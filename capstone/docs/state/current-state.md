@@ -2,6 +2,21 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-07 — review bases and integration scope
+
+The [PR plan](../plans/virtual-capstone-pr-stack.md) now audits the complete
+virtual lane through `6bf819677207` against dev at `4ea8ea9f6fa3`, and QEMU
+against `c128-qemu-merge` at `b8f08e599330`. Dry merges identify 31 main-repo
+conflict paths and two QEMU paths; no shared-branch merge was performed.
+
+Dev includes newer memcached slab/cache Sublet hooks and corpus fixtures,
+plus newer tshark wmem/corpus qualification. The virtual application results
+below retain their recorded baseline scope; they do not establish parity
+with these newer target additions. Integration must preserve and requalify
+them. A separate academic-spec branch documents the current virtual C ISA
+profile and explicitly distinguishes the earlier U-mode experiment, runtime
+service ABI, and unresolved compressed-bounds/RTL conformance.
+
 ## 2026-10-07 — complete virtual memcached and musl workers
 
 The full memcached 1.6.45 server/libevent port now runs four real musl workers

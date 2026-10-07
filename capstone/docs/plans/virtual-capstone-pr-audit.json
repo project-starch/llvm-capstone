@@ -1,9 +1,9 @@
 {
   "date": "2026-10-07",
-  "scope": "Historical virtual stack through the application-port baseline; two new review commits are described in the companion plan.",
-  "feature_baseline": "6fb2df614ca43deadf94ec454b47c49d1998006a",
+  "scope": "Complete virtual application lane including pthreads and memcached; frozen source audit for the proposed review stack.",
+  "feature_baseline": "6bf819677207292af1c26df87b5fd6200b1afe93",
   "refs": {
-    "dev": "a8922b0979b96b32f13ba94d1fd3d28265fd7765",
+    "dev": "4ea8ea9f6fa3709418236a26b2b9b9db57568963",
     "main": "88618641986d6b2787271e58c50730353e042e40",
     "virtual-addressing": "6b5779a0907200205718238238440922bcc4a5db",
     "delegation-threads": "92d21b84324b5f39c5683fd57777ea14e5e3cb81",
@@ -168,6 +168,14 @@
     {
       "commit": "6fb2df614ca43deadf94ec454b47c49d1998006a",
       "subject": "Migrate remaining application ports to virtual Capstone"
+    },
+    {
+      "commit": "35cb6a33846798584d6631387f0fd3426657dde2",
+      "subject": "Support musl pthreads in virtual Capstone applications"
+    },
+    {
+      "commit": "6bf819677207292af1c26df87b5fd6200b1afe93",
+      "subject": "Run the complete memcached server on virtual Capstone"
     }
   ],
   "main_changes": [
@@ -203,7 +211,7 @@
     },
     {
       "path": "capstone/docs/plans/README.md",
-      "added": "2",
+      "added": "3",
       "removed": "0"
     },
     {
@@ -219,6 +227,16 @@
     {
       "path": "capstone/docs/plans/virtual-capstone-abi.md",
       "added": "337",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/plans/virtual-capstone-pr-audit.json",
+      "added": "1286",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/plans/virtual-capstone-pr-stack.md",
+      "added": "130",
       "removed": "0"
     },
     {
@@ -238,12 +256,12 @@
     },
     {
       "path": "capstone/docs/state/current-next-step.md",
-      "added": "98",
+      "added": "111",
       "removed": "0"
     },
     {
       "path": "capstone/docs/state/current-state.md",
-      "added": "418",
+      "added": "444",
       "removed": "0"
     },
     {
@@ -268,8 +286,8 @@
     },
     {
       "path": "capstone/ports/README.md",
-      "added": "4",
-      "removed": "0"
+      "added": "6",
+      "removed": "1"
     },
     {
       "path": "capstone/ports/common/application/README.md",
@@ -302,6 +320,166 @@
       "removed": "3"
     },
     {
+      "path": "capstone/ports/memcached/app/README.md",
+      "added": "86",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/deps/build-libevent.sh",
+      "added": "73",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/deps/capstone-cc",
+      "added": "50",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/deps/capstone-ranlib",
+      "added": "3",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/deps/deps.json",
+      "added": "8",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/deps/env.sh",
+      "added": "65",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/deps/fetch.sh",
+      "added": "14",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/host/build-domain.sh",
+      "added": "82",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/host/build-marker.sh",
+      "added": "50",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/host/build-native.sh",
+      "added": "20",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/host/build-safety.sh",
+      "added": "56",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/host/build-virtual.sh",
+      "added": "19",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/host/mc-harness/mc-harness.c",
+      "added": "420",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/host/run-oracle.sh",
+      "added": "128",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/host/run-safety.py",
+      "added": "140",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/host/run-virtual.py",
+      "added": "177",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/host/safety-expect.txt",
+      "added": "80",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0001-capability-alignment.patch",
+      "added": "70",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0002-xxhash-pointer-alignas.patch",
+      "added": "45",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0003-bipbuffer-data-alignment.patch",
+      "added": "34",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0004-worker-marker.patch",
+      "added": "27",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0005-safety-fixtures.patch",
+      "added": "42",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/port.json",
+      "added": "25",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/probe/mc-probe-client.c",
+      "added": "52",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/probe/mc-threads-probe.c",
+      "added": "162",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/probe/run-probe.sh",
+      "added": "33",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/README.md",
+      "added": "94",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/SHA256SUMS",
+      "added": "8",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/result-lines.txt",
+      "added": "111",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/results/virtual-result.json",
+      "added": "370",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/src/mcapp-safety.c",
+      "added": "261",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/memcached/app/upstream.json",
+      "added": "8",
+      "removed": "0"
+    },
+    {
       "path": "capstone/ports/mruby/app/build-mruby-domain.sh",
       "added": "7",
       "removed": "0"
@@ -310,6 +488,16 @@
       "path": "capstone/ports/musl-capstone/build-musl-capstone.sh",
       "added": "7",
       "removed": "1"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/musl-patches/0004-pthread-cond-capability-layout.patch",
+      "added": "56",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/musl-patches/0005-pthread-attr-stack-pointer.patch",
+      "added": "96",
+      "removed": "0"
     },
     {
       "path": "capstone/ports/musl-capstone/runtime/altstack.S",
@@ -323,8 +511,8 @@
     },
     {
       "path": "capstone/ports/musl-capstone/runtime/delegate.c",
-      "added": "215",
-      "removed": "40"
+      "added": "273",
+      "removed": "45"
     },
     {
       "path": "capstone/ports/musl-capstone/runtime/level0.c",
@@ -334,6 +522,16 @@
     {
       "path": "capstone/ports/musl-capstone/runtime/setjmp.S",
       "added": "8",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/runtime/signals.c",
+      "added": "44",
+      "removed": "15"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/runtime/tls.c",
+      "added": "28",
       "removed": "0"
     },
     {
@@ -403,12 +601,12 @@
     },
     {
       "path": "capstone/runtime/applications.md",
-      "added": "24",
+      "added": "26",
       "removed": "8"
     },
     {
       "path": "capstone/runtime/cmake/Application.cmake",
-      "added": "29",
+      "added": "30",
       "removed": "3"
     },
     {
@@ -433,8 +631,18 @@
     },
     {
       "path": "capstone/runtime/linux/delegate-service.c",
-      "added": "2",
-      "removed": "2"
+      "added": "8",
+      "removed": "6"
+    },
+    {
+      "path": "capstone/runtime/linux/signals.c",
+      "added": "193",
+      "removed": "51"
+    },
+    {
+      "path": "capstone/runtime/linux/signals.h",
+      "added": "46",
+      "removed": "6"
     },
     {
       "path": "capstone/runtime/tests/application/CMakeLists.txt",
@@ -454,6 +662,11 @@
     {
       "path": "capstone/runtime/tests/application/delegate-contract.c",
       "added": "98",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/tests/application/delegate-thread-test.c",
+      "added": "67",
       "removed": "0"
     },
     {
@@ -483,7 +696,7 @@
     },
     {
       "path": "capstone/runtime/virtual/README.md",
-      "added": "253",
+      "added": "296",
       "removed": "0"
     },
     {
@@ -513,7 +726,7 @@
     },
     {
       "path": "capstone/runtime/virtual/exec.c",
-      "added": "593",
+      "added": "689",
       "removed": "0"
     },
     {
@@ -533,7 +746,7 @@
     },
     {
       "path": "capstone/runtime/virtual/mapping.c",
-      "added": "218",
+      "added": "220",
       "removed": "0"
     },
     {
@@ -544,6 +757,36 @@
     {
       "path": "capstone/runtime/virtual/module/capstone_vm.c",
       "added": "667",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/pthread-compatibility-result.json",
+      "added": "299",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/pthread-contract.c",
+      "added": "149",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/pthread-epoll-controls.json",
+      "added": "63",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/pthread-host-controls.json",
+      "added": "27",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/pthread-result.json",
+      "added": "28",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/pthread.c",
+      "added": "123",
       "removed": "0"
     },
     {
@@ -562,13 +805,18 @@
       "removed": "0"
     },
     {
+      "path": "capstone/runtime/virtual/run-pthreads.py",
+      "added": "60",
+      "removed": "0"
+    },
+    {
       "path": "capstone/runtime/virtual/run-safety.py",
       "added": "99",
       "removed": "0"
     },
     {
       "path": "capstone/runtime/virtual/run-staged.py",
-      "added": "75",
+      "added": "78",
       "removed": "0"
     },
     {
@@ -578,7 +826,7 @@
     },
     {
       "path": "capstone/runtime/virtual/start.S",
-      "added": "102",
+      "added": "126",
       "removed": "0"
     },
     {
@@ -588,7 +836,7 @@
     },
     {
       "path": "capstone/runtime/virtual/vm-abi.h",
-      "added": "17",
+      "added": "23",
       "removed": "0"
     },
     {
@@ -756,15 +1004,23 @@
     "dev": {
       "capstone/caplifive-buildroot": "8fd1ea1249a99a16ffe40886161e9a55831fdbdf",
       "capstone/caplifive-system": "da972182cb24f3c194d1abd31b31025881f72f15",
+      "capstone/capstone-academic-spec": "eadaf872705e075040f04aea12a43910b2b998f0",
       "capstone/capstone-ariane": "776d9d85900e0b7f7fd71b5369a5827af1bb715e",
-      "capstone/capstone-qemu": "674cdab03c3e3b0140d33d6f1e13d9a05e610239"
+      "capstone/capstone-c": "8cda52c610aa74033dc7ff38c04772a6df7fef56",
+      "capstone/capstone-qemu": "674cdab03c3e3b0140d33d6f1e13d9a05e610239",
+      "capstone/paper": "2bc09e1106f6a4c8c7dc87cf226301dd6396d4d0",
+      "capstone/paper-nested-allocators": "b0d7510cbec38a35a57b06c6de07c9b4505ab84c"
     },
     "main": {},
     "virtual": {
       "capstone/caplifive-buildroot": "d60365e36fef22f005c8815b98416843f6d5d864",
       "capstone/caplifive-system": "da972182cb24f3c194d1abd31b31025881f72f15",
+      "capstone/capstone-academic-spec": "eadaf872705e075040f04aea12a43910b2b998f0",
       "capstone/capstone-ariane": "f6ec6c198121495b89a9ee95d71730437e7902b6",
-      "capstone/capstone-qemu": "6bf04634a2c28e0cf96488ac805287b89027fa02"
+      "capstone/capstone-c": "8cda52c610aa74033dc7ff38c04772a6df7fef56",
+      "capstone/capstone-qemu": "6bf04634a2c28e0cf96488ac805287b89027fa02",
+      "capstone/paper": "2bc09e1106f6a4c8c7dc87cf226301dd6396d4d0",
+      "capstone/paper-nested-allocators": "b0d7510cbec38a35a57b06c6de07c9b4505ab84c"
     }
   },
   "qemu": {
@@ -923,8 +1179,8 @@
       },
       {
         "path": "target/riscv/cap_compress.c",
-        "added": "16",
-        "removed": "7"
+        "added": "17",
+        "removed": "8"
       },
       {
         "path": "target/riscv/cap_compress.h",
@@ -953,8 +1209,8 @@
       },
       {
         "path": "target/riscv/cap_rev_tree.c",
-        "added": "279",
-        "removed": "86"
+        "added": "277",
+        "removed": "84"
       },
       {
         "path": "target/riscv/cap_rev_tree.h",
@@ -1276,11 +1532,486 @@
         "added": "50",
         "removed": "0"
       }
+    ],
+    "ahead_behind": {
+      "target_only": 9,
+      "feature_only": 26
+    },
+    "merge_conflict_paths": [
+      "target/riscv/cap.h",
+      "target/riscv/op_helper.c"
     ]
   },
   "linux": {
     "qualified_source_commit": "a62e18f2b9aa25c697fc2250e95098a4374537c5",
-    "additional_core_changes": false
+    "additional_core_changes": false,
+    "scope": "Supervised virtual C via module/runtime; direct protected-U entry patch remains a separate experiment."
   },
-  "comparison": "Three-dot feature changes, not a replacement of the current dev tree. Do not roll back dev RTL or Buildroot pins."
+  "comparison": "Three-dot changes identify historical feature work; final selected-path comparisons expose newer target work. No target-tree replacement or shared-branch mutation.",
+  "ahead_behind": {
+    "target_only": 269,
+    "feature_only": 41
+  },
+  "main_target_overlap": [
+    "capstone/capstone-qemu",
+    "capstone/docs/README.md",
+    "capstone/docs/plans/capstone-heap-protection.md",
+    "capstone/docs/state/current-next-step.md",
+    "capstone/docs/state/current-state.md",
+    "capstone/my_first_domain/link.ld",
+    "capstone/ports/README.md",
+    "capstone/ports/common/application/README.md",
+    "capstone/ports/cpython/app/prepare-cpython-capstone.sh",
+    "capstone/ports/ffmpeg/app/host/build-domain.sh",
+    "capstone/ports/memcached/app/deps/build-libevent.sh",
+    "capstone/ports/memcached/app/deps/capstone-cc",
+    "capstone/ports/memcached/app/deps/capstone-ranlib",
+    "capstone/ports/memcached/app/deps/deps.json",
+    "capstone/ports/memcached/app/deps/env.sh",
+    "capstone/ports/memcached/app/deps/fetch.sh",
+    "capstone/ports/memcached/app/host/build-domain.sh",
+    "capstone/ports/memcached/app/host/build-marker.sh",
+    "capstone/ports/memcached/app/host/build-native.sh",
+    "capstone/ports/memcached/app/host/build-safety.sh",
+    "capstone/ports/memcached/app/host/mc-harness/mc-harness.c",
+    "capstone/ports/memcached/app/host/run-oracle.sh",
+    "capstone/ports/memcached/app/host/run-safety.py",
+    "capstone/ports/memcached/app/host/safety-expect.txt",
+    "capstone/ports/memcached/app/patches/memcached-1.6.45-0001-capability-alignment.patch",
+    "capstone/ports/memcached/app/patches/memcached-1.6.45-0002-xxhash-pointer-alignas.patch",
+    "capstone/ports/memcached/app/patches/memcached-1.6.45-0003-bipbuffer-data-alignment.patch",
+    "capstone/ports/memcached/app/patches/memcached-1.6.45-0004-worker-marker.patch",
+    "capstone/ports/memcached/app/patches/memcached-1.6.45-0005-safety-fixtures.patch",
+    "capstone/ports/memcached/app/port.json",
+    "capstone/ports/memcached/app/probe/mc-probe-client.c",
+    "capstone/ports/memcached/app/probe/mc-threads-probe.c",
+    "capstone/ports/memcached/app/probe/run-probe.sh",
+    "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/README.md",
+    "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/SHA256SUMS",
+    "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/result-lines.txt",
+    "capstone/ports/memcached/app/src/mcapp-safety.c",
+    "capstone/ports/memcached/app/upstream.json",
+    "capstone/ports/mruby/app/build-mruby-domain.sh",
+    "capstone/ports/musl-capstone/build-musl-capstone.sh",
+    "capstone/ports/musl-capstone/runtime/altstack.S",
+    "capstone/ports/musl-capstone/runtime/atomic_libcalls.c",
+    "capstone/ports/musl-capstone/runtime/delegate.c",
+    "capstone/ports/musl-capstone/runtime/level0.c",
+    "capstone/ports/musl-capstone/runtime/signals.c",
+    "capstone/ports/musl-capstone/runtime/tls.c",
+    "capstone/ports/musl-capstone/survey-musl-capstone.py",
+    "capstone/ports/perl/musl/README.md",
+    "capstone/ports/perl/musl/build-perl-domain.sh",
+    "capstone/ports/perl/musl/port.json",
+    "capstone/ports/wireshark/app/deps/env.sh",
+    "capstone/ports/wireshark/app/host/build-domain.sh",
+    "capstone/ports/wireshark/app/host/safety-expect.txt",
+    "capstone/runtime/application/CMakeLists.txt",
+    "capstone/runtime/applications.md",
+    "capstone/runtime/cmake/Application.cmake",
+    "capstone/runtime/host/capstone_vm/cli.py",
+    "capstone/runtime/host/tests/test_cli.py",
+    "capstone/runtime/linux/delegate-service.c",
+    "capstone/runtime/linux/signals.c",
+    "capstone/runtime/linux/signals.h",
+    "capstone/runtime/tests/application/CMakeLists.txt",
+    "capstone/runtime/tests/application/contract.c"
+  ],
+  "merge_check": {
+    "method": "git merge-tree --write-tree --name-only TARGET FEATURE; no branch/index/worktree merge",
+    "status": 1,
+    "conflict_paths": [
+      "capstone/capstone-qemu",
+      "capstone/docs/README.md",
+      "capstone/docs/state/current-next-step.md",
+      "capstone/ports/ffmpeg/app/host/build-domain.sh",
+      "capstone/ports/memcached/app/deps/env.sh",
+      "capstone/ports/memcached/app/host/build-domain.sh",
+      "capstone/ports/memcached/app/host/build-safety.sh",
+      "capstone/ports/memcached/app/host/run-oracle.sh",
+      "capstone/ports/memcached/app/host/run-safety.py",
+      "capstone/ports/memcached/app/host/safety-expect.txt",
+      "capstone/ports/memcached/app/patches/memcached-1.6.45-0001-capability-alignment.patch",
+      "capstone/ports/memcached/app/patches/memcached-1.6.45-0002-xxhash-pointer-alignas.patch",
+      "capstone/ports/memcached/app/patches/memcached-1.6.45-0003-bipbuffer-data-alignment.patch",
+      "capstone/ports/memcached/app/patches/memcached-1.6.45-0004-worker-marker.patch",
+      "capstone/ports/memcached/app/patches/memcached-1.6.45-0005-safety-fixtures.patch",
+      "capstone/ports/memcached/app/port.json",
+      "capstone/ports/memcached/app/src/mcapp-safety.c",
+      "capstone/ports/musl-capstone/build-musl-capstone.sh",
+      "capstone/ports/musl-capstone/runtime/atomic_libcalls.c",
+      "capstone/ports/musl-capstone/runtime/delegate.c",
+      "capstone/ports/musl-capstone/runtime/level0.c",
+      "capstone/ports/musl-capstone/runtime/signals.c",
+      "capstone/ports/musl-capstone/runtime/tls.c",
+      "capstone/ports/perl/musl/build-perl-domain.sh",
+      "capstone/ports/wireshark/app/host/build-domain.sh",
+      "capstone/ports/wireshark/app/host/safety-expect.txt",
+      "capstone/runtime/application/CMakeLists.txt",
+      "capstone/runtime/applications.md",
+      "capstone/runtime/cmake/Application.cmake",
+      "capstone/runtime/linux/delegate-service.c",
+      "capstone/runtime/tests/application/contract.c"
+    ],
+    "qualification": "Textual merge analysis only, not an integrated build or gate."
+  },
+  "academic_spec": {
+    "repository": "https://github.com/project-starch/capstone-academic-spec",
+    "target_branch": "master",
+    "target_commit": "ac7f329100489f843770d815ee14ce2b90215ddb",
+    "review_branch": "virtual-capstone-isa",
+    "review_commit": "6e05ba67eaccd1b1b10c61e3384c4dc2fefe0109",
+    "publication": "Local branch committed; upstream push rejected with HTTP 403 (write access not granted).",
+    "transfer_patch": "virtual-capstone-isa.patch",
+    "scope": "Draft implementation profile; no RTL conformance claim; no automatic gitlink update."
+  },
+  "sibling_comparisons": {
+    "delegation-threads": {
+      "commit": "92d21b84324b5f39c5683fd57777ea14e5e3cb81",
+      "merge_base": "c460e8c68fdc3cb1bd4b710ebeacff3480868261",
+      "both_sides_touch": [
+        "capstone/capstone-qemu",
+        "capstone/docs/README.md",
+        "capstone/docs/plans/delegation-signals.md",
+        "capstone/docs/ref/ISSUES.md",
+        "capstone/my_first_domain/link.ld",
+        "capstone/ports/musl-capstone/README.md",
+        "capstone/ports/musl-capstone/file-probe/build-file-probe.sh",
+        "capstone/ports/musl-capstone/libc-test/build-libc-test.sh",
+        "capstone/ports/musl-capstone/libc-test/run-libc-test-delegated.py",
+        "capstone/ports/musl-capstone/musl-patches/0004-pthread-cond-capability-layout.patch",
+        "capstone/ports/musl-capstone/musl-patches/0005-pthread-attr-stack-pointer.patch",
+        "capstone/ports/musl-capstone/runtime/atomic_libcalls.c",
+        "capstone/ports/musl-capstone/runtime/delegate.c",
+        "capstone/ports/musl-capstone/runtime/hostcall.c",
+        "capstone/ports/musl-capstone/runtime/level0.c",
+        "capstone/ports/musl-capstone/runtime/mmap_shm_level0.c",
+        "capstone/ports/musl-capstone/runtime/signals.c",
+        "capstone/ports/musl-capstone/runtime/start-musl.S",
+        "capstone/ports/musl-capstone/runtime/sublet_heap.c",
+        "capstone/ports/musl-capstone/runtime/tls.c",
+        "capstone/ports/musl-capstone/stdio-probe/build-stdio-probe.sh",
+        "capstone/ports/musl-capstone/write-probe/build-write-probe.sh",
+        "capstone/ports/wireshark/app/deps/README.md",
+        "capstone/runtime/application/CMakeLists.txt",
+        "capstone/runtime/cmake/Application.cmake",
+        "capstone/runtime/common/delegate.c",
+        "capstone/runtime/exec/CMakeLists.txt",
+        "capstone/runtime/host/capstone_vm/cli.py",
+        "capstone/runtime/host/tests/test_cli.py",
+        "capstone/runtime/include/capstone/delegate.h",
+        "capstone/runtime/linux/delegate-service.c",
+        "capstone/runtime/linux/signals.c",
+        "capstone/runtime/linux/signals.h",
+        "capstone/runtime/linux/spawner.c",
+        "capstone/runtime/tests/application/CMakeLists.txt",
+        "capstone/tests/runtime-qemu/capability-atomics/run.sh"
+      ],
+      "byte_identical_reused_files": [
+        "capstone/ports/musl-capstone/musl-patches/0004-pthread-cond-capability-layout.patch",
+        "capstone/ports/musl-capstone/musl-patches/0005-pthread-attr-stack-pointer.patch",
+        "capstone/runtime/linux/signals.c",
+        "capstone/runtime/linux/signals.h"
+      ]
+    },
+    "memcached-app": {
+      "commit": "c839e7294e23358e8683b6f96f3092abe1756677",
+      "merge_base": "4439dd0a55f9c849276dfc4d8e38b50293a2d10e",
+      "both_sides_touch": [
+        "capstone/capstone-qemu",
+        "capstone/docs/README.md",
+        "capstone/docs/plans/capstone-heap-protection.md",
+        "capstone/my_first_domain/link.ld",
+        "capstone/ports/cpython/app/prepare-cpython-capstone.sh",
+        "capstone/ports/ffmpeg/app/host/build-domain.sh",
+        "capstone/ports/memcached/app/deps/build-libevent.sh",
+        "capstone/ports/memcached/app/deps/capstone-cc",
+        "capstone/ports/memcached/app/deps/capstone-ranlib",
+        "capstone/ports/memcached/app/deps/deps.json",
+        "capstone/ports/memcached/app/deps/env.sh",
+        "capstone/ports/memcached/app/deps/fetch.sh",
+        "capstone/ports/memcached/app/host/build-domain.sh",
+        "capstone/ports/memcached/app/host/build-marker.sh",
+        "capstone/ports/memcached/app/host/build-native.sh",
+        "capstone/ports/memcached/app/host/build-safety.sh",
+        "capstone/ports/memcached/app/host/mc-harness/mc-harness.c",
+        "capstone/ports/memcached/app/host/run-oracle.sh",
+        "capstone/ports/memcached/app/host/run-safety.py",
+        "capstone/ports/memcached/app/host/safety-expect.txt",
+        "capstone/ports/memcached/app/patches/memcached-1.6.45-0001-capability-alignment.patch",
+        "capstone/ports/memcached/app/patches/memcached-1.6.45-0002-xxhash-pointer-alignas.patch",
+        "capstone/ports/memcached/app/patches/memcached-1.6.45-0003-bipbuffer-data-alignment.patch",
+        "capstone/ports/memcached/app/patches/memcached-1.6.45-0004-worker-marker.patch",
+        "capstone/ports/memcached/app/patches/memcached-1.6.45-0005-safety-fixtures.patch",
+        "capstone/ports/memcached/app/port.json",
+        "capstone/ports/memcached/app/probe/mc-probe-client.c",
+        "capstone/ports/memcached/app/probe/mc-threads-probe.c",
+        "capstone/ports/memcached/app/probe/run-probe.sh",
+        "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/README.md",
+        "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/SHA256SUMS",
+        "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/result-lines.txt",
+        "capstone/ports/memcached/app/src/mcapp-safety.c",
+        "capstone/ports/memcached/app/upstream.json",
+        "capstone/ports/musl-capstone/runtime/atomic_libcalls.c",
+        "capstone/ports/musl-capstone/runtime/delegate.c",
+        "capstone/ports/musl-capstone/runtime/level0.c",
+        "capstone/ports/musl-capstone/runtime/signals.c",
+        "capstone/ports/musl-capstone/runtime/tls.c",
+        "capstone/ports/wireshark/app/host/build-domain.sh",
+        "capstone/ports/wireshark/app/host/safety-expect.txt",
+        "capstone/runtime/application/CMakeLists.txt",
+        "capstone/runtime/applications.md",
+        "capstone/runtime/cmake/Application.cmake",
+        "capstone/runtime/host/capstone_vm/cli.py",
+        "capstone/runtime/host/tests/test_cli.py",
+        "capstone/runtime/linux/delegate-service.c",
+        "capstone/runtime/linux/signals.c",
+        "capstone/runtime/linux/signals.h",
+        "capstone/runtime/tests/application/CMakeLists.txt",
+        "capstone/runtime/tests/application/contract.c"
+      ],
+      "virtual_application_delta": [
+        {
+          "path": "capstone/ports/memcached/app/README.md",
+          "added": "86",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/deps/env.sh",
+          "added": "3",
+          "removed": "1"
+        },
+        {
+          "path": "capstone/ports/memcached/app/host/build-domain.sh",
+          "added": "7",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/host/build-safety.sh",
+          "added": "12",
+          "removed": "5"
+        },
+        {
+          "path": "capstone/ports/memcached/app/host/build-virtual.sh",
+          "added": "19",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/host/run-virtual.py",
+          "added": "177",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/port.json",
+          "added": "2",
+          "removed": "1"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/virtual-result.json",
+          "added": "370",
+          "removed": "0"
+        }
+      ]
+    },
+    "virtual-addressing": {
+      "commit": "6b5779a0907200205718238238440922bcc4a5db",
+      "merge_base": "4439dd0a55f9c849276dfc4d8e38b50293a2d10e",
+      "both_sides_touch": [
+        "capstone/capstone-qemu",
+        "capstone/docs/README.md",
+        "capstone/docs/plans/capstone-heap-protection.md",
+        "capstone/docs/state/current-next-step.md",
+        "capstone/docs/state/current-state.md",
+        "capstone/my_first_domain/link.ld",
+        "capstone/ports/cpython/app/prepare-cpython-capstone.sh",
+        "capstone/ports/ffmpeg/app/host/build-domain.sh",
+        "capstone/ports/memcached/app/deps/build-libevent.sh",
+        "capstone/ports/memcached/app/deps/capstone-cc",
+        "capstone/ports/memcached/app/deps/capstone-ranlib",
+        "capstone/ports/memcached/app/deps/deps.json",
+        "capstone/ports/memcached/app/deps/env.sh",
+        "capstone/ports/memcached/app/deps/fetch.sh",
+        "capstone/ports/memcached/app/host/build-domain.sh",
+        "capstone/ports/memcached/app/host/build-marker.sh",
+        "capstone/ports/memcached/app/host/build-native.sh",
+        "capstone/ports/memcached/app/host/build-safety.sh",
+        "capstone/ports/memcached/app/host/mc-harness/mc-harness.c",
+        "capstone/ports/memcached/app/host/run-oracle.sh",
+        "capstone/ports/memcached/app/host/run-safety.py",
+        "capstone/ports/memcached/app/host/safety-expect.txt",
+        "capstone/ports/memcached/app/patches/memcached-1.6.45-0001-capability-alignment.patch",
+        "capstone/ports/memcached/app/patches/memcached-1.6.45-0002-xxhash-pointer-alignas.patch",
+        "capstone/ports/memcached/app/patches/memcached-1.6.45-0003-bipbuffer-data-alignment.patch",
+        "capstone/ports/memcached/app/patches/memcached-1.6.45-0004-worker-marker.patch",
+        "capstone/ports/memcached/app/patches/memcached-1.6.45-0005-safety-fixtures.patch",
+        "capstone/ports/memcached/app/port.json",
+        "capstone/ports/memcached/app/probe/mc-probe-client.c",
+        "capstone/ports/memcached/app/probe/mc-threads-probe.c",
+        "capstone/ports/memcached/app/probe/run-probe.sh",
+        "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/README.md",
+        "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/SHA256SUMS",
+        "capstone/ports/memcached/app/results/2026-10-01-qemu-safety/result-lines.txt",
+        "capstone/ports/memcached/app/src/mcapp-safety.c",
+        "capstone/ports/memcached/app/upstream.json",
+        "capstone/ports/musl-capstone/runtime/atomic_libcalls.c",
+        "capstone/ports/musl-capstone/runtime/delegate.c",
+        "capstone/ports/musl-capstone/runtime/level0.c",
+        "capstone/ports/musl-capstone/runtime/signals.c",
+        "capstone/ports/musl-capstone/runtime/tls.c",
+        "capstone/ports/wireshark/app/deps/env.sh",
+        "capstone/ports/wireshark/app/host/build-domain.sh",
+        "capstone/ports/wireshark/app/host/safety-expect.txt",
+        "capstone/runtime/application/CMakeLists.txt",
+        "capstone/runtime/applications.md",
+        "capstone/runtime/cmake/Application.cmake",
+        "capstone/runtime/host/capstone_vm/cli.py",
+        "capstone/runtime/host/tests/test_cli.py",
+        "capstone/runtime/linux/delegate-service.c",
+        "capstone/runtime/linux/signals.c",
+        "capstone/runtime/linux/signals.h",
+        "capstone/runtime/tests/application/CMakeLists.txt",
+        "capstone/runtime/tests/application/contract.c"
+      ]
+    }
+  },
+  "target_application_work_to_preserve": {
+    "memcached": {
+      "since_imported_baseline": [
+        {
+          "path": "capstone/ports/memcached/app/host/build-slab-sublet.sh",
+          "added": "128",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/host/run-oracle.sh",
+          "added": "15",
+          "removed": "4"
+        },
+        {
+          "path": "capstone/ports/memcached/app/host/run-safety.py",
+          "added": "19",
+          "removed": "4"
+        },
+        {
+          "path": "capstone/ports/memcached/app/host/safety-expect.txt",
+          "added": "193",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0001-capability-alignment.patch",
+          "added": "1",
+          "removed": "1"
+        },
+        {
+          "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0002-xxhash-pointer-alignas.patch",
+          "added": "1",
+          "removed": "1"
+        },
+        {
+          "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0003-bipbuffer-data-alignment.patch",
+          "added": "1",
+          "removed": "1"
+        },
+        {
+          "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0004-worker-marker.patch",
+          "added": "1",
+          "removed": "1"
+        },
+        {
+          "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0005-safety-fixtures.patch",
+          "added": "1",
+          "removed": "1"
+        },
+        {
+          "path": "capstone/ports/memcached/app/patches/memcached-1.6.45-0006-slab-sublet-hooks.patch",
+          "added": "277",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-01-qemu-slab-sublet/README.md",
+          "added": "124",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-01-qemu-slab-sublet/SHA256SUMS",
+          "added": "6",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-01-qemu-slab-sublet/result-lines.txt",
+          "added": "177",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-02-qemu-corpus-in-app/README.md",
+          "added": "161",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-02-qemu-corpus-in-app/SHA256SUMS",
+          "added": "4",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-02-qemu-corpus-in-app/result-lines.txt",
+          "added": "71",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-03-qemu-class3-bipbuffer/README.md",
+          "added": "173",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-03-qemu-class3-bipbuffer/result-lines.txt",
+          "added": "67",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-03-qemu-plain-heap-contrast/README.md",
+          "added": "129",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-03-qemu-plain-heap-contrast/result-lines.txt",
+          "added": "44",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-05-qemu-classa-fixtures/README.md",
+          "added": "94",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/results/2026-10-05-qemu-classa-fixtures/result-lines.txt",
+          "added": "41",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/src/mcapp-safety.c",
+          "added": "481",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/src/slab-sublet/mc_slabs_shim.h",
+          "added": "5",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/src/slab-sublet/mcapp-slab-sublet.c",
+          "added": "105",
+          "removed": "0"
+        },
+        {
+          "path": "capstone/ports/memcached/app/src/slab-sublet/mcapp-slab-sublet.h",
+          "added": "27",
+          "removed": "0"
+        }
+      ],
+      "reason": "Newer slab/cache Sublet hooks and expanded corpus/fixture arms must remain. Current 53-case virtual result covers the older imported baseline."
+    },
+    "tshark": {
+      "reason": "Keep newer dev wmem chunk/corpus fixtures, expectations and dependency fixes while adapting the virtual heap."
+    }
+  }
 }

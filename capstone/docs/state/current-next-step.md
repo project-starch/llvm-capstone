@@ -1,3 +1,14 @@
+Review/landing (2026-10-07): use the refreshed
+[cross-repository PR plan](../plans/virtual-capstone-pr-stack.md) and audit.
+Prepare logical slices on current dev/QEMU targets; preserve the working lane.
+The dry merge has 31 main-repo and two QEMU conflict paths. Dev's newer
+memcached slab-Sublet/corpus and tshark wmem/corpus work must be retained and
+qualified on the virtual path. The older virtual results do not establish
+parity with those additions. Review the
+[ISA profile patch](../plans/virtual-capstone-isa.patch)
+alongside the processor slices. No implementation merge or integrated runtime
+test was performed as part of this documentation review.
+
 Virtual memcached and pthreads (2026-10-07): preserve the
 [53-check server gate](../../ports/memcached/app/results/virtual-result.json),
 [9-check pthread gate](../../runtime/virtual/pthread-result.json), shared-buffer

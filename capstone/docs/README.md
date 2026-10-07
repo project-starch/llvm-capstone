@@ -1,17 +1,24 @@
 # Capstone project documentation
 
-The [virtual application-port baseline](../runtime/virtual/app-ports-result.json)
-adds source-built CPython, PostgreSQL, FFmpeg and tshark to SQLite, mruby and
-Perl. Normal and inner allocator workloads, unchanged spatial/temporal
-fixtures, and the [extended runtime gate](../runtime/virtual/app-ports-security-result.json)
-are recorded separately from historical physical measurements.
-See the [virtual source-build instructions](../ports/common/application/README.md#virtual-source-builds).
+The [cross-repository review plan](plans/virtual-capstone-pr-stack.md) defines
+the proposed ISA, QEMU, compiler, runtime and application PRs. Its audit compares
+the complete virtual lane through `6bf819677207` with dev at `4ea8ea9f6fa3`.
+Dev has newer memcached and tshark safety work that must survive integration;
+the existing virtual results do not qualify those additional fixtures.
 
-The [virtual C execution experiment](plans/virtual-capstone-runtime-r0.md)
-now joins a loadable Linux adapter to the existing QEMU supervision engine.
-It runs a small Capstone-compiled C function on ordinary process mappings,
-with no additional kernel-core or firmware patch. The normal application
-loader and delegated-service loop are the next integration step.
+The virtual C runtime now has eight configured application baselines:
+SQLite, mruby, Perl, CPython, PostgreSQL single-user, FFmpeg, offline tshark
+and memcached. See the [shared port results](../runtime/virtual/app-ports-result.json),
+[memcached result](../ports/memcached/app/results/virtual-result.json) and
+[virtual build instructions](../ports/common/application/README.md#virtual-source-builds).
+A Linux module/runtime provides integration without an additional kernel-core
+or firmware patch. These are recorded QEMU workloads, with explicit limits.
+
+The [draft ISA profile patch](plans/virtual-capstone-isa.patch) targets the
+academic-spec repository and documents supervised virtual C separately from
+the earlier direct-U experiment and deployed RTL. Its local branch is ready;
+publishing there requires repository write access. See the review plan for
+the source revision and application instructions.
 
 Integration direction (2026-10-06):
 [virtual Capstone through the existing runtime](design/virtual-capstone-runtime.md).

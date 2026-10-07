@@ -1,0 +1,425 @@
+diff --git a/README.md b/README.md
+index 0642499..02a36f6 100644
+--- a/README.md
++++ b/README.md
+@@ -32,6 +32,14 @@ of the documentation inside the `parts` folder.
+
+ ### Regarding Implementations
+
++The draft [trusted-OS virtual execution profile](parts/virtual-capstone.adoc)
++records the implemented QEMU interface, its differences from the academic ISA,
++and remaining decisions before an ISA freeze. It covers supervised virtual
++C-mode execution, process-local lifetimes, instruction encodings, control
++registers, context events, and safe node reuse. It is an implementation review
++appendix, not an assertion of RTL conformance or an amendment of every base-ISA
++chapter. Its source revisions and verification gates are recorded in the text.
++
+ Note that the current implementations might not reflect the draft in this
+ repository.
+ The implementations will need to be revised to match the draft once it is
+diff --git a/main.adoc b/main.adoc
+index 554aabb..c64639e 100644
+--- a/main.adoc
++++ b/main.adoc
+@@ -51,6 +51,10 @@ include::parts/int-except.adoc[leveloffset=+1]
+
+ include::parts/insn-list.adoc[leveloffset=+1]
+
++<<<
++
++include::parts/virtual-capstone.adoc[leveloffset=+1]
++
+ // <<<
+
+ // include::parts/asm-examples.adoc[leveloffset=+1]
+diff --git a/parts/virtual-capstone.adoc b/parts/virtual-capstone.adoc
+new file mode 100644
+index 0000000..7f52d8f
+--- /dev/null
++++ b/parts/virtual-capstone.adoc
+@@ -0,0 +1,385 @@
++[#virtual-capstone]
++[appendix]
++= Draft: Trusted-OS Virtual Capstone Profile
++
++== Status and scope
++
++This appendix describes the experimental *supervised virtual C-mode* interface
++implemented in
++https://github.com/project-starch/capstone-qemu/tree/6bf04634a2c28e0cf96488ac805287b89027fa02[QEMU revision 6bf04634a2c2].
++The corresponding Linux module, runtime and application baseline is
++https://github.com/project-starch/llvm-capstone/tree/6bf819677207292af1c26df87b5fd6200b1afe93[llvm-capstone revision 6bf819677207].
++The base academic reference at this review is revision `ac7f32910048`.
++
++This is an *implementation profile for review*, including experimental opcode
++allocations and platform ABI details. It neither freezes a portable ISA nor
++claims an RTL implementation. Where this appendix differs from the earlier
++chapters, it describes only the trusted-OS profile. The existing physical
++domain interface remains a separate profile.
++
++The kernel, firmware and privileged adapter are trusted. Linux supplies page
++tables, physical backing and scheduling. The application executes Capstone
++instructions using virtual addresses; it does not acquire kernel authority.
++The qualified implementation uses one hart, Sv39, pinned private anonymous
++backing and no cross-process sharing of tagged pages. Multiple threads of a
++process share its address space and lifetime namespace.
++
++The earlier capability-enabled U-mode experiment is distinct. In particular,
++its Linux entry patch, `cepc` return protocol and proposed `CSCHECKR/W`
++instructions are not requirements of this supervised C-mode interface.
++
++== Ownership and addressing
++
++An address space A has page-table root P_A and lifetime namespace N_A.
++A capability's address bounds and cursor denote virtual addresses in A;
++its lifetime identity is logically `(N_A, local_node_id)`.
++The namespace is selected by the running context, not encoded in each
++capability. Equal node numbers or equal virtual ranges in different address
++spaces confer no shared authority.
++
++For a data access, the capability tag, type, rights, complete bounds and
++node liveness must authorize the access. The virtual address is then
++translated using P_A with *user* PTE permissions. Page permissions can
++restrict capability authority, never enlarge it. Tags attach to aligned
++16-byte *physical* granules, so aliases see the same tag. An ordinary write
++clears tags of overlapping granules, including writes through kernel aliases.
++
++The trusted adapter must control minting, mappings and namespace selection:
++it must not create overlapping live linear authority through independently
++minted roots or aliases, copy a tagged value into another namespace, or reuse
++a table/frame while saved authority still names it. Current private mapping
++restrictions make those obligations manageable. Virtual addressing alone
++does not enforce the adapter's allocation policy.
++
++The existing linear transfer rules apply within N_A. A move transfers
++authority; it does not duplicate it. Non-linear capabilities may be copied.
++Rust language ownership, allocator object boundaries and this architectural
++model are separate layers: temporal object protection also requires the
++allocator to create and revoke the appropriate object lifetimes.
++
++=== Revocation
++
++N_A is abstractly a forest. A node is live if its ID denotes an allocated,
++valid record in N_A. ID zero, reserved IDs, out-of-range IDs, free records and
++missing or invalid tables are not live.
++
++`REVOKE R` invalidates the proper descendants of `node(R)` in N_A.
++Its existing operand type rule and LIN/UNINIT result rule are retained.
++The operand node is not itself retired by `REVOKE`.
++This replaces global bounds-overlap aliasing as the revocation domain for
++this profile; matching ranges in another address space are unaffected.
++`CSRETIRE` additionally invalidates a trusted arena ancestor itself.
++
++The implementation uses a depth-ordered doubly linked list. `MREV` inserts a
++senior node and deepens its operand; `SPLIT` inserts a sibling at the same
++depth. A revocation walks the subsequent deeper run, validates it before
++mutation, invalidates it and unlinks the run. Ancestor validity is not checked
++by walking parent pointers at every access: merely clearing an ancestor's
++valid bit would therefore be insufficient. The existing model exercises the
++actual C list algorithm and guest-table backend.
++
++== Execution and entry
++
++`CSRUNV` enters a saved virtual context from trusted S mode or scalar M mode.
++The implementation internally uses the existing C-mode privilege encoding
++(M with capability memory enabled), together with a virtual-context flag.
++It overrides address translation to use user PTE permissions and restricts
++privileged operations. This is not unrestricted architectural M-mode access
++for application code.
++
++PCC is checked before instruction bytes are read for translation and again
++when the translated instruction executes. The check covers liveness, type
++(LIN or NONLIN), X permission and the whole instruction within bounds, with
++overflow-safe arithmetic. Cached translated code must fail after revocation.
++The present emulator uses one instruction per virtual translation block.
++
++Ordinary capability manipulation, loads/stores and capability jumps remain
++available. The virtual instruction policy rejects `SEAL`, `CALL`, `RETURN`,
++`CAPENTER`, `CCSRRW`, supervisor entries and debug instructions. Privileged
++SYSTEM operations other than `ECALL` and `EBREAK` are rejected. CSR accesses
++requiring supervisor privilege and the legacy Capstone CSRs `0x800..0x803`
++are rejected; implemented user CSRs remain subject to normal CSR checks.
++An illegal operation raises cause 2.
++
++The adapter services an application `ECALL` after `CSRUNV` returns an event.
++Service numbers, buffer validation, Linux syscalls and pthread operations
++belong to the software ABI, not to new processor opcodes. No direct
++application-to-Linux syscall fast path is specified here.
++
++=== Trusted S-mode transfers
++
++The opt-in also permits the existing `LDC` and `STC` encodings in S mode,
++using a scalar kernel virtual address for the slot and preserving full tagged
++register values. These use the consuming protected-transfer rules below;
++ordinary S-mode loads remain scalar. This support is needed by the current
++module as well as by the separate Linux entry experiment.
++
++The module briefly uses tagged temporary registers to load, convert with
++`DELIN`/`SCC`, and store freshly minted grants. It excludes interrupts and
++preemption during that sequence and clears the temporary before returning
++to ordinary kernel code. Therefore the interface must not be described as
++"the kernel never holds tagged registers." It avoids a kernel-wide tagged
++context-switch ABI by containing these operations within the trusted adapter.
++
++== Added instruction encodings
++
++All three instructions use the R-type layout: `funct7[31:25]`, `rs2[24:20]`,
++`rs1[19:15]`, `funct3[14:12]`, `rd[11:7]`, `opcode[6:0]`.
++The experimental QEMU profile must be enabled (`x-capstone-u-mode=on`).
++
++[%header,cols="1,1,1,1,3"]
++|===
++|Mnemonic |Opcode |funct3 |funct7 |Operands
++|`CSRUNV` |`0x5b` |`1` |`0x24` |`rd`, physical frame address in `rs1`, action in `rs2`
++|`CSMINT` |`0x5b` |`1` |`0x50` |`rd`, destination slot VA in `rs1`, descriptor VA in `rs2`
++|`CSRETIRE` |`0x5b` |`1` |`0x53` |`rd`, scalar ancestor ID in `rs1`, use zero for `rs2`
++|===
++
++`CSRUNV` and `CSRETIRE` are trusted S/scalar-M operations; they reject U mode
++and physical or virtual C mode. `CSMINT` rejects U mode and is also denied by
++the virtual C instruction policy. Its current decoder still accepts legacy
++physical C mode; it is not a general application mint instruction.
++The existing physical supervisor opcodes `0x22` and `0x23` predate this profile.
++There is no implemented `CSCHECKR` or `CSCHECKW` at the reference revision.
++
++=== CSMINT
++
++The descriptor consists of three little-endian 64-bit words: `base`,
++exclusive `end`, and `perms` (X=1, W=2, R=4). It is 8-byte aligned.
++Each word is translated separately in the caller's address space.
++The destination is a 16-byte-aligned writable ordinary-RAM slot, translated
++with the caller's current permissions. All descriptor, slot, representability
++and table-capacity checks precede changes to records, destination bytes or tags.
++
++`base < end`, `perms <= 7`, and exact compression/decompression of the
++requested bounds and initial cursor `base` are required. Failure of these
++value checks raises cause 29 with zero fault data. Alignment and translation
++failures use the corresponding ordinary load/store exceptions.
++Two free node IDs are required; exhaustion raises cause 30 with zero data.
++
++Success creates a private senior ancestor and a linear child, stores a tagged
++child capability in the slot and returns the ancestor ID in scalar `rd`.
++The trusted adapter retains that ID for arena retirement. Discarding `rd`
++does not suppress allocation. Application derivations remain below the
++private ancestor, including subsequent application `MREV` operations.
++
++=== CSRETIRE
++
++The selected guest table is `srevroot`. The operation validates and walks the
++ancestor's proper descendants, invalidates and unlinks them, then invalidates
++and unlinks the ancestor. It returns scalar zero on success or one for an
++invalid identity/table or rejected list walk. `rs2` is currently ignored.
++Retirement does not itself unmap pages, clear every stale tag, or free IDs.
++The trusted adapter retires authority before mapping/backing reuse and uses
++the collection protocol before recycling node identities.
++
++== Control registers
++
++[%header,cols="1,1,1,4"]
++|===
++|CSR |Address |Access |Meaning
++|`scapctl` |`0x5c0` |S/M read/write
++|Bit 0 selects the separate protected-U experiment; other bits read as zero.
++It is not the virtual C entry mechanism.
++|`srevroot` |`0x5c1` |S/M read/write
++|Physical guest-table base; low 12 bits are cleared on write. Zero selects no table.
++|`urevavail` |`0xcc0` |U/S/M read-only
++|Free IDs in the selected valid guest table; zero for an invalid or missing table.
++|===
++
++The virtual application may read `urevavail` but cannot write the roots.
++Virtual contexts use their bound guest table; protected U uses the selected
++table when enabled; S uses it when `srevroot` is nonzero. Legacy physical
++C/M execution retains its host-tree backend. Privileged lifetime operations
++explicitly target the guest table. A namespace switch must change both
++translation and lifetime state consistently; QEMU restores them on context
++entry/escape and flushes translation state when required.
++
++== Guest lifetime table ABI
++
++The table starts at a 4-KiB-aligned physical RAM address and consists of
++16-byte slots. Its complete range must be ordinary writable RAM. It is
++kernel-owned, inaccessible for application modification and physically
++contiguous in this implementation. Process-local node IDs do not imply a
++pageable node table. All multibyte fields are little-endian.
++
++[%header,cols="1,1,4"]
++|===
++|Offset |Width |Field
++|`0` |64 bits |Capacity, including reserved slots; bit 63 enables recycling
++|`8` |64 bits |`next`, the high-water mark; initially 1, or 2 with recycling
++|`16 * id + 0` |32 bits |Previous ID; zero terminates a list
++|`16 * id + 4` |32 bits |Next ID; zero terminates a list
++|`16 * id + 8` |32 bits |Depth
++|`16 * id + 12` |32 bits |Flags: VALID=1, LINEAR=2, FREE=4
++|===
++
++Capacity is at most `2^31`; `next` must lie between the first usable ID and
++capacity. IDs must be below `next`, not merely below capacity.
++Slot zero is always the header. In recycling mode slot one is also reserved:
++offsets 16 and 20 contain 32-bit free-list head and count, and offset 24
++contains the 64-bit allocation counter. Its first usable ID is two.
++`urevavail = capacity - next + free_count` for a valid table (free count is
++zero without recycling). Monotone mode never reuses an issued ID.
++
++Record updates use the same list algorithm for host and guest stores.
++Operations preflight the needed records and capacity before mutation;
++revocation has a visit bound. These checks assume a trusted table owner and
++the prototype's stable RAM map, not concurrent modification by another hart
++or a malicious OS.
++
++== CSRUNV context ABI
++
++The caller owns a pinned, 16-byte-aligned physical frame in writable ordinary
++RAM, not application-accessible. A frame address identifies a saved context
++on the hart. There are currently 32 supervisor slots, shared with the
++physical supervisor; this is an implementation limit, not a process quota.
++
++[%header,cols="1,1,4"]
++|===
++|Offset |Bytes |Meaning
++|0 |8 |Initial `satp`; mode must be Sv39 (8)
++|8 |8 |Initial nonzero guest-table root
++|16 |8 |Output event kind
++|24 |8 |Output cause
++|32 |8 |Output event PC
++|40 |8 |Output fault address/data
++|48 |8 |Legacy raw low-word a0 result; use the cursor views below for capabilities
++|56 |8 |Options: bit 0 resumable ECALL; bit 1 resumable page faults
++|64 |16 |Initial tagged PCC
++|`64 + 16*i`, i=1..31 |16 each |Initial full-width x1..x31, including physical tags
++|576..639 |8 each |Output scalar cursor/value views of a0..a7 when either option is set
++|640 |8 |Collection page count
++|648 |8 |Physical address of the collection page-address array
++|===
++
++The base frame is 576 bytes. Nonzero options require 640 bytes; collection
++requires 656 bytes. Unknown option bits are rejected. Initial admission checks
++require a tagged PCC; the execution check enforces its type, rights, bounds
++and liveness. Root/header validity is enforced by table accesses.
++
++On first entry the processor transfers PCC and GPR slots into the context and
++clears all 32 source slots, including bytes and tags. Platform capability
++registers start empty. Floating-point and vector state, when present, are
++initialized and preserved with the context. Subsequent resumptions use the
++saved state, not new register values written into the input frame. Roots and
++options remain bound even if the caller rewrites that frame.
++
++[%header,cols="1,2,4"]
++|===
++|Action |Name |Behavior
++|0 |Enter/resume |Create a context or resume a paused non-service event at its saved PC
++|1 |Forget |Discard its saved supervisor state; return zero, including if no slot exists
++|2 |Service reply |For a paused ECALL, transfer frame slot 224 to a0, clear that slot, and resume at PC+4
++|3 |Collect |Sweep the paused context's namespace without entering application code; return reclaimed count or `UINT64_MAX` on rejection/failure
++|===
++
++Calls from U/C mode, nested/active supervisor entry and actions above 3 raise
++illegal-instruction exceptions. Invalid frames, inadmissible context states
++or unavailable supervisor slots raise cause 29 with zero data. The base frame
++must be valid even for forget. A terminal context must be forgotten before
++reusing its frame. Forget does not revoke arenas or scrub all application memory.
++
++[%header,cols="1,2,4"]
++|===
++|Event kind |Meaning |Continuation
++|1 |Quantum/asynchronous escape |Saved context; action 0 resumes at the saved PC
++|2 |Terminal fault |Cannot resume; discard and perform adapter cleanup
++|3 |Service ECALL |Requires option bit 0; cause 11 in this encoding; action 2 supplies a0 and advances PC once
++|4 |Page fault |Requires option bit 1; cause 12, 13 or 15; repair mapping then action 0 retries the same instruction
++|5 |Node pressure |Recycling profile; cause 30, zero data; collect before retrying the allocation instruction
++|===
++
++The event kind is also returned in scalar `rd`. The caller's scalar and
++capability state, privilege and translation/lifetime roots are restored on
++escape. The 5-ms QEMU quantum is platform policy, not a promised ISA timing.
++Physical-supervisor kind zero is not a virtual `RETURN` path: application
++exit uses a service followed by adapter cleanup/forget.
++
++=== Recycling without generations
++
++Recycling is a *trusted stop-and-sweep protocol*, not immediate reuse on
++`REVOKE`. The adapter stops all contexts of N_A and provides every physical
++page that may hold its tags, including entry/reply frames and resident pages
++currently inaccessible through PTEs. Shared tagged mappings are unsupported.
++The page-address array is 16-byte aligned, holds 64-bit physical page bases,
++and currently has 1..262145 entries. Every page must be 4-KiB aligned RAM.
++The whole list is preflighted before tags are changed.
++
++Action 3 clears dead memory tags, demotes dead tagged GPRs in all saved
++contexts with the same root, and pins invalid PCC identities (PCC has no
++separate tag). Only then are unpinned invalid IDs returned to the free list.
++Memory payload bytes need not be erased by this sweep. A stale bit pattern
++without a tag cannot regain capability authority when its ID is reallocated.
++
++QEMU cannot establish that the supplied page inventory is complete. The
++adapter must ensure completeness, exclusion of unregistered tagged aliases
++and namespace quiescence for the entire operation. Table/root reuse and task
++exit require the same accounting. Multi-hart quiescence and tag-preserving
++page migration are not defined by this prototype.
++
++== Transfer faults and exception data
++
++Protected-path `LDC` consumes a tagged source slot whose type is not NONLIN;
++`STC` consumes a tagged non-NONLIN source register. A consuming load needs
++write authority and a writable PTE as well as read authority. All checks,
++including the complete 16-byte span and ordinary RAM backing, precede any
++source consumption or destination publication. A failing operation leaves
++bytes, tags and registers unchanged; a retry transfers once. Read and
++consume must name the same translated physical granule, including when a
++page-table update has not been followed by a translation fence. Legacy
++physical C transfer behavior was not changed by the Q-12 prototype patch.
++
++The capability causes remain 24..30. Capability memory faults carry the
++effective virtual address; virtual PCC faults carry the faulting PC;
++non-memory capability faults and resource exhaustion carry zero. Each raise
++sets explicit fault data and delivery consumes it, preventing reuse of a
++previous trap's address. The direct-U experiment additionally permits
++`medeleg` bits 24..30, but virtual C reports events through `CSRUNV`.
++
++These fault data deliberately differ from the base academic chapter, which
++describes instruction bits for causes 24..29 and withholds cross-world fault
++data. The trusted-OS profile discloses faults and register cursor views to
++the trusted adapter. It does not promise confidentiality against that adapter.
++
++== Encoding and conformance limits
++
++The prototype retains QEMU's existing 128-bit memory representation: the low
++64 bits are the cursor for ordinary capabilities; the upper word contains
++27 bounds bits (0..26), type (27..29), permissions (30..32) and a 31-bit node
++ID (33..63). There are no generation or address-space bits. This is not the
++deployed RTL layout, which allocates 30 node bits and 28 bounds bits.
++
++QEMU still keeps uncompressed bounds alongside physical tags in some paths.
++Although `CSMINT` rejects inexact round trips, general representability of
++`SHRINK`, `SPLIT` and every store/load path remains a separate ISA-freeze
++requirement. A tag-bit-only implementation must never enlarge authority on
++store/load. Existing QEMU application results do not prove that requirement
++or bit-exact RTL conformance.
++
++Before freezing this interface: reconcile both encodings and compressed
++bounds semantics; select permanent instruction/CSR allocations; specify the
++portable context-storage and resource-failure contract; and validate another
++OS adapter. Direct syscalls, full POSIX signal/register editing, fork, tagged
++shared mappings, swap, migration and multi-hart execution require further
++contracts and qualification. This appendix does not imply those features.
++
++== Implementation and review evidence
++
++All paths below are relative to the QEMU reference revision above:
++
++* `target/riscv/insn32.decode`, `insn_trans/trans_capstone.c.inc`, `csr.c`:
++  encodings and privilege checks.
++* `target/riscv/translate.c`, `cpu_helper.c`, `op_helper.c`:
++  virtual translation, PCC checks, fault delivery and consuming transfers.
++* `target/riscv/capstone_table.c`, `cap_rev_table.c`, `cap_rev_tree.c`:
++  mint/retirement, guest records and the common revocation algorithm.
++* `target/riscv/capstone_supervisor.c`: context frame, events and collection.
++* `tests/virtual-capstone-m1/`: recorded 60/60 foundation gate.
++* `tests/virtual-capstone-runtime/`: recorded 33/33 virtual execution gate,
++  including the cached-PCC mutation control; U-access regression 69/69.
++
++The llvm-capstone baseline additionally records runtime, VM, thread, allocator
++and application gates under `capstone/runtime/virtual/` and per-port result
++directories. These are evidence for the recorded revisions, not results of a
++future merge with the shared branches and not a proof of the complete ISA.
