@@ -124,6 +124,91 @@ are not non-runs: each case prints its own pre-defect marker and each defect arm
 reports `DEFECT-REPRODUCED` with the damage it did, inside the allocation its
 nested allocator owns.
 
+## The nested allocator's own protection, measured
+
+The arm above runs each nested allocator UNMODIFIED, and the glossary's word
+for what that costs is the right one: a release that never reaches the system
+allocator is **invisible**. But every one of these allocators already has a
+Capstone adaptation in this tree, written for the physical domain arms, and the
+virtual heap already exports the hook they need --
+`__capstone_sublet_malloc_linear` in `runtime/virtual/heap.c`, which lends a
+whole block LINEAR and keeps the senior handle above everything the borrower
+carves. So the adaptation can be measured here too, and FFmpeg's buffer pools
+were taken first because that port already had the payload's origin behind one
+interchangeable backend (`src/shared/payload-backend.h`).
+
+What it took: a 13-line CMake branch, a 14-line borrow entry point in the
+existing capability backend, and a mode argument plus a guarded borrow in the
+two corpus drivers. No new adapter and no new lease policy --
+`payload-capabilities.c` and `allocators/sublet/pool-leases.c` are the
+freestanding domain's, unchanged. The three protection levels the backend
+already had are selected at run time, so all of it is **one binary differing in
+one argument**, which is what the corpus contract asks of paired arms.
+
+| arm | bounds per object | revoke when | `pool-repros` | `subobject-repros` |
+|---|---|---|---:|---:|
+| native pointer backend | no | never | 0/4 | 0/10 |
+| capability backend, mode 0 | **yes** | never | 0/4 | 0/10 |
+| capability backend, mode 1 | yes | the **block** goes back | 0/4 | 0/10 |
+| capability backend, mode 2 | yes | the **lease** goes back | **4/4** | 0/10 |
+
+Controls: 12/12 and 30/30 held. Bundles `results/20261007-virtual` (native) and
+`results/20261007-virtual-nested-capability` (the three capability modes).
+
+Three things that are worth having been measured rather than argued:
+
+**Block-granular revocation does not help a pool that recycles.** Mode 1 takes
+an outer handle per block and revokes it when the block is freed, and it
+catches nothing here -- because `av_buffer_pool` recycles the *buffer*, so the
+block never goes back to the allocator while a case runs. Only mode 2, which
+mints fresh authority per lease and revokes it when the pool takes the buffer
+back, fires: 4 of 4, all cause 24, the revoked alias no longer being a
+capability. The granularity has to match the event the application actually
+performs, and reading the adapter is not enough to know that it does.
+
+**Per-object bounds are available without any of this, and they do not help
+here.** `ff2_payload_issue_pointer` shrinks every lease in all three modes, so
+modes 0 and 1 differ from the native backend in exactly that -- and all three
+report 0 of 4, because these four defects are temporal. An earlier expectation
+in this lane, that narrowing alone would answer the spatial corpus, is
+withdrawn: see below.
+
+**The three silent arms are not indistinguishable, and the corpus cannot show
+it.** Modes 0 and 1 and the native backend all report 0/4, so
+`observe/bounds-probe.c` reads the issued buffer's extent off the capability
+itself, through a slot, for a 64-byte lease:
+
+    BOUNDS mode=0 requested=64 length=67108864 base=0x3f78000000 WHOLE-PAYLOAD
+    BOUNDS mode=0 requested=64 length=64       base=0x3f94000000 PER-OBJECT
+    BOUNDS mode=1 requested=64 length=64       base=0x3f88000000 PER-OBJECT
+    BOUNDS mode=2 requested=64 length=64       base=0x3fa0000000 PER-OBJECT
+
+The native backend hands out 64 MiB of reach for a 64-byte object -- the whole
+payload, which is what an unshrunk interior pointer carries. The capability
+modes hand out 64 bytes. A silence that three mechanisms produce is exactly
+where the mechanism has to be shown directly rather than inferred.
+
+**`subobject-repros` is 0 of 10 under every arm, and that is a result.** Its
+crossings run from one member of a struct into another inside ONE allocation --
+case 0 overwrites `du_cpb_removal_delay_increment_minus1[0]` from
+`num_nalus_in_du_minus1[600]`, "inside one refstruct allocation". An allocator
+can only protect a boundary it issues, and a struct member is not one, so no
+allocator-level scheme reaches these ten.
+
+### Withdrawn
+
+Earlier in this lane the 0-of-N results for the nested corpora were explained as
+per-object bounds being LOST inside an arena. The first half is right -- an
+interior pointer does inherit the block's bounds, and the probe above measures
+it at 2^20 times the object -- but "lost" was wrong: `cap_shrink` works on a
+delinearised alias, which `sublet_heap.c` itself relies on
+(`sh_narrow(sublet_take(&sh_cap[i]), n)`), so any nested allocator can narrow
+what it hands out with an ordinary `malloc` block and no special API. The
+prediction that followed -- that narrowing alone would turn the spatial cases
+into catches -- is refuted by the table above: modes 0 and 1 narrow and still
+report 0 of 10 on `subobject-repros`, because the boundary those cases cross is
+not the object's.
+
 ## What had to be built
 
 Three builders, a planner, a runner, a collector and one toolchain, all new.

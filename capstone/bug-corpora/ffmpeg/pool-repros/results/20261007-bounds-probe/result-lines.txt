@@ -1,0 +1,4 @@
+BOUNDS mode=0 requested=64 length=67108864 base=0x3f78000000 WHOLE-PAYLOAD
+BOUNDS mode=0 requested=64 length=64 base=0x3f94000000 PER-OBJECT
+BOUNDS mode=1 requested=64 length=64 base=0x3f88000000 PER-OBJECT
+BOUNDS mode=2 requested=64 length=64 base=0x3fa0000000 PER-OBJECT

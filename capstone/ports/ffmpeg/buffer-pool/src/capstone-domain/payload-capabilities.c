@@ -47,6 +47,28 @@ void ff2_payload_init(void *p, size_t n) {
     ff2_fail(302);
   ff2_pool_init_region(payload_base, n);
 }
+#ifdef FFPOOL_BORROW_LINEAR
+/* The virtual application platform has no region grant to receive: the payload
+ * is a block borrowed LINEAR from the system allocator, which keeps the senior
+ * handle above everything this backend then carves, so one return revokes the
+ * whole pool. Borrowing happens HERE rather than in the caller for the reason
+ * payload-backend.h gives for ff2_pool_init_region's scalar address: a linear
+ * capability must not be forwarded through another C call. */
+unsigned long __capstone_sublet_malloc_linear(size_t n, capstone_cap_slot *out);
+
+void ff2_payload_borrow(size_t n) {
+  if (!__capstone_sublet_malloc_linear(n, &remaining))
+    ff2_fail(303);
+  uintptr_t payload_base = capstone_cap_base(&remaining);
+  if (capstone_cap_type(&remaining) != CAPSTONE_CAP_LINEAR ||
+      capstone_cap_end(&remaining) - payload_base < n)
+    ff2_fail(304);
+  /* The capacity is the amount asked for, not the block the heap rounded up
+   * to, so this arm carves from exactly as much payload as the others. */
+  ff2_pool_init_region(payload_base, n);
+}
+#endif
+
 static void *spatial_alias(struct payload_block *b) {
   void *p = capstone_cap_delinearize(&b->region);
   sublet_stats.delin++;

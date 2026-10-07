@@ -173,7 +173,9 @@
         "capstone/ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev",
         "capstone/ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39",
         "capstone/bug-corpora/ffmpeg/pool-repros/results/20261006-cheribsd",
-        "capstone/bug-corpora/ffmpeg/pool-repros/results/20261007-virtual"
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/20261007-virtual",
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/20261007-virtual-nested-capability",
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/20261007-bounds-probe"
       ],
       "advisories": [],
       "shape_table": true,
@@ -214,7 +216,8 @@
         "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261005-native-subobject",
         "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-native-subobject-7",
         "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd",
-        "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261007-virtual"
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261007-virtual",
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261007-virtual-nested-capability"
       ],
       "advisories": [],
       "shape_table": true,

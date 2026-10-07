@@ -1,0 +1,28 @@
+{
+  "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+  "arm": "bounds-probe",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 4,
+  "measured": 4,
+  "controls": 0,
+  "controls_held": 0,
+  "verdicts": {
+    "silent": 4
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "74e99cc056bc92fdb93f681f810aa0efdb8f215b49d32ab46b419d79181c57fa",
+  "staged_sha256": {},
+  "image_sha256": {
+    "native-backend-mode0": "fb79f353604aa9d3f74c24565bda2eb8e45a9d4e8654831d009626a9e5069fca",
+    "capability-backend-mode0": "b3700d67c83fde157444a4b35e4cc4aea622e4cfaa6675b5a21a3804299f1718",
+    "capability-backend-mode1": "b3700d67c83fde157444a4b35e4cc4aea622e4cfaa6675b5a21a3804299f1718",
+    "capability-backend-mode2": "b3700d67c83fde157444a4b35e4cc4aea622e4cfaa6675b5a21a3804299f1718"
+  }
+}
