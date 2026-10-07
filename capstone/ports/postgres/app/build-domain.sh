@@ -75,6 +75,10 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -ffunction-sections -fdata-sections -O1 -w -Wno-int-conversion "${INC[@]}")
 RF=("${CF[@]}" -std=c99 -D_XOPEN_SOURCE=700
     -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+  CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+  RF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+fi
 O=$ROOT/runtime
 if stage runtime; then
   EXTRA=()
