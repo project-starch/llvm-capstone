@@ -13,6 +13,8 @@
 #include <asm/io.h>
 #include <asm/pgtable.h>
 #include "wire.h"
+#include "cap_rev_table_abi.h"
+_Static_assert(CV_NODE_RESERVE == CAP_REV_TABLE_RESERVE, "processor reserve ABI");
 
 struct arena {
     unsigned long address, bytes, ancestor;
@@ -45,6 +47,81 @@ struct context {
     u64 next_id, ids[CV_MAX_ARENAS];
 };
 static DEFINE_MUTEX(vm_lock);
+/* Quotas are in base pages; zero means the 31-bit ISA limit. Parameters are
+ * read-only after module load so concurrent contexts see a stable policy. */
+static unsigned long node_initial_pages = 4, node_batch_pages = 16;
+static unsigned long node_max_pages;
+module_param(node_initial_pages, ulong, 0444);
+module_param(node_batch_pages, ulong, 0444);
+module_param(node_max_pages, ulong, 0444);
+
+static unsigned long node_capacity(const struct context *c)
+{ return c->table[0] & ~CAP_REV_TABLE_FLAGS; }
+static unsigned long node_available(const struct context *c)
+{ return node_capacity(c) - c->table[1] + (c->table[2] >> 32); }
+
+static unsigned long *node_new_page(struct context *c)
+{
+    unsigned long *p = (void *)get_zeroed_page(GFP_KERNEL);
+    if (p) c->stats.node_bytes += PAGE_SIZE;
+    return p;
+}
+
+/* These are metadata pages owned by the adapter, not application arenas.
+ * vm_lock excludes every C execution while a published root grows. */
+static int node_add_page(struct context *c, unsigned long id)
+{
+    unsigned long *entry = c->table + CAP_REV_TABLE_DIRECTORY / 8 + (id >> 26);
+    for (unsigned level = 0; level < 3; ++level) {
+        unsigned long *page;
+        if (!*entry) {
+            page = node_new_page(c);
+            if (!page) return -ENOMEM;
+            WRITE_ONCE(*entry, virt_to_phys(page));
+        } else page = phys_to_virt(*entry);
+        if (level != 2)
+            entry = page + ((id >> (level == 0 ? 17 : 8)) & 511);
+    }
+    smp_wmb();
+    WRITE_ONCE(c->table[0], CAP_REV_TABLE_FLAGS | (id + 256));
+    return 0;
+}
+
+static int node_grow(struct context *c, unsigned long required)
+{
+    unsigned long limit = node_max_pages ?: (1UL << 23);
+    unsigned long pages = node_capacity(c) / 256, before = pages;
+    unsigned long need, end;
+    if (node_available(c) >= required) return 0;
+    need = DIV_ROUND_UP(required - node_available(c), 256UL);
+    end = min(limit, pages + max(node_batch_pages, need));
+    for (; pages < end; ++pages)
+        if (node_add_page(c, pages * 256)) break;
+    if (pages != before) ++c->stats.node_growths;
+    return node_available(c) >= required ? 0 : -ENOMEM;
+}
+
+static void node_free_table(struct context *c)
+{
+    if (!c->table) return;
+    for (unsigned i = 0; i < CAP_REV_TABLE_ROOT_ENTRIES; ++i) {
+        unsigned long pa = c->table[CAP_REV_TABLE_DIRECTORY / 8 + i];
+        unsigned long *middle;
+        if (!pa) continue;
+        middle = phys_to_virt(pa);
+        for (unsigned j = 0; j < 512; ++j) {
+            unsigned long *leaf;
+            if (!middle[j]) continue;
+            leaf = phys_to_virt(middle[j]);
+            for (unsigned k = 0; k < 512; ++k)
+                if (leaf[k]) free_page((unsigned long)phys_to_virt(leaf[k]));
+            free_page((unsigned long)leaf);
+        }
+        free_page((unsigned long)middle);
+    }
+    free_page((unsigned long)c->table);
+    c->table = NULL;
+}
 static LIST_HEAD(contexts);
 static u64 allocated_total, high_water, collections_total, reclaimed_total;
 
@@ -200,10 +277,39 @@ static int pin_remaining(struct context *c, struct arena *a)
     return error;
 }
 
+struct collect_list {
+    unsigned long *head, *tail, count;
+};
+
+static int collect_page(struct collect_list *list, unsigned long pa)
+{
+    if (!list->tail || list->tail[1] == CAP_REV_COLLECT_ENTRIES) {
+        unsigned long *page = (void *)get_zeroed_page(GFP_KERNEL);
+        if (!page) return -ENOMEM;
+        if (list->tail) list->tail[0] = virt_to_phys(page);
+        else list->head = page;
+        list->tail = page;
+    }
+    list->tail[2 + list->tail[1]++] = pa;
+    ++list->count;
+    return 0;
+}
+
+static void collect_free(struct collect_list *list)
+{
+    unsigned long *page = list->head;
+    while (page) {
+        unsigned long next = page[0];
+        free_page((unsigned long)page);
+        page = next ? phys_to_virt(next) : NULL;
+    }
+}
+
 static int collect(struct context *c, struct cv_thread *owner)
 {
-    unsigned long count, at = 0, flags, result, *pages;
-    unsigned order;
+    unsigned long flags, result;
+    struct collect_list list = {0};
+    int error = -ENOMEM;
     struct cv_thread *t;
     /* Include resident pages populated by Linux/the trusted launcher without
      * a C fault. Missing pages are not materialized; any inspection failure
@@ -212,25 +318,62 @@ static int collect(struct context *c, struct cv_thread *owner)
         int error = pin_remaining(c, &c->arenas[i]);
         if (error) return error;
     }
-    count = c->stats.pinned_pages + thread_count(c);
-    order = get_order(count * sizeof(unsigned long));
-    pages = (void *)__get_free_pages(GFP_KERNEL, order);
-    if (!pages) return -ENOMEM;
     list_for_each_entry(t, &c->threads, link)
-        pages[at++] = t->frame_pa;
+        if (collect_page(&list, t->frame_pa)) goto out;
     for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
         for (unsigned j = 0; j < c->arenas[i].count; ++j)
-            if (c->arenas[i].pages[j]) pages[at++] = page_to_phys(c->arenas[i].pages[j]);
-    owner->frame[80] = at;
-    owner->frame[81] = virt_to_phys(pages);
+            if (c->arenas[i].pages[j] &&
+                collect_page(&list, page_to_phys(c->arenas[i].pages[j]))) goto out;
+    owner->frame[80] = list.count | CAP_REV_COLLECT_CHAIN;
+    owner->frame[81] = virt_to_phys(list.head);
     preempt_disable(); local_irq_save(flags);
     result = run(owner->frame_pa, 3);
     local_irq_restore(flags); preempt_enable();
     owner->frame[80] = owner->frame[81] = 0;
-    free_pages((unsigned long)pages, order);
-    if (result == ULONG_MAX) return -EIO;
+    if (result == ULONG_MAX) { error = -EIO; goto out; }
     ++c->stats.collections; c->stats.reclaimed += result;
-    return 0;
+    error = 0;
+out:
+    collect_free(&list);
+    return error;
+}
+
+/* Caller holds vm_lock, with interrupts/preemption enabled. The same path
+ * supplies user instructions, privileged mint and the allocator's preflight.
+ * A count is available capacity, not a reservation against other C threads. */
+static int ensure_nodes(struct context *c, unsigned long required)
+{
+    struct cv_thread *owner = NULL, *t;
+    unsigned long available = node_available(c);
+    unsigned long sweep_pages = thread_count(c), collect_min;
+    bool collected = false;
+    int error;
+    if (required > (1UL << 31)) return -ENOMEM;
+    if (available >= required) return 0;
+    list_for_each_entry(t, &c->threads, link)
+        if (t->started && !t->terminal) { owner = t; break; }
+    /* pin_remaining inspects every registered virtual page, including holes.
+     * Amortize that scan over at least as many retired identities and one
+     * growth batch; a tiny table beside a large sparse VMA must not cause a
+     * full scan every few hundred allocations. Existing free IDs win above. */
+    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
+        sweep_pages += c->arenas[i].bytes / PAGE_SIZE;
+    collect_min = max(sweep_pages, node_batch_pages * 256);
+    collect_min = max(collect_min, node_capacity(c) / 4);
+    if (owner && c->table[5] >= max(required - available, collect_min)) {
+        error = collect(c, owner);
+        if (error) return error;
+        collected = true;
+        if (node_available(c) >= required) return 0;
+    }
+    error = node_grow(c, required);
+    if (!error) return 0;
+    /* At a quota or memory limit, even a small successful sweep can help. */
+    if (!collected && owner && c->table[5]) {
+        error = collect(c, owner);
+        if (error) return error;
+    }
+    return node_available(c) >= required ? 0 : -ENOMEM;
 }
 
 static unsigned long run(unsigned long frame, unsigned long action)
@@ -314,7 +457,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     }
     if (!a) return -ENOSPC;
     if (mapped + r->bytes > CV_MAX_BYTES) return -ENOMEM;
-    if (((c->table[0] & ~(1UL << 63)) - c->table[1] + (c->table[2] >> 32)) < 2) return -ENOSPC;
+    if (ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE)) return -ENOMEM;
     mmap_read_lock(c->mm);
     for (unsigned long at = r->address; at < r->address + r->bytes;) {
         struct vm_area_struct *v = find_vma(c->mm, at);
@@ -432,12 +575,9 @@ static void node_stats(struct context *c)
 {
     c->stats.nodes = c->table[3];
     c->stats.nodes_high_water = c->table[1] - 2;
-    c->stats.nodes_live = c->stats.nodes_retired = 0;
-    for (unsigned long id = 2; id < c->table[1]; ++id) {
-        unsigned long flags = c->table[2 * id + 1] >> 32;
-        if (flags & 1) ++c->stats.nodes_live;
-        else if (!(flags & 4)) ++c->stats.nodes_retired;
-    }
+    c->stats.nodes_retired = c->table[5];
+    c->stats.nodes_live = c->stats.nodes_high_water - c->table[5] - (c->table[2] >> 32);
+    c->stats.node_capacity = node_capacity(c);
     high_water = max(high_water, c->stats.nodes_high_water);
 }
 
@@ -462,10 +602,20 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
             stats.nodes_retired += other->stats.nodes_retired;
             stats.collections += other->stats.collections;
             stats.reclaimed += other->stats.reclaimed;
+            stats.node_capacity += other->stats.node_capacity;
+            stats.node_bytes += other->stats.node_bytes;
             if (other->stats.arenas) ++stats.contexts;
         }
         stats.nodes_high_water = high_water;
         rc = copy_to_user((void __user *)arg, &stats, sizeof(stats)) ? -EFAULT : 0;
+    } else if (op == CV_NODES) {
+        struct cv_nodes r;
+        struct cv_thread *t;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        t = find_thread(c, r.thread);
+        if (!t || t->terminal) { rc = -ESRCH; goto out; }
+        if (r.available > (1UL << 31) - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
+        rc = ensure_nodes(c, r.available + CAP_REV_TABLE_RESERVE);
     } else if (op == CV_ADD) {
         struct cv_map r;
         struct cv_thread *t;
@@ -540,11 +690,10 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
         local_irq_restore(flags); preempt_enable();
         ++c->stats.steps;
         if (t->event == 5) {
-            int error = collect(c, t);
-            unsigned long available = (c->table[0] & ~(1UL << 63)) - c->table[1] + (c->table[2] >> 32);
+            int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
             /* Return through Linux between retries. Refuse endless retries
              * when the namespace consists of live or pinned identities. */
-            t->frame[2] = error || available <= 256 ? 2 : 1;
+            t->frame[2] = error ? 2 : 1;
         }
         r.kind = t->frame[2]; r.cause = t->frame[3];
         r.pc = t->frame[4]; r.address = t->frame[5];
@@ -578,7 +727,13 @@ static int vm_open(struct inode *inode, struct file *f)
     struct context *c;
     struct context *existing;
     struct cv_thread *t;
-    if (num_online_cpus() != 1 || !current->mm) return -EOPNOTSUPP;
+    unsigned long flags, previous_root, available;
+    if (num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
+        return -EOPNOTSUPP;
+    if (node_initial_pages < 2 || node_initial_pages > (1UL << 23) ||
+        !node_batch_pages || node_batch_pages > (1UL << 23) ||
+        node_max_pages > (1UL << 23) ||
+        (node_max_pages && node_max_pages < node_initial_pages)) return -EINVAL;
     c = kvzalloc(sizeof(*c), GFP_KERNEL);
     if (!c) return -ENOMEM;
     INIT_LIST_HEAD(&c->threads);
@@ -586,13 +741,32 @@ static int vm_open(struct inode *inode, struct file *f)
     t = kvzalloc(sizeof(*t), GFP_KERNEL);
     if (!t) { kvfree(c); return -ENOMEM; }
     c->frame = (void *)get_zeroed_page(GFP_KERNEL);
-    c->table = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, CV_NODE_ORDER);
+    c->table = node_new_page(c);
     if (!c->frame || !c->table) {
         if (c->frame) free_page((unsigned long)c->frame);
-        if (c->table) free_pages((unsigned long)c->table, CV_NODE_ORDER);
+        node_free_table(c);
         kvfree(t); kvfree(c); return -ENOMEM;
     }
-    c->table[0] = (1UL << 63) | (CV_NODE_BYTES / 16); c->table[1] = 2;
+    c->table[0] = CAP_REV_TABLE_FLAGS;
+    c->table[1] = 2;
+    c->table[4] = CAP_REV_TABLE_MAGIC;
+    for (unsigned long i = 0; i < node_initial_pages; ++i) {
+        if (node_add_page(c, i * 256)) {
+            node_free_table(c); free_page((unsigned long)c->frame);
+            kvfree(t); kvfree(c); return -ENOMEM;
+        }
+    }
+    /* An older processor rejects the versioned format through urevavail.
+     * Detect that before CSMINT could fault in the kernel context. */
+    preempt_disable(); local_irq_save(flags);
+    previous_root = select_root(c);
+    asm volatile("csrr %0, 0xcc0" : "=r"(available));
+    restore_root(previous_root);
+    local_irq_restore(flags); preempt_enable();
+    if (available != node_capacity(c) - 2) {
+        node_free_table(c); free_page((unsigned long)c->frame);
+        kvfree(t); kvfree(c); return -EOPNOTSUPP;
+    }
     c->frame[1] = virt_to_phys(c->table);
     t->context = c; t->id = 0; t->frame = c->frame;
     t->frame_pa = virt_to_phys(c->frame); t->user_frame = false;
@@ -604,8 +778,7 @@ static int vm_open(struct inode *inode, struct file *f)
         if (existing->mm == c->mm) {
             mutex_unlock(&vm_lock);
             mmdrop(c->mm);
-            memset(c->table, 0, CV_NODE_BYTES);
-            free_pages((unsigned long)c->table, CV_NODE_ORDER);
+            node_free_table(c);
             memset(c->frame, 0, PAGE_SIZE);
             free_page((unsigned long)c->frame);
             kvfree(t); kvfree(c);
@@ -649,7 +822,7 @@ static int vm_release(struct inode *inode, struct file *f)
         else if (t->frame) { memset(t->frame, 0, PAGE_SIZE); free_page((unsigned long)t->frame); }
         kvfree(t);
     }
-    memset(c->table, 0, CV_NODE_BYTES); free_pages((unsigned long)c->table, CV_NODE_ORDER);
+    node_free_table(c);
     mmdrop(c->mm); kvfree(c);
     mutex_unlock(&vm_lock);
     return 0;

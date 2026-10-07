@@ -204,6 +204,10 @@ int main(int argc, char **argv)
                     "recycling contents");
             free(p);
             require(held[i & 255] == 0x5a, "live object survived collection");
+            if ((i + 1) % 50000 == 0) {
+                printf("VIRTUAL_CHURN_PROGRESS mode=%s allocations=%u\n", mode, i + 1);
+                fflush(stdout);
+            }
         }
         if (!strcmp(mode, "sparse-stale")) {
             require(!mprotect(slot, 4096, PROT_READ), "restore stale tag storage");
