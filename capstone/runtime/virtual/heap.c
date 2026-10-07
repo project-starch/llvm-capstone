@@ -84,6 +84,14 @@ static unsigned long free_ids(void)
     __asm__ volatile("csrr %0, 0xcc0" : "=r"(n));
     return n;
 }
+static int ensure_ids(unsigned long need)
+{
+    if (free_ids() >= need + CV_NODE_RESERVE) return 0;
+    long rc = __capstone_vm_nodes(need);
+    if (rc < 0) { errno = -rc; return -1; }
+    if (free_ids() < need + CV_NODE_RESERVE) { errno = ENOMEM; return -1; }
+    return 0;
+}
 
 static unsigned long power(unsigned long n)
 {
@@ -106,7 +114,7 @@ static int grow(unsigned long size)
     }
     /* Account after metadata growth: two roots, need-1 splits and MREV.
      * The heap mutex protects the allocator state across service calls. */
-    if (free_ids() < need + 2) return -1;
+    if (ensure_ids(need + 2)) return -1;
     if (cap_vm_acquire(&rest, bytes, bytes, PROT_READ | PROT_WRITE,
                        6, CAP_VM_HEAP)) return -1;
     unsigned long base;
@@ -131,7 +139,7 @@ static int grow(unsigned long size)
 static struct block *reserve_block(size_t n, size_t alignment)
 {
     unsigned long size = power(n > alignment ? n : alignment);
-    if (!size || !free_ids()) { errno = ENOMEM; return NULL; }
+    if (!size || ensure_ids(1)) { errno = ENOMEM; return NULL; }
     for (unsigned retry = 0; retry < 2; ++retry) {
         for (unsigned a = 0; a < arena_capacity; ++a) {
             struct arena *arena = arena_at(a);

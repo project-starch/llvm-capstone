@@ -17,6 +17,9 @@
 #define CV_SERVICE_PTHREAD_EXIT 9
 #define CV_SERVICE_THREAD_DELEGATE 10
 #define CV_SERVICE_THREAD_SELF 11
+#define CV_SERVICE_NODES 12
+/* Node instructions pause at this remaining cleanup reserve. */
+#define CV_NODE_RESERVE 256
 #define CV_MAP_HEAP 0
 #define CV_MAP_APPLICATION 1
 #define CV_MAP_METADATA 2
