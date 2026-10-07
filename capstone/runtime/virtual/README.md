@@ -299,6 +299,17 @@ their fixed-budget check before an instruction requests node growth.
 
 ## Qualification and limits
 
+The growing-table [qualification manifest](results/node-growth/qualification.json)
+records 15/15 node-growth checks, 9/9 pthread checks, 46/46 runtime/application
+checks and 198 processor checks on one QEMU executable. It includes two
+70,000-live-node populations, reuse with exact-site stale denial, quota failure,
+and both 200,000-allocation sparse recycling cases. The sparse positive case
+uses 348 KiB of node metadata, with 18 demand faults and a 486-page payload
+peak. SQLite persistence, mruby and Perl smoke pass with the new SDK.
+Application objects were relinked; the compiler, musl archive and Linux/firmware
+images were reused. This does not requalify all eight ports or their full
+bug corpora. Earlier records below retain their original fixed-table scope.
+
 The shared application source recipes support a virtual profile for CPython,
 PostgreSQL, FFmpeg and tshark; see the
 [build instructions](../../ports/common/application/README.md#virtual-source-builds).
