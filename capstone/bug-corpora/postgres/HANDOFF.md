@@ -45,7 +45,7 @@ while an OSSLCipher is live". **Before writing any reduction, look for a cheap
 error path** — a bad key length or a bad padding may reach the same place for
 nothing. Only if none exists does this need `resowner.c` added to the port.
 
-## Open items from Diego's review of PR #178
+## Open items from the external collaborator's review of PR #178
 
 1. **Scope narrowing — done.** The 14 out-of-scope cases are removed.
 2. **Old case 16 (now `sql-repros/05`) is not reached on any arm.** Confirmed:
@@ -84,8 +84,8 @@ nothing. Only if none exists does this need `resowner.c` added to the port.
 
 ## Repository state
 
-Seven commits sit on top of `6d707b7bf34a`, which is the head Diego
-force-pushed after rebasing onto dev and adding his two commits. Nothing has
+Seven commits sit on top of `6d707b7bf34a`, which is the head the external
+collaborator force-pushed after rebasing onto dev and adding their two commits. Nothing has
 been pushed. A pre-commit and a commit-msg hook are installed in
 `llvm-capstone/.git/hooks`, shared by every worktree, refusing any commit whose
 message or content is not English-only. They are self-testing: writing this
