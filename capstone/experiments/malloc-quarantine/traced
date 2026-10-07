@@ -1,0 +1,3 @@
+#!/bin/sh
+# Run a program under the tracer and the sweep probe.
+LD_PRELOAD=/root/mq/mqtrace.so:/root/mq/mqstat.so exec "$@"
