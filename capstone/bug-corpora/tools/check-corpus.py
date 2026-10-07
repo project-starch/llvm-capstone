@@ -81,6 +81,13 @@ IGNORE_KINDS = {
     "no-runtime": "no arm here can run it at all -- the case is material, not a measurement",
     "arm": "one or more named arms cannot run it; the others measure it normally",
     "out-of-scope": "neither spatial nor temporal, so outside what the study measures",
+    # The first three are properties of the case. This one is a DECISION about
+    # what the study reports, and it is a declaration rather than a view on
+    # purpose: a decision to leave a measured case out belongs in the record,
+    # next to the case, with whoever reads it able to see the reason. For merely
+    # LOOKING at a subset there is `protection-matrix.py --focus`, which writes
+    # nothing.
+    "parked": "measured or measurable, and deliberately not reported; the why says on whose decision and what it costs",
 }
 
 CASE_OPTIONAL = {"ignore", "live_in_pin", "live_proof", "live_note", "distinguishing",
@@ -509,8 +516,11 @@ def check_ignore(where, number, case, problems):
     if kind not in IGNORE_KINDS:
         problems.append(f"case {number}: ignore.kind {kind!r} is not one of "
                         f"{sorted(IGNORE_KINDS)}")
-    if len(str(spec.get("why", "")).split()) < 6:
-        problems.append(f"case {number}: ignore.why is a label, not a reason")
+    floor = 12 if kind == "parked" else 6
+    if len(str(spec.get("why", "")).split()) < floor:
+        problems.append(f"case {number}: ignore.why is a label, not a reason"
+                        + (" -- a parked case says on whose decision and what the "
+                           "omission costs" if kind == "parked" else ""))
     if kind == "arm" and not spec.get("arms"):
         problems.append(f"case {number}: ignore.kind is 'arm' with no arms named")
     if kind != "arm" and spec.get("arms"):

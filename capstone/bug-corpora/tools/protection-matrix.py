@@ -575,12 +575,86 @@ def render(corpora):
     return "\n".join(lines) + "\n"
 
 
+def selected(case, cells, specs):
+    """Does this case match every --focus narrowing?
+
+    A verdict spec widens within its own kind -- `--focus caught --focus missed`
+    is either -- and narrows across kinds: a program spec and a verdict spec both
+    have to hold. That is the only sensible reading of "the caught FFmpeg ones".
+    """
+    verdicts, places, armed = set(), set(), {}
+    for spec in specs:
+        if "@" in spec:
+            verdict, arm = spec.split("@", 1)
+            armed.setdefault(arm, set()).add(verdict)
+        elif spec in MARK or spec == "parked":
+            verdicts.add(spec)
+        else:
+            places.add(spec)
+    kinds = {a: cells[a]["verdict"] for a in ARMS}
+    parked = (case["arms"][ARMS[0]].get("kind") == "parked")
+    if verdicts:
+        have = set(kinds.values()) | ({"parked"} if parked else set())
+        if not (verdicts & have):
+            return False
+    for arm, want in armed.items():
+        if arm not in ARMS or kinds.get(arm) not in want:
+            return False
+    if places:
+        here = {case["corpus"], f"{case['corpus']}/{case['group']}", case["group"]}
+        if not (places & here):
+            return False
+    return True
+
+
+def focus(corpora, specs):
+    """One line per selected case. Deliberately not written to a file: a view
+    that overwrote the record would make the record a view."""
+    rows, counts = [], {arm: 0 for arm in ARMS}
+    total = 0
+    for corpus in corpora:
+        for case in corpus["cases"]:
+            case = dict(case, corpus=corpus["corpus"])
+            cells = {a: resolve(case["arms"][a], case["arms"]) for a in ARMS}
+            if not selected(case, cells, specs):
+                continue
+            total += 1
+            for arm in ARMS:
+                if cells[arm].get("caught"):
+                    counts[arm] += 1
+            rows.append((f"{corpus['corpus']}/{case['group']}", case["number"],
+                         case["upstream_fix"], case["title"],
+                         [cells[a]["verdict"] for a in ARMS]))
+    width = max((len(r[0]) for r in rows), default=20)
+    short = {"caught": "CAUGHT", "missed": "·", "not-run": "—", "ignored": "∅",
+             "wrong-answer": "wrong"}
+    print(f"{'group':{width}s} case  {'upstream':12s} "
+          + "  ".join(f"{a.split('-')[-1]:>9s}" for a in ARMS) + "  what it is")
+    for where, number, fix, title, verdicts in rows:
+        print(f"{where:{width}s} {number:4d}  {fix:12s} "
+              + "  ".join(f"{short.get(v, v):>9s}" for v in verdicts)
+              + f"  {title[:70]}")
+    print(f"\n{total} cases selected by {' '.join(specs)}: "
+          + ", ".join(f"{a} {counts[a]}" for a in ARMS))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true",
                     help="exit 1 if the generated files are stale")
+    ap.add_argument("--focus", action="append", default=[], metavar="SPEC",
+                    help="PRINT a subset to stdout and write nothing. A view, not a "
+                         "declaration: PROTECTION.md stays the whole record. SPEC is "
+                         "caught | missed | not-run | ignored | parked, a program, a "
+                         "program/group, or caught@<arm>. Several --focus narrow "
+                         "together; repeat a verdict to widen it.")
     args = ap.parse_args()
     corpora, problems = build()
+    if args.focus:
+        for problem in problems:
+            print(f"PROBLEM {problem}", file=sys.stderr)
+        focus(corpora, args.focus)
+        return 0
     md = render(corpora)
     data = json.dumps({"arms": ARMS, "corpora": corpora}, indent=1) + "\n"
     md_path, json_path = CORPORA / "PROTECTION.md", CORPORA / "protection.json"

@@ -313,8 +313,25 @@ these carries different weight:
 | `no-runtime` | no arm here can run it at all. The material is kept, the measurement does not exist. Declared on a **group** where it holds for all of it -- SQLite's binding rows are programs in Rust, Go, Python and Tcl, and no arm has a runtime for one |
 | `arm` | one or more **named** arms cannot run it; the others measure it normally. `arms` lists them. SQLite's case 07 calls `sqlite3_config` itself and fills `sqlite_heap`, which exists only where memsys5 is configured over a static array |
 | `out-of-scope` | neither spatial nor temporal, so outside what the study measures. mruby's four null dereferences, one type confusion and one C-stack exhaustion are kept because they are what the arms reported on that release |
+| `parked` | measured or measurable, and **deliberately not reported**. The first three kinds are properties of the case; this one is a decision about what the study says, so its `why` must name on whose decision and what the omission costs |
 
-Every kind needs a `why` of more than a few words; the checker refuses a label.
+Every kind needs a `why` of more than a few words -- twelve for `parked` -- and
+the checker refuses a label.
+
+**To LOOK at a subset, do not park anything.** `tools/protection-matrix.py
+--focus <spec>` prints a selection to stdout and writes no file, so
+PROTECTION.md stays the whole record:
+
+    tools/protection-matrix.py --focus ffmpeg --focus caught
+    tools/protection-matrix.py --focus caught@capstone-sublet --focus missed@cheribsd
+
+A verdict spec widens within its kind and narrows across kinds, so the first
+line is "FFmpeg's caught ones" and the second is "what only we catch". `parked`
+is itself a spec, so a parked case can always be listed again.
+
+The difference is deliberate. Parking changes the denominator every reader sees;
+focusing changes what one reader is looking at. Collapsing the two would make a
+table that reads as the whole truth while being somebody's current interest.
 An ignored case is `∅` in PROTECTION.md and is subtracted from that arm's
 denominator -- the totals there are stated with the ignored count beside them,
 so a reader can see what was left out rather than infer it from a gap.
