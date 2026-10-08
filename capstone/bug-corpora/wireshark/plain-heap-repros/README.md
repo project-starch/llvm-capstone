@@ -25,12 +25,16 @@ tree contradict.
 |---|---|
 | a length read from the file makes a copy run past the end of a `g_malloc`'d page buffer | 0 |
 | an error path indexing the second array with the FIRST array's index | 1 |
+| a copy sized by a length counting a header the source does not hold | 2 |
+| a scan with no case for its terminator | 3 |
 
 ## The case
 
 | case | upstream | the crossing |
 |---|---|---|
 | **0** | `19c51d27b9` `wiretap/netscaler.c` | `memcpy(dst, &nstrace_buf[offset], caplen)` with `caplen` a 16-bit field straight from the file — out of a `g_malloc(NSPR_PAGESIZE)` of **8192 bytes**, running **65471 bytes past** it |
+| **2** | `381681583b` `wiretap/pcapng.c` | a copy of `size` = `sizeof(uint32_t) + stringlen` = **19** bytes out of a `calloc` of **16** -- the 4-byte PEN is counted in the option length but is not in the string buffer -- running **3 bytes past** it |
+| **3** | `c556b648aa` `wsutil/ws_strptime.c` | the timezone scan has no arm for the terminator, so it consumes the NUL of an empty string and reads the byte after it -- **1 byte past** a `calloc` of **1** |
 
 ## Measured, 2026-10-06
 
