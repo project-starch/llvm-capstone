@@ -76,7 +76,7 @@ for each authority value v:
     cost_hw = c_mrev + c_revoke_per_node * facts.derived + c_move * moves(v)  // silicon-calibrated
 
 lower capstone.lend %c {body} with view %b:
-    STATIC, STATIC_CERT:  %b = shrink_perms(%c); lower(body); emit_certificate(%b, facts)
+    STATIC, STATIC_CERT:  move %c into the callee and back (own code, or a verified callee); emit_certificate(facts)
     HARDWARE:             %rev = mrev(%c); %b = derive(%c); lower(body); revoke(%rev)
 ```
 
@@ -86,15 +86,20 @@ lower capstone.lend %c {body} with view %b:
 - the per-global `ldc` cost (the ladder's `cnt` and `bs` rows).
 
 **Consequence for the LLVM erasure problem.** What reaches LLVM IR is a *decision*, not a type.
-- Statically enforced values become plain non-linear capabilities, and LLVM may treat them as
-  ordinary pointers.
+- Statically enforced lends lower to a move into the callee and back. They cannot lower to a cheap
+  non-linear copy: by the spec `delin` is irreversible without a `revoke`, and `mrev` needs a
+  linear source, so a value delinearised for a static lend could not later be lent under hardware
+  protection. The decision itself needs nothing more from LLVM.
 - Only the HARDWARE residue needs care:
   - its own address space;
   - consuming operations modelled as intrinsics with memory effects and `noduplicate`;
   - a MachineVerifier rule against copying a linear vreg whose source is still live.
 
-  That residue is the C-32 and Q-12 class, and fixing it is worth doing regardless of this
-  proposal.
+  That residue is the C-32, C-46 and Q-12 class, and fixing it is worth doing regardless of this
+  proposal. Part of it exists: `CapstoneLiveSourceCopy` (#119, on dev since 2026-09-29) rewrites
+  every `movc` whose source is read again and refuses any that survive. That is not yet run on a
+  board. What stays open is that the machine model still treats MOVC's source as a plain use, not
+  a consumption (C-46).
 
 ### Code generation
 
@@ -169,8 +174,9 @@ The contribution has to be the authority semantics and the decision procedure.
 
 ## 6. Smallest experiment that tests it
 
-1. **First, independently: the backend invariant.** A linear address space plus the MachineVerifier
-   rule. This closes the C-32/Q-12 class for C today and is a prerequisite for any frontend.
+1. **First, independently: the rest of the backend invariant.** #119 already covers live-source
+   `movc` copies. What remains is MOVC as a consumption in the machine model (C-46) and a linear
+   address space. This is a prerequisite for any frontend.
 2. **A dialect with five types, `lend`, `domain.call` and consuming ops,** with input written by
    hand or from attribute-annotated C.
 3. **One hybrid decision,** revoke elision for provably non-escaping lends, lowered to the existing
