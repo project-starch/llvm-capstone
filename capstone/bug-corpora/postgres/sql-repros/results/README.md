@@ -6,15 +6,26 @@ run against a real stand-alone backend, measured on three arms on 2026-10-06.
 | arm | detected | scored | not applicable |
 |---|---:|---:|---:|
 | `spatial` (base Capstone) | **2** | 9 | 0 |
-| `sublet` (Capstone + Sublet) | **4** | 8 | 1 |
+| `sublet` (Capstone + Sublet) | **5** | 9 | 0 |
 | `cheribsd-revocation` (purecap) | **2** | 9 | 0 |
 
-Every denominator is the cases *that arm can run*, and the one gap is named
-rather than absorbed. `sublet` cannot create ltree: `CREATE EXTENSION ltree`
-takes a capability fault on that arm before any of case 03's own SQL runs, so
-that cell is `not-applicable` and not a verdict about the mechanism. The
-case's own `investigation` field records where the fault is and what has been
-ruled out.
+Every denominator is the cases *that arm can run*, and all three are now
+whole.
+
+**Case 03 on `sublet` was measured against a fixture cluster that already
+carried ltree, and that is not the same as the arm being able to create it.**
+`CREATE EXTENSION ltree` still takes a capability fault there. The defect is
+in the lquery parser rather than in extension creation, so the extension was
+created once on the `spatial` arm (`shared/make-fixture.py`) and the cluster
+handed to `sublet`, which then ran the statement the case is about. The two
+runs of 2026-10-08 are a controlled pair: the same image against the plain
+fixture reports FAULTS ON CREATE and scores the case `not-applicable`, and
+against the ltree fixture scores it `detected`. Only the fixture differs.
+
+That fault is deterministic, unfixed, and worth reporting on its own -- a
+capability fault while loading an extension is a finding about the port, not
+about any defect in this corpus. The case's `underlying_fault_still_open`
+field carries the detail.
 
 Case 09 was outside both Capstone arms until 2026-10-06, because it reached
 the defect through pgcrypto and no OpenSSL is cross-compiled for capstone64.
@@ -25,7 +36,7 @@ It now runs the same three statements as a C caller against pgcrypto's real
 all nine are nested by the allocator that serves them: the damage stays inside
 a chunk that AllocSet carved out of a block it took from malloc, and an arm
 whose bounds are the malloc block has nothing to check. Sublet bounds each
-sub-allocation and reports 4 of 8 where base Capstone reports 2 of 9 and the
+sub-allocation and reports 5 of 9 where base Capstone reports 2 of 9 and the
 purecap guest 2 of 9.
 
 ## What produced these numbers
@@ -68,3 +79,12 @@ Each produced a row that read as a result and was not one.
    when that session faulted on its second statement, the three extensions
    after it were recorded available although they never ran. Each extension
    now gets its own session and has to be read back out of `pg_extension`.
+
+### One row comes from a different build
+
+Case 03's `sublet` figure was measured on 2026-10-08, after the build tree
+that produced the other eight had been cleaned from `/tmp`. The image was
+rebuilt from the same pinned tarball (sha256 `fcb7ab38...`, re-fetched and
+verified) with the same patch set, but a rebuild is not byte-identical and the
+image hashes differ. Both `inputs.json` files record which image each row came
+from.

@@ -1,0 +1,28 @@
+{
+  "arm": "sublet",
+  "image": "/tmp/capstone/pg-su-sublet/link/postgres.dom",
+  "image_sha256": "fcaa4a36beef67f12868e9455bce1a3cba5d63f4933f11e44ecbd3302723d754",
+  "runner_sha256": "097aaafb0fea7b63d6daa8db6d3d6e55672a98b5f2d56624b294383eebd31856",
+  "fixture": "/home/zephyr/arms/postgres/capstone/build/fixture-ltree",
+  "extensions_staged_from": "/tmp/capstone/pg-su-sublet/share/extension",
+  "started_utc": "20261008-080000",
+  "extensions_wanted": [
+    "ltree"
+  ],
+  "extensions_available": [
+    "ltree"
+  ],
+  "extensions_preinstalled": [
+    "ltree"
+  ],
+  "mechanism_gate": {
+    "case": "02",
+    "passed": true,
+    "kind": "a corpus case required to be detected"
+  },
+  "cases": 2,
+  "scored": 2,
+  "verdicts": {
+    "detected": 2
+  }
+}

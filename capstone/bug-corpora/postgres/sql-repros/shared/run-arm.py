@@ -110,7 +110,7 @@ def directives(sql_text):
     return errors, absent
 
 
-def score(case_dir, text, result, available):
+def score(case_dir, text, result, available, preinstalled=()):
     """(verdict, evidence). Controls first, mechanism second, directives last.
 
     The order is the whole point. A control failure that is scored as a verdict
@@ -122,7 +122,13 @@ def score(case_dir, text, result, available):
     if limit:
         return "not-runnable", f"declared by the case: {limit}"
 
-    missing = [e for e in extensions_needed(case_dir) if e not in available]
+    # An extension the fixture already carries is not one this arm has to be
+    # able to create. The case still says CREATE EXTENSION, which succeeds as a
+    # no-op lookup of a row that is already there, and the statement the case
+    # is actually about then runs. Every verdict reached this way says so.
+    pre = [e for e in extensions_needed(case_dir) if e in preinstalled]
+    missing = [e for e in extensions_needed(case_dir)
+               if e not in available and e not in preinstalled]
     if missing:
         return ("not-applicable",
                 "this image cannot create " + ", ".join(missing)
@@ -180,6 +186,9 @@ def score(case_dir, text, result, available):
 
     want_errors, absent = directives((case_dir / "trigger.sql").read_text())
     notes = []
+    if pre:
+        notes.append("ran against a fixture with " + ", ".join(pre)
+                     + " already created, so this arm did not have to create it")
     if want_errors is not None:
         # A full-line match: --single prefixes errors with a timestamp, so an
         # anchored '^ERROR:' matches zero every time.
@@ -292,7 +301,16 @@ def preflight(args, out):
                      f"{out / f'preflight-{index:02d}.out'}")
         if f"PREFLIGHT-OK-{name}" in text:
             available.add(name)
-            notes[name] = "created"
+            # The row exists, which is what decides whether a case can run.
+            # Whether THIS probe put it there is a different question, and
+            # conflating them hid something once: with a fixture that already
+            # carried ltree, the probe reported "created" on an arm that in
+            # fact cannot create it -- CREATE EXTENSION errored with "already
+            # exists" and the extension's script, which is what faults, never
+            # ran.
+            notes[name] = ("already in the fixture"
+                           if re.search(rf'ERROR:.*extension "{re.escape(name)}" already exists', text)
+                           else "created")
         elif result.get("fault") or result.get("kind") == "signal":
             # Creating it faults. Not available for measurement, and worth its
             # own word: a case built on it would record a fault that belongs to
@@ -322,6 +340,10 @@ def main():
     parser.add_argument("--image", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True,
                         help="an initdb'd cluster, copied fresh for every case")
+    parser.add_argument("--preinstalled", default="",
+                        help="comma-separated extensions already created in the "
+                             "fixture, which this arm therefore does not have to "
+                             "create; recorded with every verdict that used one")
     parser.add_argument("--extensions", type=Path,
                         help="the control and version scripts build-domain.sh "
                              "staged; defaults to <image>/../../share/extension")
@@ -358,9 +380,12 @@ def main():
     except BlockingIOError:
         sys.exit("another run holds the share's lock")
 
+    preinstalled = {e.strip() for e in args.preinstalled.split(",") if e.strip()}
     digest = sha256(args.image)
     print(f"arm={args.arm} image={digest[:16]}")
     wanted, available = preflight(args, out)
+    if preinstalled:
+        print("  pre-created in the fixture: " + ", ".join(sorted(preinstalled)))
 
     rows, produced = [], 0
     for case_dir in cases(args):
@@ -372,7 +397,7 @@ def main():
         shutil.rmtree(args.share / name, ignore_errors=True)
         if text.strip():
             produced += 1
-        verdict, why = score(case_dir, text, result, available)
+        verdict, why = score(case_dir, text, result, available, preinstalled)
         rows.append((tag, verdict, why))
         print(f"{tag:<52} {verdict:<16} {why[:64]}", flush=True)
 
@@ -414,6 +439,9 @@ def main():
         "started_utc": stamp,
         "extensions_wanted": wanted,
         "extensions_available": sorted(available),
+        # Extensions the fixture carried. A verdict on a case needing one of
+        # these says nothing about whether this arm could have created it.
+        "extensions_preinstalled": sorted(preinstalled),
         # The gate is a corpus case doing double duty, which is weaker than a
         # purpose-built control: it says the mechanism reported on SOMETHING in
         # this configuration, not that it would have reported on each silent
