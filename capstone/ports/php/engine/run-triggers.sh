@@ -187,6 +187,30 @@ axis_of() {
   esac
 }
 
+# CASES THAT CRASH ON STOCK PHP HAVE NO VALID PAIR, AND THE SUITE MUST REFUSE THEM.
+#
+# The control arm's job is to reproduce the corpus row `crashes_on_pristine_build = False`: stock,
+# unsanitised PHP runs the script to completion, and so must the control. For a case where stock PHP
+# itself SIGSEGVs, that premise is false before the experiment starts -- a control that completes
+# proves the port is NOT reproducing the defect, and a fault arm that completes then says nothing
+# about detection because there was nothing to detect.
+#
+# CRASH-057 is the one that got through: it was scored MISSED, which asserts the defect occurred and
+# was not caught. The corpus says stock PHP segfaults on it (results-pristine-default.json:
+# SIGNAL:11) while our control completed -- so the defect did not occur here at all. UNRESOLVED is
+# the honest label.
+#
+# Regenerate with:
+#   jq -r '.[] | select(.crashes_on_pristine_build == "True") | .id' results-asan-default.json
+# Only the ids this suite can otherwise reach are listed; the rest never get this far.
+PRISTINE_CRASH=(CRASH-057)
+
+pristine_crashes() {   # $1 = case id
+  local c
+  for c in "${PRISTINE_CRASH[@]}"; do [ "$c" = "$1" ] && return 0; done
+  return 1
+}
+
 # THE POPULATION THIS SUITE EXISTS FOR.
 #
 # Not "every corpus case" and not "every case masked on a pristine build", but the cases ASAN
@@ -262,6 +286,13 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
   local rc=0
   local axis
   CASE_EXT="${NEEDS_EXT[$id]:-}"      # read by build_arm; empty keeps the url.c-only image
+  if pristine_crashes "$id"; then
+    echo
+    echo "################ $id"
+    echo "    SKIPPED: stock PHP crashes on this input (crashes_on_pristine_build = True), so the" >&2
+    echo "    control arm has nothing to reproduce and the pair cannot be formed. NO VERDICT." >&2
+    return 75
+  fi
   axis=$(axis_of "$id")
   if [ "$axis" = temporal ]; then
     echo

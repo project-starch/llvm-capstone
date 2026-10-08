@@ -531,9 +531,8 @@ into reach. Result:
 
 | | cases |
 |---|---|
-| **CAUGHT** | **9** -- CRASH-016, -035, -066, -074, -080, -091, -103, -151, -160 |
-| **MISSED** | **1** -- CRASH-057 |
-| no verdict, control faults | 2 -- CRASH-022, CRASH-102 |
+| **CAUGHT** | **11** -- CRASH-016, -022, -035, -066, -074, -080, -091, -102, -103, -151, -160 |
+| no pair possible, stock PHP crashes too | 1 -- CRASH-057 |
 | no verdict, trigger never ran | 1 -- CRASH-047 |
 
 Three of the catches are on the SPATIAL axis in code other than `url.c`, which is new:
@@ -554,10 +553,10 @@ float path; those are implemented rather than stubbed.
 | bucket | n | status |
 |---|---|---|
 | A: runnable with no new linking | 11 | 11 caught |
-| B: needs pure ext code linked | 13 | **11 caught**, 1 missed, 1 no verdict |
+| B: needs pure ext code linked | 13 | **11 caught**, 2 unresolved (CRASH-047, CRASH-057) |
 | C: needs the OS | 7 | not attempted -- sockets, writable `/tmp`, the clock |
 
-A+B is the no-OS population: **24 cases, 22 caught, 1 missed, 1 without a verdict.** Bucket C is the
+A+B is the no-OS population: **24 cases, 22 caught, 2 without a verdict, and no miss.** Bucket C is the
 real ceiling: four need sockets or a writable `/tmp`, two need `putenv`/tick functions, and
 CRASH-008 needs `date`'s clock -- the one the standalone allocator suite already catches with a
 hand-written trigger, which only the real engine cannot reach.
@@ -595,20 +594,41 @@ defect's OWN file, the one ASAN names, which `EXPECT_FILE` already records.
 inference I had not checked, stated as a finding, twice in one paragraph. The harness was right to
 withhold the verdict under its old rule; the characterisation was wrong.
 
-### CRASH-057 is a genuine MISS, and it is the most useful result here
+### RETRACTED: CRASH-057 is not a miss. It has no valid pair at all.
 
-`$x = ($s[1] = chr(67) . '');` -- the corpus records a use-after-free on an `IS_TMP_VAR`. Both arms
-completed, identically, with the trigger fully evaluated (`EVALED | ISARRAY` set). So the capability
-allocator did not make the stale reference dead.
+It was reported as the suite's one genuine MISS -- both arms completing with the trigger fully
+evaluated -- and I called it the most useful result in the run. **It is not a miss, and the reason
+is in the corpus metadata I did not check:**
 
-That is a real limitation, not an infrastructure problem, and the likely reason is one already
-stated elsewhere in this file: **temp variables are bounded as one array** (`EX_T` is a byte offset
-added to a `char *`), so a temp's lifetime is the frame's, not the temp's. Revocation keys on
-`efree`, and this zval's storage is never individually freed. Confirming that requires
-instrumenting the temp path; until then it is the best-supported explanation, not a diagnosis.
+    crashes_on_pristine_build = True
+    results-pristine-default.json:  SIGNAL:11
+    results-control-default.json:   SIGNAL:11
 
-**Recording a miss matters more than recording a catch.** Every verdict in this file is only worth
-as much as the harness's willingness to return MISSED, and this is the first case where it did.
+**Stock, unsanitised PHP segfaults on this input.** The control arm exists to reproduce the opposite
+-- `crashes_on_pristine_build = False`, the program completing -- and for this case that premise is
+false before the experiment starts. Our control completed, which does not validate anything; it
+shows the port is NOT reproducing the defect. A fault arm that then completes says nothing about
+detection, because there was nothing to detect.
+
+MISSED asserts "the defect occurred and was not caught". The evidence does not support the first
+half. **UNRESOLVED is the honest label.**
+
+`run-triggers.sh` now carries a `PRISTINE_CRASH` list and refuses to form a pair for those cases,
+with the regeneration command in a comment beside it. The filter was always part of the
+methodology -- the manual accounting had used it to set aside 18 runnable cases -- but the harness
+never enforced it, so running a whole bucket at once let this one through.
+
+**This retraction removes the suite's only MISS, which is exactly why it deserves scrutiny rather
+than relief.** Two things make it checkable: every one of the 24 scored catches was re-checked and
+all have `crashes_on_pristine_build = False`, so nothing else rests on this; and the corpus files
+that settle it are `results-pristine-default.json` and `results-control-default.json`, neither
+written by this project.
+
+What is NOT established, and should not be glossed: our port does not reproduce a defect that
+segfaults stock PHP. With revocation ON the fault arm still completed, so the engine never
+dereferenced a stale pointer at all -- the free at `zend_execute.c:519` either does not happen here
+or the tmp's buffer is not separately allocated. That is a divergence between this port and stock
+PHP, and it is unexplained. Diagnosing it needs the allocator trace, not more reasoning.
 
 ### The harness gained a "did the script actually run?" gate
 
