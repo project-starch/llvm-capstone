@@ -1830,7 +1830,11 @@
       "cheribsd": {
        "verdict": "missed",
        "caught": false,
-       "disposition": null,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd-quarantine",
+        "finding": "never-freed",
+        "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+       },
        "detail": "ran to the end, status 0",
        "group": "apr-pool-repros",
        "bundle": "results/20260921-cheribsd",
@@ -1873,7 +1877,11 @@
       "cheribsd": {
        "verdict": "missed",
        "caught": false,
-       "disposition": null,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd-quarantine",
+        "finding": "never-freed",
+        "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+       },
        "detail": "ran to the end, status 0",
        "group": "bucket-repros",
        "bundle": "results/20260922-cheribsd",
@@ -1913,7 +1921,11 @@
       "cheribsd": {
        "verdict": "missed",
        "caught": false,
-       "disposition": null,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd-quarantine",
+        "finding": "never-freed",
+        "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+       },
        "detail": "ran to the end, status 0",
        "group": "bucket-repros",
        "bundle": "results/20260922-cheribsd",
@@ -1953,7 +1965,11 @@
       "cheribsd": {
        "verdict": "missed",
        "caught": false,
-       "disposition": null,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd-quarantine",
+        "finding": "never-freed",
+        "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+       },
        "detail": "ran to the end, status 0",
        "group": "bucket-repros",
        "bundle": "results/20260922-cheribsd",
@@ -1996,7 +2012,11 @@
       "cheribsd": {
        "verdict": "missed",
        "caught": false,
-       "disposition": null,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd-quarantine",
+        "finding": "never-freed",
+        "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+       },
        "detail": "ran to the end, status 0",
        "group": "bucket-repros",
        "bundle": "results/20260922-cheribsd",
@@ -2039,7 +2059,11 @@
       "cheribsd": {
        "verdict": "missed",
        "caught": false,
-       "disposition": null,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd-quarantine",
+        "finding": "never-freed",
+        "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+       },
        "detail": "ran to the end, status 0",
        "group": "bucket-repros",
        "bundle": "results/20260922-cheribsd",
@@ -2079,7 +2103,11 @@
       "cheribsd": {
        "verdict": "missed",
        "caught": false,
-       "disposition": null,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd-quarantine",
+        "finding": "never-freed",
+        "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+       },
        "detail": "ran to the end, status 0",
        "group": "bucket-repros",
        "bundle": "results/20260922-cheribsd",
@@ -2122,7 +2150,11 @@
       "cheribsd": {
        "verdict": "missed",
        "caught": false,
-       "disposition": null,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd-quarantine",
+        "finding": "never-freed",
+        "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+       },
        "detail": "ran to the end, status 0",
        "group": "bucket-repros",
        "bundle": "results/20260922-cheribsd",
@@ -2162,7 +2194,11 @@
       "cheribsd": {
        "verdict": "missed",
        "caught": false,
-       "disposition": null,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd-quarantine",
+        "finding": "never-freed",
+        "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+       },
        "detail": "ran to the end, status 0",
        "group": "bucket-repros",
        "bundle": "results/20260922-cheribsd",
@@ -2211,14 +2247,24 @@
       "reader": "revocation-rows",
       "key": "number",
       "vehicle": "cheribsd-purecap",
-      "group": "apr-pool-repros"
+      "group": "apr-pool-repros",
+      "disposition": {
+       "bundle": "results/20261008-cheribsd-quarantine",
+       "finding": "never-freed",
+       "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+      }
      },
      {
       "bundle": "results/20260922-cheribsd",
       "reader": "revocation-rows",
       "key": "number",
       "vehicle": "cheribsd-purecap",
-      "group": "bucket-repros"
+      "group": "bucket-repros",
+      "disposition": {
+       "bundle": "results/20261008-cheribsd-quarantine",
+       "finding": "never-freed",
+       "why": "measured with the shared quarantine probe: every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case), none reissued while quarantined, and no sweep completing -- against 22 sweeps under a churn control, so the zero is a measurement. Those few frees are process infrastructure: APR takes blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free."
+      }
      }
     ],
     "capstone-sysalloc": [

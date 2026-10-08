@@ -26,7 +26,7 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 36 | 4 | 70 | 35 | 40 | 146 | 16 |
+| `cheribsd` | 36 | 4 | 70 | 44 | 40 | 146 | 16 |
 | `capstone-sysalloc` | 56 | 0 | 63 | 0 | 27 | 146 | 16 |
 | `capstone-sublet` | 123 | 0 | 0 | 0 | 23 | 146 | 16 |
 
@@ -41,9 +41,9 @@ The count in each heading is cells on which the arm's mechanism printed nothing.
 | disposition | cells | what it means | what would change it |
 |---|---:|---|---|
 | `quarantined-unswept` | **4** | the object WAS in the quarantine and no sweep cleared it | a synchronous sweep would have caught these |
-| `never-freed` | **30** | the object never reached the system allocator, so it never entered the quarantine | no sweep policy reaches these; only protecting the nested allocator does |
+| `never-freed` | **39** | the object never reached the system allocator, so it never entered the quarantine | no sweep policy reaches these; only protecting the nested allocator does |
 | `not-temporal` | **5** | nothing was freed at all; the crossing is inside a live allocation | revocation is not the mechanism in play |
-| not yet measured | 35 | the run does not say whether the object reached the mechanism | the probe, `ports/common/host/cheribsd/quarantine-probe.c` |
+| not yet measured | 26 | the run does not say whether the object reached the mechanism | the probe, `ports/common/host/cheribsd/quarantine-probe.c` |
 
 ## The arms compared where all three were measured, split by who allocated the object
 
@@ -160,17 +160,17 @@ httpd and APR: nine pool and bucket lifetime defects, two allocator layers deep
 
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
-| `apr-pool-repros` | 0 | `9e6be73065` | mod_watchdog's worker loop reuses a pool it destroyed | · | · | **C** |
-| `bucket-repros` | 0 | `1c7a70c9d9` | mod_proxy_http2 sends frontend data allocated with the backend connection's  | · | — | **C** |
-| `bucket-repros` | 1 | `d2a1cf5f8c` | buckets buffered in the network filters outlive the allocator that made them | · | — | **C** |
-| `bucket-repros` | 2 | `106d0761c0` | ap_request_core_filter's brigade must carry EOR past the request that made i | · | · | **C** |
-| `bucket-repros` | 3 | `d9c2352952` | a brigade holds buckets created from a pool that is freed before it | · | · | **C** |
-| `bucket-repros` | 4 | `c81adad105` | the brigade is not cleaned before the backend connection goes back to the po | · | — | **C** |
-| `bucket-repros` | 5 | `60919177e8` | ap_rgetline's folding path reads a brigade it has already destroyed | · | · | **C** |
-| `bucket-repros` | 6 | `4930450013` | buckets live longer than the brigades they belong to | · | — | **C** |
-| `bucket-repros` | 7 | `edc450c8ac` | bucket private data is left in the subrequest pool and read during the main  | · | · | **C** |
+| `apr-pool-repros` | 0 | `9e6be73065` | mod_watchdog's worker loop reuses a pool it destroyed | ·<sup>q</sup> | · | **C** |
+| `bucket-repros` | 0 | `1c7a70c9d9` | mod_proxy_http2 sends frontend data allocated with the backend connection's  | ·<sup>q</sup> | — | **C** |
+| `bucket-repros` | 1 | `d2a1cf5f8c` | buckets buffered in the network filters outlive the allocator that made them | ·<sup>q</sup> | — | **C** |
+| `bucket-repros` | 2 | `106d0761c0` | ap_request_core_filter's brigade must carry EOR past the request that made i | ·<sup>q</sup> | · | **C** |
+| `bucket-repros` | 3 | `d9c2352952` | a brigade holds buckets created from a pool that is freed before it | ·<sup>q</sup> | · | **C** |
+| `bucket-repros` | 4 | `c81adad105` | the brigade is not cleaned before the backend connection goes back to the po | ·<sup>q</sup> | — | **C** |
+| `bucket-repros` | 5 | `60919177e8` | ap_rgetline's folding path reads a brigade it has already destroyed | ·<sup>q</sup> | · | **C** |
+| `bucket-repros` | 6 | `4930450013` | buckets live longer than the brigades they belong to | ·<sup>q</sup> | — | **C** |
+| `bucket-repros` | 7 | `edc450c8ac` | bucket private data is left in the subrequest pool and read during the main  | ·<sup>q</sup> | · | **C** |
 
-- `cheribsd`: **0** caught, 9 missed, of 9.
+- `cheribsd`: **0** caught, 9 missed, of 9. 9 of the misses have a measured disposition.
 - `capstone-sysalloc`: **0** caught, 5 missed, 4 not run, of 9.
 - `capstone-sublet`: **9** caught, 0 missed, of 9.
 

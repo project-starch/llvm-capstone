@@ -1,0 +1,13 @@
+{
+ "arm": "cheribsd-purecap, default async revocation, quarantine disposition only",
+ "what_this_bundle_is": "NOT a verdict. The verdicts for this group are in its own cheribsd bundle and they are MISSES. This answers the question a miss on an asynchronously-revoking platform leaves open: was the object quarantined and merely unswept, or never there at all?",
+ "answer": "never-freed. every allocation the process makes is freed and every free lands in the quarantine (7 to 10 a case, all of them), and none is reissued while still quarantined. Those few are the process's own infrastructure: APR takes its memory in blocks from the system allocator and the apr_allocator_t keeps them on its own free list, so a destroyed pool's nodes and a freed bucket go back to APR and never reach libc free. The quarantine is active throughout and the object never arrives.",
+ "how_measured": "ports/common/host/cheribsd/quarantine-probe.c, sha256 fa283f7686c36e1803910e006dc429577ee132fd6eea12ef49a89b6b97263554, LD_PRELOADed through the shared runner's per-case env. It reads the kernel's revocation shadow bitmap and the dequeue epoch, and forces no sweep.",
+ "which_process": "the probe is in front of both the supervisor and the case it forks, so each case produces two reports. quarantine.tsv carries the CHILD's, the first of the two, and result-lines.txt keeps the supervisor's beside it.",
+ "controls": {
+  "the_sweep_counter_is_live": "sweep-control churns 400,811 allocations and reports sweeps=22, against 0 in every case. Without that pair a zero would be indistinguishable from a counter that never moves, and the zero is what the reading rests on.",
+  "revocation_can_fire": "this group's own revocation-control faulted at its labelled load with the probe loaded, signal=34 code=2 (PROT_CHERI_TAG), addr equal to pc.",
+  "platform": "cheribsd-abi and cheribsd-bounds both PASS."
+ },
+ "why_the_zero_is_not_the_argument": "with sweeps=0 nothing freed was ever cleared, so a stale read would succeed without the block being handed out again; reused_while_quarantined cannot separate the two silences here. What separates them is the SIZE of the frees column -- seven to ten in the whole process -- which cannot include the pool nodes or buckets the cases reuse."
+}

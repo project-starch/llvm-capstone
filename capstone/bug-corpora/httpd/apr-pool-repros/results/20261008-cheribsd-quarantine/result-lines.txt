@@ -1,0 +1,18 @@
+### aprpool-00
+SUPERVISE base 0x100000 /tmp/allocator-tests/aprpool-00/target
+SUPERVISE expect apr_defect_read 0x104bd0
+APRP completed=1 nodes=3 reuses=1 releases=3 discards=0
+SUPERVISE exit status=0
+PROBE child mapped 7 7 7 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### revocation-control
+SUPERVISE base 0x100000 /tmp/allocator-tests/revocation-control/control
+SUPERVISE expect apr_defect_read 0x101e42
+REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1
+SUPERVISE fault signal=34 code=2 addr=0x101e42 pc=0x101e42
+SUPERVISE exit signalled=34
+
+### sweep-control
+churned
+

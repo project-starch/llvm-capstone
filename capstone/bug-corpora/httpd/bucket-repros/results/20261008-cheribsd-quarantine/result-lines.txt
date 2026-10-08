@@ -1,0 +1,74 @@
+### bucket-00
+SUPERVISE base 0x100000 /tmp/allocator-tests/bucket-00/target
+SUPERVISE expect apr_defect_read 0x1062ca
+APRP completed=1 nodes=6 reuses=0 releases=5 discards=0
+SUPERVISE exit status=0
+PROBE child mapped 10 10 10 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### bucket-01
+SUPERVISE base 0x100000 /tmp/allocator-tests/bucket-01/target
+SUPERVISE expect apr_defect_read 0x106018
+APRP completed=1 nodes=4 reuses=1 releases=4 discards=0
+SUPERVISE exit status=0
+PROBE child mapped 8 8 8 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### bucket-02
+SUPERVISE base 0x100000 /tmp/allocator-tests/bucket-02/target
+SUPERVISE expect apr_defect_read 0x104c5a
+APRP completed=1 nodes=4 reuses=1 releases=4 discards=0
+SUPERVISE exit status=0
+PROBE child mapped 8 8 8 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### bucket-03
+SUPERVISE base 0x100000 /tmp/allocator-tests/bucket-03/target
+SUPERVISE expect apr_defect_read 0x104c64
+APRP completed=1 nodes=4 reuses=1 releases=4 discards=0
+SUPERVISE exit status=0
+PROBE child mapped 8 8 8 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### bucket-04
+SUPERVISE base 0x100000 /tmp/allocator-tests/bucket-04/target
+SUPERVISE expect apr_defect_read 0x10633c
+APRP completed=1 nodes=4 reuses=1 releases=4 discards=0
+SUPERVISE exit status=0
+PROBE child mapped 8 8 8 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### bucket-05
+SUPERVISE base 0x100000 /tmp/allocator-tests/bucket-05/target
+SUPERVISE expect apr_defect_read 0x104b86
+APRP completed=1 nodes=3 reuses=1 releases=3 discards=0
+SUPERVISE exit status=0
+PROBE child mapped 7 7 7 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### bucket-06
+SUPERVISE base 0x100000 /tmp/allocator-tests/bucket-06/target
+SUPERVISE expect apr_defect_read 0x106052
+APRP completed=1 nodes=4 reuses=1 releases=4 discards=0
+SUPERVISE exit status=0
+PROBE child mapped 8 8 8 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### bucket-07
+SUPERVISE base 0x100000 /tmp/allocator-tests/bucket-07/target
+SUPERVISE expect apr_defect_read 0x104c54
+APRP completed=1 nodes=4 reuses=1 releases=4 discards=0
+SUPERVISE exit status=0
+PROBE child mapped 8 8 8 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### revocation-control
+SUPERVISE base 0x100000 /tmp/allocator-tests/revocation-control/control
+SUPERVISE expect apr_defect_read 0x101e42
+REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1
+SUPERVISE fault signal=34 code=2 addr=0x101e42 pc=0x101e42
+SUPERVISE exit signalled=34
+
+### sweep-control
+churned
+
