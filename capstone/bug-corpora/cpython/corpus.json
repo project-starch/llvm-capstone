@@ -47,7 +47,8 @@
       "shape_prose": [
         "[Tt]wenty reports, (\\w+) shapes",
         "The (\\w+) shapes, and what each"
-      ]
+      ],
+      "allocator_boundary": "nested"
     }
   },
   "protection": {
@@ -69,13 +70,14 @@
     ],
     "capstone-sublet": [
       {
-        "bundle": "results/20260919-qemu-20",
-        "reader": "qemu-paired",
-        "arm": "sublet",
-        "key": "number",
-        "vehicle": "capstone-baremetal",
-        "because": "the domain build of ports/cpython/pymalloc always compiles src/allocators/sublet/block-lifetimes.c (cmake/Replay.cmake:41-43), so this corpus's spatial/sublet pair is that adapter's mode 0 and mode 1 -- the nested arm, on the freestanding vehicle.",
-        "group": "pymalloc-repros"
+        "bundle": "results/20261008-virtual-nested-sublet",
+        "reader": "virtual",
+        "arm": "virtual-nested-sublet",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "because": "the run brackets each case twice: mode 0 is the same adapter with no revoke at the nested allocator's release, mode 1 is the Sublet discipline. Mode 1 is this arm, so the cell reads the m1 row; the m0 row is the baseline that makes the pair a single-variable comparison. This replaces the 2026-09-19 freestanding reading: the same adapter now runs in a Capstone process with full musl libc, so the cell is PAIRED with the one to its left instead of being measured on another vehicle.",
+        "group": "pymalloc-repros",
+        "mode": "m1"
       }
     ]
   }

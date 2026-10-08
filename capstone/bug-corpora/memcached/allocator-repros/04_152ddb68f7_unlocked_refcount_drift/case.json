@@ -9,6 +9,7 @@
   "lifetime_ender": "do_item_remove (items.c:538) when the drifted count reaches zero: item_free -> slabs_free, and the chunk goes on its class's slots list, never to free()",
   "shape": "unlocked refcount update / count drifts below the holders / slabs reuse / read through the dead pointer",
   "allocator_layer": "slabs.c size classes over 1 MiB pages, memcached 1.6.45",
+  "allocator_boundary": "nested",
   "fidelity": "model-consumer, real allocator: slabs.c is upstream's file at the 1.6.45 pin and makes every allocation decision. The item layer is reduced to item_free and do_item_remove; the lost update is written out as the three steps of refcount_decr (memcached.h:1041) with the concurrent get landing between them, because that interleaving IS the defect and a single -- would hide it",
   "distinguishing": "the count here is neither overwritten (case 2) nor overflowed (case 3): it is simply one short of the truth, and nothing in the allocator or the item layer can tell. The free that follows looks correct at every step",
   "arms": {

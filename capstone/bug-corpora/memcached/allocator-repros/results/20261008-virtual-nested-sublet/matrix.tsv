@@ -1,0 +1,19 @@
+case	arm	verdict	cause	attributed	evidence
+00_7af02b0c87_rbuf_copied_after_cache_free:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+01_0ad4de66ae_io_walk_reads_freed_link:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+02_59bd02ce29_tail_repair_frees_referenced_item:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+03_a8c4a82787_refcount_overflow_frees_linked_item:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+04_152ddb68f7_unlocked_refcount_drift:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+05_2d61f18_item_data_one_past:m0	virtual-nested-sublet	detected	28 (CAP_OOB)	yes	capability fault cause=28 (CAP_OOB) pc=0x3fbbf97f40
+06_78eb770_suffix_write_no_space:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+07_ecdb011_unterminated_key_read:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+08_e8364b5_ascii_all_spaces_scan_past_rbuf:m0	virtual-nested-sublet	detected	28 (CAP_OOB)	no	capability fault cause=28 (CAP_OOB) pc=0x3faa5992bc
+00_7af02b0c87_rbuf_copied_after_cache_free:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fb0498cf8
+01_0ad4de66ae_io_walk_reads_freed_link:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fabc18cf8
+02_59bd02ce29_tail_repair_frees_referenced_item:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fbeb17f3c
+03_a8c4a82787_refcount_overflow_frees_linked_item:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa2517f3c
+04_152ddb68f7_unlocked_refcount_drift:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8dc97f3c
+05_2d61f18_item_data_one_past:m1	virtual-nested-sublet	detected	28 (CAP_OOB)	yes	capability fault cause=28 (CAP_OOB) pc=0x3f9c297f40
+06_78eb770_suffix_write_no_space:m1	virtual-nested-sublet	silent	--	--	completed with status 0
+07_ecdb011_unterminated_key_read:m1	virtual-nested-sublet	silent	--	--	completed with status 0
+08_e8364b5_ascii_all_spaces_scan_past_rbuf:m1	virtual-nested-sublet	detected	28 (CAP_OOB)	no	capability fault cause=28 (CAP_OOB) pc=0x3f871192bc

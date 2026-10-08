@@ -1,28 +1,9 @@
 {
   "program": "mruby",
-  "title": "mruby: the measured subset of the 165 defects live at the 4.0.0-rc2 pin, plus the GC-slot boundary",
+  "title": "mruby: the measured subset of the 165 defects live at the 4.0.0-rc2 pin",
   "cases": 17,
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "groups": {
-    "gc-slot-repros": {
-      "boundary": "GC slots (mrb_heap_page)",
-      "title": "Planned: the xlang mruby rows re-run inside the complete interpreter",
-      "upstream": {
-        "version": "4.0.0-rc2",
-        "port": "capstone/ports/mruby/app"
-      },
-      "cases": 0,
-      "case_schema": "case-json",
-      "status": "planned",
-      "live_in_pin_recorded": false,
-      "live_in_pin_note": "No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
-      "advisories": [],
-      "related": [
-        "xlang/repro",
-        "capstone/ports/mruby/app"
-      ],
-      "note": "Six xlang rows (4, 5, 8, 10, 13, 15) share the realloc-vmstack shape and are the intended first cases."
-    },
     "release-differential": {
       "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
       "title": "Triaged: 165 defects live in 4.0.0-rc2, found by differential test extraction, with what each arm sees",
@@ -56,34 +37,57 @@
       ],
       "advisories": [],
       "related": [
-        "capstone/bug-corpora/mruby/gc-slot-repros",
         "capstone/ports/mruby/app",
         "xlang/repro"
       ],
       "note": "ledger.json is the triage of the whole release: 165 defects live at the pin, found by extracting the Ruby test upstream added with each fix and running it at the pin and at master. The 23 cases here are the measured subset: every case on which a Capstone arm reports. They were selected by MEASUREMENT, not by the ledger, which is why 5 of them are not ledger rows at all -- their tests pass at the pin, so the ledger's 'fails at the pin' rule could never admit them, and host ASan is what found them. 17 of the 23 are spatial or temporal; the other 6 are 4 null dereferences, one type confusion and one C-stack exhaustion, kept because they are what the arms actually reported and dropping them would make the arms' own numbers unreproducible. All four arms are measured. sysalloc-bounds is the baseline: per-object heap bounds are what applications get by default since PR #170, so a catch is a case the bounds arm does not fault on.",
-      "protection_note": "READ THE capstone-sublet COLUMN WITH THE CORPUS'S SELECTION RULE IN HAND. The 23 cases are the measured subset of 165 live defects: a case is here BECAUSE a Capstone arm reports on it. So 23 of 23 on capstone-sublet is the selection criterion coming back, not a hit rate, and the informative numbers are the other two columns on the same 23 and the 165-row ledger behind them (ledger.json)."
+      "protection_note": "READ THE capstone-sublet COLUMN WITH THE CORPUS'S SELECTION RULE IN HAND. The 23 cases are the measured subset of 165 live defects: a case is here BECAUSE a Capstone arm reports on it. So 23 of 23 on capstone-sublet is the selection criterion coming back, not a hit rate, and the informative numbers are the other two columns on the same 23 and the 165-row ledger behind them (ledger.json).",
+      "allocator_boundary": "mixed"
     }
   },
   "protection": {
     "cheribsd": [
-      {
-        "not_run": "no cases: the corpus is declared and empty.",
-        "group": "gc-slot-repros"
-      },
       {
         "bundle": "results/20261006-cheribsd",
         "reader": "verdict-word",
         "arm": "cheribsd-revocation",
         "key": "fix",
         "vehicle": "cheribsd-purecap",
-        "group": "release-differential"
+        "group": "release-differential",
+        "disposition": [
+          {
+            "bundle": "results/20261008-cheribsd-quarantine",
+            "finding": "quarantined-unswept",
+            "cases": [
+              3,
+              9,
+              10,
+              17
+            ],
+            "why": "measured: every free lands in the quarantine (1238 to 1994 a case) and no sweep ever completes, sweeps=0 against 22 under a churn control. Declared: the object is a malloc'd buffer and mruby frees straight through libc, so it entered the quarantine and was never cleared -- the stale capability stayed valid. The mechanism had the object and the asynchronous window lost the race, which is a miss and not an out-of-reach."
+          },
+          {
+            "bundle": "results/20261008-cheribsd-quarantine",
+            "finding": "never-freed",
+            "cases": [
+              4,
+              5,
+              8
+            ],
+            "why": "the object is a GC object slot inside an mrb_heap_page the system allocator still holds, so no free reaches the slot. The run shows it from the other side: all three print visibly corrupted strings, so the memory was certainly reissued, while reused_while_quarantined stayed 0 -- libc reissued nothing that was still quarantined, so the reuse was mruby's own inside a page libc never got back."
+          },
+          {
+            "bundle": "results/20261006-cheribsd",
+            "finding": "not-temporal",
+            "cases": [
+              13
+            ],
+            "why": "the object is never freed: the case's own lifetime_ender records the buffer as alive throughout and the crossing is a read or write past its end, so there is nothing to quarantine and revocation is not the mechanism in play. What CheriBSD's bounds do instead is measured in results/20261006-cheribsd of mruby/release-differential: the allocator bounds each block to its SIZE CLASS, not to the request (7 -> 16, 20 -> 32, 100 -> 112, 1000 -> 1024, 4097 -> 5120), so a short overrun lands inside the round-up. Our arms bound to the request and catch it. This stays a MISS: the bounds mechanism had its chance."
+          }
+        ]
       }
     ],
     "capstone-sysalloc": [
-      {
-        "not_run": "no cases: the corpus is declared and empty.",
-        "group": "gc-slot-repros"
-      },
       {
         "bundle": "results/20261007-virtual",
         "reader": "virtual",
@@ -94,10 +98,6 @@
       }
     ],
     "capstone-sublet": [
-      {
-        "not_run": "no cases: the corpus is declared and empty.",
-        "group": "gc-slot-repros"
-      },
       {
         "bundle": "results/20261006",
         "reader": "verdict-word",

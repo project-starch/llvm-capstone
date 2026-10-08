@@ -45,7 +45,8 @@
         "CVE-2018-1000127"
       ],
       "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port. Cases 5-7 are SPATIAL, added 2026-10-05 from a SHAPE search over item-size computations (item_make_header / ITEM_* / do_item_alloc) rather than a wording filter -- the wording filter found 0 class-B defects here, and these three have subjects that say 'corruption' rather than 'overflow', which is exactly why it missed them. See docs/ref/memcached-spatial-defect-triage.md. This corpus's .gitignore keeps run summaries OUT of the repository by design -- 'the case files' status carries the outcome' -- so cases 5-7's measured readings live in their status fields and in docs/ref/memcached-spatial-defect-triage.md section 6, not in a committed results/ bundle. 2026-10-07: case 8 is CAUGHT on stock CheriBSD while cases 5-7 complete, and the split is the finding -- src/cheribsd/malloc-leases.c:79 malloc's a slab PAGE which slabs.c then carves, while :161 malloc's each cache OBJECT separately. A slab-chunk crossing therefore stays inside one malloc and a cache-object crossing does not. '0 of 9 caught' would be the wrong summary for this corpus on CheriBSD; it is 0 of 8 and 1 of 1, split by inner allocator.",
-      "shape_table": true
+      "shape_table": true,
+      "allocator_boundary": "mixed"
     },
     "plain-heap-repros": {
       "boundary": "the system allocator itself: one calloc or malloc, with no inner layer",
@@ -84,7 +85,8 @@
       ],
       "advisories": [],
       "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 29 of this tree's 35 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none. Case 1 (d5d9ff0) added 2026-10-07: item_cachedump's headroom guard reserves five bytes for \"END\\r\\n\" and the marker is written with a terminating NUL, so the NUL lands one byte past malloc(memlimit). Cited by HASH ONLY -- its subject names an outside contributor. It was the one class-A candidate in docs/ref/memcached-spatial-defect-triage.md that had never been dispositioned.",
-      "shape_table": true
+      "shape_table": true,
+      "allocator_boundary": "system"
     }
   },
   "protection": {
@@ -98,14 +100,27 @@
         "key": "number",
         "vehicle": "cheribsd-purecap",
         "because": "two bundles because case 8 was run on its own the next day, and it is the one that refuted its prediction.",
-        "group": "allocator-repros"
+        "group": "allocator-repros",
+        "disposition": {
+          "bundle": "results/20261008-cheribsd-quarantine",
+          "finding": "never-freed",
+          "why": "measured with the shared quarantine probe: 34 of 34 libc frees were quarantined and none was handed back out while still quarantined, so the quarantine was fully active, while the program's own counters show the reuse happening on memcached's cache and slab freelists. The object never reaches free(), so revocation never sees it."
+        }
       },
       {
         "bundle": "results/20261007-cheribsd",
         "reader": "supervise-blocks",
         "key": "number",
         "vehicle": "cheribsd-purecap",
-        "group": "plain-heap-repros"
+        "group": "plain-heap-repros",
+        "disposition": {
+          "bundle": "results/20261007-cheribsd",
+          "finding": "not-temporal",
+          "cases": [
+            0
+          ],
+          "why": "the object is never freed: the case's own lifetime_ender records the buffer as alive throughout and the crossing is a read or write past its end, so there is nothing to quarantine and revocation is not the mechanism in play. What CheriBSD's bounds do instead is measured in results/20261006-cheribsd of mruby/release-differential: the allocator bounds each block to its SIZE CLASS, not to the request (7 -> 16, 20 -> 32, 100 -> 112, 1000 -> 1024, 4097 -> 5120), so a short overrun lands inside the round-up. Our arms bound to the request and catch it. This stays a MISS: the bounds mechanism had its chance."
+        }
       }
     ],
     "capstone-sysalloc": [
@@ -115,7 +130,19 @@
         "arm": "virtual",
         "key": "dir",
         "vehicle": "capstone-virtual",
-        "group": "allocator-repros"
+        "group": "allocator-repros",
+        "detection_unproven": {
+          "bundle": "results/20261008-fixed-arm-control",
+          "cases": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "why": "WITHDRAWN by its own control, 2026-10-08. The fault is real but it is not this defect: it lands at slabs.c:533, the first read of `ptr` on entry to do_slabs_free, with cause 24 (untagged) -- the same line and the same offset in all six cases -- and results/20261008-fixed-arm-control shows the SAME image faulting there while running the upstream-FIXED sequence. A detection that fires without the defect is not a detection of it. Rule 2 of the corpus contract said as much in advance: the run reported attributed=false, the pc lying outside the case's labelled probe, and nobody read that column. The port's slab free path faults on any case that releases a chunk, so this group is unmeasurable on this vehicle until that is fixed; cases 0, 1 and 8 release no chunk and are unaffected."
+        }
       },
       {
         "bundle": "results/20261007-virtual",
@@ -128,8 +155,14 @@
     ],
     "capstone-sublet": [
       {
-        "not_run": "not run. The slab adapter exists and the domain build compiles it (ports/memcached/allocators/src/allocators/sublet/authority.c, cmake/Allocators.cmake:104) and every case declares its mode-0/mode-1 oracle, but results/ holds only CheriBSD and virtual bundles: the domain run was never filed.",
-        "group": "allocator-repros"
+        "group": "allocator-repros",
+        "bundle": "results/20261008-virtual-nested-sublet",
+        "reader": "virtual",
+        "arm": "virtual-nested-sublet",
+        "vehicle": "capstone-virtual",
+        "key": "dir",
+        "mode": "m1",
+        "because": "the run brackets each case twice: mode 0 is the same adapter with no revoke at the nested allocator's release, mode 1 is the Sublet discipline. Mode 1 is this arm, so the cell reads the m1 row; the m0 row is the baseline that makes the pair a single-variable comparison."
       },
       {
         "coincides_with": "capstone-sysalloc",

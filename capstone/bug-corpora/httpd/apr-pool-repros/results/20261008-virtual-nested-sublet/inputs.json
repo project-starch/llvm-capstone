@@ -1,0 +1,29 @@
+{
+  "corpus": "capstone/bug-corpora/httpd/apr-pool-repros",
+  "arm": "virtual-nested-sublet",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 2,
+  "measured": 2,
+  "controls": 0,
+  "controls_held": 0,
+  "verdicts": {
+    "silent": 1,
+    "detected": 1
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "81abbe8d995f0e18ae26f3601b172f0da56cf8a76ca88c413e737b6b7c1187a6",
+    "launcher": "5240ec2c6b04c30b5d4c73710a0cfca0745e13b30cf4b11146785791474b457c",
+    "module": "2394a455036735288a119887d4eca24c1ae9c9ab2b679da5591ae5ba935932fd",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "d1a41d1ced265271d5c7c15fc821a1e9ce2e005bb79eef59c51c147a97b3f306",
+  "staged_sha256": {
+    "traces/00_9e6be73065_watchdog_destroyed_pool_reused.bin": "748c243a431878ecd5fa4665bb227d64672b63ccc101ffe60c26205a39d89113"
+  },
+  "image_sha256": {
+    "00_9e6be73065_watchdog_destroyed_pool_reused:m0": "64154fcd34ddf3a83609396c9628a3fbab9d35a5878f343c381d84b83eb05df4",
+    "00_9e6be73065_watchdog_destroyed_pool_reused:m1": "64154fcd34ddf3a83609396c9628a3fbab9d35a5878f343c381d84b83eb05df4"
+  }
+}

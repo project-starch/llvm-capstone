@@ -9,6 +9,7 @@
   "lifetime_ender": "NONE -- the item is alive throughout. The corpus's first SPATIAL row.",
   "shape": "one byte written past an item's data into the next chunk of the page",
   "allocator_layer": "slabs.c chunks over 1 MiB pages, memcached 1.6.45",
+  "allocator_boundary": "nested",
   "fidelity": "model-consumer, real allocator. Two chunks come from the real slab allocator and the item's data is sized to end exactly at the measured chunk STRIDE -- derived from the distance between the two chunks, not from any assumed class size -- so the one-byte overflow crosses the CHUNK bound rather than landing in the class's rounding slack. That is the reachable worst case.",
   "distinguishing": "the only row here whose crossing leaves the chunk, so it is the one a chunk-granular bound could catch. MEASURED only natively. The chunk bound is what the slab port narrows (leases.c carves each chunk), so whether a Capstone arm faults depends on whether this crossing leaves the CHUNK or stays inside it -- stated per case below and NOT measured here: the domain arms need a build this run did not make.",
   "arms": {

@@ -9,6 +9,7 @@
   "lifetime_ender": "do_item_remove (items.c:538) when the wrapped count reaches zero: item_free -> slabs_free, and the chunk goes on its class's slots list (slabs.c:501), never to free()",
   "shape": "reference count overflow / item freed with holders remaining / slabs reuse / read through the dead pointer",
   "allocator_layer": "slabs.c size classes over 1 MiB pages, memcached 1.6.45",
+  "allocator_boundary": "nested",
   "fidelity": "model-consumer, real allocator: slabs.c is upstream's file at the 1.6.45 pin and makes every allocation decision. The item layer is reduced to item_free and do_item_remove with their arithmetic verbatim; the hash table, the LRU queues, the stats and the locks are left out because none of them takes part in the decision to free. The 65536 references are taken for real, one at a time, so the wrap is performed rather than asserted",
   "distinguishing": "the corpus's only case with a CVE and distribution advisories behind it, and the only one whose cause is an arithmetic limit rather than a control-flow mistake: nobody wrote a wrong line. unsigned short simply stopped counting",
   "sibling_issue": "the same overflow was still reachable through the binary protocol until e3b7d33 (2026-07-02), which upstream describes as a remote-code-execution path, and the meta protocol was hardened separately in bc080ab (2020-02-27). One defect, three front ends, nine years",

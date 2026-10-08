@@ -1,0 +1,17 @@
+case	arm	verdict	cause	attributed	evidence
+00_1c7a70c9d9_wrong_bucket_alloc_across_connections:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+01_d2a1cf5f8c_buckets_outlive_backend_allocator:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+02_106d0761c0_brigade_on_request_pool_past_eor:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+03_d9c2352952_buckets_from_pool_that_dies_first:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+04_c81adad105_brigade_not_cleaned_before_reuse:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+05_60919177e8_read_from_destroyed_brigade:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+06_4930450013_bucket_outlives_its_brigade:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+07_edc450c8ac_subrequest_pool_private_data:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+00_1c7a70c9d9_wrong_bucket_alloc_across_connections:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8b99ba34
+01_d2a1cf5f8c_buckets_outlive_backend_allocator:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fbcc1b5c0
+02_106d0761c0_brigade_on_request_pool_past_eor:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f97d980e8
+03_d9c2352952_buckets_from_pool_that_dies_first:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9b318104
+04_c81adad105_brigade_not_cleaned_before_reuse:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fbb99bb30
+05_60919177e8_read_from_destroyed_brigade:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f97997f2c
+06_4930450013_bucket_outlives_its_brigade:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fbaf9b4b0
+07_edc450c8ac_subrequest_pool_private_data:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa67180d8

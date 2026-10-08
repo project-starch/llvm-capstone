@@ -23,5 +23,6 @@
   }
  },
  "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
- "allocator_layer": "system allocator (the reg_code_block array, via Newx/Renew)"
+ "allocator_layer": "system allocator (the reg_code_block array, via Newx/Renew)",
+ "allocator_boundary": "system"
 }

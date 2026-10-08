@@ -9,6 +9,7 @@
   "lifetime_ender": "NONE -- the item is alive throughout. SPATIAL row.",
   "shape": "unbounded read forward from an item key with no terminator",
   "allocator_layer": "slabs.c chunks over 1 MiB pages, memcached 1.6.45",
+  "allocator_boundary": "interior",
   "fidelity": "model-consumer, real allocator. A real slab chunk holds the item; the key is written WITHOUT the terminator upstream relies on and the bytes after it are made non-zero, so the read has somewhere to run. The formatter is reduced to the scan it performs -- reading forward until a zero byte -- and the case reports how far that got.",
   "distinguishing": "the only row whose crossing has NO fixed extent: how far the read goes depends on where the next zero byte happens to be, which is why the fix bounds the copy rather than adding a terminator at the source. The case caps its own scan at 64 bytes so a run cannot wander, which means it measures THAT the key bound was crossed and not how far. MEASURED only natively. The chunk bound is what the slab port narrows (leases.c carves each chunk), so whether a Capstone arm faults depends on whether this crossing leaves the CHUNK or stays inside it -- stated per case below and NOT measured here: the domain arms need a build this run did not make.",
   "arms": {
@@ -51,5 +52,9 @@
   },
   "status": "MEASURED 2026-10-05, both paths. QEMU domain: BOTH modes COMPLETE, no fault, because the case caps its scan at 64 bytes and the chunk is larger, so the read never reaches the chunk's end -- which the arm's pre-registered wording anticipated ('depends on how far the scan runs'). Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. A longer scan would cross the chunk bound; this case deliberately does not, so it measures THAT the key bound was crossed, not the chunk's. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here.",
   "nested": true,
-  "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
+  "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "ignore": {
+    "kind": "parked",
+    "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION -- the chunk slabs.c vested -- so no allocator ever vested the bound it crosses and no arm of this study can report on it. The corpus predicted both silences before any domain build existed and two runs confirmed them, so nothing is being hidden. Parked for the same reason and in the same words as ffmpeg/subobject-repros 0-9, ffmpeg/plane-repros 0 and perl 11; they were left unparked only because this arm read 'not run' until its bundle was filed on 2026-10-08. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
+  }
 }

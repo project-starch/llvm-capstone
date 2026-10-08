@@ -278,8 +278,16 @@ def score(case, text, status, table=None, base=None):
         return 'trap', 'terminated by SIGSEGV with no fault line', extras
     marker = case.get('defect_marker')
     if marker and marker not in text:
-        return 'silent', f'completed with status {status}; the case\'s own ' \
-                         f'{marker} marker never appeared, so the defect did not run', extras
+        # NOT a silence. A silence is a measurement -- the defect ran and the
+        # mechanism said nothing -- and a case whose own marker never appeared
+        # has not shown that it ran. Scoring it `silent` is what let six fts3
+        # rows and six PostgreSQL rows read as measured misses on 2026-10-08
+        # when the first had no reachability proof and the second could not
+        # create their extensions. Rule 4 of the contract: an infrastructure
+        # failure is not a measurement.
+        return 'unexecuted', f'completed with status {status}, but the case\'s own ' \
+                             f'{marker} marker never appeared: nothing shows the ' \
+                             f'defect ran', extras
     return 'silent', f'completed with status {status}', extras
 
 
@@ -315,7 +323,8 @@ def summary(plan, rows, log, completed, extra):
     # fully measured and its record says FAIL rather than quietly averaging
     # the missing row away.
     measured = [r for r in rows
-                if not r['control'] and r['verdict'] not in ('harness', 'timeout')]
+                if not r['control']
+                and r['verdict'] not in ('harness', 'timeout', 'unexecuted')]
     counts = {}
     for row in rows:
         if not row['control']:

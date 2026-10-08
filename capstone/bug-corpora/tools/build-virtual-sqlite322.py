@@ -126,6 +126,11 @@ def main():
     p.add_argument('--memsys5', action='store_true', help='The nested arm')
     p.add_argument('--sublet', action='store_true',
                    help='The nested arm with memsys5 under its own Sublet port')
+    p.add_argument('--no-lookaside', action='store_true',
+                   help="With --sublet: turn SQLite's SECOND nested allocator off, so "
+                        "the small allocations it would take go to memsys5, which this "
+                        "arm's patch does cover. A probe, not an arm: it answers whether "
+                        "a silence is the unprotected layer or memsys5.")
     p.add_argument('--ext-src', type=Path,
                    help='SQLite 3.22.0 full source tree, for the two ext cases')
     p.add_argument('--only', help='comma-separated case number prefixes')
@@ -151,6 +156,8 @@ def main():
     if a.sublet:
         a.memsys5 = True
     arm = ('memsys5-sublet' if a.sublet else 'memsys5' if a.memsys5 else 'platform')
+    if a.no_lookaside:
+        arm += '-no-lookaside'
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / 'obj').mkdir(exist_ok=True)
     source = a.amalgamation / 'sqlite3.c'
@@ -233,6 +240,7 @@ def main():
         command = [str(cc), a.opt, '-DREPRO322_VIRTUAL',
                    *(['-DREPRO322_VIRTUAL_MEMSYS5'] if a.memsys5 else []),
                    *(['-DREPRO322_VIRTUAL_SUBLET'] if a.sublet else []),
+                   *(['-DREPRO322_NO_LOOKASIDE'] if a.no_lookaside else []),
                    *sublet_includes,
                    *CONFIG, *flags[group], *extra,
                    *extra_inc, f'-I{REPRO}', f'-I{a.amalgamation}',

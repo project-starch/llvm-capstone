@@ -31,7 +31,8 @@
  },
  "verdicts": {
   "caught": "the arm's own mechanism reported: a capability fault with a cause, or SIGPROT with an si_code. Where the case publishes a probe address the fault is required to be at it.",
-  "missed": "the sequence ran to the end and the mechanism said nothing. The case's own DEFECT marker printed, so the defect executed -- a measured silence, not an unexecuted case.",
+  "caught, by quarantine membership": "a subcase of caught, not a verdict of its own: the sequence ran to the end and `cheribsd` reported nothing, AND a run measured the object inside its revocation quarantine, with no sweep completing while the case ran. The user's rule, 2026-10-08, and it is deliberately generous to the arm: the mechanism did receive the object and did hold it, and only the batching of its own sweep let the stale access through, so what it saw is what it is credited with. Marked C-q in PROTECTION.md and counted in a column of its own, because the evidence is membership in a shadow bitmap rather than a reported fault -- two different kinds of proof should not disappear into one number.",
+  "missed": "the sequence ran to the end and the mechanism said nothing. The case's own DEFECT marker printed, so the defect executed -- a measured silence, not an unexecuted case. A miss whose disposition says the object never reached the system allocator, or that nothing was freed at all, stays a miss: there the mechanism never had the object, and no sweep policy would change it.",
   "wrong-answer": "no mechanism fired, and the program's own oracle failed. Counts as not caught; kept distinct because a differential corpus has no fault to wait for.",
   "not-run": "no measurement exists. Always carries a reason, because 'impossible here', 'waiting on a build' and 'nobody got to it' weigh differently in a denominator."
  },
@@ -39,5 +40,12 @@
   "cheribsd-purecap": "a CheriBSD process, riscv64-purecap, under CHERI QEMU",
   "capstone-virtual": "a Linux process under capstone-vexec with capstone_vm.ko, capability pointers over user virtual addresses, full musl libc",
   "capstone-baremetal": "a freestanding Capstone domain, no libc and no process: the port supplies its memory from a static region. A cell measured here is NOT paired with a capstone-virtual cell -- two things differ, not one -- and the matrix marks it."
+ },
+ "allocator_boundary": {
+  "why": "Which arm can possibly report depends on who allocated the object the defect crosses, so every table that compares the arms is split on it. Without the split, a corpus of nested-allocator bugs makes the malloc-boundary arms look weaker than they are at the boundary they actually protect.",
+  "system": "the system allocator handed the object out directly: malloc, calloc, realloc or the program's thin wrapper over them, with no inner layer. All three arms protect this boundary.",
+  "nested": "the program's own allocator carved the object out of a block it holds: a pool, an arena, a slab, a size-class cache, a GC heap page. Only `capstone-sublet` protects it; for the other two arms the object is interior to a block that is still live.",
+  "interior": "the crossing is inside ONE allocation and no allocator vested the crossed region -- a sub-object bound, a slot in an array. No arm in this study claims it, so the class exists to keep those rows out of a comparison they cannot inform.",
+  "mixed": "a group declaration only: its cases differ, so each case.json carries its own allocator_boundary."
  }
 }

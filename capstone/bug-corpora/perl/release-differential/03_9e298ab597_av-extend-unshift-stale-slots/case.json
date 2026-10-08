@@ -24,6 +24,7 @@
   },
   "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
   "allocator_layer": "system allocator (the AV element array, via Renew)",
+  "allocator_boundary": "system",
   "note": "not triggered by this trigger anywhere but the host: its own assertion PASSES on all four Capstone arms AND on CheriBSD with revocation both off and on, so the stale element slot the defect depends on never holds a stale pointer there. Its silence is not evidence about any arm and it is outside every denominator. Host ASan at the pin reports SEGV, so the defect is real; what is missing is a trigger that reproduces it under an allocator other than glibc",
   "ignore": {
     "kind": "parked",

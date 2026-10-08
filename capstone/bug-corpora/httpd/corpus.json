@@ -42,7 +42,8 @@
         "capstone/bug-corpora/httpd/apr-pool-repros/results/20261007-virtual"
       ],
       "advisories": [],
-      "shape_table": true
+      "shape_table": true,
+      "allocator_boundary": "nested"
     },
     "bucket-repros": {
       "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
@@ -82,7 +83,8 @@
         "capstone/bug-corpora/httpd/bucket-repros/results/20261007-virtual"
       ],
       "advisories": [],
-      "shape_table": true
+      "shape_table": true,
+      "allocator_boundary": "nested"
     }
   },
   "protection": {
@@ -117,27 +119,39 @@
         "arm": "virtual",
         "key": "dir",
         "vehicle": "capstone-virtual",
-        "group": "bucket-repros"
+        "group": "bucket-repros",
+        "detection_unproven": {
+          "bundle": "results/20261008-fixed-arm-control",
+          "cases": [
+            0,
+            1,
+            4,
+            6
+          ],
+          "why": "WITHDRAWN by its own control, 2026-10-08. The fault lands at apr_buckets_alloc.c:113, `list->pool = NULL`, the first write into a freshly carved block in apr_bucket_alloc_create_ex -- allocator CREATION, where there is no 'after free' to detect -- and results/20261008-fixed-arm-control shows the same image faulting there on the upstream-FIXED sequence. A detection that fires without the defect is not a detection of it. The run had already reported attributed=false for all four. Cases 2, 3, 5 and 7 are silent in both arms and are unaffected."
+        }
       }
     ],
     "capstone-sublet": [
       {
-        "bundle": "results/20260921-qemu",
-        "reader": "qemu-paired",
-        "arm": "sublet",
-        "key": "number",
-        "vehicle": "capstone-baremetal",
-        "because": "the domain build of ports/apr/pools always compiles src/allocators/sublet/node-leases.c (cmake/Pools.cmake:88), so the sublet arm is the pool adapter's revoking mode.",
-        "group": "apr-pool-repros"
+        "bundle": "results/20261008-virtual-nested-sublet",
+        "reader": "virtual",
+        "arm": "virtual-nested-sublet",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "because": "the run brackets each case twice: mode 0 is the same adapter with no revoke at the nested allocator's release, mode 1 is the Sublet discipline. Mode 1 is this arm, so the cell reads the m1 row; the m0 row is the baseline that makes the pair a single-variable comparison.",
+        "group": "apr-pool-repros",
+        "mode": "m1"
       },
       {
-        "bundle": "results/20260922-qemu",
-        "reader": "qemu-paired",
-        "arm": "sublet",
-        "key": "number",
-        "vehicle": "capstone-baremetal",
-        "because": "the domain build compiles node-leases.c and, with APRP_BUCKETS, bucket-leases.c (cmake/Pools.cmake:88-90).",
-        "group": "bucket-repros"
+        "bundle": "results/20261008-virtual-nested-sublet",
+        "reader": "virtual",
+        "arm": "virtual-nested-sublet",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "because": "the run brackets each case twice: mode 0 is the same adapter with no revoke at the nested allocator's release, mode 1 is the Sublet discipline. Mode 1 is this arm, so the cell reads the m1 row; the m0 row is the baseline that makes the pair a single-variable comparison.",
+        "group": "bucket-repros",
+        "mode": "m1"
       }
     ]
   }

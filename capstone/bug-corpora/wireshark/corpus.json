@@ -48,7 +48,8 @@
       ],
       "advisories": [],
       "note": "A sibling of wmem-repros, deliberately separate: that corpus's boundary is wmem -- a chunk carved from a block the system allocator handed out -- and all eighteen of its cases cross a bound wmem owns. These cross the malloc bound itself, in wiretap, which does not use wmem at all and calls g_malloc directly for its page buffers. The corpus is the mirror of memcached/plain-heap-repros and exists for the same reason: tshark's not-nested spatial row stood empty because the hunt had required its candidates to be live at the pin, which no document asks for. It also carries the one tshark row the chunk port is IRRELEVANT to, which is why sublet-chunks is a required arm here: its prediction is that the port changes nothing, because the object is not a wmem chunk. ASan REPORTS these defects, unlike the wmem and sub-object corpora.",
-      "shape_table": true
+      "shape_table": true,
+      "allocator_boundary": "system"
     },
     "wmem-repros": {
       "boundary": "wmem (block, block_fast)",
@@ -98,7 +99,8 @@
       "advisories": [],
       "note": "Cases 0-12 are temporal; cases 13-17 are SPATIAL, from the hunt recorded in docs/ref/wireshark-spatial-defect-triage.md. Cases 14 and 15 are the corpus's only rows LIVE at the v4.6.8 pin -- every other row, temporal and spatial alike, is a fix-reversal. Note for anyone reading the spatial rows: every arm of this harness narrows a wmem allocation to its request (wm_narrow(), ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15), so a spatial crossing faults on ALL arms and these rows do not discriminate the chunk port. Case 13's run established that by refuting its own prediction. Cases 18-21 added 2026-10-07, all SPATIAL and all nested. 18 (716a200295) is the row that FILLS a cell this inventory recorded as empty: a nested-spatial defect LIVE at the v4.6.8 pin, whose guard cannot fire because the user preference it tests defaults to 0. The leads came from bug-corpora/wireshark/LIVE-CANDIDATES.md and from the class-B candidates docs/ref/wireshark-spatial-defect-triage.md:226-229 named and left unbuilt. Two candidates from those lists were REJECTED rather than built: 1c090e9292 is a STACK buffer overflow, so it has no heap allocator boundary, and d7d1686a95 indexes a static value_string array, which likewise has no allocator. 0939cf989d is the same ETSI DCP defect as case 16 under a different hash.",
       "shape_table": true,
-      "protection_note": "The cheribsd bundle's README and its own result-lines.txt disagree on the count: the README says 18 cases and 21 arms, the data file says 22 cases and 25 arms and lists PASS lines 00 through 21. The data file is right -- cases 18-21 were added on 2026-10-07 and the run was redone -- and this table reads the data file, so the cheribsd column is 22 of 22 complete. The README was not rewritten."
+      "protection_note": "The cheribsd bundle's README and its own result-lines.txt disagree on the count: the README says 18 cases and 21 arms, the data file says 22 cases and 25 arms and lists PASS lines 00 through 21. The data file is right -- cases 18-21 were added on 2026-10-07 and the run was redone -- and this table reads the data file, so the cheribsd column is 22 of 22 complete. The README was not rewritten.",
+      "allocator_boundary": "nested"
     }
   },
   "protection": {

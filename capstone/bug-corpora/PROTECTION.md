@@ -14,17 +14,70 @@ measured by its own run, which is why a cell names the bundle of its own group.
 |---|---|
 | **C** | caught: the arm's mechanism reported |
 | · | missed: the sequence ran to the end and the mechanism said nothing |
+| **C**<sup>q</sup> | caught by QUARANTINE MEMBERSHIP, not by a reported fault: a run measured the object in the arm's quarantine, and only the batching of its own sweep let the stale access through |
+| ·<sup>q</sup> | missed, and WHY is measured -- the object never reached the mechanism, or nothing was freed at all. The cell's JSON says which |
 | w | the program's own oracle failed, no mechanism fired |
 | — | not run; the per-case reason is in the JSON |
 | ∅ | ignored: the case stays as material and leaves every denominator |
 
 ## Totals, ignored cases excluded
 
-| arm | caught | missed | not run | of | ignored |
-|---|---:|---:|---:|---:|---:|
-| `cheribsd` | 32 | 90 | 26 | 148 | 14 |
-| `capstone-sysalloc` | 66 | 80 | 2 | 148 | 14 |
-| `capstone-sublet` | 94 | 0 | 54 | 148 | 14 |
+IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was in `cheribsd`'s revocation quarantine and only the batching of its own sweep let the stale access through, the cell is a CATCH, scored to the arm and marked <code>C<sup>q</sup></code>: the mechanism received the object and held it, so crediting it is the fair reading of what it saw. A silence whose object never reached the mechanism, or where nothing was freed at all, stays a MISS -- `of those, disposition measured` counts the misses a run has explained that way, and the rest are open questions.
+
+| arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `cheribsd` | 36 | 4 | 50 | 15 | 60 | 146 | 16 |
+| `capstone-sysalloc` | 56 | 0 | 63 | 0 | 27 | 146 | 16 |
+| `capstone-sublet` | 123 | 0 | 0 | 0 | 23 | 146 | 16 |
+
+## What the silences are made of
+
+The arm stays what CheriBSD ships -- revocation on, asynchronous, batched. Nothing here re-runs it under another policy. What the dispositions establish is where each silence came from: an object the mechanism held in its quarantine and lost to its own batching is a different fact than an object it never received, and the first is credited as a catch while the second is not.
+
+The count in each heading is cells on which the arm's mechanism printed nothing. It is NOT the miss count: the `quarantined-unswept` ones are credited as catches by the rule above, so they appear here as an account of the silence and in the caught column as the verdict.
+
+### `cheribsd`: 54 cells where the mechanism reported nothing
+
+| disposition | cells | what it means | what would change it |
+|---|---:|---|---|
+| `quarantined-unswept` | **4** | the object WAS in the quarantine and no sweep cleared it | a synchronous sweep would have caught these |
+| `never-freed` | **10** | the object never reached the system allocator, so it never entered the quarantine | no sweep policy reaches these; only protecting the nested allocator does |
+| `not-temporal` | **5** | nothing was freed at all; the crossing is inside a live allocation | revocation is not the mechanism in play |
+| not yet measured | 35 | the run does not say whether the object reached the mechanism | the probe, `ports/common/host/cheribsd/quarantine-probe.c` |
+
+## The arms compared where all three were measured, split by who allocated the object
+
+Two corrections to the headline table, and both of them cut the same way. A cell that was never run is not evidence, so the arms are compared on the cases where all three were measured. And on a case whose object came out of the program's own allocator, two of the three arms are not protecting that object at all -- counting those together with the malloc-boundary cases reads as a weakness of the mechanism when it is a statement about what each arm covers.
+
+### `system`: 29 cases
+
+the system allocator handed the object out directly -- the boundary all three arms protect
+
+| arm | caught | of those, by quarantine | missed | share caught |
+|---|---:|---:|---:|---:|
+| `cheribsd` | **24** | 4 | 5 | 83% |
+| `capstone-sysalloc` | **29** | 0 | 0 | 100% |
+| `capstone-sublet` | **29** | 0 | 0 | 100% |
+
+### `nested`: 42 cases
+
+the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
+
+| arm | caught | of those, by quarantine | missed | share caught |
+|---|---:|---:|---:|---:|
+| `cheribsd` | **9** | 0 | 33 | 21% |
+| `capstone-sysalloc` | **8** | 0 | 34 | 19% |
+| `capstone-sublet` | **42** | 0 | 0 | 100% |
+
+### All 71 together
+
+Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
+
+| arm | caught | of those, by quarantine | missed | share caught |
+|---|---:|---:|---:|---:|
+| `cheribsd` | **33** | 4 | 38 | 46% |
+| `capstone-sysalloc` | **37** | 0 | 34 | 52% |
+| `capstone-sublet` | **71** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -34,26 +87,26 @@ CPython: twenty re-entrancy use-after-frees, all of them inside pymalloc
 
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
-| `pymalloc-repros` | 0 | `gh-143543` | re-entrant use-after-free in itertools.groupby | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 1 | `gh-146613` | re-entrant use-after-free in itertools._grouper | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 2 | `gh-142829` | use-after-free in Context.__eq__ via re-entrant ContextVar.set | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 3 | `gh-142831` | use-after-free in json encoder during re-entrant mutation | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 4 | `gh-145244` | use-after-free on borrowed dict key in json encoder | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 5 | `gh-148660` | use-after-free in OrderedDict.copy() on reentrant mutation | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 6 | `gh-151295` | use-after-free in bytes.join()/bytearray.join() via re-entrant __buffer__ | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 7 | `gh-148395` | possible UAF in {LZMA,BZ2,_Zlib}Decompressor | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 8 | `gh-112127` | possible use-after-free in atexit.unregister() | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 9 | `gh-139210` | use-after-free in xml.etree.ElementTree.iterparse() | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 10 | `gh-142560` | use-after-free in bytearray search-like methods | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 11 | `gh-142783` | possible use after free in the zoneinfo module | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 12 | `gh-143004` | possible use-after-free in collections.Counter.update() | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 13 | `gh-144833` | use-after-free in the SSL module when SSL_new() fails | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 14 | `gh-146011` | use-after-free in signaldict_repr after deletion | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 15 | `gh-149449` | use-after-free in _PyUnicode_GetNameCAPI | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 16 | `gh-151403` | use-after-free when an argv item's __fspath__ mutates args | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 17 | `gh-151416` | borrowed ref use after free via fspath in os.spawnv/spawnve | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 18 | `gh-151695` | use-after-free of the curses screen encoding | — | · | **C**<sup>b</sup> |
-| `pymalloc-repros` | 19 | `gh-153539` | use-after-free in TextIOWrapper.tell() with a reentrant decoder | — | · | **C**<sup>b</sup> |
+| `pymalloc-repros` | 0 | `gh-143543` | re-entrant use-after-free in itertools.groupby | — | · | **C** |
+| `pymalloc-repros` | 1 | `gh-146613` | re-entrant use-after-free in itertools._grouper | — | · | **C** |
+| `pymalloc-repros` | 2 | `gh-142829` | use-after-free in Context.__eq__ via re-entrant ContextVar.set | — | · | **C** |
+| `pymalloc-repros` | 3 | `gh-142831` | use-after-free in json encoder during re-entrant mutation | — | · | **C** |
+| `pymalloc-repros` | 4 | `gh-145244` | use-after-free on borrowed dict key in json encoder | — | · | **C** |
+| `pymalloc-repros` | 5 | `gh-148660` | use-after-free in OrderedDict.copy() on reentrant mutation | — | · | **C** |
+| `pymalloc-repros` | 6 | `gh-151295` | use-after-free in bytes.join()/bytearray.join() via re-entrant __buffer__ | — | · | **C** |
+| `pymalloc-repros` | 7 | `gh-148395` | possible UAF in {LZMA,BZ2,_Zlib}Decompressor | — | · | **C** |
+| `pymalloc-repros` | 8 | `gh-112127` | possible use-after-free in atexit.unregister() | — | · | **C** |
+| `pymalloc-repros` | 9 | `gh-139210` | use-after-free in xml.etree.ElementTree.iterparse() | — | · | **C** |
+| `pymalloc-repros` | 10 | `gh-142560` | use-after-free in bytearray search-like methods | — | · | **C** |
+| `pymalloc-repros` | 11 | `gh-142783` | possible use after free in the zoneinfo module | — | · | **C** |
+| `pymalloc-repros` | 12 | `gh-143004` | possible use-after-free in collections.Counter.update() | — | · | **C** |
+| `pymalloc-repros` | 13 | `gh-144833` | use-after-free in the SSL module when SSL_new() fails | — | · | **C** |
+| `pymalloc-repros` | 14 | `gh-146011` | use-after-free in signaldict_repr after deletion | — | · | **C** |
+| `pymalloc-repros` | 15 | `gh-149449` | use-after-free in _PyUnicode_GetNameCAPI | — | · | **C** |
+| `pymalloc-repros` | 16 | `gh-151403` | use-after-free when an argv item's __fspath__ mutates args | — | · | **C** |
+| `pymalloc-repros` | 17 | `gh-151416` | borrowed ref use after free via fspath in os.spawnv/spawnve | — | · | **C** |
+| `pymalloc-repros` | 18 | `gh-151695` | use-after-free of the curses screen encoding | — | · | **C** |
+| `pymalloc-repros` | 19 | `gh-153539` | use-after-free in TextIOWrapper.tell() with a reentrant decoder | — | · | **C** |
 
 - `cheribsd`: **0** caught, 0 missed, 20 not run, of 20.
 - `capstone-sysalloc`: **0** caught, 20 missed, of 20.
@@ -73,7 +126,7 @@ FFmpeg: nineteen spatial and temporal defects across four boundaries, from a dir
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
 | `plain-heap-repros` | 0 | `d133b4a231` | the backward kernel scan is inclusive of a bound the forward scan is exclusi | **C** | **C** | **C**<sup>=</sup> |
-| `plain-heap-repros` | 1 | `bcbf3a5630` | the colour-space compaction loop guards on j while reading j + 1, so it read | · | **C** | **C**<sup>=</sup> |
+| `plain-heap-repros` | 1 | `bcbf3a5630` | the colour-space compaction loop guards on j while reading j + 1, so it read | ·<sup>q</sup> | **C** | **C**<sup>=</sup> |
 | `plain-heap-repros` | 2 | `56309e476a` | the hand-rolled filter mirror reflects a tap index of 2*w to -1 and never re | **C** | **C** | **C**<sup>=</sup> |
 | `plain-heap-repros` | 3 | `495b402f27` | the edge-emulation base is sized for one sub-buffer and then carved into fou | **C** | **C** | **C**<sup>=</sup> |
 | `plane-repros` | 0 | `b7946098b1` | ff_sws_alphablendaway averages the alpha row below the plane's last on a sub | ∅ | ∅ | ∅ |
@@ -92,7 +145,7 @@ FFmpeg: nineteen spatial and temporal defects across four boundaries, from a dir
 | `subobject-repros` | 8 | `fb862976df` | the uniform-tile-spacing loop guards itself with num_tile_columns, which is  | ∅ | ∅ | ∅ |
 | `subobject-repros` | 9 | `ac59fc542f` | get_hist16's tail loop uses a raw high-bit-depth sample as a histogram index | ∅ | ∅ | ∅ |
 
-- `cheribsd`: **3** caught, 5 missed, of 8; 11 ignored.
+- `cheribsd`: **3** caught, 5 missed, of 8; 11 ignored. 1 of the misses has a measured disposition.
 - `capstone-sysalloc`: **4** caught, 4 missed, of 8; 11 ignored.
 - `capstone-sublet`: **8** caught, 0 missed, of 8; 11 ignored.
 
@@ -107,18 +160,18 @@ httpd and APR: nine pool and bucket lifetime defects, two allocator layers deep
 
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
-| `apr-pool-repros` | 0 | `9e6be73065` | mod_watchdog's worker loop reuses a pool it destroyed | · | · | **C**<sup>b</sup> |
-| `bucket-repros` | 0 | `1c7a70c9d9` | mod_proxy_http2 sends frontend data allocated with the backend connection's  | · | **C** | **C**<sup>b</sup> |
-| `bucket-repros` | 1 | `d2a1cf5f8c` | buckets buffered in the network filters outlive the allocator that made them | · | **C** | **C**<sup>b</sup> |
-| `bucket-repros` | 2 | `106d0761c0` | ap_request_core_filter's brigade must carry EOR past the request that made i | · | · | **C**<sup>b</sup> |
-| `bucket-repros` | 3 | `d9c2352952` | a brigade holds buckets created from a pool that is freed before it | · | · | **C**<sup>b</sup> |
-| `bucket-repros` | 4 | `c81adad105` | the brigade is not cleaned before the backend connection goes back to the po | · | **C** | **C**<sup>b</sup> |
-| `bucket-repros` | 5 | `60919177e8` | ap_rgetline's folding path reads a brigade it has already destroyed | · | · | **C**<sup>b</sup> |
-| `bucket-repros` | 6 | `4930450013` | buckets live longer than the brigades they belong to | · | **C** | **C**<sup>b</sup> |
-| `bucket-repros` | 7 | `edc450c8ac` | bucket private data is left in the subrequest pool and read during the main  | · | · | **C**<sup>b</sup> |
+| `apr-pool-repros` | 0 | `9e6be73065` | mod_watchdog's worker loop reuses a pool it destroyed | · | · | **C** |
+| `bucket-repros` | 0 | `1c7a70c9d9` | mod_proxy_http2 sends frontend data allocated with the backend connection's  | · | — | **C** |
+| `bucket-repros` | 1 | `d2a1cf5f8c` | buckets buffered in the network filters outlive the allocator that made them | · | — | **C** |
+| `bucket-repros` | 2 | `106d0761c0` | ap_request_core_filter's brigade must carry EOR past the request that made i | · | · | **C** |
+| `bucket-repros` | 3 | `d9c2352952` | a brigade holds buckets created from a pool that is freed before it | · | · | **C** |
+| `bucket-repros` | 4 | `c81adad105` | the brigade is not cleaned before the backend connection goes back to the po | · | — | **C** |
+| `bucket-repros` | 5 | `60919177e8` | ap_rgetline's folding path reads a brigade it has already destroyed | · | · | **C** |
+| `bucket-repros` | 6 | `4930450013` | buckets live longer than the brigades they belong to | · | — | **C** |
+| `bucket-repros` | 7 | `edc450c8ac` | bucket private data is left in the subrequest pool and read during the main  | · | · | **C** |
 
 - `cheribsd`: **0** caught, 9 missed, of 9.
-- `capstone-sysalloc`: **4** caught, 5 missed, of 9.
+- `capstone-sysalloc`: **0** caught, 5 missed, 4 not run, of 9.
 - `capstone-sublet`: **9** caught, 0 missed, of 9.
 
 ### memcached -- 11 cases
@@ -132,52 +185,47 @@ memcached: eleven defects across its two inner allocators and the platform heap
 
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
-| `allocator-repros` | 0 | `7af02b0c87` | a text multiget's read buffer is copied after it went back to the rbuf cache | · | · | — |
-| `allocator-repros` | 1 | `0ad4de66ae` | resetting a bad proxy backend reads the next-link out of a pending IO it has | · | · | — |
-| `allocator-repros` | 2 | `59bd02ce29` | tail repair discards a live reference and frees the item to the slab free li | · | **C** | — |
-| `allocator-repros` | 3 | `a8c4a82787` | the item reference count overflows and the item is freed with its holders st | · | **C** | — |
-| `allocator-repros` | 4 | `152ddb68f7` | an unlocked reference-count decrement drifts below the true number of holder | · | **C** | — |
-| `allocator-repros` | 5 | `2d61f18` | the incr/decr rewrite copies three bytes of a two-byte terminator, one byte  | · | **C** | — |
-| `allocator-repros` | 6 | `78eb770` | the flags are copied into suffix space the item was never allocated, overwri | · | **C** | — |
-| `allocator-repros` | 7 | `ecdb011` | an item key with no terminator is handed to a string formatter, which reads  | · | **C** | — |
-| `allocator-repros` | 8 | `e8364b5` | try_read_command_ascii's leading-space skip has no end, so a read buffer of  | **C** | · | — |
-| `plain-heap-repros` | 0 | `ddee3e2` | authfile_load sizes its buffer to the file's exact length, so fgets writes t | · | **C** | **C**<sup>=</sup> |
+| `allocator-repros` | 0 | `7af02b0c87` | a text multiget's read buffer is copied after it went back to the rbuf cache | ·<sup>q</sup> | · | **C** |
+| `allocator-repros` | 1 | `0ad4de66ae` | resetting a bad proxy backend reads the next-link out of a pending IO it has | ·<sup>q</sup> | · | **C** |
+| `allocator-repros` | 2 | `59bd02ce29` | tail repair discards a live reference and frees the item to the slab free li | ·<sup>q</sup> | — | **C** |
+| `allocator-repros` | 3 | `a8c4a82787` | the item reference count overflows and the item is freed with its holders st | ·<sup>q</sup> | — | **C** |
+| `allocator-repros` | 4 | `152ddb68f7` | an unlocked reference-count decrement drifts below the true number of holder | ·<sup>q</sup> | — | **C** |
+| `allocator-repros` | 5 | `2d61f18` | the incr/decr rewrite copies three bytes of a two-byte terminator, one byte  | ·<sup>q</sup> | — | **C** |
+| `allocator-repros` | 6 | `78eb770` | the flags are copied into suffix space the item was never allocated, overwri | ∅ | ∅ | ∅ |
+| `allocator-repros` | 7 | `ecdb011` | an item key with no terminator is handed to a string formatter, which reads  | ∅ | ∅ | ∅ |
+| `allocator-repros` | 8 | `e8364b5` | try_read_command_ascii's leading-space skip has no end, so a read buffer of  | **C** | · | **C** |
+| `plain-heap-repros` | 0 | `ddee3e2` | authfile_load sizes its buffer to the file's exact length, so fgets writes t | ·<sup>q</sup> | **C** | **C**<sup>=</sup> |
 | `plain-heap-repros` | 1 | `d5d9ff0` | item_cachedump's headroom guard reserves five bytes for "END\r\n" while the  | **C** | **C** | **C**<sup>=</sup> |
 
-- `cheribsd`: **2** caught, 9 missed, of 11.
-- `capstone-sysalloc`: **8** caught, 3 missed, of 11.
-- `capstone-sublet`: **2** caught, 0 missed, 9 not run, of 11.
+- `cheribsd`: **2** caught, 7 missed, of 9; 2 ignored. 7 of the misses have a measured disposition.
+- `capstone-sysalloc`: **2** caught, 3 missed, 4 not run, of 9; 2 ignored.
+- `capstone-sublet`: **9** caught, 0 missed, of 9; 2 ignored.
 
 ### mruby -- 17 cases
 
-mruby: the measured subset of the 165 defects live at the 4.0.0-rc2 pin, plus the GC-slot boundary
-
-| group | cases | the boundary its cases cross |
-|---|---:|---|
-| `gc-slot-repros` | 0 | GC slots (mrb_heap_page) |
-| `release-differential` | 17 | the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses |
+mruby: the measured subset of the 165 defects live at the 4.0.0-rc2 pin
 
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
 | `release-differential` | 1 | `13e017c2f` | OP_GETIDX0 stores a Hash result through a regs pointer taken before a defaul | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 2 | `39aecc143` | OP_ENTER moves post arguments over the block's register, then allocates: the | **C** | **C** | **C**<sup>b</sup> |
-| `release-differential` | 3 | `59552ecb8` | sprintf holds pointers into the format string across a to_s callback that St | · | **C** | **C**<sup>b</sup> |
-| `release-differential` | 4 | `606d9a6b2` | Hash#merge and pattern **rest keep the pair only in C locals; it is collecte | · | · | **C**<sup>b</sup> |
-| `release-differential` | 5 | `628ccec60` | the main task's name and result have no mark hook, so the string is swept an | · | · | **C**<sup>b</sup> |
+| `release-differential` | 3 | `59552ecb8` | sprintf holds pointers into the format string across a to_s callback that St | **C**<sup>q</sup> | **C** | **C**<sup>b</sup> |
+| `release-differential` | 4 | `606d9a6b2` | Hash#merge and pattern **rest keep the pair only in C locals; it is collecte | ·<sup>q</sup> | · | **C**<sup>b</sup> |
+| `release-differential` | 5 | `628ccec60` | the main task's name and result have no mark hook, so the string is swept an | ·<sup>q</sup> | · | **C**<sup>b</sup> |
 | `release-differential` | 6 | `84cc5aa60` | khash caches keys and ed_flags across a Ruby hash or eql? callback that reha | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 7 | `eb7693857` | Hash#inspect, __except and rehash read a value the collector has already tak | **C** | **C** | **C**<sup>b</sup> |
-| `release-differential` | 8 | `fb4974528` | Hash#key, slice and slice! carry a pair out of a hash in a C local only; it  | · | · | **C**<sup>b</sup> |
-| `release-differential` | 9 | `0cf969a2b` | shaped_iv_foreach caches the shaped-IV block across a user #inspect that add | · | **C** | **C**<sup>b</sup> |
-| `release-differential` | 10 | `7c5915799` | Struct#== and #eql? keep the member storage across a callback whose initiali | · | **C** | **C**<sup>b</sup> |
+| `release-differential` | 8 | `fb4974528` | Hash#key, slice and slice! carry a pair out of a hash in a C local only; it  | ·<sup>q</sup> | · | **C**<sup>b</sup> |
+| `release-differential` | 9 | `0cf969a2b` | shaped_iv_foreach caches the shaped-IV block across a user #inspect that add | **C**<sup>q</sup> | **C** | **C**<sup>b</sup> |
+| `release-differential` | 10 | `7c5915799` | Struct#== and #eql? keep the member storage across a callback whose initiali | **C**<sup>q</sup> | **C** | **C**<sup>b</sup> |
 | `release-differential` | 11 | `cb51fce92` | a task's stack is freed while on-stack envs still point into it, and the GC  | — | — | **C**<sup>b</sup> |
 | `release-differential` | 12 | `4663fef45` | a delete made from inside an eql? callback leaves the entry walk reading pas | **C** | **C** | **C**<sup>b</sup> |
-| `release-differential` | 13 | `4a386f80e` | mruby-pack computes a uuencode length with signed overflow and writes past t | · | **C** | **C**<sup>b</sup> |
+| `release-differential` | 13 | `4a386f80e` | mruby-pack computes a uuencode length with signed overflow and writes past t | ·<sup>q</sup> | **C** | **C**<sup>b</sup> |
 | `release-differential` | 14 | `93eb74a59` | the case-splat walk indexes a replaced, shorter array with the old count and | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 15 | `af6f23ddb` | String#prepend with a self-referencing argument memcpys past the resized buf | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 16 | `ec89364c4` | start + length overflows mrb_int, both guards go false, and fill writes far  | **C** | **C** | **C**<sup>b</sup> |
-| `release-differential` | 17 | `bef45e223` | __pat_values and __except hold the key array's pointer and its length across | · | **C** | **C**<sup>b</sup> |
+| `release-differential` | 17 | `bef45e223` | __pat_values and __except hold the key array's pointer and its length across | **C**<sup>q</sup> | **C** | **C**<sup>b</sup> |
 
-- `cheribsd`: **8** caught, 8 missed, 1 not run, of 17.
+- `cheribsd`: **12** caught (4 by quarantine), 4 missed, 1 not run, of 17. 4 of the misses have a measured disposition.
 - `capstone-sysalloc`: **13** caught, 3 missed, 1 not run, of 17.
 - `capstone-sublet`: **17** caught, 0 missed, of 17.
 
@@ -191,7 +239,7 @@ Perl: eleven spatial and temporal defects live at the 5.36.3 pin, each measured 
 | `release-differential` | 2 | `d2cddbe1df` | caller() copies pointers to already-freed SVs into @DB::args | ∅ | ∅ | ∅ |
 | `release-differential` | 3 | `9e298ab597` | av_extend_guts after an unshift leaves the trailing element slots holding st | ∅ | ∅ | ∅ |
 | `release-differential` | 4 | `e4be969235` | join() keeps the delimiter's string buffer across a magical fetch that frees | **C** | **C** | **C**<sup>b</sup> |
-| `release-differential` | 5 | `17535c984a` | A cloned constant-state sub shares the prototype's CvXSUBANY SV without taki | · | · | **C**<sup>b</sup> |
+| `release-differential` | 5 | `17535c984a` | A cloned constant-state sub shares the prototype's CvXSUBANY SV without taki | ·<sup>q</sup> | · | **C**<sup>b</sup> |
 | `release-differential` | 6 | `40727c420c` | reg_code_blocks carries one count for both its size and its used entries, so | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 7 | `39b4841b25` | A recursive match with a run-time pattern frees the regexp the outer match i | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 8 | `b7b77ffc1e` | CLEAR_ERRSV grows a one-byte buffer over a glob's GP, so the next write to $ | **C** | **C** | **C**<sup>b</sup> |
@@ -199,7 +247,7 @@ Perl: eleven spatial and temporal defects live at the 5.36.3 pin, each measured 
 | `release-differential` | 10 | `254b30e378` | Writing a scalar into the in-memory handle backed by that same scalar moves  | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 11 | `af11b0c528` | A failed /(?{})/ branch restores a COW-backed subbeg without its length, so  | ∅ | ∅ | ∅ |
 
-- `cheribsd`: **7** caught, 1 missed, of 8; 3 ignored.
+- `cheribsd`: **7** caught, 1 missed, of 8; 3 ignored. 1 of the misses has a measured disposition.
 - `capstone-sysalloc`: **7** caught, 1 missed, of 8; 3 ignored.
 - `capstone-sublet`: **8** caught, 0 missed, of 8; 3 ignored.
 
@@ -216,27 +264,27 @@ PostgreSQL: nineteen defects at three fidelities -- a C reduction, the memory co
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
 | `c-repros` | 0 | `CVE-2026-6477` | PQfn copies a server-chosen number of bytes into a caller buffer whose size  | **C** | **C** | **C**<sup>=</sup> |
-| `c-repros` | 1 | `CVE-2026-19385` | pg_dump walks a transform-type array off its end when the list is exactly FU | · | **C** | **C**<sup>=</sup> |
+| `c-repros` | 1 | `CVE-2026-19385` | pg_dump walks a transform-type array off its end when the list is exactly FU | ·<sup>q</sup> | **C** | **C**<sup>=</sup> |
 | `c-repros` | 2 | `CVE-2026-16241` | ecpg computes a negative bytea length and passes it to a decoder whose lengt | **C** | **C** | **C**<sup>=</sup> |
-| `c-repros` | 3 | `5d61bdd114` | SASLprep validates a UTF-8 sequence by its declared length without checking  | · | **C** | **C**<sup>=</sup> |
+| `c-repros` | 3 | `5d61bdd114` | SASLprep validates a UTF-8 sequence by its declared length without checking  | ·<sup>q</sup> | **C** | **C**<sup>=</sup> |
 | `c-repros` | 4 | `f1298a4c20` | pg_basebackup forwards a tar member trailer using a pointer that buffering a | **C** | **C** | **C**<sup>=</sup> |
-| `mmgr-repros` | 0 | `1f5b6a5e5d` | double free of a tuple the write path had already freed | — | · | **C**<sup>b</sup> |
-| `mmgr-repros` | 1 | `3549ffb6af` | vacuum reads the TidStore struct its own reset destroyed | — | · | **C**<sup>b</sup> |
-| `mmgr-repros` | 2 | `ed394c4bdf` | a partition set freed through one alias and read through another | — | · | **C**<sup>b</sup> |
-| `mmgr-repros` | 3 | `a61592253e` | a cache entry outlives the decoding context its memory came from | — | · | **C**<sup>b</sup> |
-| `mmgr-repros` | 4 | `9e0b4b1ab5` | the reorder buffer reads a change record it returned to the slab | — | · | **C**<sup>b</sup> |
-| `sql-repros` | 1 | `12a6206864a0` | to_char(timestamptz,'TZ') heap overflow write, ~36 B -- stays inside its ase | · | · | — |
+| `mmgr-repros` | 0 | `1f5b6a5e5d` | double free of a tuple the write path had already freed | — | · | **C** |
+| `mmgr-repros` | 1 | `3549ffb6af` | vacuum reads the TidStore struct its own reset destroyed | — | · | **C** |
+| `mmgr-repros` | 2 | `ed394c4bdf` | a partition set freed through one alias and read through another | — | · | **C** |
+| `mmgr-repros` | 3 | `a61592253e` | a cache entry outlives the decoding context its memory came from | — | · | **C** |
+| `mmgr-repros` | 4 | `9e0b4b1ab5` | the reorder buffer reads a change record it returned to the slab | — | · | **C** |
+| `sql-repros` | 1 | `12a6206864a0` | to_char(timestamptz,'TZ') heap overflow write, ~36 B -- stays inside its ase | — | — | — |
 | `sql-repros` | 2 | `3ed3dbbf44` | ts_headline() StartSel longer than PG_INT16_MAX overflows an int16 length, ~ | **C** | **C** | — |
-| `sql-repros` | 3 | `8c34261109` | lquery level with enough OR-variants wraps a uint16 totallen, ~65 KB -- leav | **C** | · | — |
-| `sql-repros` | 4 | `3d160401b65e` | array[]::oidvector out-of-bounds read, ~40 heap words -- stays inside its as | · | · | — |
-| `sql-repros` | 5 | `849da8210539` | ascii() on a truncated multibyte lead byte reads its continuation bytes past | · | · | — |
-| `sql-repros` | 6 | `e91dcfccaa` | regexp match/split size the wchar-to-multibyte conversion buffer by the inpu | · | · | — |
-| `sql-repros` | 7 | `1af08af694` | pg_trgm's picksplit applies GETSIGN() to a field that is already a bit vecto | · | · | — |
-| `sql-repros` | 8 | `c4d51b6274` | levenshtein_less_equal clamps stop_column only from above, so an overflowed  | · | · | — |
-| `sql-repros` | 9 | `7a7d9693c7` | pgcrypto copies an attacker-chosen session-key length into a 32-byte inline  | · | · | — |
+| `sql-repros` | 3 | `8c34261109` | lquery level with enough OR-variants wraps a uint16 totallen, ~65 KB -- leav | **C** | — | — |
+| `sql-repros` | 4 | `3d160401b65e` | array[]::oidvector out-of-bounds read, ~40 heap words -- stays inside its as | — | — | — |
+| `sql-repros` | 5 | `849da8210539` | ascii() on a truncated multibyte lead byte reads its continuation bytes past | — | — | — |
+| `sql-repros` | 6 | `e91dcfccaa` | regexp match/split size the wchar-to-multibyte conversion buffer by the inpu | — | — | — |
+| `sql-repros` | 7 | `1af08af694` | pg_trgm's picksplit applies GETSIGN() to a field that is already a bit vecto | — | — | — |
+| `sql-repros` | 8 | `c4d51b6274` | levenshtein_less_equal clamps stop_column only from above, so an overflowed  | — | — | — |
+| `sql-repros` | 9 | `7a7d9693c7` | pgcrypto copies an attacker-chosen session-key length into a 32-byte inline  | — | — | — |
 
-- `cheribsd`: **5** caught, 9 missed, 5 not run, of 19.
-- `capstone-sysalloc`: **6** caught, 13 missed, of 19.
+- `cheribsd`: **5** caught, 2 missed, 12 not run, of 19. 2 of the misses have a measured disposition.
+- `capstone-sysalloc`: **6** caught, 5 missed, 8 not run, of 19.
 - `capstone-sublet`: **10** caught, 0 missed, 9 not run, of 19.
 
 ### sqlite -- 32 cases
@@ -245,42 +293,42 @@ SQLite: thirty-two engine defects under memsys5, SQLite's own arena allocator
 
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
-| `engine-repros` | 0 | `adfb203a7d` | heap-use-after-free in sqlite3Fts5GetVarint | · | **C** | — |
-| `engine-repros` | 1 | `5e4233a9e4` | row17 | · | · | — |
-| `engine-repros` | 2 | `b9e0f62c3a` | row15 | **C** | **C** | — |
-| `engine-repros` | 3 | `e464802d49` | row05 | · | **C** | — |
-| `engine-repros` | 4 | `8504d37b99` | row20 | · | · | — |
-| `engine-repros` | 5 | `6397a78b2b` | row04 | **C** | **C** | — |
-| `engine-repros` | 6 | `0c8c9a64b3` | row19 | · | **C** | — |
-| `engine-repros` | 7 | `51dd67080a` | row13 | · | · | — |
-| `engine-repros` | 8 | `fix-2026-08-17` | row23 | · | · | — |
-| `engine-repros` | 9 | `becd68ba0d` | row06 | · | · | — |
-| `engine-repros` | 10 | `dee0359ddb` | row11 | · | · | — |
-| `engine-repros` | 11 | `fb8ca7de0c` | row10 | · | — | — |
-| `engine-repros` | 12 | `fix-2026-06-08` | row22 | · | **C** | — |
-| `engine-repros` | 13 | `25e3073741` | row03 | · | **C** | — |
-| `engine-repros` | 14 | `2639ddc474` | row01 | · | **C** | — |
-| `engine-repros` | 15 | `unfixed` | new02; found by us, still unfixed | · | **C** | — |
-| `engine-repros` | 16 | `28001204f4` | new01 | · | **C** | — |
-| `engine-repros` | 17 | `mem5-design` | row25; allocator design defect, trigger written by us | · | **C** | — |
-| `engine-repros` | 18 | `c8c9cdd9dd` | new05 | **C** | **C** | — |
-| `engine-repros` | 19 | `d21bd37c7c` | new16; unfixed in every release | **C** | **C** | — |
-| `engine-repros` | 20 | `eab0e10304` | new03, rtree arm -- same bug, second observable | · | **C** | — |
-| `engine-repros` | 21 | `fix-2026-07-26` | row24 | **C** | · | — |
-| `engine-repros` | 22 | `eab0e10304` | new03, fts3 arm | · | **C** | — |
-| `engine-repros` | 23 | `d4b646997a` | row08 | · | **C** | — |
-| `engine-repros` | 24 | `415540ddaa` | heap-buffer-overflow in sqlite3Fts5GetVarint | · | **C** | — |
-| `engine-repros` | 25 | `8f5b14a5c2` | heap-buffer-overflow in sqlite3Fts5GetVarint (fts5_decode) | · | **C** | — |
-| `engine-repros` | 26 | `a783931794` | heap-buffer-overflow in sqlite3Fts3GetVarint | · | · | — |
-| `engine-repros` | 27 | `c7def600bd` | heap-buffer-overflow in fts3EvalUpdateCounts | · | · | — |
-| `engine-repros` | 28 | `fz02` | heap-buffer-overflow / SEGV: sqlite3Get4byte reads a page past the buffer | · | **C** | — |
-| `engine-repros` | 29 | `fz06` | heap-buffer-overflow: vdbeRecordCompareInt THREE_BYTE_INT | · | **C** | — |
-| `engine-repros` | 30 | `fz10` | heap overflow in statDecodePage; needs -DSQLITE_ENABLE_DBSTAT_VTAB | · | **C** | — |
-| `engine-repros` | 31 | `fz11` | heap overflow in statDecodePage free-chain walk; needs DBSTAT_VTAB | · | **C** | — |
+| `engine-repros` | 0 | `adfb203a7d` | heap-use-after-free in sqlite3Fts5GetVarint | — | **C** | **C** |
+| `engine-repros` | 1 | `5e4233a9e4` | row17 | — | — | — |
+| `engine-repros` | 2 | `b9e0f62c3a` | row15 | **C** | **C** | **C** |
+| `engine-repros` | 3 | `e464802d49` | row05 | — | **C** | **C** |
+| `engine-repros` | 4 | `8504d37b99` | row20 | — | — | — |
+| `engine-repros` | 5 | `6397a78b2b` | row04 | **C** | **C** | **C** |
+| `engine-repros` | 6 | `0c8c9a64b3` | row19 | — | **C** | **C** |
+| `engine-repros` | 7 | `51dd67080a` | row13 | — | — | — |
+| `engine-repros` | 8 | `fix-2026-08-17` | row23 | — | — | — |
+| `engine-repros` | 9 | `becd68ba0d` | row06 | — | — | — |
+| `engine-repros` | 10 | `dee0359ddb` | row11 | — | — | — |
+| `engine-repros` | 11 | `fb8ca7de0c` | row10 | — | — | **C** |
+| `engine-repros` | 12 | `fix-2026-06-08` | row22 | — | **C** | **C** |
+| `engine-repros` | 13 | `25e3073741` | row03 | — | **C** | **C** |
+| `engine-repros` | 14 | `2639ddc474` | row01 | — | **C** | **C** |
+| `engine-repros` | 15 | `unfixed` | new02; found by us, still unfixed | — | **C** | **C** |
+| `engine-repros` | 16 | `28001204f4` | new01 | — | **C** | **C** |
+| `engine-repros` | 17 | `mem5-design` | row25; allocator design defect, trigger written by us | — | **C** | **C** |
+| `engine-repros` | 18 | `c8c9cdd9dd` | new05 | **C** | **C** | **C** |
+| `engine-repros` | 19 | `d21bd37c7c` | new16; unfixed in every release | **C** | **C** | **C** |
+| `engine-repros` | 20 | `eab0e10304` | new03, rtree arm -- same bug, second observable | — | **C** | **C** |
+| `engine-repros` | 21 | `fix-2026-07-26` | row24 | **C** | — | — |
+| `engine-repros` | 22 | `eab0e10304` | new03, fts3 arm | — | **C** | **C** |
+| `engine-repros` | 23 | `d4b646997a` | row08 | — | **C** | **C** |
+| `engine-repros` | 24 | `415540ddaa` | heap-buffer-overflow in sqlite3Fts5GetVarint | — | **C** | **C** |
+| `engine-repros` | 25 | `8f5b14a5c2` | heap-buffer-overflow in sqlite3Fts5GetVarint (fts5_decode) | — | **C** | **C** |
+| `engine-repros` | 26 | `a783931794` | heap-buffer-overflow in sqlite3Fts3GetVarint | — | — | — |
+| `engine-repros` | 27 | `c7def600bd` | heap-buffer-overflow in fts3EvalUpdateCounts | — | — | — |
+| `engine-repros` | 28 | `fz02` | heap-buffer-overflow / SEGV: sqlite3Get4byte reads a page past the buffer | — | **C** | **C** |
+| `engine-repros` | 29 | `fz06` | heap-buffer-overflow: vdbeRecordCompareInt THREE_BYTE_INT | — | **C** | — |
+| `engine-repros` | 30 | `fz10` | heap overflow in statDecodePage; needs -DSQLITE_ENABLE_DBSTAT_VTAB | — | **C** | **C** |
+| `engine-repros` | 31 | `fz11` | heap overflow in statDecodePage free-chain walk; needs DBSTAT_VTAB | — | **C** | **C** |
 
-- `cheribsd`: **5** caught, 27 missed, of 32.
-- `capstone-sysalloc`: **22** caught, 9 missed, 1 not run, of 32.
-- `capstone-sublet`: **0** caught, 0 missed, 32 not run, of 32.
+- `cheribsd`: **5** caught, 0 missed, 27 not run, of 32.
+- `capstone-sysalloc`: **22** caught, 0 missed, 10 not run, of 32.
+- `capstone-sublet`: **22** caught, 0 missed, 10 not run, of 32.
 
 ### wireshark -- 24 cases
 

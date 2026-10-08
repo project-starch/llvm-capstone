@@ -9,6 +9,7 @@
   "lifetime_ender": "return_io_pending, which hands the IO back to its worker thread; the worker's do_cache_free pushes the object on the cache's STAILQ (cache.c:135), and its next request pops it uncleared (cache.c:80)",
   "shape": "stale object pointer / cache.c reuse / list link read through the dead pointer",
   "allocator_layer": "cache.c object cache over malloc, memcached 1.6.45",
+  "allocator_boundary": "nested",
   "fidelity": "model-consumer, real allocator: cache.c is upstream's file at the 1.6.45 pin through the port's two patches; the proxy backend, its event thread and the worker thread are reduced to the loop the fix rewrites, a three-entry list, and the worker's return-and-reissue performed in the order the commit message describes ('the return call can free and potentially reuse the object if the thread gets suspended')",
   "distinguishing": "the stale read is of the list link itself: the freed object is the loop's cursor, so the very field the walk needs next is the one the allocator's push and the next owner overwrite",
   "layer_note": "the upstream fix does not touch the allocator; it removes each IO from the list before returning it, so no read follows the free. The fixed arm here does the same",

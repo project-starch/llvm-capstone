@@ -1,0 +1,9 @@
+case	shadow	mallocs	frees	quarantined_after_free	reused_while_quarantined	chunk_reuses	chunk_releases	object_reuses	object_releases	sweeps
+0	mapped	6	6	6	0	0	0	1	3	0
+1	mapped	7	4	4	0	0	0	1	1	0
+2	mapped	5	4	4	0	1	1	0	0	0
+3	mapped	5	4	4	0	1	1	0	0	0
+4	mapped	5	4	4	0	1	1	0	0	0
+5	mapped	5	4	4	0	0	2	0	0	0
+6	mapped	5	4	4	0	0	1	0	0	0
+7	mapped	5	4	4	0	0	1	0	0	0

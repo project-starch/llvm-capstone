@@ -61,6 +61,22 @@
 #include <string.h>
 
 static void out_text(const char *text) { fputs(text, stdout); }
+#ifdef REPRO322_VIRTUAL_SUBLET
+void sqlite3_sublet_stats(unsigned long *aOut);
+/* Printed after every case. `revoke` is the question: zero means nothing was
+ * ever handed back to memsys5, so the stale pointer this case follows points at
+ * memory no allocator was told was dead -- which no protection can catch, and
+ * which is why six temporal cases stay silent on all three arms. */
+#define REPRO322_STATS                                                   \
+  do {                                                                   \
+    unsigned long aStat[5] = {0, 0, 0, 0, 0};                            \
+    sqlite3_sublet_stats(aStat);                                         \
+    printf("SUBLET split=%lu mrev=%lu delin=%lu revoke=%lu init=%lu\n",  \
+           aStat[0], aStat[1], aStat[2], aStat[3], aStat[4]);            \
+  } while (0)
+#else
+#define REPRO322_STATS do { } while (0)
+#endif
 static void out_uint(unsigned long v) { printf("%lu", v); }
 static int run_case(void);
 
@@ -80,6 +96,10 @@ unsigned long __capstone_sublet_malloc_linear(size_t, capstone_cap_slot *);
 /* The port's hand-over, added by the patch: memsys5 stores the grant in its
  * own slot and reaches its memory through Sublet's primitives from then on. */
 void sqlite3_sublet_grant(void *pLinear);
+/* The port's own counters: split, mrev, delin, REVOKE, init. The fourth is the
+ * one that answers whether anything died: a case that ends with revoke=0 freed
+ * nothing memsys5 could see, so no arm of any quality could have caught it. */
+void sqlite3_sublet_stats(unsigned long *aOut);
 /* memsys5's bookkeeping moves OUT OF BAND under the port -- aLink, aCap and
  * aPar sit beside the pool, because a freed block is revoked memory and a free
  * list cannot live in it. SQLITE_CONFIG_HEAP is therefore given THAT region,
@@ -133,6 +153,27 @@ static int repro_init(void) {
       out_text(" of "); out_uint(SQLITE_HEAP_SIZE); out_text("\n");
       return 1;
     }
+#ifdef REPRO322_NO_LOOKASIDE
+    /* THE PROBE. SQLite has TWO nested allocators and this arm's patch
+     * (ports/sqlite/sublet/sublet-3220000-memsys5.patch, 16 hunks, zero
+     * mentions of the lookaside) covers one. The lookaside takes a
+     * connection's small allocations -- up to LOOKASIDE_SMALL -- and its free
+     * is `pBuf->pNext = db->lookaside.pFree`, a push onto a free list with no
+     * revoke and no per-object bound. Six temporal cases stay silent on this
+     * arm, four of them fts3 snippet/offsets/zterm buffers, which is exactly
+     * the small per-statement shape that lands there.
+     *
+     * Turning the lookaside off sends those allocations to memsys5, which IS
+     * under the discipline. If the six then fault, the silence was the
+     * unprotected layer and not memsys5. */
+    rc = sqlite3_config(SQLITE_CONFIG_LOOKASIDE, 0, 0);
+    out_text("repro lookaside=off rc="); out_uint((unsigned)(rc<0?-rc:rc));
+    out_text("\n");
+    if (rc != SQLITE_OK) {
+      out_text("CONTROL-FAILED sublet could not disable the lookaside\n");
+      return rc;
+    }
+#endif
     out_text("repro allocator=memsys5-sublet pool_bytes=");
     out_uint(SQLITE_HEAP_SIZE); out_text(" pool_base=");
     out_uint(capstone_cap_base(&pool)); out_text(" tables_bytes=");
@@ -184,6 +225,7 @@ static int repro_init(void) {
     }                                                                    \
     printf("%s BEGIN\n", (TAG));                                         \
     (void)run_case();                                                    \
+    REPRO322_STATS;                                                      \
     printf("%s RETURNED\n", (TAG));                                      \
     return 0;                                                            \
   }

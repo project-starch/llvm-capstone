@@ -1,0 +1,62 @@
+{
+  "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+  "arm": "virtual-fixed-arm-control",
+  "address_space": "virtual",
+  "status": "FAIL",
+  "cases": 9,
+  "measured": 9,
+  "controls": 9,
+  "controls_held": 3,
+  "verdicts": {
+    "silent": 3,
+    "detected": 6
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "81abbe8d995f0e18ae26f3601b172f0da56cf8a76ca88c413e737b6b7c1187a6",
+    "launcher": "5240ec2c6b04c30b5d4c73710a0cfca0745e13b30cf4b11146785791474b457c",
+    "module": "2394a455036735288a119887d4eca24c1ae9c9ab2b679da5591ae5ba935932fd",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "14254dd8323cdfcab767c34a2ae3c5a795ee231a91ce0e2979c30d13426ded65",
+  "staged_sha256": {
+    "traces/00_7af02b0c87_rbuf_copied_after_cache_free-defect.bin": "ec41ff736b76b6c5c9cb4945208d677c80a31204d4c7a53a955f514a886c7db4",
+    "traces/00_7af02b0c87_rbuf_copied_after_cache_free-fixed.bin": "45f2b23bb21146534393a24b895551adc40417630f6782a702fd54a6dc8e7d16",
+    "traces/01_0ad4de66ae_io_walk_reads_freed_link-defect.bin": "f8d78109c5276f05a230a964d6c7972e20a9566a38af6ccb98b1cf6225c98478",
+    "traces/01_0ad4de66ae_io_walk_reads_freed_link-fixed.bin": "9f11c03e8c72ef512792d62110e6f54e5d0f4200b5c3c281ec9aeeb39386d8ac",
+    "traces/02_59bd02ce29_tail_repair_frees_referenced_item-defect.bin": "f7003dd032c87d4a15f12469b56e9ae37c12bf680104428d9d3265906ad7e341",
+    "traces/02_59bd02ce29_tail_repair_frees_referenced_item-fixed.bin": "0724552de43d3c4340701be59f83e789a18ca3df91c67ddc9a9774655e9dfbf3",
+    "traces/03_a8c4a82787_refcount_overflow_frees_linked_item-defect.bin": "5507d8325ad5daa6c6e87715cc99b66d2f00dc5af1473be311f90c79bbccd6ac",
+    "traces/03_a8c4a82787_refcount_overflow_frees_linked_item-fixed.bin": "341118b26450cbc132318260f3ee9b3a266271f90c1474d35c16c685193ad208",
+    "traces/04_152ddb68f7_unlocked_refcount_drift-defect.bin": "5ab006c499121d73ea0ef9f487e32bc7b05d4bdd5283136a4dc3b4cff8f701a3",
+    "traces/04_152ddb68f7_unlocked_refcount_drift-fixed.bin": "470c72a383543de037a359a2e5a2a5d357d2c9d2afad87b852ddc9adb402d09d",
+    "traces/05_2d61f18_item_data_one_past-defect.bin": "7f199c9cb365e3f8b0a9470fe4059ff99f9e164c250a8dd39d9735484492a43a",
+    "traces/05_2d61f18_item_data_one_past-fixed.bin": "852f769c60d35ee318b4f268fe2903be8c7b60a3bbe529a923d63c04ede91a30",
+    "traces/06_78eb770_suffix_write_no_space-defect.bin": "0d40233ec819e2e225a1304b9fa0505498d67aba162c1b81f35c7c309ba496a3",
+    "traces/06_78eb770_suffix_write_no_space-fixed.bin": "51da9e56ff930b3b8c54b377b617dfee97a8a9401e93207dd4cb92d30f95d913",
+    "traces/07_ecdb011_unterminated_key_read-defect.bin": "a570f93ad8b61123a584b4c1e916b5deb7ef63feb4a50fb127f114cbfc78aec6",
+    "traces/07_ecdb011_unterminated_key_read-fixed.bin": "fcd948452cef246d19606df5cde354af45134e059fbec61a07bc15eb1fa5c6ba",
+    "traces/08_e8364b5_ascii_all_spaces_scan_past_rbuf-defect.bin": "a05d648ba049968949e9fac6143dfa71e79dd4d417ffa29b70d39de35a824ecf",
+    "traces/08_e8364b5_ascii_all_spaces_scan_past_rbuf-fixed.bin": "bf269d46941e263750c8d1f1fc9f6554482ed13a68149b74ddb0f8ac1dd109a0"
+  },
+  "image_sha256": {
+    "00_7af02b0c87_rbuf_copied_after_cache_free:defect": "37e9a878a50be8bd1320dc2ca91b95bf1ba5ae22af1e4540f34796759dc08390",
+    "00_7af02b0c87_rbuf_copied_after_cache_free:fixed": "37e9a878a50be8bd1320dc2ca91b95bf1ba5ae22af1e4540f34796759dc08390",
+    "01_0ad4de66ae_io_walk_reads_freed_link:defect": "c050c6cd7db3d4dfe91d86a767bf604e74e0f533d7a26c7c005d36f3d8378dde",
+    "01_0ad4de66ae_io_walk_reads_freed_link:fixed": "c050c6cd7db3d4dfe91d86a767bf604e74e0f533d7a26c7c005d36f3d8378dde",
+    "02_59bd02ce29_tail_repair_frees_referenced_item:defect": "06936325eea8fc68df85eb14e5aa98521527d14d13ad7dca5ee2eb6750bb94e2",
+    "02_59bd02ce29_tail_repair_frees_referenced_item:fixed": "06936325eea8fc68df85eb14e5aa98521527d14d13ad7dca5ee2eb6750bb94e2",
+    "03_a8c4a82787_refcount_overflow_frees_linked_item:defect": "4cc40fa12c85e6dac413fd67aab5385457d4beb6f12b9a9568827001dc5486b2",
+    "03_a8c4a82787_refcount_overflow_frees_linked_item:fixed": "4cc40fa12c85e6dac413fd67aab5385457d4beb6f12b9a9568827001dc5486b2",
+    "04_152ddb68f7_unlocked_refcount_drift:defect": "e57c099bac2799f9aaee68f4f62fa31a3ecf6aa8efa2c0577daeb449cb5323a2",
+    "04_152ddb68f7_unlocked_refcount_drift:fixed": "e57c099bac2799f9aaee68f4f62fa31a3ecf6aa8efa2c0577daeb449cb5323a2",
+    "05_2d61f18_item_data_one_past:defect": "bde4db03bef36746a0eda0b3197533fdb865cf6ed0ab452a034f0ba63ef5ad5d",
+    "05_2d61f18_item_data_one_past:fixed": "bde4db03bef36746a0eda0b3197533fdb865cf6ed0ab452a034f0ba63ef5ad5d",
+    "06_78eb770_suffix_write_no_space:defect": "caa3bd307a3fd8c5f520878a2e4f07f7f97cd8ace676bceb0a9045039128eaf6",
+    "06_78eb770_suffix_write_no_space:fixed": "caa3bd307a3fd8c5f520878a2e4f07f7f97cd8ace676bceb0a9045039128eaf6",
+    "07_ecdb011_unterminated_key_read:defect": "3ebf4fa47878a04243acd0d4c83d2ce582098d7d1908d0740ce8305d554c1058",
+    "07_ecdb011_unterminated_key_read:fixed": "3ebf4fa47878a04243acd0d4c83d2ce582098d7d1908d0740ce8305d554c1058",
+    "08_e8364b5_ascii_all_spaces_scan_past_rbuf:defect": "b71097c299bb9ab3d09ce7c9de4409d970de760ab4aac9fee294031ef175cc97",
+    "08_e8364b5_ascii_all_spaces_scan_past_rbuf:fixed": "b71097c299bb9ab3d09ce7c9de4409d970de760ab4aac9fee294031ef175cc97"
+  }
+}

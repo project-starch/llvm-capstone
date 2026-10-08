@@ -470,13 +470,67 @@ def build():
                                                       "row for this case")}
                         continue
                     caught, verdict, detail = table[key]
+                    # A group whose cases do not prove they ran cannot report a
+                    # silence: a completion with no evidence that the defective
+                    # path was taken is not a measured miss. The declaration
+                    # says so per group and the cell becomes not-run with that
+                    # reason, which is reversible the moment a proof exists.
+                    if verdict == "missed" and spec.get("silence_unproven"):
+                        cells[arm] = {"verdict": "not-run", "caught": None,
+                                      "why": spec["silence_unproven"],
+                                      "group": group}
+                        continue
+                    # And the mirror of it. A detection is only a detection of
+                    # THIS defect if the same image is quiet without it. Where a
+                    # control run shows the fault fires on the upstream-fixed
+                    # sequence too, the cell is not a catch and not a silence
+                    # either: it is unmeasured, with the control named.
+                    void = spec.get("detection_unproven")
+                    if verdict == "caught" and void and (
+                            void.get("cases") is None
+                            or case["case"] in void["cases"]):
+                        cells[arm] = {"verdict": "not-run", "caught": None,
+                                      "why": void["why"], "group": group,
+                                      "control_bundle": void["bundle"]}
+                        continue
+                    # A miss leaves one question open -- was the object in the
+                    # platform's quarantine and merely unswept, or never there --
+                    # and a group that has measured it says so here, so the cell
+                    # carries the answer instead of the reader having to know it.
+                    # A group may declare several dispositions, each for its own
+                    # cases, because one group's silences can have more than one
+                    # cause. The one that names this case wins; one that names none
+                    # covers whatever is left.
+                    declared = spec.get("disposition")
+                    declared = (declared if isinstance(declared, list)
+                                else [declared] if declared else [])
+                    disposition = None
+                    for one in declared:
+                        if one.get("cases") is None or case["case"] in one["cases"]:
+                            disposition = one
+                            break
+                    if verdict != "missed":
+                        disposition = None
+                    # IN THE QUARANTINE COUNTS AS CAUGHT -- the user's rule, on
+                    # purpose generous to the arm: the mechanism did receive the
+                    # object and did quarantine it, and only the batching of its
+                    # own sweep let the stale read through. Crediting it is the
+                    # fair reading of what the mechanism saw, and the cell keeps
+                    # the disposition so the evidence stays visible.
+                    if disposition and disposition["finding"] == "quarantined-unswept":
+                        verdict, caught = "caught", True
                     cells[arm] = {"verdict": verdict, "caught": caught,
+                                  "disposition": disposition,
                                   "detail": detail, "group": group,
                                   "bundle": spec["bundle"] if isinstance(
                                       spec["bundle"], str) else ", ".join(spec["bundle"]),
                                   "vehicle": spec["vehicle"],
                                   "local_arm": spec.get("arm", spec["reader"])}
+                boundary_class = group_decl.get("allocator_boundary")
+                if boundary_class == "mixed":
+                    boundary_class = case.get("allocator_boundary")
                 out_cases.append({"case": case_dir.name, "group": group,
+                                  "allocator_boundary": boundary_class,
                                   "number": case["case"],
                                   "upstream_fix": case.get("upstream_fix", ""),
                                   "title": case["title"],
@@ -507,6 +561,150 @@ MARK = {"caught": "**C**", "missed": "·", "wrong-answer": "w", "not-run": "—"
         "ignored": "∅"}
 
 
+MEASURED = ("caught", "missed", "wrong-answer")
+BOUNDARY_ORDER = ("system", "nested", "interior")
+BOUNDARY_TITLE = {
+    "system": "the system allocator handed the object out directly -- the boundary "
+              "all three arms protect",
+    "nested": "the program's own allocator carved the object out of a block it holds "
+              "-- only `capstone-sublet` protects it",
+    "interior": "the crossing is inside ONE allocation and no allocator vested the "
+                "crossed region -- no arm in this study claims it",
+}
+
+
+FINDING_MEANS = {
+    "quarantined-unswept": ("the object WAS in the quarantine and no sweep cleared "
+                            "it", "a synchronous sweep would have caught these"),
+    "never-freed": ("the object never reached the system allocator, so it never "
+                    "entered the quarantine",
+                    "no sweep policy reaches these; only protecting the nested "
+                    "allocator does"),
+    "not-temporal": ("nothing was freed at all; the crossing is inside a live "
+                     "allocation", "revocation is not the mechanism in play"),
+}
+
+
+def disposition_ledger(corpora):
+    """What the arm's silences are made of, where a run has measured it.
+
+    The arm stays what CheriBSD ships -- revocation on, asynchronous, batched. Nothing
+    here re-runs it under another policy. What the dispositions establish is where
+    each silence came from: an object the mechanism held in its quarantine and lost to
+    its own batching is a different fact than an object it never received, and the
+    first is credited as a catch while the second is not.
+    """
+    ledger = {arm: {} for arm in ARMS}
+    for corpus in corpora:
+        for case in corpus["cases"]:
+            if case["ignored"]:
+                continue
+            for arm in ARMS:
+                cell = resolve(case["arms"][arm], case["arms"])
+                if not (cell["verdict"] == "missed" or cell.get("disposition")):
+                    continue
+                found = (cell.get("disposition") or {}).get("finding", "open")
+                ledger[arm][found] = ledger[arm].get(found, 0) + 1
+    if not any(set(v) - {"open"} for v in ledger.values()):
+        return []
+    lines = ["## What the silences are made of", "",
+             disposition_ledger.__doc__.split("\n\n")[1].replace("\n    ", " ").strip(),
+             "",
+             "The count in each heading is cells on which the arm's mechanism printed "
+             "nothing. It is NOT the miss count: the `quarantined-unswept` ones are "
+             "credited as catches by the rule above, so they appear here as an account "
+             "of the silence and in the caught column as the verdict.", ""]
+    for arm in ARMS:
+        found = ledger[arm]
+        total = sum(found.values())
+        # Only an arm whose silences have been taken apart gets a section. The
+        # synchronous arms have no quarantine and nothing to dispose of, so a row
+        # of "not yet measured" for them would invent a question.
+        if not (set(found) - {"open"}):
+            continue
+        lines += [f"### `{arm}`: {total} cells where the mechanism reported "
+                  f"nothing", "",
+                  "| disposition | cells | what it means | what would change it |",
+                  "|---|---:|---|---|"]
+        for finding, (means, changes) in FINDING_MEANS.items():
+            if finding in found:
+                lines.append(f"| `{finding}` | **{found[finding]}** | {means} "
+                             f"| {changes} |")
+        if found.get("open"):
+            lines.append(f"| not yet measured | {found['open']} | the run does not "
+                         "say whether the object reached the mechanism | the probe, "
+                         "`ports/common/host/cheribsd/quarantine-probe.c` |")
+        lines.append("")
+    return lines
+
+
+def intersection(corpora):
+    """The arms compared only where all three have a verdict, split by who allocated
+    the object.
+
+    Two corrections to the headline table, and both of them cut the same way. A
+    cell that was never run is not evidence, so the arms are compared on the cases
+    where all three were measured. And on a case whose object came out of the
+    program's own allocator, two of the three arms are not protecting that object at
+    all -- counting those together with the malloc-boundary cases reads as a
+    weakness of the mechanism when it is a statement about what each arm covers.
+    """
+    buckets, credit = {}, {}
+    for corpus in corpora:
+        for case in corpus["cases"]:
+            if case["ignored"]:
+                continue
+            cells = {a: resolve(case["arms"][a], case["arms"]) for a in ARMS}
+            if any(cells[a]["verdict"] not in MEASURED for a in ARMS):
+                continue
+            where = buckets.setdefault(case["allocator_boundary"],
+                                       {a: {v: 0 for v in MARK} for a in ARMS})
+            here = credit.setdefault(case["allocator_boundary"],
+                                     {a: 0 for a in ARMS})
+            for arm in ARMS:
+                where[arm][cells[arm]["verdict"]] += 1
+                if cells[arm]["verdict"] == "caught" and cells[arm].get("disposition"):
+                    here[arm] += 1
+    lines = ["## The arms compared where all three were measured, split by who "
+             "allocated the object", "", intersection.__doc__.split("\n\n")[1].replace(
+                 "\n    ", " ").strip(), ""]
+    for cls in BOUNDARY_ORDER:
+        if cls not in buckets:
+            continue
+        counts, credited = buckets[cls], credit[cls]
+        n = sum(counts[ARMS[0]].values())
+        lines += [f"### `{cls}`: {n} case" + ("" if n == 1 else "s"), "",
+                  BOUNDARY_TITLE[cls], "",
+                  "| arm | caught | of those, by quarantine | missed "
+                  "| share caught |",
+                  "|---|---:|---:|---:|---:|"]
+        for arm in ARMS:
+            c = counts[arm]
+            missed = c["missed"] + c["wrong-answer"]
+            lines.append(f"| `{arm}` | **{c['caught']}** | {credited[arm]} | "
+                         f"{missed} | {c['caught'] / n:.0%} |")
+        lines.append("")
+    total = {a: {v: 0 for v in MARK} for a in ARMS}
+    credited = {a: sum(c[a] for c in credit.values()) for a in ARMS}
+    for counts in buckets.values():
+        for arm in ARMS:
+            for v, k in counts[arm].items():
+                total[arm][v] += k
+    n = sum(total[ARMS[0]].values())
+    lines += [f"### All {n} together", "",
+              "Kept for continuity with the per-application tables above. Read the "
+              "split first: this row's mixture of boundaries is a property of which "
+              "corpora happen to be fully measured, not of the arms.", "",
+              "| arm | caught | of those, by quarantine | missed "
+              "| share caught |",
+              "|---|---:|---:|---:|---:|"]
+    for arm in ARMS:
+        c = total[arm]
+        lines.append(f"| `{arm}` | **{c['caught']}** | {credited[arm]} | "
+                     f"{c['missed'] + c['wrong-answer']} | {c['caught'] / n:.0%} |")
+    return lines + [""]
+
+
 def render(corpora):
     lines = [
         "# Does it catch it? Every bug in this tree, against three protection arms",
@@ -525,18 +723,37 @@ def render(corpora):
         "|---|---|",
         "| **C** | caught: the arm's mechanism reported |",
         "| · | missed: the sequence ran to the end and the mechanism said nothing |",
+        "| **C**<sup>q</sup> | caught by QUARANTINE MEMBERSHIP, not by a reported "
+        "fault: a run measured the object in the arm's quarantine, and only the "
+        "batching of its own sweep let the stale access through |",
+        "| ·<sup>q</sup> | missed, and WHY is measured -- the object never reached "
+        "the mechanism, or nothing was freed at all. The cell's JSON says which |",
         "| w | the program's own oracle failed, no mechanism fired |",
         "| — | not run; the per-case reason is in the JSON |",
         "| ∅ | ignored: the case stays as material and leaves every denominator |",
         "",
     ]
     totals = {arm: {v: 0 for v in MARK} for arm in ARMS}
+    totals_disposed = {arm: 0 for arm in ARMS}
+    totals_credited = {arm: 0 for arm in ARMS}
     lines += ["## Totals, ignored cases excluded", "",
-              "| arm | caught | missed | not run | of | ignored |",
-              "|---|---:|---:|---:|---:|---:|"]
+              "IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the "
+              "object was in `cheribsd`'s revocation quarantine and only the batching "
+              "of its own sweep let the stale access through, the cell is a CATCH, "
+              "scored to the arm and marked <code>C<sup>q</sup></code>: the mechanism "
+              "received the object and held it, so crediting it is the fair reading of "
+              "what it saw. A silence whose object never reached the mechanism, or "
+              "where nothing was freed at all, stays a MISS -- `of those, disposition "
+              "measured` counts the misses a run has explained that way, and the rest "
+              "are open questions.", "",
+              "| arm | caught | of those, by quarantine | missed | of those, "
+              "disposition measured | not run | of | ignored |",
+              "|---|---:|---:|---:|---:|---:|---:|---:|"]
     body = []
     for corpus in corpora:
         counts = {arm: {v: 0 for v in MARK} for arm in ARMS}
+        disposed = {arm: 0 for arm in ARMS}
+        credited = {arm: 0 for arm in ARMS}
         rows_out = []
         for case in corpus["cases"]:
             cells = []
@@ -549,6 +766,13 @@ def render(corpora):
                     mark += "<sup>=</sup>"
                 elif cell.get("vehicle") == "capstone-baremetal":
                     mark += "<sup>b</sup>"
+                if cell.get("disposition"):
+                    disposed[arm] += 1
+                    totals_disposed[arm] += 1
+                    mark += "<sup>q</sup>"
+                    if cell["verdict"] == "caught":
+                        credited[arm] += 1
+                        totals_credited[arm] += 1
                 cells.append(mark)
             rows_out.append(f"| `{case['group']}` | {case['number']} | "
                             f"`{case['upstream_fix']}` | {case['title'][:76]} | "
@@ -573,18 +797,28 @@ def render(corpora):
         for arm in ARMS:
             c = counts[arm]
             measured = n - c["ignored"]
-            body.append(f"- `{arm}`: **{c['caught']}** caught, {c['missed']} missed"
+            body.append(f"- `{arm}`: **{c['caught']}** caught"
+                        + (f" ({credited[arm]} by quarantine)"
+                           if credited[arm] else "")
+                        + f", {c['missed']} missed"
                         + (f", {c['wrong-answer']} wrong answer" if c["wrong-answer"] else "")
                         + (f", {c['not-run']} not run" if c["not-run"] else "")
                         + f", of {measured}"
-                        + (f"; {c['ignored']} ignored" if c["ignored"] else "") + ".")
+                        + (f"; {c['ignored']} ignored" if c["ignored"] else "")
+                        + (f". {disposed[arm] - credited[arm]} of the misses "
+                           + ("has" if disposed[arm] - credited[arm] == 1 else "have")
+                           + " a measured disposition"
+                           if disposed[arm] - credited[arm] else "")
+                        + ".")
         body.append("")
     for arm in ARMS:
         c = totals[arm]
         n = sum(c.values()) - c["ignored"]
-        lines.append(f"| `{arm}` | {c['caught']} | {c['missed'] + c['wrong-answer']} | "
+        lines.append(f"| `{arm}` | {c['caught']} | {totals_credited[arm]} | "
+                     f"{c['missed'] + c['wrong-answer']} | "
+                     f"{totals_disposed[arm] - totals_credited[arm]} | "
                      f"{c['not-run']} | {n} | {c['ignored']} |")
-    lines += ["",
+    lines += [""] + disposition_ledger(corpora) + intersection(corpora) + [
               "A `=` marks a cell that coincides with the arm to its left because the "
               "group has no nested allocator to protect; a `b` marks one measured on the "
               "freestanding vehicle, which is NOT paired with the cell to its left.",
@@ -604,18 +838,26 @@ def selected(case, cells, specs):
         if "@" in spec:
             verdict, arm = spec.split("@", 1)
             armed.setdefault(arm, set()).add(verdict)
-        elif spec in MARK or spec == "parked":
+        elif spec in MARK or spec in ("parked", "disposed", "undisposed"):
             verdicts.add(spec)
         else:
             places.add(spec)
-    kinds = {a: cells[a]["verdict"] for a in ARMS}
+    # One cell can answer to more than one spec: a miss is also `disposed` or
+    # `undisposed`, which is how "show me the misses nobody has explained yet"
+    # is asked for.
+    kinds = {}
+    for a in ARMS:
+        tags = {cells[a]["verdict"]}
+        if cells[a]["verdict"] in ("missed", "caught"):
+            tags.add("disposed" if cells[a].get("disposition") else "undisposed")
+        kinds[a] = tags
     parked = (case["arms"][ARMS[0]].get("kind") == "parked")
     if verdicts:
-        have = set(kinds.values()) | ({"parked"} if parked else set())
+        have = set().union(*kinds.values()) | ({"parked"} if parked else set())
         if not (verdicts & have):
             return False
     for arm, want in armed.items():
-        if arm not in ARMS or kinds.get(arm) not in want:
+        if arm not in ARMS or not (want & kinds.get(arm, set())):
             return False
     if places:
         here = {case["corpus"], f"{case['corpus']}/{case['group']}", case["group"]}
@@ -641,15 +883,20 @@ def focus(corpora, specs):
                     counts[arm] += 1
             rows.append((f"{corpus['corpus']}/{case['group']}", case["number"],
                          case["upstream_fix"], case["title"],
-                         [cells[a]["verdict"] for a in ARMS]))
+                         [(cells[a]["verdict"], bool(cells[a].get("disposition")))
+                          for a in ARMS]))
     width = max((len(r[0]) for r in rows), default=20)
-    short = {"caught": "CAUGHT", "missed": "·", "not-run": "—", "ignored": "∅",
-             "wrong-answer": "wrong"}
+    short = {"caught": "CAUGHT", "missed": "·",
+             "not-run": "—", "ignored": "∅", "wrong-answer": "wrong"}
+    # A miss with a measured disposition prints as ·q, so a view of the misses
+    # never hides which of them are still open questions.
+    short_disposed = dict(short, missed="·q", caught="CAUGHT-q")
     print(f"{'group':{width}s} case  {'upstream':12s} "
           + "  ".join(f"{a.split('-')[-1]:>9s}" for a in ARMS) + "  what it is")
     for where, number, fix, title, verdicts in rows:
         print(f"{where:{width}s} {number:4d}  {fix:12s} "
-              + "  ".join(f"{short.get(v, v):>9s}" for v in verdicts)
+              + "  ".join(f"{(short_disposed if d else short).get(v, v):>9s}"
+                          for v, d in verdicts)
               + f"  {title[:70]}")
     print(f"\n{total} cases selected by {' '.join(specs)}: "
           + ", ".join(f"{a} {counts[a]}" for a in ARMS))
@@ -662,8 +909,9 @@ def main():
     ap.add_argument("--focus", action="append", default=[], metavar="SPEC",
                     help="PRINT a subset to stdout and write nothing. A view, not a "
                          "declaration: PROTECTION.md stays the whole record. SPEC is "
-                         "caught | missed | not-run | ignored | parked, a program, a "
-                         "program/group, or caught@<arm>. Several --focus narrow "
+                         "caught | missed | not-run | ignored | parked | disposed "
+                         "| undisposed, a program, a program/group, or "
+                         "caught@<arm> / undisposed@cheribsd. Several --focus narrow "
                          "together; repeat a verdict to widen it.")
     args = ap.parse_args()
     corpora, problems = build()

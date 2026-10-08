@@ -53,7 +53,7 @@ reporting a defect, and a case that does not parse is a bad extraction. Both are
 counted above rather than quietly dropped.
 
 The discovery step is checked against known ground truth: the twelve rows the
-[GC-slot corpus](../gc-slot-repros) found by hand are all 12 rediscovered by this
+the xlang mruby rows (`xlang/repro`) found by hand are all 12 rediscovered by this
 sweep. One of them, `0cf969a2b`, is only found once the window runs to master
 rather than to the port's `head` pin — its fix landed the day after that pin was
 taken, so it is live in *both* of the port's pins.
@@ -185,9 +185,9 @@ in the emulator this kit was built from, and on it the 65,536 default is not
 enough for these runs.
 
 The harness (`probe/harness.rb`, `probe/footer.rb`) and the four-arm build config
-are taken from the GC-slot corpus's own probe on `corpus/mruby-gc-slot-reuse`,
+are taken from the xlang GC-slot probe on `corpus/mruby-gc-slot-reuse`,
 where they were written; the extraction, the sweep and the domain runner are new
-here. What that corpus does for twelve hand-picked rows, `extract.py` does for
+here. What that probe does for twelve hand-picked rows, `extract.py` does for
 every commit in the window.
 
 ## What this does not say

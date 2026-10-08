@@ -212,6 +212,124 @@ per arm, and each entry is one of three things:
   denominator, and a bare blank hides which one it is. `tools/check-corpus.py`
   refuses a one-word reason.
 
+### A detection is not a finished reading either: `detection_unproven`
+
+The mirror of `silence_unproven`, and it was needed on 2026-10-08 for the same
+reason: a fault is only a detection of THIS defect if the same image is quiet
+without it. Where a control run shows the fault firing on the upstream-FIXED
+sequence too, the entry says so and the cell becomes `not-run`, with the control
+named:
+
+    "capstone-sysalloc": [{"bundle": "...", "reader": "virtual", "key": "dir",
+                           "vehicle": "capstone-virtual", "group": "bucket-repros",
+                           "detection_unproven": {
+                             "bundle": "results/20261008-fixed-arm-control",
+                             "cases": [0, 1, 4, 6],
+                             "why": "the fault lands at apr_buckets_alloc.c:113 ..."}}]
+
+`bundle` must be a filed bundle, `why` twelve words at least, `cases` optional.
+
+How eight cells came to need it is the lesson, not the mechanism. The runs had
+reported `attributed=false` on every one of them -- the runner resolves the case's
+labelled probe in the image that ran and says whether the faulting pc lies inside
+it -- and nobody read that column. Rule 2 of the contract is exactly this: a fault
+is accepted at the labelled probe and nowhere else. **Read the attribution before
+the verdict**, the same way `controls N / M` has to be read before a verdict
+column. Where a corpus has no fixed arm on a vehicle, there is nothing to control
+a detection against, which is why the fixture's spare event word now selects the
+arm (`shared/corpus.h` in both affected corpora).
+
+### A miss is not a finished reading: `disposition`
+
+A `caught` cell is a statement; a `missed` cell is two different things wearing
+one symbol. Either the arm's mechanism got a chance and said nothing, or it never
+got a chance at all -- and for `cheribsd` that difference is the whole claim,
+because its revocation is asynchronous: an object may be freed, quarantined, and
+read through before any sweep clears it. Left undistinguished, a column of dots
+reads as "the mechanism failed" when some of those dots mean "the object never
+reached the mechanism".
+
+So a bundle that has measured the reason declares it beside the verdict:
+
+    "cheribsd": [{"bundle": "results/20261006-cheribsd", "reader": "case-lines",
+                  "key": "number", "vehicle": "cheribsd-purecap",
+                  "group": "allocator-repros",
+                  "disposition": {"bundle": "results/20261008-cheribsd-quarantine",
+                                  "finding": "never-freed",
+                                  "cases": [0, 1, 2, 3, 4, 5, 6, 7],
+                                  "why": "34 of 34 frees quarantined, none reused "
+                                         "while quarantined, and the reuse is on "
+                                         "memcached's own freelists"}}]
+
+* **`bundle`** is the run that measured it, and it must exist. The disposition
+  is evidence from a run, not an opinion typed into the declaration.
+* **`finding`** is one of `never-freed` (the program's own allocator recycles the
+  object and the system allocator never sees it), `quarantined-unswept` (freed,
+  quarantined, and handed back out before a sweep) or `not-temporal` (nothing was
+  freed; the defect crosses a bound inside one live allocation).
+* **`why`** carries the numbers that settle it, twelve words at least.
+* **`cases`** is optional and narrows the disposition to those case numbers;
+  without it, it covers every missed case of the group.
+
+One group's silences can have more than one cause, so the field also takes a
+**list**. mruby is the example: four of its cases are `quarantined-unswept` and
+one is `not-temporal`, from two different runs. With a list, every entry must name
+its `cases` -- one that named none would claim every missed cell -- and the
+checker refuses two entries that claim the same case, or a list of one.
+
+A disposition only attaches to a cell whose verdict is `missed`: there is nothing
+to dispose of otherwise. What it then does depends on the finding, and the split
+is the point of the field:
+
+* **`quarantined-unswept`** turns the cell into a **CATCH**, printed
+  <code>C<sup>q</sup></code> and counted both in `caught` and in a column of its
+  own. IN THE QUARANTINE COUNTS AS CAUGHT is the user's rule, 2026-10-08, and it is
+  deliberately generous to the arm: the mechanism received the object and held it,
+  and only the batching of its own sweep let the stale access through. The separate
+  column exists because the evidence is membership in a shadow bitmap rather than a
+  reported fault, and two kinds of proof should not disappear into one number.
+* **`never-freed`** and **`not-temporal`** leave the cell a **miss**. There the
+  mechanism never had the object -- the program's own allocator recycled it, or
+  nothing was freed at all -- and no sweep policy would change that.
+
+`--focus disposed@cheribsd` lists the explained silences of either kind and
+`--focus undisposed@cheribsd` the ones still open.
+
+### The axis every comparison is split on: `allocator_boundary`
+
+Who allocated the object a case crosses decides which arm can possibly report, so
+every group declares it and `arms.json` defines the values: `system` (the system
+allocator handed the object out directly -- all three arms protect this),
+`nested` (the program's own allocator carved it from a block it holds -- only
+`capstone-sublet` protects it), `interior` (the crossing is inside ONE allocation
+and no allocator vested the crossed region -- no arm in this study claims it), or
+`mixed`. A `mixed` group obliges **every** case in it to carry its own
+`allocator_boundary`, and the checker refuses a case that carries one where its
+group already answered. The `xlang-row` corpora are exempt, as they are from the
+`protection` block.
+
+PROTECTION.md also carries a ledger built from the dispositions: how many cells
+were `quarantined-unswept` (credited as catches), how many `never-freed` (no sweep
+policy reaches them; only protecting the nested allocator does), how many
+`not-temporal`, and how many are still open. The arm itself is unchanged --
+`cheribsd` stays revocation on, asynchronous and batched, the way the platform
+ships it. What the rule changes is how its own quarantine is scored, not how it
+runs.
+
+PROTECTION.md's next section uses the boundary axis: the arms compared only on the cases where
+all three were measured, split by boundary class. Without the split, a tree whose
+corpora are mostly nested-allocator bugs makes the malloc-boundary arms look weak
+at the boundary they do protect, and an unrun cell would count as a failure.
+
+The instrument for `cheribsd` is
+`capstone/ports/common/host/cheribsd/quarantine-probe.c`: `LD_PRELOAD`ed through
+a case's `env`, it wraps `malloc` and `free` and reads the kernel's revocation
+shadow bitmap, one bit per 16-byte granule, set while that granule is
+quarantined. Reading a bit forces no sweep and changes nothing else about the
+run. Forcing a sweep with `_RUNTIME_REVOCATION_EVERY_FREE_ENABLE=1` is **not** a
+substitute: it makes cases fault that no mechanism may legitimately catch, so it
+cannot tell a catch from an artefact, and verdicts taken from it were withdrawn.
+
 `tools/protection-matrix.py` reads the blocks and writes
 [PROTECTION.md](PROTECTION.md) and `protection.json`: one row per bug, three
 cells, each carrying the bundle it came from. Both files are generated; the
@@ -324,10 +442,13 @@ PROTECTION.md stays the whole record:
 
     tools/protection-matrix.py --focus ffmpeg --focus caught
     tools/protection-matrix.py --focus caught@capstone-sublet --focus missed@cheribsd
+    tools/protection-matrix.py --focus undisposed@cheribsd
 
 A verdict spec widens within its kind and narrows across kinds, so the first
 line is "FFmpeg's caught ones" and the second is "what only we catch". `parked`
-is itself a spec, so a parked case can always be listed again.
+is itself a spec, so a parked case can always be listed again. `disposed` and
+`undisposed` select misses by whether a run has said why the arm was silent, so
+the third line is "the CheriBSD misses nobody has explained yet".
 
 The difference is deliberate. Parking changes the denominator every reader sees;
 focusing changes what one reader is looking at. Collapsing the two would make a
@@ -374,9 +495,11 @@ listed bundle stops quoting the old path or a renamed component loses its declar
 
 A corpus is `<program>/<boundary>-repros/`, where the boundary is the allocator or
 API its cases cross: `pymalloc-repros`, `mmgr-repros`, `wmem-repros`, `pool-repros`,
-`apr-pool-repros`, `bucket-repros`, `capi-repros`, `allocator-repros`,
-`gc-slot-repros`. The name says what a case crosses, never where the defect was
-reported: `sqlite/cve-repros` was renamed to `capi-repros` on 2026-09-28 because it
-named a provenance class the corpus does not have — 19 rows, 2 advisories — and
-because SQLite's own engine CVEs are explicitly out of its scope. `allocator-repros`
+`apr-pool-repros`, `bucket-repros`, `allocator-repros`. The name says what a case
+crosses, never where the defect was reported: `sqlite/cve-repros` was renamed to
+`capi-repros` on 2026-09-28 because it named a provenance class the corpus does not
+have — 19 rows, 2 advisories — and because SQLite's own engine CVEs are explicitly
+out of its scope; that group and `mruby/gc-slot-repros` were both deleted later, the
+first on the user's order and the second because it declared a boundary with no
+cases behind it. `allocator-repros`
 is broad rather than wrong (memcached's slabs *and* its object cache) and stays.

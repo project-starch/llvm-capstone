@@ -7,6 +7,7 @@
   "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL.",
   "shape": "`while (*ptr == ' ') { ++ptr; }` with no end condition, over a buffer whose branch premise is that it contains no '\\n'; a buffer of nothing but spaces therefore walks the cursor past the object and on into the next object of the same cache",
   "allocator_layer": "cache.c, the object cache, over pages the slab allocator owns. An inner allocator carved the crossed region, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "allocator_boundary": "nested",
   "nested": true,
   "nested_why": "an inner allocator (cache.c) carved the crossed region out of a larger page it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
   "fidelity": "real allocator, model consumer. cache_create/cache_alloc/cache_free are upstream's own cache.c through this corpus's seam, and the two objects' ORDER is checked rather than assumed -- the free list promises no ascending addresses, and case 5 records the same trap costing it a refused control run. READ_BUFFER_SIZE is 16384, unreduced. The scan is upstream's own loop; only a reduction-side step cap is added so a runaway cannot hang the harness, and it is set well past the crossing so it cannot mask it. The successor object is filled with spaces too, deliberately: that is what makes the scan CONTINUE past the end rather than stop at the first byte, which is the difference between an overrun and a single stray read.",

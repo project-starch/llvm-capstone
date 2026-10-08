@@ -165,3 +165,34 @@ reuse a reconstructed platform and add explicit per-lease hooks.
 They have their own modes and measurements; the generic examples use the default
 CheriBSD adapter. No cross-system security or performance equivalence is
 implied by a successful build or example.
+
+## `quarantine-probe.c`: what a CheriBSD miss means
+
+A completion on this platform has two possible causes and the verdict cannot
+tell them apart: the mechanism could not see the defect, or the asynchronous
+sweep had not run yet. `security.cheri.runtime_revocation_every_free_default`
+is 0 in this guest, so a sweep runs only once a quarantine threshold is crossed,
+and a short case that frees a handful of objects may never cross one.
+
+The probe answers it without running a sweep. The kernel exposes a shadow
+bitmap, one bit per 16-byte granule, set while that granule is quarantined;
+reading a bit is O(1), so the wrapped allocator can check on every call and
+report at exit:
+
+    QUARANTINE shadow=<...> mallocs=N frees=N quarantined_after_free=N
+               reused_while_quarantined=N
+
+`quarantined_after_free` greater than zero says the quarantine is live during
+the case. `reused_while_quarantined` is the window an async sweep leaves open:
+memory handed out again while still quarantined. A stale pointer into memory
+that never reaches `free()` at all shows up in neither -- which is the
+structural miss, and it is what Perl's eleven turned out to be.
+
+Use it by giving a case an `env` of `{"LD_PRELOAD": "./quarantine-probe.so"}`
+and shipping the shared object beside the program; `run.py` passes a case's own
+environment through in front of the revocation policy.
+
+Forcing a sweep instead (`_RUNTIME_REVOCATION_EVERY_FREE_ENABLE=1`) is NOT a
+substitute and was withdrawn as evidence: it makes every Perl case fault,
+including an in-bounds read of a live object that no bounds and no revocation
+may legitimately catch, so it cannot distinguish a catch from an artefact.

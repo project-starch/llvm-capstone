@@ -1,0 +1,58 @@
+{
+  "corpus": "capstone/bug-corpora/httpd/bucket-repros",
+  "arm": "virtual-fixed-arm-control",
+  "address_space": "virtual",
+  "status": "FAIL",
+  "cases": 8,
+  "measured": 8,
+  "controls": 8,
+  "controls_held": 4,
+  "verdicts": {
+    "detected": 4,
+    "silent": 4
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "81abbe8d995f0e18ae26f3601b172f0da56cf8a76ca88c413e737b6b7c1187a6",
+    "launcher": "5240ec2c6b04c30b5d4c73710a0cfca0745e13b30cf4b11146785791474b457c",
+    "module": "2394a455036735288a119887d4eca24c1ae9c9ab2b679da5591ae5ba935932fd",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "15fae4957fe1fc25f751373fca9c129cbb83c8d04a565318d2dc2bbc5fd6da88",
+  "staged_sha256": {
+    "traces/00_1c7a70c9d9_wrong_bucket_alloc_across_connections-defect.bin": "748c243a431878ecd5fa4665bb227d64672b63ccc101ffe60c26205a39d89113",
+    "traces/00_1c7a70c9d9_wrong_bucket_alloc_across_connections-fixed.bin": "2977743adeb716af5a1fef95d188a8345f0be6d699debf2d58a4ff09ba3e3d43",
+    "traces/01_d2a1cf5f8c_buckets_outlive_backend_allocator-defect.bin": "d2695ccb17f87676a1af13f443bee22e346eebd38bfc96da424681cfb7a389ad",
+    "traces/01_d2a1cf5f8c_buckets_outlive_backend_allocator-fixed.bin": "6bc097a83f31a362bfb67ada27889bb8c44bdc33dc3fce33aa6d87bdf849addf",
+    "traces/02_106d0761c0_brigade_on_request_pool_past_eor-defect.bin": "556034d4f499ceab2f911b498cf08f42078249ca1f5f950820bf2651df024655",
+    "traces/02_106d0761c0_brigade_on_request_pool_past_eor-fixed.bin": "1117e528f09bd818c9c998f8012c501c14b7c960cc82f5736fb26e3b35abb430",
+    "traces/03_d9c2352952_buckets_from_pool_that_dies_first-defect.bin": "f0a8c40bf5b824a20de1685665f57e473e5b4dc3277901f06a1b4cf6a40f4139",
+    "traces/03_d9c2352952_buckets_from_pool_that_dies_first-fixed.bin": "a3013f89914bad6cb63ccb8ee1903b8fee2b4c6311e556901354eadfb4ac949a",
+    "traces/04_c81adad105_brigade_not_cleaned_before_reuse-defect.bin": "63b28ade8c3692ff57f175b6fb92104257896ffd6e549f0c94df5eec50a55b7a",
+    "traces/04_c81adad105_brigade_not_cleaned_before_reuse-fixed.bin": "3e8d7dc792f40061ef6c3d20f0fd3e3a5256264ba00beaacba0b44cb66ef9df8",
+    "traces/05_60919177e8_read_from_destroyed_brigade-defect.bin": "1e8cfcf2fc55f49d0e388f1bf7b74db99a0ad165d547b9015f21c6c1edf7d205",
+    "traces/05_60919177e8_read_from_destroyed_brigade-fixed.bin": "fc8aaa282db9d96e3a13f1bd0b4b647e181cdc293e23661c2df86b6f48208dc2",
+    "traces/06_4930450013_bucket_outlives_its_brigade-defect.bin": "c8b318310005fe2bb08434ca694f2da454594bc15733552da9958f815977130a",
+    "traces/06_4930450013_bucket_outlives_its_brigade-fixed.bin": "e250c1424a5413a32040dfbb3671962f880a80eead53d53d987f68867d137969",
+    "traces/07_edc450c8ac_subrequest_pool_private_data-defect.bin": "1d6e8a9c6c62e3b699382ef6a184f74e374c041ecf64fb8dea4bd39826992527",
+    "traces/07_edc450c8ac_subrequest_pool_private_data-fixed.bin": "44330acb21881026ba3d908f3a0adc5d0f2aea38db03347a52996824d1f19723"
+  },
+  "image_sha256": {
+    "00_1c7a70c9d9_wrong_bucket_alloc_across_connections:defect": "f53ff3d4437ce1a8d70f37e4d8f76bdd1dee86ad1a4d623a9ad747121e8f5825",
+    "00_1c7a70c9d9_wrong_bucket_alloc_across_connections:fixed": "f53ff3d4437ce1a8d70f37e4d8f76bdd1dee86ad1a4d623a9ad747121e8f5825",
+    "01_d2a1cf5f8c_buckets_outlive_backend_allocator:defect": "7266ac33f0cf8ec7a72a4ff771824da1076825a157bf48098427bc8de204b4c5",
+    "01_d2a1cf5f8c_buckets_outlive_backend_allocator:fixed": "7266ac33f0cf8ec7a72a4ff771824da1076825a157bf48098427bc8de204b4c5",
+    "02_106d0761c0_brigade_on_request_pool_past_eor:defect": "fa7995e3e18c9b2878f731f8175ba703b509ee7a2cdcb4cf95608f23856dd74b",
+    "02_106d0761c0_brigade_on_request_pool_past_eor:fixed": "fa7995e3e18c9b2878f731f8175ba703b509ee7a2cdcb4cf95608f23856dd74b",
+    "03_d9c2352952_buckets_from_pool_that_dies_first:defect": "8ec58a1964429025c0202b8d1be7a366e8310bfe3089ea4cc1289e01fdfab44b",
+    "03_d9c2352952_buckets_from_pool_that_dies_first:fixed": "8ec58a1964429025c0202b8d1be7a366e8310bfe3089ea4cc1289e01fdfab44b",
+    "04_c81adad105_brigade_not_cleaned_before_reuse:defect": "6b3fffb0389b73a258c6b2cca7e593bed003bd20f0fbe3e2570369d7faaaae6b",
+    "04_c81adad105_brigade_not_cleaned_before_reuse:fixed": "6b3fffb0389b73a258c6b2cca7e593bed003bd20f0fbe3e2570369d7faaaae6b",
+    "05_60919177e8_read_from_destroyed_brigade:defect": "1e5deca18ff35b34f3db03f0f07f59ec1e61261cc4c9c3f6ef6ef40abf43bfb2",
+    "05_60919177e8_read_from_destroyed_brigade:fixed": "1e5deca18ff35b34f3db03f0f07f59ec1e61261cc4c9c3f6ef6ef40abf43bfb2",
+    "06_4930450013_bucket_outlives_its_brigade:defect": "9501ee1184f7305dde543903d26819609342ccc558127cf1d5c33558f3b9f2c7",
+    "06_4930450013_bucket_outlives_its_brigade:fixed": "9501ee1184f7305dde543903d26819609342ccc558127cf1d5c33558f3b9f2c7",
+    "07_edc450c8ac_subrequest_pool_private_data:defect": "320e553adb60268d50d0837ef4d3a928e7a5c68b1d7d025b5eafc46df61c1d5a",
+    "07_edc450c8ac_subrequest_pool_private_data:fixed": "320e553adb60268d50d0837ef4d3a928e7a5c68b1d7d025b5eafc46df61c1d5a"
+  }
+}

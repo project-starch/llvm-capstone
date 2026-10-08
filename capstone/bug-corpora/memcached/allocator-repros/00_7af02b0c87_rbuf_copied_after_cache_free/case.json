@@ -9,6 +9,7 @@
   "lifetime_ender": "do_cache_free, which pushes the buffer on the cache's STAILQ (cache.c:135) and writes the list link into its first pointer-sized bytes; free() is never called",
   "shape": "stale object pointer / cache.c reuse / read through the dead pointer",
   "allocator_layer": "cache.c object cache over malloc, memcached 1.6.45",
+  "allocator_boundary": "nested",
   "fidelity": "model-consumer, real allocator: cache.c is upstream's file at the 1.6.45 pin through the port's two patches (freestanding shim, object lifetime hooks); the connection, the parser and the thread are reduced to the two lines the fix reorders, plus one prior buffer on the free list so the link read back is a pointer",
   "layer_note": "upstream's commit message names the mechanism -- the cache 'can reuse the first 8 bytes as a pointer to the internal freelist' -- and that is the only reason the defect was visible: for years the free list did not touch the buffer. The port's hook sits on that push, which is where the buffer's lifetime ends",
   "arms": {

@@ -100,6 +100,45 @@ page of the smallest class costs about 0.5 MiB of metadata in a domain.
 `metadata` in the report is heap high-water usage. No timing or
 memory-overhead claim is made.
 
+## OPEN DEFECT: the slab free path faults on the virtual vehicle
+
+Measured 2026-10-08 and not yet diagnosed. On `capstone-virtual`, every case
+that releases a slab chunk takes a capability fault, **cause 24 (untagged)**, at
+`slabs.c:533:10` -- the first read of `ptr` on entry to `do_slabs_free`,
+`it->it_flags`, before the port's own `mcp_chunk_release` hook three lines later.
+
+It is not a detection of anything. The same image faults at the same instruction
+while running each case's **upstream-fixed** sequence, which is what
+`capstone/bug-corpora/memcached/allocator-repros/results/20261008-fixed-arm-control`
+records: six cases faulting in both arms, three silent in both.
+
+The correlation is exact. The six cases that reach `slabs_free`/`item_free` (02,
+03, 04, 05, 06, 07) all fault; the three that stay on `cache.c`'s object cache
+(00, 01, 08) are all silent. So any case of this corpus that frees a chunk is
+unmeasurable here until this is fixed, and the `capstone-sysalloc` cells for
+those cases are declared `detection_unproven`.
+
+What the instruction stream shows at the fault (`llvm-objdump` around `0x226d8`
+in the mode-0 image of case 02):
+
+    shrink a0, a1, a2       narrow a region
+    ldc   a1, 0x0(a0)       load a capability out of it
+    cincoffsetimm a0, s0, -0x70
+    shrink a0, a2, a3       narrow a stack slot
+    stc   a1, 0x0(a0)       store the capability into it
+    ldc   a0, 0x0(a0)       load it back
+    lhu   a0, 0x3e(a0)      FAULT: the reloaded value is untagged
+
+So the pointer is spilled through a `shrink`-narrowed stack slot and comes back
+without its tag. The pattern alone is not the bug -- a silent image of the same
+campaign has 187 `shrink`->`stc` pairs against this one's 317 -- so what is
+missing is which capability loses the tag and why.
+
+Next diagnostic step, not yet taken: capture the register state at the trap
+rather than inferring it from the disassembly, and from it a minimal reproducer
+that spills a capability through a narrowed slot. Until then this is a
+reproduction and a location, not a root cause.
+
 ## What is not built, and why it matters
 
 - **The page mover** (`slabs_mover.c`, `slab_automove*.c`). It is the one

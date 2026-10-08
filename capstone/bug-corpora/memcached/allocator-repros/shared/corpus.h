@@ -133,9 +133,15 @@ void mc_case_body(int fixed, struct mc_outcome *o);
  *     }
  *
  * The fixture's event id must name this case, so a fixture built for another
- * case is refused rather than silently running this one. The domain arms
- * always run the buggy sequence; protection is the variable there, not the
- * fix. slabs_init has already run, with upstream's defaults, in the entry. */
+ * case is refused rather than silently running this one. The domain arms run the
+ * buggy sequence unless the fixture asks for the fixed one: protection is the
+ * variable under test and the fix is the control. slabs_init has already run,
+ * with upstream's defaults, in the entry. */
+/* The fixture's spare event word selects the arm: 0 is the buggy sequence, 1 the
+ * upstream-fixed one. That puts the fixed arm on this vehicle, which is the
+ * corpus's own negative control -- a detection that fires on the fixed sequence
+ * too is not a detection of the defect. Nothing about any header's layout
+ * changes, which matters because the hosted runners parse them by offset. */
 #define MC_CASE(number)                                                        \
   const int mc_case_number = (number);                                         \
   void mcp_replay(const struct mcp_header *input, struct mcp_header *out) {    \
@@ -149,7 +155,7 @@ void mc_case_body(int fixed, struct mc_outcome *o);
               e->id == (number),                                               \
           700);                                                                \
     struct mc_outcome outcome = {0};                                           \
-    mc_case_body(0, &outcome);                                                 \
+    mc_case_body((int)e->value, &outcome);                                     \
     /* Only the spatial arm is expected to arrive here. */                     \
     out->completed = 1;                                                        \
     mcp_stats(out);                                                            \

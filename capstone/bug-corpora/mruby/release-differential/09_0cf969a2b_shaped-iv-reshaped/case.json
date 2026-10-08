@@ -23,5 +23,6 @@
     }
   },
   "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
-  "allocator_layer": "the shaped-IV block (system allocator)"
+  "allocator_layer": "the shaped-IV block (system allocator)",
+  "allocator_boundary": "system"
 }

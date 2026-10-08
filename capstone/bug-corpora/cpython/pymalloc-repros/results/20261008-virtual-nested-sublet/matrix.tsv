@@ -1,0 +1,41 @@
+case	arm	verdict	cause	attributed	evidence
+00_gh-143543_groupby_reentrant_eq:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+01_gh-146613_grouper_parent_key:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+02_gh-142829_hamt_eq_interior_cursor:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+03_gh-142831_json_encoder_list_item:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+04_gh-145244_json_encoder_dict_key:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+05_gh-148660_odict_copy_stale_link:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+06_gh-151295_bytes_join_reentrant_buffer:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+07_gh-148395_decompressor_next_in:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+08_gh-112127_atexit_unregister_borrowed_tuple:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+09_gh-139210_iterparse_event_name:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+10_gh-142560_bytearray_search_realloc:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+11_gh-142783_zoneinfo_eager_decref:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+12_gh-143004_counter_update_borrowed_value:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+13_gh-144833_ssl_decref_self_then_read:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+14_gh-146011_decimal_signaldict_outlives_context:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+15_gh-149449_unicodedata_capi_cached:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+16_gh-151403_fork_exec_fspath:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+17_gh-151416_spawnv_fspath:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+18_gh-151695_curses_screen_encoding_global:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+19_gh-153539_textio_tell_reentrant_decoder:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+00_gh-143543_groupby_reentrant_eq:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f87b1b2e0
+01_gh-146613_grouper_parent_key:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fb551b3c8
+02_gh-142829_hamt_eq_interior_cursor:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9701b310
+03_gh-142831_json_encoder_list_item:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fbea1b330
+04_gh-145244_json_encoder_dict_key:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fb351b47c
+05_gh-148660_odict_copy_stale_link:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9061b480
+06_gh-151295_bytes_join_reentrant_buffer:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8191b310
+07_gh-148395_decompressor_next_in:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa161b390
+08_gh-112127_atexit_unregister_borrowed_tuple:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa4e1b3d8
+09_gh-139210_iterparse_event_name:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9591b310
+10_gh-142560_bytearray_search_realloc:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8151c0a8
+11_gh-142783_zoneinfo_eager_decref:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fb971b2e4
+12_gh-143004_counter_update_borrowed_value:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9751b368
+13_gh-144833_ssl_decref_self_then_read:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa031b310
+14_gh-146011_decimal_signaldict_outlives_context:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f99a1b3b8
+15_gh-149449_unicodedata_capi_cached:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fbf41b300
+16_gh-151403_fork_exec_fspath:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fbe31b328
+17_gh-151416_spawnv_fspath:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9941b330
+18_gh-151695_curses_screen_encoding_global:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f82f1b310
+19_gh-153539_textio_tell_reentrant_decoder:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8bb1b30c

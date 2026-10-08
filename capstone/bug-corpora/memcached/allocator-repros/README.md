@@ -171,6 +171,52 @@ UNTAGGED rs1`), not only a load through it. A case that computed
 refused the run -- correctly. Probe addresses are taken while the pointer is
 live, and comparisons are of addresses, never of pointers.
 
+## OPEN: six cases are unmeasurable on the virtual vehicle
+
+The `capstone-sysalloc` cells for cases 02-07 are withdrawn, not read. Their
+faults fire on the upstream-FIXED sequence too -- same instruction, same offset
+-- so they are not detections of these defects;
+[`results/20261008-fixed-arm-control`](results/20261008-fixed-arm-control) is the
+control that shows it and
+[the port's README](../../../ports/memcached/allocators/README.md) carries the
+open defect. The three cases that stay on `cache.c`'s object cache (00, 01, 08)
+are silent in both arms and unaffected.
+
+The control exists at all because this corpus had none on that vehicle: the
+`MC_CASE` macro called `mc_case_body(0, ...)` unconditionally, so the fixed arm
+was unreachable there. The fixture's spare event word now selects the arm, and
+`shared/corpus.h` says so.
+
+## Why CheriBSD is silent on eight of the nine
+
+Cases 0-7 are CheriBSD misses, and a miss on a platform with *asynchronous*
+revocation is ambiguous: the object may have been freed, quarantined, and read
+through before any sweep cleared it. `results/20261008-cheribsd-quarantine`
+settles which it is, measured with the shared probe
+[`quarantine-probe.c`](../../../ports/common/host/cheribsd/quarantine-probe.c)
+preloaded in front of each case -- it reads the kernel's shadow bitmap, so no
+sweep is forced and nothing else about the run changes.
+
+Every `free` in every case landed in the quarantine, 34 of 34, and none was
+handed back out while still quarantined. The quarantine was fully active; the
+sweep's window never opened. The reuse that carries each defect is one layer
+down, in the program's own counters -- `object_reuses` on 0 and 1,
+`chunk_reuses` on 2-4, `chunk_releases` on 5-7 -- against four to six libc
+`free`s per case, which are process infrastructure and not the item. **The
+object never reaches `free()`, so revocation never sees it.** The silence is
+structural, and `results/.../quarantine.tsv` has the per-case numbers.
+
+Two controls make that readable: `revocation-control` ran first with the probe
+loaded and still faulted at its labelled load with `code=2` (`PROT_CHERI_TAG`),
+so the probe does not disable the mechanism; and case 8, the one this arm
+catches, still faults with the probe in place -- but with `code=1`
+(`PROT_CHERI_BOUNDS`). It is a spatial catch from per-object bounds, not a
+temporal one.
+
+Perl reaches the same answer by the same instrument for its own extra case, so
+this is not a quirk of one program: see
+[`../../perl/release-differential/results/20261006-cheribsd`](../../perl/release-differential/results/20261006-cheribsd).
+
 ## Where this corpus deviates from the contract, and why
 
 [`../../tools/check-corpus.py`](../../tools/check-corpus.py) enforces

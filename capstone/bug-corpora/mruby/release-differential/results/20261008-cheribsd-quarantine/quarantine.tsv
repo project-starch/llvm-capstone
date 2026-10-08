@@ -1,0 +1,15 @@
+case	shadow	allocs	frees	quarantined_after_free	reused_while_quarantined	sweeps
+2	FAULTED-with-probe(arm catches this case)	-	-	-	-	-
+3	mapped	1240	1238	1238	0	0
+4	mapped	1378	1376	1376	0	0
+5	mapped	1230	1229	1229	0	0
+8	mapped	1630	1627	1627	0	0
+9	mapped	1460	1459	1459	0	0
+10	mapped	1509	1506	1506	0	0
+17	mapped	1996	1994	1994	0	0
+control:eval	mapped	804	804	804	0	0
+control:eval-2	mapped	804	804	804	0	0
+control:no-sweep	mapped	804	804	804	0	0
+control:recursion	mapped	832	832	832	0	0
+control:sweep	mapped	400811	400811	400811	0	22
+control:sweep-2	mapped	400811	400811	400811	0	22

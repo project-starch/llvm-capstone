@@ -29,8 +29,7 @@
     "RUSTSEC-2022-0070"
   ],
   "related": [
-    "capstone/bug-corpora",
-    "capstone/bug-corpora/mruby/gc-slot-repros"
+    "capstone/bug-corpora"
   ],
   "note": "Rows 8 and 13 are one upstream defect, so 15 rows are 14 distinct fixes. The advisory list is the front-page table's; rows 8, 12, 13 and 14 carry their CVE id in that table but not yet in their own target.md."
 }

@@ -16,7 +16,7 @@ out as a service a domain does not have; what its POSIX HAL actually uses is
 and none of them is a thread, so the scheduler runs in a domain.
 
 That matters beyond the gem. The [GC-slot
-corpus](../../../bug-corpora/mruby/gc-slot-repros) is for the defects that
+corpus](../../../bug-corpora/mruby/release-differential) is for the defects that
 reuse a GC object slot without the allocator seeing a release, and its survey
 on `corpus/mruby-gc-slot-reuse` names this gem as the reason four candidates
 cannot be reached: mruby #6870, #6886, #6872 and #6887, the reports carrying

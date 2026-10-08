@@ -142,7 +142,7 @@ void aprb_case_body(int fixed, apr_pool_t *root, struct aprb_outcome *o);
     apr_pool_t *root = NULL;                                                   \
     CHECK(apr_pool_create(&root, NULL) == APR_SUCCESS, 701);                   \
     struct aprb_outcome outcome = {0};                                         \
-    aprb_case_body(0, root, &outcome);                                         \
+    aprb_case_body((int)e->value, root, &outcome);                             \
     apr_pool_destroy(root);                                                    \
     /* Only an arm whose oracle says "complete" is expected to arrive here. */ \
     out->completed = 1;                                                        \
@@ -159,6 +159,11 @@ void aprb_case_body(int fixed, apr_pool_t *root, struct aprb_outcome *o);
  * The fixture's event id must name this case, so a fixture built for another
  * case is refused rather than silently running this one. The domain arms
  * always run the buggy sequence; protection is the variable there. */
+/* The fixture's spare event word selects the arm: 0 is the buggy sequence, 1 the
+ * upstream-fixed one. That puts the fixed arm on this vehicle, which is the
+ * corpus's own negative control -- a detection that fires on the fixed sequence
+ * too is not a detection of the defect. Nothing about any header's layout
+ * changes, which matters because the hosted runners parse them by offset. */
 #define APRB_CASE(number)                                                      \
   const int aprb_case_number = (number);                                       \
   APRB_DOMAIN_ENTRY(number)                                                     \

@@ -20,7 +20,7 @@
     "capstone/experiments/study/results/mruby-gc-memory-20260927"
   ],
   "corpora": [
-    "capstone/bug-corpora/mruby/gc-slot-repros"
+    "capstone/bug-corpora/mruby/release-differential"
   ],
   "related": [
     "xlang/repro"
