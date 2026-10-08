@@ -366,11 +366,19 @@ extern void zif_htmlspecialchars(INTERNAL_FUNCTION_PARAMETERS);
 /* sprintf is PHP_FALIAS(sprintf, user_sprintf) in basic_functions.c's table, so the handler is
  * zif_user_sprintf -- the name PHP registers it under is ours to choose here. */
 extern void zif_user_sprintf(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_var_dump(INTERNAL_FUNCTION_PARAMETERS);
 #endif
 
 static zend_function_entry rung_e_functions[] = {
     { "parse_url", zif_parse_url,  (struct _zend_arg_info *)0, 0, 0 },
+#if defined(PHP_CAP_REAL_VAR_DUMP)
+    /* The REAL var_dump out of ext/standard/var.c, which is already linked under PHP_CAP_EXT=pure.
+     * The no-op stub never touches its argument, so any use-after-free whose USE is inside
+     * var_dump would be invisible -- this build removes that blind spot. */
+    { "var_dump",  zif_var_dump,   (struct _zend_arg_info *)0, 0, 0 },
+#else
     { "var_dump",  zif_rung_nop,   (struct _zend_arg_info *)0, 0, 0 },
+#endif
 #if defined(PHP_CAP_EXT_PURE)
     { "str_repeat",           zif_str_repeat,           (struct _zend_arg_info *)0, 0, 0 },
     { "strtolower",           zif_strtolower,           (struct _zend_arg_info *)0, 0, 0 },

@@ -256,7 +256,20 @@ char *_estrndup(const char *s, unsigned int length)
     extern unsigned long zc_n_estrndup, zc_n_readfreed;
     extern int zc_was_freed(unsigned long);
     ++zc_n_estrndup;
-    if (s && zc_was_freed(__builtin_capstone_cap_get_cursor((void *)s))) { ++zc_n_readfreed; }
+    if (s && zc_was_freed(__builtin_capstone_cap_get_cursor((void *)s))) {
+        extern unsigned long zc_n_readfreed_same, zc_n_readfreed_stale;
+        extern void *zc_live_block(unsigned long);
+        void *cur = zc_live_block(__builtin_capstone_cap_get_cursor((void *)s));
+        ++zc_n_readfreed;
+        if (cur && __builtin_capstone_cap_get_base((void *)s)
+                 >= __builtin_capstone_cap_get_base(cur)
+                && __builtin_capstone_cap_get_end((void *)s)
+                 <= __builtin_capstone_cap_get_end(cur)) {
+            ++zc_n_readfreed_same;    /* inside the block that is live there NOW */
+        } else {
+            ++zc_n_readfreed_stale;   /* an older, narrower or wider authority */
+        }
+    }
 #endif
     char *p = (char *) ZCAP_EMALLOC((size_t)length + 1);
     if (!p) { return (char *)0; }

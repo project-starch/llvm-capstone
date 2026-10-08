@@ -659,20 +659,46 @@ So every step of the defect's mechanism runs. The last probe says why it is stil
 ring of recently-freed ranges, consulted by `_estrndup`, reports **2 of the 17 copies reading from a
 previously-freed range -- and neither faulted.**
 
-A read of a *revoked* capability cannot complete. So those reads went through a **valid, re-minted**
-capability over an address that had been freed earlier: the block was returned to `AG(cache)` and
-handed straight back out, and the pointer the engine used is the NEW tenant's, not the stale one.
-There is no dangling pointer at the moment of the read, so there is nothing for revocation to catch.
+A read of a *revoked* capability cannot complete, so those reads went through a capability that was
+still tagged.
 
-**The conclusion, stated at the strength the evidence supports:** this is not a detection failure
-and not an allocator defect. The port reaches every step, but its allocation ORDER differs from the
-reference build, so the block is recycled before the read instead of after it. What ASAN sees as a
-use-after-free is, here, a read of live memory.
+**RETRACTED: I first concluded the block had been recycled and the engine was using the new tenant's
+pointer. Three experiments say otherwise, and the first one kills it outright.**
 
-What is NOT established: exactly which allocation claims the recycled block, and why the engine ends
-up holding the new tenant's pointer rather than the stale one. Distinguishing "the zval was
-re-pointed" from "the copy reads a different object that happens to sit at a recycled address" needs
-per-block address logging, not more counting.
+| experiment | intervention | result |
+|---|---|---|
+| no cache | `ZEND_CAP_NO_CACHE` -- the corpus's own `ZEND_DISABLE_MEMORY_CACHE 0 -> 1`, so a freed block is NEVER handed back | fault arm still COMPLETES |
+| eval vs file | the host ASAN build, trigger wrapped in `eval()` instead of run as a file | UAF reproduces identically |
+| real `var_dump` | `PHP_CAP_REAL_VAR_DUMP` registers `zif_var_dump` from the linked `var.c` instead of the no-op stub | fault arm still COMPLETES |
+
+The first is decisive. With the cache disabled the freed block can never be re-served, so a stale
+pointer STAYS stale -- and nothing faults. **The engine never dereferences the freed block at all.**
+Recycling was not masking anything, and the bounds check I used to argue it was is worthless anyway:
+it tested containment, and a re-minted block covers the same range as the one it replaced, so both
+the old and new capability satisfy it. The only load-bearing evidence is the tag: revocation untags,
+a tagged load is required to complete, and the read completed.
+
+The other two eliminate the obvious environmental suspects. Running under `eval` rather than as a
+file does not change the defect on the host, and the no-op `var_dump` is not hiding a second use.
+
+### So what IS the cause? Not established.
+
+What is left is a control-flow divergence inside `zend_assign_to_variable` itself. The free at :519
+sits in a branch chosen by a POINTER COMPARISON, `final_value == &T(op2->u.var).tmp_var`, and the
+copy at :654 sits behind `PZVAL_IS_REF(value) && value->refcount > 0`. Both executed here -- the
+counters prove it -- but on different objects than on the host, since the copy read live memory.
+
+The leading untested hypothesis is temp-variable layout. `EX_T` is a compiler-emitted byte offset
+added to a `char *` and reinterpreted (`zend_execute.c:52`), and on this target a zval is wider
+because its union holds a 16-byte pointer. If `final_value` and `&T(op2->u.var).tmp_var` compare
+differently here, the branch taken differs and the dangling pointer is never created. That is a
+hypothesis, and testing it means instrumenting `zend_execute.c` -- which breaks the byte-identical
+property that makes the whole corpus result meaningful, so it would be a clearly-labelled diagnostic
+build, never a scoring one.
+
+**What this case is NOT: a detection failure.** Everything measured says the defect does not occur
+here. What it IS: a divergence between this port and the reference build, of unknown origin, in a
+case the suite correctly refuses to score.
 
 **The transferable caveat, and it cuts against this approach rather than for it:** an allocator that
 promptly recycles a freed block can MASK a use-after-free, because the stale pointer stops being

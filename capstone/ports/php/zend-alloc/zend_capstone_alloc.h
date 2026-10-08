@@ -129,6 +129,12 @@ unsigned long zc_n_estrndup;   /* non-static: the seam's _estrndup lives in anot
 unsigned long zc_free_lo[ZC_FREERING], zc_free_hi[ZC_FREERING];
 unsigned zc_free_pos;
 unsigned long zc_n_readfreed;        /* estrndup sources landing in a freed range */
+/* For a source that lands in a freed range, record whether its capability BOUNDS match the block
+ * that is live there NOW. Matching bounds means the caller holds the re-minted tenant (benign data
+ * flow). Not matching means it is still carrying the old capability -- which would be a hole in
+ * revocation, and the opposite conclusion. */
+unsigned long zc_n_readfreed_same;   /* bounds == the currently-live block at that address */
+unsigned long zc_n_readfreed_stale;  /* bounds != it */
 
 void zc_note_free(unsigned long lo, unsigned long hi)
 {
@@ -150,7 +156,9 @@ void zend_cap_lifecycle(unsigned long *a, unsigned long *f, unsigned long *r, un
     if (a) { *a = zc_n_emalloc; }
     if (f) { *f = zc_n_efree; }
     if (r) { *r = zc_n_revoke; }
-    if (c) { *c = (zc_n_estrndup & 0xFFUL) | ((zc_n_readfreed & 0xFFUL) << 8); }
+    if (c) { *c = (zc_n_readfreed & 0xFFUL)
+                  | ((zc_n_readfreed_same  & 0xFFUL) << 8)
+                  | ((zc_n_readfreed_stale & 0xFFUL) << 16); }
 }
 #else
 #  define ZC_LIFE(ctr) do { } while (0)
@@ -342,6 +350,24 @@ static void *zend_arena_carve(unsigned long bytes, unsigned long bound_bytes)
  * the block leaks instead of corrupting the slot table, which is the right failure for a diagnostic
  * allocator. It does not weaken detection -- a use-after-free faults at the USE, through the revoked
  * alias, not here. */
+#if defined(ZEND_CAP_LIFECYCLE_TRACE)
+/* The live block covering `a`, or 0. Slots with base == 0 are free and skipped. */
+void *zc_live_block(unsigned long a)
+{
+    unsigned i;
+    for (i = 0; i < zend_nslots; i++) {
+        if (!zend_slots[i].base || !zend_slots[i].blk) { continue; }
+        {
+            unsigned long b = __builtin_capstone_cap_get_base(zend_slots[i].blk);
+            unsigned long e = __builtin_capstone_cap_get_end(zend_slots[i].blk);
+            if (a >= b && a < e) { return zend_slots[i].blk; }
+        }
+    }
+    return (void *)0;
+}
+
+#endif
+
 static zend_slot *zend_find(void *p)
 {
     unsigned long b = __builtin_capstone_cap_get_base(p);
@@ -371,7 +397,15 @@ static void *_emalloc(size_t size)
      * lifetime is revocable independently of the old one -- and the previous
      * tenant's alias, revoked at its own _efree, stays dead. Verified by
      * probes/revoke-reuse-safety.c. */
+#if defined(ZEND_CAP_NO_CACHE)
+    /* ZEND_CAP_NO_CACHE: the exact intervention the corpus applies to PHP for ASAN
+     * (ZEND_DISABLE_MEMORY_CACHE 0 -> 1). Freed blocks are never handed back, so a block that is
+     * freed STAYS dead and a stale pointer stays stale. Diagnostic only: it changes the program
+     * under test, which is the whole reason the scoring builds leave the cache ON. */
+    if (0) {
+#else
     if ((cache_index < MAX_CACHED_MEMORY) && (AG_cache_count[cache_index] > 0)) {
+#endif
         void *blk = AG_cache[cache_index][--AG_cache_count[cache_index]];
         ZC_LIFE(zc_n_cachehit);
 #if defined(ZEND_CAP_REV_AUDIT)
@@ -474,8 +508,12 @@ static void _efree(void *ptr)
      * in-block list links have to be read, and they are only readable while the block is alive.
      * The condition is the same one the park below tests; `blk != 0` is equivalent to `s != 0` at
      * this point, in both arms. */
+#if defined(ZEND_CAP_NO_CACHE)
+    int will_cache = 0;
+#else
     int will_cache = (blk != (void *)0) && (cache_index < MAX_CACHED_MEMORY)
                    && (AG_cache_count[cache_index] < MAX_CACHED_ENTRIES);
+#endif
 
     /* THE UNLINK MUST PRECEDE THE REVOKE, AND IT MUST BE UNCONDITIONAL UNDER REVOCATION.
      *
@@ -554,10 +592,12 @@ static void _efree(void *ptr)
      * This is what ZEND_DISABLE_MEMORY_CACHE exists to defeat for ASan, and it
      * is left ON. `blk` is re-read here because the revoke above replaced it with the authority it
      * handed back, which is what must be parked -- see the note on recycling. */
+#if !defined(ZEND_CAP_NO_CACHE)
     if (will_cache) {
         AG_cache[cache_index][AG_cache_count[cache_index]++] = blk;
         return;
     }
+#endif
     /* The unlink already happened, above the revoke. */
     /* ZEND_DO_FREE(p) -- the arena does not reclaim address space. */
 }
