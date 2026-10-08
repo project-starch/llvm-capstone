@@ -24,11 +24,13 @@
     "false": 13
   },
   "runners": [
-    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/runners/run-native.sh"
+    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/runners/run-native.sh",
+    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/runners/run-cheribsd.sh"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "evidence": [
-    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-08-native-thirteen-cases"
+    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-08-native-thirteen-cases",
+    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-cheribsd"
   ],
   "advisories": [],
   "shape_table": true

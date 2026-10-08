@@ -40,6 +40,16 @@ int main(int argc, char **argv) {
     printf("VERDICT DEFECT-REPRODUCED %s\n", o.defect_text);
   else if (fixed && !o.aliased)
     printf("VERDICT FIXED %s\n", o.fixed_text);
+  else if (!fixed && !o.aliased)
+    /* The object was freed and the stale pointer followed, yet nothing aliased:
+     * the allocator never handed the released chunk to another allocation. On a
+     * QUARANTINING allocator -- CheriBSD with revocation, or ASan -- that is the
+     * mechanism working, not a failed case. It is not a fault either, so it is
+     * its own verdict rather than CAUGHT or DEFECT-REPRODUCED. Exit code as
+     * before: the defect did not reproduce. */
+    printf("VERDICT NOT-REISSUED the released chunk was withheld; the stale pointer "
+           "still names the dead object, so nothing aliased (observed=0x%02x)\n",
+           o.observed);
   else
     printf("VERDICT INCONCLUSIVE\n");
   return fixed ? !!o.aliased : !o.aliased;

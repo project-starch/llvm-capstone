@@ -69,7 +69,11 @@ _Noreturn void mct_fail(unsigned code);
  * asserting reuse under ASan would fail the case for the very reason the ASan
  * arm exists. The plain build observes the aliasing; the ASan build observes the
  * fault; neither alone is the result. */
-#if defined(__SANITIZE_ADDRESS__)
+#if defined(__SANITIZE_ADDRESS__) || defined(__CHERI_PURE_CAPABILITY__)
+/* CheriBSD's libc quarantines a released chunk until the revoker has swept every
+ * capability to it, so on purecap the reuse is withheld by design -- the same
+ * reason as ASan, and the same consequence: asserting it would fail the case for
+ * the very reason the mechanism exists. */
 #define CHECK_REUSE(c, n) ((void)0)
 #elif defined(__has_feature)
 #if __has_feature(address_sanitizer)
