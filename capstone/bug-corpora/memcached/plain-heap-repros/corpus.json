@@ -6,7 +6,7 @@
     "version": "1.6.45",
     "port": "capstone/ports/memcached/app"
   },
-  "cases": 2,
+  "cases": 9,
   "case_schema": "case-json",
   "case_macro": "MCH",
   "required_arms": [
@@ -21,7 +21,7 @@
   "status": "measured",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
-    "false": 2
+    "false": 9
   },
   "runners": [
     "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-native.sh",

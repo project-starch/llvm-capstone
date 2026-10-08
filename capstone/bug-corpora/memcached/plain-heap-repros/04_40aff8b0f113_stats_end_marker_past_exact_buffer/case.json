@@ -1,0 +1,53 @@
+{
+  "case": 4,
+  "upstream_fix": "40aff8b0f113",
+  "title": "a buffer sized for exactly two blobs then had a terminator appended past its end",
+  "consumer": "memcached.c, process_stat's bare \"stats\" path",
+  "object": "the stats response buffer, one direct malloc sized as the sum of two blob lengths",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL row.",
+  "shape": "a buffer sized for its payload, with a trailer appended afterwards that was never counted",
+  "allocator_layer": "the platform allocator itself: one direct malloc/calloc/realloc, with neither slabs.c nor cache.c between it and the request.",
+  "fidelity": "model consumer, real arithmetic: the sizes and the crossing expression are upstream's, quoted in PROVENANCE.md.",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: `grep -c server_statlen` on 1.6.45 across memcached.c, proto_text.c and proto_parser.c is 0. The construct was REMOVED rather than fixed -- the two-blob concatenation was replaced by the append_stats / grow_stats_buf model -- so the pinned code cannot carry the defect. A fix-reversal against history.",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "spatial": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, not measured. The request is exactly a jemalloc size class, so the usable size equals the requested size and there is no slack to absorb the crossing -- confirmed by tools/size-class-audit.py, which reports `faults` for this case. The capability's bounds end where the allocation does and the probe SHOULD fault.",
+      "status": "predicted"
+    }
+  },
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "nested": false,
+  "nested_why": "the crossed buffer came straight from the platform allocator with no inner layer between -- this is not a slab chunk and not a cache.c object -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
+  "distinguishing": "nothing here is off by an index: the buffer is exactly the right size for what was MEASURED, and the defect is that the terminator was never part of the measurement -- which is why the fix changes the ALLOCATION rather than the write, and adds 6 rather than 5 because sprintf also plants the NUL."
+}
