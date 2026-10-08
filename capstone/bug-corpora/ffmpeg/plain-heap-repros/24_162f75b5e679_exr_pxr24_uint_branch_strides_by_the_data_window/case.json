@@ -1,0 +1,55 @@
+{
+  "case": 24,
+  "upstream_fix": "162f75b5e679",
+  "title": "one branch laid out its byte planes by the data-window width instead of the tile's",
+  "consumer": "libavcodec/exr.c, pxr24_uncompress's EXR_UINT branch",
+  "object": "td->tmp, one av_fast_padded_malloc sized by the TILE's width",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL row.",
+  "shape": "a cursor advanced by a width larger than the one the buffer was sized from",
+  "allocator_layer": "the platform allocator itself: one direct av_malloc-family allocation, no inner layer. FFmpeg's av_malloc is malloc plus alignment.",
+  "fidelity": "model consumer, real arithmetic: the sizes and the crossing expression are upstream's, quoted in PROVENANCE.md.",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: n9.0.1:libavcodec/exr.c lays the UINT planes out with `td->xsize` (`grep -c 'ptr\\[1\\] = ptr\\[0\\] + td->xsize'` = 3 across the branches). The `s->xdelta` form is at 162f75b5e679^ and is absent from the pin. A fix-reversal.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "signal": 34,
+      "si_code": 1,
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, not measured. The request is exactly a jemalloc size class, so the usable size equals the requested size and there is no slack to absorb the crossing -- confirmed by tools/size-class-audit.py, which reports `faults` for this case. The capability's bounds end where the allocation does and the probe SHOULD fault.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    }
+  },
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "nested": false,
+  "nested_why": "the crossed buffer came straight from av_malloc / av_mallocz / av_calloc / av_malloc_array -- which on the platform is malloc -- with no AVBufferPool or AVRefStructPool between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
+  "distinguishing": "the UINT branch's two siblings in the same switch -- FLOAT and HALF -- correctly use `td->xsize`, so this is an INCONSISTENCY between arms rather than a missing bound, and the buffer is sized from the same `td->xsize` the siblings use. The crossing scales with how much narrower the tile is than the data window."
+}

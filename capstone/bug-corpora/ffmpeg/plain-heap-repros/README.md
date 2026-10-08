@@ -42,6 +42,9 @@ disposition: [`docs/ref/ffmpeg-spatial-defect-triage.md`](../../../docs/ref/ffmp
 | a cursor initialised to the count rather than the last index | 19 |  |  |  |
 | a buffer whose worst case is smaller than its writer's | 20 |  |  |  |
 | a fixed-length read from a frame whose last partition is shorter | 21 |  |  |  |
+| a cursor advanced by a stride the loop already walked | 22 |  |  |  |
+| a fixed-size block written whole at a ragged edge | 23 |  |  |  |
+| one switch arm striding by a different width than its siblings | 24 |  |  |  |
 
 **ASan reports all four, measured two-sided** — the fixed arm silent and exiting 0 in every case. That
 is the contrast this corpus exists to draw against `../subobject-repros/`, where ASan is blind to all
