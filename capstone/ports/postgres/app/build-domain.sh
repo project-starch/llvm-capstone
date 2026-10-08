@@ -288,6 +288,10 @@ for md in $MODULES; do
   grep -q "PGSU_SYMBOL($m, \"Pg_magic_func\"" "$TABLE" || { echo "module $m: no Pg_magic_func" >&2; exit 2; }
   objs="$objs $mo"
 done
+# Publish the exact backend/module inputs for the common application relinker.
+# Keep one list so newly admitted contrib modules cannot disappear at relink.
+# shellcheck disable=SC2086
+printf '%s\n' $objs | sort -u > "$ROOT/link/backend-objects.txt"
 "$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -O1 -I"$ROOT/link" -c "$SCRIPT_DIR/toolchain/static_modules.c" \
   -o "$ROOT/link/static_modules.o"
 log "modules linked in: $(grep -c PGSU_MODULE_END "$TABLE"), $(grep -c PGSU_SYMBOL "$TABLE") functions"
