@@ -55,7 +55,7 @@
         "version": "n9.0.1",
         "port": "capstone/ports/ffmpeg/buffer-pool"
       },
-      "cases": 4,
+      "cases": 10,
       "case_schema": "case-json",
       "case_macro": "FFH",
       "required_arms": [
@@ -70,7 +70,7 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "false": 4
+        "false": 10
       },
       "runners": [
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/runners/run-native.sh",
@@ -1611,7 +1611,7 @@
   ],
   "cases_by_corpus": {
     "capstone/bug-corpora/cpython/pymalloc-repros": 20,
-    "capstone/bug-corpora/ffmpeg/plain-heap-repros": 4,
+    "capstone/bug-corpora/ffmpeg/plain-heap-repros": 10,
     "capstone/bug-corpora/ffmpeg/plane-repros": 1,
     "capstone/bug-corpora/ffmpeg/pool-repros": 4,
     "capstone/bug-corpora/ffmpeg/subobject-repros": 10,
@@ -1634,11 +1634,11 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 188,
+  "cases_here": 194,
   "cases_xlang": 30,
-  "cases_total": 218,
+  "cases_total": 224,
   "live_true": 116,
-  "live_false": 44,
+  "live_false": 50,
   "live_not": 28,
   "advisories_total": 21,
   "renames": {

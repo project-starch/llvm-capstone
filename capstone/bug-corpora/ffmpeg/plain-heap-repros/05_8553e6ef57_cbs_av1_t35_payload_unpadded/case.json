@@ -1,0 +1,55 @@
+{
+  "case": 5,
+  "upstream_fix": "8553e6ef57",
+  "title": "the T.35 payload buffer was allocated to its exact size, so a padded reader ran past it",
+  "consumer": "libavcodec/cbs_av1_syntax_template.c, metadata_itut_t35's payload allocation",
+  "object": "current->payload, one direct av_buffer_alloc",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL row.",
+  "shape": "a reader that may read up to AV_INPUT_BUFFER_PADDING_SIZE past the payload runs off an exactly sized allocation",
+  "allocator_layer": "the platform allocator itself: one direct av_buffer_alloc, no inner layer.",
+  "fidelity": "model consumer, real constant. AV_INPUT_BUFFER_PADDING_SIZE is FFmpeg's own 64, and the case asserts that the unpadded allocation ends before the padded read does.",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: n9.0.1:libavcodec/cbs_av1_syntax_template.c carries av_buffer_alloc(current->payload_size + AV_INPUT_BUFFER_PADDING_SIZE) together with the memset of that padding. The pre-fix line, av_buffer_alloc(current->payload_size), is at 8553e6ef57^ and is absent from the pin. A fix-reversal.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault. On CheriBSD that is conditional on the usable size for this request -- a size class is a step function and the capability length must be read in-guest before the arm is called either way.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault. On CheriBSD that is conditional on the usable size for this request -- a size class is a step function and the capability length must be read in-guest before the arm is called either way.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault. On CheriBSD that is conditional on the usable size for this request -- a size class is a step function and the capability length must be read in-guest before the arm is called either way.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault. On CheriBSD that is conditional on the usable size for this request -- a size class is a step function and the capability length must be read in-guest before the arm is called either way.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "signal": 34,
+      "si_code": 1,
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault. On CheriBSD that is conditional on the usable size for this request -- a size class is a step function and the capability length must be read in-guest before the arm is called either way.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer, which LeakSanitizer's summary also contains.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer, which LeakSanitizer's summary also contains.",
+      "status": "measured"
+    }
+  },
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "nested": false,
+  "nested_why": "the crossed buffer came straight from av_buffer_alloc with no inner allocator between it and the platform, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT nested.",
+  "distinguishing": "the other rows here cross by a mis-shaped index; this one crosses because the allocation omits padding that FFmpeg's own readers are documented to require, so the index is correct and the SIZE is wrong."
+}

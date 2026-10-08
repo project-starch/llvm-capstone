@@ -24,6 +24,12 @@ disposition: [`docs/ref/ffmpeg-spatial-defect-triage.md`](../../../docs/ref/ffmp
 | a shift loop guarding on `j` while reading `j + 1` | 1 | `bcbf3a5630` | reads one element past the format array; the value is **discarded** | **reports** |
 | a one-shot mirror that reflects to a **negative** index | 2 | `56309e476a` | reads 4 bytes **BELOW** `av_calloc`'s base | **reports** |
 | an allocation sized for one sub-buffer, carved into four | 3 | `495b402f27` | writes 33 bytes past `av_malloc_array(stride, 32)` | **reports** |
+| a buffer sized by one consumer and used by another | 4 | `b3c7ebc1ed` | writes 1 byte past a scratch row sized for the luma plane, copying a **chroma** row | **reports** |
+| an allocation that omits the padding its readers require | 5 | `8553e6ef57` | reads up to 64 bytes past an exactly sized `av_buffer_alloc` | **reports** |
+| a stream-supplied length consumed without checking the bytes left | 6 | `041d4f010e` | reads past the packet buffer by as much as the stream declares | **reports** |
+| a copy sized by the source payload, not the destination | 7 | `8880a174d0` | writes the payload's length into a smaller caller buffer | **reports** |
+| a writer given a constant capacity instead of the space left | 8 | `b2df2f4f22` | writes up to 128 bytes at a cursor with less than that remaining | **reports** |
+| a transform whose output is a multiple of a declared width | 9 | `16b2049d4d` | writes `lowpass_width * 2` into a narrower plane allocation | **reports** |
 
 **ASan reports all four, measured two-sided** — the fixed arm silent and exiting 0 in every case. That
 is the contrast this corpus exists to draw against `../subobject-repros/`, where ASan is blind to all

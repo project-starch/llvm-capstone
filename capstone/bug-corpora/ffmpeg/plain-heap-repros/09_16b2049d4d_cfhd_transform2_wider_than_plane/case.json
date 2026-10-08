@@ -1,0 +1,55 @@
+{
+  "case": 9,
+  "upstream_fix": "16b2049d4d",
+  "title": "a transform wrote twice the lowpass width into a plane that was narrower",
+  "consumer": "libavcodec/cfhd.c, the transform-2 path writing into the plane buffer",
+  "object": "the plane's pixel buffer, one direct allocation",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL row.",
+  "shape": "an inverse transform doubles the width and writes past a narrower plane",
+  "allocator_layer": "the platform allocator itself: one direct allocation per plane, no inner layer.",
+  "fidelity": "model consumer, real guard: the pin's added term is `lowpass_width * 2 > s->plane[plane].width`, and the case asserts exactly that inequality.",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: n9.0.1:libavcodec/cfhd.c carries the added term `|| lowpass_width * 2 > s->plane[plane].width` in both transform-2 guards. The pre-fix form, ending at `lowpass_height < 3`, is at 16b2049d4d^.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault; on CheriBSD that is conditional on the usable size for this request, which is a step function and must be read in-guest.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault; on CheriBSD that is conditional on the usable size for this request, which is a step function and must be read in-guest.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault; on CheriBSD that is conditional on the usable size for this request, which is a step function and must be read in-guest.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault; on CheriBSD that is conditional on the usable size for this request, which is a step function and must be read in-guest.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "signal": 34,
+      "si_code": 1,
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault; on CheriBSD that is conditional on the usable size for this request, which is a step function and must be read in-guest.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    }
+  },
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "nested": false,
+  "nested_why": "the crossed buffer came straight from the platform allocator with no inner allocator between, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT nested.",
+  "distinguishing": "the crossing length is a MULTIPLE of a stream-declared value rather than the value itself -- the transform doubles it -- so a guard on the declared width alone does not bound the write."
+}
