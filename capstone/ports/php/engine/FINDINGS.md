@@ -630,6 +630,57 @@ dereferenced a stale pointer at all -- the free at `zend_execute.c:519` either d
 or the tmp's buffer is not separately allocated. That is a divergence between this port and stock
 PHP, and it is unexplained. Diagnosing it needs the allocator trace, not more reasoning.
 
+### MEASURED: why CRASH-057's defect does not occur in this port
+
+Instrumented rather than argued. `ZEND_CAP_LIFECYCLE_TRACE` (default off) counts allocator events
+and reports them through the fault channel after the eval; the trigger was then differenced against
+two cut-down variants.
+
+| build | source | efree | revoke | estrndup |
+|---|---|---|---|---|
+| `PROBE057A` | `$x = chr(67) . '';` -- no offset write | 37 | 37 | -- |
+| `PROBE057B` | `$s[1] = chr(67) . '';` -- offset write, no capture | 39 | 39 | 16 |
+| `CRASH-057` | the full trigger | 42 | 42 | 17 |
+| `PROBE057C` | the full trigger, corpus's double quotes | 42 | 42 | -- |
+
+What each row establishes:
+
+1. **Revocation is live.** Every free revokes -- 42 frees, 42 revokes -- so a stale dereference
+   would have faulted.
+2. **The free happens.** The string-offset write costs +2 frees (37 -> 39), so the `STR_FREE` /
+   `efree` at `zend_execute.c:519` that ASAN names is executing here.
+3. **The copy happens.** The outer capture costs exactly +1 `_estrndup` (16 -> 17), and
+   `zval_copy_ctor`'s string copy goes through `_estrndup`. So the read at `zend_execute.c:654` --
+   the one ASAN reports as the use-after-free -- is executing too.
+4. **My transcription was not the cause.** `PROBE057C` uses the corpus's exact double-quoted text
+   and is identical to the single-quoted version, 42/42.
+
+So every step of the defect's mechanism runs. The last probe says why it is still not a catch: a
+ring of recently-freed ranges, consulted by `_estrndup`, reports **2 of the 17 copies reading from a
+previously-freed range -- and neither faulted.**
+
+A read of a *revoked* capability cannot complete. So those reads went through a **valid, re-minted**
+capability over an address that had been freed earlier: the block was returned to `AG(cache)` and
+handed straight back out, and the pointer the engine used is the NEW tenant's, not the stale one.
+There is no dangling pointer at the moment of the read, so there is nothing for revocation to catch.
+
+**The conclusion, stated at the strength the evidence supports:** this is not a detection failure
+and not an allocator defect. The port reaches every step, but its allocation ORDER differs from the
+reference build, so the block is recycled before the read instead of after it. What ASAN sees as a
+use-after-free is, here, a read of live memory.
+
+What is NOT established: exactly which allocation claims the recycled block, and why the engine ends
+up holding the new tenant's pointer rather than the stale one. Distinguishing "the zval was
+re-pointed" from "the copy reads a different object that happens to sit at a recycled address" needs
+per-block address logging, not more counting.
+
+**The transferable caveat, and it cuts against this approach rather than for it:** an allocator that
+promptly recycles a freed block can MASK a use-after-free, because the stale pointer stops being
+stale before anything dereferences it. Revocation only fires on a dereference that actually happens.
+A quarantine -- not reusing freed addresses for a while -- is what makes such a bug reliably
+observable, and it is precisely what this allocator does not do, because it reproduces PHP's cache
+policy deliberately.
+
 ### The harness gained a "did the script actually run?" gate
 
 CRASH-047 first reported MISSED. It had not been missed: both arms returned with `BAILED | ERRORS`

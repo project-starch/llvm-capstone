@@ -250,6 +250,14 @@ void *_erealloc(void *ptr, size_t size, int allow_failure)
 
 char *_estrndup(const char *s, unsigned int length)
 {
+#if defined(ZEND_CAP_LIFECYCLE_TRACE)
+    /* Counted because zval_copy_ctor's string copy goes through here: it is the read ASAN reports
+     * for CRASH-057, so its call count says whether that copy happened at all. */
+    extern unsigned long zc_n_estrndup, zc_n_readfreed;
+    extern int zc_was_freed(unsigned long);
+    ++zc_n_estrndup;
+    if (s && zc_was_freed(__builtin_capstone_cap_get_cursor((void *)s))) { ++zc_n_readfreed; }
+#endif
     char *p = (char *) ZCAP_EMALLOC((size_t)length + 1);
     if (!p) { return (char *)0; }
     memcpy(p, s, length);

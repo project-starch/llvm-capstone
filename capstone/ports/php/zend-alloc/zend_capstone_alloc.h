@@ -110,6 +110,52 @@ extern void php_fault_report(unsigned long);
 #  define ZEND_CAP_CHECK_TAG(ptr, size) do { } while (0)
 #endif
 
+/* ZEND_CAP_LIFECYCLE_TRACE: diagnostic only, OFF by default.
+ *
+ * Counts allocator events so a trigger that produces NO fault can still be told apart from a
+ * trigger that produces no FREE. Those look identical from outside -- the domain just completes --
+ * and the difference decides whether a non-catch means "the detector missed it" or "the defect
+ * never happened here". Read by the domain after the eval and reported through the fault channel. */
+#if defined(ZEND_CAP_LIFECYCLE_TRACE)
+static unsigned long zc_n_emalloc, zc_n_efree, zc_n_revoke, zc_n_cachehit;
+unsigned long zc_n_estrndup;   /* non-static: the seam's _estrndup lives in another TU */
+
+/* A ring of the most recently FREED block ranges. _estrndup consults it to answer the one question
+ * the counters cannot: did the copy read a region that had already been freed? A completing run
+ * with revocation on says no stale capability was dereferenced, but not whether the copy simply
+ * landed on a different, live block -- which is the difference between "the detector missed it"
+ * and "the defect did not happen here". */
+#define ZC_FREERING 16
+unsigned long zc_free_lo[ZC_FREERING], zc_free_hi[ZC_FREERING];
+unsigned zc_free_pos;
+unsigned long zc_n_readfreed;        /* estrndup sources landing in a freed range */
+
+void zc_note_free(unsigned long lo, unsigned long hi)
+{
+    zc_free_lo[zc_free_pos % ZC_FREERING] = lo;
+    zc_free_hi[zc_free_pos % ZC_FREERING] = hi;
+    ++zc_free_pos;
+}
+int zc_was_freed(unsigned long a)
+{
+    unsigned i;
+    for (i = 0; i < ZC_FREERING; i++) {
+        if (zc_free_lo[i] && a >= zc_free_lo[i] && a < zc_free_hi[i]) { return 1; }
+    }
+    return 0;
+}
+#  define ZC_LIFE(ctr) ((ctr)++)
+void zend_cap_lifecycle(unsigned long *a, unsigned long *f, unsigned long *r, unsigned long *c)
+{
+    if (a) { *a = zc_n_emalloc; }
+    if (f) { *f = zc_n_efree; }
+    if (r) { *r = zc_n_revoke; }
+    if (c) { *c = (zc_n_estrndup & 0xFFUL) | ((zc_n_readfreed & 0xFFUL) << 8); }
+}
+#else
+#  define ZC_LIFE(ctr) do { } while (0)
+#endif
+
 /* ZEND_CAP_REV_AUDIT: diagnostic only, OFF by default. Finds which revocation invariant breaks,
  * and when, instead of inferring it from where the cause-24 lands.
  *
@@ -313,6 +359,8 @@ static void *_emalloc(size_t size)
     unsigned int real_size;
     unsigned int cache_index;
 
+    ZC_LIFE(zc_n_emalloc);
+
     real_size   = REAL_SIZE(size);      /* :135 */
     cache_index = real_size >> 3;       /* :136 */
 
@@ -325,6 +373,7 @@ static void *_emalloc(size_t size)
      * probes/revoke-reuse-safety.c. */
     if ((cache_index < MAX_CACHED_MEMORY) && (AG_cache_count[cache_index] > 0)) {
         void *blk = AG_cache[cache_index][--AG_cache_count[cache_index]];
+        ZC_LIFE(zc_n_cachehit);
 #if defined(ZEND_CAP_REV_AUDIT)
         ZEND_REV_COUNT_ALLOC();
         if (!__builtin_capstone_cap_get_tag(blk)) {
@@ -407,6 +456,14 @@ static void *_emalloc(size_t size)
 static void _efree(void *ptr)
 {
     zend_mem_header *p = (zend_mem_header *) ((char *)ptr - sizeof(zend_mem_header) - MEM_HEADER_PADDING);
+
+    ZC_LIFE(zc_n_efree);
+#if defined(ZEND_CAP_LIFECYCLE_TRACE)
+    {
+        unsigned long _b = __builtin_capstone_cap_get_cursor((void *)ptr);
+        zc_note_free(_b, _b + (unsigned long)p->size);
+    }
+#endif
     unsigned int real_size   = REAL_SIZE(p->size);
     unsigned int cache_index = real_size >> 3;
 
@@ -479,6 +536,7 @@ static void _efree(void *ptr)
 #endif
 #ifndef ZEND_NO_REVOKE
         blk = __builtin_capstone_cap_revoke(s->rev);   /* the control removes ONLY this */
+        ZC_LIFE(zc_n_revoke);
 #endif
 #if defined(ZEND_CAP_REV_AUDIT)
         if (!__builtin_capstone_cap_get_tag(blk)) {

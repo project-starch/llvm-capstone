@@ -168,6 +168,31 @@
      "$x = ($s[1] = chr(67) . '');\n" \
      "var_dump($x);"
 #  define RUNG_E_STMT   1
+/* CRASH-057 with the string-offset assignment REMOVED. Everything else is identical, so the
+ * difference in free/revoke counts isolates what `$s[1] = ...` costs. */
+# elif defined(RUNG_E_PROBE057A)
+#  define RUNG_E_SOURCE \
+     "$s = 'AB';\n" \
+     "$x = (chr(67) . '');\n" \
+     "var_dump($x);"
+#  define RUNG_E_STMT   1
+/* CRASH-057 with the offset assignment but WITHOUT the outer capture into $x, which is the read
+ * ASAN reports. If the free happens here too, the free is the offset write, not the capture. */
+# elif defined(RUNG_E_PROBE057B)
+#  define RUNG_E_SOURCE \
+     "$s = 'AB';\n" \
+     "$s[1] = chr(67) . '';\n" \
+     "var_dump($s);"
+#  define RUNG_E_STMT   1
+/* CRASH-057 transcribed EXACTLY as the corpus writes it, double quotes and all. The scored variant
+ * used single quotes, which ought to be equivalent -- checking that it is, before concluding
+ * anything about the port. */
+# elif defined(RUNG_E_PROBE057C)
+#  define RUNG_E_SOURCE \
+     "$s = \"AB\";\n" \
+     "$x = ($s[1] = chr(67) . \"\");\n" \
+     "var_dump($x);"
+#  define RUNG_E_STMT   1
 # elif defined(RUNG_E_CRASH066)
 #  define RUNG_E_SOURCE \
      "class obj { var $ryat; public function __destruct() { $this->ryat = null; } }\n" \
@@ -519,6 +544,24 @@ void domain_main(unsigned *res, unsigned func)
         } zend_catch {
             st |= ST_BAILED;
         } zend_end_try();
+
+#if defined(ZEND_CAP_LIFECYCLE_TRACE)
+        /* Report the allocator's event counts through the fault channel. This HALTS the domain, so
+         * it is a measurement build only -- it answers "did a free happen at all during this
+         * trigger?", which a completing run cannot distinguish from "a free happened and nothing
+         * read the dead block". */
+        {
+            extern void zend_cap_lifecycle(unsigned long *, unsigned long *,
+                                           unsigned long *, unsigned long *);
+            extern void php_fault_report(unsigned long);
+            unsigned long na = 0, nf = 0, nr = 0, nc = 0;
+            zend_cap_lifecycle(&na, &nf, &nr, &nc);
+            php_fault_report((0xE9UL << 56)
+                           | ((nf & 0xFFFFUL) << 32)      /* efree  */
+                           | ((nr & 0xFFFFUL) << 16)      /* revoke */
+                           | ((nc & 0xFFFFUL)));          /* cache hits */
+        }
+#endif
 
         if (rc == SUCCESS) {
             st |= ST_EVALED;
