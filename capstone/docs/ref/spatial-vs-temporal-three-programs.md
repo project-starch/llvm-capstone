@@ -45,14 +45,24 @@ Per program, recomputed from each case's `nested` boolean and its `lifetime_ende
 > two differently-counted totals get compared.** All three figures below count CASES in these three
 > programs, from `case.json` files, on the same basis as the table above:
 >
-> | when | FFmpeg | tshark | memcached | total |
+> | state of the branch, by its last commit that day | FFmpeg | tshark | memcached | total |
 > |---|---:|---:|---:|---:|
-> | the inventory of 2026-10-06 | 19 | 24 | 11 | **54** |
-> | 2026-10-08, when the axis first became computable | 25 | 26 | 11 | **62** |
-> | 2026-10-08, after this change | 53 | 44 | 21 | **118** |
+> | end of 2026-10-05 (`84990ea0ade5`) | 7 | 18 | 8 | **33** |
+> | end of 2026-10-06 (`39f62dfb0354`) | 19 | 19 | 9 | **47** |
+> | end of 2026-10-07 (`f2c70e991714`) = start of 2026-10-08 | 19 | 24 | 11 | **54** |
+> | end of 2026-10-08 (`c3931286386f`) | 53 | 44 | 21 | **118** |
 >
-> The middle row is the honest baseline for *this* day's work: +56. The first row is the baseline
-> for the week: +64. Neither is "54 -> 118", which mixes the two.
+> Each row is counted from GIT -- `git ls-tree` of that commit, one row per `case.json` -- not
+> from a table written at the time. So 2026-10-08's work is **54 -> 118, +64**, and the week's
+> is **33 -> 118, +85**.
+>
+> **CORRECTED 2026-10-08.** An earlier version of this table labelled the 54 row "the inventory of
+> 2026-10-06" and added an intermediate 62 row as the day's baseline, concluding "+56 today". Both
+> were wrong. The 54 figure was right but its DATE was not -- it is the state at the end of
+> 2026-10-07, while the end of 2026-10-06 was 47 -- and 62 was a point in the middle of
+> 2026-10-08, after the day's first eight cases, so it is not a baseline for anything. The figures
+> had been carried from a plan written earlier the same day instead of being read from history,
+> which is exactly the mistake the paragraph above this table warns against.
 >
 > The counts are now COMPUTABLE rather than asserted: 22 temporal cases carried no `nested`
 > boolean at all — the field postdates them — and were backfilled from each case's own
