@@ -514,11 +514,12 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             struct cv_stats stats;
             if (tid == 0 && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) &&
                 !ioctl(device, CV_STATS, &stats))
-                fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%lu launch_ns=%llu elapsed_ns=%llu\n",
+                fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu\n",
                     stats.arenas, stats.pinned_pages, stats.peak_pages, stats.nodes, stats.steps,
                     stats.faults, stats.collections, stats.reclaimed, (unsigned long long)host.rounds,
                     (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
-                    CV_NODE_BYTES, launch_ns, now_ns() - start_ns);
+                    stats.node_bytes, stats.node_capacity, stats.node_growths,
+                    launch_ns, now_ns() - start_ns);
             /* exit_group stops all native workers before Linux releases
              * mappings and the adapter fd. Unmapping here would race a
              * worker completing its blocked delegated read. */
@@ -536,6 +537,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         pthread_mutex_unlock(&service_lock);
         sched_yield();
         pthread_mutex_lock(&service_lock);
+    } else if (step->args[7] == CV_SERVICE_NODES) {
+        struct cv_nodes nodes = {.thread = tid, .available = step->args[0]};
+        step->result = ioctl(device, CV_NODES, &nodes) ? -errno : 0;
     } else {
         step->result = -ENOSYS;
     }
@@ -622,10 +626,10 @@ int main(int argc, char **argv)
         struct cv_global stats;
         if (fd < 0 || ioctl(fd, CV_GLOBAL, &stats)) return 125;
         close(fd);
-        printf("{\"version\":1,\"live_domains\":%llu,\"live_regions\":%llu,\"live_bytes\":%llu,\"cached_bytes\":0,\"poisoned_blocks\":0,\"nodes_high_water\":%llu,\"nodes_live\":%llu,\"nodes_retired\":%llu,\"nodes_allocated_total\":%llu,\"tag_pages\":%llu,\"node_capacity\":%lu,\"collections\":%llu,\"nodes_reclaimed\":%llu}\n",
+        printf("{\"version\":1,\"live_domains\":%llu,\"live_regions\":%llu,\"live_bytes\":%llu,\"cached_bytes\":0,\"poisoned_blocks\":0,\"nodes_high_water\":%llu,\"nodes_live\":%llu,\"nodes_retired\":%llu,\"nodes_allocated_total\":%llu,\"tag_pages\":%llu,\"node_capacity\":%llu,\"node_bytes\":%llu,\"collections\":%llu,\"nodes_reclaimed\":%llu}\n",
             stats.contexts, stats.arenas, stats.pinned_pages * 4096,
             stats.nodes_high_water, stats.nodes_live, stats.nodes_retired, stats.nodes_allocated,
-            stats.pinned_pages, CV_NODE_BYTES / 16, stats.collections, stats.reclaimed);
+            stats.pinned_pages, stats.node_capacity, stats.node_bytes, stats.collections, stats.reclaimed);
         return 0;
     }
     image_path = app_args ? argv[2] : argv[1];

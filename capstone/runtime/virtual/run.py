@@ -32,9 +32,8 @@ cat /tmp/ok.out
 echo VM_EXIT:threads:$?
 cat /tmp/threads.out
 for mode in vm linear linear-stale heap-threads sparse-churn stale bounds retired vm-ro-write vm-none-read vm-guard vm-padding sparse-stale; do
-  ./capstone-vexec contract.dom "$mode" > /tmp/fault.out 2>&1
+  ./capstone-vexec contract.dom "$mode" 2>&1
   echo VM_EXIT:$mode:$?
-  cat /tmp/fault.out
 done
 ./capstone-vexec contract.dom spin > /tmp/spin.out 2>&1 & spin=$!
 # QEMU startup includes Linux image loading and the first delegated rounds;
@@ -221,9 +220,18 @@ def main():
     tests['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32
     tests['shared_heap_pages_released'] = len(stats) >= 5 and stats[4]['peak'] - stats[4]['pages'] >= 768
     if not a.skip_recycling:
+        sparse = stats[5] if len(stats) >= 6 else {}
+        # The fixed table happened to collect ~195k IDs in three sweeps.
+        # A growing table has different collection boundaries. Require reuse
+        # to explain allocations beyond capacity, with more than two tablefuls
+        # allocated and no more than the old 1-MiB metadata budget. Retired
+        # nodes in the unfinished final collection epoch need not be reclaimed.
+        capacity = sparse.get('node_capacity', sparse.get('node_bytes', 0) // 16)
         tests['sparse_recycling'] = (lines.count('VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags') == 1
-                                 and len(stats) >= 6 and stats[5]['collections'] >= 3
-                                 and stats[5]['reclaimed'] >= 190000 and stats[5]['peak'] < 2048)
+                                 and capacity > 0 and sparse['collections'] > 0
+                                 and sparse['nodes'] > 2 * capacity
+                                 and sparse['reclaimed'] >= sparse['nodes'] - capacity
+                                 and sparse['node_bytes'] <= 1048576 and sparse['peak'] < 2048)
     tests['sqlite_results'] = lines.count('SQLITE_SUM=5050') == 1 and lines.count('SQLITE_PERSIST=100') == 1
     tests['mruby_results'] = lines.count('MRUBY_SUM=5050') == 1 and lines.count('MRUBY_FILE=virtual') == 1
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1

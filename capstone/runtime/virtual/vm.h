@@ -19,6 +19,7 @@ extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned, 
 extern long __capstone_vm_unmap(unsigned long, unsigned long);
 extern long __capstone_vm_protect(unsigned long, unsigned long, int);
 extern long __capstone_vm_wait(void);
+extern long __capstone_vm_nodes(unsigned long);
 
 static inline int cap_vm_acquire(sublet_cap *slot, size_t bytes,
                                  size_t alignment, int prot,

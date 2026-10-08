@@ -5,8 +5,9 @@ addresses. The processor enforces capability authority; a trusted operating
 system supplies page tables, physical pages, scheduling and system services.
 The integration goal is a reusable processor interface with a small OS adapter.
 
-This guide describes the **supervised virtual C implementation under review**,
-as of 2026-10-07. Applications still run in C mode. Linux runs the native
+This guide describes the **supervised virtual C implementation**,
+as of 2026-10-07. The core stack is on `dev`; the paged node-store extension
+is on `review/virtual-node-growth`. Applications still run in C mode. Linux runs the native
 launcher and its worker threads, and a loadable module connects them to the
 processor. The recorded platform needs no additional Linux-core or firmware
 patch. This is a QEMU implementation, not a released RTL interface.
@@ -63,7 +64,10 @@ A large virtual range can span noncontiguous physical pages. The runtime no
 longer needs a large contiguous physical payload pool. It still uses arenas
 to amortize allocation: an arena is now a Linux-backed virtual mapping from
 which libc carves objects. Ordinary applications call `malloc` and `mmap`.
-The current lifetime table itself is still a contiguous physical allocation.
+The node-growth extension gives the lifetime table scattered physical backing
+too: its stable physical root selects a directory of 256-record pages.
+Capability IDs and the ownership model stay unchanged; see the
+[table format and publication rules](isa.md#lifetime-storage-and-encoding).
 
 ## Responsibilities
 

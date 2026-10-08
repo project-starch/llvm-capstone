@@ -74,6 +74,12 @@ __capstone_vm_acquire:
     ecall
     ret
 .global __capstone_vm_unmap
+.global __capstone_vm_nodes
+__capstone_vm_nodes:
+    li a7, CV_SERVICE_NODES
+    ecall
+    ret
+
 __capstone_vm_unmap:
     li a7, CV_SERVICE_UNMAP
     ecall

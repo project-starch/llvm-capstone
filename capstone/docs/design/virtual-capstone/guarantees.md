@@ -46,12 +46,14 @@ Anonymous `MAP_SHARED` and SysV compatibility accepted by the runtime remain
 process-local backing in this no-fork profile. They do not establish
 cross-process tagged sharing.
 
-The prototype has resource limits: a 65,536-slot / 1-MiB node table per
-launch (including reserved slots), 32 supervisor slots on the hart, at most
+The node-growth extension replaces the fixed 65,536-slot / 1-MiB table with
+base-page-backed tables bounded by RAM, an optional quota and the 31-bit ID
+field. It retains the separate limits of 32 supervisor slots on the hart, at most
 512 registered mappings, 256 MiB per registered region and 1 GiB aggregate
-registered VA. The table requires contiguous physical backing; application
-payloads do not. Some allocator requests return `ENOMEM` early. If collection
-cannot release enough IDs, node pressure terminates with resource cause 30;
+registered VA, 65,536 allocator block records and 256 allocator arenas by
+default. Table pages can be physically scattered. Allocator capacity requests
+can return `ENOMEM`; if collection and growth cannot supply enough IDs,
+node pressure terminates with resource cause 30;
 it is not universally converted into recoverable `malloc` failure.
 
 ## Encoding work still matters
@@ -106,12 +108,21 @@ passed” therefore does not mean every tested bug was prevented. Memcached's
 slab/cache lifetime and bipbuffer logical-reuse gaps remain; other ports need
 their documented inner-allocator configurations.
 
-Fresh full builds and current corpus/workload gates for Perl, CPython,
-PostgreSQL, FFmpeg and tshark remain required on the extracted stack.
-So do the physical runtime/thread regression, reruns of inherited
-epoll/message mutation variants and final integration of all app leaves.
-Historical runs retain their value for their recorded revisions; they do not
-qualify a future merged tree automatically.
+### Growing node-table qualification
+
+The core virtual stack is now on `dev`. The node-growth review branch has its
+own [qualification manifest](../../../runtime/virtual/results/node-growth/qualification.json),
+covering the paged processor paths, growth/reuse and quota refusals, same-mm
+pthreads, and the complete runtime gate with SQLite, mruby and Perl smoke.
+The manifest distinguishes new QEMU builds from reused source-matched runtime,
+compiler and application artifacts. Node exhaustion and failed collection
+remain fail-closed, and published pages are retained until namespace teardown.
+
+This does not requalify every application port, the full upstream suites or
+all nested-allocator bug corpora. Full physical runtime/thread regression,
+the inherited epoll/message mutation matrix, multi-hart and RTL remain outside
+this node-growth qualification. Historical runs retain their value for their
+recorded revisions; they do not qualify a future merged tree automatically.
 
 [qemu]: https://github.com/project-starch/capstone-qemu/tree/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9
 [runtime]: https://github.com/project-starch/llvm-capstone/tree/518a5b805aa70c222ef0496c151b2845b4ab8dae

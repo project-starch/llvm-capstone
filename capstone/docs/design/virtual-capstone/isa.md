@@ -2,8 +2,11 @@
 
 [Guide](README.md) · Previous: [Runtime](runtime.md) · Next: [Development](development.md)
 
-This chapter describes the experimental interface implemented at
-[QEMU revision 9bf9c1f28653][qemu]. Numeric allocations and the context-storage
+This chapter describes the experimental interface introduced at
+[QEMU revision 9bf9c1f28653][qemu], plus the paged node-store and collection-list
+extensions on `review/virtual-node-growth`. The superproject QEMU pin selects their
+implementation; the older source links describe the original interface.
+Numeric allocations and the context-storage
 ABI are not frozen. It supplements the [academic-spec amendment][spec-patch];
 it does not claim conformance with the deployed physical RTL encoding.
 
@@ -172,12 +175,58 @@ separate from virtual C event delivery through `CSRUNV`.
 
 ## Lifetime storage and encoding
 
-The guest table is kernel-owned, physically contiguous writable RAM with a
-4-KiB-aligned base and 16-byte slots. Slot 0 is a header, never a node.
+The guest table is kernel-owned writable RAM with a 4-KiB-aligned physical
+`srevroot` and 16-byte records. The original flat format requires contiguous
+backing. Slot 0 is a header, never a node.
 The header contains capacity (bit 63 enables recycling) and the next-unused
 ID. Recycling also reserves slot 1 for free-list metadata and allocation
 statistics, so its first usable ID is 2. A node record contains u32 previous
 ID, next ID, depth and flags (VALID=1, LINEAR=2, FREE=4).
+
+The node-growth extension adds a paged format while retaining flat-table
+support. Bit 62 selects paging and requires the recycling bit. The physical
+root contains these little-endian fields:
+
+| Byte offset | Field |
+|---|---|
+| 0 | Capacity in slots, including reserved IDs, and format bits 63/62 |
+| 8 | Next unused ID |
+| 16 | Free-list head (low u32), free count (high u32) |
+| 24 | Cumulative allocations |
+| 32 | Version magic `0x3145474150444f4e` |
+| 40 | Retired records not yet returned to the free list |
+| 48, 56 | Reserved, zero |
+| 64 | 32 physical directory pointers |
+
+The 31-bit ID is split into `5:9:9:8`: root entry, two 512-entry directory
+indices, then record index. Each directory and record page is aligned
+ordinary writable 4-KiB RAM. Missing, misaligned or non-RAM pointers, and a
+pointer back to an earlier page on the path, refuse lookup. The trusted adapter guarantees that pages do not
+alias one another or other objects. All pages below the published capacity
+must exist. Initializing pages and publishing links precedes the capacity
+update, with all namespace execution stopped. Pages and the root remain
+stable until all bound contexts have been discarded. Node accesses are
+physical metadata accesses; they do not use `satp` translation.
+
+This QEMU backend does not cache directory translations or implement large
+leaves. It caches only a validated physical RAM section and its host pointer,
+assuming a static physical memory map; directory and node bytes remain fresh.
+RAM hotplug and migration are outside this prototype. Paging adds physical
+lookups on capability checks; this qualification is not an RTL speedup claim.
+
+Existing records and up to two allocation candidates are preflighted before
+any node mutation; this includes fresh candidates straddling a page boundary.
+The same node-list algorithm and capability encoding are retained. The
+[shared format header](../../../capstone-qemu/target/riscv/cap_rev_table_abi.h)
+is used by the QEMU backend and copied into the Linux module build.
+
+For scalable collection, bit 63 of frame word 80 selects a linked page list;
+the remaining bits hold its total entry count, and word 81 holds its first
+physical page address. Each list page contains a next pointer, count 1..510,
+then physical page addresses. The final next pointer must be zero. QEMU
+preflights the entire request and issued node pages before clearing tags;
+no ID is released after an incomplete sweep. The original contiguous-vector
+collection request remains valid. Dead PCC IDs remain pinned.
 
 IDs must be allocated, below the high-water mark and valid; missing, free,
 reserved and out-of-range records fail closed. The same depth-ordered list

@@ -7,6 +7,7 @@ source "$here/../../tests/capstone-test-env.sh"
 out=${1:?Output directory}
 mkdir -p "$out/module"
 cp "$here/module/Makefile" "$here/module/capstone_vm.c" "$here/wire.h" "$here/vm-abi.h" "$out/module/"
+cp "$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h" "$out/module/"
 make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" \
     M="$(cd "$out/module" && pwd)" -j16 modules
 "${CROSS_COMPILE}gcc" -O2 -static -pthread -Wall -Wextra -Werror \

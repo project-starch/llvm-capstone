@@ -3,17 +3,18 @@
 [Guide](README.md) · Previous: [ISA](isa.md) · Next: [Guarantees](guarantees.md)
 
 Use the matching processor, compiler, runtime and application profile.
-This documentation-only branch can land independently; it does not contain
-the implementation stack. Source links below identify the reviewed revisions
-even before those changes reach `dev`.
+The core virtual stack has landed on `dev`. The node-growth review branch
+`review/virtual-node-growth` adds paged lifetime storage on top of `dev` and
+the build repairs in `review/virtual-build-repairs`. Source links below retain
+the original review boundaries; use the checkout's QEMU pin for new builds.
 
 ## Repositories and profiles
 
 | Component | Integration/review location |
 |---|---|
-| Virtual processor | QEMU [#13](https://github.com/project-starch/capstone-qemu/pull/13) → [#14](https://github.com/project-starch/capstone-qemu/pull/14) → [#15](https://github.com/project-starch/capstone-qemu/pull/15) → [#16](https://github.com/project-starch/capstone-qemu/pull/16), landing on `virtual-capstone` |
+| Virtual processor | QEMU [#13](https://github.com/project-starch/capstone-qemu/pull/13) → [#14](https://github.com/project-starch/capstone-qemu/pull/14) → [#15](https://github.com/project-starch/capstone-qemu/pull/15) → [#16](https://github.com/project-starch/capstone-qemu/pull/16), merged into `virtual-capstone` |
 | Compiler and buffer authority | LLVM [#182](https://github.com/project-starch/llvm-capstone/pull/182) → [#183](https://github.com/project-starch/llvm-capstone/pull/183) |
-| Linux adapter, libc VM, pthreads | LLVM [#184](https://github.com/project-starch/llvm-capstone/pull/184) → [#185](https://github.com/project-starch/llvm-capstone/pull/185) → [#191](https://github.com/project-starch/llvm-capstone/pull/191), landing on `dev` |
+| Linux adapter, libc VM, pthreads | LLVM [#184](https://github.com/project-starch/llvm-capstone/pull/184) → [#185](https://github.com/project-starch/llvm-capstone/pull/185) → [#191](https://github.com/project-starch/llvm-capstone/pull/191), merged into `dev` |
 | Academic ISA amendment | [Transferable spec patch][spec-patch]; publication requires a spec maintainer |
 
 The runtime adapter requires the complete QEMU stack. Its QEMU submodule
