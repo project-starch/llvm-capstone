@@ -75,6 +75,12 @@ python3 "$HERE/cheribsd-cases.py" "$OUT/bin" "$OUT/cases.json" \
   || { echo "CONTROL-FAILED cases.json" >&2; exit 75; }
 
 # --continue-on-failure so a refuted prediction does not hide the rows after it.
+# A marker whose mtime bounds THIS invocation. The control check below requires each
+# control's record to be newer than it, because $OUT/run survives a previous run and a
+# stale record would otherwise satisfy the check for a boot that never happened.
+STAMP="$OUT/.run-started"
+: > "$STAMP"
+
 python3 "$CAP/ports/common/host/cheribsd/run.py" "$OUT/run" \
   --sdk "$SDK" --rootfs "$SYSROOT" --image "$IMAGE" --port "$PORT" \
   --abi-probe "$OUT/bin/cheribsd-abi-probe" \
@@ -89,6 +95,11 @@ rc=$?
 for c in cheribsd-abi cheribsd-bounds; do
   out="$OUT/run/$c/stdout.txt"
   [ -s "$out" ] || { echo "CONTROL-FAILED $c produced no output: not a reading" >&2; exit 75; }
+  # ... and it must come from THIS boot, not from a directory a previous run left behind.
+  [ "$out" -nt "$STAMP" ] || {
+    echo "CONTROL-FAILED $c's record predates this run: it is evidence about an earlier boot," >&2
+    echo "               so this suite is not a reading. Use a fresh output directory." >&2
+    exit 75; }
 done
 grep -q "runtime_revocation=1" "$OUT/run/cheribsd-abi/stdout.txt" \
   || { echo "CONTROL-FAILED cheribsd-abi did not report runtime_revocation=1" >&2; exit 75; }

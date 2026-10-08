@@ -52,38 +52,68 @@ done
 # request 9 yields a capability of length 16, so offset 9 is inside the bounds
 # and no fault is possible. Contrast the wireshark sibling, whose 65471-byte
 # crossing past an exactly-size-classed 8192 does leave the allocation.
-python3 - "$OUT/bin" "$OUT/cases.json" <<'PY'
+python3 - "$OUT/bin" "$OUT/cases.json" "$ROOT" <<'CASESPY'
 import json, pathlib, sys
-BIN, OUT = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+BIN, OUT, CORPUS = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3])
 SIGPROT = 34
-# The buggy arm expects a COMPLETION, because that is what was MEASURED and the
-# CATCH prediction was refuted. Encoding the refuted prediction instead would
-# make this suite fail every time and a genuine change invisible. SIGPROT is
-# still imported so the contrast with the wireshark sibling is readable.
+# The buggy arm's expectation is PER CASE, because the cases differ in whether the
+# crossing leaves the allocator's USABLE size. malloc bounds a capability to that
+# size and not to the request, so a crossing shorter than the gap to the next size
+# class stays inside the same allocation and NO capability check can see it.
+# Encoding one expectation for all of them would make a true reading look like a
+# failure, which is how a measured absorption gets mistaken for a bug.
+#
+# The usable sizes are MEASURED in this guest and recorded in case 00's case.json:
+# calloc(1,1) and calloc(1,9) both return length 16, calloc(1,17) returns 32,
+# calloc(1,8192) returns exactly 8192. tools/size-class-audit.py reproduces all four.
+CASES = {
+    0: (9,  '1 byte past calloc(1, 9), whose capability is 16 long -- ABSORBED', 'COMPLETE'),
+    1: (64, '1 byte past malloc(64), and 64 is exactly a size class',            'FAULT'),
+    2: (64, '1 byte past a 64-byte realloc of the suffix freelist',              'FAULT'),
+    3: (64, '1 byte past a 64-byte object-cache freelist array',                 'FAULT'),
+    4: (64, '1 byte past a 64-byte stats buffer',                                'FAULT'),
+    5: (16, '1 byte past a 16-byte connection write buffer',                     'FAULT'),
+    6: (16, '1 byte past a 16-byte proxy key buffer',                            'FAULT'),
+    7: (16, '1 byte past a 16-byte binary-protocol key',                         'FAULT'),
+    8: (16, '1 element (8 bytes) past a 16-byte slab page list',                 'FAULT'),
+}
+# A case directory with no row here is one the run would be silent about. The
+# FFmpeg sibling had exactly that: a table of 4 while the corpus held 25.
+present = {int(d.name[:2]) for d in CORPUS.glob('[0-9][0-9]_*') if d.is_dir()}
+missing, extra = sorted(present - set(CASES)), sorted(set(CASES) - present)
+if missing or extra:
+    msg = []
+    if missing: msg.append('cases %s exist in the corpus but have no row in CASES' % missing)
+    if extra:   msg.append('CASES names %s, which is not a case directory' % extra)
+    sys.exit('CONTROL-FAILED cases.json: ' + '; '.join(msg))
+
 cases = []
 for p in sorted(BIN.glob('mch-[0-9][0-9]')):
     n = int(p.name.split('-')[1])
-    cases.append(dict(name=f'{p.name}-fixed', program=str(p), args=['fixed', str(n)],
+    request, what, expect = CASES[n]
+    cases.append(dict(name='%s-fixed' % p.name, program=str(p), args=['fixed', str(n)],
                       timeout=300, expect_regex=r'VERDICT FIXED .*', exit=0))
-    # The buggy arm's expectation is PER CASE, because the two cases differ in
-    # whether the crossing leaves the allocator's USABLE size:
-    #   case 0: 1 byte past calloc(1, 9), whose capability is 16 long -> COMPLETES
-    #   case 1: 1 byte past malloc(64), and 64 is exactly a size class -> FAULTS
-    # Encoding one expectation for both would make a true reading look like a
-    # failure, which is how a measured refutation gets mistaken for a bug.
-    if n == 0:
-        cases.append(dict(name=f'{p.name}-buggy', program=str(BIN/'supervise'),
+    if expect == 'FAULT':
+        cases.append(dict(name='%s-buggy' % p.name, program=str(BIN/'supervise'),
+                          args=['./target','buggy',str(n)], inputs={'target': str(p)},
+                          timeout=300, expect='SUPERVISE exit signalled=%d' % SIGPROT,
+                          exit=128+SIGPROT))
+    else:
+        cases.append(dict(name='%s-buggy' % p.name, program=str(BIN/'supervise'),
                           args=['./target','buggy',str(n)], inputs={'target': str(p)},
                           timeout=300, expect='SUPERVISE exit status=0', exit=0))
-    else:
-        cases.append(dict(name=f'{p.name}-buggy', program=str(BIN/'supervise'),
-                          args=['./target','buggy',str(n)], inputs={'target': str(p)},
-                          timeout=300, expect=f'SUPERVISE exit signalled={SIGPROT}',
-                          exit=128+SIGPROT))
-assert SIGPROT == 34
 OUT.write_text(json.dumps(cases, indent=2) + '\n')
-PY
+print('  wrote %s: %d cases, covering all %d case directories' % (OUT, len(cases), len(present)))
+for n, (request, what, expect) in sorted(CASES.items()):
+    print('    case %2d: %s -- %s' % (n, 'CATCH   ' if expect == 'FAULT' else 'COMPLETE', what))
+CASESPY
 [ -s "$OUT/cases.json" ] || { echo "CONTROL-FAILED cases.json" >&2; exit 75; }
+
+# A marker whose mtime bounds THIS invocation. The control check below requires each
+# control's record to be newer than it, because $OUT/run survives a previous run and a
+# stale record would otherwise satisfy the check for a boot that never happened.
+STAMP="$OUT/.run-started"
+: > "$STAMP"
 
 python3 "$CAP/ports/common/host/cheribsd/run.py" "$OUT/run" \
   --sdk "$SDK" --rootfs "$SYSROOT" --image "$IMAGE" --port "$PORT" \
@@ -96,6 +126,11 @@ rc=$?
 for c in cheribsd-abi cheribsd-bounds; do
   [ -s "$OUT/run/$c/stdout.txt" ] \
     || { echo "CONTROL-FAILED $c produced no output: not a reading" >&2; exit 75; }
+  # ... and it must come from THIS boot, not from a directory a previous run left behind.
+  [ "$OUT/run/$c/stdout.txt" -nt "$STAMP" ] || {
+    echo "CONTROL-FAILED $c's record predates this run: it is evidence about an earlier boot," >&2
+    echo "               so this suite is not a reading. Use a fresh output directory." >&2
+    exit 75; }
 done
 grep -q "runtime_revocation=1" "$OUT/run/cheribsd-abi/stdout.txt" \
   || { echo "CONTROL-FAILED cheribsd-abi did not report runtime_revocation=1" >&2; exit 75; }

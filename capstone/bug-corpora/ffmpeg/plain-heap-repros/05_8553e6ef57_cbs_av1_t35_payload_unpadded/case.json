@@ -36,8 +36,9 @@
       "si_code": 1,
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault. On CheriBSD that is conditional on the usable size for this request -- a size class is a step function and the capability length must be read in-guest before the arm is called either way.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **NOT CAUGHT, and clean here is NOT a negative result about the defect.** The sequence COMPLETES, exit status 0, with supervise resolving `expect ffh_read_probe_u8 0x1021c6` from the ELF -- so the probe was found and simply never faulted. THE MECHANISM: malloc bounds a capability to the allocator's USABLE size and not to the request, so a crossing shorter than the gap to the next size class stays inside the same allocation and no capability check can see it. This is a property of the allocator's granularity, not of the bug. tools/size-class-audit.py reports this case ABSORBED from the measured request size, and the two agree. The Capstone arms are the discriminating ones here.",
+      "status": "measured",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot."
     },
     "native-detect": {
       "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer, which LeakSanitizer's summary also contains.",

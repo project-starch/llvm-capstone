@@ -47,8 +47,9 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "oracle": "PREDICTED CLEAN, and clean here is NOT a negative result about the defect. The request is far below jemalloc's smallest size class, so malloc's usable size exceeds it and the crossing lands inside the same allocation's slack -- CheriBSD cannot see it, for a reason that is a property of the allocator's granularity rather than of the bug. The trigger is an EMPTY string, so the request cannot be sized onto a class boundary without destroying the defect. The Capstone arms are the discriminating ones for this case.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **NOT CAUGHT, and clean here is NOT a negative result about the defect.** The sequence COMPLETES, exit status 0, with supervise resolving `expect wsh_read_probe 0x10237a` from the ELF -- so the probe was found and simply never faulted. THE MECHANISM: malloc bounds a capability to the allocator's USABLE size and not to the request, so a crossing shorter than the gap to the next size class stays inside the same allocation and no capability check can see it. This is a property of the allocator's granularity, not of the bug. tools/size-class-audit.py reports this case ABSORBED from the measured request size, and the two agree. The Capstone arms are the discriminating ones here.",
+      "status": "measured",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot."
     }
   },
   "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
