@@ -341,3 +341,61 @@ to have crossed, and a case built from it would report a completion on every arm
 has nothing to do with the upstream fix. **This is a finding about FFmpeg's allocation discipline,
 not a shortfall in the search** — and it is the reason the plane/row shape is **exhausted at one case
 and must not be grown**.
+
+# Candidate disposition, 2026-10-08: `01701bdcd5` reclassified, and what a case from it must assert
+
+The "Opened, classified, not built" table above lists `01701bdcd5` as **shape A** and as the
+**next candidate if more are wanted**, with the reason it was not built being that *"the target
+array's declaration was not run down, so the adjacency a case must assert is unverified."*
+
+That declaration has now been run down, and **the shape is wrong: it is class C, not A, and the
+row would be NOT nested.** So a case from it belongs in `plain-heap-repros`, not
+`subobject-repros`.
+
+**The evidence, read at the 9.0.1 pin rather than inferred.** The arrays the scan walks are
+pointers, not inline members:
+
+    libavcodec/vvc/ps.h:118   uint16_t *col_bd;    ///< TileColBdVal
+    libavcodec/vvc/ps.h:119   uint16_t *row_bd;    ///< TileRowBdVal
+
+and each is its own direct allocation:
+
+    libavcodec/vvc/ps.c:352   pps->col_bd = av_calloc(r->num_tile_columns + 1, sizeof(*pps->col_bd));
+    libavcodec/vvc/ps.c:353   pps->row_bd = av_calloc(r->num_tile_rows    + 1, sizeof(*pps->row_bd));
+
+Under this inventory's axis -- **who allocated the object** -- a direct `av_calloc` is not nested.
+There is also no adjacency for a case to assert, which is why that stated blocker dissolves rather
+than being satisfied: the crossing leaves the allocation entirely, so the question is the
+allocation's extent, not what sits next to it inside a larger block. Collapsing "which bound is
+crossed" with "who allocated" is the 2026-10-05 retraction, and calling this shape A would have
+repeated it.
+
+**The defect itself is real and small.** The fix replaces `!=` with `<` in two scans:
+
+    while (pps->col_bd[*tile_x] != rx)   ->   while (pps->col_bd[*tile_x] < rx)
+
+`col_bd`'s last element is set to `pps->ctb_width` (`ps.c:365`), so the scan terminates for any
+`rx` at or below it. The overread needs `rx` greater than every boundary -- which the upstream
+message says an illegal bitstream can construct, and which is also reachable when a horizontal
+subpicture boundary is not a tile boundary.
+
+**What a case from it must get right, and the trap waiting in it.** The CheriBSD verdict is decided
+by the array's SIZE, not by the defect:
+
+- `av_calloc(n + 1, 2)` for a minimal `n = 1` requests **4 bytes**. CheriBSD's malloc bounds to the
+  allocator's **usable** size, so a 4-byte request yields a 16-byte capability and a two-byte
+  overread at offset 4 is **inside** it -- the arm would complete, and the row would discriminate
+  nothing.
+- The size must therefore be chosen so the crossing exceeds the usable size, and the capability
+  length must be **measured in the guest for that request size** rather than read off the sibling
+  corpora's table: a size class is a step function, and the plain-heap corpus's own bundle records
+  that non-transferability as the thing which refuted one of its catch predictions.
+
+So: buildable, genuinely open, and it is a `plain-heap-repros` row whose size choice is part of the
+claim. Recorded here rather than built, so that the next pass starts from the corrected
+classification instead of the one above it.
+
+**Citation constraint for this hash.** `01701bdcd5`'s commit message carries a `Signed-off-by:`
+trailer naming an outside contributor with an email address. Cite it by **hash, subject and path
+only** -- the subject line itself is clean -- and never quote the trailer. The same constraint is
+recorded against a memcached hash in `memcached/plain-heap-repros/01_.../case.json`.
