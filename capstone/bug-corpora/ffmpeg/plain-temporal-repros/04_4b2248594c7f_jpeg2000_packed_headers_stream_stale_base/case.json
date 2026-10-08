@@ -1,0 +1,45 @@
+{
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured. CheriBSD's revocation sweeps capabilities to freed heap memory, so the stale pointer SHOULD be revoked and the probe fault -- but only if the sweep has run between the free and the access. The reduction frees and re-allocates immediately, which is the case least favourable to revocation, so a clean reading here is about sweep TIMING and not about the defect. That must be read in-guest before it is called either way.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    }
+  },
+  "case": 4,
+  "title": "a bytestream reader kept the old base of a buffer that had been reallocated",
+  "consumer": "libavcodec/jpeg2000dec.c, get_ppt",
+  "object": "tile->packed_headers, grown by av_realloc, with a GetByteContext holding the old base",
+  "lifetime_ender": "av_realloc(tile->packed_headers, ...), which frees the old block when it moves",
+  "shape": "a saved reader context holding a base pointer that realloc invalidated",
+  "allocator_layer": "the platform allocator itself: one direct av_malloc-family allocation, with no pool or refstruct layer. FFmpeg's av_malloc is malloc plus alignment.",
+  "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is `s->g = tile->packed_headers_stream`, then reads through that context.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "upstream_fix": "4b2248594c7f",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: n9.0.1:libavcodec/jpeg2000dec.c zeroes the context with `memset(&tile->packed_headers_stream, 0, sizeof(tile->packed_headers_stream));` after the realloc. That memset is absent at 4b2248594c7f^.",
+  "nested": false,
+  "nested_why": "the object came straight from av_malloc/av_mallocz/av_malloc_array/av_realloc -- which on the platform is malloc -- with no AVBufferPool, AVRefStructPool or other recycling layer between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested. Its sibling ../pool-repros holds the nested ones.",
+  "distinguishing": "what dangles is not a bare pointer but a whole READER CONTEXT -- a struct of pointers into the old block -- which is why the fix zeroes the struct rather than rebasing one field. A reader re-created from the new base would be correct; one carrying the old base passes its own bounds checks while reading freed storage, so the context's internal consistency is exactly what hides the defect."
+}

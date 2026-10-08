@@ -1,0 +1,53 @@
+{
+  "case": 2,
+  "upstream_fix": "391f2e4762bf",
+  "title": "a growable pointer array was reallocated with a BYTE count where an element count was needed",
+  "consumer": "memcached.c, do_suffix_add_to_freelist's grow path",
+  "object": "the suffix freelist, an array of char* from malloc, grown by realloc",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL row.",
+  "shape": "a realloc sized in bytes while the index bound it feeds is counted in elements",
+  "allocator_layer": "the platform allocator itself: one direct malloc/calloc/realloc, with neither slabs.c nor cache.c between it and the request.",
+  "fidelity": "model consumer, real arithmetic: the sizes and the crossing expression are upstream's, quoted in PROVENANCE.md.",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: `grep -c freesuffix` on 1.6.45:memcached.c is 0. The construct was REMOVED rather than fixed -- the suffix freelist no longer exists, suffixes are built inline into the response buffer -- so the pinned code cannot carry the defect. A fix-reversal against history.",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "spatial": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, not measured. The request is exactly a jemalloc size class, so the usable size equals the requested size and there is no slack to absorb the crossing -- confirmed by tools/size-class-audit.py, which reports `faults` for this case. The capability's bounds end where the allocation does and the probe SHOULD fault.",
+      "status": "predicted"
+    }
+  },
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "nested": false,
+  "nested_why": "the crossed buffer came straight from the platform allocator with no inner layer between -- this is not a slab chunk and not a cache.c object -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
+  "distinguishing": "the length is wrong by a FACTOR, not by one: the new capacity is `freesuffixtotal * 2` BYTES while `freesuffixtotal` is then set to that same number of ELEMENTS, so the array is sizeof(char*) times too small and the very next store is already far outside it."
+}

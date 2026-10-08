@@ -55,7 +55,7 @@
         "version": "n9.0.1",
         "port": "capstone/ports/ffmpeg/buffer-pool"
       },
-      "cases": 4,
+      "cases": 25,
       "case_schema": "case-json",
       "case_macro": "FFH",
       "required_arms": [
@@ -70,7 +70,7 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "false": 4
+        "false": 25
       },
       "runners": [
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/runners/run-native.sh",
@@ -86,6 +86,42 @@
       "shape_table": true,
       "note": "The third plain-heap corpus, after memcached's and wireshark's, and a sibling of subobject-repros and pool-repros rather than part of either: those boundaries are 'inside one allocation' and 'storage an AVBufferPool handed out', while every case here leaves a buffer FFmpeg obtained DIRECTLY from av_malloc_array or av_calloc. Under this inventory's axis (WHO ALLOCATED THE OBJECT) all four rows are NOT NESTED. ASan REPORTS all four, two-sided, unlike the sub-object corpora -- which is the contrast this corpus exists to draw. Case 2 is the only row in the whole inventory that crosses BELOW an allocation's base. All four are fix-reversals: liveness is recorded, never required, and requiring it is what kept FFmpeg's spatial count at four. WHY THE PLATFORM ALLOCATOR. These cases call the platform's calloc, not the buffer-pool port's av_malloc. That port's av_malloc (ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26) is a bump/freelist carve out of ONE arena returning a raw interior pointer, and it rounds every request up to 64 bytes; __builtin_capstone_cap_shrink appears only in src/capstone-domain/payload-capabilities.c:57, on pool PAYLOAD blocks. Routing these cases through it would leave no per-allocation bound to cross AND would absorb every small crossing in the round-up, so the reading would be about the arena, not the defect. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 3 of 4 CAUGHT with the fault attributed to the labelled probe, si_code 1; case 1 NOT caught, refuting its pre-registered prediction because its 24-byte request yields a 32-byte capability. This is the first CheriBSD reading of any FFmpeg corpus, and the first in the tree where attribution is established -- the probes are defined once externally rather than static per translation unit.",
       "where": "capstone/bug-corpora/ffmpeg/plain-heap-repros"
+    },
+    {
+      "program": "ffmpeg",
+      "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+      "title": "Lifetime defects on a direct ffmpeg allocation, with no suballocator between it and the platform",
+      "upstream": {
+        "version": "9.0.1"
+      },
+      "cases": 13,
+      "case_schema": "case-json",
+      "case_macro": "FFT",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential"
+      ],
+      "arm_keys": {},
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "false": 13
+      },
+      "runners": [
+        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/runners/run-native.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "evidence": [
+        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-08-native-thirteen-cases"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "where": "capstone/bug-corpora/ffmpeg/plain-temporal-repros"
     },
     {
       "program": "ffmpeg",
@@ -357,7 +393,7 @@
         "version": "1.6.45",
         "port": "capstone/ports/memcached/app"
       },
-      "cases": 2,
+      "cases": 9,
       "case_schema": "case-json",
       "case_macro": "MCH",
       "required_arms": [
@@ -372,7 +408,7 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "false": 2
+        "false": 9
       },
       "runners": [
         "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-native.sh",
@@ -389,6 +425,42 @@
       "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 29 of this tree's 35 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none. Case 1 (d5d9ff0) added 2026-10-07: item_cachedump's headroom guard reserves five bytes for \"END\\r\\n\" and the marker is written with a terminating NUL, so the NUL lands one byte past malloc(memlimit). Cited by HASH ONLY -- its subject names an outside contributor. It was the one class-A candidate in docs/ref/memcached-spatial-defect-triage.md that had never been dispositioned.",
       "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
       "where": "capstone/bug-corpora/memcached/plain-heap-repros"
+    },
+    {
+      "program": "memcached",
+      "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+      "title": "Lifetime defects on a direct memcached allocation, with no suballocator between it and the platform",
+      "upstream": {
+        "version": "1.6.45"
+      },
+      "cases": 3,
+      "case_schema": "case-json",
+      "case_macro": "MCT",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential"
+      ],
+      "arm_keys": {},
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "false": 3
+      },
+      "runners": [
+        "capstone/bug-corpora/memcached/plain-temporal-repros/runners/run-native.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "evidence": [
+        "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-08-native-three-cases"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "where": "capstone/bug-corpora/memcached/plain-temporal-repros"
     },
     {
       "program": "mruby",
@@ -709,7 +781,7 @@
         "version": "4.6.8",
         "port": "capstone/ports/wireshark/app"
       },
-      "cases": 2,
+      "cases": 12,
       "case_schema": "case-json",
       "case_macro": "WSH",
       "required_arms": [
@@ -725,8 +797,8 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "true": 1,
-        "false": 1
+        "false": 11,
+        "true": 1
       },
       "runners": [
         "capstone/bug-corpora/wireshark/plain-heap-repros/runners/run-native.sh",
@@ -748,6 +820,42 @@
         ]
       },
       "where": "capstone/bug-corpora/wireshark/plain-heap-repros"
+    },
+    {
+      "program": "wireshark",
+      "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+      "title": "Lifetime defects on a direct wireshark allocation, with no suballocator between it and the platform",
+      "upstream": {
+        "version": "4.6.8"
+      },
+      "cases": 10,
+      "case_schema": "case-json",
+      "case_macro": "WST",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential"
+      ],
+      "arm_keys": {},
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "false": 10
+      },
+      "runners": [
+        "capstone/bug-corpora/wireshark/plain-temporal-repros/runners/run-native.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "evidence": [
+        "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-08-native-ten-cases"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "where": "capstone/bug-corpora/wireshark/plain-temporal-repros"
     },
     {
       "program": "wireshark",
@@ -1611,14 +1719,16 @@
   ],
   "cases_by_corpus": {
     "capstone/bug-corpora/cpython/pymalloc-repros": 20,
-    "capstone/bug-corpora/ffmpeg/plain-heap-repros": 4,
+    "capstone/bug-corpora/ffmpeg/plain-heap-repros": 25,
+    "capstone/bug-corpora/ffmpeg/plain-temporal-repros": 13,
     "capstone/bug-corpora/ffmpeg/plane-repros": 1,
     "capstone/bug-corpora/ffmpeg/pool-repros": 4,
     "capstone/bug-corpora/ffmpeg/subobject-repros": 10,
     "capstone/bug-corpora/httpd/apr-pool-repros": 1,
     "capstone/bug-corpora/httpd/bucket-repros": 8,
     "capstone/bug-corpora/memcached/allocator-repros": 9,
-    "capstone/bug-corpora/memcached/plain-heap-repros": 2,
+    "capstone/bug-corpora/memcached/plain-heap-repros": 9,
+    "capstone/bug-corpora/memcached/plain-temporal-repros": 3,
     "capstone/bug-corpora/mruby/gc-slot-repros": 0,
     "capstone/bug-corpora/mruby/release-differential": 23,
     "capstone/bug-corpora/perl/release-differential": 11,
@@ -1627,18 +1737,19 @@
     "capstone/bug-corpora/postgres/sql-repros": 9,
     "capstone/bug-corpora/sqlite/capi-repros": 19,
     "capstone/bug-corpora/sqlite/engine-repros": 33,
-    "capstone/bug-corpora/wireshark/plain-heap-repros": 2,
+    "capstone/bug-corpora/wireshark/plain-heap-repros": 12,
+    "capstone/bug-corpora/wireshark/plain-temporal-repros": 10,
     "capstone/bug-corpora/wireshark/wmem-repros": 22,
     "xlang/lua-cdp": 13,
     "xlang/repro": 15,
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 188,
+  "cases_here": 252,
   "cases_xlang": 30,
-  "cases_total": 218,
+  "cases_total": 282,
   "live_true": 116,
-  "live_false": 44,
+  "live_false": 108,
   "live_not": 28,
   "advisories_total": 21,
   "renames": {
@@ -1702,8 +1813,10 @@
     ]
   },
   "gaps": [
+    "`capstone/bug-corpora/ffmpeg/plain-temporal-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.",
     "`capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.",
+    "`capstone/bug-corpora/memcached/plain-temporal-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
     "`capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.",
@@ -1714,6 +1827,7 @@
     "`capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.",
     "`capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.",
     "`capstone/bug-corpora/sqlite/engine-repros` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/wireshark/plain-temporal-repros` has no triage inventory under docs/ref/.",
     "`xlang/lua-cdp` does not record live_in_pin: Each row is pinned to the binding version its upstream report names, not to a release this project ports.",
     "`xlang/repro` does not record live_in_pin: Each row is pinned to its own vulnerable upstream commit, named in its target.md, rather than to a release this project ports.",
     "`xlang/reuse-not-free` does not record live_in_pin: These are documented API contracts rather than fixed defects, so there is no upstream fix against which a pin could be live.",
@@ -1723,7 +1837,10 @@
     "`capstone/ports/micropython` is a complete application with no corpus.",
     "`capstone/ports/postgres/app` is a complete application with no corpus.",
     "`capstone/ports/sqlite/app` is a complete application with no corpus.",
+    "`capstone/bug-corpora/ffmpeg/plain-temporal-repros` is not referenced by any port.json.",
+    "`capstone/bug-corpora/memcached/plain-temporal-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/postgres/c-repros` is not referenced by any port.json.",
-    "`capstone/bug-corpora/postgres/sql-repros` is not referenced by any port.json."
+    "`capstone/bug-corpora/postgres/sql-repros` is not referenced by any port.json.",
+    "`capstone/bug-corpora/wireshark/plain-temporal-repros` is not referenced by any port.json."
   ]
 }

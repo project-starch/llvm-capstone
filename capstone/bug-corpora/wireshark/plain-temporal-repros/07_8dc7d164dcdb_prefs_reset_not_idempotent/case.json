@@ -1,0 +1,45 @@
+{
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured. CheriBSD's revocation sweeps capabilities to freed heap memory, so the stale pointer SHOULD be revoked and the probe fault -- but only if the sweep has run between the free and the access. The reduction frees and re-allocates immediately, the case least favourable to revocation, so a clean reading here would be about sweep TIMING rather than about the defect. It must be read in-guest before it is called either way.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's stale pointer reads storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared, copied or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's stale pointer reads storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared, copied or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    }
+  },
+  "case": 7,
+  "title": "a reset freed a struct field without clearing it, so two resets freed it twice",
+  "consumer": "epan/prefs.c, prefs_reset",
+  "object": "the recorded preferences-file version, a g_strndup",
+  "lifetime_ender": "g_free(prefs.saved_at_version), which leaves the struct field set",
+  "shape": "a teardown that is not idempotent because it frees a field it never clears",
+  "allocator_layer": "the platform allocator itself: one direct g_malloc-family allocation, no wmem layer. GLib's g_malloc is malloc plus abort-on-failure.",
+  "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is the NEXT prefs_reset(), which frees the identical pointer.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "upstream_fix": "8dc7d164dcdb",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: v4.6.8:epan/prefs.c carries `prefs.saved_at_version = NULL;` after the free (`grep -c` = 1). The form without it is at 8dc7d164dcdb^ and is absent from the pin. A fix-reversal.",
+  "nested": false,
+  "nested_why": "the object came straight from g_malloc / g_new / g_new0 / g_strdup / getline -- which on the platform is malloc -- with no wmem allocator between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested. Its sibling ../wmem-repros holds the nested ones.",
+  "distinguishing": "the later access is the SAME function run again, so what is under test is IDEMPOTENCE -- and the trigger is changing preferences in the GUI, which performs exactly two resets without an intervening reload. This is the sibling of case 6 in the same file, kept separate because that one's state is a function-static and this one's is a struct field reachable from everywhere."
+}

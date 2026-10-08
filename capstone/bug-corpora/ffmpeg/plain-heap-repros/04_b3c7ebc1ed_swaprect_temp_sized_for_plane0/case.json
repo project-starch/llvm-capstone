@@ -1,0 +1,55 @@
+{
+  "case": 4,
+  "upstream_fix": "b3c7ebc1ed",
+  "title": "the scratch row buffer was sized for the luma plane and overrun by a chroma row",
+  "consumer": "libavfilter/vf_swaprect.c, filter_frame's per-plane row swap through s->temp",
+  "object": "s->temp, the scratch row buffer, one direct allocation",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL row.",
+  "shape": "a chroma row copy writes past a scratch buffer sized for the luma plane",
+  "allocator_layer": "the platform allocator itself: one direct av_malloc_array, no inner layer. Nothing sub-allocated the crossed region.",
+  "fidelity": "model consumer, real arithmetic. The sizes are NV12's real pixsteps {1, 2} and log2_chroma_w 1 at upstream's own reproducer width of 17, and the case asserts the one-byte difference rather than assuming it.",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: n9.0.1:libavfilter/vf_swaprect.c:214-223 carries the fix verbatim -- a per-plane loop computing AV_CEIL_RSHIFT(inlink->w, shift) * s->pixsteps[p] and s->temp = av_malloc(size) over their FFMAX. The pre-fix line, s->temp = av_malloc_array(inlink->w, s->pixsteps[0]), is at b3c7ebc1ed^:vf_swaprect.c:213 and is absent from the pin. A fix-reversal.",
+  "distinguishing": "the corpus's other plain-heap rows cross by a mis-shaped index or a short allocation for a single consumer; this one is a SIZING disagreement between two consumers of the same buffer -- plane 0 sizes it, plane 1 uses it -- so it only appears for a pixel format whose chroma row is wider than its luma row, and only at odd widths.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "signal": null,
+      "si_code": null,
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "ASan reports heap-buffer-overflow at the labelled write probe on the buggy arm and is silent on the fixed arm. Keyed on the string heap-buffer-overflow, never on AddressSanitizer, which LeakSanitizer's summary also contains.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's chroma row copy crosses and the case's damage flag is set; the fixed arm's buffer is sized by the widest plane and the same copy fits. The arms differ by the upstream fix, not by protection.",
+      "status": "measured"
+    }
+  },
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions: this corpus's CheriBSD bundle predates the case.",
+  "nested": false,
+  "nested_why": "the crossed buffer came straight from av_malloc_array with no inner allocator between it and the platform, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT nested."
+}

@@ -1,0 +1,35 @@
+{
+  "program": "wireshark",
+  "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+  "title": "Lifetime defects on a direct wireshark allocation, with no suballocator between it and the platform",
+  "upstream": {
+    "version": "4.6.8"
+  },
+  "cases": 10,
+  "case_schema": "case-json",
+  "case_macro": "WST",
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "poisoncap-spatial",
+    "poisoncap-protected",
+    "cheribsd-revocation",
+    "native-detect",
+    "native-fix-differential"
+  ],
+  "arm_keys": {},
+  "status": "measured",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "false": 10
+  },
+  "runners": [
+    "capstone/bug-corpora/wireshark/plain-temporal-repros/runners/run-native.sh"
+  ],
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "evidence": [
+    "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-08-native-ten-cases"
+  ],
+  "advisories": [],
+  "shape_table": true
+}

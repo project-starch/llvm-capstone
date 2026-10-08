@@ -1,0 +1,45 @@
+{
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured. CheriBSD's revocation sweeps capabilities to freed heap memory, so the stale pointer SHOULD be revoked and the probe fault -- but only if the sweep has run between the free and the access. The reduction frees and re-allocates immediately, which is the case least favourable to revocation, so a clean reading here is about sweep TIMING and not about the defect. That must be read in-guest before it is called either way.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    }
+  },
+  "case": 11,
+  "title": "a release helper that does not clear its argument left the field set for a second teardown",
+  "consumer": "libavcodec/ratecontrol.c, ff_rate_control_uninit",
+  "object": "the rate-control expression from av_expr_parse, owned by rcc->rc_eq_eval",
+  "lifetime_ender": "av_expr_free(rcc->rc_eq_eval), which releases the object and does not clear the field",
+  "shape": "a teardown that can run twice, releasing through a field it never clears",
+  "allocator_layer": "the platform allocator itself: one direct av_malloc-family allocation, with no pool or refstruct layer. FFmpeg's av_malloc is malloc plus alignment.",
+  "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is the SECOND run of this same uninit, reached via FF_CODEC_CAP_INIT_CLEANUP.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "upstream_fix": "ba28222a14ab",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: n9.0.1:libavcodec/ratecontrol.c clears the field with `rcc->rc_eq_eval = NULL;` after av_expr_free. That line is absent at ba28222a14ab^.",
+  "nested": false,
+  "nested_why": "the object came straight from av_malloc/av_mallocz/av_malloc_array/av_realloc -- which on the platform is malloc -- with no AVBufferPool, AVRefStructPool or other recycling layer between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested. Its sibling ../pool-repros holds the nested ones.",
+  "distinguishing": "the later access is the SAME function running a second time, not a different one -- the mpeg encoders set FF_CODEC_CAP_INIT_CLEANUP, so an init failure runs uninit and then ff_mpv_encode_end runs it again. That makes idempotence the property under test, which is why a one-line null assignment is the whole fix."
+}

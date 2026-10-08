@@ -218,3 +218,32 @@ domain result. `--negative-control` corrupts the input record so the program
 refuses it before any case runs; every arm must then FAIL, and the flag makes
 the exit status 0 only if every one did. `../../tools/check-corpus.py --self-test`
 enforces the contract and first proves it can reject four corruptions.
+
+## Vetted upstream candidates NOT built here (2026-10-08)
+
+Seven wmem defects were mined and vetted on 2026-10-08 but not reduced, because the batch that day
+went to the two cells that were EMPTY — `wireshark/plain-heap-repros` and the new
+`wireshark/plain-temporal-repros` — while this corpus already held 22 cases. They are recorded so
+the next pass does not re-mine them. Each was read at the fix's parent; the class and the crossing
+below are from that read, not from the commit message.
+
+| fix | path | kind | what crosses |
+|---|---|---|---|
+| `5441003874` | `epan/conversation.c` | spatial | `wmem_alloc(..., sizeof(conversation_element_t) * (DEINTD_ENDP_NO_PORTS_IDX+1))` is 3 elements, and the NO_PORTS arm writes index 3 as well — one 24-byte element past the chunk |
+| `d5f2657825e6` | `epan/to_str.c` | spatial | `wmem_alloc0(pool, 256+64)` sized for "256 bits and one space per four", while the loop is bounded by the caller's `no_of_bits` and emits 11 characters per 8 bits — unbounded, overflowing from about `no_of_bits = 234` |
+| `9de18e88f501` | `epan/addr_resolv.c` | allocator mismatch | `wmem_new(wmem_epan_scope(), ...)` released with `g_free` — the platform allocator handed an interior pointer into a wmem block |
+| `661743e4da6b` | `epan/addr_resolv.c` | allocator mismatch | `fgetline`'s `wmem_alloc`/`wmem_realloc` line buffer released with `g_free` |
+| `14f2a654d43c` | `epan/addr_resolv.c` | allocator mismatch | the same shape in the sibling reader; collapse with the row above if one row per MECHANISM is wanted rather than per instance |
+| `a2c8ff7cb6b0` | `epan/dissectors/packet-umts_rlc.c` | allocator mismatch | `tvb_memdup(wmem_file_scope(), ...)` released with `g_free` on both teardown paths |
+| `b1e0cb01b33d` | `epan/dissectors/packet-coap.c` | temporal | a PACKET-scope string stored in a FILE-scope struct, so the next `wmem_free_all` of the packet pool reclaims it while the struct still points at it |
+
+**Every one of these crossings leaves the wmem allocation and stays inside the platform one** —
+wmem's block allocator carves 16-byte-aligned chunks out of an 8 MiB `g_malloc`'d block
+(`WMEM_ALIGN_AMOUNT`, `WMEM_BLOCK_SIZE` in `wsutil/wmem/wmem_allocator_block.c`). That is the
+nested-allocator property this corpus exists to exercise, and it is why these belong here rather
+than in `../plain-heap-repros`.
+
+Two more were mined and REJECTED, with the reason worth keeping: `9ea014637ece` (`wiretap/pcapng.c`,
+a genuine heap write-overflow where `pcapng_compute_string_option_size` returns
+`strlen(...) & 0xffff` and the writer then copies the full string) needs two functions to explain,
+and `984e52244f08` (`epan/column-utils.c`) has its allocation in a different file from its crossing.

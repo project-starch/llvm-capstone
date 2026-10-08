@@ -21,6 +21,13 @@ is a field recorded in the case, not a gate on building one.
 |---|---|
 | a terminator written one byte past an allocation sized to the exact input length | 0 |
 | a terminator written past an allocation whose RESERVED HEADROOM is one byte short | 1 |
+| a realloc sized in bytes where the capacity is counted in elements | 2 |
+| an array of pointers sized by the object the pointers point at | 3 |
+| a buffer sized for its payload with an uncounted trailer appended | 4 |
+| a guard reserving two bytes before a copy that writes three | 5 |
+| a length computed as a pointer difference that underflows | 6 |
+| a counted string printed with a %s conversion | 7 |
+| a shuffle whose bound is decremented after the loop | 8 |
 
 **Both crossings are a terminating NUL, and they are not duplicates.** In case 0 the *size argument*
 is wrong — the buffer is `calloc(1, sb.st_size)` where the content needs `sb.st_size + 1`. In case 1
@@ -49,6 +56,13 @@ which is temporal), and one is `e8364b5`, whose buffer is `do_cache_alloc`'d and
 | case | upstream | the crossing |
 |---|---|---|
 | **0** | `ddee3e2` `authfile.c` | `fgets`'s terminating NUL at offset `sb.st_size` of a `calloc(1, sb.st_size)` — **one byte past the allocation**. The fix is `+ 1`; our pin carries `+ 2` |
+| **2** | `391f2e4762bf` `memcached.c` | `realloc(freesuffix, freesuffixtotal * 2)` sizes the array in BYTES while the capacity is set in POINTERS -- the next store is at byte 64 of a **16-byte** allocation, **48 bytes past** |
+| **3** | `16a809e2a062` `cache.c` | `calloc(initial_pool_size, bufsize)` sizes a `void**` freelist by the CACHED OBJECT's size -- with a 1-byte object, 64 promised slots get **64 bytes** and `ptr[63]` is **440 bytes past** |
+| **4** | `40aff8b0f113` `memcached.c` | `malloc(server_statlen + engine_statlen)` leaves `ptr` exactly at the end, then the six-byte `END\r\n\0` trailer is written there -- **6 bytes past** a **64-byte** allocation |
+| **5** | `49f3b0ca9b57` `memcached.c` | `memcpy(c->wbuf + len, "\r\n", 3)` plants the literal's NUL at index `wsize` when `len + 2 == wsize` -- **1 byte past** a **16-byte** allocation |
+| **6** | `212c3820c7bb` `proxy_lua.c` | `memchr(t1, conf[1], remain)` finds the OPENING tag, so `*newlen = t2 - t1 - 1` underflows to **SIZE_MAX** and the hasher reads unboundedly past a **16-byte** key |
+| **7** | `0f605245cf3f` `memcached.c` | `fprintf(stderr, "Deleting %s\n", key)` scans a key that has no terminator -- **past the end** of a **16-byte** allocation |
+| **8** | `fa51ad8452d5` `slabs.c` | `slab_list[x+1]` with `x < slabs` and `slabs == list_size` reads index `list_size` -- **one element (8 bytes) past** a **16-byte** array |
 
 ## Measured, 2026-10-06
 

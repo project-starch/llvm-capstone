@@ -6,7 +6,7 @@
     "version": "n9.0.1",
     "port": "capstone/ports/ffmpeg/buffer-pool"
   },
-  "cases": 4,
+  "cases": 25,
   "case_schema": "case-json",
   "case_macro": "FFH",
   "required_arms": [
@@ -21,7 +21,7 @@
   "status": "measured",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
-    "false": 4
+    "false": 25
   },
   "runners": [
     "capstone/bug-corpora/ffmpeg/plain-heap-repros/runners/run-native.sh",

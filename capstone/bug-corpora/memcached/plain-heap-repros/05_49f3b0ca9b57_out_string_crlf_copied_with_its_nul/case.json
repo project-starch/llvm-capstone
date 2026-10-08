@@ -1,0 +1,53 @@
+{
+  "case": 5,
+  "upstream_fix": "49f3b0ca9b57",
+  "title": "a CRLF was copied with length 3 into a buffer whose guard only promised room for 2",
+  "consumer": "memcached.c, out_string",
+  "object": "the connection write buffer, one direct malloc of wsize bytes",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL row.",
+  "shape": "a guard that reserves N bytes while the copy that follows writes N+1",
+  "allocator_layer": "the platform allocator itself: one direct malloc/calloc/realloc, with neither slabs.c nor cache.c between it and the request.",
+  "fidelity": "model consumer, real arithmetic: the sizes and the crossing expression are upstream's, quoted in PROVENANCE.md.",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: 1.6.45:memcached.c carries `memcpy(resp->wbuf + len, \"\\r\\n\", 2);` (`grep -c` = 1). The length-3 form is at 49f3b0ca9b57^ and is absent from the pin. A fix-reversal.",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "spatial": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, not measured. The request is exactly a jemalloc size class, so the usable size equals the requested size and there is no slack to absorb the crossing -- confirmed by tools/size-class-audit.py, which reports `faults` for this case. The capability's bounds end where the allocation does and the probe SHOULD fault.",
+      "status": "predicted"
+    }
+  },
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "nested": false,
+  "nested_why": "the crossed buffer came straight from the platform allocator with no inner layer between -- this is not a slab chunk and not a cache.c object -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
+  "distinguishing": "the guard and the copy disagree by exactly the string's NUL: `len + 2 > wsize` reserves room for the CR and the LF, and `memcpy(..., \"\\r\\n\", 3)` writes a third byte. So the crossing happens only at the exact boundary len + 2 == wsize, which is why it survived -- and it is one of TWO instances the same earlier commit planted."
+}

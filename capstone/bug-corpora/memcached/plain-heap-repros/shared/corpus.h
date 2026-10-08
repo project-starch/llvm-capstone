@@ -68,4 +68,15 @@ _Noreturn void mch_fail(unsigned code);
 void mch_write_probe(volatile unsigned char *p, unsigned char v);
 #define write_probe mch_write_probe
 
+/* The read crossing, on the same terms. Added 2026-10-08: this corpus began with
+ * write-only defects, but three of memcached's reducible plain-heap defects are
+ * over-READS -- a "%s" conversion handed a key that is not NUL-terminated, a
+ * memchr whose remaining length underflows, and a backwards list shuffle that
+ * reads one element past. The sibling ffmpeg/plain-heap-repros has carried both
+ * probes from the start. Cases built before this do not reference it, so their
+ * native readings must be unchanged by its addition; that was verified by
+ * re-running runners/run-native.sh over cases 00 and 01. */
+unsigned mch_read_probe(const volatile unsigned char *p);
+#define read_probe mch_read_probe
+
 #endif

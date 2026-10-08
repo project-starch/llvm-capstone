@@ -1,0 +1,55 @@
+{
+  "case": 17,
+  "upstream_fix": "18761f9fb55c",
+  "title": "the output cursor was advanced for an OBU that was skipped instead of the input cursor",
+  "consumer": "libavformat/rtpdec_av1.c, the OBU reassembly loop",
+  "object": "pkt->data, one av_new_packet allocation",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL row.",
+  "shape": "a skip that advances the wrong cursor, so the destination offset outruns the buffer",
+  "allocator_layer": "the platform allocator itself: one direct av_malloc-family allocation, no inner layer. FFmpeg's av_malloc is malloc plus alignment.",
+  "fidelity": "model consumer, real arithmetic: the sizes and the crossing expression are upstream's, quoted in PROVENANCE.md.",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: n9.0.1:libavformat/rtpdec_av1.c advances `buf_ptr += obu_size;` on the skip path. The form advancing `pktpos` is at 18761f9fb55c^ and is absent from the pin.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "signal": 34,
+      "si_code": 1,
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, not measured. The request is exactly a jemalloc size class, so the usable size equals the requested size and there is no slack to absorb the crossing -- confirmed by tools/size-class-audit.py, which reports `faults` for this case. The capability's bounds end where the allocation does and the probe SHOULD fault.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    }
+  },
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "nested": false,
+  "nested_why": "the crossed buffer came straight from av_malloc / av_mallocz / av_calloc / av_malloc_array -- which on the platform is malloc -- with no AVBufferPool or AVRefStructPool between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
+  "distinguishing": "the two cursors are the only difference: no byte is written for the skipped OBU, yet the DESTINATION offset jumps by its size, so the buffer is overrun by exactly the amount that was never written into it. A variable-name confusion, which is why the fix changes one identifier and nothing else."
+}

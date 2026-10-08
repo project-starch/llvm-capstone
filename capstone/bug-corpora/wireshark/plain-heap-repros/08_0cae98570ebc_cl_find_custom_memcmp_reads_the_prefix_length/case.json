@@ -1,0 +1,58 @@
+{
+  "case": 8,
+  "upstream_fix": "0cae98570ebc",
+  "title": "a comparison read the search prefix's length from both operands, including the shorter one",
+  "consumer": "ui/commandline.c, cl_find_custom",
+  "object": "a stored -o option string, one g_strdup",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL row.",
+  "shape": "a fixed-length comparison applied to operands of different lengths",
+  "allocator_layer": "the platform allocator itself: one direct g_malloc-family allocation, no wmem layer. GLib's g_malloc is malloc plus abort-on-failure.",
+  "fidelity": "model consumer, real arithmetic: the sizes and the crossing expression are upstream's, quoted in PROVENANCE.md.",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: v4.6.8:ui/commandline.c compares with `strncmp(opt_and_val, prefix, strlen(prefix))` (`grep -c` = 1). The memcmp form is at 0cae98570ebc^ and is absent from the pin. A fix-reversal.",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "spatial": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "sublet-chunks": {
+      "cause": 5,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, not measured. The request is exactly a jemalloc size class, so the usable size equals the requested size and there is no slack to absorb the crossing -- confirmed by tools/size-class-audit.py, which reports `faults` for this case. The capability's bounds end where the allocation does and the probe SHOULD fault.",
+      "status": "predicted"
+    }
+  },
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "nested": false,
+  "nested_why": "the crossed buffer came straight from the platform allocator with no inner layer between -- wiretap, wsutil and ui do not use wmem, and epan/uat.c and epan/charsets.c take the crossed buffer from g_malloc or from the caller -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
+  "distinguishing": "`memcmp` is SPECIFIED to read n bytes from both operands regardless of content, so the defect exists even where a byte-wise implementation would stop early at the in-bounds terminator -- which is exactly why the fix switches to `strncmp`, whose contract stops at a terminator. A detector keyed on what the implementation happens to touch and one keyed on the contract disagree here, and ASan's interceptor follows the contract."
+}
