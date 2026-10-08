@@ -160,18 +160,34 @@ def audit(corpus, so, tmp, rows, unresolved):
             note = f" (ambiguous: {cand}, took smallest)"
         size = cand[0]
         esz = size // cap
-        if extent is None:
-            # Some drivers print no `extent` (it is the UNREDUCED span, which not every corpus
-            # records). The REDUCED crossing is still derivable: `touched` is the index the
-            # consumer reached, so it ran (touched - cap + 1) elements past the end.
-            if touched < cap:
-                unresolved.append((corpus, d.name,
-                                   f"no extent= and touched={touched} < cap={cap}: "
-                                   f"this arm did not cross, so there is nothing to absorb"))
-                continue
-            extent = touched - cap + 1
-            note += " (crossing derived from touched-cap+1; driver prints no extent)"
-        cross = abs(extent) * esz
+        # THE CROSSING IS WHERE THE PROBE LANDS, NOT THE UNREDUCED EXTENT. `extent` records how
+        # far the defect would run in real code; the reduction usually touches only the FIRST
+        # element past, because writing the whole overrun smashes the next chunk header. Sizing
+        # the crossing from `extent` therefore over-states it, and a row whose probe lands inside
+        # the size-class slack gets called `faults` when it cannot fault at all.
+        #
+        # That is not a theory: it was MEASURED. On 2026-10-08 this function used `extent` and
+        # predicted CATCH for ffmpeg/plain-heap-repros/05, whose extent is 64 bytes past a
+        # 24-byte request -- but the probe lands at offset 27, inside the 32-byte usable size,
+        # and the in-guest run returned a COMPLETION. The reading refuted the tool.
+        if touched < 0:
+            # BELOW the base. This crosses and can NEVER be absorbed: size-class rounding adds
+            # slack AFTER the allocation, never before it, so there is nothing in front of the
+            # base for the access to hide in. Both such cases measured CAUGHT in-guest.
+            rows.append((corpus.parent.name, d.name, size, esz, abs(touched) * esz,
+                         jemalloc_usable(size), 0, False,
+                         note + " (crossing is BELOW the base: no slack exists before it)"))
+            continue
+        if touched < cap:
+            unresolved.append((corpus, d.name,
+                               f"touched={touched} < cap={cap} and not below the base: this arm "
+                               f"did not cross, so there is nothing to absorb"))
+            continue
+        probe_past = touched - cap + 1          # elements past the end that the PROBE touches
+        cross = probe_past * esz
+        if extent is not None and abs(extent) != probe_past:
+            note += (f" (probe lands {probe_past} element(s) past; the unreduced extent is "
+                     f"{abs(extent)}, which is NOT what the capability check sees)")
         usable = jemalloc_usable(size)
         slack = usable - size
         absorbed = touched >= 0 and cross <= slack   # a below-base crossing is never absorbed

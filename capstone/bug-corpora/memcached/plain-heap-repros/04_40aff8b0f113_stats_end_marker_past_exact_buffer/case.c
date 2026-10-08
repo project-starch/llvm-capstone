@@ -21,7 +21,7 @@ MCH_CASE(4) {
    * and the fix widens the allocation, by SIX and not five because the sprintf
    * inside append_ascii_stats also plants a NUL:
    *
-   *     /* 6 is: strlen("END\r\n") + strlen("\0") *\/
+   *     // 6 is: strlen("END\r\n") + strlen("\0")
    *     buf = calloc(1, server_statlen + engine_statlen + 6);
    *
    * After both copies `ptr` sits exactly at the end of the allocation, so every

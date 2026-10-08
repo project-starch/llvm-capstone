@@ -33,7 +33,8 @@
   "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
   "evidence": [
     "capstone/bug-corpora/wireshark/plain-heap-repros/results/20261006-native-plain-heap",
-    "capstone/bug-corpora/wireshark/plain-heap-repros/results/20261007-cheribsd"
+    "capstone/bug-corpora/wireshark/plain-heap-repros/results/20261007-cheribsd",
+    "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-08-cheribsd"
   ],
   "advisories": [],
   "shape_table": true,

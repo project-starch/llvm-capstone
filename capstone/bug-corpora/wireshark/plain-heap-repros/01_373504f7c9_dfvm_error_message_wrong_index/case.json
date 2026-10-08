@@ -42,10 +42,11 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "oracle": "MEASURED 2026-10-07, results/20261007-cheribsd/: **CAUGHT**, confirming this arm's prediction AND the size-class condition it stated. signal=34 (SIGPROT), si_code=1 (BOUNDS), fault at 0x102416, with supervise resolving `expect wsh_read_probe 0x102406` from the ELF independently -- the fault lies INSIDE the probe's extent, the offset being the -O0 frame setup, so the range is the criterion rather than equality with the symbol address. fv2->pdata is malloc(16), 16 is a size class with zero slack, and the read at index 3 is byte offset 24, so the crossing leaves the USABLE allocation. 6 of 6 arms, runner exit 0, both platform controls firing in the same boot.",
+      "oracle": "MEASURED 2026-10-07, results/20261007-cheribsd/: **CAUGHT**, confirming this arm's prediction AND the size-class condition it stated. signal=34 (SIGPROT), si_code=1 (BOUNDS), fault at 0x102416, with supervise resolving `expect wsh_read_probe 0x102406` from the ELF independently -- the fault lies INSIDE the probe's extent, the offset being the -O0 frame setup, so the range is the criterion rather than equality with the symbol address. fv2->pdata is malloc(16), 16 is a size class with zero slack, and the read at index 3 is byte offset 24, so the crossing leaves the USABLE allocation. 6 of 6 arms, runner exit 0, both platform controls firing in the same boot.\n\nRE-MEASURED 2026-10-08 in the same vehicle: MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **CAUGHT.** signal=34, si_code=1 (the BOUNDS code), fault at 0x10243e, with supervise resolving `expect wsh_read_probe 0x10242e` from the ELF independently of the run -- the fault lies inside the probe's extent, the offset being the -O0 frame setup, and the RANGE is the attribution criterion rather than equality with the symbol address. The crossing leaves the allocator's USABLE size, which is what malloc bounds the capability to, so there is no size-class slack for it to hide in. tools/size-class-audit.py predicted this reading from the measured request size alone, and the two agree.",
       "status": "measured",
       "signal": 34,
-      "si_code": 1
+      "si_code": 1,
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot."
     },
     "native-detect": {
       "oracle": "MEASURED two-sided 2026-10-07: ASan REPORTS heap-buffer-overflow on the buggy arm and is SILENT on the fixed arm, which exits 0. The crossing leaves the malloc bound, so a redzone sits where the read lands.",
