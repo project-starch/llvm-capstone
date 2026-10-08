@@ -56,10 +56,19 @@ _Noreturn void ffp_fail(unsigned code);
 
 /* The crossing, labelled so a sanitiser's report -- if one ever fires -- can be
  * required to land HERE. It is not expected to: the read stays inside the
- * allocation, which is the whole point of the row. */
-__attribute__((noinline, used)) static unsigned
-read_probe(const volatile unsigned char *p) {
-  return *p;
-}
+ * allocation, which is the whole point of the row.
+ *
+ * DEFINED ONCE IN driver.c, NOT static here, and that is load-bearing rather
+ * than style. `supervise` (the CheriBSD observer) resolves the probe by NAME
+ * from the ELF symbol table, so that a fault can be REQUIRED to land inside it
+ * instead of merely somewhere in the program. A `static` definition has
+ * internal linkage: `used` keeps the compiler from discarding it, but the name
+ * never reaches the symbol table, so every arm would come back UNRESOLVED --
+ * a whole platform run spent on an instrument that cannot report. The sibling
+ * corpora already do it this way (plain-heap-repros/shared/driver.c defines
+ * ffh_read_probe); this corpus was header-static only because it had no
+ * platform runner yet. */
+unsigned ffp_read_probe(const volatile unsigned char *p);
+#define read_probe ffp_read_probe
 
 #endif

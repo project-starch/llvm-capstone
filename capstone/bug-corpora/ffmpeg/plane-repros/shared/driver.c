@@ -9,6 +9,14 @@ _Noreturn void ffp_fail(unsigned code) {
   exit(75); /* an infrastructure failure is never a verdict */
 }
 
+/* The labelled crossing. External on purpose -- see the comment in corpus.h:
+ * `supervise` resolves this by name from the symbol table so a fault can be
+ * required to land INSIDE it, and a static definition would never appear there. */
+__attribute__((noinline, used)) unsigned
+ffp_read_probe(const volatile unsigned char *p) {
+  return *p;
+}
+
 int main(int argc, char **argv) {
   int fixed = argc > 1 && !strcmp(argv[1], "fixed");
   if (argc > 2 && atoi(argv[2]) != ffp_case_number) {
