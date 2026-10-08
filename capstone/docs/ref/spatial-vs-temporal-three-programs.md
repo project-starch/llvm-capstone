@@ -19,9 +19,34 @@ anything is broken. A grep for the word finds arms, not defects.
 
 | | nested allocator | plain / system allocator | total |
 |---|---:|---:|---:|
-| **spatial**, built and measured | **14** | **18** | **32** |
-| **spatial**, triaged upstream defects (§1a) | **19** (15 class B + 4 class C) | **29** class-A *candidates*, **0** verified — see §1b | **48** |
-| **temporal**, built and measured | 22 | 5 | **27** |
+| **spatial**, built and measured | **14** | **56** | **70** |
+| **temporal**, built and measured | **22** | **26** | **48** |
+| **total** | **36** | **82** | **118** |
+
+Per program, recomputed from each case's `nested` boolean and its `lifetime_ender`:
+
+| program | spatial / nested | spatial / plain | temporal / nested | temporal / plain | total |
+|---|---:|---:|---:|---:|---:|
+| FFmpeg | 1 | 35 | 4 | 13 | **53** |
+| tshark | 9 | 12 | 13 | 10 | **44** |
+| memcached | 4 | 9 | 5 | 3 | **21** |
+
+> **UPDATED 2026-10-08.** The table above read `14 | 18 | 32` spatial and `22 | 5 | 27` temporal
+> yesterday, with **temporal / plain = 0 for all three programs**. That zero was a property of
+> which CORPORA existed, not of the upstream software: every temporal corpus in this tree sat on a
+> nested allocator — FFmpeg's AVBufferPool and AVRefStructPool, Wireshark's wmem, memcached's
+> slabs.c and cache.c — because that is what the temporal hunts were aimed at. All three programs
+> also free direct allocations and use them afterwards, and there was nowhere to record one.
+>
+> Three `plain-temporal-repros` corpora were created and filled (FFmpeg 13, tshark 10, memcached 3),
+> and the plain spatial row grew by 38. The whole-tree total went 54 -> 118 for these three
+> programs on 2026-10-08.
+>
+> The counts are now COMPUTABLE rather than asserted: 22 temporal cases carried no `nested`
+> boolean at all — the field postdates them — and were backfilled from each case's own
+> `allocator_layer`, so no case is left in an "unclassified" bucket. A script that put 11 of 25
+> spatial cases into such a bucket on 2026-10-06 reported a nesting share wrong by 16 points, which
+> is why the boolean exists.
 
 > **UPDATED 2026-10-07.** The spatial row read *"8 | 3 | 11"* until today. It is now **14 | 18 | 32**:
 > FFmpeg went 4 -> 15 (2026-10-06), tshark 6 -> 11 and memcached 4 -> 6 (2026-10-07). The
