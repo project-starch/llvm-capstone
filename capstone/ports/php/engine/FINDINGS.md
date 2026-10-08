@@ -711,6 +711,59 @@ assignment entirely; the object whose string was freed is never string-copied. N
 the dangling pointer, which is why nothing faults -- and with `ZEND_CAP_NO_CACHE` proving the block
 is never recycled, the pointer really is dangling the whole time. It is simply stored and not read.
 
+### CONFIRMED, by running the SAME probes on a native build
+
+The comparison above rested on inferring the host's behaviour from an ASAN backtrace. That
+inference was wrong, and building the reference is what showed it.
+
+`diag/patch-zend-execute.py --host` emits the same instrumentation for a native build: it defines
+the counters itself and prints each probe as it fires, because this trigger segfaults and anything
+deferred to exit would never run. Built pristine -- no detector patches, cache ON, `REAL_SIZE`
+intact -- which is the configuration this port mirrors. It reproduces the corpus row: `rc=139`,
+`SIGNAL:11`, matching the corpus's own pristine binary.
+
+**The probe vectors are IDENTICAL.** Probes 1, 7 and 8 fire once each; 2, 6 and 9 never. The
+addresses differ in the same way on both: the zval and string at `:519` are not the ones at `:654`.
+And the ORDER settles what the counts could not -- on the host, probe 8 fires BEFORE probes 1 and 7.
+It belongs to an earlier assignment, not to the use-after-free.
+
+**So the `:654` read ASAN reports does not happen on pristine at all.** The ASAN build has the cache
+disabled and `REAL_SIZE` neutered; it is a different program, and its backtrace describes its own
+control flow. I had been chasing a code path from a trace that does not apply to the configuration
+this port actually mirrors.
+
+### Where pristine really dies, and why the port does not
+
+Under gdb, the pristine build prints `string(1) "<garbage>"` -- the freed buffer, read and rendered
+without crashing -- and then dies here:
+
+    Program received signal SIGSEGV
+    #0  shutdown_memory_manager (silent=0, full_shutdown=0) at Zend/zend_alloc.c:490
+    490        REMOVE_POINTER_FROM_LIST(ptr);
+    #1  php_request_shutdown (dummy=0x0) at main/main.c:1223
+    #2  main (argc=3, argv=...) at sapi/cli/php_cli.c:1046
+
+**The fatal use is PHP's own memory manager walking its allocation list at request shutdown**, over
+a block header the use-after-free corrupted. Not the engine, and not the `:654` copy.
+
+That is why the port does not reproduce it: **`shutdown_memory_manager` does not exist here.** In
+`seam` mode `zend_alloc.c` is dropped, `start_memory_manager` is a no-op stub, and the domain runs
+no request-shutdown path at all -- `grep shutdown rung_E_domain.c` returns nothing. The dangling
+pointer is created identically, by the identical branch; the code that would dereference it fatally
+is simply absent from the image.
+
+**The confirmed cause of the difference: the defect's manifestation site on stock PHP is a code path
+this port does not contain.** Not recycling, not `eval`, not `var_dump`, not temp layout, not the
+executor at all.
+
+### What this says about the method, which is the part worth keeping
+
+A corpus trace is tied to the BUILD that produced it. The ASAN trace named `zend_execute.c:654`, and
+four hypotheses were built on the assumption that the same line mattered on an unpatched build. It
+does not. **When a port mirrors configuration A and the ground-truth trace comes from configuration
+B, the trace is a hypothesis about A, not evidence about it.** The corpus ships
+`results-pristine-default.json` precisely so this is checkable, and the check costs one native build.
+
 ### What remains unknown, after four refuted hypotheses
 
 Which arm the outer `$x = (...)` assignment actually takes. Probes 6, 8 and 9 exclude three of the
