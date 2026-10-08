@@ -1,0 +1,45 @@
+{
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured. CheriBSD's revocation sweeps capabilities to freed heap memory, so the stale pointer SHOULD be revoked and the probe fault -- but only if the sweep has run between the free and the access. The reduction frees and re-allocates immediately, the case least favourable to revocation, so a clean reading here would be about sweep TIMING rather than about the defect. It must be read in-guest before it is called either way.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's stale pointer reads storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared, copied or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's stale pointer reads storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared, copied or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    }
+  },
+  "case": 0,
+  "title": "a teardown helper frees the struct it is handed, and the caller freed it again",
+  "consumer": "wiretap/k12.c, k12_open's error paths",
+  "object": "the k12_t file-state struct, one g_malloc from new_k12_file_data()",
+  "lifetime_ender": "destroy_k12_file_data(file_data), whose last statement is g_free(fd)",
+  "shape": "a callee that frees its argument, followed by the caller freeing it again",
+  "allocator_layer": "the platform allocator itself: one direct g_malloc-family allocation, no wmem layer. GLib's g_malloc is malloc plus abort-on-failure.",
+  "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is the caller's own `g_free(file_data);` on the next line.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "upstream_fix": "f3c2e6087e7b",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: `grep -c 'g_free(file_data);'` on v4.6.8:wiretap/k12.c is 0, while `destroy_k12_file_data(file_data);` appears 14 times. The fix is a REMOVAL, so zero occurrences of the removed line is the fix being present. A fix-reversal.",
+  "nested": false,
+  "nested_why": "the object came straight from g_malloc / g_new / g_new0 / g_strdup / getline -- which on the platform is malloc -- with no wmem allocator between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested. Its sibling ../wmem-repros holds the nested ones.",
+  "distinguishing": "the free is INVISIBLE at the call site: `destroy_k12_file_data` reads as 'destroy the contents', and only its last line frees the struct itself. That is why the fix deletes the caller's free rather than adding a null assignment, and why the same mistake appears at four separate error paths in one function."
+}

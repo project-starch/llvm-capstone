@@ -5,7 +5,7 @@
   "upstream": {
     "version": "4.6.8"
   },
-  "cases": 0,
+  "cases": 10,
   "case_schema": "case-json",
   "case_macro": "WST",
   "required_arms": [
@@ -18,14 +18,18 @@
     "native-fix-differential"
   ],
   "arm_keys": {},
-  "status": "planned",
+  "status": "measured",
   "live_in_pin_recorded": true,
-  "expect_live_in_pin": {},
+  "expect_live_in_pin": {
+    "false": 10
+  },
   "runners": [
     "capstone/bug-corpora/wireshark/plain-temporal-repros/runners/run-native.sh"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
-  "evidence": [],
+  "evidence": [
+    "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-08-native-ten-cases"
+  ],
   "advisories": [],
   "shape_table": true
 }

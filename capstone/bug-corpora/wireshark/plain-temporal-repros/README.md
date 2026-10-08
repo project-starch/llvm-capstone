@@ -37,6 +37,16 @@ the rest of this tree already follows.
 
 | shape | cases |
 |---|---|
+| a callee that frees its argument, then the caller freeing it again | 0 |
+| a cleanup helper that frees its argument, then the caller again | 1 |
+| a container freed before the teardown of what it owns | 2 |
+| an alias named copy, so freeing it destroys the original | 3 |
+| one allocation stored into several owners that each free it | 4 |
+| a nested loop reusing the outer loop's index | 5 |
+| a function-static freed but left set across calls | 6 |
+| a teardown that is not idempotent | 7 |
+| a release performed by both a function and its delegate | 8 |
+| a free-then-reassign contract one return path does not honour | 9 |
 
 Each row's `case.json` carries the upstream fix, the exact lifetime ender, the access that follows
 it, and a `nested: false` with the reason — the field the inventory's cell counts are computed from.
