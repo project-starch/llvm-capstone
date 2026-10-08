@@ -1,4 +1,18 @@
 2026-10-07 — **Review the growing node tables on `review/virtual-node-growth`.**
+
+## Local virtual mallocng review
+
+Use `virtual-musl-local` for the local allocator architecture, based on
+`review/virtual-node-growth`. Merge node growth before the exact-bounds QEMU
+PR #19, then the matching runtime. Keep QEMU and SDK/application ABI v5
+in sync; ordinary malloc/free run in Capstone. Review the representation and
+lifetime hooks against upstream policy, the VM remap transaction, and the
+[qualification](../../runtime/virtual/results/local-mallocng/README.md).
+
+Further work remains separate: metadata-cost tuning, full benchmark timing,
+CPython inner and FFmpeg/tshark corpus requalification, and a hardware storage
+contract for exact bounds. The extra-shadow profile is a QEMU prototype.
+
 The original virtual stack is merged into `dev`. Merge
 [QEMU #17](https://github.com/project-starch/capstone-qemu/pull/17) into
 `virtual-capstone` and [build repairs #194](https://github.com/project-starch/llvm-capstone/pull/194)

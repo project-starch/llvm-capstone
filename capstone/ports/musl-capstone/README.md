@@ -8,6 +8,15 @@ stubs, and the next workload would need its own.
 
 ## Status
 
+The `virtual-musl-local` profile compiles mallocng in the Capstone application.
+Its metadata representation patch preserves UNIT=16, IB=4 and upstream
+allocation decisions. Ordinary allocation does not call the native launcher.
+The virtual compile survey requires all 1,361 C files; the physical profile
+keeps its existing allocator selection. See the
+[allocator contract](../../runtime/virtual/mallocng.md), including QEMU's
+explicit exact-bounds requirement and the metadata cost.
+
+
 **A domain runs musl**, as a delegated application (ABI v2, the only application runtime:
 [applications.md](../../runtime/applications.md)). The delegated libc-test runner runs musl's
 functional suite in one guest boot and currently records **56 PASS, 3 FAIL, 1 FAULT, 5 NOBUILD,
@@ -137,7 +146,7 @@ needed the replacement work the old table planned.
 
 | files | where | cause | what to do |
 |---:|---|---|---|
-| 6 | `src/malloc/mallocng` | `sizeof(void*)` static assert; a 16-byte pointer makes the assert expression zero, so its negative-size array reports `array is too large (2^64-1 elements)` | Nothing. Every port here brings its own system allocator, so no domain links musl's allocator. `src/malloc/mallocng/malloc.c` is now the survey's MUST_FAIL control for exactly that reason: it fails structurally and it blocks no milestone. |
+| 6 | `src/malloc/mallocng` | `sizeof(void*)` static assert; a 16-byte pointer makes the assert expression zero, so its negative-size array reports `array is too large (2^64-1 elements)` | Physical builds retain their external allocator and MUST_FAIL control. The virtual profile uses patch 0009, requires all six files to compile, and links local mallocng. |
 
 So the compile side of this port is finished for practical purposes. **What remained was
 the transport**, which a compile count never measured: at the time `runtime/hostcall.c`

@@ -37,8 +37,6 @@ set(CAPSTONE_APPLICATION_EXCHANGE_BYTES 262144 CACHE STRING "Exchange region for
 # come from (a musl thread's area is 1280 bytes; its stack and TLS are heap).
 set(CAPSTONE_APPLICATION_CONTEXTS 15 CACHE STRING "Threads at once besides the first (0 to 15)")
 set(CAPSTONE_APPLICATION_CONTEXT_BYTES 65536 CACHE STRING "Context arena for thread areas")
-set(CAPSTONE_APPLICATION_VIRTUAL_BLOCKS 65536 CACHE STRING "Virtual allocator block metadata entries")
-set(CAPSTONE_APPLICATION_VIRTUAL_ARENAS 256 CACHE STRING "Virtual allocator arena metadata entries")
 option(CAPSTONE_APPLICATION_SDK "Build a reusable compiler SDK instead of an application" OFF)
 if(NOT CAPSTONE_APPLICATION_INPUTS AND NOT CAPSTONE_APPLICATION_SDK)
   message(FATAL_ERROR "Set CAPSTONE_APPLICATION_INPUTS to sources, objects or archives")

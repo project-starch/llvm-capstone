@@ -3,8 +3,8 @@
 [Guide](README.md) · Previous: [Runtime](runtime.md) · Next: [Development](development.md)
 
 This chapter describes the experimental interface introduced at
-[QEMU revision 9bf9c1f28653][qemu], plus the paged node-store and collection-list
-extensions on `review/virtual-node-growth`. The superproject QEMU pin selects their
+[QEMU revision 9bf9c1f28653][qemu], plus the paged node-store, collection-list and opt-in exact-bounds
+extensions. The superproject QEMU pin selects their
 implementation; the older source links describe the original interface.
 Numeric allocations and the context-storage
 ABI are not frozen. It supplements the [academic-spec amendment][spec-patch];
@@ -48,7 +48,7 @@ The current `CSRETIRE` helper ignores rs2.
 |---|---|---|
 | `srevroot` | `0x5c1` | S/M read/write physical lifetime-table base, rounded down to 4 KiB |
 | `urevavail` | `0xcc0` | Read-only available IDs; zero for an invalid/missing table |
-| `scapctl` | `0x5c0` | S/M read/write; bit 0 controls the separate protected-U experiment |
+| `scapctl` | `0x5c0` | S/M; bit 0 controls the separate protected-U experiment; read-only bit 8 advertises exact shadow bounds |
 
 `scapctl` is not how the launcher enters virtual C. `CSRUNV` binds both roots
 when admitting a context, then restores them from saved state on resume.
@@ -65,7 +65,12 @@ must be a writable, 16-byte-aligned ordinary-RAM slot. Descriptor words and
 the destination are translated with the trusted caller's permissions.
 
 It requires `base < end`, permissions at most 7, two available IDs, and an
-exact compress/decompress round trip of the initial bounds and cursor.
+exact compress/decompress round trip of the initial bounds and cursor in the
+default profile. With `x-capstone-exact-bounds=true`, the existing physical
+shadow bounds are authoritative, and the round-trip restriction is lifted.
+Context restoration also loads those shadow bounds. This opt-in QEMU profile
+supports mallocng object geometry without allocator-specific instructions;
+it requires more metadata than a tag bit and is not an RTL encoding.
 All checks precede table and slot mutation. Success creates a private senior
 ancestor and a linear child. The scalar ancestor lets the adapter later
 retire every application derivation under that arena without keeping a REV

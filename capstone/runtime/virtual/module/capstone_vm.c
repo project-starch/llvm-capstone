@@ -9,6 +9,7 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/wait.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
@@ -45,6 +46,12 @@ struct context {
     struct arena arenas[CV_MAX_ARENAS];
     struct cv_stats stats;
     u64 next_id, ids[CV_MAX_ARENAS];
+    bool exact_bounds;
+    wait_queue_head_t remap_wait;
+    struct arena *remapping;
+    struct page **remap_pages;
+    u64 remap_thread;
+    unsigned long remap_bytes;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 31-bit ISA limit. Parameters are
@@ -437,7 +444,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     long n;
     if (!r->bytes || r->bytes > CV_MAX_REGION_BYTES ||
         ((r->address | r->bytes) & (PAGE_SIZE - 1)) ||
-        !is_power_of_2(r->bytes) || (r->address & (r->bytes - 1)) ||
+        (!c->exact_bounds && (!is_power_of_2(r->bytes) || (r->address & (r->bytes - 1)))) ||
         r->address > ULONG_MAX - r->bytes ||
         !access_ok((void __user *)r->address, r->bytes) ||
         r->permissions > 7 || r->linear > 1 || r->reg > 31 ||
@@ -523,6 +530,96 @@ unpin:
     kvfree(pages);
     return -EFAULT;
 }
+/* Linux performs mremap; the adapter only updates lifetime and physical-tag
+ * ownership. Pinned frames retained by mremap keep their tags. Truncated frames
+ * are cleared before their pins are released. The syscall may fail without
+ * changing any capability lifetime. */
+static int remap_begin(struct context *c, const struct cv_remap *r)
+{
+    struct cv_thread *t = find_thread(c, r->thread);
+    struct arena *a = NULL;
+    unsigned long mapped = 0;
+    int error;
+    if (!c->exact_bounds || c->remapping || !t || t->terminal ||
+        !t->started || t->event != 3 || t->reply_cap ||
+        !r->bytes || r->bytes > CV_MAX_REGION_BYTES || (r->bytes & ~PAGE_MASK))
+        return -EINVAL;
+    for (unsigned i=0; i<CV_MAX_ARENAS; ++i) {
+        mapped += c->arenas[i].bytes;
+        if (c->ids[i] == r->id && c->arenas[i].pages) a = &c->arenas[i];
+    }
+    if (!a || !a->lazy || arena_has_thread_frame(c, a)) return -EINVAL;
+    if (mapped - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
+    error = pin_remaining(c, a);
+    if (error) return error;
+    error = ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE);
+    if (error) return error;
+    c->remap_pages = kvcalloc(r->bytes / PAGE_SIZE, sizeof(struct page *), GFP_KERNEL);
+    if (!c->remap_pages) return -ENOMEM;
+    c->remapping = a; c->remap_thread = r->thread; c->remap_bytes = r->bytes;
+    return 0;
+}
+static int remap_end(struct context *c, const struct cv_remap *r)
+{
+    struct arena *a = c->remapping;
+    struct cv_thread *t = find_thread(c, r->thread);
+    unsigned long flags, root, result, desc[3], *slot;
+    unsigned count;
+    struct vm_area_struct *v;
+    bool valid;
+    if (!a || !t || c->remap_thread != r->thread || c->remap_bytes != r->bytes)
+        return -EINVAL;
+    if (!r->address) {
+        kvfree(c->remap_pages); c->remap_pages = NULL; c->remapping = NULL; wake_up_all(&c->remap_wait);
+        return 0;
+    }
+    if ((r->address & ~PAGE_MASK) || r->address > ULONG_MAX-r->bytes ||
+        !access_ok((void __user *)r->address, r->bytes)) return -EINVAL;
+    /* The launcher is trusted, but reject overlap with another registered
+     * arena and malformed VM state before retiring the old ancestor. */
+    for (unsigned i=0; i<CV_MAX_ARENAS; ++i) {
+        struct arena *b = &c->arenas[i];
+        if (b != a && b->pages && r->address < b->address+b->bytes &&
+            b->address < r->address+r->bytes) return -EINVAL;
+    }
+    mmap_read_lock(c->mm);
+    v = find_vma(c->mm, r->address);
+    valid = v && v->vm_start <= r->address && v->vm_end >= r->address+r->bytes &&
+                 !v->vm_file && !(v->vm_flags & VM_SHARED) &&
+                 (v->vm_flags & (VM_READ|VM_WRITE)) == (VM_READ|VM_WRITE);
+    mmap_read_unlock(c->mm);
+    if (!valid) return -EACCES;
+    slot = t->frame + 28;
+    if (slot[0] || slot[1]) return -EFAULT;
+    count = r->bytes / PAGE_SIZE;
+    for (unsigned i=0; i<min(count, a->count); ++i) c->remap_pages[i] = a->pages[i];
+    desc[0] = r->address; desc[1] = r->address+r->bytes; desc[2] = 6;
+    preempt_disable(); local_irq_save(flags); root = select_root(c);
+    asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
+                 : "=r"(result) : "r"(a->ancestor) : "memory");
+    if (!result) {
+        asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
+                     : "=r"(result) : "r"(slot), "r"(desc) : "memory");
+        a->ancestor = result;
+    } else {
+        restore_root(root); local_irq_restore(flags); preempt_enable();
+        return -EIO;
+    }
+    restore_root(root); local_irq_restore(flags); preempt_enable();
+    for (unsigned i=count; i<a->count; ++i) {
+        unsigned long *p;
+        if (!a->pages[i]) continue;
+        p = page_address(a->pages[i]);
+        for (unsigned j=0; j<PAGE_SIZE/sizeof(*p); ++j) WRITE_ONCE(p[j], READ_ONCE(p[j]));
+        set_page_dirty_lock(a->pages[i]); unpin_user_page(a->pages[i]);
+        --c->stats.pinned_pages;
+    }
+    kvfree(a->pages); a->pages = c->remap_pages; c->remap_pages = NULL;
+    a->address = r->address; a->bytes = r->bytes; a->count = count;
+    c->remapping = NULL; wake_up_all(&c->remap_wait); t->reply_cap = true;
+    return 0;
+}
+
 static int resolve(struct context *c, struct cv_thread *t)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
@@ -588,7 +685,13 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
     unsigned long flags;
     if (current->mm != c->mm)
         return -EPERM;
+retry:
     if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
+    if (c->remapping && op != CV_REMAP_END) {
+        mutex_unlock(&vm_lock);
+        if (wait_event_interruptible(c->remap_wait, !READ_ONCE(c->remapping))) return -EINTR;
+        goto retry;
+    }
     if (op == CV_GLOBAL) {
         struct context *other;
         struct cv_global stats = {.nodes_allocated = allocated_total,
@@ -608,6 +711,13 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
         }
         stats.nodes_high_water = high_water;
         rc = copy_to_user((void __user *)arg, &stats, sizeof(stats)) ? -EFAULT : 0;
+    } else if (op == CV_PROFILE) {
+        u64 profile = c->exact_bounds ? 0x100 : 0;
+        rc = copy_to_user((void __user *)arg, &profile, sizeof(profile)) ? -EFAULT : 0;
+    } else if (op == CV_REMAP_BEGIN || op == CV_REMAP_END) {
+        struct cv_remap r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        rc = op == CV_REMAP_BEGIN ? remap_begin(c, &r) : remap_end(c, &r);
     } else if (op == CV_NODES) {
         struct cv_nodes r;
         struct cv_thread *t;
@@ -737,6 +847,7 @@ static int vm_open(struct inode *inode, struct file *f)
     c = kvzalloc(sizeof(*c), GFP_KERNEL);
     if (!c) return -ENOMEM;
     INIT_LIST_HEAD(&c->threads);
+    init_waitqueue_head(&c->remap_wait);
     c->next_thread = 0;
     t = kvzalloc(sizeof(*t), GFP_KERNEL);
     if (!t) { kvfree(c); return -ENOMEM; }
@@ -767,6 +878,9 @@ static int vm_open(struct inode *inode, struct file *f)
         node_free_table(c); free_page((unsigned long)c->frame);
         kvfree(t); kvfree(c); return -EOPNOTSUPP;
     }
+    { unsigned long profile;
+      asm volatile("csrr %0, 0x5c0" : "=r"(profile));
+      c->exact_bounds = !!(profile & 0x100); }
     c->frame[1] = virt_to_phys(c->table);
     t->context = c; t->id = 0; t->frame = c->frame;
     t->frame_pa = virt_to_phys(c->frame); t->user_frame = false;
@@ -795,6 +909,7 @@ static int vm_release(struct inode *inode, struct file *f)
     unsigned long flags;
     struct cv_thread *t, *tmp;
     mutex_lock(&vm_lock);
+    kvfree(c->remap_pages);
     list_del(&c->link);
     node_stats(c);
     allocated_total += c->stats.nodes;

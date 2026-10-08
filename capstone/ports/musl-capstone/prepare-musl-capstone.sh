@@ -13,7 +13,9 @@
 # argument). 0006 lays out pthread_cond_t and cnd_t for 16-byte pointers, which
 # the upstream layout put over its own ints and past the object's end; 0007
 # keeps a thread attribute's stack address as a pointer rather than a long; 0008
-# keeps prctl's arguments and the thread-name calls' name pointers.
+# keeps prctl's arguments and the thread-name calls' name pointers. 0009 ports
+# mallocng's capability representation for the virtual profile while retaining
+# its allocation policy; the physical build keeps the original layout.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -33,6 +35,9 @@ for patch in "$SCRIPT_DIR"/musl-patches/*.patch; do
     exit 1
   }
 done
+
+python3 "$SCRIPT_DIR/check-mallocng-policy.py" "$MUSL_SRC_DIR" \
+  "${MUSL_ARCHIVE:-${MUSL_CACHE_ROOT:-$CAPSTONE_TMP_ROOT/musl-src}/musl-${MUSL_VERSION:-1.2.5}.tar.gz}" >&2
 
 rm -rf "$ARCH_DIR"
 cp -r "$MUSL_SRC_DIR/arch/riscv64" "$ARCH_DIR"

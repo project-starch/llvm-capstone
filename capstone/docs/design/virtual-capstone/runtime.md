@@ -65,24 +65,27 @@ physical monitor and its domain protocol remain a separate execution path.
 
 ## malloc, mmap and the meaning of an arena
 
-Most `malloc`/`free` calls stay inside capability libc. The heap uses size
-classes, revocation handles and a shared metadata lock. When it needs more
-space, it sends a VM MAP request. The native launcher obtains Linux anonymous
-backing and the module registers it and supplies a linear grant.
+musl, including mallocng, is compiled for Capstone. Ordinary malloc/free calls
+perform slot selection and lifetime operations locally. Only VM operations,
+node pressure and execution events cross the boundary. The launcher never
+runs the application allocator.
 
 ```text
-Linux mapping -> linear arena grant -> split blocks -> object lifetimes
-                                                       malloc / free
+Linux mapping -> mallocng group -> linear slots -> bounded object lifetimes
+                               local malloc/free and revocation
 ```
 
-Backing, visible mapping length and individual object bounds are distinct.
-The current heap uses power-of-two blocks of at least 256 bytes. Returned
-bounds are narrowed to the request, with representability rounding for
-requests of at least 4 KiB. That small padding is accessible within the
-block; the implementation does not promise byte-exact requested bounds for
-every size. Heap metadata grows through separate VM mappings without
-recursing into malloc. Completely free payload arenas can be returned by
-`malloc_trim` while metadata remains valid.
+The allocator port preserves upstream's UNIT=16, IB=4, size classes, group
+counts, offset cycling and realloc decisions. Its internal metadata gains
+capabilities and an out-of-line slot-prefix representation. ABI v5 requires
+QEMU's explicit exact-bounds shadow-storage profile; this is not an RTL proof.
+The old block-count ceiling and custom allocator are removed. See the
+[local mallocng contract](../../../runtime/virtual/mallocng.md).
+
+Large realloc uses Linux mremap through a VM transaction. Protected contexts
+stay parked while the adapter retires the old mapping lifetime and retains
+physical tags on the moved pages. A failed syscall keeps the old allocation
+live. Successful realloc returns a fresh lifetime, including in-place growth.
 
 Public anonymous `mmap` uses the same service, then makes the grant copyable.
 It supports `PROT_NONE` and R/W/X protection combinations, page-range

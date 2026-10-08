@@ -8,6 +8,10 @@ The core virtual stack is on `dev`. The growing node-table extension is on
 Use its pinned QEMU and the [runtime build instructions](../runtime/virtual/README.md);
 [qualification records](../runtime/virtual/results/node-growth/qualification.json)
 identify the exact tested inputs and scope.
+The `virtual-musl-local` branch adds [local Capstone-compiled mallocng](../runtime/virtual/mallocng.md)
+with upstream allocation policy and capability lifetime hooks. Its
+[qualification](../runtime/virtual/results/local-mallocng/README.md) records
+the local service-boundary, safety, thread and application checks.
 
 Lane-only work on `delegation-threads` (not landed on `dev`):
 [the threads computing model](design/delegated-threads-model.md),

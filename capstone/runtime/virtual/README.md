@@ -1,11 +1,13 @@
 # Virtual C applications on Linux
 
-The node-growth review branch builds on the virtual stack landed on `dev`
+The local-mallocng branch builds on node growth and the virtual stack landed on `dev`
 at `08cf07d75ad2`, with the application build repairs. Its
 [qualification manifest](results/node-growth/qualification.json) identifies
 exact source and executable hashes. Earlier R1/R2/R3 result files below retain
 their historical scope. This profile uses trusted Linux, same-mm pthreads
-and one hart.
+and one hart. The [local-mallocng qualification](results/local-mallocng/README.md)
+records the current allocator profile; historical results below retain their
+original allocator and binary identities.
 
 This adapter runs Capstone applications in **C mode with user virtual
 addresses**. The existing Linux kernel schedules the launcher, owns its page
@@ -17,10 +19,10 @@ The [application gate](result.json) runs a normal C program, the explicit
 same-`mm` thread contract, SQLite's shell and the mruby interpreter. The
 existing ports build through the common SDK; applications must be rebuilt for
 its virtual profile. An ELF marker prevents the loader from accepting an image
-built for the physical calling convention. VM-service version 3 adds pthread
-services and accepts version-2 images, whose mapping ABI is unchanged.
-Version-1 virtual images are rejected. Older launchers reject version-3 images;
-rebuild the SDK and application together for the pthread profile.
+built for the physical calling convention. VM-service version 5 runs musl mallocng locally and adds its Linux mremap
+slow path. The launcher accepts version-2/3 images and rejects version-1,
+withdrawn native-heap version-4 and physical images. Rebuild the SDK and
+application together. ABI v5 requires the opt-in exact-bounds QEMU profile.
 
 ## Execution and memory
 
@@ -162,32 +164,21 @@ set of saved PCC IDs replaces the host bitmap indexed by the node high-water
 mark. `node_capacity`, `node_bytes` (including directories) and `node_growths`
 report actual resources instead of the former fixed 1-MiB charge.
 
-The allocator uses existing Sublet operations for object lifetimes. It grows
-through Linux mappings and supports `malloc`, `calloc`, `realloc`, alignment
-and whole-free-arena `malloc_trim`. It checks the remaining node budget
-before allocation and asks the adapter for more capacity when needed.
-Blocks are aligned powers of two, minimum 256 bytes. The
-returned capability is bounded to the request; a request of 4 KiB or more is
-rounded up to the representable grain, at most 1/512 of its size.
-`malloc_usable_size` reports that bounded extent, not the block.
-Private anonymous `mmap`, page-range `mprotect` and whole-mapping `munmap`
-use the same VM service. `mmap` supports `PROT_NONE` and R/W/X combinations;
-its capability carries maximum anonymous-mapping rights while PTEs enforce
-current protection. `mprotect` never increases an explicitly restricted
-capability's own rights. Management operations use the registered virtual
-range without reading through the pointer, so `PROT_NONE` can be retired.
-Public lengths are rounded to pages. Internal power-of-two backing padding
-stays `PROT_NONE`, cannot be exposed by `mprotect`, and is retired with the
-whole mapping. Heap grants retain linear ownership; public mmap grants are
-explicitly delinearised. Both belong to one mm, shared by its C threads.
-The virtual SDK bounds metadata at 65,536 block records and 256 arena records by default.
-It starts with at most 256 block records and 32 arena records, then adds metadata
-slabs through the common VM service without recursing into malloc. Metadata has
-separate mapping lifetimes and survives payload `malloc_trim`. A scalar atomic
-mutex protects allocator state across thread switches and suspended mapping
-calls; contended callers return to Linux through the WAIT service. The
-uncontended malloc/free path performs no lock-service calls. Larger applications may set `CAPSTONE_APPLICATION_VIRTUAL_BLOCKS` and
-`CAPSTONE_APPLICATION_VIRTUAL_ARENAS` when building the SDK.
+ABI v5 uses [Capstone-compiled musl mallocng](mallocng.md). Allocation and
+revocation run in the application's C context. Upstream musl chooses size
+classes, slots, offset cycling, retention and realloc behavior; Linux supplies
+mapping growth, release and remapping. There is no per-object heap service or
+fixed block-record array. The capability port changes metadata representation,
+not allocation policy. `malloc_trim` is a compatibility no-op.
+
+The profile requires `x-capstone-exact-bounds=true`: QEMU preserves exact object
+bounds in physical shadow metadata, including context-frame restoration.
+This prototype contract is not an RTL or one-bit-tag qualification. Public
+anonymous mmap, page-range mprotect and whole-mapping munmap retain their prior
+scope. The internal mallocng remap path invokes real Linux mremap while the
+adapter parks the namespace and transfers its tracked physical frames.
+See the [ownership, policy and VM contract](mallocng.md) and the allocator gate.
+
 The collector is only enabled after a complete namespace sweep. If growth
 is unavailable and remaining identities are live or pinned, the context ends with a resource
 fault (cause 30) instead of guessing that a stale capability is gone.
@@ -208,8 +199,9 @@ metadata). It returns a consumed linear grant or a scalar negative errno.
 UNMAP removes an exact whole visible mapping. PROTECT operates on a page range
 inside one registered payload mapping. WAIT yields to Linux without holding
 the transport lock. Metadata mappings are not exposed to public protection or
-retirement services. New images carry `CPONVVM3`; the launcher also accepts
-`CPONVVM2` images. Application ABI-v2's
+retirement services. New images carry `CPONVVM5`; the launcher also accepts
+`CPONVVM2` and `CPONVVM3` images. Version 4 is withdrawn. REMAP is an internal
+heap VM operation; ordinary malloc/free execute locally. Application ABI-v2's
 ordinary delegated system-service format remains independent of this marker.
 
 Linux, the adapter and the runtime belong to the TCB. Linearity concerns

@@ -38,6 +38,8 @@ def main():
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--port', type=int, default=21299)
     p.add_argument('--timeout', type=int, default=1200)
+    p.add_argument('--native-reference', type=Path,
+                   help='Reuse native transcripts from a passing gate with identical native binaries and harness source')
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
@@ -59,13 +61,25 @@ def main():
         shutil.copy2(inputs[name], stage/filename)
     flags = ['-l', '127.0.0.1', '-p', str(a.port), '-U', '0', '-m', '64', '-t', '4']
     native = {}
+    reference_record = None
+    if a.native_reference:
+        reference_record = a.native_reference/'result.json'
+        recorded = json.loads(reference_record.read_text())
+        if recorded.get('status') != 'PASS' or any(
+                recorded.get('input_sha256', {}).get(name) != sha(inputs[name])
+                for name in ('native', 'native_marker', 'harness_source')):
+            p.error('native reference does not match this passing harness/binary combination')
     for label, stop, perturb, marked in [('null1', 'TERM', 'none', False), ('null2', 'TERM', 'none', False),
                                          ('value', 'TERM', 'value', False), ('cas', 'TERM', 'cas', False),
                                          ('usr1', 'USR1', 'none', False), ('marker', 'TERM', 'none', True)]:
         out = a.work / ('native-' + label)
         out.mkdir()
-        with (out/'harness.log').open('w') as log:
-            subprocess.run([str(host_harness), '--out', str(out), '--port', str(a.port),
+        if a.native_reference:
+            for file in (a.native_reference/('native-'+label)).iterdir():
+                if file.is_file(): shutil.copy2(file, out/file.name)
+        else:
+            with (out/'harness.log').open('w') as log:
+                subprocess.run([str(host_harness), '--out', str(out), '--port', str(a.port),
                             '--stop', stop, '--perturb', perturb, '--',
                             str(inputs['native_marker' if marked else 'native']), *flags],
                            stdout=log, stderr=subprocess.STDOUT, check=True, timeout=240)
@@ -165,7 +179,10 @@ def main():
             check(label + '_prediction', passed)
     check('adapter_cleanup', run.returncode == 0 and '\nMC_CLEANUP:0\n' in log)
     record = dict(status='PASS' if all(c['passed'] for c in checks) else 'FAIL',
-                  checks=checks, fixtures=fixtures, workers=4, harts=1, virtual_vm_abi=3,
+                  checks=checks, fixtures=fixtures, workers=4, harts=1, virtual_vm_abi=5,
+                  native_reference_sha256=sha(reference_record) if reference_record else None,
+                  native_transcript_sha256={label: hashlib.sha256(files['transcript.norm']).hexdigest()
+                                            for label, files in native.items()},
                   safety_prediction_arm='sublet',
                   known_gaps=['nested slab/cache lifetimes', 'bipbuffer logical reuse'],
                   input_sha256={name: sha(path) for name, path in inputs.items()},

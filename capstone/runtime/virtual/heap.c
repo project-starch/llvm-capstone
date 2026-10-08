@@ -1,257 +1,219 @@
-/* Grow through Linux mappings; keep object lifetimes in the existing Sublet
- * slot discipline. Power-of-two blocks keep stored bounds representable.
- * A scalar atomic mutex protects metadata across guest preemption. Contended
- * callers yield through the OS adapter; uncontended allocations stay local. */
+/* mallocng runs in the application's Capstone context. This file supplies
+ * ownership operations, not allocation policy. Only VM growth/release and
+ * node pressure cross the existing service boundary. */
 #include <errno.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <malloc_capstone.h>
 #include "vm.h"
 
-#ifndef CAPSTONE_VIRTUAL_ARENAS
-#define CAPSTONE_VIRTUAL_ARENAS 256
-#endif
-#ifndef CAPSTONE_VIRTUAL_BLOCKS
-#define CAPSTONE_VIRTUAL_BLOCKS 65536
-#endif
-#define ARENAS CAPSTONE_VIRTUAL_ARENAS
-#define BLOCKS CAPSTONE_VIRTUAL_BLOCKS
-#define MIN_BLOCK 256UL
-#define MIN_ARENA 65536UL
-struct arena { unsigned long base, bytes, block; unsigned used, free_head; };
-struct block {
-    sublet_cap slot;
-    unsigned long base, requested;
-    unsigned arena, live, next_free, index;
-};
-#define BLOCK_SLAB 256U
-#define ARENA_SLAB 32U
-_Static_assert(BLOCKS > 0 && ARENAS > 0, "positive virtual allocator limits");
-static struct block initial_blocks[BLOCK_SLAB];
-static struct arena initial_arenas[ARENA_SLAB];
-static struct block *block_slabs[(BLOCKS + BLOCK_SLAB - 1) / BLOCK_SLAB] = {initial_blocks};
-static struct arena *arena_slabs[(ARENAS + ARENA_SLAB - 1) / ARENA_SLAB] = {initial_arenas};
-static unsigned block_capacity = BLOCKS < BLOCK_SLAB ? BLOCKS : BLOCK_SLAB;
-static unsigned arena_capacity = ARENAS < ARENA_SLAB ? ARENAS : ARENA_SLAB;
-static unsigned long allocations, frees, live_objects, peak_objects;
-static struct block *block_at(unsigned i)
-{ return &block_slabs[i / BLOCK_SLAB][i % BLOCK_SLAB]; }
-static struct arena *arena_at(unsigned i)
-{ return &arena_slabs[i / ARENA_SLAB][i % ARENA_SLAB]; }
-/* Metadata grows through the same VM service without recursing into malloc.
- * These mappings have a separate lifetime from every payload arena. */
-static void *metadata(size_t bytes)
-{
-    sublet_cap slot;
-    bytes = (bytes + 4095) & ~4095UL;
-    if (cap_vm_acquire(&slot, bytes, 4096, PROT_READ | PROT_WRITE,
-                       6, CAP_VM_METADATA)) return NULL;
-    void *p = cap_vm_copyable(&slot);
-    memset(p, 0, bytes);
-    return p;
-}
-static int grow_blocks(void)
-{
-    if (block_capacity == BLOCKS) return -1;
-    void *p = metadata(BLOCK_SLAB * sizeof(struct block));
-    if (!p) return -1;
-    block_slabs[block_capacity / BLOCK_SLAB] = p;
-    unsigned n = BLOCKS - block_capacity;
-    block_capacity += n < BLOCK_SLAB ? n : BLOCK_SLAB;
-    return 0;
-}
-static int grow_arenas(void)
-{
-    if (arena_capacity == ARENAS) return -1;
-    void *p = metadata(ARENA_SLAB * sizeof(struct arena));
-    if (!p) return -1;
-    arena_slabs[arena_capacity / ARENA_SLAB] = p;
-    unsigned n = ARENAS - arena_capacity;
-    arena_capacity += n < ARENA_SLAB ? n : ARENA_SLAB;
-    return 0;
-}
+#define INDEX_BUCKETS 4096U
+static struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
+static sublet_cap pending_mapping;
 static unsigned heap_mutex;
-static void cap_vm_heap_lock(void)
+static unsigned long allocations, frees, live_objects, peak_objects;
+static void lock_heap(void)
 {
     while (__atomic_exchange_n(&heap_mutex, 1, __ATOMIC_ACQUIRE))
         if (__capstone_vm_wait()) __builtin_trap();
 }
-static void cap_vm_heap_unlock(void)
+static void unlock_heap(void)
 { __atomic_store_n(&heap_mutex, 0, __ATOMIC_RELEASE); }
-static unsigned long free_ids(void)
+static unsigned bucket(size_t key)
+{ return ((key >> 4) * 11400714819323198485UL) >> 52; }
+static void unindex(struct capstone_malloc_slot *r)
+{
+    if (!r->key) return;
+    struct capstone_malloc_slot **p = &index_heads[bucket(r->key)];
+    while (*p && *p != r) p = &(*p)->next;
+    if (!*p) __builtin_trap();
+    *p = r->next;
+    r->next = NULL; r->key = 0;
+}
+struct capstone_malloc_slot *__capstone_malloc_find(const void *p)
+{
+    size_t key = __builtin_capstone_cap_get_cursor((void *)p);
+    for (struct capstone_malloc_slot *r = index_heads[bucket(key)]; r; r = r->next)
+        if (r->key == key) return r;
+    return NULL;
+}
+void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t n)
+{
+    unindex(r);
+    r->raw = p; r->key = __builtin_capstone_cap_get_cursor(p); r->nominal = n;
+    unsigned b = bucket(r->key);
+    r->next = index_heads[b]; index_heads[b] = r;
+}
+static int ensure_ids(size_t need)
 {
     unsigned long n;
     __asm__ volatile("csrr %0, 0xcc0" : "=r"(n));
-    return n;
-}
-static int ensure_ids(unsigned long need)
-{
-    if (free_ids() >= need + CV_NODE_RESERVE) return 0;
+    if (n >= need + CV_NODE_RESERVE) return 0;
     long rc = __capstone_vm_nodes(need);
     if (rc < 0) { errno = -rc; return -1; }
-    if (free_ids() < need + CV_NODE_RESERVE) { errno = ENOMEM; return -1; }
     return 0;
 }
+static sublet_cap *authority(struct capstone_malloc_slot *r)
+{ return (sublet_cap *)&r->authority; }
 
-static unsigned long power(unsigned long n)
+/* Partition the exact upstream group geometry: a 16-byte header followed
+ * by count slots of stride bytes. The initial four prefix bytes of each
+ * slot are represented in its record, never in the preceding owner's slot. */
+static void *partition(struct capstone_malloc_slot *slots, void **tail,
+                       sublet_cap *root, size_t base, size_t stride, unsigned count)
 {
-    unsigned long p = MIN_BLOCK;
-    if (n > (256UL << 20)) return 0;
-    while (p < n) p <<= 1;
+    sublet_cap rest;
+    sublet_split(root, base + 16, &rest);
+    void *header = cap_vm_copyable(root);
+    for (unsigned i = 0; i < count; ++i) {
+        size_t end = base + 16 + (i + 1) * stride;
+        if (end < sublet_end(&rest)) {
+            sublet_cap next;
+            sublet_split(&rest, end, &next);
+            sublet_move(&rest, authority(&slots[i]));
+            sublet_move(&next, &rest);
+        } else sublet_move(&rest, authority(&slots[i]));
+        if (sublet_base(authority(&slots[i])) != end - stride ||
+            sublet_end(authority(&slots[i])) != end) __builtin_trap();
+    }
+    sublet_move(&rest, (sublet_cap *)tail);
+    return header;
+}
+void *__capstone_malloc_map(size_t bytes)
+{
+    if (!bytes || bytes > CAP_VM_MAX_BYTES) { errno = ENOMEM; return MAP_FAILED; }
+    bytes = (bytes + 4095) & -4096UL;
+    if (cap_vm_acquire(&pending_mapping, bytes, 4096,
+                       PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP)) return MAP_FAILED;
+    /* A scalar placeholder crosses only the private backend, until attach.
+     * The linear grant remains in its consuming slot throughout alloc_meta. */
+    return (void *)sublet_base(&pending_mapping);
+}
+void *__capstone_malloc_group_attach(struct capstone_malloc_slot *slots, void **tail,
+                                    void *p, size_t bytes)
+{
+    size_t base = sublet_base(&pending_mapping);
+    if (base != (size_t)p) __builtin_trap();
+    return partition(slots, tail, &pending_mapping, base, bytes - 16, 1);
+}
+void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots, void **tail,
+                                 size_t bytes, size_t stride, unsigned count)
+{
+    void *p = __capstone_malloc_map(bytes);
+    if (p == MAP_FAILED) return p;
+    return partition(slots, tail, &pending_mapping, (size_t)p, stride, count);
+}
+void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots, void **tail,
+                                    size_t stride, unsigned count,
+                                    struct capstone_malloc_slot *parent)
+{
+    size_t base = parent->key;
+    sublet_give(authority(parent));
+    sublet_cap root;
+    sublet_take_linear(authority(parent), &root);
+    parent->kind = 3; parent->raw = NULL;
+    return partition(slots, tail, &root, base, stride, count);
+}
+void *__capstone_malloc_slot_take(struct capstone_malloc_slot *r)
+{
+    if (sublet_type(authority(r)) != SUBLET_TYPE_LIN) sublet_give(authority(r));
+    void *p = sublet_take(authority(r));
+    __capstone_malloc_slot_key(r, p, r->nominal);
     return p;
 }
-static int grow(unsigned long size)
+void *__capstone_malloc_slot_start(struct capstone_malloc_slot *r)
 {
-    unsigned a, ids[256], count = 0, need;
-    unsigned long bytes = size < MIN_ARENA ? MIN_ARENA : size;
-    sublet_cap rest;
-    for (a = 0; a < arena_capacity && arena_at(a)->bytes; ++a) {}
-    if (a == arena_capacity && grow_arenas()) return -1;
-    need = bytes / size;
-    for (unsigned i = 0; count < need; ++i) {
-        if (i == block_capacity && grow_blocks()) return -1;
-        if (!block_at(i)->base) ids[count++] = i;
-    }
-    /* Account after metadata growth: two roots, need-1 splits and MREV.
-     * The heap mutex protects the allocator state across service calls. */
-    if (ensure_ids(need + 2)) return -1;
-    if (cap_vm_acquire(&rest, bytes, bytes, PROT_READ | PROT_WRITE,
-                       6, CAP_VM_HEAP)) return -1;
-    unsigned long base;
-    base = sublet_base(&rest);
-    *arena_at(a) = (struct arena){base, bytes, size, 0, 0};
-    for (unsigned i = 0; i < need; ++i) {
-        struct block *b = block_at(ids[i]);
-        b->base = base + i * size; b->arena = a; b->index = ids[i];
-        b->live = 0; b->requested = 0;
-        b->next_free = arena_at(a)->free_head;
-        arena_at(a)->free_head = ids[i] + 1;
-        if (i + 1 == need) sublet_move(&rest, &b->slot);
-        else {
-            sublet_cap tail;
-            sublet_split(&rest, b->base + size, &tail);
-            sublet_move(&rest, &b->slot);
-            sublet_move(&tail, &rest);
-        }
-    }
-    return 0;
+    return (char *)r->raw - (r->key - __builtin_capstone_cap_get_base(r->raw));
 }
-static struct block *reserve_block(size_t n, size_t alignment)
+void __capstone_malloc_slot_release(struct capstone_malloc_slot *r)
+{ unindex(r); r->kind = 0; r->raw = NULL; }
+void __capstone_malloc_nested_release(struct capstone_malloc_slot *r)
 {
-    unsigned long size = power(n > alignment ? n : alignment);
-    if (!size || ensure_ids(1)) { errno = ENOMEM; return NULL; }
-    for (unsigned retry = 0; retry < 2; ++retry) {
-        for (unsigned a = 0; a < arena_capacity; ++a) {
-            struct arena *arena = arena_at(a);
-            if (arena->bytes && arena->block == size && arena->free_head) {
-                unsigned index = arena->free_head - 1;
-                struct block *b = block_at(index);
-                arena->free_head = b->next_free;
-                b->next_free = 0; b->live = 1; b->requested = n;
-                ++arena->used;
-                ++allocations;
-                if (++live_objects > peak_objects) peak_objects = live_objects;
-                return b;
-            }
-        }
-        if (grow(size)) break;
-    }
-    errno = ENOMEM; return NULL;
+    sublet_give(authority(r));
+    __capstone_malloc_slot_release(r);
 }
-static void *allocate(size_t n, size_t alignment)
+static void *rotate(struct capstone_malloc_slot *r)
 {
-    struct block *b = reserve_block(n, alignment);
-    if (!b) return NULL;
-    void *p = sublet_take(&b->slot);
-    unsigned long length = n ? n : 1;
-    if (length >= 4096) {
-        unsigned long grain = 1UL << (63 - __builtin_clzl(length) - 9);
-        length = (length + grain - 1) & ~(grain - 1);
+    size_t offset = r->key - sublet_base(authority(r));
+    sublet_give(authority(r));
+    void *p = (char *)sublet_take(authority(r)) + offset;
+    r->raw = p;
+    return p;
+}
+void *__capstone_malloc_prepare_free(void *p)
+{
+    struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+    if (!r || r->kind == 3) __builtin_trap();
+    if (r->kind == 1) {
+        /* Remove residual payload capabilities before returning ownership.
+         * The slot prefix and musl's offset-cycle state are preserved. */
+        memset(r->raw, 0, r->nominal);
+        p = rotate(r);
+        ++frees; --live_objects; r->kind = 0;
     }
-    return __builtin_capstone_cap_shrink(p, b->base, b->base + length);
+    return p;
+}
+/* A real Linux mremap is a VM slow path. The returned grant is new authority
+ * over the retained physical frames; the old mapping's descendants are dead. */
+void *__capstone_malloc_group_remap(struct capstone_malloc_slot *slots, void **tail,
+                                   void *p, size_t old, size_t bytes)
+{
+    struct capstone_malloc_slot *r = slots;
+    size_t offset = r->key - __builtin_capstone_cap_get_base(r->raw);
+    sublet_cap root;
+    sublet_store(&root, __capstone_vm_remap((size_t)p, old, bytes));
+    unsigned long result;
+    __asm__ volatile("ld %0, 0(%1)" : "=r"(result) : "r"(&root) : "memory");
+    if ((long)result < 0) { errno = -(long)result; sublet_clear(&root); return MAP_FAILED; }
+    unindex(r);
+    void *header = partition(slots, tail, &root, result, bytes - 16, 1);
+    void *raw = (char *)sublet_take(authority(r)) + offset;
+    __capstone_malloc_slot_key(r, raw, r->nominal);
+    *(unsigned long *)header = (unsigned long)r->group;
+    ((unsigned char *)header)[8] = 0;
+    return header;
+}
+static void *publish(void *p, size_t n)
+{
+    if (!p) return NULL;
+    struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+    if (!r) __builtin_trap();
+    if (r->kind == 1) p = rotate(r);
+    else {
+        ++allocations;
+        if (++live_objects > peak_objects) peak_objects = live_objects;
+    }
+    r->kind = 1; r->nominal = n;
+    return __builtin_capstone_cap_shrink(p, r->key, r->key + (n ? n : 1));
 }
 void *malloc(size_t n)
 {
-    cap_vm_heap_lock();
-    void *p = allocate(n ? n : 1, 16);
-    cap_vm_heap_unlock();
-    return p;
+    lock_heap();
+    void *p = ensure_ids(256) ? NULL : publish(__capstone_mallocng_malloc(n), n);
+    unlock_heap(); return p;
 }
 void *__libc_malloc(size_t n) { return malloc(n); }
 void *__simple_malloc(size_t n) { return malloc(n); }
-
-static struct block *lookup(void *p)
+__attribute__((noinline, noreturn)) static void invalid_free(void)
 {
-    unsigned long address = __builtin_capstone_cap_get_cursor(p);
-    /* A stale free must fault before it can touch a replacement's handle. */
-    (void)*(volatile unsigned char *)p;
-    for (unsigned i = 0; i < block_capacity; ++i) {
-        struct block *b = block_at(i);
-        if (b->base == address && b->live) return b;
-    }
-    __builtin_trap();
+    __asm__ volatile(".global cap_malloc_invalid_free\ncap_malloc_invalid_free:\nunimp" ::: "memory");
+    __builtin_unreachable();
 }
-static void return_block(struct block *b)
+__attribute__((noinline)) static struct capstone_malloc_slot *checked(void *p)
 {
-    sublet_give(&b->slot);
-    ++frees; --live_objects;
-    b->live = 0; --arena_at(b->arena)->used;
-    b->next_free = arena_at(b->arena)->free_head;
-    arena_at(b->arena)->free_head = b->index + 1;
-}
-/* Existing nested allocators borrow a whole linear block and return its
- * scalar base. The retained senior handle revokes every derived lifetime.
- * This is an internal allocator API, not the public free(pointer) contract. */
-unsigned long __capstone_sublet_malloc_linear(size_t n, sublet_cap *out)
-{
-    cap_vm_heap_lock();
-    struct block *b = reserve_block(n ? n : 1, 16);
-    unsigned long base = 0;
-    if (b) {
-        b->live = 2;
-        base = sublet_take_linear(&b->slot, out);
-    } else sublet_clear(out);
-    cap_vm_heap_unlock();
-    return base;
-}
-void __capstone_sublet_free_linear(unsigned long base)
-{
-    cap_vm_heap_lock();
-    for (unsigned i = 0; i < block_capacity; ++i) {
-        struct block *b = block_at(i);
-        if (b->base == base && b->live == 2) {
-            return_block(b);
-            cap_vm_heap_unlock();
-            return;
-        }
-    }
-    __builtin_trap();
-}
-void __capstone_sublet_heap_stats(unsigned long out[9])
-{
-    cap_vm_heap_lock();
-    out[0] = allocations; out[1] = frees;
-    out[2] = 0; /* size-class VM arenas do not perform buddy merges */
-    out[3] = peak_objects;
-    out[4] = sublet_stats.split; out[5] = sublet_stats.mrev;
-    out[6] = sublet_stats.delin; out[7] = sublet_stats.revoke;
-    out[8] = sublet_stats.init;
-    cap_vm_heap_unlock();
-}
-static void free_locked(void *p)
-{
-    if (!p) return;
-    struct block *b = lookup(p);
-    if (b->live != 1) __builtin_trap();
-    memset(p, 0, __builtin_capstone_cap_get_end(p) - b->base);
-    return_block(b);
+    __asm__ volatile(".global cap_malloc_validate\ncap_malloc_validate:\nlbu zero, 0(%0)"
+                     : : "r"(p) : "memory");
+    struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+    if (!r || r->kind != 1) invalid_free();
+    return r;
 }
 void free(void *p)
 {
     if (!p) return;
-    cap_vm_heap_lock();
-    free_locked(p);
-    cap_vm_heap_unlock();
+    int e = errno;
+    lock_heap(); __capstone_mallocng_free(checked(p)->raw); unlock_heap();
+    errno = e;
 }
 void __libc_free(void *p) { free(p); }
 void *calloc(size_t n, size_t size)
@@ -264,70 +226,76 @@ void *calloc(size_t n, size_t size)
 void *realloc(void *p, size_t n)
 {
     if (!p) return malloc(n);
-    if (!n) { free(p); return NULL; }
-    cap_vm_heap_lock();
-    struct block *b = lookup(p);
-    void *q = allocate(n, 16);
-    if (q) {
-        memcpy(q, p, n < b->requested ? n : b->requested);
-        free_locked(p);
-    }
-    cap_vm_heap_unlock();
-    return q;
+    lock_heap();
+    struct capstone_malloc_slot *r = checked(p);
+    void *q = ensure_ids(256) ? NULL : publish(__capstone_mallocng_realloc(r->raw, n), n);
+    unlock_heap(); return q;
 }
+void *__libc_realloc(void *p, size_t n) { return realloc(p, n); }
+void *aligned_alloc(size_t a, size_t n)
+{
+    lock_heap();
+    void *p = ensure_ids(256) ? NULL : publish(__capstone_mallocng_aligned_alloc(a, n), n);
+    unlock_heap(); return p;
+}
+int posix_memalign(void **out, size_t a, size_t n)
+{
+    if (!a || (a & (a-1)) || a < sizeof(void *)) return EINVAL;
+    int e = errno;
+    void *p = aligned_alloc(a, n);
+    int error = p ? 0 : errno;
+    errno = e;
+    if (!error) *out = p;
+    return error;
+}
+void *memalign(size_t a, size_t n) { return aligned_alloc(a, n); }
 size_t malloc_usable_size(void *p)
 {
     if (!p) return 0;
-    cap_vm_heap_lock();
-    struct block *b = lookup(p);
-    size_t n = __builtin_capstone_cap_get_end(p) - b->base;
-    cap_vm_heap_unlock();
-    return n;
+    lock_heap(); size_t n = checked(p)->nominal; unlock_heap(); return n;
 }
-void *aligned_alloc(size_t align, size_t n)
+int malloc_trim(size_t pad) { (void)pad; return 0; }
+unsigned long __capstone_sublet_malloc_linear(size_t n, sublet_cap *out)
 {
-    if (!align || (align & (align - 1)) || align < sizeof(void *) || n % align) {
-        errno = EINVAL; return NULL;
+    lock_heap();
+    sublet_clear(out);
+    void *p = ensure_ids(256) ? NULL : __capstone_mallocng_malloc(n);
+    size_t base = 0;
+    if (p) {
+        struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+        sublet_give(authority(r));
+        sublet_cap owned;
+        sublet_take_linear(authority(r), &owned);
+        base = r->key;
+        size_t end = base + (n ? n : 1);
+        __asm__ volatile("ldc t0, 0(%0)\nshrink t0, %1, %2\nstc t0, 0(%3)"
+                         : : "r"(&owned), "r"(base), "r"(end), "r"(out)
+                         : "t0", "memory");
+        r->kind = 2; r->raw = NULL;
+        ++allocations;
+        if (++live_objects > peak_objects) peak_objects = live_objects;
     }
-    cap_vm_heap_lock();
-    void *p = allocate(n ? n : 1, align);
-    cap_vm_heap_unlock();
-    return p;
+    unlock_heap(); return base;
 }
-int posix_memalign(void **out, size_t align, size_t n)
+/* Restore prefix/footer bytes after UNINIT reclamation of an explicit linear
+ * loan. The backend still makes the ordinary free-list/release decision. */
+extern void __capstone_mallocng_restore(struct capstone_malloc_slot *, void *);
+void __capstone_sublet_free_linear(unsigned long base)
 {
-    if (!align || (align & (align - 1)) || align < sizeof(void *)) return EINVAL;
-    cap_vm_heap_lock();
-    void *p = allocate(n ? n : 1, align);
-    cap_vm_heap_unlock();
-    if (!p) return ENOMEM;
-    *out = p; return 0;
+    lock_heap();
+    struct capstone_malloc_slot *r = __capstone_malloc_find((void *)base);
+    if (!r || r->kind != 2) invalid_free();
+    void *p = rotate(r);
+    __capstone_mallocng_restore(r, p);
+    r->kind = 0; ++frees; --live_objects;
+    __capstone_mallocng_free(p);
+    unlock_heap();
 }
-void *memalign(size_t align, size_t n)
+void __capstone_sublet_heap_stats(unsigned long out[9])
 {
-    void *p; int error = posix_memalign(&p, align, n);
-    if (error) { errno = error; return NULL; }
-    return p;
-}
-/* Return every wholly free arena to Linux after retiring all descendants.
- * Its old tags are cleared before any retired identity can be recycled. */
-int malloc_trim(size_t pad)
-{
-    int released = 0; (void)pad;
-    cap_vm_heap_lock();
-    for (unsigned a = 0; a < arena_capacity; ++a) {
-        if (!arena_at(a)->bytes || arena_at(a)->used) continue;
-        if (__capstone_vm_unmap(arena_at(a)->base, arena_at(a)->bytes)) continue;
-        for (unsigned i = 0; i < block_capacity; ++i) {
-            struct block *b = block_at(i);
-            if (b->base && b->arena == a) {
-                /* Scalar clearing drops dead tags without loading them. */
-                unsigned long *p = (unsigned long *)b;
-                for (unsigned k = 0; k < sizeof(*b) / sizeof(*p); ++k) p[k] = 0;
-            }
-        }
-        memset(arena_at(a), 0, sizeof(struct arena)); released = 1;
-    }
-    cap_vm_heap_unlock();
-    return released;
+    lock_heap();
+    out[0]=allocations; out[1]=frees; out[2]=0; out[3]=peak_objects;
+    out[4]=sublet_stats.split; out[5]=sublet_stats.mrev; out[6]=sublet_stats.delin;
+    out[7]=sublet_stats.revoke; out[8]=sublet_stats.init;
+    unlock_heap();
 }

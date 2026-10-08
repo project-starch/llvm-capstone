@@ -127,10 +127,10 @@ def main():
            '-device', 'virtio-blk-device,drive=hd0',
            '-drive', f'file={disk},format=raw,id=gate,readonly=on',
            '-device', 'virtio-blk-device,drive=gate', '-cpu',
-           'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true']
+           'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true']
     with open(os.environ['CAPSTONE_QEMU_LOCK'], 'a+b') as lock, (work/'serial.log').open('wb') as log:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        guest = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        guest = subprocess.Popen(cmd, env=dict(os.environ, TMPDIR=str(work)), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, bufsize=0)
         out = b''; login = sent = False
         deadline = time.monotonic() + a.timeout
@@ -237,6 +237,7 @@ def main():
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1
     result = {'status': 'PASS' if all(tests.values()) else 'FAIL', 'tests': tests,
               'scope': 'one hart; private anonymous arenas; same-mm virtual threads',
+              'virtual_vm_abi': 5,
               'control_omit_application': a.omit_application,
               'recycling_cases_enabled': not a.skip_recycling,
               'sha256': {n: digest(path) for n, path in inputs.items()},
