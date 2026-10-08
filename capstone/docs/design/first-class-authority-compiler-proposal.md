@@ -117,11 +117,12 @@ decisions has to survive to the binary.
 
 ## 4. Prior art
 
-These were checked against primary sources on 2026-10-08:
-- the CapsLock and Capstone quotations, read in full text;
-- the FRESCO and SafeFFI abstracts, read on arXiv.
+These were checked against primary sources on 2026-10-08, in two passes:
+- read in full text: the Capstone, CapsLock, FRESCO, Rust for Morello and Le Temps des Cerises quotations, the QSSA preprint, the separation-logic linear-capability paper, CCured (POPL), CHERIoT's and Wasm's documentation;
+- read as abstracts only: SafeFFI;
+- not confirmed: Gradual Ownership Types' venue.
 
-Rows marked (summary) were not re-read.
+Rows marked (summary) were not re-read. FRESCO's gate is confirmed function-granular in the body ("A function must be colored if a capability pointing to its frame may escape"), with no cost model.
 
 | work | overlap | what it does not do |
 |---|---|---|
@@ -129,10 +130,13 @@ Rows marked (summary) were not re-read.
 | **CapsLock: Securing Mixed Rust with Hardware Capabilities** (CCS 2025, https://arxiv.org/abs/2507.03344) | the same hardware lineage and goal; a rustc MIR pass injects borrow instructions | It replaces linear and revocation capabilities with a new revoke-on-use mechanism, QEMU only. **Its argument against this route:** "looking at use_p() alone is not sufficient to statically know if p corresponds to a revocation capability that needs revocation. Such information may only be determined during run-time." |
 | **FRESCO** (arXiv 2608.26353) | Color Saver, a static capability-aware escape analysis that decides where hardware stack temporal enforcement is applied on CHERI | The static gate is function-granular ("confines coloring to functions needing it") and applies to stack coloring. Heap and stack temporal safety coexist through color segmentation. It has no substructural authority types. It runs on QEMU and the CHERI-Toooba FPGA softcore; our board is an FPGA too, so "silicon" is not a differentiator against it |
 | **Linear capabilities for fully abstract compilation of separation-logic-verified code** (ICFP 2019 / JFP 2021) | a static proof directs lowering to hardware linear capabilities | Its compilation is linear everywhere and never elides hardware linearity. It is formal only |
-| **QSSA** (CC 2022), **Mojo** (MLIR-based; https://mojolang.org/docs/manual/values/lifetimes) (summary) | linear or affine SSA values checked in MLIR | No hardware authority, no fallback |
+| **QSSA** (CC 2022, https://arxiv.org/abs/2109.02409) | single-use (affine: at most once) SSA values in an MLIR dialect, with a verifier | No borrowing, no hardware, no fallback |
+| **Mojo** (https://mojolang.org/docs/manual/values/lifetimes) | an MLIR-based compiler with a lifetime checker and "explicitly destroyed" (linear) types | Hardware enforcement. That the checker runs on an MLIR dialect is an inference, not stated in its docs or LLVM Dev Mtg slides |
 | **MLIR ownership-based buffer deallocation** (https://mlir.llvm.org/docs/OwnershipBasedBufferDeallocation/) | ownership as SSA dataflow | Inserts frees; no security semantics |
-| **CCured** (POPL 2002), **Gradual Ownership Types** (ESOP 2012), **SafeFFI** (arXiv 2510.20688) (summary except SafeFFI's abstract) | a per-pointer static/dynamic split, or checks only at safe/unsafe boundaries | Software checks; no capability hardware |
-| **CHERIoT compartments**, **Wasm component `own`/`borrow`** (summary) | first-class compartments; borrows that end at the call | Runtime or ABI enforcement; no per-value choice |
+| **CCured** (POPL 2002), **Gradual Ownership Types** (ESOP 2012), **SafeFFI** (arXiv 2510.20688) | a per-pointer static/dynamic split (CCured: SAFE/SEQ/DYNAMIC), or checks only at safe/unsafe boundaries | Software checks; spatial or owner properties, no capability hardware |
+| **CHERIoT compartments**, **Wasm component `own`/`borrow`** | first-class compartments (C attributes); a borrow "must be dropped before the current export call returns" | Wasm enforces it dynamically (a trap on return with live borrows); no static elision, no per-value choice |
+| **Rust for Morello** (ECOOP 2023, https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ECOOP.2023.39) | purecap Rust; hardware bounds cost 39% | It names this hybrid as future work: "off-loading as much bounds-checking to software, ideally statically enforced, and maintaining hardware bounds-checks where these guarantees cannot be enforced by software alone". Dropping rustc's remaining software checks gained almost nothing |
+| **Le Temps des Cerises** (OOPSLA 2022, https://dl.acm.org/doi/10.1145/3527318) | a uniform directed-capability calling convention, mechanised | It rejects linear capabilities as "expensive to realize in practice" (an atomic move) and awkward for C |
 
 **Answer to CapsLock's argument.** It holds for unannotated code: inside an opaque callee nothing
 is known. The proposal moves exactly that information onto the boundary (`domain.call`'s authority
@@ -159,6 +163,7 @@ The contribution has to be the authority semantics and the decision procedure.
 - **If revoke and linear moves are cheap,** the hybrid buys little. R1's ~23 cycles per node
   suggests a single lend is tens of cycles. The payoff may lie in revocation-node pressure (a
   finite pool) and in moving errors to compile time, more than in cycles.
+- **Linear capabilities are seen as costly and awkward for C** (Le Temps des Cerises). That argues for static elision, but questions keeping them as the fallback.
 - **Authority that flows into untyped code** (musl, SQLite) may dominate real programs and collapse
   everything to HARDWARE.
 
