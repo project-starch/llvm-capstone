@@ -26,7 +26,7 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 36 | 4 | 50 | 15 | 60 | 146 | 16 |
+| `cheribsd` | 36 | 4 | 70 | 35 | 40 | 146 | 16 |
 | `capstone-sysalloc` | 56 | 0 | 63 | 0 | 27 | 146 | 16 |
 | `capstone-sublet` | 123 | 0 | 0 | 0 | 23 | 146 | 16 |
 
@@ -36,12 +36,12 @@ The arm stays what CheriBSD ships -- revocation on, asynchronous, batched. Nothi
 
 The count in each heading is cells on which the arm's mechanism printed nothing. It is NOT the miss count: the `quarantined-unswept` ones are credited as catches by the rule above, so they appear here as an account of the silence and in the caught column as the verdict.
 
-### `cheribsd`: 54 cells where the mechanism reported nothing
+### `cheribsd`: 74 cells where the mechanism reported nothing
 
 | disposition | cells | what it means | what would change it |
 |---|---:|---|---|
 | `quarantined-unswept` | **4** | the object WAS in the quarantine and no sweep cleared it | a synchronous sweep would have caught these |
-| `never-freed` | **10** | the object never reached the system allocator, so it never entered the quarantine | no sweep policy reaches these; only protecting the nested allocator does |
+| `never-freed` | **30** | the object never reached the system allocator, so it never entered the quarantine | no sweep policy reaches these; only protecting the nested allocator does |
 | `not-temporal` | **5** | nothing was freed at all; the crossing is inside a live allocation | revocation is not the mechanism in play |
 | not yet measured | 35 | the run does not say whether the object reached the mechanism | the probe, `ports/common/host/cheribsd/quarantine-probe.c` |
 
@@ -59,25 +59,25 @@ the system allocator handed the object out directly -- the boundary all three ar
 | `capstone-sysalloc` | **29** | 0 | 0 | 100% |
 | `capstone-sublet` | **29** | 0 | 0 | 100% |
 
-### `nested`: 42 cases
+### `nested`: 62 cases
 
 the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **9** | 0 | 33 | 21% |
-| `capstone-sysalloc` | **8** | 0 | 34 | 19% |
-| `capstone-sublet` | **42** | 0 | 0 | 100% |
+| `cheribsd` | **9** | 0 | 53 | 15% |
+| `capstone-sysalloc` | **8** | 0 | 54 | 13% |
+| `capstone-sublet` | **62** | 0 | 0 | 100% |
 
-### All 71 together
+### All 91 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **33** | 4 | 38 | 46% |
-| `capstone-sysalloc` | **37** | 0 | 34 | 52% |
-| `capstone-sublet` | **71** | 0 | 0 | 100% |
+| `cheribsd` | **33** | 4 | 58 | 36% |
+| `capstone-sysalloc` | **37** | 0 | 54 | 41% |
+| `capstone-sublet` | **91** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -87,28 +87,28 @@ CPython: twenty re-entrancy use-after-frees, all of them inside pymalloc
 
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
-| `pymalloc-repros` | 0 | `gh-143543` | re-entrant use-after-free in itertools.groupby | — | · | **C** |
-| `pymalloc-repros` | 1 | `gh-146613` | re-entrant use-after-free in itertools._grouper | — | · | **C** |
-| `pymalloc-repros` | 2 | `gh-142829` | use-after-free in Context.__eq__ via re-entrant ContextVar.set | — | · | **C** |
-| `pymalloc-repros` | 3 | `gh-142831` | use-after-free in json encoder during re-entrant mutation | — | · | **C** |
-| `pymalloc-repros` | 4 | `gh-145244` | use-after-free on borrowed dict key in json encoder | — | · | **C** |
-| `pymalloc-repros` | 5 | `gh-148660` | use-after-free in OrderedDict.copy() on reentrant mutation | — | · | **C** |
-| `pymalloc-repros` | 6 | `gh-151295` | use-after-free in bytes.join()/bytearray.join() via re-entrant __buffer__ | — | · | **C** |
-| `pymalloc-repros` | 7 | `gh-148395` | possible UAF in {LZMA,BZ2,_Zlib}Decompressor | — | · | **C** |
-| `pymalloc-repros` | 8 | `gh-112127` | possible use-after-free in atexit.unregister() | — | · | **C** |
-| `pymalloc-repros` | 9 | `gh-139210` | use-after-free in xml.etree.ElementTree.iterparse() | — | · | **C** |
-| `pymalloc-repros` | 10 | `gh-142560` | use-after-free in bytearray search-like methods | — | · | **C** |
-| `pymalloc-repros` | 11 | `gh-142783` | possible use after free in the zoneinfo module | — | · | **C** |
-| `pymalloc-repros` | 12 | `gh-143004` | possible use-after-free in collections.Counter.update() | — | · | **C** |
-| `pymalloc-repros` | 13 | `gh-144833` | use-after-free in the SSL module when SSL_new() fails | — | · | **C** |
-| `pymalloc-repros` | 14 | `gh-146011` | use-after-free in signaldict_repr after deletion | — | · | **C** |
-| `pymalloc-repros` | 15 | `gh-149449` | use-after-free in _PyUnicode_GetNameCAPI | — | · | **C** |
-| `pymalloc-repros` | 16 | `gh-151403` | use-after-free when an argv item's __fspath__ mutates args | — | · | **C** |
-| `pymalloc-repros` | 17 | `gh-151416` | borrowed ref use after free via fspath in os.spawnv/spawnve | — | · | **C** |
-| `pymalloc-repros` | 18 | `gh-151695` | use-after-free of the curses screen encoding | — | · | **C** |
-| `pymalloc-repros` | 19 | `gh-153539` | use-after-free in TextIOWrapper.tell() with a reentrant decoder | — | · | **C** |
+| `pymalloc-repros` | 0 | `gh-143543` | re-entrant use-after-free in itertools.groupby | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 1 | `gh-146613` | re-entrant use-after-free in itertools._grouper | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 2 | `gh-142829` | use-after-free in Context.__eq__ via re-entrant ContextVar.set | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 3 | `gh-142831` | use-after-free in json encoder during re-entrant mutation | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 4 | `gh-145244` | use-after-free on borrowed dict key in json encoder | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 5 | `gh-148660` | use-after-free in OrderedDict.copy() on reentrant mutation | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 6 | `gh-151295` | use-after-free in bytes.join()/bytearray.join() via re-entrant __buffer__ | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 7 | `gh-148395` | possible UAF in {LZMA,BZ2,_Zlib}Decompressor | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 8 | `gh-112127` | possible use-after-free in atexit.unregister() | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 9 | `gh-139210` | use-after-free in xml.etree.ElementTree.iterparse() | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 10 | `gh-142560` | use-after-free in bytearray search-like methods | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 11 | `gh-142783` | possible use after free in the zoneinfo module | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 12 | `gh-143004` | possible use-after-free in collections.Counter.update() | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 13 | `gh-144833` | use-after-free in the SSL module when SSL_new() fails | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 14 | `gh-146011` | use-after-free in signaldict_repr after deletion | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 15 | `gh-149449` | use-after-free in _PyUnicode_GetNameCAPI | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 16 | `gh-151403` | use-after-free when an argv item's __fspath__ mutates args | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 17 | `gh-151416` | borrowed ref use after free via fspath in os.spawnv/spawnve | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 18 | `gh-151695` | use-after-free of the curses screen encoding | ·<sup>q</sup> | · | **C** |
+| `pymalloc-repros` | 19 | `gh-153539` | use-after-free in TextIOWrapper.tell() with a reentrant decoder | ·<sup>q</sup> | · | **C** |
 
-- `cheribsd`: **0** caught, 0 missed, 20 not run, of 20.
+- `cheribsd`: **0** caught, 20 missed, of 20. 20 of the misses have a measured disposition.
 - `capstone-sysalloc`: **0** caught, 20 missed, of 20.
 - `capstone-sublet`: **20** caught, 0 missed, of 20.
 

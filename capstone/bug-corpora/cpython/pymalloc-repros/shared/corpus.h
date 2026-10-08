@@ -58,10 +58,17 @@ static volatile unsigned char *held;
 __attribute__((noinline)) static unsigned
 read_probe(const volatile unsigned char *p) {
   unsigned long value;
-#ifdef PYMALLOC_POISONCAP
+#if defined(PYMALLOC_POISONCAP) || defined(__CHERI_PURE_CAPABILITY__)
   /* Capability-base byte load. The label sits ON the faulting instruction, so
    * the SIGPROT handler can require the fault here rather than anywhere in the
-   * program; a "C" operand keeps the stale capability itself as the base. */
+   * program; a "C" operand keeps the stale capability itself as the base.
+   *
+   * The condition is the ABI and not one platform: on ANY purecap target a
+   * pointer is a capability and cannot be held in an integer register, so an
+   * "r" operand fails to compile ("couldn't allocate input reg for constraint
+   * 'r'"). It read PYMALLOC_POISONCAP alone until 2026-10-08, which is one
+   * reason stock CheriBSD had never been built for this corpus. The Capstone
+   * domain target does not define the macro and keeps the integer form. */
   __asm__ volatile(".globl pyc_defect_read\npyc_defect_read:\nclbu %0, 0(%1)\n"
                    : "=r"(value)
                    : "C"(p)
@@ -82,7 +89,7 @@ read_probe(const volatile unsigned char *p) {
  * Without `used`, --gc-sections drops the function and the link fails. */
 __attribute__((used, noinline)) static void write_probe(volatile unsigned char *p) {
   unsigned long value = 93;
-#ifdef PYMALLOC_POISONCAP
+#if defined(PYMALLOC_POISONCAP) || defined(__CHERI_PURE_CAPABILITY__)
   __asm__ volatile(".globl pyc_defect_write\npyc_defect_write:\n"
                    "csb %0, 0(%1)\n" ::"r"(value),
                    "C"(p)

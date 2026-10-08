@@ -22,9 +22,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -60,9 +69,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -98,9 +116,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -136,9 +163,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -174,9 +210,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -212,9 +257,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -250,9 +304,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -288,9 +351,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -326,9 +398,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -364,9 +445,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -402,9 +492,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -440,9 +539,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -478,9 +586,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -516,9 +633,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -554,9 +680,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -592,9 +727,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -630,9 +774,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -668,9 +821,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -706,9 +868,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -744,9 +915,18 @@
      "ignored": false,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
-       "caught": null,
-       "why": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+       "verdict": "missed",
+       "caught": false,
+       "disposition": {
+        "bundle": "results/20261008-cheribsd",
+        "finding": "never-freed",
+        "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+       },
+       "detail": "ran to the end, status 0",
+       "group": "pymalloc-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
       },
       "capstone-sysalloc": {
        "verdict": "missed",
@@ -781,8 +961,18 @@
    "protection": {
     "cheribsd": [
      {
-      "not_run": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable.",
-      "group": "pymalloc-repros"
+      "group": "pymalloc-repros",
+      "bundle": "results/20261008-cheribsd",
+      "reader": "supervise-blocks",
+      "case_from": "allocator-tests/pymalloc-(\\d+)/target",
+      "key": "number",
+      "vehicle": "cheribsd-purecap",
+      "because": "the first stock-purecap reading of this corpus. Until 2026-10-08 its only CheriBSD images were the poisoncap pair, which arms.json excludes, because build-cases.sh had a target named `cheribsd` that built PoisonCap and the probe's capability operand was guarded on that platform rather than on the purecap ABI.",
+      "disposition": {
+       "bundle": "results/20261008-cheribsd",
+       "finding": "never-freed",
+       "why": "four allocations and five frees in the whole child process, every free quarantined and none reissued while quarantined. The port takes ONE arena from aligned_alloc and pymalloc sub-allocates inside it, so a freed object returns to a pymalloc freelist and never reaches libc free: the quarantine is active throughout and the object never arrives."
+      }
      }
     ],
     "capstone-sysalloc": [

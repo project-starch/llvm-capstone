@@ -1,0 +1,187 @@
+### revocation-control
+SUPERVISE base 0x100000 /tmp/allocator-tests/revocation-control/control
+SUPERVISE expect mc_defect_read 0x101e42
+REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1
+SUPERVISE fault signal=34 code=2 addr=0x101e42 pc=0x101e42
+SUPERVISE exit signalled=34
+
+### pymalloc-00
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-00/target
+SUPERVISE expect pyc_defect_read 0x1061ac
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=00000000000bb394
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-01
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-01/target
+SUPERVISE expect pyc_defect_read 0x106210
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=000000000176afe5
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-02
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-02/target
+SUPERVISE expect pyc_defect_read 0x1061cc
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=00000000000bb394
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-03
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-03/target
+SUPERVISE expect pyc_defect_read 0x1061b0
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=000000000176afe5
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-04
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-04/target
+SUPERVISE expect pyc_defect_read 0x10624e
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=0003698aa08e1ed1
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-05
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-05/target
+SUPERVISE expect pyc_defect_read 0x10626e
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=000000000118cd25
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-06
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-06/target
+SUPERVISE expect pyc_defect_read 0x1061cc
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=00000000000bb394
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-07
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-07/target
+SUPERVISE expect pyc_defect_read 0x106202
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=000000000003efc5
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-08
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-08/target
+SUPERVISE expect pyc_defect_read 0x106206
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=0000000030467884
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-09
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-09/target
+SUPERVISE expect pyc_defect_read 0x1061cc
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=00000000000bb394
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-10
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-10/target
+SUPERVISE expect pyc_defect_read 0x106228
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=000000000002c1ef
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-11
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-11/target
+SUPERVISE expect pyc_defect_read 0x1061b4
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=00000000000bb394
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-12
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-12/target
+SUPERVISE expect pyc_defect_read 0x1061f4
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=000000000176afe5
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-13
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-13/target
+SUPERVISE expect pyc_defect_read 0x1061cc
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=00000000000bb394
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-14
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-14/target
+SUPERVISE expect pyc_defect_read 0x10621c
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=000000000176a005
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-15
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-15/target
+SUPERVISE expect pyc_defect_read 0x1061c0
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=0000000000084914
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-16
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-16/target
+SUPERVISE expect pyc_defect_read 0x1061b0
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=000000000176afe5
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-17
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-17/target
+SUPERVISE expect pyc_defect_read 0x1061b0
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=000000000176afe5
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-18
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-18/target
+SUPERVISE expect pyc_defect_read 0x1061cc
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=00000000000bb394
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
+### pymalloc-19
+SUPERVISE base 0x100000 /tmp/allocator-tests/pymalloc-19/target
+SUPERVISE expect pyc_defect_read 0x1061c8
+PYM completed=1 alloc=0 free=0 realloc=0 arenas=1 released=0
+PYM decisions=00000000000bb394
+SUPERVISE exit status=0
+PROBE child mapped 4 5 5 0 0
+PROBE supervisor mapped 6 5 5 0 0
+
