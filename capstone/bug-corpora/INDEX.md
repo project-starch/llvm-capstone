@@ -54,32 +54,30 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/apr/pools` | allocator-component | 1.7.4 | capstone-domain, cheribsd-purecap, native | `apr-pool-repros`, `bucket-repros` | 9 |
 | `capstone/ports/cpython/app` | full-application | 3.13.7 | capstone-domain, cheribsd-purecap | `pymalloc-repros` | 20 |
 | `capstone/ports/cpython/pymalloc` | allocator-component | 3.13.7 | capstone-domain, cheribsd-purecap, native | `pymalloc-repros` | 20 |
-| `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | -- | 0 |
+| `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | `plain-heap-repros`, `plane-repros`, `subobject-repros` | 15 |
 | `capstone/ports/ffmpeg/buffer-pool` | allocator-component | 9.0.1 | capstone-domain, cheribsd-purecap, native | `pool-repros` | 4 |
 | `capstone/ports/memcached/allocators` | allocator-component | 1.6.45 | capstone-domain, cheribsd-purecap, native | `allocator-repros` | 9 |
-| `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, native | `allocator-repros` | 9 |
+| `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, capstone-virtual, native | `allocator-repros`, `plain-heap-repros` | 11 |
 | `capstone/ports/micropython` | full-application | 2e3304a | capstone-domain, silicon | -- | 0 |
 | `capstone/ports/mruby/app` | full-application | 4.0.0-rc2 | capstone-domain, native | `gc-slot-repros` | 0 |
 | `capstone/ports/mruby/cheribsd` | platform-build | 4.0.0-rc2 | cheribsd-purecap | `release-differential` | 23 |
 | `capstone/ports/musl-capstone` | domain-libc | 1.2.5 | capstone-domain | -- | 0 |
 | `capstone/ports/nginx` | allocator-component | 1.28.0 | capstone-domain, native | -- | 0 |
 | `capstone/ports/perl/cheribsd` | platform-build | 5.36.3 | cheribsd-purecap | -- | 0 |
-| `capstone/ports/perl/musl` | full-application | 5.36.3 | capstone-domain, native | `release-differential` | 11 |
+| `capstone/ports/perl/musl` | full-application | 5.36.3 | capstone-domain, capstone-virtual, native | `release-differential` | 11 |
 | `capstone/ports/postgres/app` | full-application | 17.5 | capstone-domain, cheribsd-purecap | -- | 0 |
 | `capstone/ports/postgres/memory-contexts` | allocator-component | 17.0 | capstone-domain, cheribsd-purecap, linux-guest, native | `mmgr-repros` | 5 |
 | `capstone/ports/sqlite/app` | full-application | 3.22.0 | capstone-domain, native | -- | 0 |
 | `capstone/ports/sqlite/cheribsd` | platform-build | 3.22.0 | cheribsd-purecap | `engine-repros` | 33 |
 | `capstone/ports/sqlite` | full-application | 3.53.3, 3.22.0 | capstone-domain, silicon, native | `capi-repros`, `engine-repros` | 52 |
 | `capstone/ports/whisper/ggml-context` | allocator-component | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | 0 |
-| `capstone/ports/wireshark/app` | full-application | 4.6.8 | capstone-domain | -- | 0 |
+| `capstone/ports/wireshark/app` | full-application | 4.6.8 | capstone-domain | `plain-heap-repros` | 2 |
 | `capstone/ports/wireshark/wmem` | allocator-component | 4.6.8 | capstone-domain, cheribsd-purecap, native | `wmem-repros` | 22 |
 
 ## Gaps, as the declarations state them
 
-- `capstone/bug-corpora/ffmpeg/subobject-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.
 - `capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.
-- `capstone/bug-corpora/memcached/allocator-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.
 - `capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.
 - `capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.
@@ -90,25 +88,17 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.
 - `capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.
 - `capstone/bug-corpora/sqlite/engine-repros` has no triage inventory under docs/ref/.
-- `capstone/bug-corpora/wireshark/wmem-repros` has no triage inventory under docs/ref/.
 - `xlang/lua-cdp` does not record live_in_pin: Each row is pinned to the binding version its upstream report names, not to a release this project ports.
 - `xlang/repro` does not record live_in_pin: Each row is pinned to its own vulnerable upstream commit, named in its target.md, rather than to a release this project ports.
 - `xlang/reuse-not-free` does not record live_in_pin: These are documented API contracts rather than fixed defects, so there is no upstream fix against which a pin could be live.
 - `xlang/reuse-not-free` commits no result bundle of its own.
 - `xlang/toctou-double-fetch` is triage only -- nothing built.
 - `xlang/toctou-double-fetch` does not record live_in_pin: Nothing is built, so there is no case to place in a pin.
-- `capstone/ports/ffmpeg/app` is a complete application with no corpus.
 - `capstone/ports/micropython` is a complete application with no corpus.
 - `capstone/ports/postgres/app` is a complete application with no corpus.
 - `capstone/ports/sqlite/app` is a complete application with no corpus.
-- `capstone/ports/wireshark/app` is a complete application with no corpus.
-- `capstone/bug-corpora/ffmpeg/plain-heap-repros` is not referenced by any port.json.
-- `capstone/bug-corpora/ffmpeg/plane-repros` is not referenced by any port.json.
-- `capstone/bug-corpora/ffmpeg/subobject-repros` is not referenced by any port.json.
-- `capstone/bug-corpora/memcached/plain-heap-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/postgres/c-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/postgres/sql-repros` is not referenced by any port.json.
-- `capstone/bug-corpora/wireshark/plain-heap-repros` is not referenced by any port.json.
 
 ## Our own silicon defects
 

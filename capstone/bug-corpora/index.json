@@ -214,6 +214,7 @@
       "advisories": [],
       "shape_table": true,
       "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. Cases 0-2 are LIVE at the n9.0.1 pin; cases 3-9 were added 2026-10-06, of which 5, 6 are live and 3, 4, 7, 8, 9 are fix-reversals -- liveness is RECORDED, never required, and requiring it is what kept this cell at three cases. Under this inventory's axis (WHO ALLOCATED THE OBJECT) every row here is NOT NESTED: the object is one allocation and nothing sub-allocated the crossed region. No arm we have catches any of them; the oracle is the upstream fix. The Capstone arms for 3-9 are declared predictions -- cases 0-2 got theirs from probe cases 40-42 of ports/ffmpeg/buffer-pool/security-tests, which is the seam 3-9 will use. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 0 of 10 caught, 22/22 arms, both platform controls firing -- and the reason is recorded as WEAKER than 'the bound is the allocation', because the port's av_malloc is an un-narrowed arena carve.",
+      "inventory": "capstone/docs/ref/ffmpeg-spatial-defect-triage.md",
       "where": "capstone/bug-corpora/ffmpeg/subobject-repros"
     },
     {
@@ -343,6 +344,7 @@
         "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd",
         "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8"
       ],
+      "inventory": "capstone/docs/ref/memcached-allocator-defect-triage.md",
       "where": "capstone/bug-corpora/memcached/allocator-repros"
     },
     {
@@ -748,7 +750,7 @@
     {
       "program": "wireshark",
       "boundary": "wmem (block, block_fast)",
-      "title": "Dissector-side defects in consumers of Wireshark's wmem pools: thirteen temporal, five spatial",
+      "title": "Dissector-side defects in consumers of Wireshark's wmem pools: thirteen temporal, nine spatial",
       "upstream": {
         "version": "4.6.8",
         "port": "capstone/ports/wireshark/wmem"
@@ -793,7 +795,8 @@
       ],
       "advisories": [],
       "shape_table": true,
-      "note": "Cases 0-12 are temporal; cases 13-17 are SPATIAL, from the hunt recorded in docs/ref/wireshark-spatial-defect-triage.md. Cases 14 and 15 are the corpus's only rows LIVE at the v4.6.8 pin -- every other row, temporal and spatial alike, is a fix-reversal. Note for anyone reading the spatial rows: every arm of this harness narrows a wmem allocation to its request (wm_narrow(), ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15), so a spatial crossing faults on ALL arms and these rows do not discriminate the chunk port. Case 13's run established that by refuting its own prediction. Cases 18-21 added 2026-10-07, all SPATIAL and all nested. 18 (716a200295) is the row that FILLS a cell this inventory recorded as empty: a nested-spatial defect LIVE at the v4.6.8 pin, whose guard cannot fire because the user preference it tests defaults to 0. The leads came from bug-corpora/wireshark/LIVE-CANDIDATES.md and from the class-B candidates docs/ref/wireshark-spatial-defect-triage.md:226-229 named and left unbuilt. Two candidates from those lists were REJECTED rather than built: 1c090e9292 is a STACK buffer overflow, so it has no heap allocator boundary, and d7d1686a95 indexes a static value_string array, which likewise has no allocator. 0939cf989d is the same ETSI DCP defect as case 16 under a different hash.",
+      "note": "Cases 0-12 are temporal; cases 13-21 are SPATIAL, from the hunt recorded in docs/ref/wireshark-spatial-defect-triage.md. Cases 14 and 15 are the corpus's only rows LIVE at the v4.6.8 pin -- every other row, temporal and spatial alike, is a fix-reversal. Note for anyone reading the spatial rows: every arm of this harness narrows a wmem allocation to its request (wm_narrow(), ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15), so a spatial crossing faults on ALL arms and these rows do not discriminate the chunk port. Case 13's run established that by refuting its own prediction. Cases 18-21 added 2026-10-07, all SPATIAL and all nested. 18 (716a200295) is the row that FILLS a cell this inventory recorded as empty: a nested-spatial defect LIVE at the v4.6.8 pin, whose guard cannot fire because the user preference it tests defaults to 0. The leads came from bug-corpora/wireshark/LIVE-CANDIDATES.md and from the class-B candidates docs/ref/wireshark-spatial-defect-triage.md:226-229 named and left unbuilt. Two candidates from those lists were REJECTED rather than built: 1c090e9292 is a STACK buffer overflow, so it has no heap allocator boundary, and d7d1686a95 indexes a static value_string array, which likewise has no allocator. 0939cf989d is the same ETSI DCP defect as case 16 under a different hash.",
+      "inventory": "capstone/docs/ref/wireshark-wmem-defect-triage.md",
       "where": "capstone/bug-corpora/wireshark/wmem-repros"
     },
     {
@@ -992,6 +995,11 @@
         "capstone/ports/ffmpeg/buffer-pool"
       ],
       "note": "Its pool fixtures run the buffer-pool port's Sublet leases inside the whole decoder; the pool corpus's cases belong to that component, not to this one.",
+      "corpora": [
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+        "capstone/bug-corpora/ffmpeg/plane-repros",
+        "capstone/bug-corpora/ffmpeg/subobject-repros"
+      ],
       "where": "capstone/ports/ffmpeg/app"
     },
     {
@@ -1049,16 +1057,18 @@
       },
       "targets": [
         "capstone-domain",
+        "capstone-virtual",
         "native"
       ],
       "workload": "mc-harness: a fixed text- and meta-protocol script over one connection and 2 x -t concurrent ones, compared byte for byte with the native server",
       "corpora": [
-        "capstone/bug-corpora/memcached/allocator-repros"
+        "capstone/bug-corpora/memcached/allocator-repros",
+        "capstone/bug-corpora/memcached/plain-heap-repros"
       ],
       "related": [
         "capstone/ports/memcached/allocators"
       ],
-      "status": "M0 open: see capstone/docs/plans/2026-10-01-memcached-full-app-port.md",
+      "status": "Physical port and current corpus retained; virtual review stack passes 73 checks including 20 outer-heap fixtures: see app/README.md",
       "where": "capstone/ports/memcached/app"
     },
     {
@@ -1206,11 +1216,13 @@
       },
       "targets": [
         "capstone-domain",
+        "capstone-virtual",
         "native"
       ],
       "workload": "scripts/smoke.pl, byte-identical to the native reference",
       "evidence": [
-        "capstone/ports/perl/musl/results/2026-09-26"
+        "capstone/ports/perl/musl/results/2026-09-26",
+        "capstone/ports/perl/musl/results/virtual/2026-10-07.json"
       ],
       "related": [
         "capstone/ports/perl/cheribsd"
@@ -1403,6 +1415,9 @@
         "capstone/ports/wireshark/app/results/2026-09-24-qemu-cma-domain-block"
       ],
       "note": "The seven dependencies cross-build and a CMA domain block covers its size; the port found three runtime gaps (C-64, C-65, I-11) and has no README.",
+      "corpora": [
+        "capstone/bug-corpora/wireshark/plain-heap-repros"
+      ],
       "where": "capstone/ports/wireshark/app"
     },
     {
@@ -1685,10 +1700,8 @@
     ]
   },
   "gaps": [
-    "`capstone/bug-corpora/ffmpeg/subobject-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.",
     "`capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.",
-    "`capstone/bug-corpora/memcached/allocator-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
     "`capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.",
@@ -1699,24 +1712,16 @@
     "`capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.",
     "`capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.",
     "`capstone/bug-corpora/sqlite/engine-repros` has no triage inventory under docs/ref/.",
-    "`capstone/bug-corpora/wireshark/wmem-repros` has no triage inventory under docs/ref/.",
     "`xlang/lua-cdp` does not record live_in_pin: Each row is pinned to the binding version its upstream report names, not to a release this project ports.",
     "`xlang/repro` does not record live_in_pin: Each row is pinned to its own vulnerable upstream commit, named in its target.md, rather than to a release this project ports.",
     "`xlang/reuse-not-free` does not record live_in_pin: These are documented API contracts rather than fixed defects, so there is no upstream fix against which a pin could be live.",
     "`xlang/reuse-not-free` commits no result bundle of its own.",
     "`xlang/toctou-double-fetch` is triage only -- nothing built.",
     "`xlang/toctou-double-fetch` does not record live_in_pin: Nothing is built, so there is no case to place in a pin.",
-    "`capstone/ports/ffmpeg/app` is a complete application with no corpus.",
     "`capstone/ports/micropython` is a complete application with no corpus.",
     "`capstone/ports/postgres/app` is a complete application with no corpus.",
     "`capstone/ports/sqlite/app` is a complete application with no corpus.",
-    "`capstone/ports/wireshark/app` is a complete application with no corpus.",
-    "`capstone/bug-corpora/ffmpeg/plain-heap-repros` is not referenced by any port.json.",
-    "`capstone/bug-corpora/ffmpeg/plane-repros` is not referenced by any port.json.",
-    "`capstone/bug-corpora/ffmpeg/subobject-repros` is not referenced by any port.json.",
-    "`capstone/bug-corpora/memcached/plain-heap-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/postgres/c-repros` is not referenced by any port.json.",
-    "`capstone/bug-corpora/postgres/sql-repros` is not referenced by any port.json.",
-    "`capstone/bug-corpora/wireshark/plain-heap-repros` is not referenced by any port.json."
+    "`capstone/bug-corpora/postgres/sql-repros` is not referenced by any port.json."
   ]
 }

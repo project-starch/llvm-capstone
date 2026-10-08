@@ -16,7 +16,8 @@
   ],
   "workload": "mc-harness: a fixed text- and meta-protocol script over one connection and 2 x -t concurrent ones, compared byte for byte with the native server",
   "corpora": [
-    "capstone/bug-corpora/memcached/allocator-repros"
+    "capstone/bug-corpora/memcached/allocator-repros",
+    "capstone/bug-corpora/memcached/plain-heap-repros"
   ],
   "related": [
     "capstone/ports/memcached/allocators"
