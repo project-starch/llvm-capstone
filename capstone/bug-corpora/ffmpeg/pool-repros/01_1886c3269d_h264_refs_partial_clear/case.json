@@ -78,5 +78,7 @@
     "Sublet",
     "CHERI default (stock CheriBSD, revoker on) -- PREDICTED, NOT MEASURED",
     "PoisonCap (mode 2)"
-  ]
+  ],
+  "nested": true,
+  "nested_why": "AVBufferPool recycles the object; the platform allocator saw only the pool's block -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED."
 }
