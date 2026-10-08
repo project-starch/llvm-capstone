@@ -1,0 +1,45 @@
+{
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured. CheriBSD's revocation sweeps capabilities to freed heap memory, so the stale pointer SHOULD be revoked and the probe fault -- but only if the sweep has run between the free and the access. The reduction frees and re-allocates immediately, the case least favourable to revocation, so a clean reading here would be about sweep TIMING rather than about the defect.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared or the iteration is skipped, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared or the iteration is skipped, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    }
+  },
+  "case": 2,
+  "title": "guarding only the write left every later read of the freed watcher unguarded",
+  "consumer": "logger.c, logger_thread_write_entry's request loop",
+  "object": "the same log watcher as case 01, one calloc(1, sizeof(logger_watcher))",
+  "lifetime_ender": "free(w) inside logger_thread_close_watcher, reached from the same poll",
+  "shape": "a residual: the first fix guarded the write and left the reads",
+  "allocator_layer": "the platform allocator itself: one direct malloc/calloc/getline allocation, with neither memcached suballocator in the path.",
+  "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is the LOOP CONDITION, `!w->failed_flush && bipbuf_request(w->buf, ...)`.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "upstream_fix": "3bc58f6ea55a",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: 1.6.45:logger.c carries `if (watchers[x] == NULL) { continue; }` (`grep -c 'if (watchers[x] == NULL) {'` = 2). The predecessor form, which guards only the write, is at 3bc58f6ea55a^ and is absent from the pin. A fix-reversal.",
+  "nested": false,
+  "nested_why": "the object came straight from malloc / calloc / getline, with neither slabs.c nor cache.c between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested. Its sibling ../allocator-repros holds the nested ones.",
+  "distinguishing": "this is the RESIDUAL of case 01's fix, not an independent defect -- and it is the reason both are kept. Guarding the write meant the flag was never set, so the while condition was re-evaluated against freed memory and the loop could not terminate; the second fix skips the whole iteration with `continue` instead. A fix that addresses the access it was reported for and leaves the others is a shape worth having a case for."
+}

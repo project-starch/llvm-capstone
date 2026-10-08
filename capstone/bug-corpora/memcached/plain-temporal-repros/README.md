@@ -37,6 +37,9 @@ the rest of this tree already follows.
 
 | shape | cases |
 |---|---|
+| a free-at-entry republished on only one return path | 0 |
+| a helper that frees the object its caller is standing on | 1 |
+| a residual: the first fix guarded the write, not the reads | 2 |
 
 Each row's `case.json` carries the upstream fix, the exact lifetime ender, the access that follows
 it, and a `nested: false` with the reason — the field the inventory's cell counts are computed from.

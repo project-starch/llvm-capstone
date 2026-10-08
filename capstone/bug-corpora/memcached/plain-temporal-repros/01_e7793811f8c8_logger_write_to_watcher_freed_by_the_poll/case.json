@@ -1,0 +1,45 @@
+{
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured. CheriBSD's revocation sweeps capabilities to freed heap memory, so the stale pointer SHOULD be revoked and the probe fault -- but only if the sweep has run between the free and the access. The reduction frees and re-allocates immediately, the case least favourable to revocation, so a clean reading here would be about sweep TIMING rather than about the defect.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared or the iteration is skipped, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared or the iteration is skipped, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    }
+  },
+  "case": 1,
+  "title": "a flush flag was written into a watcher the poll it had just called may have freed",
+  "consumer": "logger.c, logger_thread_write_entry",
+  "object": "a log watcher, one calloc(1, sizeof(logger_watcher))",
+  "lifetime_ender": "free(w) inside logger_thread_close_watcher, reached from logger_thread_poll_watchers",
+  "shape": "a helper that may free the object its caller is standing on",
+  "allocator_layer": "the platform allocator itself: one direct malloc/calloc/getline allocation, with neither memcached suballocator in the path.",
+  "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is `w->failed_flush = true;`, a WRITE into the freed watcher.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "upstream_fix": "e7793811f8c8",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: this fix was SUPERSEDED by 3bc58f6ea55a rather than reverted, so `grep -c 'if (watchers[x] != NULL) {'` on 1.6.45:logger.c is 0 while the successor's `if (watchers[x] == NULL) {` appears twice. The unguarded write is at e7793811f8c8^ and is absent from the pin. A fix-reversal.",
+  "nested": false,
+  "nested_why": "the object came straight from malloc / calloc / getline, with neither slabs.c nor cache.c between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested. Its sibling ../allocator-repros holds the nested ones.",
+  "distinguishing": "the free is two calls deep and CONDITIONAL on the peer having gone away, so nothing at the write's own line suggests the object might be gone -- the fix's own comment is the documentation: 'Oddity; poll_watchers can free *w, recheck it.' The close also nulls the global slot `watchers[w->id]` but cannot null the caller's local `w`, which is what leaves the dangling pointer."
+}
