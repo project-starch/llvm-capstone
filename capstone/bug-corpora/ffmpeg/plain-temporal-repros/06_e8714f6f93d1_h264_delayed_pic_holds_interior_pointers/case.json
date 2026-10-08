@@ -1,0 +1,45 @@
+{
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured. CheriBSD's revocation sweeps capabilities to freed heap memory, so the stale pointer SHOULD be revoked and the probe fault -- but only if the sweep has run between the free and the access. The reduction frees and re-allocates immediately, which is the case least favourable to revocation, so a clean reading here is about sweep TIMING and not about the defect. That must be read in-guest before it is called either way.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    }
+  },
+  "case": 6,
+  "title": "a reorder array held interior pointers into a picture buffer that was freed wholesale",
+  "consumer": "libavcodec/h264.c, ff_h264_free_tables",
+  "object": "the H264 DPB, ONE av_mallocz_array block, with delayed_pic[] holding &DPB[i]",
+  "lifetime_ender": "av_freep(&h->DPB), which frees the whole block in one call",
+  "shape": "an array of interior pointers into a single block freed as a whole",
+  "allocator_layer": "the platform allocator itself: one direct av_malloc-family allocation, with no pool or refstruct layer. FFmpeg's av_malloc is malloc plus alignment.",
+  "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is `h->delayed_pic[i]->reference = 0;`, a WRITE through an interior pointer.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "upstream_fix": "e8714f6f93d1",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: the function moved to n9.0.1:libavcodec/h264dec.c, which clears the reorder array with `memset(h->delayed_pic, 0, sizeof(h->delayed_pic));` before freeing the DPB. That memset is absent at e8714f6f93d1^.",
+  "nested": false,
+  "nested_why": "the object came straight from av_malloc/av_mallocz/av_malloc_array/av_realloc -- which on the platform is malloc -- with no AVBufferPool, AVRefStructPool or other recycling layer between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested. Its sibling ../pool-repros holds the nested ones.",
+  "distinguishing": "the dangling pointers are INTERIOR -- `&h->DPB[i]` for various i -- into one allocation freed in a single call, so clearing the owning pointer cannot help and the fix must clear the other ARRAY. It is also a WRITE, which makes it the most damaging shape here: it stores into whatever now occupies the block rather than merely reading it."
+}

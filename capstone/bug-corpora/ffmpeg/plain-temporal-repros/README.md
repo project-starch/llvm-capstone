@@ -37,6 +37,19 @@ the rest of this tree already follows.
 
 | shape | cases |
 |---|---|
+| an interior pointer into a freed object | 0 |
+| a list-freeing loop whose increment reads the freed node | 1 |
+| a cursor not rebased after realloc moved its buffer | 2 |
+| a saved field pointing into a buffer that was replaced | 3 |
+| a reader context holding a base that realloc invalidated | 4 |
+| two tables owning one object, with the free clearing one | 5 |
+| interior pointers into a block freed as a whole | 6 |
+| a free that leaves its owning field set, then a callee that frees again | 7 |
+| a realloc whose source and destination fields differ | 8 |
+| a free through a local copy, leaving the owning field set | 9 |
+| av_freep pointed at the local instead of the owning field | 10 |
+| a teardown that can run twice through a field it never clears | 11 |
+| ownership handed to a callee, then the buffer used again | 12 |
 
 Each row's `case.json` carries the upstream fix, the exact lifetime ender, the access that follows
 it, and a `nested: false` with the reason — the field the inventory's cell counts are computed from.

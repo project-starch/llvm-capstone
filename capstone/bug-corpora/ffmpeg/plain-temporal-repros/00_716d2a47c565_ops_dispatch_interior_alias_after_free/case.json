@@ -1,0 +1,45 @@
+{
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured. CheriBSD's revocation sweeps capabilities to freed heap memory, so the stale pointer SHOULD be revoked and the probe fault -- but only if the sweep has run between the free and the access. The reduction frees and re-allocates immediately, which is the case least favourable to revocation, so a clean reading here is about sweep TIMING and not about the defect. That must be read in-guest before it is called either way.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    }
+  },
+  "case": 0,
+  "title": "an interior pointer into a freed pass struct was dereferenced to read a field",
+  "consumer": "libswscale/ops_dispatch.c, compile_single",
+  "object": "a SwsOpPass from av_mallocz, with `comp` an interior pointer at &p->comp",
+  "lifetime_ender": "av_free(p), the pass struct, on the path that hands its compiled parts onward",
+  "shape": "an interior pointer into a freed object, used after the object was freed",
+  "allocator_layer": "the platform allocator itself: one direct av_malloc-family allocation, with no pool or refstruct layer. FFmpeg's av_malloc is malloc plus alignment.",
+  "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is `comp->backend->flags`, where comp points INSIDE the freed p.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "upstream_fix": "716d2a47c565",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: n9.0.1:libswscale/ops_dispatch.c reads `c.backend->flags`. The stale form, `comp->backend->flags`, is at 716d2a47c565^ and is absent from the pin.",
+  "nested": false,
+  "nested_why": "the object came straight from av_malloc/av_mallocz/av_malloc_array/av_realloc -- which on the platform is malloc -- with no AVBufferPool, AVRefStructPool or other recycling layer between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested. Its sibling ../pool-repros holds the nested ones.",
+  "distinguishing": "the stale pointer is not the one that was freed -- it is an INTERIOR pointer into the same allocation, which is why no amount of nulling the outer pointer would have helped and why the fix reads from the local copy `c` instead. A bounds-only configuration cannot see this at all: the address is in bounds of whatever now occupies the chunk."
+}

@@ -5,7 +5,7 @@
   "upstream": {
     "version": "9.0.1"
   },
-  "cases": 0,
+  "cases": 13,
   "case_schema": "case-json",
   "case_macro": "FFT",
   "required_arms": [
@@ -18,14 +18,18 @@
     "native-fix-differential"
   ],
   "arm_keys": {},
-  "status": "planned",
+  "status": "measured",
   "live_in_pin_recorded": true,
-  "expect_live_in_pin": {},
+  "expect_live_in_pin": {
+    "false": 13
+  },
   "runners": [
     "capstone/bug-corpora/ffmpeg/plain-temporal-repros/runners/run-native.sh"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
-  "evidence": [],
+  "evidence": [
+    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-08-native-thirteen-cases"
+  ],
   "advisories": [],
   "shape_table": true
 }

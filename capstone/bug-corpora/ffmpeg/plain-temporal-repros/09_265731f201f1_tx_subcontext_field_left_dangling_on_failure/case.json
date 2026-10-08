@@ -1,0 +1,45 @@
+{
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured. CheriBSD's revocation sweeps capabilities to freed heap memory, so the stale pointer SHOULD be revoked and the probe fault -- but only if the sweep has run between the free and the access. The reduction frees and re-allocates immediately, which is the case least favourable to revocation, so a clean reading here is about sweep TIMING and not about the defect. That must be read in-guest before it is called either way.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    }
+  },
+  "case": 9,
+  "title": "a failed initialisation freed the subcontext through a local, leaving the field set",
+  "consumer": "libavutil/tx.c, ff_tx_init_subtx",
+  "object": "the AVTXContext subcontext from av_mallocz, owned by s->sub",
+  "lifetime_ender": "av_free(sub), which releases the block without clearing s->sub",
+  "shape": "an error path freeing through a local copy while the owning field keeps the address",
+  "allocator_layer": "the platform allocator itself: one direct av_malloc-family allocation, with no pool or refstruct layer. FFmpeg's av_malloc is malloc plus alignment.",
+  "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is teardown, which dereferences and frees s->sub again.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "upstream_fix": "265731f201f1",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: n9.0.1:libavutil/tx.c frees with `av_freep(&s->sub)` on the failure path. The `av_free(sub)` form is at 265731f201f1^ and is absent from the pin.",
+  "nested": false,
+  "nested_why": "the object came straight from av_malloc/av_mallocz/av_malloc_array/av_realloc -- which on the platform is malloc -- with no AVBufferPool, AVRefStructPool or other recycling layer between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested. Its sibling ../pool-repros holds the nested ones.",
+  "distinguishing": "the fix's whole content is changing which pointer the free goes through -- `av_free(sub)` to `av_freep(&s->sub)` -- so the row is precisely the distinction this corpus's gate turns on: freeing through a local leaves the FIELD dangling, while freeing through the field clears it."
+}

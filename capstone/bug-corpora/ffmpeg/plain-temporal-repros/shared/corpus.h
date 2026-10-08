@@ -63,6 +63,24 @@ _Noreturn void fft_fail(unsigned code);
       fft_fail(n);                                                            \
   } while (0)
 
+/* A premise that holds only WITHOUT AddressSanitizer: that the allocator handed
+ * the released chunk back. ASan quarantines freed memory precisely so it cannot
+ * be reused, which is what lets it fault at the labelled probe instead -- so
+ * asserting reuse under ASan would fail the case for the very reason the ASan
+ * arm exists. The plain build observes the aliasing; the ASan build observes the
+ * fault; neither alone is the result. */
+#if defined(__SANITIZE_ADDRESS__)
+#define CHECK_REUSE(c, n) ((void)0)
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define CHECK_REUSE(c, n) ((void)0)
+#else
+#define CHECK_REUSE(c, n) CHECK(c, n)
+#endif
+#else
+#define CHECK_REUSE(c, n) CHECK(c, n)
+#endif
+
 /* The accesses through the stale pointer, labelled so a sanitiser's report or a
  * capability fault can be required to land HERE rather than merely somewhere in
  * the program.
