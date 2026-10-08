@@ -286,6 +286,17 @@ extern void (*php_capstone_sink)(const char *, unsigned long);
 /* PHP_FUNCTION(parse_url) in ext/standard/url.c defines this. */
 extern void zif_parse_url(INTERNAL_FUNCTION_PARAMETERS);
 
+#if defined(PHP_CAP_DIAG_EXECUTE)
+/* Branch counters for the instrumented zend_execute.c. Indices match diag/patch-zend-execute.py:
+ *   1 reached the string-offset tail        2 op2 is IS_VAR          3 value == the temp slot
+ *   4 result UNUSED -> STR_FREE             5 result USED -> ALLOC_ZVAL
+ *   7 final_value == temp slot -> the :519 STR_FREE that ASAN reports
+ *   8 PZVAL_IS_REF && refcount>0 -> the :654 zval_copy_ctor that ASAN reports as the UAF read
+ *   9 the IS_TMP_VAR arm of the same switch */
+unsigned long ze_diag[16];
+unsigned long ze_addr[4];   /* [0] pointer freed at :519   [1] pointer copied at :654 */
+#endif
+
 static void sink(const char *s, unsigned long n) { (void)s; (void)n; }
 
 static unsigned err_count;
@@ -552,6 +563,31 @@ void domain_main(unsigned *res, unsigned func)
         } zend_catch {
             st |= ST_BAILED;
         } zend_end_try();
+
+
+#if defined(PHP_CAP_DIAG_EXECUTE)
+        {
+            extern void php_fault_report(unsigned long);
+            /* Pack the branch counters, 4 bits each -- they are single-digit for this trigger. */
+            unsigned long v = 0xEAUL << 56;
+            unsigned i;
+            for (i = 1; i <= 9; i++) {
+                v |= (ze_diag[i] > 15UL ? 15UL : ze_diag[i]) << ((9 - i) * 4);
+            }
+            /* Four 12-bit address slices in one report: the two STRING pointers and the two
+             * ZVAL pointers. Same zval + different strings means the pointer was replaced between
+             * the free and the copy; different zvals means the outer assignment never sees the
+             * object whose string was freed. */
+            v = (0xEAUL << 56)
+              | ((ze_diag[6] > 7UL ? 7UL : ze_diag[6]) << 48)    /* non-split TMP_VAR arm */
+              | ((ze_diag[8] > 7UL ? 7UL : ze_diag[8]) << 51)    /* split IS_VAR/CONST arm */
+              | ((ze_addr[0] >> 4) & 0xFFFUL)
+              | (((ze_addr[1] >> 4) & 0xFFFUL) << 12)
+              | (((ze_addr[2] >> 4) & 0xFFFUL) << 24)
+              | (((ze_addr[3] >> 4) & 0xFFFUL) << 36);
+            php_fault_report(v);
+        }
+#endif
 
 #if defined(ZEND_CAP_LIFECYCLE_TRACE)
         /* Report the allocator's event counts through the fault channel. This HALTS the domain, so

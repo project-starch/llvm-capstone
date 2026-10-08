@@ -681,6 +681,49 @@ a tagged load is required to complete, and the read completed.
 The other two eliminate the obvious environmental suspects. Running under `eval` rather than as a
 file does not change the defect on the host, and the no-op `var_dump` is not hiding a second use.
 
+### Branch-level instrumentation: the free matches the host, the READ does not
+
+`PHP_CAP_DIAG_EXECUTE` compiles an instrumented copy of `zend_execute.c`
+(`diag/patch-zend-execute.py` inserts counters at named branches). Diagnostic only -- it breaks the
+byte-identical property the corpus result rests on, so it must never be on for a scoring build.
+
+Measured on CRASH-057's fault arm:
+
+| probe | branch | count |
+|---|---|---|
+| 1 | reached the string-offset tail | 1 |
+| 2 | `op2->op_type == IS_VAR` | 0 |
+| 7 | `final_value == &T(op2->u.var).tmp_var` -> **the `:519` STR_FREE ASAN reports** | **1** |
+| 8 | split path, `PZVAL_IS_REF && refcount>0` -> the `:654` `zval_copy_ctor` | 1 |
+| 9 | split path, `IS_TMP_VAR` arm | 0 |
+| 6 | non-split path, `IS_TMP_VAR` arm | 0 |
+
+**The free is identical to the host.** Probe 7 fires, in the same branch, on the same condition.
+The port is not diverging at the free.
+
+The divergence is at the read. Recording the actual pointers at both sites:
+
+    :519   zval 0x745  ->  string 0x6fd   (freed)
+    :654   zval 0x779  ->  string 0x8cf   (copied)
+
+**Different zvals and different strings.** The one `zval_copy_ctor` that runs is for some other
+assignment entirely; the object whose string was freed is never string-copied. Nothing dereferences
+the dangling pointer, which is why nothing faults -- and with `ZEND_CAP_NO_CACHE` proving the block
+is never recycled, the pointer really is dangling the whole time. It is simply stored and not read.
+
+### What remains unknown, after four refuted hypotheses
+
+Which arm the outer `$x = (...)` assignment actually takes. Probes 6, 8 and 9 exclude three of the
+four candidates; the non-split path's `IS_VAR`/`IS_CONST` arms are uninstrumented, and one of them
+(`value->refcount++; *variable_ptr_ptr = value;`) would store the pointer without copying the
+string, which fits every measurement. That is the next probe, not a conclusion.
+
+**Four hypotheses were proposed and refuted in order**, each one plausible and each one wrong:
+block recycling (killed by `ZEND_CAP_NO_CACHE`), `eval` versus file execution (killed on the host),
+the no-op `var_dump` (killed by linking the real one), and temp-variable layout changing the branch
+(killed by probe 7 matching the host exactly). The useful output of this investigation is the
+elimination, not a mechanism.
+
 ### So what IS the cause? Not established.
 
 What is left is a control-flow divergence inside `zend_assign_to_variable` itself. The free at :519

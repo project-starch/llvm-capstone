@@ -173,6 +173,15 @@ for t in $TUS; do
   _src="$P/Zend/$t.c"
   [ "$t" = "zend_alloc" ] && _src="$ZEND_ALLOC_SRC"
   [ "$t" = "zend_variables" ] && _src="$ZEND_VARIABLES_SRC"
+  # PHP_CAP_DIAG_EXECUTE: compile an INSTRUMENTED copy of zend_execute.c instead of the corpus one.
+  # Diagnostic only -- the corpus result rests on the engine being byte-identical, so this must
+  # never be on for a scoring build. It answers which BRANCH this port takes where ASAN reports
+  # CRASH-057's free and its use-after-free read.
+  if [ "$t" = "zend_execute" ] && [ -n "${PHP_CAP_DIAG_EXECUTE:-}" ]; then
+    python3 "$HERE/diag/patch-zend-execute.py" "$P/Zend/zend_execute.c" "$OUT/diag_zend_execute.c" >/dev/null \
+      || { echo "FAILED patching zend_execute.c"; exit 1; }
+    _src="$OUT/diag_zend_execute.c"
+  fi
   # The rename is scoped to zend_alloc.c: every OTHER TU must still call `_emalloc` and so reach
   # the re-bounding wrapper. Applying it globally would bypass the wrapper everywhere.
   _rn=(); [ "$t" = "zend_alloc" ] && _rn=("${ZEND_ALLOC_RENAME[@]}")
