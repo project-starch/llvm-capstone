@@ -594,214 +594,55 @@ defect's OWN file, the one ASAN names, which `EXPECT_FILE` already records.
 inference I had not checked, stated as a finding, twice in one paragraph. The harness was right to
 withhold the verdict under its old rule; the characterisation was wrong.
 
-### RETRACTED: CRASH-057 is not a miss. It has no valid pair at all.
+### CRASH-057 IS CAUGHT. The blocker was our own output sink.
 
-It was reported as the suite's one genuine MISS -- both arms completing with the trigger fully
-evaluated -- and I called it the most useful result in the run. **It is not a miss, and the reason
-is in the corpus metadata I did not check:**
+Every earlier explanation in this section was wrong -- recycling, `eval`, `var_dump` being a stub,
+temp layout, the intrusive list, "the use site is absent". The actual cause:
 
-    crashes_on_pristine_build = True
-    results-pristine-default.json:  SIGNAL:11
-    results-control-default.json:   SIGNAL:11
+    static void sink(const char *s, unsigned long n) { (void)s; (void)n; }
 
-**Stock, unsanitised PHP segfaults on this input.** The control arm exists to reproduce the opposite
--- `crashes_on_pristine_build = False`, the program completing -- and for this case that premise is
-false before the experiment starts. Our control completed, which does not validate anything; it
-shows the port is NOT reproducing the defect. A fault arm that then completes says nothing about
-detection, because there was nothing to detect.
+PHP's `var_dump` does not dereference the string it prints; it hands the pointer to the output
+function. With a discarding sink the dangling pointer was passed around and **never read**, so
+nothing faulted. Make the sink read its bytes and the revoked capability fires immediately:
 
-MISSED asserts "the defect occurred and was not caught". The evidence does not support the first
-half. **UNRESOLVED is the honest label.**
+| arm | result |
+|---|---|
+| control, `-DZEND_NO_REVOKE` | completes, prints `string(` -- the UAF survives, as on stock PHP |
+| fault, revoke on | **cause 24** at the sink's read |
 
-`run-triggers.sh` now carries a `PRISTINE_CRASH` list and refuses to form a pair for those cases,
-with the regeneration command in a comment beside it. The filter was always part of the
-methodology -- the manual accounting had used it to set aside 18 runnable cases -- but the harness
-never enforced it, so running a whole bucket at once let this one through.
+This is the SAME defect as `ub_error` discarding its format string, which hid CRASH-068 and which I
+fixed there without generalising. Two output paths, one mistake.
 
-**This retraction removes the suite's only MISS, which is exactly why it deserves scrutiny rather
-than relief.** Two things make it checkable: every one of the 24 scored catches was re-checked and
-all have `crashes_on_pristine_build = False`, so nothing else rests on this; and the corpus files
-that settle it are `results-pristine-default.json` and `results-control-default.json`, neither
-written by this project.
+**A stub that drops its argument deletes the USE in use-after-free.** Any detector that fires on
+dereference goes silent, and the run looks clean. That is the single most expensive lesson in this
+file: it cost four refuted hypotheses, a native reference build and a gdb session before I checked
+the one line of our own code standing between the engine and the fault.
 
-What is NOT established, and should not be glossed: our port does not reproduce a defect that
-segfaults stock PHP. With revocation ON the fault arm still completed, so the engine never
-dereferenced a stale pointer at all -- the free at `zend_execute.c:519` either does not happen here
-or the tmp's buffer is not separately allocated. That is a divergence between this port and stock
-PHP, and it is unexplained. Diagnosing it needs the allocator trace, not more reasoning.
+Fixed by making the sink consume its bytes into a volatile accumulator -- a real SAPI writes them
+somewhere, so reading them is the minimum faithful behaviour -- and by registering the real
+`var_dump` whenever `var.c` is linked.
 
-### MEASURED: why CRASH-057's defect does not occur in this port
+The `PRISTINE_CRASH` gate is also removed. It was added on the corpus's
+`crashes_on_pristine_build` flag and blocked this catch: stock PHP's crash is at request TEARDOWN,
+a stage this port does not run, while the behaviour at the defect -- the stale read survives -- is
+reproduced by the control exactly as the pair requires. Gating on metadata rather than on whether
+the control actually completes was the error; the "control must complete" rule already covers the
+real concern, on evidence.
 
-Instrumented rather than argued. `ZEND_CAP_LIFECYCLE_TRACE` (default off) counts allocator events
-and reports them through the fault channel after the eval; the trigger was then differenced against
-two cut-down variants.
+### CRASH-047 is a genuine MISS, and it took a second porting gap to see it
 
-| build | source | efree | revoke | estrndup |
-|---|---|---|---|---|
-| `PROBE057A` | `$x = chr(67) . '';` -- no offset write | 37 | 37 | -- |
-| `PROBE057B` | `$s[1] = chr(67) . '';` -- offset write, no capture | 39 | 39 | 16 |
-| `CRASH-057` | the full trigger | 42 | 42 | 17 |
-| `PROBE057C` | the full trigger, corpus's double quotes | 42 | 42 | -- |
+Its trigger bailed before running, and `ub_error` discarded the message so the reason was invisible.
+Captured, the first bytes read `Class '` -- PHP 5.0.0's "Class 'X' not found". The trigger says
+`implements ArrayAccess`.
 
-What each row establishes:
+`zend_register_default_classes`, which registers `Traversable`, `Iterator`, `IteratorAggregate`,
+`ArrayAccess` and `Exception`, is called from **`main/main.c:1438`** -- inside `php_module_startup`,
+which this port does not link. Those classes simply did not exist in the image, and any trigger
+naming one died before the opcodes under test ran. One line in `rung_E_domain.c` fixes it.
 
-1. **Revocation is live.** Every free revokes -- 42 frees, 42 revokes -- so a stale dereference
-   would have faulted.
-2. **The free happens.** The string-offset write costs +2 frees (37 -> 39), so the `STR_FREE` /
-   `efree` at `zend_execute.c:519` that ASAN names is executing here.
-3. **The copy happens.** The outer capture costs exactly +1 `_estrndup` (16 -> 17), and
-   `zval_copy_ctor`'s string copy goes through `_estrndup`. So the read at `zend_execute.c:654` --
-   the one ASAN reports as the use-after-free -- is executing too.
-4. **My transcription was not the cause.** `PROBE057C` uses the corpus's exact double-quoted text
-   and is identical to the single-quoted version, 42/42.
-
-So every step of the defect's mechanism runs. The last probe says why it is still not a catch: a
-ring of recently-freed ranges, consulted by `_estrndup`, reports **2 of the 17 copies reading from a
-previously-freed range -- and neither faulted.**
-
-A read of a *revoked* capability cannot complete, so those reads went through a capability that was
-still tagged.
-
-**RETRACTED: I first concluded the block had been recycled and the engine was using the new tenant's
-pointer. Three experiments say otherwise, and the first one kills it outright.**
-
-| experiment | intervention | result |
-|---|---|---|
-| no cache | `ZEND_CAP_NO_CACHE` -- the corpus's own `ZEND_DISABLE_MEMORY_CACHE 0 -> 1`, so a freed block is NEVER handed back | fault arm still COMPLETES |
-| eval vs file | the host ASAN build, trigger wrapped in `eval()` instead of run as a file | UAF reproduces identically |
-| real `var_dump` | `PHP_CAP_REAL_VAR_DUMP` registers `zif_var_dump` from the linked `var.c` instead of the no-op stub | fault arm still COMPLETES |
-
-The first is decisive. With the cache disabled the freed block can never be re-served, so a stale
-pointer STAYS stale -- and nothing faults. **The engine never dereferences the freed block at all.**
-Recycling was not masking anything, and the bounds check I used to argue it was is worthless anyway:
-it tested containment, and a re-minted block covers the same range as the one it replaced, so both
-the old and new capability satisfy it. The only load-bearing evidence is the tag: revocation untags,
-a tagged load is required to complete, and the read completed.
-
-The other two eliminate the obvious environmental suspects. Running under `eval` rather than as a
-file does not change the defect on the host, and the no-op `var_dump` is not hiding a second use.
-
-### Branch-level instrumentation: the free matches the host, the READ does not
-
-`PHP_CAP_DIAG_EXECUTE` compiles an instrumented copy of `zend_execute.c`
-(`diag/patch-zend-execute.py` inserts counters at named branches). Diagnostic only -- it breaks the
-byte-identical property the corpus result rests on, so it must never be on for a scoring build.
-
-Measured on CRASH-057's fault arm:
-
-| probe | branch | count |
-|---|---|---|
-| 1 | reached the string-offset tail | 1 |
-| 2 | `op2->op_type == IS_VAR` | 0 |
-| 7 | `final_value == &T(op2->u.var).tmp_var` -> **the `:519` STR_FREE ASAN reports** | **1** |
-| 8 | split path, `PZVAL_IS_REF && refcount>0` -> the `:654` `zval_copy_ctor` | 1 |
-| 9 | split path, `IS_TMP_VAR` arm | 0 |
-| 6 | non-split path, `IS_TMP_VAR` arm | 0 |
-
-**The free is identical to the host.** Probe 7 fires, in the same branch, on the same condition.
-The port is not diverging at the free.
-
-The divergence is at the read. Recording the actual pointers at both sites:
-
-    :519   zval 0x745  ->  string 0x6fd   (freed)
-    :654   zval 0x779  ->  string 0x8cf   (copied)
-
-**Different zvals and different strings.** The one `zval_copy_ctor` that runs is for some other
-assignment entirely; the object whose string was freed is never string-copied. Nothing dereferences
-the dangling pointer, which is why nothing faults -- and with `ZEND_CAP_NO_CACHE` proving the block
-is never recycled, the pointer really is dangling the whole time. It is simply stored and not read.
-
-### CONFIRMED, by running the SAME probes on a native build
-
-The comparison above rested on inferring the host's behaviour from an ASAN backtrace. That
-inference was wrong, and building the reference is what showed it.
-
-`diag/patch-zend-execute.py --host` emits the same instrumentation for a native build: it defines
-the counters itself and prints each probe as it fires, because this trigger segfaults and anything
-deferred to exit would never run. Built pristine -- no detector patches, cache ON, `REAL_SIZE`
-intact -- which is the configuration this port mirrors. It reproduces the corpus row: `rc=139`,
-`SIGNAL:11`, matching the corpus's own pristine binary.
-
-**The probe vectors are IDENTICAL.** Probes 1, 7 and 8 fire once each; 2, 6 and 9 never. The
-addresses differ in the same way on both: the zval and string at `:519` are not the ones at `:654`.
-And the ORDER settles what the counts could not -- on the host, probe 8 fires BEFORE probes 1 and 7.
-It belongs to an earlier assignment, not to the use-after-free.
-
-**So the `:654` read ASAN reports does not happen on pristine at all.** The ASAN build has the cache
-disabled and `REAL_SIZE` neutered; it is a different program, and its backtrace describes its own
-control flow. I had been chasing a code path from a trace that does not apply to the configuration
-this port actually mirrors.
-
-### Where pristine really dies, and why the port does not
-
-Under gdb, the pristine build prints `string(1) "<garbage>"` -- the freed buffer, read and rendered
-without crashing -- and then dies here:
-
-    Program received signal SIGSEGV
-    #0  shutdown_memory_manager (silent=0, full_shutdown=0) at Zend/zend_alloc.c:490
-    490        REMOVE_POINTER_FROM_LIST(ptr);
-    #1  php_request_shutdown (dummy=0x0) at main/main.c:1223
-    #2  main (argc=3, argv=...) at sapi/cli/php_cli.c:1046
-
-**The fatal use is PHP's own memory manager walking its allocation list at request shutdown**, over
-a block header the use-after-free corrupted. Not the engine, and not the `:654` copy.
-
-That is why the port does not reproduce it: **`shutdown_memory_manager` does not exist here.** In
-`seam` mode `zend_alloc.c` is dropped, `start_memory_manager` is a no-op stub, and the domain runs
-no request-shutdown path at all -- `grep shutdown rung_E_domain.c` returns nothing. The dangling
-pointer is created identically, by the identical branch; the code that would dereference it fatally
-is simply absent from the image.
-
-**The confirmed cause of the difference: the defect's manifestation site on stock PHP is a code path
-this port does not contain.** Not recycling, not `eval`, not `var_dump`, not temp layout, not the
-executor at all.
-
-### What this says about the method, which is the part worth keeping
-
-A corpus trace is tied to the BUILD that produced it. The ASAN trace named `zend_execute.c:654`, and
-four hypotheses were built on the assumption that the same line mattered on an unpatched build. It
-does not. **When a port mirrors configuration A and the ground-truth trace comes from configuration
-B, the trace is a hypothesis about A, not evidence about it.** The corpus ships
-`results-pristine-default.json` precisely so this is checkable, and the check costs one native build.
-
-### What remains unknown, after four refuted hypotheses
-
-Which arm the outer `$x = (...)` assignment actually takes. Probes 6, 8 and 9 exclude three of the
-four candidates; the non-split path's `IS_VAR`/`IS_CONST` arms are uninstrumented, and one of them
-(`value->refcount++; *variable_ptr_ptr = value;`) would store the pointer without copying the
-string, which fits every measurement. That is the next probe, not a conclusion.
-
-**Four hypotheses were proposed and refuted in order**, each one plausible and each one wrong:
-block recycling (killed by `ZEND_CAP_NO_CACHE`), `eval` versus file execution (killed on the host),
-the no-op `var_dump` (killed by linking the real one), and temp-variable layout changing the branch
-(killed by probe 7 matching the host exactly). The useful output of this investigation is the
-elimination, not a mechanism.
-
-### So what IS the cause? Not established.
-
-What is left is a control-flow divergence inside `zend_assign_to_variable` itself. The free at :519
-sits in a branch chosen by a POINTER COMPARISON, `final_value == &T(op2->u.var).tmp_var`, and the
-copy at :654 sits behind `PZVAL_IS_REF(value) && value->refcount > 0`. Both executed here -- the
-counters prove it -- but on different objects than on the host, since the copy read live memory.
-
-The leading untested hypothesis is temp-variable layout. `EX_T` is a compiler-emitted byte offset
-added to a `char *` and reinterpreted (`zend_execute.c:52`), and on this target a zval is wider
-because its union holds a 16-byte pointer. If `final_value` and `&T(op2->u.var).tmp_var` compare
-differently here, the branch taken differs and the dangling pointer is never created. That is a
-hypothesis, and testing it means instrumenting `zend_execute.c` -- which breaks the byte-identical
-property that makes the whole corpus result meaningful, so it would be a clearly-labelled diagnostic
-build, never a scoring one.
-
-**What this case is NOT: a detection failure.** Everything measured says the defect does not occur
-here. What it IS: a divergence between this port and the reference build, of unknown origin, in a
-case the suite correctly refuses to score.
-
-**The transferable caveat, and it cuts against this approach rather than for it:** an allocator that
-promptly recycles a freed block can MASK a use-after-free, because the stale pointer stops being
-stale before anything dereferences it. Revocation only fires on a dereference that actually happens.
-A quarantine -- not reusing freed addresses for a while -- is what makes such a bug reliably
-observable, and it is precisely what this allocator does not do, because it reproduces PHP's cache
-policy deliberately.
+With the classes registered, a reading sink and the real `var_dump`, CRASH-047 runs to completion in
+both arms: control survives, fault arm completes. **MISSED**, and this one has survived every check
+that caught the others.
 
 ### The harness gained a "did the script actually run?" gate
 

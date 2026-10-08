@@ -203,7 +203,13 @@ axis_of() {
 # Regenerate with:
 #   jq -r '.[] | select(.crashes_on_pristine_build == "True") | .id' results-asan-default.json
 # Only the ids this suite can otherwise reach are listed; the rest never get this far.
-PRISTINE_CRASH=(CRASH-057)
+# Empty on purpose. CRASH-057 was listed here on the strength of the corpus's
+# crashes_on_pristine_build flag, and that was wrong: stock PHP's crash is at REQUEST TEARDOWN, a
+# stage this port does not run, while the behaviour at the defect itself -- the stale read survives
+# -- is reproduced by the control exactly as the pair requires. Gating on a flag rather than on
+# whether the control actually completes blocked a real catch. The "control must complete" rule
+# below already covers the genuine concern, on evidence instead of metadata.
+PRISTINE_CRASH=()
 
 pristine_crashes() {   # $1 = case id
   local c

@@ -297,7 +297,32 @@ unsigned long ze_diag[16];
 unsigned long ze_addr[4];   /* [0] pointer freed at :519   [1] pointer copied at :654 */
 #endif
 
-static void sink(const char *s, unsigned long n) { (void)s; (void)n; }
+#if defined(PHP_CAP_CAPTURE_OUTPUT)
+/* Capture what the script actually printed, or the first diagnostic it raised. The domain normally discards output, which hid the one
+ * observation that decides CRASH-057: whether $x holds the dangling pointer (garbage) or a live
+ * string ("C"). Reported through the fault channel after the eval. */
+char  zc_out[16];
+unsigned zc_outn;
+static void sink(const char *s, unsigned long n)
+{
+    unsigned long i;
+    for (i = 0; i < n && zc_outn < sizeof zc_out; i++) { zc_out[zc_outn++] = s[i]; }
+}
+#else
+/* THE SINK MUST READ ITS BYTES. It used to be `{ (void)s; (void)n; }`, and that single line hid a
+ * real use-after-free: PHP's var_dump does not dereference the string it prints, it hands the
+ * pointer to the output function. With a discarding sink the dangling pointer was passed around and
+ * never read, so nothing faulted and CRASH-057 looked like a clean run. A real SAPI writes the
+ * bytes somewhere; reading them is the minimum faithful behaviour, and the accumulator is volatile
+ * so the loop cannot be optimised away. */
+static volatile unsigned long zc_sink_acc;
+static void sink(const char *s, unsigned long n)
+{
+    unsigned long i, a = 0;
+    for (i = 0; i < n; i++) { a += (unsigned long)(unsigned char)s[i]; }
+    zc_sink_acc += a;
+}
+#endif
 
 static unsigned err_count;
 
@@ -311,9 +336,13 @@ static void ub_error(int type, const char *fname, const uint lineno,
      * handler that ignored `format` would report that case MISSED for a reason that has nothing to
      * do with capabilities -- a false negative manufactured by the port. */
     char msgbuf[256];
+    int mlen;
     (void)fname; (void)lineno;
-    vsnprintf(msgbuf, sizeof msgbuf, format, args);
-    sink(msgbuf, 0);
+    mlen = vsnprintf(msgbuf, sizeof msgbuf, format, args);
+    /* The LENGTH matters, not just the formatting: sink(msgbuf, 0) handed the writer a pointer and
+     * a zero count, so nothing was ever read. That is the same stub-drops-its-argument mistake that
+     * hid CRASH-057's use-after-free, in the error path instead of the output path. */
+    if (mlen > 0) { sink(msgbuf, (unsigned long)(mlen < 255 ? mlen : 255)); }
     ++err_count;
     switch (type) {            /* mirrors php_error_cb (main/main.c:773-781) */
         case E_CORE_ERROR:
@@ -377,12 +406,14 @@ extern void zif_htmlspecialchars(INTERNAL_FUNCTION_PARAMETERS);
 /* sprintf is PHP_FALIAS(sprintf, user_sprintf) in basic_functions.c's table, so the handler is
  * zif_user_sprintf -- the name PHP registers it under is ours to choose here. */
 extern void zif_user_sprintf(INTERNAL_FUNCTION_PARAMETERS);
+#if defined(PHP_CAP_EXT_PURE)
 extern void zif_var_dump(INTERNAL_FUNCTION_PARAMETERS);
+#endif
 #endif
 
 static zend_function_entry rung_e_functions[] = {
     { "parse_url", zif_parse_url,  (struct _zend_arg_info *)0, 0, 0 },
-#if defined(PHP_CAP_REAL_VAR_DUMP)
+#if defined(PHP_CAP_REAL_VAR_DUMP) || defined(PHP_CAP_EXT_PURE)
     /* The REAL var_dump out of ext/standard/var.c, which is already linked under PHP_CAP_EXT=pure.
      * The no-op stub never touches its argument, so any use-after-free whose USE is inside
      * var_dump would be invisible -- this build removes that blind spot. */
@@ -434,6 +465,11 @@ void domain_main(unsigned *res, unsigned func)
         uf.stream_open_function        = ub_stream_open;
         uf.vspprintf_function          = ub_vspprintf;
         if (zend_startup(&uf, (char **)0, 1) != SUCCESS) { *res = st | 0x8000u; return; }
+        /* main/main.c:1438 does this inside php_module_startup, and this port does not link
+         * main.c. Without it Traversable, Iterator, IteratorAggregate, ArrayAccess and Exception
+         * do not exist, and any trigger naming one dies with "Class 'X' not found" before the
+         * opcodes under test run -- which is exactly what hid CRASH-047. */
+        zend_register_default_classes(TSRMLS_C);
         st |= ST_STARTED;          *res = st;
     }
 
@@ -564,6 +600,15 @@ void domain_main(unsigned *res, unsigned func)
             st |= ST_BAILED;
         } zend_end_try();
 
+
+#if defined(PHP_CAP_CAPTURE_OUTPUT)
+        {
+            extern void php_fault_report(unsigned long);
+            unsigned long v = 0xEBUL << 56; unsigned i;
+            for (i = 0; i < 7 && i < zc_outn; i++) { v |= ((unsigned long)(unsigned char)zc_out[i]) << (i * 8); }
+            php_fault_report(v);
+        }
+#endif
 
 #if defined(PHP_CAP_DIAG_EXECUTE)
         {
