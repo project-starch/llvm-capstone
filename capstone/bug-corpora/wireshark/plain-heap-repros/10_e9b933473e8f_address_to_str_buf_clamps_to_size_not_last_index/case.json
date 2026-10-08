@@ -1,0 +1,59 @@
+{
+  "case": 10,
+  "upstream_fix": "e9b933473e8f",
+  "title": "a copy length was clamped to the buffer size, so the terminator landed one past it",
+  "consumer": "epan/to_str.c, address_to_str_buf's AT_URI arm",
+  "object": "the caller-supplied output buffer of buf_len bytes, one direct allocation",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. SPATIAL row.",
+  "shape": "a copy clamped to the capacity rather than to the capacity minus the terminator",
+  "allocator_layer": "the platform allocator itself: one direct g_malloc-family allocation, no wmem layer. GLib's g_malloc is malloc plus abort-on-failure.",
+  "fidelity": "model consumer, real arithmetic: the sizes and the crossing expression are upstream's, quoted in PROVENANCE.md.",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: `address_to_str_buf` no longer exists in v4.6.8:epan/to_str.c (`grep -c address_to_str_buf` = 0), so the construct was REMOVED rather than fixed and the pinned code cannot carry the defect. A fix-reversal against history.",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
+      "status": "measured"
+    },
+    "spatial": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "sublet-chunks": {
+      "cause": 5,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, not measured. The request is exactly a jemalloc size class, so the usable size equals the requested size and there is no slack to absorb the crossing -- confirmed by tools/size-class-audit.py, which reports `faults` for this case. The capability's bounds end where the allocation does and the probe SHOULD fault.",
+      "status": "predicted"
+    }
+  },
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "nested": false,
+  "nested_why": "the crossed buffer came straight from the platform allocator with no inner layer between -- wiretap, wsutil and ui do not use wmem, and epan/uat.c and epan/charsets.c take the crossed buffer from g_malloc or from the caller -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
+  "distinguishing": "the copy itself never crosses -- it is clamped correctly to `buf_len` -- and the crossing is the TERMINATOR written after it, at `buf[copy_len]`. So a check that only validated the memmove would pass, and the fix changes the clamp rather than the store.",
+  "citation_constraint": "the commit SUBJECT names an individual, so this fix is cited by HASH AND PATH ONLY. This tree's naming rule is absolute and applies to every committed file."
+}

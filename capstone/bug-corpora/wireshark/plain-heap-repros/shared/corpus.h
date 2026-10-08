@@ -71,4 +71,15 @@ _Noreturn void wsh_fail(unsigned code);
 unsigned wsh_read_probe(const volatile unsigned char *p);
 #define read_probe wsh_read_probe
 
+/* The write crossing, on the same terms. Added 2026-10-08: this corpus began
+ * with read-only defects, but two of Wireshark's reducible plain-heap defects
+ * are over-WRITES -- a copy length clamped to the buffer size rather than one
+ * less, so the terminator lands at buf[buf_len], and an OID formatter whose
+ * tail reservation is one byte short of its own worst case. Cases built before
+ * this do not reference it, so their native readings must be unchanged by its
+ * addition; that was verified by running runners/run-native.sh before and
+ * after. */
+void wsh_write_probe(volatile unsigned char *p, unsigned char v);
+#define write_probe wsh_write_probe
+
 #endif

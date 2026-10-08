@@ -27,6 +27,14 @@ tree contradict.
 | an error path indexing the second array with the FIRST array's index | 1 |
 | a copy sized by a length counting a header the source does not hold | 2 |
 | a scan with no case for its terminator | 3 |
+| a buffer sized for its payload then consumed as a C string | 4 |
+| a fully-written buffer searched by a terminator-seeking function | 5 |
+| a two-byte decode entered on the last byte | 6 |
+| a decode buffer sized for its output, read as a terminated string | 7 |
+| a fixed-length comparison applied to a shorter operand | 8 |
+| an unsigned length-minus-one that wraps before the indexing | 9 |
+| a copy clamped to the capacity, with the terminator past it | 10 |
+| a tail reservation one byte short of its own worst case | 11 |
 
 ## The case
 
@@ -35,6 +43,14 @@ tree contradict.
 | **0** | `19c51d27b9` `wiretap/netscaler.c` | `memcpy(dst, &nstrace_buf[offset], caplen)` with `caplen` a 16-bit field straight from the file — out of a `g_malloc(NSPR_PAGESIZE)` of **8192 bytes**, running **65471 bytes past** it |
 | **2** | `381681583b` `wiretap/pcapng.c` | a copy of `size` = `sizeof(uint32_t) + stringlen` = **19** bytes out of a `calloc` of **16** -- the 4-byte PEN is counted in the option length but is not in the string buffer -- running **3 bytes past** it |
 | **3** | `c556b648aa` `wsutil/ws_strptime.c` | the timezone scan has no arm for the terminator, so it consumes the NUL of an empty string and reads the byte after it -- **1 byte past** a `calloc` of **1** |
+| **4** | `87803328179` `wiretap/blf.c` | `g_try_malloc0(textLength)` is filled completely by `blf_read_bytes`, then walked by `g_strsplit_set` -- **past the end** of a **16-byte** allocation |
+| **5** | `140aad08e081` `wiretap/nettrace_3gpp_32_423.c` | `g_malloc(packet_size + 12)` is written in full, then `strstr` searches it -- **past the end** of a **16-byte** allocation |
+| **6** | `3aad1ef236e6` `epan/charsets.c` | `(*c & 0xf0) == 0xc0` then `c[1]`, which at `i == length - 1` is `ptr[length]` |
+| **7** | `e2ca71beaed2` `epan/uat.c` | `g_malloc(in_len/2)` is filled completely and then read as a C string -- **past the end** of a **16-byte** allocation |
+| **8** | `0cae98570ebc` `ui/commandline.c` | `memcmp(elem_data, search_data, strlen(search_data))` reads the PREFIX's length from the shorter stored option |
+| **9** | `bf123efe154d` `epan/uat.c` | `strptr[len-1]` with `len == 0` and `len` a `guint` -- the index wraps to **4294967295** |
+| **10** | `e9b933473e8f` `epan/to_str.c` | `copy_len` clamped to `buf_len`, so `buf[copy_len] = '\0'` writes **1 byte past** a **16-byte** buffer |
+| **11** | `4b15bf76a7f7` `epan/to_str.c` | 15 bytes reserved for a worst case of `1 + 10 + 4 + 1 = 16`, with `g_snprintf`'s would-be length advancing the cursor past the end |
 
 ## Measured, 2026-10-06
 
