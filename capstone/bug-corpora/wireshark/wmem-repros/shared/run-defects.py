@@ -96,7 +96,7 @@ def oracle_causes(which, arm=None):
     raise SystemExit(f"no case.json for case {which}")
 
 
-def refuse_if_no_result(serial, which, mode, run):
+def refuse_if_no_result(serial, which, mode, run, negative_control=False):
     """A boot that produced nothing is an INFRASTRUCTURE failure, never a measurement.
 
     The sibling memcached runner has had these two checks all along and this one did not,
@@ -105,9 +105,18 @@ def refuse_if_no_result(serial, which, mode, run):
     FAIL there reads exactly like the defect failing to reproduce. Returns the reason it
     refused, or None when the boot said something; a caller that gets a reason must exit 75.
 
-    Kept a function rather than inline so it can be negative-tested without a QEMU boot."""
+    Kept a function rather than inline so it can be negative-tested without a QEMU boot.
+
+    UNDER --negative-control the corrupted record makes the guest-side loader refuse it before
+    any domain exists (domain-loader.c's length check, exit 3), so the case marker and a fault
+    are absent BY DESIGN. Without the clause below this guard refused every negative-control
+    boot with exit 75, and the control could not run at all from the day the guard landed
+    (fd75d7d89f64, 2026-10-05 19:32) -- an hour after its last passing run. Only that exit
+    counts, and only under the control: a normal run whose loader exits 3 is still refused."""
     if not serial:
         return f"NO SERIAL CAPTURE for case={which} mode={mode}: {run}"
+    if negative_control and re.search(r"^__EXIT_CODE__3\s*$", serial, re.M):
+        return None
     if f"Print = Scalar(0x{MARKER_BASE | which:x})" not in serial and not re.search(
         r"domain (?:halted by capability fault|capability fault delivered)", serial
     ):
@@ -231,7 +240,7 @@ echo WM_DEFECT_DONE
         env.setdefault("CAPSTONE_GUEST_COMMAND_TIMEOUT", "60")
         result = run_guest(run, "sh /mnt/host/run.sh", "WM_DEFECT_DONE", env=env, timeout_multiplier=1)
         serial = (run / "serial.log").read_text(errors="replace") if (run / "serial.log").exists() else ""
-        refused = refuse_if_no_result(serial, which, mode, run)
+        refused = refuse_if_no_result(serial, which, mode, run, a.negative_control)
         if refused:
             print(refused, flush=True)
             sys.exit(75)
