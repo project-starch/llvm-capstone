@@ -149,8 +149,19 @@
         }
       },
       {
-        "not_run": "measured on 2026-10-05 and written into each case's cheribsd-revocation arm, but no results bundle was ever filed, so this table has nothing to read. The fix is to file the run, not to re-measure.",
-        "group": "mmgr-repros"
+        "group": "mmgr-repros",
+        "bundle": "results/20261008-cheribsd",
+        "reader": "supervise-blocks",
+        "case_from": "PG_DEFECT case=(\\d+) ready",
+        "completed": "PG_DEFECT case=\\d+ mode=0 completed",
+        "key": "number",
+        "vehicle": "cheribsd-purecap",
+        "because": "measured 2026-10-05 and re-run on 2026-10-08 to file it: the earlier reading lived only in each case's arm text, so this table had nothing to read. The case prints its own marker before and after the defective sequence, so the silence is measured rather than inferred from a clean exit.",
+        "disposition": {
+          "bundle": "results/20261008-cheribsd",
+          "finding": "never-freed",
+          "why": "two to four allocations in the whole process and ZERO frees, so the quarantine is never offered the object at all: palloc chunks live inside memory-context blocks and a reset or delete returns them to aset's own free lists while the process keeps the blocks. That the quarantine is live comes from the two controls in the same boot, not from these rows."
+        }
       },
       {
         "bundle": "results",

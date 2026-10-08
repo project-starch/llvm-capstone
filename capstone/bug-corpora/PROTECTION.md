@@ -26,7 +26,7 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 36 | 4 | 70 | 44 | 40 | 146 | 16 |
+| `cheribsd` | 36 | 4 | 75 | 49 | 35 | 146 | 16 |
 | `capstone-sysalloc` | 56 | 0 | 63 | 0 | 27 | 146 | 16 |
 | `capstone-sublet` | 123 | 0 | 0 | 0 | 23 | 146 | 16 |
 
@@ -36,12 +36,12 @@ The arm stays what CheriBSD ships -- revocation on, asynchronous, batched. Nothi
 
 The count in each heading is cells on which the arm's mechanism printed nothing. It is NOT the miss count: the `quarantined-unswept` ones are credited as catches by the rule above, so they appear here as an account of the silence and in the caught column as the verdict.
 
-### `cheribsd`: 74 cells where the mechanism reported nothing
+### `cheribsd`: 79 cells where the mechanism reported nothing
 
 | disposition | cells | what it means | what would change it |
 |---|---:|---|---|
 | `quarantined-unswept` | **4** | the object WAS in the quarantine and no sweep cleared it | a synchronous sweep would have caught these |
-| `never-freed` | **39** | the object never reached the system allocator, so it never entered the quarantine | no sweep policy reaches these; only protecting the nested allocator does |
+| `never-freed` | **44** | the object never reached the system allocator, so it never entered the quarantine | no sweep policy reaches these; only protecting the nested allocator does |
 | `not-temporal` | **5** | nothing was freed at all; the crossing is inside a live allocation | revocation is not the mechanism in play |
 | not yet measured | 26 | the run does not say whether the object reached the mechanism | the probe, `ports/common/host/cheribsd/quarantine-probe.c` |
 
@@ -59,25 +59,25 @@ the system allocator handed the object out directly -- the boundary all three ar
 | `capstone-sysalloc` | **29** | 0 | 0 | 100% |
 | `capstone-sublet` | **29** | 0 | 0 | 100% |
 
-### `nested`: 62 cases
+### `nested`: 67 cases
 
 the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **9** | 0 | 53 | 15% |
-| `capstone-sysalloc` | **8** | 0 | 54 | 13% |
-| `capstone-sublet` | **62** | 0 | 0 | 100% |
+| `cheribsd` | **9** | 0 | 58 | 13% |
+| `capstone-sysalloc` | **8** | 0 | 59 | 12% |
+| `capstone-sublet` | **67** | 0 | 0 | 100% |
 
-### All 91 together
+### All 96 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **33** | 4 | 58 | 36% |
-| `capstone-sysalloc` | **37** | 0 | 54 | 41% |
-| `capstone-sublet` | **91** | 0 | 0 | 100% |
+| `cheribsd` | **33** | 4 | 63 | 34% |
+| `capstone-sysalloc` | **37** | 0 | 59 | 39% |
+| `capstone-sublet` | **96** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -268,11 +268,11 @@ PostgreSQL: nineteen defects at three fidelities -- a C reduction, the memory co
 | `c-repros` | 2 | `CVE-2026-16241` | ecpg computes a negative bytea length and passes it to a decoder whose lengt | **C** | **C** | **C**<sup>=</sup> |
 | `c-repros` | 3 | `5d61bdd114` | SASLprep validates a UTF-8 sequence by its declared length without checking  | ·<sup>q</sup> | **C** | **C**<sup>=</sup> |
 | `c-repros` | 4 | `f1298a4c20` | pg_basebackup forwards a tar member trailer using a pointer that buffering a | **C** | **C** | **C**<sup>=</sup> |
-| `mmgr-repros` | 0 | `1f5b6a5e5d` | double free of a tuple the write path had already freed | — | · | **C** |
-| `mmgr-repros` | 1 | `3549ffb6af` | vacuum reads the TidStore struct its own reset destroyed | — | · | **C** |
-| `mmgr-repros` | 2 | `ed394c4bdf` | a partition set freed through one alias and read through another | — | · | **C** |
-| `mmgr-repros` | 3 | `a61592253e` | a cache entry outlives the decoding context its memory came from | — | · | **C** |
-| `mmgr-repros` | 4 | `9e0b4b1ab5` | the reorder buffer reads a change record it returned to the slab | — | · | **C** |
+| `mmgr-repros` | 0 | `1f5b6a5e5d` | double free of a tuple the write path had already freed | ·<sup>q</sup> | · | **C** |
+| `mmgr-repros` | 1 | `3549ffb6af` | vacuum reads the TidStore struct its own reset destroyed | ·<sup>q</sup> | · | **C** |
+| `mmgr-repros` | 2 | `ed394c4bdf` | a partition set freed through one alias and read through another | ·<sup>q</sup> | · | **C** |
+| `mmgr-repros` | 3 | `a61592253e` | a cache entry outlives the decoding context its memory came from | ·<sup>q</sup> | · | **C** |
+| `mmgr-repros` | 4 | `9e0b4b1ab5` | the reorder buffer reads a change record it returned to the slab | ·<sup>q</sup> | · | **C** |
 | `sql-repros` | 1 | `12a6206864a0` | to_char(timestamptz,'TZ') heap overflow write, ~36 B -- stays inside its ase | — | — | — |
 | `sql-repros` | 2 | `3ed3dbbf44` | ts_headline() StartSel longer than PG_INT16_MAX overflows an int16 length, ~ | **C** | **C** | — |
 | `sql-repros` | 3 | `8c34261109` | lquery level with enough OR-variants wraps a uint16 totallen, ~65 KB -- leav | **C** | — | — |
@@ -283,7 +283,7 @@ PostgreSQL: nineteen defects at three fidelities -- a C reduction, the memory co
 | `sql-repros` | 8 | `c4d51b6274` | levenshtein_less_equal clamps stop_column only from above, so an overflowed  | — | — | — |
 | `sql-repros` | 9 | `7a7d9693c7` | pgcrypto copies an attacker-chosen session-key length into a 32-byte inline  | — | — | — |
 
-- `cheribsd`: **5** caught, 2 missed, 12 not run, of 19. 2 of the misses have a measured disposition.
+- `cheribsd`: **5** caught, 7 missed, 7 not run, of 19. 7 of the misses have a measured disposition.
 - `capstone-sysalloc`: **6** caught, 5 missed, 8 not run, of 19.
 - `capstone-sublet`: **10** caught, 0 missed, 9 not run, of 19.
 
