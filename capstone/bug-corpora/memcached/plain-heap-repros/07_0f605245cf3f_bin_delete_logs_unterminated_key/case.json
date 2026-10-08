@@ -20,12 +20,18 @@
       "status": "measured"
     },
     "spatial": {
-      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at mch_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc020f200, address=0xc0252160.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image eeee96d8119e1b84. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "sublet": {
-      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at mch_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc0210104, address=0xc8802010. Nothing had been freed, so the catch is the per-object bound, not revocation.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image e446982140464e5b. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -47,7 +53,7 @@
       "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot."
     }
   },
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT.",
   "nested": false,
   "nested_why": "the crossed buffer came straight from the platform allocator with no inner layer between -- this is not a slab chunk and not a cache.c object -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
   "distinguishing": "the bound being crossed is a TERMINATOR that was never written, not a length that was miscomputed -- `binary_get_key` returns `c->rcurr - keylen`, a pointer into the read buffer whose key region is delimited by `nkey` and nothing else. That is why the fix replaces the conversion with a counted loop instead of adjusting a size."

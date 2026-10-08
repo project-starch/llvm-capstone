@@ -1,12 +1,18 @@
 {
   "arms": {
     "spatial": {
-      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **NOT CAUGHT; the defect reproduced**: the stale pointer read the NEW object's marker. An exact bound cannot see a dead object -- the stale capability still carries the freed object's bounds, and level0 reissued the same block.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 463e809dcf7ec8ec. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "NOT CAUGHT"
     },
     "sublet": {
-      "oracle": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at wst_read_probe+0x38 -- cause 24, an access through revoked authority; pc=0xc020fd28, address=0x0. free had revoked every capability to the object, so the stale pointer was dead before the access. On capstone-qemu a revoked capability reloads untagged (ISSUES Q-11); deployed silicon lets such a data access retire, so this is a detection on the emulator, not a silicon claim.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image 1e28f342805bfdb0. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "poisoncap-spatial": {
       "status": "not written"
@@ -37,7 +43,7 @@
   "shape": "a free ordered before the teardown of what the object owns",
   "allocator_layer": "the platform allocator itself: one direct g_malloc-family allocation, no wmem layer. GLib's g_malloc is malloc plus abort-on-failure.",
   "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is `g_hash_table_foreach(sp->hash, ...)`, which loads `hash` from the freed struct.",
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. CheriBSD measured 2026-10-09 (results/2026-10-09-cheribsd/): NOT-REISSUED.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. CheriBSD measured 2026-10-09 (results/2026-10-09-cheribsd/): NOT-REISSUED. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet CAUGHT.",
   "upstream_fix": "0fc7f3781351",
   "live_in_pin": false,
   "live_proof": "absent at the pin: the error path was replaced wholesale -- v4.6.8:ui/cli/tap-wspstat.c calls `wspstat_finish((void *)sp);` (3 occurrences of `wspstat_finish` in the file), so the defective ordering no longer exists. A fix-reversal against history.",

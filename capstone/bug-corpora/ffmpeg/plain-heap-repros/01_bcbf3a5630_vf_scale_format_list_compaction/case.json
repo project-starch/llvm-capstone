@@ -13,12 +13,18 @@
   "distinguishing": "the only row here where upstream states the crossed value is DISCARDED, so `damage` is 0 on both arms and the crossing alone is the finding. That is the distinction a bounds machine makes and a consequence-based test cannot: the fix was taken for the read, not for its effect.",
   "arms": {
     "spatial": {
-      "oracle": "PREDICTED: FAULTS at the labelled probe. The crossing leaves the allocation the platform allocator handed out, which per-object bounds enforce. NOT YET MEASURED: this corpus has no capstone-domain runner, as is also true of the two sibling plain-heap corpora. WHY THE PLATFORM ALLOCATOR. These cases call the platform's calloc, not the buffer-pool port's av_malloc. That port's av_malloc (ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26) is a bump/freelist carve out of ONE arena returning a raw interior pointer, and it rounds every request up to 64 bytes; __builtin_capstone_cap_shrink appears only in src/capstone-domain/payload-capabilities.c:57, on pool PAYLOAD blocks. Routing these cases through it would leave no per-allocation bound to cross AND would absorb every small crossing in the round-up, so the reading would be about the arena, not the defect.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at ffh_read_probe_u8+0x38 -- cause 5, a bounds violation on a load; pc=0xc020ed28, address=0xc0252338. CheriBSD did NOT catch this crossing: its malloc bounds to a size class and the crossing landed in the slack. level0 bounds to the request, so there is none.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 3422adb641eb7234. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: FAULTS at the labelled probe. The crossing leaves the allocation the platform allocator handed out, which per-object bounds enforce. NOT YET MEASURED: this corpus has no capstone-domain runner, as is also true of the two sibling plain-heap corpora. WHY THE PLATFORM ALLOCATOR. These cases call the platform's calloc, not the buffer-pool port's av_malloc. That port's av_malloc (ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26) is a bump/freelist carve out of ONE arena returning a raw interior pointer, and it rounds every request up to 64 bytes; __builtin_capstone_cap_shrink appears only in src/capstone-domain/payload-capabilities.c:57, on pool PAYLOAD blocks. Routing these cases through it would leave no per-allocation bound to cross AND would absorb every small crossing in the round-up, so the reading would be about the arena, not the defect.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "sublet": {
-      "oracle": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the buffer is alive; the catch is the inherited per-object bound. NOT YET MEASURED.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at ffh_read_probe_u8+0x38 -- cause 5, a bounds violation on a load; pc=0xc020fc2c, address=0xc8802018. CheriBSD did NOT catch this crossing: its malloc bounds to a size class and the crossing landed in the slack. level0 bounds to the request, so there is none. Nothing had been freed, so the catch is the per-object bound, not revocation.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image e479bd160dac5802. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the buffer is alive; the catch is the inherited per-object bound. NOT YET MEASURED.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -50,7 +56,7 @@
       "status": "measured"
     }
   },
-  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, and ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell. CheriBSD MEASURED 2026-10-06: NOT caught, REFUTING this case's prediction; the mechanism (24-byte request -> 32-byte capability) was measured in the same boot.",
+  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, and ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell. CheriBSD MEASURED 2026-10-06: NOT caught, REFUTING this case's prediction; the mechanism (24-byte request -> 32-byte capability) was measured in the same boot. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT.",
   "nested": false,
   "nested_why": "nothing sub-allocated the crossed region: the object is one allocation the platform or FFmpeg's own av_malloc handed out directly, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED."
 }

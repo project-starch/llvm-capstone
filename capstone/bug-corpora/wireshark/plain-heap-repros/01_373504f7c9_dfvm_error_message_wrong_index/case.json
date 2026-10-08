@@ -15,12 +15,18 @@
   "distinguishing": "the defect is on the ERROR PATH ONLY, and the correct index is three lines above it in the same statement block -- which is why it survived review and why a reduction exercising the success path would report a clean result and learn nothing. This corpus's case 0 crosses on the main path with an attacker-chosen magnitude; this one crosses only when the operation fails, by exactly the difference in the two arrays' lengths. The crossed value is merely formatted into a debug string, so `damage` is 0: a consequence-based test cannot see this defect at all, while a bounds check sees the read. That is the same asymmetry ffmpeg/plain-heap-repros case 1 records, and it is the reason both rows exist.",
   "arms": {
     "spatial": {
-      "oracle": "PREDICTED: FAULTS at the labelled probe. The crossing leaves the malloc bound, which per-object bounds enforce. NOT YET MEASURED: this corpus has no capstone-domain runner, as is true of its two sibling plain-heap corpora.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc020f160, address=0xc02521d0.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 4e00c297abf38cf8. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: FAULTS at the labelled probe. The crossing leaves the malloc bound, which per-object bounds enforce. NOT YET MEASURED: this corpus has no capstone-domain runner, as is true of its two sibling plain-heap corpora.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "sublet": {
-      "oracle": "PREDICTED: faults, identically to the spatial arm. Revocation has nothing to fire on while both arrays are alive; the catch is the inherited per-object bound. NOT YET MEASURED.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc02102b4, address=0xc8802130. Nothing had been freed, so the catch is the per-object bound, not revocation.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image df9cea140f4b9b91. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: faults, identically to the spatial arm. Revocation has nothing to fire on while both arrays are alive; the catch is the inherited per-object bound. NOT YET MEASURED.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "sublet-chunks": {
       "oracle": "PREDICTED: the chunk port changes NOTHING here, and that is the point of declaring the arm. The object is a GPtrArray's pdata, not a wmem chunk, so there is no inner allocator for the port to narrow. NOT YET MEASURED.",
@@ -57,5 +63,5 @@
       "status": "measured"
     }
   },
-  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0, control arm first, buggy arm DEFECT-REPRODUCED, ASan two-sided. LIVE at the v4.6.8 pin. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1."
+  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0, control arm first, buggy arm DEFECT-REPRODUCED, ASan two-sided. LIVE at the v4.6.8 pin. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT."
 }

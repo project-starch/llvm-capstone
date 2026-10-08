@@ -10,6 +10,92 @@ here; `paper-bug-inventory.md` is the whole-tree inventory.
 failing to catch *temporal* bugs. It is not a count of spatial bugs, and it is not evidence that
 anything is broken. A grep for the word finds arms, not defects.
 
+## 0. What catches what — every arm measured, all 118 cases (2026-10-09)
+
+Counted from `case.json` by one classifier that reads an arm's explicit `verdict`, or the opening
+words of its oracle (`fault…` = caught; `complete…` / `the sequence completes` = not caught;
+CheriBSD's `MEASURED …: **CAUGHT**` / `**NOT CAUGHT**` / `**NO FAULT**`), and prints any arm it
+cannot classify by name instead of counting it. Before today's runs it reproduced the known state
+exactly (CheriBSD 42/70 spatial, 0/48 temporal; Capstone measured on 33 cases). It now finds no
+arm unrun and none unclassified.
+
+**Temporal (48)**
+
+| cell | n | CheriBSD (revocation on) | Capstone, bounds only | Capstone + Sublet |
+|---|---:|---:|---:|---:|
+| nested | 22 | 0 | 0 | **22** |
+| plain | 26 | 0 | 0 | **26** |
+| **total** | **48** | **0** | **0** | **48** |
+
+**Spatial (70)**
+
+| cell | n | CheriBSD (revocation on) | Capstone, bounds only | Capstone + Sublet |
+|---|---:|---:|---:|---:|
+| nested | 14 | 1 | 11 | 11 |
+| plain | 56 | 41 | 46 | 46 |
+| **total** | **70** | **42** | **57** | **57** |
+
+How each mechanism reads, and why it misses what it misses:
+
+- **CheriBSD, temporal 0/48, for two different reasons.** Nested (22): the stale storage goes back
+  on an inner allocator's free list inside a block malloc still owns, nothing reaches `free()`, and
+  the revoker never sees it; the inner allocator reissues it and the stale pointer reads another
+  object. Plain (26): the object does reach `free()`, and libc's quarantine **withholds** the chunk
+  until a sweep — so nothing is reissued and nothing aliases (verdict NOT-REISSUED), but nothing
+  faults either, because no sweep runs between the free and the access. The same boot's revocation
+  control (forced sweep, then `tag_after_sweep=0` and SIGPROT) shows the revoker acts.
+- **CheriBSD, spatial 42/70.** Its malloc bounds a capability to a SIZE CLASS, not to the request:
+  5 plain crossings land in that slack and are not caught (ffmpeg plain-heap 01, 04, 05; tshark
+  plain-heap 03; memcached plain-heap 00 — `tools/size-class-audit.py` predicts all five from the
+  interposed sizes). 10 cross between members of ONE allocation (`ffmpeg/subobject-repros`). 13 of
+  14 nested crossings stay inside the block malloc handed the inner allocator.
+- **Capstone bounds only (`spatial` arm), temporal 0/48.** An exact bound cannot see a dead object:
+  the stale capability still carries the freed object's bounds. On the plain cases the level0 heap
+  reissues the same block and the stale pointer reads the new object (DEFECT-REPRODUCED, 26/26).
+- **Capstone bounds only, spatial 57/70.** level0 narrows every malloc to the bytes requested, so
+  the five CheriBSD slack misses are caught (cause 5 on a load, 7 on a store, at the labelled
+  probe). Inner allocators that narrow per object (wmem's `wm_narrow`, the memcached slab port) are
+  caught too: wmem 13-21 and memcached allocator 05 and 08. Misses: the 10 sub-object crossings
+  (inside one allocation, by each case's own CHECKs), memcached allocator 06-07 (inside one slab
+  chunk), and the FFmpeg plane case (inside upstream's own padded plane).
+- **Capstone + Sublet, temporal 48/48.** `free` (or the inner allocator's release, on the Sublet
+  ports of FFmpeg's pools, wmem and memcached's slabs) revokes the object, and the stale access
+  faults with **cause 24** at the labelled probe. **QEMU only:** capstone-qemu reloads a revoked
+  capability untagged (ISSUES Q-11); deployed silicon lets such a data access retire, so these are
+  detections on the emulator, not a silicon claim. wmem case 12 is caught by the chunk port
+  (`sublet-chunks`); the region-granular `sublet` build completes it.
+- **Capstone + Sublet, spatial 57/70 — the same 57 as bounds only.** Revocation has nothing to fire
+  on while the object is alive; every spatial catch on this arm is the inherited per-object bound.
+
+Where the readings come from (2026-10-09 unless noted):
+
+| corpus | Capstone evidence |
+|---|---|
+| the six plain-heap / plain-temporal corpora, `ffmpeg/subobject-repros`, `ffmpeg/plane-repros` | `results/2026-10-09-capstone/`, runner `tools/run-capstone-domain.py`, predictions pre-registered at `60f1c5be25a5` |
+| `wireshark/wmem-repros` 18-21 | `results/20261009-qemu-capstone-18-21/` (00-17: earlier runs in the same folder) |
+| `memcached/allocator-repros` 08 | `results/20261009-qemu-capstone-case8/` (00-07: 2026-10-05) |
+| `ffmpeg/pool-repros` | 2026-09-25 / 2026-09-29 runs recorded in its cases |
+
+Three readings did not go as written and are recorded as such in their cases:
+
+- **memcached allocator 08** was predicted to fault at its labelled probe. It faults ONE STATEMENT
+  EARLIER, in the upstream defective scan itself, on the first byte past the 16384-byte object
+  (bounds and address from the emulator's own fault line). The corpus runner scores that row FAIL,
+  because it requires the fault at the probe after the case marker; the FAIL is this reading.
+- **wmem 18-21** were filed with an oracle that named neither probe nor cause; the runner's
+  defaults (read probe, temporal causes) scored all 8 new arms FAIL on the first run. The oracles
+  were completed from each `case.c` (which probe it calls; store = 7, load = 5) and the re-run on
+  the same images reads 12/12 with both controls.
+- **wmem's negative control** could not run from 2026-10-05 19:32: the empty-boot guard added then
+  refused the boot the control is designed to produce. Fixed and negative-tested; 12/12 FAIL as
+  required.
+
+The subobject arm has one more limit, stated in its cases: in those images `av_malloc` is the
+buffer-pool port's arena carve, which gives an object no bound of its own, so the run cannot
+separate "an allocation-granular bound cannot see a member crossing" (which the cases' CHECKs
+establish) from "nothing bounded the struct". It establishes that every case runs to its defect in
+a Capstone domain on both arms with no fault anywhere.
+
 ## 1. The temporal 27 were all there was, because spatial had been filtered out — no longer true
 
 > **HEADING CORRECTED 2026-10-07.** It read *"The 27 real upstream defects are all temporal"*, which

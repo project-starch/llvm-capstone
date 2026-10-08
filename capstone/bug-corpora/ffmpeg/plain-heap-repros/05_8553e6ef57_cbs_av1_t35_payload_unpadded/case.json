@@ -12,12 +12,18 @@
   "live_proof": "absent at the pin: n9.0.1:libavcodec/cbs_av1_syntax_template.c carries av_buffer_alloc(current->payload_size + AV_INPUT_BUFFER_PADDING_SIZE) together with the memset of that padding. The pre-fix line, av_buffer_alloc(current->payload_size), is at 8553e6ef57^ and is absent from the pin. A fix-reversal.",
   "arms": {
     "spatial": {
-      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault. On CheriBSD that is conditional on the usable size for this request -- a size class is a step function and the capability length must be read in-guest before the arm is called either way.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at ffh_read_probe_u8+0x38 -- cause 5, a bounds violation on a load; pc=0xc020eaf4, address=0xc025211b. CheriBSD did NOT catch this crossing: its malloc bounds to a size class and the crossing landed in the slack. level0 bounds to the request, so there is none.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 0ed8b2d83936d740. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault. On CheriBSD that is conditional on the usable size for this request -- a size class is a step function and the capability length must be read in-guest before the arm is called either way.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "sublet": {
-      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault. On CheriBSD that is conditional on the usable size for this request -- a size class is a step function and the capability length must be read in-guest before the arm is called either way.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at ffh_read_probe_u8+0x38 -- cause 5, a bounds violation on a load; pc=0xc020f9f8, address=0xc880201b. CheriBSD did NOT catch this crossing: its malloc bounds to a size class and the crossing landed in the slack. level0 bounds to the request, so there is none. Nothing had been freed, so the catch is the per-object bound, not revocation.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image fe1806e9470767ff. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault. On CheriBSD that is conditional on the usable size for this request -- a size class is a step function and the capability length must be read in-guest before the arm is called either way.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -49,7 +55,7 @@
       "status": "measured"
     }
   },
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT.",
   "nested": false,
   "nested_why": "the crossed buffer came straight from av_buffer_alloc with no inner allocator between it and the platform, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT nested.",
   "distinguishing": "the other rows here cross by a mis-shaped index; this one crosses because the allocation omits padding that FFmpeg's own readers are documented to require, so the index is correct and the SIZE is wrong."

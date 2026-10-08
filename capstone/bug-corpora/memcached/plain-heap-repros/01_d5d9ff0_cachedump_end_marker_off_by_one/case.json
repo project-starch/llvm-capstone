@@ -16,12 +16,18 @@
   "citation_constraint": "the upstream fix is cited by HASH ONLY, deliberately. Its subject line names an outside contributor, and a person's name must not enter a committed file in this tree. docs/ref/memcached-spatial-defect-triage.md:43-45 records the same constraint against this hash, which is why the row was easy to miss.",
   "arms": {
     "spatial": {
-      "oracle": "PREDICTED: FAULTS at the labelled probe. The crossing leaves the malloc bound, which per-object bounds enforce. NOT YET MEASURED as a corpus case: this corpus has no capstone-domain runner, as is also true of its two sibling plain-heap corpora.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at mch_write_probe+0x58 -- cause 7, a bounds violation on a store; pc=0xc020f14c, address=0xc0252140.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 767e14f155870752. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: FAULTS at the labelled probe. The crossing leaves the malloc bound, which per-object bounds enforce. NOT YET MEASURED as a corpus case: this corpus has no capstone-domain runner, as is also true of its two sibling plain-heap corpora.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "sublet": {
-      "oracle": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the buffer is alive; the catch is the inherited per-object bound. NOT YET MEASURED.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at mch_write_probe+0x58 -- cause 7, a bounds violation on a store; pc=0xc02102a0, address=0xc8802040. Nothing had been freed, so the catch is the per-object bound, not revocation.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image 4db6d3d77c3b8887. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the buffer is alive; the catch is the inherited per-object bound. NOT YET MEASURED.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -55,5 +61,5 @@
       "status": "measured"
     }
   },
-  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner, and the CheriBSD reading needs a boot. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT at the labelled probe, si_code 1, confirming the prediction and its size-class condition."
+  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner, and the CheriBSD reading needs a boot. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT at the labelled probe, si_code 1, confirming the prediction and its size-class condition. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT."
 }

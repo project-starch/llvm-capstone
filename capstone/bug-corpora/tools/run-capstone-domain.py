@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Run one plain-heap or plain-temporal corpus on a Capstone application domain arm.
+"""Run one plain-heap, plain-temporal, subobject or plane corpus on a Capstone application domain arm.
 
     run-capstone-domain.py --corpus <corpus dir> --arm spatial|sublet \\
-        --sdk <application SDK> --state <capstone-vm state> --out <fresh dir>
+        --sdk <application SDK> --state <capstone-vm state> --out <fresh dir> [--cc-arg ARG]...
+
+--cc-arg adds a source, archive or flag to every case's compile, for the two corpora whose cases
+link a library: subobject-repros (the buffer-pool port's pool core) and plane-repros (FFmpeg's
+libavutil). Every --cc-arg is recorded in record.json.
 
 Every case becomes one domain image, built by the SDK's capstone-cc at -O0 (the CheriBSD and
 native arms build at -O0 too: an optimiser that folds or hoists the crossing moves the fault off
@@ -103,13 +107,17 @@ def corpus_kind(corpus):
         return "spatial"
     if name == "plain-temporal-repros":
         return "temporal"
-    sys.exit(f"CONTROL-FAILED {corpus}: this tool runs plain-heap-repros and plain-temporal-repros only")
+    if name in ("subobject-repros", "plane-repros"):
+        return "interior"     # the crossing stays inside ONE allocation, by each case's own CHECKs
+    sys.exit(f"CONTROL-FAILED {corpus}: this tool runs plain-heap, plain-temporal, subobject and plane corpora only")
 
 
 def predicted(kind, arm):
     """The buggy run's predicted outcome, fixed before any run (see the module docstring)."""
     if kind == "spatial":
         return "CAUGHT"                     # both arms: the crossing leaves an exact bound
+    if kind == "interior":
+        return "DEFECT-REPRODUCED"          # both arms: an allocation-granular bound is in bounds for it
     return "CAUGHT" if arm == "sublet" else "DEFECT-REPRODUCED"
 
 
@@ -189,6 +197,8 @@ def main():
     ap.add_argument("--sdk", type=Path, required=True)
     ap.add_argument("--state", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--cc-arg", action="append", default=[],
+                    help="extra compile input for every case (source, archive or flag); repeatable")
     ap.add_argument("--llvm-bin", type=Path,
                     help="for llvm-nm/llvm-readelf; default: the SDK's recorded compiler")
     a = ap.parse_args()
@@ -230,7 +240,7 @@ def main():
     for d in cases:
         img = bindir / f"{d.name}.dom"
         b = subprocess.run([str(cc), "-O0", f"-I{shared}", str(d / "case.c"), str(shared / "driver.c"),
-                            "-o", str(img)], capture_output=True, text=True)
+                            *a.cc_arg, "-o", str(img)], capture_output=True, text=True)
         if b.returncode or not img.is_file():
             first = " | ".join((b.stderr or b.stdout).strip().splitlines()[:3])
             rows.append(dict(case=d.name, outcome="BUILD-FAILED", detail=first[:300]))
@@ -308,7 +318,7 @@ def main():
         compiler=subprocess.run([str(cc), "--version"], capture_output=True, text=True).stdout.splitlines()[0],
         platform={k: v.get("sha256") for k, v in vmcfg["identity"]["files"].items()},
         platform_environment=vmcfg["identity"].get("environment"),
-        tool_sha256=sha256(Path(__file__)),
+        tool_sha256=sha256(Path(__file__)), cc_args=a.cc_arg,
         controls=controls, rows=rows)
     (a.out / "record.json").write_text(json.dumps(record, indent=2) + "\n")
     tally = {}
