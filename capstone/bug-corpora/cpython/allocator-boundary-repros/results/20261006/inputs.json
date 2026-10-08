@@ -51,7 +51,9 @@
     "spatial-hicap-20261007-021742",
     "sublet-20261007-022142",
     "sublet-hicap-20261007-023111",
-    "boundary-20261007-020413"
+    "boundary-20261007-020413",
+    "spatial-20261008-033909",
+    "sublet-20261008-034649"
   ],
   "reruns_20261007": [
     {
@@ -128,5 +130,55 @@
       "dir": "boundary-20261007-020413"
     }
   ],
-  "note_20261007": "Four rows per Capstone arm and four on cheribsd were re-measured on 2026-10-07; the matrix's run column says which row came from which. 07 and 32 carry new single-process triggers and were deliberately measured on the SAME image as the other rows (CAP=base). Only 08 and 13 were given the raised image (CAP=hicap), and neither was recovered by it: 08's trigger has readinto claim 2147483647 bytes and 13 uses a pointer as a length and asks for 0x9fad41ee2fbf, about 175 TB. Capacity was not the limit on either. 21 was given 1800 s where it had had 600 s, and completed in roughly 430 s -- but in a three-case subset, where its 600 s timeout had occurred in a full 32-case pass, so subset and full runs are not freely comparable."
+  "note_20261007": "Four rows per Capstone arm and four on cheribsd were re-measured on 2026-10-07; the matrix's run column says which row came from which. 07 and 32 carry new single-process triggers and were deliberately measured on the SAME image as the other rows (CAP=base). Only 08 and 13 were given the raised image (CAP=hicap), and neither was recovered by it: 08's trigger has readinto claim 2147483647 bytes and 13 uses a pointer as a length and asks for 0x9fad41ee2fbf, about 175 TB. Capacity was not the limit on either. 21 was given 1800 s where it had had 600 s, and completed in roughly 430 s -- but in a three-case subset, where its 600 s timeout had occurred in a full 32-case pass, so subset and full runs are not freely comparable.",
+  "reruns_20261008": [
+    {
+      "arm": "spatial",
+      "capacity": "base",
+      "image": "spatial",
+      "image_sha256": "7788ac72f70a02aceca2544df7403c79fcf6819da7d0c79f6a5c750deff5b1db",
+      "rev_nodes": "65536",
+      "started_utc": "2026-10-08T03:39:10Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "none",
+      "case_timeout": "600",
+      "only": "08,24",
+      "ended_utc": "2026-10-08T03:46:49Z",
+      "cases": "2",
+      "dir": "spatial-20261008-033909"
+    },
+    {
+      "arm": "sublet",
+      "capacity": "base",
+      "image": "sublet",
+      "image_sha256": "1dd1c0f6df64d5951d78e86a7ba4298b097fba6c09d11c9abd08a631fe1517ae",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-08T03:46:49Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "CPY-SUBLET mode=1",
+      "case_timeout": "600",
+      "only": "08",
+      "ended_utc": "2026-10-08T03:51:47Z",
+      "cases": "1",
+      "dir": "sublet-20261008-034649"
+    }
+  ],
+  "delivered": {
+    "what": "which rows the delivered comparison is taken over; the matrix's `delivered` column carries it per row",
+    "per_arm": 27,
+    "rule": "base and sublet are reported over the same 27 cases, the ones both can run, so the Capstone pair is a pair. cheribsd is reported over its own 27, a different set: it runs 13, 15 and 18, which the Capstone images cannot, and loses 12, 21 and 22 to missing modules.",
+    "held_out": {
+      "case": "13_gh-144169_fix-three-crashes-in-ast-objects",
+      "arm": "sublet",
+      "verdict": "DETECTED",
+      "cause": "5",
+      "why": "measured and kept, but not counted: base cannot run this case at all, and counting it would report the Capstone pair over different sets. sublet would be 26 of 28 with it."
+    },
+    "not_delivered_counts": {
+      "spatial": 5,
+      "sublet": 4,
+      "cheribsd-revocation": 5
+    }
+  },
+  "note_20261008": "Cases 08 and 24 were recovered by fixing triggers rather than images, and both detect: 08 gives cause 5 on both Capstone arms and 24 gives cause 24 on base. 08's readinto now claims 1048576 rather than 2147483647, chosen by measuring both host builds -- every value from 2147483647 down to 8194 overflows under ASan, but without bounds checking the loop only terminates if the claimed copy runs off into unmapped memory, so 8194 and 65536 hang and 1048576 does not. 24 carries the 127-byte UTC TZif in its trigger, used only when the image has no tzdata. Both ran with CAP=base: 08 asks for 1 MiB of a 48 MiB heap and must be measured on the same image as the other rows."
 }
