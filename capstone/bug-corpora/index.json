@@ -74,14 +74,16 @@
       },
       "runners": [
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/runners/run-native.sh",
-        "capstone/bug-corpora/ffmpeg/plain-heap-repros/runners/run-cheribsd.sh"
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/runners/run-cheribsd.sh",
+        "capstone/bug-corpora/tools/run-capstone-domain.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
       "evidence": [
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/20261006-native-plain-heap",
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/20261006-cheribsd",
-        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-08-cheribsd"
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-08-cheribsd",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-capstone"
       ],
       "advisories": [],
       "shape_table": true,
@@ -115,12 +117,14 @@
       },
       "runners": [
         "capstone/bug-corpora/ffmpeg/plain-temporal-repros/runners/run-native.sh",
-        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/runners/run-cheribsd.sh"
+        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/runners/run-cheribsd.sh",
+        "capstone/bug-corpora/tools/run-capstone-domain.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "evidence": [
         "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-08-native-thirteen-cases",
-        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-cheribsd"
+        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-cheribsd",
+        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-capstone"
       ],
       "advisories": [],
       "shape_table": true,
@@ -153,12 +157,14 @@
       },
       "runners": [
         "capstone/bug-corpora/ffmpeg/plane-repros/runners/run-native.sh",
-        "capstone/bug-corpora/ffmpeg/plane-repros/runners/run-cheribsd.sh"
+        "capstone/bug-corpora/ffmpeg/plane-repros/runners/run-cheribsd.sh",
+        "capstone/bug-corpora/tools/run-capstone-domain.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "evidence": [
         "capstone/bug-corpora/ffmpeg/plane-repros/results/20261006-native-plane",
-        "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd"
+        "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd",
+        "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone"
       ],
       "advisories": [],
       "shape_table": true,
@@ -244,13 +250,15 @@
         "false": 5
       },
       "runners": [
-        "capstone/bug-corpora/ffmpeg/subobject-repros/runners/run-native.sh"
+        "capstone/bug-corpora/ffmpeg/subobject-repros/runners/run-native.sh",
+        "capstone/bug-corpora/tools/run-capstone-domain.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "evidence": [
         "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261005-native-subobject",
         "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-native-subobject-7",
-        "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd"
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd",
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-capstone"
       ],
       "advisories": [],
       "shape_table": true,
@@ -383,7 +391,8 @@
       "evidence": [
         "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects",
         "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd",
-        "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8"
+        "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8",
+        "capstone/bug-corpora/memcached/allocator-repros/results/20261009-qemu-capstone-case8"
       ],
       "inventory": "capstone/docs/ref/memcached-allocator-defect-triage.md",
       "where": "capstone/bug-corpora/memcached/allocator-repros"
@@ -415,14 +424,16 @@
       },
       "runners": [
         "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-native.sh",
-        "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-cheribsd.sh"
+        "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-cheribsd.sh",
+        "capstone/bug-corpora/tools/run-capstone-domain.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "evidence": [
         "capstone/bug-corpora/memcached/plain-heap-repros/results/20261006-native-plain-heap",
         "capstone/bug-corpora/memcached/plain-heap-repros/results/20261007-cheribsd",
         "capstone/bug-corpora/memcached/plain-heap-repros/results/20261007-cheribsd",
-        "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-08-cheribsd"
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-08-cheribsd",
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-capstone"
       ],
       "advisories": [],
       "shape_table": true,
@@ -457,12 +468,14 @@
       },
       "runners": [
         "capstone/bug-corpora/memcached/plain-temporal-repros/runners/run-native.sh",
-        "capstone/bug-corpora/memcached/plain-temporal-repros/runners/run-cheribsd.sh"
+        "capstone/bug-corpora/memcached/plain-temporal-repros/runners/run-cheribsd.sh",
+        "capstone/bug-corpora/tools/run-capstone-domain.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "evidence": [
         "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-08-native-three-cases",
-        "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-09-cheribsd"
+        "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-09-cheribsd",
+        "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-09-capstone"
       ],
       "advisories": [],
       "shape_table": true,
@@ -808,14 +821,16 @@
       },
       "runners": [
         "capstone/bug-corpora/wireshark/plain-heap-repros/runners/run-native.sh",
-        "capstone/bug-corpora/wireshark/plain-heap-repros/runners/run-cheribsd.sh"
+        "capstone/bug-corpora/wireshark/plain-heap-repros/runners/run-cheribsd.sh",
+        "capstone/bug-corpora/tools/run-capstone-domain.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
       "evidence": [
         "capstone/bug-corpora/wireshark/plain-heap-repros/results/20261006-native-plain-heap",
         "capstone/bug-corpora/wireshark/plain-heap-repros/results/20261007-cheribsd",
-        "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-08-cheribsd"
+        "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-08-cheribsd",
+        "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-capstone"
       ],
       "advisories": [],
       "shape_table": true,
@@ -855,12 +870,14 @@
       },
       "runners": [
         "capstone/bug-corpora/wireshark/plain-temporal-repros/runners/run-native.sh",
-        "capstone/bug-corpora/wireshark/plain-temporal-repros/runners/run-cheribsd.sh"
+        "capstone/bug-corpora/wireshark/plain-temporal-repros/runners/run-cheribsd.sh",
+        "capstone/bug-corpora/tools/run-capstone-domain.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "evidence": [
         "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-08-native-ten-cases",
-        "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-cheribsd"
+        "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-cheribsd",
+        "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-capstone"
       ],
       "advisories": [],
       "shape_table": true,
@@ -910,7 +927,8 @@
         "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-case13-OFF",
         "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-ON",
         "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-OFF",
-        "capstone/bug-corpora/wireshark/wmem-repros/results/20261007-cheribsd-revocation-control"
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20261007-cheribsd-revocation-control",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20261009-qemu-capstone-18-21"
       ],
       "advisories": [],
       "shape_table": true,

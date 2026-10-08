@@ -13,12 +13,18 @@
   "distinguishing": "the corpus's other plain-heap rows cross by a mis-shaped index or a short allocation for a single consumer; this one is a SIZING disagreement between two consumers of the same buffer -- plane 0 sizes it, plane 1 uses it -- so it only appears for a pixel format whose chroma row is wider than its luma row, and only at odd widths.",
   "arms": {
     "spatial": {
-      "oracle": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at ffh_write_probe_u8+0x58 -- cause 7, a bounds violation on a store; pc=0xc020ecb0, address=0xc0252261. CheriBSD did NOT catch this crossing: its malloc bounds to a size class and the crossing landed in the slack. level0 bounds to the request, so there is none.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 6c1d02108b8b1149. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "sublet": {
-      "oracle": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at ffh_write_probe_u8+0x58 -- cause 7, a bounds violation on a store; pc=0xc020fbb4, address=0xc8802011. CheriBSD did NOT catch this crossing: its malloc bounds to a size class and the crossing landed in the slack. level0 bounds to the request, so there is none. Nothing had been freed, so the catch is the per-object bound, not revocation.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image f490c0ce9f19baf6. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -50,7 +56,7 @@
       "status": "measured"
     }
   },
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions: this corpus's CheriBSD bundle predates the case.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions: this corpus's CheriBSD bundle predates the case. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT.",
   "nested": false,
   "nested_why": "the crossed buffer came straight from av_malloc_array with no inner allocator between it and the platform, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT nested."
 }

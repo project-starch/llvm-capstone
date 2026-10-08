@@ -21,12 +21,18 @@
       "status": "measured"
     },
     "spatial": {
-      "oracle": "PREDICTED: faults at the labelled probe. The crossing leaves the malloc bound, which per-object bounds enforce, so the bounds-only arm must catch it. The corresponding reading already exists in the port: memcached app fixture 20 is this defect's shape and reads level0 RETURN, shrink FAULT oob (cause 5 on its read probe), ports/memcached/app/results/2026-10-05-qemu-classa-fixtures/. NOT YET MEASURED as a corpus case -- this corpus has no capstone-domain runner.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at mch_write_probe+0x58 -- cause 7, a bounds violation on a store; pc=0xc020f040, address=0xc0251f99. CheriBSD did NOT catch this crossing: its malloc bounds to a size class and the crossing landed in the slack. level0 bounds to the request, so there is none.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 36e178db06b6419c. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: faults at the labelled probe. The crossing leaves the malloc bound, which per-object bounds enforce, so the bounds-only arm must catch it. The corresponding reading already exists in the port: memcached app fixture 20 is this defect's shape and reads level0 RETURN, shrink FAULT oob (cause 5 on its read probe), ports/memcached/app/results/2026-10-05-qemu-classa-fixtures/. NOT YET MEASURED as a corpus case -- this corpus has no capstone-domain runner.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "sublet": {
-      "oracle": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the buffer is alive; the catch is the inherited per-object bound. Fixture 20 reads sublet FAULT oob in the same bundle. NOT YET MEASURED as a corpus case.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at mch_write_probe+0x58 -- cause 7, a bounds violation on a store; pc=0xc020ff44, address=0xc8802009. CheriBSD did NOT catch this crossing: its malloc bounds to a size class and the crossing landed in the slack. level0 bounds to the request, so there is none. Nothing had been freed, so the catch is the per-object bound, not revocation.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image 7683a40580ae6ee1. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the buffer is alive; the catch is the inherited per-object bound. Fixture 20 reads sublet FAULT oob in the same bundle. NOT YET MEASURED as a corpus case.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -48,7 +54,7 @@
       "status": "measured"
     }
   },
-  "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plain-heap/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner yet, and the port fixture that carries the same shape is measured separately. CheriBSD MEASURED 2026-10-06: NOT caught, refuting this case's prediction; the mechanism was then measured rather than inferred.",
+  "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plain-heap/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner yet, and the port fixture that carries the same shape is measured separately. CheriBSD MEASURED 2026-10-06: NOT caught, refuting this case's prediction; the mechanism was then measured rather than inferred. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT.",
   "nested": false,
   "nested_why": "nothing sub-allocated the crossed region: the object is one allocation the platform or FFmpeg's own av_malloc handed out directly, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED."
 }

@@ -25,12 +25,14 @@
   },
   "runners": [
     "capstone/bug-corpora/ffmpeg/plane-repros/runners/run-native.sh",
-    "capstone/bug-corpora/ffmpeg/plane-repros/runners/run-cheribsd.sh"
+    "capstone/bug-corpora/ffmpeg/plane-repros/runners/run-cheribsd.sh",
+    "capstone/bug-corpora/tools/run-capstone-domain.py"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "evidence": [
     "capstone/bug-corpora/ffmpeg/plane-repros/results/20261006-native-plane",
-    "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd"
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd",
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone"
   ],
   "advisories": [],
   "shape_table": true,

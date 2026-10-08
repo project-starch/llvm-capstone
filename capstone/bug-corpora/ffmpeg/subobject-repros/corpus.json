@@ -26,13 +26,15 @@
     "false": 5
   },
   "runners": [
-    "capstone/bug-corpora/ffmpeg/subobject-repros/runners/run-native.sh"
+    "capstone/bug-corpora/ffmpeg/subobject-repros/runners/run-native.sh",
+    "capstone/bug-corpora/tools/run-capstone-domain.py"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "evidence": [
     "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261005-native-subobject",
     "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-native-subobject-7",
-    "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd"
+    "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd",
+    "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-capstone"
   ],
   "advisories": [],
   "shape_table": true,

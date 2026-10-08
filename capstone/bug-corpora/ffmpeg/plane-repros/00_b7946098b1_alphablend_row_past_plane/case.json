@@ -21,12 +21,18 @@
       "status": "measured"
     },
     "spatial": {
-      "oracle": "PREDICTED: the sequence completes. The crossing stays inside one av_malloc, so a per-allocation bound is in bounds for it and the bounds-only arm cannot see it. NOT MEASURED -- this corpus has no capstone-domain runner.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **NOT CAUGHT; the defect reproduced**: the sequence completed with the crossing made, which the case's own CHECKs place inside ONE allocation, so an allocation-granular bound is in bounds for it. The bound that was in force: this libavutil was configured with HAVE_POSIX_MEMALIGN 0, so av_frame_get_buffer -> av_buffer_alloc -> av_malloc reaches the SDK's malloc, which narrows the frame's single buffer to its size. The read at offset 160 of the alpha plane lies inside upstream's own 1024-byte padded plane, inside that bound.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 9708638436b7117b. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: the sequence completes. The crossing stays inside one av_malloc, so a per-allocation bound is in bounds for it and the bounds-only arm cannot see it. NOT MEASURED -- this corpus has no capstone-domain runner.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "NOT CAUGHT"
     },
     "sublet": {
-      "oracle": "PREDICTED: the sequence completes, for the spatial arm's reason plus its own -- revocation has nothing to fire on while the frame is alive. RETRACTED 2026-10-06: this oracle previously said a discriminating reading needs a plane-narrowing adapter. Measured, it does not help: av_frame_get_buffer pads to FFALIGN(height,32), so the alpha plane's OWN allocated extent is 1024 bytes while the logical plane is 160, and this case reads at offset 160 -- inside upstream's own plane extent. An adapter narrowing to FFmpeg's layout cannot see it; only a bound tighter than upstream's own allocation could, and that would fault legitimate code (SIMD tail reads, av_image_copy_to_buffer over padded_height). NOT MEASURED, and not a gap.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **NOT CAUGHT; the defect reproduced**: the sequence completed with the crossing made, which the case's own CHECKs place inside ONE allocation, so an allocation-granular bound is in bounds for it. The bound that was in force: this libavutil was configured with HAVE_POSIX_MEMALIGN 0, so av_frame_get_buffer -> av_buffer_alloc -> av_malloc reaches the SDK's malloc, which narrows the frame's single buffer to its size. The read at offset 160 of the alpha plane lies inside upstream's own 1024-byte padded plane, inside that bound.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image de9a3e0e6d8c189c. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: the sequence completes, for the spatial arm's reason plus its own -- revocation has nothing to fire on while the frame is alive. RETRACTED 2026-10-06: this oracle previously said a discriminating reading needs a plane-narrowing adapter. Measured, it does not help: av_frame_get_buffer pads to FFALIGN(height,32), so the alpha plane's OWN allocated extent is 1024 bytes while the logical plane is 160, and this case reads at offset 160 -- inside upstream's own plane extent. An adapter narrowing to FFmpeg's layout cannot see it; only a bound tighter than upstream's own allocation could, and that would fault legitimate code (SIMD tail reads, av_image_copy_to_buffer over padded_height). NOT MEASURED, and not a gap.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "NOT CAUGHT"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -49,7 +55,7 @@
       "evidence": "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd"
     }
   },
-  "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host.",
+  "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT.",
   "nested": true,
   "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
 }

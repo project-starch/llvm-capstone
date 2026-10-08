@@ -15,12 +15,20 @@
   "distinguishing": "the corpus's FOURTH spatial row and the FIRST whose object comes from cache.c rather than slabs.c -- cases 5, 6 and 7 all cross a slab chunk. That matters because the two allocators are different inner layers over the same pages, and a port that narrows one does not thereby narrow the other. It is also the only row here whose crossing distance is unbounded by construction: the scan runs for as long as the bytes beyond the object happen to be spaces, rather than by a fixed one or three bytes.",
   "arms": {
     "spatial": {
-      "oracle": "PREDICTED: faults at the labelled probe once the slab port narrows per object. The crossing leaves the cache object, which the port's bound covers. NOT YET MEASURED for this case: cases 0-7 were measured 2026-10-05 under QEMU and this one has not had a domain run.",
-      "status": "predicted"
+      "oracle": "fault before the labelled probe, in the defective scan itself: the first byte past the 16384-byte rbuf object",
+      "status": "measured",
+      "prediction": "PREDICTED: faults at the labelled probe once the slab port narrows per object. The crossing leaves the cache object, which the port's bound covers. NOT YET MEASURED for this case: cases 0-7 were measured 2026-10-05 under QEMU and this one has not had a domain run.",
+      "verdict": "CAUGHT",
+      "cause": 5,
+      "note": "MEASURED 2026-10-09, results/20261009-qemu-capstone-case8/: cause 5, a 1-byte load at 0xe4a04000 against bounds [0xe4a00000, 0xe4a04000) -- the rbuf object exactly -- by the `lb` of `while (*ptr == ' ')` in mc_case_body (offset 0xb79c from the code capability base, ELF 0x1b79c, identical on both modes). mark(8) never ran. PREDICTION REFUTED ON LOCATION, HELD ON OUTCOME: it said 'faults at the labelled probe'; the bound stops the overrun one statement earlier, at the line upstream fixed. run-defects.py therefore reports this row FAIL -- it requires the fault at the probe after the marker -- and that FAIL is this reading, not a regression. Control: case 5 faulted at its published write probe on both modes in the same runner; negative control 2/2 fired."
     },
     "sublet": {
-      "oracle": "PREDICTED: faults, identically to the spatial arm. Revocation has nothing to fire on -- nothing is freed in a spatial row -- so the catch is the inherited per-object bound. NOT YET MEASURED.",
-      "status": "predicted"
+      "oracle": "fault before the labelled probe, in the defective scan itself: the first byte past the 16384-byte rbuf object",
+      "status": "measured",
+      "prediction": "PREDICTED: faults, identically to the spatial arm. Revocation has nothing to fire on -- nothing is freed in a spatial row -- so the catch is the inherited per-object bound. NOT YET MEASURED.",
+      "verdict": "CAUGHT",
+      "cause": 5,
+      "note": "MEASURED 2026-10-09, results/20261009-qemu-capstone-case8/: cause 5, a 1-byte load at 0xe4a04000 against bounds [0xe4a00000, 0xe4a04000) -- the rbuf object exactly -- by the `lb` of `while (*ptr == ' ')` in mc_case_body (offset 0xb79c from the code capability base, ELF 0x1b79c, identical on both modes). mark(8) never ran. PREDICTION REFUTED ON LOCATION, HELD ON OUTCOME: it said 'faults at the labelled probe'; the bound stops the overrun one statement earlier, at the line upstream fixed. run-defects.py therefore reports this row FAIL -- it requires the fault at the probe after the marker -- and that FAIL is this reading, not a regression. Control: case 5 faulted at its published write probe on both modes in the same runner; negative control 2/2 fired."
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -51,5 +59,5 @@
       "status": "not written"
     }
   },
-  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0 over all nine cases, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. The Capstone, PoisonCap and CheriBSD arms are declared predictions -- this case has not had a domain or guest run. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1, REFUTING this case's prediction -- the port malloc's each cache object separately, so an object crossing leaves a real bound while the slab chunk rows stay inside their page's malloc."
+  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0 over all nine cases, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. The Capstone, PoisonCap and CheriBSD arms are declared predictions -- this case has not had a domain or guest run. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1, REFUTING this case's prediction -- the port malloc's each cache object separately, so an object crossing leaves a real bound while the slab chunk rows stay inside their page's malloc. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-case8/): spatial CAUGHT, sublet CAUGHT, both in the scan before the probe."
 }
