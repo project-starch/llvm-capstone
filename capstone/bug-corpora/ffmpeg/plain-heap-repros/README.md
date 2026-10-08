@@ -30,6 +30,18 @@ disposition: [`docs/ref/ffmpeg-spatial-defect-triage.md`](../../../docs/ref/ffmp
 | a copy sized by the source payload, not the destination | 7 | `8880a174d0` | writes the payload's length into a smaller caller buffer | **reports** |
 | a writer given a constant capacity instead of the space left | 8 | `b2df2f4f22` | writes up to 128 bytes at a cursor with less than that remaining | **reports** |
 | a transform whose output is a multiple of a declared width | 9 | `16b2049d4d` | writes `lowpass_width * 2` into a narrower plane allocation | **reports** |
+| a stride computed before the directive that changes it | 10 |  |  |  |
+| a clone sized by the character count of a terminated source | 11 |  |  |  |
+| a buffer sized for its items but not the separator joining them | 12 |  |  |  |
+| a single-reflection mirror that produces a negative index | 13 |  |  |  |
+| an index used unmasked where its sibling paths mask it | 14 |  |  |  |
+| a copy length and an allocation taken from unrelated fields | 15 |  |  |  |
+| plane lengths from the geometry, read out of the packet | 16 |  |  |  |
+| a skip that advances the output cursor instead of the input | 17 |  |  |  |
+| a scroll whose last iteration sources the row after the last | 18 |  |  |  |
+| a cursor initialised to the count rather than the last index | 19 |  |  |  |
+| a buffer whose worst case is smaller than its writer's | 20 |  |  |  |
+| a fixed-length read from a frame whose last partition is shorter | 21 |  |  |  |
 
 **ASan reports all four, measured two-sided** — the fixed arm silent and exiting 0 in every case. That
 is the contrast this corpus exists to draw against `../subobject-repros/`, where ASan is blind to all
