@@ -39,8 +39,20 @@ Per program, recomputed from each case's `nested` boolean and its `lifetime_ende
 > also free direct allocations and use them afterwards, and there was nowhere to record one.
 >
 > Three `plain-temporal-repros` corpora were created and filled (FFmpeg 13, tshark 10, memcached 3),
-> and the plain spatial row grew by 38. The whole-tree total went 54 -> 118 for these three
-> programs on 2026-10-08.
+> and the plain spatial row grew by 38.
+>
+> **The baseline, with its denominator named, because this document's own history shows how easily
+> two differently-counted totals get compared.** All three figures below count CASES in these three
+> programs, from `case.json` files, on the same basis as the table above:
+>
+> | when | FFmpeg | tshark | memcached | total |
+> |---|---:|---:|---:|---:|
+> | the inventory of 2026-10-06 | 19 | 24 | 11 | **54** |
+> | 2026-10-08, when the axis first became computable | 25 | 26 | 11 | **62** |
+> | 2026-10-08, after this change | 53 | 44 | 21 | **118** |
+>
+> The middle row is the honest baseline for *this* day's work: +56. The first row is the baseline
+> for the week: +64. Neither is "54 -> 118", which mixes the two.
 >
 > The counts are now COMPUTABLE rather than asserted: 22 temporal cases carried no `nested`
 > boolean at all — the field postdates them — and were backfilled from each case's own
