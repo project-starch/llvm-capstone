@@ -2665,37 +2665,25 @@
      "title": "try_read_command_ascii's leading-space skip has no end, so a read buffer of nothing but spaces walks the cursor off the cache object",
      "boundary": "slabs and the per-thread object cache",
      "nested": true,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "caught",
-       "caught": true,
-       "disposition": null,
-       "detail": "SIGPROT(34) si_code 1 at 0x105530",
-       "group": "allocator-repros",
-       "bundle": "results/20261006-cheribsd, results/20261007-cheribsd-case8",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "case-lines"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the two malloc-boundary cells are NOT a comparison, because the arms run different allocator topologies here. In the CheriBSD build mcp_object_backing takes each cache object with its own malloc (ports/memcached/allocators/src/cheribsd/malloc-leases.c:161), so libc's per-allocation bound covers the object and does the nested allocator's work for free; the virtual build carves the objects out of one MCP_OBJECTS region, where capstone-sysalloc leaves the nested allocator unprotected by definition. So cheribsd reads CAUGHT (si_code 1, BOUNDS) and capstone-sysalloc reads missed for a reason that is the port's, not the mechanism's -- and capstone-sublet DOES catch it, cause 28 (CAP_OOB). Leaving the row in made CheriBSD look like it caught one nested case more than we do, which is withdrawn. What the omission costs is a row that would show per-object bounds beating a size-class bound: our malloc narrows to the REQUEST where CheriBSD narrows to the class, so a shorter overrun would have gone the other way. It comes back the moment the virtual build takes cache objects from the platform allocator the way the CheriBSD build does."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "disposition": null,
-       "detail": "ran to the end, status 0",
-       "group": "allocator-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the two malloc-boundary cells are NOT a comparison, because the arms run different allocator topologies here. In the CheriBSD build mcp_object_backing takes each cache object with its own malloc (ports/memcached/allocators/src/cheribsd/malloc-leases.c:161), so libc's per-allocation bound covers the object and does the nested allocator's work for free; the virtual build carves the objects out of one MCP_OBJECTS region, where capstone-sysalloc leaves the nested allocator unprotected by definition. So cheribsd reads CAUGHT (si_code 1, BOUNDS) and capstone-sysalloc reads missed for a reason that is the port's, not the mechanism's -- and capstone-sublet DOES catch it, cause 28 (CAP_OOB). Leaving the row in made CheriBSD look like it caught one nested case more than we do, which is withdrawn. What the omission costs is a row that would show per-object bounds beating a size-class bound: our malloc narrows to the REQUEST where CheriBSD narrows to the class, so a shorter overrun would have gone the other way. It comes back the moment the virtual build takes cache objects from the platform allocator the way the CheriBSD build does."
       },
       "capstone-sublet": {
-       "verdict": "caught",
-       "caught": true,
-       "disposition": null,
-       "detail": "cause 28 (CAP_OOB), attribution not established",
-       "group": "allocator-repros",
-       "bundle": "results/20261008-virtual-nested-sublet",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-sublet"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the two malloc-boundary cells are NOT a comparison, because the arms run different allocator topologies here. In the CheriBSD build mcp_object_backing takes each cache object with its own malloc (ports/memcached/allocators/src/cheribsd/malloc-leases.c:161), so libc's per-allocation bound covers the object and does the nested allocator's work for free; the virtual build carves the objects out of one MCP_OBJECTS region, where capstone-sysalloc leaves the nested allocator unprotected by definition. So cheribsd reads CAUGHT (si_code 1, BOUNDS) and capstone-sysalloc reads missed for a reason that is the port's, not the mechanism's -- and capstone-sublet DOES catch it, cause 28 (CAP_OOB). Leaving the row in made CheriBSD look like it caught one nested case more than we do, which is withdrawn. What the omission costs is a row that would show per-object bounds beating a size-class bound: our malloc narrows to the REQUEST where CheriBSD narrows to the class, so a shorter overrun would have gone the other way. It comes back the moment the virtual build takes cache objects from the platform allocator the way the CheriBSD build does."
       }
      }
     },

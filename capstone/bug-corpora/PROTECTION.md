@@ -26,9 +26,9 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 36 | 4 | 75 | 49 | 35 | 146 | 16 |
-| `capstone-sysalloc` | 56 | 0 | 63 | 0 | 27 | 146 | 16 |
-| `capstone-sublet` | 123 | 0 | 0 | 0 | 23 | 146 | 16 |
+| `cheribsd` | 35 | 4 | 75 | 49 | 35 | 145 | 17 |
+| `capstone-sysalloc` | 56 | 0 | 62 | 0 | 27 | 145 | 17 |
+| `capstone-sublet` | 122 | 0 | 0 | 0 | 23 | 145 | 17 |
 
 ## What the silences are made of
 
@@ -59,25 +59,25 @@ the system allocator handed the object out directly -- the boundary all three ar
 | `capstone-sysalloc` | **29** | 0 | 0 | 100% |
 | `capstone-sublet` | **29** | 0 | 0 | 100% |
 
-### `nested`: 67 cases
+### `nested`: 66 cases
 
 the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **9** | 0 | 58 | 13% |
-| `capstone-sysalloc` | **8** | 0 | 59 | 12% |
-| `capstone-sublet` | **67** | 0 | 0 | 100% |
+| `cheribsd` | **8** | 0 | 58 | 12% |
+| `capstone-sysalloc` | **8** | 0 | 58 | 12% |
+| `capstone-sublet` | **66** | 0 | 0 | 100% |
 
-### All 96 together
+### All 95 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **33** | 4 | 63 | 34% |
-| `capstone-sysalloc` | **37** | 0 | 59 | 39% |
-| `capstone-sublet` | **96** | 0 | 0 | 100% |
+| `cheribsd` | **32** | 4 | 63 | 34% |
+| `capstone-sysalloc` | **37** | 0 | 58 | 39% |
+| `capstone-sublet` | **95** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -193,13 +193,13 @@ memcached: eleven defects across its two inner allocators and the platform heap
 | `allocator-repros` | 5 | `2d61f18` | the incr/decr rewrite copies three bytes of a two-byte terminator, one byte  | ·<sup>q</sup> | — | **C** |
 | `allocator-repros` | 6 | `78eb770` | the flags are copied into suffix space the item was never allocated, overwri | ∅ | ∅ | ∅ |
 | `allocator-repros` | 7 | `ecdb011` | an item key with no terminator is handed to a string formatter, which reads  | ∅ | ∅ | ∅ |
-| `allocator-repros` | 8 | `e8364b5` | try_read_command_ascii's leading-space skip has no end, so a read buffer of  | **C** | · | **C** |
+| `allocator-repros` | 8 | `e8364b5` | try_read_command_ascii's leading-space skip has no end, so a read buffer of  | ∅ | ∅ | ∅ |
 | `plain-heap-repros` | 0 | `ddee3e2` | authfile_load sizes its buffer to the file's exact length, so fgets writes t | ·<sup>q</sup> | **C** | **C**<sup>=</sup> |
 | `plain-heap-repros` | 1 | `d5d9ff0` | item_cachedump's headroom guard reserves five bytes for "END\r\n" while the  | **C** | **C** | **C**<sup>=</sup> |
 
-- `cheribsd`: **2** caught, 7 missed, of 9; 2 ignored. 7 of the misses have a measured disposition.
-- `capstone-sysalloc`: **2** caught, 3 missed, 4 not run, of 9; 2 ignored.
-- `capstone-sublet`: **9** caught, 0 missed, of 9; 2 ignored.
+- `cheribsd`: **1** caught, 7 missed, of 8; 3 ignored. 7 of the misses have a measured disposition.
+- `capstone-sysalloc`: **2** caught, 2 missed, 4 not run, of 8; 3 ignored.
+- `capstone-sublet`: **8** caught, 0 missed, of 8; 3 ignored.
 
 ### mruby -- 17 cases
 
