@@ -24,11 +24,13 @@
     "false": 3
   },
   "runners": [
-    "capstone/bug-corpora/memcached/plain-temporal-repros/runners/run-native.sh"
+    "capstone/bug-corpora/memcached/plain-temporal-repros/runners/run-native.sh",
+    "capstone/bug-corpora/memcached/plain-temporal-repros/runners/run-cheribsd.sh"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "evidence": [
-    "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-08-native-three-cases"
+    "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-08-native-three-cases",
+    "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-09-cheribsd"
   ],
   "advisories": [],
   "shape_table": true

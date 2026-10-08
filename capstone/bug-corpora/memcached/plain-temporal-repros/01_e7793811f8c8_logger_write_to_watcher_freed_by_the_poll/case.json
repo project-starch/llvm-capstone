@@ -15,8 +15,10 @@
       "status": "not written"
     },
     "cheribsd-revocation": {
-      "oracle": "PREDICTED, not measured. CheriBSD's revocation sweeps capabilities to freed heap memory, so the stale pointer SHOULD be revoked and the probe fault -- but only if the sweep has run between the free and the access. The reduction frees and re-allocates immediately, the case least favourable to revocation, so a clean reading here would be about sweep TIMING rather than about the defect.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd/: **NO FAULT, AND NO REUSE.** The sequence completes with aliased=0: the stale pointer was followed, but the chunk it names was never handed to another allocation, because CheriBSD's libc holds a released chunk in QUARANTINE until the revoker has swept every capability to it. So the access reads only the dead object -- the exploitable half of a use-after-free, reading or writing SOMEONE ELSE'S object, did not happen. It is not a fault, because nothing forced a sweep between the free and the access: the stale capability still carried its tag, as the case was built to leave it. revocation control in the same boot: revocation=1 tag_after_sweep=0 reissued=1, then SIGPROT si_code 2 at the control's own probe, so the revoker demonstrably acts in this guest and a completion here is the mechanism's design, not an inactive mechanism. CONTRAST, measured in the sibling nested corpora: there the inner allocator reissues the storage at once and the stale pointer DOES read another object, because nothing reaches free(). Predicted before the run; the prediction held.",
+      "status": "measured",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); cheribsd-abi, cheribsd-bounds and the revocation control all PASSED in the same boot.",
+      "verdict": "NOT-REISSUED"
     },
     "native-detect": {
       "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared or the iteration is skipped, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
@@ -35,7 +37,7 @@
   "shape": "a helper that may free the object its caller is standing on",
   "allocator_layer": "the platform allocator itself: one direct malloc/calloc/getline allocation, with neither memcached suballocator in the path.",
   "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is `w->failed_flush = true;`, a WRITE into the freed watcher.",
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. CheriBSD measured 2026-10-09 (results/2026-10-09-cheribsd/): NOT-REISSUED.",
   "upstream_fix": "e7793811f8c8",
   "live_in_pin": false,
   "live_proof": "absent at the pin: this fix was SUPERSEDED by 3bc58f6ea55a rather than reverted, so `grep -c 'if (watchers[x] != NULL) {'` on 1.6.45:logger.c is 0 while the successor's `if (watchers[x] == NULL) {` appears twice. The unguarded write is at e7793811f8c8^ and is absent from the pin. A fix-reversal.",
