@@ -1,0 +1,49 @@
+{
+  "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+  "arm": "virtual-nested-capability-backend",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 12,
+  "measured": 12,
+  "controls": 12,
+  "controls_held": 12,
+  "verdicts": {
+    "silent": 8,
+    "detected": 4
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "b3c762db7b1474d1c025119803c9169c10b36274606352a0cce820c9f77e32ce",
+  "staged_sha256": {},
+  "image_sha256": {
+    "00_461fb22053_af_join_dedup_bound:m0:fixed": "816b1cbdfe858c466c16757537b948036c98f528f74173ec44d894671f84ae80",
+    "00_461fb22053_af_join_dedup_bound:m0:buggy": "816b1cbdfe858c466c16757537b948036c98f528f74173ec44d894671f84ae80",
+    "00_461fb22053_af_join_dedup_bound:m1:fixed": "816b1cbdfe858c466c16757537b948036c98f528f74173ec44d894671f84ae80",
+    "00_461fb22053_af_join_dedup_bound:m1:buggy": "816b1cbdfe858c466c16757537b948036c98f528f74173ec44d894671f84ae80",
+    "00_461fb22053_af_join_dedup_bound:m2:fixed": "816b1cbdfe858c466c16757537b948036c98f528f74173ec44d894671f84ae80",
+    "00_461fb22053_af_join_dedup_bound:m2:buggy": "816b1cbdfe858c466c16757537b948036c98f528f74173ec44d894671f84ae80",
+    "01_1886c3269d_h264_refs_partial_clear:m0:fixed": "414d7d1a12cc9177fa14de67f3d6204ca0aaa7a45213c411855a5ffd4837b732",
+    "01_1886c3269d_h264_refs_partial_clear:m0:buggy": "414d7d1a12cc9177fa14de67f3d6204ca0aaa7a45213c411855a5ffd4837b732",
+    "01_1886c3269d_h264_refs_partial_clear:m1:fixed": "414d7d1a12cc9177fa14de67f3d6204ca0aaa7a45213c411855a5ffd4837b732",
+    "01_1886c3269d_h264_refs_partial_clear:m1:buggy": "414d7d1a12cc9177fa14de67f3d6204ca0aaa7a45213c411855a5ffd4837b732",
+    "01_1886c3269d_h264_refs_partial_clear:m2:fixed": "414d7d1a12cc9177fa14de67f3d6204ca0aaa7a45213c411855a5ffd4837b732",
+    "01_1886c3269d_h264_refs_partial_clear:m2:buggy": "414d7d1a12cc9177fa14de67f3d6204ca0aaa7a45213c411855a5ffd4837b732",
+    "02_316531e61c_vidstab_parked_plane_pointer:m0:fixed": "0e3b49843578145b9b0e377d4df0587ead38c3f7b97952bb3c011663049529f8",
+    "02_316531e61c_vidstab_parked_plane_pointer:m0:buggy": "0e3b49843578145b9b0e377d4df0587ead38c3f7b97952bb3c011663049529f8",
+    "02_316531e61c_vidstab_parked_plane_pointer:m1:fixed": "0e3b49843578145b9b0e377d4df0587ead38c3f7b97952bb3c011663049529f8",
+    "02_316531e61c_vidstab_parked_plane_pointer:m1:buggy": "0e3b49843578145b9b0e377d4df0587ead38c3f7b97952bb3c011663049529f8",
+    "02_316531e61c_vidstab_parked_plane_pointer:m2:fixed": "0e3b49843578145b9b0e377d4df0587ead38c3f7b97952bb3c011663049529f8",
+    "02_316531e61c_vidstab_parked_plane_pointer:m2:buggy": "0e3b49843578145b9b0e377d4df0587ead38c3f7b97952bb3c011663049529f8",
+    "03_5c66a3ab51_vvc_nonref_output_releases_tabs:m0:fixed": "4c7717d9054261919204e4f5658cba2b243c2ed5aebf8da87cda6132a495e3a8",
+    "03_5c66a3ab51_vvc_nonref_output_releases_tabs:m0:buggy": "4c7717d9054261919204e4f5658cba2b243c2ed5aebf8da87cda6132a495e3a8",
+    "03_5c66a3ab51_vvc_nonref_output_releases_tabs:m1:fixed": "4c7717d9054261919204e4f5658cba2b243c2ed5aebf8da87cda6132a495e3a8",
+    "03_5c66a3ab51_vvc_nonref_output_releases_tabs:m1:buggy": "4c7717d9054261919204e4f5658cba2b243c2ed5aebf8da87cda6132a495e3a8",
+    "03_5c66a3ab51_vvc_nonref_output_releases_tabs:m2:fixed": "4c7717d9054261919204e4f5658cba2b243c2ed5aebf8da87cda6132a495e3a8",
+    "03_5c66a3ab51_vvc_nonref_output_releases_tabs:m2:buggy": "4c7717d9054261919204e4f5658cba2b243c2ed5aebf8da87cda6132a495e3a8"
+  }
+}

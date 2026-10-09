@@ -28,49 +28,53 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 34 | 0 | 76 | 0 | 67 | 177 | 3 |
-| `capstone-sysalloc` | 58 | 0 | 59 | 0 | 60 | 177 | 3 |
-| `capstone-sublet` | 121 | 0 | 2 | 0 | 54 | 177 | 3 |
-
-## Programs that have not declared their arms yet
-
-Not in any total above or below, and not a statement about them: **1** of 9 programs in the tree.
-
-- `ffmpeg`
+| `cheribsd` | 37 | 0 | 91 | 0 | 102 | 230 | 3 |
+| `capstone-sysalloc` | 62 | 0 | 74 | 0 | 94 | 230 | 3 |
+| `capstone-sublet` | 129 | 0 | 12 | 0 | 89 | 230 | 3 |
 
 ## The arms compared where all three were measured, split by who allocated the object
 
 Two corrections to the headline table, and both of them cut the same way. A cell that was never run is not evidence, so the arms are compared on the cases where all three were measured. And on a case whose object came out of the program's own allocator, two of the three arms are not protecting that object at all -- counting those together with the malloc-boundary cases reads as a weakness of the mechanism when it is a statement about what each arm covers.
 
-### `system`: 13 cases
+### `system`: 17 cases
 
 the system allocator handed the object out directly -- the boundary all three arms protect
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **10** | 0 | 3 | 77% |
-| `capstone-sysalloc` | **13** | 0 | 0 | 100% |
-| `capstone-sublet` | **13** | 0 | 0 | 100% |
+| `cheribsd` | **13** | 0 | 4 | 76% |
+| `capstone-sysalloc` | **17** | 0 | 0 | 100% |
+| `capstone-sublet` | **17** | 0 | 0 | 100% |
 
-### `nested`: 59 cases
+### `nested`: 63 cases
 
 the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **8** | 0 | 51 | 14% |
-| `capstone-sysalloc` | **7** | 0 | 52 | 12% |
-| `capstone-sublet` | **59** | 0 | 0 | 100% |
+| `cheribsd` | **8** | 0 | 55 | 13% |
+| `capstone-sysalloc` | **7** | 0 | 56 | 11% |
+| `capstone-sublet` | **63** | 0 | 0 | 100% |
 
-### All 93 together
+### `interior`: 10 cases
+
+the crossing is inside ONE allocation and no allocator vested the crossed region -- no arm in this study claims it
+
+| arm | caught | of those, by quarantine | missed | share caught |
+|---|---:|---:|---:|---:|
+| `cheribsd` | **0** | 0 | 10 | 0% |
+| `capstone-sysalloc` | **0** | 0 | 10 | 0% |
+| `capstone-sublet` | **0** | 0 | 10 | 0% |
+
+### All 111 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **31** | 0 | 62 | 33% |
-| `capstone-sysalloc` | **38** | 0 | 55 | 41% |
-| `capstone-sublet` | **93** | 0 | 0 | 100% |
+| `cheribsd` | **34** | 0 | 77 | 31% |
+| `capstone-sysalloc` | **42** | 0 | 69 | 38% |
+| `capstone-sublet` | **101** | 0 | 10 | 91% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -104,6 +108,78 @@ CPython: twenty re-entrancy use-after-frees, all of them inside pymalloc
 - `cheribsd`: **0** caught, 20 missed, of 20.
 - `capstone-sysalloc`: **0** caught, 20 missed, of 20.
 - `capstone-sublet`: **20** caught, 0 missed, of 20.
+
+### ffmpeg -- 53 cases
+
+FFmpeg: fifty-three defects across five boundaries -- thirty-eight past a direct av_malloc, four in a buffer pool, eleven inside one allocation
+
+| group | cases | the boundary its cases cross |
+|---|---:|---|
+| `plain-heap-repros` | 25 | the system allocator itself: one av_malloc_array or av_calloc, with no inner layer |
+| `plain-temporal-repros` | 13 | the platform allocator's own bound -- a direct allocation, no inner layer |
+| `plane-repros` | 1 | a bound between two PLANES of one AVBuffer, as av_frame_get_buffer carves them |
+| `pool-repros` | 4 | AVBufferPool / AVRefStructPool |
+| `subobject-repros` | 10 | sub-object bounds inside ONE allocation (av_refstruct / av_malloc) |
+
+| group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
+|---|---:|---|---|:---:|:---:|:---:|
+| `plain-heap-repros` | 0 | `d133b4a231` | the backward kernel scan is inclusive of a bound the forward scan is exclusi | **C** | **C** | **C**<sup>=</sup> |
+| `plain-heap-repros` | 1 | `bcbf3a5630` | the colour-space compaction loop guards on j while reading j + 1, so it read | · | **C** | **C**<sup>=</sup> |
+| `plain-heap-repros` | 2 | `56309e476a` | the hand-rolled filter mirror reflects a tap index of 2*w to -1 and never re | **C** | **C** | **C**<sup>=</sup> |
+| `plain-heap-repros` | 3 | `495b402f27` | the edge-emulation base is sized for one sub-buffer and then carved into fou | **C** | **C** | **C**<sup>=</sup> |
+| `plain-heap-repros` | 4 | `b3c7ebc1ed` | the scratch row buffer was sized for the luma plane and overrun by a chroma  | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 5 | `8553e6ef57` | the T.35 payload buffer was allocated to its exact size, so a padded reader  | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 6 | `041d4f010e` | a header length taken from the stream was used without checking the bytes ac | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 7 | `8880a174d0` | the read copied the payload's length into a caller buffer sized by the calle | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 8 | `b2df2f4f22` | the system-header writer was given a constant size instead of the space actu | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 9 | `16b2049d4d` | a transform wrote twice the lowpass width into a plane that was narrower | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 10 | `989444060d5f` | a stride was computed from the default LUT size before the file could lower  | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 11 | `76645e096fab` | a string clone copied the character count and dropped the terminator the sou | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 12 | `ad956ff076ea` | a label buffer counted the labels but not the separators joining them | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 13 | `8af6c71d96f4` | a hand-rolled mirror reflected only once and produced a negative index | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 14 | `789d7b1b1dff` | one of three remap paths used the decoded sample as a map index without mask | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 15 | `e9e6fb879835` | a raw tile was copied by its geometry while the buffer was sized by a stream | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 16 | `ca1c1f29ce47` | split-plane output read plane sizes derived from the stream geometry, not th | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 17 | `18761f9fb55c` | the output cursor was advanced for an OBU that was skipped instead of the in | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 18 | `e8031e5b9ad2` | a scroll copied each row from the one below it, including from past the last | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 19 | `905a4324030e` | a row cursor was initialised and wrapped to the row count rather than the la | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 20 | `bbdce45fda1e` | a motion-compensation scratch buffer was sized below the rows the loop can w | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 21 | `3fbb9560821b` | a crossfade read a fixed partition length regardless of the input frame's sa | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 22 | `242ff799c75f` | a row cursor was advanced by a stride the inner loop had already walked | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 23 | `f45da79b2c33` | a block decoder wrote a full 8x8 block regardless of how much of it lay insi | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 24 | `162f75b5e679` | one branch laid out its byte planes by the data-window width instead of the  | — | — | —<sup>=</sup> |
+| `plain-temporal-repros` | 0 | `716d2a47c565` | an interior pointer into a freed pass struct was dereferenced to read a fiel | — | — | — |
+| `plain-temporal-repros` | 1 | `c98810ab47fa` | a free-the-list loop read each node's next pointer after freeing the node | — | — | — |
+| `plain-temporal-repros` | 2 | `43de8b328b62` | a write cursor was not rebased after the buffer it points into was reallocat | — | — | — |
+| `plain-temporal-repros` | 3 | `dc87758775e2` | a saved pointer into the IO buffer was not rebased when the buffer was reall | — | — | — |
+| `plain-temporal-repros` | 4 | `4b2248594c7f` | a bytestream reader kept the old base of a buffer that had been reallocated | — | — | — |
+| `plain-temporal-repros` | 5 | `d6458f6a8bf1` | a lookup table kept pointing at a channel element after the element was free | — | — | — |
+| `plain-temporal-repros` | 6 | `e8714f6f93d1` | a reorder array held interior pointers into a picture buffer that was freed  | — | — | — |
+| `plain-temporal-repros` | 7 | `a43e9cdd442b` | extradata was freed without clearing the field, and the callee freed it agai | — | — | — |
+| `plain-temporal-repros` | 8 | `8a4ea9644833` | a realloc read one field and stored its result in another, leaving two owner | — | — | — |
+| `plain-temporal-repros` | 9 | `265731f201f1` | a failed initialisation freed the subcontext through a local, leaving the fi | — | — | — |
+| `plain-temporal-repros` | 10 | `e7a65142b972` | an error path cleared the local pointer variable instead of the field that o | — | — | — |
+| `plain-temporal-repros` | 11 | `ba28222a14ab` | a release helper that does not clear its argument left the field set for a s | — | — | — |
+| `plain-temporal-repros` | 12 | `2e04d35c69e6` | a scratch table was released by a callee and then read by the next call | — | — | — |
+| `plane-repros` | 0 | `b7946098b1` | ff_sws_alphablendaway averages the alpha row below the plane's last on a sub | — | · | — |
+| `pool-repros` | 0 | `461fb22053` | af_join tracks an input buffer by the channel index instead of nb_buffers | · | · | **C** |
+| `pool-repros` | 1 | `1886c3269d` | h264_refs clears ref_list up to ref_count instead of the array length | · | · | **C** |
+| `pool-repros` | 2 | `316531e61c` | vidstabtransform leaves a shallow copy of the source frame in the library's  | · | · | **C** |
+| `pool-repros` | 3 | `5c66a3ab51` | a non-reference VVC frame that is output is fully released, returning its po | · | · | **C** |
+| `subobject-repros` | 0 | `8864fd0aec` | the pic_timing decoding-unit loop writes one uint16_t past its array into th | · | · | · |
+| `subobject-repros` | 1 | `68845e26f7` | the HEVC reference-set fill writes up to eight bytes past an eight-entry arr | · | · | · |
+| `subobject-repros` | 2 | `e058af88ab` | the DPB walk writes ref_src[16], which is the first element of the next stru | · | · | · |
+| `subobject-repros` | 3 | `89de2f0de1` | ff_aac_ac_get_context reads state->last[i + 1] for the last window index, ta | · | · | · |
+| `subobject-repros` | 4 | `1a00ea51cb` | the SDP parser indexes control_url at strlen()-1 without checking for the em | · | · | · |
+| `subobject-repros` | 5 | `d29ff88422` | the Vulkan AV1 tile-count check is both the wrong relation and hoisted out o | · | · | · |
+| `subobject-repros` | 6 | `a809a784ec` | sh_entry_points bounds its write index by nothing, so a slice whose every CT | · | · | · |
+| `subobject-repros` | 7 | `275e217b10` | parse_playlist passes av_strlcpy a SOURCE length where its contract takes th | · | · | · |
+| `subobject-repros` | 8 | `fb862976df` | the uniform-tile-spacing loop guards itself with num_tile_columns, which is  | · | · | · |
+| `subobject-repros` | 9 | `ac59fc542f` | get_hist16's tail loop uses a raw high-bit-depth sample as a histogram index | · | · | · |
+
+- `cheribsd`: **3** caught, 15 missed, 35 not run, of 53.
+- `capstone-sysalloc`: **4** caught, 15 missed, 34 not run, of 53.
+- `capstone-sublet`: **8** caught, 10 missed, 35 not run, of 53.
 
 ### httpd -- 9 cases
 

@@ -1,0 +1,44 @@
+{
+  "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 10,
+  "measured": 10,
+  "controls": 10,
+  "controls_held": 10,
+  "verdicts": {
+    "silent": 10
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "431accf3f870f516648922dd6d465b8ea99d00a4ad5cda6172decf77c69c0450",
+  "staged_sha256": {},
+  "image_sha256": {
+    "00_8864fd0aec_cbs_h265_pic_timing_member:fixed": "a9af5e26a7edb668cfa4ca7f5d67458b6a1f35ed0c7f3c5a79958c407421717b",
+    "00_8864fd0aec_cbs_h265_pic_timing_member:buggy": "a9af5e26a7edb668cfa4ca7f5d67458b6a1f35ed0c7f3c5a79958c407421717b",
+    "01_68845e26f7_vulkan_hevc_refpicset_member:fixed": "f20e79b349f5f60f853987b22121e72e987e90de07e69a3a243c21c0f14dd24b",
+    "01_68845e26f7_vulkan_hevc_refpicset_member:buggy": "f20e79b349f5f60f853987b22121e72e987e90de07e69a3a243c21c0f14dd24b",
+    "02_e058af88ab_vulkan_hevc_dpb_member:fixed": "2c5b4ef62b85bd84c3b8ee969ffc0bff343afcf342998728261499151366c896",
+    "02_e058af88ab_vulkan_hevc_dpb_member:buggy": "2c5b4ef62b85bd84c3b8ee969ffc0bff343afcf342998728261499151366c896",
+    "03_89de2f0de1_aac_arith_last_member:fixed": "f519c26708efc376e0c58ddf86afc415619074788e23923ad327dbbecaab1683",
+    "03_89de2f0de1_aac_arith_last_member:buggy": "f519c26708efc376e0c58ddf86afc415619074788e23923ad327dbbecaab1683",
+    "04_1a00ea51cb_rtsp_control_url_underflow:fixed": "a2891f32b19d24785735b87d7bdbd1b194d9a65d14e62f4e78ba2af05168631e",
+    "04_1a00ea51cb_rtsp_control_url_underflow:buggy": "a2891f32b19d24785735b87d7bdbd1b194d9a65d14e62f4e78ba2af05168631e",
+    "05_d29ff88422_vulkan_av1_tile_sizes:fixed": "9882e20a2b4c9d52d74966f0b9fe329c90bbe32d0b2c375d8ebb22d3e8a16f9f",
+    "05_d29ff88422_vulkan_av1_tile_sizes:buggy": "9882e20a2b4c9d52d74966f0b9fe329c90bbe32d0b2c375d8ebb22d3e8a16f9f",
+    "06_a809a784ec_vvc_entry_point_start_ctu:fixed": "dace7c6006a0473bb9f5ef4ee0b5fcaea5094c30d22294782cdd4f59411d46cd",
+    "06_a809a784ec_vvc_entry_point_start_ctu:buggy": "dace7c6006a0473bb9f5ef4ee0b5fcaea5094c30d22294782cdd4f59411d46cd",
+    "07_275e217b10_hlsenc_key_uri_strlcpy_size:fixed": "282963ab94c6d71381bf68b7d44ac888629dbcfe29b7f61bfdc1f0e74f914998",
+    "07_275e217b10_hlsenc_key_uri_strlcpy_size:buggy": "282963ab94c6d71381bf68b7d44ac888629dbcfe29b7f61bfdc1f0e74f914998",
+    "08_fb862976df_cbs_h266_col_width_val:fixed": "9f19411599e86a38b0fbadb42665adfb29de56edbe54c7313b8ac0dba8e988bb",
+    "08_fb862976df_cbs_h266_col_width_val:buggy": "9f19411599e86a38b0fbadb42665adfb29de56edbe54c7313b8ac0dba8e988bb",
+    "09_ac59fc542f_thumbnail_carved_histogram_slice:fixed": "20299ee4f072b888d692061cf497ba587be1f63784097bcbd86a7a0f2bb978fc",
+    "09_ac59fc542f_thumbnail_carved_histogram_slice:buggy": "20299ee4f072b888d692061cf497ba587be1f63784097bcbd86a7a0f2bb978fc"
+  }
+}

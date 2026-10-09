@@ -1,0 +1,25 @@
+case	arm	verdict	cause	attributed	evidence
+00_461fb22053_af_join_dedup_bound:m0:fixed	control	silent	--	--	completed with status 0
+00_461fb22053_af_join_dedup_bound:m0:buggy	virtual-nested-capability-backend	silent	--	--	completed with status 0
+00_461fb22053_af_join_dedup_bound:m1:fixed	control	silent	--	--	completed with status 0
+00_461fb22053_af_join_dedup_bound:m1:buggy	virtual-nested-capability-backend	silent	--	--	completed with status 0
+00_461fb22053_af_join_dedup_bound:m2:fixed	control	silent	--	--	completed with status 0
+00_461fb22053_af_join_dedup_bound:m2:buggy	virtual-nested-capability-backend	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa141093c
+01_1886c3269d_h264_refs_partial_clear:m0:fixed	control	silent	--	--	completed with status 0
+01_1886c3269d_h264_refs_partial_clear:m0:buggy	virtual-nested-capability-backend	silent	--	--	completed with status 0
+01_1886c3269d_h264_refs_partial_clear:m1:fixed	control	silent	--	--	completed with status 0
+01_1886c3269d_h264_refs_partial_clear:m1:buggy	virtual-nested-capability-backend	silent	--	--	completed with status 0
+01_1886c3269d_h264_refs_partial_clear:m2:fixed	control	silent	--	--	completed with status 0
+01_1886c3269d_h264_refs_partial_clear:m2:buggy	virtual-nested-capability-backend	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f98410620
+02_316531e61c_vidstab_parked_plane_pointer:m0:fixed	control	silent	--	--	completed with status 0
+02_316531e61c_vidstab_parked_plane_pointer:m0:buggy	virtual-nested-capability-backend	silent	--	--	completed with status 0
+02_316531e61c_vidstab_parked_plane_pointer:m1:fixed	control	silent	--	--	completed with status 0
+02_316531e61c_vidstab_parked_plane_pointer:m1:buggy	virtual-nested-capability-backend	silent	--	--	completed with status 0
+02_316531e61c_vidstab_parked_plane_pointer:m2:fixed	control	silent	--	--	completed with status 0
+02_316531e61c_vidstab_parked_plane_pointer:m2:buggy	virtual-nested-capability-backend	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f982101cc
+03_5c66a3ab51_vvc_nonref_output_releases_tabs:m0:fixed	control	silent	--	--	completed with status 0
+03_5c66a3ab51_vvc_nonref_output_releases_tabs:m0:buggy	virtual-nested-capability-backend	silent	--	--	completed with status 0
+03_5c66a3ab51_vvc_nonref_output_releases_tabs:m1:fixed	control	silent	--	--	completed with status 0
+03_5c66a3ab51_vvc_nonref_output_releases_tabs:m1:buggy	virtual-nested-capability-backend	silent	--	--	completed with status 0
+03_5c66a3ab51_vvc_nonref_output_releases_tabs:m2:fixed	control	silent	--	--	completed with status 0
+03_5c66a3ab51_vvc_nonref_output_releases_tabs:m2:buggy	virtual-nested-capability-backend	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fae6105bc

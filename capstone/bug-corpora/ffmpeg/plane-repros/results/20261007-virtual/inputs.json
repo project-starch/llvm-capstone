@@ -1,0 +1,26 @@
+{
+  "corpus": "capstone/bug-corpora/ffmpeg/plane-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 1,
+  "measured": 1,
+  "controls": 1,
+  "controls_held": 1,
+  "verdicts": {
+    "silent": 1
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "ca35eebf4be4c8ab5eba364e60217c95c01bb3a1a9f60cbc0d5b489e4573dbfc",
+  "staged_sha256": {},
+  "image_sha256": {
+    "00_b7946098b1_alphablend_row_past_plane:fixed": "3fb9373563332dc208c7cfe250fa361726475c524fce7487ce957af8f9b3b310",
+    "00_b7946098b1_alphablend_row_past_plane:buggy": "3fb9373563332dc208c7cfe250fa361726475c524fce7487ce957af8f9b3b310"
+  }
+}

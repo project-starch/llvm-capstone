@@ -1,0 +1,9 @@
+case	arm	verdict	cause	attributed	evidence
+00_d133b4a231_showcwt_kernel_scan_past_array:fixed	control	silent	--	--	completed with status 0
+00_d133b4a231_showcwt_kernel_scan_past_array:buggy	virtual	detected	28 (CAP_OOB)	yes	capability fault cause=28 (CAP_OOB) pc=0x3fabe90050
+01_bcbf3a5630_vf_scale_format_list_compaction:fixed	control	silent	--	--	completed with status 0
+01_bcbf3a5630_vf_scale_format_list_compaction:buggy	virtual	detected	28 (CAP_OOB)	yes	capability fault cause=28 (CAP_OOB) pc=0x3f9ee90324
+02_56309e476a_vf_vif_mirror_below_base:fixed	control	silent	--	--	completed with status 0
+02_56309e476a_vf_vif_mirror_below_base:buggy	virtual	detected	28 (CAP_OOB)	yes	capability fault cause=28 (CAP_OOB) pc=0x3f93490480
+03_495b402f27_diracdec_edge_emu_buffer_undersized:fixed	control	silent	--	--	completed with status 0
+03_495b402f27_diracdec_edge_emu_buffer_undersized:buggy	virtual	detected	28 (CAP_OOB)	yes	capability fault cause=28 (CAP_OOB) pc=0x3f99c10268

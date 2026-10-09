@@ -1,0 +1,32 @@
+{
+  "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 4,
+  "measured": 4,
+  "controls": 4,
+  "controls_held": 4,
+  "verdicts": {
+    "silent": 4
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "cc2e5e3b9749446ce4d4545a34e81d1cce75c8bd836dafa827e1fe04a04d4275",
+  "staged_sha256": {},
+  "image_sha256": {
+    "00_461fb22053_af_join_dedup_bound:fixed": "69a281770038da15fe75e9aabb99d149bf7a8e4cc78417811ec32f57eaecb25d",
+    "00_461fb22053_af_join_dedup_bound:buggy": "69a281770038da15fe75e9aabb99d149bf7a8e4cc78417811ec32f57eaecb25d",
+    "01_1886c3269d_h264_refs_partial_clear:fixed": "49f188d080ecdc005968c31d0e0a37ead185857a410077cf086dc215de58a708",
+    "01_1886c3269d_h264_refs_partial_clear:buggy": "49f188d080ecdc005968c31d0e0a37ead185857a410077cf086dc215de58a708",
+    "02_316531e61c_vidstab_parked_plane_pointer:fixed": "081a2282b1148a666a31cf4dbb7100e41b1ead4126887728727ce49f4fafba33",
+    "02_316531e61c_vidstab_parked_plane_pointer:buggy": "081a2282b1148a666a31cf4dbb7100e41b1ead4126887728727ce49f4fafba33",
+    "03_5c66a3ab51_vvc_nonref_output_releases_tabs:fixed": "cfcfa3f50795033cb4678665c5ab822e9d0baf796e71a973a099ad7d968f1dc0",
+    "03_5c66a3ab51_vvc_nonref_output_releases_tabs:buggy": "cfcfa3f50795033cb4678665c5ab822e9d0baf796e71a973a099ad7d968f1dc0"
+  }
+}
