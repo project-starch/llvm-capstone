@@ -48,6 +48,11 @@ mkdir -p "$OUT/bin"
 # observe would stop being observable for a reason unrelated to the defect.
 CFLAGS="--target=riscv64-unknown-freebsd13 -march=rv64imafdcxcheri -mabi=l64pc128d"
 CFLAGS="$CFLAGS -mno-relax -B$SDK/bin --sysroot=$SYSROOT -std=gnu11 -O0 -fuse-ld=lld"
+# Optional, for another arm on the same cases: CHERI_EXTRA_CFLAGS, and CHERI_REVOCATION=off
+# (PoisonCap mode 0). Unset, this builds and boots exactly as before.
+CFLAGS="$CFLAGS ${CHERI_EXTRA_CFLAGS:-}"
+REVOCATION=${CHERI_REVOCATION:-on}
+case "$REVOCATION" in on|off) ;; *) echo "CONTROL-FAILED CHERI_REVOCATION=$REVOCATION" >&2; exit 75;; esac
 
 for dir in "$ROOT"/[0-9][0-9]_*/; do
   n=$(basename "$dir" | cut -c1-2)
@@ -128,7 +133,7 @@ STAMP="$OUT/.run-started"
 python3 "$CAP/ports/common/host/cheribsd/run.py" "$OUT/run" \
   --sdk "$SDK" --rootfs "$SYSROOT" --image "$IMAGE" --port "$PORT" \
   --abi-probe "$OUT/bin/cheribsd-abi-probe" \
-  --runtime-revocation on --cases "$OUT/cases.json" --continue-on-failure
+  --runtime-revocation "$REVOCATION" --cases "$OUT/cases.json" --continue-on-failure
 rc=$?
 
 for c in cheribsd-abi cheribsd-bounds revocation-control; do
@@ -138,15 +143,20 @@ for c in cheribsd-abi cheribsd-bounds revocation-control; do
     echo "CONTROL-FAILED $c's record predates this run: it is evidence about an earlier boot" >&2
     exit 75; }
 done
-grep -q "runtime_revocation=1" "$OUT/run/cheribsd-abi/stdout.txt" \
-  || { echo "CONTROL-FAILED cheribsd-abi did not report runtime_revocation=1" >&2; exit 75; }
+WANT_REV=1; [ "$REVOCATION" = off ] && WANT_REV=0
+grep -q "runtime_revocation=$WANT_REV" "$OUT/run/cheribsd-abi/stdout.txt" \
+  || { echo "CONTROL-FAILED cheribsd-abi did not report runtime_revocation=$WANT_REV" >&2; exit 75; }
 grep -q "CHERI_BOUNDARY_READY" "$OUT/run/cheribsd-bounds/stdout.txt" \
   || { echo "CONTROL-FAILED cheribsd-bounds did not report ready" >&2; exit 75; }
-# The temporal reading is void unless the revoker demonstrably sweeps in THIS guest.
+# The temporal reading is void unless the revoker demonstrably sweeps in THIS guest -- when
+# revocation is on. With it off (PoisonCap mode 0) nothing can sweep, and the reading is the
+# unprotected one; the requirement below does not apply.
+if [ "$REVOCATION" = on ]; then
 grep -q "tag_after_sweep=0" "$OUT/run/revocation-control/stdout.txt" \
   || { echo "CONTROL-FAILED revocation-control: the stale capability kept its tag after a forced sweep" >&2; exit 75; }
 grep -q "SUPERVISE exit signalled=34" "$OUT/run/revocation-control/stdout.txt" \
   || { echo "CONTROL-FAILED revocation-control did not fault after the sweep: the revoker is not shown to act" >&2; exit 75; }
+fi
 
 echo "run-cheribsd: controls fired, including the revocation control; suite exit $rc (non-zero = a prediction did not hold, which is data)"
 echo "run-cheribsd: per-case output in $OUT/run/"
