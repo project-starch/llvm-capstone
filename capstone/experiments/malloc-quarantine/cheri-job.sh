@@ -36,7 +36,16 @@ cd "$KIT"
 {
   echo "MQ-JOB slot=$SLOT arm=$ARM instrument=$INST argv=$* start=$(date -u +%FT%TZ)"
   echo "MQ-KIT $(cat guest/SHA256SUMS | tr '\n' ' ')"
-  if ./vm.sh up > "$MQ_WORK/up.log" 2>&1 && ./vm.sh put guest/* > "$MQ_WORK/put.log" 2>&1; then
+  # Many VMs booting at once on a loaded host can miss the login timeout: retry the boot.
+  booted=0
+  for try in 1 2 3; do
+    if ./vm.sh up > "$MQ_WORK/up.log" 2>&1 && ./vm.sh put guest/* > "$MQ_WORK/put.log" 2>&1; then
+      booted=1; break
+    fi
+    echo "MQ-BOOT-RETRY $try"
+    ./vm.sh down > /dev/null 2>&1
+  done
+  if [ $booted = 1 ]; then
     ./vm.sh ssh "cd /root/mq && chmod +x * && $cmd" 2>&1
     echo "MQ-EXIT rc=$?"
   else
