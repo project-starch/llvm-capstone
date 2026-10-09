@@ -56,7 +56,10 @@ size_t mcp_meta_used(void);
 /* The payload region and the mode. mode 0 is spatial: a chunk or object keeps
  * the alias it was carved with across the free list, so a stale pointer still
  * names live storage. mode 1 is sublet: release and issue each revoke the
- * unit's authority and mint a fresh alias, so a stale pointer is a dead one. */
+ * unit's authority and mint a fresh alias, so a stale pointer is a dead one.
+ * mode 2 is sublet-malloc: Sublet only as the system allocator -- a chunk
+ * carries its whole page's bound and is revoked only when its page is given
+ * back, an object only when it is discarded. */
 void mcp_payload_init(void *payload);
 void mcp_set_mode(unsigned mode);
 

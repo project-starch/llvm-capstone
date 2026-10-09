@@ -75,6 +75,28 @@
       "status": "measured",
       "verdict": "CAUGHT",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-carve-bounds/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), pc=0x104d18, which is mc_defect_read at the load base supervise reported -- the labelled probe. mc_carve() under MC_CARVE_BOUNDS narrows the region with cheri_bounds_set to nkey + 1 bytes. Stock CheriBSD purecap, revocation on, platform controls passing. Predicted before the run (83dcfa032845); it held."
+    },
+    "sublet-malloc": {
+      "target": "Capstone domain, the allocators port's ledger in mode 2: stock slabs.c/cache.c on Sublet as the SYSTEM allocator -- a chunk carries its whole page's bound, an object its own, and nothing is revoked until a page or object is given back",
+      "mode": 2,
+      "oracle": "the sequence completes: the unterminated key read stays inside the page MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (completed=1, image da0eac83b369dfa3).",
+      "prediction": "complete",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "f7adf03a1009"
+    },
+    "sublet-carve": {
+      "target": "Capstone domain: the slab Sublet port in mode 1 (each item its own Sublet region, revoked on release) PLUS mc_carve under MC_CARVE_BOUNDS, narrowing ITEM_key/ITEM_suffix from the item's alias -- the carve inside a slab item, ported",
+      "oracle": "fault at the labelled read probe: the access leaves ITEM_key's nkey + 1 = 9-byte region, the bound the carve puts on the item's alias; the catch is that bound, revocation is the item's as a whole MEASURED 2026-10-09, results/2026-10-09-sublet-carve/: **CAUGHT**, cause 5 at the labelled read probe (pc 0x10186a710, image 1a2d6c930044a201).",
+      "cause": 5,
+      "prediction": "CAUGHT",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "a28d6c33fd97"
     }
   },
   "status": "MEASURED 2026-10-05, both paths. QEMU domain: BOTH modes COMPLETE, no fault, because the case caps its scan at 64 bytes and the chunk is larger, so the read never reaches the chunk's end -- which the arm's pre-registered wording anticipated ('depends on how far the scan runs'). Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. A longer scan would cross the chunk bound; this case deliberately does not, so it measures THAT the key bound was crossed, not the chunk's. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Field bounds measured 2026-10-09 (results/2026-10-09-field-bounds/): NOT CAUGHT on Capstone and on CheriBSD. Carve bounds on Capstone measured 2026-10-09: CAUGHT at the labelled probe. Carve bounds on CheriBSD measured 2026-10-09: CAUGHT at the labelled probe. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): completes in both modes.",

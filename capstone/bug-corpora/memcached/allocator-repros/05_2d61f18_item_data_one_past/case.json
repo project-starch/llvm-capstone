@@ -57,6 +57,17 @@
     },
     "native-fix-differential": {
       "oracle": "the buggy arm's write or read crosses and the case's damage flag is set; the fixed arm's bound keeps it inside. This pair differs by the upstream fix, not by protection."
+    },
+    "sublet-malloc": {
+      "target": "Capstone domain, the allocators port's ledger in mode 2: stock slabs.c/cache.c on Sublet as the SYSTEM allocator -- a chunk carries its whole page's bound, an object its own, and nothing is revoked until a page or object is given back",
+      "mode": 2,
+      "oracle": "the sequence completes: the write leaves item a's data for the next chunk of the SAME page, and in mode 2 a chunk carries its whole page's bound MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (completed=1, image 59d41478f9698d66).",
+      "prediction": "complete",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "f7adf03a1009"
     }
   },
   "status": "MEASURED 2026-10-05, both paths. QEMU domain, cases 2,5,6,7 in one pass: 8/8 arms, runner exit 0, with case 2 as the temporal regression control reading cause 24 as before, and the suite's negative control reporting 8/8 oracles fired. This row FAULTS on BOTH modes with cause 7 at the labelled WRITE probe, pc 0x10186a0e4 equal to the resolved probe address. Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. The prediction that it faults is CONFIRMED; that both modes fault shows the slab port narrows per chunk whatever the temporal mode, as wm_narrow() does on the wireshark side; and cause 7 rather than 5 is the store-versus-load distinction, which the pre-registration did not anticipate here either. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): CAUGHT in both modes.",

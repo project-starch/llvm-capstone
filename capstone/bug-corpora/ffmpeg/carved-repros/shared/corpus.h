@@ -76,6 +76,25 @@ _Noreturn void ffc_fail(unsigned code);
  * round-up on CHERI cannot pass silently as a catch or a miss. */
 void *ffc_carve(void *block, size_t off, size_t len, const char *name);
 
+/* THE SUBLET PORT OF THE CARVE, FFC_SUBLET_CARVE (added 2026-10-09; Capstone, Sublet heap only).
+ * The block is not malloc's: ffc_block_alloc takes it LINEAR from the Sublet heap
+ * (__capstone_sublet_malloc_linear), and the case gets only its address, an untagged token that
+ * nothing may dereference. ffc_carve() then splits the block, in ascending order, into one Sublet
+ * region per carve -- split points on 16-byte boundaries, a region's granularity -- and issues each
+ * as an alias bounded to exactly [off, off + len). A carve whose end is not on a 16-byte boundary
+ * takes the rest of the block as its region, so the carves after it share that region: their
+ * bounds stay exact, their revocation is joint. ffc_recarve() gives a region back, which revokes
+ * every alias of it -- what re-carving does to the old regions -- and free() is the heap's single
+ * revoke of the whole block. Without the switch none of this is compiled. */
+#ifdef FFC_SUBLET_CARVE
+void *ffc_block_alloc(size_t bytes, int zero);
+void ffc_block_free(void *block);
+void ffc_recarve(void *region);
+#define malloc(n) ffc_block_alloc((n), 0)
+#define calloc(n, size) ffc_block_alloc((size_t)(n) * (size_t)(size), 1)
+#define free(p) ffc_block_free(p)
+#endif
+
 /* Record the access step: `at` is the first byte the step touches that lies
  * outside [region, region + rlen) -- or, when nothing does (the fixed arm), the
  * byte the same step touches last -- and `span` how many bytes the unreduced

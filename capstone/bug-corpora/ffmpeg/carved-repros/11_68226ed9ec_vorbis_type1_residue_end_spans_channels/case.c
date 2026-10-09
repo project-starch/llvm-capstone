@@ -40,7 +40,13 @@ FFC_CASE(11) {
   float *ch[2];
   ch[0] = ffc_carve(residues, 0, vlen * sizeof(float), "channel_residues[0]");
   ch[1] = ffc_carve(residues, vlen * sizeof(float), vlen * sizeof(float), "channel_residues[1]");
+#ifdef FFC_SUBLET_CARVE
+  /* The Sublet carve's block is reachable only through its regions, which cover it exactly. */
+  memset(ch[0], 0, vlen * sizeof(float));
+  memset(ch[1], 0, vlen * sizeof(float));
+#else
   memset(residues, 0, bytes);                                  /* :1508 */
+#endif
   CHECK(end0 <= channels * vlen, 812);                         /* the nested window */
 
   if (end0 > limit) {

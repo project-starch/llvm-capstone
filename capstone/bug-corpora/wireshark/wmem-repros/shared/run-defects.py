@@ -46,6 +46,11 @@ def oracle_arm(domain_build):
     cache = domain_build / "CMakeCache.txt"
     if not cache.exists():
         raise SystemExit(f"no {cache}: cannot tell which port this build is")
+    # WM_VARIANT=reference: wmem as released, no port at all -- Sublet only as the system
+    # allocator under it. Its own arm, whatever WM_CHUNKS says (nothing of 0002 is applied).
+    v = re.search(r"^WM_VARIANT:STRING=(\w+)$", cache.read_text(), re.M)
+    if v is not None and v.group(1) == "reference":
+        return "sublet-malloc"
     m = re.search(r"^WM_CHUNKS:BOOL=(\w+)$", cache.read_text(), re.M)
     if m is None:
         return "sublet"

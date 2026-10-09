@@ -71,6 +71,16 @@
       "verdict": "CAUGHT",
       "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, every case built with -Xclang -cheri-bounds=subobject-safe (booted on the second host)",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x102226 pc=0x102226; fault pc 0x102226 INSIDE ffh_write_probe_u8 [0x10220e, 0x102232). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162 (SIGPROT before any output; run.py lists the row as FAIL because its expectation needs a stdout line, the runner's own check reads the exit status -- the control was changed the same day to print first)). Predicted before the run (886abf4cc336)."
+    },
+    "sublet-full": {
+      "target": "Capstone domain, the program's whole Sublet configuration: the Sublet heap plus FFmpeg's pools on their Sublet port (FF_SUBLET_POOLS=1 libavutil + ffsublet.c), a pool live with one buffer taken and returned before main (tools/full-config/ffmpeg.c)",
+      "oracle": "the same reading as the sublet arm (CAUGHT): this case's objects come straight from malloc, so the nested allocator's port is live in the image but off the bug's path. A different reading would be an interaction, not a catch by the port. Every run must print the constructor's FULLCONFIG line. MEASURED 2026-10-09, results/2026-10-09-sublet-full/: **CAUGHT** -- cause=7 pc=0xc02111f4 address=0xc48023a0 in ffh_write_probe_u8+0x58 (the labelled probe); fixed FIXED exit=0; image 12fc015d5722a639; FULLCONFIG ffmpeg pools=sublet-port live gives=1 ends=0.",
+      "prediction": "CAUGHT",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "aeba7ddefb4d"
     }
   },
   "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): CAUGHT.",

@@ -45,6 +45,16 @@
     "native-fix-differential": {
       "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
       "status": "measured"
+    },
+    "sublet-full": {
+      "target": "Capstone domain, the program's whole Sublet configuration: the Sublet heap plus FFmpeg's pools on their Sublet port (FF_SUBLET_POOLS=1 libavutil + ffsublet.c), a pool live with one buffer taken and returned before main (tools/full-config/ffmpeg.c)",
+      "oracle": "the same reading as the sublet arm (CAUGHT): this case's objects come straight from malloc, so the nested allocator's port is live in the image but off the bug's path. A different reading would be an interaction, not a catch by the port. Every run must print the constructor's FULLCONFIG line. MEASURED 2026-10-09, results/2026-10-09-sublet-full/: **CAUGHT** -- cause=24 pc=0xc0211124 address=0x0 in fft_read_probe+0x38 (the labelled probe); fixed FIXED exit=0; image abec21dfcf1e22f2; FULLCONFIG ffmpeg pools=sublet-port live gives=1 ends=0.",
+      "prediction": "CAUGHT",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "aeba7ddefb4d"
     }
   },
   "case": 11,

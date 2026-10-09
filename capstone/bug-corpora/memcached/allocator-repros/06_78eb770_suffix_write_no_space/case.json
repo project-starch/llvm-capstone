@@ -75,6 +75,28 @@
       "status": "measured",
       "verdict": "CAUGHT",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-carve-bounds/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), pc=0x104d5c, which is mc_defect_write at the load base supervise reported -- the labelled probe. mc_carve() under MC_CARVE_BOUNDS narrows the region with cheri_bounds_set to zero bytes (nsuffix = 0). Stock CheriBSD purecap, revocation on, platform controls passing. Predicted before the run (83dcfa032845); it held."
+    },
+    "sublet-malloc": {
+      "target": "Capstone domain, the allocators port's ledger in mode 2: stock slabs.c/cache.c on Sublet as the SYSTEM allocator -- a chunk carries its whole page's bound, an object its own, and nothing is revoked until a page or object is given back",
+      "mode": 2,
+      "oracle": "the sequence completes: the suffix write stays inside the item, inside the page MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (completed=1, image 47c8f937425920ad).",
+      "prediction": "complete",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "f7adf03a1009"
+    },
+    "sublet-carve": {
+      "target": "Capstone domain: the slab Sublet port in mode 1 (each item its own Sublet region, revoked on release) PLUS mc_carve under MC_CARVE_BOUNDS, narrowing ITEM_key/ITEM_suffix from the item's alias -- the carve inside a slab item, ported",
+      "oracle": "fault at the labelled write probe: the access leaves ITEM_suffix's empty region (the byte before it, as Capstone cannot express a zero-length bound), the bound the carve puts on the item's alias; the catch is that bound, revocation is the item's as a whole MEASURED 2026-10-09, results/2026-10-09-sublet-carve/: **CAUGHT**, cause 7 at the labelled write probe (pc 0x10186a79c, image f1c726b057ce7417).",
+      "cause": 7,
+      "prediction": "CAUGHT",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "a28d6c33fd97"
     }
   },
   "status": "MEASURED 2026-10-05, both paths, and this is the row that settles something. QEMU domain: BOTH modes COMPLETE, no fault, in the same 8/8 pass whose negative control fired 8/8 and whose temporal control read cause 24. Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED with damage set. So the defect is real, it corrupts the value's storage, and NOTHING WE HAVE DETECTS IT -- the crossing stays inside the chunk and the slab port's bound is the chunk. The prediction of completion is CONFIRMED, which is the measured form of 'a chunk-granular bound cannot see a sub-object crossing'. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Field bounds measured 2026-10-09 (results/2026-10-09-field-bounds/): NOT CAUGHT on Capstone and on CheriBSD. Carve bounds on Capstone measured 2026-10-09: CAUGHT at the labelled probe. Carve bounds on CheriBSD measured 2026-10-09: CAUGHT at the labelled probe. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): completes in both modes.",
