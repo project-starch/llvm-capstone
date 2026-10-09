@@ -265,9 +265,9 @@ recomputation flipped nothing.
 
 | arm | detections | by the capability mechanism | an ordinary trap |
 |---|---:|---:|---|
-| `spatial` | 14 | **13** | `32` cause 2 |
-| `sublet` | 25 | **25** | none |
-| `cheribsd-revocation` | 10 | **10** | none |
+| `spatial` | 15 | **14** | `32` cause 2 |
+| `sublet` | 27 | **27** | none |
+| `cheribsd-revocation` | 11 | **11** | none |
 
 Case `32` is why this column exists. Its dangling `_ucnhash_CAPI` pointer is
 **called**, and on the base arm control lands on non-code at `0x87d0` and the CPU

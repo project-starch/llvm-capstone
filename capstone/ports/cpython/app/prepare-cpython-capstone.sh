@@ -132,9 +132,17 @@ if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
   SUBLET_INC=(-I"$PYM/shared" -I"$REPO_ROOT/capstone/runtime/include" -DSIZEOF_VOID_P=16)
   GAP_FLAGS=()
   if [[ ${CPY_GAP_OBSERVER:-0} == 1 ]]; then GAP_FLAGS=(-DPYMALLOC_GAP_OBSERVER=1); fi
-  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" "${GAP_FLAGS[@]}" -DPYMALLOC_DOMAIN \
+  # CPY_PYM_DEFINES reaches the pymalloc port's own capacity constants, which are
+  # #ifndef-guarded in shared/port.h and allocators/sublet/block-lifetimes.c.
+  # Without this there was no way to set them from a build at all: an earlier
+  # campaign passed CPY_EXTRA_CFLAGS, which nothing in this tree reads, so two
+  # images were recorded as carrying raised PYM_ARENA_BYTES and LARGE_COUNT and
+  # carried neither. Unset is the old behaviour, byte for byte.
+  PYM_FLAGS=()
+  if [[ -n ${CPY_PYM_DEFINES:-} ]]; then read -r -a PYM_FLAGS <<< "$CPY_PYM_DEFINES"; fi
+  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" "${GAP_FLAGS[@]}" "${PYM_FLAGS[@]}" -DPYMALLOC_DOMAIN \
     -c "$PYM/allocators/sublet/block-lifetimes.c" -o "$RT/pym_block_lifetimes.o"
-  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" -DPYMALLOC_DOMAIN \
+  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" "${PYM_FLAGS[@]}" -DPYMALLOC_DOMAIN \
     -c "$PYM/shared/backing.c" -o "$RT/pym_backing.o"
   "$CAPSTONE_CLANG" "${CF[@]}" "${GAP_FLAGS[@]}" \
     -c "$SCRIPT_DIR/toolchain/pym_sublet_glue.c" -o "$RT/pym_sublet_glue.o"

@@ -66,6 +66,19 @@ echo "revocation_default=$rev every_free_default=${ef:-unrecorded}"
 # Without this, a wrong PYTHONHOME or a missing sicode.so turns every case into
 # a fabricated silence. objects.py is the same workload the Capstone arms use.
 G "test -x $GUEST/python" || { echo "no $GUEST/python in the guest" >&2; exit 2; }
+# The binary that RUNS is the guest's copy; $PY is only what run.meta records.
+# Nothing kept the two in step, so a stale guest copy would have produced
+# results attributed to a build that never ran them. Compare them.
+hostsha=$(sha256sum "$PY" | cut -d' ' -f1)
+guestsha=$(G "sha256sum $GUEST/python 2>/dev/null | cut -d' ' -f1")
+[[ -n $guestsha ]] || { echo "could not hash $GUEST/python in the guest" >&2; exit 2; }
+[[ $hostsha == "$guestsha" ]] || {
+  echo "REFUSING: the guest is running a different binary from the one recorded." >&2
+  echo "  host  $PY: ${hostsha:0:16}" >&2
+  echo "  guest $GUEST/python: ${guestsha:0:16}" >&2
+  echo "  push the intended binary into the guest, or point PY at the one that is there." >&2
+  exit 2; }
+echo "binary: ${hostsha:0:16} (host and guest agree)"
 G "test -f $SICODE" || { echo "no $SICODE in the guest -- push it before running" >&2; exit 2; }
 pc=$(G "cd $GUEST && env PYTHONHOME=$PYHOME LD_PRELOAD=$SICODE timeout 300 ./python objects.py 8 3 0 2>&1 | tail -1")
 echo "positive control: ${pc:-<no output>}"

@@ -1,7 +1,7 @@
 case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run	delivered
 01_gh-139071_heap-overflow-in-set-dealloc-setobject	gh-139071	spatial	nested	spatial	DETECTED	24	True	spatial-20261006-105111	yes
 01_gh-139071_heap-overflow-in-set-dealloc-setobject	gh-139071	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-123446	yes
-01_gh-139071_heap-overflow-in-set-dealloc-setobject	gh-139071	spatial	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	cheri11	yes
+01_gh-139071_heap-overflow-in-set-dealloc-setobject	gh-139071	spatial	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	boundary-20261008-075318	yes
 02_gh-140471_fix-buffer-overflow-in-ast-node	gh-140471	spatial	nested	spatial	SILENT		True	spatial-20261006-131005	yes
 02_gh-140471_fix-buffer-overflow-in-ast-node	gh-140471	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-123446	yes
 02_gh-140471_fix-buffer-overflow-in-ast-node	gh-140471	spatial	nested	cheribsd-revocation	SILENT		True	boundary-20261007-020413	yes
@@ -19,7 +19,7 @@ case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run	delivered
 06_gh-140551_crash-in-dict-if-hash-eq	gh-140551	spatial	nested	cheribsd-revocation	SILENT		True	cheri11	yes
 07_gh-140594_fix-an-out-of-bounds-read	gh-140594	spatial	non-nested	spatial	DETECTED	5	True	spatial-20261007-020747	yes
 07_gh-140594_fix-an-out-of-bounds-read	gh-140594	spatial	non-nested	sublet	DETECTED	5	True	sublet-20261007-022142	yes
-07_gh-140594_fix-an-out-of-bounds-read	gh-140594	spatial	non-nested	cheribsd-revocation	DETECTED	si_code=1 (PROT_CHERI_BOUNDS)	True	boundary-20261007-020413	yes
+07_gh-140594_fix-an-out-of-bounds-read	gh-140594	spatial	non-nested	cheribsd-revocation	DETECTED	si_code=1 (PROT_CHERI_BOUNDS)	True	boundary-20261008-075318	yes
 08_gh-140607_heap-buffer-overflow-in-io-rawiobase	gh-140607	spatial	non-nested	spatial	DETECTED	5	True	spatial-20261008-033909	yes
 08_gh-140607_heap-buffer-overflow-in-io-rawiobase	gh-140607	spatial	non-nested	sublet	DETECTED	5	True	sublet-20261008-034649	yes
 08_gh-140607_heap-buffer-overflow-in-io-rawiobase	gh-140607	spatial	non-nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	cheri11	yes
@@ -34,15 +34,15 @@ case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run	delivered
 11_gh-143005_heap-buffer-overflow-in-ctypes-array	gh-143005	spatial	nested	cheribsd-revocation	NOMODULE	_ctypes is not in the purecap build		cheri11	no
 12_gh-143377_heap-buffer-overflow-in-format-tracebackexception	gh-143377	spatial	non-nested	spatial	DETECTED	7	True	spatial-20261006-105111	yes
 12_gh-143377_heap-buffer-overflow-in-format-tracebackexception	gh-143377	spatial	non-nested	sublet	DETECTED	7	True	sublet-20261006-112658	yes
-12_gh-143377_heap-buffer-overflow-in-format-tracebackexception	gh-143377	spatial	non-nested	cheribsd-revocation	NOMODULE	_interpreters is not in the purecap build		cheri11	no
+12_gh-143377_heap-buffer-overflow-in-format-tracebackexception	gh-143377	spatial	non-nested	cheribsd-revocation	DETECTED	si_code=1 (PROT_CHERI_BOUNDS)	True	boundary-20261008-075318	yes
 13_gh-144169_fix-three-crashes-in-ast-objects	gh-144169	spatial	nested	spatial	CAPACITY			spatial-hicap-20261007-021742	no
 13_gh-144169_fix-three-crashes-in-ast-objects	gh-144169	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-123446	held-out
-13_gh-144169_fix-three-crashes-in-ast-objects	gh-144169	spatial	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	boundary-20261007-020413	yes
+13_gh-144169_fix-three-crashes-in-ast-objects	gh-144169	spatial	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	boundary-20261007-020413	held-out
 14_gh-144475_heap-buffer-overflow-in-functools-partial	gh-144475	spatial	nested	spatial	DETECTED	24	True	spatial-20261006-105111	yes
 14_gh-144475_heap-buffer-overflow-in-functools-partial	gh-144475	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-112658	yes
 14_gh-144475_heap-buffer-overflow-in-functools-partial	gh-144475	spatial	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	cheri11	yes
-15_gh-148973_fix-segfault-on-mismatch-between-consts	gh-148973	spatial	nested	spatial	SKIPPED	Ran 1 test, skipped: requires _testinternalcapi		spatial-20261006-105111	no
-15_gh-148973_fix-segfault-on-mismatch-between-consts	gh-148973	spatial	nested	sublet	SKIPPED	Ran 1 test, skipped: requires _testinternalcapi		sublet-20261006-123446	no
+15_gh-148973_fix-segfault-on-mismatch-between-consts	gh-148973	spatial	nested	spatial	DETECTED	24	True	spatial-mod-20261009-031346	yes
+15_gh-148973_fix-segfault-on-mismatch-between-consts	gh-148973	spatial	nested	sublet	DETECTED	7	True	sublet-modL-20261009-081625	yes
 15_gh-148973_fix-segfault-on-mismatch-between-consts	gh-148973	spatial	nested	cheribsd-revocation	SILENT		True	cheri11	yes
 16_gh-156075_heap-buffer-overflow	gh-156075	spatial	nested	spatial	SILENT		True	spatial-20261006-105111	yes
 16_gh-156075_heap-buffer-overflow	gh-156075	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-112658	yes
@@ -52,22 +52,22 @@ case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run	delivered
 17_gh-157325_fix-an-oob-read-in-the	gh-157325	spatial	nested	cheribsd-revocation	SILENT		True	cheri11	yes
 18_gh-157335_fix-out-of-bounds-write-in	gh-157335	spatial	non-nested	spatial	NOTIMPL	mmap: Errno 38, the guest kernel has no such syscall		spatial-20261006-105111	no
 18_gh-157335_fix-out-of-bounds-write-in	gh-157335	spatial	non-nested	sublet	NOTIMPL	mmap: Errno 38, the guest kernel has no such syscall		sublet-20261006-123446	no
-18_gh-157335_fix-out-of-bounds-write-in	gh-157335	spatial	non-nested	cheribsd-revocation	SILENT		False	cheri11	yes
+18_gh-157335_fix-out-of-bounds-write-in	gh-157335	spatial	non-nested	cheribsd-revocation	SILENT		False	cheri11	held-out
 19_gh-142664_fix-uaf-in-memoryview-hash-via	gh-142664	temporal	non-nested	spatial	SILENT		False	spatial-20261006-131005	yes
 19_gh-142664_fix-uaf-in-memoryview-hash-via	gh-142664	temporal	non-nested	sublet	DETECTED	24	True	sublet-20261006-123446	yes
-19_gh-142664_fix-uaf-in-memoryview-hash-via	gh-142664	temporal	non-nested	cheribsd-revocation	SILENT		True	cheri11	yes
+19_gh-142664_fix-uaf-in-memoryview-hash-via	gh-142664	temporal	non-nested	cheribsd-revocation	SILENT		True	boundary-20261008-075318	yes
 20_gh-143308_use-after-free-in-save-picklebuffer	gh-143308	temporal	non-nested	spatial	SILENT		False	spatial-20261006-105111	yes
 20_gh-143308_use-after-free-in-save-picklebuffer	gh-143308	temporal	non-nested	sublet	DETECTED	24	True	sublet-20261006-112658	yes
 20_gh-143308_use-after-free-in-save-picklebuffer	gh-143308	temporal	non-nested	cheribsd-revocation	SILENT		True	cheri11	yes
 21_gh-146169_segfault-ub-from-expat-when-re	gh-146169	temporal	non-nested	spatial	SILENT		False	spatial-20261007-020747	yes
 21_gh-146169_segfault-ub-from-expat-when-re	gh-146169	temporal	non-nested	sublet	DETECTED	24	True	sublet-20261007-022142	yes
-21_gh-146169_segfault-ub-from-expat-when-re	gh-146169	temporal	non-nested	cheribsd-revocation	NOMODULE	pyexpat is not in the purecap build		cheri11	no
+21_gh-146169_segfault-ub-from-expat-when-re	gh-146169	temporal	non-nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	boundary-20261008-075318	yes
 22_gh-139210_iterparse-event-name	gh-139210	temporal	nested	spatial	SILENT		True	spatial-20261006-141858	yes
 22_gh-139210_iterparse-event-name	gh-139210	temporal	nested	sublet	DETECTED	24	True	sublet-20261006-144133	yes
-22_gh-139210_iterparse-event-name	gh-139210	temporal	nested	cheribsd-revocation	NOMODULE	expat is not in the purecap build		cheri11	no
-23_gh-142560_bytearray-search-realloc	gh-142560	temporal	nested	spatial	NOMODULE	_testlimitedcapi is not in the image		spatial-20261006-141858	no
-23_gh-142560_bytearray-search-realloc	gh-142560	temporal	nested	sublet	NOMODULE	_testlimitedcapi is not in the image		sublet-20261006-144133	no
-23_gh-142560_bytearray-search-realloc	gh-142560	temporal	nested	cheribsd-revocation	NOMODULE	_testlimitedcapi is not in the purecap build		cheri11	no
+22_gh-139210_iterparse-event-name	gh-139210	temporal	nested	cheribsd-revocation	SILENT		True	boundary-20261008-075318	yes
+23_gh-142560_bytearray-search-realloc	gh-142560	temporal	nested	spatial	SILENT		True	spatial-mod-20261009-031346	yes
+23_gh-142560_bytearray-search-realloc	gh-142560	temporal	nested	sublet	DETECTED	24	True	sublet-modL-20261009-081625	yes
+23_gh-142560_bytearray-search-realloc	gh-142560	temporal	nested	cheribsd-revocation	SILENT		True	boundary-20261008-075318	yes
 24_gh-142783_zoneinfo-eager-decref	gh-142783	temporal	nested	spatial	DETECTED	24	True	spatial-20261008-033909	yes
 24_gh-142783_zoneinfo-eager-decref	gh-142783	temporal	nested	sublet	DETECTED	24	True	sublet-20261006-144133	yes
 24_gh-142783_zoneinfo-eager-decref	gh-142783	temporal	nested	cheribsd-revocation	SILENT		True	cheri11	yes
@@ -91,7 +91,7 @@ case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run	delivered
 30_gh-146613_grouper-parent-key	gh-146613	temporal	nested	cheribsd-revocation	SILENT		True	cheri11	yes
 31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	spatial	DETECTED	24	True	spatial-20261006-141858	yes
 31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	sublet	DETECTED	24	True	sublet-20261006-144133	yes
-31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	cheri11	yes
+31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	boundary-20261008-075318	yes
 32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	spatial	DETECTED	2	False	spatial-20261007-020747	yes
 32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	sublet	DETECTED	24	True	sublet-20261007-022142	yes
 32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	cheribsd-revocation	DETECTED	si_code=5 (PROT_CHERI_PERM)	True	boundary-20261007-020413	yes

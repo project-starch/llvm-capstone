@@ -52,11 +52,33 @@ CASE_TIMEOUT=${CASE_TIMEOUT:-120}
 #   base   the image the other rows were measured with
 #   hicap  heap 192 MiB, PYM_ARENA 128 MiB, PYM_META 64 MiB, ARENA_COUNT 64,
 #          LARGE_COUNT 65536 -- for the rows that cannot run at all otherwise
+#   mod    default capacity plus _testinternalcapi and _testlimitedcapi, which
+#          cases 15 and 23 die at import without. Capacity is deliberately NOT
+#          raised here: the rows this image is compared against were measured at
+#          the defaults, so the modules stay the only difference between them
+#   mod96  the same modules with the application heap at 96 MiB instead of 48.
+#          `mod` is unusable on the sublet arm: that arm revokes on every free
+#          and the two extra builtin modules put the 48 MiB heap over DURING
+#          IMPORT, so cases 15, 19, 23 and 31 all died in importlib -- and 19
+#          and 31 were detections on the base image, so it lost more rows than
+#          it recovered. Only the application arena is raised; PYM_ARENA_BYTES
+#          and the rest stay at their defaults, to keep the confound small.
+#   modL   the modules with LARGE_COUNT raised from 4096 to 65536 and nothing
+#          else. `mod96` showed the application arena is NOT what runs out:
+#          48 and 96 MiB fail identically, same traceback, same line. The
+#          sublet port's own `large` table is the limit, and it is a separate
+#          table from the arenas, so raising it leaves arena-return timing --
+#          what the cause-24 detections depend on -- untouched. Verified at the
+#          instruction level: the only difference in block-lifetimes.o is
+#          lui a0, 0x1 becoming lui a0, 0x10.
 CAP=${CAP:-base}
 case $CAP in
   base)  IMGKEY=$arm ;;
   hicap) IMGKEY=$arm-hicap ;;
-  *) echo "CAP must be base or hicap, not '$CAP'" >&2; exit 2 ;;
+  mod)   IMGKEY=$arm-mod ;;
+  mod96) IMGKEY=$arm-mod96 ;;
+  modL)  IMGKEY=$arm-modL ;;
+  *) echo "CAP must be base, hicap, mod, mod96 or modL, not '$CAP'" >&2; exit 2 ;;
 esac
 [ "$CAP" = base ] || OUT=${2:-$KIT/results/$arm-$CAP-$STAMP}
 
