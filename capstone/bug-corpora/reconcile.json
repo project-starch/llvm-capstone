@@ -1,0 +1,147 @@
+{
+ "arms": [
+  "cheribsd",
+  "capstone-sysalloc",
+  "capstone-sublet"
+ ],
+ "other_cases": 252,
+ "study_cases": 233,
+ "same_bug": 233,
+ "only_other": [
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row10_ruby_stmt_reuse_after_close",
+   "dir": "row10_ruby_stmt_reuse_after_close",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row11_go_double_finalize",
+   "dir": "row11_go_double_finalize",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row12_expo_unfinalized_close",
+   "dir": "row12_expo_unfinalized_close",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row13_cpython_deleted_rowfactory",
+   "dir": "row13_cpython_deleted_rowfactory",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row14_cpython_uninit_connection",
+   "dir": "row14_cpython_uninit_connection",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row15_cpython_subinterp_gil",
+   "dir": "row15_cpython_subinterp_gil",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row16_datasette_authorizer_ctx",
+   "dir": "row16_datasette_authorizer_ctx",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row17_node_bind_typecast_abort",
+   "dir": "row17_node_bind_typecast_abort",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row18_php_columntype_after_reset",
+   "dir": "row18_php_columntype_after_reset",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row19_php_result_lifecycle",
+   "dir": "row19_php_result_lifecycle",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row1_cpython_progress_uaf",
+   "dir": "row1_cpython_progress_uaf",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row2_rusqlite_hook_closure_uaf",
+   "dir": "row2_rusqlite_hook_closure_uaf",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row3_diesel_colname_cached",
+   "dir": "row3_diesel_colname_cached",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row4_php_stmt_after_close",
+   "dir": "row4_php_stmt_after_close",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row5_php_destruction_order",
+   "dir": "row5_php_destruction_order",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row6_php_udf_uaf",
+   "dir": "row6_php_udf_uaf",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row7_cpython_cursor_dealloc",
+   "dir": "row7_cpython_cursor_dealloc",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row8_cpython_backup_closed",
+   "dir": "row8_cpython_backup_closed",
+   "other_measured": []
+  },
+  {
+   "program": "sqlite",
+   "group": "capi-repros",
+   "bug": "row9_ruby_finalize_after_dbfree",
+   "dir": "row9_ruby_finalize_after_dbfree",
+   "other_measured": []
+  }
+ ],
+ "only_study": [],
+ "renamed": []
+}

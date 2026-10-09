@@ -1,7 +1,33 @@
 # Bug corpora
 
-Reproduction material for defects in third-party software, one directory per program.
-Deliberately outside `ports/`, which holds the ports themselves and their build.
+Reproduction material for defects in third-party software, **one corpus per
+program**. Deliberately outside `ports/`, which holds the ports themselves and
+their build.
+
+A program's corpus is one `corpus.json` with its cases in GROUPS -- what used to
+be a corpus of its own. A group is a boundary: FFmpeg has five, because a
+crossing past a direct `av_malloc`, a crossing between two members of one
+allocation and a crossing inside a buffer pool are different questions and the
+defences answer them differently. The group keeps what is true of it alone --
+that boundary, its upstream pin, its build seam, the runs that measured it -- and
+the program keeps the title, the total and where each arm's verdict comes from.
+
+## Does it catch it?
+
+[PROTECTION.md](PROTECTION.md) answers one question for every bug here: which
+defence reports? Three arms, defined in [arms.json](arms.json) -- stock CheriBSD,
+Capstone at the same malloc boundary, and Capstone protecting the program's own
+nested allocator as well. It is generated; edit the corpora, not it.
+
+[OPEN.md](OPEN.md) is the other half of that answer: the cells no run has filled,
+why each one is open, and what closing it would take. It also names what the
+table cannot see -- a group whose cases are table rows rather than directories
+produces no row, and nineteen cases are in that position today.
+
+[RECONCILE.md](RECONCILE.md) records how this study's case set and this tree's
+were reconciled, and which arm of the older mechanism-level set may be read
+across into which of the three. One may NOT, and the file says why rather than
+leaving it to be rediscovered. `tools/reconcile.py` regenerates its data.
 
 **[INDEX.md](INDEX.md) lists every corpus, its case count, the version each one pins and
 whether those defects are live in that version.** It is generated from each corpus's

@@ -32,6 +32,14 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 | `capstone-sysalloc` | 62 | 0 | 74 | 0 | 94 | 230 | 3 |
 | `capstone-sublet` | 129 | 0 | 12 | 0 | 89 | 230 | 3 |
 
+## Cases this table cannot see yet
+
+**19** declared cases produce no row above. A case is found by its own directory, and these groups keep their cases as rows in a table instead; reading one needs a reader this tool does not have. They are counted here so the totals are not mistaken for the whole tree.
+
+| group | cases missing | case_schema |
+|---|---:|---|
+| `sqlite/capi-repros` | 19 | `sqlite-row` |
+
 ## The arms compared where all three were measured, split by who allocated the object
 
 Two corrections to the headline table, and both of them cut the same way. A cell that was never run is not evidence, so the arms are compared on the cases where all three were measured. And on a case whose object came out of the program's own allocator, two of the three arms are not protecting that object at all -- counting those together with the malloc-boundary cases reads as a weakness of the mechanism when it is a statement about what each arm covers.

@@ -394,6 +394,7 @@ def build():
     corpora = []
     problems = []
     undeclared = []
+    unenumerated = []
     for manifest in sorted(CORPORA.glob("*/corpus.json")):
         corpus = manifest.parent
         decl = json.loads(manifest.read_text())
@@ -442,7 +443,21 @@ def build():
                         problems.append(f"{name}/{group}/{arm}: reader "
                                         f"{spec['reader']} failed on {one}: {exc!r}")
                 read[arm] = table
-            for case_dir, case in load_cases(corpus / group, group_decl):
+            enumerated = load_cases(corpus / group, group_decl)
+            # A GROUP WHOSE CASES ARE NOT DIRECTORIES IS INVISIBLE HERE. Cases are
+            # found by globbing case directories, and a `sqlite-row` group keeps
+            # its cases as rows in a table instead -- so sqlite's nineteen
+            # capi-repros cases produced no rows at all, in a document whose first
+            # line claims every bug in the tree. `xlang-row` is exempt by
+            # declaration and says so; this was not exempt, it was missed.
+            # Reading a row table needs a reader this tool does not have, so until
+            # it does, the shortfall is COUNTED and named rather than passing as a
+            # smaller tree.
+            declared_count = group_decl.get("cases")
+            if isinstance(declared_count, int) and len(enumerated) < declared_count:
+                unenumerated.append((name, group, declared_count - len(enumerated),
+                                     group_decl.get("case_schema")))
+            for case_dir, case in enumerated:
                 ids = case_identifiers(case_dir, case)
                 ignore = case.get("ignore") or group_ignore
                 cells = {}
@@ -552,7 +567,7 @@ def build():
                                        "ignore": d.get("ignore")}
                                    for g, d in sorted(decl.get("groups", {}).items())},
                         "protection": block})
-    return corpora, problems, undeclared
+    return corpora, problems, undeclared, unenumerated
 
 
 def resolve(cell, cells):
@@ -724,7 +739,7 @@ def intersection(corpora):
     return lines + [""]
 
 
-def render(corpora, undeclared=()):
+def render(corpora, undeclared=(), unenumerated=()):
     lines = [
         "# Does it catch it? Every bug in this tree, against three protection arms",
         "",
@@ -844,6 +859,16 @@ def render(corpora, undeclared=()):
                      f"{c['missed'] + c['wrong-answer']} | "
                      f"{totals_disposed[arm] - totals_credited[arm]} | "
                      f"{c['not-run']} | {n} | {c['ignored']} |")
+    if unenumerated:
+        total = sum(n for _, _, n, _ in unenumerated)
+        lines += ["", "## Cases this table cannot see yet", "",
+                  f"**{total}** declared cases produce no row above. A case is found by "
+                  "its own directory, and these groups keep their cases as rows in a "
+                  "table instead; reading one needs a reader this tool does not have. "
+                  "They are counted here so the totals are not mistaken for the whole "
+                  "tree.", "",
+                  "| group | cases missing | case_schema |", "|---|---:|---|"]
+        lines += [f"| `{p}/{g}` | {n} | `{s}` |" for p, g, n, s in sorted(unenumerated)]
     if undeclared:
         lines += ["", "## Programs that have not declared their arms yet", "",
                   "Not in any total above or below, and not a statement about them: "
@@ -946,7 +971,7 @@ def main():
                          "caught@<arm> / undisposed@cheribsd. Several --focus narrow "
                          "together; repeat a verdict to widen it.")
     args = ap.parse_args()
-    corpora, problems, undeclared = build()
+    corpora, problems, undeclared, unenumerated = build()
     if not corpora:
         # NOT a table of zero rows. A tree in which no corpus declares its arms
         # yet has nothing for this tool to generate, and writing an empty
@@ -964,7 +989,7 @@ def main():
             print(f"PROBLEM {problem}", file=sys.stderr)
         focus(corpora, args.focus)
         return 0
-    md = render(corpora, undeclared)
+    md = render(corpora, undeclared, unenumerated)
     data = json.dumps({"arms": ARMS, "corpora": corpora}, indent=1) + "\n"
     md_path, json_path = CORPORA / "PROTECTION.md", CORPORA / "protection.json"
     if args.check:
