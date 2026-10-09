@@ -42,9 +42,24 @@ if(PORT_PLATFORM STREQUAL "capstone-domain")
   add_library(domain-runtime OBJECT ${domain_runtime})
   target_link_libraries(domain-runtime PRIVATE replay-options)
 endif()
+# The virtual application platform is HOSTED -- ordinary main(), a libc -- and
+# carries capability pointers, so it takes the SAME payload backend and lease
+# policy as the freestanding domain and differs only in where the payload comes
+# from: a linear block borrowed from the system allocator rather than a grant.
+# FFPOOL_DOMAIN is what the probes and the replay engine key the capability path
+# on, so it is defined here too; it does not imply freestanding anywhere.
+if(PORT_PLATFORM STREQUAL "capstone-application")
+  target_compile_definitions(replay-options INTERFACE FFPOOL_DOMAIN FFPOOL_BORROW_LINEAR)
+  target_sources(pool-core PRIVATE
+    src/capstone-domain/payload-capabilities.c
+    src/capstone-domain/node-snapshots.c
+    src/allocators/sublet/pool-leases.c)
+endif()
 if(PORT_HOSTED)
   set(entry src/native/replay/main.c)
-  if(FFPOOL_CHERI)
+  if(PORT_PLATFORM STREQUAL "capstone-application")
+    # the capability backend above is already selected
+  elseif(FFPOOL_CHERI)
     target_compile_definitions(replay-options INTERFACE FFPOOL_CHERI)
     option(FFPOOL_POISONCAP "Use experimental PoisonCap with sweep before pool reuse" OFF)
     if(FFPOOL_POISONCAP)
@@ -75,7 +90,18 @@ endif()
 add_executable(pool-security ${entry} src/shared/replay-engine.c
   security-tests/shared/pool-lifetime-probes.c)
 target_compile_definitions(pool-security PRIVATE FF2_SECURITY)
-if(PORT_PLATFORM STREQUAL "capstone-domain")
+# The fixture that DEFINES ff2_alias_scatter_register_span and the two register
+# probes is Capstone assembly with no domain scaffolding in it -- plain
+# instructions over a0..a7 -- so it belongs to every Capstone platform, not to
+# the freestanding one. Keyed on `capstone-domain` alone it was missing on
+# capstone-application and pool-security could not link there at all.
+if(PORT_PLATFORM MATCHES "^capstone-")
+  # CMake SILENTLY DROPS a .S source when ASM is not an enabled language: no
+  # warning, no build rule, just three undefined symbols at link. The domain
+  # branch near the top of this file enables it, and the hosted Capstone
+  # platform needs it for the very same fixture; calling it again where it is
+  # already on is harmless.
+  enable_language(ASM)
   target_sources(pool-security PRIVATE
     security-tests/capstone/alias-scatter-register.S)
 endif()

@@ -24,6 +24,14 @@
       "description": "Host compiler; override the external build directory with -B or CMakeUserPresets.json."
     },
     {
+      "name": "capstone-application",
+      "inherits": "base",
+      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/capstone-application.cmake",
+      "cacheVariables": {
+        "BUILD_TESTING": false
+      }
+    },
+    {
       "name": "capstone-domain",
       "inherits": "base",
       "displayName": "Freestanding Capstone domains (including Sublet mode)",
@@ -49,6 +57,11 @@
     {
       "name": "native",
       "configurePreset": "native",
+      "jobs": 4
+    },
+    {
+      "name": "capstone-application",
+      "configurePreset": "capstone-application",
       "jobs": 4
     },
     {
