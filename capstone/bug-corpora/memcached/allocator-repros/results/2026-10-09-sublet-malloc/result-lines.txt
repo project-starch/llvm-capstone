@@ -22,3 +22,7 @@ OK   case=4 unlocked-refcount-drift            sublet   cause=24 pc=0x10186a710 
 
 # negative test of the mode-2 page-bound check (expected end moved 16 bytes, one-off image, case 5):
 FAIL case=5 item-data-one-past                 sublet-malloc  report status=509 completed=0
+
+# same-image control, second run: mode 1 (sublet) on cases 1 and 3 of these images:
+OK   case=1 io-walk-reads-freed-link           sublet   cause=24 pc=0x10186b560 expected=0x10186b560 halted
+OK   case=3 refcount-overflow-frees-linked-item sublet   cause=24 pc=0x1018aa710 expected=0x1018aa710 halted

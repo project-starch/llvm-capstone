@@ -13,3 +13,5 @@ live` line or `tools/run-capstone-domain.py --arm sublet-full` refuses the run (
 the same reading as the `sublet` arm on every case. The case's objects come straight from malloc,
 so the live port is off the bug's path; the run shows it changes nothing for a direct-allocation
 bug. Controls in the same boot as every arm of this tool (clean, oob, uaf, subobj) behaved.
+
+**What this is, and is not.** A non-interference result: every reading is unchanged with the port linked and live, and the port is off these bugs' path, so no row here is a catch by the port. The image carries FFmpeg's real pool code (the application port's FF_SUBLET_POOLS=1 libavutil) over ffsublet.c. The SDK is the plain corpora's own Sublet SDK (HEAP_LOG 22); the sub-object corpus's HEAP_LOG 27 one, as its sublet arm, so the heap size differs from the `sublet` arm's as well as the port.

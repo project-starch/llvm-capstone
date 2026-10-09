@@ -65,9 +65,17 @@ def verdict(arm):
 # The three columns per bug. Column 2 is Sublet ONLY as the system allocator; on a plain corpus that
 # is the `sublet` arm itself, on a nested one the arm that leaves the nested allocator stock.
 COL2 = {"pool-repros": "sublet-malloc", "wmem-repros": "sublet-malloc", "allocator-repros": "sublet-malloc"}
-# Column 3 is the nested allocator's Sublet port; a plain case runs in the program's full configuration.
+# Column 3 is the Sublet port of the INNERMOST allocator that made the object the access belongs to; a
+# plain case runs in the program's full configuration. Where code carves the object out of a block that
+# allocator handed out -- a codec's carve, av_frame_get_buffer's planes, memcached's ITEM_key/ITEM_suffix
+# inside a slab item -- that carve is the innermost allocator, and its port is the case's `sublet-carve`
+# arm (memcached 06/07: the slab port plus the key/suffix carve). One rule, so the two corpora agree.
 COL3 = {"pool-repros": "sublet-port", "wmem-repros": "sublet-chunks", "allocator-repros": "sublet",
         "carved-repros": "sublet-carve", "plane-repros": "sublet-carve"}
+
+
+def col3_arm(corpus, arms):
+    return "sublet-carve" if "sublet-carve" in arms else COL3.get(corpus, "sublet-full")
 
 
 def cheri_board(arm):
@@ -109,7 +117,7 @@ for p in TARGETS:
                  scarve=verdict(a.get("sublet-carve")),
                  c1=cheri_board(a.get("cheribsd-revocation")),
                  c2=verdict(a.get(COL2.get(corpus, "sublet"))), c2arm=COL2.get(corpus, "sublet"),
-                 c3=verdict(a.get(COL3.get(corpus, "sublet-full"))), c3arm=COL3.get(corpus, "sublet-full"),
+                 c3=verdict(a.get(col3_arm(corpus, a))), c3arm=col3_arm(corpus, a),
                  title=str(d.get("title", ""))[:140])
         for k in ("c2", "c3"):
             if r[k] not in ("caught", "missed"):

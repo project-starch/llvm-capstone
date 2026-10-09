@@ -19,20 +19,24 @@ reads **caught / measured**.
 
 1. **CHERI** — stock CheriBSD purecap, libc revocation on. A freed chunk **held in quarantine**
    (the stale pointer was followed, the chunk was never reissued; a revocation control faulted in
-   the same boot) counts as caught, by the rule asked for, and is shown apart: "(n held)".
+   the same boot) counts as caught, by the rule asked for, and is shown apart: "(n held)". It is
+   the unported platform: CHERI's carve and field bounds are in section 0b.1.
 2. **Sublet in malloc** — Sublet ONLY as the system allocator, the program's nested allocator
    stock. On a plain case that is the `sublet` arm. On a nested one it is the new `sublet-malloc`
    arm: wmem as released (`WM_VARIANT=reference`: none of the port's patches, every `g_malloc` a
    region, every `g_free` a revoke; positive control `controls/sublet-malloc/90`), memcached's
    ledger in mode 2 (a chunk carries its whole page's bound, an object its own, nothing revoked
-   until a page or object is given back; the page-bound check negative-tested), and FFmpeg's pools
-   unported on the Sublet heap (`poolstock`, the application port's 2026-10-04 readings).
-3. **Sublet in nested** — the nested allocator's Sublet port: FFmpeg's pool port (`sublet-port`),
-   wmem's chunk port (`sublet-chunks`), the slab/cache port (`sublet`), and the Sublet port of a
-   carve (`sublet-carve`: the carved corpus, and av_frame_get_buffer's planes). A **plain** case,
-   which has no nested allocator on its path, runs in its program's whole Sublet configuration
-   (`sublet-full`): the Sublet heap with that program's port linked and brought up before `main()`
-   (`tools/full-config/`), every run checked for the port's `FULLCONFIG ... live` line.
+   until a page or object is given back; the page-bound check negative-tested; mode 1 on the same
+   images faults on all five temporal cases), and FFmpeg's pools unported (`poolstock`, the
+   application port's 2026-10-04 readings; its build refuses a pool arm without the Sublet heap,
+   `ports/ffmpeg/app/host/build-domain.sh`).
+3. **Sublet in nested** — the Sublet port of the **innermost** allocator that made the object:
+   FFmpeg's pool port (`sublet-port`), wmem's chunk port (`sublet-chunks`), the slab/cache port
+   (`sublet`), and where code carves the object out of a block, that carve's port (`sublet-carve`:
+   the carved corpus, av_frame_get_buffer's planes, and memcached 6 and 7, whose key and suffix
+   ITEM_key/ITEM_suffix carve out of a slab item). A **plain** case, with no nested allocator on its
+   path, runs with its program's port linked and live (`sublet-full`, `tools/full-config/`): a
+   non-interference check, every run required to print the port's `FULLCONFIG ... live` line.
 
 **Temporal (48)**
 
@@ -56,59 +60,68 @@ reads **caught / measured**.
 | FFmpeg | inside one struct | plain | 10 | 0 / 10 | 0 / 10 | 0 / 10 |
 | tshark | wmem | nested | 9 | 0 / 9 | 0 / 9 | 9 / 9 |
 | tshark | direct g_malloc | plain | 12 | 11 / 12 | 12 / 12 | 12 / 12 |
-| memcached | slabs.c / cache.c | nested | 4 | 1 / 4 | 1 / 4 | 2 / 4 |
+| memcached | slabs.c / cache.c | nested | 4 | 1 / 4 | 1 / 4 | 4 / 4 |
 | memcached | direct malloc | plain | 9 | 8 / 9 | 9 / 9 | 9 / 9 |
-| **Total** |  | 26 n · 56 p | 82 | 42 / 82 | 47 / 82 | 69 / 82 |
+| **Total** |  | 26 n · 56 p | 82 | 42 / 82 | 47 / 82 | 71 / 82 |
 
 How the three columns read:
 
 - **Temporal, CHERI 26 of 48 — all 26 held, none faulted.** Every plain temporal case reaches
-  `free()`, and the quarantine withholds the chunk; every nested one (22) is reused inside its
-  allocator and never reaches `free()`, so the quarantine never sees it.
-- **Temporal, Sublet in malloc 26 of 48 — the same split, with a revoke instead of a hold.** The
-  22 nested lifetimes end on an allocator free list: wmem's packet pool keeps its first block on
-  reset (13 cases), memcached's chunks go back to their slab class and its objects to cache.c's
-  list (5), FFmpeg's pool keeps its buffers (4). Measured on stock code in all three, with controls
-  showing the same builds do revoke when storage is given back.
-- **Temporal, Sublet in nested 48 of 48.** The port puts the release on the allocator's own
-  transition, so the 22 fault; the 26 plain ones fault as before (`sublet-full` = `sublet`).
+  `free()` and the quarantine withholds the chunk; in the 22 nested sequences the object is reused
+  inside its allocator and never reaches `free()`, so the quarantine never sees it.
+- **Temporal, Sublet in malloc 26 of 48 — the same split, with a revoke instead of a hold.** In each
+  of the 22 nested sequences the lifetime ends on an allocator free list: wmem's packet pool keeps
+  its first block on reset (13), memcached's chunks go back to their slab class and its objects to
+  cache.c's list (5), FFmpeg's pool keeps its buffers (4). That is a property of these sequences,
+  not of the programs: wmem does `g_free` every block after the first and every jumbo on reset
+  (control 90 is that case), and cache.c frees above a configured limit (default 0, none).
+- **Temporal, Sublet in nested 48 of 48.** The port revokes on the allocator's own release, so the
+  22 fault; the 26 plain ones read as in column 2.
 - **Spatial, Sublet in malloc 47 of 82** is the Sublet heap's per-object bound: all 46 plain
   cases and memcached 8 (its rbuf object is its own allocation); nothing inside a block.
-- **Spatial, Sublet in nested 69 of 82.** The ports bound each chunk, so wmem 9/9 and slab 5 and 8;
-  the carve port bounds each carved region, so the carved corpus 12/12. What remains is 13: the 10
-  struct-member crossings, the frame plane, and memcached 6 and 7 under the slab port alone --
-  which the slab port plus the key/suffix carve catches (2/2, section 0b.1).
+- **Spatial, Sublet in nested 71 of 82.** The chunk and slab ports bound each chunk (wmem 9/9, slab
+  5 and 8); the carve ports bound each carved region (carved 12/12, memcached 6 and 7). Those carve
+  catches are the port's BOUND -- the same shrink as carve bounds, which CHERI's carve bounds match
+  12/12 -- not a revocation: no buggy sequence re-carves, and the re-carve control alone shows the
+  revocation. Column 3's 12/12 against column 1's 0/12 compares a ported carve with an unported
+  platform, not Sublet with CHERI.
+- **Plain rows, columns 2 and 3 agree on all 82** (72 caught). That is the expected
+  non-interference: the port is off these bugs' path. For tshark and memcached the image carries
+  the port's Sublet layer, driven by the constructor, not wmem or slabs.c themselves; the SDK's heap
+  size differs from the `sublet` arm's too (each corpus's README says which).
 
-### 0.1 Where "Sublet misses races", and the fix
+### 0.1 "Sublet misses races": what it misses, and the fix
 
-Four of the 130 are races: FFmpeg pool 03 (vvc: a non-reference output releases the decoder's
-tables while a frame still holds them) and memcached allocator 01 (an IO list walked across a
-free by two threads), 02 (tail repair frees an item another thread holds) and 04 (an unlocked
-refcount decrement loses a concurrent get). The corpus reduces each to the allocator sequence the
-race produces. All four are nested temporal:
+**Two of the 130 are races**, both memcached and both nested: allocator 01 (an IO object walked
+across its free by two threads) and 04 (an unlocked refcount decrement loses a concurrent get). The
+corpus says so itself (`memcached/allocator-repros/shared/corpus.h`: "two of its defects are
+races") and serialises each interleaving into one thread. Two more nested lifetimes sit beside them
+and are NOT races: FFmpeg pool 03 (its PROVENANCE excludes the frame-threading race) and memcached
+02 (the allocator deliberately overwrites a held item's refcount).
 
-| race | CHERI (quarantine = caught) | Sublet in malloc | Sublet in nested |
-|---|---|---|---|
-| FFmpeg pool 03 | missed (reused in the pool) | missed | caught, cause 24 |
-| memcached 01 | missed (reused) | missed | caught, cause 24 |
-| memcached 02 | missed (reused) | missed | caught, cause 24 |
-| memcached 04 | missed (reused) | missed | caught, cause 24 |
+| case | kind | CHERI (quarantine = caught) | Sublet in malloc | Sublet in nested |
+|---|---|---|---|---|
+| memcached 01 | race | missed (reused) | missed | caught, cause 24 |
+| memcached 04 | race | missed (reused) | missed | caught, cause 24 |
+| memcached 02 | premature release into a slab | missed (reused) | missed | caught, cause 24 |
+| FFmpeg pool 03 | premature release into a pool | missed (reused) | missed | caught, cause 24 |
 
-**No change to the Sublet heap can catch them**: the object goes back to the allocator's free
-list, not to `free()`, so the heap is never told its lifetime ended. The fix is the one the third
-column measures — the allocator's Sublet port, which revokes on the allocator's own release — and
-it catches all four (and all 22 nested lifetimes). On the porting deck these are the rows where the
-`sublet` arm "returns": that arm is column 2.
+**The miss comes from nesting, not from racing.** In each sequence the object goes back to the
+allocator's free list, not to `free()`, so a heap is never told its lifetime ended and no change to
+the heap alone can catch it; a race on an object straight from malloc would be caught by column 2,
+as all 26 plain temporal cases are. The fix is column 3: the allocator's Sublet port, which revokes
+on the allocator's own release -- all 22 nested lifetimes, the two races included. On the porting
+deck these are the memcached rows where the `sublet` arm "returns": that arm is column 2. What is
+not measured: revocation racing a real access on another hart -- every reduction here is one
+thread.
 
 ### 0.2 What no column catches
 
-Thirteen spatial cases are missed in column 3. Two of them, memcached 6 and 7, are caught once the
-slab port also carves the item's key and suffix (2/2, section 0b.1). That leaves eleven that no
-Sublet configuration catches: the 10 struct-member crossings, which no code carves -- only the
-compiler's field bounds narrow a member (7/10 on Capstone, 8/10 on CHERI, section 0b.1) -- and the
-frame plane, whose read stays inside the 1024 bytes FFmpeg allocates for the alpha plane:
-the Sublet port of the frame carve issues exactly that extent (measured, NOT CAUGHT; its bound and
-free controls fault), and only a bound tighter than FFmpeg's own allocation would catch it.
+Eleven spatial cases: the 10 struct-member crossings, which no code carves -- only the compiler's
+field bounds narrow a member (7/10 on Capstone, 8/10 on CHERI, section 0b.1) -- and the frame plane,
+whose read stays inside the 1024 bytes FFmpeg allocates for the alpha plane: the Sublet port of the
+frame carve issues exactly that extent (measured, NOT CAUGHT; its bound and free controls fault),
+and only a bound tighter than FFmpeg's own allocation would catch it.
 
 ### 0.3 Every bug
 
@@ -224,8 +237,8 @@ free controls fault), and only a bound tighter than FFmpeg's own allocation woul
 | tshark | wmem-repros | 11_3a5f82dfb5_http_header_map | temporal | yes | missed | missed | caught |
 | tshark | wmem-repros | 12_90bb3a5c9e_xml_root_name_recycled | temporal | yes | missed | missed | caught |
 | memcached | allocator-repros | 05_2d61f18_item_data_one_past | spatial | yes | missed | missed | caught |
-| memcached | allocator-repros | 06_78eb770_suffix_write_no_space | spatial | yes | missed | missed | missed |
-| memcached | allocator-repros | 07_ecdb011_unterminated_key_read | spatial | yes | missed | missed | missed |
+| memcached | allocator-repros | 06_78eb770_suffix_write_no_space | spatial | yes | missed | missed | caught |
+| memcached | allocator-repros | 07_ecdb011_unterminated_key_read | spatial | yes | missed | missed | caught |
 | memcached | allocator-repros | 08_e8364b5_ascii_all_spaces_scan_past_rbuf | spatial | yes | caught | caught | caught |
 | memcached | plain-heap-repros | 00_ddee3e2_authfile_scan_past_calloc | spatial | no | missed | caught | caught |
 | memcached | plain-heap-repros | 01_d5d9ff0_cachedump_end_marker_off_by_one | spatial | no | caught | caught | caught |
@@ -249,8 +262,11 @@ The new arms' pre-registrations and records: `f7adf03a1009` (Sublet in malloc; r
 nested corpus's `results/2026-10-09-sublet-malloc/`), `40175e883ca3` + fix `ed9f91e69c5d` (carve port,
 `carved-repros/results/2026-10-09-sublet-carve/`), `aeba7ddefb4d` + fix `a28d6c33fd97` (full
 configuration, `results/2026-10-09-sublet-full/` in each plain corpus), `03c471feabcc` (frame carve,
-`plane-repros/results/2026-10-09-sublet-carve/`), `a28d6c33fd97` (slab port + carve). Every reading
-matched its prediction; five runs produced no reading first and are recorded as such.
+`plane-repros/results/2026-10-09-sublet-carve/`), `a28d6c33fd97` (slab port + carve,
+`allocator-repros/results/2026-10-09-sublet-carve/`). Every reading matched its prediction; five
+runs produced no reading first and are recorded as such. **Withdrawn the same night, before it
+reached dev:** a first version of this section counted FOUR races by matching the word in the case
+records; the corpora's own statements give two (an adversarial audit caught it).
 
 ## 0b. Every arm, all 130 cases (2026-10-09, evening)
 

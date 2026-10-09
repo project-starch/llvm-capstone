@@ -19,9 +19,10 @@ crossings stay inside one page. 8 faults with cause 5 at the first byte past the
 object, bounds exactly that object, in the defective scan itself -- the shape the `spatial` and
 `sublet` arms recorded; the runner prints FAIL for it only because its oracle wants the probe's pc.
 
-**Control, same images.** Mode 1 on cases 0, 2 and 4 faults with cause 24 at the labelled read
-probe, so these images do revoke when the ledger asks; mode 2's completions are the configuration,
-not a broken build.
+**Control, same images.** Mode 1 on cases 0-4 -- run as 0, 2, 4 and then 1, 3 -- faults with cause
+24 at the labelled read probe on every one, so these images do revoke when the ledger asks; mode 2's
+completions are the configuration, not a broken build. Cases 1 and 4 are the corpus's two races
+(`shared/corpus.h`: "two of its defects are races"), serialised into one thread by the reduction.
 
 **The page-bound check can fire.** Mode 2's carve-time check (a chunk's alias must carry exactly its
 page's bounds, else code 509) was negative-tested: an image built with the expected end moved 16
