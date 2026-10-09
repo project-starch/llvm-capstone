@@ -93,10 +93,13 @@
     },
     "sublet-carve": {
       "target": "Capstone domain, Sublet heap; -DFFC_SUBLET_CARVE: the block is lent LINEAR by the Sublet heap and split into one Sublet region per carve, each issued as an alias bounded to the carve",
-      "oracle": "fault at the labelled write probe (ffc_write_probe_u8): the crossing leaves the alias the port issued for its region. The catch is the port's BOUND on the region, not a revocation -- no buggy arm here re-carves. The fixed arm must stay FIXED under the same carve; the re-carve control (98) and the carve control (99) must fault in the same boot.",
+      "oracle": "fault at the labelled write probe (ffc_write_probe_u8): the crossing leaves the alias the port issued for its region. The catch is the port's BOUND on the region, not a revocation -- no buggy arm here re-carves. The fixed arm must stay FIXED under the same carve; the re-carve control (98) and the carve control (99) must fault in the same boot. MEASURED 2026-10-09, results/2026-10-09-sublet-carve/: **CAUGHT** -- cause=7 pc=0xc0210584 address=0xc4802100 in ffc_write_probe_u8+0x58 (the labelled probe); fixed FIXED exit=0; image 2fc3d697b9654def; controls 99 and 98 faulted at the probe in the same boot.",
       "prediction": "CAUGHT",
-      "status": "predicted",
-      "predicted": "2026-10-09"
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "40175e883ca3"
     }
   },
   "status": "built 2026-10-09 and measured the same day on every arm, each against its pre-registration (see arms and results/). spatial measured 2026-10-09 (results/2026-10-09-capstone-spatial/): NOT CAUGHT. sublet measured 2026-10-09 (results/2026-10-09-capstone-sublet/): NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-capstone-carve-bounds/): CAUGHT. Native differential and ASan recorded 2026-10-09 (results/2026-10-09-native-*/): two-sided; ASan NOT CAUGHT. cheribsd-revocation measured 2026-10-09 (results/2026-10-09-cheribsd-revocation/): NOT CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): NOT CAUGHT.",
