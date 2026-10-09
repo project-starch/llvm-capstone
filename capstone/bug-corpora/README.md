@@ -10,6 +10,9 @@ questions and the arms answer them differently. The group keeps what is true of 
 alone -- that boundary, its upstream pin, its build seam, the runs that measured it --
 and the program keeps the title, the total and where each arm's verdict comes from.
 [PROTECTION.md](PROTECTION.md) is one table per program, with the group as a column.
+[OPEN.md](OPEN.md) is the other half of that answer: the cells no run has filled,
+why each one is blank, and what it would take -- hand-written, and the only file
+here that says what the study does NOT know.
 
 **[INDEX.md](INDEX.md) lists every group, its case count, the version each one pins and
 whether those defects are live in that version.** It is generated from each corpus's
