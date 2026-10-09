@@ -57,7 +57,6 @@ for v in "" -traced; do
   # sh6bench hands out tens of millions of distinct addresses: the tracer follows 1 in 16.
   export MQ_ADDR_SAMPLE=16
   run sh6bench$v     /dev/null    sh6bench$v.dom 1
-  run sh8bench$v     /dev/null    sh8bench$v.dom 1
   unset MQ_ADDR_SAMPLE
   run mleak5$v       /dev/null    mleak$v.dom 5
   run mleak50$v      /dev/null    mleak$v.dom 50

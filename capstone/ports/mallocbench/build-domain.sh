@@ -10,12 +10,15 @@
 # type (barnes calls malloc and strchr undeclared). No source is changed except:
 #   cfrac         -DNOMEMOPT=1, as mimalloc-bench builds it
 #   barnes        a gets() shim: musl declares no gets (CheriBSD's side has the same shim)
-#   sh6bench, sh8bench  -DBENCH=1 -DSYS_MULTI_THREAD=1, as mimalloc-bench builds them; their OS
-#                 switch knows no Capstone, so __CAPSTONE__ is added where __linux__ selects POSIX
+#   sh6bench      -DBENCH=1 -DSYS_MULTI_THREAD=1, as mimalloc-bench builds it; its OS switch
+#                 knows no Capstone, so __CAPSTONE__ is added where __linux__ selects POSIX
 #   mstress, mleak  <stdatomic.h> is a compiler header the SDK's -nostdinc leaves out; only that
 #                 header is added, from the SDK's own compiler
 #   espresso, glibc-simple: unchanged
 # Not built: glibc-thread and xmalloc-test run for a fixed time, not a fixed amount of work;
+# sh8bench stores a pointer into a block of blockSizeHistogram[0].size = 8 bytes
+# (sh8bench-new.c:347-352): with 16-byte capabilities that store overflows the block, and
+# Capstone's exact bounds stop it (cause 28); CheriBSD's off arm aborts too. Not built.
 # rptest needs two compiler features Capstone lacks: __sync_bool_compare_and_swap on a pointer
 # lowers to __atomic_compare_exchange_16, which nothing provides (capability atomics reach only
 # the generic __atomic_* calls, C-54), and it keeps tag bits in a pointer and recovers the
@@ -72,7 +75,7 @@ mkdir -p "$OUT/src/atomic-include"
 cp "$("$RES" -print-resource-dir)/include/stdatomic.h" "$OUT/src/atomic-include/"
 dom mstress -isystem "$OUT/src/atomic-include" "$B/mstress/mstress.c" -lpthread
 
-for sh in sh6bench sh8bench; do
+for sh in sh6bench; do
   cp "$B/shbench/$sh-new.c" "$OUT/src/"
   sed -i 's/|| defined(__linux__)/& || defined(__CAPSTONE__)/' "$OUT/src/$sh-new.c"
   dom $sh -DBENCH=1 -DSYS_MULTI_THREAD=1 "$OUT/src/$sh-new.c" -lpthread

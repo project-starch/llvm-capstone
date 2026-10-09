@@ -10,7 +10,7 @@ OUT=${2:?usage: build-native.sh <bench dir> <out>}
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CC=(musl-gcc -O3 -static -w -std=gnu11 -fcommon -Wno-implicit-int -Wno-implicit-function-declaration
     -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-return-mismatch)
-# gcc 14+ rejects these old-C forms by default; -Wno-return-mismatch keeps sh8bench's
+# gcc 14+ rejects these old-C forms by default; -Wno-return-mismatch keeps sh8bench's (no longer built)
 # "return;" in a non-void thread function a warning, as older compilers had it.
 TRACE=(-DMQ_NATIVE "$HERE/../mqtrace-cap.c"
        -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free,--wrap=posix_memalign
@@ -37,7 +37,7 @@ barnes=(code.c code_io.c load.c grav.c getparam.c util.c)
 dom barnes -include "$OUT/src/mq-gets.h" "${barnes[@]/#/$B/barnes/}" -lm
 dom glibc-simple "$B/glibc-bench/bench-malloc-simple.c" -lpthread
 dom mstress "$B/mstress/mstress.c" -lpthread
-for sh in sh6bench sh8bench; do
+for sh in sh6bench; do
   dom $sh -DBENCH=1 -DSYS_MULTI_THREAD=1 "$B/shbench/$sh-new.c" -lpthread
 done
 dom mleak "$B/mleak/mleak.c" -lpthread

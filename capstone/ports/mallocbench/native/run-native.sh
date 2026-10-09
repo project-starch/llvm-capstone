@@ -17,7 +17,6 @@ for v in "" -traced; do
   run cfrac$v        /dev/null    ./cfrac$v 17545186520507317056371138836327483792789528
   run mstress$v      /dev/null    ./mstress$v 1 50 25
   run sh6bench$v     /dev/null    env MQ_ADDR_SAMPLE=16 ./sh6bench$v 1
-  run sh8bench$v     /dev/null    env MQ_ADDR_SAMPLE=16 ./sh8bench$v 1
   run mleak5$v       /dev/null    ./mleak$v 5
   run mleak50$v      /dev/null    ./mleak$v 50
 done

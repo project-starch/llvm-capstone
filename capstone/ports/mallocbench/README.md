@@ -28,14 +28,16 @@ The fixed-work C programs of mimalloc-bench 69c41ed, with its arguments and one 
 | cfrac | `17545186520507317056371138836327483792789528` | 91,530,283 |
 | glibc-simple | | 96,000,003 |
 | sh6bench | `1` | 193,000,001 |
-| sh8bench | `1` | 437,061,564 |
 
 The allocation counts are the program's, not the allocator's: CheriBSD's tracer counts the
 same numbers (cfrac 91,530,284, glibc-simple 96,000,004, espresso 33,509,501, sh6bench
 193,000,001; the extra one is an allocation made before the tracer starts). A run's progress
 is therefore its `op=` over these totals.
 
-Not run: glibc-thread and xmalloc-test (a fixed time, not a fixed amount of work); rptest
+Not run: sh8bench, which stores a pointer into an 8-byte block (`sh8bench-new.c:347-352`):
+with 16-byte capabilities the store overflows the block, and both capability systems stop it
+(Capstone: cause 28 after about a minute, in all four runs of 2026-10-09; CheriBSD's `off` arm
+aborted abnormally after 247 s, not localized further). It runs only natively (437,061,564 allocations). glibc-thread and xmalloc-test (a fixed time, not a fixed amount of work); rptest
 (needs a capability compare-and-swap through `__sync_*` and pointer provenance through
 `uintptr_t`, see `build-domain.sh`); the C++ programs.
 
@@ -69,8 +71,8 @@ native musl makes none. Allocations inside `__clone`, `__capstone_delegate_threa
 `__capstone_signals_thread_detach` are therefore set aside with their later frees. They stay in
 RSS and pinned pages, as the platform's cost.
 
-sh6bench and sh8bench hand out more distinct addresses than the tracer's table holds, so
-their reuse and lifetime histograms follow 1 address in 16 (`MQ_ADDR_SAMPLE=16`), each with
+sh6bench hands out more distinct addresses than the tracer's table holds, so its reuse and
+lifetime histograms follow 1 address in 16 (`MQ_ADDR_SAMPLE=16`), each with
 all its reuses, as on CheriBSD.
 
 The native reference (`native/`) uses the same tracer source built with `-DMQ_NATIVE`: reuse,
@@ -91,7 +93,7 @@ separates MRS's own bookkeeping (`run-maps.sh`). See that experiment's README.
   built hosted with builtins on all three systems, so the compiler may remove an allocation
   whose memory is never used; equal totals show it removed the same ones.
 - **Output**: `MB_OUT_SHA256` must equal the hash of the native run's output, except for
-  programs that print times (sh6bench, sh8bench), whose output is compared by eye.
+  programs that print times (sh6bench), whose output is compared by eye.
 - **Completeness**: exit 0, an `MQ-DONE` or `CAPSTONE_VM_STATS` line, `MB_OUT_LINES` equal to
   the streamed line count. A run that fails any of these is not plotted.
 
