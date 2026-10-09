@@ -1,0 +1,28 @@
+{
+  "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 2,
+  "measured": 2,
+  "controls": 2,
+  "controls_held": 2,
+  "verdicts": {
+    "detected": 2
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "145f09a644ee71d313530e502854611685d33220f847bda5a4840c60973a2363",
+  "staged_sha256": {},
+  "image_sha256": {
+    "00_19c51d27b9_netscaler_record_past_page:fixed": "f7986d09d5e107992d1fc65ef43b862e60a2c5fa42ab09cf4a2ae23a6d213c9d",
+    "00_19c51d27b9_netscaler_record_past_page:buggy": "f7986d09d5e107992d1fc65ef43b862e60a2c5fa42ab09cf4a2ae23a6d213c9d",
+    "01_373504f7c9_dfvm_error_message_wrong_index:fixed": "d79b1862d3636fd0907a9f05f9de353a08b21fc7652e5d540a5b960158270f68",
+    "01_373504f7c9_dfvm_error_message_wrong_index:buggy": "d79b1862d3636fd0907a9f05f9de353a08b21fc7652e5d540a5b960158270f68"
+  }
+}

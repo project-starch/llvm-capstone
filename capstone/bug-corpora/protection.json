@@ -4531,6 +4531,1667 @@
      }
     ]
    }
+  },
+  {
+   "corpus": "wireshark",
+   "program": "wireshark",
+   "title": "Wireshark: forty-four defects, twenty-two inside wmem and twenty-two past a direct g_malloc",
+   "cases": [
+    {
+     "case": "00_19c51d27b9_netscaler_record_past_page",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 0,
+     "upstream_fix": "19c51d27b9",
+     "title": "PACKET_DESCRIBE copies a NetScaler record out of the page buffer using a length taken straight from the file",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34) si_code 1 at 0x1023c4",
+       "group": "plain-heap-repros",
+       "bundle": "results/20261007-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB), at the case's own probe",
+       "group": "plain-heap-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "01_373504f7c9_dfvm_error_message_wrong_index",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 1,
+     "upstream_fix": "373504f7c9",
+     "title": "mk_binary_internal's error message indexes the second value array with the first array's index, so a failing operation past the shorter array's end reads off its pdata",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34) si_code 1 at 0x102416",
+       "group": "plain-heap-repros",
+       "bundle": "results/20261007-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB), at the case's own probe",
+       "group": "plain-heap-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "02_381681583b_pcapng_nrb_custom_string_over_copy",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 2,
+     "upstream_fix": "381681583b",
+     "title": "a custom-string option was copied by the option's value size, which counts a 4-byte PEN the string buffer does not hold",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "03_c556b648aa_strptime_reads_past_null_timezone",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 3,
+     "upstream_fix": "c556b648aa",
+     "title": "the timezone parse consumed the string terminator and read the byte after it",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "04_87803328179_blf_apptext_sized_without_terminator",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 4,
+     "upstream_fix": "87803328179",
+     "title": "a payload buffer was sized to the declared text length and then filled completely",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "05_140aad08e081_nettrace_packet_buf_scanned_by_strstr",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 5,
+     "upstream_fix": "140aad08e081",
+     "title": "a packet buffer was filled to its last byte and then searched with strstr",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "06_3aad1ef236e6_t61_accent_branch_reads_the_following_byte",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 6,
+     "upstream_fix": "3aad1ef236e6",
+     "title": "an accent-composition branch read the following byte without checking one exists",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "07_e2ca71beaed2_uat_unbinstring_leaves_no_terminator",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 7,
+     "upstream_fix": "e2ca71beaed2",
+     "title": "an unescaped-string buffer was sized for its bytes and consumed as a C string",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "08_0cae98570ebc_cl_find_custom_memcmp_reads_the_prefix_length",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 8,
+     "upstream_fix": "0cae98570ebc",
+     "title": "a comparison read the search prefix's length from both operands, including the shorter one",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "09_bf123efe154d_uat_oid_empty_field_underflows_the_index",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 9,
+     "upstream_fix": "bf123efe154d",
+     "title": "an empty field made a length-minus-one index underflow before the pointer arithmetic",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "10_e9b933473e8f_address_to_str_buf_clamps_to_size_not_last_index",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 10,
+     "upstream_fix": "e9b933473e8f",
+     "title": "a copy length was clamped to the buffer size, so the terminator landed one past it",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "11_4b15bf76a7f7_oid_to_str_buf_tail_reservation_one_short",
+     "group": "plain-heap-repros",
+     "allocator_boundary": "system",
+     "number": 11,
+     "upstream_fix": "4b15bf76a7f7",
+     "title": "a formatter reserved fifteen bytes of tail room for a worst case needing sixteen",
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "00_f3c2e6087e7b_k12_callee_frees_its_own_argument",
+     "group": "plain-temporal-repros",
+     "allocator_boundary": null,
+     "number": 0,
+     "upstream_fix": "f3c2e6087e7b",
+     "title": "a teardown helper frees the struct it is handed, and the caller freed it again",
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run."
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      }
+     }
+    },
+    {
+     "case": "01_7dcf69480de8_peak_trc_callee_frees_state_struct",
+     "group": "plain-temporal-repros",
+     "allocator_boundary": null,
+     "number": 1,
+     "upstream_fix": "7dcf69480de8",
+     "title": "a cleanup helper frees the reader state, and the caller freed it again",
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run."
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      }
+     }
+    },
+    {
+     "case": "02_0fc7f3781351_wspstat_container_freed_before_its_contents",
+     "group": "plain-temporal-repros",
+     "allocator_boundary": null,
+     "number": 2,
+     "upstream_fix": "0fc7f3781351",
+     "title": "a container was freed before the hash table it owns was torn down",
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run."
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      }
+     }
+    },
+    {
+     "case": "03_012a179785ab_filesystem_alias_named_copy_is_not_a_copy",
+     "group": "plain-temporal-repros",
+     "allocator_boundary": null,
+     "number": 3,
+     "upstream_fix": "012a179785ab",
+     "title": "a variable named _copy was a plain assignment, so freeing it destroyed the original",
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run."
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      }
+     }
+    },
+    {
+     "case": "04_07ffcf90426b_extcap_one_help_string_stored_in_many_owners",
+     "group": "plain-temporal-repros",
+     "allocator_boundary": null,
+     "number": 4,
+     "upstream_fix": "07ffcf90426b",
+     "title": "one duplicated string was stored into every interface the loop produced",
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run."
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      }
+     }
+    },
+    {
+     "case": "05_fb46cda19602_wtap_close_inner_loop_rewinds_outer_cursor",
+     "group": "plain-temporal-repros",
+     "allocator_boundary": null,
+     "number": 5,
+     "upstream_fix": "fb46cda19602",
+     "title": "a nested loop reused the outer loop's index, rewinding it over already-freed fields",
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run."
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      }
+     }
+    },
+    {
+     "case": "06_d3e3c00fbbe2_prefs_static_filter_label_not_cleared",
+     "group": "plain-temporal-repros",
+     "allocator_boundary": null,
+     "number": 6,
+     "upstream_fix": "d3e3c00fbbe2",
+     "title": "a function-static pointer was freed but left set, so the next call read and re-freed it",
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run."
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      }
+     }
+    },
+    {
+     "case": "07_8dc7d164dcdb_prefs_reset_not_idempotent",
+     "group": "plain-temporal-repros",
+     "allocator_boundary": null,
+     "number": 7,
+     "upstream_fix": "8dc7d164dcdb",
+     "title": "a reset freed a struct field without clearing it, so two resets freed it twice",
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run."
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      }
+     }
+    },
+    {
+     "case": "08_48a00fd55671_ftype_string_freed_twice_by_caller_and_callee",
+     "group": "plain-temporal-repros",
+     "allocator_boundary": null,
+     "number": 8,
+     "upstream_fix": "48a00fd55671",
+     "title": "a value was released up front and then released again by the function it delegates to",
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run."
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      }
+     }
+    },
+    {
+     "case": "09_cfc15838bdec_capture_ifinfo_out_parameter_left_unassigned",
+     "group": "plain-temporal-repros",
+     "allocator_boundary": null,
+     "number": 9,
+     "upstream_fix": "cfc15838bdec",
+     "title": "a caller freed a global and passed its address in, and one return path never reassigned it",
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run."
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill."
+      }
+     }
+    },
+    {
+     "case": "00_3c8be14c82_rpcrdma_write_offsets_global",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 0,
+     "upstream_fix": "3c8be14c82",
+     "title": "packet-scope write-offset array kept in a global and read by a later packet",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x101902314",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "01_c14d731e45_cms_oid_global",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 1,
+     "upstream_fix": "c14d731e45",
+     "title": "packet-scope OID string kept in a global and read by a later packet's parameters decode",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x101902348",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "02_99da8c2cdc_mdb_address_column",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 2,
+     "upstream_fix": "99da8c2cdc",
+     "title": "val_to_str default string in packet scope kept by an AT_STRINGZ address and printed after the scope ended",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x1019022a4",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "03_6eab9f83ab_cola_info_column",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 3,
+     "upstream_fix": "6eab9f83ab",
+     "title": "packet-scope string handed to col_set_str, which keeps the pointer, and printed after the scope ended",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x1019022a0",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "04_b48759e4a4_qnet6_col_set_str",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 4,
+     "upstream_fix": "b48759e4a4",
+     "title": "col_add_str converted to col_set_str on a non-literal val_to_str default string",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x1019022a4",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "05_5a109265a6_usbll_address_struct",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 5,
+     "upstream_fix": "5a109265a6",
+     "title": "three-byte address structure in packet scope kept by pinfo->src and read during column fill after the scope ended",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x101902254",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "06_a8b16d74e1_x509if_last_dn_static",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 6,
+     "upstream_fix": "a8b16d74e1",
+     "title": "distinguished-name buffer in pinfo->pool kept by a file-level static whose frame-end reset was registered on a copy of pinfo",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x10190229c",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "07_fb504bc76c_mysql_auth_method",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 7,
+     "upstream_fix": "fb504bc76c",
+     "title": "authentication plugin name in pinfo->pool kept by the file-scope connection record and compared by the next packet",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x1019022f0",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "08_31ab1a0a17_sip_cseq_method",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 8,
+     "upstream_fix": "31ab1a0a17",
+     "title": "CSeq method string in pinfo->pool stored into the file-scope resend record by a truncation fix",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x1019022f4",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "09_693dc40936_geonw_proto_data_tvb",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 9,
+     "upstream_fix": "693dc40936",
+     "title": "unescaped PPP buffer in pinfo->pool kept by proto data added with file scope and read by a later frame",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x1019022bc",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "10_6fd3af5e99_t38_reassembly_buffer",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 10,
+     "upstream_fix": "6fd3af5e99",
+     "title": "forced-reassembly buffer in pinfo->pool kept by the persistent reassembly table and compared by a later frame",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x1019022a4",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "11_3a5f82dfb5_http_header_map",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 11,
+     "upstream_fix": "3a5f82dfb5",
+     "title": "header map created in pinfo->pool before the start line and saved into the conversation's file-scope data",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x101902258",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "12_90bb3a5c9e_xml_root_name_recycled",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 12,
+     "upstream_fix": "90bb3a5c9e",
+     "title": "epan-scope root name freed individually while the protocol registry still holds it",
+     "boundary": "wmem (block, block_fast)",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 at 0x101902348",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "13_0261fd7da6_http_range_cursor_past_chunk",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 13,
+     "upstream_fix": "0261fd7da6",
+     "title": "the Range header cursor is advanced by a fixed skip past the end of its file-scope chunk and the parse reads on inside the same block",
+     "boundary": "wmem (block, block_fast)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 5 at 0x10190222c",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "14_1d8acb21ab_solaredge_payload_six_past",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 14,
+     "upstream_fix": "1d8acb21ab",
+     "title": "the decrypt loop reads six bytes past its packet-scope chunk into the next chunk of the same block",
+     "boundary": "wmem (block, block_fast)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 5 at 0x10190222c",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "15_d24613c461_opcua_padding_below_chunk",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 15,
+     "upstream_fix": "d24613c461",
+     "title": "verify_padding reads a packet-controlled distance BELOW its chunk, into the block's earlier storage",
+     "boundary": "wmem (block, block_fast)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 5 at 0x101902200",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "16_e8ef9df09d_dcp_etsi_rs_parity_write",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 16,
+     "upstream_fix": "e8ef9df09d",
+     "title": "the in-place Reed-Solomon decode writes its parity bytes at a fixed offset past the output buffer",
+     "boundary": "wmem (block, block_fast)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 7 at 0x101902218",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "17_5a560f3f6a_dns_one_byte_write",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 17,
+     "upstream_fix": "5a560f3f6a",
+     "title": "expand_dns_name hands g_snprintf a size one larger than its chunk, so the terminator can land one byte past",
+     "boundary": "wmem (block, block_fast)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 7 at 0x101902218",
+       "group": "wmem-repros",
+       "bundle": "results/20260929-qemu-chunk-port, results/20261005-qemu-spatial-5-ON",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-chunks"
+      }
+     }
+    },
+    {
+     "case": "18_716a200295_rtps_batch_sample_info_unguarded",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 18,
+     "upstream_fix": "716a200295",
+     "title": "the DATA_BATCH sample-info loop guards on a user preference whose default of 0 disables the guard entirely, so the write runs off arrays sized sample_info_max",
+     "boundary": "wmem (block, block_fast)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. The chunk port covers cases 0-17; 18-21 were added afterwards and no nested-arm run includes them."
+      }
+     }
+    },
+    {
+     "case": "19_4a4871a831_ntlmssp_blob_length_before_check",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 19,
+     "upstream_fix": "4a4871a831",
+     "title": "dissect_ntlmssp_blob assigns result->length before the MAX_BLOB_SIZE check, so an oversized blob leaves the length large while contents was never allocated for it",
+     "boundary": "wmem (block, block_fast)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. The chunk port covers cases 0-17; 18-21 were added afterwards and no nested-arm run includes them."
+      }
+     }
+    },
+    {
+     "case": "20_ed20250c13_proto_undecoded_bitmap_unbounded",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 20,
+     "upstream_fix": "ed20250c13",
+     "title": "proto_find_undecoded_data's marking loop is bounded by the field's extent and not by the bitmap's length, so a field reaching past the frame writes off the end",
+     "boundary": "wmem (block, block_fast)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. The chunk port covers cases 0-17; 18-21 were added afterwards and no nested-arm run includes them."
+      }
+     }
+    },
+    {
+     "case": "21_69dac89280_tcp_flags_str_sixteen_bytes",
+     "group": "wmem-repros",
+     "allocator_boundary": "nested",
+     "number": 21,
+     "upstream_fix": "69dac89280",
+     "title": "tcp_flags_to_str_first_letter writes nine flags, their separators and a terminator into a sixteen-byte buffer",
+     "boundary": "wmem (block, block_fast)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "the suite's completion oracle passed",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-cheribsd-revocation-control",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "pass-lines"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "wmem-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. The chunk port covers cases 0-17; 18-21 were added afterwards and no nested-arm run includes them."
+      }
+     }
+    }
+   ],
+   "groups": {
+    "plain-heap-repros": {
+     "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+     "cases": 12,
+     "ignore": null
+    },
+    "plain-temporal-repros": {
+     "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",
+     "cases": 10,
+     "ignore": null
+    },
+    "wmem-repros": {
+     "boundary": "wmem (block, block_fast)",
+     "cases": 22,
+     "ignore": null
+    }
+   },
+   "protection": {
+    "cheribsd": [
+     {
+      "bundle": "results/20261007-cheribsd",
+      "reader": "supervise-blocks",
+      "key": "number",
+      "vehicle": "cheribsd-purecap",
+      "group": "plain-heap-repros"
+     },
+     {
+      "bundle": "results/20261007-cheribsd-revocation-control",
+      "reader": "pass-lines",
+      "mode": 0,
+      "key": "number",
+      "vehicle": "cheribsd-purecap",
+      "because": "the suite's mode-0 oracle is 'completes', so a PASS line is a measured silence. This bundle is the one with a revocation control, which is what makes the silences mean anything.",
+      "group": "wmem-repros"
+     },
+     {
+      "not_run": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill.",
+      "group": "plain-temporal-repros"
+     }
+    ],
+    "capstone-sysalloc": [
+     {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "group": "plain-heap-repros"
+     },
+     {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "group": "wmem-repros"
+     },
+     {
+      "not_run": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run.",
+      "group": "plain-temporal-repros"
+     }
+    ],
+    "capstone-sublet": [
+     {
+      "coincides_with": "capstone-sysalloc",
+      "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left.",
+      "group": "plain-heap-repros"
+     },
+     {
+      "bundle": [
+       "results/20260929-qemu-chunk-port",
+       "results/20261005-qemu-spatial-5-ON"
+      ],
+      "reader": "qemu-paired",
+      "mode_column": "oracle_arm",
+      "arm": "sublet-chunks",
+      "run": [
+       "chunk",
+       "chunk-retry"
+      ],
+      "key": "number",
+      "vehicle": "capstone-baremetal",
+      "missing_reason": "not run. The chunk port covers cases 0-17; 18-21 were added afterwards and no nested-arm run includes them.",
+      "because": "sublet-chunks is the wmem block allocator with every chunk in a region of its own (ports/wireshark/wmem/patches/...-0002-wmem-block-chunks-under-sublet.patch). Two bundles: the 2026-09-29 chunk-port run scored cases 0-12 and the 2026-10-05 spatial run added 13-17.",
+      "group": "wmem-repros"
+     },
+     {
+      "not_run": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill.",
+      "group": "plain-temporal-repros"
+     }
+    ]
+   }
   }
  ]
 }

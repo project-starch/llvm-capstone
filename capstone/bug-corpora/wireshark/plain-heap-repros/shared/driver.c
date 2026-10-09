@@ -39,7 +39,3 @@ __attribute__((noinline, used)) unsigned
 wsh_read_probe(const volatile unsigned char *p) {
   return *p;
 }
-__attribute__((noinline, used)) void
-wsh_write_probe(volatile unsigned char *p, unsigned char v) {
-  *p = v;
-}

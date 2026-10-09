@@ -28,51 +28,50 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 27 | 0 | 54 | 0 | 19 | 100 | 3 |
-| `capstone-sysalloc` | 34 | 0 | 37 | 0 | 29 | 100 | 3 |
-| `capstone-sublet` | 79 | 0 | 2 | 0 | 19 | 100 | 3 |
+| `cheribsd` | 29 | 0 | 76 | 0 | 39 | 144 | 3 |
+| `capstone-sysalloc` | 36 | 0 | 59 | 0 | 49 | 144 | 3 |
+| `capstone-sublet` | 99 | 0 | 2 | 0 | 43 | 144 | 3 |
 
 ## Programs that have not declared their arms yet
 
-Not in any total above or below, and not a statement about them: **3** of 9 programs in the tree.
+Not in any total above or below, and not a statement about them: **2** of 9 programs in the tree.
 
 - `ffmpeg`
 - `sqlite`
-- `wireshark`
 
 ## The arms compared where all three were measured, split by who allocated the object
 
 Two corrections to the headline table, and both of them cut the same way. A cell that was never run is not evidence, so the arms are compared on the cases where all three were measured. And on a case whose object came out of the program's own allocator, two of the three arms are not protecting that object at all -- counting those together with the malloc-boundary cases reads as a weakness of the mechanism when it is a statement about what each arm covers.
 
-### `system`: 11 cases
+### `system`: 13 cases
 
 the system allocator handed the object out directly -- the boundary all three arms protect
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **8** | 0 | 3 | 73% |
-| `capstone-sysalloc` | **11** | 0 | 0 | 100% |
-| `capstone-sublet` | **11** | 0 | 0 | 100% |
+| `cheribsd` | **10** | 0 | 3 | 77% |
+| `capstone-sysalloc` | **13** | 0 | 0 | 100% |
+| `capstone-sublet` | **13** | 0 | 0 | 100% |
 
-### `nested`: 37 cases
+### `nested`: 55 cases
 
 the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **4** | 0 | 33 | 11% |
-| `capstone-sysalloc` | **3** | 0 | 34 | 8% |
-| `capstone-sublet` | **37** | 0 | 0 | 100% |
+| `cheribsd` | **4** | 0 | 51 | 7% |
+| `capstone-sysalloc` | **3** | 0 | 52 | 5% |
+| `capstone-sublet` | **55** | 0 | 0 | 100% |
 
-### All 69 together
+### All 89 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **25** | 0 | 44 | 36% |
-| `capstone-sysalloc` | **32** | 0 | 37 | 46% |
-| `capstone-sublet` | **69** | 0 | 0 | 100% |
+| `cheribsd` | **27** | 0 | 62 | 30% |
+| `capstone-sysalloc` | **34** | 0 | 55 | 38% |
+| `capstone-sublet` | **89** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -266,4 +265,65 @@ PostgreSQL: nineteen defects at three fidelities -- a C reduction, the memory co
 - `cheribsd`: **5** caught, 7 missed, 7 not run, of 19.
 - `capstone-sysalloc`: **6** caught, 5 missed, 8 not run, of 19.
 - `capstone-sublet`: **10** caught, 0 missed, 9 not run, of 19.
+
+### wireshark -- 44 cases
+
+Wireshark: forty-four defects, twenty-two inside wmem and twenty-two past a direct g_malloc
+
+| group | cases | the boundary its cases cross |
+|---|---:|---|
+| `plain-heap-repros` | 12 | the system allocator itself: one g_malloc, with no inner layer |
+| `plain-temporal-repros` | 10 | the platform allocator's own bound -- a direct allocation, no inner layer |
+| `wmem-repros` | 22 | wmem (block, block_fast) |
+
+| group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
+|---|---:|---|---|:---:|:---:|:---:|
+| `plain-heap-repros` | 0 | `19c51d27b9` | PACKET_DESCRIBE copies a NetScaler record out of the page buffer using a len | **C** | **C** | **C**<sup>=</sup> |
+| `plain-heap-repros` | 1 | `373504f7c9` | mk_binary_internal's error message indexes the second value array with the f | **C** | **C** | **C**<sup>=</sup> |
+| `plain-heap-repros` | 2 | `381681583b` | a custom-string option was copied by the option's value size, which counts a | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 3 | `c556b648aa` | the timezone parse consumed the string terminator and read the byte after it | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 4 | `87803328179` | a payload buffer was sized to the declared text length and then filled compl | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 5 | `140aad08e081` | a packet buffer was filled to its last byte and then searched with strstr | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 6 | `3aad1ef236e6` | an accent-composition branch read the following byte without checking one ex | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 7 | `e2ca71beaed2` | an unescaped-string buffer was sized for its bytes and consumed as a C strin | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 8 | `0cae98570ebc` | a comparison read the search prefix's length from both operands, including t | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 9 | `bf123efe154d` | an empty field made a length-minus-one index underflow before the pointer ar | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 10 | `e9b933473e8f` | a copy length was clamped to the buffer size, so the terminator landed one p | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 11 | `4b15bf76a7f7` | a formatter reserved fifteen bytes of tail room for a worst case needing six | — | — | —<sup>=</sup> |
+| `plain-temporal-repros` | 0 | `f3c2e6087e7b` | a teardown helper frees the struct it is handed, and the caller freed it aga | — | — | — |
+| `plain-temporal-repros` | 1 | `7dcf69480de8` | a cleanup helper frees the reader state, and the caller freed it again | — | — | — |
+| `plain-temporal-repros` | 2 | `0fc7f3781351` | a container was freed before the hash table it owns was torn down | — | — | — |
+| `plain-temporal-repros` | 3 | `012a179785ab` | a variable named _copy was a plain assignment, so freeing it destroyed the o | — | — | — |
+| `plain-temporal-repros` | 4 | `07ffcf90426b` | one duplicated string was stored into every interface the loop produced | — | — | — |
+| `plain-temporal-repros` | 5 | `fb46cda19602` | a nested loop reused the outer loop's index, rewinding it over already-freed | — | — | — |
+| `plain-temporal-repros` | 6 | `d3e3c00fbbe2` | a function-static pointer was freed but left set, so the next call read and  | — | — | — |
+| `plain-temporal-repros` | 7 | `8dc7d164dcdb` | a reset freed a struct field without clearing it, so two resets freed it twi | — | — | — |
+| `plain-temporal-repros` | 8 | `48a00fd55671` | a value was released up front and then released again by the function it del | — | — | — |
+| `plain-temporal-repros` | 9 | `cfc15838bdec` | a caller freed a global and passed its address in, and one return path never | — | — | — |
+| `wmem-repros` | 0 | `3c8be14c82` | packet-scope write-offset array kept in a global and read by a later packet | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 1 | `c14d731e45` | packet-scope OID string kept in a global and read by a later packet's parame | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 2 | `99da8c2cdc` | val_to_str default string in packet scope kept by an AT_STRINGZ address and  | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 3 | `6eab9f83ab` | packet-scope string handed to col_set_str, which keeps the pointer, and prin | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 4 | `b48759e4a4` | col_add_str converted to col_set_str on a non-literal val_to_str default str | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 5 | `5a109265a6` | three-byte address structure in packet scope kept by pinfo->src and read dur | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 6 | `a8b16d74e1` | distinguished-name buffer in pinfo->pool kept by a file-level static whose f | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 7 | `fb504bc76c` | authentication plugin name in pinfo->pool kept by the file-scope connection  | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 8 | `31ab1a0a17` | CSeq method string in pinfo->pool stored into the file-scope resend record b | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 9 | `693dc40936` | unescaped PPP buffer in pinfo->pool kept by proto data added with file scope | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 10 | `6fd3af5e99` | forced-reassembly buffer in pinfo->pool kept by the persistent reassembly ta | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 11 | `3a5f82dfb5` | header map created in pinfo->pool before the start line and saved into the c | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 12 | `90bb3a5c9e` | epan-scope root name freed individually while the protocol registry still ho | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 13 | `0261fd7da6` | the Range header cursor is advanced by a fixed skip past the end of its file | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 14 | `1d8acb21ab` | the decrypt loop reads six bytes past its packet-scope chunk into the next c | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 15 | `d24613c461` | verify_padding reads a packet-controlled distance BELOW its chunk, into the  | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 16 | `e8ef9df09d` | the in-place Reed-Solomon decode writes its parity bytes at a fixed offset p | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 17 | `5a560f3f6a` | expand_dns_name hands g_snprintf a size one larger than its chunk, so the te | · | · | **C**<sup>b</sup> |
+| `wmem-repros` | 18 | `716a200295` | the DATA_BATCH sample-info loop guards on a user preference whose default of | · | · | — |
+| `wmem-repros` | 19 | `4a4871a831` | dissect_ntlmssp_blob assigns result->length before the MAX_BLOB_SIZE check,  | · | · | — |
+| `wmem-repros` | 20 | `ed20250c13` | proto_find_undecoded_data's marking loop is bounded by the field's extent an | · | · | — |
+| `wmem-repros` | 21 | `69dac89280` | tcp_flags_to_str_first_letter writes nine flags, their separators and a term | · | · | — |
+
+- `cheribsd`: **2** caught, 22 missed, 20 not run, of 44.
+- `capstone-sysalloc`: **2** caught, 22 missed, 20 not run, of 44.
+- `capstone-sublet`: **20** caught, 0 missed, 24 not run, of 44.
 

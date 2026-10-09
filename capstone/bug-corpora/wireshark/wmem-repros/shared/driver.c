@@ -93,11 +93,21 @@ static void start(void) {
   (void)wm_write_probe; /* the label must exist even where no case writes */
 }
 
+#ifdef WM_BORROW_LINEAR
+/* The heap's lend API: one linear block, the heap keeping the senior handle so
+ * its own free still reclaims everything derived from it. Declared rather than
+ * included -- it is the allocator's internal interface, not a libc header. */
+#include <capstone/capability.h>
+unsigned long __capstone_sublet_malloc_linear(size_t, capstone_cap_slot *);
+#endif
 #ifdef WM_CORPUS_HOSTED
 _Noreturn void wm_fail(unsigned code) { wm_give_up(code); }
 int main(int argc, char **argv) {
-  /* Strict input rejection is the runner's control. Without PoisonCap only
-   * the unprotected shape exists, so mode 0 is the only mode accepted. */
+  /* Strict input rejection is the runner's control. Which modes exist depends
+   * on what is under the allocator: with the native region layer only the
+   * unprotected shape does, so mode 0 is the only mode accepted; with
+   * WM_BORROW_LINEAR the Sublet region and chunk layers are underneath and
+   * both run. */
   setvbuf(stdout, NULL, _IONBF, 0);
   if (argc < 2 || argc > 3 || (strcmp(argv[1], "0") && strcmp(argv[1], "1")))
     return 75;
@@ -107,7 +117,25 @@ int main(int argc, char **argv) {
     return 75;
   }
   unsigned mode = (unsigned)(argv[1][0] - '0');
-#ifdef WM_POISONCAP
+#if defined(WM_BORROW_LINEAR)
+  /* The payload is LENT by the system allocator as ONE LINEAR capability,
+   * which is what lets the region layer carve inside it and revoke a carve
+   * when a scope ends. wm_regions_init requires it linear, exactly
+   * WM_PAYLOAD_BYTES long and 16-byte aligned, and calls wm_fail(201)
+   * otherwise, so a region that is merely nearly right stops the case instead
+   * of quietly measuring something else. */
+  {
+    capstone_cap_slot lent;
+    if (!__capstone_sublet_malloc_linear(WM_PAYLOAD_BYTES, &lent)) {
+      fprintf(stderr, "CONTROL-FAILED the heap refused a linear block of %lu "
+                      "bytes\n", (unsigned long)WM_PAYLOAD_BYTES);
+      return 75;
+    }
+    /* capstone_cap_load moves it out of the slot into a register, which is how
+     * the region layer takes it: in a domain it arrives that way. */
+    wm_init_backing(NULL, capstone_cap_load(&lent), mode);
+  }
+#elif defined(WM_POISONCAP)
   wm_init_backing(NULL, NULL, mode);
 #else
   if (mode)

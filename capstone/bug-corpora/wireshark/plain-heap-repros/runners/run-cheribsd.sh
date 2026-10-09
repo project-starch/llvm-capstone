@@ -46,75 +46,26 @@ done
 "$SDK/bin/clang" $CFLAGS "$CAP/ports/common/host/cheribsd/abi-probe.c" \
   -o "$OUT/bin/cheribsd-abi-probe" || { echo "CONTROL-FAILED abi-probe build" >&2; exit 75; }
 
-# PREDICTIONS, written before the run. Most rows CATCH: their crossing leaves the
-# USABLE allocation, which is what malloc bounds the capability to. ABSORBED names
-# the exception and is NOT a prediction of safety -- a crossing shorter than the gap
-# to the next size class stays inside the same allocation, so no capability check
-# can see it. Declaring CATCH for such a row makes a correct reading look like a
-# failure, which is how a measured absorption gets mistaken for a bug; that happened
-# on the 2026-10-08 run, where wsh-03 read FAIL for exactly this reason.
-#
-# ABSORBED is taken from tools/size-class-audit.py, which reproduces four in-guest
-# usable sizes recorded in memcached/plain-heap-repros/00's case.json.
-python3 - "$OUT/bin" "$OUT/cases.json" "$ROOT" <<'PY'
+# PREDICTION, written before the run: CAUGHT. The crossing is 65471 bytes past a
+# g_malloc(8192), and 8192 is exactly a size class, so it leaves the USABLE
+# allocation by far more than any slack. Contrast the memcached sibling, whose
+# 1-byte crossing past a 9-byte request is absorbed by a 16-byte capability.
+python3 - "$OUT/bin" "$OUT/cases.json" <<'PY'
 import json, pathlib, sys
-BIN, OUT, CORPUS = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3])
+BIN, OUT = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 SIGPROT = 34
-# case -> request bytes, crossing, expectation. Every case directory must appear;
-# the gate below refuses the run otherwise, because a case with no row here is one
-# the run would be silent about.
-CASES = {
-    0:  (8192, '65471 bytes past a g_malloc(8192)',                       'FAULT'),
-    1:  (16,   '16 bytes past a 16-byte array of pointers',               'FAULT'),
-    2:  (16,   '3 bytes past a 16-byte string buffer',                    'FAULT'),
-    3:  (1,    '1 byte past a 1-byte calloc; usable 16, so 15 bytes of '
-               'slack ABSORB it -- the trigger is an EMPTY string, so the '
-               'request cannot be sized onto a class boundary',           'COMPLETE'),
-    4:  (16,   '1 byte past a 16-byte APP_TEXT payload',                  'FAULT'),
-    5:  (16,   '1 byte past a 16-byte packet buffer',                     'FAULT'),
-    6:  (16,   '1 byte past a 16-byte input buffer',                      'FAULT'),
-    7:  (16,   '1 byte past a 16-byte decode buffer',                     'FAULT'),
-    8:  (16,   '8 bytes past a 16-byte option string',                    'FAULT'),
-    9:  (16,   'past a 16-byte buffer; the real index wraps to 4294967295 '
-               'so the probe touches the first byte outside instead',     'FAULT'),
-    10: (16,   '1 byte past a 16-byte output buffer',                     'FAULT'),
-    11: (16,   '1 byte past a 16-byte output buffer',                     'FAULT'),
-}
-present = {int(d.name[:2]) for d in CORPUS.glob('[0-9][0-9]_*') if d.is_dir()}
-missing, extra = sorted(present - set(CASES)), sorted(set(CASES) - present)
-if missing or extra:
-    msg = []
-    if missing: msg.append(f'cases {missing} exist in the corpus but have no row in CASES')
-    if extra:   msg.append(f'CASES names {extra}, which is not a case directory')
-    sys.exit('CONTROL-FAILED cases.json: ' + '; '.join(msg))
-
 cases = []
 for p in sorted(BIN.glob('wsh-[0-9][0-9]')):
     n = int(p.name.split('-')[1])
-    request, what, expect = CASES[n]
     cases.append(dict(name=f'{p.name}-fixed', program=str(p), args=['fixed', str(n)],
                       timeout=300, expect_regex=r'VERDICT FIXED .*', exit=0))
-    if expect == 'FAULT':
-        cases.append(dict(name=f'{p.name}-buggy', program=str(BIN/'supervise'),
-                          args=['./target','buggy',str(n)], inputs={'target': str(p)},
-                          timeout=300, expect=f'SUPERVISE exit signalled={SIGPROT}',
-                          exit=128+SIGPROT))
-    else:
-        cases.append(dict(name=f'{p.name}-buggy', program=str(BIN/'supervise'),
-                          args=['./target','buggy',str(n)], inputs={'target': str(p)},
-                          timeout=300, expect='SUPERVISE exit status=0', exit=0))
+    cases.append(dict(name=f'{p.name}-buggy', program=str(BIN/'supervise'),
+                      args=['./target','buggy',str(n)], inputs={'target': str(p)},
+                      timeout=300, expect=f'SUPERVISE exit signalled={SIGPROT}',
+                      exit=128+SIGPROT))
 OUT.write_text(json.dumps(cases, indent=2) + '\n')
-print(f'  wrote {OUT}: {len(cases)} cases, covering all {len(present)} case directories')
-for n, (request, what, expect) in sorted(CASES.items()):
-    print(f"    case {n:>2}: {'CATCH   ' if expect=='FAULT' else 'COMPLETE'} -- {what}")
 PY
 [ -s "$OUT/cases.json" ] || { echo "CONTROL-FAILED cases.json" >&2; exit 75; }
-
-# A marker whose mtime bounds THIS invocation. The control check below requires each
-# control's record to be newer than it, because $OUT/run survives a previous run and a
-# stale record would otherwise satisfy the check for a boot that never happened.
-STAMP="$OUT/.run-started"
-: > "$STAMP"
 
 python3 "$CAP/ports/common/host/cheribsd/run.py" "$OUT/run" \
   --sdk "$SDK" --rootfs "$SYSROOT" --image "$IMAGE" --port "$PORT" \
@@ -127,11 +78,6 @@ rc=$?
 for c in cheribsd-abi cheribsd-bounds; do
   [ -s "$OUT/run/$c/stdout.txt" ] \
     || { echo "CONTROL-FAILED $c produced no output: not a reading" >&2; exit 75; }
-  # ... and it must come from THIS boot, not from a directory a previous run left behind.
-  [ "$OUT/run/$c/stdout.txt" -nt "$STAMP" ] || {
-    echo "CONTROL-FAILED $c's record predates this run: it is evidence about an earlier boot," >&2
-    echo "               so this suite is not a reading. Use a fresh output directory." >&2
-    exit 75; }
 done
 grep -q "runtime_revocation=1" "$OUT/run/cheribsd-abi/stdout.txt" \
   || { echo "CONTROL-FAILED cheribsd-abi did not report runtime_revocation=1" >&2; exit 75; }

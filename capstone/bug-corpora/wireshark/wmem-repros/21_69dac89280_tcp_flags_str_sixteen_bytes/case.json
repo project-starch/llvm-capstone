@@ -15,20 +15,12 @@
   "distinguishing": "the only row here reachable with NO crafted input: nine flags into sixteen bytes is a fixed, compile-time-known overflow, which is why it was found by inspection rather than by a fuzzer. Also the only spatial row in this corpus whose arms differ by the WRITTEN LENGTH rather than by one term -- the fix rewrites the function instead of adjusting the constant, and the case says so rather than letting a reader assume a one-term reversal.",
   "arms": {
     "spatial": {
-      "oracle": "fault at the labelled write probe",
-      "status": "measured",
-      "prediction": "PREDICTED: faults. Every arm of this harness narrows a wmem allocation to its request via wm_narrow(), so a spatial crossing faults on ALL arms and this row does not discriminate the chunk port -- the corpus.json note states that for the corpus as a whole. NOT YET MEASURED for this case: it needs a Capstone domain build, which the four 2026-10-07 additions have not had.",
-      "cause": 7,
-      "note": "ORACLE COMPLETED 2026-10-09, AFTER THE FIRST RUN, FROM THE SOURCE. The pre-registered text (kept in `prediction`) said only 'faults', naming neither probe nor cause, so the runner fell back to its defaults -- the READ probe and the temporal causes 24/25 -- and scored the first run FAIL although the domain faulted where the case is built to. The probe is fixed by case.c, which calls wm_write_probe at line 51; the cause by the access: a bounds violation on a store raises 7 (established by cases 16-17 on 2026-10-05). Neither was read off the result. MEASURED 2026-10-09, results/20261009-qemu-capstone-18-21/: cause 7 at pc=0x1019014e4, equal to the write probe address the boot published; runner exit 0 with controls 11 (temporal) and 13 (spatial) as recorded, negative control 12/12.",
-      "verdict": "CAUGHT"
+      "oracle": "PREDICTED: faults. Every arm of this harness narrows a wmem allocation to its request via wm_narrow(), so a spatial crossing faults on ALL arms and this row does not discriminate the chunk port -- the corpus.json note states that for the corpus as a whole. NOT YET MEASURED for this case: it needs a Capstone domain build, which the four 2026-10-07 additions have not had.",
+      "status": "predicted"
     },
     "sublet": {
-      "oracle": "fault at the labelled write probe",
-      "status": "measured",
-      "prediction": "PREDICTED: faults, identically to the spatial arm, and for the same reason -- wm_narrow() bounds every allocation on every arm. Revocation has nothing to fire on: nothing is freed in a spatial row. NOT YET MEASURED.",
-      "cause": 7,
-      "note": "ORACLE COMPLETED 2026-10-09, AFTER THE FIRST RUN, FROM THE SOURCE. The pre-registered text (kept in `prediction`) said only 'faults', naming neither probe nor cause, so the runner fell back to its defaults -- the READ probe and the temporal causes 24/25 -- and scored the first run FAIL although the domain faulted where the case is built to. The probe is fixed by case.c, which calls wm_write_probe at line 51; the cause by the access: a bounds violation on a store raises 7 (established by cases 16-17 on 2026-10-05). Neither was read off the result. Judged on the WM_CHUNKS=OFF build. MEASURED 2026-10-09, results/20261009-qemu-capstone-18-21/: cause 7 at pc=0x1019014e4, equal to the write probe address the boot published; runner exit 0 with controls 11 (temporal) and 13 (spatial) as recorded, negative control 12/12.",
-      "verdict": "CAUGHT"
+      "oracle": "PREDICTED: faults, identically to the spatial arm, and for the same reason -- wm_narrow() bounds every allocation on every arm. Revocation has nothing to fire on: nothing is freed in a spatial row. NOT YET MEASURED.",
+      "status": "predicted"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -55,5 +47,5 @@
       "status": "not written"
     }
   },
-  "status": "built 2026-10-07 and MEASURED on stock CheriBSD the same day (revocation on, 25 of 25 arms, control firing): completes, not caught. The case's own CHECK assertions must hold for it to exit 0, so the crossing was created rather than merely described. The Capstone, PoisonCap and native arms are declared: these four have not had a domain build. N = 1 per cell. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-18-21/): spatial CAUGHT, sublet CAUGHT."
+  "status": "built 2026-10-07 and MEASURED on stock CheriBSD the same day (revocation on, 25 of 25 arms, control firing): completes, not caught. The case's own CHECK assertions must hold for it to exit 0, so the crossing was created rather than merely described. The Capstone, PoisonCap and native arms are declared: these four have not had a domain build. N = 1 per cell."
 }
