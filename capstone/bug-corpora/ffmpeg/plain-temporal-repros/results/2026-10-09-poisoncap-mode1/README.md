@@ -69,5 +69,6 @@ Result LINES only; the boot capture is contaminated by construction.
 ## Against the prediction
 
 Case 12 did NOT fault, refuting its pre-registered SIGPROT: the stale read completed and returned 0x30,
-neither the freed object's 0x11 nor the new allocation's 0xAA. N = 1; the mechanism is not established.
+neither the freed object's 0x11 nor the new allocation's 0xAA. tshark plain-temporal 04 reads the same;
+both keep a second same-size block live across the free. N = 2; the mechanism is not established.
 The other twelve faulted at the labelled probe with si_code 3.

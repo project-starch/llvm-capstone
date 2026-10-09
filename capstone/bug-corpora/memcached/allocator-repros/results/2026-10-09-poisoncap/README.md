@@ -31,3 +31,9 @@ were written for the temporal cases, so it scores the spatial rows FAIL; the rea
 Mode-0 rows of 5 and 8 report exit 162 without a parsed fault; supervise's own lines in those boots read
 signal=34 code=1 at pc 0x105c2e (5) and 0x106564 (8), the same as mode 1.
 Addresses: case 5's 0x105c2e is 0x100000 + mc_defect_write; case 8's 0x106564 is mc_case_body+0x1e8 (llvm-nm on the binaries).
+
+## Negative control, same day
+
+    runners/poisoncap/run-defects.py ... --negative-control  (every fixture corrupted; every oracle must
+    report a failure with no ready, fault or completed marker): exit 0.
+    negative control: 18/18 oracles fired; 0 reported a pass or a marker on an input that never ran its case

@@ -1,6 +1,6 @@
 # ffmpeg/plane-repros, arm `poisoncap-spatial` -- 2026-10-09
 
-Platform: PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host).
+Platform: PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF; libavutil built FFPURECAP_MALLOC_ONLY=1 (booted on the second host).
 Predictions committed before the run: the corpus's committed prediction. Runtime revocation reported by the ABI control: 0.
 
 Result LINES only; the boot capture is contaminated by construction.

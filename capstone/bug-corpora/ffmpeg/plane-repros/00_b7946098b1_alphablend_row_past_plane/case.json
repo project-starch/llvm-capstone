@@ -41,14 +41,18 @@
       "prediction": "PREDICTED and UNMEASURABLE HERE: completes -- mode 0 bounds the allocation, and the crossing stays inside it.",
       "status": "measured",
       "verdict": "NOT CAUGHT",
-      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF; libavutil built FFPURECAP_MALLOC_ONLY=1 (booted on the second host)"
     },
     "poisoncap-protected": {
       "mode": 1,
-      "signal": 34,
-      "si_code": 2,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: completes -- mode 1 adds temporal protection and no lifetime ends here.",
-      "note": "UNMEASURABLE ON THIS HOST, same check as the arm above."
+      "signal": null,
+      "si_code": null,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the last row's vertical average read the alpha row below the plane's last, inside the frame's ). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed prediction).",
+      "note": "UNMEASURABLE ON THIS HOST, same check as the arm above.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: completes -- mode 1 adds temporal protection and no lifetime ends here.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation; libavutil built FFPURECAP_MALLOC_ONLY=1, because this platform's posix_memalign returns a non-zero status under quarantine (booted on the second host)"
     },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
@@ -83,7 +87,7 @@
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-carve-bounds/: **CAUGHT**: SIGPROT, exit 162 (the runner does not supervise this corpus, so si_code is not recorded). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (83dcfa032845)."
     }
   },
-  "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-carve-bounds/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT.",
+  "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-carve-bounds/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): NOT CAUGHT.",
   "nested": true,
   "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
 }
