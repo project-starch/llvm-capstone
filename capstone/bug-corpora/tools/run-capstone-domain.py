@@ -62,7 +62,12 @@ FULLCONFIG = re.compile(r"^FULLCONFIG \S+ .*\blive\b.*$", re.M)
 # Sublet heap and split into one region per carve (carved corpus only).
 ARM_CARVE = {"capstone-carve-bounds": {"carved-repros": "-DFFC_CARVE_BOUNDS",
                                        "plane-repros": "-DFFP_CARVE_BOUNDS"},
-             "sublet-carve": {"carved-repros": "-DFFC_SUBLET_CARVE"}}
+             "sublet-carve": {"carved-repros": "-DFFC_SUBLET_CARVE", "plane-repros": "-DFFP_SUBLET_CARVE"}}
+# The Sublet carve's own controls, per corpus: one shows the port's BOUND (a crossing out of a region
+# it issued), the other its REVOCATION (an alias used after its region was carved again, or after the
+# frame was freed). Each runs fixed and buggy in the same boot; buggy must fault at the probe.
+CARVE_CONTROLS = {"carved-repros": (("carve-control.c", 99), ("carve-recarve-control.c", 98)),
+                  "plane-repros": (("plane-bound-control.c", 99), ("plane-free-control.c", 98))}
 
 # The tool's own controls, compiled with the corpus's SDK into the same boot.
 CONTROL_C = r'''
@@ -334,7 +339,7 @@ def main():
     # ---- the Sublet carve's own controls: the bound AND the revocation, in this boot ----
     probe_re = re.compile(r"_(read|write)_probe(_u8|_u32)?$")
     if a.arm == "sublet-carve":
-        for src, num in (("carve-control.c", 99), ("carve-recarve-control.c", 98)):
+        for src, num in CARVE_CONTROLS[corpus.name]:
             img = bindir / f"control-{num}.dom"
             b = subprocess.run([str(cc), "-O0", f"-I{shared}", str(shared / src), str(shared / "driver.c"),
                                 *a.cc_arg, "-o", str(img)], capture_output=True, text=True)
