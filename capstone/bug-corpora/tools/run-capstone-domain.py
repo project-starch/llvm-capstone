@@ -49,8 +49,14 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 RUN = REPO / "capstone/ports/common/application/run.py"
 SDK_HEAP = {"spatial": "level0", "sublet": "sublet", "sublet-chunks": "sublet",
-            "capstone-subobject": "level0", "capstone-carve-bounds": "level0", "sublet-carve": "sublet"}
-REVOKING = ("sublet", "sublet-chunks", "sublet-carve")
+            "capstone-subobject": "level0", "capstone-carve-bounds": "level0", "sublet-carve": "sublet",
+            "sublet-full": "sublet"}
+REVOKING = ("sublet", "sublet-chunks", "sublet-carve", "sublet-full")
+# sublet-full: a plain case in its program's whole Sublet configuration -- the Sublet heap plus the
+# program's nested-allocator port, linked and brought up before main() by tools/full-config/<program>.c.
+# Every run must print that constructor's `FULLCONFIG <program> ... live` line, or the image is not
+# the configuration it claims and the run exits 75.
+FULLCONFIG = re.compile(r"^FULLCONFIG \S+ .*\blive\b.*$", re.M)
 # The carve switch each carve arm needs, per corpus. capstone-carve-bounds narrows a pointer into
 # the malloc'd block; sublet-carve is the Sublet port of the carve: the block is lent LINEAR by the
 # Sublet heap and split into one region per carve (carved corpus only).
@@ -364,6 +370,12 @@ def main():
         fixed_ok = fout == "FIXED" and fres.get("kind") == "exit" and fres.get("value") == 0
         btext, bres = run_image(a.state, img, ["buggy", n], rundir / f"{d.name}-buggy")
         bout, bdetail = classify(btext, bres, syms, probe_re)
+        if a.arm == "sublet-full":
+            for which, text in (("fixed", ftext), ("buggy", btext)):
+                if not FULLCONFIG.search(text) or "FULLCONFIG-FAILED" in text:
+                    print(f"CONTROL-FAILED {d.name} {which}: no live FULLCONFIG line; the image is not the "
+                          "full configuration", file=sys.stderr)
+                    return 75
         if not fixed_ok:
             outcome = "FIXED-ARM-FAILED"
             detail = f"fixed run read {fout}: {fdetail}; buggy run ({bout}: {bdetail}) is not scored"
@@ -374,6 +386,7 @@ def main():
                    as_predicted=outcome == want_row and (outcome != "CAUGHT" or "(the labelled probe)" in detail
                                                          or subobject),
                    image_sha256=sha256(img), fixed=f"{fout} exit={fres.get('value')}",
+                   **({"full_config": FULLCONFIG.search(btext).group(0)} if a.arm == "sublet-full" else {}),
                    buggy_exit=f"{bres.get('kind')}={bres.get('value')}")
         rows.append(row)
         print(f"  {d.name:<62} {outcome:<18} {'ok ' if row['as_predicted'] else 'DIFF'} {detail[:110]}", flush=True)

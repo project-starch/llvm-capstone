@@ -69,6 +69,13 @@
       "verdict": "CAUGHT",
       "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, every case built with -Xclang -cheri-bounds=subobject-safe (booted on the second host)",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x102494 pc=0x102494; fault pc 0x102494 OUTSIDE mch_write_probe [0x102460, 0x102484). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162). Predicted before the run (886abf4cc336)."
+    },
+    "sublet-full": {
+      "target": "Capstone domain, the program's whole Sublet configuration: the Sublet heap plus the slab/cache Sublet port (the allocators port's ledger, mode 1, 64 MiB lent payload), one page carved and one chunk issued and released before main (tools/full-config/memcached.c)",
+      "oracle": "the same reading as the sublet arm (CAUGHT): this case's objects come straight from malloc, so the nested allocator's port is live in the image but off the bug's path. A different reading would be an interaction, not a catch by the port. Every run must print the constructor's FULLCONFIG line.",
+      "prediction": "CAUGHT",
+      "status": "predicted",
+      "predicted": "2026-10-09"
     }
   },
   "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): CAUGHT.",
