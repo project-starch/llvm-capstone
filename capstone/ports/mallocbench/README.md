@@ -34,6 +34,14 @@ same numbers (cfrac 91,530,284, glibc-simple 96,000,004, espresso 33,509,501, sh
 193,000,001; the extra one is an allocation made before the tracer starts). A run's progress
 is therefore its `op=` over these totals.
 
+barnes is built with `-fwrapv`: its random number generator (`util.c` `prand`) relies on
+signed `int` overflow, and clang 22 (this SDK's, for riscv64 as well as capstone64) drops the
+`& MASK` that follows the overflowing product, because it may assume the product non-negative.
+The generator then returns negative numbers, bodies coincide, and barnes stops with "not enough
+levels in tree" and exit status 0 after its header. gcc (native) and clang 17 (CheriBSD) keep
+the mask; `-fwrapv` makes Capstone's build do the same. Found 2026-10-09 by the output check:
+all four Capstone runs had exited 0.
+
 Not run: sh8bench, which stores a pointer into an 8-byte block (`sh8bench-new.c:347-352`):
 with 16-byte capabilities the store overflows the block, and both capability systems stop it
 (Capstone: cause 28 after about a minute, in all four runs of 2026-10-09; CheriBSD's `off` arm
@@ -96,6 +104,9 @@ separates MRS's own bookkeeping (`run-maps.sh`). See that experiment's README.
   programs that print times (sh6bench), whose output is compared by eye.
 - **Completeness**: exit 0, an `MQ-DONE` or `CAPSTONE_VM_STATS` line, `MB_OUT_LINES` equal to
   the streamed line count. A run that fails any of these is not plotted.
+
+`collect.py` applies these checks to every run of all three systems and writes `results.json`;
+a run without `MB_END` is reported as running and not checked.
 
 ## Run matrix
 

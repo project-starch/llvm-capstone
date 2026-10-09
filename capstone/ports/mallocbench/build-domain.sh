@@ -65,7 +65,13 @@ dom espresso "${espresso[@]/#/$B/espresso/}" -lm
 
 printf '#include <stdio.h>\nstatic char *mq_gets(char *b, int n) { char *p; if (!fgets(b, n, stdin)) return 0; for (p = b; *p; p++) if (*p == 0x0a) { *p = 0; break; } return b; }\n#define gets(b) mq_gets(b, sizeof(b))\n' > "$OUT/src/mq-gets.h"
 barnes=(code.c code_io.c load.c grav.c getparam.c util.c)
-dom barnes -include "$OUT/src/mq-gets.h" "${barnes[@]/#/$B/barnes/}" -lm
+# barnes's random number generator (util.c prand) relies on signed int overflow:
+# randx = (A*randx+B) & MASK. clang 22 (this SDK's, for riscv64 as well as capstone64) infers
+# from the overflow being undefined that the product is non-negative and drops the mask, so
+# the generator produces negative values, the initial bodies coincide and barnes stops with
+# "not enough levels in tree" after exit 0. gcc (native) and clang 17 (CheriBSD) keep the
+# mask. -fwrapv defines the overflow as the two's complement those compilers produce.
+dom barnes -fwrapv -include "$OUT/src/mq-gets.h" "${barnes[@]/#/$B/barnes/}" -lm
 
 dom glibc-simple "$B/glibc-bench/bench-malloc-simple.c" -lpthread
 # mstress takes one atomic pointer exchange from <stdatomic.h>, a compiler header that the SDK's
