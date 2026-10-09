@@ -41,8 +41,11 @@ SEARCH = ["capstone/bug-corpora", "xlang"]
 #
 # The flat shape below is still checked, because `xlang/` uses it: a declaration
 # with no `groups` is read as one group spelled inline.
-PROGRAM_REQUIRED = {"program", "title", "cases", "checker", "groups", "protection"}
-PROGRAM_OPTIONAL = {"note", "related", "advisories", "inventory"}
+PROGRAM_REQUIRED = {"program", "title", "cases", "checker", "groups"}
+# `protection` is optional here for the same reason it is optional per group:
+# the declarations arrive per program after the shape does. See the note beside
+# DECL_OPTIONAL.
+PROGRAM_OPTIONAL = {"protection", "note", "related", "advisories", "inventory"}
 
 DECL_REQUIRED = {"program", "boundary", "title", "cases", "case_schema", "status",
                  "live_in_pin_recorded"}

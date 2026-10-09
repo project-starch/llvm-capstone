@@ -44,12 +44,30 @@ def read_json(path):
 
 
 def corpora():
+    """Every piece of bug material, one row per GROUP.
+
+    A bug-corpora declaration is one corpus per APPLICATION, with the former
+    corpora inside it as groups: the boundary a case crosses, its upstream pin
+    and the run that measured it are per group, so that is the granularity an
+    index of material wants. The application's own row is its groups summed,
+    which the tables below do by program. A declaration with no `groups` -- the
+    shape `xlang/` uses -- is one group spelled inline.
+    """
     found = []
     for base in ("capstone/bug-corpora", "xlang"):
         for path in sorted((REPO / base).rglob("corpus.json")):
             decl = read_json(path)
-            decl["where"] = str(path.parent.relative_to(REPO))
-            found.append(decl)
+            where = str(path.parent.relative_to(REPO))
+            if "groups" not in decl:
+                decl["where"] = where
+                found.append(decl)
+                continue
+            for group, fields in sorted(decl["groups"].items()):
+                row = dict(fields)
+                row["program"] = decl["program"]
+                row["where"] = f"{where}/{group}"
+                row["corpus"] = where
+                found.append(row)
     return found
 
 

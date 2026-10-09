@@ -1,0 +1,52 @@
+{
+  "program": "cpython",
+  "title": "CPython: twenty re-entrancy use-after-frees, all of them inside pymalloc",
+  "cases": 20,
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "groups": {
+    "pymalloc-repros": {
+      "boundary": "pymalloc",
+      "title": "Consumer-side temporal defects in CPython whose memory comes from pymalloc",
+      "upstream": {
+        "version": "3.13.7",
+        "port": "capstone/ports/cpython/pymalloc"
+      },
+      "cases": 20,
+      "case_schema": "case-json",
+      "case_macro": "PYC",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected"
+      ],
+      "arm_keys": {
+        "sublet": [
+          "oracle",
+          "cause"
+        ]
+      },
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "true": 20
+      },
+      "runners": [
+        "capstone/bug-corpora/cpython/pymalloc-repros/runners/capstone-domain/run-defects.py",
+        "capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py"
+      ],
+      "inventory": "capstone/docs/ref/cpython-pymalloc-defects.md",
+      "evidence": [
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20",
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "shape_prose": [
+        "[Tt]wenty reports, (\\w+) shapes",
+        "The (\\w+) shapes, and what each"
+      ],
+      "note": "The inventory states this is the whole reachable set at the pin, not a sample."
+    }
+  }
+}
