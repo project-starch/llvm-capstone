@@ -17,7 +17,8 @@
     "cheribsd-revocation",
     "native-detect",
     "native-fix-differential",
-    "capstone-subobject"
+    "capstone-subobject",
+    "capstone-carve-bounds"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -34,7 +35,8 @@
     "capstone/bug-corpora/ffmpeg/plane-repros/results/20261006-native-plane",
     "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd",
     "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone",
-    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone-subobject"
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone-subobject",
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone-carve-bounds"
   ],
   "advisories": [],
   "shape_table": true,

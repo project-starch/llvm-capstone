@@ -17,7 +17,8 @@
     "cheribsd-revocation",
     "native-detect",
     "native-fix-differential",
-    "capstone-subobject"
+    "capstone-subobject",
+    "cheribsd-subobject"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -36,7 +37,8 @@
     "capstone/bug-corpora/memcached/plain-heap-repros/results/20261007-cheribsd",
     "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-08-cheribsd",
     "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-capstone",
-    "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-capstone-subobject"
+    "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-capstone-subobject",
+    "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-cheribsd-subobject"
   ],
   "advisories": [],
   "shape_table": true,
