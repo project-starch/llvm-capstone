@@ -25,9 +25,12 @@ WM_CASE(16) {
  * Reduced to the first byte the parity copy writes past the buffer. */
   enum { DECODED = 64, PARITY_AT = 207 };
   /* :376 -- the output buffer, sized fcount*plen with no room for parity. */
-  unsigned char *output = wmem_alloc(wm_packet, DECODED);
+  /* THE FIX, e8ef9df09d, widens the allocation by the parity's room (decoded_size + PFT_RS_N - rsk);
+   * modelled as an output long enough to hold the byte at PARITY_AT. */
+  const unsigned out_bytes = wm_fixed ? PARITY_AT + 48 : DECODED;
+  unsigned char *output = wmem_alloc(wm_packet, out_bytes);
   CHECK(output, 1);
-  memset(output, 0, DECODED);
+  memset(output, 0, out_bytes);
   /* The storage the parity copy overwrites: the next chunk of the same block.
    * Filled with a pattern so the damage is observable, and its position
    * asserted BEFORE the marker. */
@@ -38,8 +41,8 @@ WM_CASE(16) {
   /* :264 with index_out = 0 -- the copy starts at output + 207, which is past
    * a 64-byte buffer, and 48 bytes of it stay inside the block. */
   CHECK(PARITY_AT >= DECODED, 4);                              /* past the chunk */
-  CHECK((uintptr_t)output + PARITY_AT < (uintptr_t)successor + 256, 5); /* in block */
+  CHECK(wm_fixed || (uintptr_t)output + PARITY_AT < (uintptr_t)successor + 256, 5); /* in block */
   wm_held = output + PARITY_AT;
   wm_mark();
-  wm_write_probe(wm_held);
+  WM_WRITE_AT(wm_held, output, out_bytes);
 }

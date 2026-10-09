@@ -15,12 +15,18 @@ WM_CASE(1) {
   object_identifier_id = oid;
   uintptr_t address = (uintptr_t)oid;
   wm_next_packet(); /* wmem_leave_packet_scope at frame end, epan.c:617 */
+  /* THE FIX, c14d731e45 "get rid of globals": the OID lives in the packet's own private data, so
+   * a packet whose capability decode failed has none and T_parameters has nothing to read. */
+  if (wm_fixed)
+    object_identifier_id = NULL;
   /* The next packet's decode raises before it re-sets the global; its other
    * allocations reoccupy the block. Proven before the marker. */
   unsigned char *next = wmem_alloc(wm_packet, 59);
   CHECK(next && (uintptr_t)next == address, 2);
   memset(next, 0x5a, 59);
   wm_held = (unsigned char *)object_identifier_id; /* T_parameters, cms.cnf:220 */
+  if (!wm_held)
+    return; /* the fix: no global, no stale OID */
   wm_mark();
-  (void)wm_probe(wm_held); /* g_strdup -> strlen in find_string_dtbl_entry */
+  WM_READ(wm_held, 0x5a); /* g_strdup -> strlen in find_string_dtbl_entry */
 }

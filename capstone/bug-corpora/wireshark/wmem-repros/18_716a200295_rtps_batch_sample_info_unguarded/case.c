@@ -63,7 +63,10 @@ WM_CASE(18) {
    * Index SAMPLE_INFO_MAX of the lengths array is the successor's first word. */
   CHECK((uintptr_t)&lengths[SAMPLE_INFO_MAX] + sizeof(unsigned)
             <= (uintptr_t)successor + 64, 7);
+  /* THE FIX, 716a200295: the guard is on sample_info_max, so a full array stops the loop. */
+  if (wm_fixed && count >= SAMPLE_INFO_MAX)
+    return;
   wm_held = (unsigned char *)&lengths[count];
   wm_mark();
-  wm_write_probe(wm_held);
+  WM_WRITE_AT(wm_held, lengths, SAMPLE_INFO_MAX * sizeof *lengths);
 }

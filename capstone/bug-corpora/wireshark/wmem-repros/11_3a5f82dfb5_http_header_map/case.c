@@ -17,7 +17,8 @@ WM_CASE(11) {
   struct http_req_res_private_data *prv_data =
       wmem_alloc(wm_file_scope(), sizeof *prv_data); /* wmem_new0(wmem_file_scope()), packet-http.c:1124 */
   CHECK(prv_data, 1);
-  unsigned char *map = wmem_alloc(wm_packet, 88); /* wmem_map_new(pinfo->pool, ...), :1814 */
+  /* THE FIX, 3a5f82dfb5: a map that is saved into the conversation is a file-scope one. */
+  unsigned char *map = wmem_alloc(wm_fixed ? wm_file_scope() : wm_packet, 88); /* wmem_map_new(pinfo->pool, ...), :1814 */
   CHECK(map, 2);
   memset(map, 0, 88);
   prv_data->request_headers = map; /* :1781 */
@@ -27,7 +28,7 @@ WM_CASE(11) {
    * allocator log shows an unrelated allocation sitting in the freed block.
    * Proven before the marker. */
   unsigned char *other = wmem_alloc(wm_packet, 88);
-  CHECK(other && (uintptr_t)other == address, 3);
+  CHECK(other && (wm_fixed || (uintptr_t)other == address), 3); /* the fixed map is not in the pool */
   memset(other, 0x5a, 88);
   /* A later frame retrieves the map from the conversation, :1797-1804. */
   /* map->table sits at +16; the case reads the struct's first byte, because
@@ -35,5 +36,5 @@ WM_CASE(11) {
    * arithmetic, before the load. */
   wm_held = prv_data->request_headers; /* wmem_map.c:299 */
   wm_mark();
-  (void)wm_probe(wm_held);
+  WM_READ(wm_held, 0x5a);
 }

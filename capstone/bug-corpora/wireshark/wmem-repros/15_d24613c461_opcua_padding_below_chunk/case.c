@@ -41,7 +41,10 @@ WM_CASE(15) {
   unsigned char *target = padding - PAD_LEN;
   CHECK((uintptr_t)target < (uintptr_t)plaintext, 4);        /* below the chunk */
   CHECK((uintptr_t)target >= (uintptr_t)before, 5);          /* inside the block */
+  /* THE FIX, d24613c461: an `available` count is passed and pad_len > available is rejected. */
+  if (wm_fixed && PAD_LEN > PLAINTEXT)
+    return;
   wm_held = target;
   wm_mark();
-  (void)wm_probe(wm_held);
+  WM_READ_AT(wm_held, plaintext, PLAINTEXT);
 }

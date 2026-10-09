@@ -65,7 +65,9 @@ WM_CASE(19) {
   CHECK((uintptr_t)contents + 32 + 8 <= (uintptr_t)successor + 64, 8);
 
   /* The consumer at :1649, which trusts the length. */
-  wm_held = contents + 32;
+  /* THE FIX, 4a4871a831, moves `result->length = blob_length` inside the size check, so a blob at
+   * or above MAX_BLOB_SIZE leaves the recorded length at the old blob's and the copy stays in it. */
+  wm_held = wm_fixed ? contents + small - 1 : contents + 32;
   wm_mark();
-  (void)wm_probe(wm_held);
+  WM_READ_AT(wm_held, contents, small);
 }

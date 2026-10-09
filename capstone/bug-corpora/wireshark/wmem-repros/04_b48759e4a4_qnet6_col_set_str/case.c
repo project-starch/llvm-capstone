@@ -12,7 +12,16 @@ WM_CASE(4) {
   memset(info, 0, 70);
   memcpy(info, "Unknown LWL4 Type 200 packets", 30);
   wm_held = info; /* col_set_str: the pointer, not a copy */
+  if (wm_fixed) {
+    /* THE FIX, b48759e4a4: col_add_str again -- the column COPIES the string into storage it owns,
+     * which the packet reset does not end. */
+    unsigned char *column = wmem_alloc(wm_file_scope(), 70);
+    CHECK(column, 2);
+    memcpy(column, info, 70);
+    wm_held = column;
+  }
   wm_next_packet(); /* wmem_leave_packet_scope, end of dissection, epan.c:665 */
+  wm_reoccupy(info, 70); /* native observer only */
   wm_mark();
-  (void)wm_probe(wm_held); /* strlen in print_columns, tshark.c:4509 */
+  WM_READ(wm_held, WM_MARKER); /* strlen in print_columns, tshark.c:4509 */
 }

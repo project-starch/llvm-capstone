@@ -21,12 +21,20 @@ WM_CASE(9) {
   memset(buff, 0x7e, 55);
   buff[1] = 0x20; /* the header type byte the later read wants */
   entry->tvb_real_data = buff; /* tvb_new_child_real_data(tvb, buff, ...) then stored */
+  if (wm_fixed) {
+    /* THE FIX, 693dc40936: the stored tvb's data has the entry's (file) scope, not the packet's. */
+    unsigned char *kept = wmem_alloc(wm_file_scope(), 55);
+    CHECK(kept, 3);
+    memcpy(kept, buff, 55);
+    entry->tvb_real_data = kept;
+  }
   wm_next_packet(); /* epan_dissect_reset, epan.c:581 */
   /* A later frame's dissect_geonw retrieves the entry, :2229-2231. */
   /* tvb_get_guint8(tvb, 1) reads byte 1; the case reads byte 0 through the
    * retrieved pointer, because deriving an interior pointer from revoked
    * authority faults at the arithmetic, before the load. */
+  wm_reoccupy(buff, 55); /* native observer only */
   wm_held = entry->tvb_real_data;
   wm_mark();
-  (void)wm_probe(wm_held); /* :2234 */
+  WM_READ(wm_held, WM_MARKER); /* :2234 */
 }

@@ -46,7 +46,8 @@ WM_CASE(21) {
   CHECK((uintptr_t)pbuf + written <= (uintptr_t)successor + 64, 5);
 
   /* The first byte that does not fit is the labelled crossing. */
-  wm_held = (unsigned char *)pbuf + MAXLENGTH;
+  /* THE FIX, 69dac89280: the rewrite is bounded by the buffer, so nothing lands past its last byte. */
+  wm_held = (unsigned char *)pbuf + (wm_fixed ? MAXLENGTH - 1 : MAXLENGTH);
   wm_mark();
-  wm_write_probe(wm_held);
+  WM_WRITE_AT(wm_held, pbuf, MAXLENGTH);
 }
