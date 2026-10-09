@@ -28,15 +28,21 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: faults. Mode 0 bounds each allocation and the crossing leaves one. Unmeasurable on this host, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 FATAL_ERRORs without CHERI_SDK and CHERI_SYSROOT.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the shift loop's guard was j < nb_formats while its body read formats[j + 1], so it read one e). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions and 2852edcdd747 (size-class slack)).",
+      "status": "measured",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: faults. Mode 0 bounds each allocation and the crossing leaves one. Unmeasurable on this host, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 FATAL_ERRORs without CHERI_SDK and CHERI_SYSROOT.",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
     },
     "poisoncap-protected": {
       "mode": 1,
       "signal": null,
       "si_code": null,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, for the mode-0 reason.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the shift loop's guard was j < nb_formats while its body read formats[j + 1], so it read one e). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions and 2852edcdd747 (size-class slack)).",
+      "status": "measured",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: faults, for the mode-0 reason.",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
     },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
@@ -68,7 +74,7 @@
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the shift loop's guard was j < nb_formats while its body read formats[j + 1], so it read one e). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162 (SIGPROT before any output; run.py lists the row as FAIL because its expectation needs a stdout line, the runner's own check reads the exit status -- the control was changed the same day to print first)). Predicted before the run (886abf4cc336)."
     }
   },
-  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, and ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell. CheriBSD MEASURED 2026-10-06: NOT caught, REFUTING this case's prediction; the mechanism (24-byte request -> 32-byte capability) was measured in the same boot. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT.",
+  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, and ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell. CheriBSD MEASURED 2026-10-06: NOT caught, REFUTING this case's prediction; the mechanism (24-byte request -> 32-byte capability) was measured in the same boot. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): NOT CAUGHT.",
   "nested": false,
   "nested_why": "nothing sub-allocated the crossed region: the object is one allocation the platform or FFmpeg's own av_malloc handed out directly, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED."
 }

@@ -43,7 +43,9 @@ MC_CASE(7) {
     local[KEY_LEN] = 0;
     scan = local;
   } else {
-    scan = key;                       /* passed straight to the formatter */
+    /* passed straight to the formatter: ITEM_key(it), whose region is nkey + 1 bytes (the key
+     * and the terminator upstream relies on), which mc_carve() states under MC_CARVE_BOUNDS */
+    scan = mc_carve(key, KEY_LEN + 1);
   }
 
   o->unit_reissued = 0;

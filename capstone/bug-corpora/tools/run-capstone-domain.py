@@ -235,10 +235,13 @@ def main():
     # capstone-carve-bounds is the carved corpus's source remedy: ffc_carve() narrows each region
     # to its own extent when FFC_CARVE_BOUNDS is defined. Like the field-bounds flag, the switch
     # decides the arm, so it is required exactly where the arm is named and refused elsewhere.
+    # The plane corpus has the same remedy for av_frame_get_buffer's carve (FFP_CARVE_BOUNDS).
+    CARVE_FLAG = {"carved-repros": "-DFFC_CARVE_BOUNDS", "plane-repros": "-DFFP_CARVE_BOUNDS"}
     carve = a.arm == "capstone-carve-bounds"
-    if carve != ("-DFFC_CARVE_BOUNDS" in a.cc_arg) or (carve and corpus.name != "carved-repros"):
-        print("CONTROL-FAILED capstone-carve-bounds needs --cc-arg=-DFFC_CARVE_BOUNDS on the carved "
-              "corpus, and no other arm may carry it", file=sys.stderr)
+    flags = [f for f in CARVE_FLAG.values() if f in a.cc_arg]
+    if carve != bool(flags) or (carve and flags != [CARVE_FLAG.get(corpus.name)]):
+        print("CONTROL-FAILED capstone-carve-bounds needs exactly its corpus's carve switch "
+              f"({CARVE_FLAG}), and no other arm may carry one", file=sys.stderr)
         return 75
     overrides = json.loads(a.predictions.read_text()) if a.predictions else {}
     cache = (a.sdk / "CMakeCache.txt").read_text()

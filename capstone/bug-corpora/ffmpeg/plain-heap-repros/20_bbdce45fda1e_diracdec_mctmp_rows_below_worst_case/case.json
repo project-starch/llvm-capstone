@@ -27,15 +27,21 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x102178 pc=0x102178; fault pc 0x102178 INSIDE ffh_write_probe_u8 [0x102160, 0x102184). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions and 2852edcdd747 (size-class slack)).",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "verdict": "CAUGHT",
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
     },
     "poisoncap-protected": {
       "mode": 1,
-      "signal": null,
-      "si_code": null,
-      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
-      "status": "predicted"
+      "signal": 34,
+      "si_code": 1,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x102178 pc=0x102178; fault pc 0x102178 INSIDE ffh_write_probe_u8 [0x102160, 0x102184). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions and 2852edcdd747 (size-class slack)).",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "verdict": "CAUGHT",
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
     },
     "cheribsd-revocation": {
       "signal": 34,
@@ -67,7 +73,7 @@
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x102204 pc=0x102204; fault pc 0x102204 INSIDE ffh_write_probe_u8 [0x1021ec, 0x102210). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162 (SIGPROT before any output; run.py lists the row as FAIL because its expectation needs a stdout line, the runner's own check reads the exit status -- the control was changed the same day to print first)). Predicted before the run (886abf4cc336)."
     }
   },
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): CAUGHT.",
   "nested": false,
   "nested_why": "the crossed buffer came straight from av_malloc / av_mallocz / av_calloc / av_malloc_array -- which on the platform is malloc -- with no AVBufferPool or AVRefStructPool between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
   "distinguishing": "the allocation's height term and the loop's are both 'worst case' -- they are simply DIFFERENT worst cases, h + MAX_BLOCKSIZE against blheight * ybsep + yblen, and nothing checked that the first covers the second. The fix multiplies the margin by five rather than deriving it, which is itself evidence the relation was never written down."

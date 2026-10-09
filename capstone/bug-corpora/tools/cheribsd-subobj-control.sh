@@ -1,10 +1,12 @@
-# Sourced by the CheriBSD runners. Only when CHERI_EXTRA_CFLAGS is set -- i.e. on another arm built
-# from the same runner -- it adds a field-crossing control to cases.json and, after the boot,
+# Sourced by the CheriBSD runners. Only when CHERI_EXTRA_CFLAGS carries a -cheri-bounds= switch -- the
+# field-bounds arm built from the same runner -- it adds a field-crossing control to cases.json and, after the boot,
 # refuses the suite unless that control died by SIGPROT. Unset, both functions do nothing, so the
 # runner's own arm is unchanged.
 subobj_control_add() {   # subobj_control_add <out> <sdk> <cflags...>
   local out=$1 sdk=$2; shift 2
-  [ -n "${CHERI_EXTRA_CFLAGS:-}" ] || return 0
+  # Only a field-bounds arm carries the field control: another switch passed the same way (a carve
+  # remedy, say) does not narrow fields, and the control would refuse a correct run.
+  case "${CHERI_EXTRA_CFLAGS:-}" in *-cheri-bounds=*) ;; *) return 0 ;; esac
   "$sdk/bin/clang" "$@" ${CHERI_EXTRA_CFLAGS} "$(dirname "${BASH_SOURCE[0]}")/subobj-control.c" \
     -o "$out/bin/subobj-control" || { echo "CONTROL-FAILED subobj-control build" >&2; return 75; }
   python3 - "$out/cases.json" "$out/bin/subobj-control" <<'PY'
@@ -18,7 +20,7 @@ PY
 }
 subobj_control_check() {   # subobj_control_check <out>
   local out=$1
-  [ -n "${CHERI_EXTRA_CFLAGS:-}" ] || return 0
+  case "${CHERI_EXTRA_CFLAGS:-}" in *-cheri-bounds=*) ;; *) return 0 ;; esac
   python3 - "$out/run/summary.json" <<'PY' || { echo "CONTROL-FAILED subobj-control did not die by SIGPROT: the flags are not shown to narrow a field in this boot" >&2; return 75; }
 import json, sys
 rows = json.load(open(sys.argv[1]))['results']

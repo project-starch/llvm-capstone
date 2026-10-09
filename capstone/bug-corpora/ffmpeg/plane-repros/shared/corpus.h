@@ -71,4 +71,25 @@ _Noreturn void ffp_fail(unsigned code);
 unsigned ffp_read_probe(const volatile unsigned char *p);
 #define read_probe ffp_read_probe
 
+/* The carve-bounds remedy, FFP_CARVE_BOUNDS (added 2026-10-09). av_frame_get_buffer carves every
+ * plane out of ONE AVBuffer by pointer arithmetic (libavutil/frame.c) and narrows none of them, so a
+ * read one row past a plane lands in the same buffer. With the switch, the case hands the consumer
+ * the plane narrowed to its own rows, linesize * height -- what frame.c would do if it narrowed at
+ * the carve. Without it this is the identity, so every other arm builds byte-identically. */
+#if defined(FFP_CARVE_BOUNDS)
+__attribute__((unused)) static unsigned char *ffp_carve(unsigned char *p, unsigned long len) {
+#if defined(__CHERI_PURE_CAPABILITY__)
+  return __builtin_cheri_bounds_set(p, len);
+#elif defined(__CAPSTONE__)
+  unsigned long long at = __builtin_capstone_cap_get_cursor(p);
+  return __builtin_capstone_cap_shrink(p, at, at + len);
+#else
+#error "FFP_CARVE_BOUNDS needs a capability target: CHERI purecap or Capstone"
+#endif
+}
+#else
+/* The identity as a macro, not a function, so the build without the switch is byte-identical. */
+#define ffp_carve(p, len) (p)
+#endif
+
 #endif

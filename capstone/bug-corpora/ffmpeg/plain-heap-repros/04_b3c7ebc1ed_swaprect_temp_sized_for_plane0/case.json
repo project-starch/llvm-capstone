@@ -28,15 +28,21 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the scratch row was sized w * pixsteps[0], the luma plane, while the chroma row of a semi-plan). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions and 2852edcdd747 (size-class slack)).",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
     },
     "poisoncap-protected": {
       "mode": 1,
       "signal": null,
       "si_code": null,
-      "oracle": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the scratch row was sized w * pixsteps[0], the luma plane, while the chroma row of a semi-plan). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions and 2852edcdd747 (size-class slack)).",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: this corpus's platform arms are run per corpus, and this case was added after the last run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault -- but on CheriBSD that depends on the usable size: the request is 17 bytes and the write is at offset 17, so a 32-byte size class would absorb it. The capability length must be measured in-guest for a 17-byte request before this is called either way.",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
     },
     "cheribsd-revocation": {
       "signal": null,
@@ -68,7 +74,7 @@
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the scratch row was sized w * pixsteps[0], the luma plane, while the chroma row of a semi-plan). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162 (SIGPROT before any output; run.py lists the row as FAIL because its expectation needs a stdout line, the runner's own check reads the exit status -- the control was changed the same day to print first)). Predicted before the run (886abf4cc336)."
     }
   },
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions: this corpus's CheriBSD bundle predates the case. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions: this corpus's CheriBSD bundle predates the case. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): NOT CAUGHT.",
   "nested": false,
   "nested_why": "the crossed buffer came straight from av_malloc_array with no inner allocator between it and the platform, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT nested."
 }

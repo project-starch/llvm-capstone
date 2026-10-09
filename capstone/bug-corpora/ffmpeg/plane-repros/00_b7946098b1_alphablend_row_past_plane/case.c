@@ -66,7 +66,10 @@ FFP_CASE(0) {
   const int subsample_row = (row + 1) < h;  /* the fix's own condition */
   CHECK(!subsample_row, 906);               /* ... which is false exactly here */
 
-  unsigned char *arow = a + (ptrdiff_t)alpha_step * row;
+  /* The consumer's view of the plane: under FFP_CARVE_BOUNDS narrowed to its own h rows, as
+   * av_frame_get_buffer would hand it out if it narrowed at the carve; otherwise `a` itself. The
+   * setup above wrote the slack through the unnarrowed pointer, as other code owning it would. */
+  unsigned char *arow = ffp_carve(a, (unsigned long)alpha_step * h) + (ptrdiff_t)alpha_step * row;
   const int x = 0;
   unsigned alpha_value;
   if (!fixed) {
