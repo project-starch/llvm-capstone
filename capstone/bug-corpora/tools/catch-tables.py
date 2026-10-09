@@ -68,7 +68,10 @@ for p in TARGETS:
         le = str(d.get("lifetime_ender", "")).strip().upper()
         kind = "spatial" if (le.startswith("NONE") or "SPATIAL" in le) else "temporal"
         a = d["arms"]
-        r = dict(prog=p, corpus=corpus, layer=LAYER.get(corpus, corpus), case=cj.parent.name, kind=kind,
+        layer = LAYER.get(corpus, corpus)
+        if p == "wireshark" and layer == "direct malloc":
+            layer = "direct g_malloc"
+        r = dict(prog=p, corpus=corpus, layer=layer, case=cj.parent.name, kind=kind,
                  nested=bool(d.get("nested")),
                  asan=verdict(a.get("native-detect")),
                  cheri=verdict(a.get("cheribsd-revocation")),
