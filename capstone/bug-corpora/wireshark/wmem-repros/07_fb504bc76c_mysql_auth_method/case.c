@@ -14,14 +14,16 @@ WM_CASE(7) {
   struct mysql_conn_data *conn_data =
       wmem_alloc(wm_file_scope(), sizeof *conn_data); /* wmem_new0(wmem_file_scope()), packet-mysql.c:4043 */
   CHECK(conn_data, 1);
-  unsigned char *name = wmem_alloc(wm_packet, 43); /* tvb_get_string_enc(pinfo->pool, ...), :3714 */
+  /* THE FIX, fb504bc76c: tvb_get_string_enc(wmem_file_scope(), ...), the connection record's scope. */
+  unsigned char *name = wmem_alloc(wm_fixed ? wm_file_scope() : wm_packet, 43); /* tvb_get_string_enc(pinfo->pool, ...), :3714 */
   CHECK(name, 2);
   memset(name, 0, 43);
   memcpy(name, "caching_sha2_password", 22);
   conn_data->auth_method = name;
   wm_next_packet(); /* epan_dissect_reset, epan.c:589 */
+  wm_reoccupy(name, 43); /* native observer only */
   /* The AuthSwitch response arrives and consults the connection record. */
   wm_held = conn_data->auth_method;
   wm_mark();
-  (void)wm_probe(wm_held); /* strcmp in mysql_dissect_auth_switch_response, :3745 */
+  WM_READ(wm_held, WM_MARKER); /* strcmp in mysql_dissect_auth_switch_response, :3745 */
 }

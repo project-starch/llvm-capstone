@@ -1,0 +1,25 @@
+{
+  "_about": "Pre-registered per-case predictions for the capstone-subobject arm (-Xclang -fcapstone-subobject-bounds, C1 v1: non-last ARRAY fields only; refuses trailing arrays, unions, flexible arrays). Committed before the run.",
+  "_why": {
+    "00": "num_nalus_in_du_minus1[] is a NON-LAST array field: v1 narrows it, index SEGMENTS leaves it",
+    "01": "RefPicSetStCurrBefore[] is a non-last array field",
+    "02": "ref_src[] is a non-last array field",
+    "03": "last[] is a non-last array field (cur[] follows)",
+    "04": "control_url[] is the struct's LAST member: v1 refuses trailing arrays (the flexible-array idiom), so it is not narrowed",
+    "05": "tile_sizes[] is a non-last array field",
+    "06": "entry_point_start_ctu[] is the LAST member of the nested struct sh: refused as a trailing array",
+    "07": "key_uri[] is a non-last array field; the pointer is narrowed where it is passed to av_strlcpy, so the fault lands INSIDE the strlcpy, not at a labelled probe",
+    "08": "col_width_val[] is a non-last array field",
+    "09": "the slices are pointer arithmetic inside ONE int array, not struct fields: nothing for field bounds to narrow"
+  },
+  "00_8864fd0aec_cbs_h265_pic_timing_member": "CAUGHT",
+  "01_68845e26f7_vulkan_hevc_refpicset_member": "CAUGHT",
+  "02_e058af88ab_vulkan_hevc_dpb_member": "CAUGHT",
+  "03_89de2f0de1_aac_arith_last_member": "CAUGHT",
+  "04_1a00ea51cb_rtsp_control_url_underflow": "DEFECT-REPRODUCED",
+  "05_d29ff88422_vulkan_av1_tile_sizes": "CAUGHT",
+  "06_a809a784ec_vvc_entry_point_start_ctu": "DEFECT-REPRODUCED",
+  "07_275e217b10_hlsenc_key_uri_strlcpy_size": "CAUGHT",
+  "08_fb862976df_cbs_h266_col_width_val": "CAUGHT",
+  "09_ac59fc542f_thumbnail_carved_histogram_slice": "DEFECT-REPRODUCED"
+}

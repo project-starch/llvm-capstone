@@ -15,15 +15,21 @@ WM_CASE(0) {
   gp_rdma_write_offsets = array;
   uintptr_t address = (uintptr_t)array;
   wm_next_packet(); /* wmem_leave_packet_scope at frame end, epan.c:617 */
+  /* THE FIX, 3c8be14c82: a frame-end cleanup routine resets the global, so the later packet finds
+   * no write-offset array and process_rdma_list does not follow it. */
+  if (wm_fixed)
+    gp_rdma_write_offsets = NULL;
   /* Packet N+1 takes a path that never re-stores the global; its own first
    * allocation lands on the same storage. Proven before the marker. */
   unsigned char *next = wmem_alloc(wm_packet, 80);
-  CHECK(next && (uintptr_t)next == address, 2);
+  CHECK(next && (uintptr_t)next == address, 2); /* the fix does not change where packet N+1 lands */
   memset(next, 0x5a, 80);
   /* wmem_array_get_count reads the count field at +56; the case reads the
    * descriptor's first byte, because deriving an interior pointer from
    * revoked authority faults at the arithmetic, before the load. */
   wm_held = gp_rdma_write_offsets; /* :1159 */
+  if (!wm_held)
+    return; /* the fix: nothing retained, nothing read */
   wm_mark();
-  (void)wm_probe(wm_held);
+  WM_READ(wm_held, 0x5a);
 }

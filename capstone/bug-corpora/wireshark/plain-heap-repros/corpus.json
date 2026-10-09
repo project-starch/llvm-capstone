@@ -17,7 +17,9 @@
     "poisoncap-protected",
     "cheribsd-revocation",
     "native-detect",
-    "native-fix-differential"
+    "native-fix-differential",
+    "capstone-subobject",
+    "cheribsd-subobject"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -36,7 +38,12 @@
     "capstone/bug-corpora/wireshark/plain-heap-repros/results/20261006-native-plain-heap",
     "capstone/bug-corpora/wireshark/plain-heap-repros/results/20261007-cheribsd",
     "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-08-cheribsd",
-    "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-capstone"
+    "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-capstone",
+    "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-capstone-sublet-chunks",
+    "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-capstone-subobject",
+    "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-cheribsd-subobject",
+    "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-poisoncap-mode0",
+    "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-poisoncap-mode1"
   ],
   "advisories": [],
   "shape_table": true,

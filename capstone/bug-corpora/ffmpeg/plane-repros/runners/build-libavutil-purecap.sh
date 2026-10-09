@@ -52,8 +52,20 @@ if [ "$rc" -ne 0 ]; then
   exit 3
 fi
 
+# FFPURECAP_MALLOC_ONLY=1 (added 2026-10-09): av_malloc through malloc instead of posix_memalign. On
+# PoisonCap with revocation ON the platform's posix_memalign returns a NON-ZERO status while setting
+# *ptr (measured: the status equals the pointer's low 32 bits), so av_malloc reads it as failure and
+# av_frame_alloc returns NULL -- the plane case could not run there at all. This is the same
+# allocation path the Capstone domain build of this corpus uses (HAVE_POSIX_MEMALIGN 0).
+if [ "${FFPURECAP_MALLOC_ONLY:-0}" = 1 ]; then
+  sed -i 's/^#define HAVE_POSIX_MEMALIGN 1$/#define HAVE_POSIX_MEMALIGN 0/; s/^#define HAVE_MEMALIGN 1$/#define HAVE_MEMALIGN 0/' config.h
+  grep -q '^#define HAVE_POSIX_MEMALIGN 0$' config.h && grep -q '^#define HAVE_MEMALIGN 0$' config.h \
+    || { echo "CONTROL-FAILED config.h kept an aligned allocator"; exit 75; }
+fi
 echo "=== build libavutil only ==="
-taskset -c 0-7,32-39 nice -n 10 make -j12 libavutil/libavutil.a
+# The caller pins the CPUs: a hard-coded set here once ran this build on the half of the host
+# reserved for timed benchmark runs.
+nice -n 10 make -j"${JOBS:-12}" libavutil/libavutil.a
 rc=$?
 echo "MAKE_RC=$rc"
 [ "$rc" -eq 0 ] || exit 4

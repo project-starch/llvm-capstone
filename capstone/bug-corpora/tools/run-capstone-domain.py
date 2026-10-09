@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one plain-heap, plain-temporal, subobject or plane corpus on a Capstone application domain arm.
+"""Run one plain-heap, plain-temporal, subobject, plane or carved corpus on a Capstone application domain arm.
 
     run-capstone-domain.py --corpus <corpus dir> --arm spatial|sublet \\
         --sdk <application SDK> --state <capstone-vm state> --out <fresh dir> [--cc-arg ARG]...
@@ -48,7 +48,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 RUN = REPO / "capstone/ports/common/application/run.py"
-SDK_HEAP = {"spatial": "level0", "sublet": "sublet"}
+SDK_HEAP = {"spatial": "level0", "sublet": "sublet", "sublet-chunks": "sublet",
+            "capstone-subobject": "level0", "capstone-carve-bounds": "level0"}
+REVOKING = ("sublet", "sublet-chunks")
 
 # The tool's own controls, compiled with the corpus's SDK into the same boot.
 CONTROL_C = r'''
@@ -73,6 +75,15 @@ int main(int argc, char **argv) {
     if (!p) return 75;
     ctl_write_probe(p + 24, 0x5a);
     printf("CONTROL oob RETURNED\n");
+    return 0;
+  }
+  if (!strcmp(which, "subobj")) {       /* one past an 8-byte FIELD, into its sibling field */
+    struct pair { unsigned char a[8]; unsigned char b[8]; } *s = malloc(sizeof *s);
+    if (!s) return 75;
+    memset(s, 0, sizeof *s);
+    volatile unsigned char *field = s->a; /* the field, materialised as a pointer */
+    ctl_write_probe(field + 8, 0x5a);     /* lands on s->b[0]: inside the allocation */
+    printf("CONTROL subobj RETURNED b0=0x%02x\n", s->b[0]);
     return 0;
   }
   if (!strcmp(which, "uaf")) {          /* free, same-size allocation, stale read */
@@ -107,18 +118,21 @@ def corpus_kind(corpus):
         return "spatial"
     if name == "plain-temporal-repros":
         return "temporal"
-    if name in ("subobject-repros", "plane-repros"):
+    if name in ("subobject-repros", "plane-repros", "carved-repros"):
         return "interior"     # the crossing stays inside ONE allocation, by each case's own CHECKs
-    sys.exit(f"CONTROL-FAILED {corpus}: this tool runs plain-heap, plain-temporal, subobject and plane corpora only")
+    sys.exit(f"CONTROL-FAILED {corpus}: this tool runs plain-heap, plain-temporal, subobject, plane and "
+             f"carved corpora only")
 
 
 def predicted(kind, arm):
     """The buggy run's predicted outcome, fixed before any run (see the module docstring)."""
+    if arm == "capstone-carve-bounds":
+        return "CAUGHT"                     # each carved region is narrowed to its own extent
     if kind == "spatial":
         return "CAUGHT"                     # both arms: the crossing leaves an exact bound
     if kind == "interior":
         return "DEFECT-REPRODUCED"          # both arms: an allocation-granular bound is in bounds for it
-    return "CAUGHT" if arm == "sublet" else "DEFECT-REPRODUCED"
+    return "CAUGHT" if arm in REVOKING else "DEFECT-REPRODUCED"
 
 
 class Symbols:
@@ -199,12 +213,37 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--cc-arg", action="append", default=[],
                     help="extra compile input for every case (source, archive or flag); repeatable")
+    ap.add_argument("--predictions", type=Path,
+                    help="JSON {case directory name: CAUGHT|DEFECT-REPRODUCED} overriding the per-kind "
+                         "prediction -- for the capstone-subobject arm, where it depends on whether the "
+                         "crossing leaves a FIELD; must be committed before the run")
     ap.add_argument("--llvm-bin", type=Path,
                     help="for llvm-nm/llvm-readelf; default: the SDK's recorded compiler")
     a = ap.parse_args()
 
     corpus = a.corpus.resolve()
     kind = corpus_kind(corpus)
+    subobject = a.arm == "capstone-subobject"
+    # The driver spelling -fcapstone-subobject-bounds is ACCEPTED AND IGNORED through capstone-cc
+    # (measured 2026-10-09: the same shrink count as no flag); only the cc1 form narrows. Require it.
+    SUBOBJ = ["-Xclang", "-fcapstone-subobject-bounds"]
+    has_subobj = any(a.cc_arg[i:i + 2] == SUBOBJ for i in range(len(a.cc_arg)))
+    if subobject != has_subobj:
+        print("CONTROL-FAILED capstone-subobject needs exactly --cc-arg=-Xclang "
+              "--cc-arg=-fcapstone-subobject-bounds, and no other arm may carry it", file=sys.stderr)
+        return 75
+    # capstone-carve-bounds is the carved corpus's source remedy: ffc_carve() narrows each region
+    # to its own extent when FFC_CARVE_BOUNDS is defined. Like the field-bounds flag, the switch
+    # decides the arm, so it is required exactly where the arm is named and refused elsewhere.
+    # The plane corpus has the same remedy for av_frame_get_buffer's carve (FFP_CARVE_BOUNDS).
+    CARVE_FLAG = {"carved-repros": "-DFFC_CARVE_BOUNDS", "plane-repros": "-DFFP_CARVE_BOUNDS"}
+    carve = a.arm == "capstone-carve-bounds"
+    flags = [f for f in CARVE_FLAG.values() if f in a.cc_arg]
+    if carve != bool(flags) or (carve and flags != [CARVE_FLAG.get(corpus.name)]):
+        print("CONTROL-FAILED capstone-carve-bounds needs exactly its corpus's carve switch "
+              f"({CARVE_FLAG}), and no other arm may carry one", file=sys.stderr)
+        return 75
+    overrides = json.loads(a.predictions.read_text()) if a.predictions else {}
     cache = (a.sdk / "CMakeCache.txt").read_text()
     heap = re.search(r"^CAPSTONE_APPLICATION_HEAP:STRING=(\S+)", cache, re.M)
     if not heap or heap.group(1) != SDK_HEAP[a.arm]:
@@ -250,7 +289,8 @@ def main():
     ctl_src = a.out / "control.c"
     ctl_src.write_text(CONTROL_C)
     ctl_img = bindir / "control.dom"
-    b = subprocess.run([str(cc), "-O0", str(ctl_src), "-o", str(ctl_img)], capture_output=True, text=True)
+    ctl_flags = SUBOBJ if subobject else []  # the arm's own codegen
+    b = subprocess.run([str(cc), "-O0", *ctl_flags, str(ctl_src), "-o", str(ctl_img)], capture_output=True, text=True)
     if b.returncode:
         print(f"CONTROL-FAILED control build: {b.stderr[:300]}", file=sys.stderr)
         return 75
@@ -259,9 +299,12 @@ def main():
     ctl_syms = Symbols(llvm_bin, ctl_img)
     ctl_probe = re.compile(r"^ctl_(read|write)_probe$")
     want = {"clean": "RETURNED", "oob": "CAUGHT",
-            "uaf": "CAUGHT" if a.arm == "sublet" else "RETURNED"}
+            "uaf": "CAUGHT" if a.arm in REVOKING else "RETURNED",
+            # Field bounds are what the capstone-subobject arm adds; every other arm must NOT see a
+            # crossing that stays inside the allocation, or it is not the arm it says it is.
+            "subobj": "CAUGHT" if subobject else "RETURNED"}
     controls = {}
-    for which in ("clean", "oob", "uaf"):
+    for which in ("clean", "oob", "uaf", "subobj"):
         text, result = run_image(a.state, ctl_img, [which], rundir / f"control-{which}")
         outcome, detail = classify(text, result, ctl_syms, ctl_probe)
         if outcome == "OTHER" and f"CONTROL {which} RETURNED" in text and result.get("value") == 0:
@@ -277,7 +320,7 @@ def main():
             return 75
 
     # ---- the cases --------------------------------------------------------------------
-    probe_re = re.compile(r"_(read|write)_probe(_u8)?$")
+    probe_re = re.compile(r"_(read|write)_probe(_u8|_u32)?$")
     expect = predicted(kind, a.arm)
     for d in cases:
         if d.name not in images:
@@ -295,8 +338,10 @@ def main():
             detail = f"fixed run read {fout}: {fdetail}; buggy run ({bout}: {bdetail}) is not scored"
         else:
             outcome, detail = bout, bdetail
-        row = dict(case=d.name, outcome=outcome, detail=detail, predicted=expect,
-                   as_predicted=outcome == expect and (outcome != "CAUGHT" or "(the labelled probe)" in detail),
+        want_row = overrides.get(d.name, expect)
+        row = dict(case=d.name, outcome=outcome, detail=detail, predicted=want_row,
+                   as_predicted=outcome == want_row and (outcome != "CAUGHT" or "(the labelled probe)" in detail
+                                                         or subobject),
                    image_sha256=sha256(img), fixed=f"{fout} exit={fres.get('value')}",
                    buggy_exit=f"{bres.get('kind')}={bres.get('value')}")
         rows.append(row)
@@ -313,6 +358,7 @@ def main():
         corpus=str(corpus.relative_to(REPO)), kind=kind, arm=a.arm, started=started,
         predicted_buggy_outcome=expect,
         sdk=dict(path=str(a.sdk), heap=heap.group(1),
+                 heap_log=(re.search(r"^CAPSTONE_APPLICATION_HEAP_LOG:STRING=(\S+)", cache, re.M) or [None, None])[1],
                  runtime_sha256=sha256(a.sdk / "libapplication-runtime.a"),
                  sdk_json_sha256=sha256(a.sdk / "sdk.json") if (a.sdk / "sdk.json").exists() else None),
         compiler=subprocess.run([str(cc), "--version"], capture_output=True, text=True).stdout.splitlines()[0],

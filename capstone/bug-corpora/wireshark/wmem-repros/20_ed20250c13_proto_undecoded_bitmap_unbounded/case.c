@@ -59,7 +59,9 @@ WM_CASE(20) {
   CHECK(!(i < bitmap_bytes), 6);
 
   /* `decoded[byte] |= 1 << bit` -- a read-modify-write on the labelled probe. */
-  wm_held = (unsigned char *)decoded + byte;
+  /* THE FIX, ed20250c13: the bitmap's own length bounds the loop, so its last write is the last
+   * bitmap byte. */
+  wm_held = (unsigned char *)decoded + (wm_fixed ? bitmap_bytes - 1 : byte);
   wm_mark();
-  wm_write_probe(wm_held);
+  WM_WRITE_AT(wm_held, decoded, bitmap_bytes);
 }

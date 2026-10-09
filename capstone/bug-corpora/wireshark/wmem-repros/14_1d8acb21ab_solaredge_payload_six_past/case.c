@@ -38,7 +38,10 @@ WM_CASE(14) {
   CHECK(PAYLOAD + 5 >= PAYLOAD, 5);                      /* past the chunk */
   CHECK((uintptr_t)inter + PAYLOAD + 5
         < (uintptr_t)successor + 64, 6);                 /* inside the block */
-  wm_held = inter + (PAYLOAD - 1) + 6;
+  /* THE FIX, 1d8acb21ab: payload_length -= 6 before the loop, so its last read is the payload's
+   * own last byte. */
+  const unsigned length = wm_fixed ? PAYLOAD - 6 : PAYLOAD;
+  wm_held = inter + (length - 1) + 6;
   wm_mark();
-  (void)wm_probe(wm_held);
+  WM_READ_AT(wm_held, inter, PAYLOAD);
 }

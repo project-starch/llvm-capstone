@@ -32,7 +32,9 @@
   "evidence": [
     "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-08-native-ten-cases",
     "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-cheribsd",
-    "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-capstone"
+    "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-capstone",
+    "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-poisoncap-mode0",
+    "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-poisoncap-mode1"
   ],
   "advisories": [],
   "shape_table": true

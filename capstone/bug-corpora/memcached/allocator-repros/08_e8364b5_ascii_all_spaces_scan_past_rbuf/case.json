@@ -32,15 +32,19 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, for the spatial arm's reason. PoisonCap is unavailable on this host -- checked, not assumed.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at mc_case_body+0x1e8 -- inside the defective scan, one statement before the labelled read probe, as on Capstone. The corpus runner scores this row FAIL because its oracles were written for the temporal cases; the fault line is the reading. The prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: faults, for the spatial arm's reason. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "verdict": "CAUGHT"
     },
     "poisoncap-protected": {
       "mode": 1,
-      "signal": null,
-      "si_code": null,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, for the mode-0 reason.",
-      "status": "predicted"
+      "signal": 34,
+      "si_code": 1,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at mc_case_body+0x1e8 -- inside the defective scan, one statement before the labelled read probe, as on Capstone. The corpus runner scores this row FAIL because its oracles were written for the temporal cases; the fault line is the reading. The prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: faults, for the mode-0 reason.",
+      "verdict": "CAUGHT"
     },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
@@ -55,9 +59,11 @@
       "status": "measured"
     },
     "native-detect": {
-      "oracle": "NOT WRITTEN, and declined rather than pending for the reason this corpus records for its other rows: the port hands cache.c one arena, so ASan sees a single allocation and its silence would measure the fixture rather than memcached. A positive control would have to create a crossing of the ARENA, which is not this defect.",
-      "status": "not written"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -O1 -g; port library with the same sanitizer). Positive controls in the same run: `asan-control past 67108864` -> heap-buffer-overflow; `asan-control uaf 67108864` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (3ef5169ae90b); the arm was previously 'not written'.",
+      "status": "measured",
+      "prediction": "NOT WRITTEN, and declined rather than pending for the reason this corpus records for its other rows: the port hands cache.c one arena, so ASan sees a single allocation and its silence would measure the fixture rather than memcached. A positive control would have to create a crossing of the ARENA, which is not this defect.",
+      "verdict": "NOT CAUGHT"
     }
   },
-  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0 over all nine cases, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. The Capstone, PoisonCap and CheriBSD arms are declared predictions -- this case has not had a domain or guest run. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1, REFUTING this case's prediction -- the port malloc's each cache object separately, so an object crossing leaves a real bound while the slab chunk rows stay inside their page's malloc. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-case8/): spatial CAUGHT, sublet CAUGHT, both in the scan before the probe."
+  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0 over all nine cases, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. The Capstone, PoisonCap and CheriBSD arms are declared predictions -- this case has not had a domain or guest run. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1, REFUTING this case's prediction -- the port malloc's each cache object separately, so an object crossing leaves a real bound while the slab chunk rows stay inside their page's malloc. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-case8/): spatial CAUGHT, sublet CAUGHT, both in the scan before the probe. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): CAUGHT in both modes."
 }

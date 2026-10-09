@@ -116,6 +116,14 @@ ARM_ORACLES = {
     "sysalloc-sublet": {"oracle"},
     "sublet-gc": {"oracle"},
     "sublet-svheads": {"oracle"},
+    # Bounds narrower than the allocation, the remedies for a crossing that stays inside one:
+    # struct-field bounds from each compiler, and the carved corpus's narrowing at the carve.
+    "capstone-subobject": {"oracle"},
+    "cheribsd-subobject": {"oracle"},
+    "capstone-carve-bounds": {"oracle"},
+    "cheribsd-carve-bounds": {"oracle"},
+    # tshark's chunk allocator over the Sublet heap (the wireshark plain-heap corpus).
+    "sublet-chunks": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),

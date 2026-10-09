@@ -65,7 +65,9 @@
         "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
-        "native-fix-differential"
+        "native-fix-differential",
+        "capstone-subobject",
+        "cheribsd-subobject"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -83,7 +85,11 @@
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/20261006-native-plain-heap",
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/20261006-cheribsd",
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-08-cheribsd",
-        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-capstone"
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-capstone",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-capstone-subobject",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-cheribsd-subobject",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode0",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode1"
       ],
       "advisories": [],
       "shape_table": true,
@@ -124,7 +130,9 @@
       "evidence": [
         "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-08-native-thirteen-cases",
         "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-cheribsd",
-        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-capstone"
+        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-capstone",
+        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-poisoncap-mode0",
+        "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-poisoncap-mode1"
       ],
       "advisories": [],
       "shape_table": true,
@@ -148,7 +156,11 @@
         "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
-        "native-fix-differential"
+        "native-fix-differential",
+        "capstone-subobject",
+        "capstone-carve-bounds",
+        "cheribsd-subobject",
+        "cheribsd-carve-bounds"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -164,7 +176,13 @@
       "evidence": [
         "capstone/bug-corpora/ffmpeg/plane-repros/results/20261006-native-plane",
         "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd",
-        "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone"
+        "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone",
+        "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone-subobject",
+        "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone-carve-bounds",
+        "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-cheribsd-subobject",
+        "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-cheribsd-carve-bounds",
+        "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-poisoncap-mode0",
+        "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-poisoncap-mode1"
       ],
       "advisories": [],
       "shape_table": true,
@@ -205,7 +223,8 @@
       },
       "runners": [
         "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-native.sh",
-        "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-sublet-port.sh"
+        "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-sublet-port.sh",
+        "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-asan.sh"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "inventory": "capstone/docs/ref/ffmpeg-pool-consumer-defects.md",
@@ -216,7 +235,9 @@
         "capstone/ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47",
         "capstone/ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev",
         "capstone/ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39",
-        "capstone/bug-corpora/ffmpeg/pool-repros/results/20261006-cheribsd"
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/20261006-cheribsd",
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-09-native-asan",
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-09-poisoncap"
       ],
       "advisories": [],
       "shape_table": true,
@@ -241,7 +262,9 @@
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential",
-        "backing"
+        "backing",
+        "capstone-subobject",
+        "cheribsd-subobject"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -258,7 +281,11 @@
         "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261005-native-subobject",
         "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-native-subobject-7",
         "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd",
-        "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-capstone"
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-capstone",
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-capstone-subobject",
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-cheribsd-subobject",
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-poisoncap-mode0",
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-poisoncap-mode1"
       ],
       "advisories": [],
       "shape_table": true,
@@ -380,7 +407,8 @@
         "capstone/bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py",
         "capstone/bug-corpora/memcached/allocator-repros/runners/cheribsd/run-defects.py",
         "capstone/bug-corpora/memcached/allocator-repros/runners/poisoncap/run-defects.py",
-        "capstone/bug-corpora/memcached/allocator-repros/runners/run-native.sh"
+        "capstone/bug-corpora/memcached/allocator-repros/runners/run-native.sh",
+        "capstone/bug-corpora/memcached/allocator-repros/runners/run-asan.sh"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "advisories": [
@@ -392,7 +420,11 @@
         "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects",
         "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd",
         "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8",
-        "capstone/bug-corpora/memcached/allocator-repros/results/20261009-qemu-capstone-case8"
+        "capstone/bug-corpora/memcached/allocator-repros/results/20261009-qemu-capstone-case8",
+        "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-native-asan",
+        "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-field-bounds",
+        "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-carve-bounds",
+        "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-poisoncap"
       ],
       "inventory": "capstone/docs/ref/memcached-allocator-defect-triage.md",
       "where": "capstone/bug-corpora/memcached/allocator-repros"
@@ -415,7 +447,9 @@
         "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
-        "native-fix-differential"
+        "native-fix-differential",
+        "capstone-subobject",
+        "cheribsd-subobject"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -433,7 +467,11 @@
         "capstone/bug-corpora/memcached/plain-heap-repros/results/20261007-cheribsd",
         "capstone/bug-corpora/memcached/plain-heap-repros/results/20261007-cheribsd",
         "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-08-cheribsd",
-        "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-capstone"
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-capstone",
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-capstone-subobject",
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-cheribsd-subobject",
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-poisoncap-mode0",
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-poisoncap-mode1"
       ],
       "advisories": [],
       "shape_table": true,
@@ -475,7 +513,9 @@
       "evidence": [
         "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-08-native-three-cases",
         "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-09-cheribsd",
-        "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-09-capstone"
+        "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-09-capstone",
+        "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-09-poisoncap-mode0",
+        "capstone/bug-corpora/memcached/plain-temporal-repros/results/2026-10-09-poisoncap-mode1"
       ],
       "advisories": [],
       "shape_table": true,
@@ -811,7 +851,9 @@
         "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
-        "native-fix-differential"
+        "native-fix-differential",
+        "capstone-subobject",
+        "cheribsd-subobject"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -830,7 +872,12 @@
         "capstone/bug-corpora/wireshark/plain-heap-repros/results/20261006-native-plain-heap",
         "capstone/bug-corpora/wireshark/plain-heap-repros/results/20261007-cheribsd",
         "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-08-cheribsd",
-        "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-capstone"
+        "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-capstone",
+        "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-capstone-sublet-chunks",
+        "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-capstone-subobject",
+        "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-cheribsd-subobject",
+        "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-poisoncap-mode0",
+        "capstone/bug-corpora/wireshark/plain-heap-repros/results/2026-10-09-poisoncap-mode1"
       ],
       "advisories": [],
       "shape_table": true,
@@ -877,7 +924,9 @@
       "evidence": [
         "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-08-native-ten-cases",
         "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-cheribsd",
-        "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-capstone"
+        "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-capstone",
+        "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-poisoncap-mode0",
+        "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-09-poisoncap-mode1"
       ],
       "advisories": [],
       "shape_table": true,
@@ -915,7 +964,9 @@
         "false": 19
       },
       "runners": [
-        "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py"
+        "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py",
+        "capstone/bug-corpora/wireshark/wmem-repros/runners/run-asan.sh",
+        "capstone/bug-corpora/wireshark/wmem-repros/runners/run-native.sh"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "evidence": [
@@ -928,7 +979,11 @@
         "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-ON",
         "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-OFF",
         "capstone/bug-corpora/wireshark/wmem-repros/results/20261007-cheribsd-revocation-control",
-        "capstone/bug-corpora/wireshark/wmem-repros/results/20261009-qemu-capstone-18-21"
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20261009-qemu-capstone-18-21",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-asan",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-differential",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-domain-regression",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-poisoncap"
       ],
       "advisories": [],
       "shape_table": true,

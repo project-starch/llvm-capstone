@@ -146,11 +146,16 @@ passes silently.
 | `sublet` | Capstone domain | fault at the labelled read probe, with `cause` |
 | `poisoncap-spatial` | CheriBSD purecap, mode 0 | the sequence completes |
 | `poisoncap-protected` | CheriBSD purecap, mode 1 | `SIGPROT` at the labelled read probe, with `signal` and `si_code` |
-| `native-detect` | host | declared, not written: it needs Valgrind, and ASan's silence here is tautological because the memory never reached `malloc` |
+| `native-detect` | host | ASan, built `-O0`, run fixed then buggy by `tools/run-native-asan.py`. A silence is a reading only when the buggy arm printed `VERDICT DEFECT-REPRODUCED` and the same run's positive controls -- a read past, and a read after free of, a heap block the size of the corpus's arena or block -- were reported. Until 2026-10-09 this arm was 'declared, not written' as tautological; it is measured now, because an argument is not a reading |
 | `sysalloc-none` | Capstone domain | the whole-program run completes; the first-fit heap is built with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, so only tag integrity and the arena's bounds are left |
 | `sysalloc-bounds` | Capstone domain | the same, with the heap as applications get it since PR #170: each allocation bounded, no revocation. **The baseline a catch is measured against** |
 | `sysalloc-sublet` | Capstone domain | the Sublet heap: per-object bounds and a revoke on every free |
 | `sublet-gc` | Capstone domain | `sysalloc-sublet` plus the program's own Sublet port, so its nested allocator's objects are issued and revoked too |
+| `sublet-chunks` | Capstone domain | tshark's chunk allocator linked over the Sublet heap (`HEAP_LOG 24`, 40 MiB arena): the configuration the tshark application runs in |
+| `capstone-subobject` | Capstone domain | the `spatial` arm with `-Xclang -fcapstone-subobject-bounds`: an ARRAY-typed field that is not the last member is narrowed to the field. The tool's `subobj` control must be CAUGHT in the same boot |
+| `cheribsd-subobject` | CheriBSD purecap | stock CheriBSD with `-Xclang -cheri-bounds=subobject-safe`: a pointer taken to a member is narrowed to it (size-0/1 trailing arrays excepted). The shared field-crossing control must die by `SIGPROT` in the same boot |
+| `capstone-carve-bounds` | Capstone domain | the carved corpus only: `-DFFC_CARVE_BOUNDS` makes `ffc_carve()` narrow each carved region to its own extent -- the remedy at the carving code. Fixed arms run under the same narrowing |
+| `cheribsd-carve-bounds` | CheriBSD purecap | the same with `cheri_bounds_set`; the run prints each carve's granted length, and a carve control must fault in the same boot |
 
 The four above are the glossary's system-allocator arms
 (`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the

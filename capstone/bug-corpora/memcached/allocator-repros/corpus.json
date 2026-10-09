@@ -28,7 +28,8 @@
     "capstone/bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py",
     "capstone/bug-corpora/memcached/allocator-repros/runners/cheribsd/run-defects.py",
     "capstone/bug-corpora/memcached/allocator-repros/runners/poisoncap/run-defects.py",
-    "capstone/bug-corpora/memcached/allocator-repros/runners/run-native.sh"
+    "capstone/bug-corpora/memcached/allocator-repros/runners/run-native.sh",
+    "capstone/bug-corpora/memcached/allocator-repros/runners/run-asan.sh"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "advisories": [
@@ -40,7 +41,11 @@
     "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects",
     "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd",
     "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8",
-    "capstone/bug-corpora/memcached/allocator-repros/results/20261009-qemu-capstone-case8"
+    "capstone/bug-corpora/memcached/allocator-repros/results/20261009-qemu-capstone-case8",
+    "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-native-asan",
+    "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-field-bounds",
+    "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-carve-bounds",
+    "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-poisoncap"
   ],
   "inventory": "capstone/docs/ref/memcached-allocator-defect-triage.md"
 }

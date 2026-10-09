@@ -1,0 +1,4 @@
+{
+  "_about": "capstone-subobject arm, pre-registered: the crossing is pointer arithmetic inside one av_malloc'd frame buffer (planes carved by offsets), not a struct field, so field bounds do not apply.",
+  "00_b7946098b1_alphablend_row_past_plane": "DEFECT-REPRODUCED"
+}

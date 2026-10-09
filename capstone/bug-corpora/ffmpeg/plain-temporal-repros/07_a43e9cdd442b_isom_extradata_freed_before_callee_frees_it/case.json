@@ -15,10 +15,22 @@
       "verdict": "CAUGHT"
     },
     "poisoncap-spatial": {
-      "status": "not written"
+      "status": "measured",
+      "mode": 0,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED av_free left st->codecpar->extradata pointing at the released buffer, so ff_get_extradata rele). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY; revocation-control: exit 0). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED 2026-10-09, before the first PoisonCap run: COMPLETES -- mode 0 is the PoisonCap image with runtime revocation off, so free neither poisons nor quarantines and nothing faults on the stale access. Whether the block was reissued (aliased) is recorded, not predicted: stock CheriBSD's quarantine read NOT-REISSUED, and without it the allocator may reuse at once.",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
     },
     "poisoncap-protected": {
-      "status": "not written"
+      "status": "measured",
+      "mode": 1,
+      "signal": 34,
+      "si_code": 3,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **CAUGHT**: SIGPROT, si_code 3 (raw), addr=0x102262 pc=0x102262; fault pc 0x102262 INSIDE fft_read_probe [0x102252, 0x10226e). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; revocation-control: exit 162; SUPERVISE fault signal=34 code=2 addr=0x101dd6 pc=0x101dd6). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED 2026-10-09, before the first PoisonCap run: SIGPROT at the labelled probe -- mode 1 poisons the block on free (mrs POISON_ON_FREE), so the stale access traps before any revocation sweep; where stock CheriBSD's quarantine let the same access complete (NOT-REISSUED), poison is the difference. si_code is recorded from the run.",
+      "verdict": "CAUGHT",
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
     },
     "cheribsd-revocation": {
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd/: **NO FAULT, AND NO REUSE.** The sequence completes with aliased=0: the stale pointer was followed, but the chunk it names was never handed to another allocation, because CheriBSD's libc holds a released chunk in QUARANTINE until the revoker has swept every capability to it. So the access reads only the dead object -- the exploitable half of a use-after-free, reading or writing SOMEONE ELSE'S object, did not happen. It is not a fault, because nothing forced a sweep between the free and the access: the stale capability still carried its tag, as the case was built to leave it. revocation control in the same boot: revocation=1 tag_after_sweep=0 reissued=1, then SIGPROT si_code 2 at the control's own probe, so the revoker demonstrably acts in this guest and a completion here is the mechanism's design, not an inactive mechanism. CONTRAST, measured in the sibling nested corpora: there the inner allocator reissues the storage at once and the stale pointer DOES read another object, because nothing reaches free(). Predicted before the run; the prediction held.",
@@ -43,7 +55,7 @@
   "shape": "a free that leaves the owning field set, followed by a callee that frees it again",
   "allocator_layer": "the platform allocator itself: one direct av_malloc-family allocation, with no pool or refstruct layer. FFmpeg's av_malloc is malloc plus alignment.",
   "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is ff_get_extradata()'s own av_freep of the same field, a second free.",
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. CheriBSD measured 2026-10-09 (results/2026-10-09-cheribsd/): NOT-REISSUED. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet CAUGHT.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. CheriBSD measured 2026-10-09 (results/2026-10-09-cheribsd/): NOT-REISSUED. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): CAUGHT.",
   "upstream_fix": "a43e9cdd442b",
   "live_in_pin": false,
   "live_proof": "absent at the pin: n9.0.1:libavformat/isom.c has no `av_free(st->codecpar->extradata)` before the ff_get_extradata call -- the line was deleted by the fix, so 0 occurrences IS the fix being present. It is at a43e9cdd442b^.",

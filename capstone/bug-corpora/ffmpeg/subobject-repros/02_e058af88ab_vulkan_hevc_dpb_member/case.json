@@ -24,15 +24,23 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: completes. Mode 0 bounds an allocation, and the crossing is inside one.",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the DPB walk wrote ref_src[16], which is h265_refs[0], inside one refstruct allocation). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions).",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: completes. Mode 0 bounds an allocation, and the crossing is inside one.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
     },
     "poisoncap-protected": {
       "mode": 1,
-      "signal": 34,
-      "si_code": 2,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: completes. Mode 1 adds temporal protection and no lifetime ends here.",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending."
+      "signal": null,
+      "si_code": null,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the DPB walk wrote ref_src[16], which is h265_refs[0], inside one refstruct allocation). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions).",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: completes. Mode 1 adds temporal protection and no lifetime ends here.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
     },
     "cheribsd-revocation": {
       "oracle": "MEASURED 2026-10-06 on this host, revocation ON: the sequence COMPLETES on both arms and each prints its own VERDICT, so the completion is a reading and not a silent pass. NOT CAUGHT. 22 of 22 arms passed, runner exit 0, with the platform controls firing in the SAME boot: cheribsd-abi reported `CHERI_ABI pointer_bytes=16 runtime_revocation=1` and cheribsd-bounds reported CHERI_BOUNDARY_READY. THE REASON IS WEAKER THAN 'CHERI BOUNDS THE ALLOCATION AND THE CROSSING STAYS INSIDE', and that is stated rather than glossed: this corpus's driver hands the port's av_malloc ONE arena (ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26 bumps a cursor and returns a raw interior pointer, rounding every request to 64 bytes), so there is no per-allocation bound on the struct at all on this harness. The completion shows that nothing bounded anything at this granularity, not that a bound was in force and held. The sub-object claim does not rest on the arm -- the case asserts its own offsets. This is the over-claim that was corrected on the wmem arms, written down before it could be made again. BUILD: clang -O0, purecap, linked against the port's libffmpeg-pool.a from `cmake --preset cheribsd`. -O0 IS LOAD-BEARING: a first suite built -O1 returned VERDICT INCONCLUSIVE for case 0 while the other nineteen arms passed and both controls fired, because case 0's index is a compile-time constant one past its member and clang folded the store away. Rebuilt at -O0 with nothing else changed, it reads DEFECT-REPRODUCED. Reporting the -O1 suite would have recorded a compiler artifact as a CheriBSD reading. Evidence: results/20261006-cheribsd/.",
@@ -51,9 +59,21 @@
     },
     "backing": {
       "oracle": "not applicable, and recorded rather than omitted: there is no backing allocation distinct from the object. The object IS one av_malloc (av_refstruct_allocz -> refstruct.c:109, av_malloc(size + REFCOUNT_OFFSET)), so the 'a mechanism at the wrong point' distinction this arm draws for the pool corpus has nothing to separate here."
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime afa624ec6387; compiler 7d01722aab88",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-subobject/: **CAUGHT** at ff2_case_run+0x36c -- cause 7, a bounds violation on a store; pc=0xce70e8cc, address=0xcf75e008 -- in the case's own statement, the defective member access itself, before any probe. Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -Xclang -fcapstone-subobject-bounds: C1 v1 narrows a struct's non-last ARRAY field to the field; scalars, the last member and flexible arrays are not narrowed. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xce70e5b8 address=0xce751958); uaf RETURNED; subobj CAUGHT (cause=7 pc=0xce70e5b8 address=0xce751948). Image 752de7aefac5bd19. Predicted before the run (49498f856e87): CAUGHT; the prediction held."
+    },
+    "cheribsd-subobject": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, every case built with -Xclang -cheri-bounds=subobject-safe (booted on the second host)",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **CAUGHT**: SIGPROT, exit 162 (the runner does not supervise this corpus, so si_code is not recorded). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162). Predicted before the run (886abf4cc336)."
     }
   },
-  "status": "MEASURED 2026-10-05, both paths. Capstone: probe case 42 (vulkan-hevc-dpb-member-write) of ports/ffmpeg/buffer-pool/security-tests, run under QEMU on BOTH modes 0 and 2 -- PASS/PASS, expected=completed, runner exit 0. So the prediction that NOTHING WE HAVE CATCHES THIS is now measured under Capstone and not merely declared. Native: runners/run-native.sh exit 0, fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. ASan measured blind two-sided with a firing positive control (results/20261005-native-subobject/). PoisonCap and CheriBSD remain unmeasurable here. N = 1 per cell. CheriBSD MEASURED 2026-10-06, revocation on: completes, NOT caught, 22/22 arms with both platform controls firing (results/20261006-cheribsd/); built -O0, which is load-bearing. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT.",
+  "status": "MEASURED 2026-10-05, both paths. Capstone: probe case 42 (vulkan-hevc-dpb-member-write) of ports/ffmpeg/buffer-pool/security-tests, run under QEMU on BOTH modes 0 and 2 -- PASS/PASS, expected=completed, runner exit 0. So the prediction that NOTHING WE HAVE CATCHES THIS is now measured under Capstone and not merely declared. Native: runners/run-native.sh exit 0, fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. ASan measured blind two-sided with a firing positive control (results/20261005-native-subobject/). PoisonCap and CheriBSD remain unmeasurable here. N = 1 per cell. CheriBSD MEASURED 2026-10-06, revocation on: completes, NOT caught, 22/22 arms with both platform controls firing (results/20261006-cheribsd/); built -O0, which is load-bearing. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): NOT CAUGHT.",
   "nested": false,
   "nested_why": "nothing sub-allocated the crossed region: the object is one allocation the platform or FFmpeg's own av_malloc handed out directly, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED."
 }

@@ -21,7 +21,41 @@ def archive(spec, path):
             while data := src.read(1 << 20):
                 dst.write(data)
     if hashlib.sha256(path.read_bytes()).hexdigest() != spec["sha256"]:
-        raise ValueError(f"archive hash mismatch: {path}")
+        # GitHub regenerates API tarballs, so the same commit can come back as different
+        # bytes (cheri-compressed-cap did on 2026-10-09: same 76 files, new archive hash).
+        # The archive hash pins an ENCODING; what has to be pinned is the content. Accept a
+        # mismatching archive only if every file in it equals the pinned commit's file.
+        mismatch = content_mismatch(spec, path)
+        if mismatch:
+            raise ValueError(f"archive hash mismatch: {path}; content differs from "
+                             f"{spec['commit']}: {mismatch}")
+        print(f"archive bytes differ from the pinned hash but its content equals "
+              f"{spec['repository']}@{spec['commit']}: {path}")
+
+
+def content_mismatch(spec, path):
+    """None when the archive's regular files equal the pinned commit's, else the reason."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp) / "repo"
+        for argv in (["git", "init", "-q", str(repo)],
+                     ["git", "-C", str(repo), "fetch", "-q", "--depth", "1",
+                      spec["repository"], spec["commit"]],
+                     ["git", "-C", str(repo), "checkout", "-q", spec["commit"]]):
+            subprocess.run(argv, check=True)
+        listed = subprocess.check_output(["git", "-C", str(repo), "ls-files"], text=True).split()
+        tracked = {f: (repo / f).read_bytes() for f in listed
+                   if (repo / f).is_file() and not (repo / f).is_symlink()}
+        packed = {}
+        with tarfile.open(path) as tar:
+            for member in tar:
+                parts = PurePosixPath(member.name).parts[1:]
+                if parts and member.isfile():
+                    packed["/".join(parts)] = tar.extractfile(member).read()
+        if set(packed) != set(tracked):
+            return f"file sets differ ({len(packed)} vs {len(tracked)})"
+        changed = sorted(f for f in packed if packed[f] != tracked[f])
+        return f"{len(changed)} files differ, e.g. {changed[:3]}" if changed else None
 
 
 def files(path):

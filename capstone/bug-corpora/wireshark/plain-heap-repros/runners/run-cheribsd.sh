@@ -34,6 +34,12 @@ mkdir -p "$OUT/bin"
 
 CFLAGS="--target=riscv64-unknown-freebsd13 -march=rv64imafdcxcheri -mabi=l64pc128d"
 CFLAGS="$CFLAGS -mno-relax -B$SDK/bin --sysroot=$SYSROOT -std=gnu11 -O0 -fuse-ld=lld"
+# Optional, for another arm on the same cases: CHERI_EXTRA_CFLAGS (e.g. -Xclang
+# -cheri-bounds=subobject-safe for cheribsd-subobject) and CHERI_REVOCATION=off (PoisonCap mode 0).
+# Both default to this runner's own arm, so an unset environment builds and boots exactly as before.
+CFLAGS="$CFLAGS ${CHERI_EXTRA_CFLAGS:-}"
+REVOCATION=${CHERI_REVOCATION:-on}
+case "$REVOCATION" in on|off) ;; *) echo "CONTROL-FAILED CHERI_REVOCATION=$REVOCATION" >&2; exit 75;; esac
 
 for dir in "$ROOT"/[0-9][0-9]_*/; do
   n=$(basename "$dir" | cut -c1-2)
@@ -109,6 +115,9 @@ for n, (request, what, expect) in sorted(CASES.items()):
     print(f"    case {n:>2}: {'CATCH   ' if expect=='FAULT' else 'COMPLETE'} -- {what}")
 PY
 [ -s "$OUT/cases.json" ] || { echo "CONTROL-FAILED cases.json" >&2; exit 75; }
+. "$CAP/bug-corpora/tools/cheribsd-subobj-control.sh"
+subobj_control_add "$OUT" "$SDK" ${CFLAGS/${CHERI_EXTRA_CFLAGS:-@@none@@}/} || exit 75
+
 
 # A marker whose mtime bounds THIS invocation. The control check below requires each
 # control's record to be newer than it, because $OUT/run survives a previous run and a
@@ -119,7 +128,7 @@ STAMP="$OUT/.run-started"
 python3 "$CAP/ports/common/host/cheribsd/run.py" "$OUT/run" \
   --sdk "$SDK" --rootfs "$SYSROOT" --image "$IMAGE" --port "$PORT" \
   --abi-probe "$OUT/bin/cheribsd-abi-probe" \
-  --runtime-revocation on --cases "$OUT/cases.json" --continue-on-failure
+  --runtime-revocation "$REVOCATION" --cases "$OUT/cases.json" --continue-on-failure
 rc=$?
 
 # The suite's status cannot distinguish "an oracle did not hold" -- which is DATA
@@ -133,10 +142,12 @@ for c in cheribsd-abi cheribsd-bounds; do
     echo "               so this suite is not a reading. Use a fresh output directory." >&2
     exit 75; }
 done
-grep -q "runtime_revocation=1" "$OUT/run/cheribsd-abi/stdout.txt" \
-  || { echo "CONTROL-FAILED cheribsd-abi did not report runtime_revocation=1" >&2; exit 75; }
+WANT_REV=1; [ "$REVOCATION" = off ] && WANT_REV=0
+grep -q "runtime_revocation=$WANT_REV" "$OUT/run/cheribsd-abi/stdout.txt" \
+  || { echo "CONTROL-FAILED cheribsd-abi did not report runtime_revocation=$WANT_REV" >&2; exit 75; }
 grep -q "CHERI_BOUNDARY_READY" "$OUT/run/cheribsd-bounds/stdout.txt" \
   || { echo "CONTROL-FAILED cheribsd-bounds did not report ready" >&2; exit 75; }
+subobj_control_check "$OUT" || exit 75
 
 echo "run-cheribsd: controls fired; suite exit $rc (non-zero = an oracle did not hold, which is data)"
 exit "$rc"

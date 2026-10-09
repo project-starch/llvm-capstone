@@ -1,0 +1,13 @@
+{
+  "_about": "cheribsd-subobject arm (CHERI clang -Xclang -cheri-bounds=subobject-safe), pre-registered. CHERI treats only size-0/1 trailing arrays as flexible, so 04 and 06 -- trailing arrays Capstone's C1 v1 refuses -- ARE narrowed here. In subobject-safe mode &array[n] gets the WHOLE field's bounds, which still stops a crossing into the next field. Medium confidence on 00-03: they subscript the member directly (s->f[i] = v), so the narrowing must come from array-to-pointer decay; that is the open question this arm answers. 09 is pointer arithmetic inside one int array: no field.",
+  "00_8864fd0aec_cbs_h265_pic_timing_member": "CAUGHT",
+  "01_68845e26f7_vulkan_hevc_refpicset_member": "CAUGHT",
+  "02_e058af88ab_vulkan_hevc_dpb_member": "CAUGHT",
+  "03_89de2f0de1_aac_arith_last_member": "CAUGHT",
+  "04_1a00ea51cb_rtsp_control_url_underflow": "CAUGHT",
+  "05_d29ff88422_vulkan_av1_tile_sizes": "CAUGHT",
+  "06_a809a784ec_vvc_entry_point_start_ctu": "CAUGHT",
+  "07_275e217b10_hlsenc_key_uri_strlcpy_size": "CAUGHT",
+  "08_fb862976df_cbs_h266_col_width_val": "CAUGHT",
+  "09_ac59fc542f_thumbnail_carved_histogram_slice": "DEFECT-REPRODUCED"
+}

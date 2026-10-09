@@ -20,15 +20,16 @@ WM_CASE(12) {
   memcpy(root_name, "presentation", 13);
   hfinfo_name = root_name;                          /* proto_register_protocol stores the pointer, :1616 */
   uintptr_t address = (uintptr_t)root_name;
-  wmem_free(wm_epan_scope(), root_name);            /* :1631, the line the fix removes */
+  if (!wm_fixed) /* THE FIX, 90bb3a5c9e, removes this free: the registry keeps a live name */
+    wmem_free(wm_epan_scope(), root_name);          /* :1631, the line the fix removes */
   /* The recycler hands the same chunk to the next request of that size, so
    * the registry's name now aliases whatever is stored there. Proven before
    * the marker. */
   unsigned char *next = wmem_alloc(wm_epan_scope(), 16);
-  CHECK(next && (uintptr_t)next == address, 2);
+  CHECK(next && (wm_fixed || (uintptr_t)next == address), 2); /* a live name is not recycled */
   memset(next, 0x5a, 16);
   wm_next_packet(); /* packets go by; the registry outlives them all */
   wm_held = (unsigned char *)hfinfo_name;
   wm_mark();
-  (void)wm_probe(wm_held); /* g_strdup(hfinfo->name) in value_set, ftype-protocol.c:54 */
+  WM_READ(wm_held, 0x5a); /* g_strdup(hfinfo->name) in value_set, ftype-protocol.c:54 */
 }
