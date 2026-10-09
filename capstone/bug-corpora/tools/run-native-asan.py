@@ -65,7 +65,14 @@ def main():
     ap.add_argument("--control", action="append", default=[], required=True,
                     help="'<binary> <args>=<expected report type>'; repeatable")
     ap.add_argument("--build-note", default="", help="compiler and flags, recorded in record.json")
+    ap.add_argument("--asan-options", default="",
+                    help="extra ASAN_OPTIONS, ':'-separated, appended and recorded -- e.g. "
+                         "quarantine_size_mb=1024 for an arena larger than ASan's 256 MiB default "
+                         "quarantine, where a freed block is unmapped at once and a stale read "
+                         "SEGVs instead of being reported")
     a = ap.parse_args()
+    if a.asan_options:
+        ENV["ASAN_OPTIONS"] += ":" + a.asan_options
     a.corpus = a.corpus.resolve()
     if a.out.exists():
         print(f"CONTROL-FAILED {a.out} exists: use a fresh directory", file=sys.stderr)
