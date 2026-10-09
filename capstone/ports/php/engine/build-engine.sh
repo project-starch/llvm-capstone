@@ -177,6 +177,11 @@ for t in $TUS; do
   # Diagnostic only -- the corpus result rests on the engine being byte-identical, so this must
   # never be on for a scoring build. It answers which BRANCH this port takes where ASAN reports
   # CRASH-057's free and its use-after-free read.
+  if [ "$t" = "zend_execute_API" ] && [ -n "${PHP_CAP_DIAG_DTOR:-}" ]; then
+    python3 "$HERE/diag/patch-zend-execute-api.py" "$P/Zend/zend_execute_API.c" "$OUT/diag_zend_execute_API.c" >/dev/null \
+      || { echo "FAILED patching zend_execute_API.c"; exit 1; }
+    _src="$OUT/diag_zend_execute_API.c"
+  fi
   if [ "$t" = "zend_execute" ] && [ -n "${PHP_CAP_DIAG_EXECUTE:-}" ]; then
     python3 "$HERE/diag/patch-zend-execute.py" "$P/Zend/zend_execute.c" "$OUT/diag_zend_execute.c" >/dev/null \
       || { echo "FAILED patching zend_execute.c"; exit 1; }

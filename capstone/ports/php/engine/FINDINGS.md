@@ -629,7 +629,57 @@ reproduced by the control exactly as the pair requires. Gating on metadata rathe
 the control actually completes was the error; the "control must complete" rule already covers the
 real concern, on evidence.
 
-### CRASH-047 is a genuine MISS, and it took a second porting gap to see it
+### CRASH-047 IS CAUGHT. The missing piece was request teardown.
+
+ASAN's full stack names the use precisely, and it is not in the script's own execution:
+
+    #0 _zval_ptr_dtor                        Zend/zend_execute_API.c:389
+    #1 zend_hash_destroy                     Zend/zend_hash.c:519
+    #2 _zval_dtor                            Zend/zend_variables.c:52
+    #3 _zval_ptr_dtor                        Zend/zend_execute_API.c:391
+    #4 zend_hash_destroy                     Zend/zend_hash.c:519
+    #5 zend_objects_free_object_storage      Zend/zend_objects.c:88
+    #6 zend_objects_store_free_object_storage Zend/zend_objects_API.c:72
+    #7 shutdown_executor                     Zend/zend_execute_API.c:272
+
+**The use-after-free fires while the object store is being destroyed at request shutdown.** This
+port ran scripts and never tore a request down, so that half of the lifecycle -- and every defect
+observable only there -- did not exist.
+
+`zend_deactivate` is Zend code we already link (`zend.c:808`); it drives `shutdown_scanner`,
+`shutdown_executor` and `shutdown_compiler`. Its only caller is `main/main.c:1155`, inside
+`php_request_shutdown`, and `main/` is not linked. One call was missing.
+
+With it, the pair is textbook:
+
+| arm | result |
+|---|---|
+| control, `-DZEND_NO_REVOKE` | completes, retval 255 -- the UAF SURVIVED, as on stock PHP |
+| fault, revoke on | **cause 24 at `zend_execute_API.c:389`** -- ASAN's exact function and line |
+
+Teardown is now ON by default (`PHP_CAP_NO_REQUEST_SHUTDOWN` disables it). A port that runs a script
+and never shuts the request down is not running the same program.
+
+### The pattern across all four of today's porting gaps
+
+| case | missing piece | layer |
+|---|---|---|
+| CRASH-068 | `ub_error` discarded the format string | SAPI error path |
+| CRASH-057 | the sink discarded the bytes it was handed | SAPI write path |
+| CRASH-047 (bail) | `zend_register_default_classes` never called | `main/main.c:1438` |
+| CRASH-047 (use) | `zend_deactivate` never called | `main/main.c:1155` |
+
+Not one is in `Zend/` or `ext/`, which are byte-identical corpus code and behaved correctly
+throughout. All four are in the ~200 lines this port writes itself to stand in for `main/` and the
+SAPI -- roughly 20,000 lines of PHP that we replace with stubs.
+
+**The lesson for anyone porting an interpreter to new hardware to test it against a bug corpus:
+the engine is the easy part.** The host layer is where a defect's *observable consequence* usually
+lives -- output, error reporting, and teardown -- and a stub that drops its argument or skips a
+lifecycle stage silently deletes the bug rather than the detection. Four cases looked like misses
+or divergences and every one was our own scaffolding.
+
+
 
 Its trigger bailed before running, and `ub_error` discarded the message so the reason was invisible.
 Captured, the first bytes read `Class '` -- PHP 5.0.0's "Class 'X' not found". The trigger says

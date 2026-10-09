@@ -294,7 +294,27 @@ extern void zif_parse_url(INTERNAL_FUNCTION_PARAMETERS);
  *   8 PZVAL_IS_REF && refcount>0 -> the :654 zval_copy_ctor that ASAN reports as the UAF read
  *   9 the IS_TMP_VAR arm of the same switch */
 unsigned long ze_diag[16];
+
 unsigned long ze_addr[4];   /* [0] pointer freed at :519   [1] pointer copied at :654 */
+#endif
+
+#if defined(PHP_CAP_DIAG_DTOR)
+/* Every zval whose refcount _zval_ptr_dtor is about to decrement, and how many of those sit in a
+ * block this allocator has already freed. A nonzero second number means the port DOES reproduce
+ * CRASH-047's use-after-free and the miss is real; zero means the object was never individually
+ * freed here, so revocation had nothing to key on. */
+unsigned long zc_n_dtor, zc_n_dtor_freed;
+void ze_dtor_probe(void *p)
+{
+    extern void *zc_live_block(unsigned long);
+    ++zc_n_dtor;
+    /* zc_was_freed() is a HISTORICAL ring, so a block that was freed and then re-served still
+     * matches it -- that is why its count says nothing. zc_live_block() asks the question that
+     * matters: is any slot covering this address live RIGHT NOW? No live slot means the zval being
+     * dereferenced is currently-dead memory, i.e. the port really does reproduce the
+     * use-after-free. */
+    if (p && !zc_live_block(__builtin_capstone_cap_get_cursor(p))) { ++zc_n_dtor_freed; }
+}
 #endif
 
 #if defined(PHP_CAP_CAPTURE_OUTPUT)
@@ -600,6 +620,34 @@ void domain_main(unsigned *res, unsigned func)
             st |= ST_BAILED;
         } zend_end_try();
 
+
+#if !defined(PHP_CAP_NO_REQUEST_SHUTDOWN)
+        /* THE REQUEST TEARDOWN. On by default, because PHP always tears a request down and a port that
+         * never does is not running the same program.
+         *
+         * main/main.c:1155, inside php_request_shutdown, is the only caller of zend_deactivate --
+         * and main/ is not linked here, so nothing ever tore a request down. zend_deactivate itself
+         * is Zend code we already have (zend.c:808); it drives shutdown_scanner,
+         * shutdown_executor and shutdown_compiler, and shutdown_executor is where the object store
+         * and the symbol table are destroyed.
+         *
+         * That matters for detection, not just tidiness: CRASH-047's use-after-free fires during
+         * exactly that teardown. ASAN's stack is _zval_ptr_dtor <- zend_hash_destroy <- _zval_dtor
+         * <- zend_hash_destroy <- zend_objects_free_object_storage <-
+         * zend_objects_store_free_object_storage <- shutdown_executor. Running a script and never
+         * tearing it down skips the half of the lifecycle where a whole class of lifetime defects
+         * becomes observable. */
+        zend_deactivate(TSRMLS_C);
+#endif
+
+#if defined(PHP_CAP_DIAG_DTOR)
+        {
+            extern void php_fault_report(unsigned long);
+            php_fault_report((0xECUL << 56)
+                           | ((zc_n_dtor & 0xFFFFUL) << 16)
+                           | (zc_n_dtor_freed & 0xFFFFUL));
+        }
+#endif
 
 #if defined(PHP_CAP_CAPTURE_OUTPUT)
         {
