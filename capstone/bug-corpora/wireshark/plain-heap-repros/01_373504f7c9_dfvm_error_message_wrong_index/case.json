@@ -29,9 +29,12 @@
       "verdict": "CAUGHT"
     },
     "sublet-chunks": {
-      "oracle": "PREDICTED: the chunk port changes NOTHING here, and that is the point of declaring the arm. The object is a GPtrArray's pdata, not a wmem chunk, so there is no inner allocator for the port to narrow. NOT YET MEASURED.",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-sublet-chunks/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc0210ab0, address=0xc5002130 (the labelled probe). Fixed run of the same image: VERDICT FIXED, exit 0. Arm: tshark's chunks configuration: the Sublet heap (HEAP_LOG 24, 40 MiB arena) with the wmem chunk port linked. These cases call g_malloc and no wmem, so the chunk port is present and never called; the bound is the Sublet heap's per-object bound. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc020f76c address=0xc5002018); uaf CAUGHT (cause=24 pc=0xc020f7b8 address=0x0); subobj RETURNED. Image 36434c4c61c09179. Predicted before the run (49498f856e87): CAUGHT; the prediction held.",
       "cause": null,
-      "status": "predicted"
+      "status": "measured",
+      "prediction": "PREDICTED: the chunk port changes NOTHING here, and that is the point of declaring the arm. The object is a GPtrArray's pdata, not a wmem chunk, so there is no inner allocator for the port to narrow. NOT YET MEASURED.",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet heap_log=24 runtime cdfc061d5e9a; compiler 7d01722aab88"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -61,7 +64,13 @@
     "native-fix-differential": {
       "oracle": "MEASURED 2026-10-07: the buggy arm reads index 3 of a 2-entry array (crossed=1, extent=2); the fixed arm's one-character change to j reads index 1 (crossed=0). runners/run-native.sh exit 0, control arm first.",
       "status": "measured"
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-subobject/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc670f160, address=0xc67521d0 (the labelled probe). Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -Xclang -fcapstone-subobject-bounds: C1 v1 narrows a struct's non-last ARRAY field to the field; scalars, the last member and flexible arrays are not narrowed. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751958); uaf RETURNED; subobj CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751948). Image 4e00c297abf38cf8. Predicted before the run (49498f856e87): CAUGHT; the prediction held."
     }
   },
-  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0, control arm first, buggy arm DEFECT-REPRODUCED, ASan two-sided. LIVE at the v4.6.8 pin. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT."
+  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0, control arm first, buggy arm DEFECT-REPRODUCED, ASan two-sided. LIVE at the v4.6.8 pin. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. sublet-chunks measured 2026-10-09 (results/2026-10-09-capstone-sublet-chunks/): CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT."
 }

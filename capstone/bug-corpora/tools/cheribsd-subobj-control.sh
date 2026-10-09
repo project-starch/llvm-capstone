@@ -12,7 +12,7 @@ import json, sys
 p, prog = sys.argv[1], sys.argv[2]
 cases = json.load(open(p))
 cases.insert(0, dict(name='subobj-control', program=prog, args=[], timeout=120,
-                     expect_regex=r'.*', exit=162))
+                     expect='SUBOBJ-CONTROL BEGIN', exit=162))
 open(p, 'w').write(json.dumps(cases, indent=2) + '\n')
 PY
 }

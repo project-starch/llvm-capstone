@@ -16,7 +16,8 @@
     "poisoncap-protected",
     "cheribsd-revocation",
     "native-detect",
-    "native-fix-differential"
+    "native-fix-differential",
+    "capstone-subobject"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -32,7 +33,8 @@
   "evidence": [
     "capstone/bug-corpora/ffmpeg/plane-repros/results/20261006-native-plane",
     "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd",
-    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone"
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone",
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone-subobject"
   ],
   "advisories": [],
   "shape_table": true,

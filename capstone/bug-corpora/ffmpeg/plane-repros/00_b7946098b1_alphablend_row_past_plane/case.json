@@ -53,9 +53,15 @@
       "note": "Measured at last. The earlier note said UNMEASURABLE ON THIS HOST, 'same check as the PoisonCap arms' -- that was true of PoisonCap and WRONG of CheriBSD once a purecap vehicle existed here. The real blocker was specific to this corpus and is now removed: the cases link REAL libavutil, so a purecap libavutil had to be cross-built (verified by ELF flags EF_RISCV_CAP_MODE/EF_RISCV_CHERIABI, not by the build command), and the read probe had to stop being `static` in corpus.h so supervise could resolve it. PoisonCap remains genuinely absent from this host: not yet done is not the same as cannot be done.",
       "status": "measured",
       "evidence": "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd"
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-subobject/: **NOT CAUGHT; the defect reproduced**: the sequence completed with the crossing made, inside one allocation and outside anything this arm narrows. Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -Xclang -fcapstone-subobject-bounds: C1 v1 narrows a struct's non-last ARRAY field to the field; scalars, the last member and flexible arrays are not narrowed. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751958); uaf RETURNED; subobj CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751948). Image 2af6bd8d96b8a1ad. Predicted before the run (49498f856e87): DEFECT-REPRODUCED; the prediction held."
     }
   },
-  "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT.",
+  "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): NOT CAUGHT.",
   "nested": true,
   "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
 }

@@ -36,7 +36,14 @@
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
-  "evidence": [],
+  "evidence": [
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-capstone-spatial",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-capstone-sublet",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-capstone-capstone-subobject",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-capstone-capstone-carve-bounds",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-native-differential",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-native-asan"
+  ],
   "advisories": [
     "CVE-2011-3895 (case 11's fix says it fixes part of it)"
   ],

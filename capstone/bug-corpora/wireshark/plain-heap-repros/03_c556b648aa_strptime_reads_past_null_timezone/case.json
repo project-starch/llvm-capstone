@@ -35,8 +35,11 @@
     },
     "sublet-chunks": {
       "cause": 5,
-      "oracle": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-sublet-chunks/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc02109e4, address=0xc5002001 (the labelled probe). Fixed run of the same image: VERDICT FIXED, exit 0. Arm: tshark's chunks configuration: the Sublet heap (HEAP_LOG 24, 40 MiB arena) with the wmem chunk port linked. These cases call g_malloc and no wmem, so the chunk port is present and never called; the bound is the Sublet heap's per-object bound. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc020f76c address=0xc5002018); uaf CAUGHT (cause=24 pc=0xc020f7b8 address=0x0); subobj RETURNED. Image fb26cc4d954e0dc8. Predicted before the run (49498f856e87): CAUGHT; the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet heap_log=24 runtime cdfc061d5e9a; compiler 7d01722aab88"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -56,9 +59,15 @@
       "oracle": "MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **NOT CAUGHT, and clean here is NOT a negative result about the defect.** The sequence COMPLETES, exit status 0, with supervise resolving `expect wsh_read_probe 0x10237a` from the ELF -- so the probe was found and simply never faulted. THE MECHANISM: malloc bounds a capability to the allocator's USABLE size and not to the request, so a crossing shorter than the gap to the next size class stays inside the same allocation and no capability check can see it. This is a property of the allocator's granularity, not of the bug. tools/size-class-audit.py reports this case ABSORBED from the measured request size, and the two agree. The Capstone arms are the discriminating ones here.",
       "status": "measured",
       "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot."
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-subobject/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc670f094, address=0xc6752031 (the labelled probe). Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -Xclang -fcapstone-subobject-bounds: C1 v1 narrows a struct's non-last ARRAY field to the field; scalars, the last member and flexible arrays are not narrowed. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751958); uaf RETURNED; subobj CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751948). Image 28c09863c1167edb. Predicted before the run (49498f856e87): CAUGHT; the prediction held."
     }
   },
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. sublet-chunks measured 2026-10-09 (results/2026-10-09-capstone-sublet-chunks/): CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT.",
   "nested": false,
   "nested_why": "the crossed buffer came straight from the platform allocator with no inner layer between -- wiretap and wsutil do not use wmem -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
   "distinguishing": "the only row in this corpus whose bound is a TERMINATOR rather than a size, which is why the fix adds a switch arm instead of changing arithmetic -- and the shortest crossing, exactly one byte."

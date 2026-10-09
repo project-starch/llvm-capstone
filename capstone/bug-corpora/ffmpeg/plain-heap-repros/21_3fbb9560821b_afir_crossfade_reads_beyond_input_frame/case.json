@@ -53,9 +53,21 @@
     "native-fix-differential": {
       "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
       "status": "measured"
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-subobject/: **CAUGHT** at ffh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc670eb58, address=0xc6752300 (the labelled probe). Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -Xclang -fcapstone-subobject-bounds: C1 v1 narrows a struct's non-last ARRAY field to the field; scalars, the last member and flexible arrays are not narrowed. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751958); uaf RETURNED; subobj CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751948). Image 4bf5009ecf467d81. Predicted before the run (49498f856e87): CAUGHT; the prediction held."
+    },
+    "cheribsd-subobject": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, every case built with -Xclang -cheri-bounds=subobject-safe (booted on the second host)",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x1021a6 pc=0x1021a6; fault pc 0x1021a6 INSIDE ffh_read_probe [0x102196, 0x1021b2). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162 (SIGPROT before any output; run.py lists the row as FAIL because its expectation needs a stdout line, the runner's own check reads the exit status -- the control was changed the same day to print first)). Predicted before the run (886abf4cc336)."
     }
   },
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT.",
   "nested": false,
   "nested_why": "the crossed buffer came straight from av_malloc / av_mallocz / av_calloc / av_malloc_array -- which on the platform is malloc -- with no AVBufferPool or AVRefStructPool between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
   "distinguishing": "the length is a CONFIGURATION constant -- the minimum partition size -- rather than anything derived from the data, so the crossing appears only on the final partition of a frame and scales with how short that partition is. The fix introduces a clamped nb_samples, which is also why the same commit touches a sibling expression in fir_quantum."

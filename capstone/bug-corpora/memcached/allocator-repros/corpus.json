@@ -42,7 +42,8 @@
     "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd",
     "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8",
     "capstone/bug-corpora/memcached/allocator-repros/results/20261009-qemu-capstone-case8",
-    "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-native-asan"
+    "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-native-asan",
+    "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-field-bounds"
   ],
   "inventory": "capstone/docs/ref/memcached-allocator-defect-triage.md"
 }

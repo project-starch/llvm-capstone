@@ -49,9 +49,19 @@
     },
     "native-fix-differential": {
       "oracle": "the buggy arm's write or read crosses and the case's damage flag is set; the fixed arm's bound keeps it inside. This pair differs by the upstream fix, not by protection."
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-field-bounds/: **NOT CAUGHT; the defect reproduced** -- the sequence completes with C1 field bounds (-Xclang -fcapstone-subobject-bounds) on the level0 heap: the scan runs from ITEM_key(it), pointer arithmetic into the item's flexible array data[], which neither compiler narrows. Image 86568ea5c092afbd. NOT pre-registered by commit: these two arms were added during the session, after the 2852edcdd747 pre-registration; the stated expectation, NOT caught, held."
+    },
+    "cheribsd-subobject": {
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-field-bounds/: **NOT CAUGHT** -- exit 0, completed=1, no fault seen, with -cheri-bounds=subobject-safe on stock CheriBSD, revocation on, platform controls passing: the scan runs from ITEM_key(it), pointer arithmetic into the item's flexible array data[], which neither compiler narrows. NOT pre-registered by commit: these two arms were added during the session, after the 2852edcdd747 pre-registration; the stated expectation, NOT caught, held."
     }
   },
-  "status": "MEASURED 2026-10-05, both paths. QEMU domain: BOTH modes COMPLETE, no fault, because the case caps its scan at 64 bytes and the chunk is larger, so the read never reaches the chunk's end -- which the arm's pre-registered wording anticipated ('depends on how far the scan runs'). Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. A longer scan would cross the chunk bound; this case deliberately does not, so it measures THAT the key bound was crossed, not the chunk's. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT.",
+  "status": "MEASURED 2026-10-05, both paths. QEMU domain: BOTH modes COMPLETE, no fault, because the case caps its scan at 64 bytes and the chunk is larger, so the read never reaches the chunk's end -- which the arm's pre-registered wording anticipated ('depends on how far the scan runs'). Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. A longer scan would cross the chunk bound; this case deliberately does not, so it measures THAT the key bound was crossed, not the chunk's. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Field bounds measured 2026-10-09 (results/2026-10-09-field-bounds/): NOT CAUGHT on Capstone and on CheriBSD.",
   "nested": true,
   "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
 }

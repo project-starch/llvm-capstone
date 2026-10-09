@@ -59,7 +59,13 @@
     "native-fix-differential": {
       "oracle": "MEASURED 2026-10-07: the buggy arm admits the entry and the terminator lands at offset 64 of a 64-byte allocation (crossed=1, damage=1); the fixed arm's `+ 6` headroom rejects the entry and nothing is written (crossed=0). runners/run-native.sh exit 0, control arm first.",
       "status": "measured"
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-subobject/: **CAUGHT** at mch_write_probe+0x58 -- cause 7, a bounds violation on a store; pc=0xc670f14c, address=0xc6752140 (the labelled probe). Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -Xclang -fcapstone-subobject-bounds: C1 v1 narrows a struct's non-last ARRAY field to the field; scalars, the last member and flexible arrays are not narrowed. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751958); uaf RETURNED; subobj CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751948). Image 767e14f155870752. Predicted before the run (49498f856e87): CAUGHT; the prediction held."
     }
   },
-  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner, and the CheriBSD reading needs a boot. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT at the labelled probe, si_code 1, confirming the prediction and its size-class condition. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT."
+  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner, and the CheriBSD reading needs a boot. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT at the labelled probe, si_code 1, confirming the prediction and its size-class condition. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT."
 }

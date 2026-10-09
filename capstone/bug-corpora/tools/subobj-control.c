@@ -11,6 +11,10 @@ int main(int argc, char **argv) {
   if (!s) return 75;
   memset(s, 0, sizeof *s);
   volatile int i = 8 + (argc > 99);   /* 8, not foldable */
+  /* A line BEFORE the access, flushed: the runner matches stdout, and a control that dies before
+   * printing anything would read as a FAILED row even when it faulted exactly as required. */
+  printf("SUBOBJ-CONTROL BEGIN\n");
+  fflush(stdout);
   s->a[i] = 0x5a;                     /* one past a[], onto b[0] */
   printf("SUBOBJ-CONTROL RETURNED b0=0x%02x\n", s->b[0]);
   (void)argv;

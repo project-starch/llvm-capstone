@@ -47,7 +47,8 @@
     "capstone/bug-corpora/wireshark/wmem-repros/results/20261007-cheribsd-revocation-control",
     "capstone/bug-corpora/wireshark/wmem-repros/results/20261009-qemu-capstone-18-21",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-asan",
-    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-differential"
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-differential",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-domain-regression"
   ],
   "advisories": [],
   "shape_table": true,

@@ -58,9 +58,15 @@
     "backing": {
       "oracle": "not applicable, and recorded rather than omitted: there is no backing allocation distinct from the object. The struct IS the allocation, which is what makes the crossing a sub-object one.",
       "status": "not-applicable"
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime afa624ec6387; compiler 7d01722aab88",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-subobject/: **CAUGHT** at ff2_case_run+0x328 -- cause 5, a bounds violation on a load; pc=0xce70e888, address=0xcf75e180 -- in the case's own statement, the defective member access itself, before any probe. Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -Xclang -fcapstone-subobject-bounds: C1 v1 narrows a struct's non-last ARRAY field to the field; scalars, the last member and flexible arrays are not narrowed. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xce70e5b8 address=0xce751958); uaf RETURNED; subobj CAUGHT (cause=7 pc=0xce70e5b8 address=0xce751948). Image c469c6bf18f78e53. Predicted before the run (49498f856e87): CAUGHT; the prediction held."
     }
   },
-  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. ASan measured blind two-sided with a firing positive control (results/20261006-native-subobject-7/). The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell. CheriBSD MEASURED 2026-10-06, revocation on: completes, NOT caught, 22/22 arms with both platform controls firing (results/20261006-cheribsd/); built -O0, which is load-bearing. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT.",
+  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. ASan measured blind two-sided with a firing positive control (results/20261006-native-subobject-7/). The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell. CheriBSD MEASURED 2026-10-06, revocation on: completes, NOT caught, 22/22 arms with both platform controls firing (results/20261006-cheribsd/); built -O0, which is load-bearing. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT.",
   "nested": false,
   "nested_why": "nothing sub-allocated the crossed region: the object is one allocation the platform or FFmpeg's own av_malloc handed out directly, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED."
 }
