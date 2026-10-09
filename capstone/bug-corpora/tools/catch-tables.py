@@ -25,7 +25,8 @@ import pathlib
 import re
 import sys
 
-POS = [a for a in sys.argv[1:] if not a.startswith("--")]
+_VALUED = {"--board-json"}  # flags that take a value: their value is not the corpora directory
+POS = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] not in _VALUED]
 BC = pathlib.Path(POS[0]) if POS else pathlib.Path(__file__).resolve().parents[1]
 TARGETS = ("ffmpeg", "wireshark", "memcached")
 NOTRUN = {"predicted", "not written", "declined"}
@@ -119,6 +120,10 @@ for p in TARGETS:
             if r[k] not in ("caught", "missed"):
                 odd.append(f"{p}/{corpus}/{r['case']} {k}={r[k]}")
         rows.append(r)
+
+if {r["prog"] for r in rows} != set(TARGETS):
+    # No data is an ERROR, not an empty table: a wrong directory reads exactly like a clean one.
+    sys.exit(f"catch-tables: {len(rows)} cases under {BC}; every one of {TARGETS} must have some")
 
 COLS = (("asan", "ASan"), ("cheri", "CheriBSD"), ("pc0", "PoisonCap m0"), ("pc1", "PoisonCap m1"),
         ("cap", "Cap bounds"), ("sub", "Cap+Sublet"))
