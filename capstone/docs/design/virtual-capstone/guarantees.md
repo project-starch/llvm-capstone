@@ -49,7 +49,7 @@ cross-process tagged sharing.
 The node-growth extension replaces the fixed 65,536-slot / 1-MiB table with
 base-page-backed tables bounded by RAM, an optional quota and the 31-bit ID
 field. It retains the separate limits of 32 supervisor slots on the hart, at most
-8192 registered mappings, 1 GiB per registered region and 4 GiB aggregate
+32768 registered mappings, 1 GiB per registered region and 4 GiB aggregate
 registered VA. Local mallocng removes the fixed allocator block/arena arrays;
 its metadata grows through musl mappings and remains subject to the adapter
 quotas above. Table pages can be physically scattered. Allocator capacity requests
