@@ -44,6 +44,11 @@ An access that leaves a bound. Built from upstream defects:
 | FFmpeg | **1** | **14** | **15** | `plane-repros/00` (`b7946098b1`, one row past a frame plane); `subobject-repros/00-09` (inside one allocation); `plain-heap-repros/00-03` (past a direct `av_malloc_array`/`av_calloc`) |
 | **total** | **14** | **18** | **32** | |
 
+> **SUPERSEDED COUNTS, 2026-10-09.** This table is the 2026-10-06 state. FFmpeg's nested spatial row
+> is now **13** -- `plane-repros/00` plus the twelve cases of `ffmpeg/carved-repros` (regions carved
+> out of one allocation) -- and the current per-program, per-arm table for all three programs is
+> `spatial-vs-temporal-three-programs.md` section 0.
+
 And the **synthetic baseline**, which carried the not-nested spatial row alone until
 `plain-heap-repros/00` landed and which still does the job no upstream case can -- showing
 the arms discriminate at `malloc` granularity on demand:
