@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one plain-heap, plain-temporal, subobject or plane corpus on a Capstone application domain arm.
+"""Run one plain-heap, plain-temporal, subobject, plane or carved corpus on a Capstone application domain arm.
 
     run-capstone-domain.py --corpus <corpus dir> --arm spatial|sublet \\
         --sdk <application SDK> --state <capstone-vm state> --out <fresh dir> [--cc-arg ARG]...
@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 RUN = REPO / "capstone/ports/common/application/run.py"
 SDK_HEAP = {"spatial": "level0", "sublet": "sublet", "sublet-chunks": "sublet",
-            "capstone-subobject": "level0"}
+            "capstone-subobject": "level0", "capstone-carve-bounds": "level0"}
 REVOKING = ("sublet", "sublet-chunks")
 
 # The tool's own controls, compiled with the corpus's SDK into the same boot.
@@ -118,13 +118,16 @@ def corpus_kind(corpus):
         return "spatial"
     if name == "plain-temporal-repros":
         return "temporal"
-    if name in ("subobject-repros", "plane-repros"):
+    if name in ("subobject-repros", "plane-repros", "carved-repros"):
         return "interior"     # the crossing stays inside ONE allocation, by each case's own CHECKs
-    sys.exit(f"CONTROL-FAILED {corpus}: this tool runs plain-heap, plain-temporal, subobject and plane corpora only")
+    sys.exit(f"CONTROL-FAILED {corpus}: this tool runs plain-heap, plain-temporal, subobject, plane and "
+             f"carved corpora only")
 
 
 def predicted(kind, arm):
     """The buggy run's predicted outcome, fixed before any run (see the module docstring)."""
+    if arm == "capstone-carve-bounds":
+        return "CAUGHT"                     # each carved region is narrowed to its own extent
     if kind == "spatial":
         return "CAUGHT"                     # both arms: the crossing leaves an exact bound
     if kind == "interior":
@@ -229,6 +232,14 @@ def main():
         print("CONTROL-FAILED capstone-subobject needs exactly --cc-arg=-Xclang "
               "--cc-arg=-fcapstone-subobject-bounds, and no other arm may carry it", file=sys.stderr)
         return 75
+    # capstone-carve-bounds is the carved corpus's source remedy: ffc_carve() narrows each region
+    # to its own extent when FFC_CARVE_BOUNDS is defined. Like the field-bounds flag, the switch
+    # decides the arm, so it is required exactly where the arm is named and refused elsewhere.
+    carve = a.arm == "capstone-carve-bounds"
+    if carve != ("-DFFC_CARVE_BOUNDS" in a.cc_arg) or (carve and corpus.name != "carved-repros"):
+        print("CONTROL-FAILED capstone-carve-bounds needs --cc-arg=-DFFC_CARVE_BOUNDS on the carved "
+              "corpus, and no other arm may carry it", file=sys.stderr)
+        return 75
     overrides = json.loads(a.predictions.read_text()) if a.predictions else {}
     cache = (a.sdk / "CMakeCache.txt").read_text()
     heap = re.search(r"^CAPSTONE_APPLICATION_HEAP:STRING=(\S+)", cache, re.M)
@@ -306,7 +317,7 @@ def main():
             return 75
 
     # ---- the cases --------------------------------------------------------------------
-    probe_re = re.compile(r"_(read|write)_probe(_u8)?$")
+    probe_re = re.compile(r"_(read|write)_probe(_u8|_u32)?$")
     expect = predicted(kind, a.arm)
     for d in cases:
         if d.name not in images:

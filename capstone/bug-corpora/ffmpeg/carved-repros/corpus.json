@@ -1,0 +1,45 @@
+{
+  "program": "ffmpeg",
+  "boundary": "a region FFmpeg carved out of one allocation by pointer arithmetic",
+  "title": "Upstream FFmpeg spatial defects that cross between CARVED REGIONS of one allocation, FFmpeg's nested row",
+  "upstream": {
+    "version": "n9.0.1",
+    "port": "capstone/ports/ffmpeg/buffer-pool"
+  },
+  "cases": 12,
+  "case_schema": "case-json",
+  "case_macro": "FFC",
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "capstone-subobject",
+    "capstone-carve-bounds",
+    "poisoncap-spatial",
+    "poisoncap-protected",
+    "cheribsd-revocation",
+    "cheribsd-subobject",
+    "cheribsd-carve-bounds",
+    "native-detect",
+    "native-fix-differential"
+  ],
+  "status": "built",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "false": 11,
+    "true": 1
+  },
+  "runners": [
+    "capstone/bug-corpora/ffmpeg/carved-repros/runners/run-native.sh",
+    "capstone/bug-corpora/ffmpeg/carved-repros/runners/run-asan.sh",
+    "capstone/bug-corpora/ffmpeg/carved-repros/runners/run-cheribsd.sh",
+    "capstone/bug-corpora/tools/run-capstone-domain.py"
+  ],
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
+  "evidence": [],
+  "advisories": [
+    "CVE-2011-3895 (case 11's fix says it fixes part of it)"
+  ],
+  "shape_table": true,
+  "note": "FFmpeg's nested spatial row, which had one case (plane-repros) before this corpus. The candidates and the rejected commits are in docs/ref/ffmpeg-spatial-defect-triage.md."
+}

@@ -1,0 +1,67 @@
+{
+  "case": 2,
+  "upstream_fix": "cd7524fdd1",
+  "title": "long_filter_high_3800 primes its delay line from `order` samples of a shorter channel, reading into decoded[1]",
+  "consumer": "libavcodec/apedec.c:889-897 at the fix's parent, long_filter_high_3800(), called from predictor_decode_mono_3800() :1006",
+  "object": "s->decoded_buffer, carved into decoded[0] and decoded[1] exactly as case 1",
+  "lifetime_ender": "NONE -- the block is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "a read bounded by a filter order larger than the carved region",
+  "allocator_layer": "FFmpeg's own carve of one allocation: the block is the platform's calloc/malloc (as in ../plain-heap-repros, so the allocation bound the arms enforce is real and exact), and the regions are pointer arithmetic on it, exactly as upstream writes it, through shared/driver.c's ffc_carve().",
+  "fidelity": "real carve arithmetic, model consumer. The block size and every region offset are upstream's expressions at the fix's parent, evaluated at the parameters named in case.c; the consumer is reduced to the stores or loads that cross, the first crossing access going through the labelled probe and the rest of the unreduced overshoot recorded as `extent`. The fixed arm models the fix's own change, including any change to the allocation.",
+  "nested": true,
+  "nested_why": "the crossed region was carved out of one allocation by FFmpeg's own pointer arithmetic, and the case CHECKs that the whole unreduced overshoot stays inside that allocation, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- the object is FFmpeg's carve, one layer inside malloc: NESTED.",
+  "arms": {
+    "spatial": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES with VERDICT DEFECT-REPRODUCED -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's: level0 narrows malloc to the bytes requested, which is the whole carved block."
+    },
+    "sublet": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES, as spatial. Sublet revokes on free and nothing is freed before the access; its spatial bound is the same per-allocation bound."
+    },
+    "capstone-subobject": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES. -fcapstone-subobject-bounds narrows ARRAY-typed struct FIELDS; a carved region is pointer arithmetic on the block, not a field, so nothing narrows it."
+    },
+    "capstone-carve-bounds": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): CAUGHT at ffc_read_probe_u32 -- ffc_carve() narrows each region to its own extent under -DFFC_CARVE_BOUNDS, so the first byte past the region faults; the fixed arm, under the same narrowing, stays FIXED."
+    },
+    "cheribsd-revocation": {
+      "status": "predicted",
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's; revocation has nothing to act on."
+    },
+    "cheribsd-subobject": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES. -cheri-bounds=subobject-safe narrows a pointer taken to a struct member; a carved region is pointer arithmetic on the block."
+    },
+    "cheribsd-carve-bounds": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): SIGPROT at ffc_read_probe_u32 -- cheri_bounds_set at the carve; every region length here is far below CHERI-128's exact-representability limit, and the run prints the granted length per carve."
+    },
+    "poisoncap-spatial": {
+      "status": "predicted",
+      "mode": 0,
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's."
+    },
+    "poisoncap-protected": {
+      "status": "predicted",
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- mode 1 adds poison-on-free and revocation, and nothing is freed before the access."
+    },
+    "native-detect": {
+      "status": "predicted",
+      "oracle": "PREDICTED: ASan SILENT -- its redzones sit around an allocation, never inside one. Written in runners/run-asan.sh's header BEFORE the run, but committed with the result, not before it (pre-registration in the commit that adds this corpus carries both)."
+    },
+    "native-fix-differential": {
+      "status": "predicted",
+      "oracle": "PREDICTED: the buggy arm's access leaves its region and stays in the block; the fixed arm's does not."
+    }
+  },
+  "status": "built 2026-10-09; native differential and ASan run (see arms); every capability arm PREDICTED, not yet measured.",
+  "live_in_pin": false,
+  "live_proof": "read from the PINNED source, two-sided, never from ancestry: n9.0.1:libavcodec/apedec.c contains `if (order >= length)\\n        return;` once and the pre-fix adjacency (the delay-line memset directly after the declarations) 0 times; 1/0 at the fix, 0/1 at its parent. A fix-reversal: the pre-fix carve or consumer is reconstructed, the convention at ../../memcached/allocator-repros/README.md:132-135."
+}

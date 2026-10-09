@@ -1,0 +1,67 @@
+{
+  "case": 8,
+  "upstream_fix": "b5ff61695f",
+  "title": "V is placed at the pre-doubling half stride, so 16-bit scaling's int32 U samples run into V",
+  "consumer": "libswscale/utils.c:789, :889-890 and :1053-1055 at the fix's parent, sws_init_context(); the writer is the horizontal chroma scaler",
+  "object": "each chrUPixBuf line, one FF_ALLOC_OR_GOTO(dst_stride * 2 + 1) at libswscale/utils.c:1053, carved into U and V (:1055)",
+  "lifetime_ender": "NONE -- the block is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "an offset computed before the stride it depends on was doubled",
+  "allocator_layer": "FFmpeg's own carve of one allocation: the block is the platform's calloc/malloc (as in ../plain-heap-repros, so the allocation bound the arms enforce is real and exact), and the regions are pointer arithmetic on it, exactly as upstream writes it, through shared/driver.c's ffc_carve().",
+  "fidelity": "real carve arithmetic, model consumer. The block size and every region offset are upstream's expressions at the fix's parent, evaluated at the parameters named in case.c; the consumer is reduced to the stores or loads that cross, the first crossing access going through the labelled probe and the rest of the unreduced overshoot recorded as `extent`. The fixed arm models the fix's own change, including any change to the allocation.",
+  "nested": true,
+  "nested_why": "the crossed region was carved out of one allocation by FFmpeg's own pointer arithmetic, and the case CHECKs that the whole unreduced overshoot stays inside that allocation, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- the object is FFmpeg's carve, one layer inside malloc: NESTED.",
+  "arms": {
+    "spatial": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES with VERDICT DEFECT-REPRODUCED -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's: level0 narrows malloc to the bytes requested, which is the whole carved block."
+    },
+    "sublet": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES, as spatial. Sublet revokes on free and nothing is freed before the access; its spatial bound is the same per-allocation bound."
+    },
+    "capstone-subobject": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES. -fcapstone-subobject-bounds narrows ARRAY-typed struct FIELDS; a carved region is pointer arithmetic on the block, not a field, so nothing narrows it."
+    },
+    "capstone-carve-bounds": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): CAUGHT at ffc_write_probe_u32 -- ffc_carve() narrows each region to its own extent under -DFFC_CARVE_BOUNDS, so the first byte past the region faults; the fixed arm, under the same narrowing, stays FIXED."
+    },
+    "cheribsd-revocation": {
+      "status": "predicted",
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's; revocation has nothing to act on."
+    },
+    "cheribsd-subobject": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES. -cheri-bounds=subobject-safe narrows a pointer taken to a struct member; a carved region is pointer arithmetic on the block."
+    },
+    "cheribsd-carve-bounds": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): SIGPROT at ffc_write_probe_u32 -- cheri_bounds_set at the carve; every region length here is far below CHERI-128's exact-representability limit, and the run prints the granted length per carve."
+    },
+    "poisoncap-spatial": {
+      "status": "predicted",
+      "mode": 0,
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's."
+    },
+    "poisoncap-protected": {
+      "status": "predicted",
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- mode 1 adds poison-on-free and revocation, and nothing is freed before the access."
+    },
+    "native-detect": {
+      "status": "predicted",
+      "oracle": "PREDICTED: ASan SILENT -- its redzones sit around an allocation, never inside one. Written in runners/run-asan.sh's header BEFORE the run, but committed with the result, not before it (pre-registration in the commit that adds this corpus carries both)."
+    },
+    "native-fix-differential": {
+      "status": "predicted",
+      "oracle": "PREDICTED: the buggy arm's access leaves its region and stays in the block; the fixed arm's does not."
+    }
+  },
+  "status": "built 2026-10-09; native differential and ASan run (see arms); every capability arm PREDICTED, not yet measured.",
+  "live_in_pin": false,
+  "live_proof": "read from the PINNED source, two-sided, never from ancestry: the carve moved and carries the fix's form at n9.0.1: libswscale/slice.c:63-68 allocates `size * 2 + 32` and places V at `line + size + 16`, where size is the stride AFTER the 16-bit doubling (slice.c:257-273, passed at :311). The pre-fix `chrUPixBuf[i] + dst_stride_px` occurs 0 times at the pin's libswscale/utils.c and once at the fix's parent. A fix-reversal: the pre-fix carve or consumer is reconstructed, the convention at ../../memcached/allocator-repros/README.md:132-135."
+}

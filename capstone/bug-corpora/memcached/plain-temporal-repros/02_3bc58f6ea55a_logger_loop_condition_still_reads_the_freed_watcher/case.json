@@ -15,10 +15,16 @@
       "verdict": "CAUGHT"
     },
     "poisoncap-spatial": {
-      "status": "not written"
+      "status": "predicted",
+      "mode": 0,
+      "oracle": "PREDICTED 2026-10-09, before the first PoisonCap run: COMPLETES -- mode 0 is the PoisonCap image with runtime revocation off, so free neither poisons nor quarantines and nothing faults on the stale access. Whether the block was reissued (aliased) is recorded, not predicted: stock CheriBSD's quarantine read NOT-REISSUED, and without it the allocator may reuse at once."
     },
     "poisoncap-protected": {
-      "status": "not written"
+      "status": "predicted",
+      "mode": 1,
+      "signal": 34,
+      "si_code": null,
+      "oracle": "PREDICTED 2026-10-09, before the first PoisonCap run: SIGPROT at the labelled probe -- mode 1 poisons the block on free (mrs POISON_ON_FREE), so the stale access traps before any revocation sweep; where stock CheriBSD's quarantine let the same access complete (NOT-REISSUED), poison is the difference. si_code is recorded from the run."
     },
     "cheribsd-revocation": {
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd/: **NO FAULT, AND NO REUSE.** The sequence completes with aliased=0: the stale pointer was followed, but the chunk it names was never handed to another allocation, because CheriBSD's libc holds a released chunk in QUARANTINE until the revoker has swept every capability to it. So the access reads only the dead object -- the exploitable half of a use-after-free, reading or writing SOMEONE ELSE'S object, did not happen. It is not a fault, because nothing forced a sweep between the free and the access: the stale capability still carried its tag, as the case was built to leave it. revocation control in the same boot: revocation=1 tag_after_sweep=0 reissued=1, then SIGPROT si_code 2 at the control's own probe, so the revoker demonstrably acts in this guest and a completion here is the mechanism's design, not an inactive mechanism. CONTRAST, measured in the sibling nested corpora: there the inner allocator reissues the storage at once and the stale pointer DOES read another object, because nothing reaches free(). Predicted before the run; the prediction held.",

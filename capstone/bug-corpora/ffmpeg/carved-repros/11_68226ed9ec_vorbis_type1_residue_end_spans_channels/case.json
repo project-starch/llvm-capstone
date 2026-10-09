@@ -1,0 +1,68 @@
+{
+  "case": 11,
+  "upstream_fix": "68226ed9ec",
+  "title": "a type-0/1 residue may end past one channel's blocksize/2, so a one-channel submap adds into the next channel's residue",
+  "consumer": "libavcodec/vorbisdec.c:681-683 (setup) and :1359-1364 (type-1 write) at the fix's parent",
+  "object": "vc->channel_residues, one av_malloc(blocksize[1] / 2 * channels floats) at libavcodec/vorbisdec.c:952, carved per submap by ch_res_ptr (:1481, :1560-1562)",
+  "lifetime_ender": "NONE -- the block is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "an end validated against all channels' worth of samples for a per-channel decode",
+  "allocator_layer": "FFmpeg's own carve of one allocation: the block is the platform's calloc/malloc (as in ../plain-heap-repros, so the allocation bound the arms enforce is real and exact), and the regions are pointer arithmetic on it, exactly as upstream writes it, through shared/driver.c's ffc_carve().",
+  "fidelity": "real carve arithmetic, model consumer. The block size and every region offset are upstream's expressions at the fix's parent, evaluated at the parameters named in case.c; the consumer is reduced to the stores or loads that cross, the first crossing access going through the labelled probe and the rest of the unreduced overshoot recorded as `extent`. The fixed arm models the fix's own change, including any change to the allocation.",
+  "nested": true,
+  "nested_why": "the crossed region was carved out of one allocation by FFmpeg's own pointer arithmetic, and the case CHECKs that the whole unreduced overshoot stays inside that allocation, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- the object is FFmpeg's carve, one layer inside malloc: NESTED.",
+  "arms": {
+    "spatial": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES with VERDICT DEFECT-REPRODUCED -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's: level0 narrows malloc to the bytes requested, which is the whole carved block."
+    },
+    "sublet": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES, as spatial. Sublet revokes on free and nothing is freed before the access; its spatial bound is the same per-allocation bound."
+    },
+    "capstone-subobject": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES. -fcapstone-subobject-bounds narrows ARRAY-typed struct FIELDS; a carved region is pointer arithmetic on the block, not a field, so nothing narrows it."
+    },
+    "capstone-carve-bounds": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): CAUGHT at ffc_read_probe_u32 -- ffc_carve() narrows each region to its own extent under -DFFC_CARVE_BOUNDS, so the first byte past the region faults; the fixed arm, under the same narrowing, stays FIXED."
+    },
+    "cheribsd-revocation": {
+      "status": "predicted",
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's; revocation has nothing to act on."
+    },
+    "cheribsd-subobject": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES. -cheri-bounds=subobject-safe narrows a pointer taken to a struct member; a carved region is pointer arithmetic on the block."
+    },
+    "cheribsd-carve-bounds": {
+      "status": "predicted",
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): SIGPROT at ffc_read_probe_u32 -- cheri_bounds_set at the carve; every region length here is far below CHERI-128's exact-representability limit, and the run prints the granted length per carve."
+    },
+    "poisoncap-spatial": {
+      "status": "predicted",
+      "mode": 0,
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's."
+    },
+    "poisoncap-protected": {
+      "status": "predicted",
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- mode 1 adds poison-on-free and revocation, and nothing is freed before the access."
+    },
+    "native-detect": {
+      "status": "predicted",
+      "oracle": "PREDICTED: ASan SILENT -- its redzones sit around an allocation, never inside one. Written in runners/run-asan.sh's header BEFORE the run, but committed with the result, not before it (pre-registration in the commit that adds this corpus carries both)."
+    },
+    "native-fix-differential": {
+      "status": "predicted",
+      "oracle": "PREDICTED: the buggy arm's access leaves its region and stays in the block; the fixed arm's does not."
+    }
+  },
+  "status": "built 2026-10-09; native differential and ASan run (see arms); every capability arm PREDICTED, not yet measured.",
+  "live_in_pin": true,
+  "live_proof": "read from the PINNED source, two-sided, never from ancestry: LIVE, by reading the pinned source, two-sided, and adversarially audited (claim-auditor, 2026-10-09); NOT demonstrated on a stream. The per-type end check this fix added (`res_setup->type == 2 ? ... : 1`) occurs 0 times at n9.0.1: it was removed by 0a266cb55a (2014), and `git log -G'(vr|res_setup)->end' 0a266cb55a..n9.0.1 -- libavcodec/vorbisdec.c` is empty while the same query over all history lists both commits. The setup check left (n9.0.1:libavcodec/vorbisdec.c:724-725) bounds begin <= end and the partition count only. The one runtime bound is `max_output = (ch - 1) * vlen + vr->end` against `ch_left * vlen` (:1425-1449), which for a one-channel submap with two channels left accepts an end of up to 2 * vlen, and the type-0/1 loops (:1482-1506) then write vec[voffs] up to begin + ptns_to_read * partition_size - 1, into the next channel's slice of channel_residues (one av_malloc_array, :1019) and never past it. The Vorbis I spec, section 8.6.2, has the decoder clamp residue_end to blocksize/2 for formats 0 and 1, so such a stream is LEGAL and a conforming decoder truncates. Conditions: a type-0/1 residue on a submap with fewer channels than remain, begin + ptns_to_read * partition_size > vlen, and a neighbour whose floor is used (an unused one is cleared at :1743-1745 before the MDCT). The audit refined the history: the 2012 check bounded end by blocksize[1]/2 while the write uses the CURRENT block's vlen, so short-block packets could cross even while it stood. What would settle it dynamically: a 2-channel stream with two one-channel submaps whose first residue is type 1 with end = 2 * vlen, decoded by an instrumented n9.0.1, against the same stream with end = vlen. A fix-reversal: the pre-fix carve or consumer is reconstructed, the convention at ../../memcached/allocator-repros/README.md:132-135.",
+  "advisory": "the fix's commit message says it 'fixes part of 2011-3895'"
+}
