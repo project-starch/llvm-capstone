@@ -4533,6 +4533,1292 @@
    }
   },
   {
+   "corpus": "sqlite",
+   "program": "sqlite",
+   "title": "SQLite: fifty-two defects -- nineteen through the C API, thirty-three in the engine under memsys5",
+   "cases": [
+    {
+     "case": "00_adfb203a7d_fts5_getvarint_stale_read",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 0,
+     "upstream_fix": "adfb203a7d",
+     "title": "heap-use-after-free in sqlite3Fts5GetVarint",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "01_5e4233a9e4_agginfo_stale_after_realloc",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 1,
+     "upstream_fix": "5e4233a9e4",
+     "title": "row17",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      }
+     }
+    },
+    {
+     "case": "02_b9e0f62c3a_backup_pager_after_detach",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 2,
+     "upstream_fix": "b9e0f62c3a",
+     "title": "row15",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any ca",
+       "group": "engine-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "03_e464802d49_blob_close_after_db_close",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 3,
+     "upstream_fix": "e464802d49",
+     "title": "row05",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "04_8504d37b99_blob_write_after_reopen",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 4,
+     "upstream_fix": "8504d37b99",
+     "title": "row20",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      }
+     }
+    },
+    {
+     "case": "05_6397a78b2b_detach_with_pending_trigger",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 5,
+     "upstream_fix": "6397a78b2b",
+     "title": "row04",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any ca",
+       "group": "engine-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "06_0c8c9a64b3_expert_rem_ctx_freed",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 6,
+     "upstream_fix": "0c8c9a64b3",
+     "title": "row19",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "07_129371553c_fts3_destroy_oom_stale_table",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 7,
+     "upstream_fix": "129371553c",
+     "title": "new04",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      }
+     }
+    },
+    {
+     "case": "08_51dd67080a_fts3_offsets_stale_buffer",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 8,
+     "upstream_fix": "51dd67080a",
+     "title": "row13",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      }
+     }
+    },
+    {
+     "case": "09_fix-2026-08-17_fts3_snippet_stale_buffer",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 9,
+     "upstream_fix": "fix-2026-08-17",
+     "title": "row23",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      }
+     }
+    },
+    {
+     "case": "10_becd68ba0d_fts3_snippet_or_stale_iter",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 10,
+     "upstream_fix": "becd68ba0d",
+     "title": "row06",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      }
+     }
+    },
+    {
+     "case": "11_dee0359ddb_fts3_zterm_stale_buffer",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 11,
+     "upstream_fix": "dee0359ddb",
+     "title": "row11",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      }
+     }
+    },
+    {
+     "case": "12_fb8ca7de0c_fts5_inplace_stale_leaf",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 12,
+     "upstream_fix": "fb8ca7de0c",
+     "title": "row10",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "the bundle of record has no row for this case"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "13_fix-2026-06-08_fts5_near_stale_phrase",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 13,
+     "upstream_fix": "fix-2026-06-08",
+     "title": "row22",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "14_25e3073741_fts5_structure_release_refcount",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 14,
+     "upstream_fix": "25e3073741",
+     "title": "row03",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "15_2639ddc474_fts5_vocab_eof_stale_poslist",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 15,
+     "upstream_fix": "2639ddc474",
+     "title": "row01",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "16_unfixed_json_each_root_stale_key",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 16,
+     "upstream_fix": "unfixed",
+     "title": "new02; found by us, still unfixed",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "17_28001204f4_json_each_static_stale_key",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 17,
+     "upstream_fix": "28001204f4",
+     "title": "new01",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "18_mem5-design_memsys5_inband_freelist_overwrite",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 18,
+     "upstream_fix": "mem5-design",
+     "title": "row25; allocator design defect, trigger written by us",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "19_c8c9cdd9dd_rtree_cursor_stale_node",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 19,
+     "upstream_fix": "c8c9cdd9dd",
+     "title": "new05",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any ca",
+       "group": "engine-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "20_d21bd37c7c_rtree_inode0_stale_node",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 20,
+     "upstream_fix": "d21bd37c7c",
+     "title": "new16; unfixed in every release",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any ca",
+       "group": "engine-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "21_eab0e10304_rtree_static_bind_stale_text",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 21,
+     "upstream_fix": "eab0e10304",
+     "title": "new03, rtree arm -- same bug, second observable",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "22_fix-2026-07-26_spellfix_oom_stale_vtab",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 22,
+     "upstream_fix": "fix-2026-07-26",
+     "title": "row24",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any ca",
+       "group": "engine-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      }
+     }
+    },
+    {
+     "case": "23_eab0e10304_fts3_static_bind_stale_text",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 23,
+     "upstream_fix": "eab0e10304",
+     "title": "new03, fts3 arm",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "24_d4b646997a_writable_schema_stale_table",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 24,
+     "upstream_fix": "d4b646997a",
+     "title": "row08",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "25_415540ddaa_fts5_getvarint_overread",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 25,
+     "upstream_fix": "415540ddaa",
+     "title": "heap-buffer-overflow in sqlite3Fts5GetVarint",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "26_8f5b14a5c2_fts5_decode_getvarint32_overread",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 26,
+     "upstream_fix": "8f5b14a5c2",
+     "title": "heap-buffer-overflow in sqlite3Fts5GetVarint (fts5_decode)",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "27_a783931794_fts3_getvarint_overread",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 27,
+     "upstream_fix": "a783931794",
+     "title": "heap-buffer-overflow in sqlite3Fts3GetVarint",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      }
+     }
+    },
+    {
+     "case": "28_c7def600bd_fts3_matchinfo_overread",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 28,
+     "upstream_fix": "c7def600bd",
+     "title": "heap-buffer-overflow in fts3EvalUpdateCounts",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      }
+     }
+    },
+    {
+     "case": "29_fz02_btree_get4byte_page_overread",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 29,
+     "upstream_fix": "fz02",
+     "title": "heap-buffer-overflow / SEGV: sqlite3Get4byte reads a page past the buffer",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "30_fz06_recordcompareint_overread",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 30,
+     "upstream_fix": "fz06",
+     "title": "heap-buffer-overflow: vdbeRecordCompareInt THREE_BYTE_INT",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      }
+     }
+    },
+    {
+     "case": "31_fz10_dbstat_decodepage_overflow",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 31,
+     "upstream_fix": "fz10",
+     "title": "heap overflow in statDecodePage; needs -DSQLITE_ENABLE_DBSTAT_VTAB",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    },
+    {
+     "case": "32_fz11_dbstat_freechain_overflow",
+     "group": "engine-repros",
+     "allocator_boundary": "nested",
+     "number": 32,
+     "upstream_fix": "fz11",
+     "title": "heap overflow in statDecodePage free-chain walk; needs DBSTAT_VTAB",
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker.",
+       "group": "engine-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "engine-repros",
+       "bundle": "results/20261007-virtual-platform-allocator",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-platform-allocator"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "engine-repros",
+       "bundle": "results/20261008-virtual-memsys5-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-memsys5-sublet"
+      }
+     }
+    }
+   ],
+   "groups": {
+    "capi-repros": {
+     "boundary": "the SQLite C API, as host bindings hold it",
+     "cases": 19,
+     "ignore": null
+    },
+    "engine-repros": {
+     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+     "cases": 33,
+     "ignore": null
+    }
+   },
+   "protection": {
+    "cheribsd": [
+     {
+      "bundle": "results",
+      "reader": "sqlite-axis",
+      "arm": "cheribsd-revocation",
+      "key": "slug",
+      "vehicle": "cheribsd-purecap",
+      "group": "engine-repros",
+      "key_why": "the number is positional and a deletion ahead of a case moves it; the fix id and slug are the case, and the archived bundles keep the number they ran under",
+      "silence_unproven": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker."
+     },
+     {
+      "not_run": "not read yet. This group was measured under this tree's older mechanism arms (none of this arm's kind), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill.",
+      "group": "capi-repros"
+     }
+    ],
+    "capstone-sysalloc": [
+     {
+      "bundle": "results/20261007-virtual-platform-allocator",
+      "reader": "virtual",
+      "arm": "virtual-platform-allocator",
+      "key": "slug",
+      "vehicle": "capstone-virtual",
+      "group": "engine-repros",
+      "key_why": "the number is positional and a deletion ahead of a case moves it; the fix id and slug are the case, and the archived bundles keep the number they ran under",
+      "silence_unproven": "a completion here is NOT a measured silence. Each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. What is missing is the evidence that the defective path ran, and these cells become measured silences the moment a case publishes that marker."
+     },
+     {
+      "not_run": "not read yet. This group was measured under this tree's older mechanism arms (none of this arm's kind), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill.",
+      "group": "capi-repros"
+     }
+    ],
+    "capstone-sublet": [
+     {
+      "group": "engine-repros",
+      "bundle": "results/20261008-virtual-memsys5-sublet",
+      "reader": "virtual",
+      "arm": "virtual-memsys5-sublet",
+      "vehicle": "capstone-virtual",
+      "key": "slug",
+      "silence_unproven": "a completion here is NOT a measured silence, for the same reason as this group's other two arms: each case prints only its query's result -- `rows=2`, `NOTRAP done` -- and carries no marker printed after reuse is proven, so nothing establishes that the dangling access happened. It is not that nothing was freed: the port revokes 231 to 1786 blocks per case. The eleven quiet cases become measured silences the moment a case publishes that marker.",
+      "because": "memsys5 under the Sublet discipline (ports/sqlite/sublet/sublet-3220000-memsys5.patch): the arena allocator hands each of its chunks out as a bounded capability and revokes it at its own free.",
+      "key_note": "keyed on the SLUG, not on the case directory. The directory carries a leading ordinal, and deleting any case in the group renumbers every directory after it -- keying a declaration on that means the cell silently stops matching its own bundle. Read by `dir` this arm reported 5 catches where the bundle holds 22: five directories happened to keep their number and the other seventeen fell to `not-run`, which looks like a legitimate gap and is not one. The other two arms of this group were already keyed on the slug."
+     },
+     {
+      "not_run": "not read yet. This group was measured under this tree's older mechanism arms (none of this arm's kind), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill.",
+      "group": "capi-repros"
+     }
+    ]
+   }
+  },
+  {
    "corpus": "wireshark",
    "program": "wireshark",
    "title": "Wireshark: forty-four defects, twenty-two inside wmem and twenty-two past a direct g_malloc",

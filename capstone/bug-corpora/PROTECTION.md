@@ -28,16 +28,15 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 29 | 0 | 76 | 0 | 39 | 144 | 3 |
-| `capstone-sysalloc` | 36 | 0 | 59 | 0 | 49 | 144 | 3 |
-| `capstone-sublet` | 99 | 0 | 2 | 0 | 43 | 144 | 3 |
+| `cheribsd` | 34 | 0 | 76 | 0 | 67 | 177 | 3 |
+| `capstone-sysalloc` | 58 | 0 | 59 | 0 | 60 | 177 | 3 |
+| `capstone-sublet` | 121 | 0 | 2 | 0 | 54 | 177 | 3 |
 
 ## Programs that have not declared their arms yet
 
-Not in any total above or below, and not a statement about them: **2** of 9 programs in the tree.
+Not in any total above or below, and not a statement about them: **1** of 9 programs in the tree.
 
 - `ffmpeg`
-- `sqlite`
 
 ## The arms compared where all three were measured, split by who allocated the object
 
@@ -53,25 +52,25 @@ the system allocator handed the object out directly -- the boundary all three ar
 | `capstone-sysalloc` | **13** | 0 | 0 | 100% |
 | `capstone-sublet` | **13** | 0 | 0 | 100% |
 
-### `nested`: 55 cases
+### `nested`: 59 cases
 
 the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **4** | 0 | 51 | 7% |
-| `capstone-sysalloc` | **3** | 0 | 52 | 5% |
-| `capstone-sublet` | **55** | 0 | 0 | 100% |
+| `cheribsd` | **8** | 0 | 51 | 14% |
+| `capstone-sysalloc` | **7** | 0 | 52 | 12% |
+| `capstone-sublet` | **59** | 0 | 0 | 100% |
 
-### All 89 together
+### All 93 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **27** | 0 | 62 | 30% |
-| `capstone-sysalloc` | **34** | 0 | 55 | 38% |
-| `capstone-sublet` | **89** | 0 | 0 | 100% |
+| `cheribsd` | **31** | 0 | 62 | 33% |
+| `capstone-sysalloc` | **38** | 0 | 55 | 41% |
+| `capstone-sublet` | **93** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -265,6 +264,55 @@ PostgreSQL: nineteen defects at three fidelities -- a C reduction, the memory co
 - `cheribsd`: **5** caught, 7 missed, 7 not run, of 19.
 - `capstone-sysalloc`: **6** caught, 5 missed, 8 not run, of 19.
 - `capstone-sublet`: **10** caught, 0 missed, 9 not run, of 19.
+
+### sqlite -- 33 cases with a directory, of 52 declared
+
+SQLite: fifty-two defects -- nineteen through the C API, thirty-three in the engine under memsys5
+
+| group | cases | the boundary its cases cross |
+|---|---:|---|
+| `capi-repros` | 19 | the SQLite C API, as host bindings hold it |
+| `engine-repros` | 33 | memsys5, SQLite's own arena allocator, under the engine |
+
+| group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
+|---|---:|---|---|:---:|:---:|:---:|
+| `engine-repros` | 0 | `adfb203a7d` | heap-use-after-free in sqlite3Fts5GetVarint | — | **C** | **C** |
+| `engine-repros` | 1 | `5e4233a9e4` | row17 | — | — | — |
+| `engine-repros` | 2 | `b9e0f62c3a` | row15 | **C** | **C** | **C** |
+| `engine-repros` | 3 | `e464802d49` | row05 | — | **C** | **C** |
+| `engine-repros` | 4 | `8504d37b99` | row20 | — | — | — |
+| `engine-repros` | 5 | `6397a78b2b` | row04 | **C** | **C** | **C** |
+| `engine-repros` | 6 | `0c8c9a64b3` | row19 | — | **C** | **C** |
+| `engine-repros` | 7 | `129371553c` | new04 | — | — | — |
+| `engine-repros` | 8 | `51dd67080a` | row13 | — | — | — |
+| `engine-repros` | 9 | `fix-2026-08-17` | row23 | — | — | — |
+| `engine-repros` | 10 | `becd68ba0d` | row06 | — | — | — |
+| `engine-repros` | 11 | `dee0359ddb` | row11 | — | — | — |
+| `engine-repros` | 12 | `fb8ca7de0c` | row10 | — | — | **C** |
+| `engine-repros` | 13 | `fix-2026-06-08` | row22 | — | **C** | **C** |
+| `engine-repros` | 14 | `25e3073741` | row03 | — | **C** | **C** |
+| `engine-repros` | 15 | `2639ddc474` | row01 | — | **C** | **C** |
+| `engine-repros` | 16 | `unfixed` | new02; found by us, still unfixed | — | **C** | **C** |
+| `engine-repros` | 17 | `28001204f4` | new01 | — | **C** | **C** |
+| `engine-repros` | 18 | `mem5-design` | row25; allocator design defect, trigger written by us | — | **C** | **C** |
+| `engine-repros` | 19 | `c8c9cdd9dd` | new05 | **C** | **C** | **C** |
+| `engine-repros` | 20 | `d21bd37c7c` | new16; unfixed in every release | **C** | **C** | **C** |
+| `engine-repros` | 21 | `eab0e10304` | new03, rtree arm -- same bug, second observable | — | **C** | **C** |
+| `engine-repros` | 22 | `fix-2026-07-26` | row24 | **C** | — | — |
+| `engine-repros` | 23 | `eab0e10304` | new03, fts3 arm | — | **C** | **C** |
+| `engine-repros` | 24 | `d4b646997a` | row08 | — | **C** | **C** |
+| `engine-repros` | 25 | `415540ddaa` | heap-buffer-overflow in sqlite3Fts5GetVarint | — | **C** | **C** |
+| `engine-repros` | 26 | `8f5b14a5c2` | heap-buffer-overflow in sqlite3Fts5GetVarint (fts5_decode) | — | **C** | **C** |
+| `engine-repros` | 27 | `a783931794` | heap-buffer-overflow in sqlite3Fts3GetVarint | — | — | — |
+| `engine-repros` | 28 | `c7def600bd` | heap-buffer-overflow in fts3EvalUpdateCounts | — | — | — |
+| `engine-repros` | 29 | `fz02` | heap-buffer-overflow / SEGV: sqlite3Get4byte reads a page past the buffer | — | **C** | **C** |
+| `engine-repros` | 30 | `fz06` | heap-buffer-overflow: vdbeRecordCompareInt THREE_BYTE_INT | — | **C** | — |
+| `engine-repros` | 31 | `fz10` | heap overflow in statDecodePage; needs -DSQLITE_ENABLE_DBSTAT_VTAB | — | **C** | **C** |
+| `engine-repros` | 32 | `fz11` | heap overflow in statDecodePage free-chain walk; needs DBSTAT_VTAB | — | **C** | **C** |
+
+- `cheribsd`: **5** caught, 0 missed, 28 not run, of 33.
+- `capstone-sysalloc`: **22** caught, 0 missed, 11 not run, of 33.
+- `capstone-sublet`: **22** caught, 0 missed, 11 not run, of 33.
 
 ### wireshark -- 44 cases
 
