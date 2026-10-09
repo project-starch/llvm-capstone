@@ -17,11 +17,19 @@
  *   mode 1 (sublet): issue and release each revoke the chunk and mint a fresh
  *   alias, so that pointer is dead. Revocation clears the chunk; slabs_clsid,
  *   which upstream keeps on free memory, is put back from the page's record.
+ *   mode 2 (sublet-malloc): Sublet as the SYSTEM allocator under a stock
+ *   slabs.c. The page is never cut: every chunk is the whole page's alias at
+ *   the chunk's address, as a pointer into a malloc'd page is, and nothing is
+ *   revoked until the page itself is given back -- free() on the Sublet heap.
  * Objects. cache.c's are the same shape one level down -- malloc'd once,
  * pushed and popped, freed only over a limit or at destroy -- and get the same
- * treatment, one region per object. */
+ * treatment, one region per object. In mode 2 an object is its own region, as
+ * its malloc would make it, revoked only when it is discarded (cache.c's free). */
 #include "mc_slabs_shim.h"
 #include "port.h"
+#ifdef MCP_DOMAIN
+#include <capstone/capability.h> /* mode 2's check that a chunk carries its page's bound */
+#endif
 
 #define MIN_PAGE (64UL * 1024)
 #define MAX_PAGES (MCP_PAGE_HALF / MIN_PAGE)
@@ -54,18 +62,21 @@ struct object {
 static struct page *pages;
 static uint16_t *page_map; /* page number + 1 for every grain of a page */
 static struct object *objects;
-static unsigned page_count, object_count, protected_mode;
+static unsigned page_count, object_count, protected_mode, malloc_granular;
 static uint64_t chunk_reuses, chunk_releases, object_reuses, object_releases;
 
 void mcp_payload_init(void *payload) { mcp_authority_init(payload); }
 void mcp_set_mode(unsigned mode) {
-  if (mode > 1)
+  if (mode > 2)
     mcp_fail(502);
   /* A hosted execution does not acquire revocation from a mode number. */
-  if (mode == 1 && !mcp_authority_can_revoke())
+  if (mode >= 1 && !mcp_authority_can_revoke())
     mcp_fail(505);
-  protected_mode = mode;
-  mcp_authority_set_mode(mode);
+  /* protected_mode: revoke at the free-list transitions (mode 1 only).
+   * malloc_granular: page-wide chunks, revocation only at discard (mode 2). */
+  protected_mode = mode == 1;
+  malloc_granular = mode == 2;
+  mcp_authority_set_mode(mode == 1);
   pages = mcp_meta_calloc(MAX_PAGES, sizeof *pages);
   page_map = mcp_meta_calloc(GRAINS, sizeof *page_map);
   objects = mcp_meta_calloc(MAX_OBJECTS, sizeof *objects);
@@ -133,6 +144,20 @@ void *mcp_page_carve(void *page, unsigned id, uint32_t chunk_size, uint32_t pers
   pg->chunk_size = chunk_size;
   pg->perslab = perslab;
   pg->clsid = id;
+  if (malloc_granular) {
+    /* Stock slabs.c: a chunk is page + i * size, carrying the page's bound. */
+#ifdef MCP_DOMAIN
+    capstone_cap_slot probe;
+    capstone_cap_store(&probe, pg->alias);
+    if (capstone_cap_base(&probe) != pg->base || capstone_cap_end(&probe) != pg->base + pg->size)
+      mcp_fail(509);
+#endif
+    for (uint32_t i = 0; i < perslab; ++i) {
+      pg->chunks[i].alias = (char *)pg->alias + (size_t)i * chunk_size;
+      pg->chunks[i].state = CARVED;
+    }
+    return pg->chunks[0].alias;
+  }
   /* The whole-page alias upstream zeroed through dies here; the region comes
    * back linear and is cut, in order, into the chunks the split will file. */
   mcp_authority_reclaim(&pg->region);
@@ -186,7 +211,7 @@ void mcp_page_discard(void *page) {
   /* Only memory_release comes here, with a page from the global pool that
    * was never split. Nothing is handed out again; reclaiming the authority
    * is all there is. */
-  if (protected_mode)
+  if (protected_mode || malloc_granular)
     mcp_authority_reclaim(&pg->region);
 }
 
@@ -246,7 +271,7 @@ void mcp_object_discard(void *object) {
   if (o->state == GONE)
     mcp_fail(530);
   o->state = GONE;
-  if (protected_mode)
+  if (protected_mode || malloc_granular)
     mcp_authority_reclaim(&o->region);
 }
 

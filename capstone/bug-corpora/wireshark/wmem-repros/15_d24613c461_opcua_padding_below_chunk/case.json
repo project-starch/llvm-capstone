@@ -63,6 +63,14 @@
       "status": "measured",
       "verdict": "TWO-SIDED",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-differential/: the buggy sequence reaches storage outside its object (VERDICT DEFECT-REPRODUCED, exit 0) and the fixed sequence -- this case's upstream fix, modelled in case.c under wm_fixed -- does not (VERDICT FIXED, exit 0). Hosted build, upstream wmem allocator (WM_CHUNKS=OFF), `program 0 N buggy|fixed` (runners/run-native.sh). Spatial: the access address lies outside [object, object+size) in the buggy sequence and inside it, or is not made, in the fixed one. The arm did not exist before 2026-10-09: the cases had no fixed sequence."
+    },
+    "sublet-malloc": {
+      "target": "Capstone domain, wmem AS RELEASED (WM_VARIANT=reference: none of the port's patches) on Sublet regions, mode 1: every g_malloc a region, every g_free a revoke -- Sublet only as the system allocator",
+      "oracle": "complete: the crossing leaves its wmem chunk but stays inside the block wmem carved it from, one g_malloc; without the port nothing narrows below that region (the same mechanism as the stock CheriBSD reading of this case, which completes).",
+      "prediction": "complete",
+      "status": "predicted",
+      "control": "controls/sublet-malloc/90_ctl_jumbo_freed_by_reset must fault in the same build",
+      "predicted": "2026-10-09"
     }
   },
   "status": "MEASURED 2026-10-05 under QEMU on BOTH builds (WM_CHUNKS=ON and OFF): cause 5 at the labelled READ probe, with the pc equal to the probe address the run resolved from the image. 12/12 arms on each build, runner exit 0, with case 11 in the same runs as the temporal regression control reading cause 24, and the suite's negative control reporting 12/12 oracles FAIL as they must. Bundles: results/20261005-qemu-spatial-5-{ON,OFF}/. This row is LIVE at the v4.6.8 pin. Both arms read the same because wm_narrow() narrows every wmem allocation on every arm, so this harness has no malloc-granular arm and the row does not discriminate the chunk port. PoisonCap and CheriBSD are unmeasurable here; native-detect is declined, not pending -- see the corpus README. N = 1 per cell. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on: completes, not caught. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 CAUGHT, mode 1 CAUGHT.",

@@ -12,6 +12,11 @@ runtime from the mode argument, so the two arms differ in exactly one thing.
                     alias, so that pointer is dead and the first read through
                     it must FAULT -- at the labelled probe, not merely
                     somewhere.
+  sublet-malloc (mode 2)  Sublet only as the system allocator under a stock
+                    slabs.c and cache.c: a chunk carries its whole page's bound,
+                    an object its own, and nothing is revoked until a page or an
+                    object is given back. Its oracle is the case's
+                    `sublet-malloc` arm, like the other two.
 
 The expected PC is not hardcoded. The domain publishes both probe addresses
 through its marker, and the oracle compares the fault PC against what that boot
@@ -167,6 +172,7 @@ p.add_argument(
 )
 p.add_argument("--cases", default=",".join(str(i) for i in range(len(CASES))))
 p.add_argument("--modes", default="spatial,sublet")
+MODE_NUMBER = {"spatial": 0, "sublet": 1, "sublet-malloc": 2}
 p.add_argument(
     "--negative-control",
     action="store_true",
@@ -186,9 +192,9 @@ for which in map(int, a.cases.split(",")):
     if not 0 <= which < len(CASES):
         p.error(f"no such case: {which}")
     for mode in a.modes.split(","):
-        if mode not in ("spatial", "sublet"):
+        if mode not in MODE_NUMBER:
             p.error("invalid mode")
-        number = 0 if mode == "spatial" else 1
+        number = MODE_NUMBER[mode]
         run, hashes = stage_run(
             a.output,
             f"{which:02d}-{CASES[which][1]}-{mode}-",
@@ -265,7 +271,7 @@ echo MC_DEFECT_DONE
         if a.negative_control:
             flag = "FIRED" if not row["passed"] else "VACUOUS"
         extra = ""
-        if mode == "sublet":
+        if row.get("expected") == "fault":
             extra = f" cause={row.get('cause')} pc={row.get('pc')}"
             if row.get("expected_pc"):
                 extra += f" expected={row['expected_pc']}"

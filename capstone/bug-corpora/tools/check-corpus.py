@@ -124,6 +124,13 @@ ARM_ORACLES = {
     "cheribsd-carve-bounds": {"oracle"},
     # tshark's chunk allocator over the Sublet heap (the wireshark plain-heap corpus).
     "sublet-chunks": {"oracle"},
+    # The three columns asked for per bug (docs/ref/spatial-vs-temporal-three-programs.md section 0):
+    # Sublet ONLY as the system allocator under the program's stock nested allocator; the whole
+    # program's Sublet configuration (heap + its nested allocator's port) on a plain case; and the
+    # Sublet port of a carving routine (regions split from a linear block, each its own alias).
+    "sublet-malloc": {"oracle"},
+    "sublet-full": {"oracle"},
+    "sublet-carve": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),
