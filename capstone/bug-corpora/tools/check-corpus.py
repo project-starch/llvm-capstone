@@ -33,9 +33,34 @@ CORPORA = TOOLS.parent
 REPO = CORPORA.parents[1]
 SEARCH = ["capstone/bug-corpora", "xlang"]
 
+# ONE CORPUS PER APPLICATION. What used to be a corpus is a GROUP inside its
+# application's corpus: the boundary it crosses, the upstream pin and the build
+# seam's case macro stay with the group, because that is where they are true,
+# and the title, the total and the protection sources belong to the application.
+# Nothing moved on disk, so no archived result bundle's case names became wrong.
+#
+# The flat shape below is still checked, because `xlang/` uses it: a declaration
+# with no `groups` is read as one group spelled inline.
+PROGRAM_REQUIRED = {"program", "title", "cases", "checker", "groups", "protection"}
+PROGRAM_OPTIONAL = {"note", "related", "advisories", "inventory"}
+
 DECL_REQUIRED = {"program", "boundary", "title", "cases", "case_schema", "status",
                  "live_in_pin_recorded"}
-DECL_OPTIONAL = {"upstream", "expect_live_in_pin", "live_in_pin_note", "case_macro",
+# Who allocated the object a case crosses. arms.json carries the definitions; the
+# split on this axis is what keeps a nested-allocator corpus from making the
+# malloc-boundary arms look weak at the boundary they do protect. `mixed` is a
+# group-level answer only, and obliges every case in the group to give its own.
+BOUNDARY_CLASSES = {"system", "nested", "interior"}
+# `allocator_boundary` and `protection` are OPTIONAL HERE ON PURPOSE, and both are
+# meant to become required. Their vocabulary and their shape are checked in full
+# wherever they appear; what is deliberately not checked yet is that every group
+# has them. The declarations arrive per program in the steps after this one, and
+# requiring them in the same change that introduces them would mean landing the
+# contract and 26 corpora's worth of answers at once -- which is exactly the
+# unreviewable lump this split exists to avoid. The checker says `not declared`
+# through the matrix's `not-run` cells instead, so the gap is visible in the
+# generated table rather than hidden.
+DECL_OPTIONAL = {"ignore", "protection", "allocator_boundary", "upstream", "expect_live_in_pin", "live_in_pin_note", "case_macro",
                  "case_glob", "case_exclude", "case_number_base", "case_table",
                  "case_dir_column", "case_doc", "required_arms", "arm_keys",
                  "expect_provenance", "runners", "checker", "inventory", "evidence",
@@ -63,12 +88,29 @@ CASE_REQUIRED = {
     "script-trigger": ["case", "upstream_fix", "title", "consumer", "class",
                        "trigger", "fidelity", "arms", "status"],
 }
-CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
+# Three kinds of case that stay in the corpus and leave every denominator.
+# A bare "ignored" is the one cell a reader cannot interpret, so each kind says
+# what it is and every one of them carries a reason.
+IGNORE_KINDS = {
+    "no-runtime": "no arm here can run it at all -- the case is material, not a measurement",
+    "arm": "one or more named arms cannot run it; the others measure it normally",
+    "out-of-scope": "neither spatial nor temporal, so outside what the study measures",
+    # The first three are properties of the case. This one is a DECISION about
+    # what the study reports, and it is a declaration rather than a view on
+    # purpose: a decision to leave a measured case out belongs in the record,
+    # next to the case, with whoever reads it able to see the reason. For merely
+    # LOOKING at a subset there is `protection-matrix.py --focus`, which writes
+    # nothing.
+    "parked": "measured or measurable, and deliberately not reported; the why says on whose decision and what it costs",
+}
+
+CASE_OPTIONAL = {"ignore", "live_in_pin", "live_proof", "live_note", "distinguishing",
                  "sibling_issue", "size_class", "size_note", "layer_note", "note",
                  "advisory", "shape", "object", "capstone_column", "comparison",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
+                 "allocator_boundary",
                  "citation_constraint"}
 # `citation_constraint` records that a case's upstream commit cannot be quoted
 # freely -- in practice that its SUBJECT names a person, so the fix may be cited
@@ -122,6 +164,19 @@ ARM_ORACLES = {
     "host-asan": {"oracle"},
     "capstone-domain": {"oracle"},
 }
+# The three arms every bug gets a verdict for, and the readers that can produce
+# one. Both are read out of the generator and arms.json rather than copied here,
+# so a reader added there cannot fail validation for not being in a second list.
+def protection_vocabulary():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "protection_matrix", Path(__file__).resolve().parent / "protection-matrix.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    arms = json.loads((Path(__file__).resolve().parent.parent / "arms.json").read_text())
+    return tuple(module.ARMS), set(module.READERS), set(arms["arms"])
+
+
 WORDS = {"eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
          "thirteen": 13, "twenty": 20}
 
@@ -266,6 +321,18 @@ def check_cases(corpus, decl, dirs, problems):
             if key not in required and key not in CASE_OPTIONAL:
                 problems.append(f"{where}: unknown field {key!r} -- add it to "
                                 f"SCHEMA.md and to this checker, or drop it")
+        # Only a `mixed` group asks its cases for the boundary class, and then it
+        # asks ALL of them: a group half-answered splits into a silent remainder.
+        mixed = decl.get("allocator_boundary") == "mixed"
+        own = case.get("allocator_boundary")
+        if mixed and own not in BOUNDARY_CLASSES:
+            problems.append(f"{where}: the group's allocator_boundary is 'mixed', so "
+                            f"this case needs its own, one of "
+                            f"{sorted(BOUNDARY_CLASSES)}; it has {own!r}")
+        if not mixed and own is not None:
+            problems.append(f"{where}: allocator_boundary {own!r} on a case whose "
+                            f"group already declares "
+                            f"{decl.get('allocator_boundary')!r}")
 
         number, fix = case.get("case"), case.get("upstream_fix")
         if isinstance(number, int) and fix:
@@ -383,23 +450,229 @@ def check_cases(corpus, decl, dirs, problems):
                                 f"{counted}")
 
 
-def check_one(manifest):
-    """Check the corpus that `manifest` declares. Returns a list of problems."""
-    corpus = manifest.parent
-    where = corpus.relative_to(REPO)
-    problems = []
-    try:
-        decl = json.loads(manifest.read_text())
-    except json.JSONDecodeError as exc:
-        return [f"{where}: corpus.json is not valid JSON: {exc}"]
+def check_protection(corpus, decl, problems):
+    """Every corpus says, for each of the three arms and for each of its groups,
+    where that verdict comes from.
 
-    for key in sorted(DECL_REQUIRED - set(decl)):
+    This is what keeps PROTECTION.md honest: a cell is either a bundle this
+    checker can see, or an explicit reason there is no measurement, and there is
+    no third state in which a reader cannot tell the difference. The arm names
+    and the readers come from `arms.json` and `tools/protection-matrix.py`, so
+    the three files cannot drift apart silently.
+
+    An arm holds one entry PER GROUP, because the groups of one application were
+    measured by different runs -- FFmpeg's pool bundle is not its plain-heap
+    bundle -- and a cell must name the run that scored its own case.
+    """
+    arms, readers, declared = protection_vocabulary()
+    if set(arms) != declared:
+        problems.append(f"arms.json declares {sorted(declared)} and "
+                        f"protection-matrix.py {sorted(arms)}")
+    block = decl.get("protection")
+    if block is None:
+        # Not yet declared, which is not yet an error -- see the note beside
+        # DECL_OPTIONAL. protection-matrix.py reports the same fact as three
+        # `not-run` cells carrying the reason, so it is counted in the table
+        # instead of passing silently.
+        return
+    for key in sorted(set(block) - set(arms) - {"note"}):
+        problems.append(f"protection has an entry {key!r} that is not one of "
+                        f"{sorted(arms)}")
+    # A group that runs on no arm here owes no protection entries: its `ignore`
+    # IS the statement, and asking it for three bundles that cannot exist would
+    # turn a clear fact into three holes.
+    groups = {name for name, group in (decl.get("groups") or {"": None}).items()
+              if not (group or {}).get("ignore")}
+    for arm in arms:
+        entries = block.get(arm)
+        where = f"protection.{arm}"
+        if isinstance(entries, dict):           # the flat shape: one group inline
+            entries = [entries]
+        if not isinstance(entries, list) or not entries:
+            problems.append(f"{where} is missing or is not a non-empty list")
+            continue
+        seen = [e.get("group", "") for e in entries]
+        for group in sorted(groups - set(seen)):
+            problems.append(f"{where}: no entry for group {group!r}")
+        for group in sorted({g for g in seen if seen.count(g) > 1}):
+            problems.append(f"{where}: {seen.count(group)} entries for group {group!r}")
+        for spec in entries:
+            group = spec.get("group", "")
+            if groups != {""} and group not in groups:
+                problems.append(f"{where}: entry names group {group!r}, which the "
+                                f"corpus does not declare")
+                continue
+            root = corpus / group if group else corpus
+            label = f"{where}[{group}]" if group else where
+            if "not_run" in spec:
+                if set(spec) - {"not_run", "group"}:
+                    problems.append(f"{label} has not_run and "
+                                    f"{sorted(set(spec) - {'not_run', 'group'})}: a "
+                                    f"cell is a measurement or a reason, not both")
+                elif len(spec["not_run"].split()) < 6:
+                    problems.append(f"{label}: not_run is a label, not a reason -- say "
+                                    f"whether it can be measured and what it waits on")
+                continue
+            if "coincides_with" in spec:
+                if spec["coincides_with"] not in arms:
+                    problems.append(f"{label}: coincides_with names "
+                                    f"{spec['coincides_with']!r}")
+                if not spec.get("why"):
+                    problems.append(f"{label}: coincides_with with no why")
+                continue
+            for field in ("bundle", "reader", "vehicle"):
+                if field not in spec:
+                    problems.append(f"{label}: no {field}")
+            if spec.get("reader") not in readers:
+                problems.append(f"{label}: reader {spec.get('reader')!r} is not one of "
+                                f"{sorted(readers)}")
+            names = spec.get("bundle", [])
+            for one in [names] if isinstance(names, str) else names:
+                if not (root / one).is_dir():
+                    problems.append(f"{label}: bundle {one} does not exist")
+            check_disposition(label, root, spec, problems)
+            check_detection_unproven(label, root, spec, problems)
+
+
+# Why an arm was silent, when a run has measured it. The vocabulary is small on
+# purpose: each value is a different answer to "did the mechanism get a chance",
+# and a miss with no disposition is an open question, which PROTECTION.md counts
+# separately from the explained ones.
+DISPOSITIONS = {
+    "never-freed": "the object is recycled by the program's own allocator and "
+                   "never reaches the system allocator, so the mechanism never "
+                   "sees it",
+    "quarantined-unswept": "the object was freed and quarantined, and handed back "
+                           "out before a sweep cleared it",
+    "not-temporal": "nothing was freed; the defect crosses a bound inside one "
+                    "live allocation",
+}
+
+
+def check_detection_unproven(label, root, entry, problems):
+    """A detection withdrawn because a control run shows it fires without the defect.
+
+    The mirror of silence_unproven, and it needs the same discipline: the control
+    is a filed bundle, not an assertion, and it says which cases it voids.
+    """
+    spec = entry.get("detection_unproven")
+    if spec is None:
+        return
+    if not isinstance(spec, dict):
+        problems.append(f"{label}: detection_unproven is not an object")
+        return
+    if not isinstance(spec.get("bundle"), str) or not (
+            root / str(spec.get("bundle"))).is_dir():
+        problems.append(f"{label}: detection_unproven names no existing control "
+                        f"bundle")
+    if len(str(spec.get("why", "")).split()) < 12:
+        problems.append(f"{label}: detection_unproven.why is a label, not a reason "
+                        f"-- say what the control did and what it rules out")
+    cases = spec.get("cases")
+    if cases is not None and not (
+            isinstance(cases, list) and cases
+            and all(isinstance(n, int) for n in cases)
+            and len(set(cases)) == len(cases)):
+        problems.append(f"{label}: detection_unproven.cases is not a list of "
+                        f"distinct case numbers")
+    for key in set(spec) - {"bundle", "cases", "why"}:
+        problems.append(f"{label}: detection_unproven has an unknown field {key!r}")
+
+
+def check_disposition(label, root, entry, problems):
+    """One group's silences can have more than one cause -- mruby's four temporal
+    cases are quarantined-unswept and its spatial one frees nothing -- so the field
+    takes a list as well. With several, each must say which cases it covers, or two
+    findings would claim the same cell."""
+    specs = entry.get("disposition")
+    if specs is None:
+        return
+    if isinstance(specs, list):
+        if len(specs) < 2:
+            problems.append(f"{label}: a disposition list of {len(specs)} -- write "
+                            f"one disposition as an object")
+        claimed = set()
+        for one in specs:
+            if isinstance(one, dict) and one.get("cases") is None:
+                problems.append(f"{label}: one of several dispositions names no "
+                                f"cases, so it would claim every missed cell")
+            for n in (one.get("cases") or []) if isinstance(one, dict) else []:
+                if n in claimed:
+                    problems.append(f"{label}: two dispositions both claim case {n}")
+                claimed.add(n)
+    for one in specs if isinstance(specs, list) else [specs]:
+        check_one_disposition(label, root, one, problems)
+
+
+def check_one_disposition(label, root, spec, problems):
+    if not isinstance(spec, dict):
+        problems.append(f"{label}: disposition is not an object")
+        return
+    if spec.get("finding") not in DISPOSITIONS:
+        problems.append(f"{label}: disposition.finding {spec.get('finding')!r} is "
+                        f"not one of {sorted(DISPOSITIONS)}")
+    # The reason carries the numbers that settle it; a label would let a cell
+    # claim an answer the bundle does not hold.
+    if len(str(spec.get("why", "")).split()) < 12:
+        problems.append(f"{label}: disposition.why is a label, not a reason -- say "
+                        "what was measured and what it rules out")
+    if not isinstance(spec.get("bundle"), str) or not (
+            root / str(spec.get("bundle"))).is_dir():
+        problems.append(f"{label}: disposition names no existing bundle")
+    cases = spec.get("cases")
+    if cases is not None and not (
+            isinstance(cases, list) and cases
+            and all(isinstance(n, int) for n in cases)
+            and len(set(cases)) == len(cases)):
+        problems.append(f"{label}: disposition.cases is not a list of distinct "
+                        "case numbers")
+    for key in set(spec) - {"bundle", "finding", "why", "cases"}:
+        problems.append(f"{label}: disposition has an unknown field {key!r}")
+
+
+def check_ignore(where, number, case, problems):
+    """An ignored case says which kind it is and why, and nothing else."""
+    spec = case.get("ignore")
+    if spec is None:
+        return
+    if not isinstance(spec, dict):
+        problems.append(f"case {number}: ignore is not an object")
+        return
+    kind = spec.get("kind")
+    if kind not in IGNORE_KINDS:
+        problems.append(f"case {number}: ignore.kind {kind!r} is not one of "
+                        f"{sorted(IGNORE_KINDS)}")
+    floor = 12 if kind == "parked" else 6
+    if len(str(spec.get("why", "")).split()) < floor:
+        problems.append(f"case {number}: ignore.why is a label, not a reason"
+                        + (" -- a parked case says on whose decision and what the "
+                           "omission costs" if kind == "parked" else ""))
+    if kind == "arm" and not spec.get("arms"):
+        problems.append(f"case {number}: ignore.kind is 'arm' with no arms named")
+    if kind != "arm" and spec.get("arms"):
+        problems.append(f"case {number}: ignore names arms but its kind is {kind!r}")
+    for arm in spec.get("arms") or []:
+        if arm not in protection_vocabulary()[0]:
+            problems.append(f"case {number}: ignore names arm {arm!r}, which is not "
+                            f"one of the three")
+
+
+def check_group(corpus, decl, where, problems):
+    """One group: what a corpus used to be, checked exactly as it was."""
+    ignore = decl.get("ignore")
+    if ignore is not None:
+        check_ignore(where, "group", {"ignore": ignore}, problems)
+    # The xlang corpora are exempt, as they are from the protection block: their
+    # rows are not case directories and they declare no arms, so an axis for
+    # splitting the arms has nothing to say about them.
+    exempt = {"allocator_boundary"} if decl.get("case_schema") == "xlang-row" else set()
+    for key in sorted(DECL_REQUIRED - set(decl) - {"program"} - exempt):
         problems.append(f"missing required declaration {key!r}")
-    for key in sorted(set(decl) - DECL_REQUIRED - DECL_OPTIONAL):
+    for key in sorted(set(decl) - DECL_REQUIRED - DECL_OPTIONAL - {"protection_note"}):
         problems.append(f"unknown declaration {key!r} -- add it to SCHEMA.md and to "
                         f"this checker, or drop it")
     if problems:
-        return [f"{where}: {p}" for p in problems]
+        return
 
     if decl["case_schema"] not in SCHEMAS:
         problems.append(f"case_schema {decl['case_schema']!r} is not one of "
@@ -410,12 +683,16 @@ def check_one(manifest):
         problems.append("cases is not a non-negative integer")
     if not isinstance(decl["live_in_pin_recorded"], bool):
         problems.append("live_in_pin_recorded is not a boolean")
+    if "allocator_boundary" in decl and decl["allocator_boundary"] not in (
+            BOUNDARY_CLASSES | {"mixed"}):
+        problems.append(f"allocator_boundary {decl['allocator_boundary']!r} is not "
+                        f"one of {sorted(BOUNDARY_CLASSES | {'mixed'})}")
     if not decl["live_in_pin_recorded"] and not decl.get("live_in_pin_note"):
         problems.append("live_in_pin_recorded is false with no live_in_pin_note saying why")
     if decl["cases"] == 0 and decl["status"] not in {"planned", "triaged"}:
         problems.append(f"no cases, but status is {decl['status']!r}")
     if problems:
-        return [f"{where}: {p}" for p in problems]
+        return
 
     for field in PATH_FIELDS:
         value = decl.get(field)
@@ -428,8 +705,55 @@ def check_one(manifest):
         problems.append(f"cases says {decl['cases']}, the tree has {len(dirs)}")
     if decl["cases"] and decl["case_schema"] != "xlang-row":
         check_cases(corpus, decl, dirs, problems)
+        for directory in dirs:
+            manifest = directory / "case.json"
+            if manifest.exists():
+                try:
+                    check_ignore(where, directory.name,
+                                 json.loads(manifest.read_text()), problems)
+                except json.JSONDecodeError:
+                    pass          # check_cases already reports it
     if decl.get("shape_table"):
         check_shape_table(corpus, decl, len(dirs), problems)
+
+
+def check_one(manifest):
+    """Check the corpus that `manifest` declares. Returns a list of problems."""
+    corpus = manifest.parent
+    where = corpus.relative_to(REPO)
+    problems = []
+    try:
+        decl = json.loads(manifest.read_text())
+    except json.JSONDecodeError as exc:
+        return [f"{where}: corpus.json is not valid JSON: {exc}"]
+
+    if "groups" not in decl:
+        # The flat shape: one group spelled inline, which is what xlang/ uses.
+        check_group(corpus, decl, where, problems)
+        if decl.get("case_schema") != "xlang-row":
+            check_protection(corpus, decl, problems)
+        return [f"{where}: {p}" for p in problems]
+
+    for key in sorted(PROGRAM_REQUIRED - set(decl)):
+        problems.append(f"missing required declaration {key!r}")
+    for key in sorted(set(decl) - PROGRAM_REQUIRED - PROGRAM_OPTIONAL):
+        problems.append(f"unknown declaration {key!r} -- add it to SCHEMA.md and to "
+                        f"this checker, or drop it")
+    if problems:
+        return [f"{where}: {p}" for p in problems]
+
+    total = 0
+    for name, group in sorted(decl["groups"].items()):
+        directory = corpus / name
+        if not directory.is_dir():
+            problems.append(f"group {name!r} has no directory")
+            continue
+        total += group.get("cases", 0)
+        check_group(directory, dict(group, program=decl["program"]),
+                    directory.relative_to(REPO), problems)
+    if total != decl["cases"]:
+        problems.append(f"cases says {decl['cases']}, the groups say {total}")
+    check_protection(corpus, decl, problems)
 
     return [f"{where}: {p}" for p in problems]
 
@@ -442,7 +766,20 @@ def self_test():
     sixth corruption is added, and keeps printing five when one stops running.
     The number has to come from the list that ran, or it is decoration.
     """
+    # The victim is a GROUP, and its declaration is read WHEREVER IT LIVES. While
+    # the corpora are being moved one program at a time, a group either still
+    # carries its own corpus.json or is already an entry inside its program's
+    # file, and a self-test hard-coded to one of the two shapes stops running
+    # the moment that program moves -- silently, since a crash in the harness is
+    # not a rejected corruption. Finding it either way is what keeps the proof
+    # alive across the move.
     victim = CORPORA / "cpython/pymalloc-repros"
+    own = victim / "corpus.json"
+    if own.exists():
+        group = json.loads(own.read_text())
+    else:
+        group = json.loads((CORPORA / "cpython/corpus.json").read_text())[
+            "groups"]["pymalloc-repros"]
     accepted = []
     corruptions = (
         ("a missing required field", lambda c: c.pop("consumer")),
@@ -454,6 +791,13 @@ def self_test():
         # gate that spots it.
         ("a misspelled arm hidden behind 'not written'",
          lambda c: c["arms"].update(spatail={"status": "not written"})),
+        ("an ignore with no kind",
+         lambda c: c.update(ignore={"why": "because it does not run here at all"})),
+        ("an ignore whose reason is a label",
+         lambda c: c.update(ignore={"kind": "out-of-scope", "why": "n/a"})),
+        ("kind 'arm' with no arm named",
+         lambda c: c.update(ignore={"kind": "arm",
+                                    "why": "one arm cannot run this case as written"})),
     )
     for label, mutate in corruptions:
         with tempfile.TemporaryDirectory() as tmp:
@@ -464,11 +808,71 @@ def self_test():
             mutate(case)
             (target / "case.json").write_text(json.dumps(case, indent=2))
             problems = []
-            decl = json.loads((copy / "corpus.json").read_text())
-            check_cases(copy, decl, sorted(copy.glob("[0-9][0-9]_*")), problems)
+            check_cases(copy, group, sorted(copy.glob("[0-9][0-9]_*")), problems)
+            check_ignore("self-test", target.name, case, problems)
             if not problems:
                 accepted.append(label)
-    return accepted, len(corruptions)
+    # The disposition block is checked against the declaration, not a case
+    # directory, so its corruptions get their own pass -- but the same count,
+    # because a corruption the gate lets through is a corruption either way.
+    good = dict(bundle="results/20261008-cheribsd-quarantine",
+                finding="never-freed",
+                why="34 of 34 frees quarantined and none reused while quarantined, "
+                    "so the quarantine was active and the object never reached it")
+    disposition_root = CORPORA / "memcached/allocator-repros"
+    disposition_corruptions = (
+        ("a disposition whose finding is not in the vocabulary",
+         dict(good, finding="probably-fine")),
+        ("a disposition whose reason is a label", dict(good, why="never freed")),
+        ("a disposition naming a bundle that does not exist",
+         dict(good, bundle="results/20991231-wishful")),
+        ("a disposition with a field nobody defined",
+         dict(good, confidence="high")),
+        ("a disposition whose case list is not case numbers",
+         dict(good, cases=["five"])),
+    )
+    for label, spec in disposition_corruptions:
+        problems = []
+        check_disposition("self-test", disposition_root, {"disposition": spec},
+                          problems)
+        if not problems:
+            accepted.append(label)
+    # And the list form, whose failure mode is two findings claiming one cell --
+    # which no single-disposition check can see.
+    list_corruptions = (
+        ("two dispositions claiming the same case",
+         [dict(good, cases=[1, 2]), dict(good, finding="not-temporal", cases=[2, 3])]),
+        ("one of several dispositions naming no cases",
+         [dict(good, cases=[1]), dict(good, finding="not-temporal")]),
+        ("a list of one, which is an object written the long way",
+         [dict(good, cases=[1])]),
+    )
+    withdrawn = dict(bundle="results/20261008-fixed-arm-control",
+                     cases=[2, 3],
+                     why="the same image faults at the same line while running the "
+                         "upstream-fixed sequence, so the fault is not this defect")
+    detection_corruptions = (
+        ("a withdrawn detection naming no control bundle",
+         dict(withdrawn, bundle="results/20991231-wishful")),
+        ("a withdrawn detection whose reason is a label",
+         dict(withdrawn, why="artefact")),
+        ("a withdrawn detection with a field nobody defined",
+         dict(withdrawn, confidence="high")),
+    )
+    for label, spec in detection_corruptions:
+        problems = []
+        check_detection_unproven("self-test", disposition_root,
+                                 {"detection_unproven": spec}, problems)
+        if not problems:
+            accepted.append(label)
+    for label, specs in list_corruptions:
+        problems = []
+        check_disposition("self-test", disposition_root, {"disposition": specs},
+                          problems)
+        if not problems:
+            accepted.append(label)
+    return accepted, (len(corruptions) + len(disposition_corruptions)
+                      + len(detection_corruptions) + len(list_corruptions))
 
 
 def main():

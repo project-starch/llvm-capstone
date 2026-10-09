@@ -1,0 +1,52 @@
+{
+ "title": "The three protection arms every bug in this tree gets a verdict for",
+ "why": [
+  "Until this file existed the tree carried sixteen arm names and seventeen result-table shapes, and no reader could answer the one question the corpora are for: for THIS bug, which defence reports and which does not. The mechanism-level arm names stay where they are -- they record how a measurement was produced -- but every one of them now feeds exactly one of the three arms below, and `tools/protection-matrix.py` is the only thing that reads them.",
+  "Three arms, because there are three protection levels worth separating: a shipping system that protects the malloc boundary (CheriBSD), Capstone protecting the same boundary, and Capstone protecting the nested allocator's objects as well. The first pair differs by implementation, the second by how deep the protection reaches."
+ ],
+ "arms": {
+  "cheribsd": {
+   "title": "stock CheriBSD, revocation at its shipped default",
+   "protects": "the libc malloc/free boundary: every block is handed out bounded to its usable size, and free quarantines it until a revocation sweep clears the capabilities that pointed into it",
+   "revocation": "on, asynchronous, quarantine 1/4 of the heap -- the default a CheriBSD system runs with, not a configuration of ours",
+   "nested": "unprotected: an allocator carving objects out of a malloc block gets no per-object bound and no revocation at its own free",
+   "vehicle": "cheribsd-purecap",
+   "excludes": "PoisonCap. It is our adapter for a competitor's platform, so a reader is entitled to discount it; the arm measures what CheriBSD ships. The poisoncap-* arms stay in the cases as a record and are not read here."
+  },
+  "capstone-sysalloc": {
+   "title": "Capstone, the libc interface protected",
+   "protects": "the same boundary: malloc bounds each object on issue and free revokes it at once, so a capability into a freed object is untagged from the next instruction onwards rather than at the next sweep",
+   "revocation": "synchronous, no quarantine",
+   "nested": "unprotected, exactly as in the cheribsd arm -- which is what makes the two comparable",
+   "vehicle": "capstone-virtual, or capstone-baremetal where a corpus has no virtual run"
+  },
+  "capstone-sublet": {
+   "title": "Capstone, the nested allocator protected too, under the Sublet discipline",
+   "protects": "capstone-sysalloc, plus the program's own allocator issuing each of its objects as a bounded capability and revoking it when the object's life ends -- at whatever granularity the program's own return event has",
+   "revocation": "synchronous, at the nested allocator's own release points",
+   "nested": "protected; this is the only arm in which it is",
+   "vehicle": "capstone-virtual where the port has been lifted onto the application SDK, capstone-baremetal otherwise",
+   "name": "`sublet` here names the discipline the port's adapter follows -- take a linear capability for the block, hand each object out as a bounded sub-capability, give it back when the object's life ends -- which is what `runtime/include/sublet/sublet.h` is and what every in-tree nested adapter is written against."
+  }
+ },
+ "verdicts": {
+  "caught": "the arm's own mechanism reported: a capability fault with a cause, or SIGPROT with an si_code. Where the case publishes a probe address the fault is required to be at it.",
+  "caught, by quarantine membership": "a subcase of caught, not a verdict of its own: the sequence ran to the end and `cheribsd` reported nothing, AND a run measured the object inside its revocation quarantine, with no sweep completing while the case ran. The user's rule, 2026-10-08, and it is deliberately generous to the arm: the mechanism did receive the object and did hold it, and only the batching of its own sweep let the stale access through, so what it saw is what it is credited with. Marked C-q in PROTECTION.md and counted in a column of its own, because the evidence is membership in a shadow bitmap rather than a reported fault -- two different kinds of proof should not disappear into one number.",
+  "coincides": "not a verdict of its own either: the cell was measured by the run that measured the arm named in its `coincides_with`, because on this case there is no nested allocator between the program and malloc: the object comes straight from the system allocator, so the two arms are the same binary and the same measurement. The cell resolves to that arm's verdict and PROTECTION.md marks it `=`, so a reader is never shown one measurement twice as if it were two.",
+  "missed": "the sequence ran to the end and the mechanism said nothing. The case's own DEFECT marker printed, so the defect executed -- a measured silence, not an unexecuted case. A miss whose disposition says the object never reached the system allocator, or that nothing was freed at all, stays a miss: there the mechanism never had the object, and no sweep policy would change it.",
+  "wrong-answer": "no mechanism fired, and the program's own oracle failed. Counts as not caught; kept distinct because a differential corpus has no fault to wait for.",
+  "not-run": "no measurement exists. Always carries a reason, because 'impossible here', 'waiting on a build' and 'nobody got to it' weigh differently in a denominator."
+ },
+ "vehicles": {
+  "cheribsd-purecap": "a CheriBSD process, riscv64-purecap, under CHERI QEMU",
+  "capstone-virtual": "a Linux process under capstone-vexec with capstone_vm.ko, capability pointers over user virtual addresses, full musl libc",
+  "capstone-baremetal": "a freestanding Capstone domain, no libc and no process: the port supplies its memory from a static region. A cell measured here is NOT paired with a capstone-virtual cell -- two things differ, not one -- and the matrix marks it."
+ },
+ "allocator_boundary": {
+  "why": "Which arm can possibly report depends on who allocated the object the defect crosses, so every table that compares the arms is split on it. Without the split, a corpus of nested-allocator bugs makes the malloc-boundary arms look weaker than they are at the boundary they actually protect.",
+  "system": "the system allocator handed the object out directly: malloc, calloc, realloc or the program's thin wrapper over them, with no inner layer. All three arms protect this boundary.",
+  "nested": "the program's own allocator carved the object out of a block it holds: a pool, an arena, a slab, a size-class cache, a GC heap page. Only `capstone-sublet` protects it; for the other two arms the object is interior to a block that is still live.",
+  "interior": "the crossing is inside ONE allocation and no allocator vested the crossed region -- a sub-object bound, a slot in an array. No arm in this study claims it, so the class exists to keep those rows out of a comparison they cannot inform.",
+  "mixed": "a group declaration only: its cases differ, so each case.json carries its own allocator_boundary."
+ }
+}
