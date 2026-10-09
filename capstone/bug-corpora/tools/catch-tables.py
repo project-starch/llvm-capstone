@@ -4,7 +4,14 @@ FFmpeg, tshark and memcached; then the inside-one-allocation table. Computed fro
 cell that is not a reading is printed as NOT RUN / UNCLASSIFIED and counted as neither, and the run
 exits 1 if any exists -- a table with a hole in it is not printed as if it were complete.
 
-    catch-tables.py [bug-corpora dir] [--markdown]
+    catch-tables.py [bug-corpora dir] [--markdown] [--board] [--board-json FILE]
+
+--board prints the THREE-COLUMN tables instead: per bug, (1) CHERI -- stock CheriBSD, revocation on,
+where a freed chunk HELD in quarantine (the stale pointer followed, the chunk never reissued) counts
+as caught and is shown apart from a fault; (2) Sublet in malloc -- Sublet only as the system
+allocator, the program's nested allocator stock; (3) Sublet in nested -- the nested allocator's
+Sublet port (for a plain case, the program's whole configuration with that port live). Then one row
+per bug. --board-json also writes the rows, for the slides.
 
 The source of the per-program tables in docs/ref/spatial-vs-temporal-three-programs.md section 0.
 
@@ -18,7 +25,8 @@ import pathlib
 import re
 import sys
 
-POS = [a for a in sys.argv[1:] if not a.startswith("--")]
+_VALUED = {"--board-json"}  # flags that take a value: their value is not the corpora directory
+POS = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] not in _VALUED]
 BC = pathlib.Path(POS[0]) if POS else pathlib.Path(__file__).resolve().parents[1]
 TARGETS = ("ffmpeg", "wireshark", "memcached")
 NOTRUN = {"predicted", "not written", "declined"}
@@ -54,6 +62,30 @@ def verdict(arm):
     return "UNCLASSIFIED"
 
 
+# The three columns per bug. Column 2 is Sublet ONLY as the system allocator; on a plain corpus that
+# is the `sublet` arm itself, on a nested one the arm that leaves the nested allocator stock.
+COL2 = {"pool-repros": "sublet-malloc", "wmem-repros": "sublet-malloc", "allocator-repros": "sublet-malloc"}
+# Column 3 is the Sublet port of the INNERMOST allocator that made the object the access belongs to; a
+# plain case runs in the program's full configuration. Where code carves the object out of a block that
+# allocator handed out -- a codec's carve, av_frame_get_buffer's planes, memcached's ITEM_key/ITEM_suffix
+# inside a slab item -- that carve is the innermost allocator, and its port is the case's `sublet-carve`
+# arm (memcached 06/07: the slab port plus the key/suffix carve). One rule, so the two corpora agree.
+COL3 = {"pool-repros": "sublet-port", "wmem-repros": "sublet-chunks", "allocator-repros": "sublet",
+        "carved-repros": "sublet-carve", "plane-repros": "sublet-carve"}
+
+
+def col3_arm(corpus, arms):
+    return "sublet-carve" if "sublet-carve" in arms else COL3.get(corpus, "sublet-full")
+
+
+def cheri_board(arm):
+    """Column 1: CheriBSD's reading with the quarantine rule -- 'held' is caught, kept apart."""
+    if arm and str(arm.get("verdict", "")).upper() == "NOT-REISSUED":
+        return "held"
+    v = verdict(arm)
+    return "fault" if v == "caught" else v
+
+
 def protected(arms, plain, port):
     """The stronger arm where a port measured one, else the plain one."""
     a = arms.get(port)
@@ -81,11 +113,25 @@ for p in TARGETS:
                  sub=verdict(protected(a, "sublet", "sublet-chunks") if corpus != "pool-repros"
                              else protected(a, "sublet", "sublet-port")),
                  fcap=verdict(a.get("capstone-subobject")), fcheri=verdict(a.get("cheribsd-subobject")),
-                 kcap=verdict(a.get("capstone-carve-bounds")), kcheri=verdict(a.get("cheribsd-carve-bounds")))
+                 kcap=verdict(a.get("capstone-carve-bounds")), kcheri=verdict(a.get("cheribsd-carve-bounds")),
+                 scarve=verdict(a.get("sublet-carve")),
+                 c1=cheri_board(a.get("cheribsd-revocation")),
+                 c2=verdict(a.get(COL2.get(corpus, "sublet"))), c2arm=COL2.get(corpus, "sublet"),
+                 c3=verdict(a.get(col3_arm(corpus, a))), c3arm=col3_arm(corpus, a),
+                 title=str(d.get("title", ""))[:140])
+        for k in ("c2", "c3"):
+            if r[k] not in ("caught", "missed"):
+                odd.append(f"{p}/{corpus}/{r['case']} {k}({r[k + 'arm']})={r[k]}")
+        if r["c1"] not in ("fault", "held", "missed"):
+            odd.append(f"{p}/{corpus}/{r['case']} c1={r['c1']}")
         for k in ("asan", "cheri", "pc0", "pc1", "cap", "sub"):
             if r[k] not in ("caught", "missed"):
                 odd.append(f"{p}/{corpus}/{r['case']} {k}={r[k]}")
         rows.append(r)
+
+if {r["prog"] for r in rows} != set(TARGETS):
+    # No data is an ERROR, not an empty table: a wrong directory reads exactly like a clean one.
+    sys.exit(f"catch-tables: {len(rows)} cases under {BC}; every one of {TARGETS} must have some")
 
 COLS = (("asan", "ASan"), ("cheri", "CheriBSD"), ("pc0", "PoisonCap m0"), ("pc1", "PoisonCap m1"),
         ("cap", "Cap bounds"), ("sub", "Cap+Sublet"))
@@ -119,7 +165,8 @@ inside = [r for r in rows if r["kind"] == "spatial" and r["cap"] == "missed"]
 groups = collections.OrderedDict()
 for r in inside:
     groups.setdefault((r["prog"], r["layer"]), []).append(r)
-IC = (("sub", "Cap+Sublet"), ("fcap", "Cap field"), ("fcheri", "CHERI field"), ("kcap", "Cap carve"), ("kcheri", "CHERI carve"))
+IC = (("sub", "Cap+Sublet"), ("fcap", "Cap field"), ("fcheri", "CHERI field"), ("kcap", "Cap carve"), ("kcheri", "CHERI carve"),
+      ("scarve", "Sublet carve"))
 for (p, layer), g in groups.items():
     print(f"  {p:<10}{layer:<20}{len(g):>4} | " + " | ".join(f"{h}: {cell(g, k):>10}" for k, h in IC))
     for r in g:
@@ -143,6 +190,58 @@ def table_rows(kind):
     out.append(("Total", "", f"{nn} n · {len(tot) - nn} p", len(tot), [cell(tot, k) for k, _ in COLS]))
     return out
 
+
+def board_cell(g, k):
+    if k == "c1":
+        held = sum(r["c1"] == "held" for r in g)
+        caught = sum(r["c1"] in ("fault", "held") for r in g)
+        run = sum(r["c1"] in ("fault", "held", "missed") for r in g)
+        return f"{caught}/{run}" + (f" ({held} held)" if held else "")
+    return cell(g, k)
+
+
+BOARD = (("c1", "CHERI (quarantine = caught)"), ("c2", "Sublet in malloc"), ("c3", "Sublet in nested"))
+NAMES = {"ffmpeg": "FFmpeg", "wireshark": "tshark", "memcached": "memcached"}
+WORD = {"fault": "caught", "held": "caught (held)", "missed": "missed", "caught": "caught"}
+
+
+def board_rows(kind):
+    groups = collections.OrderedDict()
+    for r in rows:
+        if r["kind"] == kind:
+            groups.setdefault((r["prog"], r["layer"], "nested" if r["nested"] else "plain"), []).append(r)
+    order = {"ffmpeg": 0, "wireshark": 1, "memcached": 2}
+    out = [(p, layer, ax, len(g), [board_cell(g, k) for k, _ in BOARD])
+           for (p, layer, ax), g in sorted(groups.items(), key=lambda kv: (order[kv[0][0]], kv[0][2] != "nested", kv[0][1]))]
+    tot = [r for r in rows if r["kind"] == kind]
+    nn = sum(1 for r in tot if r["nested"])
+    out.append(("Total", "", f"{nn} n · {len(tot) - nn} p", len(tot), [board_cell(tot, k) for k, _ in BOARD]))
+    return out
+
+
+if "--board" in sys.argv:
+    for kind in ("temporal", "spatial"):
+        tr = board_rows(kind)
+        print(f"\n**{kind.capitalize()} ({tr[-1][3]})**\n")
+        print("| program | allocator layer | axis | n | " + " | ".join(h for _, h in BOARD) + " |")
+        print("|---|---|---|---:|---:|---:|---:|")
+        for p, layer, ax, n, cells in tr:
+            name = "**Total**" if p == "Total" else NAMES[p]
+            print(f"| {name} | {layer} | {ax} | {n} | " + " | ".join(c.replace('/', ' / ') for c in cells) + " |")
+    print("\n**Every bug**\n")
+    print("| program | corpus | case | axis | nested | " + " | ".join(h for _, h in BOARD) + " |")
+    print("|---|---|---|---|---|---|---|---|")
+    for r in sorted(rows, key=lambda r: ({"ffmpeg": 0, "wireshark": 1, "memcached": 2}[r["prog"]], r["kind"], r["corpus"], r["case"])):
+        print(f"| {NAMES[r['prog']]} | {r['corpus']} | {r['case']} | {r['kind']} | {'yes' if r['nested'] else 'no'} | "
+              f"{WORD.get(r['c1'], r['c1'])} | {WORD.get(r['c2'], r['c2'])} | {WORD.get(r['c3'], r['c3'])} |")
+
+if "--board-json" in sys.argv:
+    out = sys.argv[sys.argv.index("--board-json") + 1]
+    pathlib.Path(out).write_text(json.dumps(dict(
+        rows=[{k: r[k] for k in ("prog", "corpus", "layer", "case", "kind", "nested", "c1", "c2", "c3", "c2arm",
+                                 "c3arm", "title", "cap", "sub", "fcap", "fcheri", "kcap", "kcheri", "scarve")}
+              for r in rows],
+        temporal=board_rows("temporal"), spatial=board_rows("spatial")), indent=1, ensure_ascii=False) + "\n")
 
 if "--markdown" in sys.argv:
     NAME = {"ffmpeg": "FFmpeg", "wireshark": "tshark", "memcached": "memcached", "Total": "**Total**"}
