@@ -18,7 +18,9 @@
     "native-detect",
     "native-fix-differential",
     "capstone-subobject",
-    "capstone-carve-bounds"
+    "capstone-carve-bounds",
+    "cheribsd-subobject",
+    "cheribsd-carve-bounds"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -36,7 +38,11 @@
     "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd",
     "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone",
     "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone-subobject",
-    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone-carve-bounds"
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-capstone-carve-bounds",
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-cheribsd-subobject",
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-cheribsd-carve-bounds",
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-poisoncap-mode0",
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/2026-10-09-poisoncap-mode1"
   ],
   "advisories": [],
   "shape_table": true,

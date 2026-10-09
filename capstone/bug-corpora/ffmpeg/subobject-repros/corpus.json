@@ -18,7 +18,8 @@
     "native-detect",
     "native-fix-differential",
     "backing",
-    "capstone-subobject"
+    "capstone-subobject",
+    "cheribsd-subobject"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -36,7 +37,8 @@
     "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-native-subobject-7",
     "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd",
     "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-capstone",
-    "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-capstone-subobject"
+    "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-capstone-subobject",
+    "capstone/bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-cheribsd-subobject"
   ],
   "advisories": [],
   "shape_table": true,

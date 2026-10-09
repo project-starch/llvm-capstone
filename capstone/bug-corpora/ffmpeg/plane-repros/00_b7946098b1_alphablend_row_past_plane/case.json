@@ -36,8 +36,12 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: completes -- mode 0 bounds the allocation, and the crossing stays inside it.",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset after sourcing the project environment, and no SDK, purecap sysroot or image exists here."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the last row's vertical average read the alpha row below the plane's last, inside the frame's ). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed prediction).",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset after sourcing the project environment, and no SDK, purecap sysroot or image exists here.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: completes -- mode 0 bounds the allocation, and the crossing stays inside it.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
     },
     "poisoncap-protected": {
       "mode": 1,
@@ -65,9 +69,21 @@
       "verdict": "CAUGHT",
       "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-carve-bounds/: **CAUGHT** at ffp_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc020fba0, address=0xc02788a0 (the labelled probe). Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -DFFC_CARVE_BOUNDS: ffc_carve() narrows each carved region to its own extent with __builtin_capstone_cap_shrink, the remedy at the carving code. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251948); uaf RETURNED; subobj RETURNED. Image f10ad50364ba5d9d. Predicted before the run (83dcfa032845): CAUGHT; the prediction held."
+    },
+    "cheribsd-subobject": {
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, every case built with -Xclang -cheri-bounds=subobject-safe (booted on the second host)",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the last row's vertical average read the alpha row below the plane's last, inside the frame's ). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162). Predicted before the run (886abf4cc336)."
+    },
+    "cheribsd-carve-bounds": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, the case built with -DFFP_CARVE_BOUNDS (booted on the second host)",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-carve-bounds/: **CAUGHT**: SIGPROT, exit 162 (the runner does not supervise this corpus, so si_code is not recorded). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (83dcfa032845)."
     }
   },
-  "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-carve-bounds/): CAUGHT.",
+  "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-carve-bounds/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT.",
   "nested": true,
   "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
 }

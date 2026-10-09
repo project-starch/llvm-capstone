@@ -40,17 +40,26 @@
       "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88"
     },
     "cheribsd-revocation": {
-      "status": "predicted",
+      "status": "measured",
       "target": "stock CheriBSD purecap with libc revocation on",
-      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's; revocation has nothing to act on."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-revocation/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED after the linesize doubled, direction 0's prediction ran from tmp_b_block_y[0] into tmp_b_bloc). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; carve-control-buggy: exit 0; carve-control-fixed: exit 0). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's; revocation has nothing to act on.",
+      "verdict": "NOT CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on (booted on the second host)"
     },
     "cheribsd-subobject": {
-      "status": "predicted",
-      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES. -cheri-bounds=subobject-safe narrows a pointer taken to a struct member; a carved region is pointer arithmetic on the block."
+      "status": "measured",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED after the linesize doubled, direction 0's prediction ran from tmp_b_block_y[0] into tmp_b_bloc). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162; carve-control-buggy: exit 0; carve-control-fixed: exit 0). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES. -cheri-bounds=subobject-safe narrows a pointer taken to a struct member; a carved region is pointer arithmetic on the block.",
+      "verdict": "NOT CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, every case built with -Xclang -cheri-bounds=subobject-safe (booted on the second host)"
     },
     "cheribsd-carve-bounds": {
-      "status": "predicted",
-      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): SIGPROT at ffc_write_probe_u8 -- cheri_bounds_set at the carve; every region length here is far below CHERI-128's exact-representability limit, and the run prints the granted length per carve."
+      "status": "measured",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-carve-bounds/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x102612 pc=0x102612; fault pc 0x102612 INSIDE ffc_write_probe_u8 [0x1025fa, 0x10261e). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; carve-control-buggy: exit 162; SUPERVISE fault signal=34 code=1 addr=0x1022ba pc=0x1022ba; carve-control-fixed: exit 0). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED (pre-registration in the commit that adds this corpus): SIGPROT at ffc_write_probe_u8 -- cheri_bounds_set at the carve; every region length here is far below CHERI-128's exact-representability limit, and the run prints the granted length per carve.",
+      "verdict": "CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, the cases built with -DFFC_CARVE_BOUNDS (booted on the second host)"
     },
     "poisoncap-spatial": {
       "status": "predicted",
@@ -77,7 +86,7 @@
       "verdict": "TWO-SIDED"
     }
   },
-  "status": "built 2026-10-09; native differential and ASan run (see arms); every capability arm PREDICTED, not yet measured. spatial measured 2026-10-09 (results/2026-10-09-capstone-spatial/): NOT CAUGHT. sublet measured 2026-10-09 (results/2026-10-09-capstone-sublet/): NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-capstone-carve-bounds/): CAUGHT. Native differential and ASan recorded 2026-10-09 (results/2026-10-09-native-*/): two-sided; ASan NOT CAUGHT.",
+  "status": "built 2026-10-09; native differential and ASan run (see arms); every capability arm PREDICTED, not yet measured. spatial measured 2026-10-09 (results/2026-10-09-capstone-spatial/): NOT CAUGHT. sublet measured 2026-10-09 (results/2026-10-09-capstone-sublet/): NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-capstone-carve-bounds/): CAUGHT. Native differential and ASan recorded 2026-10-09 (results/2026-10-09-native-*/): two-sided; ASan NOT CAUGHT. cheribsd-revocation measured 2026-10-09 (results/2026-10-09-cheribsd-revocation/): NOT CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT.",
   "live_in_pin": false,
   "live_proof": "read from the PINNED source, two-sided, never from ancestry: n9.0.1:libavcodec/rv34.c contains `if (!r->tmp_b_block_base) {` once and the dead guard `if (!r->tmp_b_block_base || s->width != r->si.width || s->height != r->si.height) {` 0 times; 1/0 at the fix, 0/1 at its parent. A fix-reversal: the pre-fix carve or consumer is reconstructed, the convention at ../../memcached/allocator-repros/README.md:132-135."
 }

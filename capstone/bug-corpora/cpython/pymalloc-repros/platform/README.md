@@ -82,3 +82,19 @@ upstream.
 The platform is shared with the FFmpeg PoisonCap port. It lives here because
 this corpus is what needed it; if a second consumer appears it belongs one level
 up.
+
+## A second platform defect, measured 2026-10-09: posix_memalign's status under quarantine
+
+With runtime revocation ON (the mrs shim quarantining), `posix_memalign` sets `*ptr` to a usable
+block and returns a NON-ZERO status -- in every call measured the status equals the low 32 bits of
+the returned pointer (`rc=1084289024` for `p=0x40a0f000`). `aligned_alloc` and `malloc` are correct,
+and with revocation OFF `posix_memalign` returns 0. A probe of nine alignment/size pairs
+(`posix_memalign` and `aligned_alloc` at 16, 32 and 64 bytes, sizes 48, 128 and 4096) read the same
+in one boot of each mode, on the platform rebuilt with the fix above.
+
+Consequence: a caller that tests the status, as FFmpeg's `av_malloc` does, reads every aligned
+allocation as a failure -- `ffmpeg/plane-repros` could not run on PoisonCap mode 1 at all until its
+libavutil was built to allocate with `malloc` (`FFPURECAP_MALLOC_ONLY=1` in its
+`runners/build-libavutil-purecap.sh`). Why the status carries the pointer's low bits -- the
+source returns `ret`, which is 0 on that path -- was not established; the generated code was not
+read. Not reported upstream; not fixed here.

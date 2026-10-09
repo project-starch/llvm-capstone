@@ -42,7 +42,10 @@
     "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-capstone-capstone-subobject",
     "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-capstone-capstone-carve-bounds",
     "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-native-differential",
-    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-native-asan"
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-native-asan",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-cheribsd-revocation",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-cheribsd-subobject",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-cheribsd-carve-bounds"
   ],
   "advisories": [
     "CVE-2011-3895 (case 11's fix says it fixes part of it)"

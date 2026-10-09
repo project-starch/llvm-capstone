@@ -38,7 +38,9 @@
     "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-08-cheribsd",
     "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-capstone",
     "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-capstone-subobject",
-    "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-cheribsd-subobject"
+    "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-cheribsd-subobject",
+    "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-poisoncap-mode0",
+    "capstone/bug-corpora/memcached/plain-heap-repros/results/2026-10-09-poisoncap-mode1"
   ],
   "advisories": [],
   "shape_table": true,

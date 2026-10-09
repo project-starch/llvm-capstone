@@ -25,13 +25,19 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "complete"
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **NOT CAUGHT**: the sequence completes. Adapter counters: WM_POISONCAP mode=0 sweeps=0 poison_bytes=0 epochs=1 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16.",
+      "prediction": "complete",
+      "status": "measured",
+      "verdict": "NOT CAUGHT"
     },
     "poisoncap-protected": {
       "mode": 1,
-      "oracle": "SIGPROT at the labelled read probe",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 2 (PROT_CHERI_TAG) at wm_defect_probe (pc 0x104110). Adapter counters: WM_POISONCAP mode=1 sweeps=1 poison_bytes=2097152 epochs=1 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16.",
       "signal": 34,
-      "si_code": 2
+      "si_code": 2,
+      "prediction": "SIGPROT at the labelled read probe",
+      "status": "measured",
+      "verdict": "CAUGHT"
     },
     "native-detect": {
       "status": "measured",
@@ -52,7 +58,7 @@
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-differential/: the buggy sequence reaches storage outside its object (VERDICT DEFECT-REPRODUCED, exit 0) and the fixed sequence -- this case's upstream fix, modelled in case.c under wm_fixed -- does not (VERDICT FIXED, exit 0). Hosted build, upstream wmem allocator (WM_CHUNKS=OFF), `program 0 N buggy|fixed` (runners/run-native.sh). Temporal: the next dissection reoccupies the freed storage, asserted to be the same address, and the stale read returns its marker. The arm did not exist before 2026-10-09: the cases had no fixed sequence."
     }
   },
-  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe, as before; results/20260929-qemu-chunk-port ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided.",
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe, as before; results/20260929-qemu-chunk-port ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 completes, mode 1 CAUGHT.",
   "nested": true,
   "nested_why": "wmem's BLOCK_FAST allocator carved the object out of a block g_malloc handed out -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED."
 }

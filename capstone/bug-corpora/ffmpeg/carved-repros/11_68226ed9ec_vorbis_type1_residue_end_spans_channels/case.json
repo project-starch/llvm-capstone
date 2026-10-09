@@ -40,17 +40,26 @@
       "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88"
     },
     "cheribsd-revocation": {
-      "status": "predicted",
+      "status": "measured",
       "target": "stock CheriBSD purecap with libc revocation on",
-      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's; revocation has nothing to act on."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-revocation/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED a type-1 residue ending at 2 * vlen added channel 0's codevectors into channel 1's slice of ch). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; carve-control-buggy: exit 0; carve-control-fixed: exit 0). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's; revocation has nothing to act on.",
+      "verdict": "NOT CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on (booted on the second host)"
     },
     "cheribsd-subobject": {
-      "status": "predicted",
-      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES. -cheri-bounds=subobject-safe narrows a pointer taken to a struct member; a carved region is pointer arithmetic on the block."
+      "status": "measured",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED a type-1 residue ending at 2 * vlen added channel 0's codevectors into channel 1's slice of ch). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162; carve-control-buggy: exit 0; carve-control-fixed: exit 0). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES. -cheri-bounds=subobject-safe narrows a pointer taken to a struct member; a carved region is pointer arithmetic on the block.",
+      "verdict": "NOT CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, every case built with -Xclang -cheri-bounds=subobject-safe (booted on the second host)"
     },
     "cheribsd-carve-bounds": {
-      "status": "predicted",
-      "oracle": "PREDICTED (pre-registration in the commit that adds this corpus): SIGPROT at ffc_read_probe_u32 -- cheri_bounds_set at the carve; every region length here is far below CHERI-128's exact-representability limit, and the run prints the granted length per carve."
+      "status": "measured",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-carve-bounds/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x102642 pc=0x102642; fault pc 0x102642 INSIDE ffc_read_probe_u32 [0x102632, 0x10264c). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; carve-control-buggy: exit 162; SUPERVISE fault signal=34 code=1 addr=0x1022ba pc=0x1022ba; carve-control-fixed: exit 0). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED (pre-registration in the commit that adds this corpus): SIGPROT at ffc_read_probe_u32 -- cheri_bounds_set at the carve; every region length here is far below CHERI-128's exact-representability limit, and the run prints the granted length per carve.",
+      "verdict": "CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, the cases built with -DFFC_CARVE_BOUNDS (booted on the second host)"
     },
     "poisoncap-spatial": {
       "status": "predicted",
@@ -77,7 +86,7 @@
       "verdict": "TWO-SIDED"
     }
   },
-  "status": "built 2026-10-09; native differential and ASan run (see arms); every capability arm PREDICTED, not yet measured. spatial measured 2026-10-09 (results/2026-10-09-capstone-spatial/): NOT CAUGHT. sublet measured 2026-10-09 (results/2026-10-09-capstone-sublet/): NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-capstone-carve-bounds/): CAUGHT. Native differential and ASan recorded 2026-10-09 (results/2026-10-09-native-*/): two-sided; ASan NOT CAUGHT.",
+  "status": "built 2026-10-09; native differential and ASan run (see arms); every capability arm PREDICTED, not yet measured. spatial measured 2026-10-09 (results/2026-10-09-capstone-spatial/): NOT CAUGHT. sublet measured 2026-10-09 (results/2026-10-09-capstone-sublet/): NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-capstone-carve-bounds/): CAUGHT. Native differential and ASan recorded 2026-10-09 (results/2026-10-09-native-*/): two-sided; ASan NOT CAUGHT. cheribsd-revocation measured 2026-10-09 (results/2026-10-09-cheribsd-revocation/): NOT CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT.",
   "live_in_pin": true,
   "live_proof": "read from the PINNED source, two-sided, never from ancestry: LIVE, by reading the pinned source, two-sided, and adversarially audited (claim-auditor, 2026-10-09); NOT demonstrated on a stream. The per-type end check this fix added (`res_setup->type == 2 ? ... : 1`) occurs 0 times at n9.0.1: it was removed by 0a266cb55a (2014), and `git log -G'(vr|res_setup)->end' 0a266cb55a..n9.0.1 -- libavcodec/vorbisdec.c` is empty while the same query over all history lists both commits. The setup check left (n9.0.1:libavcodec/vorbisdec.c:724-725) bounds begin <= end and the partition count only. The one runtime bound is `max_output = (ch - 1) * vlen + vr->end` against `ch_left * vlen` (:1425-1449), which for a one-channel submap with two channels left accepts an end of up to 2 * vlen, and the type-0/1 loops (:1482-1506) then write vec[voffs] up to begin + ptns_to_read * partition_size - 1, into the next channel's slice of channel_residues (one av_malloc_array, :1019) and never past it. The Vorbis I spec, section 8.6.2, has the decoder clamp residue_end to blocksize/2 for formats 0 and 1, so such a stream is LEGAL and a conforming decoder truncates. Conditions: a type-0/1 residue on a submap with fewer channels than remain, begin + ptns_to_read * partition_size > vlen, and a neighbour whose floor is used (an unused one is cleared at :1743-1745 before the MDCT). The audit refined the history: the 2012 check bounded end by blocksize[1]/2 while the write uses the CURRENT block's vlen, so short-block packets could cross even while it stood. What would settle it dynamically: a 2-channel stream with two one-channel submaps whose first residue is type 1 with end = 2 * vlen, decoded by an instrumented n9.0.1, against the same stream with end = vlen. A fix-reversal: the pre-fix carve or consumer is reconstructed, the convention at ../../memcached/allocator-repros/README.md:132-135.",
   "advisory": "the fix's commit message says it 'fixes part of 2011-3895'"

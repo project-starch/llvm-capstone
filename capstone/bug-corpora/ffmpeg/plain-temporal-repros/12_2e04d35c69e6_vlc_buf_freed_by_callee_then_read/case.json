@@ -15,16 +15,22 @@
       "verdict": "CAUGHT"
     },
     "poisoncap-spatial": {
-      "status": "predicted",
+      "status": "measured",
       "mode": 0,
-      "oracle": "PREDICTED 2026-10-09, before the first PoisonCap run: COMPLETES -- mode 0 is the PoisonCap image with runtime revocation off, so free neither poisons nor quarantines and nothing faults on the stale access. Whether the block was reissued (aliased) is recorded, not predicted: stock CheriBSD's quarantine read NOT-REISSUED, and without it the allocator may reuse at once."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED vlc_common_end freed the scratch table because it differed from the fallback it was handed, an). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY; revocation-control: exit 0). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED 2026-10-09, before the first PoisonCap run: COMPLETES -- mode 0 is the PoisonCap image with runtime revocation off, so free neither poisons nor quarantines and nothing faults on the stale access. Whether the block was reissued (aliased) is recorded, not predicted: stock CheriBSD's quarantine read NOT-REISSUED, and without it the allocator may reuse at once.",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
     },
     "poisoncap-protected": {
-      "status": "predicted",
+      "status": "measured",
       "mode": 1,
-      "signal": 34,
+      "signal": null,
       "si_code": null,
-      "oracle": "PREDICTED 2026-10-09, before the first PoisonCap run: SIGPROT at the labelled probe -- mode 1 poisons the block on free (mrs POISON_ON_FREE), so the stale access traps before any revocation sweep; where stock CheriBSD's quarantine let the same access complete (NOT-REISSUED), poison is the difference. si_code is recorded from the run."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **NOT CAUGHT, AND NOTHING REISSUED**: VERDICT NOT-REISSUED the released chunk was withheld; the stale pointer still names the dead object, so nothing aliased (observed=0x30). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; revocation-control: exit 162; SUPERVISE fault signal=34 code=2 addr=0x101dd6 pc=0x101dd6). Predicted before the run (2852edcdd747). THE PREDICTION DID NOT HOLD: it was SIGPROT at the probe, as the other twelve cases of this run read (si_code 3), and this stale read completed instead, returning 0x30 -- neither the freed object's 0x11 nor the new allocation's 0xAA. The mechanism is not established by this run (N = 1): this is the one case whose sequence keeps a second same-size block (the fallback `localbuf`) allocated across the free, and that difference is recorded, not claimed as the cause.",
+      "prediction": "PREDICTED 2026-10-09, before the first PoisonCap run: SIGPROT at the labelled probe -- mode 1 poisons the block on free (mrs POISON_ON_FREE), so the stale access traps before any revocation sweep; where stock CheriBSD's quarantine let the same access complete (NOT-REISSUED), poison is the difference. si_code is recorded from the run.",
+      "verdict": "NOT-REISSUED",
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
     },
     "cheribsd-revocation": {
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd/: **NO FAULT, AND NO REUSE.** The sequence completes with aliased=0: the stale pointer was followed, but the chunk it names was never handed to another allocation, because CheriBSD's libc holds a released chunk in QUARANTINE until the revoker has swept every capability to it. So the access reads only the dead object -- the exploitable half of a use-after-free, reading or writing SOMEONE ELSE'S object, did not happen. It is not a fault, because nothing forced a sweep between the free and the access: the stale capability still carried its tag, as the case was built to leave it. revocation control in the same boot: revocation=1 tag_after_sweep=0 reissued=1, then SIGPROT si_code 2 at the control's own probe, so the revoker demonstrably acts in this guest and a completion here is the mechanism's design, not an inactive mechanism. CONTRAST, measured in the sibling nested corpora: there the inner allocator reissues the storage at once and the stale pointer DOES read another object, because nothing reaches free(). Predicted before the run; the prediction held.",
@@ -49,7 +55,7 @@
   "shape": "ownership handed to a callee, then the same buffer used by the next call",
   "allocator_layer": "the platform allocator itself: one direct av_malloc-family allocation, with no pool or refstruct layer. FFmpeg's av_malloc is malloc plus alignment.",
   "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is `vlc_multi_gen(multi->table, vlc, nb_elems, j, nb_bits, buf, logctx)`.",
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. CheriBSD measured 2026-10-09 (results/2026-10-09-cheribsd/): NOT-REISSUED. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet CAUGHT.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. CheriBSD measured 2026-10-09 (results/2026-10-09-cheribsd/): NOT-REISSUED. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): NOT-REISSUED.",
   "upstream_fix": "2e04d35c69e6",
   "live_in_pin": false,
   "live_proof": "absent at the pin: n9.0.1:libavcodec/vlc.c passes `buf` as vlc_common_end's last argument and frees it in the caller after vlc_multi_gen. The form passing `localbuf` and returning vlc_multi_gen directly is at 2e04d35c69e6^ and is absent from the pin.",

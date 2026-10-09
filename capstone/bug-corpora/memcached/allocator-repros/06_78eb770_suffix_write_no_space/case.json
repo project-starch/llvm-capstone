@@ -22,15 +22,21 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "PREDICTED and UNMEASURABLE HERE; neither platform is on this host.",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **NOT CAUGHT**: the sequence completes -- the crossing stays inside one slab chunk, whose bound the adapter sets. The corpus runner scores this row FAIL because its oracles were written for the temporal cases; the fault line is the reading. No outcome was predicted for this arm (its record said only that the platform was unavailable).",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE; neither platform is on this host.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT"
     },
     "poisoncap-protected": {
       "mode": 1,
-      "signal": 34,
-      "si_code": 2,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: mode 1 adds temporal protection and no lifetime ends here.",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable."
+      "signal": null,
+      "si_code": null,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **NOT CAUGHT**: the sequence completes -- the crossing stays inside one slab chunk, whose bound the adapter sets. The corpus runner scores this row FAIL because its oracles were written for the temporal cases; the fault line is the reading. The prediction -- mode 0's spatial behaviour decides it -- held.",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: mode 1 adds temporal protection and no lifetime ends here.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT"
     },
     "cheribsd-revocation": {
       "oracle": "MEASURED 2026-10-06 on this host: the sequence COMPLETES. exit=0, completed=1, object_reuses=0, chunk_reuses=0. Not caught. Both reuse counters are 0, as they must be for a spatial case: nothing is freed here, and the crossing stays inside the slab page, which is one malloc. EVIDENCE COMMITTED 2026-10-06: results/20261006-cheribsd/. Both controls are in that bundle -- the revocation control FAULTED with addr == pc == the independently resolved expectation (0x101e42), proving the revoker sweeps in this guest AND attributing the fault; and a NEGATIVE CONTROL run on the same vehicle makes all 8 case oracles FAIL while the three platform controls still pass, so none of these completions is vacuous. The image hash is byte-identical to the vehicle the ffmpeg readings of the same day used, so the two programs' columns are comparable.",
@@ -71,7 +77,7 @@
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-carve-bounds/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), pc=0x104d5c, which is mc_defect_write at the load base supervise reported -- the labelled probe. mc_carve() under MC_CARVE_BOUNDS narrows the region with cheri_bounds_set to zero bytes (nsuffix = 0). Stock CheriBSD purecap, revocation on, platform controls passing. Predicted before the run (83dcfa032845); it held."
     }
   },
-  "status": "MEASURED 2026-10-05, both paths, and this is the row that settles something. QEMU domain: BOTH modes COMPLETE, no fault, in the same 8/8 pass whose negative control fired 8/8 and whose temporal control read cause 24. Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED with damage set. So the defect is real, it corrupts the value's storage, and NOTHING WE HAVE DETECTS IT -- the crossing stays inside the chunk and the slab port's bound is the chunk. The prediction of completion is CONFIRMED, which is the measured form of 'a chunk-granular bound cannot see a sub-object crossing'. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Field bounds measured 2026-10-09 (results/2026-10-09-field-bounds/): NOT CAUGHT on Capstone and on CheriBSD. Carve bounds on Capstone measured 2026-10-09: CAUGHT at the labelled probe. Carve bounds on CheriBSD measured 2026-10-09: CAUGHT at the labelled probe.",
+  "status": "MEASURED 2026-10-05, both paths, and this is the row that settles something. QEMU domain: BOTH modes COMPLETE, no fault, in the same 8/8 pass whose negative control fired 8/8 and whose temporal control read cause 24. Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED with damage set. So the defect is real, it corrupts the value's storage, and NOTHING WE HAVE DETECTS IT -- the crossing stays inside the chunk and the slab port's bound is the chunk. The prediction of completion is CONFIRMED, which is the measured form of 'a chunk-granular bound cannot see a sub-object crossing'. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Field bounds measured 2026-10-09 (results/2026-10-09-field-bounds/): NOT CAUGHT on Capstone and on CheriBSD. Carve bounds on Capstone measured 2026-10-09: CAUGHT at the labelled probe. Carve bounds on CheriBSD measured 2026-10-09: CAUGHT at the labelled probe. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): completes in both modes.",
   "nested": true,
   "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
 }

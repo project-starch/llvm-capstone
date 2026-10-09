@@ -48,7 +48,8 @@
     "capstone/bug-corpora/wireshark/wmem-repros/results/20261009-qemu-capstone-18-21",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-asan",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-differential",
-    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-domain-regression"
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-domain-regression",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-poisoncap"
   ],
   "advisories": [],
   "shape_table": true,
