@@ -28,16 +28,15 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 7 | 0 | 21 | 0 | 0 | 28 | 3 |
-| `capstone-sysalloc` | 7 | 0 | 21 | 0 | 0 | 28 | 3 |
-| `capstone-sublet` | 28 | 0 | 0 | 0 | 0 | 28 | 3 |
+| `cheribsd` | 7 | 0 | 30 | 0 | 0 | 37 | 3 |
+| `capstone-sysalloc` | 7 | 0 | 26 | 0 | 4 | 37 | 3 |
+| `capstone-sublet` | 37 | 0 | 0 | 0 | 0 | 37 | 3 |
 
 ## Programs that have not declared their arms yet
 
-Not in any total above or below, and not a statement about them: **7** of 9 programs in the tree.
+Not in any total above or below, and not a statement about them: **6** of 9 programs in the tree.
 
 - `ffmpeg`
-- `httpd`
 - `memcached`
 - `mruby`
 - `postgres`
@@ -58,25 +57,25 @@ the system allocator handed the object out directly -- the boundary all three ar
 | `capstone-sysalloc` | **4** | 0 | 0 | 100% |
 | `capstone-sublet` | **4** | 0 | 0 | 100% |
 
-### `nested`: 24 cases
+### `nested`: 29 cases
 
 the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **3** | 0 | 21 | 12% |
-| `capstone-sysalloc` | **3** | 0 | 21 | 12% |
-| `capstone-sublet` | **24** | 0 | 0 | 100% |
+| `cheribsd` | **3** | 0 | 26 | 10% |
+| `capstone-sysalloc` | **3** | 0 | 26 | 10% |
+| `capstone-sublet` | **29** | 0 | 0 | 100% |
 
-### All 28 together
+### All 33 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **7** | 0 | 21 | 25% |
-| `capstone-sysalloc` | **7** | 0 | 21 | 25% |
-| `capstone-sublet` | **28** | 0 | 0 | 100% |
+| `cheribsd` | **7** | 0 | 26 | 21% |
+| `capstone-sysalloc` | **7** | 0 | 26 | 21% |
+| `capstone-sublet` | **33** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -110,6 +109,31 @@ CPython: twenty re-entrancy use-after-frees, all of them inside pymalloc
 - `cheribsd`: **0** caught, 20 missed, of 20.
 - `capstone-sysalloc`: **0** caught, 20 missed, of 20.
 - `capstone-sublet`: **20** caught, 0 missed, of 20.
+
+### httpd -- 9 cases
+
+httpd and APR: nine pool and bucket lifetime defects, two allocator layers deep
+
+| group | cases | the boundary its cases cross |
+|---|---:|---|
+| `apr-pool-repros` | 1 | apr_pool_t over apr_allocator_t |
+| `bucket-repros` | 8 | apr_bucket_alloc_t over apr_pool_t over apr_allocator_t |
+
+| group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
+|---|---:|---|---|:---:|:---:|:---:|
+| `apr-pool-repros` | 0 | `9e6be73065` | mod_watchdog's worker loop reuses a pool it destroyed | · | · | **C** |
+| `bucket-repros` | 0 | `1c7a70c9d9` | mod_proxy_http2 sends frontend data allocated with the backend connection's  | · | — | **C** |
+| `bucket-repros` | 1 | `d2a1cf5f8c` | buckets buffered in the network filters outlive the allocator that made them | · | — | **C** |
+| `bucket-repros` | 2 | `106d0761c0` | ap_request_core_filter's brigade must carry EOR past the request that made i | · | · | **C** |
+| `bucket-repros` | 3 | `d9c2352952` | a brigade holds buckets created from a pool that is freed before it | · | · | **C** |
+| `bucket-repros` | 4 | `c81adad105` | the brigade is not cleaned before the backend connection goes back to the po | · | — | **C** |
+| `bucket-repros` | 5 | `60919177e8` | ap_rgetline's folding path reads a brigade it has already destroyed | · | · | **C** |
+| `bucket-repros` | 6 | `4930450013` | buckets live longer than the brigades they belong to | · | — | **C** |
+| `bucket-repros` | 7 | `edc450c8ac` | bucket private data is left in the subrequest pool and read during the main  | · | · | **C** |
+
+- `cheribsd`: **0** caught, 9 missed, of 9.
+- `capstone-sysalloc`: **0** caught, 5 missed, 4 not run, of 9.
+- `capstone-sublet`: **9** caught, 0 missed, of 9.
 
 ### perl -- 11 cases
 

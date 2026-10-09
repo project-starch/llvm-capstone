@@ -915,6 +915,468 @@
    }
   },
   {
+   "corpus": "httpd",
+   "program": "httpd",
+   "title": "httpd and APR: nine pool and bucket lifetime defects, two allocator layers deep",
+   "cases": [
+    {
+     "case": "00_9e6be73065_watchdog_destroyed_pool_reused",
+     "group": "apr-pool-repros",
+     "allocator_boundary": "nested",
+     "number": 0,
+     "upstream_fix": "9e6be73065",
+     "title": "mod_watchdog's worker loop reuses a pool it destroyed",
+     "boundary": "apr_pool_t over apr_allocator_t",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "apr-pool-repros",
+       "bundle": "results/20260921-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation-rows"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "apr-pool-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "apr-pool-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "00_1c7a70c9d9_wrong_bucket_alloc_across_connections",
+     "group": "bucket-repros",
+     "allocator_boundary": "nested",
+     "number": 0,
+     "upstream_fix": "1c7a70c9d9",
+     "title": "mod_proxy_http2 sends frontend data allocated with the backend connection's bucket_alloc",
+     "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20260922-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation-rows"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "WITHDRAWN by its own control, 2026-10-08. The fault lands at apr_buckets_alloc.c:113, `list->pool = NULL`, the first write into a freshly carved block in apr_bucket_alloc_create_ex -- allocator CREATION, where there is no 'after free' to detect -- and results/20261008-fixed-arm-control shows the same image faulting there on the upstream-FIXED sequence. A detection that fires without the defect is not a detection of it. The run had already reported attributed=false for all four. Cases 2, 3, 5 and 7 are silent in both arms and are unaffected.",
+       "group": "bucket-repros",
+       "control_bundle": "results/20261008-fixed-arm-control"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "bucket-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "01_d2a1cf5f8c_buckets_outlive_backend_allocator",
+     "group": "bucket-repros",
+     "allocator_boundary": "nested",
+     "number": 1,
+     "upstream_fix": "d2a1cf5f8c",
+     "title": "buckets buffered in the network filters outlive the allocator that made them",
+     "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20260922-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation-rows"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "WITHDRAWN by its own control, 2026-10-08. The fault lands at apr_buckets_alloc.c:113, `list->pool = NULL`, the first write into a freshly carved block in apr_bucket_alloc_create_ex -- allocator CREATION, where there is no 'after free' to detect -- and results/20261008-fixed-arm-control shows the same image faulting there on the upstream-FIXED sequence. A detection that fires without the defect is not a detection of it. The run had already reported attributed=false for all four. Cases 2, 3, 5 and 7 are silent in both arms and are unaffected.",
+       "group": "bucket-repros",
+       "control_bundle": "results/20261008-fixed-arm-control"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "bucket-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "02_106d0761c0_brigade_on_request_pool_past_eor",
+     "group": "bucket-repros",
+     "allocator_boundary": "nested",
+     "number": 2,
+     "upstream_fix": "106d0761c0",
+     "title": "ap_request_core_filter's brigade must carry EOR past the request that made it",
+     "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20260922-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation-rows"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "bucket-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "03_d9c2352952_buckets_from_pool_that_dies_first",
+     "group": "bucket-repros",
+     "allocator_boundary": "nested",
+     "number": 3,
+     "upstream_fix": "d9c2352952",
+     "title": "a brigade holds buckets created from a pool that is freed before it",
+     "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20260922-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation-rows"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "bucket-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "04_c81adad105_brigade_not_cleaned_before_reuse",
+     "group": "bucket-repros",
+     "allocator_boundary": "nested",
+     "number": 4,
+     "upstream_fix": "c81adad105",
+     "title": "the brigade is not cleaned before the backend connection goes back to the pool",
+     "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20260922-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation-rows"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "WITHDRAWN by its own control, 2026-10-08. The fault lands at apr_buckets_alloc.c:113, `list->pool = NULL`, the first write into a freshly carved block in apr_bucket_alloc_create_ex -- allocator CREATION, where there is no 'after free' to detect -- and results/20261008-fixed-arm-control shows the same image faulting there on the upstream-FIXED sequence. A detection that fires without the defect is not a detection of it. The run had already reported attributed=false for all four. Cases 2, 3, 5 and 7 are silent in both arms and are unaffected.",
+       "group": "bucket-repros",
+       "control_bundle": "results/20261008-fixed-arm-control"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "bucket-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "05_60919177e8_read_from_destroyed_brigade",
+     "group": "bucket-repros",
+     "allocator_boundary": "nested",
+     "number": 5,
+     "upstream_fix": "60919177e8",
+     "title": "ap_rgetline's folding path reads a brigade it has already destroyed",
+     "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20260922-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation-rows"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "bucket-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "06_4930450013_bucket_outlives_its_brigade",
+     "group": "bucket-repros",
+     "allocator_boundary": "nested",
+     "number": 6,
+     "upstream_fix": "4930450013",
+     "title": "buckets live longer than the brigades they belong to",
+     "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20260922-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation-rows"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "WITHDRAWN by its own control, 2026-10-08. The fault lands at apr_buckets_alloc.c:113, `list->pool = NULL`, the first write into a freshly carved block in apr_bucket_alloc_create_ex -- allocator CREATION, where there is no 'after free' to detect -- and results/20261008-fixed-arm-control shows the same image faulting there on the upstream-FIXED sequence. A detection that fires without the defect is not a detection of it. The run had already reported attributed=false for all four. Cases 2, 3, 5 and 7 are silent in both arms and are unaffected.",
+       "group": "bucket-repros",
+       "control_bundle": "results/20261008-fixed-arm-control"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "bucket-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "07_edc450c8ac_subrequest_pool_private_data",
+     "group": "bucket-repros",
+     "allocator_boundary": "nested",
+     "number": 7,
+     "upstream_fix": "edc450c8ac",
+     "title": "bucket private data is left in the subrequest pool and read during the main request",
+     "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20260922-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation-rows"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "bucket-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "bucket-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    }
+   ],
+   "groups": {
+    "apr-pool-repros": {
+     "boundary": "apr_pool_t over apr_allocator_t",
+     "cases": 1,
+     "ignore": null
+    },
+    "bucket-repros": {
+     "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
+     "cases": 8,
+     "ignore": null
+    }
+   },
+   "protection": {
+    "cheribsd": [
+     {
+      "bundle": "results/20260921-cheribsd",
+      "reader": "revocation-rows",
+      "key": "number",
+      "vehicle": "cheribsd-purecap",
+      "group": "apr-pool-repros"
+     },
+     {
+      "bundle": "results/20260922-cheribsd",
+      "reader": "revocation-rows",
+      "key": "number",
+      "vehicle": "cheribsd-purecap",
+      "group": "bucket-repros"
+     }
+    ],
+    "capstone-sysalloc": [
+     {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "group": "apr-pool-repros"
+     },
+     {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "group": "bucket-repros",
+      "detection_unproven": {
+       "bundle": "results/20261008-fixed-arm-control",
+       "cases": [
+        0,
+        1,
+        4,
+        6
+       ],
+       "why": "WITHDRAWN by its own control, 2026-10-08. The fault lands at apr_buckets_alloc.c:113, `list->pool = NULL`, the first write into a freshly carved block in apr_bucket_alloc_create_ex -- allocator CREATION, where there is no 'after free' to detect -- and results/20261008-fixed-arm-control shows the same image faulting there on the upstream-FIXED sequence. A detection that fires without the defect is not a detection of it. The run had already reported attributed=false for all four. Cases 2, 3, 5 and 7 are silent in both arms and are unaffected."
+      }
+     }
+    ],
+    "capstone-sublet": [
+     {
+      "bundle": "results/20261008-virtual-nested-sublet",
+      "reader": "virtual",
+      "arm": "virtual-nested-sublet",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "because": "the run brackets each case twice: mode 0 is the same adapter with no revoke at the nested allocator's release, mode 1 is the Sublet discipline. Mode 1 is this arm, so the cell reads the m1 row; the m0 row is the baseline that makes the pair a single-variable comparison.",
+      "group": "apr-pool-repros",
+      "mode": "m1"
+     },
+     {
+      "bundle": "results/20261008-virtual-nested-sublet",
+      "reader": "virtual",
+      "arm": "virtual-nested-sublet",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "because": "the run brackets each case twice: mode 0 is the same adapter with no revoke at the nested allocator's release, mode 1 is the Sublet discipline. Mode 1 is this arm, so the cell reads the m1 row; the m0 row is the baseline that makes the pair a single-variable comparison.",
+      "group": "bucket-repros",
+      "mode": "m1"
+     }
+    ]
+   }
+  },
+  {
    "corpus": "perl",
    "program": "perl",
    "title": "Perl: eleven spatial and temporal defects live at the 5.36.3 pin",

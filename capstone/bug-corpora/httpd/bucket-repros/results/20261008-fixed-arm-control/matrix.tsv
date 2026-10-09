@@ -1,0 +1,17 @@
+case	arm	verdict	cause	attributed	evidence
+00_1c7a70c9d9_wrong_bucket_alloc_across_connections:defect	virtual-fixed-arm-control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fbad9506c
+00_1c7a70c9d9_wrong_bucket_alloc_across_connections:fixed	control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa3e9506c
+01_d2a1cf5f8c_buckets_outlive_backend_allocator:defect	virtual-fixed-arm-control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3faae14bec
+01_d2a1cf5f8c_buckets_outlive_backend_allocator:fixed	control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fbc694bec
+02_106d0761c0_brigade_on_request_pool_past_eor:defect	virtual-fixed-arm-control	silent	--	--	completed with status 0
+02_106d0761c0_brigade_on_request_pool_past_eor:fixed	control	silent	--	--	completed with status 0
+03_d9c2352952_buckets_from_pool_that_dies_first:defect	virtual-fixed-arm-control	silent	--	--	completed with status 0
+03_d9c2352952_buckets_from_pool_that_dies_first:fixed	control	silent	--	--	completed with status 0
+04_c81adad105_brigade_not_cleaned_before_reuse:defect	virtual-fixed-arm-control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa529506c
+04_c81adad105_brigade_not_cleaned_before_reuse:fixed	control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f92d9506c
+05_60919177e8_read_from_destroyed_brigade:defect	virtual-fixed-arm-control	silent	--	--	completed with status 0
+05_60919177e8_read_from_destroyed_brigade:fixed	control	silent	--	--	completed with status 0
+06_4930450013_bucket_outlives_its_brigade:defect	virtual-fixed-arm-control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f95e94c70
+06_4930450013_bucket_outlives_its_brigade:fixed	control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f97d14c70
+07_edc450c8ac_subrequest_pool_private_data:defect	virtual-fixed-arm-control	silent	--	--	completed with status 0
+07_edc450c8ac_subrequest_pool_private_data:fixed	control	silent	--	--	completed with status 0

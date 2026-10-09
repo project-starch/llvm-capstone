@@ -1,0 +1,3 @@
+case	arm	verdict	cause	attributed	evidence
+00_9e6be73065_watchdog_destroyed_pool_reused:m0	virtual-nested-sublet	silent	--	--	completed with status 0
+00_9e6be73065_watchdog_destroyed_pool_reused:m1	virtual-nested-sublet	detected	24 (UNEXP_OP_TYPE)	yes	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8c198030

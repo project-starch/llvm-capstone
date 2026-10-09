@@ -1,0 +1,27 @@
+{
+  "corpus": "capstone/bug-corpora/httpd/apr-pool-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 1,
+  "measured": 1,
+  "controls": 0,
+  "controls_held": 0,
+  "verdicts": {
+    "silent": 1
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "b706e47a5b1a056d48df237021f22e318b9cbee2ae72d21027bb7662cbc71cd7",
+  "staged_sha256": {
+    "traces/00_9e6be73065_watchdog_destroyed_pool_reused.bin": "748c243a431878ecd5fa4665bb227d64672b63ccc101ffe60c26205a39d89113"
+  },
+  "image_sha256": {
+    "00_9e6be73065_watchdog_destroyed_pool_reused": "0e0282e983ca4a29aca864126ca7d8c50accb37f0937f7de16ece65fc34190de"
+  }
+}

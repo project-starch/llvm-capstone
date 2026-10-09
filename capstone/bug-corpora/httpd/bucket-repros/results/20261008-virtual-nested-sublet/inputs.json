@@ -1,0 +1,50 @@
+{
+  "corpus": "capstone/bug-corpora/httpd/bucket-repros",
+  "arm": "virtual-nested-sublet",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 16,
+  "measured": 16,
+  "controls": 0,
+  "controls_held": 0,
+  "verdicts": {
+    "silent": 8,
+    "detected": 8
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "81abbe8d995f0e18ae26f3601b172f0da56cf8a76ca88c413e737b6b7c1187a6",
+    "launcher": "5240ec2c6b04c30b5d4c73710a0cfca0745e13b30cf4b11146785791474b457c",
+    "module": "2394a455036735288a119887d4eca24c1ae9c9ab2b679da5591ae5ba935932fd",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "2a78712730009613131975aef5cda952d04b223d7ea7793c19361e4b991f5496",
+  "staged_sha256": {
+    "traces/00_1c7a70c9d9_wrong_bucket_alloc_across_connections.bin": "748c243a431878ecd5fa4665bb227d64672b63ccc101ffe60c26205a39d89113",
+    "traces/01_d2a1cf5f8c_buckets_outlive_backend_allocator.bin": "d2695ccb17f87676a1af13f443bee22e346eebd38bfc96da424681cfb7a389ad",
+    "traces/02_106d0761c0_brigade_on_request_pool_past_eor.bin": "556034d4f499ceab2f911b498cf08f42078249ca1f5f950820bf2651df024655",
+    "traces/03_d9c2352952_buckets_from_pool_that_dies_first.bin": "f0a8c40bf5b824a20de1685665f57e473e5b4dc3277901f06a1b4cf6a40f4139",
+    "traces/04_c81adad105_brigade_not_cleaned_before_reuse.bin": "63b28ade8c3692ff57f175b6fb92104257896ffd6e549f0c94df5eec50a55b7a",
+    "traces/05_60919177e8_read_from_destroyed_brigade.bin": "1e8cfcf2fc55f49d0e388f1bf7b74db99a0ad165d547b9015f21c6c1edf7d205",
+    "traces/06_4930450013_bucket_outlives_its_brigade.bin": "c8b318310005fe2bb08434ca694f2da454594bc15733552da9958f815977130a",
+    "traces/07_edc450c8ac_subrequest_pool_private_data.bin": "1d6e8a9c6c62e3b699382ef6a184f74e374c041ecf64fb8dea4bd39826992527"
+  },
+  "image_sha256": {
+    "00_1c7a70c9d9_wrong_bucket_alloc_across_connections:m0": "0e36d22a8734976ffad8fca4099590b6c084857532f471787fbb53cdf8e06335",
+    "01_d2a1cf5f8c_buckets_outlive_backend_allocator:m0": "bde6c039a4c94d9624c9336deac53c7bc5ab109433fd7fd6d922a262075f4e9f",
+    "02_106d0761c0_brigade_on_request_pool_past_eor:m0": "757f769dfb966de4dec8e45363e9f12405454fc98885791486ed02abdf8705b7",
+    "03_d9c2352952_buckets_from_pool_that_dies_first:m0": "70aa4f0d4111a7d67788d9329894ec616afee41b7fd1b7a9eee306d099a7c6bc",
+    "04_c81adad105_brigade_not_cleaned_before_reuse:m0": "d8985b91169e066f4682226f4e56f2846fe0d08c820b68537ba367c224f24864",
+    "05_60919177e8_read_from_destroyed_brigade:m0": "f28764c56490b6b647a258c30961d47f0575d2c41d6ea714928ae1bdac4c9b57",
+    "06_4930450013_bucket_outlives_its_brigade:m0": "685ba357e279d5db5c28766bdeede391b346fdffa20f5b3d548e9f6f0d0de153",
+    "07_edc450c8ac_subrequest_pool_private_data:m0": "89e3683cb14881874ab5d0da536795582b09a865436edaef37360c6c33d31414",
+    "00_1c7a70c9d9_wrong_bucket_alloc_across_connections:m1": "0e36d22a8734976ffad8fca4099590b6c084857532f471787fbb53cdf8e06335",
+    "01_d2a1cf5f8c_buckets_outlive_backend_allocator:m1": "bde6c039a4c94d9624c9336deac53c7bc5ab109433fd7fd6d922a262075f4e9f",
+    "02_106d0761c0_brigade_on_request_pool_past_eor:m1": "757f769dfb966de4dec8e45363e9f12405454fc98885791486ed02abdf8705b7",
+    "03_d9c2352952_buckets_from_pool_that_dies_first:m1": "70aa4f0d4111a7d67788d9329894ec616afee41b7fd1b7a9eee306d099a7c6bc",
+    "04_c81adad105_brigade_not_cleaned_before_reuse:m1": "d8985b91169e066f4682226f4e56f2846fe0d08c820b68537ba367c224f24864",
+    "05_60919177e8_read_from_destroyed_brigade:m1": "f28764c56490b6b647a258c30961d47f0575d2c41d6ea714928ae1bdac4c9b57",
+    "06_4930450013_bucket_outlives_its_brigade:m1": "685ba357e279d5db5c28766bdeede391b346fdffa20f5b3d548e9f6f0d0de153",
+    "07_edc450c8ac_subrequest_pool_private_data:m1": "89e3683cb14881874ab5d0da536795582b09a865436edaef37360c6c33d31414"
+  }
+}
