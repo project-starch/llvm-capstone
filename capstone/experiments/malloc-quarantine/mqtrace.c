@@ -4,8 +4,8 @@
  * Interposes malloc, calloc, realloc, free, posix_memalign and aligned_alloc
  * and forwards each to the next definition (libc's, i.e. MRS over jemalloc),
  * so the allocator under test is unchanged.  Output, on stderr:
- *   MQ op= live_req= live_asked= allocated= active= resident= mapped= maxrss_kib=
- *      enqueue= dequeue= fresh_addr= reused_addr= win_pages= win_lines=
+ *   MQ op= live_req= live_asked= allocated= active= resident= mapped= metadata=
+ *      maxrss_kib= enqueue= dequeue= fresh_addr= reused_addr= win_pages= win_lines=
  *   MQ-HIST b:count ...   MQ-STRIDE b:count ...   MQ-SIZES b:count ...
  *   MQ-DONE objects= ops= peak_live= peak_live_objects= peak_live_pow2_256=
  * peak_live is exact (updated on every allocation), unlike the sampled lines.
@@ -16,7 +16,8 @@
  * (Capstone's Sublet heap) would hold for the same objects.
  * op counts allocations (malloc-like calls); a line is printed every
  * MQ_SAMPLE allocations (default 4096).  live_req is the usable size of the
- * objects the program holds.  With MQ_TRACK=1 the reuse distance (in
+ * objects the program holds; metadata is jemalloc's stats.metadata (its own
+ * bookkeeping, included in resident and mapped).  With MQ_TRACK=1 the reuse distance (in
  * allocations between the free of an address and its next allocation) and
  * the distinct 4 KiB pages / 64 B lines handed out per window are recorded,
  * and also:
@@ -26,13 +27,28 @@
  *               (bucket 0 = same address), a measure of spatial locality.
  * MQ_WIN=0 skips the per-window page/line sets (their cost grows with object
  * size) and reports win_pages=win_lines=0.
+ * MQ_TRACK=2 keeps only the live objects (the table holds an address from its
+ * allocation to its free), for programs that hand out more distinct addresses
+ * than the reuse table holds: MQ-SIZES, live_asked, peak_live_objects and
+ * peak_live_pow2_256 as with MQ_TRACK=1; no reuse distance, stride or windows
+ * (fresh_addr, reused_addr, MQ-HIST and MQ-STRIDE stay zero).
+ * MQ_TRACK=3 measures the reuse distance on a fixed sample of the addresses:
+ * an address is followed when a hash of it falls in 1 of MQ_ADDR_SAMPLE
+ * buckets (default 16), and then on every allocation and free, so each
+ * followed address contributes all its reuses.  Distances still count all
+ * allocations.  MQ-HIST, fresh_addr and reused_addr cover the followed
+ * addresses only; nothing else is tracked (no sizes, live objects, stride).
  * The tables are mmap'd, outside the measured heap (but inside max RSS, so
  * footprint runs leave tracking off).
  *
  * MQ_PREFIX replaces the "MQ" of every line, for programs that print MQ lines
  * of their own.
  *
- * Limits: single-threaded programs only (no locking); allocations made
+ * Threads: every counter and table is updated under one spin lock, and the
+ * guard against the tracer's own allocations (busy) is per thread, so
+ * multi-threaded programs (mleak) are counted exactly.
+ *
+ * Limits: allocations made
  * inside libc without going through its PLT (e.g. reallocarray) are not
  * seen by the tracker, though the sampled jemalloc ledger still counts them.
  */
@@ -55,7 +71,10 @@ static void *(*real_realloc)(void *, size_t);
 static int (*real_posix_memalign)(void **, size_t, size_t);
 static void *(*real_aligned_alloc)(size_t, size_t);
 
-static int busy, track, win, ready;
+static __thread int busy __attribute__((tls_model("initial-exec")));
+static int track, win, ready, lock_word;
+static void lock(void) { while (__atomic_test_and_set(&lock_word, __ATOMIC_ACQUIRE)) ; }
+static void unlock(void) { __atomic_clear(&lock_word, __ATOMIC_RELEASE); }
 static uint64_t op, every = 4096, live, objects, peak_live;
 static const char *pfx = "MQ";
 
@@ -115,6 +134,89 @@ static void on_alloc(uint64_t a, uint64_t n) {
     h = (h + 1) & (TSIZE - 1);
   }
 }
+/* MQ_TRACK=2: the same key/size tables, holding live objects only.  Linear
+ * probing with backward-shift deletion, so no tombstones accumulate. */
+static uint64_t slot_of(uint64_t a) { return (a >> 4) * 0x9e3779b97f4a7c15ull >> (64 - TBITS); }
+static void live_alloc(uint64_t a, uint64_t n) {
+  asked += n;
+  sizes[n ? 64 - __builtin_clzll(n) : 0]++;
+  uint64_t h = slot_of(a);
+  for (;;) {
+    if (tkey[h] == a) { /* still recorded live: replace, as on_alloc does */
+      asked = asked >= treq[h] ? asked - treq[h] : 0;
+      { uint64_t r = pow2_256(treq[h]); live_pow2 = live_pow2 >= r ? live_pow2 - r : 0; }
+      if (live_objs) live_objs--;
+      break;
+    }
+    if (tkey[h] == 0) {
+      if (++seen > TSIZE / 2) { write(2, "MQ-ERROR table full\n", 20); _exit(3); }
+      tkey[h] = a;
+      break;
+    }
+    h = (h + 1) & (TSIZE - 1);
+  }
+  treq[h] = n;
+  live_objs++; if (live_objs > peak_live_objs) peak_live_objs = live_objs;
+  live_pow2 += pow2_256(n); if (live_pow2 > peak_live_pow2) peak_live_pow2 = live_pow2;
+}
+static void live_free(uint64_t a) {
+  uint64_t i = slot_of(a);
+  for (;;) {
+    if (tkey[i] == 0) return; /* allocated before tracking began */
+    if (tkey[i] == a) break;
+    i = (i + 1) & (TSIZE - 1);
+  }
+  asked = asked >= treq[i] ? asked - treq[i] : 0;
+  if (live_objs) live_objs--;
+  { uint64_t r = pow2_256(treq[i]); live_pow2 = live_pow2 >= r ? live_pow2 - r : 0; }
+  seen--;
+  for (;;) { /* backward shift: pull later entries of the run into the hole */
+    tkey[i] = 0; treq[i] = 0;
+    uint64_t j = i;
+    for (;;) {
+      j = (j + 1) & (TSIZE - 1);
+      if (tkey[j] == 0) return;
+      uint64_t k = slot_of(tkey[j]);
+      if (i <= j ? (i < k && k <= j) : (i < k || k <= j)) continue; /* already reachable */
+      break;
+    }
+    tkey[i] = tkey[j]; treq[i] = treq[j];
+    i = j;
+  }
+}
+
+/* MQ_TRACK=3: reuse distance on a hash-selected sample of the addresses. */
+static uint64_t addr_keep = 16;
+static int followed(uint64_t a) {
+  return ((a >> 4) * 0xd6e8feb86659fd93ull >> 32) % addr_keep == 0;
+}
+static void sampled_alloc(uint64_t a) {
+  uint64_t h = slot_of(a);
+  for (;;) {
+    if (tkey[h] == a) {
+      if (tfree[h]) {
+        uint64_t r = op - tfree[h];
+        hist[r ? 64 - __builtin_clzll(r) : 0]++;
+        reused++; tfree[h] = 0;
+      }
+      return;
+    }
+    if (tkey[h] == 0) {
+      if (++seen > TSIZE / 2) { write(2, "MQ-ERROR table full\n", 20); _exit(3); }
+      tkey[h] = a; tfree[h] = 0; fresh++; return;
+    }
+    h = (h + 1) & (TSIZE - 1);
+  }
+}
+static void sampled_free(uint64_t a) {
+  uint64_t h = slot_of(a);
+  for (;;) {
+    if (tkey[h] == a) { tfree[h] = op ? op : 1; return; }
+    if (tkey[h] == 0) return; /* allocated before tracking began */
+    h = (h + 1) & (TSIZE - 1);
+  }
+}
+
 static void on_free(uint64_t a) {
   uint64_t h = (a >> 4) * 0x9e3779b97f4a7c15ull >> (64 - TBITS);
   for (;;) {
@@ -143,13 +245,14 @@ static void wadd(uint64_t *k, uint64_t *s, uint64_t v, uint64_t *count) {
 }
 
 static void sample(void) {
-  size_t allocated = 0, active = 0, resident = 0, mapped = 0, len;
+  size_t allocated = 0, active = 0, resident = 0, mapped = 0, metadata = 0, len;
   uint64_t e = 1; len = sizeof e;
   mallctl("epoch", &e, &len, &e, sizeof e);
   len = sizeof(size_t); mallctl("stats.allocated", &allocated, &len, NULL, 0);
   len = sizeof(size_t); mallctl("stats.active", &active, &len, NULL, 0);
   len = sizeof(size_t); mallctl("stats.resident", &resident, &len, NULL, 0);
   len = sizeof(size_t); mallctl("stats.mapped", &mapped, &len, NULL, 0);
+  len = sizeof(size_t); mallctl("stats.metadata", &metadata, &len, NULL, 0);
   static const struct cheri_revoke_info *info;
   if (!info) { void *p = NULL;
     if (!cheri_revoke_get_shadow(CHERI_REVOKE_SHADOW_INFO_STRUCT, NULL, &p)) info = p; }
@@ -157,10 +260,10 @@ static void sample(void) {
   char line[512];
   int n = snprintf(line, sizeof line,
     "%s op=%llu live_req=%llu live_asked=%llu allocated=%zu active=%zu resident=%zu mapped=%zu "
-    "maxrss_kib=%ld enqueue=%llu dequeue=%llu fresh_addr=%llu reused_addr=%llu "
+    "metadata=%zu maxrss_kib=%ld enqueue=%llu dequeue=%llu fresh_addr=%llu reused_addr=%llu "
     "win_pages=%llu win_lines=%llu\n", pfx,
     (unsigned long long)op, (unsigned long long)live, (unsigned long long)asked, allocated, active, resident, mapped,
-    ru.ru_maxrss, info ? (unsigned long long)info->epochs.enqueue : 0ull,
+    metadata, ru.ru_maxrss, info ? (unsigned long long)info->epochs.enqueue : 0ull,
     info ? (unsigned long long)info->epochs.dequeue : 0ull, (unsigned long long)fresh,
     (unsigned long long)reused, (unsigned long long)wpages, (unsigned long long)wlines);
   if (n > 0) write(2, line, (size_t)n);
@@ -174,7 +277,15 @@ __attribute__((constructor)) static void mq_init(void) {
              *w = getenv("MQ_WIN");
   if (x && *x && strlen(x) < 8) pfx = x;
   if (s && atoll(s) > 0) every = (uint64_t)atoll(s);
-  if (t && *t == '1') {
+  if (t && *t == '3') {
+    const char *k = getenv("MQ_ADDR_SAMPLE");
+    if (k && atoll(k) > 0) addr_keep = (uint64_t)atoll(k);
+    tkey = table(TSIZE * 8ul); tfree = table(TSIZE * 8ul);
+    track = 3;
+  } else if (t && *t == '2') {
+    tkey = table(TSIZE * 8ul); treq = table(TSIZE * 8ul);
+    track = 2;
+  } else if (t && *t == '1') {
     tkey = table(TSIZE * 8ul); tfree = table(TSIZE * 8ul); treq = table(TSIZE * 8ul);
     wpage = table(8ul << WBITS); wline = table(8ul << WBITS);
     wpage_s = table(8ul << WBITS); wline_s = table(8ul << WBITS);
@@ -187,13 +298,16 @@ __attribute__((constructor)) static void mq_init(void) {
 }
 
 static void got(void *p, size_t n) {
-  if (!p || busy || !ready) return;
+  if (!p || !ready || busy) return;
   busy++;
+  lock();
   op++; objects++;
   size_t sz = malloc_usable_size(p);
   live += sz;
   if (live > peak_live) peak_live = live;
-  if (track) {
+  if (track == 3) { uint64_t a = (uint64_t)(uintptr_t)p; if (followed(a)) sampled_alloc(a); }
+  else if (track == 2) live_alloc((uint64_t)(uintptr_t)p, n);
+  else if (track) {
     uint64_t a = (uint64_t)(uintptr_t)p;
     on_alloc(a, n);
     for (uint64_t b = a & ~63ull; win && b < a + sz; b += 64) {
@@ -202,15 +316,20 @@ static void got(void *p, size_t n) {
     }
   }
   if (op % every == 0) sample();
+  unlock();
   busy--;
 }
 
 static void gone(void *p) {
-  if (!p || busy || !ready) return;
+  if (!p || !ready || busy) return;
   busy++;
+  lock();
   size_t sz = malloc_usable_size(p);
   live = live >= sz ? live - sz : 0;
-  if (track) on_free((uint64_t)(uintptr_t)p);
+  if (track == 3) { uint64_t a = (uint64_t)(uintptr_t)p; if (followed(a)) sampled_free(a); }
+  else if (track == 2) live_free((uint64_t)(uintptr_t)p);
+  else if (track) on_free((uint64_t)(uintptr_t)p);
+  unlock();
   busy--;
 }
 
@@ -248,6 +367,7 @@ void *aligned_alloc(size_t al, size_t n) {
 __attribute__((destructor)) static void mq_fini(void) {
   if (!ready) return;
   busy++;
+  lock();
   sample();
   char line[4096];
   int n = snprintf(line, sizeof line, "%s-HIST", pfx);
@@ -264,5 +384,6 @@ __attribute__((destructor)) static void mq_fini(void) {
                 (unsigned long long)objects, (unsigned long long)op, (unsigned long long)peak_live,
                 (unsigned long long)peak_live_objs, (unsigned long long)peak_live_pow2);
   write(2, line, (size_t)n);
+  unlock();
   busy--;
 }

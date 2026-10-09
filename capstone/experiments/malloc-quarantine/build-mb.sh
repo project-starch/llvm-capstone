@@ -33,6 +33,12 @@ mkdir -p "$O/sh6-src" && cp "$B/shbench/sh6bench-new.c" "$O/sh6-src/"
 sed -i 's/|| defined(sgi) || defined(__DGUX__) || defined(__linux__)/& || defined(__FreeBSD__)/; s/|| defined(__DGUX__) || defined(__linux__)$/& || defined(__FreeBSD__)/' "$O/sh6-src/sh6bench-new.c"
 build sh6bench $CC $W -DBENCH=1 -DSYS_MULTI_THREAD=1 -o "$O/sh6bench" "$O/sh6-src/sh6bench-new.c" -lpthread
 build mstress $CC $W -o "$O/mstress" "$B/mstress/mstress.c" -lpthread
+# sh8bench: the same OS switch as sh6bench (its second line also names __MVS__).
+mkdir -p "$O/sh8-src" && cp "$B/shbench/sh8bench-new.c" "$O/sh8-src/"
+sed -i 's/|| defined(__linux__)/& || defined(__FreeBSD__)/' "$O/sh8-src/sh8bench-new.c"
+# Its doBench has a bare "return;" in a non-void function, an error by default in this clang.
+build sh8bench $CC $W -Wno-return-type -DBENCH=1 -DSYS_MULTI_THREAD=1 -o "$O/sh8bench" "$O/sh8-src/sh8bench-new.c" -lpthread
+build mleak $CC $W -o "$O/mleak" "$B/mleak/mleak.c" -lpthread
 build malloc-large $CXX $W -std=c++17 -o "$O/malloc-large" "$B/malloc-large/malloc-large.cpp" -lpthread
 # alloc-test reads __rdtsc() except on Apple/aarch64; take its clock_gettime path on RISC-V.
 mkdir -p "$O/alloc-test-src" && cp "$B"/alloc-test/* "$O/alloc-test-src/"
