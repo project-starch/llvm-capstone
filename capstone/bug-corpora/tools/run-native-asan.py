@@ -66,6 +66,7 @@ def main():
                     help="'<binary> <args>=<expected report type>'; repeatable")
     ap.add_argument("--build-note", default="", help="compiler and flags, recorded in record.json")
     a = ap.parse_args()
+    a.corpus = a.corpus.resolve()
     if a.out.exists():
         print(f"CONTROL-FAILED {a.out} exists: use a fresh directory", file=sys.stderr)
         return 75
