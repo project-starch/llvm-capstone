@@ -56,7 +56,7 @@ struct cv_global {
 #define CV_REMAP_BEGIN _IOW('V', 25, struct cv_remap)
 #define CV_REMAP_END _IOW('V', 26, struct cv_remap)
 #define CV_PROFILE _IOR('V', 27, __u64)
-#define CV_MAX_ARENAS 8192
+#define CV_MAX_ARENAS 32768
 #define CV_MAX_REGION_BYTES (1024UL << 20)
 #define CV_MAX_BYTES (4096UL << 20)
 #endif

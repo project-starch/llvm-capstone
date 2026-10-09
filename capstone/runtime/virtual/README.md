@@ -364,7 +364,7 @@ gate; this adapter does not replace their monitor or CALL/RETURN path.
 
 This is the first QEMU application profile: one hart, private anonymous
 mappings, 1 GiB per registered region, 4 GiB
-aggregate registered VA, 8192 mappings, and a recyclable node table bounded by
+aggregate registered VA, 32768 mappings, and a recyclable node table bounded by
 RAM, an optional module quota and the 31-bit ID field. The separate allocator
 block/arena limits are unchanged by node-table growth.
 Fork, shared tagged mappings, file-backed
