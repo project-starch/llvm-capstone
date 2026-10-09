@@ -124,6 +124,19 @@ static unsigned char *sublet_region(size_t off, size_t len, const char *name, un
 #endif
 
 void *ffc_carve(void *block, size_t off, size_t len, const char *name) {
+#ifdef FFC_SUBLET_CARVE
+  /* No arithmetic on `block` here: it is an untagged address, and offsetting an untagged
+   * capability faults on Capstone (cause 24) -- found by the carve control, 2026-10-09. */
+  unsigned long lo, hi;
+  CHECK(addr(block) == blk.base, 962);
+  unsigned char *p = sublet_region(off, len, name, &lo, &hi);
+  if (blk.zero)
+    memset(p, 0, len); /* calloc's zeroing, through the region's own alias */
+  printf("carve %s off=%zu len=%zu bounds=%llu base_eq=%d region=[%lu,%lu)\n", name, off, len,
+         (unsigned long long)(__builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_base(p)),
+         __builtin_capstone_cap_get_base(p) == blk.base + off, lo, hi);
+  return p;
+#else
   unsigned char *p = (unsigned char *)block + off;
 #if defined(FFC_CARVE_BOUNDS) && defined(__CHERI_PURE_CAPABILITY__)
   p = cheri_bounds_set(p, len);
@@ -138,18 +151,11 @@ void *ffc_carve(void *block, size_t off, size_t len, const char *name) {
          __builtin_capstone_cap_get_base(p) == base);
 #elif defined(FFC_CARVE_BOUNDS)
 #error "FFC_CARVE_BOUNDS needs a capability target: CHERI purecap or Capstone"
-#elif defined(FFC_SUBLET_CARVE)
-  unsigned long lo, hi;
-  p = sublet_region(off, len, name, &lo, &hi);
-  if (blk.zero)
-    memset(p, 0, len); /* calloc's zeroing, through the region's own alias */
-  printf("carve %s off=%zu len=%zu bounds=%llu base_eq=%d region=[%lu,%lu)\n", name, off, len,
-         (unsigned long long)(__builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_base(p)),
-         __builtin_capstone_cap_get_base(p) == blk.base + off, lo, hi);
 #else
   printf("carve %s off=%zu len=%zu bounds=allocation\n", name, off, len);
 #endif
   return p;
+#endif
 }
 
 void ffc_note(struct ffc_outcome *o, const void *block, size_t blen,
