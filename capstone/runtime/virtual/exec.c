@@ -585,6 +585,32 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     return 0;
 }
 
+/* CAPSTONE_VM_SAMPLE_MS=<n>: print the adapter's counters and the process's
+ * memory at most every n ms of launcher time, from whichever worker returns
+ * from a step first, so that footprint and lifetime-table use can be followed
+ * over a run and not only read at its end. */
+static unsigned long long sample_every_ns, next_sample_ns;
+static void maybe_sample(void)
+{
+    unsigned long long now = now_ns(), due = __atomic_load_n(&next_sample_ns, __ATOMIC_RELAXED);
+    struct cv_stats s;
+    unsigned long vm = 0, rss = 0;
+    if (!sample_every_ns || now < due ||
+        !__atomic_compare_exchange_n(&next_sample_ns, &due, now + sample_every_ns, 0,
+                                     __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+        return;
+    if (ioctl(device, CV_STATS, &s)) return;
+    FILE *f = fopen("/proc/self/statm", "r");
+    if (f) { if (fscanf(f, "%lu %lu", &vm, &rss) != 2) vm = rss = 0; fclose(f); }
+    fprintf(stderr, "CAPSTONE_VM_SAMPLE t_ns=%llu arenas=%llu pages=%llu peak=%llu nodes=%llu "
+            "nodes_live=%llu nodes_retired=%llu nodes_high_water=%llu node_capacity=%llu "
+            "node_bytes=%llu node_growths=%llu collections=%llu reclaimed=%llu faults=%llu "
+            "steps=%llu vm_kib=%lu rss_kib=%lu\n",
+            now - start_ns, s.arenas, s.pinned_pages, s.peak_pages, s.nodes, s.nodes_live,
+            s.nodes_retired, s.nodes_high_water, s.node_capacity, s.node_bytes, s.node_growths,
+            s.collections, s.reclaimed, s.faults, s.steps, vm * 4, rss * 4);
+}
+
 static int virtual_service_loop(uint64_t tid)
 {
     struct cv_step step = {.thread = tid};
@@ -592,6 +618,7 @@ static int virtual_service_loop(uint64_t tid)
         while (ioctl(device, CV_STEP, &step))
             if (errno != EINTR && errno != EAGAIN) return die("step");
         step.reply = 0;
+        maybe_sample();
         if (step.kind == 1) {
             /* The supervisor quantum is the preemption point. Yielding here
              * lets Linux schedule another launcher thread on this one hart. */
@@ -675,6 +702,10 @@ int main(int argc, char **argv)
     unsigned stdio_mask;
     if (reserve_stdio(&stdio_mask)) return 125;
     start_ns = now_ns();
+    {
+        const char *every = getenv("CAPSTONE_VM_SAMPLE_MS");
+        if (every) sample_every_ns = strtoull(every, NULL, 10) * 1000000ULL;
+    }
     trace = getenv("CAPSTONE_VM_TRACE") != NULL;
     struct capstone_application_descriptor_v2 desc;
     char resumed_path[64];
