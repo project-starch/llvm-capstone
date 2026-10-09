@@ -58,11 +58,14 @@
     },
     "sublet-malloc": {
       "target": "Capstone domain, wmem AS RELEASED (WM_VARIANT=reference: none of the port's patches) on Sublet regions, mode 1: every g_malloc a region, every g_free a revoke -- Sublet only as the system allocator",
-      "oracle": "complete: the explicit wmem_free returns the name to the epan scope's BLOCK allocator's free list inside a live block; nothing reaches g_free.",
+      "oracle": "complete: the explicit wmem_free returns the name to the epan scope's BLOCK allocator's free list inside a live block; nothing reaches g_free. MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (image 6526f51779e63ccf); the positive control 90 faulted in mode 1 and completed in mode 0 of the same build options.",
       "prediction": "complete",
-      "status": "predicted",
+      "status": "measured",
       "control": "controls/sublet-malloc/90_ctl_jumbo_freed_by_reset must fault in the same build",
-      "predicted": "2026-10-09"
+      "predicted": "2026-10-09",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "f7adf03a1009"
     }
   },
   "status": "run 2026-09-21 under QEMU: spatial completes; sublet completes, the recorded non-detection; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe with released_chunks=1, the chunk poisoned at its individual free; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe x3, and the WM_CHUNKS=OFF build still completes x3; results/20260929-qemu-chunk-port ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 completes, mode 1 CAUGHT.",

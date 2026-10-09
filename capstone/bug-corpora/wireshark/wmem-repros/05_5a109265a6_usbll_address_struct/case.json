@@ -60,11 +60,14 @@
     },
     "sublet-malloc": {
       "target": "Capstone domain, wmem AS RELEASED (WM_VARIANT=reference: none of the port's patches) on Sublet regions, mode 1: every g_malloc a region, every g_free a revoke -- Sublet only as the system allocator",
-      "oracle": "complete: wmem as released keeps the stale object's block -- wm_next_packet is wmem_free_all on the BLOCK_FAST packet pool, which frees every block but the first and reinitialises that one (wmem_block_fast_free_all), and the object is far smaller than a block, so it sits in the kept first block; nothing reaches g_free, so the Sublet system allocator revokes nothing.",
+      "oracle": "complete: wmem as released keeps the stale object's block -- wm_next_packet is wmem_free_all on the BLOCK_FAST packet pool, which frees every block but the first and reinitialises that one (wmem_block_fast_free_all), and the object is far smaller than a block, so it sits in the kept first block; nothing reaches g_free, so the Sublet system allocator revokes nothing. MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (image 44266e2ccbb869bf); the positive control 90 faulted in mode 1 and completed in mode 0 of the same build options.",
       "prediction": "complete",
-      "status": "predicted",
+      "status": "measured",
       "control": "controls/sublet-malloc/90_ctl_jumbo_freed_by_reset must fault in the same build",
-      "predicted": "2026-10-09"
+      "predicted": "2026-10-09",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "f7adf03a1009"
     }
   },
   "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe, as before; results/20260929-qemu-chunk-port ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 completes, mode 1 CAUGHT.",

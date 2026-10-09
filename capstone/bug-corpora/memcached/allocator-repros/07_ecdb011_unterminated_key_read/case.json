@@ -79,10 +79,13 @@
     "sublet-malloc": {
       "target": "Capstone domain, the allocators port's ledger in mode 2: stock slabs.c/cache.c on Sublet as the SYSTEM allocator -- a chunk carries its whole page's bound, an object its own, and nothing is revoked until a page or object is given back",
       "mode": 2,
-      "oracle": "the sequence completes: the unterminated key read stays inside the page",
+      "oracle": "the sequence completes: the unterminated key read stays inside the page MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (completed=1, image da0eac83b369dfa3).",
       "prediction": "complete",
-      "status": "predicted",
-      "predicted": "2026-10-09"
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "f7adf03a1009"
     }
   },
   "status": "MEASURED 2026-10-05, both paths. QEMU domain: BOTH modes COMPLETE, no fault, because the case caps its scan at 64 bytes and the chunk is larger, so the read never reaches the chunk's end -- which the arm's pre-registered wording anticipated ('depends on how far the scan runs'). Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. A longer scan would cross the chunk bound; this case deliberately does not, so it measures THAT the key bound was crossed, not the chunk's. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Field bounds measured 2026-10-09 (results/2026-10-09-field-bounds/): NOT CAUGHT on Capstone and on CheriBSD. Carve bounds on Capstone measured 2026-10-09: CAUGHT at the labelled probe. Carve bounds on CheriBSD measured 2026-10-09: CAUGHT at the labelled probe. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): completes in both modes.",

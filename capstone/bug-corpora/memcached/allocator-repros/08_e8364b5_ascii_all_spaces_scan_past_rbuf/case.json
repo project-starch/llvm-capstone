@@ -67,10 +67,14 @@
     "sublet-malloc": {
       "target": "Capstone domain, the allocators port's ledger in mode 2: stock slabs.c/cache.c on Sublet as the SYSTEM allocator -- a chunk carries its whole page's bound, an object its own, and nothing is revoked until a page or object is given back",
       "mode": 2,
-      "oracle": "fault before the labelled probe, in the defective scan itself: the first byte past the 16384-byte rbuf object, which in mode 2 is its own region as its malloc would be (a bounds fault, not a revocation)",
+      "oracle": "fault before the labelled probe, in the defective scan itself: the first byte past the 16384-byte rbuf object, which in mode 2 is its own region as its malloc would be (a bounds fault, not a revocation) MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: CAUGHT by a bound, cause 5, in the scan before the probe: cursor = e4a04000, imm = 0, addr = e4a04000, size = 1, bounds = (e4a00000, e4a04000) (image e5950dd6b1168050).",
       "prediction": "fault",
-      "status": "predicted",
-      "predicted": "2026-10-09"
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "CAUGHT",
+      "cause": 5,
+      "measured": "2026-10-09",
+      "preregistered": "f7adf03a1009"
     }
   },
   "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0 over all nine cases, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. The Capstone, PoisonCap and CheriBSD arms are declared predictions -- this case has not had a domain or guest run. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1, REFUTING this case's prediction -- the port malloc's each cache object separately, so an object crossing leaves a real bound while the slab chunk rows stay inside their page's malloc. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-case8/): spatial CAUGHT, sublet CAUGHT, both in the scan before the probe. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): CAUGHT in both modes."
