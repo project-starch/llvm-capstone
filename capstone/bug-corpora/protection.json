@@ -913,6 +913,490 @@
      }
     ]
    }
+  },
+  {
+   "corpus": "perl",
+   "program": "perl",
+   "title": "Perl: eleven spatial and temporal defects live at the 5.36.3 pin",
+   "cases": [
+    {
+     "case": "01_ad5fedb002_for-loop-gv-freed-early",
+     "group": "release-differential",
+     "allocator_boundary": "nested",
+     "number": 1,
+     "upstream_fix": "ad5fedb002",
+     "title": "A foreach loop over a package variable frees the GV it iterates, and pp_iter reads it again",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation_on"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault cause 24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-svheads"
+      }
+     }
+    },
+    {
+     "case": "02_d2cddbe1df_caller-args-freed-sv",
+     "group": "release-differential",
+     "allocator_boundary": "nested",
+     "number": 2,
+     "upstream_fix": "d2cddbe1df",
+     "title": "caller() copies pointers to already-freed SVs into @DB::args",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": true,
+     "arms": {
+      "cheribsd": {
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the defect IS in the arm's context -- the SV head arena -- but Perl's own check aborts first, `panic: attempt to copy freed scalar`, so no arm gets to report and the row measures Perl's assertion rather than any protection. The omission costs the observation that the program wins the race."
+      },
+      "capstone-sysalloc": {
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the defect IS in the arm's context -- the SV head arena -- but Perl's own check aborts first, `panic: attempt to copy freed scalar`, so no arm gets to report and the row measures Perl's assertion rather than any protection. The omission costs the observation that the program wins the race."
+      },
+      "capstone-sublet": {
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the defect IS in the arm's context -- the SV head arena -- but Perl's own check aborts first, `panic: attempt to copy freed scalar`, so no arm gets to report and the row measures Perl's assertion rather than any protection. The omission costs the observation that the program wins the race."
+      }
+     }
+    },
+    {
+     "case": "03_9e298ab597_av-extend-unshift-stale-slots",
+     "group": "release-differential",
+     "allocator_boundary": "system",
+     "number": 3,
+     "upstream_fix": "9e298ab597",
+     "title": "av_extend_guts after an unshift leaves the trailing element slots holding stale SV pointers",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": true,
+     "arms": {
+      "cheribsd": {
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: this trigger never dereferences the stale slots it leaves behind -- the workload's own oracle passes -- so there is no access for any arm to catch. The omission costs nothing until a stronger trigger exists; writing one would make it a real row again."
+      },
+      "capstone-sysalloc": {
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: this trigger never dereferences the stale slots it leaves behind -- the workload's own oracle passes -- so there is no access for any arm to catch. The omission costs nothing until a stronger trigger exists; writing one would make it a real row again."
+      },
+      "capstone-sublet": {
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: this trigger never dereferences the stale slots it leaves behind -- the workload's own oracle passes -- so there is no access for any arm to catch. The omission costs nothing until a stronger trigger exists; writing one would make it a real row again."
+      }
+     }
+    },
+    {
+     "case": "04_e4be969235_join-delimiter-freed-by-magic",
+     "group": "release-differential",
+     "allocator_boundary": "system",
+     "number": 4,
+     "upstream_fix": "e4be969235",
+     "title": "join() keeps the delimiter's string buffer across a magical fetch that frees it",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation_on"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault cause 24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-svheads"
+      }
+     }
+    },
+    {
+     "case": "05_17535c984a_cloned-const-sub-unrefcounted",
+     "group": "release-differential",
+     "allocator_boundary": "nested",
+     "number": 5,
+     "upstream_fix": "17535c984a",
+     "title": "A cloned constant-state sub shares the prototype's CvXSUBANY SV without taking a reference",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "clean",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation_on"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault cause 24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-svheads"
+      }
+     }
+    },
+    {
+     "case": "06_40727c420c_code-blocks-count-reused",
+     "group": "release-differential",
+     "allocator_boundary": "system",
+     "number": 6,
+     "upstream_fix": "40727c420c",
+     "title": "reg_code_blocks carries one count for both its size and its used entries, so a recursive compile writes into a reallocated array",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation_on"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault cause 24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-svheads"
+      }
+     }
+    },
+    {
+     "case": "07_39b4841b25_recursive-code-eval-rex-freed",
+     "group": "release-differential",
+     "allocator_boundary": "nested",
+     "number": 7,
+     "upstream_fix": "39b4841b25",
+     "title": "A recursive match with a run-time pattern frees the regexp the outer match is still executing",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation_on"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault cause 24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-svheads"
+      }
+     }
+    },
+    {
+     "case": "08_b7b77ffc1e_clear-errsv-on-a-glob",
+     "group": "release-differential",
+     "allocator_boundary": "system",
+     "number": 8,
+     "upstream_fix": "b7b77ffc1e",
+     "title": "CLEAR_ERRSV grows a one-byte buffer over a glob's GP, so the next write to $@ runs past it",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation_on"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault cause 5",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-svheads"
+      }
+     }
+    },
+    {
+     "case": "09_1189b87114_special-block-cv-freed",
+     "group": "release-differential",
+     "allocator_boundary": "nested",
+     "number": 9,
+     "upstream_fix": "1189b87114",
+     "title": "newATTRSUB_x keeps using a CV that clear_special_blocks has already freed",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation_on"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault cause 24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-svheads"
+      }
+     }
+    },
+    {
+     "case": "10_254b30e378_perlio-scalar-write-overlap",
+     "group": "release-differential",
+     "allocator_boundary": "system",
+     "number": 10,
+     "upstream_fix": "254b30e378",
+     "title": "Writing a scalar into the in-memory handle backed by that same scalar moves from the buffer SvGROW has freed",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "revocation_on"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault cause 24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-svheads"
+      }
+     }
+    },
+    {
+     "case": "11_af11b0c528_cow-subbeg-across-code-eval",
+     "group": "release-differential",
+     "allocator_boundary": "system",
+     "number": 11,
+     "upstream_fix": "af11b0c528",
+     "title": "A failed /(?{})/ branch restores a COW-backed subbeg without its length, so $& reads past the match",
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "nested": null,
+     "ignored": true,
+     "arms": {
+      "cheribsd": {
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
+      },
+      "capstone-sysalloc": {
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
+      },
+      "capstone-sublet": {
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
+      }
+     }
+    }
+   ],
+   "groups": {
+    "release-differential": {
+     "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
+     "cases": 11,
+     "ignore": null
+    }
+   },
+   "protection": {
+    "cheribsd": [
+     {
+      "bundle": "results/20261006-cheribsd",
+      "reader": "column-per-arm",
+      "arm": "revocation_on",
+      "key": "fix",
+      "vehicle": "cheribsd-purecap",
+      "group": "release-differential"
+     }
+    ],
+    "capstone-sysalloc": [
+     {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "group": "release-differential"
+     }
+    ],
+    "capstone-sublet": [
+     {
+      "bundle": "results/20261006",
+      "reader": "column-per-arm",
+      "arm": "sublet-svheads",
+      "key": "fix",
+      "vehicle": "capstone-baremetal",
+      "because": "sublet-svheads is the Sublet heap plus Perl's SV head arena under the discipline, which is the nested allocator this corpus's defects live in.",
+      "group": "release-differential"
+     }
+    ]
+   }
   }
  ]
 }

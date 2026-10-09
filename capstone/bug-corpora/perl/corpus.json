@@ -3,6 +3,39 @@
   "title": "Perl: eleven spatial and temporal defects live at the 5.36.3 pin",
   "cases": 11,
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "protection": {
+    "cheribsd": [
+      {
+        "bundle": "results/20261006-cheribsd",
+        "reader": "column-per-arm",
+        "arm": "revocation_on",
+        "key": "fix",
+        "vehicle": "cheribsd-purecap",
+        "group": "release-differential"
+      }
+    ],
+    "capstone-sysalloc": [
+      {
+        "bundle": "results/20261007-virtual",
+        "reader": "virtual",
+        "arm": "virtual",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "group": "release-differential"
+      }
+    ],
+    "capstone-sublet": [
+      {
+        "bundle": "results/20261006",
+        "reader": "column-per-arm",
+        "arm": "sublet-svheads",
+        "key": "fix",
+        "vehicle": "capstone-baremetal",
+        "because": "sublet-svheads is the Sublet heap plus Perl's SV head arena under the discipline, which is the nested allocator this corpus's defects live in.",
+        "group": "release-differential"
+      }
+    ]
+  },
   "groups": {
     "release-differential": {
       "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
@@ -43,7 +76,8 @@
       ],
       "expect_live_in_pin": {
         "true": 11
-      }
+      },
+      "allocator_boundary": "mixed"
     }
   }
 }

@@ -28,19 +28,18 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 0 | 0 | 20 | 0 | 0 | 20 | 0 |
-| `capstone-sysalloc` | 0 | 0 | 20 | 0 | 0 | 20 | 0 |
-| `capstone-sublet` | 20 | 0 | 0 | 0 | 0 | 20 | 0 |
+| `cheribsd` | 7 | 0 | 21 | 0 | 0 | 28 | 3 |
+| `capstone-sysalloc` | 7 | 0 | 21 | 0 | 0 | 28 | 3 |
+| `capstone-sublet` | 28 | 0 | 0 | 0 | 0 | 28 | 3 |
 
 ## Programs that have not declared their arms yet
 
-Not in any total above or below, and not a statement about them: **8** of 9 programs in the tree.
+Not in any total above or below, and not a statement about them: **7** of 9 programs in the tree.
 
 - `ffmpeg`
 - `httpd`
 - `memcached`
 - `mruby`
-- `perl`
 - `postgres`
 - `sqlite`
 - `wireshark`
@@ -49,25 +48,35 @@ Not in any total above or below, and not a statement about them: **8** of 9 prog
 
 Two corrections to the headline table, and both of them cut the same way. A cell that was never run is not evidence, so the arms are compared on the cases where all three were measured. And on a case whose object came out of the program's own allocator, two of the three arms are not protecting that object at all -- counting those together with the malloc-boundary cases reads as a weakness of the mechanism when it is a statement about what each arm covers.
 
-### `nested`: 20 cases
+### `system`: 4 cases
+
+the system allocator handed the object out directly -- the boundary all three arms protect
+
+| arm | caught | of those, by quarantine | missed | share caught |
+|---|---:|---:|---:|---:|
+| `cheribsd` | **4** | 0 | 0 | 100% |
+| `capstone-sysalloc` | **4** | 0 | 0 | 100% |
+| `capstone-sublet` | **4** | 0 | 0 | 100% |
+
+### `nested`: 24 cases
 
 the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **0** | 0 | 20 | 0% |
-| `capstone-sysalloc` | **0** | 0 | 20 | 0% |
-| `capstone-sublet` | **20** | 0 | 0 | 100% |
+| `cheribsd` | **3** | 0 | 21 | 12% |
+| `capstone-sysalloc` | **3** | 0 | 21 | 12% |
+| `capstone-sublet` | **24** | 0 | 0 | 100% |
 
-### All 20 together
+### All 28 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **0** | 0 | 20 | 0% |
-| `capstone-sysalloc` | **0** | 0 | 20 | 0% |
-| `capstone-sublet` | **20** | 0 | 0 | 100% |
+| `cheribsd` | **7** | 0 | 21 | 25% |
+| `capstone-sysalloc` | **7** | 0 | 21 | 25% |
+| `capstone-sublet` | **28** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -101,4 +110,26 @@ CPython: twenty re-entrancy use-after-frees, all of them inside pymalloc
 - `cheribsd`: **0** caught, 20 missed, of 20.
 - `capstone-sysalloc`: **0** caught, 20 missed, of 20.
 - `capstone-sublet`: **20** caught, 0 missed, of 20.
+
+### perl -- 11 cases
+
+Perl: eleven spatial and temporal defects live at the 5.36.3 pin
+
+| group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
+|---|---:|---|---|:---:|:---:|:---:|
+| `release-differential` | 1 | `ad5fedb002` | A foreach loop over a package variable frees the GV it iterates, and pp_iter | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 2 | `d2cddbe1df` | caller() copies pointers to already-freed SVs into @DB::args | ∅ | ∅ | ∅ |
+| `release-differential` | 3 | `9e298ab597` | av_extend_guts after an unshift leaves the trailing element slots holding st | ∅ | ∅ | ∅ |
+| `release-differential` | 4 | `e4be969235` | join() keeps the delimiter's string buffer across a magical fetch that frees | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 5 | `17535c984a` | A cloned constant-state sub shares the prototype's CvXSUBANY SV without taki | · | · | **C**<sup>b</sup> |
+| `release-differential` | 6 | `40727c420c` | reg_code_blocks carries one count for both its size and its used entries, so | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 7 | `39b4841b25` | A recursive match with a run-time pattern frees the regexp the outer match i | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 8 | `b7b77ffc1e` | CLEAR_ERRSV grows a one-byte buffer over a glob's GP, so the next write to $ | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 9 | `1189b87114` | newATTRSUB_x keeps using a CV that clear_special_blocks has already freed | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 10 | `254b30e378` | Writing a scalar into the in-memory handle backed by that same scalar moves  | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 11 | `af11b0c528` | A failed /(?{})/ branch restores a COW-backed subbeg without its length, so  | ∅ | ∅ | ∅ |
+
+- `cheribsd`: **7** caught, 1 missed, of 8; 3 ignored.
+- `capstone-sysalloc`: **7** caught, 1 missed, of 8; 3 ignored.
+- `capstone-sublet`: **8** caught, 0 missed, of 8; 3 ignored.
 

@@ -1,28 +1,33 @@
 {
- "case": 11,
- "upstream_fix": "af11b0c528",
- "title": "A failed /(?{})/ branch restores a COW-backed subbeg without its length, so $& reads past the match",
- "consumer": "regexec.c",
- "class": "temporal",
- "trigger": "trigger.pl",
- "live_in_pin": true,
- "live_proof": "upstream fixed it in af11b0c528 (af11b0c528200761891d46a7f6566aa880be45ca) (2026-07-03). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin regexec.c:10978 eval_state->subbeg = NULL; regexec.c:11010 unconditional RXp_MATCH_COPIED_on(rex); regexp.h:648 has no subbeg_flags). Host ASan at the pin: no ASan report; the workload's own oracle fails (rc=0); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
- "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
- "arms": {
-  "sysalloc-bounds": {
-   "oracle": "no fault: completes, the workload's own oracle fails"
+  "case": 11,
+  "upstream_fix": "af11b0c528",
+  "title": "A failed /(?{})/ branch restores a COW-backed subbeg without its length, so $& reads past the match",
+  "consumer": "regexec.c",
+  "class": "temporal",
+  "trigger": "trigger.pl",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in af11b0c528 (af11b0c528200761891d46a7f6566aa880be45ca) (2026-07-03). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin regexec.c:10978 eval_state->subbeg = NULL; regexec.c:11010 unconditional RXp_MATCH_COPIED_on(rex); regexp.h:648 has no subbeg_flags). Host ASan at the pin: no ASan report; the workload's own oracle fails (rc=0); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
+  "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-bounds": {
+      "oracle": "no fault: completes, the workload's own oracle fails"
+    },
+    "sysalloc-sublet": {
+      "oracle": "no fault: completes, the workload's own oracle fails"
+    },
+    "sublet-svheads": {
+      "oracle": "no fault: completes, the workload's own oracle fails"
+    },
+    "cheribsd-revocation": {
+      "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
+    }
   },
-  "sysalloc-sublet": {
-   "oracle": "no fault: completes, the workload's own oracle fails"
-  },
-  "sublet-svheads": {
-   "oracle": "no fault: completes, the workload's own oracle fails"
-  },
-  "cheribsd-revocation": {
-   "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
+  "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
+  "allocator_layer": "system allocator (the RXp_SUBBEG buffer), plus the nested SV head arena (saved_copy)",
+  "allocator_boundary": "system",
+  "note": "triggered on every arm, on both platforms, and catchable by NONE of them, for a structural reason worth recording: the stale subbeg length makes $& read one byte past the logical string into the NUL terminator, which lies INSIDE the same allocation. No per-object bounds and no revocation can see an in-bounds read of a live object -- CheriBSD with revocation on is clean here too. The only oracle is the wrong output, which every arm does produce",
+  "ignore": {
+    "kind": "parked",
+    "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
   }
- },
- "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
- "allocator_layer": "system allocator (the RXp_SUBBEG buffer), plus the nested SV head arena (saved_copy)",
- "note": "triggered on every arm, on both platforms, and catchable by NONE of them, for a structural reason worth recording: the stale subbeg length makes $& read one byte past the logical string into the NUL terminator, which lies INSIDE the same allocation. No per-object bounds and no revocation can see an in-bounds read of a live object -- CheriBSD with revocation on is clean here too. The only oracle is the wrong output, which every arm does produce"
 }

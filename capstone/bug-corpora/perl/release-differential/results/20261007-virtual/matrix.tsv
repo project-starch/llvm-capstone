@@ -1,0 +1,13 @@
+case	arm	verdict	cause	attributed	evidence
+control-interpreter	control	silent	--	--	completed with status 0
+01_ad5fedb002_for-loop-gv-freed-early	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9c0f055c
+02_d2cddbe1df_caller-args-freed-sv	virtual	silent	--	--	completed with status 255
+03_9e298ab597_av-extend-unshift-stale-slots	virtual	silent	--	--	completed with status 0
+04_e4be969235_join-delimiter-freed-by-magic	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8223c914
+05_17535c984a_cloned-const-sub-unrefcounted	virtual	silent	--	--	completed with status 0
+06_40727c420c_code-blocks-count-reused	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa723c914
+07_39b4841b25_recursive-code-eval-rex-freed	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8215139c
+08_b7b77ffc1e_clear-errsv-on-a-glob	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3fad0e26c0
+09_1189b87114_special-block-cv-freed	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f83029768
+10_254b30e378_perlio-scalar-write-overlap	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f7f0023f4
+11_af11b0c528_cow-subbeg-across-code-eval	virtual	silent	--	--	completed with status 0
