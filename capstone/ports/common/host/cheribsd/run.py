@@ -197,12 +197,18 @@ def main():
                     + ("ENABLE" if a.runtime_revocation == "on" else "DISABLE")
                     + "=1"
                 )
+                # A case may add environment of its own, which is how an
+                # instrument gets in front of the program: the quarantine probe
+                # is an LD_PRELOAD and nothing else in the run changes.
                 command = (
                     "cd "
                     + shlex.quote(remote)
                     + "; ulimit -c 0; env "
                     + policy
                     + " "
+                    + " ".join(f"{k}={shlex.quote(str(v))}"
+                               for k, v in (case.get("env") or {}).items())
+                    + (" " if case.get("env") else "")
                     + shlex.join(["./program", *case.get("args", [])])
                 )
                 # Keep a shell waiting for the child. OpenSSH cannot transport
