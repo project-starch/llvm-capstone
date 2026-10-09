@@ -25,7 +25,9 @@
       "oracle": "case.c unchanged against the Sublet port of FFmpeg's own pools (app port, FFAPP_POOL=sublet): the defect faults at an instruction case.c's line table puts on a line that dereferences the stale table pointer, before the verdict line; the fix completes with VERDICT FIXED",
       "control": "the same case.c and driver objects linked against upstream's pools (FFAPP_POOL=stock): the defect completes with VERDICT DEFECT-REPRODUCED, the fix with VERDICT FIXED",
       "cause": 24,
-      "measured": "2026-10-04, ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/: poolsublet fixture 46 FAULT cause 24 attributed to case.c:104 (registered 104,105,108) with value_hi 1198a902a20 non-zero, and fixture 47 COMPLETE VERDICT FIXED; the poolstock control completes 46 with VERDICT DEFECT-REPRODUCED and 47 with FIXED. All 16 cells of 40-47 as predicted on both arms. Built with the qualified toolchain 7d01722aab88, the only one on this host passing the application SDK's ABI gate -- a comparability caveat, since other FFmpeg arms used b7b31421e9fa"
+      "measured": "2026-10-04, ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/: poolsublet fixture 46 FAULT cause 24 attributed to case.c:104 (registered 104,105,108) with value_hi 1198a902a20 non-zero, and fixture 47 COMPLETE VERDICT FIXED; the poolstock control completes 46 with VERDICT DEFECT-REPRODUCED and 47 with FIXED. All 16 cells of 40-47 as predicted on both arms. Built with the qualified toolchain 7d01722aab88, the only one on this host passing the application SDK's ABI gate -- a comparability caveat, since other FFmpeg arms used b7b31421e9fa",
+      "status": "measured",
+      "verdict": "CAUGHT"
     },
     "spatial": {
       "probe_case": 39,

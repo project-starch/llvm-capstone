@@ -34,7 +34,10 @@
       ],
       "oracle": "case.c unchanged against the Sublet port of FFmpeg's own pools (app port, FFAPP_POOL=sublet): the defect faults, cause 24, at an instruction case.c's line table puts on a line that dereferences the stale pointer (33), before the verdict line; the fix completes with VERDICT FIXED",
       "control": "the same case.c and driver objects (byte-identical), linked against upstream's pools (FFAPP_POOL=stock): the defect completes with VERDICT DEFECT-REPRODUCED, the fix with VERDICT FIXED",
-      "cause": 24
+      "cause": 24,
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-04, ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/result-lines.txt: fx44: AS PREDICTED  predicted: FAULT 33  got: cause 24 at image 0x21200, case.c:33, value_hi 14189502500"
     },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
