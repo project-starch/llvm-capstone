@@ -38,7 +38,8 @@ W=("${HOSTED[@]}" -Wno-everything -Wno-implicit-function-declaration -Wno-implic
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 TRACE=("$HERE/mqtrace-cap.c"
        -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free,--wrap=posix_memalign
-       -Wl,--wrap=aligned_alloc)
+       -Wl,--wrap=aligned_alloc
+       -Wl,--wrap=__clone,--wrap=__capstone_delegate_thread_attach,--wrap=__capstone_signals_thread_detach)
 mkdir -p "$OUT/src"
 # dom <name> <compiler arguments...>: the plain and the traced program.
 dom() {
@@ -77,6 +78,8 @@ for sh in sh6bench sh8bench; do
   dom $sh -DBENCH=1 -DSYS_MULTI_THREAD=1 "$OUT/src/$sh-new.c" -lpthread
 done
 dom mleak -isystem "$OUT/src/atomic-include" "$B/mleak/mleak.c" -lpthread
+# The tracer's positive control (see tracer-check.c), not a benchmark.
+dom tracer-check "$HERE/tracer-check.c" -lpthread
 
 cp "$B/espresso/largest.espresso" "$B/barnes/input" "$OUT/"
 "${CROSS_COMPILE:?RISC-V Linux compiler prefix for mb-run}gcc" -O2 -static -Wall -Wextra -Werror \
