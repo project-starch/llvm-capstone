@@ -172,7 +172,9 @@ p.add_argument(
 )
 p.add_argument("--cases", default=",".join(str(i) for i in range(len(CASES))))
 p.add_argument("--modes", default="spatial,sublet")
-MODE_NUMBER = {"spatial": 0, "sublet": 1, "sublet-malloc": 2}
+MODE_NUMBER = {"spatial": 0, "sublet": 1, "sublet-malloc": 2,
+               # mode 1 on images built with MC_CARVE_BOUNDS, judged by the case's `sublet-carve` arm
+               "sublet-carve": 1}
 p.add_argument(
     "--negative-control",
     action="store_true",
