@@ -1,6 +1,9 @@
 #include "regions.h"
 #include "chunks.h"
 #include <string.h>
+/* WM_DOMAIN here is the FREESTANDING axis, not the capability one: what it
+ * decides is whether there is a libc. WM_CAPABILITY decides whether regions
+ * carry Sublet handles, and a Capstone process has both. */
 #ifndef WM_DOMAIN
 #include <stdlib.h>
 #endif
@@ -113,7 +116,7 @@ void *wm_epoch(void *p) {
   wm_region_renew(&e->region, temporal);
   return (char *)e->region.alias + ((uintptr_t)p - e->base);
 }
-#ifdef WM_DOMAIN
+#ifdef WM_CAPABILITY
 /* A stale pointer handed back to the allocator must fail here, on its own
  * authority, before any block-wide authority is looked up by address. The
  * label lets the fault oracle name this access. */

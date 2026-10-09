@@ -5,13 +5,32 @@
 #ifdef WM_POISONCAP
 #include "poisoncap.h"
 #endif
+#ifdef WM_BORROW_LINEAR
+/* The heap lends one linear block and keeps the senior handle, so the region
+ * layer can carve and revoke inside it. Declared, not included: the
+ * allocator's own interface. */
+#include <capstone/capability.h>
+unsigned long __capstone_sublet_malloc_linear(size_t, capstone_cap_slot *);
+#endif
 _Noreturn void wm_fail(unsigned code) {
   fprintf(stderr, "WM failure %u\n", code);
   exit(1);
 }
 int main(int argc, char **argv) {
   unsigned mode = 0;
-#ifdef WM_POISONCAP
+#if defined(WM_BORROW_LINEAR)
+  /* Both modes run here: mode 0 narrows every object and revokes nothing,
+   * mode 1 revokes at the allocator's own release points. The default is the
+   * protected one, as in the PoisonCap replay, and an explicit final argument
+   * selects the control. */
+  mode = 1;
+  if (argc == 4) {
+    if (strcmp(argv[3], "0") && strcmp(argv[3], "1"))
+      return 2;
+    mode = argv[3][0] - '0';
+  } else if (argc != 3)
+    return 2;
+#elif defined(WM_POISONCAP)
   /* The PoisonCap replay defaults to the protected mode; an explicit final
    * argument selects the spatial control. */
   mode = 1;
@@ -37,7 +56,17 @@ int main(int argc, char **argv) {
       n != sizeof *trace + trace->count * sizeof(struct wm_event))
     return 3;
   fclose(f);
-#ifdef WM_POISONCAP
+#if defined(WM_BORROW_LINEAR)
+  /* wm_regions_init requires the region linear, exactly WM_PAYLOAD_BYTES long
+   * and 16-byte aligned, and calls wm_fail(201) if it is not. capstone_cap_load
+   * moves it out of the slot into a register, which is how the region layer
+   * takes it: in a domain it arrives that way. */
+  capstone_cap_slot lent;
+  void *payload = NULL;
+  if (!__capstone_sublet_malloc_linear(WM_PAYLOAD_BYTES, &lent))
+    return 4;
+  wm_init_backing(NULL, capstone_cap_load(&lent), mode);
+#elif defined(WM_POISONCAP)
   void *payload = NULL;
   wm_init_backing(NULL, NULL, mode);
 #else

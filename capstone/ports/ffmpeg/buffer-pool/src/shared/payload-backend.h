@@ -32,6 +32,13 @@ void ff2_poisoncap_teardown(struct payload_block *block, unsigned mode);
  * another C call. Only the backend retains the remaining region's authority. */
 void ff2_pool_init_region(uintptr_t base, size_t capacity);
 
+/* Only the capability backend on the virtual application platform: the payload
+ * is borrowed LINEAR from the system allocator instead of arriving as a grant,
+ * and the backend borrows it itself so no linear capability crosses a C call. */
+#ifdef FFPOOL_BORROW_LINEAR
+void ff2_payload_borrow(size_t capacity);
+#endif
+
 /* CMake links exactly one implementation of these operations. */
 void ff2_payload_carve(struct payload_block *block, size_t offset);
 void *ff2_payload_issue_pointer(struct payload_block *block, unsigned mode);

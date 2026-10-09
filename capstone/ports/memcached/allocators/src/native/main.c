@@ -1,7 +1,12 @@
 /* Hosted entry: the same protocol as the domain, read from and written to
- * files, with the payload and metadata regions taken from the host heap. Only
- * mode 0 runs here; the native authority layer has nothing to revoke, and
- * leases.c refuses mode 1 before anything is allocated. */
+ * files, with the metadata region taken from the host heap.
+ *
+ * Which modes run depends on the authority layer underneath. With the native
+ * one, only mode 0: it has nothing to revoke, and leases.c refuses mode 1
+ * before anything is allocated. With MCP_BORROW_LINEAR the Sublet authority is
+ * underneath, the payload is LENT by the system allocator as one linear
+ * capability, and both modes run -- which is what makes this entry the vehicle
+ * for the nested arm in a Capstone process as well. */
 #include "mc_slabs_shim.h"
 #include "port.h"
 #include "slabs.h"
@@ -9,6 +14,12 @@
 #include <stdlib.h>
 #ifdef MCP_POISONCAP
 #include "poisoncap.h"
+#endif
+#ifdef MCP_BORROW_LINEAR
+/* The heap lends one linear block and keeps the senior handle, so the
+ * authority layer can revoke inside it and the heap can still reclaim all of
+ * it. Declared, not included: this is the allocator's internal interface. */
+#include "../../../../common/include/borrow-aligned-block.h"
 #endif
 _Noreturn void mcp_fail(unsigned code) {
   fprintf(stderr, "MCP failed=%u\n", code);
@@ -38,16 +49,36 @@ int main(int argc, char **argv) {
 #ifdef MCP_ADAPTER_BACKING
   void *payload = NULL; /* the CheriBSD adapter owns its own backing */
 #else
+#ifdef MCP_BORROW_LINEAR
+  /* mcp_authority_init requires the region linear, exactly MCP_PAYLOAD_BYTES
+   * long and MCP_GRAIN-aligned. The heap gives all three by construction -- it
+   * rounds a request up to a power of two and acquires each arena aligned to
+   * its own size -- and the authority layer checks them again and calls
+   * mcp_fail(501) if they do not hold, so a region that is merely nearly right
+   * stops the arm instead of quietly changing what it measures. */
+  capstone_cap_slot lent, head, tail;
+  void *payload = NULL;
+  if (!capstone_borrow_aligned_block(MCP_PAYLOAD_BYTES, MCP_GRAIN, &lent,
+                                     &head, &tail))
+    return 4;
+#else
   void *payload = aligned_alloc(4096, MCP_PAYLOAD_BYTES);
 #endif
-#ifndef MCP_ADAPTER_BACKING
+#endif
+#if !defined(MCP_ADAPTER_BACKING) && !defined(MCP_BORROW_LINEAR)
   if (!payload)
     return 4;
 #endif
   if (!metadata)
     return 4;
   mcp_meta_init(metadata);
+#ifdef MCP_BORROW_LINEAR
+  /* capstone_cap_load moves the region out of the slot into a register, which
+   * is how the authority layer takes it: in a domain it arrives that way. */
+  mcp_payload_init(capstone_cap_load(&lent));
+#else
   mcp_payload_init(payload);
+#endif
   mcp_set_mode(out.mode);
   slabs_init(settings.maxbytes, settings.factor, false, NULL, NULL, false);
   mcp_replay(input, &out);
@@ -67,7 +98,12 @@ int main(int argc, char **argv) {
   mcp_poisoncap_report();
 #endif
   free(metadata);
+#ifdef MCP_BORROW_LINEAR
+  /* The payload is the heap's; its senior handle is what reclaims it, and the
+   * process is ending anyway. */
+#else
   free(payload);
+#endif
   free(input);
   return 0;
 }

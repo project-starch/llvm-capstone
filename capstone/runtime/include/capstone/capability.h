@@ -112,6 +112,27 @@ capstone_cap_store(capstone_cap_slot *slot, void *cap) {
                    : "memory");
 }
 
+/* The counterpart of capstone_cap_store: take the capability OUT of its slot
+ * into a register, leaving the slot empty.
+ *
+ * A nested allocator's hand-over entry point takes the region as a POINTER,
+ * because that is how a freestanding domain receives it -- the monitor shares
+ * it in a register. A caller holding the same region in a slot, which is how
+ * the heap's lend API returns it, has no other way to call that entry point.
+ * Unlike the metadata readers below, this does not put the capability back:
+ * emptying the slot is the point, since a linear capability has exactly one
+ * place at a time and leaving a copy behind would be the bug this type exists
+ * to prevent. */
+static inline void *capstone_cap_load(capstone_cap_slot *slot) {
+  void *cap;
+  __asm__ volatile(".insn i 0x5b, 0x3, %0, 0(%1)\n"
+                   ".insn s 0x5b, 0x4, x0, 0(%1)\n"
+                   : "=&r"(cap)
+                   : "r"(slot)
+                   : "memory");
+  return cap;
+}
+
 /* Metadata readers restore the capability to its slot after LCC: even
  * reading a linear capability out of memory can move it. */
 static inline unsigned long capstone_cap_type(capstone_cap_slot *slot) {
