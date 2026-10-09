@@ -1,0 +1,21 @@
+case	arm	verdict	cause	attributed	evidence
+00_gh-143543_groupby_reentrant_eq	virtual	silent	--	--	completed with status 0
+01_gh-146613_grouper_parent_key	virtual	silent	--	--	completed with status 0
+02_gh-142829_hamt_eq_interior_cursor	virtual	silent	--	--	completed with status 0
+03_gh-142831_json_encoder_list_item	virtual	silent	--	--	completed with status 0
+04_gh-145244_json_encoder_dict_key	virtual	silent	--	--	completed with status 0
+05_gh-148660_odict_copy_stale_link	virtual	silent	--	--	completed with status 0
+06_gh-151295_bytes_join_reentrant_buffer	virtual	silent	--	--	completed with status 0
+07_gh-148395_decompressor_next_in	virtual	silent	--	--	completed with status 0
+08_gh-112127_atexit_unregister_borrowed_tuple	virtual	silent	--	--	completed with status 0
+09_gh-139210_iterparse_event_name	virtual	silent	--	--	completed with status 0
+10_gh-142560_bytearray_search_realloc	virtual	silent	--	--	completed with status 0
+11_gh-142783_zoneinfo_eager_decref	virtual	silent	--	--	completed with status 0
+12_gh-143004_counter_update_borrowed_value	virtual	silent	--	--	completed with status 0
+13_gh-144833_ssl_decref_self_then_read	virtual	silent	--	--	completed with status 0
+14_gh-146011_decimal_signaldict_outlives_context	virtual	silent	--	--	completed with status 0
+15_gh-149449_unicodedata_capi_cached	virtual	silent	--	--	completed with status 0
+16_gh-151403_fork_exec_fspath	virtual	silent	--	--	completed with status 0
+17_gh-151416_spawnv_fspath	virtual	silent	--	--	completed with status 0
+18_gh-151695_curses_screen_encoding_global	virtual	silent	--	--	completed with status 0
+19_gh-153539_textio_tell_reentrant_decoder	virtual	silent	--	--	completed with status 0

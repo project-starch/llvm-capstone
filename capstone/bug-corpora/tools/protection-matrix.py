@@ -393,13 +393,20 @@ def build():
     measured it are all per group."""
     corpora = []
     problems = []
+    undeclared = []
     for manifest in sorted(CORPORA.glob("*/corpus.json")):
         corpus = manifest.parent
         decl = json.loads(manifest.read_text())
         name = corpus.name
         block = decl.get("protection")
         if not block:
-            problems.append(f"{name}: no protection block in corpus.json")
+            # NOT a problem: a program that has not declared its arms yet is a
+            # known state while the corpora are declared one at a time, and
+            # counting it as a problem makes --check fail on a tree that is
+            # exactly as intended. It is carried separately so the generated
+            # table can NAME the programs still missing -- the gap belongs in
+            # the document, not only in a tool's stderr.
+            undeclared.append(name)
             continue
         out_cases = []
         for group, group_decl in sorted(decl.get("groups", {}).items()):
@@ -545,7 +552,7 @@ def build():
                                        "ignore": d.get("ignore")}
                                    for g, d in sorted(decl.get("groups", {}).items())},
                         "protection": block})
-    return corpora, problems
+    return corpora, problems, undeclared
 
 
 def resolve(cell, cells):
@@ -717,7 +724,7 @@ def intersection(corpora):
     return lines + [""]
 
 
-def render(corpora):
+def render(corpora, undeclared=()):
     lines = [
         "# Does it catch it? Every bug in this tree, against three protection arms",
         "",
@@ -726,6 +733,13 @@ def render(corpora):
         "the verdict vocabulary; every cell below was read out of the results bundle its",
         "corpus names, and the JSON beside this file carries the bundle and the detail",
         "per cell.",
+        "",
+        "WHAT IS NOT HERE YET IS NAMED BELOW. A program enters this table once its "
+        "corpus.json declares, per arm, the bundle its verdict is read from. The "
+        "declarations arrive one program at a time, so a program missing from the "
+        "totals is not a program with nothing to report -- it is one that has not "
+        "declared yet, and leaving it unnamed would make the totals read as the whole "
+        "tree.",
         "",
         "ONE CORPUS PER APPLICATION. The groups inside an application are what used to be",
         "separate corpora: each crosses one boundary, pins one upstream version and was",
@@ -830,6 +844,12 @@ def render(corpora):
                      f"{c['missed'] + c['wrong-answer']} | "
                      f"{totals_disposed[arm] - totals_credited[arm]} | "
                      f"{c['not-run']} | {n} | {c['ignored']} |")
+    if undeclared:
+        lines += ["", "## Programs that have not declared their arms yet", "",
+                  "Not in any total above or below, and not a statement about them: "
+                  f"**{len(undeclared)}** of "
+                  f"{len(corpora) + len(undeclared)} programs in the tree.", ""]
+        lines += [f"- `{name}`" for name in undeclared]
     lines += [""] + disposition_ledger(corpora) + intersection(corpora) + [
               "A `=` marks a cell that coincides with the arm to its left because the "
               "group has no nested allocator to protect; a `b` marks one measured on the "
@@ -926,7 +946,7 @@ def main():
                          "caught@<arm> / undisposed@cheribsd. Several --focus narrow "
                          "together; repeat a verdict to widen it.")
     args = ap.parse_args()
-    corpora, problems = build()
+    corpora, problems, undeclared = build()
     if not corpora:
         # NOT a table of zero rows. A tree in which no corpus declares its arms
         # yet has nothing for this tool to generate, and writing an empty
@@ -944,7 +964,7 @@ def main():
             print(f"PROBLEM {problem}", file=sys.stderr)
         focus(corpora, args.focus)
         return 0
-    md = render(corpora)
+    md = render(corpora, undeclared)
     data = json.dumps({"arms": ARMS, "corpora": corpora}, indent=1) + "\n"
     md_path, json_path = CORPORA / "PROTECTION.md", CORPORA / "protection.json"
     if args.check:

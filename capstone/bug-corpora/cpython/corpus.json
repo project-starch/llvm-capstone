@@ -3,6 +3,41 @@
   "title": "CPython: twenty re-entrancy use-after-frees, all of them inside pymalloc",
   "cases": 20,
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "protection": {
+    "cheribsd": [
+      {
+        "group": "pymalloc-repros",
+        "bundle": "results/20261008-cheribsd",
+        "reader": "supervise-blocks",
+        "case_from": "allocator-tests/pymalloc-(\\d+)/target",
+        "key": "number",
+        "vehicle": "cheribsd-purecap",
+        "because": "the first stock-purecap reading of this corpus. Until 2026-10-08 its only CheriBSD images were the poisoncap pair, which arms.json excludes, because build-cases.sh had a target named `cheribsd` that built PoisonCap and the probe's capability operand was guarded on that platform rather than on the purecap ABI."
+      }
+    ],
+    "capstone-sysalloc": [
+      {
+        "bundle": "results/20261007-virtual",
+        "reader": "virtual",
+        "arm": "virtual",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "group": "pymalloc-repros"
+      }
+    ],
+    "capstone-sublet": [
+      {
+        "bundle": "results/20261008-virtual-nested-sublet",
+        "reader": "virtual",
+        "arm": "virtual-nested-sublet",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "because": "the run brackets each case twice: mode 0 is the same adapter with no revoke at the nested allocator's release, mode 1 is the Sublet discipline. Mode 1 is this arm, so the cell reads the m1 row; the m0 row is the baseline that makes the pair a single-variable comparison. This replaces the 2026-09-19 freestanding reading: the same adapter now runs in a Capstone process with full musl libc, so the cell is PAIRED with the one to its left instead of being measured on another vehicle.",
+        "group": "pymalloc-repros",
+        "mode": "m1"
+      }
+    ]
+  },
   "groups": {
     "pymalloc-repros": {
       "boundary": "pymalloc",
@@ -46,7 +81,8 @@
         "[Tt]wenty reports, (\\w+) shapes",
         "The (\\w+) shapes, and what each"
       ],
-      "note": "The inventory states this is the whole reachable set at the pin, not a sample."
+      "note": "The inventory states this is the whole reachable set at the pin, not a sample.",
+      "allocator_boundary": "nested"
     }
   }
 }
