@@ -108,6 +108,16 @@ separates MRS's own bookkeeping (`run-maps.sh`). See that experiment's README.
 `collect.py` applies these checks to every run of all three systems and writes `results.json`;
 a run without `MB_END` is reported as running and not checked.
 
+## Platform settings
+
+Guest RAM is 2 GiB, as on CheriBSD, except for sh6bench, which runs with 6 GiB
+(`MB_MEMORY=6G`). Its live set grows to about 9.2 million objects by design, and on Capstone
+each live object costs far more pinned memory than natively: on 2026-10-09 an untraced run had
+58,321 pinned pages (228 MiB) and 2,720 mappings at about 14% of its allocations, against a
+native peak RSS of 337 MiB for the whole run. Projected, that exceeds 2 GiB and the earlier
+8,192-mapping table; the runs were restarted with 32,768 mappings and 6 GiB. The extra RAM
+changes nothing else: pinned pages are counted, not the guest's RAM.
+
 ## Run matrix
 
 | System | Builds | Runs per program |

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run each named program of the mallocbench gate in its own QEMU, all in parallel.
-#   remote-probe.sh RUNID SECONDS NAME...
+#   remote-probe.sh RUNID SECONDS NAME...      (MB_MEMORY sets the guest's RAM, default 2G)
 # Each run gets its own stage (gate.sh with "only" = NAME) and its own lock file, so the
 # runs do not serialise. Logs: runs/RUNID/NAME.log (rc line) and runs/RUNID/work-NAME/serial.log.
 set -u
@@ -12,7 +12,7 @@ mkdir -p "$R"
 for n in "$@"; do
   s=$R/stage-$n; mkdir -p "$s"; cp -a "$K/stage-base/." "$s/"; echo "$n" > "$s/only"; echo "$T" > "$s/timeout"
   ( CAPSTONE_QEMU_LOCK=$R/lock-$n LD_LIBRARY_PATH=$K/lib python3 "$K/run-staged.py" --qemu "$K/qemu-system-riscv64" \
-      --images "$K/images" --stage "$s" --work "$R/work-$n" --timeout $((T + 900)) > "$R/$n.log" 2>&1
+      --images "$K/images" --memory "${MB_MEMORY:-2G}" --stage "$s" --work "$R/work-$n" --timeout $((T + 900)) > "$R/$n.log" 2>&1
     echo "rc=$?" >> "$R/$n.log" ) &
 done
 wait
