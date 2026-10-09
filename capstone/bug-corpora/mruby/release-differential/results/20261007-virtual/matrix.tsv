@@ -1,0 +1,27 @@
+case	arm	verdict	cause	attributed	evidence
+control-smoke-trimmed	control	silent	--	--	completed with status 0
+probe-smoke-full	virtual	detected	30 (INSUF_RESOURCES)	--	capability fault cause=30 (INSUF_RESOURCES) pc=0x3fa041191c
+probe-live-ladder	virtual	silent	--	--	completed with status 0
+01_13e017c2f_opgetidx0-stale-regs	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8b4b2e54
+02_39aecc143_openter-block-collected	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fad4a83b4
+03_59552ecb8_sprintf-format-mutated	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f85d6322c
+04_606d9a6b2_merge-pair-collected	virtual	silent	--	--	completed with status 0
+05_628ccec60_task-values-unmarked	virtual	silent	--	--	completed with status 0
+06_84cc5aa60_khash-freed-buckets	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9c5108d0
+07_eb7693857_vacated-slot-read	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa704b79c
+08_fb4974528_hash-ext-walk-carries	virtual	silent	--	--	completed with status 0
+09_0cf969a2b_shaped-iv-reshaped	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f88c9e4e0
+10_7c5915799_struct-member-storage	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa196f320
+11_cb51fce92_task-stack-envs	virtual	trap	12 (INST_PAGE_FAULT)	--	stopped by cause 12 (INST_PAGE_FAULT) at pc=0x3f967e4190, which is not a Capstone capability cause
+12_4663fef45_eql-delete-past-entries	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3f8c8566a4
+13_4a386f80e_pack-uu-signed-overflow	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3f9cd5cc1c
+14_93eb74a59_case-splat-stale-count	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3f9885e9d4
+15_af6f23ddb_prepend-self-reference	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3fbd801bc8
+16_ec89364c4_ary-fill-int-overflow	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3f90d42b78
+17_bef45e223_pat-values-stale-ptr-and-len	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fb185af04
+18_03f242d09_mod-visibility-null-mt	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9802c6d8
+19_77d1d928f_method-defined-null-mt	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9842c6d8
+20_94993eede_visibility-unprepared-mt	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fb9c2c6d8
+21_ff047f5fe_method-defined-inherit-null-mt	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8682c6d8
+22_d8911416c_alias-mid-as-irep	virtual	detected	24 (UNEXP_OP_TYPE)	--	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8ad4d49c
+23_1737589f0_file-join-recursive-array	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3f9c410818

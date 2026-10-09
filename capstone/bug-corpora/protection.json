@@ -2207,6 +2207,1059 @@
    }
   },
   {
+   "corpus": "mruby",
+   "program": "mruby",
+   "title": "mruby: twenty-three measured defects of the 165 live at the 4.0.0-rc2 pin",
+   "cases": [
+    {
+     "case": "01_13e017c2f_opgetidx0-stale-regs",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 1,
+     "upstream_fix": "13e017c2f",
+     "title": "OP_GETIDX0 stores a Hash result through a regs pointer taken before a default proc grew the VM stack",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "02_39aecc143_openter-block-collected",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 2,
+     "upstream_fix": "39aecc143",
+     "title": "OP_ENTER moves post arguments over the block's register, then allocates: the Proc is collected and the method reads the slot's next occupant",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "03_59552ecb8_sprintf-format-mutated",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 3,
+     "upstream_fix": "59552ecb8",
+     "title": "sprintf holds pointers into the format string across a to_s callback that String#replace frees",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "completes",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "04_606d9a6b2_merge-pair-collected",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 4,
+     "upstream_fix": "606d9a6b2",
+     "title": "Hash#merge and pattern **rest keep the pair only in C locals; it is collected and the freed object reaches the write barrier",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "completes",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "05_628ccec60_task-values-unmarked",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 5,
+     "upstream_fix": "628ccec60",
+     "title": "the main task's name and result have no mark hook, so the string is swept and its slot reused",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "completes",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "06_84cc5aa60_khash-freed-buckets",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 6,
+     "upstream_fix": "84cc5aa60",
+     "title": "khash caches keys and ed_flags across a Ruby hash or eql? callback that rehashes and frees h->data",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "07_eb7693857_vacated-slot-read",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 7,
+     "upstream_fix": "eb7693857",
+     "title": "Hash#inspect, __except and rehash read a value the collector has already taken, and a rehash writes into a slot the table no longer holds",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "08_fb4974528_hash-ext-walk-carries",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 8,
+     "upstream_fix": "fb4974528",
+     "title": "Hash#key, slice and slice! carry a pair out of a hash in a C local only; it is collected and then answered",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "completes",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "09_0cf969a2b_shaped-iv-reshaped",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 9,
+     "upstream_fix": "0cf969a2b",
+     "title": "shaped_iv_foreach caches the shaped-IV block across a user #inspect that adds or removes an instance variable and frees it",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "completes",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "10_7c5915799_struct-member-storage",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 10,
+     "upstream_fix": "7c5915799",
+     "title": "Struct#== and #eql? keep the member storage across a callback whose initialize_copy replaces it",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "completes",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "11_cb51fce92_task-stack-envs",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 11,
+     "upstream_fix": "cb51fce92",
+     "title": "a task's stack is freed while on-stack envs still point into it, and the GC then marks freed memory",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "disposition": null,
+       "detail": "the run did not measure it: abort",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "disposition": null,
+       "detail": "the run did not measure it: trap -- stopped by cause 12 (INST_PAGE_FAULT) at pc=0x3f967e4190, which is not a Capstone capability cause",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c2",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "12_4663fef45_eql-delete-past-entries",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 12,
+     "upstream_fix": "4663fef45",
+     "title": "a delete made from inside an eql? callback leaves the entry walk reading past the used entries and past the allocation",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c5",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "13_4a386f80e_pack-uu-signed-overflow",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 13,
+     "upstream_fix": "4a386f80e",
+     "title": "mruby-pack computes a uuencode length with signed overflow and writes past the destination buffer",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "completes",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c7",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "14_93eb74a59_case-splat-stale-count",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 14,
+     "upstream_fix": "93eb74a59",
+     "title": "the case-splat walk indexes a replaced, shorter array with the old count and reads past its end",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c5",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "15_af6f23ddb_prepend-self-reference",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 15,
+     "upstream_fix": "af6f23ddb",
+     "title": "String#prepend with a self-referencing argument memcpys past the resized buffer",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c7",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "16_ec89364c4_ary-fill-int-overflow",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 16,
+     "upstream_fix": "ec89364c4",
+     "title": "start + length overflows mrb_int, both guards go false, and fill writes far past the element buffer",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c7",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "17_bef45e223_pat-values-stale-ptr-and-len",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 17,
+     "upstream_fix": "bef45e223",
+     "title": "__pat_values and __except hold the key array's pointer and its length across Ruby: the freed buffer is read and the stale length indexes past the shorter array",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "completes",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "18_03f242d09_mod-visibility-null-mt",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 18,
+     "upstream_fix": "03f242d09",
+     "title": "mrb_mod_visibility hands a NULL method table to mt_put after a prepend",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "19_77d1d928f_method-defined-null-mt",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 19,
+     "upstream_fix": "77d1d928f",
+     "title": "method_defined? reaches mt_put with a NULL method table",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "20_94993eede_visibility-unprepared-mt",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 20,
+     "upstream_fix": "94993eede",
+     "title": "a visibility change runs before the method table is prepared, so mt_put dereferences NULL",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "21_ff047f5fe_method-defined-inherit-null-mt",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 21,
+     "upstream_fix": "ff047f5fe",
+     "title": "Module#method_defined? with its inherit argument reaches mt_put with a NULL method table",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "22_d8911416c_alias-mid-as-irep",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 22,
+     "upstream_fix": "d8911416c",
+     "title": "a method's symbol id is dereferenced as an mrb_irep pointer where aliases are not handled",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c24",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    },
+    {
+     "case": "23_1737589f0_file-join-recursive-array",
+     "group": "release-differential",
+     "allocator_boundary": null,
+     "number": 23,
+     "upstream_fix": "1737589f0",
+     "title": "File.join recurses on a self-referencing array until the C stack is exhausted",
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "nested": null,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "disposition": null,
+       "detail": "the run did not measure it: timeout",
+       "group": "release-differential",
+       "bundle": "results/20261006-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "release-differential",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "fault, cause c7",
+       "group": "release-differential",
+       "bundle": "results/20261006",
+       "vehicle": "capstone-baremetal",
+       "local_arm": "sublet-gc"
+      }
+     }
+    }
+   ],
+   "groups": {
+    "gc-slot-repros": {
+     "boundary": "GC slots (mrb_heap_page)",
+     "cases": 0,
+     "ignore": null
+    },
+    "release-differential": {
+     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+     "cases": 23,
+     "ignore": null
+    }
+   },
+   "protection": {
+    "cheribsd": [
+     {
+      "bundle": "results/20261006-cheribsd",
+      "reader": "verdict-word",
+      "arm": "cheribsd-revocation",
+      "key": "fix",
+      "vehicle": "cheribsd-purecap",
+      "group": "release-differential"
+     },
+     {
+      "not_run": "not read yet. This group was measured under this tree's older mechanism arms (none of this arm's kind), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill.",
+      "group": "gc-slot-repros"
+     }
+    ],
+    "capstone-sysalloc": [
+     {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "group": "release-differential"
+     },
+     {
+      "not_run": "not read yet. This group was measured under this tree's older mechanism arms (none of this arm's kind), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill.",
+      "group": "gc-slot-repros"
+     }
+    ],
+    "capstone-sublet": [
+     {
+      "bundle": "results/20261006",
+      "reader": "verdict-word",
+      "arm": "sublet-gc",
+      "key": "fix",
+      "vehicle": "capstone-baremetal",
+      "because": "sublet-gc is the Sublet heap plus mruby's own GC slots under the discipline (ports/mruby/app/patches/4.0.0-rc2/0008-gc-slots-under-sublet.patch). The sysalloc-bounds arm in the same bundle bounds objects without revoking them, so it is NOT this tree's capstone-sysalloc; the virtual run is.",
+      "group": "release-differential"
+     },
+     {
+      "not_run": "not read yet. This group was measured under this tree's older mechanism arms (none of this arm's kind), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill.",
+      "group": "gc-slot-repros"
+     }
+    ]
+   }
+  },
+  {
    "corpus": "perl",
    "program": "perl",
    "title": "Perl: eleven spatial and temporal defects live at the 5.36.3 pin",

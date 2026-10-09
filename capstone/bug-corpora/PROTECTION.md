@@ -28,16 +28,15 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 14 | 0 | 46 | 0 | 17 | 77 | 3 |
-| `capstone-sysalloc` | 15 | 0 | 34 | 0 | 28 | 77 | 3 |
-| `capstone-sublet` | 56 | 0 | 2 | 0 | 19 | 77 | 3 |
+| `cheribsd` | 27 | 0 | 54 | 0 | 19 | 100 | 3 |
+| `capstone-sysalloc` | 34 | 0 | 37 | 0 | 29 | 100 | 3 |
+| `capstone-sublet` | 79 | 0 | 2 | 0 | 19 | 100 | 3 |
 
 ## Programs that have not declared their arms yet
 
-Not in any total above or below, and not a statement about them: **4** of 9 programs in the tree.
+Not in any total above or below, and not a statement about them: **3** of 9 programs in the tree.
 
 - `ffmpeg`
-- `mruby`
 - `sqlite`
 - `wireshark`
 
@@ -65,15 +64,15 @@ the program's own allocator carved the object out of a block it holds -- only `c
 | `capstone-sysalloc` | **3** | 0 | 34 | 8% |
 | `capstone-sublet` | **37** | 0 | 0 | 100% |
 
-### All 48 together
+### All 69 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **12** | 0 | 36 | 25% |
-| `capstone-sysalloc` | **14** | 0 | 34 | 29% |
-| `capstone-sublet` | **48** | 0 | 0 | 100% |
+| `cheribsd` | **25** | 0 | 44 | 36% |
+| `capstone-sysalloc` | **32** | 0 | 37 | 46% |
+| `capstone-sublet` | **69** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -170,6 +169,45 @@ memcached: twenty-one defects -- nine inside its slab and cache allocators, twel
 - `cheribsd`: **2** caught, 9 missed, 10 not run, of 21.
 - `capstone-sysalloc`: **2** caught, 3 missed, 16 not run, of 21.
 - `capstone-sublet`: **9** caught, 2 missed, 10 not run, of 21.
+
+### mruby -- 23 cases
+
+mruby: twenty-three measured defects of the 165 live at the 4.0.0-rc2 pin
+
+| group | cases | the boundary its cases cross |
+|---|---:|---|
+| `gc-slot-repros` | 0 | GC slots (mrb_heap_page) |
+| `release-differential` | 23 | the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses |
+
+| group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
+|---|---:|---|---|:---:|:---:|:---:|
+| `release-differential` | 1 | `13e017c2f` | OP_GETIDX0 stores a Hash result through a regs pointer taken before a defaul | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 2 | `39aecc143` | OP_ENTER moves post arguments over the block's register, then allocates: the | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 3 | `59552ecb8` | sprintf holds pointers into the format string across a to_s callback that St | · | **C** | **C**<sup>b</sup> |
+| `release-differential` | 4 | `606d9a6b2` | Hash#merge and pattern **rest keep the pair only in C locals; it is collecte | · | · | **C**<sup>b</sup> |
+| `release-differential` | 5 | `628ccec60` | the main task's name and result have no mark hook, so the string is swept an | · | · | **C**<sup>b</sup> |
+| `release-differential` | 6 | `84cc5aa60` | khash caches keys and ed_flags across a Ruby hash or eql? callback that reha | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 7 | `eb7693857` | Hash#inspect, __except and rehash read a value the collector has already tak | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 8 | `fb4974528` | Hash#key, slice and slice! carry a pair out of a hash in a C local only; it  | · | · | **C**<sup>b</sup> |
+| `release-differential` | 9 | `0cf969a2b` | shaped_iv_foreach caches the shaped-IV block across a user #inspect that add | · | **C** | **C**<sup>b</sup> |
+| `release-differential` | 10 | `7c5915799` | Struct#== and #eql? keep the member storage across a callback whose initiali | · | **C** | **C**<sup>b</sup> |
+| `release-differential` | 11 | `cb51fce92` | a task's stack is freed while on-stack envs still point into it, and the GC  | — | — | **C**<sup>b</sup> |
+| `release-differential` | 12 | `4663fef45` | a delete made from inside an eql? callback leaves the entry walk reading pas | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 13 | `4a386f80e` | mruby-pack computes a uuencode length with signed overflow and writes past t | · | **C** | **C**<sup>b</sup> |
+| `release-differential` | 14 | `93eb74a59` | the case-splat walk indexes a replaced, shorter array with the old count and | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 15 | `af6f23ddb` | String#prepend with a self-referencing argument memcpys past the resized buf | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 16 | `ec89364c4` | start + length overflows mrb_int, both guards go false, and fill writes far  | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 17 | `bef45e223` | __pat_values and __except hold the key array's pointer and its length across | · | **C** | **C**<sup>b</sup> |
+| `release-differential` | 18 | `03f242d09` | mrb_mod_visibility hands a NULL method table to mt_put after a prepend | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 19 | `77d1d928f` | method_defined? reaches mt_put with a NULL method table | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 20 | `94993eede` | a visibility change runs before the method table is prepared, so mt_put dere | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 21 | `ff047f5fe` | Module#method_defined? with its inherit argument reaches mt_put with a NULL  | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 22 | `d8911416c` | a method's symbol id is dereferenced as an mrb_irep pointer where aliases ar | **C** | **C** | **C**<sup>b</sup> |
+| `release-differential` | 23 | `1737589f0` | File.join recurses on a self-referencing array until the C stack is exhauste | — | **C** | **C**<sup>b</sup> |
+
+- `cheribsd`: **13** caught, 8 missed, 2 not run, of 23.
+- `capstone-sysalloc`: **19** caught, 3 missed, 1 not run, of 23.
+- `capstone-sublet`: **23** caught, 0 missed, of 23.
 
 ### perl -- 11 cases
 
