@@ -1,0 +1,6 @@
+case	arm	verdict	cause	attributed	evidence
+00_CVE-2026-6477_pqfn_unbounded_result_copy	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3f8d28197c
+01_CVE-2026-19385_pgdump_transform_list_overread	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3f9a60fed4
+02_CVE-2026-16241_ecpg_bytea_negative_length	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3f848110ac
+03_5d61bdd114_saslprep_truncated_utf8_overread	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3f85d1122c
+04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer	virtual	detected	28 (CAP_OOB)	--	capability fault cause=28 (CAP_OOB) pc=0x3f90e11658

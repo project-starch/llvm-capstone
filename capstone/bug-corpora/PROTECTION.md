@@ -28,18 +28,17 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 7 | 0 | 30 | 0 | 0 | 37 | 3 |
-| `capstone-sysalloc` | 7 | 0 | 26 | 0 | 4 | 37 | 3 |
-| `capstone-sublet` | 37 | 0 | 0 | 0 | 0 | 37 | 3 |
+| `cheribsd` | 12 | 0 | 37 | 0 | 7 | 56 | 3 |
+| `capstone-sysalloc` | 13 | 0 | 31 | 0 | 12 | 56 | 3 |
+| `capstone-sublet` | 47 | 0 | 0 | 0 | 9 | 56 | 3 |
 
 ## Programs that have not declared their arms yet
 
-Not in any total above or below, and not a statement about them: **6** of 9 programs in the tree.
+Not in any total above or below, and not a statement about them: **5** of 9 programs in the tree.
 
 - `ffmpeg`
 - `memcached`
 - `mruby`
-- `postgres`
 - `sqlite`
 - `wireshark`
 
@@ -47,35 +46,35 @@ Not in any total above or below, and not a statement about them: **6** of 9 prog
 
 Two corrections to the headline table, and both of them cut the same way. A cell that was never run is not evidence, so the arms are compared on the cases where all three were measured. And on a case whose object came out of the program's own allocator, two of the three arms are not protecting that object at all -- counting those together with the malloc-boundary cases reads as a weakness of the mechanism when it is a statement about what each arm covers.
 
-### `system`: 4 cases
+### `system`: 9 cases
 
 the system allocator handed the object out directly -- the boundary all three arms protect
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **4** | 0 | 0 | 100% |
-| `capstone-sysalloc` | **4** | 0 | 0 | 100% |
-| `capstone-sublet` | **4** | 0 | 0 | 100% |
+| `cheribsd` | **7** | 0 | 2 | 78% |
+| `capstone-sysalloc` | **9** | 0 | 0 | 100% |
+| `capstone-sublet` | **9** | 0 | 0 | 100% |
 
-### `nested`: 29 cases
+### `nested`: 34 cases
 
 the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **3** | 0 | 26 | 10% |
-| `capstone-sysalloc` | **3** | 0 | 26 | 10% |
-| `capstone-sublet` | **29** | 0 | 0 | 100% |
+| `cheribsd` | **3** | 0 | 31 | 9% |
+| `capstone-sysalloc` | **3** | 0 | 31 | 9% |
+| `capstone-sublet` | **34** | 0 | 0 | 100% |
 
-### All 33 together
+### All 43 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **7** | 0 | 26 | 21% |
-| `capstone-sysalloc` | **7** | 0 | 26 | 21% |
-| `capstone-sublet` | **33** | 0 | 0 | 100% |
+| `cheribsd` | **10** | 0 | 33 | 23% |
+| `capstone-sysalloc` | **12** | 0 | 31 | 28% |
+| `capstone-sublet` | **43** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -156,4 +155,40 @@ Perl: eleven spatial and temporal defects live at the 5.36.3 pin
 - `cheribsd`: **7** caught, 1 missed, of 8; 3 ignored.
 - `capstone-sysalloc`: **7** caught, 1 missed, of 8; 3 ignored.
 - `capstone-sublet`: **8** caught, 0 missed, of 8; 3 ignored.
+
+### postgres -- 19 cases
+
+PostgreSQL: nineteen defects at three fidelities -- a C reduction, the memory contexts under a replay, and the server driven over SQL
+
+| group | cases | the boundary its cases cross |
+|---|---:|---|
+| `c-repros` | 5 | C reductions that drive the real upstream function, compiled verbatim from the 17.5 pin, with no server in the process |
+| `mmgr-repros` | 5 | memory contexts (aset, slab) |
+| `sql-repros` | 9 | a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect |
+
+| group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
+|---|---:|---|---|:---:|:---:|:---:|
+| `c-repros` | 0 | `CVE-2026-6477` | PQfn copies a server-chosen number of bytes into a caller buffer whose size  | **C** | **C** | **C**<sup>=</sup> |
+| `c-repros` | 1 | `CVE-2026-19385` | pg_dump walks a transform-type array off its end when the list is exactly FU | · | **C** | **C**<sup>=</sup> |
+| `c-repros` | 2 | `CVE-2026-16241` | ecpg computes a negative bytea length and passes it to a decoder whose lengt | **C** | **C** | **C**<sup>=</sup> |
+| `c-repros` | 3 | `5d61bdd114` | SASLprep validates a UTF-8 sequence by its declared length without checking  | · | **C** | **C**<sup>=</sup> |
+| `c-repros` | 4 | `f1298a4c20` | pg_basebackup forwards a tar member trailer using a pointer that buffering a | **C** | **C** | **C**<sup>=</sup> |
+| `mmgr-repros` | 0 | `1f5b6a5e5d` | double free of a tuple the write path had already freed | · | · | **C** |
+| `mmgr-repros` | 1 | `3549ffb6af` | vacuum reads the TidStore struct its own reset destroyed | · | · | **C** |
+| `mmgr-repros` | 2 | `ed394c4bdf` | a partition set freed through one alias and read through another | · | · | **C** |
+| `mmgr-repros` | 3 | `a61592253e` | a cache entry outlives the decoding context its memory came from | · | · | **C** |
+| `mmgr-repros` | 4 | `9e0b4b1ab5` | the reorder buffer reads a change record it returned to the slab | · | · | **C** |
+| `sql-repros` | 1 | `12a6206864a0` | to_char(timestamptz,'TZ') heap overflow write, ~36 B -- stays inside its ase | — | — | — |
+| `sql-repros` | 2 | `3ed3dbbf44` | ts_headline() StartSel longer than PG_INT16_MAX overflows an int16 length, ~ | **C** | **C** | — |
+| `sql-repros` | 3 | `8c34261109` | lquery level with enough OR-variants wraps a uint16 totallen, ~65 KB -- leav | **C** | — | — |
+| `sql-repros` | 4 | `3d160401b65e` | array[]::oidvector out-of-bounds read, ~40 heap words -- stays inside its as | — | — | — |
+| `sql-repros` | 5 | `849da8210539` | ascii() on a truncated multibyte lead byte reads its continuation bytes past | — | — | — |
+| `sql-repros` | 6 | `e91dcfccaa` | regexp match/split size the wchar-to-multibyte conversion buffer by the inpu | — | — | — |
+| `sql-repros` | 7 | `1af08af694` | pg_trgm's picksplit applies GETSIGN() to a field that is already a bit vecto | — | — | — |
+| `sql-repros` | 8 | `c4d51b6274` | levenshtein_less_equal clamps stop_column only from above, so an overflowed  | — | — | — |
+| `sql-repros` | 9 | `7a7d9693c7` | pgcrypto copies an attacker-chosen session-key length into a 32-byte inline  | — | — | — |
+
+- `cheribsd`: **5** caught, 7 missed, 7 not run, of 19.
+- `capstone-sysalloc`: **6** caught, 5 missed, 8 not run, of 19.
+- `capstone-sublet`: **10** caught, 0 missed, 9 not run, of 19.
 

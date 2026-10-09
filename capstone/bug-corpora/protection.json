@@ -1859,6 +1859,795 @@
      }
     ]
    }
+  },
+  {
+   "corpus": "postgres",
+   "program": "postgres",
+   "title": "PostgreSQL: nineteen defects at three fidelities -- a C reduction, the memory contexts under a replay, and the server driven over SQL",
+   "cases": [
+    {
+     "case": "00_CVE-2026-6477_pqfn_unbounded_result_copy",
+     "group": "c-repros",
+     "allocator_boundary": "system",
+     "number": 0,
+     "upstream_fix": "CVE-2026-6477",
+     "title": "PQfn copies a server-chosen number of bytes into a caller buffer whose size it was never told",
+     "boundary": "C reductions that drive the real upstream function, compiled verbatim from the 17.5 pin, with no server in the process",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34); PG_FAULT case=0 sig",
+       "group": "c-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "c-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "01_CVE-2026-19385_pgdump_transform_list_overread",
+     "group": "c-repros",
+     "allocator_boundary": "system",
+     "number": 1,
+     "upstream_fix": "CVE-2026-19385",
+     "title": "pg_dump walks a transform-type array off its end when the list is exactly FUNC_MAX_ARGS long",
+     "boundary": "C reductions that drive the real upstream function, compiled verbatim from the 17.5 pin, with no server in the process",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "reached its marker and returned; the mechanism did not report",
+       "group": "c-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "c-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "02_CVE-2026-16241_ecpg_bytea_negative_length",
+     "group": "c-repros",
+     "allocator_boundary": "system",
+     "number": 2,
+     "upstream_fix": "CVE-2026-16241",
+     "title": "ecpg computes a negative bytea length and passes it to a decoder whose length parameter is unsigned",
+     "boundary": "C reductions that drive the real upstream function, compiled verbatim from the 17.5 pin, with no server in the process",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34); PG_FAULT case=2 sig",
+       "group": "c-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "c-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "03_5d61bdd114_saslprep_truncated_utf8_overread",
+     "group": "c-repros",
+     "allocator_boundary": "system",
+     "number": 3,
+     "upstream_fix": "5d61bdd114",
+     "title": "SASLprep validates a UTF-8 sequence by its declared length without checking how many bytes remain",
+     "boundary": "C reductions that drive the real upstream function, compiled verbatim from the 17.5 pin, with no server in the process",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "reached its marker and returned; the mechanism did not report",
+       "group": "c-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "c-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer",
+     "group": "c-repros",
+     "allocator_boundary": "system",
+     "number": 4,
+     "upstream_fix": "f1298a4c20",
+     "title": "pg_basebackup forwards a tar member trailer using a pointer that buffering already advanced past it",
+     "boundary": "C reductions that drive the real upstream function, compiled verbatim from the 17.5 pin, with no server in the process",
+     "nested": false,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34); PG_FAULT case=4 sig",
+       "group": "c-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "c-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "coincides",
+       "with": "capstone-sysalloc",
+       "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+      }
+     }
+    },
+    {
+     "case": "00_1f5b6a5e5d_tuplestore_double_free",
+     "group": "mmgr-repros",
+     "allocator_boundary": "nested",
+     "number": 0,
+     "upstream_fix": "1f5b6a5e5d",
+     "title": "double free of a tuple the write path had already freed",
+     "boundary": "memory contexts (aset, slab)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "mmgr-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "mmgr-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE)",
+       "group": "mmgr-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "01_3549ffb6af_vacuum_dead_items_stale_struct",
+     "group": "mmgr-repros",
+     "allocator_boundary": "nested",
+     "number": 1,
+     "upstream_fix": "3549ffb6af",
+     "title": "vacuum reads the TidStore struct its own reset destroyed",
+     "boundary": "memory contexts (aset, slab)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "mmgr-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "mmgr-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "mmgr-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "02_ed394c4bdf_live_parts_stale_alias",
+     "group": "mmgr-repros",
+     "allocator_boundary": "nested",
+     "number": 2,
+     "upstream_fix": "ed394c4bdf",
+     "title": "a partition set freed through one alias and read through another",
+     "boundary": "memory contexts (aset, slab)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "mmgr-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "mmgr-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "mmgr-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "03_a61592253e_pgoutput_entry_cxt_teardown",
+     "group": "mmgr-repros",
+     "allocator_boundary": "nested",
+     "number": 3,
+     "upstream_fix": "a61592253e",
+     "title": "a cache entry outlives the decoding context its memory came from",
+     "boundary": "memory contexts (aset, slab)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "mmgr-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "mmgr-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "mmgr-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn",
+     "group": "mmgr-repros",
+     "allocator_boundary": "nested",
+     "number": 4,
+     "upstream_fix": "9e0b4b1ab5",
+     "title": "the reorder buffer reads a change record it returned to the slab",
+     "boundary": "memory contexts (aset, slab)",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "mmgr-repros",
+       "bundle": "results/20261008-cheribsd",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "supervise-blocks"
+      },
+      "capstone-sysalloc": {
+       "verdict": "missed",
+       "caught": false,
+       "disposition": null,
+       "detail": "ran to the end, status 0",
+       "group": "mmgr-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 24 (UNEXP_OP_TYPE), at the case's own probe",
+       "group": "mmgr-repros",
+       "bundle": "results/20261008-virtual-nested-sublet",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual-nested-sublet"
+      }
+     }
+    },
+    {
+     "case": "01_12a6206864a0_to_char_tz_overflow",
+     "group": "sql-repros",
+     "allocator_boundary": "nested",
+     "number": 1,
+     "upstream_fix": "12a6206864a0",
+     "title": "to_char(timestamptz,'TZ') heap overflow write, ~36 B -- stays inside its aset block",
+     "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm."
+      }
+     }
+    },
+    {
+     "case": "02_3ed3dbbf44_ts_headline_int16_overflow",
+     "group": "sql-repros",
+     "allocator_boundary": "nested",
+     "number": 2,
+     "upstream_fix": "3ed3dbbf44",
+     "title": "ts_headline() StartSel longer than PG_INT16_MAX overflows an int16 length, ~32 KB -- leaves its block",
+     "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34) -- a capability violation",
+       "group": "sql-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "cause 28 (CAP_OOB)",
+       "group": "sql-repros",
+       "bundle": "results/20261007-virtual",
+       "vehicle": "capstone-virtual",
+       "local_arm": "virtual"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm."
+      }
+     }
+    },
+    {
+     "case": "03_8c34261109_ltree_lquery_uint16_overflow",
+     "group": "sql-repros",
+     "allocator_boundary": "nested",
+     "number": 3,
+     "upstream_fix": "8c34261109",
+     "title": "lquery level with enough OR-variants wraps a uint16 totallen, ~65 KB -- leaves its block",
+     "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "caught",
+       "caught": true,
+       "disposition": null,
+       "detail": "SIGPROT(34) -- a capability violation",
+       "group": "sql-repros",
+       "bundle": "results",
+       "vehicle": "cheribsd-purecap",
+       "local_arm": "cheribsd-revocation"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm."
+      }
+     }
+    },
+    {
+     "case": "04_3d160401b65e_oidvector_oob_read",
+     "group": "sql-repros",
+     "allocator_boundary": "nested",
+     "number": 4,
+     "upstream_fix": "3d160401b65e",
+     "title": "array[]::oidvector out-of-bounds read, ~40 heap words -- stays inside its aset block",
+     "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm."
+      }
+     }
+    },
+    {
+     "case": "05_849da8210539_ascii_multibyte_oob_read",
+     "group": "sql-repros",
+     "allocator_boundary": "nested",
+     "number": 5,
+     "upstream_fix": "849da8210539",
+     "title": "ascii() on a truncated multibyte lead byte reads its continuation bytes past the end of the string. The 17.5 guard is Assert(*data > 0xC0), which is compiled out of a non-assert build",
+     "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm."
+      }
+     }
+    },
+    {
+     "case": "06_e91dcfccaa_regexp_conv_buf_overrun",
+     "group": "sql-repros",
+     "allocator_boundary": "nested",
+     "number": 6,
+     "upstream_fix": "e91dcfccaa",
+     "title": "regexp match/split size the wchar-to-multibyte conversion buffer by the input's byte length, which is not an upper bound for invalidly encoded input",
+     "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm."
+      }
+     }
+    },
+    {
+     "case": "07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec",
+     "group": "sql-repros",
+     "allocator_boundary": "nested",
+     "number": 7,
+     "upstream_fix": "1af08af694",
+     "title": "pg_trgm's picksplit applies GETSIGN() to a field that is already a bit vector, shifting the read TRGMHDRSIZE bytes past the signature",
+     "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm."
+      }
+     }
+    },
+    {
+     "case": "08_c4d51b6274_levenshtein_stop_column_oob_write",
+     "group": "sql-repros",
+     "allocator_boundary": "nested",
+     "number": 8,
+     "upstream_fix": "c4d51b6274",
+     "title": "levenshtein_less_equal clamps stop_column only from above, so an overflowed cost product drives an out-of-bounds write into the palloc'd row",
+     "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm."
+      }
+     }
+    },
+    {
+     "case": "09_7a7d9693c7_pgp_sesskey_overflow",
+     "group": "sql-repros",
+     "allocator_boundary": "nested",
+     "number": 9,
+     "upstream_fix": "7a7d9693c7",
+     "title": "pgcrypto copies an attacker-chosen session-key length into a 32-byte inline array with no upper bound",
+     "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+     "nested": true,
+     "ignored": false,
+     "arms": {
+      "cheribsd": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sysalloc": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker.",
+       "group": "sql-repros"
+      },
+      "capstone-sublet": {
+       "verdict": "not-run",
+       "caught": null,
+       "why": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm."
+      }
+     }
+    }
+   ],
+   "groups": {
+    "c-repros": {
+     "boundary": "C reductions that drive the real upstream function, compiled verbatim from the 17.5 pin, with no server in the process",
+     "cases": 5,
+     "ignore": null
+    },
+    "mmgr-repros": {
+     "boundary": "memory contexts (aset, slab)",
+     "cases": 5,
+     "ignore": null
+    },
+    "sql-repros": {
+     "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+     "cases": 9,
+     "ignore": null
+    }
+   },
+   "protection": {
+    "cheribsd": [
+     {
+      "bundle": "results",
+      "reader": "arm-verdict",
+      "arm": "cheribsd-revocation",
+      "key": "dir",
+      "vehicle": "cheribsd-purecap",
+      "group": "c-repros"
+     },
+     {
+      "group": "mmgr-repros",
+      "bundle": "results/20261008-cheribsd",
+      "reader": "supervise-blocks",
+      "case_from": "PG_DEFECT case=(\\d+) ready",
+      "completed": "PG_DEFECT case=\\d+ mode=0 completed",
+      "key": "number",
+      "vehicle": "cheribsd-purecap",
+      "because": "measured 2026-10-05 and re-run on 2026-10-08 to file it: the earlier reading lived only in each case's arm text, so this table had nothing to read. The case prints its own marker before and after the defective sequence, so the silence is measured rather than inferred from a clean exit."
+     },
+     {
+      "bundle": "results",
+      "reader": "arm-verdict",
+      "arm": "cheribsd-revocation",
+      "key": "dir",
+      "vehicle": "cheribsd-purecap",
+      "group": "sql-repros",
+      "silence_unproven": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker."
+     }
+    ],
+    "capstone-sysalloc": [
+     {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "group": "c-repros"
+     },
+     {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "group": "mmgr-repros"
+     },
+     {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "group": "sql-repros",
+      "silence_unproven": "a completion here is NOT a measured silence. These cases drive a running server over SQL and print only the statement's result; no marker is printed after reuse is proven, so a clean run does not establish that the defective path was taken. The cells become measured silences the moment a case publishes such a marker."
+     }
+    ],
+    "capstone-sublet": [
+     {
+      "coincides_with": "capstone-sysalloc",
+      "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left.",
+      "group": "c-repros"
+     },
+     {
+      "bundle": "results/20261008-virtual-nested-sublet",
+      "reader": "virtual",
+      "arm": "virtual-nested-sublet",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "because": "one mode only: the run measures the Sublet discipline over aset and slab, and every case faults at it.",
+      "group": "mmgr-repros"
+     },
+     {
+      "not_run": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm.",
+      "group": "sql-repros"
+     }
+    ]
+   }
   }
  ]
 }
