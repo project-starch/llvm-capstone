@@ -14,7 +14,7 @@
 #define CAP_VM_HEAP CV_MAP_HEAP
 #define CAP_VM_MAPPING CV_MAP_APPLICATION
 #define CAP_VM_METADATA CV_MAP_METADATA
-#define CAP_VM_MAX_BYTES (256UL << 20)
+#define CAP_VM_MAX_BYTES (1024UL << 20)
 extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned, unsigned);
 extern void *__capstone_vm_remap(unsigned long, unsigned long, unsigned long);
 extern long __capstone_vm_unmap(unsigned long, unsigned long);

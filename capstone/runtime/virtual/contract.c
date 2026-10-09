@@ -88,7 +88,7 @@ static void vm_contract(void)
     require(old != NULL, "realloc original");
     old[0] = 33;
     errno = 0;
-    require(!realloc(old, (256UL << 20) + 1) && errno == ENOMEM && old[0] == 33,
+    require(!realloc(old, (1024UL << 20) + 1) && errno == ENOMEM && old[0] == 33,
             "realloc failure preserves original");
     free(old);
     puts("VIRTUAL_VM_OK protections guards requested_length unused_pages execute rollback");
