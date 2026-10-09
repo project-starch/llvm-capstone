@@ -9,6 +9,7 @@
   "lifetime_ender": "NONE -- the item is alive throughout. SPATIAL row.",
   "shape": "unbounded read forward from an item key with no terminator",
   "allocator_layer": "slabs.c chunks over 1 MiB pages, memcached 1.6.45",
+  "allocator_boundary": "interior",
   "fidelity": "model-consumer, real allocator. A real slab chunk holds the item; the key is written WITHOUT the terminator upstream relies on and the bytes after it are made non-zero, so the read has somewhere to run. The formatter is reduced to the scan it performs -- reading forward until a zero byte -- and the case reports how far that got.",
   "distinguishing": "the only row whose crossing has NO fixed extent: how far the read goes depends on where the next zero byte happens to be, which is why the fix bounds the copy rather than adding a terminator at the source. The case caps its own scan at 64 bytes so a run cannot wander, which means it measures THAT the key bound was crossed and not how far. MEASURED only natively. The chunk bound is what the slab port narrows (leases.c carves each chunk), so whether a Capstone arm faults depends on whether this crossing leaves the CHUNK or stays inside it -- stated per case below and NOT measured here: the domain arms need a build this run did not make.",
   "arms": {

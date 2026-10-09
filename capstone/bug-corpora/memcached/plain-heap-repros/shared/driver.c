@@ -39,7 +39,3 @@ __attribute__((noinline, used)) void
 mch_write_probe(volatile unsigned char *p, unsigned char v) {
   *p = v;
 }
-__attribute__((noinline, used)) unsigned
-mch_read_probe(const volatile unsigned char *p) {
-  return *p;
-}

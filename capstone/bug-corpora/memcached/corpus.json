@@ -3,6 +3,87 @@
   "title": "memcached: twenty-one defects -- nine inside its slab and cache allocators, twelve past the platform heap",
   "cases": 21,
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "protection": {
+    "cheribsd": [
+      {
+        "bundle": [
+          "results/20261006-cheribsd",
+          "results/20261007-cheribsd-case8"
+        ],
+        "reader": "case-lines",
+        "key": "number",
+        "vehicle": "cheribsd-purecap",
+        "because": "two bundles because case 8 was run on its own the next day, and it is the one that refuted its prediction.",
+        "group": "allocator-repros"
+      },
+      {
+        "bundle": "results/20261007-cheribsd",
+        "reader": "supervise-blocks",
+        "key": "number",
+        "vehicle": "cheribsd-purecap",
+        "group": "plain-heap-repros"
+      },
+      {
+        "not_run": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill.",
+        "group": "plain-temporal-repros"
+      }
+    ],
+    "capstone-sysalloc": [
+      {
+        "bundle": "results/20261007-virtual",
+        "reader": "virtual",
+        "arm": "virtual",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "group": "allocator-repros",
+        "detection_unproven": {
+          "bundle": "results/20261008-fixed-arm-control",
+          "cases": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "why": "WITHDRAWN by its own control, 2026-10-08. The fault is real but it is not this defect: it lands at slabs.c:533, the first read of `ptr` on entry to do_slabs_free, with cause 24 (untagged) -- the same line and the same offset in all six cases -- and results/20261008-fixed-arm-control shows the SAME image faulting there while running the upstream-FIXED sequence. A detection that fires without the defect is not a detection of it. Rule 2 of the corpus contract said as much in advance: the run reported attributed=false, the pc lying outside the case's labelled probe, and nobody read that column. The port's slab free path faults on any case that releases a chunk, so this group is unmeasurable on this vehicle until that is fixed; cases 0, 1 and 8 release no chunk and are unaffected."
+        }
+      },
+      {
+        "bundle": "results/20261007-virtual",
+        "reader": "virtual",
+        "arm": "virtual",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "group": "plain-heap-repros"
+      },
+      {
+        "not_run": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill. For THIS group `spatial` must not be read across: its own oracles say `free only marks the block free`, so on a temporal crossing it misses where this arm, which revokes at free, would catch. These cells need their own run.",
+        "group": "plain-temporal-repros"
+      }
+    ],
+    "capstone-sublet": [
+      {
+        "group": "allocator-repros",
+        "bundle": "results/20261008-virtual-nested-sublet",
+        "reader": "virtual",
+        "arm": "virtual-nested-sublet",
+        "vehicle": "capstone-virtual",
+        "key": "dir",
+        "mode": "m1",
+        "because": "the run brackets each case twice: mode 0 is the same adapter with no revoke at the nested allocator's release, mode 1 is the Sublet discipline. Mode 1 is this arm, so the cell reads the m1 row; the m0 row is the baseline that makes the pair a single-variable comparison."
+      },
+      {
+        "coincides_with": "capstone-sysalloc",
+        "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left.",
+        "group": "plain-heap-repros"
+      },
+      {
+        "not_run": "not read yet. This group was measured under this tree's older mechanism arms (cheribsd-revocation, spatial, sublet), and feeding those bundles to this arm needs a reader for their shape; RECONCILE.md counts what that would fill.",
+        "group": "plain-temporal-repros"
+      }
+    ]
+  },
   "groups": {
     "allocator-repros": {
       "boundary": "slabs and the per-thread object cache",
@@ -46,7 +127,8 @@
         "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8",
         "capstone/bug-corpora/memcached/allocator-repros/results/20261009-qemu-capstone-case8"
       ],
-      "inventory": "capstone/docs/ref/memcached-allocator-defect-triage.md"
+      "inventory": "capstone/docs/ref/memcached-allocator-defect-triage.md",
+      "allocator_boundary": "mixed"
     },
     "plain-heap-repros": {
       "boundary": "the system allocator itself: one calloc or malloc, with no inner layer",
@@ -87,7 +169,8 @@
       "advisories": [],
       "shape_table": true,
       "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 29 of this tree's 35 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none. Case 1 (d5d9ff0) added 2026-10-07: item_cachedump's headroom guard reserves five bytes for \"END\\r\\n\" and the marker is written with a terminating NUL, so the NUL lands one byte past malloc(memlimit). Cited by HASH ONLY -- its subject names an outside contributor. It was the one class-A candidate in docs/ref/memcached-spatial-defect-triage.md that had never been dispositioned.",
-      "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md"
+      "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
+      "allocator_boundary": "system"
     },
     "plain-temporal-repros": {
       "boundary": "the platform allocator's own bound -- a direct allocation, no inner layer",

@@ -1,0 +1,19 @@
+case	arm	verdict	cause	attributed	evidence
+00_7af02b0c87_rbuf_copied_after_cache_free:defect	virtual-fixed-arm-control	silent	--	--	completed with status 0
+00_7af02b0c87_rbuf_copied_after_cache_free:fixed	control	silent	--	--	completed with status 0
+01_0ad4de66ae_io_walk_reads_freed_link:defect	virtual-fixed-arm-control	silent	--	--	completed with status 0
+01_0ad4de66ae_io_walk_reads_freed_link:fixed	control	silent	--	--	completed with status 0
+02_59bd02ce29_tail_repair_frees_referenced_item:defect	virtual-fixed-arm-control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9e1926d8
+02_59bd02ce29_tail_repair_frees_referenced_item:fixed	control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa4a126d8
+03_a8c4a82787_refcount_overflow_frees_linked_item:defect	virtual-fixed-arm-control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa47926d8
+03_a8c4a82787_refcount_overflow_frees_linked_item:fixed	control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fba9126d8
+04_152ddb68f7_unlocked_refcount_drift:defect	virtual-fixed-arm-control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3faef926d8
+04_152ddb68f7_unlocked_refcount_drift:fixed	control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa47126d8
+05_2d61f18_item_data_one_past:defect	virtual-fixed-arm-control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8ae926d8
+05_2d61f18_item_data_one_past:fixed	control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f955126d8
+06_78eb770_suffix_write_no_space:defect	virtual-fixed-arm-control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f82c926d8
+06_78eb770_suffix_write_no_space:fixed	control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f90a126d8
+07_ecdb011_unterminated_key_read:defect	virtual-fixed-arm-control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fab9926d8
+07_ecdb011_unterminated_key_read:fixed	control	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fa33926d8
+08_e8364b5_ascii_all_spaces_scan_past_rbuf:defect	virtual-fixed-arm-control	silent	--	--	completed with status 0
+08_e8364b5_ascii_all_spaces_scan_past_rbuf:fixed	control	silent	--	--	completed with status 0

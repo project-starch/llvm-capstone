@@ -1,0 +1,28 @@
+{
+  "corpus": "capstone/bug-corpora/memcached/plain-heap-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 2,
+  "measured": 2,
+  "controls": 2,
+  "controls_held": 2,
+  "verdicts": {
+    "detected": 2
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "fa847b109e90824ffb2a4d632576c456a6b5ecc0f18442f036e0f15ecb782204",
+  "staged_sha256": {},
+  "image_sha256": {
+    "00_ddee3e2_authfile_scan_past_calloc:fixed": "d213457646e92a0f77fa62fe788b38a41018b3578a1cc284ecf9fd6a94818cfe",
+    "00_ddee3e2_authfile_scan_past_calloc:buggy": "d213457646e92a0f77fa62fe788b38a41018b3578a1cc284ecf9fd6a94818cfe",
+    "01_d5d9ff0_cachedump_end_marker_off_by_one:fixed": "303864d9d816361a6059192bc275925e284557f3eee676bfa234f06d4182c0fe",
+    "01_d5d9ff0_cachedump_end_marker_off_by_one:buggy": "303864d9d816361a6059192bc275925e284557f3eee676bfa234f06d4182c0fe"
+  }
+}

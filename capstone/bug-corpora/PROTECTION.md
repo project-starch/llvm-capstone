@@ -28,16 +28,15 @@ IN THE QUARANTINE COUNTS AS CAUGHT. Where a run has measured that the object was
 
 | arm | caught | of those, by quarantine | missed | of those, disposition measured | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `cheribsd` | 12 | 0 | 37 | 0 | 7 | 56 | 3 |
-| `capstone-sysalloc` | 13 | 0 | 31 | 0 | 12 | 56 | 3 |
-| `capstone-sublet` | 47 | 0 | 0 | 0 | 9 | 56 | 3 |
+| `cheribsd` | 14 | 0 | 46 | 0 | 17 | 77 | 3 |
+| `capstone-sysalloc` | 15 | 0 | 34 | 0 | 28 | 77 | 3 |
+| `capstone-sublet` | 56 | 0 | 2 | 0 | 19 | 77 | 3 |
 
 ## Programs that have not declared their arms yet
 
-Not in any total above or below, and not a statement about them: **5** of 9 programs in the tree.
+Not in any total above or below, and not a statement about them: **4** of 9 programs in the tree.
 
 - `ffmpeg`
-- `memcached`
 - `mruby`
 - `sqlite`
 - `wireshark`
@@ -46,35 +45,35 @@ Not in any total above or below, and not a statement about them: **5** of 9 prog
 
 Two corrections to the headline table, and both of them cut the same way. A cell that was never run is not evidence, so the arms are compared on the cases where all three were measured. And on a case whose object came out of the program's own allocator, two of the three arms are not protecting that object at all -- counting those together with the malloc-boundary cases reads as a weakness of the mechanism when it is a statement about what each arm covers.
 
-### `system`: 9 cases
+### `system`: 11 cases
 
 the system allocator handed the object out directly -- the boundary all three arms protect
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **7** | 0 | 2 | 78% |
-| `capstone-sysalloc` | **9** | 0 | 0 | 100% |
-| `capstone-sublet` | **9** | 0 | 0 | 100% |
+| `cheribsd` | **8** | 0 | 3 | 73% |
+| `capstone-sysalloc` | **11** | 0 | 0 | 100% |
+| `capstone-sublet` | **11** | 0 | 0 | 100% |
 
-### `nested`: 34 cases
+### `nested`: 37 cases
 
 the program's own allocator carved the object out of a block it holds -- only `capstone-sublet` protects it
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **3** | 0 | 31 | 9% |
-| `capstone-sysalloc` | **3** | 0 | 31 | 9% |
-| `capstone-sublet` | **34** | 0 | 0 | 100% |
+| `cheribsd` | **4** | 0 | 33 | 11% |
+| `capstone-sysalloc` | **3** | 0 | 34 | 8% |
+| `capstone-sublet` | **37** | 0 | 0 | 100% |
 
-### All 43 together
+### All 48 together
 
 Kept for continuity with the per-application tables above. Read the split first: this row's mixture of boundaries is a property of which corpora happen to be fully measured, not of the arms.
 
 | arm | caught | of those, by quarantine | missed | share caught |
 |---|---:|---:|---:|---:|
-| `cheribsd` | **10** | 0 | 33 | 23% |
-| `capstone-sysalloc` | **12** | 0 | 31 | 28% |
-| `capstone-sublet` | **43** | 0 | 0 | 100% |
+| `cheribsd` | **12** | 0 | 36 | 25% |
+| `capstone-sysalloc` | **14** | 0 | 34 | 29% |
+| `capstone-sublet` | **48** | 0 | 0 | 100% |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -133,6 +132,44 @@ httpd and APR: nine pool and bucket lifetime defects, two allocator layers deep
 - `cheribsd`: **0** caught, 9 missed, of 9.
 - `capstone-sysalloc`: **0** caught, 5 missed, 4 not run, of 9.
 - `capstone-sublet`: **9** caught, 0 missed, of 9.
+
+### memcached -- 21 cases
+
+memcached: twenty-one defects -- nine inside its slab and cache allocators, twelve past the platform heap
+
+| group | cases | the boundary its cases cross |
+|---|---:|---|
+| `allocator-repros` | 9 | slabs and the per-thread object cache |
+| `plain-heap-repros` | 9 | the system allocator itself: one calloc or malloc, with no inner layer |
+| `plain-temporal-repros` | 3 | the platform allocator's own bound -- a direct allocation, no inner layer |
+
+| group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
+|---|---:|---|---|:---:|:---:|:---:|
+| `allocator-repros` | 0 | `7af02b0c87` | a text multiget's read buffer is copied after it went back to the rbuf cache | · | · | **C** |
+| `allocator-repros` | 1 | `0ad4de66ae` | resetting a bad proxy backend reads the next-link out of a pending IO it has | · | · | **C** |
+| `allocator-repros` | 2 | `59bd02ce29` | tail repair discards a live reference and frees the item to the slab free li | · | — | **C** |
+| `allocator-repros` | 3 | `a8c4a82787` | the item reference count overflows and the item is freed with its holders st | · | — | **C** |
+| `allocator-repros` | 4 | `152ddb68f7` | an unlocked reference-count decrement drifts below the true number of holder | · | — | **C** |
+| `allocator-repros` | 5 | `2d61f18` | the incr/decr rewrite copies three bytes of a two-byte terminator, one byte  | · | — | **C** |
+| `allocator-repros` | 6 | `78eb770` | the flags are copied into suffix space the item was never allocated, overwri | · | — | · |
+| `allocator-repros` | 7 | `ecdb011` | an item key with no terminator is handed to a string formatter, which reads  | · | — | · |
+| `allocator-repros` | 8 | `e8364b5` | try_read_command_ascii's leading-space skip has no end, so a read buffer of  | **C** | · | **C** |
+| `plain-heap-repros` | 0 | `ddee3e2` | authfile_load sizes its buffer to the file's exact length, so fgets writes t | · | **C** | **C**<sup>=</sup> |
+| `plain-heap-repros` | 1 | `d5d9ff0` | item_cachedump's headroom guard reserves five bytes for "END\r\n" while the  | **C** | **C** | **C**<sup>=</sup> |
+| `plain-heap-repros` | 2 | `391f2e4762bf` | a growable pointer array was reallocated with a BYTE count where an element  | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 3 | `16a809e2a062` | an object cache's freelist array was sized by the cached object's size inste | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 4 | `40aff8b0f113` | a buffer sized for exactly two blobs then had a terminator appended past its | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 5 | `49f3b0ca9b57` | a CRLF was copied with length 3 into a buffer whose guard only promised room | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 6 | `212c3820c7bb` | a tag search starting at the opening tag let the hashed length underflow to  | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 7 | `0f605245cf3f` | a key that is not NUL-terminated was printed with a "%s" conversion | — | — | —<sup>=</sup> |
+| `plain-heap-repros` | 8 | `fa51ad8452d5` | a backwards list shuffle read one element past the live region before decrem | — | — | —<sup>=</sup> |
+| `plain-temporal-repros` | 0 | `0d4901071c74` | a line buffer was freed at entry and republished only on the success path | — | — | — |
+| `plain-temporal-repros` | 1 | `e7793811f8c8` | a flush flag was written into a watcher the poll it had just called may have | — | — | — |
+| `plain-temporal-repros` | 2 | `3bc58f6ea55a` | guarding only the write left every later read of the freed watcher unguarded | — | — | — |
+
+- `cheribsd`: **2** caught, 9 missed, 10 not run, of 21.
+- `capstone-sysalloc`: **2** caught, 3 missed, 16 not run, of 21.
+- `capstone-sublet`: **9** caught, 2 missed, 10 not run, of 21.
 
 ### perl -- 11 cases
 

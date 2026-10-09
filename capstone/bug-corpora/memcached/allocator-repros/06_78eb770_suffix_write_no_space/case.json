@@ -9,6 +9,7 @@
   "lifetime_ender": "NONE -- the item is alive throughout. SPATIAL row.",
   "shape": "four bytes written into an item field that has no room, inside the chunk",
   "allocator_layer": "slabs.c chunks over 1 MiB pages, memcached 1.6.45",
+  "allocator_boundary": "interior",
   "fidelity": "model-consumer, real allocator. The item is laid out in a real slab chunk with nsuffix = 0, where ITEM_suffix and ITEM_data are the SAME address -- asserted by the case -- and nbytes = 2, a zero-length value. A sentinel sits in the two bytes past the value.",
   "distinguishing": "a SUB-OBJECT crossing: it overruns the value's storage and stays INSIDE the chunk, so a chunk-granular bound cannot see it. The same shape FFmpeg's subobject-repros corpus is built around, arrived at from the other end. MEASURED only natively. The chunk bound is what the slab port narrows (leases.c carves each chunk), so whether a Capstone arm faults depends on whether this crossing leaves the CHUNK or stays inside it -- stated per case below and NOT measured here: the domain arms need a build this run did not make.",
   "arms": {

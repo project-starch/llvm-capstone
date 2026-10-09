@@ -1,0 +1,44 @@
+{
+  "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 9,
+  "measured": 9,
+  "controls": 0,
+  "controls_held": 0,
+  "verdicts": {
+    "silent": 3,
+    "detected": 6
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "afbf79c5e2ba72a923be1106b65e5f5e10808b8550eafd633132f45834d81b2a",
+  "staged_sha256": {
+    "traces/00_7af02b0c87_rbuf_copied_after_cache_free.bin": "ec41ff736b76b6c5c9cb4945208d677c80a31204d4c7a53a955f514a886c7db4",
+    "traces/01_0ad4de66ae_io_walk_reads_freed_link.bin": "f8d78109c5276f05a230a964d6c7972e20a9566a38af6ccb98b1cf6225c98478",
+    "traces/02_59bd02ce29_tail_repair_frees_referenced_item.bin": "f7003dd032c87d4a15f12469b56e9ae37c12bf680104428d9d3265906ad7e341",
+    "traces/03_a8c4a82787_refcount_overflow_frees_linked_item.bin": "5507d8325ad5daa6c6e87715cc99b66d2f00dc5af1473be311f90c79bbccd6ac",
+    "traces/04_152ddb68f7_unlocked_refcount_drift.bin": "5ab006c499121d73ea0ef9f487e32bc7b05d4bdd5283136a4dc3b4cff8f701a3",
+    "traces/05_2d61f18_item_data_one_past.bin": "7f199c9cb365e3f8b0a9470fe4059ff99f9e164c250a8dd39d9735484492a43a",
+    "traces/06_78eb770_suffix_write_no_space.bin": "0d40233ec819e2e225a1304b9fa0505498d67aba162c1b81f35c7c309ba496a3",
+    "traces/07_ecdb011_unterminated_key_read.bin": "a570f93ad8b61123a584b4c1e916b5deb7ef63feb4a50fb127f114cbfc78aec6",
+    "traces/08_e8364b5_ascii_all_spaces_scan_past_rbuf.bin": "a05d648ba049968949e9fac6143dfa71e79dd4d417ffa29b70d39de35a824ecf"
+  },
+  "image_sha256": {
+    "00_7af02b0c87_rbuf_copied_after_cache_free": "6d86cc7cae7a1d278f600a5834a29ad83b17f515f75381be0e68c951d4de709a",
+    "01_0ad4de66ae_io_walk_reads_freed_link": "2ea7a38bffaab9eea72d11c353e18ac4f1a5f6235188215a23212cf9c4eea2e8",
+    "02_59bd02ce29_tail_repair_frees_referenced_item": "0d53ed015344e3d556824b1f55334497ec8a413beef033fe997fba4e88c880eb",
+    "03_a8c4a82787_refcount_overflow_frees_linked_item": "ad9880347e44587279ec893bb4358cdd10efe320ce367e9e501014d2263f8ab1",
+    "04_152ddb68f7_unlocked_refcount_drift": "049d3b5d93edd9b36d50eb429a2fd4a6f7a543551bd7e871c557708b2dd05bb9",
+    "05_2d61f18_item_data_one_past": "69ba73f507c47ef0218b78fb7e08a4298f0a48d1a7463d3f9bce4a30f00ab05f",
+    "06_78eb770_suffix_write_no_space": "3aa142d7e4d80d7f38e862dfd148a188ab03d9992966fe03e4571ed3c2441524",
+    "07_ecdb011_unterminated_key_read": "71cf728f937981b61dcf1fb562fe17d1e81734181577b89218ebe15535c0e18a",
+    "08_e8364b5_ascii_all_spaces_scan_past_rbuf": "38d609406376a3108e1ffcfa870830d55a427546a115582f730528783a10de1f"
+  }
+}
