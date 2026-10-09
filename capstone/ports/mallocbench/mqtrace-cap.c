@@ -87,15 +87,18 @@ static uint64_t *tkey, *tfree, *talloc, seen, fresh, reused, hist[65], sizes[65]
 static uint64_t life[65], stride[65], last_addr, unfreed;
 static __thread int in_runtime;
 #define IGN 1024
-static uint64_t ign[IGN], runtime_allocs, runtime_frees;
+static uint64_t ign[IGN], ign_live, runtime_allocs, runtime_frees;
 static void ign_add(uint64_t a)
 {
-    for (int i = 0; i < IGN; i++) if (!ign[i]) { ign[i] = a; runtime_allocs++; return; }
+    for (int i = 0; i < IGN; i++) if (!ign[i]) { ign[i] = a; ign_live++; runtime_allocs++; return; }
     write(2, "MQ-ERROR runtime table full\n", 28); _exit(3);
 }
+/* Called on every free: the table is searched only while it holds an address, which for a
+ * single-threaded program is never (a search per free made traced runs 8x slower). */
 static int ign_take(uint64_t a)
 {
-    for (int i = 0; i < IGN; i++) if (ign[i] == a) { ign[i] = 0; runtime_frees++; return 1; }
+    if (!ign_live) return 0;
+    for (int i = 0; i < IGN; i++) if (ign[i] == a) { ign[i] = 0; ign_live--; runtime_frees++; return 1; }
     return 0;
 }
 static void lock(void) { while (__atomic_test_and_set(&lock_word, __ATOMIC_ACQUIRE)) ; }
