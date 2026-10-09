@@ -49,8 +49,14 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 RUN = REPO / "capstone/ports/common/application/run.py"
 SDK_HEAP = {"spatial": "level0", "sublet": "sublet", "sublet-chunks": "sublet",
-            "capstone-subobject": "level0", "capstone-carve-bounds": "level0"}
-REVOKING = ("sublet", "sublet-chunks")
+            "capstone-subobject": "level0", "capstone-carve-bounds": "level0", "sublet-carve": "sublet"}
+REVOKING = ("sublet", "sublet-chunks", "sublet-carve")
+# The carve switch each carve arm needs, per corpus. capstone-carve-bounds narrows a pointer into
+# the malloc'd block; sublet-carve is the Sublet port of the carve: the block is lent LINEAR by the
+# Sublet heap and split into one region per carve (carved corpus only).
+ARM_CARVE = {"capstone-carve-bounds": {"carved-repros": "-DFFC_CARVE_BOUNDS",
+                                       "plane-repros": "-DFFP_CARVE_BOUNDS"},
+             "sublet-carve": {"carved-repros": "-DFFC_SUBLET_CARVE"}}
 
 # The tool's own controls, compiled with the corpus's SDK into the same boot.
 CONTROL_C = r'''
@@ -126,7 +132,7 @@ def corpus_kind(corpus):
 
 def predicted(kind, arm):
     """The buggy run's predicted outcome, fixed before any run (see the module docstring)."""
-    if arm == "capstone-carve-bounds":
+    if arm in ("capstone-carve-bounds", "sublet-carve"):
         return "CAUGHT"                     # each carved region is narrowed to its own extent
     if kind == "spatial":
         return "CAUGHT"                     # both arms: the crossing leaves an exact bound
@@ -236,12 +242,12 @@ def main():
     # to its own extent when FFC_CARVE_BOUNDS is defined. Like the field-bounds flag, the switch
     # decides the arm, so it is required exactly where the arm is named and refused elsewhere.
     # The plane corpus has the same remedy for av_frame_get_buffer's carve (FFP_CARVE_BOUNDS).
-    CARVE_FLAG = {"carved-repros": "-DFFC_CARVE_BOUNDS", "plane-repros": "-DFFP_CARVE_BOUNDS"}
-    carve = a.arm == "capstone-carve-bounds"
-    flags = [f for f in CARVE_FLAG.values() if f in a.cc_arg]
-    if carve != bool(flags) or (carve and flags != [CARVE_FLAG.get(corpus.name)]):
-        print("CONTROL-FAILED capstone-carve-bounds needs exactly its corpus's carve switch "
-              f"({CARVE_FLAG}), and no other arm may carry one", file=sys.stderr)
+    every = sorted({f for per in ARM_CARVE.values() for f in per.values()})
+    flags = [f for f in every if f in a.cc_arg]
+    need = ARM_CARVE.get(a.arm, {}).get(corpus.name)
+    if (a.arm in ARM_CARVE and flags != [need]) or (a.arm not in ARM_CARVE and flags):
+        print(f"CONTROL-FAILED {a.arm} needs exactly its corpus's carve switch ({ARM_CARVE}), "
+              "and no other arm may carry one", file=sys.stderr)
         return 75
     overrides = json.loads(a.predictions.read_text()) if a.predictions else {}
     cache = (a.sdk / "CMakeCache.txt").read_text()
@@ -319,8 +325,33 @@ def main():
             (a.out / "controls.json").write_text(json.dumps(controls, indent=2) + "\n")
             return 75
 
-    # ---- the cases --------------------------------------------------------------------
+    # ---- the Sublet carve's own controls: the bound AND the revocation, in this boot ----
     probe_re = re.compile(r"_(read|write)_probe(_u8|_u32)?$")
+    if a.arm == "sublet-carve":
+        for src, num in (("carve-control.c", 99), ("carve-recarve-control.c", 98)):
+            img = bindir / f"control-{num}.dom"
+            b = subprocess.run([str(cc), "-O0", f"-I{shared}", str(shared / src), str(shared / "driver.c"),
+                                *a.cc_arg, "-o", str(img)], capture_output=True, text=True)
+            if b.returncode:
+                print(f"CONTROL-FAILED {src} build: {b.stderr[:300]}", file=sys.stderr)
+                return 75
+            syms = Symbols(llvm_bin, img)
+            ftext, fres = run_image(a.state, img, ["fixed", str(num)], rundir / f"control-{num}-fixed")
+            fout, fdetail = classify(ftext, fres, syms, probe_re)
+            btext, bres = run_image(a.state, img, ["buggy", str(num)], rundir / f"control-{num}-buggy")
+            bout, bdetail = classify(btext, bres, syms, probe_re)
+            ok = (fout == "FIXED" and fres.get("value") == 0 and bout == "CAUGHT"
+                  and "(the labelled probe)" in bdetail)
+            controls[f"carve-{num}"] = dict(fixed=f"{fout} {fdetail}", buggy=f"{bout} {bdetail}",
+                                            required="fixed FIXED, buggy CAUGHT at the probe")
+            print(f"  control carve-{num} fixed={fout} buggy={bout} {'ok' if ok else 'FAILED'}  {bdetail[:100]}",
+                  flush=True)
+            if not ok:
+                print(f"CONTROL-FAILED {src}: the Sublet carve is not what it says", file=sys.stderr)
+                (a.out / "controls.json").write_text(json.dumps(controls, indent=2) + "\n")
+                return 75
+
+    # ---- the cases --------------------------------------------------------------------
     expect = predicted(kind, a.arm)
     for d in cases:
         if d.name not in images:
