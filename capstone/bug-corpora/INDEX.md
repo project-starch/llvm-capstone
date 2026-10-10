@@ -64,7 +64,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/memcached/allocators` | allocator-component | 1.6.45 | capstone-domain, cheribsd-purecap, native | `allocator-repros` | 9 |
 | `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, capstone-virtual, native | `allocator-repros`, `plain-heap-repros` | 18 |
 | `capstone/ports/micropython` | full-application | 2e3304a | capstone-domain, silicon | -- | 0 |
-| `capstone/ports/mruby/app` | full-application | 4.0.0-rc2 | capstone-domain, native | `gc-slot-repros` | 0 |
+| `capstone/ports/mruby/app` | full-application | 4.0.0-rc2 | capstone-domain, capstone-virtual, native | `gc-slot-repros`, `release-differential` | 23 |
 | `capstone/ports/mruby/cheribsd` | platform-build | 4.0.0-rc2 | cheribsd-purecap | `release-differential` | 23 |
 | `capstone/ports/musl-capstone` | domain-libc | 1.2.5 | capstone-domain | -- | 0 |
 | `capstone/ports/nginx` | allocator-component | 1.28.0 | capstone-domain, native | -- | 0 |
