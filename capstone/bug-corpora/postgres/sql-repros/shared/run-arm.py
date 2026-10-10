@@ -111,6 +111,21 @@ def directives(sql_text):
 
 
 def score(case_dir, text, result, available, preinstalled=()):
+    verdict, why = _score(case_dir, text, result, available, preinstalled)
+    # On every verdict, not only the ones that reach the end of _score. A
+    # `detected` obtained against a pre-created extension has to carry that
+    # fact where the verdict is read -- in results/matrix.tsv and in the arm's
+    # evidence -- and not only in a field beside it.
+    pre = [e for e in extensions_needed(case_dir) if e in preinstalled]
+    if pre and verdict not in ("not-applicable", "not-runnable"):
+        why += ("; ran against a fixture that already carried "
+                + ", ".join(pre)
+                + ", so this arm did not have to create it and this row says "
+                  "nothing about whether it can")
+    return verdict, why
+
+
+def _score(case_dir, text, result, available, preinstalled=()):
     """(verdict, evidence). Controls first, mechanism second, directives last.
 
     The order is the whole point. A control failure that is scored as a verdict
@@ -164,7 +179,18 @@ def score(case_dir, text, result, available, preinstalled=()):
 
     # An extension the preflight said was available but that failed here is a
     # control failure for this case, not a silent arm.
+    #
+    # EXCEPT "already exists", for one the fixture carries. That error is the
+    # expected outcome of the case's own CREATE EXTENSION line when the
+    # extension is pre-created, and matching it here made the oracle
+    # one-sided: every run that did not fault was scored control-failure, so
+    # `silent` was unreachable and a `detected` had nothing to be contrasted
+    # with. Any OTHER error naming a pre-created extension is still a control
+    # failure.
     for name in extensions_needed(case_dir):
+        if name in pre and re.search(
+                rf'ERROR:.*extension "{re.escape(name)}" already exists', text):
+            continue
         if re.search(rf'ERROR:.*extension "{re.escape(name)}"', text) or \
            re.search(rf'ERROR:.*could not (open extension control file|load library).*{re.escape(name)}', text):
             return ("control-failure",
@@ -186,9 +212,6 @@ def score(case_dir, text, result, available, preinstalled=()):
 
     want_errors, absent = directives((case_dir / "trigger.sql").read_text())
     notes = []
-    if pre:
-        notes.append("ran against a fixture with " + ", ".join(pre)
-                     + " already created, so this arm did not have to create it")
     if want_errors is not None:
         # A full-line match: --single prefixes errors with a timestamp, so an
         # anchored '^ERROR:' matches zero every time.
@@ -322,6 +345,17 @@ def preflight(args, out):
     return wanted, available
 
 
+def _fixture_provenance(fixture):
+    """What make-fixture.py recorded beside this cluster, if anything."""
+    side = fixture.with_suffix(".provenance.json")
+    if not side.is_file():
+        return None
+    try:
+        return json.loads(side.read_text())
+    except ValueError:
+        return {"unreadable": str(side)}
+
+
 def cases(args):
     found = sorted(d for d in CORPUS.glob("[0-9][0-9]_*")
                    if (d / "trigger.sql").is_file())
@@ -442,6 +476,10 @@ def main():
         # Extensions the fixture carried. A verdict on a case needing one of
         # these says nothing about whether this arm could have created it.
         "extensions_preinstalled": sorted(preinstalled),
+        # Which image wrote the catalog this run read, when the fixture
+        # carries a pre-created extension. Without it the row says an
+        # extension was pre-created but not by what.
+        "fixture_provenance": _fixture_provenance(args.fixture),
         # The gate is a corpus case doing double duty, which is weaker than a
         # purpose-built control: it says the mechanism reported on SOMETHING in
         # this configuration, not that it would have reported on each silent

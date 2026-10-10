@@ -27,6 +27,7 @@ the other. An ordinary host cluster is NOT interchangeable with these: the
 domain builds force MAXIMUM_ALIGNOF to 16 and the on-disk layout differs.
 """
 import argparse
+import hashlib
 import json
 import shutil
 import subprocess
@@ -119,8 +120,31 @@ def main():
 
     shutil.move(str(work), str(args.out))
     subprocess.run(["chmod", "-R", "u+rwX", str(args.out)])
+
+    # WHO BUILT THIS CLUSTER, by hash and not by path. A fixture carrying a
+    # pre-created extension decides what a later run can measure, so "which
+    # image wrote this catalog" has to be answerable from the record rather
+    # than from a path that may be rebuilt or cleaned. The runner copies this
+    # file's contents into its own inputs.json.
+    digest = hashlib.sha256()
+    with args.image.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    provenance = {
+        "fixture": str(args.out),
+        "extensions": names,
+        "built_from_fixture": str(args.fixture),
+        "builder_image": str(args.image),
+        "builder_image_sha256": digest.hexdigest(),
+        "extension_files": str(args.extension_files),
+    }
+    args.out.with_suffix(".provenance.json").write_text(
+        json.dumps(provenance, indent=2) + "\n")
+
     print(f"fixture with {', '.join(names)} written to {args.out}")
     print(f"  built by {args.image}")
+    print(f"  builder sha256 {digest.hexdigest()}")
+    print(f"  provenance {args.out.with_suffix('.provenance.json')}")
     print(f"  log {log}")
     return 0
 
