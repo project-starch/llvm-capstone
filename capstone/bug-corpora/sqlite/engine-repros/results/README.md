@@ -26,7 +26,7 @@ blocks has nothing to check; Sublet bounds each sub-allocation, and sees them.
 | arm | runner | platform |
 |---|---|---|
 | `spatial` | `ports/sqlite/repro322/corpus322.sh` | Capstone domain, base |
-| `sublet` | the same script with `CORPUS_SUBLET=1` | Capstone domain, Sublet discipline on memsys5 |
+| `sublet` | the same script with `CORPUS_SUBLET=1`, the lent-pool memsys5 port (both removed; the current Sublet arm is `virtual-nested-pools`, `repro322/build-virtual.py --sublet`) | Capstone domain, Sublet discipline on memsys5 |
 | `cheribsd-revocation` | `ports/sqlite/cheribsd/run-corpus-cheri.sh` | CheriBSD 15.0-CURRENT riscv64-purecap, QEMU |
 
 The two Capstone arms are one image each of the same source, differing only in

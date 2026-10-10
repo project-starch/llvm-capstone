@@ -42,30 +42,11 @@ resolve_src() {   # $1 tag  $2 manifest path -> echoes an absolute path
 }
 
 GROUP=${2:-core}
-# CORPUS_SUBLET=1 builds the SECOND arm: identical in every respect except that the
-# allocator carries the Sublet discipline (sublet/sublet-3220000-memsys5.patch). The two
-# arms therefore differ by the allocator patch ALONE -- unlike Capstone-vs-CheriBSD, where
-# ISA and OS change together. Its artefacts live in their own root so one arm never
-# overwrites the other, and the sqlite3.o cache is off because the cached object is the
-# unpatched one.
-SUBLET=${CORPUS_SUBLET:-0}
-if [ "$SUBLET" = 1 ]; then ROOT=$SQLITE322_TMP_ROOT/corpus-$GROUP-sublet
-else ROOT=$SQLITE322_TMP_ROOT/corpus-$GROUP; fi
+# The Sublet arm of this corpus is the virtual one: build-virtual.py --sublet.
+ROOT=$SQLITE322_TMP_ROOT/corpus-$GROUP
 SHARE=$ROOT/share
 OBJ=$ROOT/obj
 
-# Under Sublet the pool is NOT the static sqlite_heap[]: it arrives from the host as a
-# linear region (`h.user --arena N`), and memsys5 keeps aCtrl/aLink/aCap/aPar out of band
-# in a second region (`--tables M`). The sizing is memsys5Init's under the port, for
-# atoms = N/64: aCtrl one byte an atom, aLink 8, aCap 16, aPar 16 per possibly-split block.
-sublet_tables() {   # $1 = arena bytes -> tables bytes
-  local atoms=$(( $1 / 64 ))
-  echo $(( ((atoms + 15) & ~15) + atoms*8 + atoms*16 + (atoms + 32)*16 + 64 ))
-}
-# A case may override the arena with -DSQLITE_HEAP_SIZE in its manifest `extra` column;
-# the host region must then be the SAME size, or memsys5Init sizes its tables for one pool
-# and carves another.
-heap_of() { case "$*" in *-DSQLITE_HEAP_SIZE=*) echo "$*" | sed -E 's/.*-DSQLITE_HEAP_SIZE=([0-9]+).*/\1/' ;; *) echo 262144 ;; esac; }
 MATHINC="-include $SCRIPT_DIR/repro322_math_decl.h"
 case "$GROUP" in
   core) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_COUNTOFVIEW_OPTIMIZATION" ;;
@@ -226,20 +207,9 @@ do_build() {
                      EXTRA_INC="-DSQLITE_CORE -I$EXT_SRC_DIR/misc" ;;
       esac
     fi
-    # blobclose used to be skipped on the Sublet arm: the legacy standalone domain
-    # had its own domain_main, never captured the grant, and faulted inside
-    # capstone_cap_base before the case ran. 2026-10-05 the corpus copy was ported
-    # onto REPRO322_MAIN, which captures the grant like every other case, so the
-    # skip is gone and the arm has no hole. The defect sequence did not change.
-    local SUBLET_ENV=() CACHE=1
-    if [ "$SUBLET" = 1 ]; then
-      CACHE=0
-      SUBLET_ENV=(SQLITE_SUBLET_PATCH="$PORTS_DIR/sublet/sublet-3220000-memsys5.patch")
-      extra="${extra:-} -DREPRO322_SUBLET=1"
-    fi
     src=$(resolve_src "$tag" "$file") || { echo "  BUILD ABORTED ($tag)"; continue; }
     echo "== build $tag ($(basename "$(dirname "$src")")/$(basename "$src")) =="
-    if env "${SUBLET_ENV[@]}" CORPUS_CACHE_SQLITE=$CACHE \
+    if env CORPUS_CACHE_SQLITE=1 \
        OUT_DIR="$OBJ" OBJ_DIR="$OBJ" OUT_DOM="$SHARE/$tag.dom" \
        DOMAIN_SRC="$src" \
        DOMAIN_OPT_LEVEL="-O0" SQLITE_OPT_LEVEL="-O0" \
@@ -282,11 +252,11 @@ do_run() {
     echo "ERROR: 'conda activate qemu-deps' failed; the QEMU runner needs pexpect" >&2
     return 2
   }
-  local all=() ; declare -A ARENA_OF=()
+  local all=()
   while read -r file tag extra; do
     [ -z "${file:-}" ] && continue
     [ -f "$SHARE/$tag.dom" ] || continue
-    all+=("$tag"); ARENA_OF[$tag]=$(heap_of "${extra:-}")
+    all+=("$tag")
   done < <(manifest)
   local pass="$SHARE/passed.txt" fault="$SHARE/faulted.txt" err="$SHARE/erred.txt"
   local infra="$SHARE/infra.txt"
@@ -300,15 +270,7 @@ do_run() {
     echo "=== boot $boot: running ${rem[*]} ==="
     local gc="cp /mnt/host/h.user /tmp/h && chmod 0755 /tmp/h"
     for d in "${rem[@]}"; do
-      local args=""
-      if [ "$SUBLET" = 1 ]; then
-        local a=${ARENA_OF[$d]:-262144}
-        # --tail prints the payload WHILE the domain runs, so the markers of a domain that
-        # later faults are not lost with it -- which is what makes a faulting Sublet run
-        # interpretable at all (out_text is otherwise read only after the domain returns).
-        args=" --tail --arena $a --tables $(sublet_tables "$a")"
-      fi
-      gc="$gc && (echo ==RUN $d==; /tmp/h /mnt/host/$d.dom$args; echo ==RC $d=\$?==)"
+      gc="$gc && (echo ==RUN $d==; /tmp/h /mnt/host/$d.dom; echo ==RC $d=\$?==)"
     done
     gc="$gc && echo ==ALLDONE=="
     local rc=1
@@ -350,7 +312,7 @@ do_run() {
       fi
     fi
   done
-  echo "===== RESULTS ($GROUP$( [ "$SUBLET" = 1 ] && echo " -- SUBLET arm" )) ====="
+  echo "===== RESULTS ($GROUP) ====="
   for t in "${all[@]}"; do
     if grep -qxF "$t" "$pass"; then echo "PASS   $t (control ran to NOTRAP)";
     elif grep -qxF "$t" "$fault"; then echo "FAULT  $t $(where_fault "$t")";
