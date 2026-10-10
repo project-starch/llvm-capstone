@@ -54,8 +54,23 @@ checks on the extracted dev-based stack. It includes all 20 fixtures with a
 10. Normal, safety and worker-marker servers and native controls were built
 afresh; the Capstone libevent archives were reused, with their hashes and
 build scope recorded. Upstream libevent tests were not rerun.
-The virtual profile here uses the outer revoking heap; dev’s physical
-`slabsublet` arms remain separate and retain their existing source and tests.
+The virtual profile here uses the outer revoking heap.
+
+### Sublet inside the slabs and the object cache
+
+Patch 0006 (`-DMC_CAPSTONE_SUBLET`) closes the nested-allocator gap with two
+instructions in memcached's own allocators: `slabs.c` and `cache.c` hand out
+every chunk and object as a CDERIVE child lifetime, and `slabs_free` and
+`cache_free` revoke it (CREVOKE). There is no adapter. The patch header says
+how the slab mover, chunked items and page moves are covered and what it
+gives up. `host/build-sublet.sh` (run by `build-virtual.sh`) builds its oracle
+and safety images under `$MC_WORK/sublet/`, and gates that both carry the two
+instructions and the plain images none. `run-virtual.py --arm sublet` runs the
+same gate on them and judges the fixtures by the `lifetimes` predictions in
+`host/safety-expect.txt`, registered before the first build. The physical
+`slabsublet` arms, the allocators port's ledger inside memcached on the Sublet
+heap, were removed on 2026-10-11 with that heap's lend API; their predictions
+stay in `host/safety-expect.txt` as the record.
 
 
 The [historical virtual result](results/virtual-result.json) passed **53/53 checks** and

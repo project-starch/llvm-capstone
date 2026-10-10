@@ -228,8 +228,23 @@
     },
     "virtual-memcached-ledger": {
       "target": "capstone-virtual",
-      "summary": "the same corpus on the port's shared ledger over the Sublet authority in the process (-DMCP_SUBLET=ON, shared/driver-virtual.c): the payload is lent by the virtual heap as one linear capability (capstone_borrow_aligned_block), every chunk and object a lease bounded to itself, revoked when slabs.c or cache.c takes it back (mode 1); with the carve remedy (MC_CARVE_BOUNDS) for 06 and 07, as the physical column 3 reads sublet-carve for them",
+      "summary": "the same corpus on the port's shared ledger over the Sublet authority in the process (-DMCP_SUBLET=ON, shared/driver-virtual.c): the payload is lent by the virtual heap as one linear capability (capstone_borrow_aligned_block), every chunk and object a lease bounded to itself, revoked when slabs.c or cache.c takes it back (mode 1); with the carve remedy (MC_CARVE_BOUNDS) for 06 and 07, as the physical column 3 reads sublet-carve for them. SUPERSEDED 2026-10-11 by virtual-memcached-sublet: the ledger's Sublet authority and the lent payload were removed with the lend API; kept to judge the 2026-10-10 bundle",
       "mechanism": "per-chunk and per-object bounds and revocation in the allocators, over a payload the virtual heap lends; for 06 and 07 also the item's key/suffix carve",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "chunk-free-90": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "chunk-free-90"
+      ]
+    },
+    "virtual-memcached-sublet": {
+      "target": "capstone-virtual",
+      "summary": "the same corpus with the application's Sublet patch 0006 in slabs.c and cache.c (the allocators port's -DMCP_SUBLET=ON, shared/driver-virtual.c, `fixed|buggy N`): no hooks and no ledger; pages and objects come from virtual mallocng as upstream's come from malloc, every chunk and object is a CDERIVE child of its page's generation or of the object's lifetime, bounded to the chunk or object, and slabs_free/cache_free revoke it (CREVOKE); with the carve remedy (MC_CARVE_BOUNDS) for 06 and 07, as the physical column 3 read sublet-carve for them",
+      "mechanism": "per-chunk and per-object bounds and revocation by the allocators' own two lifetime instructions; for 06 and 07 also the item's key/suffix carve",
       "controls": {
         "bounds-malloc": "fault",
         "uaf-malloc": "fault",

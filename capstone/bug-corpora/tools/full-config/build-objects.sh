@@ -6,16 +6,15 @@
 #   build-objects.sh ffmpeg    SDK OUT FFMPEG_SRC FFMPEG_BUILD   (the app port's --sublet source and
 #                                                              its ffmpeg-build-poolsublet tree)
 #   build-objects.sh wireshark SDK OUT
-#   build-objects.sh memcached SDK OUT MEMCACHED_SRC            (the allocators port's prepared
-#                                                              memcached-1.6.45 source)
 #
 # SDK must be an application SDK built with CAPSTONE_APPLICATION_HEAP=sublet: every port lends its
-# blocks from the Sublet heap (__capstone_sublet_malloc_linear). memcached's needs HEAP_LOG >= 27,
-# for its 64 MiB payload and 16 MiB of metadata.
+# blocks from the Sublet heap (__capstone_sublet_malloc_linear). memcached's full configuration
+# (its allocators port's ledger on the Sublet authority) was removed on 2026-10-11 with that
+# authority; its recorded sublet-full verdicts stay in the plain corpora's case files.
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CAP=$(cd -- "$HERE/../../.." && pwd)
-PROG=${1:?ffmpeg|wireshark|memcached}; SDK=${2:?SDK}; OUT=${3:?OUT}
+PROG=${1:?ffmpeg|wireshark}; SDK=${2:?SDK}; OUT=${3:?OUT}
 CC=$SDK/capstone-cc
 mkdir -p "$OUT"
 grep -q '^CAPSTONE_APPLICATION_HEAP:STRING=sublet$' "$SDK/CMakeCache.txt" \
@@ -34,14 +33,6 @@ wireshark)
     "$CC" -O1 -std=c11 -DWM_DOMAIN -I"$WP/src/shared" -I"$CAP/runtime/include" -c "$s" -o "$OUT/$(basename "${s%.c}").o"
   done
   "$CC" -O0 -std=c11 -DWM_DOMAIN -I"$WP/src/shared" -I"$CAP/runtime/include" -c "$HERE/wireshark.c" -o "$OUT/full-config.o"
-  ;;
-memcached)
-  MS=${4:?MEMCACHED_SRC}; MP=$CAP/ports/memcached/allocators
-  F=(-DNDEBUG -DCHUNK_ALIGN_BYTES=16 -DMCP_DOMAIN -I"$MP/src/shared" -I"$MS" -I"$MP/../adapted" -I"$CAP/runtime/include")
-  for s in "$MP/src/shared/leases.c" "$MP/src/shared/metadata.c" "$MP/src/allocators/sublet/authority.c"; do
-    "$CC" -O1 "${F[@]}" -c "$s" -o "$OUT/$(basename "${s%.c}").o"
-  done
-  "$CC" -O0 "${F[@]}" -c "$HERE/memcached.c" -o "$OUT/full-config.o"
   ;;
 *) echo "build-objects: no program $PROG" >&2; exit 2 ;;
 esac

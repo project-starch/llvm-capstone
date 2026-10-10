@@ -12,6 +12,7 @@ bash "$HERE/build-domain.sh"
 bash "$HERE/build-native.sh"
 bash "$HERE/build-marker.sh"
 bash "$HERE/build-safety.sh"
+bash "$HERE/build-sublet.sh"
 source "$HERE/../deps/env.sh"
 "$CAPSTONE_SDK/capstone-cc" -O1 -I"$CAPSTONE_REPO_ROOT/capstone/runtime/include" \
   "$CAPSTONE_REPO_ROOT/capstone/runtime/virtual/pthread-contract.c" \

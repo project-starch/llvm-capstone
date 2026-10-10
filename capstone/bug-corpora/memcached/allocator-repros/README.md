@@ -141,24 +141,25 @@ referenced rather than copied. Where this corpus differs:
 ## Four targets, one sequence
 
 Real: `cache.c` (and `slabs.c`, initialised and idle) from the 1.6.45 pin,
-unmodified but for the two patches the port
+unmodified but for the patches the port
 [`ports/memcached/allocators`](../../../ports/memcached/allocators/README.md)
-applies -- and the same two patches on every target, because what changes
-between them is the authority under the allocators, never the allocators -- one replaces the includes with the port's shims, the other connects
-the free-list transitions to the adapter. Reduced: the consumer. Each `case.c`
+applies. The native, CheriBSD, PoisonCap and stock virtual builds take two:
+one replaces the includes with the port's shims, the other connects the
+free-list transitions to the port's ledger. The Sublet build
+(`-DMCP_SUBLET=ON`, the `virtual-nested-pools` arm) takes the shims and the
+application's patch 0006 instead -- the two lifetime instructions in `slabs.c`
+and `cache.c` -- and has no ledger. Reduced: the consumer. Each `case.c`
 writes its sequence inside `MC_CASE(NN)` and is a complete translation unit on
-both targets; [`shared/corpus.h`](shared/corpus.h) is the seam.
+every target; [`shared/corpus.h`](shared/corpus.h) is the seam.
 
-    shared/build-cases.sh native <out>            then runners/run-native.sh
-    shared/build-cases.sh capstone-domain <out>   then runners/capstone-domain/
-    shared/build-cases.sh cheribsd <out>          then runners/cheribsd/
-    shared/build-cases.sh poisoncap <out>         then runners/poisoncap/
+    shared/build-cases.sh native <out>                 then runners/run-native.sh
+    shared/build-cases.sh capstone-application <out>   then tools/run-virtual-cases.py --prebuilt
+    shared/build-cases.sh cheribsd <out>               then runners/cheribsd/
+    shared/build-cases.sh poisoncap <out>              then runners/poisoncap/
 
-The [domain runner's manual](runners/capstone-domain/README.md) has the
-commands, the two modes and the oracle. In short: `spatial` must complete,
-`sublet` must fault at the labelled probe, the expected address is published by
-the run and never hardcoded, and `--negative-control` must make every oracle
-say FAIL before a PASS is believed. The [CheriBSD manual](runners/cheribsd/README.md)
+The physical Capstone-domain pair (`spatial`, `sublet`) keeps its recorded
+verdicts, but its target and runner were removed on 2026-10-11 with the
+physical Sublet heap and the lend API. The [CheriBSD manual](runners/cheribsd/README.md)
 runs the same cases against the platform's own `malloc` with libc revocation on
 or off, beside a control that shows the revocation can fire at the same shape.
 The [PoisonCap manual](runners/poisoncap/README.md) runs the pair the contract

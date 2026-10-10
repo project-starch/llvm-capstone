@@ -286,15 +286,15 @@ HOSTED = {
     # drivers' lines (`case=N arm=...`, VERDICT), so observe()/fixed_ok() read them.
     #   virtual-malloc: the stock ledger, every slab page and cache.c object one virtual-mallocng
     #     object (MCP_STOCK_MALLOC, as the ASan arm), `fixed|buggy N`.
-    #   virtual-nested-pools: the shared ledger on the Sublet authority over a payload the virtual
-    #     heap lends linear (MCP_SUBLET, shared/driver-virtual.c), mode 1: `fixed|buggy N 1`.
+    #   virtual-nested-pools: slabs.c and cache.c with the application's Sublet patch 0006 and no
+    #     ledger (MCP_SUBLET, shared/driver-virtual.c): `fixed|buggy N`.
     "allocator-repros": dict(
         format="case-line",
         cache={"virtual-malloc": {"MCP_STOCK_MALLOC": "ON", "MCP_SUBLET": "OFF"},
                "virtual-nested-pools": {"MCP_SUBLET": "ON", "MCP_STOCK_MALLOC": "OFF"}},
         cache_dir="work/port",
         program="bin/defect-{nn}",
-        extra={"virtual-malloc": [], "virtual-nested-pools": ["1"]},
+        extra={"virtual-malloc": [], "virtual-nested-pools": []},
         mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
         controls_dir="controls/virtual",
         control_names={90: "chunk-free-90"},

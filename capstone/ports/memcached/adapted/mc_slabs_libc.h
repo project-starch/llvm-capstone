@@ -10,6 +10,13 @@
 #include <stdint.h>
 
 void *memset(void *, int, size_t);
+#ifdef MC_CAPSTONE_SUBLET
+/* No hook patch in the Sublet build: pages come from malloc and go back through
+ * free, and the slab lists grow by realloc, as upstream. */
+void *malloc(size_t);
+void *realloc(void *, size_t);
+void free(void *);
+#endif
 
 /* util.h:19, reached only through getenv, which answers nothing here: the
  * test suite's T_MEMD_INITIAL_MALLOC knob is not consulted. */

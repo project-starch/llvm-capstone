@@ -86,7 +86,7 @@
       "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, the allocators' shared ledger on the Sublet authority over a payload the virtual heap lends linear, mode 1 (tools/arms.json virtual-memcached-ledger; tools/run-virtual-cases.py --prebuilt, `buggy N 1`): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "oracle": "virtual profile, slabs.c and cache.c with the application's Sublet patch 0006 and no ledger, every chunk and object a CDERIVE child revoked by slabs_free/cache_free (tools/arms.json virtual-memcached-sublet; tools/run-virtual-cases.py --prebuilt, `buggy N`): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
       "verdict": "CAUGHT",
       "verdict_note": "cause=24 pc=0x3fb5d10ac0 in read_probe; by probe: the fault is at the labelled probe read_probe",
       "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"

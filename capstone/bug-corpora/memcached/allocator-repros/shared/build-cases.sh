@@ -4,9 +4,6 @@
 #   shared/build-cases.sh native OUT [cmake options]
 #       one port build, then each case.c linked with the native driver:
 #       OUT/bin/defect-NN, run as `defect-NN buggy|fixed NN`
-#   shared/build-cases.sh capstone-domain OUT [cmake options]
-#       the seam invoked once per case: OUT/bin/defect-NN.dom, spatial or
-#       sublet chosen by the mode argument at run time
 #   shared/build-cases.sh cheribsd OUT [cmake options]
 #       the seam once per case for CheriBSD purecap: OUT/bin/defect-NN, plus
 #       the platform's ABI probe, the revocation control and the supervisor
@@ -22,7 +19,7 @@ set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CORPUS=$(cd -- "$HERE/.." && pwd)
 REPO=$(git -C "$HERE" rev-parse --show-toplevel)
-TARGET=${1:?usage: build-cases.sh native|capstone-domain|cheribsd|poisoncap|capstone-application OUT [cmake options]}
+TARGET=${1:?usage: build-cases.sh native|cheribsd|poisoncap|capstone-application OUT [cmake options]}
 OUT=${2:?select an output directory}
 shift 2
 PORT="$REPO/capstone/ports/memcached/allocators"
@@ -43,17 +40,6 @@ native)
       -I"$REPO/capstone/runtime/include" \
       -o "$OUT/bin/defect-$number" "$dir/case.c" "$CORPUS/shared/driver.c" \
       "$work/libmemcached-allocators.a"
-    built=$((built + 1))
-  done
-  ;;
-capstone-domain)
-  for dir in "$CORPUS"/[0-9][0-9]_*/; do
-    number=$(basename "$dir" | cut -c1-2)
-    work="$OUT/work/$number"
-    cmake --preset capstone-domain -S "$PORT" -B "$work" \
-      -DMCP_CORPUS_SRC="$dir/case.c" "$@" >"$OUT/work/$number.log" 2>&1
-    cmake --build "$work" >>"$OUT/work/$number.log" 2>&1
-    cp "$work/bin/defects.dom" "$OUT/bin/defect-$number.dom"
     built=$((built + 1))
   done
   ;;
@@ -109,10 +95,11 @@ capstone-application)
   # The virtual Capstone process build, for the virtual-malloc and virtual-nested-pools arms: the
   # port's capstone-application preset on the virtual SDK (CAPSTONE_SDK, CAPSTONE_LLVM_BUILD_DIR),
   # then each case linked as the native arms are, with the SDK's capstone-cc. Built with
-  # -DMCP_SUBLET=ON the driver is shared/driver-virtual.c: the payload lent linear by the virtual
-  # heap, the mode an argument. Otherwise it is driver.c, unchanged. The Sublet build also takes the
+  # -DMCP_SUBLET=ON the allocators carry the application's patch 0006 and no ledger, the cases are
+  # compiled with MC_CAPSTONE_SUBLET (the item layout gains its parent slot) and the driver is
+  # shared/driver-virtual.c. Otherwise it is driver.c, unchanged. The Sublet build also takes the
   # carve remedy (MC_CARVE_BOUNDS, the identity for every case but 06 and 07), because the physical
-  # column 3 reads `sublet-carve` for those two: the nested column is the same remedy on both platforms.
+  # column 3 read `sublet-carve` for those two: the nested column keeps that remedy.
   : "${CAPSTONE_SDK:?set CAPSTONE_SDK to a virtual Capstone application SDK}"
   work="$OUT/work/port"
   cmake --preset capstone-application -S "$PORT" -B "$work" "$@" >"$OUT/work/port.log" 2>&1
@@ -121,13 +108,13 @@ capstone-application)
   driver="$CORPUS/shared/driver.c"
   carve=()
   if grep -q '^MCP_SUBLET:BOOL=ON$' "$work/CMakeCache.txt"; then
-    driver="$CORPUS/shared/driver-virtual.c"; carve=(-DMC_CARVE_BOUNDS)
+    driver="$CORPUS/shared/driver-virtual.c"; carve=(-DMC_CARVE_BOUNDS -DMC_CAPSTONE_SUBLET)
   fi
   for dir in "$CORPUS"/[0-9][0-9]_*/; do
     number=$(basename "$dir" | cut -c1-2)
     "$CAPSTONE_SDK/capstone-cc" -std=c11 -O1 -g -Wall -Wextra -DNDEBUG -DCHUNK_ALIGN_BYTES=16 "${carve[@]}" \
       -I"$CORPUS/shared" -I"$PORT/src/shared" -I"$SRC" -I"$PORT/../adapted" \
-      -I"$REPO/capstone/runtime/include" -I"$REPO/capstone/ports/common/include" \
+      -I"$REPO/capstone/runtime/include" \
       -o "$OUT/bin/defect-$number" "$dir/case.c" "$driver" "$work/libmemcached-allocators.a"
     built=$((built + 1))
   done

@@ -76,21 +76,13 @@ so the items it restores are not children of a generation and their first free f
      struct _stritem  *head;     /* always points to the owner chunk */
 --- a/slabs.c
 +++ b/slabs.c
-@@ -17,6 +17,9 @@
- #include <string.h>
- #include <assert.h>
- #include <pthread.h>
-+#ifdef MC_CAPSTONE_SUBLET
-+#include <capstone/capability.h>
-+#endif
- 
- //#define DEBUG_SLAB_MOVER
- /* powers-of-N allocation structures */
-@@ -66,6 +69,22 @@
+@@ -66,6 +66,24 @@
     smaller ones will be made.  */
  static void slabs_preallocate (const unsigned int maxslabs);
  
 +#ifdef MC_CAPSTONE_SUBLET
++#include <capstone/capability.h>
++
 +/* Sublet: a CDERIVE child of parent, starting at p. */
 +static inline void *sublet_derive(void *parent, const void *p, size_t size) {
 +    return capstone_cap_derive(parent,
@@ -109,7 +101,7 @@ so the items it restores are not children of a generation and their first free f
  /*
   * Figures out which slab class (chunk size) is required to store an item of
   * a given size.
-@@ -354,7 +373,14 @@
+@@ -354,7 +372,14 @@
  static void split_slab_page_into_freelist(char *ptr, const unsigned int id) {
      slabclass_t *p = &slabclass[id];
      int x;
@@ -124,7 +116,7 @@ so the items it restores are not children of a generation and their first free f
          do_slabs_free(ptr, id);
          ptr += p->size;
      }
-@@ -437,7 +463,12 @@
+@@ -437,7 +462,12 @@
          it->it_flags &= ~ITEM_SLABBED;
          it->refcount = 1;
          p->sl_curr--;
@@ -137,7 +129,7 @@ so the items it restores are not children of a generation and their first free f
      } else {
          ret = NULL;
      }
-@@ -481,6 +512,9 @@
+@@ -481,6 +511,9 @@
  
      item_chunk *next_chunk;
      while (chunk) {
@@ -147,7 +139,7 @@ so the items it restores are not children of a generation and their first free f
          assert(chunk->it_flags == ITEM_CHUNK);
          chunk->it_flags = ITEM_SLABBED;
          p = &slabclass[chunk->slabs_clsid];
-@@ -637,6 +671,12 @@
+@@ -637,6 +670,12 @@
      }
      mem_malloced += size;
  
@@ -160,7 +152,7 @@ so the items it restores are not children of a generation and their first free f
      return ret;
  }
  
-@@ -667,6 +707,9 @@
+@@ -667,6 +706,9 @@
  
  void slabs_free(void *ptr, unsigned int id) {
      pthread_mutex_lock(&slabs_lock);
@@ -170,7 +162,7 @@ so the items it restores are not children of a generation and their first free f
      do_slabs_free(ptr, id);
      pthread_mutex_unlock(&slabs_lock);
  }
-@@ -755,6 +798,12 @@
+@@ -755,6 +797,12 @@
      slabclass_t *s_cls = &slabclass[sid];
      slabclass_t *d_cls = &slabclass[did];
  

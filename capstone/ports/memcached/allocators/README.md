@@ -5,9 +5,8 @@ Capstone builds through the seam the [census](../README.md) measured. This is
 an allocator component port for the
 [memcached bug corpus](../../../bug-corpora/memcached/allocator-repros/README.md).
 It does not execute memcached, its item layer, its threads or its page mover:
-the port is single-threaded, the mutexes are no-ops in a domain and the host's
-uncontended ones natively, and `slabs_mover.c` -- the one place a page changes
-class -- is not built. Two CheriBSD builds exist: a
+the port is single-threaded, the mutexes are the host's uncontended ones, and
+`slabs_mover.c` -- the one place a page changes class -- is not built. Two CheriBSD builds exist: a
 [stock one](host/cheribsd/README.md), the platform's own `malloc` under every
 page and object with no adapter authority, and an experimental
 [PoisonCap one](host/cheribsd/poisoncap/README.md) that puts poison authority
@@ -18,12 +17,12 @@ there instead.
 This component uses `../../common` for verified downloads, cross toolchains,
 external builds and the shared QEMU lock, in the layout the port catalog
 describes. `src/shared/` holds the protocol, the metadata heap, the service
-stubs and the lifetime ledger; `src/allocators/sublet/` and `src/native/` the
-two authority layers under it; `src/cheribsd/` the two CheriBSD adapters -- the stock
-ledger over `malloc`, and the PoisonCap authority layer that runs under the
-shared ledger instead; `src/capstone-domain/` the domain entry;
-`src/linux-guest/` the staging loader. Generated sources stay outside the
-repository.
+stubs and the lifetime ledger; `src/native/` the authority layer under it;
+`src/cheribsd/` the two CheriBSD adapters -- the stock ledger over `malloc`,
+and the PoisonCap authority layer that runs under the shared ledger instead.
+Generated sources stay outside the repository. The freestanding Capstone
+domain target, its Sublet authority over a lent payload and the guest loader
+were removed on 2026-10-11 with the physical Sublet heap and its lend API.
 
 `upstream.json` pins the official memcached 1.6.45 archive by SHA256 -- the
 same archive `../fetch-memcached.sh` caches, so one download serves the census
@@ -34,6 +33,17 @@ application command:
 |---|---|
 | `0001-freestanding-shims` | `slabs.c` includes `memcached.h` whole -- 1114 lines -- and eleven system headers; `cache.c` four more and `cache.h` `<pthread.h>`. They become the four shims in [`../adapted/`](../adapted/): what `slabs.c` reads from `memcached.h`, each line cited to the 1.6.45 tree; the libc pieces the patched allocator still calls, renamed so a hosted client never sees them; the same for `cache.c`; and the mutexes. Two regions are gated on `MC_PORT`: the stats formatter and huge-page preallocation. Ten hunks in `slabs.c`, one each in `cache.c` and `cache.h` |
 | `0002-lifetime-hooks` | connects the free-list transitions to the adapter: ten hunks in `slabs.c`, five in `cache.c` |
+
+The Sublet build (`-DMCP_SUBLET=ON`, capstone-application only) applies
+`0001` and then the application's
+[`0006-slabs-and-cache-sublet-lifetimes`](../app/patches/), referenced rather
+than copied, in place of `0002`: the two lifetime instructions in `slabs.c` and
+`cache.c` themselves, with no hooks, no ledger and no metadata heap. Pages and
+objects come from the system allocator -- virtual mallocng -- as upstream's do
+from `malloc`; every chunk is a CDERIVE child of its page's generation and
+every object a child of its own lifetime, and `slabs_free` and `cache_free`
+revoke them (CREVOKE). `cmake/prepare-source.py --variant protected` builds that
+source; the library is `slabs.c`, `cache.c` and `src/shared/services.c`.
 
 ## Lifetime mapping
 
@@ -64,31 +74,22 @@ element-wise, since it holds page aliases. `cache.c`'s control block and name
 come from the metadata heap, so an allocator never lives inside storage it
 hands out.
 
-Both domain arms use the same layout and allocator code:
+In mode 0 a chunk or object keeps the alias it was carved with, so a pointer
+held across `slabs_free` or `cache_free` still names the storage, which by then
+is the next item's. Mode 1 (PoisonCap only) invalidates the unit on release.
 
-- `spatial`: a chunk or object keeps the alias it was carved with. A pointer
-  held across `slabs_free` or `cache_free` still names the storage, which by
-  then is the next item's.
-- `sublet`: release and issue each `sublet_give` then `sublet_take` the unit,
-  so that pointer is a revoked alias. Revocation clears the chunk; the one
-  header field upstream keeps on free memory, `slabs_clsid`, is put back from
-  the page's record. A chunk filed by the split has never been held and is
-  not revoked then.
-
-The ledger, `src/shared/leases.c`, is one file for both targets; only the
-authority layer under it differs (`src/allocators/sublet/authority.c`,
-`src/native/authority.c`), so the native arms measure the same bookkeeping
-the domain does. It keys chunks by page map and offset and objects by a
-sorted table, and refuses a release or issue that does not match a unit's
-state or class with a 5xx code rather than guessing.
+The ledger, `src/shared/leases.c`, is one file for the native and PoisonCap
+builds; only the authority layer under it differs. It keys chunks by page map
+and offset and objects by a sorted table, and refuses a release or issue that
+does not match a unit's state or class with a 5xx code rather than guessing.
 
 `CHUNK_ALIGN_BYTES` is 16 here where upstream aligns chunk sizes to 8
 (`-DCHUNK_ALIGN_BYTES=16`, a knob the shim defaults to 8 so the census keeps
-upstream's table). A Sublet region must be aligned and sized to whole
-capabilities, and a chunk is a region. `NDEBUG` is memcached's own production
+upstream's table). An item begins with pointers, which are 16-byte
+capabilities on Capstone and CheriBSD. `NDEBUG` is memcached's own production
 build (`Makefile.am:92`). Native builds use both, so the class table agrees
 across the seam: with `sizeof(item)` 48 natively the first class is 96 bytes,
-with 80 in a domain (pointers are 16 bytes there) it is 128, and either way
+with 80 on Capstone (pointers are 16 bytes there) it is 128, and either way
 the table is what `slabs_init` computes from upstream's defaults
 (`settings_init`, `memcached.c:224-258`), which `src/shared/services.c`
 carries.
@@ -96,7 +97,7 @@ carries.
 The fixed regions are 64 MiB payload -- 48 MiB of slab pages from the bottom,
 16 MiB of cache objects from the top -- 16 MiB metadata, 8 MiB trace and 4 KiB
 report; at most 768 pages and 8,192 objects, and one record per chunk, so a
-page of the smallest class costs about 0.5 MiB of metadata in a domain.
+page of the smallest class costs about 0.5 MiB of metadata with 16-byte pointers.
 `metadata` in the report is heap high-water usage. No timing or
 memory-overhead claim is made.
 
@@ -107,13 +108,9 @@ memory-overhead claim is made.
   slabs-level lifetime defect on record in upstream's history is in it. A
   port that hooked it would be porting a second allocator; this one names
   the boundary instead.
-- **Threads.** 31 `pthread_mutex` references in `slabs.c` compile to nothing
-  in a domain. The LRU maintainer and the mover are threads; neither runs.
+- **Threads.** The LRU maintainer and the mover are threads; neither runs.
 - **Stats and preallocation**, gated under `MC_PORT`: the former needs the
   server's per-thread stats aggregate, the latter the host OS.
-- **`slabs_init`'s `double` arithmetic** is upstream's and is kept; the
-  freestanding target has no FP ABI, so nine compiler-rt double builtins are
-  compiled in from the tree, as the BEEBS FP benchmarks do.
 
 ## CheriBSD
 
@@ -148,12 +145,12 @@ expects.
 `-DMCP_POISONCAP=ON`, which replaces the authority layer and nothing else: one
 `mmap`'d arena carrying `CHERI_PERM_POISON` and `CHERI_PERM_SW_VMEM` is the
 adapter's, every alias handed to memcached is bounded to its unit and stripped
-of both permissions, and **the ledger is the one the Capstone domain runs**
+of both permissions, and **the ledger is the one the native build runs**
 (`src/shared/leases.c`, unchanged). Mode 0 is bounded aliases with no
 invalidation; mode 1 poisons the unit's granules on release, sweeps
 synchronously, clears the poison and zeroes the payload before upstream writes
 its free-list link through the fresh alias. That file, 160 lines, is the whole
-of the difference between this system and the domain. Its
+of the difference between this system and the native build. Its
 [manual](host/cheribsd/poisoncap/README.md) has the geometry rules and the
 platform's own instruction controls.
 
@@ -166,8 +163,7 @@ From the repository root, source `capstone/tests/capstone-test-env.sh` and set
 ```sh
 cmake --preset native && cmake --build /tmp/capstone/memcached-allocators/build/native
 ctest --test-dir /tmp/capstone/memcached-allocators/build/native
-cmake --preset capstone-domain && cmake --build /tmp/capstone/memcached-allocators/build/capstone-domain
-cmake --preset linux-guest && cmake --build /tmp/capstone/memcached-allocators/build/linux-guest
+CAPSTONE_SDK=... cmake --preset capstone-application -DMCP_SUBLET=ON && cmake --build /tmp/capstone/memcached-allocators/build/capstone-application
 CHERI_SDK=... CHERI_SYSROOT=... cmake --preset cheribsd && cmake --build /tmp/capstone/memcached-allocators/build/cheribsd
 CHERI_SDK=... CHERI_SYSROOT=... bash host/cheribsd/poisoncap/build.sh /tmp/capstone/poisoncap-memcached/build
 ```
@@ -175,9 +171,11 @@ CHERI_SDK=... CHERI_SYSROOT=... bash host/cheribsd/poisoncap/build.sh /tmp/capst
 Presets build under `/tmp/capstone/memcached-allocators/build/`. A hosted
 build exposes `Memcached::Allocators`, `bin/allocator-example` and
 `PORT_CLIENT_SOURCE`. The one-source seam is `-DMCP_CORPUS_SRC=<case.c>`: the
-corpus supplies `mcp_replay`, and the build produces `bin/defects` (hosted) or
-`bin/defects.dom` (domain). The corpus's `shared/build-cases.sh` invokes it
-once per case. `allocator-example` prints
+corpus supplies `mcp_replay`, and the build produces `bin/defects`. The
+corpus's `shared/build-cases.sh` invokes it once per case; for the
+capstone-application target it links each case against the library itself,
+and the Sublet build, which has no ledger, has neither `bin/defects` nor
+`allocator-example`. `allocator-example` prints
 `ALLOCATOR_EXAMPLE memcached PASS pointer_bytes=8` as its last line natively,
 `pointer_bytes=16` on either CheriBSD build. On the PoisonCap build it runs
 **mode 1** unless told otherwise, so the registered example is itself a
@@ -190,13 +188,9 @@ failure preserves a previous complete source, and that `allocator-example`
 observes both reissues the corpus exists for: a freed chunk comes back as the
 next `slabs_alloc` and a freed object as the next `cache_alloc`,
 `chunk_reuses >= 1` and `object_reuses >= 1`. Without that the example would
-be measuring the wrong allocators. The same sequence, built through the seam
-as a domain, completes in both arms under QEMU with the same counts.
+be measuring the wrong allocators.
 
-The domain and CheriBSD arms are the corpus's, run and judged by
-[its runners](../../../bug-corpora/memcached/allocator-repros/runners/capstone-domain/README.md):
-`spatial` must complete, `sublet` must fault at the labelled probe, the
-expected address is published by the run, and the negative control must make
-every oracle fail before a pass is believed. Results are recorded in the case
-files' `status` and in the pull request; run artifacts stay under
-`/tmp/capstone` and are not committed.
+The virtual and CheriBSD arms are the corpus's, run and judged by
+`tools/run-virtual-cases.py` and
+[the CheriBSD runner](../../../bug-corpora/memcached/allocator-repros/runners/cheribsd/README.md).
+Verdicts are recorded in the case files and the corpus's verdict bundles.

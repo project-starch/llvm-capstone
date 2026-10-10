@@ -1,9 +1,9 @@
 /* CONTROL, not a defect: a slab chunk handed back to its class with slabs_free, then read through
  * the pointer that held it. slabs.c keeps the chunk on its class's free list inside the page, so no
  * system free happens: on `virtual-malloc` (MCP_STOCK_MALLOC, the page one virtual-mallocng object)
- * the read must COMPLETE; on `virtual-nested-pools` (MCP_SUBLET, mode 1) the ledger revokes the
- * chunk at slabs_free and the read must FAULT at read_probe. It is case 2's free without case 2's
- * refcount story, run as `buggy 90`. */
+ * the read must COMPLETE; on `virtual-nested-pools` (MCP_SUBLET: the application's patch 0006)
+ * slabs_free revokes the chunk (CREVOKE) and the read must FAULT at read_probe. It is case 2's free
+ * without case 2's refcount story, run as `buggy 90`. */
 #include "../shared/corpus.h"
 
 MC_CASE(90) {

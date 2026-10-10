@@ -6,18 +6,20 @@ target_link_libraries(allocators-options INTERFACE Capstone::Runtime)
 target_include_directories(allocators-options INTERFACE
   "${PROJECT_SOURCE_DIR}/src/shared" "${MC_SOURCE}" "${PROJECT_SOURCE_DIR}/../adapted")
 # NDEBUG is memcached's own production build (Makefile.am:92). CHUNK_ALIGN_BYTES
-# is 8 upstream; 16 here, because a chunk is a Sublet region and a region is
-# whole capabilities. The shim defaults to 8 so a census keeps upstream's table.
+# is 8 upstream; 16 here, because an item begins with pointers, which are
+# 16-byte capabilities (the application's patch 0001). The shim defaults to 8 so
+# a census keeps upstream's table.
 target_compile_definitions(allocators-options INTERFACE NDEBUG CHUNK_ALIGN_BYTES=16)
 target_compile_options(allocators-options INTERFACE -ffunction-sections -fdata-sections -Wall -Wextra)
 option(MCP_POISONCAP "Use the experimental PoisonCap adapter on the CheriBSD build" OFF)
 if(MCP_POISONCAP AND NOT PORT_PLATFORM STREQUAL "cheribsd")
   message(FATAL_ERROR "MCP_POISONCAP requires the CheriBSD purecap toolchain")
 endif()
-# The lifetime ledger. Stock CheriBSD has its own, because the platform's malloc
-# places every unit and there is no region to carve. Everywhere else -- native,
-# the Capstone domain and PoisonCap -- the SAME ledger runs over one region and
-# only the authority layer beneath it differs.
+# The lifetime ledger, for the arms that go through the hooks (patch 0002). Stock
+# CheriBSD has its own, because the platform's malloc places every unit and there
+# is no region to carve. Native and PoisonCap run the SAME ledger over one region
+# and only the authority layer beneath it differs. The Sublet arm (MCP_SUBLET,
+# cmake/MemcachedSource.cmake) has no hooks and no ledger.
 # MCP_STOCK_MALLOC: the hosted build on the same stock ledger, so a native tool
 # (AddressSanitizer) sees what upstream memcached gives it -- each slab page and
 # each cache.c object its own malloc -- rather than one arena with no redzones
@@ -26,13 +28,20 @@ option(MCP_STOCK_MALLOC "Hosted native build: pages and objects from the host ma
 if(MCP_STOCK_MALLOC AND (NOT PORT_HOSTED OR PORT_PLATFORM STREQUAL "cheribsd"))
   message(FATAL_ERROR "MCP_STOCK_MALLOC is for the hosted native build; stock CheriBSD already uses that ledger")
 endif()
-if((PORT_PLATFORM STREQUAL "cheribsd" AND NOT MCP_POISONCAP) OR MCP_STOCK_MALLOC)
-  set(ledger src/cheribsd/malloc-leases.c)
+if(MCP_SUBLET AND MCP_STOCK_MALLOC)
+  message(FATAL_ERROR "MCP_SUBLET has no ledger and MCP_STOCK_MALLOC is one; choose one")
+endif()
+if(MCP_SUBLET)
+  # slabs.c and cache.c take their pages and objects from the system allocator, as
+  # upstream does, and derive and revoke every chunk and object themselves.
+  set(ledger)
+elseif((PORT_PLATFORM STREQUAL "cheribsd" AND NOT MCP_POISONCAP) OR MCP_STOCK_MALLOC)
+  set(ledger src/cheribsd/malloc-leases.c src/shared/metadata.c)
 else()
-  set(ledger src/shared/leases.c)
+  set(ledger src/shared/leases.c src/shared/metadata.c)
 endif()
 add_library(mc-allocators OBJECT "${MC_SOURCE}/slabs.c" "${MC_SOURCE}/cache.c"
-  src/shared/metadata.c src/shared/services.c ${ledger})
+  src/shared/services.c ${ledger})
 # Upstream's warnings are upstream's; ours stay on.
 set_source_files_properties("${MC_SOURCE}/slabs.c" "${MC_SOURCE}/cache.c"
   PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter;-Wno-sign-compare")
@@ -40,117 +49,76 @@ target_link_libraries(mc-allocators PUBLIC allocators-options)
 add_dependencies(mc-allocators memcached-source)
 # The seam the bug corpus builds through. The corpus source supplies
 # mcp_replay, so the corpus stays outside the port and the port keeps one way
-# in. Both the Capstone domain build and the hosted build read it.
+# in. The hosted builds read it.
 set(MCP_CORPUS_SRC "" CACHE FILEPATH "Corpus-supplied program that defines mcp_replay")
-# The nested arm in the VIRTUAL address space. The ledger is the same in every
-# arm; only the AUTHORITY layer beneath it differs, so this option swaps
-# src/native/authority.c -- which has nothing to revoke, and makes leases.c
-# refuse mode 1 -- for the Sublet one the freestanding domain uses, and the
-# payload region is then LENT by the system allocator as one linear
-# capability instead of coming from aligned_alloc. One option, one layer: the
-# protected and unprotected nested arms differ in that and nothing else.
-option(MCP_SUBLET "Nested lifetimes in a Capstone process: the Sublet authority, with the payload lent linear" OFF)
-if(MCP_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
-  message(FATAL_ERROR "MCP_SUBLET needs the capstone-application toolchain")
+if(NOT PORT_HOSTED)
+  message(FATAL_ERROR "the allocators port builds hosted only: native, cheribsd or capstone-application")
 endif()
-if(MCP_SUBLET AND MCP_STOCK_MALLOC)
-  message(FATAL_ERROR "MCP_SUBLET and MCP_STOCK_MALLOC are two different ledgers; choose one")
-endif()
-if(PORT_HOSTED)
-  # The shim takes the host's <pthread.h> in a hosted build (see mc_pthread_shim.h).
-  find_package(Threads REQUIRED)
-  target_link_libraries(allocators-options INTERFACE Threads::Threads)
-  if(PORT_PLATFORM STREQUAL "cheribsd")
-    # Either CheriBSD adapter owns its own backing, so the entry passes none.
-    target_compile_definitions(allocators-options INTERFACE MCP_ADAPTER_BACKING)
-    # The SDK ships ld.lld and no ld; without this clang falls back to the host
-    # linker. The cheribsd preset says the same through CMAKE_EXE_LINKER_FLAGS,
-    # but the shared host/cheribsd/build.py configures from the toolchain file
-    # alone, so the port says it here too.
-    add_link_options(-fuse-ld=lld)
-    if(MCP_POISONCAP)
-      # PoisonCap: one mmap'd arena with poison authority under the shared
-      # ledger. Mode 0 is bounded leases; mode 1 poisons and sweeps a unit as
-      # it is released.
-      target_compile_definitions(allocators-options INTERFACE MCP_POISONCAP)
-      target_include_directories(allocators-options INTERFACE
-        "${PROJECT_SOURCE_DIR}/src/cheribsd")
-      target_sources(mc-allocators PRIVATE src/cheribsd/poisoncap-authority.c)
-      # The platform's own instruction control, referenced where it already
-      # lives rather than copied: live access, poison, sweep, reuse, and a
-      # retained old alias that must be refused.
-      add_executable(poisoncap-probe
-        "${PROJECT_SOURCE_DIR}/../../ffmpeg/buffer-pool/security-tests/cheribsd/poisoncap-probe.c")
-      target_link_libraries(poisoncap-probe PRIVATE allocators-options)
-      # The poison primitives and the published revocation header are GNU C.
-      set_target_properties(poisoncap-probe mc-allocators PROPERTIES C_EXTENSIONS ON)
-    else()
-      # Stock CheriBSD: pages and objects from the platform's own malloc, so its
-      # revocation is asked the question at the level where it lives. No payload
-      # region, no ledger over one: src/cheribsd/malloc-leases.c is the seam.
-      # The positive control: this guest's libc revocation, made to fire at the
-      # corpus's own labelled load shape. Pure libc, no port library.
-      add_executable(revocation-control security-tests/cheribsd/revocation-control.c)
-      # The probes use GNU inline asm with a "C" operand, as cheric.h does.
-      set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
-    endif()
-  elseif(MCP_STOCK_MALLOC)
-    # The ledger owns its backing, as on stock CheriBSD; the entry passes none.
-    target_compile_definitions(allocators-options INTERFACE MCP_ADAPTER_BACKING)
-  elseif(MCP_SUBLET)
-    target_compile_definitions(allocators-options INTERFACE MCP_BORROW_LINEAR)
-    target_sources(mc-allocators PRIVATE src/allocators/sublet/authority.c)
+
+# The shim takes the host's <pthread.h> in a hosted build (see mc_pthread_shim.h).
+find_package(Threads REQUIRED)
+target_link_libraries(allocators-options INTERFACE Threads::Threads)
+if(PORT_PLATFORM STREQUAL "cheribsd")
+  # Either CheriBSD adapter owns its own backing, so the entry passes none.
+  target_compile_definitions(allocators-options INTERFACE MCP_ADAPTER_BACKING)
+  # The SDK ships ld.lld and no ld; without this clang falls back to the host
+  # linker. The cheribsd preset says the same through CMAKE_EXE_LINKER_FLAGS,
+  # but the shared host/cheribsd/build.py configures from the toolchain file
+  # alone, so the port says it here too.
+  add_link_options(-fuse-ld=lld)
+  if(MCP_POISONCAP)
+    # PoisonCap: one mmap'd arena with poison authority under the shared
+    # ledger. Mode 0 is bounded leases; mode 1 poisons and sweeps a unit as
+    # it is released.
+    target_compile_definitions(allocators-options INTERFACE MCP_POISONCAP)
+    target_include_directories(allocators-options INTERFACE
+      "${PROJECT_SOURCE_DIR}/src/cheribsd")
+    target_sources(mc-allocators PRIVATE src/cheribsd/poisoncap-authority.c)
+    # The platform's own instruction control, referenced where it already
+    # lives rather than copied: live access, poison, sweep, reuse, and a
+    # retained old alias that must be refused.
+    add_executable(poisoncap-probe
+      "${PROJECT_SOURCE_DIR}/../../ffmpeg/buffer-pool/security-tests/cheribsd/poisoncap-probe.c")
+    target_link_libraries(poisoncap-probe PRIVATE allocators-options)
+    # The poison primitives and the published revocation header are GNU C.
+    set_target_properties(poisoncap-probe mc-allocators PROPERTIES C_EXTENSIONS ON)
   else()
-    target_sources(mc-allocators PRIVATE src/native/authority.c)
+    # Stock CheriBSD: pages and objects from the platform's own malloc, so its
+    # revocation is asked the question at the level where it lives. No payload
+    # region, no ledger over one: src/cheribsd/malloc-leases.c is the seam.
+    # The positive control: this guest's libc revocation, made to fire at the
+    # corpus's own labelled load shape. Pure libc, no port library.
+    add_executable(revocation-control security-tests/cheribsd/revocation-control.c)
+    # The probes use GNU inline asm with a "C" operand, as cheric.h does.
+    set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
   endif()
-  add_library(mc-allocators-library STATIC $<TARGET_OBJECTS:mc-allocators>)
-  set_target_properties(mc-allocators-library PROPERTIES OUTPUT_NAME memcached-allocators)
-  target_link_libraries(mc-allocators-library PUBLIC allocators-options)
-  add_library(Memcached::Allocators ALIAS mc-allocators-library)
+elseif(MCP_STOCK_MALLOC)
+  # The ledger owns its backing, as on stock CheriBSD; the entry passes none.
+  target_compile_definitions(allocators-options INTERFACE MCP_ADAPTER_BACKING)
+elseif(MCP_SUBLET)
+  target_compile_definitions(allocators-options INTERFACE MC_CAPSTONE_SUBLET)
+else()
+  target_sources(mc-allocators PRIVATE src/native/authority.c)
+endif()
+add_library(mc-allocators-library STATIC $<TARGET_OBJECTS:mc-allocators>)
+set_target_properties(mc-allocators-library PROPERTIES OUTPUT_NAME memcached-allocators)
+target_link_libraries(mc-allocators-library PUBLIC allocators-options)
+add_library(Memcached::Allocators ALIAS mc-allocators-library)
+include("${PORT_SUPPORT_ROOT}/cmake/Client.cmake")
+port_add_client(Memcached::Allocators)
+# The example and the replay entry speak the ledger's interface; the Sublet
+# build has none, and the corpus links its cases with its own driver.
+if(NOT MCP_SUBLET)
   add_executable(allocator-example examples/allocators.c)
   target_link_libraries(allocator-example PRIVATE Memcached::Allocators)
   add_dependencies(allocator-example memcached-source)
-  include("${PORT_SUPPORT_ROOT}/cmake/Client.cmake")
-  port_add_client(Memcached::Allocators)
-  if(MCP_CORPUS_SRC)
-    add_executable(defects src/native/main.c "${MCP_CORPUS_SRC}")
-    target_link_libraries(defects PRIVATE mc-allocators)
-    add_dependencies(defects memcached-source)
-    target_link_options(defects PRIVATE LINKER:--gc-sections)
-    if(PORT_PLATFORM STREQUAL "cheribsd")
-      set_target_properties(defects PROPERTIES C_EXTENSIONS ON)
-    endif()
-  endif()
-else()
-  enable_language(ASM)
-  target_compile_definitions(allocators-options INTERFACE MCP_DOMAIN)
-  # A pointer is 16 bytes here and uintptr_t 8: the cast the ledger keys its
-  # tables by IS the address-of-a-capability operation, so the warning that
-  # names it carries no information.
-  target_compile_options(allocators-options INTERFACE
-    -Wno-pointer-to-int-cast -Wno-void-pointer-to-int-cast)
-  target_sources(mc-allocators PRIVATE src/allocators/sublet/authority.c)
-  # slabs_init grows the class table by a double factor (size *= 1.25). The
-  # freestanding target has no FP ABI and no compiler-rt of its own, so the
-  # double builtins are compiled in from the tree, as the BEEBS FP benchmarks
-  # do (benchmarks/beebs/build-beebs-softfloat-common.sh). Nine files; the
-  # linker names any the allocator needs beyond them.
-  set(builtins "${CAPSTONE_REPO_ROOT}/compiler-rt/lib/builtins")
-  foreach(builtin adddf3 subdf3 muldf3 divdf3 fixdfsi floatsidf comparedf2 floatunsidf fixunsdfsi)
-    list(APPEND softfloat "${builtins}/${builtin}.c")
-  endforeach()
-  target_sources(mc-allocators PRIVATE ${softfloat})
-  set_source_files_properties(${softfloat} PROPERTIES
-    COMPILE_OPTIONS "-w" INCLUDE_DIRECTORIES "${builtins}")
-  if(MCP_CORPUS_SRC)
-    set(link_script "${CAPSTONE_REPO_ROOT}/capstone/my_first_domain/link.ld")
-    add_executable(defects src/capstone-domain/entry.c "${MCP_CORPUS_SRC}"
-      "${CAPSTONE_REPO_ROOT}/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c"
-      "${CAPSTONE_REPO_ROOT}/capstone/my_first_domain/start.S"
-      "${CAPSTONE_REPO_ROOT}/capstone/tests/runtime-qemu/gct-section-end.S")
-    target_link_libraries(defects PRIVATE mc-allocators)
-    add_dependencies(defects memcached-source)
-    target_link_options(defects PRIVATE --gc-sections -T "${link_script}")
-    set_target_properties(defects PROPERTIES SUFFIX .dom LINK_DEPENDS "${link_script}")
+endif()
+if(MCP_CORPUS_SRC AND NOT MCP_SUBLET)
+  add_executable(defects src/native/main.c "${MCP_CORPUS_SRC}")
+  target_link_libraries(defects PRIVATE mc-allocators)
+  add_dependencies(defects memcached-source)
+  target_link_options(defects PRIVATE LINKER:--gc-sections)
+  if(PORT_PLATFORM STREQUAL "cheribsd")
+    set_target_properties(defects PROPERTIES C_EXTENSIONS ON)
   endif()
 endif()

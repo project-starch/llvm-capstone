@@ -353,7 +353,7 @@ class VirtualHosted(unittest.TestCase):
             self.assertIn("WM_LIBC_SYSTEM", self.rv.cache_says(t, want["virtual-malloc"], sdk))
             self.assertIn("CAPSTONE_SDK", self.rv.cache_says(t, want["virtual-nested-pools"], t))
 
-    def test_memcached_cache_lives_in_the_port_work_dir_and_names_its_ledger(self):
+    def test_memcached_cache_lives_in_the_port_work_dir_and_names_its_variant(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:
             t = Path(t)
@@ -398,7 +398,7 @@ class VirtualHosted(unittest.TestCase):
         w, m = self.rv.HOSTED["wmem-repros"], self.rv.HOSTED["allocator-repros"]
         self.assertEqual(self.rv.port_control_argv(w, "virtual-malloc", "0", "91"), ["0", "91"])
         self.assertEqual(self.rv.port_control_argv(w, "virtual-nested-pools", "1", "90"), ["1", "90"])
-        self.assertEqual(self.rv.port_control_argv(m, "virtual-nested-pools", "1", "90"), ["buggy", "90", "1"])
+        self.assertEqual(self.rv.port_control_argv(m, "virtual-nested-pools", "1", "90"), ["buggy", "90"])
 
     def test_control_evidence_is_a_line_not_a_character(self):
         self.assertEqual(self.rv.evidence_line({"fault": "capstone-exec: domain fault cause=24"}, ""),
