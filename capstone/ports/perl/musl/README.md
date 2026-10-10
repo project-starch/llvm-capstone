@@ -170,6 +170,7 @@ in regex state with pointer-typed fields; both are unconditional.
 | 0007 | `pp_ctl.c` | `rxres_save` puts `RX_SAVED_COPY`, `RX_SUBBEG` and an optional copied buffer through `UV` slots. Restoring a 128-bit capability from a 64-bit `UV` keeps its address but loses its tag. `lex.t` then faults in `Perl_pregfree2` when it decrements the saved-copy reference count. Pointer-typed fields preserve the capability; all 120 `lex.t` assertions now pass |
 | 0008 | `util.c` | Route backticks and piped opens through libc's delegated `popen`/`pclose`, preserving the child's wait status without cloning the domain. Shell-launched images additionally require the guest binfmt_misc handler |
 | 0009 | `toke.c` | Pass a local copy of the constant `no_code`, not the constant itself, by value. A const global aggregate holding pointers, passed by value, faults in the virtual profile's code generation (compiler issue C-77, `docs/ref/ISSUES.md`): every bareword starting with `::` (`::is`, `::ok` throughout Perl's tests) faulted in `memcpy` at compile time. Behaviour unchanged |
+| 0010 | `builtin.c` | Each `builtin::` call checker gets its descriptor as an index into `builtins[]`, not as `newSVuv(PTR2UV(builtin))` turned back with `NUM2PTR`: through an integer the capability loses its tag, so every `builtin::` call and every program loading `overload.pm` faulted, on this port and on CheriBSD purecap alike (measured 2026-10-11). An upstream pattern, harmless where a pointer is an integer |
 
 ## Open, in the order they matter
 

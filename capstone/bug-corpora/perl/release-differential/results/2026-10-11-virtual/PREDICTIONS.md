@@ -82,3 +82,48 @@ So the predicted table cells: system allocator 4 cases (04, 06, 07, 10), all cau
 `virtual-nested-pools`. 01 and 09 are expected to fault without the patch; if either completes
 on `virtual-malloc` instead, it enters the nested denominator and its `virtual-nested-pools` row
 decides it.
+
+## Amendment, after the first run: patch 0010 and a rerun
+
+The first run (`first-run/`, runner ced629f24256, images stock e4ca6fb06359 and protected
+d8fa2b671553, both carrying patch 0009) ended as follows; every control passed on both arms.
+
+| case | virtual-malloc | virtual-nested-pools |
+|---|---|---|
+| 01 | fault 24, Perl_pp_iter (site) | fault 25, Perl_pp_iter (site) |
+| 02 | exit 255, Perl's "panic: attempt to copy freed scalar" | fault 25, Perl_sv_setsv_flags |
+| 03 | completed, [PASS] | completed, [PASS] |
+| 04 | fault 24, ck_builtin_func1 (not a site) | the same |
+| 05 | completed, [FAIL] (no "Attempt to free unreferenced scalar") | fault 25, Perl_cv_undef_flags |
+| 06 | fault 24, ck_builtin_func1 (not a site) | the same |
+| 07 | fault 25, S_regcppop (site) | the same |
+| 08 | fault 28, Perl_pp_gvsv | the same |
+| 09 | fault 24, Perl_newATTRSUB_x (site) | fault 25, Perl_newATTRSUB_x (site) |
+| 10 | fault 25, memmove (site) | the same |
+| 11 | completed, [FAIL] | the same |
+
+**04 and 06 never reach their defects, on either platform.** Both triggers load `overload.pm`,
+which calls `builtin::blessed`. Perl hands each `builtin::` call checker its descriptor as
+`newSVuv(PTR2UV(builtin))` and turns it back with `NUM2PTR` (`builtin.c`). Where a pointer is a
+capability that round trip loses the tag, so any `builtin::` call or `use overload` faults: cause
+24 in `ck_builtin_func1` here, and on CheriBSD SIGPROT at one instruction in
+`Perl_sv_2uv_flags`, with revocation on and off, for both cases. `perl -e
+'builtin::blessed(...)'` and `perl -e 'use overload ...'` reproduce it on all three images
+with no defect involved. Port patch 0010 keeps the descriptor's index instead of its address.
+With it, both one-liners complete on all three rebuilt images.
+
+The corpus is rerun on images rebuilt with patch 0010 (stock, protected, and the CheriBSD
+interpreter), with the same runners, rules and predictions, all registered above before the
+first run. The first run stays recorded.
+
+Two further readings of the first run, so the rerun cannot be read as fitted to them:
+* 02 on the protected image faults at `stype = SvTYPE(ssv)`, `sv_setsv_flags`' first read of the
+  freed SV the defect hands it, one step before upstream's own `SvIS_FREED` panic. By the rule
+  above its baseline ended without a fault (exit 255), so a cause-25 fault on the protected image
+  counts. The prediction (Perl's panic on both) was wrong.
+* `$x = *foo; *x = $x`, a correct program, completes on the stock image and faults on the
+  protected one (cause 25 in `S_glob_assign_glob`): upstream reads the source glob after `LEAVE`
+  may have freed it. The old adapter recorded the same read (`ports/perl/sv-heads/README.md`). It
+  is a read of a freed head that the patch does not route, by choice: it is a read after free.
+  The qualification table (`qualify-v2.txt`, 47 core test files, every one ending the same way
+  on both images) does not exercise it.

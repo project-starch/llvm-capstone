@@ -55,3 +55,15 @@ From the 2026-10-06 matrix (revocation off / on, then per process on another pla
 | 11 | completes, wrong bytes | the same | none |
 
 So the predicted CheriBSD cells: system allocator 2 of the 4 (07, 10); nested 0.
+
+## Amendment, after the first run: patch 0010 and a rerun
+
+The first run (`first-run/`, interpreter built with patch 0009) passed every control. 04 and 06
+both faulted at one instruction in `Perl_sv_2uv_flags`, revocation on and off: the `builtin::`
+descriptor round trip through an integer, which every program loading `overload.pm` hits
+(`results/2026-10-11-virtual/PREDICTIONS.md`, amendment). The other rows: 01 and 09 SIGPROT
+`PROT_CHERI_TAG` at the same instruction on and off (Perl_pp_iter, Perl_newATTRSUB_x); 02 Perl's
+panic; 03 and 05 completed; 07 completed with a wrong result and every free quarantined, none
+reissued; 08 SIGPROT at one instruction on and off; 10 completed with [PASS] and every free
+quarantined, none reissued; 11 completed. The rerun uses an interpreter rebuilt with patch 0010,
+the same runner, rules and predictions.
