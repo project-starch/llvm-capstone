@@ -561,7 +561,7 @@
         "CVE-2018-1000127"
       ],
       "shape_table": true,
-      "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port. Cases 5-7 are SPATIAL, added 2026-10-05 from a SHAPE search over item-size computations (item_make_header / ITEM_* / do_item_alloc) rather than a wording filter -- the wording filter found 0 class-B defects here, and these three have subjects that say 'corruption' rather than 'overflow', which is exactly why it missed them. See docs/ref/memcached-spatial-defect-triage.md. This corpus's .gitignore keeps run summaries OUT of the repository by design -- 'the case files' status carries the outcome' -- so cases 5-7's measured readings live in their status fields and in docs/ref/memcached-spatial-defect-triage.md section 6, not in a committed results/ bundle. 2026-10-07: case 8 is CAUGHT on stock CheriBSD while cases 5-7 complete, and the split is the finding -- src/cheribsd/malloc-leases.c:79 malloc's a slab PAGE which slabs.c then carves, while :161 malloc's each cache OBJECT separately. A slab-chunk crossing therefore stays inside one malloc and a cache-object crossing does not. '0 of 9 caught' would be the wrong summary for this corpus on CheriBSD; it is 0 of 8 and 1 of 1, split by inner allocator. 2026-10-11: the physical Capstone-domain pair (spatial, sublet) and sublet-malloc keep their recorded verdicts but can no longer be rebuilt: the freestanding domain target and its runner were removed with the physical Sublet heap and the lend API. virtual-nested-pools is now the allocators with the application's Sublet patch 0006 (tools/arms.json virtual-memcached-sublet), no ledger; its cells still carry the 2026-10-10 ledger bundle (results/2026-10-10-virtual/virtual-nested-pools, virtual-memcached-ledger) until the re-measurement on this tree lands.",
+      "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port. Cases 5-7 are SPATIAL, added 2026-10-05 from a SHAPE search over item-size computations (item_make_header / ITEM_* / do_item_alloc) rather than a wording filter -- the wording filter found 0 class-B defects here, and these three have subjects that say 'corruption' rather than 'overflow', which is exactly why it missed them. See docs/ref/memcached-spatial-defect-triage.md. This corpus's .gitignore keeps run summaries OUT of the repository by design -- 'the case files' status carries the outcome' -- so cases 5-7's measured readings live in their status fields and in docs/ref/memcached-spatial-defect-triage.md section 6, not in a committed results/ bundle. 2026-10-07: case 8 is CAUGHT on stock CheriBSD while cases 5-7 complete, and the split is the finding -- src/cheribsd/malloc-leases.c:79 malloc's a slab PAGE which slabs.c then carves, while :161 malloc's each cache OBJECT separately. A slab-chunk crossing therefore stays inside one malloc and a cache-object crossing does not. '0 of 9 caught' would be the wrong summary for this corpus on CheriBSD; it is 0 of 8 and 1 of 1, split by inner allocator. 2026-10-11: the physical Capstone-domain pair (spatial, sublet) and sublet-malloc keep their recorded verdicts but can no longer be rebuilt: the freestanding domain target and its runner were removed with the physical Sublet heap and the lend API. virtual-nested-pools is now the allocators with the application's Sublet patch 0006 (tools/arms.json virtual-memcached-sublet), no ledger. Measured 2026-10-11 on the Sublet lifetime platform (results/2026-10-11-virtual, both arms in their own boot, same images and controls): virtual-malloc CAUGHT 1 (08) and MISSED 8; virtual-nested-pools CAUGHT 8 and NO-READING 1 -- case 05's fixed run faults because the case's setup writes a sentinel into byte 0 of the neighbouring live item, which under patch 0006 is that item's parent capability, so its later slabs_free faults (diagnosed with the sentinel moved past the slot: both frees pass). The 2026-10-10 ledger bundles stay as history.",
       "evidence": [
         "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects",
         "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd",
@@ -578,7 +578,8 @@
         "virtual-nested-pools": "virtual-memcached-sublet"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
       },
       "where": "capstone/bug-corpora/memcached/allocator-repros"
     },
@@ -684,7 +685,7 @@
         "virtual-malloc": "virtual-mallocng"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc"
       },
       "where": "capstone/bug-corpora/memcached/plain-temporal-repros"
     },
