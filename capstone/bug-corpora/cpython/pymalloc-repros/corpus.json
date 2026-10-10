@@ -14,7 +14,9 @@
     "sublet",
     "poisoncap-spatial",
     "poisoncap-protected",
-    "cheribsd-revocation"
+    "cheribsd-revocation",
+    "virtual-malloc",
+    "virtual-nested-pools"
   ],
   "arm_keys": {
     "sublet": [
@@ -29,14 +31,16 @@
   },
   "runners": [
     "capstone/bug-corpora/cpython/pymalloc-repros/runners/capstone-domain/run-defects.py",
-    "capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py"
+    "capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py",
+    "capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "inventory": "capstone/docs/ref/cpython-pymalloc-defects.md",
   "evidence": [
     "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20",
     "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control",
-    "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd"
+    "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd",
+    "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-virtual"
   ],
   "advisories": [],
   "shape_table": true,
@@ -44,5 +48,13 @@
     "[Tt]wenty reports, (\\w+) shapes",
     "The (\\w+) shapes, and what each"
   ],
-  "note": "The inventory states this is the whole reachable set at the pin, not a sample."
+  "note": "The inventory states this is the whole reachable set at the pin, not a sample.",
+  "arm_configurations": {
+    "virtual-malloc": "virtual-pymalloc",
+    "virtual-nested-pools": "virtual-pymalloc-pools"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+  }
 }

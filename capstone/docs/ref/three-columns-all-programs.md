@@ -30,6 +30,13 @@ defect: FTS5's default tokenizer computes NULL + 16 (fixed by the port's own fts
 which the virtual builder had not applied) and `sqlite3Fts5IterTerm` returns `&z[1]` with `z` NULL
 (case 12, unresolved, no reading).
 
+**CPython pymalloc is measured on virtual Capstone** (2026-10-10, under `tools/verdicts.py`): the
+hosted replay with pymalloc stock, its arena one block from virtual mallocng, as "Sublet in malloc",
+and with pymalloc on its lifetime adapter (mode 1, arena lent linear by the virtual heap) as
+"Sublet in nested". Stock completes all 20 after the stale read; the adapter faults on all 20 with
+cause 24 in `read_probe`, the function carrying the case's labelled load. A use-after-free control
+in the corpus's own format completes on the first and faults there on the second.
+
 ## Where each of the six programs' cells comes from
 
 Every cell of the six is an explicit `verdict` in the case's arm, with `verdict_from` naming the
@@ -38,7 +45,7 @@ run should show -- so the tool does not read them for these programs.
 
 | program / group | CHERI | Sublet in malloc | Sublet in nested |
 |---|---|---|---|
-| cpython/pymalloc-repros | `results/20261008-cheribsd` (new) | not measured | `sublet`, `results/20260919-qemu-20` |
+| cpython/pymalloc-repros | `results/20261008-cheribsd` (new) | `virtual-malloc`, `results/2026-10-10-virtual` (virtual Capstone) | `virtual-nested-pools`, `results/2026-10-10-virtual` (virtual Capstone) |
 | httpd/apr-pool-repros, bucket-repros | `results/2026092{1,2}-cheribsd`, revocation on | not measured | `sublet`, `results/2026092{1,2}-qemu` |
 | mruby/release-differential | `results/20261006-cheribsd` | not measured | `sublet-gc`, `results/20261006` |
 | perl/release-differential | `results/20261006-cheribsd`, `revocation_on` | `sysalloc-sublet`, `results/20261006` | `sublet-svheads`, `results/20261006` |
@@ -49,11 +56,12 @@ run should show -- so the tool does not read them for these programs.
 
 **Column 2 is the gap.** For a group with its own allocator, column 2 is the program with its
 nested allocator STOCK on a protecting system allocator, and column 3 the same with the nested
-allocator's own port. PostgreSQL and SQLite are measured that way on virtual Capstone (2026-10-10):
+allocator's own port. CPython pymalloc, PostgreSQL and SQLite are measured that way on virtual
+Capstone (2026-10-10):
 the system allocator is virtual mallocng -- exact bounds, lifetime retired on free -- and column 3
 adds the port's pools (`virtual-malloc`, `virtual-pg-pools`, `virtual-nested-pools`; the
-configurations are in `tools/arms.json`). The physical Sublet heap is not used any more. CPython,
-httpd and mruby have no such run yet, so 52 cells are holes. Perl's `sysalloc-sublet` is the
+configurations are in `tools/arms.json`). The physical Sublet heap is not used any more. httpd and
+mruby have no such run yet, so 32 cells are holes. Perl's `sysalloc-sublet` is the
 column-2 configuration on the physical Sublet heap and stays until Perl is measured on virtual.
 
 **postgres/c-repros** links no nested allocator, so both columns are the same `virtual-malloc` run.
@@ -80,14 +88,14 @@ quarantine reading either way.
 | tshark | direct g_malloc | plain | 10 | 10 / 10 (10 held) | 10 / 10 | 10 / 10 |
 | memcached | slabs.c / cache.c | nested | 5 | 0 / 5 | 0 / 5 | 5 / 5 |
 | memcached | direct malloc | plain | 3 | 3 / 3 (3 held) | 3 / 3 | 3 / 3 |
-| CPython | pymalloc | nested | 20 | 0 / 20 | 0 / 0 (+20 ?) | 20 / 20 |
+| CPython | pymalloc | nested | 20 | 0 / 20 | 0 / 20 | 20 / 20 |
 | httpd | APR buckets | nested | 8 | 0 / 8 | 0 / 0 (+8 ?) | 8 / 8 |
 | httpd | APR pools | nested | 1 | 0 / 1 | 0 / 0 (+1 ?) | 1 / 1 |
 | mruby | whole program | unsplit | 11 | 4 / 10 | 0 / 0 (+11 ?) | 10 / 10 (+1 ?) |
 | Perl | whole program | unsplit | 10 | 6 / 9 | 6 / 9 (+1 ?) | 7 / 9 (+1 ?) |
-| PostgreSQL | memory contexts | nested | 5 | 0 / 5 | 0 / 0 (+5 ?) | 5 / 5 |
+| PostgreSQL | memory contexts | nested | 5 | 0 / 5 | 0 / 5 | 5 / 5 |
 | SQLite | memsys5 | nested | 25 | 5 / 25 | 4 / 22 (+3 ?) | 13 / 23 (+2 ?) |
-| **Total** |  | 81 n · 26 p · 21 u | 128 | 41 / 126 (26 held) | 36 / 79 (+49 ?) | 112 / 124 (+4 ?) |
+| **Total** |  | 81 n · 26 p · 21 u | 128 | 41 / 126 (26 held) | 36 / 104 (+24 ?) | 112 / 124 (+4 ?) |
 
 **Spatial (110)**
 
@@ -103,10 +111,10 @@ quarantine reading either way.
 | memcached | direct malloc | plain | 9 | 8 / 9 | 9 / 9 | 9 / 9 |
 | mruby | whole program | unsplit | 5 | 4 / 5 | 0 / 0 (+5 ?) | 5 / 5 |
 | Perl | whole program | unsplit | 1 | 1 / 1 | 1 / 1 | 1 / 1 |
-| PostgreSQL | palloc, whole server | nested | 9 | 2 / 9 | 0 / 0 (+9 ?) | 4 / 8 (+1 ?) |
+| PostgreSQL | palloc, whole server | nested | 9 | 2 / 9 | 1 / 8 (+1 ?) | 4 / 8 (+1 ?) |
 | PostgreSQL | direct malloc | plain | 5 | 3 / 5 | 5 / 5 | 5 / 5 |
 | SQLite | memsys5 | nested | 8 | 0 / 8 | 0 / 8 | 5 / 8 |
-| **Total** |  | 43 n · 61 p · 6 u | 110 | 52 / 110 | 53 / 96 (+14 ?) | 91 / 109 (+1 ?) |
+| **Total** |  | 43 n · 61 p · 6 u | 110 | 52 / 110 | 54 / 104 (+6 ?) | 91 / 109 (+1 ?) |
 
 **Other (7)**
 
@@ -143,8 +151,8 @@ Thirteen cells ran but did not answer:
 - **PostgreSQL mmgr runs the replay program, not the server**: its columns are the managers alone
   (`virtual-mallocng-replay`, `-replay-pools`), sql-repros' the whole server.
 - **Columns 2 and 3 mix platforms across groups.** FFmpeg, tshark and memcached were measured on the
-  physical application domain, PostgreSQL and SQLite on virtual Capstone. The configuration of every
-  cell is in its bundle; totals across both are sums over different machines.
+  physical application domain, CPython pymalloc, PostgreSQL and SQLite on virtual Capstone. The
+  configuration of every cell is in its bundle; totals across both are sums over different machines.
 - **mruby and Perl are whole-program corpora.** Their cases cross different allocator boundaries
   and are not split into nested and plain here (`unsplit`).
 - **mruby's `other` row** holds the cases whose class is neither temporal nor spatial (null

@@ -37,6 +37,18 @@
       "status": "measured",
       "verdict": "MISSED",
       "verdict_from": "results/20261008-cheribsd/result-lines.txt pymalloc-06: PYM completed=1, SUPERVISE exit status=0; quarantine.tsv row 6"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, pymalloc stock in an arena from virtual mallocng (tools/arms.json virtual-pymalloc): a fault at the labelled read probe, or the case completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (PYM completed=1, after the case's read_probe) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, pymalloc on the lifetime adapter, mode 1 (tools/arms.json virtual-pymalloc-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3fbbc1b310 in read_probe; by probe: the pc lies in read_probe (pyc_defect_read)",
+      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
     }
   },
   "status": "run 2026-09-18 under QEMU; both arms passed"

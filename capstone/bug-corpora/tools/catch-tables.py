@@ -100,9 +100,11 @@ def col3_arm(corpus, arms):
 # Column 2 for a nested group is `sublet-malloc`, the same arm the three programs use; none of these
 # groups has measured it yet, so those cells are holes. Perl's `sysalloc-sublet` is that arm under
 # its own name (the Sublet heap, Perl's SV arenas stock); mruby has no such run. Column 3 is the
-# group's Sublet port: the APR, pymalloc, palloc and memsys5 ports' `sublet`, Perl's SV-head port,
-# mruby's GC port. postgres/c-repros are frontend programs with no nested allocator linked at all,
-# so both columns are the protected system allocator itself: virtual mallocng, `virtual-malloc`
+# group's Sublet port: the APR ports' `sublet`, Perl's SV-head port, mruby's GC port. pymalloc,
+# PostgreSQL and SQLite are measured on the virtual profile instead: column 2 is `virtual-malloc`,
+# column 3 the nested allocator's port on a block virtual mallocng lends. postgres/c-repros are
+# frontend programs with no nested allocator linked at all, so both columns are the protected
+# system allocator itself: virtual mallocng, `virtual-malloc`
 # (the physical Sublet heap is not used, project decision 2026-10-10). Their recorded `sublet` arm
 # was level0 bounds under a Sublet label and is dropped.
 # Corpora of these programs that are deliberately NOT on the board yet, each with the reason. A new
@@ -114,7 +116,7 @@ NOT_ON_BOARD = {
         "own pass rather than a guess",
 }
 EXTRA_GROUPS = {
-    ("cpython", "pymalloc-repros"): ("pymalloc", True, "sublet-malloc", "sublet"),
+    ("cpython", "pymalloc-repros"): ("pymalloc", True, "virtual-malloc", "virtual-nested-pools"),
     ("httpd", "apr-pool-repros"): ("APR pools", True, "sublet-malloc", "sublet"),
     ("httpd", "bucket-repros"): ("APR buckets", True, "sublet-malloc", "sublet"),
     ("mruby", "release-differential"): ("whole program", None, "sysalloc-sublet", "sublet-gc"),
