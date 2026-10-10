@@ -461,3 +461,12 @@ which puts case 22 in the same bundle as 0-21. The predictions are the recorded 
       default prediction, explained in its README.
     - The column-3 temporal catches have no same-image mode-0 buggy arm beside them. What carries them
       is cause 24 with a non-zero `value_hi`: a capability whose tag the revocation cleared.
+- **R9b** (`wmem-repros/results/2026-10-11-virtual/<arm>/`, now the corpus's `verdict_bundles`; derived): as
+  predicted, 46 of 46 cells.
+  - Controls are as in R7b, now run unobserved, with their evidence recorded as whole lines.
+  - `virtual-malloc`: 23 MISSED.
+  - `virtual-nested-pools`: 23 CAUGHT:
+    - 13 at `wm_probe`, cause 24;
+    - 9 spatial at `wm_probe`/`wm_write_probe`, cause 28;
+    - case 22 at `wm_widen_probe`'s own instruction, cause 24.
+  - R7b's bundles (`2026-10-10-virtual/`) stay as the earlier record.

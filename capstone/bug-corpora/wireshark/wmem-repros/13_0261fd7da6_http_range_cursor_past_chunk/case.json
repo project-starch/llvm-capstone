@@ -89,13 +89,13 @@
       "oracle": "virtual profile, wmem stock on virtual mallocng (tools/arms.json virtual-wmem-libc; tools/run-virtual-cases.py --prebuilt, the fix differential `0 N buggy`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the case printed `WM_DEFECT case=13 ready`, the last thing before its defective access; VERDICT DEFECT-REPRODUCED (the stale or crossing access reached other storage)) and completed with no fault",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, wmem's Sublet region and chunk layers over a payload the virtual heap lends linear (tools/arms.json virtual-wmem-chunks; tools/run-virtual-cases.py --prebuilt, `1 N`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=28 pc=0x3fafe10f0c in wm_probe; by probe: the fault is in wm_probe, the case's labelled probe, whose one data access is the defect's",
-      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
+      "verdict_note": "cause=28 pc=0x3f8de10f0c in wm_probe; by probe: the fault is in wm_probe, the case's labelled probe, whose one data access is the defect's",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
     }
   },
   "status": "MEASURED 2026-10-05 under QEMU, both builds, case 13 only, modes spatial and sublet. WM_CHUNKS=ON: both arms fault, cause 5, at the labelled read probe, pc 0x10190222c equal to the resolved probe address. WM_CHUNKS=OFF: both arms fault, cause 5, pc 0x1019013f8 likewise. N=1 per cell. The run REFUTED the completion predictions both arms were filed with; the oracles above are the corrected, measured ones and 'distinguishing' records the withdrawal. poisoncap-* and cheribsd-revocation remain predictions -- neither platform is on this host. native-detect remains not written and still needs its own positive control before a silent ASan arm means anything. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on: completes, not caught. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 CAUGHT, mode 1 CAUGHT.",

@@ -82,10 +82,16 @@
       "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
     },
     "virtual-malloc": {
-      "oracle": "virtual profile, wmem stock on virtual mallocng (tools/arms.json virtual-wmem-libc; tools/run-virtual-cases.py --prebuilt, the fix differential `0 N buggy`): a fault in the case's labelled probe function or at a declared allocator label, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
+      "oracle": "virtual profile, wmem stock on virtual mallocng (tools/arms.json virtual-wmem-libc; tools/run-virtual-cases.py --prebuilt, the fix differential `0 N buggy`): a fault in the case's labelled probe function or at a declared allocator label, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case printed `WM_DEFECT case=22 ready`, the last thing before its defective access; VERDICT DEFECT-REPRODUCED (the stale or crossing access reached other storage)) and completed with no fault",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, wmem's Sublet region and chunk layers over a payload the virtual heap lends linear (tools/arms.json virtual-wmem-chunks; tools/run-virtual-cases.py --prebuilt, `1 N`): a fault in the case's labelled probe function or at a declared allocator label, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
+      "oracle": "virtual profile, wmem's Sublet region and chunk layers over a payload the virtual heap lends linear (tools/arms.json virtual-wmem-chunks; tools/run-virtual-cases.py --prebuilt, `1 N`): a fault in the case's labelled probe function or at a declared allocator label, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3f87d123bc in probe; by function: the fault is at wm_widen_probe, a site the case declared before the run (case.json fault_sites) -- the label's own instruction",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
     }
   }
 }

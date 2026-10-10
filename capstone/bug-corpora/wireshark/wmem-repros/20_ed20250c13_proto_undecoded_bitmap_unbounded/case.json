@@ -92,13 +92,13 @@
       "oracle": "virtual profile, wmem stock on virtual mallocng (tools/arms.json virtual-wmem-libc; tools/run-virtual-cases.py --prebuilt, the fix differential `0 N buggy`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the case printed `WM_DEFECT case=20 ready`, the last thing before its defective access; VERDICT DEFECT-REPRODUCED (the stale or crossing access reached other storage)) and completed with no fault",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, wmem's Sublet region and chunk layers over a payload the virtual heap lends linear (tools/arms.json virtual-wmem-chunks; tools/run-virtual-cases.py --prebuilt, `1 N`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=28 pc=0x3f88910f0c in wm_write_probe; by probe: the fault is in wm_write_probe, the case's labelled probe, whose one data access is the defect's",
-      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
+      "verdict_note": "cause=28 pc=0x3fb0e10f0c in wm_write_probe; by probe: the fault is in wm_write_probe, the case's labelled probe, whose one data access is the defect's",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
     }
   },
   "status": "built 2026-10-07 and MEASURED on stock CheriBSD the same day (revocation on, 25 of 25 arms, control firing): completes, not caught. The case's own CHECK assertions must hold for it to exit 0, so the crossing was created rather than merely described. The Capstone, PoisonCap and native arms are declared: these four have not had a domain build. N = 1 per cell. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-18-21/): spatial CAUGHT, sublet CAUGHT. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 CAUGHT, mode 1 CAUGHT."
