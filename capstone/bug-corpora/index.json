@@ -338,11 +338,6 @@
         "virtual-malloc",
         "virtual-nested-pools"
       ],
-      "arm_keys": {
-        "sublet-port": [
-          "oracle"
-        ]
-      },
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
@@ -350,7 +345,6 @@
       },
       "runners": [
         "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-native.sh",
-        "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-sublet-port.sh",
         "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-asan.sh",
         "capstone/bug-corpora/ffmpeg/pool-repros/shared/build-cases.sh",
         "capstone/bug-corpora/tools/run-virtual-cases.py"

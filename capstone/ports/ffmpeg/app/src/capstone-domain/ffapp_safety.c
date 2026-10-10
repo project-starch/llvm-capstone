@@ -63,16 +63,13 @@
  *                     copies the next frame into it
  *
  * COUNTING fixtures: what a pool's END costs, measured across FFmpeg's own uninit, not inferred.
- * The Sublet port's claim is one revoke per block at a pool's end and none per entry. A bracket
- * around one function measures that function's code, and sublet.h keeps its counters per file, so
- * these read the POOL LAYER's own file counter (ff_sublet_counts, ffsublet.c) and the heap's
- * (__capstone_sublet_heap_stats) across the whole uninit, and across the entries' returns first:
- * a return is a give, so that first reading must be 8, and shows the same counter can move.
+ * They read the heap's counters (__capstone_sublet_heap_stats) across the whole uninit, and across
+ * the entries' returns first. Until 2026-10-11 they also read the Sublet pool layer's own file
+ * counter (ffsublet.c, removed with ports/ffmpeg/sublet).
  *  20 rs_pool_end     an AVRefStructPool of 64-byte objects: 8 gets, 8 returns, then
  *                     av_refstruct_pool_uninit. Marks (returns' file revokes << 8) | end's.
  *  21 buf_pool_end    the same with an AVBufferPool and av_buffer_pool_uninit.
- * Both print the heap's revokes across each phase too. On poolstock the pool layer is not linked,
- * so they print the heap's numbers only and mark 0xE00F0.
+ * Both print the heap's revokes across each phase and mark 0xE00F0.
  */
 #include <stdio.h>
 #include <string.h>
@@ -90,9 +87,6 @@
 #endif
 #if FFAPP_FIXTURE == 20 || FFAPP_FIXTURE == 21
 void __capstone_sublet_heap_stats(unsigned long out[9]);
-#ifdef FFAPP_SUBLET_POOLS
-void ff_sublet_counts(unsigned long out[3]);
-#endif
 #endif
 #ifdef FFAPP_POOL_MODE
 #include "ffapp_pool.h"
@@ -712,9 +706,6 @@ static int fixture(void)
     (void)ref;
 #endif
     __capstone_sublet_heap_stats(h0);
-#ifdef FFAPP_SUBLET_POOLS
-    ff_sublet_counts(f[0]);
-#endif
     for (int k = 0; k < N; k++)           /* every entry back to its pool */
 #if FFAPP_FIXTURE == 20
         av_refstruct_unref(&obj[k]);
@@ -722,27 +713,17 @@ static int fixture(void)
         av_buffer_unref(&ref[k]);
 #endif
     __capstone_sublet_heap_stats(h1);
-#ifdef FFAPP_SUBLET_POOLS
-    ff_sublet_counts(f[1]);
-#endif
 #if FFAPP_FIXTURE == 20                   /* the pool's end: its last reference goes */
     av_refstruct_pool_uninit(&rp);
 #else
     av_buffer_pool_uninit(&bp);
 #endif
     __capstone_sublet_heap_stats(h2);
-#ifdef FFAPP_SUBLET_POOLS
-    ff_sublet_counts(f[2]);
-#endif
     unsigned long ret_file = f[1][0] - f[0][0], end_file = f[2][0] - f[1][0];
     printf("FFAPP-FIX %d returns: file-revokes=%lu gives=%lu heap-revokes=%lu | end: file-revokes=%lu"
            " ends=%lu heap-revokes=%lu heap-merges=%lu\n", FFAPP_FIXTURE, ret_file, f[1][1] - f[0][1],
            h1[7] - h0[7], end_file, f[2][2] - f[1][2], h2[7] - h1[7], h2[2] - h1[2]);
-#ifdef FFAPP_SUBLET_POOLS
-    return FX_MARK(((ret_file & 0xFF) << 8) | (end_file & 0xFF));
-#else
     return FX_MARK(0xE00F0);
-#endif
 
 #else
 #error "unknown FFAPP_FIXTURE"

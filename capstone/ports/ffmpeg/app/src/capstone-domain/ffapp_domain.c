@@ -16,9 +16,6 @@ void __capstone_sublet_heap_stats(unsigned long out[9]);
 #ifdef FFAPP_POOL_MODE
 #include "ffapp_pool.h"
 #endif
-#ifdef FFAPP_SUBLET_POOLS
-void ff_sublet_report(void);
-#endif
 
 int main(int argc, char **argv)
 {
@@ -30,10 +27,6 @@ int main(int argc, char **argv)
     int status = ffapp_run(argc > 1 ? argv[1] : FFAPP_INPUT, FFAPP_STOP_AT);
 #ifdef FFAPP_POOL_MODE
     ffapp_pool_report();
-#endif
-#ifdef FFAPP_SUBLET_POOLS
-    /* the pools' own counts: blocks taken from the heap and ended, entries, takes, gives */
-    ff_sublet_report();
 #endif
 #ifdef FFAPP_SUBLET_HEAP
     /* What the revoking heap spent: split + mrev is the revocation-node count, which silicon
