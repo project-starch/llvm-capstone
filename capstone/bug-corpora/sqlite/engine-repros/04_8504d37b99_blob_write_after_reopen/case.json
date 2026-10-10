@@ -37,5 +37,6 @@
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
-  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",
+  "note": "Trigger reaches the bug CONDITION but makes no invalid access (2026-10-11, gdb on the host -O0 build). At vdbeblob.c:420 the cursor is exactly as upstream 8504d37b99 describes: eState=CURSOR_REQUIRESEEK, iPage=-1, and the saved page unpinned in the cache (pPage->pDbPage->nRef=0). No stale read follows, because info.nSize=69 is still set, so getCellInfo returns the cursor's cached cell info instead of parsing the unpinned page; the preupdate hook therefore receives a stale key, which is a correctness defect, not a memory access. The btreeParseCellPtr seen on that same page afterwards comes from accessPayload once the restore has re-pinned it (nRef=1). The lifetime that ended here is the CURSOR'S REFERENCE to the page, which btreeReleaseAllCursorPages dropped while pCur->pPage stayed set: the page is neither freed nor reassigned, so ASan cannot see it by construction, and a per-reference lifetime at the pager is what would express it."
 }
