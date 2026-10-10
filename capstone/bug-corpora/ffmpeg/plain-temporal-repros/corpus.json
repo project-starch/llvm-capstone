@@ -33,7 +33,9 @@
     "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-cheribsd",
     "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-capstone",
     "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-poisoncap-mode0",
-    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-poisoncap-mode1"
+    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-poisoncap-mode1",
+    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-10-virtual",
+    "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-11-virtual"
   ],
   "advisories": [],
   "shape_table": true,
@@ -41,6 +43,6 @@
     "virtual-malloc": "virtual-mallocng"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+    "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc"
   }
 }
