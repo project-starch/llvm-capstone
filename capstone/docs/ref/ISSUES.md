@@ -1768,10 +1768,16 @@ one bitstream; the rung's 66 → 64 on the board is the acceptance.
 > sequences: `fdiv.d` and `fadd.d` results never reach the next consumer, `fcvt.d.l` reaches it only when the register's
 > previous writer had long completed, an `fsd` right behind an `fld` stores the old value, and every result does land in
 > order later (a fence + re-read sees the completed chain). **Mechanism:** `issue_read_operands.sv` builds the clobber vectors
-> the issue stage's RAW/WAW stalls and forwarding key on; the FPR line carried the GPR line's NEGATED predicate,
-> `fpr_clobber_vld[rd][i] = still_issued[i] && !(FpPresent && is_rd_fpr(op))`, so no in-flight instruction with an FP
-> destination ever marked its register, `rd_clobber_fpr` read NONE for every register, no FP consumer stalled or was
-> forwarded to, and it read the stale register file. **Origin:** the issue-stage commit of 2026-04-24 ("added missing
+> the issue stage's RAW/WAW stalls and forwarding key on; the FPR line was a verbatim copy of the GPR line,
+> `fpr_clobber_vld[rd][i] = still_issued[i] && !(FpPresent && is_rd_fpr(op))`, so every in-flight instruction with an
+> INTEGER destination marked FPR[rd] as clobbered (a live mirror of the integer side) and no instruction with an FP
+> destination ever marked its own: FP consumers stalled on spurious integer collisions and never on a real FP producer,
+> issued early, and read the stale register file. (CORRECTED 2026-10-10 after the board lane's pre-synthesis audit: the
+> earlier text here, and in 546807884's message, said `rd_clobber_fpr` read NONE for every register and that the FPR stall
+> and forwarding logic was therefore pruned in synthesis; it was a live mirror, nothing was prunable, and the fix flips one
+> polarity term per scoreboard entry. The root cause, the origin and the fix are unchanged. 546807884's "Tests:" paragraph
+> also lists expected values 0x40450fcd6e9ba4df / 0x41d9551f804e7d8d / 0x419d6f3487800000 / 0x4146706b5b6db6db that no run
+> and no header carry; the values below are the ones every run reads.) **Origin:** the issue-stage commit of 2026-04-24 ("added missing
 > handling of WAW stalls ... cleaned up issue stage code") changed that line from the positive `still_issued & (FpPresent &&
 > is_rd_fpr(op))`; its own diff shows both lines. Every bitstream built since carries it, and every hard-float native process
 > on silicon since April has computed with stale operands. Delegated domains are unaffected: the silicon build's assembler
