@@ -27,15 +27,15 @@
     "virtual-malloc": {
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "NO-READING",
-      "verdict_note": "cause=24 pc=0x3f93e814b4 in sqlite3Fts5IterTerm; in sqlite3Fts5IterTerm; ASan site not recorded",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc",
+      "verdict_note": "cause=24 pc=0x3fbda81490 in sqlite3Fts5IterTerm; in sqlite3Fts5IterTerm; ASan site not recorded",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc",
       "verdict_reason": "unattributed"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "NO-READING",
-      "verdict_note": "cause=24 pc=0x3fa82832b4 in sqlite3Fts5IterTerm; in sqlite3Fts5IterTerm; ASan site not recorded",
-      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools",
+      "verdict_note": "cause=24 pc=0x3fb4a816c0 in sqlite3Fts5IterTerm; in sqlite3Fts5IterTerm; ASan site not recorded",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools",
       "verdict_reason": "unattributed"
     }
   },
