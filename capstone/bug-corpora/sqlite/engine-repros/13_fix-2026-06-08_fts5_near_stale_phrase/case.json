@@ -37,5 +37,6 @@
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
-  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",
+  "note": "Trigger not established (2026-10-11, gdb on the host -O0 build): fts5ExprNearIsMatch runs twice and calls sqlite3Fts5PoslistWriterAppend 4 and 6 times, so the in-place rewrite does run under live lookahead readers, but whether any append grows the buffer past its allocation -- the reallocation the stale read needs -- is not established. Upstream b677c5afd4 replaces that call with sqlite3Fts5PoslistSafeAppend, and its ext/fts5/test/fts5near.test 2.x uses tokenize=trigram over a 64-character run, a far longer poslist than this trigger builds."
 }

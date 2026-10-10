@@ -37,5 +37,6 @@
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
-  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",
+  "note": "Trigger does not reach the defect (2026-10-11, gdb on the host -O0 build): sqlite3Fts3Offsets runs twice and all three fts3EvalRestart calls come after both of them, so no saved poslist pointer is ever read across a restart. Upstream 51dd67080a fixes it by cancelling the incremental phrases BEFORE the pointers are taken (sqlite3Fts3MsrCancel from a new fts3ExprRestartIfCb), which is the ordering this trigger never produces."
 }

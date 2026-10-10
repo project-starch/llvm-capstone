@@ -37,5 +37,6 @@
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
-  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",
+  "note": "Trigger does not reach the defect (2026-10-11, gdb on the host -O0 build): each INSERT auto-commits, so sqlite3Fts3PendingTermsClear runs three times before the SELECT opens and the pending-terms hash is already empty; the mid-scan optimize() runs, but no zTerm aliased at fts3_write.c:1333 is read after a clear. Upstream dee0359ddb copies the term instead of aliasing the hash key, and its test/fts3f.test keeps the inserts inside BEGIN/COMMIT so the hash is still non-empty when the scan starts -- the element this trigger lacks."
 }

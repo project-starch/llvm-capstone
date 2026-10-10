@@ -37,5 +37,6 @@
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
-  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",
+  "note": "Trigger does not reach the defect (2026-10-11). Under gdb on the host -O0 build of this case's own source, countOfViewOptimization is entered 8 times and returns early every time: the sqlite3ExprListDelete this case's argument rests on (select.c:5069) is never reached, and resetAccumulator runs once with no freed Expr under it. Upstream 5e4233a9e4 fixes a spurious \"misuse of aggregate function\" error and its regression tests (test/aggnested.test 7.x, 8.x) are error-message tests; a trigger for the use-after-free has to make the mis-attributed AggInfo survive the count-of-view rewrite, which this SELECT does not."
 }

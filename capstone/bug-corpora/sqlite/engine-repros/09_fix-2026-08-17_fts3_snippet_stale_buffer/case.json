@@ -37,5 +37,6 @@
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
-  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",
+  "note": "Trigger does not reach the defect (2026-10-11, gdb on the host -O0 build): fts3BestSnippet runs twice and all three fts3EvalRestart calls come after both of them, so pHead/pTail are never read across a restart. Upstream a87bd2471a9c fixes it by iterating the expression a second time, and ships test/fts3snippet2.test 4.x, whose fts4 query shape differs from this trigger's."
 }

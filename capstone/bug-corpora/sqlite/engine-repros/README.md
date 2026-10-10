@@ -52,9 +52,17 @@ or what the source and `PROVENANCE.md` name as the stale access.
 off, no page-cache bulk pool and a 4 GiB quarantine, and both controls must report
 (`results/2026-10-11-host-asan/results.json`). On 2026-10-11 it reports 26 of the 33 cases as an
 invalid heap access (17 heap-use-after-free, 9 heap-buffer-overflow, case 00's stale read among
-them) and case 02 as a SEGV. Six are silent, 01, 04, 08, 09, 11 and 13: their triggers run to
-completion without touching freed heap memory, so no allocator protection can catch them, and they
-need new triggers. (04's stale object is a cached B-tree page, which the page cache recycles without
+them) and case 02 as a SEGV. Six are silent, 01, 04, 08, 09, 11 and 13. ASan's silence is not the finding, because it only sees
+`malloc` lifetimes: each of the six was then traced under gdb at its own free and use sites, and
+each case's `note` records what the trigger does instead. In five the lifetime never ends before the
+use (01 never reaches its `sqlite3ExprListDelete`; 08 and 09 restart only after the consumer has
+finished; 11's pending hash is already empty because every INSERT auto-commits; 13's in-place
+rewrite runs but no reallocation is established). **04 is different**: it reaches the condition
+upstream's fix guards, a cursor at `CURSOR_REQUIRESEEK` whose page is unpinned in the cache, and the
+read is answered from the cursor's cached cell info instead. The lifetime that ended there is the
+cursor's REFERENCE to the page -- the page is neither freed nor reassigned, so no `malloc`-level
+mechanism can see it. Each case's `note` also names what its upstream regression test does that the
+trigger does not. (04's stale object is a cached B-tree page, which the page cache recycles without
 a free, so ASan's silence is weaker evidence there.) The same check showed four corpus triggers had
 fallen behind the corrected copies in `ports/sqlite/cheribsd/cases/` (10, 14, 15, 22); they were
 replaced, each `PROVENANCE.md` says how. The harness
