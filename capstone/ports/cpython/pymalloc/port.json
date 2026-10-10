@@ -10,7 +10,7 @@
     }
   },
   "targets": [
-    "capstone-domain",
+    "capstone-virtual",
     "cheribsd-purecap",
     "native"
   ],

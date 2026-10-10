@@ -10,29 +10,18 @@
   "case_schema": "case-json",
   "case_macro": "PYC",
   "required_arms": [
-    "spatial",
-    "sublet",
-    "poisoncap-spatial",
-    "poisoncap-protected",
     "cheribsd-revocation",
     "virtual-malloc",
     "virtual-nested-pools"
   ],
-  "arm_keys": {
-    "sublet": [
-      "oracle",
-      "cause"
-    ]
-  },
   "status": "measured",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
     "true": 20
   },
   "runners": [
-    "capstone/bug-corpora/cpython/pymalloc-repros/runners/capstone-domain/run-defects.py",
-    "capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py",
-    "capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py"
+    "capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py",
+    "capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-cheribsd-revocation.sh"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "inventory": "capstone/docs/ref/cpython-pymalloc-defects.md",
@@ -40,7 +29,8 @@
     "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20",
     "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control",
     "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd",
-    "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-virtual"
+    "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-virtual",
+    "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-patch0003"
   ],
   "advisories": [],
   "shape_table": true,
@@ -54,7 +44,7 @@
     "virtual-nested-pools": "virtual-pymalloc-pools"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+    "virtual-malloc": "results/2026-10-10-patch0003/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-10-patch0003/virtual-nested-pools"
   }
 }

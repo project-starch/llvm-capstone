@@ -51,7 +51,7 @@ and documented in its README; INDEX.md links both. For example:
 
     sqlite/capi-repros/run-host-asan-repros.sh
     postgres/mmgr-repros/run-host-repros.sh
-    cpython/pymalloc-repros/runners/capstone-domain/run-defects.py
+    cpython/pymalloc-repros/runners/virtual/run-virtual.py
 
 The postgres and pymalloc runners execute a control before any case — ASan must see a plain
 malloc use-after-free; CheriBSD must pass its ABI and bounds probes — and exit 75 with NO

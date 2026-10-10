@@ -270,7 +270,6 @@ class Traces(unittest.TestCase):
 
     def test_launchers_validate_staged_bytes_before_guest(self):
         cases = [
-            ("cpython/pymalloc", "cpython.pymalloc"),
             ("whisper/ggml-context", "whisper.ggml-context"),
             ("ffmpeg/buffer-pool", "ffmpeg.buffer-pool"),
             ("postgres/memory-contexts", "postgres.a11"),
