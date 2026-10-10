@@ -1,0 +1,11 @@
+case	name	arm	control	cause	evidence
+0	tuplestore-double-free	spatial	held	0	completed with no fault, as a control must
+0	tuplestore-double-free	sublet	held	0	completed with no fault, as a control must
+1	vacuum-dead-items-stale-struct	spatial	held	0	completed with no fault, as a control must
+1	vacuum-dead-items-stale-struct	sublet	held	0	completed with no fault, as a control must
+2	live-parts-stale-alias	spatial	held	0	completed with no fault, as a control must
+2	live-parts-stale-alias	sublet	held	0	completed with no fault, as a control must
+3	pgoutput-entry-cxt-teardown	spatial	held	0	completed with no fault, as a control must
+3	pgoutput-entry-cxt-teardown	sublet	held	0	completed with no fault, as a control must
+4	reorderbuffer-spec-insert-lsn	spatial	held	0	completed with no fault, as a control must
+4	reorderbuffer-spec-insert-lsn	sublet	held	0	completed with no fault, as a control must

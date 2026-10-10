@@ -12,10 +12,12 @@
   "fidelity": "model-consumer, real allocator",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "complete",
+      "negative_control": "HELD. The same program with PG_NEGATIVE_CONTROL, which replaces the one invalid access with a valid one, completes on this arm with no fault (results/20261010-control). The detection therefore depends on the defect and not on the allocation pattern."
     },
     "sublet": {
-      "oracle": "fault anywhere; the stale access is the second pfree, so there is no read probe"
+      "oracle": "fault anywhere; the stale access is the second pfree, so there is no read probe",
+      "negative_control": "HELD. The same program with PG_NEGATIVE_CONTROL, which replaces the one invalid access with a valid one, completes on this arm with no fault (results/20261010-control). The detection therefore depends on the defect and not on the allocation pattern."
     },
     "poisoncap-spatial": {
       "mode": 0,

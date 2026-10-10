@@ -40,16 +40,33 @@ def discover(domain_build, mode, control=False):
     return found
 
 
-CASES = [
-    ("1f5b6a5e5d", "tuplestore-double-pfree", "aset"),
-    ("3549ffb6af", "dead-items-stale-after-reset", "aset"),
-    ("83ce20d671", "dead-items-2024-instance", "aset"),
-    ("ed394c4bdf", "live-parts-stale-alias", "aset"),
-    ("727bc6ac33f6", "child-join-frees-parent-relids", "aset"),
-    ("9d5ce4f1a00a", "windowagg-reset-keeps-byref", "aset"),
-    ("a61592253e", "pgoutput-ancestor-delete", "aset"),
-    ("9e0b4b1ab5", "reorderbuffer-slab-reuse", "slab"),
-]
+# The corpus directories are the authority, not a list kept here. This table
+# used to be eight hardcoded rows; the corpus was narrowed to five and the
+# table was not, so every row from index 2 up carried another case's name and
+# fix id -- 04 ran reorderbuffer-spec-insert-lsn and was labelled
+# child-join-frees-parent-relids. discover() was already reading the built
+# programs for exactly this reason; the labels had stayed behind.
+CORPUS_DIR = Path(__file__).resolve().parents[1]
+
+
+def corpus_cases():
+    """[(fix, slug, allocator)] indexed by the NN each directory carries."""
+    rows = {}
+    for d in sorted(CORPUS_DIR.glob("[0-9][0-9]_*")):
+        if not (d / "case.c").is_file():
+            continue
+        number, fix, slug = d.name.split("_", 2)
+        allocator = "aset"
+        meta = d / "case.json"
+        if meta.is_file():
+            allocator = json.loads(meta.read_text()).get("allocator_layer", "aset")
+        rows[int(number)] = (fix, slug.replace("_", "-"), allocator)
+    if not rows:
+        raise SystemExit(f"no NN_*/case.c under {CORPUS_DIR}")
+    return [rows[i] for i in sorted(rows)]
+
+
+CASES = corpus_cases()
 
 MARKER_BASE = 0xCF18000000000000
 
@@ -99,7 +116,11 @@ def classify(serial, which, mode, runner_exit, control=False):
     if runner_exit == 75 or (marker not in serial and not faults):
         why = "no marker in the serial log and no fault, so the program did not reach the point where it could be measured"
         if runner_exit == 75:
-            why = "the shared qemu lock wait expired (exit 75), so nothing ran"
+            # 75 is the guest runner's INFRA_FLAKE_EXIT_CODE and also flock's
+            # -E on a lock it could not take. Both are infrastructure; which
+            # one it was is in the runner's own stderr, not here, so do not
+            # guess between them in the record.
+            why = ("the guest runner reported an infrastructure flake "                   "(exit 75: a boot that did not come up, or a lock it "                   "could not take), so nothing ran")
         elif not serial.strip():
             why = "the guest produced no serial output at all"
         row.update(

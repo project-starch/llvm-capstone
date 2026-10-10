@@ -1,0 +1,32 @@
+[
+  {
+    "case": 1,
+    "fix": "3549ffb6af",
+    "name": "vacuum-dead-items-stale-struct",
+    "allocator": "aset",
+    "mode": "spatial",
+    "expected": "complete",
+    "runner_exit": 0,
+    "control": "held",
+    "cause": 0,
+    "pc": "0",
+    "delivered": false,
+    "passed": true,
+    "run": "/tmp/mmgr-ctl-c1/01-vacuum-dead-items-stale-struct-spatial-ciakwb_y"
+  },
+  {
+    "case": 1,
+    "fix": "3549ffb6af",
+    "name": "vacuum-dead-items-stale-struct",
+    "allocator": "aset",
+    "mode": "sublet",
+    "expected": "fault",
+    "runner_exit": 0,
+    "control": "held",
+    "cause": 0,
+    "pc": "0",
+    "delivered": false,
+    "passed": true,
+    "run": "/tmp/mmgr-ctl-c1/01-vacuum-dead-items-stale-struct-sublet-yaxhugn_"
+  }
+]

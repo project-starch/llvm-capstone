@@ -1,0 +1,20 @@
+{
+  "ran": "control",
+  "date_utc": "2026-10-10",
+  "cases": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "arms": [
+    "spatial",
+    "sublet"
+  ],
+  "held": 10,
+  "total": 10,
+  "build": "/tmp/capstone/postgres-memory-contexts/build/capstone-domain, configured 2026-10-10 from this tree with -DPG_CORPUS_DIR",
+  "comparability": "These controls were built and run on 2026-10-10. The detections they qualify were measured on 2026-09-18, before the 17.5 re-pin, on a build that no longer exists. Same sources and same patch set, but a rebuild is not byte-identical, so a control holding today is evidence about this build's behaviour on these programs and not a replay of the run it qualifies.",
+  "retries": "Three arms came back norun on the first pass and one on the second -- exit 75, the guest runner's infrastructure flake. They were rerun until they produced a measurement rather than being scored; a norun is not a verdict in either direction."
+}

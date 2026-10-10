@@ -1,0 +1,17 @@
+[
+  {
+    "case": 4,
+    "fix": "9e0b4b1ab5",
+    "name": "reorderbuffer-spec-insert-lsn",
+    "allocator": "slab",
+    "mode": "sublet",
+    "expected": "fault",
+    "runner_exit": 0,
+    "control": "held",
+    "cause": 0,
+    "pc": "0",
+    "delivered": false,
+    "passed": true,
+    "run": "/tmp/mmgr-ctl-c4b/04-reorderbuffer-spec-insert-lsn-sublet-fa90wjf6"
+  }
+]
