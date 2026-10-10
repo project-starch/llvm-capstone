@@ -2,7 +2,8 @@
 
 **Scope: the three programs the paper's target evaluation uses.** Other corpora in this tree
 (cpython, httpd, PostgreSQL, sqlite, mruby, the cross-language set) are deliberately out of scope
-here; `paper-bug-inventory.md` is the whole-tree inventory.
+here; the generated `capstone/bug-corpora/INDEX.md` is the whole-tree inventory, and
+`three-columns-all-programs.md` puts the other six programs on section 0's three columns.
 
 **Read this first if you came here grepping for "spatial".** `spatial` is also the name of a
 **measurement arm** — bounds-only Capstone, revocation disabled — and it appears in dozens of
@@ -348,9 +349,10 @@ How each reads, and why it misses what it misses:
 - **ASan sees exactly the accesses that leave a malloc'd block** (since the audit, on each program's own
   backing: memcached's pages and cache.c objects each their own malloc, wmem's `g_malloc` the host's
   `malloc` -- the earlier arms carved everything out of one arena and could read nothing but silence, and
-  memcached 8, a crossing past a cache.c object, now reports): plain spatial 46/56 (the 10
-  struct-member crossings stay inside one block), plain temporal 26/26, and 0 on every nested row,
-  because an arena, a pool or a carve is one block to ASan. Every silent row ran with controls that
+  memcached 8, a crossing past a cache.c object, now reports): plain spatial 45/54 (the 9
+  struct-member crossings stay inside one block), plain temporal 26/26, and 1/27 nested spatial with
+  0/22 nested temporal -- memcached 8 is the only nested crossing that leaves a malloc'd block, because
+  upstream mallocs each cache.c object on its own; an arena, a pool or a carve is one block to ASan. Every silent row ran with controls that
   reported a read past, and a read after free of, a block the size of that corpus's arena.
 - **CheriBSD and PoisonCap read the same on every plain spatial row** — the PoisonCap libc rounds
   requests to the same size classes (17 and 24 bytes to 32, measured in the same boot), so the same
@@ -386,12 +388,13 @@ identity unless its switch is defined, so every other arm builds unchanged).
 
 - **Field bounds catch member crossings and nothing else.** Struct members: 7/9 on Capstone, 8/9
   on CHERI. Still missed: 04 (a read one byte before a member — predicted caught on CHERI, refuted)
-  and 09 (an index inside one int array) on both; 06 on Capstone only, because C1 v1 does not
-  narrow a struct's last array member. On carved regions, slab items and the frame plane they catch
+  on both, and 06 on Capstone only, because C1 v1 does not narrow a struct's last array member.
+  (09, an index inside one int array, was a slice carved out of one `av_calloc`; since the audit it is
+  carved case 12, which carve bounds catch.) On carved regions, slab items and the frame plane they catch
   nothing: those are pointer arithmetic on a block, not fields.
 - **The Sublet carve** (column 3 for these rows; `sublet-carve`) is the carving code ported to Sublet: the
   block lent LINEAR by the Sublet heap and split into one Sublet region per carve, each issued as an
-  alias bounded to the carve. It catches the 12 carved crossings and, as the slab port plus the
+  alias bounded to the carve. It catches the 13 carved crossings and, as the slab port plus the
   key/suffix carve, memcached 6 and 7 -- **by the bound it sets, the mechanism of carve bounds**; no
   buggy sequence re-carves, and its revocation is shown by the re-carve control alone. It does NOT
   catch the frame plane: a faithful port of av_frame_get_buffer issues each plane its allocated
@@ -502,6 +505,10 @@ a Capstone domain on both arms with no fault anywhere.
 > was the state when this document was written and contradicted its own table below as soon as the
 > spatial hunt produced anything. The spatial corpus is now **32 built and measured cases**, so the
 > sentence had become false in the one place a reader looks first.
+
+> **HISTORY -- counts as of 2026-10-09, before the audit of 2026-10-10.** The current counts are in
+> section 0: 129 defects, spatial 27 nested / 54 plain, temporal 22 nested / 26 plain. FFmpeg
+> plain-heap 13 is a duplicate and subobject 09 moved to carved-repros as case 12 (section A).
 
 | | nested allocator | plain / system allocator | total |
 |---|---:|---:|---:|

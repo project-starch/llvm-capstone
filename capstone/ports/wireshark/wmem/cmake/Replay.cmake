@@ -113,6 +113,13 @@ if(PORT_HOSTED)
       "${CAPSTONE_REPO_ROOT}/capstone/bug-corpora/cpython/pymalloc-repros/observe/supervise.c")
     target_compile_definitions(supervise PRIVATE PROBE_SYMBOL="wm_defect_probe")
     target_link_libraries(supervise PRIVATE util)
+    # A case whose defective access is a WRITE faults at wm_defect_write, which the supervisor above
+    # cannot resolve; without its own supervisor every such fault read "NOT at probe" (cases 16, 17,
+    # 18, 20 and 21, corrected by hand at the 2026-10-10 audit).
+    add_executable(supervise-wm_defect_write
+      "${CAPSTONE_REPO_ROOT}/capstone/bug-corpora/cpython/pymalloc-repros/observe/supervise.c")
+    target_compile_definitions(supervise-wm_defect_write PRIVATE PROBE_SYMBOL="wm_defect_write")
+    target_link_libraries(supervise-wm_defect_write PRIVATE util)
   endif()
   target_link_libraries(wireshark-wmem PUBLIC Capstone::Runtime)
   add_library(Wireshark::Wmem ALIAS wireshark-wmem)
