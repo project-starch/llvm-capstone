@@ -64,7 +64,8 @@
  *                     through the old pointer. Added with the slabsublet arm, whose oracle never
  *                     frees a chunked item, so this is the only run of that release path.
  *  22 mover_floating  upstream a836eab (2015, shipped 1.4.23-1.4.24) REVERSED: the page mover takes
- *                     an item that is allocated but not yet linked (its upload in progress) for
+ *                     an item that is allocated but not yet linked (its upload in progress, at its
+ *                     page's first chunk) for
  *                     cleared, so the page is wiped and handed to another class under its holder.
  *                     The holder then writes its next byte, and a live item of the other class reads
  *                     it back. The reversal is patch 0005's run-time flag in slabs_mover.c.
@@ -757,36 +758,48 @@ static int mcapp_fixture(int n)
            22 runs with that branch reversed (mcapp_reverse_a836eab), 23 as shipped. The page move
            is the real one: slabs_reassign signals the server's page-mover thread. */
         const int len_a = 1500, len_b = 150000;
-        unsigned char *a;
-        item *ia = mcapp_item(n, "a", len_a, &a);   /* allocated, never linked: upload in progress */
-        if (!ia)
+        /* The class's first page hands out its chunks from the top down, so the LAST of its
+           perslab allocations is the page's first chunk. a must be that one: the dst class's chunks
+           need not reach the page's tail (1 MiB is not a multiple of their size), so only an a near
+           the page's start is guaranteed to lie under a dst item. (First run, 2026-10-11: a was the
+           page's top chunk, in that tail, and both arms returned 0xE0016.) */
+        unsigned char *a = NULL, *d0;
+        item *probe = mcapp_item(n, "probe", len_a, &d0);
+        if (!probe)
             return MCAPP_MARK(n, 0xE0016);
-        unsigned src = ITEM_clsid(ia), dst = slabs_clsid((size_t)len_b + 200), perslab = 0;
+        unsigned src = ITEM_clsid(probe), dst = slabs_clsid((size_t)len_b + 200), perslab = 0;
         slabs_available_chunks(src, NULL, &perslab);
         printf("MCAPP-FIX %d src=%u perslab=%u pages=%d dst=%u\n", n, src, perslab, slabs_page_count(src), dst);
-        /* a must sit in the class's oldest page, the one the mover takes (slab_list[0]) */
         if (slabs_page_count(src) != 1 || perslab < 2 || dst == src) {
             printf("MCAPP-FIX %d triggering condition not created (class not fresh)\n", n);
             return MCAPP_MARK(n, 0xE0016);
         }
-        /* fill the rest of a's page and open a second one, so the class has a page to spare; then
-           free the fillers, so every chunk of a's page but a's own is on the free list */
-        item **fill = malloc(sizeof(item *) * perslab);
+        /* the probe was the page's top chunk; perslab - 1 more fill the page down to its first chunk
+           (a), and one more opens a second page, so the class has a page to spare */
+        item **fill = malloc(sizeof(item *) * (perslab + 1));
         if (!fill)
             return MCAPP_MARK(n, 0xE0016);
-        unsigned made = 0;
-        for (; made < perslab; made++) {
+        fill[0] = probe;
+        unsigned made = 1;
+        for (; made <= perslab; made++) {
             char key[32];
             int nkey = snprintf(key, sizeof key, "mcapp-fill-%u", made);
             if (!(fill[made] = item_alloc(key, (size_t)nkey, 0, 0, len_a + 2)))
                 break;
         }
         int pages = slabs_page_count(src);
+        item *ia = made > perslab ? fill[perslab - 1] : NULL;  /* the page's first chunk */
+        if (ia) {
+            a = (unsigned char *)ITEM_data(ia);
+            mcapp_show(n, "a", a);
+        }
+        /* free every filler but a: a stays allocated and never linked (upload in progress) */
         for (unsigned i = 0; i < made; i++)
-            item_remove(fill[i]);
+            if (fill[i] != ia)
+                item_remove(fill[i]);
         free(fill);
         printf("MCAPP-FIX %d fillers=%u pages=%d\n", n, made, pages);
-        if (made != perslab || pages != 2) {
+        if (!ia || made != perslab + 1 || pages != 2) {
             printf("MCAPP-FIX %d triggering condition not created (no second page)\n", n);
             return MCAPP_MARK(n, 0xE0016);
         }
