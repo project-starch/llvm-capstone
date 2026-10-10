@@ -138,9 +138,12 @@ Sixteen cells ran but did not answer:
   a stop, but not a capability fault.
 - **Perl 02, all three columns**: Perl's own check panics ("attempt to copy freed scalar") before
   any mechanism reports.
-- **Perl 03, all three columns**: the defect is not reached on any arm -- the case's own assertion
-  passes, so the stale element slot never holds a stale pointer, and its README puts it outside every
-  denominator. It was recorded MISSED until 2026-10-10, which counted it on this board.
+- **Perl 03, all three columns**: the defect is not shown reached on any arm -- the trigger observes
+  nothing about the stale slot, since its only check is `pass()`, which the harness makes unconditional
+  (`harness/shim.pl:8`), and its README puts it outside every denominator. It was recorded MISSED until
+  2026-10-10, which counted it on this board. (Corrected 2026-10-11: the 2026-10-10 text gave as the
+  reason that "the case's own assertion passes, so the stale element slot never holds a stale pointer",
+  which that unconditional pass cannot show.)
 - **postgres/sql-repros 03, columns 2 and 3**: with the pools `CREATE EXTENSION ltree` faults before
   the case's SQL runs. On the stock arm the fault was left unattributed because "its control.sql
   FAULTS too" -- but that was the 64-variant control, which PR #215 showed crosses the uint16 threshold

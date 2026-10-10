@@ -17,24 +17,24 @@
    "verdict": "NO-READING",
    "verdict_from": "results/20261006/matrix.tsv 9e298ab597 sysalloc-sublet: silent (exit 0)",
    "verdict_reason": "not-reached",
-   "verdict_note": "the defect is not reached on this arm: the case's own assertion passes, so the stale element slot never holds a stale pointer (case note; README 'What no arm reaches': 'the only case outside every denominator, which is therefore 10'). Recorded MISSED until 2026-10-10, which counted it on the board."
+   "verdict_note": "the defect is not shown reached on this arm: the trigger has no reach observation. Its only check is pass('unshifting and growing an array initializes trailing elements') (trigger.pl:13), and the harness's pass is unconditional (harness/shim.pl:8: sub pass { $CUR++; 1 }), so the run's silence says nothing about whether a stale element slot existed. RETRACTED 2026-10-11: the basis recorded on 2026-10-10 -- 'the case's own assertion passes, so the stale element slot never holds a stale pointer' -- rests on that unconditional pass and cannot support it. The NO-READING stands for the reason above."
   },
   "sublet-svheads": {
    "oracle": "no fault: completes and the workload's own oracle passes",
    "verdict": "NO-READING",
    "verdict_from": "results/20261006/matrix.tsv 9e298ab597 sublet-svheads: silent (exit 0)",
    "verdict_reason": "not-reached",
-   "verdict_note": "the defect is not reached on this arm: the case's own assertion passes, so the stale element slot never holds a stale pointer (case note; README 'What no arm reaches': 'the only case outside every denominator, which is therefore 10'). Recorded MISSED until 2026-10-10, which counted it on the board."
+   "verdict_note": "the defect is not shown reached on this arm: the trigger has no reach observation. Its only check is pass('unshifting and growing an array initializes trailing elements') (trigger.pl:13), and the harness's pass is unconditional (harness/shim.pl:8: sub pass { $CUR++; 1 }), so the run's silence says nothing about whether a stale element slot existed. RETRACTED 2026-10-11: the basis recorded on 2026-10-10 -- 'the case's own assertion passes, so the stale element slot never holds a stale pointer' -- rests on that unconditional pass and cannot support it. The NO-READING stands for the reason above."
   },
   "cheribsd-revocation": {
    "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes",
    "verdict": "NO-READING",
    "verdict_from": "results/20261006-cheribsd/matrix.tsv 9e298ab597: revocation_on=clean, revocation_off=clean",
    "verdict_reason": "not-reached",
-   "verdict_note": "the defect is not reached on this arm: the case's own assertion passes, so the stale element slot never holds a stale pointer (case note; README 'What no arm reaches': 'the only case outside every denominator, which is therefore 10'). Recorded MISSED until 2026-10-10, which counted it on the board."
+   "verdict_note": "the defect is not shown reached on this arm: the trigger has no reach observation. Its only check is pass('unshifting and growing an array initializes trailing elements') (trigger.pl:13), and the harness's pass is unconditional (harness/shim.pl:8: sub pass { $CUR++; 1 }), so the run's silence says nothing about whether a stale element slot existed. RETRACTED 2026-10-11: the basis recorded on 2026-10-10 -- 'the case's own assertion passes, so the stale element slot never holds a stale pointer' -- rests on that unconditional pass and cannot support it. The NO-READING stands for the reason above."
   }
  },
  "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
  "allocator_layer": "system allocator (the AV element array, via Renew)",
- "note": "not triggered by this trigger anywhere but the host: its own assertion PASSES on all four Capstone arms AND on CheriBSD with revocation both off and on, so the stale element slot the defect depends on never holds a stale pointer there. Its silence is not evidence about any arm and it is outside every denominator. Host ASan at the pin reports SEGV, so the defect is real; what is missing is a trigger that reproduces it under an allocator other than glibc"
+ "note": "not triggered by this trigger anywhere but the host: its own assertion PASSES on all four Capstone arms AND on CheriBSD with revocation both off and on, so the stale element slot the defect depends on never holds a stale pointer there. Its silence is not evidence about any arm and it is outside every denominator. Host ASan at the pin reports SEGV, so the defect is real; what is missing is a trigger that reproduces it under an allocator other than glibc CORRECTION 2026-10-11: 'its own assertion PASSES ... so the stale element slot the defect depends on never holds a stale pointer there' does not follow -- that assertion is pass(), which is unconditional (harness/shim.pl:8), so the trigger observes nothing about the slot. The runs show only that no arm reported the defect; whether the trigger reaches it off glibc is unknown."
 }
