@@ -85,8 +85,9 @@ Three things that had to be got right for those runs to mean anything:
   base arm. For the remaining 14 the defect is not one invalid access in an
   otherwise ordinary program, and three of those 14 are the cases no arm
   delivers. What each control settles, and what neither does, is in
-  `results/20261006/README.md`. Neither has been run on the virtual arms yet:
-  `runners/virtual/run-virtual.py` has no negative-control mode.
+  `results/20261006/README.md`. On the virtual arms `runners/virtual/run-virtual.py`
+  runs a case's strong control when the case faults outside its `fault_sites`, and the
+  fault counts only if the control then runs clean on the same image.
 
 ## Arms
 

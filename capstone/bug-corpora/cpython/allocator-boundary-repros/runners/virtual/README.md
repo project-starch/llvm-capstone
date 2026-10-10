@@ -25,6 +25,13 @@ In order, each must pass before anything after it counts:
    for the arm, and the VM must be a virtual one.
 2. The interpreter must run a JSON/GC workload.
 3. The two controls in `../../controls/` must do what `tools/arms.json` says.
-4. Then each case is run. A fault counts only in the case's `fault_sites`.
+4. Then each case is run. A fault counts when it lies in one of the case's `fault_sites`, or,
+   when it does not and the case has a `negative_control.py`, when that control (the same
+   traffic, the offending access made valid) then runs to its end on the same image without a
+   fault and passes its own self-test.
+
+The interpreter's main stack is 8 MiB (`build-virtual.sh` sets it for cpython): CPython 3.13 sizes
+its C recursion limit for the stack Linux gives a process, and with the runtime's 1 MiB default a
+deep recursion overflows the stack before the interpreter's guard raises `RecursionError`.
 
 `tools/verdicts.py` judges every row.

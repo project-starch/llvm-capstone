@@ -73,6 +73,7 @@ def main():
     p.add_argument('--profile', choices=['physical', 'virtual'], default='physical')
     p.add_argument('--arena', type=int, default=64*1024*1024)
     p.add_argument('--heap-log', type=int, default=26)
+    p.add_argument('--stack-bytes', type=int, default=1 << 20, help='The main thread\'s stack')
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--input-revision', required=True, help='Port recipe revision; cached objects are identified separately by hashes')
     p.add_argument('--libc-root', type=Path, help='Separate root containing musl-src and musl-build')
@@ -136,6 +137,7 @@ def main():
          '-DCAPSTONE_APPLICATION_HEAP_LOG=' + str(args.heap_log),
          '-DCAPSTONE_APPLICATION_DATA_BYTES=33554432',
          '-DCAPSTONE_APPLICATION_ARENA_BYTES=' + str(args.arena),
+         '-DCAPSTONE_APPLICATION_STACK_BYTES=' + str(args.stack_bytes),
          '-DCMAKE_BUILD_TYPE=Release',
          '-DCMAKE_C_FLAGS_RELEASE=-O1' +
          (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
@@ -178,7 +180,7 @@ def main():
                     nested=args.nested, recipe_revision=input_revision,
                     runtime_revision=subprocess.check_output(['git', '-C', REPO, 'rev-parse', 'HEAD'], text=True).strip(),
                     runtime_dirty=bool(subprocess.check_output(['git', '-C', REPO, 'status', '--porcelain'])),
-                    arena_bytes=args.arena, heap_log=args.heap_log,
+                    arena_bytes=args.arena, heap_log=args.heap_log, stack_bytes=args.stack_bytes,
                     image_sha256=sha(image), compiler_sha256=sha(args.toolchain / 'bin/clang'),
                     runtime_archive_sha256=sha(sdk / 'libapplication-runtime.a'),
                     builtins_archive_sha256=sha(sdk / 'libcapstone-application-builtins.a'),

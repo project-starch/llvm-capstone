@@ -17,7 +17,9 @@ CPY_SUBLET=1), under which obmalloc hands out every block as a child lifetime an
   fault       the launcher's fault line, the pc resolved from the image's own symbols
   attribution `function` when that symbol is one of the case's fault_sites, which come from a host
               ASan run (probe/asan-sites.py) recorded before any arm ran. A fault anywhere else is
-              not a catch
+              not a catch, unless the case has a negative_control.py (the same traffic with the
+              offending access made valid) and that runs to its end on the same image without a
+              fault: then `control`. A control that faults too leaves the fault unattributed
 
 Before any case the image must run a JSON/GC workload; then the configuration's controls run
 (controls/), which is what shows the pools arm's protection is in force. The build's
@@ -137,6 +139,23 @@ def observe(text, result, symbols, sites):
     return o
 
 
+def attribute_by_control(a, share, image, d, o, symbols):
+    """The case's negative_control.py, for a fault no fault_site names. It counts only when it
+    performed its traffic, passed its own self-test and ended without a fault."""
+    text, result = run_script(a, share, image, d, "negative_control.py", d.name + "-control")
+    fault = v.domain_fault(result.get("fault") or "", symbols) or v.domain_fault(text, symbols)
+    if fault:
+        o.attribution_evidence += (f"; its negative_control.py faults too (cause={fault.cause} in "
+                                   f"{fault.symbol or '?'}), so the fault is not the defect's")
+    elif ("NEGATIVE-CONTROL no defect performed" in text and "SELFTEST-FAILED" not in text
+          and "ABR RETURNED" in text):
+        o.attribution = "control"
+        o.attribution_evidence = ("negative_control.py (the same traffic, the offending access made "
+                                  "valid) ran to its end on this image without a fault")
+    else:
+        o.attribution_evidence += "; its negative_control.py did not run to an answer"
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("output", type=Path)
@@ -197,6 +216,8 @@ def main():
         claims = json.loads((d / "case.json").read_text())
         text, result = run_script(a, share, image, d, claims["trigger"], d.name)
         o = observe(text, result, symbols, set(claims.get("fault_sites", [])))
+        if o.fault and o.reached and not o.attribution and (d / "negative_control.py").is_file():
+            attribute_by_control(a, share, image, d, o, symbols)
         o.image_sha256 = v.sha256(image)
         o.case, o.arm, o.controls = d.name, a.arm, list(controls)
         verdict = v.judge(o, spec)
@@ -206,7 +227,7 @@ def main():
     record = v.write_bundle(a.output, "cpython/allocator-boundary-repros", a.arm, rows, {
         "configuration": config, "predicted": PREDICTED[a.arm],
         "build": {k: manifest.get(k) for k in ("application", "profile", "nested", "image_sha256",
-                                               "runtime_revision", "runtime_dirty")},
+                                               "runtime_revision", "runtime_dirty", "stack_bytes")},
         "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
     print(f"--- {a.arm} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
