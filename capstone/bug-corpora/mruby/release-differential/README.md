@@ -298,7 +298,8 @@ arms fault there, cause 25 in `gc_mark_children`: the stack is a malloc'd
 block, so mallocng's retirement on free catches it without patch 0008. Two
 matched pairs, the pin against the pin with cb51fce92's `task.c` hunks alone,
 show the driver reaches that defect: natively SIGSEGV in `mrb_gc_mark` under
-`gc_mark_children` (upstream's backtrace) against `CASE11 completed 30`, and on
+`gc_mark_children` (upstream's backtrace), and under ASan a heap-use-after-free
+read there of the task's freed stack, against `CASE11 completed 30`; and on
 `virtual-malloc` cause 25 against exit 0, twice each
 (`probe/native-control.sh`, the bundle's README).
 
