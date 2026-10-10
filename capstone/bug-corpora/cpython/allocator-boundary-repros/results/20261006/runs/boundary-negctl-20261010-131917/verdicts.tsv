@@ -1,0 +1,7 @@
+case	arm	rc	signal	si_code	last
+01_gh-139071_heap-overflow-in-set-dealloc-setobject	cheribsd-revocation	0			{<weakref at 0x42034070; to 'dummy' at 0x4275ae40>} NEGATIVE-CONTROL no defect performed 
+05_gh-140497_cpython-crash-heap-buffer-overflow-python	cheribsd-revocation	0			sicode: handlers installed; BOUNDS=1 TAG=2 NEGATIVE-CONTROL no defect performed 
+09_gh-140802_heap-buffer-overflow-in-pycore-interpframe	cheribsd-revocation	0			  frame.f_lineno = frame.f_lineno NEGATIVE-CONTROL no defect performed 
+10_gh-142554_avoid-divmod-crashes-due-to-bad	cheribsd-revocation	0			OK NEGATIVE-CONTROL no defect performed 
+14_gh-144475_heap-buffer-overflow-in-functools-partial	cheribsd-revocation	0			sicode: handlers installed; BOUNDS=1 TAG=2 NEGATIVE-CONTROL no defect performed 
+31_gh-148660_odict-copy-stale-link	cheribsd-revocation	0			OK (skipped=2) NEGATIVE-CONTROL no defect performed 

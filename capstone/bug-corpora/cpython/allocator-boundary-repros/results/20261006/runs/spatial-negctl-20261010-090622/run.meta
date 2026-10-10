@@ -1,0 +1,14 @@
+arm	spatial
+capacity	mod
+image	spatial-mod
+image_sha256	68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2
+rev_nodes	65536
+started_utc	2026-10-10T09:06:23Z
+positive_control	EXP-OK cpython 552
+discipline	none
+case_timeout	900
+only	24,10,15,30,31
+ended_utc	2026-10-10T09:33:10Z
+cases	5
+negative_control	1
+negative_control_detections	0

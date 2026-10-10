@@ -19,7 +19,10 @@ CPY_SUBLET=1), under which obmalloc hands out every block as a child lifetime an
               ASan run (probe/asan-sites.py) recorded before any arm ran. A fault anywhere else is
               not a catch, unless the case has a negative_control.py (the same traffic with the
               offending access made valid) and that runs to its end on the same image without a
-              fault: then `control`. A control that faults too leaves the fault unattributed
+              fault: then `control`. A control that faults too leaves the fault unattributed.
+              A case whose trigger runs more than its defect declares a `control_probe`, the
+              defect's own tests alone; its control is paired with the probe, and the probe
+              must fault in the trigger's function at the trigger's offset
 
 Before any case the image must run a JSON/GC workload; then the configuration's controls run
 (controls/), which is what shows the pools arm's protection is in force. The build's
@@ -139,9 +142,20 @@ def observe(text, result, symbols, sites):
     return o
 
 
-def attribute_by_control(a, share, image, d, o, symbols):
+def attribute_by_control(a, share, image, d, o, symbols, probe=None):
     """The case's negative_control.py, for a fault no fault_site names. It counts only when it
-    performed its traffic, passed its own self-test and ended without a fault."""
+    performed its traffic, passed its own self-test and ended without a fault. With a probe, the
+    control is paired with the probe instead of the trigger, and the probe must first fault where
+    the trigger did."""
+    if probe:
+        text, result = run_script(a, share, image, d, probe, d.name + "-probe")
+        fault = v.domain_fault(result.get("fault") or "", symbols) or v.domain_fault(text, symbols)
+        if not fault or (fault.symbol, fault.offset) != (o.fault.symbol, o.fault.offset):
+            seen = f"{fault.symbol}+{fault.offset:#x}" if fault and fault.offset is not None else (
+                fault.symbol if fault else "no fault")
+            o.attribution_evidence += (f"; its {probe} did not fault where the trigger did "
+                                       f"({seen}, trigger {o.fault.symbol}+{o.fault.offset or 0:#x})")
+            return
     text, result = run_script(a, share, image, d, "negative_control.py", d.name + "-control")
     fault = v.domain_fault(result.get("fault") or "", symbols) or v.domain_fault(text, symbols)
     if fault:
@@ -152,6 +166,10 @@ def attribute_by_control(a, share, image, d, o, symbols):
         o.attribution = "control"
         o.attribution_evidence = ("negative_control.py (the same traffic, the offending access made "
                                   "valid) ran to its end on this image without a fault")
+        if probe:
+            o.attribution_evidence = (f"{probe} (the defect's tests alone) faults at the trigger's "
+                                      f"{o.fault.symbol}+{o.fault.offset or 0:#x}; " + o.attribution_evidence
+                                      .replace("the same traffic", "the same tests"))
     else:
         o.attribution_evidence += "; its negative_control.py did not run to an answer"
 
@@ -217,7 +235,7 @@ def main():
         text, result = run_script(a, share, image, d, claims["trigger"], d.name)
         o = observe(text, result, symbols, set(claims.get("fault_sites", [])))
         if o.fault and o.reached and not o.attribution and (d / "negative_control.py").is_file():
-            attribute_by_control(a, share, image, d, o, symbols)
+            attribute_by_control(a, share, image, d, o, symbols, claims.get("control_probe"))
         o.image_sha256 = v.sha256(image)
         o.case, o.arm, o.controls = d.name, a.arm, list(controls)
         verdict = v.judge(o, spec)

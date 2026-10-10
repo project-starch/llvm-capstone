@@ -81,13 +81,17 @@ Three things that had to be got right for those runs to mean anything:
   replaces every trigger with a stub, which the three arms of 2026-10-06 (the
   physical `spatial` and `sublet`, and `cheribsd-revocation`) pass, and a strong
   per-case one that keeps the allocation traffic and makes only the offending
-  access valid, which exists for 18 of the 32 cases and has been run on the
-  base arm. For the remaining 14 the defect is not one invalid access in an
-  otherwise ordinary program, and three of those 14 are the cases no arm
-  delivers. What each control settles, and what neither does, is in
-  `results/20261006/README.md`. On the virtual arms `runners/virtual/run-virtual.py`
-  runs a case's strong control when the case faults outside its `fault_sites`, and the
-  fault counts only if the control then runs clean on the same image.
+  access valid, which exists for 18 of the 32 cases and has been run on all three
+  arms of 2026-10-06. It qualifies every detection the two physical Capstone arms report
+  on those cases -- base 11 of 11, Sublet 17 of 17 -- and 2 of the 6 on CheriBSD, where
+  the other 4 were measured on an earlier binary than the control could be run against.
+  For the remaining 14 cases the defect is not one invalid access in an otherwise
+  ordinary program, and three of those 14 are the cases no arm delivers. What each
+  control settles, and what neither does, is in `results/20261006/README.md`. On the
+  virtual arms `runners/virtual/run-virtual.py` runs a case's strong control when the
+  case faults outside its `fault_sites`, and the fault counts only if the control then
+  runs clean on the same image (case 19's control is paired with a probe; see
+  `runners/virtual/README.md`).
 
 ## Arms
 

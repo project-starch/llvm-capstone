@@ -1,0 +1,13 @@
+arm	sublet
+capacity	base
+image	sublet
+image_sha256	1dd1c0f6df64d5951d78e86a7ba4298b097fba6c09d11c9abd08a631fe1517ae
+rev_nodes	16777216
+started_utc	2026-10-10T12:24:14Z
+positive_control	EXP-OK cpython 552
+discipline	CPY-SUBLET mode=1
+case_timeout	900
+only	19
+trigger_override	probe-142664.py
+ended_utc	2026-10-10T12:27:27Z
+cases	1

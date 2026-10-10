@@ -1,0 +1,9 @@
+01_gh-139071_heap-overflow-in-set-dealloc-setobject	variant
+03_gh-140492_heap-buffer-overflow-in-ast-copy	variant
+04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer	variant
+05_gh-140497_cpython-crash-heap-buffer-overflow-python	variant
+07_gh-140594_fix-an-out-of-bounds-read	stub
+09_gh-140802_heap-buffer-overflow-in-pycore-interpframe	variant
+12_gh-143377_heap-buffer-overflow-in-format-tracebackexception	stub
+14_gh-144475_heap-buffer-overflow-in-functools-partial	variant
+24_gh-142783_zoneinfo-eager-decref	variant

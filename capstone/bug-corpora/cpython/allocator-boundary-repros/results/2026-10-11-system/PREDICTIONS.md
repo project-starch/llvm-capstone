@@ -61,3 +61,31 @@ What would falsify each:
 
 The workload and the two pymalloc controls (`uaf-block`, `bounds-block`) must pass as
 `tools/arms.json` says before any row counts.
+
+## Amendment, 2026-10-11, before any output of the run was read
+
+The run of 9239e39689e9 started on p13 at once, and while its images were building I found
+d3a500f411cb on `corpus/cpython-controls-all-arms`, which this branch did not hold: case 19's
+trigger runs the whole upstream file, and on the physical sublet arm that file faults at three
+distinct sites (gh-142664, this case; gh-143195, a use-after-free in `memoryview.hex(sep)`;
+gh-92888's regression test). The whole-file control neutralises gh-142664 only, so it is expected
+to fault at one of the other two sites. The rule registered above would then read "the control
+faults too" as "the `fnv` fault is not the defect's", which does not follow: a fault at a
+different site in a different test says nothing about this one.
+
+So, before any case output of that run was read, this branch merges d3a500f411cb (the probes and
+the control scoped to gh-142664's six tests) and changes the rule for a case that declares a
+`control_probe` (case 19: `probe-142664.py`): the probe must fault in the trigger's function at
+the trigger's offset, and the scoped control must then run clean. Cases without one keep the rule
+above.
+
+The run already under way used the whole-file control and keeps its output as recorded. Cases
+19, 20 and 21 are then rerun with the amended runner on the same two images, so every row comes
+from one runner revision. The merge changes no build input (nothing under `capstone/ports`,
+`capstone/runtime` or `capstone/host`), so the images built from 9239e39689e9 are the images this
+commit would build.
+
+Prediction for case 19 under the amended rule, both arms: `probe-142664.py` faults with cause 25
+in `fnv` at the trigger's offset, `negative_control.py` runs its six tests clean, and the row is
+CAUGHT by control. Falsifiers: the probe not faulting, or faulting elsewhere (then the whole-file
+fault in `fnv` is not shown to be gh-142664's), or the scoped control faulting.

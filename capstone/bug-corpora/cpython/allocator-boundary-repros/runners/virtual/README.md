@@ -28,7 +28,11 @@ In order, each must pass before anything after it counts:
 4. Then each case is run. A fault counts when it lies in one of the case's `fault_sites`, or,
    when it does not and the case has a `negative_control.py`, when that control (the same
    traffic, the offending access made valid) then runs to its end on the same image without a
-   fault and passes its own self-test.
+   fault and passes its own self-test. A case whose trigger runs more than its defect declares a
+   `control_probe` in `case.json`: case 19's trigger runs the whole upstream file, which holds
+   three faulting sites, so its control is paired with `probe-142664.py` (the defect's six tests
+   alone). The probe must fault in the trigger's function at the trigger's offset, and the
+   control, the same six tests without the release, must then run clean.
 
 The interpreter's main stack is 8 MiB (`build-virtual.sh` sets it for cpython): CPython 3.13 sizes
 its C recursion limit for the stack Linux gives a process, and with the runtime's 1 MiB default a
