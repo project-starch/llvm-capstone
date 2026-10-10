@@ -35,7 +35,8 @@
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x104248, NOT the probe). Adapter counters: WM_POISONCAP mode=0 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held.",
       "status": "measured",
       "prediction": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
-      "verdict": "CAUGHT"
+      "verdict": "CAUGHT",
+      "attribution": "2026-10-10, by llvm-nm on this run's own binaries (identified by sha256), results/2026-10-09-poisoncap/attribution-2026-10-10.txt: in both modes the fault pc is exactly the wm_defect_write label (the store at shared/driver.c:72, inside wm_write_probe) -- this case's labelled WRITE probe. 'NOT the probe' above means not wm_defect_probe, the READ label, which poisoncap/run.py hardcodes as the one probe it resolves. Positive control: the read crossings 13, 14, 15 and 19 fault exactly at wm_defect_probe."
     },
     "poisoncap-protected": {
       "mode": 1,
@@ -44,7 +45,8 @@
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x104248, NOT the probe). Adapter counters: WM_POISONCAP mode=1 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held.",
       "status": "measured",
       "prediction": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
-      "verdict": "CAUGHT"
+      "verdict": "CAUGHT",
+      "attribution": "2026-10-10, by llvm-nm on this run's own binaries (identified by sha256), results/2026-10-09-poisoncap/attribution-2026-10-10.txt: in both modes the fault pc is exactly the wm_defect_write label (the store at shared/driver.c:72, inside wm_write_probe) -- this case's labelled WRITE probe. 'NOT the probe' above means not wm_defect_probe, the READ label, which poisoncap/run.py hardcodes as the one probe it resolves. Positive control: the read crossings 13, 14, 15 and 19 fault exactly at wm_defect_probe."
     },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",

@@ -37,7 +37,7 @@
     "poisoncap-spatial": {
       "mode": 0,
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x10429c). Adapter counters: WM_POISONCAP mode=0 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. THE PREDICTION DID NOT HOLD: the wmem PoisonCap backend bounds each wmem chunk, so mode 0 already faults on a crossing of one.",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending.",
+      "note": "(Superseded: measured on 2026-10-09 on the second host -- see oracle. The note below was true of the first host.) UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending.",
       "prediction": "PREDICTED and UNMEASURABLE HERE: the sequence completes if mode 0 bounds per malloc, which is what the block arrives as. If PoisonCap narrows each wmem chunk instead, this arm faults and the prediction is wrong -- recorded this way so the reading settles it rather than confirming an assumption.",
       "status": "measured",
       "verdict": "CAUGHT"
@@ -47,7 +47,7 @@
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x10429c). Adapter counters: WM_POISONCAP mode=1 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. THE PREDICTION DID NOT HOLD: the wmem PoisonCap backend bounds each wmem chunk, so mode 0 already faults on a crossing of one.",
       "signal": 34,
       "si_code": 1,
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending.",
+      "note": "(Superseded: measured on 2026-10-09 on the second host -- see oracle. The note below was true of the first host.) UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending.",
       "prediction": "PREDICTED and UNMEASURABLE HERE: the sequence completes. Mode 1 adds temporal protection and no lifetime ends here.",
       "status": "measured",
       "verdict": "CAUGHT"
