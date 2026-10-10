@@ -20,10 +20,13 @@ import sys
 HERE = Path(__file__).resolve().parent
 RUNNER = HERE.parents[4] / "common/host/cheribsd/run.py"
 SIGPROT = 34
-PROBE = "wm_defect_probe"
+CORPUS = HERE.parents[5] / "bug-corpora/wireshark/wmem-repros"
+# The labelled access each case makes, read from its own case.c: a read goes through wm_probe (label
+# wm_defect_probe), a write through wm_write_probe (label wm_defect_write). One supervisor per label.
+SUPERVISOR = {"wm_defect_probe": "supervise", "wm_defect_write": "supervise-wm_defect_write"}
 EXAMPLES = {"allocator-example": "ALLOCATOR_EXAMPLE wireshark PASS pointer_bytes=16"}
 FAULT = re.compile(r"SUPERVISE fault signal=(\d+) code=(\S+) addr=(\S+) pc=0x([0-9a-f]+)")
-EXPECT = re.compile(r"SUPERVISE expect " + PROBE + r" (?:0x([0-9a-f]+)|unavailable)")
+EXPECT = re.compile(r"SUPERVISE expect (?:wm_defect_probe|wm_defect_write) (?:0x([0-9a-f]+)|unavailable)")
 EXIT = re.compile(r"SUPERVISE exit (signalled|status)=(\d+)")
 
 
@@ -33,11 +36,22 @@ def discover(bins):
             if p.is_file() and p.suffix == ""]
 
 
+def probe_label(which):
+    """The label of the one probe the case's own case.c calls; anything else is refused."""
+    src = next(CORPUS.glob(f"{which:02d}_*")) / "case.c"
+    text = src.read_text()
+    reads = "WM_READ" in text or "wm_probe(" in text
+    writes = "WM_WRITE" in text or "wm_write_probe(" in text
+    if reads == writes:
+        raise SystemExit(f"CONTROL-FAILED case {which} calls {'both' if reads else 'no'} labelled probe")
+    return "wm_defect_probe" if reads else "wm_defect_write"
+
+
 def defect_case(program, mode, which, timeout):
     """One arm. Both arms run the SAME binary; only the mode argument differs."""
     case = dict(
         name=f"{program.name}-mode{mode}",
-        program=str(program.parent / "supervise"),
+        program=str(program.parent / SUPERVISOR[probe_label(which)]),
         inputs={program.name: str(program)},
         args=["./" + program.name, str(mode), str(which)],
         timeout=timeout,
@@ -86,13 +100,17 @@ def pair_verdict(which, zero, one):
 
 def single_verdict(which, zero):
     """The plain CheriBSD arm has one mode. Completing means the layer below
-    saw nothing; a SIGPROT means it caught the stale access."""
+    saw nothing; a SIGPROT counts as a catch ONLY at the case's labelled probe.
+    A SIGPROT anywhere else -- or one whose probe the supervisor could not resolve
+    -- is reported as faulted_elsewhere: it is not attributed to the defect.
+    (Until 2026-10-10 any SIGPROT counted as caught.)"""
     completed = zero["exit_kind"] == "status" and zero["exit_value"] == 0
     faulted = zero["exit_kind"] == "signalled" and zero["exit_value"] == SIGPROT
     at_probe = None
     if faulted and zero["probe_address"] is not None:
         at_probe = any(f["pc"] == zero["probe_address"] for f in zero["faults"])
-    return dict(case=which, completed=completed, caught=faulted, fault_at_probe=at_probe,
+    return dict(case=which, completed=completed, caught=faulted and at_probe is True,
+                faulted_elsewhere=faulted and at_probe is not True, fault_at_probe=at_probe,
                 fault_pcs=[hex(f["pc"]) for f in zero["faults"]], ready=zero["ready"])
 
 
@@ -118,8 +136,9 @@ def main():
     found = discover(bins)
     if not found:
         p.error(f"no NN-* case programs under {bins}")
-    if not (bins / "supervise").is_file():
-        p.error("no supervise binary; build the corpus for cheribsd")
+    for sup in sorted({SUPERVISOR[probe_label(w)] for w, _ in found}):
+        if not (bins / sup).is_file():
+            p.error(f"no {sup} binary; build the corpus for cheribsd")
     cases = [dict(name=b, program=str(bins / b), expect=m, timeout=a.timeout) for b, m in EXAMPLES.items()]
     for mode in modes:
         for which, program in found:
@@ -171,6 +190,7 @@ def main():
     else:
         matrix["caught"] = sorted(r["case"] for r in rows if r["caught"])
         matrix["completed"] = sorted(r["case"] for r in rows if r["completed"])
+        matrix["faulted_elsewhere"] = sorted(r["case"] for r in rows if r["faulted_elsewhere"])
     (a.output / "matrix.json").write_text(json.dumps(matrix, indent=2) + "\n")
     for r in rows:
         if "paired" in r:
@@ -178,7 +198,8 @@ def main():
             print(f"case {r['case']}: mode0 " + ("completed" if r["unprotected_completed"] else "DID NOT complete")
                   + ", mode1 " + ("faulted" if r["protected_faulted"] else "DID NOT fault") + f" [{site}]", flush=True)
         else:
-            print(f"case {r['case']}: " + ("caught (SIGPROT" + (" at probe)" if r["fault_at_probe"] else " elsewhere)") if r["caught"]
+            print(f"case {r['case']}: " + ("caught (SIGPROT at probe)" if r["caught"]
+                  else "SIGPROT NOT at the labelled probe: " + ", ".join(r["fault_pcs"] or ["no pc"]) if r["faulted_elsewhere"]
                   else ("completed, not caught" if r["completed"] else "NEITHER completed nor SIGPROT")), flush=True)
     if 1 in modes:
         print(f"paired: {matrix['paired']}  unpaired: {matrix['unpaired']}", flush=True)

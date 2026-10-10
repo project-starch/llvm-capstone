@@ -56,7 +56,7 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "oracle": "MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **CAUGHT.** signal=34, si_code=1 (the BOUNDS code), fault at 0x102424, with supervise resolving `expect mch_write_probe 0x10240c` from the ELF independently of the run -- the fault lies inside the probe's extent, the offset being the -O0 frame setup, and the RANGE is the attribution criterion rather than equality with the symbol address. The crossing leaves the allocator's USABLE size, which is what malloc bounds the capability to, so there is no size-class slack for it to hide in. tools/size-class-audit.py predicted this reading from the measured request size alone, and the two agree.",
+      "oracle": "MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **CAUGHT.** signal=34, si_code=1 (the BOUNDS code), fault at 0x102424, with supervise resolving `expect mch_write_probe 0x10240c` from the ELF independently of the run -- the fault lies inside the probe's extent, the offset being the -O0 frame setup, and the RANGE is the attribution criterion rather than equality with the symbol address. The crossing leaves the allocator's USABLE size, which is what malloc bounds the capability to, so there is no size-class slack for it to hide in. tools/size-class-audit.py predicted this reading from the request size measured on the x86-64 host build alone, and the two agree.",
       "status": "measured",
       "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot."
     },

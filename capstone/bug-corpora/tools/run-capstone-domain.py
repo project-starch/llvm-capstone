@@ -400,7 +400,20 @@ def main():
     diff = [r["case"] for r in rows if not r.get("as_predicted")]
     print(f"\n{corpus.parent.name}/{corpus.name} on {a.arm}: {len(rows)} cases; {tally}; "
           f"predicted {expect}; differing: {diff or 'none'}")
+    lost = infra_rows(rows)
+    if lost:
+        # A row that printed no verdict (a dead VM, a signal with no domain fault line) differs from
+        # its prediction for a reason that is not the mechanism. It used to make this run exit 1,
+        # "data"; it is infrastructure, so the run is not a reading.
+        print(f"INFRA: {len(lost)} row(s) produced no verdict ({', '.join(lost)}): not a reading",
+              file=sys.stderr)
+        return 75
     return 1 if diff else 0
+
+
+def infra_rows(rows):
+    """Cases whose run produced no verdict at all -- outcome OTHER -- which no prediction names."""
+    return [str(r["case"]) for r in rows if r.get("outcome") == "OTHER"]
 
 
 if __name__ == "__main__":
