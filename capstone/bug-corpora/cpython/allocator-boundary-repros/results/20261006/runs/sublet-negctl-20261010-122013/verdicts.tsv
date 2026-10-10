@@ -1,0 +1,2 @@
+case	arm	verdict	rc	cause	last	pc	address	untagged_value
+19_gh-142664_fix-uaf-in-memoryview-hash-via	sublet	DETECTED	139	24	test_use_released_memory (__main__.OtherTest.test_use_released_memory) ... capstone-vm: capstone-exec: domain fault cause=24 pc=0xc034a960 address=0x0 entry=0xc0200d34 code=0xc0200000-0xc3ea0000 last=0x40 preparing=0x40 sha256=1dd1c0f6df64d5951d78e86a7ba4298b097fba6c09d11c9abd08a631fe1517ae image=/mnt/host/python-sublet.dom capstone-vm: application terminated by signal 11	0xc034a960	0x0	

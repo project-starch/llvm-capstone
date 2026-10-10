@@ -15,7 +15,12 @@
 set -u
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CORPUS=$(cd "$HERE/.." && pwd)
-PY=${CHERI_PYTHON:-$HOME/arms/cpython/cheribsd/build-tgot/python}
+# build-tgot/ holds two binaries and only the inner one is in the guest.
+# The outer build-tgot/python is a different, smaller build; pointing
+# here made the guest-copy check below refuse every run, which is the
+# check doing its job on a bad default. The delivered 2026-10-08 and -09
+# runs record the inner build's hash, df124719.
+PY=${CHERI_PYTHON:-$HOME/arms/cpython/cheribsd/build-tgot/build/python}
 GUEST=${GUEST:-/root/cpython}
 # PYTHONHOME is the pyhome DIRECTORY INSIDE the install, not the install.
 # With the wrong one every case dies before any Python runs, with

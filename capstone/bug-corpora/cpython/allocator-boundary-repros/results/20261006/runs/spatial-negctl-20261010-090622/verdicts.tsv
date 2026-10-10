@@ -1,0 +1,6 @@
+case	arm	verdict	rc	cause	last
+10_gh-142554_avoid-divmod-crashes-due-to-bad	spatial	SILENT	0		OK NEGATIVE-CONTROL no defect performed
+15_gh-148973_fix-segfault-on-mismatch-between-consts	spatial	SILENT	0		OK NEGATIVE-CONTROL no defect performed
+24_gh-142783_zoneinfo-eager-decref	spatial	SILENT	0		NEGATIVE-CONTROL no defect performed
+30_gh-146613_grouper-parent-key	spatial	SILENT	0		OK NEGATIVE-CONTROL no defect performed
+31_gh-148660_odict-copy-stale-link	spatial	OTHER-rc3	3		NEGATIVE-CONTROL no defect performed NEGATIVE-CONTROL SELFTEST-FAILED unittest rc=1

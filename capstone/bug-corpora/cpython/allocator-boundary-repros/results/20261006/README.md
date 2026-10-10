@@ -407,6 +407,118 @@ arm was silent. *(Corrected at review.)* That row is now held out, which is why
 the table reads 0 of 29. It is not measured on the Capstone arms: both read
 NOTIMPL, because the guest kernel has no `mmap`.
 
+## What the strong control qualifies, arm by arm
+
+A control qualifies a *detection*, so the denominator is the cases an
+arm detects, not every case it delivers. A case counts as qualified
+only when its control ran on the image the detection came from and
+stayed silent: a control on a different capacity image answers the
+question for that image. The first base-arm control runs used the
+module image for cases whose detections came from the base-capacity
+image, and are superseded by runs on the matching one.
+
+For the two Capstone arms the comparable thing is the capacity
+image. CheriBSD has no capacity variants, so there it is the binary,
+and that column was built from two: `3172023c` for the 2026-10-06 and
+-07 runs and `df124719`, the same build plus four modules, for -08 and
+-09. The guest holds `df124719`, so four of the six detections that
+arm reports on a variant case were measured on the earlier build and
+their control ran on the later one. That is weaker evidence than a
+match, not none, and it is counted separately.
+
+| arm | detects, of its variant cases | qualified | control faulted | other build or image | not run |
+|---|---:|---:|---:|---:|---:|
+| base | 11 of 18 | 11 | 0 | 0 | 0 |
+| sublet | 17 of 18 | 17 | 0 | 0 | 0 |
+| cheribsd-revocation | 6 of 18 | 2 | 0 | 4 | 0 |
+
+The four on the later build are `05`, `09`, `10`, `14`. Their controls are silent on
+`df124719`; their detections were measured on `3172023c`. The
+runner hashes the guest's copy against the host's and refuses a
+mismatch, so closing this would mean pushing the earlier build
+into the guest and re-qualifying it, which changes the guest
+state every other CheriBSD row depends on.
+
+`inputs.json`'s `strong_control_per_case` carries the row behind each
+number: the control run and its capacity, the run the matrix cites
+for the detection and its capacity, and whether the two agree. The
+lists of which cases are clean were kept by hand for one day and went
+stale, so they are now derived from the run records.
+
+One repair the CheriBSD run needed first: that arm could not run a
+variant at all, and when the path was added the run was refused by
+its own binary gate. The default `CHERI_PYTHON` pointed at
+`build-tgot/python`, 59,565,536 bytes; the guest runs the inner
+`build-tgot/build/python`, 63,167,120 bytes, which is the hash the
+delivered runs record. The gate was right and the default was wrong,
+and with the gate in place that default would have refused every run
+on that arm.
+
+### Case 19 has three faulting sites, and only one of them is its defect
+
+Its trigger runs a whole upstream file. On the sublet arm that file faults
+at three distinct pcs, and the control is what found them:
+
+| pc | what is there | in this corpus |
+|---|---|---|
+| `0xc05c3f70` | gh-142664, the re-entrant `memoryview.__hash__` | yes, this case |
+| `0xc06226cc` | gh-143195, a use-after-free in `memoryview.hex(sep)` via a re-entrant `sep.__len__` | no |
+| `0xc034a960` | `OtherTest.test_use_released_memory`, gh-92888's regression test | no |
+
+The first control neutralised only gh-142664 and faulted at the second
+site. The second neutralised both and faulted at the third. The third site
+is not a defect this corpus holds and no host oracle flags it, so no
+amount of editing the file's defects makes a whole-file control silent.
+
+**The attribution holds anyway, and a probe is why.** `TRIGGER=<file>` runs
+one script from a case directory in place of `trigger.py` -- a diagnostic,
+with the trigger unchanged and the override recorded in `run.meta`. Two
+probes select one site each by test name:
+
+| probe | selects | sublet |
+|---|---|---|
+| `probe-142664.py` | six tests by name | DETECTED cause=24 pc=0xc05c3f70 |
+| `probe-143195.py` | six tests by name | DETECTED cause=24 pc=0xc06226cc |
+
+gh-142664's own six tests fault on their own, so the detection the matrix
+credits to this case is that defect's. The three sites also run in that
+order inside the file, so the whole-file run reaches gh-142664 first.
+
+The control for this case is therefore paired with `probe-142664.py`
+rather than with `trigger.py`: both select the same six tests by name, the
+probe with the re-entrant release in place and the control with it removed.
+A fault in the probe and silence in the control qualifies the detection
+without relying on the whole-file run at all.
+
+### An open fault on the sublet arm
+
+`OtherTest.test_use_released_memory` is gh-92888's regression test: a
+memoryview whose backing bytearray is freed from inside `__index__`, then
+read through. It **passes** on the pinned host build, and the nesting test
+is negative -- no ASan report on the same build with pymalloc active and
+none with `PYTHONMALLOC=malloc`, where a block-level use-after-free would
+be caught. The sublet arm faults on it at `pc=0xc034a960` with cause 24.
+
+So this is either a fault on traffic that is safe, or a detection no host
+oracle can corroborate, and the evidence here does not decide which. It is
+recorded as an open fault on that arm rather than promoted to a case: the
+corpus admits a defect only on a measured liveness proof, and there is
+none. It belongs to whoever owns the sublet runtime, on the same footing
+as the two open faults the PostgreSQL corpus records for that arm.
+
+### Case 31 is the other whole-file trigger, and its control settles its
+### attribution by itself
+
+The same structural weakness applies to `31`: a whole-file verdict does
+not say which test faulted. There it is settled without a probe. Its
+control differs from its trigger in exactly the two gh-148660 tests, it
+runs the same 299 tests, and it is silent on the sublet arm while the
+trigger faults with cause 24. A pair that differs in one defect and
+differs in outcome attributes the outcome to that defect. That is the
+general argument, and `19` needs probes only because its control cannot
+be made silent: a third site in its file faults for reasons the corpus
+does not own.
+
 ## A cause 24 carries no faulting value, and the one that exists was discarded
 
 The review that corrected the base arm's premise ends on an open question: a
@@ -459,6 +571,12 @@ should, and is identical across the three sublet images, which differ only in
 heap capacity.
 
 ## The negative controls, and the two questions they answer
+
+Every run named below has its result lines in [`runs/`](runs/): one
+`verdicts.tsv`, `control-kind.tsv` and `run.meta` per run, so the per-case
+claims in this file can be checked against the tree rather than against the
+aggregates in `inputs.json`. Per-case logs are not committed (rule 6).
+
 
 Rule 5 of the SCHEMA requires every oracle to have a negative control:
 a suite whose oracles cannot say FAIL proves nothing by saying PASS.
@@ -541,35 +659,32 @@ not a measurement that came back empty.
 
 | arm | run | cases | executed | faults | case timeout | status |
 |---|---|---|---|---|---|---|
+| cheribsd-revocation | `boundary-negctl-20261010-131917` | 6 | 6 | 0 | n/a | pass |
 | base | `spatial-negctl-20261010-081957` | 9 | 8 | 0 | 300s | void -- case 24 produced no marker, see below |
 | base | `spatial-negctl-20261010-083844` | 9 | 8 | 1 | 300s | failed -- re-run of the above; case 24's first variant faulted, see below |
 | base | `spatial-negctl-20261010-090107` | 1 | 0 | 0 | 120s | no measurement -- case 24's second variant under the 120s default |
 | base | `spatial-negctl-20261010-090622` | 5 | 5 | 0 | 900s | ran, self-test failed -- case 31 ran 299 tests with no fault, see below |
+| base | `spatial-negctl-20261010-123039` | 16 | 16 | 0 | 900s | pass |
+| base | `spatial-negctl-20261010-130627` | 2 | 2 | 0 | 900s | pass |
+| sublet | `sublet-negctl-20261010-113809` | 16 | 15 | 1 | 900s | failed |
+| sublet | `sublet-negctl-20261010-121149` | 2 | 2 | 0 | 900s | pass |
+| sublet | `sublet-negctl-20261010-122013` | 1 | 0 | 1 | 900s | failed |
+| sublet | `sublet-negctl-20261010-131308` | 1 | 1 | 0 | 900s | pass |
 
 What the strong control settles, and what it does not:
 
-- Clean on the base arm, so these detections are defect-dependent: `10`, `15`, `24`, `30`.
-- Measured only inside runs that were voided or failed for case 24's
-  sake: `01`, `03`, `04`, `05`, `09`, `14`. Each was silent with its marker
-  present in `spatial-negctl-20261010-081957` and again in
-  `spatial-negctl-20261010-083844`, so the per-case evidence is there,
-  but neither run carries a clean run-level verdict. A re-run under the
-  fixed evidence gate is outstanding.
-- Built and verified on the pinned host interpreter, never yet run in a
-  domain: `02`, `17`, `19`, `23`, `25`, `27`, `28`. One of them, `19`, carries
-  an allowed-failure list: `test_hex_use_after_free` is the same
-  reentrancy through `memoryview.hex()`, a sibling defect unfixed at this
-  pin, and the trigger's own run of that file fails it in all six
-  parametrised classes. The control removes exactly the six
-  `test_hash_use_after_free` failures and no others, which is evidence it
-  edited the method the case is about.
-- `31` ran its full 299 tests with no fault, and its control's own
-  self-test then failed on two `test_sizeof_exact` assertions. Those
-  assert exact `sys.getsizeof` values, which capability pointers widen,
-  so they fail on this substrate for reasons unrelated to the control;
-  the trigger's own run of the file fails them too. The control now
-  allows those two by name, and a re-run to record the clean verdict is
-  outstanding.
+- **base**: 11 of the 11 detections it reports on a variant case
+  are qualified -- the control ran on the same capacity image and stayed
+  silent: `01`, `03`, `04`, `05`, `09`, `10`, `14`, `15`, `24`, `30`, `31`.
+- **sublet**: 17 of the 17 detections it reports on a variant case
+  are qualified -- the control ran on the same capacity image and stayed
+  silent: `01`, `02`, `03`, `04`, `05`, `09`, `10`, `14`, `15`, `19`, `23`, `24`, `25`, `27`, `28`, `30`, `31`.
+- **cheribsd-revocation**: 2 of the 6 detections it reports on a variant case
+  are qualified -- the control ran on the same binary and stayed
+  silent: `01`, `31`.
+  4 ran on a different build or image: `05`, `09`, `10`, `14`.
+
+Two cases needed more than one attempt and both are worth reading: `24`, whose first variant was itself defective, and `19`, whose trigger runs a file with three faulting sites. Both are below.
 
 #### Case 24 took two variants, and the first one was wrong
 

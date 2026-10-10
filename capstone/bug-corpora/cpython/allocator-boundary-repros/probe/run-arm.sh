@@ -96,6 +96,7 @@ case $CAP in
 esac
 [ "$CAP" = base ] || OUT=${2:-$KIT/results/$arm-$CAP-$STAMP}
 [ "$NEGCTL" = 0 ] || OUT=${2:-$KIT/results/$arm-negctl-$STAMP}
+[ -z "${TRIGGER:-}" ] || OUT=${2:-$KIT/results/$arm-probe-$STAMP}
 
 # ---- the arm must be one the corpus declares -----------------------------
 DECL=$(python3 -c "import json,sys; print(' '.join(json.load(open(sys.argv[1]))['required_arms']))" \
@@ -203,7 +204,8 @@ in_subset() {  # $1 = case directory name
 }
 printf 'case\tarm\tverdict\trc\tcause\tlast\tpc\taddress\tuntagged_value\n' \
   > "$OUT/verdicts.tsv"
-printf 'case_timeout\t%s\nonly\t%s\n' "$CASE_TIMEOUT" "${ONLY:-all}" >> "$OUT/run.meta"
+printf 'case_timeout\t%s\nonly\t%s\ntrigger_override\t%s\n' \
+  "$CASE_TIMEOUT" "${ONLY:-all}" "${TRIGGER:-none}" >> "$OUT/run.meta"
 n=0
 for d in "$CORPUS"/[0-9][0-9]_*/; do
   c=$(basename "$d")
@@ -219,7 +221,21 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   # staging step that copied only two files left those cases dying at import
   # while the row read as the arm staying quiet.
   cp "$d"/*.py "$stage/" 2>/dev/null
-  if [ "$NEGCTL" = 1 ] && [ -f "$d/negative_control.py" ]; then
+  # TRIGGER=<file> runs a different script from the case directory. It is for
+  # diagnostics on a case whose trigger runs a whole upstream file: selecting
+  # one test answers which defect a fault belongs to without editing the
+  # trigger, which would re-measure the case. It is refused together with
+  # --negative-control, because then neither name would say what ran.
+  if [ -n "${TRIGGER:-}" ] && [ "$NEGCTL" = 1 ]; then
+    echo "REFUSING: TRIGGER= and --negative-control both replace the trigger." >&2
+    exit 2
+  fi
+  if [ -n "${TRIGGER:-}" ]; then
+    [ -f "$d/$TRIGGER" ] || {
+      printf '%s\t%s\tSTAGING-FAILED\t\t\t\t\t\t\n' "$c" "$arm" >> "$OUT/verdicts.tsv"
+      printf '  %-56s STAGING-FAILED (no %s)\n' "${c:0:56}" "$TRIGGER"; continue; }
+    cp "$d/$TRIGGER" "$stage/trigger.py"
+  elif [ "$NEGCTL" = 1 ] && [ -f "$d/negative_control.py" ]; then
     # The strong control: the case's own allocation and free traffic with only
     # the offending access made valid. This is the one that qualifies a
     # detection -- the stub below only shows the arm does not fault on any

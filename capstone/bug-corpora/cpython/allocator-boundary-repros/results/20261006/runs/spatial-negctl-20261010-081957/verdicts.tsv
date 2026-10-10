@@ -1,0 +1,10 @@
+case	arm	verdict	rc	cause	last
+01_gh-139071_heap-overflow-in-set-dealloc-setobject	spatial	SILENT	0		{<weakref at 0xc1247db0; to 'dummy' at 0xc135d950>} NEGATIVE-CONTROL no defect performed
+03_gh-140492_heap-buffer-overflow-in-ast-copy	spatial	SILENT	0		FAILED (failures=1) NEGATIVE-CONTROL no defect performed
+04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer	spatial	SILENT	0		FAILED (failures=1) NEGATIVE-CONTROL no defect performed
+05_gh-140497_cpython-crash-heap-buffer-overflow-python	spatial	SILENT	0		NEGATIVE-CONTROL no defect performed
+07_gh-140594_fix-an-out-of-bounds-read	spatial	SILENT	0		NEGATIVE-CONTROL no defect performed
+09_gh-140802_heap-buffer-overflow-in-pycore-interpframe	spatial	SILENT	0		  frame.f_lineno = frame.f_lineno NEGATIVE-CONTROL no defect performed
+12_gh-143377_heap-buffer-overflow-in-format-tracebackexception	spatial	SILENT	0		NEGATIVE-CONTROL no defect performed
+14_gh-144475_heap-buffer-overflow-in-functools-partial	spatial	SILENT	0		NEGATIVE-CONTROL no defect performed
+24_gh-142783_zoneinfo-eager-decref	spatial	SILENT	1		    raise ZoneInfoNotFoundError(f"No time zone found with key {key}") zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key UTC'
