@@ -77,6 +77,25 @@ def classify(serial, which, mode, runner_exit, control=False):
         "expected": "fault" if mode == "sublet" else "complete",
         "runner_exit": runner_exit,
     }
+    # INFRASTRUCTURE FAILURE IS NOT A MEASUREMENT (the corpus contract's rule 4,
+    # and it bit on 2026-10-10). run_guest takes a lock shared with every lane
+    # and `flock -E 75` exits 75 when the wait expires, which is another lane
+    # legitimately holding it. Scored as it stood, those runs came back as five
+    # broken controls, which would have read as "the arm faults without the
+    # defect" -- the exact opposite of what had happened, which was that
+    # nothing ran at all.
+    if runner_exit == 75 or (not serial.strip() and not faults):
+        row.update(
+            control="norun" if control else None,
+            passed=False,
+            norun=("the guest produced nothing"
+                   + (" and the shared qemu lock wait expired (exit 75)"
+                      if runner_exit == 75 else "")
+                   + "; this is an infrastructure failure and carries no"
+                     " verdict either way"),
+        )
+        return row
+
     if control:
         # A CONTROL IS READ BY WHETHER IT COMPLETED, on either arm. It is the
         # same case with the one invalid access replaced by a valid one, so a
