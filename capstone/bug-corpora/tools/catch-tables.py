@@ -102,10 +102,9 @@ def col3_arm(corpus, arms):
 # its own name (the Sublet heap, Perl's SV arenas stock); mruby has no such run. Column 3 is the
 # group's Sublet port: the APR, pymalloc, palloc and memsys5 ports' `sublet`, Perl's SV-head port,
 # mruby's GC port. postgres/c-repros are frontend programs with no nested allocator linked at all,
-# so both columns are the Sublet heap itself, `sysalloc-sublet`. Their recorded `sublet` arm is NOT
-# that: both PostgreSQL SDKs keep the default level0 heap (runtime/application/CMakeLists.txt) and
-# the sublet one only adds a grant for the server's context pools, which these programs never use,
-# so that run measured level0 bounds under a Sublet label. Until the Sublet heap is run they are holes.
+# so both columns are the protected system allocator itself: virtual mallocng, `virtual-malloc`
+# (the physical Sublet heap is not used, project decision 2026-10-10). Their recorded `sublet` arm
+# was level0 bounds under a Sublet label and is dropped.
 # Corpora of these programs that are deliberately NOT on the board yet, each with the reason. A new
 # corpus is not silently skipped: it stops --all until it is either given a group above or named here.
 NOT_ON_BOARD = {
@@ -120,7 +119,7 @@ EXTRA_GROUPS = {
     ("httpd", "bucket-repros"): ("APR buckets", True, "sublet-malloc", "sublet"),
     ("mruby", "release-differential"): ("whole program", None, "sysalloc-sublet", "sublet-gc"),
     ("perl", "release-differential"): ("whole program", None, "sysalloc-sublet", "sublet-svheads"),
-    ("postgres", "c-repros"): ("direct malloc", False, "sysalloc-sublet", "sysalloc-sublet"),
+    ("postgres", "c-repros"): ("direct malloc", False, "virtual-malloc", "virtual-malloc"),
     ("postgres", "mmgr-repros"): ("memory contexts", True, "sublet-malloc", "sublet"),
     ("postgres", "sql-repros"): ("palloc, whole server", True, "sublet-malloc", "sublet"),
     ("sqlite", "engine-repros"): ("memsys5", True, "sublet-malloc", "sublet"),

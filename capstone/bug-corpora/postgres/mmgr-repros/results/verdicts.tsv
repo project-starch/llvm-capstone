@@ -1,0 +1,21 @@
+case	arm	configuration	verdict	reason	evidence	bundle
+00_1f5b6a5e5d_tuplestore_double_free	spatial	replay-arena	MISSED		reached (pg_mark() marker) and completed with no fault; run=00-tuplestore-double-free-spatial-v26wh5nt	results/2026-10-10-qemu/spatial
+00_1f5b6a5e5d_tuplestore_double_free	sublet	replay-sublet	CAUGHT		cause=24 pc=0x101a05cf0 in GetMemoryChunkMethodID; by function: GetMemoryChunkMethodID is the case's declared fault site	results/2026-10-10-qemu/sublet
+00_1f5b6a5e5d_tuplestore_double_free	virtual-malloc	virtual-mallocng-replay	MISSED		reached (the hosted driver's ready mark) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+00_1f5b6a5e5d_tuplestore_double_free	virtual-pg-pools	virtual-mallocng-replay-pools	CAUGHT		cause=24 pc=0x3f97a16d90 in GetMemoryChunkMethodID; by function: GetMemoryChunkMethodID is the case's declared fault site	results/2026-10-10-virtual/virtual-pg-pools
+01_3549ffb6af_vacuum_dead_items_stale_struct	spatial	replay-arena	MISSED		reached (pg_mark() marker) and completed with no fault; run=01-vacuum-dead-items-stale-struct-spatial-55ve9cz2	results/2026-10-10-qemu/spatial
+01_3549ffb6af_vacuum_dead_items_stale_struct	sublet	replay-sublet	CAUGHT		cause=24 pc=0x101a127f4 in pg_probe; by probe: pc equals the labelled probe 0x101a127f4	results/2026-10-10-qemu/sublet
+01_3549ffb6af_vacuum_dead_items_stale_struct	virtual-malloc	virtual-mallocng-replay	MISSED		reached (the hosted driver's ready mark) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+01_3549ffb6af_vacuum_dead_items_stale_struct	virtual-pg-pools	virtual-mallocng-replay-pools	CAUGHT		cause=24 pc=0x3fbe810b44 in pg_probe; by probe: the pc lies in pg_probe, the labelled read	results/2026-10-10-virtual/virtual-pg-pools
+02_ed394c4bdf_live_parts_stale_alias	spatial	replay-arena	MISSED		reached (pg_mark() marker) and completed with no fault; run=02-live-parts-stale-alias-spatial-ysniqxnc	results/2026-10-10-qemu/spatial
+02_ed394c4bdf_live_parts_stale_alias	sublet	replay-sublet	CAUGHT		cause=24 pc=0x101a1280c in pg_probe; by probe: pc equals the labelled probe 0x101a1280c	results/2026-10-10-qemu/sublet
+02_ed394c4bdf_live_parts_stale_alias	virtual-malloc	virtual-mallocng-replay	MISSED		reached (the hosted driver's ready mark) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+02_ed394c4bdf_live_parts_stale_alias	virtual-pg-pools	virtual-mallocng-replay-pools	CAUGHT		cause=24 pc=0x3fa1e10b5c in pg_probe; by probe: the pc lies in pg_probe, the labelled read	results/2026-10-10-virtual/virtual-pg-pools
+03_a61592253e_pgoutput_entry_cxt_teardown	spatial	replay-arena	MISSED		reached (pg_mark() marker) and completed with no fault; run=03-pgoutput-entry-cxt-teardown-spatial-tmkq1rfe	results/2026-10-10-qemu/spatial
+03_a61592253e_pgoutput_entry_cxt_teardown	sublet	replay-sublet	CAUGHT		cause=24 pc=0x101a12d70 in pg_probe; by probe: pc equals the labelled probe 0x101a12d70	results/2026-10-10-qemu/sublet
+03_a61592253e_pgoutput_entry_cxt_teardown	virtual-malloc	virtual-mallocng-replay	MISSED		reached (the hosted driver's ready mark) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+03_a61592253e_pgoutput_entry_cxt_teardown	virtual-pg-pools	virtual-mallocng-replay-pools	CAUGHT		cause=24 pc=0x3f9d810ba8 in pg_probe; by probe: the pc lies in pg_probe, the labelled read	results/2026-10-10-virtual/virtual-pg-pools
+04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn	spatial	replay-arena	MISSED		reached (pg_mark() marker) and completed with no fault; run=04-reorderbuffer-spec-insert-lsn-spatial-4tzevhi0	results/2026-10-10-qemu/spatial
+04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn	sublet	replay-sublet	CAUGHT		cause=24 pc=0x101a130f0 in pg_probe; by probe: pc equals the labelled probe 0x101a130f0	results/2026-10-10-qemu/sublet
+04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn	virtual-malloc	virtual-mallocng-replay	MISSED		reached (the hosted driver's ready mark) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn	virtual-pg-pools	virtual-mallocng-replay-pools	CAUGHT		cause=24 pc=0x3f88a10cc4 in pg_probe; by probe: the pc lies in pg_probe, the labelled read	results/2026-10-10-virtual/virtual-pg-pools

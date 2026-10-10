@@ -46,6 +46,8 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import verdicts  # noqa: E402
 REPO = HERE.parents[2]
 RUN = REPO / "capstone/ports/common/application/run.py"
 SDK_HEAP = {"spatial": "level0", "sublet": "sublet", "sublet-chunks": "sublet",
@@ -152,33 +154,9 @@ def predicted(kind, arm):
     return "CAUGHT" if arm in REVOKING else "DEFECT-REPRODUCED"
 
 
-class Symbols:
-    """Function symbols of one ELF image, and its load base, for pc attribution."""
-
-    def __init__(self, llvm_bin, image):
-        out = subprocess.run([str(llvm_bin / "llvm-nm"), "--print-size", "-n", "--defined-only",
-                              str(image)], capture_output=True, text=True, check=True).stdout
-        self.funcs = []
-        for line in out.splitlines():
-            parts = line.split()
-            if len(parts) == 4 and parts[2] in "tTwW":
-                self.funcs.append((int(parts[0], 16), int(parts[1], 16), parts[3]))
-        hdr = subprocess.run([str(llvm_bin / "llvm-readelf"), "-l", str(image)],
-                             capture_output=True, text=True, check=True).stdout
-        loads = [int(m.group(1), 16) for m in re.finditer(r"^\s*LOAD\s+\S+\s+(0x[0-9a-f]+)", hdr, re.M)]
-        if not loads or not self.funcs:
-            raise RuntimeError(f"{image}: no LOAD segment or no function symbols")
-        self.base = min(loads)
-
-    def lookup(self, runtime_pc, code_start):
-        pc = runtime_pc - code_start + self.base
-        for addr, size, name in self.funcs:
-            if addr <= pc < addr + max(size, 1):
-                return name, pc - addr
-        return None, None
-
-
-FAULT = re.compile(r"domain fault cause=(\d+) pc=(0x[0-9a-f]+) address=(0x[0-9a-f]+).*?code=(0x[0-9a-f]+)-")
+# pc attribution and the fault line are shared with every runner, in verdicts.py.
+Symbols = verdicts.Symbols
+FAULT = verdicts.FAULT_LINE
 
 
 def run_image(state, image, argv, out_base):

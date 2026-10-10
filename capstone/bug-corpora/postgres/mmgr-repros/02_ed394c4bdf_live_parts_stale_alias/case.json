@@ -13,12 +13,16 @@
   "fidelity": "model-consumer, real allocator",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "complete",
+      "verdict": "MISSED",
+      "verdict_note": "reached (pg_mark() marker) and completed with no fault; run=02-live-parts-stale-alias-spatial-ysniqxnc",
+      "verdict_from": "results/2026-10-10-qemu/spatial"
     },
     "sublet": {
       "oracle": "fault at the labelled read probe",
       "verdict": "CAUGHT",
-      "verdict_from": "results/20260918-qemu/matrix.tsv case 2: sublet=PASS:fault cause=24 fault_pc=0x101a147d4 probe_pc=0x101a147d4"
+      "verdict_note": "cause=24 pc=0x101a1280c in pg_probe; by probe: pc equals the labelled probe 0x101a1280c",
+      "verdict_from": "results/2026-10-10-qemu/sublet"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -39,6 +43,18 @@
       "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts with PG_POISONCAP off",
       "verdict": "MISSED",
       "verdict_from": "results/20261008-cheribsd/result-lines.txt mmgr-02: PG_DEFECT case=2 ready, then mode=0 completed; quarantine.tsv row 2"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, the replay's managers stock on virtual mallocng (tools/arms.json virtual-mallocng-replay): a fault in pg_probe (case 0: its declared function), or the case completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the hosted driver's ready mark) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-pg-pools": {
+      "oracle": "virtual profile, the managers on the Sublet context pools with the arena lent linear (tools/arms.json virtual-mallocng-replay-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3fa1e10b5c in pg_probe; by probe: the pc lies in pg_probe, the labelled read",
+      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
     }
   },
   "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case.",

@@ -1,10 +1,11 @@
 # PostgreSQL 17.5 engine defects, reached through SQL
 
-19 defects in PostgreSQL 17.5 and its contrib extensions, each a `trigger.sql`
-run against a real server. Sibling of [`../mmgr-repros`](../mmgr-repros), which
-holds 8 upstream memory-manager defects pinned at 17.0 and reduced to C
-programs; these are not reducible that way, so they use the `script-trigger`
-schema described in [`../../SCHEMA.md`](../../SCHEMA.md).
+9 defects in PostgreSQL 17.5 and its contrib extensions, each a `trigger.sql`
+run against a real server. Siblings: [`../mmgr-repros`](../mmgr-repros), five
+memory-manager defects reduced to C programs against the managers themselves,
+and [`../c-repros`](../c-repros), five frontend defects reduced to C against
+the real upstream functions; these are not reducible that way, so they use the
+`script-trigger` schema described in [`../../SCHEMA.md`](../../SCHEMA.md).
 
 ## Classes
 
@@ -27,30 +28,49 @@ clean, which is the reason this corpus records the class per case.
 
 ## Arms
 
-| arm | state |
-|---|---|
-| `spatial` | not run. Needs the Capstone application VM -- real postgres in a domain -- which is built and has never been run |
-| `sublet` | not run, same reason |
-| `cheribsd-revocation` | measured for all 19 |
+| arm | configuration (`tools/arms.json`) | what it is |
+|---|---|---|
+| `spatial` | `app-level0` | the server as an application domain (`ports/postgres/app/build-domain.sh`, `PGSU_NESTED=none`): malloc bounds each object; palloc chunks are unbounded inside their block |
+| `sublet` | `app-level0-pg-nested-sublet` | the same with PostgreSQL's memory contexts on Sublet context pools (`PGSU_NESTED=sublet`): palloc chunks bounded and revoked per chunk; malloc still level0 |
+| `virtual-malloc` | `virtual-mallocng` | the server built for the virtual Capstone profile (`ports/common/application/build-virtual.sh postgres`): a Linux process under `capstone-vexec`, malloc is musl mallocng run locally with exact bounds and lifetime retirement; palloc chunks unbounded inside their block |
+| `virtual-pg-pools` | `virtual-mallocng-pg-pools` | the same with `PGSU_NESTED=sublet`: PostgreSQL's contexts on Sublet context pools, chunks bounded and retired per chunk |
+| `cheribsd-revocation` | -- | stock CheriBSD purecap, revocation at the platform default (`shared/run-cheribsd.sh`) |
 
-CheriBSD runs each case **twice**: the plain purecap build gives the verdict,
-and a separate `--enable-cassert` purecap build supplies the reachability
-witness through PostgreSQL's own `Assert()` and its `MEMORY_CONTEXT_CHECKING`
-chunk sentinel. The two must be separate runs, because `Assert()` aborts and so
-changes control flow -- a build that aborts can never be the one whose silence
-is being reported. For the wrong-answer and integer cases the witness is instead
-a differential directive in the trigger itself:
+On the virtual profile the runner takes `--virtual-kit <platform>` and `--image
+<build-virtual.sh OUT>/image/postgres.dom`, stages the image, the share and the fixture cluster, and
+runs every session -- each on a fresh copy of the cluster, as `nobody` -- in one boot.
 
-    -- EXPECT-ERRORS: N     a correct build rejects N statements
-    -- EXPECT-ABSENT: <re>  a correct build can never print this
+`shared/run-arm.py` reads what an image IS from its build root -- `domain/nested.mode` and the
+runtime SDK's heap -- and refuses an arm whose configuration needs another build. Before any case
+it runs the configuration's controls inside the server through pgcorpus_reach's
+`corpus_control()` (a write past and a read after free, through malloc and, on the nested arm,
+through palloc), then each `trigger.sql` on a fresh copy of the fixture. It reports one Observation
+per run to the shared judge (`tools/verdicts.py`, SCHEMA.md "Verdicts"):
+
+* a SQL trigger has no marker before its access, so **reached** is the trigger statement running
+  after the case's CREATE EXTENSION lines, counted by backend prompts, and the evidence says so;
+* a fault counts as the defect's only when the case's `control.sql` -- the same statement below the
+  defect's threshold -- completes on the same image in the same invocation, or when it lies in a
+  function `case.json` `fault_sites` justifies. Two cases have a control so far (02, 03). A fault
+  with neither is NO-READING, `unattributed`: case 03's sublet fault was a fault of exactly that
+  kind, and its control faulted at the same instruction (2026-10-10, withdrawn on review);
+* a silence is MISSED only when the controls behaved, and its evidence carries what the trigger's
+  directives showed:
+
+      -- EXPECT-ERRORS: N     a correct build rejects N statements
+      -- EXPECT-ABSENT: <re>  a correct build can never print this
+
+CheriBSD runs each case **twice**: the plain purecap build gives the verdict, and a separate
+`--enable-cassert` purecap build supplies the reachability witness through PostgreSQL's own
+`Assert()` and its `MEMORY_CONTEXT_CHECKING` chunk sentinel. Its runner is not yet on the shared
+judge.
 
 ## What these results do not say
 
-Three cases (12, 14, 18) need a postmaster and cannot run under the single-user
-backend, so their rows are `not-run`, not `silent`. Case 13's `EXPECT-ABSENT`
-directive was written from its own run output: it records what was seen rather
-than testing an independent expectation, so it will always fire on this arm.
-Its `case.json` says so, and `audit-evidence.py` flags the overlap.
+`results/matrix.tsv` and the `results/*-20261006-*`, `-20261008-*` and `-control-20261010-*`
+directories are the runs scored by the runner of their day, which counted any fault after the setup
+as detected and used corpus case 02 as its mechanism gate -- a spatial defect the spatial arm
+catches too, so it could not show that the sublet arm's pools were active.
 
 Our own constructed memory-context demonstrators are deliberately not here.
 They are this project's fixtures, and `../../README.md` places those under

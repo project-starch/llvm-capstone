@@ -20,6 +20,8 @@
  *
  * Both datums come from palloc, so both defects stay in the aset layer and
  * both cases run on all three arms, unlike the non-nested c-repros.
+ *
+ * corpus_control, at the end, is not a defect: it is the arm's control set.
  */
 #include "postgres.h"
 
@@ -161,4 +163,74 @@ corpus_pgp_sesskey_overflow(PG_FUNCTION_ARGS)
 	memcpy(ctx->sess_key, msg + 1, ctx->sess_key_len);
 
 	PG_RETURN_INT32((int32) ctx->sess_key_len);
+}
+
+/*
+ * The arm's controls, run in the server before any case and on exactly the
+ * image being measured (bug-corpora/postgres/sql-repros/shared/run-arm.py).
+ * Not defects. Each says what the arm IS, and tools/arms.json records what
+ * each must do on each configuration: a write one past a malloc'd object
+ * faults wherever malloc bounds objects; a read after free faults only where
+ * free revokes; the palloc pair does the same through a memory context, which
+ * only the Sublet context pools bound and revoke per chunk. The NOTICE is the
+ * mark: it is printed last before the access, so a run that faults without it
+ * faulted somewhere else.
+ */
+static volatile unsigned char corpus_control_sink;
+
+static void __attribute__((noinline))
+corpus_control_write(volatile unsigned char *p)
+{
+	*p = 1;
+}
+
+static unsigned char __attribute__((noinline))
+corpus_control_read(const volatile unsigned char *p)
+{
+	return *p;
+}
+
+PG_FUNCTION_INFO_V1(corpus_control);
+
+Datum
+corpus_control(PG_FUNCTION_ARGS)
+{
+	char	   *name = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	unsigned char *p;
+
+	if (strcmp(name, "bounds-malloc") == 0)
+	{
+		if ((p = malloc(16)) == NULL)
+			elog(ERROR, "malloc failed");
+		elog(NOTICE, "CONTROL %s mark", name);
+		corpus_control_write(p + 16);
+		free(p);
+	}
+	else if (strcmp(name, "uaf-malloc") == 0)
+	{
+		if ((p = malloc(32)) == NULL)
+			elog(ERROR, "malloc failed");
+		p[0] = 7;
+		free(p);
+		elog(NOTICE, "CONTROL %s mark", name);
+		corpus_control_sink = corpus_control_read(p);
+	}
+	else if (strcmp(name, "bounds-palloc") == 0)
+	{
+		p = palloc(16);
+		elog(NOTICE, "CONTROL %s mark", name);
+		corpus_control_write(p + 16);
+		pfree(p);
+	}
+	else if (strcmp(name, "uaf-palloc") == 0)
+	{
+		p = palloc(32);
+		p[0] = 7;
+		pfree(p);
+		elog(NOTICE, "CONTROL %s mark", name);
+		corpus_control_sink = corpus_control_read(p);
+	}
+	else
+		elog(ERROR, "unknown control \"%s\"", name);
+	PG_RETURN_TEXT_P(cstring_to_text("CONTROL RETURNED"));
 }

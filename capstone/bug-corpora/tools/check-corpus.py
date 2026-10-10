@@ -39,7 +39,8 @@ DECL_OPTIONAL = {"upstream", "expect_live_in_pin", "live_in_pin_note", "case_mac
                  "case_glob", "case_exclude", "case_number_base", "case_table",
                  "case_dir_column", "case_doc", "required_arms", "arm_keys",
                  "expect_provenance", "runners", "checker", "inventory", "evidence",
-                 "advisories", "related", "note", "shape_table", "shape_prose"}
+                 "advisories", "related", "note", "shape_table", "shape_prose",
+                 "arm_configurations", "verdict_bundles"}
 SCHEMAS = {"case-json", "sqlite-row", "script-trigger", "xlang-row"}
 STATUSES = {"planned", "built", "measured", "triaged"}
 PATH_FIELDS = ("runners", "checker", "inventory", "evidence", "related")
@@ -69,7 +70,7 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
-                 "citation_constraint"}
+                 "citation_constraint", "fault_sites", "fault_sites_why"}
 # `citation_constraint` records that a case's upstream commit cannot be quoted
 # freely -- in practice that its SUBJECT names a person, so the fix may be cited
 # by HASH AND PATH ONLY. This tree's naming rule is absolute and applies to
@@ -132,6 +133,11 @@ ARM_ORACLES = {
     "sublet-full": {"oracle"},
     "sublet-carve": {"oracle"},
     "sublet-pymalloc": {"oracle"},
+    # The virtual Capstone profile (capstone/runtime/virtual): local mallocng with capability
+    # lifetimes, and PostgreSQL's contexts on Sublet context pools over it. tools/arms.json says
+    # what each is; they are not the physical Sublet heap.
+    "virtual-malloc": {"oracle"},
+    "virtual-pg-pools": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),
@@ -295,6 +301,18 @@ def check_cases(corpus, decl, dirs, problems):
         if "shape" in required and not str(case.get("shape", "")).strip():
             problems.append(f"{where}: shape is empty")
 
+        # A declared fault site lets a fault outside the labelled probe count as the defect's, so
+        # it has to say why that function is the defect's access -- from the source or an earlier
+        # independent run, never from the fault it is about to excuse.
+        if "fault_sites" in case:
+            sites = case["fault_sites"]
+            if not (isinstance(sites, list) and sites and all(isinstance(x, str) and x for x in sites)):
+                problems.append(f"{where}: fault_sites must be a non-empty list of function names")
+            if not str(case.get("fault_sites_why", "")).strip():
+                problems.append(f"{where}: fault_sites without fault_sites_why")
+        elif "fault_sites_why" in case:
+            problems.append(f"{where}: fault_sites_why without fault_sites")
+
         # live_in_pin is the field the index reports per version, so its
         # absence must be a corpus-wide decision rather than a per-case
         # oversight: a corpus either records it for every case or for none.
@@ -422,6 +440,31 @@ def check_one(manifest):
                         f"{sorted(SCHEMAS)}")
     if decl["status"] not in STATUSES:
         problems.append(f"status {decl['status']!r} is not one of {sorted(STATUSES)}")
+    # Which configuration in tools/arms.json each arm name of this corpus measures. The name is a
+    # label; two corpora's `spatial` need not be the same thing, and the configuration is what
+    # tools/verdicts.py judges a run against and what a total may add up.
+    # A corpus whose verdicts are derived from its bundles is held to them: every case.json verdict
+    # and results/verdicts.tsv must be what tools/derive-verdicts.py writes, re-judged now.
+    if "verdict_bundles" in decl:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("derive_verdicts", TOOLS / "derive-verdicts.py")
+        derive = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(derive)
+        by_case, tsv, found = derive.derive(corpus)
+        problems += [f"verdicts: {line}" for line in found]
+        if not found:
+            problems += [f"verdicts: {path} is not what derive-verdicts.py writes"
+                         for path in derive.apply(corpus, by_case, write=False)]
+            table = corpus / "results/verdicts.tsv"
+            if not table.is_file() or table.read_text() != tsv:
+                problems.append("verdicts: results/verdicts.tsv is not what derive-verdicts.py writes")
+    if "arm_configurations" in decl:
+        known = json.loads((TOOLS / "arms.json").read_text())["arms"]
+        for arm, config in sorted(decl["arm_configurations"].items()):
+            if config not in known:
+                problems.append(f"arm_configurations: {arm} -> {config!r} is not in tools/arms.json")
+            if arm not in decl.get("required_arms", []):
+                problems.append(f"arm_configurations: {arm!r} is not one of required_arms")
     if not isinstance(decl["cases"], int) or decl["cases"] < 0:
         problems.append("cases is not a non-negative integer")
     if not isinstance(decl["live_in_pin_recorded"], bool):

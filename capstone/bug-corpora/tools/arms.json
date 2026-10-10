@@ -1,0 +1,120 @@
+{
+  "about": "What each measured CONFIGURATION is, and the controls a run of it must show in the same invocation before a silence counts as MISSED (tools/verdicts.py). An arm NAME in a case.json is a label; a corpus maps each of its arm names to one configuration here (corpus.json `arm_configurations`), so two corpora whose `spatial` means different things cannot be added up as if it did not. A control's expectation is part of the configuration's identity: a use-after-free control that COMPLETES is what shows an arm does not revoke, just as one that faults shows it does.",
+  "arms": {
+    "replay-arena": {
+      "target": "capstone-domain",
+      "summary": "the memory-contexts replay study's level 0 (ports/postgres/memory-contexts, backing-allocator.c): every chunk is an offset inside one arena capability; nothing is revoked",
+      "mechanism": "none below the arena",
+      "controls": {
+        "uaf-chunk": "complete"
+      },
+      "controls_for_missed": [
+        "uaf-chunk"
+      ]
+    },
+    "replay-sublet": {
+      "target": "capstone-domain",
+      "summary": "the replay study with PostgreSQL's managers patched onto Sublet context pools: every chunk is its own capability, revoked when the manager takes it back",
+      "mechanism": "per-chunk bounds and revocation in the nested allocator",
+      "controls": {
+        "uaf-chunk": "fault"
+      },
+      "controls_for_missed": [
+        "uaf-chunk"
+      ]
+    },
+    "app-level0": {
+      "target": "capstone-domain",
+      "summary": "an application domain whose SDK heap is level0 (CAPSTONE_APPLICATION_HEAP=level0): malloc bounds each object to its request; free revokes nothing; a nested allocator's chunks are unbounded inside the block it took",
+      "mechanism": "per-object bounds in malloc",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "complete"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc"
+      ]
+    },
+    "app-level0-pg-nested-sublet": {
+      "target": "capstone-domain",
+      "summary": "app-level0 plus PostgreSQL's memory contexts on Sublet context pools (ports/postgres/app/build-domain.sh, PGSU_NESTED=sublet): palloc chunks bounded and revoked; plain malloc as in app-level0",
+      "mechanism": "per-object bounds in malloc; per-chunk bounds and revocation in palloc",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "complete",
+        "bounds-palloc": "fault",
+        "uaf-palloc": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "bounds-palloc",
+        "uaf-palloc"
+      ]
+    },
+    "cheribsd-default": {
+      "target": "cheribsd-purecap",
+      "summary": "stock CheriBSD purecap with libc revocation at the platform default: malloc bounds each object; a freed object is quarantined and revoked by a later sweep",
+      "mechanism": "per-object bounds in malloc; revocation after quarantine",
+      "controls": {
+        "bounds-malloc": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc"
+      ]
+    },
+    "virtual-mallocng": {
+      "target": "capstone-virtual",
+      "summary": "the virtual Capstone profile (capstone/runtime/virtual, exact-bounds QEMU): the application runs as a Linux process under capstone-vexec with musl mallocng compiled for Capstone and run locally; malloc bounds each object exactly and free retires its lifetime, so a stale capability to it faults; a nested allocator's chunks are unbounded inside the block it took. Not the physical Sublet heap: its own lifetime mechanism (runtime/virtual/mallocng.md)",
+      "mechanism": "per-object exact bounds and lifetime retirement in malloc",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc"
+      ]
+    },
+    "virtual-mallocng-pg-pools": {
+      "target": "capstone-virtual",
+      "summary": "virtual-mallocng plus PostgreSQL's memory contexts on the Sublet context pools, built for the virtual profile (ports/common/application/build-virtual.sh postgres with PGSU_NESTED=sublet): palloc chunks bounded and retired per chunk",
+      "mechanism": "as virtual-mallocng; per-chunk bounds and revocation in palloc",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "bounds-palloc": "fault",
+        "uaf-palloc": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "bounds-palloc",
+        "uaf-palloc"
+      ]
+    },
+    "virtual-mallocng-replay": {
+      "target": "capstone-virtual",
+      "summary": "the memory-contexts replay built as a Capstone application (capstone-application toolchain, virtual SDK) and run as a process under capstone-vexec: PostgreSQL's aset/slab stock on virtual mallocng, which bounds and retires each block it hands the manager but not the chunks carved from it",
+      "mechanism": "exact bounds and lifetime retirement of malloc blocks; none per chunk",
+      "controls": {
+        "uaf-chunk": "complete"
+      },
+      "controls_for_missed": [
+        "uaf-chunk"
+      ]
+    },
+    "virtual-mallocng-replay-pools": {
+      "target": "capstone-virtual",
+      "summary": "the same replay with PG_SUBLET: PostgreSQL's managers on the Sublet context pools, their arena lent by the virtual heap as one linear capability (__capstone_sublet_malloc_linear), so every chunk is its own capability, retired when the manager takes it back",
+      "mechanism": "as virtual-mallocng-replay; per-chunk bounds and revocation in the nested allocator",
+      "controls": {
+        "uaf-chunk": "fault"
+      },
+      "controls_for_missed": [
+        "uaf-chunk"
+      ]
+    }
+  }
+}
