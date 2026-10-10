@@ -23,12 +23,12 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 |---|---|---|---:|---|---:|---|---|
 | [`capstone/bug-corpora/cpython/allocator-boundary-repros`](cpython/allocator-boundary-repros) | cpython | 3.13.7 | 32 | 32 live | 0 | script-trigger | measured |
 | [`capstone/bug-corpora/cpython/pymalloc-repros`](cpython/pymalloc-repros) | cpython | 3.13.7 | 20 | 20 live | 0 | case-json | measured |
-| [`capstone/bug-corpora/ffmpeg/carved-repros`](ffmpeg/carved-repros) | ffmpeg | n9.0.1 | 12 | 1 live, 11 fixed before the pin | 1 | case-json | measured |
+| [`capstone/bug-corpora/ffmpeg/carved-repros`](ffmpeg/carved-repros) | ffmpeg | n9.0.1 | 13 | 1 live, 12 fixed before the pin | 1 | case-json | measured |
 | [`capstone/bug-corpora/ffmpeg/plain-heap-repros`](ffmpeg/plain-heap-repros) | ffmpeg | n9.0.1 | 25 | 25 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/ffmpeg/plain-temporal-repros`](ffmpeg/plain-temporal-repros) | ffmpeg | 9.0.1 | 13 | 13 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/ffmpeg/plane-repros`](ffmpeg/plane-repros) | ffmpeg | n9.0.1 | 1 | 1 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/ffmpeg/pool-repros`](ffmpeg/pool-repros) | ffmpeg | 9.0.1 | 4 | 4 fixed before the pin | 0 | case-json | measured |
-| [`capstone/bug-corpora/ffmpeg/subobject-repros`](ffmpeg/subobject-repros) | ffmpeg | n9.0.1 | 10 | 5 live, 5 fixed before the pin | 0 | case-json | measured |
+| [`capstone/bug-corpora/ffmpeg/subobject-repros`](ffmpeg/subobject-repros) | ffmpeg | n9.0.1 | 9 | 5 live, 4 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/httpd/apr-pool-repros`](httpd/apr-pool-repros) | httpd | 1.7.4 | 1 | 1 not asserted | 0 | case-json | measured |
 | [`capstone/bug-corpora/httpd/bucket-repros`](httpd/bucket-repros) | httpd | 1.7.4 | 8 | 8 not asserted | 0 | case-json | measured |
 | [`capstone/bug-corpora/memcached/allocator-repros`](memcached/allocator-repros) | memcached | 1.6.45 | 9 | 1 live, 8 fixed before the pin | 1 | case-json | measured |
@@ -59,7 +59,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/apr/pools` | allocator-component | 1.7.4 | capstone-domain, cheribsd-purecap, native | `apr-pool-repros`, `bucket-repros` | 9 |
 | `capstone/ports/cpython/app` | full-application | 3.13.7 | capstone-domain, cheribsd-purecap | `pymalloc-repros` | 20 |
 | `capstone/ports/cpython/pymalloc` | allocator-component | 3.13.7 | capstone-domain, cheribsd-purecap, native | `pymalloc-repros` | 20 |
-| `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | `plain-heap-repros`, `plane-repros`, `subobject-repros` | 36 |
+| `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | `plain-heap-repros`, `plane-repros`, `subobject-repros` | 35 |
 | `capstone/ports/ffmpeg/buffer-pool` | allocator-component | 9.0.1 | capstone-domain, cheribsd-purecap, native | `pool-repros` | 4 |
 | `capstone/ports/memcached/allocators` | allocator-component | 1.6.45 | capstone-domain, cheribsd-purecap, native | `allocator-repros` | 9 |
 | `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, capstone-virtual, native | `allocator-repros`, `plain-heap-repros` | 18 |

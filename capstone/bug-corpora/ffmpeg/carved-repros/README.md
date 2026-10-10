@@ -10,9 +10,11 @@ Siblings: `../plain-heap-repros` (the access leaves the malloc bound itself),
 `../subobject-repros` (it leaves a struct member), `../plane-repros` (one `av_frame_get_buffer`
 block carved into planes), `../pool-repros` (storage an AVBufferPool handed out).
 
-Twelve cases from twelve upstream fixes, 2010-2017, mined from the FFmpeg history (13 candidates were
-accepted; the CUDA one is excluded because its block is device memory no arm here can run). Eleven
-are fix-reversals. **Case 11 is LIVE at the n9.0.1 pin by source reading**: the per-type residue
+Thirteen cases from thirteen upstream fixes. Cases 0-11 were mined from the FFmpeg history, 2010-2017 (13
+candidates were accepted; the CUDA one is excluded because its block is device memory no arm here can
+run). **Case 12 joined on 2026-10-10 from `../subobject-repros` (its case 09)**: vf_thumbnail's
+histogram, carved twice by arithmetic out of one `av_calloc`, which that corpus had filed NOT NESTED
+against the carve rule this one follows. Twelve are fix-reversals. **Case 11 is LIVE at the n9.0.1 pin by source reading**: the per-type residue
 bound its fix added was removed in 2014, and the pinned decoder accepts a legal stream that the
 Vorbis I spec says to truncate -- see its `live_proof`; it has not been demonstrated on a stream.
 
@@ -32,6 +34,7 @@ Vorbis I spec says to truncate -- see its `live_proof`; it has not been demonstr
 | a 2-D block placed by a column offset that only fits a wide stride | 9 | `043bcdcdb0` | writes the prediction's last row, 16 bytes, onto src's first | encode_block() then encodes against a corrupted source row |
 | a region carved at one stride and written at another | 10 | `d2213b6493` | writes direction 0's rows 8..15 onto tmp_b_block_y[1] after the linesize doubled | direction 1 overwrites them, and rv4_weight averages direction 1 with itself |
 | an end validated against all channels' worth of samples for a per-channel decode | 11 | `68226ed9ec` | adds codevectors 128 floats past channel 0's slice, into channel 1's | channel 1's output carries channel 0's residue |
+| an unshifted high-bit-depth sample indexing a 256-entry carved sub-slice | 12 | `ac59fc542f` | bumps one int 767 entries past plane 0's 1024-byte sub-slice, into thread 1's slice | a count lands in another thread's histogram, which merges into the frame's |
 
 ## Arms
 
