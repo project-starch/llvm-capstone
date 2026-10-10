@@ -60,6 +60,14 @@ LAYER = {"pool-repros": "AVBufferPool", "plain-temporal-repros": "direct malloc"
          "wmem-repros": "wmem", "allocator-repros": "slabs.c / cache.c"}
 
 
+VERDICT_WORDS = {"CAUGHT": "caught", "MISSED": "missed", "NOT CAUGHT": "missed",
+                 # CheriBSD: freed chunk held in quarantine. A miss here; column 1 counts it as held.
+                 "NOT-REISSUED": "missed",
+                 "NO-READING": "no reading",
+                 # native-fix-differential: buggy reproduces and fixed does not. Not a mechanism.
+                 "TWO-SIDED": "two-sided"}
+
+
 def verdict(arm):
     if arm is None:
         return "absent"
@@ -69,9 +77,12 @@ def verdict(arm):
         return "n/a"
     v = arm.get("verdict")
     if v:
-        if v.upper() == "NO-READING":
-            return "no reading"
-        return "caught" if v.upper() == "CAUGHT" else "missed"
+        # Every verdict word the corpora use, each with its reading. A word not listed here is NOT
+        # a miss: it lands in the NOT A READING list, which stops the board and names the cell.
+        # (Until 2026-10-10 any word but CAUGHT read as "missed", so a legacy `detected` -- on
+        # postgres' spatial arms -- would have scored as a miss had a table ever read it.)
+        r = VERDICT_WORDS.get(str(v).strip().upper())
+        return r if r else f"UNKNOWN VERDICT {v!r}"
     o = str(arm.get("oracle", "")).strip()
     if o.upper().startswith("PREDICTED"):
         return "not run"
@@ -123,6 +134,12 @@ NOT_ON_BOARD = {
         "landed on dev in #213 after this board was built; its rows are oracle prose with no verdict "
         "field, and its nested/plain split is decided per case in its README, so placing it needs its "
         "own pass rather than a guess",
+    ("sqlite", "capi-repros"):
+        "a host-ASan row corpus (`sqlite-row`): its only arm is host-asan, its cases are `rowN_` "
+        "directories with no Capstone, Sublet or CheriBSD arm, and its top-level `verdict` is a "
+        "provenance verdict (literal / modeled / out-of-scope), not a mechanism's reading",
+    ("mruby", "gc-slot-repros"):
+        "planned, no cases yet (its hand-found rows live on another branch)",
 }
 EXTRA_GROUPS = {
     ("cpython", "pymalloc-repros"): ("pymalloc", True, "virtual-malloc", "virtual-nested-pools"),
@@ -205,6 +222,13 @@ if {r["prog"] for r in rows} != set(TARGETS):
     sys.exit(f"catch-tables: {len(rows)} cases under {BC}; every one of {TARGETS} must have some")
 
 extra = []
+if ALL:
+    # A corpus is found by its corpus.json, not by the case glob: a corpus whose case directories do
+    # not match the glob (sqlite/capi-repros' rowN_) would otherwise vanish from --all silently.
+    for decl in sorted(BC.glob("*/*/corpus.json")):
+        key = (decl.parts[-3], decl.parts[-2])
+        if key[0] in EXTRA and key not in EXTRA_GROUPS and key not in NOT_ON_BOARD:
+            sys.exit(f"catch-tables: {key[0]}/{key[1]} is a corpus with no entry in EXTRA_GROUPS or NOT_ON_BOARD")
 for p in EXTRA if ALL else ():
     for cj in sorted((BC / p).glob("*/[0-9][0-9]_*/case.json")):
         corpus = cj.parts[-3]
@@ -297,7 +321,8 @@ def board_cell(g, k):
         held = sum(r["c1"] == "held" for r in g)
         caught = sum(r["c1"] in ("fault", "held") for r in g)
         run = sum(r["c1"] in ("fault", "held", "missed") for r in g)
-        return f"{caught}/{run}" + (f" ({held} held)" if held else "")
+        extra = len(g) - run  # a cell with no reading is shown, as columns 2 and 3 show theirs
+        return f"{caught}/{run}" + (f" ({held} held)" if held else "") + (f" (+{extra} ?)" if extra else "")
     return cell(g, k)
 
 

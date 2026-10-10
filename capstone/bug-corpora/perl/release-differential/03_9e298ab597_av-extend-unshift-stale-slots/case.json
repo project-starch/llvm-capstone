@@ -14,18 +14,24 @@
   },
   "sysalloc-sublet": {
    "oracle": "no fault: completes and the workload's own oracle passes",
-   "verdict": "MISSED",
-   "verdict_from": "results/20261006/matrix.tsv 9e298ab597 sysalloc-sublet: silent (exit 0)"
+   "verdict": "NO-READING",
+   "verdict_from": "results/20261006/matrix.tsv 9e298ab597 sysalloc-sublet: silent (exit 0)",
+   "verdict_reason": "not-reached",
+   "verdict_note": "the defect is not reached on this arm: the case's own assertion passes, so the stale element slot never holds a stale pointer (case note; README 'What no arm reaches': 'the only case outside every denominator, which is therefore 10'). Recorded MISSED until 2026-10-10, which counted it on the board."
   },
   "sublet-svheads": {
    "oracle": "no fault: completes and the workload's own oracle passes",
-   "verdict": "MISSED",
-   "verdict_from": "results/20261006/matrix.tsv 9e298ab597 sublet-svheads: silent (exit 0)"
+   "verdict": "NO-READING",
+   "verdict_from": "results/20261006/matrix.tsv 9e298ab597 sublet-svheads: silent (exit 0)",
+   "verdict_reason": "not-reached",
+   "verdict_note": "the defect is not reached on this arm: the case's own assertion passes, so the stale element slot never holds a stale pointer (case note; README 'What no arm reaches': 'the only case outside every denominator, which is therefore 10'). Recorded MISSED until 2026-10-10, which counted it on the board."
   },
   "cheribsd-revocation": {
    "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes",
-   "verdict": "MISSED",
-   "verdict_from": "results/20261006-cheribsd/matrix.tsv 9e298ab597: revocation_on=clean, revocation_off=clean"
+   "verdict": "NO-READING",
+   "verdict_from": "results/20261006-cheribsd/matrix.tsv 9e298ab597: revocation_on=clean, revocation_off=clean",
+   "verdict_reason": "not-reached",
+   "verdict_note": "the defect is not reached on this arm: the case's own assertion passes, so the stale element slot never holds a stale pointer (case note; README 'What no arm reaches': 'the only case outside every denominator, which is therefore 10'). Recorded MISSED until 2026-10-10, which counted it on the board."
   }
  },
  "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",

@@ -2,8 +2,8 @@
 
 9 defects in PostgreSQL 17.5 and its contrib extensions, each a `trigger.sql`
 run against a real stand-alone backend, measured on three arms on 2026-10-06;
-case 03 re-measured on all three on 2026-10-10, and every detection now has a
-negative control beside it.
+case 03 re-measured on all three on 2026-10-10. Five of the nine detections have a
+negative control run beside them; the section below names the four that do not.
 
 | arm | detected | scored | out of denominator |
 |---|---:|---:|---:|
@@ -17,8 +17,12 @@ Every denominator is the cases *that arm can run*, and nothing is out of one.
 
 Each of the five cases that any arm detects has a `control.sql`: the same
 statement with one value moved to the safe side of the boundary the defect
-crosses, which must COMPLETE on the same image and the same fixture. All of
-them now do, on all three arms.
+crosses, which must COMPLETE on the same image and the same fixture. Of the nine
+detections, five have that control run on file, and it completes in each:
+`cheribsd-revocation` 02 and 03 (`cheribsd-revocation-control-20261010-104207`),
+`sublet` 02 (`sublet-control-20261010-043643`) and 03 (`sublet-control-20261010-105616`),
+and `spatial` 03 (`spatial-control-20261010-104936`). The other four -- `sublet` 01, 04
+and 06, and `spatial` 02 -- have no control run yet and rest on the trigger run alone.
 
 **Case 03's first control was wrong, and it cost the row a withdrawal.** On
 2026-10-08 the sublet row was withdrawn because the control faulted at the

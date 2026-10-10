@@ -53,7 +53,7 @@ run should show -- so the tool does not read them for these programs.
 | perl/release-differential | `results/20261006-cheribsd`, `revocation_on` | `sysalloc-sublet`, `results/20261006` | `sublet-svheads`, `results/20261006` |
 | postgres/c-repros | `results/matrix.tsv` | `virtual-malloc`, `results/2026-10-10-virtual` | the same run (no nested allocator) |
 | postgres/mmgr-repros | `results/20261008-cheribsd` (new) | `virtual-malloc`, `results/2026-10-10-virtual` | `virtual-pg-pools`, `results/2026-10-10-virtual` |
-| postgres/sql-repros | `results/matrix.tsv` | `virtual-malloc`, `results/2026-10-10-virtual` | `virtual-pg-pools`, `results/2026-10-10-virtual` |
+| postgres/sql-repros | `results/matrix.tsv` (case 03: `results/cheribsd-revocation-20261010-094729`) | `virtual-malloc`, `results/2026-10-10-virtual` | `virtual-pg-pools`, `results/2026-10-10-virtual` |
 | sqlite/engine-repros | `results/matrix.tsv` | `virtual-malloc`, `results/2026-10-10-virtual` (virtual Capstone) | `virtual-nested-pools`, `results/2026-10-10-virtual` (virtual Capstone) |
 
 **Column 2 is the gap.** For a group with its own allocator, column 2 is the program with its
@@ -62,9 +62,13 @@ allocator's own port. CPython pymalloc, PostgreSQL and SQLite are measured that 
 Capstone (2026-10-10):
 the system allocator is virtual mallocng -- exact bounds, lifetime retired on free -- and column 3
 adds the port's pools (`virtual-malloc`, `virtual-pg-pools`, `virtual-nested-pools`; the
-configurations are in `tools/arms.json`). The physical Sublet heap is not used any more. httpd and
-mruby have no such run yet, so 32 cells are holes. Perl's `sysalloc-sublet` is the
-column-2 configuration on the physical Sublet heap and stays until Perl is measured on virtual.
+configurations are in `tools/arms.json`). For these groups the physical Sublet heap is not used any
+more; FFmpeg, tshark and memcached keep their physical columns (section 0 of
+`spatial-vs-temporal-three-programs.md`). httpd has no column-2 run. mruby has one only in its triage:
+`ledger.json` records `domain_sublet` (the Sublet heap, mruby's GC stock) for all 165 triage rows, 18
+of them cases here, but as a raw FAULT/FAIL/PASS with no per-case run record, so it is not carried into
+`case.json` and those cells stay holes -- 32 in all. Perl's `sysalloc-sublet` is the column-2
+configuration on the physical Sublet heap and stays until Perl is measured on virtual.
 
 **postgres/c-repros** links no nested allocator, so both columns are the same `virtual-malloc` run.
 Its earlier `sublet` arm is dropped: both PostgreSQL SDKs had the default level0 heap, so it measured
@@ -93,11 +97,11 @@ quarantine reading either way.
 | CPython | pymalloc | nested | 20 | 0 / 20 | 0 / 20 | 20 / 20 |
 | httpd | APR buckets | nested | 8 | 0 / 8 | 0 / 0 (+8 ?) | 8 / 8 |
 | httpd | APR pools | nested | 1 | 0 / 1 | 0 / 0 (+1 ?) | 1 / 1 |
-| mruby | whole program | unsplit | 11 | 4 / 10 | 0 / 0 (+11 ?) | 10 / 10 (+1 ?) |
-| Perl | whole program | unsplit | 10 | 6 / 9 | 6 / 9 (+1 ?) | 7 / 9 (+1 ?) |
+| mruby | whole program | unsplit | 11 | 4 / 10 (+1 ?) | 0 / 0 (+11 ?) | 10 / 10 (+1 ?) |
+| Perl | whole program | unsplit | 10 | 6 / 8 (+2 ?) | 6 / 8 (+2 ?) | 7 / 8 (+2 ?) |
 | PostgreSQL | memory contexts | nested | 5 | 0 / 5 | 0 / 5 | 5 / 5 |
 | SQLite | memsys5 | nested | 25 | 5 / 25 | 4 / 22 (+3 ?) | 13 / 23 (+2 ?) |
-| **Total** |  | 81 n · 26 p · 21 u | 128 | 41 / 126 (26 held) | 36 / 104 (+24 ?) | 112 / 124 (+4 ?) |
+| **Total** |  | 81 n · 26 p · 21 u | 128 | 41 / 125 (26 held) (+3 ?) | 36 / 103 (+25 ?) | 112 / 123 (+5 ?) |
 
 **Spatial (109)**
 
@@ -122,20 +126,26 @@ quarantine reading either way.
 
 | program | allocator layer | axis | n | CHERI (quarantine = caught) | Sublet in malloc | Sublet in nested |
 |---|---|---|---:|---:|---:|---:|
-| mruby | whole program | unsplit | 7 | 5 / 6 | 0 / 0 (+7 ?) | 7 / 7 |
-| **Total** |  | 0 n · 0 p · 7 u | 7 | 5 / 6 | 0 / 0 (+7 ?) | 7 / 7 |
+| mruby | whole program | unsplit | 7 | 5 / 6 (+1 ?) | 0 / 0 (+7 ?) | 7 / 7 |
+| **Total** |  | 0 n · 0 p · 7 u | 7 | 5 / 6 (+1 ?) | 0 / 0 (+7 ?) | 7 / 7 |
 
 ## What is not a reading, and why
 
-Thirteen cells ran but did not answer:
+Sixteen cells ran but did not answer:
 
 - **mruby, CHERI, 2 cases**: one aborts (rc 134) and one hits the run's timeout.
 - **mruby 11, Sublet in nested**: the `sublet-gc` run stops on cause 2, an illegal instruction --
   a stop, but not a capability fault.
 - **Perl 02, all three columns**: Perl's own check panics ("attempt to copy freed scalar") before
   any mechanism reports.
-- **postgres/sql-repros 03, columns 2 and 3**: on the stock arm its fault is not tied to the defect,
-  and with the pools `CREATE EXTENSION ltree` faults before the case's SQL runs.
+- **Perl 03, all three columns**: the defect is not reached on any arm -- the case's own assertion
+  passes, so the stale element slot never holds a stale pointer, and its README puts it outside every
+  denominator. It was recorded MISSED until 2026-10-10, which counted it on this board.
+- **postgres/sql-repros 03, columns 2 and 3**: with the pools `CREATE EXTENSION ltree` faults before
+  the case's SQL runs. On the stock arm the fault was left unattributed because "its control.sql
+  FAULTS too" -- but that was the 64-variant control, which PR #215 showed crosses the uint16 threshold
+  itself wherever `MAXIMUM_ALIGNOF` is 16 (16 + 64 x 1024 = 65552). The virtual bundle predates the
+  corrected 48-variant control, so this cell's basis is void until the case is re-run with it.
 - **sqlite 06, column 2**: the program's own `assert` in `idxRemFunc` aborts on the freed context
   before any mechanism reports.
 - **sqlite 07, column 3**: the case fills memsys5's static array itself, which the Sublet port does
@@ -150,6 +160,14 @@ Thirteen cells ran but did not answer:
 - **Perl's CHERI catches 01, 04, 06, 08 and 09 also fault with revocation off.** Something other
   than revocation fired -- bounds or a CHERI check on a stale field -- and no fixed-arm control has
   shown that the fault is the defect. Each cell's `verdict_note` says so.
+- **mruby's CHERI catches carry the same doubt, and no run to settle it.** Its CheriBSD record calls
+  them "a strict subset of our 16" `sysalloc-bounds` catches (`results/20261006-cheribsd/README.md`),
+  and that arm ran with revocation on only, so none of them is shown to need revocation.
+- **Neither mruby's nor Perl's temporal catches are separated from bounds.** For FFmpeg, tshark and
+  memcached the bounds-only arm reads 0 of 48 temporal, so every temporal catch there is a lifetime
+  catch. mruby's and Perl's bounds-only arms (`sysalloc-none`/`sysalloc-bounds`) carry no `verdict`,
+  so this board cannot subtract them; their own records say bounds alone already fault on some
+  temporal cases (mruby `ledger.json` `domain_level0`; Perl README, `sysalloc-bounds` catches 6).
 - **PostgreSQL mmgr runs the replay program, not the server**: its columns are the managers alone
   (`virtual-mallocng-replay`, `-replay-pools`), sql-repros' the whole server.
 - **Columns 2 and 3 mix platforms across groups.** FFmpeg, tshark and memcached were measured on the
