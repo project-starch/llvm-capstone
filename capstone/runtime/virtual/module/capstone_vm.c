@@ -54,7 +54,7 @@ struct context {
     unsigned long remap_bytes;
 };
 static DEFINE_MUTEX(vm_lock);
-/* Quotas are in base pages; zero means the 31-bit ISA limit. Parameters are
+/* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
  * read-only after module load so concurrent contexts see a stable policy. */
 static unsigned long node_initial_pages = 4, node_batch_pages = 16;
 static unsigned long node_max_pages;
@@ -96,7 +96,7 @@ static int node_add_page(struct context *c, unsigned long id)
 
 static int node_grow(struct context *c, unsigned long required)
 {
-    unsigned long limit = node_max_pages ?: (1UL << 23);
+    unsigned long limit = node_max_pages ?: CAP_REV_TABLE_MAX_PAGES;
     unsigned long pages = node_capacity(c) / 256, before = pages;
     unsigned long need, end;
     if (node_available(c) >= required) return 0;
@@ -355,7 +355,7 @@ static int ensure_nodes(struct context *c, unsigned long required)
     unsigned long sweep_pages = thread_count(c), collect_min;
     bool collected = false;
     int error;
-    if (required > (1UL << 31)) return -ENOMEM;
+    if (required > CAP_REV_TABLE_NAMESPACE_SIZE) return -ENOMEM;
     if (available >= required) return 0;
     list_for_each_entry(t, &c->threads, link)
         if (t->started && !t->terminal) { owner = t; break; }
@@ -724,7 +724,7 @@ retry:
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        if (r.available > (1UL << 31) - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
+        if (r.available > CAP_REV_TABLE_NAMESPACE_SIZE - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
         rc = ensure_nodes(c, r.available + CAP_REV_TABLE_RESERVE);
     } else if (op == CV_ADD) {
         struct cv_map r;
@@ -840,9 +840,9 @@ static int vm_open(struct inode *inode, struct file *f)
     unsigned long flags, previous_root, available;
     if (num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
         return -EOPNOTSUPP;
-    if (node_initial_pages < 2 || node_initial_pages > (1UL << 23) ||
-        !node_batch_pages || node_batch_pages > (1UL << 23) ||
-        node_max_pages > (1UL << 23) ||
+    if (node_initial_pages < 2 || node_initial_pages > CAP_REV_TABLE_MAX_PAGES ||
+        !node_batch_pages || node_batch_pages > CAP_REV_TABLE_MAX_PAGES ||
+        node_max_pages > CAP_REV_TABLE_MAX_PAGES ||
         (node_max_pages && node_max_pages < node_initial_pages)) return -EINVAL;
     c = kvzalloc(sizeof(*c), GFP_KERNEL);
     if (!c) return -ENOMEM;
