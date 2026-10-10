@@ -1534,8 +1534,18 @@ supervision overhead within 0.1 points of 776d9d859's +0.680 %.
     does at first entry. A handler outside that capability faults 28.
   - a10 is R-35's stale probe, called several times. Its revocation fault (mcause 25, latched mepc DBAS+0x4354, on
     776d9d859) comes in a later invocation, so after a yield.
-  - Predicted: k800 4 and ENT1 unchanged. The trap log reads either mcause 25 at DBAS+0x4354 as before (handler inside
-    the code capability), or a 28 at mtvec (handler outside). Either way a10 still wedges by design.
+  - ~~Predicted: either mcause 25 as before, or a 28 at mtvec.~~ **Sharpened 2026-10-10 by the RTL lane's sim**
+    (r51-trap-after-yield.S on 776d9d859 and 0568f93a9):
+    - a10's seal slot 1 is zero, so mtvec = 0: monitor 2dcd3a5 fills it only under CAPSTONE_DOMAIN_TRAP_VECTOR, which no
+      build defines. With mtvec = 0, the handler fetch at address 0 raises ILLEGAL_INSTR at decode, before pc_cap_check
+      can apply, identically on both trees: 199,481 exceptions at pc 0 in each.
+    - The trap log filters ILLEGAL_INSTR, which is why 776d9d859's a10 kept 25 through the storm.
+    - **Predicted: k800 4, ENT1, and the trap log mcause 25 at DBAS+0x4354 with tval 0xac100000, all unchanged.** a10
+      still wedges by design.
+    - The only refuting reading is cause 28 with mepc 0. It needs the board's fetch at 0 to return a valid instruction.
+  - The same sim confirms the mechanism where a handler is real but outside the code capability. After the yield the fix
+    faults at the handler fetch in a loop, where 776d9d859 ran the handler. At first entry both trees loop alike. With
+    the handler inside, both are identical.
   - The rule: a post-yield fault on the new bitstream reads what a first-entry fault reads on the board in the same
     configuration.
   - Supervised escapes are unaffected: the escape already parks a tagged word (commit_stage.sv:741-742).
