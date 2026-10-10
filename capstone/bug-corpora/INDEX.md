@@ -57,7 +57,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | component | role | pinned version | targets | corpora | cases |
 |---|---|---|---|---|---:|
 | `capstone/ports/apr/pools` | allocator-component | 1.7.4 | capstone-domain, cheribsd-purecap, native | `apr-pool-repros`, `bucket-repros` | 9 |
-| `capstone/ports/cpython/app` | full-application | 3.13.7 | capstone-domain, cheribsd-purecap | `pymalloc-repros` | 20 |
+| `capstone/ports/cpython/app` | full-application | 3.13.7 | capstone-virtual, cheribsd-purecap | `pymalloc-repros`, `allocator-boundary-repros` | 52 |
 | `capstone/ports/cpython/pymalloc` | allocator-component | 3.13.7 | capstone-domain, cheribsd-purecap, native | `pymalloc-repros` | 20 |
 | `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | `plain-heap-repros`, `plane-repros`, `subobject-repros` | 35 |
 | `capstone/ports/ffmpeg/buffer-pool` | allocator-component | 9.0.1 | capstone-domain, cheribsd-purecap, native | `pool-repros` | 4 |
@@ -107,7 +107,6 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/ports/micropython` is a complete application with no corpus.
 - `capstone/ports/postgres/app` is a complete application with no corpus.
 - `capstone/ports/sqlite/app` is a complete application with no corpus.
-- `capstone/bug-corpora/cpython/allocator-boundary-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/ffmpeg/carved-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/ffmpeg/plain-temporal-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/memcached/plain-temporal-repros` is not referenced by any port.json.

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Prepare a CPython 3.13.7 tree configured for a musl capstone64 domain.
+# Prepare a CPython 3.13.7 tree configured for a musl capstone64 application on
+# the virtual Capstone profile. There is one heap: musl's mallocng, compiled for
+# Capstone (runtime/virtual/heap.c), which bounds every object exactly and
+# retires its lifetime on free. The physical domain's level0 and Sublet heaps
+# are not built for CPython.
 #
 #   1. the verified source archive, unpacked outside the repository
 #   2. a native CPython 3.13.7 (configure requires one for a cross build: it
@@ -17,6 +21,14 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PORTS_DIR=$(cd -- "$SCRIPT_DIR/../.." && pwd)
 source "$PORTS_DIR/../tests/capstone-test-env.sh" >/dev/null
+
+[[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual ]] || {
+  echo "CPython builds only for the virtual profile (musl mallocng);" \
+       "CAPSTONE_APPLICATION_PROFILE=$CAPSTONE_APPLICATION_PROFILE" >&2; exit 2; }
+[[ -z ${CPYD_HEAP:-} ]] || {
+  echo "CPYD_HEAP=$CPYD_HEAP: CPython has one heap, musl mallocng; CPY_SUBLET=1 selects" \
+       "pymalloc's lifetime port on top of it" >&2; exit 2; }
+export CAPSTONE_APPLICATION_PROFILE=virtual
 
 REPO_ROOT=$CAPSTONE_REPO_ROOT
 CPY_ROOT=${CPY_ROOT:-$CAPSTONE_TMP_ROOT/cpython-interpreter}
@@ -76,11 +88,19 @@ log "patches applied: ${#APPLIED[@]} ${APPLIED[*]:-}"
 
 # ---- 2. native build python ---------------------------------------------
 BUILD_PYTHON=${CPY_BUILD_PYTHON:-$CPY_ROOT/build-python/python}
+# From the release as published, not from the patched tree: the patches are for
+# the target, and 0014 makes obmalloc.c call the pymalloc adapter, which no host
+# binary has -- a native build from the CPY_SUBLET=1 tree cannot link. Every
+# patch touches C sources and headers only, so the modules this interpreter
+# freezes are the same either way.
 if [[ ! -x "$BUILD_PYTHON" ]]; then
-  log "building native CPython $CPY_VERSION"
-  mkdir -p "$CPY_ROOT/build-python"
-  (cd "$CPY_ROOT/build-python" && "$CPY_SRC/configure" >configure.log 2>&1 \
-     && make -j"${CPY_JOBS:-8}" >make.log 2>&1)
+  log "building native CPython $CPY_VERSION from the unpatched release"
+  rm -rf "$CPY_ROOT/src-native" "$CPY_ROOT/build-python"
+  mkdir -p "$CPY_ROOT/src-native" "$CPY_ROOT/build-python"
+  tar -xzf "$CPY_ARCHIVE" -C "$CPY_ROOT/src-native"
+  (cd "$CPY_ROOT/build-python" && "$CPY_ROOT/src-native/Python-$CPY_VERSION/configure" >configure.log 2>&1 \
+     && make -j"${CPY_JOBS:-8}" >make.log 2>&1) \
+    || { tail -20 "$CPY_ROOT/build-python/make.log" >&2; echo "native CPython build failed" >&2; exit 2; }
 fi
 bv=$("$BUILD_PYTHON" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])')
 [[ "$bv" == "$CPY_VERSION" ]] || { echo "build python is $bv, need $CPY_VERSION" >&2; exit 2; }
@@ -108,18 +128,15 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -Xclang -target-feature -Xclang +a -ffreestanding -fno-builtin -fno-jump-tables
     -ffunction-sections -fdata-sections -std=c99 -O1 -w -Wno-int-conversion
     -D_XOPEN_SOURCE=700 "${INC[@]}")
-CPY_HEAP_BYTES=${CPY_HEAP_BYTES:-$((48 << 20))}
-if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
-  CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
-fi
-# The Sublet arm's allocator side. link-cpython-capstone.py links every *.o in
-# this directory, so compiling them here is the whole wiring; nothing in the link
-# step changes. The adapter and its metadata heap are the component port's,
-# program-independent and taken as they are -- 40/40 arms of the pymalloc defect
-# corpus stand on that code -- and PYMALLOC_DOMAIN selects backing.c's domain
-# form, whose arenas come from the shared region rather than from a native heap.
-# hostcall.c parks the two program regions the adapter's init needs
-# (__capstone_region); the plain arm never asks for them.
+CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+# pymalloc's lifetime port (CPY_SUBLET=1). link-cpython-capstone.py links every
+# *.o in this directory, so compiling them here is the whole wiring; nothing in
+# the link step changes. The adapter and its metadata heap are the component
+# port's, program-independent and taken as they are, and PYMALLOC_DOMAIN selects
+# backing.c's form whose arenas the adapter owns (shared/port.h). The two regions
+# the adapter's init needs arrive through __capstone_region, which
+# ports/common/application/regions.c serves from the image's linear grant; the
+# plain arm never asks for them.
 if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
   PYM=$PORTS_DIR/cpython/pymalloc/src
   # THERE ARE TWO sublet.h AND THE ORDER DECIDES WHICH. capstone/sublet/sublet.h
@@ -155,9 +172,7 @@ fi
 COMPILER_RT=$REPO_ROOT/compiler-rt/lib/builtins
 BF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w -I"$COMPILER_RT")
-if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
-  BF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
-fi
+BF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
 rm -f "$CPY_ROOT/builtins"/*.o "$CPY_ROOT/builtins/failed.txt"
 built=0; failed=0
 for f in "$COMPILER_RT"/*.c; do
@@ -180,61 +195,16 @@ rm -f "$COMBINED"
 printf 'CREATE %s\nADDLIB %s\nADDLIB %s\nSAVE\nEND\n' \
   "$COMBINED" "$LIBC_ARCHIVE" "$CPY_ROOT/libclang_rt.builtins.a" | "$LLVM_AR" -M
 
-# ---- the heap this image links -----------------------------------------
-# CPYD_HEAP names the arm, because the arm is the heap plus whether the port's
-# own nested allocator is sublet too, and a result that names only the knob
-# cannot be read later (docs/ref/runtime-terms-glossary.md section 6):
-#
-#   none             level0 heap with per-object bounds OFF   sysalloc-none
-#   bounds           level0 heap as applications get it       sysalloc-bounds
-#   sublet           the Sublet heap, pymalloc NOT sublet     sysalloc-sublet
-#   sublet-pymalloc  the Sublet heap AND patch 0014           sublet-pymalloc
-#
-# The last two differ by one thing only: whether pymalloc's own pools and
-# arenas are issued and revoked. That difference is what a nested-allocator
-# corpus measures, so the two must be separate images and not one.
-#
-# UNSET IS THE OLD BEHAVIOUR, byte for byte: no CAPSTONE_APPLICATION_HEAP (the
-# CMake default is level0), no bounds macro, and CPY_SUBLET alone decides 0014.
-# An earlier arm built that way was level0 + 0014 and was CALLED "sublet"; it is
-# not sublet-pymalloc, because its system heap was never the Sublet one.
+# ---- the SDK -------------------------------------------------------------
+# CPY_SUBLET=1 is pymalloc's lifetime port (patch 0014) on top of mallocng: the
+# grant is the linear region ports/common/application/regions.c splits into the
+# adapter's 64 MiB payload and its metadata.
 SDK_FLAGS=()
-if [[ -n ${CPYD_HEAP:-} ]]; then
-  case "$CPYD_HEAP" in
-    none)            APP_HEAP=level0; APP_BOUNDS=0; WANT_0014=0 ;;
-    bounds)          APP_HEAP=level0; APP_BOUNDS=1; WANT_0014=0 ;;
-    sublet)          APP_HEAP=sublet; APP_BOUNDS=1; WANT_0014=0 ;;
-    sublet-pymalloc) APP_HEAP=sublet; APP_BOUNDS=1; WANT_0014=1 ;;
-    *) echo "CPYD_HEAP=$CPYD_HEAP? (none, bounds, sublet, sublet-pymalloc)" >&2; exit 2 ;;
-  esac
-  # Refuse a contradiction rather than silently preferring one of them: an arm
-  # built from a heap it did not ask for is the mistake this project has made
-  # most often.
-  if [[ -n ${CPY_SUBLET:-} && ${CPY_SUBLET} != "$WANT_0014" ]]; then
-    echo "CPYD_HEAP=$CPYD_HEAP implies CPY_SUBLET=$WANT_0014, but CPY_SUBLET=$CPY_SUBLET was set" >&2
-    exit 2
-  fi
-  CPY_SUBLET=$WANT_0014
-  SDK_FLAGS+=(-DCAPSTONE_APPLICATION_HEAP="$APP_HEAP")
-  if [[ $APP_HEAP == sublet ]]; then
-    # CONTEXTS=1 is not a tuning choice, it is required. At the default 15,
-    # REGION_DATA is 16 * 256 KiB = exactly 4.00 MiB, which is the buddy
-    # allocator's largest block, and capstone-exec then fails with "cannot
-    # allocate launch regions". An earlier Sublet build here hit that and had
-    # its SDK rebuilt by hand afterwards because prepare offered no hook; the
-    # hook is this block, so the flag belongs here rather than in a caller.
-    SDK_FLAGS+=(-DCAPSTONE_APPLICATION_CONTEXTS=1)
-  fi
-  if [[ $APP_BOUNDS == 0 ]]; then
-    SDK_FLAGS+=(-DCMAKE_C_FLAGS_RELEASE="-O1 -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0")
-  fi
-  log "arm $CPYD_HEAP: application heap $APP_HEAP, per-object bounds $APP_BOUNDS, pymalloc-under-sublet $WANT_0014"
-fi
 if [[ ${CPY_SUBLET:-0} == 1 ]]; then
   SDK_FLAGS+=(-DCAPSTONE_APPLICATION_GRANT_BYTES=83886080)
 fi
 bash "$PORTS_DIR/common/application/build-sdk.sh" "$RT" "$MUSL_DIR" "$COMBINED" \
-  -DCAPSTONE_APPLICATION_ARENA_BYTES="$CPY_HEAP_BYTES" "${SDK_FLAGS[@]}"
+  "${SDK_FLAGS[@]}"
 export CAPSTONE_SDK=$RT
 export CPY_MUSL=$MUSL_DIR CPY_RUNTIME_DIR=$RT CPY_LIBC_ARCHIVE=$COMBINED
 export CPY_SUBLET=${CPY_SUBLET:-0}
@@ -368,6 +338,29 @@ if grep -qE '^LIBS=.*-latomic' "$BUILD_DIR/Makefile"; then
 fi
 if grep -q '^#define USE_COMPUTED_GOTOS 1' "$BUILD_DIR/pyconfig.h"; then
   echo "configure enabled computed gotos" >&2; exit 2
+fi
+
+# CPY_TEST_CAPI=1 builds in _testinternalcapi and _testlimitedcapi, which some
+# of the allocator-boundary corpus's upstream reproducers import (cases 15 and
+# 23 die at import without them). --disable-test-modules puts every test module
+# in Setup.stdlib's *shared* block, which a static image cannot load, so these
+# two go into Setup.local's *static* block instead.
+if [[ ${CPY_TEST_CAPI:-0} == 1 ]]; then
+  limited="_testlimitedcapi _testlimitedcapi.c"
+  for f in abstract bytearray bytes complex dict eval float heaptype_relative import \
+           list long object pyos set sys tuple unicode vectorcall_limited file; do
+    limited+=" _testlimitedcapi/$f.c"
+  done
+  printf '\n*static*\n%s\n%s\n' \
+    "_testinternalcapi _testinternalcapi.c _testinternalcapi/test_lock.c _testinternalcapi/pytime.c _testinternalcapi/set.c _testinternalcapi/test_critical_sections.c" \
+    "$limited" >> "$BUILD_DIR/Modules/Setup.local"
+  (cd "$BUILD_DIR" && make Makefile > make-makefile.log 2>&1) \
+    || { tail -12 "$BUILD_DIR/make-makefile.log" >&2; echo "make Makefile failed" >&2; exit 2; }
+  for m in _testinternalcapi _testlimitedcapi; do
+    grep -q "$m" "$BUILD_DIR/Makefile" \
+      || { echo "CPY_TEST_CAPI=1 but $m is not in the Makefile" >&2; exit 2; }
+  done
+  log "test C-API modules built in: _testinternalcapi, _testlimitedcapi"
 fi
 
 # The environment the survey needs to drive make with the same wrapper.

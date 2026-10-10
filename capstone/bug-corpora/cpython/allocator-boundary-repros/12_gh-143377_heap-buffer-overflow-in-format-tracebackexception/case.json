@@ -12,16 +12,20 @@
   "allocator_consumed": "no",
   "layer_note": "measured: ASan reported a 1-byte region, at or under the 512 B SMALL_REQUEST_THRESHOLD",
   "arms": {
-    "spatial": {
-      "oracle": "a fault at the offending access: cause 5 on a load or 7 on a store where the access leaves the object's own capability, or cause 24 where it reaches memory the system allocator has already freed and revoked. The object is a system allocator block, so one of the two applies; completion would falsify this. The fault must carry cause 5, 7 or 24; any other cause, cause 2 (ILLEGAL_INST) among them, is an ordinary trap rather than this arm's mechanism and falsifies this.",
-      "oracle_premise": "Corrected at review, 2026-10-10: the premise that this arm revokes is false. Its level0 heap only marks a freed block free (capstone/ports/musl-capstone/runtime/level0.c, l0_free), patch 0009 issues no revoke, and the runtime's only revoke sites release thread context areas, reached only through __clone; so nothing on this arm revokes heap memory. A cause 24 here is UNEXP_OP_TYPE, an access through an untagged base register: a pointer slot that later data overwrote (tag integrity), or an integer or NULL used as a pointer -- not revocation. The oracle above is kept as written; see results/20261006/README.md, 'Corrections made at review'."
+    "virtual-malloc": {
+      "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it"
     },
-    "sublet": {
-      "oracle": "fault: the object is a libc malloc block"
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, pymalloc on its lifetime port, CPY_SUBLET_MODE=1 (tools/arms.json virtual-cpython-pools): as virtual-malloc"
     },
     "cheribsd-revocation": {
       "oracle": "the arm does not separate this case, and the admissible outcomes are stated rather than one of them predicted: si_code=1 (PROT_CHERI_BOUNDS) where the access goes beyond the bounds the allocator actually set, si_code=2 (PROT_CHERI_TAG) where it instead lands in memory a revocation sweep has already reclaimed, or completion where it stays inside the bounds the allocator set -- malloc may bound a capability to a rounded size class rather than the requested length. The mechanism is live and the run proves it rather than assuming it: mech-control S_OOB faults with si_code=1. Any other si_code would falsify this."
     }
   },
-  "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial DETECTED cause=7 (spatial-20261006-105111); sublet DETECTED cause=7 (sublet-20261006-112658); cheribsd-revocation DETECTED si_code=1 (boundary-20261008-075318)"
+  "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial DETECTED cause=7 (spatial-20261006-105111); sublet DETECTED cause=7 (sublet-20261006-112658); cheribsd-revocation DETECTED si_code=1 (boundary-20261008-075318)",
+  "fault_sites": [
+    "_format_TracebackException",
+    "_PyXI_excinfo_InitFromException"
+  ],
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (WRITE 1) at _format_TracebackException Python/crossinterp.c:448 | _PyXI_excinfo_InitFromException Python/crossinterp.c:703. That run uses no Capstone arm and was recorded before any virtual arm ran."
 }

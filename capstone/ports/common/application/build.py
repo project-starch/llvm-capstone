@@ -90,6 +90,8 @@ def main():
         p.error('study observers require --instrument')
     if args.profile == 'virtual' and args.instrument:
         p.error('virtual migration does not qualify historical memory-study observers')
+    if 'cpython' in (args.app, args.nested) and args.profile != 'virtual':
+        p.error('CPython builds only for the virtual profile: its heap is musl mallocng')
     input_revision = subprocess.check_output(['git', '-C', REPO, 'rev-parse', args.input_revision+'^{commit}'], text=True).strip()
     root, out = args.root.resolve(), args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
