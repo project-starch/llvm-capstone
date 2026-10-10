@@ -47,7 +47,7 @@ process-local backing in this no-fork profile. They do not establish
 cross-process tagged sharing.
 
 The node-growth extension replaces the fixed 65,536-slot / 1-MiB table with
-base-page-backed tables bounded by RAM, an optional quota and the 31-bit ID
+base-page-backed tables bounded by RAM, an optional quota and the 30-bit ID
 field. It retains the separate limits of 32 supervisor slots on the hart, at most
 512 registered mappings, 256 MiB per registered region and 1 GiB aggregate
 registered VA. Local mallocng removes the fixed allocator block/arena arrays;

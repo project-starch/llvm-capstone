@@ -18,6 +18,71 @@ enum {
   CAPSTONE_CAP_EMPTY = 7
 };
 
+enum {
+  CAPSTONE_PERM_EXECUTE = 1,
+  CAPSTONE_PERM_WRITE = 2,
+  CAPSTONE_PERM_READ = 4,
+  CAPSTONE_PERM_MANAGE = 8
+};
+
+/* Sublet CDERIVE: offset is relative to the non-linear parent's base.
+ * A fresh child inherits data rights and gains MANAGE for its own children.
+ * The parent is unchanged. Invalid/empty ranges fault before allocation.
+ * Check offset before addition so wraparound cannot turn it into a valid
+ * range. The ISA takes the requested start from the parent's cursor. */
+static inline void *capstone_cap_derive(void *parent, unsigned long offset,
+                                       unsigned long size) {
+  void *child;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x04, t0, %1, x3\n"
+                   ".insn r 0x5b, 0x1, 0x04, t1, %1, x4\n"
+                   "sub t1, t1, t0\n"
+                   "bgtu %2, t1, 1f\n"
+                   "add t0, t0, %2\n"
+                   ".insn r 0x5b, 0x1, 0x05, t2, %1, t0\n"
+                   ".insn r 0x5b, 0x1, 0x51, %0, t2, %3\n"
+                   "j 2f\n"
+                   "1: .insn r 0x5b, 0x1, 0x51, %0, %1, x0\n"
+                   "2:\n"
+                   : "=&r"(child)
+                   : "r"(parent), "r"(offset), "r"(size)
+                   : "t0", "t1", "t2", "memory");
+  return child;
+}
+
+/* Sublet CREVOKE: parent must carry MANAGE and child must name a live direct
+ * child. Ends that subtree without touching payload bytes. Offset/narrowed
+ * references name the same lifetime. Distinct from legacy handle REVOKE. */
+static inline void capstone_cap_revoke_child(void *parent, void *child) {
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x52, x0, %0, %1\n"
+                   : : "r"(parent), "r"(child) : "memory");
+}
+
+/* Issue a non-linear reference with the same data rights but no MANAGE.
+ * TIGHTEN encodes its rights mask in rs2's register number, not its value. */
+static inline void *capstone_cap_without_manage(void *cap) {
+  void *copy;
+  unsigned long rights;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x5\n"
+                   : "=r"(rights) : "r"(cap));
+#define CAPSTONE_WITHOUT_MANAGE_CASE(n) \
+  case n: \
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x02, %0, %1, x" #n "\n" \
+                     : "=r"(copy) : "r"(cap) : "memory"); \
+    break
+  switch (rights & 7) {
+    CAPSTONE_WITHOUT_MANAGE_CASE(0);
+    CAPSTONE_WITHOUT_MANAGE_CASE(1);
+    CAPSTONE_WITHOUT_MANAGE_CASE(2);
+    CAPSTONE_WITHOUT_MANAGE_CASE(3);
+    CAPSTONE_WITHOUT_MANAGE_CASE(4);
+    CAPSTONE_WITHOUT_MANAGE_CASE(5);
+    CAPSTONE_WITHOUT_MANAGE_CASE(6);
+    CAPSTONE_WITHOUT_MANAGE_CASE(7);
+  }
+#undef CAPSTONE_WITHOUT_MANAGE_CASE
+  return copy;
+}
+
 /* Split [lo] at mid. Keep the lower part in [lo], put the upper in [hi].
  * The slots must be distinct. */
 static inline void capstone_cap_split(capstone_cap_slot *lo, unsigned long mid,

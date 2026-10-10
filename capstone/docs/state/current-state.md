@@ -1,5 +1,15 @@
 # Current Capstone state
 
+## 2026-10-10 — Sublet lifetime extension on `isa/sublet-lifetimes`
+
+`CDERIVE`/two-operand `CREVOKE`, node-scoped MANAGE and explicit parent links
+are implemented and qualified in QEMU with C wrappers. The format has
+30-bit IDs, four rights bits and 16-byte node records. Rebuild the Linux
+adapter with the new header; its capacity limits change too. Compiler
+backend changes are unnecessary. See the [qualification and commands](../design/virtual-capstone/development.md#sublet-lifetime-qualification).
+This is a task-branch result, not a merged baseline or an allocator-port,
+performance or RTL claim.
+
 ## 2026-10-08 — mallocng executes locally in virtual Capstone
 
 Branch `virtual-musl-local` replaces the virtual buddy heap with Capstone-compiled

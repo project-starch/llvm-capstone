@@ -1,3 +1,13 @@
+2026-10-10 — **Sublet lifetime extension: review the paired QEMU/runtime change
+on `isa/sublet-lifetimes`.** Its [qualification](../design/virtual-capstone/development.md#sublet-lifetime-qualification)
+covers the ISA, storage formats, public C wrappers and existing processor
+regressions. Land the QEMU change in `virtual-capstone` before selecting its
+landed commit in the superproject. Rebuild the Linux adapter; the node-table
+ABI and namespace limits changed. The next allocator step is to migrate a
+small adapter to derive/revoke-child and requalify its negative cases before
+measuring workloads. No allocator capacity/performance improvement is yet
+claimed by this implementation.
+
 2026-10-08 — **The virtual stack, node growth and local mallocng are all merged. Two items below
 are corrected: one was DONE, one was FALSE.**
 
