@@ -1,0 +1,230 @@
+Subject: [PATCH 0014] pymalloc blocks as Sublet child lifetimes (CDERIVE/CREVOKE)
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 virtual application (musl), CPY_SUBLET=1
+Apply-From: upstream source root after 0009, with patch --batch --forward --fuzz=0 -p1
+Needs: -I capstone/runtime/include (capability.h) on the compile line
+
+The protection is two instructions inserted where obmalloc hands a block out
+and takes it back (docs/design/virtual-capstone/isa.md):
+
+- new_arena derives a child of the arena the system allocator returned
+  (arena_life). The child carries MANAGE over its own children. Freeing the
+  arena revokes the system allocator's lifetime of it, and this child lies
+  below that, so arena release needs no code of its own.
+- pymalloc_alloc returns a child of arena_life bounded to the request
+  instead of its own pointer.
+- pymalloc_free revokes that child (CREVOKE), which faults on a reference
+  that is not a live block of this arena, and then continues with obmalloc's
+  own pointer at the same address. That pointer is derived from 0009's
+  arena_ptr, which outlives every block.
+- pymalloc_realloc replaces the client's child when the block stays, and
+  copies only the issued length when it moves.
+
+A client's pointer is bounded to its block, so obmalloc cannot reach the
+pool header by aligning it down. The radix tree's leaf therefore also
+records which arena its tails belong to (arena_hi, arena_lo), and
+arena_map_arena finds a client pointer's arena by address.
+
+Requests over 512 bytes are not touched: they go to the system allocator as
+upstream, which on the virtual profile bounds and retires them itself.
+
+--- a/Include/internal/pycore_obmalloc.h
++++ b/Include/internal/pycore_obmalloc.h
+@@ -283,6 +283,9 @@
+      * Defining _Py_ARENA_KEEPS_POINTER selects it anywhere, for testing. */
+     pymem_block *arena_ptr;
+ #  define _Py_ARENA_PTR(ao) ((ao)->arena_ptr)
++    /* Sublet: the arena's child lifetime (CDERIVE), which carries MANAGE.
++     * Every block handed out is derived from it and revoked through it. */
++    void *arena_life;
+ #else
+ #  define _Py_ARENA_PTR(ao) ((pymem_block *)(ao)->address)
+ #endif
+@@ -632,6 +635,10 @@
+ typedef struct {
+     int32_t tail_hi;
+     int32_t tail_lo;
++    /* Sublet: the arenas those tails belong to, as allarenas index + 1, so a
++     * client's pointer -- bounded to its block -- finds its arena by address. */
++    uint32_t arena_hi;
++    uint32_t arena_lo;
+ } arena_coverage_t;
+ 
+ typedef struct arena_map_bot {
+--- a/Objects/obmalloc.c
++++ b/Objects/obmalloc.c
+@@ -10,6 +10,7 @@
+ #include "pycore_obmalloc_init.h"
+ 
+ #include <stdlib.h>               // malloc()
++#include <capstone/capability.h>  // Sublet: CDERIVE, CREVOKE
+ #include <stdbool.h>
+ #ifdef WITH_MIMALLOC
+ // Forward declarations of functions used in our mimalloc modifications
+@@ -1751,7 +1752,8 @@
+ 
+ /* mark or unmark addresses covered by arena */
+ static int
+-arena_map_mark_used(OMState *state, uintptr_t arena_base, int is_used)
++arena_map_mark_used(OMState *state, uintptr_t arena_base, int is_used,
++                    uint32_t arena)
+ {
+     /* sanity check that IGNORE_BITS is correct */
+     assert(HIGH_BITS(arena_base) == HIGH_BITS(&arena_map_root));
+@@ -1766,6 +1768,7 @@
+     if (tail == 0) {
+         /* is ideal arena address */
+         n_hi->arenas[i3].tail_hi = is_used ? -1 : 0;
++        n_hi->arenas[i3].arena_hi = is_used ? arena + 1 : 0;
+     }
+     else {
+         /* arena_base address is not ideal (aligned to arena size) and
+@@ -1775,6 +1778,7 @@
+          * again (do the full tree traversal).
+          */
+         n_hi->arenas[i3].tail_hi = is_used ? tail : 0;
++        n_hi->arenas[i3].arena_hi = is_used ? arena + 1 : 0;
+         uintptr_t arena_base_next = arena_base + ARENA_SIZE;
+         /* If arena_base is a legit arena address, so is arena_base_next - 1
+          * (last address in arena).  If arena_base_next overflows then it
+@@ -1790,10 +1794,55 @@
+         }
+         int i3_next = MAP_BOT_INDEX(arena_base_next);
+         n_lo->arenas[i3_next].tail_lo = is_used ? tail : 0;
++        n_lo->arenas[i3_next].arena_lo = is_used ? arena + 1 : 0;
+     }
+     return 1;
+ }
+ 
++/* Sublet: the arena P lies in, or NULL. P may be a client's pointer, which
++ * is bounded to its block and so cannot reach the pool header. */
++static struct arena_object *
++arena_map_arena(OMState *state, pymem_block *p)
++{
++    arena_map_bot_t *n = arena_map_get(state, p, 0);
++    if (n == NULL) {
++        return NULL;
++    }
++    int i3 = MAP_BOT_INDEX(p);
++    int32_t tail = (int32_t)(AS_UINT(p) & ARENA_SIZE_MASK);
++    arena_coverage_t *c = &n->arenas[i3];
++    uint32_t index = (c->tail_hi != 0 && tail >= c->tail_hi) ? c->arena_hi
++                   : (tail < c->tail_lo) ? c->arena_lo : 0;
++    return index ? &allarenas[index - 1] : NULL;
++}
++
++/* Sublet: obmalloc's own pointer at P's address, from the arena's
++ * capability; it outlives every block the arena hands out. */
++static pymem_block *
++arena_inside(struct arena_object *ao, void *p)
++{
++    return _Py_ARENA_PTR(ao) + (AS_UINT(p) - ao->address);
++}
++
++/* Sublet: a block handed out to a client is a child lifetime of its arena,
++ * bounded to the request. */
++static void *
++block_issue(OMState *state, pymem_block *bp, size_t nbytes)
++{
++    struct arena_object *ao = &allarenas[POOL_ADDR(bp)->arenaindex];
++    return capstone_cap_derive(ao->arena_life, AS_UINT(bp) - ao->address,
++                               nbytes ? nbytes : 1);
++}
++
++/* Sublet: the length a client's block was issued with. */
++static size_t
++block_requested(void *p)
++{
++    capstone_cap_slot slot;
++    capstone_cap_store(&slot, p);
++    return capstone_cap_end(&slot) - capstone_cap_base(&slot);
++}
++
+ /* Return true if 'p' is a pointer inside an obmalloc arena.
+  * _PyObject_Free() calls this so it needs to be very fast. */
+ static int
+@@ -1888,7 +1937,8 @@
+     address = _PyObject_Arena.alloc(_PyObject_Arena.ctx, ARENA_SIZE);
+ #if WITH_PYMALLOC_RADIX_TREE
+     if (address != NULL) {
+-        if (!arena_map_mark_used(state, (uintptr_t)address, 1)) {
++        if (!arena_map_mark_used(state, (uintptr_t)address, 1,
++                                 (uint32_t)(arenaobj - allarenas))) {
+             /* marking arena in radix tree failed, abort */
+             _PyObject_Arena.free(_PyObject_Arena.ctx, address, ARENA_SIZE);
+             address = NULL;
+@@ -1907,6 +1957,9 @@
+ #ifdef _Py_ARENA_KEEPS_POINTER
+     arenaobj->arena_ptr = (pymem_block *)address;
+ #endif
++    /* Ends with the arena: freeing it revokes the system allocator's
++       lifetime of the arena, and this child and its blocks lie below it. */
++    arenaobj->arena_life = capstone_cap_derive(address, 0, ARENA_SIZE);
+ 
+     ++narenas_currently_allocated;
+     ++ntimes_arena_allocated;
+@@ -2238,7 +2291,7 @@
+         bp = allocate_from_new_pool(state, size);
+     }
+ 
+-    return (void *)bp;
++    return block_issue(state, bp, nbytes);
+ }
+ 
+ 
+@@ -2380,7 +2433,7 @@
+ 
+ #if WITH_PYMALLOC_RADIX_TREE
+         /* mark arena region as not under control of obmalloc */
+-        arena_map_mark_used(state, ao->address, 0);
++        arena_map_mark_used(state, ao->address, 0, 0);
+ #endif
+ 
+         /* Free the entire arena. */
+@@ -2481,7 +2534,13 @@
+     if (UNLIKELY(!address_in_range(state, p, pool))) {
+         return 0;
+     }
+-    /* We allocated this address. */
++    /* We allocated this address. End the client's lifetime of the block;
++       CREVOKE faults on a reference that is not a live block of this arena,
++       so a double or foreign free stops here. */
++    struct arena_object *ao = arena_map_arena(state, p);
++    capstone_cap_revoke_child(ao->arena_life, p);
++    p = arena_inside(ao, p);
++    pool = POOL_ADDR(p);
+ 
+     /* Link p to the start of the pool's freeblock list.  Since
+      * the pool had at least the p block outstanding, the pool
+@@ -2585,6 +2644,8 @@
+     }
+ 
+     /* pymalloc is in charge of this block */
++    struct arena_object *ao = arena_map_arena(state, p);
++    pool = POOL_ADDR(arena_inside(ao, p));
+     size = INDEX2SIZE(pool->szidx);
+     if (nbytes <= size) {
+         /* The block is staying the same or shrinking.
+@@ -2595,12 +2656,18 @@
+            The compromise here is to copy on shrink only if at least 25% of
+            size can be shaved off. */
+         if (4 * nbytes > 3 * size) {
+-            /* It's the same, or shrinking and new/old > 3/4. */
+-            *newptr_p = p;
++            /* It's the same, or shrinking and new/old > 3/4. The block stays;
++               its client lifetime is replaced by one of the new length. */
++            capstone_cap_revoke_child(ao->arena_life, p);
++            *newptr_p = block_issue(state, arena_inside(ao, p), nbytes);
+             return 1;
+         }
+         size = nbytes;
+     }
++    /* Only the issued length is the client's. */
++    if (size > block_requested(p)) {
++        size = block_requested(p);
++    }
+ 
+     bp = _PyObject_Malloc(ctx, nbytes);
+     if (bp != NULL) {

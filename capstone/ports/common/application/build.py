@@ -112,8 +112,6 @@ def main():
     if args.musl: musl = args.musl.resolve()
     if args.libc: libc = args.libc.resolve()
     objects = inputs(args.app, root)
-    if args.nested == 'cpython':
-        objects += [root / 'runtime' / n for n in ('pym_backing.o', 'pym_block_lifetimes.o', 'pym_sublet_glue.o')]
     if args.nested == 'postgres':
         objects += [root / 'link/context-pools.o']
     if args.nested == 'perl':
@@ -142,10 +140,10 @@ def main():
          '-DCAPSTONE_APPLICATION_ARENA_BYTES=' + str(args.arena),
          '-DCMAKE_BUILD_TYPE=Release',
          '-DCMAKE_C_FLAGS_RELEASE=-O1' +
-         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str((80 if args.nested == 'cpython' else 64 if args.nested == 'postgres' else 32) << 20 if args.nested != 'none' else 0)])
+         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'postgres': 64, 'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
     run(['cmake', '--build', sdk, '-j8'])
     probe = out / 'memory.o'
-    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_PYMALLOC'] if args.nested == 'cpython' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_PG_CONTEXT_SUBLET'] if args.nested == 'postgres' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
+    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_PG_CONTEXT_SUBLET'] if args.nested == 'postgres' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
     if args.reuse_gap: defines += ['-DEXP_PG_REUSE_GAP']
     if args.allocations: defines += ['-DEXP_ALLOCATIONS', '-DEXP_CAPSTONE']
     memory_includes = (['-I', REPO / 'capstone/ports/postgres/memory-contexts/src/allocators/sublet',
@@ -159,7 +157,8 @@ def main():
     if args.allocations:
         extra += ['-O1', *defines, EXPERIMENTS / 'allocations.c',
                   '-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free']
-    if args.nested != 'none':
+    # CPython's protection is patch 0014 inside obmalloc: no objects, no regions.
+    if args.nested not in ('none', 'cpython'):
         extra += ['-O1', '-Wl,--wrap=__capstone_region', *defines, '-I',
                   REPO / 'capstone/runtime/include', HERE / 'regions.c']
     if args.reuse_gap:
@@ -171,7 +170,7 @@ def main():
         if args.app == 'ffmpeg': extra += ['-I', REPO / 'capstone/ports/ffmpeg/app/src/shared']
     if args.instrument:
         extra += ['-Wl,--wrap=main,--wrap=write', probe]
-    elif args.nested in ('cpython', 'postgres'):
+    elif args.nested == 'postgres':
         extra += ['-O1', '-Wl,--wrap=main', *defines, HERE / 'initialize.c']
     run([sdk / 'capstone-cc', *extra, *objects, '-o', image])
     run([args.toolchain / 'bin/llvm-objcopy', '--strip-debug', image])

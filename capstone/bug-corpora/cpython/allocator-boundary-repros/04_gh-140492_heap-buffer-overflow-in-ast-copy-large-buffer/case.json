@@ -16,7 +16,7 @@
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, pymalloc on its lifetime port, CPY_SUBLET_MODE=1 (tools/arms.json virtual-cpython-pools): as virtual-malloc"
+      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc"
     },
     "cheribsd-revocation": {
       "oracle": "the arm does not separate this case, and the admissible outcomes are stated rather than one of them predicted: si_code=1 (PROT_CHERI_BOUNDS) where the access goes beyond the bounds the allocator actually set, si_code=2 (PROT_CHERI_TAG) where it instead lands in memory a revocation sweep has already reclaimed, or completion where it stays inside the bounds the allocator set -- malloc may bound a capability to a rounded size class rather than the requested length. The mechanism is live and the run proves it rather than assuming it: mech-control S_OOB faults with si_code=1. Any other si_code would falsify this."

@@ -7,21 +7,21 @@
 domain's heaps -- the first-fit `level0.c` and the Sublet heap -- are no longer built for CPython:
 `prepare-cpython-capstone.sh` refuses any other profile, and the `CPYD_HEAP` switch between them
 is gone. `cheribsd/` cross-builds the same release for CheriBSD purecap, with ordinary pymalloc or
-the PoisonCap component. Fourteen patches carry the pointer-layout changes, and `port.json`
+the PoisonCap component. Fourteen patches carry the pointer-layout changes (0014, the protection, only with `CPY_SUBLET=1`), and `port.json`
 states the pin and the role.
 
 ## Build and run
 
     ports/common/application/build-virtual.sh cpython OUT              # pymalloc stock
-    CPY_SUBLET=1 ports/common/application/build-virtual.sh cpython OUT # pymalloc's lifetime port
+    CPY_SUBLET=1 ports/common/application/build-virtual.sh cpython OUT # pymalloc protected
 
-The second applies patch 0014 instead of 0009 and links the pymalloc component's adapter
-(`ports/cpython/pymalloc/src/allocators/sublet/block-lifetimes.c`); its arena is a linear grant
-that `ports/common/application/regions.c` splits into payload and metadata.
-`CPY_SUBLET_MODE=1` in the environment selects revocation on free. `runtime/virtual/run-ports.py`
-runs both on a virtual VM:
+The second also applies patch 0014, on top of 0009. It is the whole Sublet protection: obmalloc
+hands out each block as a child lifetime of its arena, bounded to the request (`CDERIVE`), and
+revokes it on free (`CREVOKE`), through the wrappers in `capstone/runtime/include/capstone/capability.h`.
+There is no adapter, no run-time mode and no grant. `runtime/virtual/run-ports.py` runs the
+image on a virtual VM:
 
-    CPY_SUBLET_MODE=1 PYTHONHOME=/mnt/vm/cpy ./capstone-vexec ./cpython.dom -S -c '...'
+    PYTHONHOME=/mnt/vm/cpy ./capstone-vexec ./cpython.dom -S -c '...'
 
 **The records below were measured on the physical application domain with the first-fit heap**,
 before this port moved to the virtual profile. They are kept as history: the compile survey, the

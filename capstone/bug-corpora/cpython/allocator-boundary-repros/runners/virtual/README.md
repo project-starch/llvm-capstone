@@ -6,7 +6,7 @@ one process per case on a persistent VM. CPython's one heap there is musl malloc
 | arm | configuration | build | run |
 |---|---|---|---|
 | `virtual-malloc` | `virtual-cpython` | `CPY_TEST_CAPI=1 build-virtual.sh cpython OUT` | as is |
-| `virtual-nested-pools` | `virtual-cpython-pools` | `CPY_TEST_CAPI=1 CPY_SUBLET=1 build-virtual.sh cpython OUT` | `CPY_SUBLET_MODE=1` |
+| `virtual-nested-pools` | `virtual-cpython-pools` | `CPY_TEST_CAPI=1 CPY_SUBLET=1 build-virtual.sh cpython OUT` | as is |
 
 (`build-virtual.sh` is `capstone/ports/common/application/build-virtual.sh`.)
 
@@ -23,8 +23,7 @@ In order, each must pass before anything after it counts:
 
 1. The build's `image/manifest.json` must say profile `virtual` and nested `none` or `cpython`
    for the arm, and the VM must be a virtual one.
-2. The interpreter must run a JSON/GC workload. On the pools arm it must also report
-   `CPY-SUBLET mode=1`.
+2. The interpreter must run a JSON/GC workload.
 3. The two controls in `../../controls/` must do what `tools/arms.json` says.
 4. Then each case is run. A fault counts only in the case's `fault_sites`.
 
