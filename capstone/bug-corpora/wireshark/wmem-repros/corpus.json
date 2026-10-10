@@ -41,7 +41,8 @@
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-asan",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-differential",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-domain-regression",
-    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-poisoncap"
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-poisoncap",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual"
   ],
   "advisories": [],
   "shape_table": true,
