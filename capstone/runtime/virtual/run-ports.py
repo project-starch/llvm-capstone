@@ -24,7 +24,7 @@ chmod 666 /dev/capstone-vm
 su nobody -s /bin/sh -c 'cd /mnt/vm; ./capstone-vexec ./bin/postgres --single -D /tmp/pgcluster -c shared_buffers=4MB -c max_connections=10 -c timezone=GMT -c log_timezone=GMT -c dynamic_shared_memory_type=sysv -c exit_on_error=true postgres < work.sql'
 echo PORT_END:postgres:$?
 echo PORT_BEGIN:cpython
-CPY_SUBLET_MODE=1 PYTHONHOME=/mnt/vm/cpy ./capstone-vexec ./cpython.dom -S -c 'import json,gc; a=[{"n":n} for n in range(1000)]; assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")'
+PYTHONHOME=/mnt/vm/cpy ./capstone-vexec ./cpython.dom -S -c 'import json,gc; a=[{"n":n} for n in range(1000)]; assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")'
 echo PORT_END:cpython:$?
 for input in input input.flip; do
   echo PORT_BEGIN:ffmpeg-$input
@@ -76,8 +76,6 @@ def main():
                  'pg-fixture', 'ffmpeg', 'ffmpeg-fixture', 'tshark', 'tshark-native', 'capture', 'work'):
         p.add_argument('--'+name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=1200)
-    p.add_argument('--cpython-inner', action='store_true',
-                   help='Require the inner pymalloc adapter to report revocation on every free')
     p.add_argument('--ffmpeg-staged', action='store_true',
                    help='Use the source recipe M5 image, whose successful exit status is 5')
     p.add_argument('--omit-application', choices=('cpython', 'postgres', 'ffmpeg', 'tshark'))
@@ -134,8 +132,6 @@ def main():
             checks[name+'_exit'] = (parts.get(name, (-1, ''))[0] == 5 and
                                    'STAGE M5 frames=30 packets=30' in body(name))
     checks['cpython_json_gc'] = 'CPYTHON-OK 1000' in body('cpython')
-    if a.cpython_inner:
-        checks['cpython_inner_revocation'] = 'CPY-SUBLET mode=1 (sublet: every free revokes)' in body('cpython')
     expected_pg = pg_rows(paths['pg_reference'].read_text())
     checks['postgres_native_rows'] = len(expected_pg) == 22 and pg_rows(body('postgres')) == expected_pg
     ff = frames(body('ffmpeg-input'))

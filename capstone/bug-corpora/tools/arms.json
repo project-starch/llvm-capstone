@@ -179,8 +179,8 @@
     },
     "virtual-cpython-pools": {
       "target": "capstone-virtual",
-      "summary": "the same interpreter with CPY_SUBLET=1 run with CPY_SUBLET_MODE=1: pymalloc on its lifetime port (patch 0014, ports/cpython/pymalloc/src/allocators/sublet/block-lifetimes.c) over a linear grant the virtual runtime splits into payload and metadata (ports/common/application/regions.c); every pymalloc block, and pymalloc's fallback for larger requests, is its own bounded capability, retired on free",
-      "mechanism": "as virtual-cpython; per-block bounds and revocation in pymalloc",
+      "summary": "the same interpreter built with CPY_SUBLET=1: patch 0014 makes obmalloc hand out every block as a child lifetime of its arena, bounded to the request (CDERIVE), and revoke it on free (CREVOKE); the arena's own child dies with the arena when mallocng frees it; requests over 512 bytes go to mallocng, as in the stock arm",
+      "mechanism": "as virtual-cpython; per-block bounds and revocation inside obmalloc",
       "controls": {
         "uaf-block": "fault",
         "bounds-block": "fault"

@@ -108,7 +108,7 @@ the VM-service profile.
 |---|---|---|
 | SQLite, mruby | Included in [#184](https://github.com/project-starch/llvm-capstone/pull/184) | Recorded workloads; not full upstream suites |
 | Perl | [#186](https://github.com/project-starch/llvm-capstone/pull/186) | `PERLD_PROFILE=virtual`; existing build restrictions remain |
-| CPython | [#187](https://github.com/project-starch/llvm-capstone/pull/187) | Inner temporal protection requires `CPY_SUBLET_MODE=1` |
+| CPython | [#187](https://github.com/project-starch/llvm-capstone/pull/187) | Inner temporal protection is the `CPY_SUBLET=1` build (patch 0014, `CDERIVE`/`CREVOKE` in obmalloc) |
 | PostgreSQL | [#188](https://github.com/project-starch/llvm-capstone/pull/188) | Single-user backend profile |
 | FFmpeg | [#189](https://github.com/project-starch/llvm-capstone/pull/189) | Configured decoder/pool workloads |
 | tshark | [#190](https://github.com/project-starch/llvm-capstone/pull/190) | Offline profile and selected wmem adapters |

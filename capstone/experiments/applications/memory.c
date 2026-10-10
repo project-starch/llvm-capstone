@@ -127,10 +127,6 @@ int __wrap_main(int argc, char **argv) {
 #ifdef EXP_PG_CONTEXT_SUBLET
   if (pg_subpool_arena(__capstone_region(1), 64UL << 20) != 0) return 126;
 #endif
-#ifdef EXP_PYMALLOC
-  extern int cpy_sublet_init(void);
-  if (cpy_sublet_init() < 0) return 124;
-#endif
   if (atexit(at_exit)) return 125;
 #ifdef EXP_ALLOCATIONS
   exp_alloc_start();

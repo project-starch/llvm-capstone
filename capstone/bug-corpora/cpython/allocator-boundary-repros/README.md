@@ -98,7 +98,7 @@ uses:
 | arm | configuration (`tools/arms.json`) | what it is |
 |---|---|---|
 | `virtual-malloc` | `virtual-cpython` | the interpreter with pymalloc stock (patch 0009). mallocng bounds and retires what it hands out -- `PyMem_Raw` memory, objects over 512 bytes, pymalloc's arenas -- but not the blocks pymalloc carves inside an arena |
-| `virtual-nested-pools` | `virtual-cpython-pools` | the same with `CPY_SUBLET=1` (patch 0014), run with `CPY_SUBLET_MODE=1`: every pymalloc block, and pymalloc's fallback for larger requests, is its own capability, retired on free |
+| `virtual-nested-pools` | `virtual-cpython-pools` | the same with `CPY_SUBLET=1`: patch 0014 makes obmalloc hand out every block as a child lifetime of its arena, bounded to the request (`CDERIVE`), and revoke it on free (`CREVOKE`). Requests over 512 bytes stay with mallocng, as in the stock arm |
 | `cheribsd-revocation` | -- | CheriBSD purecap, libc revocation as the platform ships it |
 
 How to build and run the two Capstone arms is in
