@@ -232,3 +232,53 @@ class Mmgr(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VirtualCases(unittest.TestCase):
+    """tools/run-virtual-cases.py, the FFmpeg/tshark/memcached case.c corpora on the virtual profile.
+    Inputs are the launcher's own line format and the drivers' printf lines."""
+    rv = load(HERE / "run-virtual-cases.py", "run_virtual_cases")
+    FAULT = ("capstone-exec: domain fault cause=28 pc=0x10234 address=0x55 entry=0x10000 "
+             "code=0x10000-0x20000 last=0x4f")
+
+    def run_text(self, n, extra=""):
+        return f"case={n} arm=buggy\ncap=16 touched=17 extent=1 crossed=1 damage=0\n{extra}"
+
+    def test_fault_at_a_prefixed_or_bare_probe_is_reached_and_attributed(self):
+        for name in ("ffh_read_probe", "write_probe", "wsh_write_probe_u8"):
+            o = self.rv.observe("3", self.run_text(3, self.FAULT), {"kind": "signal", "value": 11}, FakeSymbols(name))
+            self.assertTrue(o.reached, name)
+            self.assertEqual(o.attribution, "probe", name)
+
+    def test_fault_at_a_declared_site_is_function(self):
+        o = self.rv.observe("3", self.run_text(3, self.FAULT), {}, FakeSymbols("ff2_case_run"), ("ff2_case_run",))
+        self.assertEqual((o.reached, o.attribution), (True, "function"))
+
+    def test_fault_elsewhere_is_neither_reached_nor_attributed(self):
+        o = self.rv.observe("3", self.run_text(3, self.FAULT), {}, FakeSymbols("memcpy"), ("ff2_case_run",))
+        self.assertFalse(o.reached)
+        self.assertIsNone(o.attribution)
+        verdict = v.judge(o, {"controls": {}})
+        self.assertEqual(verdict[:2], (v.NO_READING, "setup-fault"))
+
+    def test_reproduced_and_exit_0_is_a_completed_reach(self):
+        o = self.rv.observe("3", self.run_text(3, "VERDICT DEFECT-REPRODUCED x\n"), {"kind": "exit", "value": 0})
+        self.assertEqual((o.reached, o.completed), (True, True))
+
+    def test_exit_75_is_control_failed_not_a_silence(self):
+        o = self.rv.observe("3", self.run_text(3, "CONTROL-FAILED 785\n"), {"kind": "exit", "value": 75})
+        self.assertEqual(o.infra, "control-failed")
+
+    def test_wrong_case_number_is_infra(self):
+        o = self.rv.observe("4", self.run_text(3, "VERDICT DEFECT-REPRODUCED x\n"), {"kind": "exit", "value": 0})
+        self.assertEqual(o.infra, "infra")
+
+    def test_step_that_never_ended_is_infra(self):
+        o = self.rv.observe("3", self.run_text(3) + "[runner] TIMEOUT\n", {"kind": "none"})
+        self.assertEqual(o.infra, "infra")
+
+    def test_fixed_arm_must_print_fixed_and_exit_0(self):
+        ok = "case=3 arm=fixed\nVERDICT FIXED y\n"
+        self.assertTrue(self.rv.fixed_ok("3", ok, {"kind": "exit", "value": 0}))
+        self.assertFalse(self.rv.fixed_ok("3", ok, {"kind": "exit", "value": 1}))
+        self.assertFalse(self.rv.fixed_ok("3", "case=3 arm=fixed\nVERDICT DEFECT-REPRODUCED\n", {"kind": "exit", "value": 0}))
