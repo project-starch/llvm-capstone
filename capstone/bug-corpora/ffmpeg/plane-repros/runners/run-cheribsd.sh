@@ -92,10 +92,9 @@ done
 "$SDK/bin/clang" $CFLAGS "$CAP/ports/common/host/cheribsd/abi-probe.c" \
   -o "$OUT/bin/cheribsd-abi-probe" || { echo "CONTROL-FAILED abi-probe build" >&2; exit 75; }
 
-# Both arms are expected to COMPLETE (exit 0) -- see the predicted reading above. The arms are run
-# directly rather than under supervise: supervise exists to attribute a FAULT to the probe, and the
-# prediction here is that there is no fault. If an arm faults, the suite reports it and the
-# attribution run is the follow-up, not this.
+# The fixed arm runs directly. The BUGGY arm runs under supervise (anchored on ffp_read_probe), so a
+# fault keeps its pc and tools/attribute-cheribsd-faults.py names where it landed (attribution.tsv).
+# Until 2026-10-10 both arms ran directly, so the carve-bounds catch carried a status and no pc.
 python3 - "$OUT/bin" "$OUT/cases.json" <<'PY'
 import json, pathlib, sys
 BIN, OUT = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
@@ -104,8 +103,9 @@ for p in sorted(BIN.glob('ffp-[0-9][0-9]')):
     n = int(p.name.split('-')[1])
     cases.append(dict(name=f'{p.name}-fixed', program=str(p), args=['fixed', str(n)],
                       timeout=300, expect_regex=r'VERDICT FIXED .*', exit=0))
-    cases.append(dict(name=f'{p.name}-buggy', program=str(p), args=['buggy', str(n)],
-                      timeout=300, expect_regex=r'VERDICT DEFECT-REPRODUCED .*', exit=0))
+    cases.append(dict(name=f'{p.name}-buggy', program=str(BIN / 'supervise'),
+                      args=['./target', 'buggy', str(n)], inputs={'target': str(p)},
+                      timeout=300, expect_regex=r'SUPERVISE exit .*', exit=0))
 OUT.write_text(json.dumps(cases, indent=2) + '\n')
 PY
 [ -s "$OUT/cases.json" ] || { echo "CONTROL-FAILED cases.json" >&2; exit 75; }
@@ -140,6 +140,10 @@ grep -q "CHERI_BOUNDARY_READY" "$OUT/run/cheribsd-bounds/stdout.txt" \
   || { echo "CONTROL-FAILED cheribsd-bounds did not report ready" >&2; exit 75; }
 subobj_control_check "$OUT" || exit 75
 
+ATTR=(); for prog in "$OUT"/bin/ffp-[0-9][0-9]; do ATTR+=(--arm "$(basename "$prog")-buggy=$prog" --sites "$(basename "$prog")-buggy=ffp_read_probe"); done
+python3 "$CAP/bug-corpora/tools/attribute-cheribsd-faults.py" --run "$OUT/run" --nm "$SDK/bin/llvm-nm" \
+  --sysroot "$SYSROOT" --anchor ffp_read_probe "${ATTR[@]}" > "$OUT/attribution.tsv"
+echo "run-cheribsd: attribution exit $? (non-zero = a fault not at ffp_read_probe, which is data) -- $OUT/attribution.tsv"
 echo "run-cheribsd: controls fired; suite exit $rc (non-zero = an oracle did not hold, which is data)"
 echo "run-cheribsd: per-case output in $OUT/run/"
 exit "$rc"

@@ -32,7 +32,7 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x104248, NOT the probe). Adapter counters: WM_POISONCAP mode=0 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held.",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x104248, NOT the probe). Adapter counters: WM_POISONCAP mode=0 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held. RE-MEASURED 2026-10-10, results/2026-10-10-poisoncap-supervised-13-21/ (R4): SIGPROT, bounds, AT wm_defect_write -- resolved by the runner's own per-label supervisor, no longer by hand.",
       "status": "measured",
       "prediction": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
       "verdict": "CAUGHT",
@@ -42,7 +42,7 @@
       "mode": 1,
       "signal": 34,
       "si_code": 1,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x104248, NOT the probe). Adapter counters: WM_POISONCAP mode=1 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held.",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x104248, NOT the probe). Adapter counters: WM_POISONCAP mode=1 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held. RE-MEASURED 2026-10-10, results/2026-10-10-poisoncap-supervised-13-21/ (R4): SIGPROT, bounds, AT wm_defect_write -- resolved by the runner's own per-label supervisor, no longer by hand.",
       "status": "measured",
       "prediction": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
       "verdict": "CAUGHT",

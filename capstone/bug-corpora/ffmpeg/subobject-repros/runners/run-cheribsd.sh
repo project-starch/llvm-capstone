@@ -9,8 +9,11 @@
 #                       applied to the cases, whose member accesses are what it narrows;
 #   CHERI_REVOCATION    on|off (off = PoisonCap mode 0).
 #
-# Arms run directly, not under supervise: a fault is read from the process status, 162 = 128 +
-# SIGPROT, beside the case's own VERDICT line. An infrastructure failure exits 75.
+# The fixed arm runs directly. The BUGGY arm runs under supervise (cpython/pymalloc-repros/observe/
+# supervise.c, anchored on ff2_case_run): the status is the same 162 = 128 + SIGPROT, and the fault pc is
+# kept, so tools/attribute-cheribsd-faults.py can name the function it landed in (attribution.tsv).
+# Until 2026-10-10 the buggy arm ran directly and a catch carried no pc at all. An infrastructure
+# failure exits 75.
 set -uo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd -- "$HERE/.." && pwd)
@@ -54,6 +57,9 @@ for dir in "$ROOT"/[0-9][0-9]_*/; do
 done
 "$SDK/bin/clang" $CFLAGS "$CAP/ports/common/host/cheribsd/abi-probe.c" \
   -o "$OUT/bin/cheribsd-abi-probe" || { echo "CONTROL-FAILED abi-probe build" >&2; exit 75; }
+"$SDK/bin/clang" $CFLAGS -DPROBE_SYMBOL='"ff2_case_run"' \
+  "$CAP/bug-corpora/cpython/pymalloc-repros/observe/supervise.c" -lutil \
+  -o "$OUT/bin/supervise" || { echo "CONTROL-FAILED supervise build" >&2; exit 75; }
 
 python3 - "$OUT/bin" "$OUT/cases.json" "$ROOT" <<'PY'
 import json, pathlib, sys
@@ -69,8 +75,9 @@ for n in built:
     # status and the VERDICT line afterwards, so a refuted prediction is data, not a lost row.
     cases.append(dict(name=f'so-{n:02d}-fixed', program=str(p), args=['fixed', str(n)],
                       timeout=300, expect_regex=r'VERDICT FIXED .*', exit=0))
-    cases.append(dict(name=f'so-{n:02d}-buggy', program=str(p), args=['buggy', str(n)],
-                      timeout=300, expect_regex=r'case=.*', exit=0))
+    cases.append(dict(name=f'so-{n:02d}-buggy', program=str(BIN / 'supervise'),
+                      args=['./target', 'buggy', str(n)], inputs={'target': str(p)},
+                      timeout=300, expect_regex=r'SUPERVISE exit .*', exit=0))
 OUT.write_text(json.dumps(cases, indent=2) + '\n')
 print(f'  cases.json: {len(cases)} arms covering all {len(present)} case directories')
 PY
@@ -103,5 +110,23 @@ grep -q "runtime_revocation=$WANT_REV" "$OUT/run/cheribsd-abi/stdout.txt" \
 grep -q "CHERI_BOUNDARY_READY" "$OUT/run/cheribsd-bounds/stdout.txt" \
   || { echo "CONTROL-FAILED cheribsd-bounds did not report ready" >&2; exit 75; }
 subobj_control_check "$OUT" || exit 75
-echo "run-cheribsd: controls fired; suite exit $rc (non-zero = an arm's status was not the recorded one, which is data)"
+# Where each buggy fault landed, against the case's own declared sites (case.json fault_sites) or its
+# labelled probe. A fault anywhere else is data, and says so in the table.
+mapfile -t ATTR < <(python3 - "$ROOT" "$OUT/bin" <<'PY'
+import json, pathlib, re, sys
+root, bin_ = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+for d in sorted(root.glob('[0-9][0-9]_*')):
+    n = d.name[:2]
+    print('--arm'); print(f'so-{n}-buggy={bin_}/so-{n}')
+    sites = json.loads((d / 'case.json').read_text()).get('fault_sites') or []
+    probes = sorted(set(re.findall(r'\b((?:[a-z0-9]+_)?(?:read|write)_probe)\(', (d / 'case.c').read_text())))
+    if sites or probes:
+        print('--sites'); print(f'so-{n}-buggy=' + ','.join(sites + probes))
+PY
+)
+python3 "$CAP/bug-corpora/tools/attribute-cheribsd-faults.py" --run "$OUT/run" --nm "$SDK/bin/llvm-nm" \
+  --sysroot "$SYSROOT" --anchor ff2_case_run "${ATTR[@]}" > "$OUT/attribution.tsv"
+arc=$?
+echo "run-cheribsd: controls fired; suite exit $rc (non-zero = an arm's status was not the recorded one, which is data);" \
+     "attribution exit $arc (non-zero = a fault not at a declared site or probe, which is data) -- $OUT/attribution.tsv"
 exit "$rc"
