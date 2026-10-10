@@ -1,5 +1,18 @@
 # Perl 5.36.3: spatial and temporal defects live at the pin
 
+> **Correction, 2026-10-11.** The four-arm account below (2026-10-06) counts 04 (`e4be969235`) and
+> 06 (`40727c420c`) as caught on every Capstone arm and on CheriBSD. Those faults were, by every
+> sign, a Perl port bug and not the defects: both triggers load `overload.pm`, whose
+> `builtin::blessed` call goes through a descriptor pointer kept as an integer (`builtin.c`), which
+> loses its capability tag. On 2026-10-11 the same faults appear with no defect involved, on the
+> Capstone virtual port (cause 24 in `ck_builtin_func1`) and on CheriBSD purecap (one instruction
+> in `Perl_sv_2uv_flags`, revocation on and off), and they go away with port patch 0010. The
+> physical 2026-10-06 images are gone, so this rests on the same unpatched upstream code being in
+> them, and on their faults' shape (cause 24 on the bounds-only arm too; SIGPROT with revocation
+> off too), not on rerunning them. The counts below that include 04 and 06 are therefore not
+> readings. The current measurement, on the Sublet platform and on CheriBSD with patch 0010, is
+> [`results/2026-10-11-virtual`](results/2026-10-11-virtual/README.md).
+
 **Scope: spatial and temporal memory defects only.** That is this study's subject,
 and it is the only thing this corpus admits. A defect that is a null dereference, a
 type confusion, an integer overflow with no out-of-bounds consequence, or a crash
