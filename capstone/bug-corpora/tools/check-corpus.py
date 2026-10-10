@@ -107,8 +107,6 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
 ARM_ORACLES = {
     "spatial": {"oracle"},
     "sublet": {"oracle"},
-    "poisoncap-spatial": {"oracle", "mode"},
-    "poisoncap-protected": {"oracle", "mode", "signal", "si_code"},
     "cheribsd-revocation": {"oracle"},
     # The three system-allocator arms of docs/ref/runtime-terms-glossary.md
     # section 6. They are one image each of the same source, differing only in
