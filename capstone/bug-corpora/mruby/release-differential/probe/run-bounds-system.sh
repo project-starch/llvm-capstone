@@ -12,8 +12,8 @@
 #   against that arm's build), smoke.rb and d40.rb/d500.rb
 # Controls first, as on 2026-10-06: smoke.rb must print SMOKE_DONE and both recursion depths
 # must complete, or no case is a reading. Each case runs under a 25 s watchdog (the guest's
-# busybox has no timeout(1)) with CAPSTONE_EXEC_DIAGNOSTICS=1, without which the launcher
-# reports a fault's cause only to a tty.
+# busybox has no timeout(1)), a control under 600 s (smoke.rb takes longer than 25 s), with
+# CAPSTONE_EXEC_DIAGNOSTICS=1, without which the launcher reports a fault's cause only to a tty.
 set -u
 K=$(cd "${1:?KIT}" && pwd); OUT=${2:?OUT}; shift 2
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -24,9 +24,10 @@ cat > "$S/one.sh" <<'GUEST'
 #!/bin/sh
 export CAPSTONE_EXEC_DIAGNOSTICS=1
 cd /mnt/host
+dog=$1; shift
 "$@" > /tmp/case.out 2>&1 &
 pid=$!
-( sleep 25; kill -9 $pid 2>/dev/null ) > /dev/null 2>&1 &
+( sleep $dog; kill -9 $pid 2>/dev/null ) > /dev/null 2>&1 &
 dog=$!
 wait $pid
 st=$?
@@ -48,13 +49,13 @@ vm up --qemu "$K/qemu-system-riscv64" --kernel "$K/Image" --firmware "$K/fw_jump
   --share "$S" --module "$K/capstone.ko" --launcher "$K/capstone-exec" --cma-mib 1024 --process-cache-mib 768 \
   > "$OUT/up.log" 2>&1 || { echo "up FAILED"; tail -5 "$OUT/up.log"; exit 1; }
 ex() { timeout 900 python3 -m capstone_vm --state "$V" exec sh /mnt/host/one.sh "$@"; }
-ex /mnt/host/mruby-bounds.dom /mnt/host/smoke.rb > "$OUT/control-smoke.txt" 2>&1
-for d in d40 d500; do ex /mnt/host/mruby-bounds.dom /mnt/host/$d.rb > "$OUT/control-$d.txt" 2>&1; done
+ex 600 /mnt/host/mruby-bounds.dom /mnt/host/smoke.rb > "$OUT/control-smoke.txt" 2>&1
+for d in d40 d500; do ex 600 /mnt/host/mruby-bounds.dom /mnt/host/$d.rb > "$OUT/control-$d.txt" 2>&1; done
 echo "control smoke $(grep -c SMOKE_DONE "$OUT/control-smoke.txt") d40 $(grep -c '^DEEP' "$OUT/control-d40.txt") d500 $(grep -c '^DEEP' "$OUT/control-d500.txt")"
 for r in "${runs[@]}"; do
   nn=${r%%:*}; cmd=${r#*:}
   # shellcheck disable=SC2086
-  ex $cmd > "$OUT/case-$nn.txt" 2>&1
+  ex 25 $cmd > "$OUT/case-$nn.txt" 2>&1
   echo "case $nn $(grep -o 'STATUS=[0-9]*' "$OUT/case-$nn.txt") $(grep -m1 -oE 'cause=[0-9]+[^\n]{0,80}' "$OUT/case-$nn.txt")"
 done
 vm down > /dev/null 2>&1

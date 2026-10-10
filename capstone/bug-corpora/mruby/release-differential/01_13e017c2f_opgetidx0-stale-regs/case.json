@@ -21,8 +21,10 @@
     },
     "cheribsd-revocation": {
       "oracle": "SIGPROT: the defence reports",
-      "verdict": "CAUGHT",
-      "verdict_from": "results/20261006-cheribsd/matrix.tsv 13e017c2f: SIGPROT rc=162"
+      "verdict": "NO-READING",
+      "verdict_from": "results/2026-10-11-system-group/cheribsd/matrix.tsv 01",
+      "verdict_reason": "unattributed",
+      "verdict_note": "SIGPROT: a CHERI tag fault in mrb_vformat, not at the declared site mrb_vm_exec (2026-10-11); the bounds-only Capstone baseline faults in the same function (cause 24), so the run is stopped after the defect but not at its access"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, mruby 4.0.0-rc2 as ported on musl mallocng (exact bounds, lifetime retirement on free); its GC object slots are unbounded offsets in a malloc'd heap page: a capability fault (cause 24-30) is CAUGHT, a run that completes is MISSED",

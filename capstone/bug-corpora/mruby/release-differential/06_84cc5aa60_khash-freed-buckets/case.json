@@ -25,7 +25,8 @@
     "cheribsd-revocation": {
       "oracle": "SIGPROT: the defence reports",
       "verdict": "CAUGHT",
-      "verdict_from": "results/20261006-cheribsd/matrix.tsv 84cc5aa60: SIGPROT rc=162"
+      "verdict_from": "results/2026-10-11-system-group/cheribsd/matrix.tsv 06",
+      "verdict_note": "SIGPROT: a CHERI length (bounds) fault in kh_get_set_val, a declared fault site, plain and probed (2026-10-11): the access was rejected by the stale bucket capability's bounds, not by a revocation sweep"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, mruby 4.0.0-rc2 as ported on musl mallocng (exact bounds, lifetime retirement on free); its GC object slots are unbounded offsets in a malloc'd heap page: a capability fault (cause 24-30) is CAUGHT, a run that completes is MISSED",
