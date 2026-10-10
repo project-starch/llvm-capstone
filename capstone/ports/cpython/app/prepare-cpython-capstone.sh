@@ -133,10 +133,10 @@ CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
 # *.o in this directory, so compiling them here is the whole wiring; nothing in
 # the link step changes. The adapter and its metadata heap are the component
 # port's, program-independent and taken as they are, and PYMALLOC_DOMAIN selects
-# backing.c's form whose arenas the adapter owns (shared/port.h). The two regions
-# the adapter's init needs arrive through __capstone_region, which
-# ports/common/application/regions.c serves from the image's linear grant; the
-# plain arm never asks for them.
+# backing.c's form whose arenas the adapter owns (shared/port.h), and
+# PYMALLOC_SYSTEM_MALLOC sends requests over 512 bytes to mallocng. The glue
+# allocates the adapter's two regions from mallocng before main; the adapter
+# derives every arena and block from them (CDERIVE), so nothing is lent linear.
 if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
   PYM=$PORTS_DIR/cpython/pymalloc/src
   # THERE ARE TWO sublet.h AND THE ORDER DECIDES WHICH. capstone/sublet/sublet.h
@@ -158,10 +158,10 @@ if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
   PYM_FLAGS=()
   if [[ -n ${CPY_PYM_DEFINES:-} ]]; then read -r -a PYM_FLAGS <<< "$CPY_PYM_DEFINES"; fi
   "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" "${GAP_FLAGS[@]}" "${PYM_FLAGS[@]}" -DPYMALLOC_DOMAIN \
-    -c "$PYM/allocators/sublet/block-lifetimes.c" -o "$RT/pym_block_lifetimes.o"
+    -DPYMALLOC_SYSTEM_MALLOC -c "$PYM/allocators/sublet/block-lifetimes.c" -o "$RT/pym_block_lifetimes.o"
   "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" "${PYM_FLAGS[@]}" -DPYMALLOC_DOMAIN \
     -c "$PYM/shared/backing.c" -o "$RT/pym_backing.o"
-  "$CAPSTONE_CLANG" "${CF[@]}" "${GAP_FLAGS[@]}" \
+  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" "${GAP_FLAGS[@]}" "${PYM_FLAGS[@]}" \
     -c "$SCRIPT_DIR/toolchain/pym_sublet_glue.c" -o "$RT/pym_sublet_glue.o"
   log "Sublet arm: adapter, metadata heap and glue compiled"
 fi
@@ -196,15 +196,7 @@ printf 'CREATE %s\nADDLIB %s\nADDLIB %s\nSAVE\nEND\n' \
   "$COMBINED" "$LIBC_ARCHIVE" "$CPY_ROOT/libclang_rt.builtins.a" | "$LLVM_AR" -M
 
 # ---- the SDK -------------------------------------------------------------
-# CPY_SUBLET=1 is pymalloc's lifetime port (patch 0014) on top of mallocng: the
-# grant is the linear region ports/common/application/regions.c splits into the
-# adapter's 64 MiB payload and its metadata.
-SDK_FLAGS=()
-if [[ ${CPY_SUBLET:-0} == 1 ]]; then
-  SDK_FLAGS+=(-DCAPSTONE_APPLICATION_GRANT_BYTES=83886080)
-fi
-bash "$PORTS_DIR/common/application/build-sdk.sh" "$RT" "$MUSL_DIR" "$COMBINED" \
-  "${SDK_FLAGS[@]}"
+bash "$PORTS_DIR/common/application/build-sdk.sh" "$RT" "$MUSL_DIR" "$COMBINED"
 export CAPSTONE_SDK=$RT
 export CPY_MUSL=$MUSL_DIR CPY_RUNTIME_DIR=$RT CPY_LIBC_ARCHIVE=$COMBINED
 export CPY_SUBLET=${CPY_SUBLET:-0}

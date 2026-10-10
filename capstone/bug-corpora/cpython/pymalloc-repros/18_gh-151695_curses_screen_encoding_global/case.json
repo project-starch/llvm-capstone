@@ -42,13 +42,13 @@
       "oracle": "virtual profile, pymalloc stock in an arena from virtual mallocng (tools/arms.json virtual-pymalloc): a fault at the labelled read probe, or the case completes and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (PYM completed=1, after the case's read_probe) and completed with no fault",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc on the lifetime adapter, mode 1 (tools/arms.json virtual-pymalloc-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3f8b61b310 in read_probe; by probe: the pc lies in read_probe (pyc_defect_read)",
-      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3fa6418958 in read_probe; by probe: the pc lies in read_probe (pyc_defect_read)",
+      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools"
     }
   },
   "status": "run 2026-09-18 under QEMU"

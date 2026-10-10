@@ -142,7 +142,7 @@ def main():
          '-DCAPSTONE_APPLICATION_ARENA_BYTES=' + str(args.arena),
          '-DCMAKE_BUILD_TYPE=Release',
          '-DCMAKE_C_FLAGS_RELEASE=-O1' +
-         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str((80 if args.nested == 'cpython' else 64 if args.nested == 'postgres' else 32) << 20 if args.nested != 'none' else 0)])
+         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'postgres': 64, 'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
     run(['cmake', '--build', sdk, '-j8'])
     probe = out / 'memory.o'
     defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_PYMALLOC'] if args.nested == 'cpython' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_PG_CONTEXT_SUBLET'] if args.nested == 'postgres' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])

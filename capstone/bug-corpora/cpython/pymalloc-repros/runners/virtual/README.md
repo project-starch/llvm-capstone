@@ -9,11 +9,12 @@ used.
 | arm | configuration (`tools/arms.json`) | build | what bounds a pymalloc block |
 |---|---|---|---|
 | `virtual-malloc` | `virtual-pymalloc` | `-DPYMALLOC_SUBLET=OFF` | nothing: the arena is one mallocng object |
-| `virtual-nested-pools` | `virtual-pymalloc-pools` | `-DPYMALLOC_SUBLET=ON`, mode 1 | the lifetime adapter, one capability per block, retired on free |
+| `virtual-nested-pools` | `virtual-pymalloc-pools` | `-DPYMALLOC_SUBLET=ON`, mode 1 | the lifetime adapter: one derived child per block, revoked on free |
 
-In the pools arm the virtual heap lends the arena as one linear capability
-(`__capstone_sublet_malloc_linear`), and `ports/common/include/borrow-aligned-block.h` carves the
-16 KiB pool alignment the adapter requires out of it.
+In the pools arm the adapter's arena region is an ordinary `aligned_alloc` object from virtual
+mallocng. The adapter derives one child of it per arena and one child per block, bounded to the
+request (`CDERIVE`), and revokes the block's child when pymalloc takes it back (`CREVOKE`,
+`docs/design/virtual-capstone/isa.md`).
 
 ## Build
 

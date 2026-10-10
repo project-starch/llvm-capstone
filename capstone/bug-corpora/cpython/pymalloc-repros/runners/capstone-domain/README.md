@@ -27,7 +27,7 @@ from the mode argument:
 | mode | authority | required outcome |
 |---|---|---|
 | `spatial` | request-bounded pointers, no per-object revocation | the sequence COMPLETES |
-| `sublet` | every issue and release does `sublet_give` then `sublet_take` | the stale access FAULTS at the labelled probe |
+| `sublet` | every issue derives the block as a child lifetime (`CDERIVE`) and every release revokes it (`CREVOKE`); `results/20260919-qemu-20` was measured with the earlier adapter, which did `sublet_give` then `sublet_take` | the stale access FAULTS at the labelled probe |
 
 **The expected PC is not hardcoded.** The domain publishes both probe addresses
 through its marker, and the oracle compares the fault PC against what that boot

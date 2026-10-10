@@ -1,11 +1,31 @@
-/* Each arena is split into pools, each pool into a persistent header and a
- * revocable body, and each body into size-class blocks. Upstream pymalloc still
- * chooses the pool and free-list order. These records retain authority only;
- * address lookup never authorizes a client's release without a lease check.
+/* pymalloc's blocks as Sublet child lifetimes (CDERIVE / CREVOKE).
+ *
+ * The region pymalloc's arenas live in is one non-linear capability. The
+ * adapter derives a child of it, which carries MANAGE, and from that one child
+ * per arena; every block a client receives is a child of its arena, bounded to
+ * the request. Releasing a block revokes that child: every copy of the client's
+ * pointer dies, and the block's bytes stay reachable through the arena's own
+ * capability, which is what obmalloc uses for its pool headers and free lists.
+ * Releasing an arena revokes the arena's child, and with it every block still
+ * derived from it. Nothing is carved, so there are no per-pool or per-block
+ * records: obmalloc's own bookkeeping already says where each block is, and
+ * CREVOKE refuses a reference that is not a live direct child of the arena.
+ *
+ * Allocator bookkeeping, not the hardware, keeps live blocks from overlapping
+ * (docs/design/virtual-capstone/isa.md, "Sublet child lifetimes").
+ *
+ * Requests over 512 bytes do not reach pymalloc's pools. With
+ * PYMALLOC_SYSTEM_MALLOC (hosted builds) they go to the system allocator, which
+ * on the virtual profile is musl mallocng: exact bounds, lifetime retired on
+ * free. Without it (the freestanding domain) they are derived from the upper
+ * half of the region and never reused.
  */
 #include "port.h"
 #include <string.h>
-#include <sublet/sublet.h>
+#include <capstone/capability.h>
+#ifdef PYMALLOC_SYSTEM_MALLOC
+#include <stdlib.h>
+#endif
 #ifdef PYMALLOC_GAP_OBSERVER
 #include <stdio.h>
 #include "../../../../../experiments/study/reuse-gap-observer.h"
@@ -17,85 +37,70 @@ static unsigned observer_inplace_resize;
 
 #define ARENA_SIZE 1048576UL
 #define POOL_SIZE 16384UL
-/* Capacity. Overridable from the build: an earlier campaign raised these by
- * editing the source, so the raised values lived in one working tree only and
- * the next build silently went back to the defaults. The defaults are
- * unchanged; -D on the compiler line now takes effect. */
-#ifndef ARENA_COUNT
-#define ARENA_COUNT 32
+#ifdef PYMALLOC_SYSTEM_MALLOC
+#define SMALL_BYTES PYM_ARENA_BYTES
+#else
+#define SMALL_BYTES (PYM_ARENA_BYTES / 2)
 #endif
-#ifndef POOL_COUNT
-#define POOL_COUNT 64
-#endif
-#ifndef LARGE_COUNT
-#define LARGE_COUNT 4096
-#endif
-struct block {
-  capstone_cap_slot region;
-  void *alias, *client;
-  size_t size, requested;
-  unsigned active;
-};
-struct pool {
-  capstone_cap_slot body, remaining;
-  void *header;
-  struct block *blocks;
-  uintptr_t base;
-  size_t size, overhead, carved, capacity;
-};
+#define ARENA_COUNT (SMALL_BYTES / ARENA_SIZE)
+
 struct arena {
-  capstone_cap_slot region, remaining;
-  struct pool *pools;
-  uintptr_t base;
-  size_t carved;
+  void *cap; /* the arena's child: MANAGE over its blocks, data over its bytes */
   unsigned live;
 };
-static capstone_cap_slot small_remaining, large_remaining;
-static uintptr_t small_cursor, small_end, large_cursor, large_end;
-static struct arena *arenas;
-static struct block *large;
-static unsigned large_used, protected_mode;
+static struct arena arenas[ARENA_COUNT];
+static void *root;       /* the region's child: MANAGE over the arenas */
+static uintptr_t region_base;
+static unsigned protected_mode;
 static size_t arena_allocations, arena_releases;
+#ifndef PYMALLOC_SYSTEM_MALLOC
+static uintptr_t large_cursor;
+#endif
 size_t pym_metadata_used(void);
 
 void pym_lifetime_init(void *region) {
 #ifdef PYMALLOC_GAP_OBSERVER
   reuse_gap_init(&pym_reuse, pym_reuse_slots, PYM_REUSE_SLOTS);
 #endif
-  capstone_cap_store(&small_remaining, region);
-  small_cursor = capstone_cap_base(&small_remaining);
-  small_end = small_cursor + PYM_ARENA_BYTES / 2;
-  if (capstone_cap_type(&small_remaining) != CAPSTONE_CAP_LINEAR ||
-      capstone_cap_end(&small_remaining) - small_cursor != PYM_ARENA_BYTES ||
-      (small_cursor & (POOL_SIZE - 1)))
+  capstone_cap_slot slot;
+  capstone_cap_store(&slot, region);
+  region_base = capstone_cap_base(&slot);
+  if (capstone_cap_end(&slot) - region_base != PYM_ARENA_BYTES ||
+      (region_base & (POOL_SIZE - 1)))
     pym_fail(501);
-  sublet_split(&small_remaining, small_end, &large_remaining);
-  large_cursor = small_end;
-  large_end = small_cursor + PYM_ARENA_BYTES;
+  /* CDERIVE needs a non-linear parent. A freestanding domain is handed its
+   * region linear; a hosted build passes an ordinary malloc'd object. */
+  if (capstone_cap_type(&slot) == CAPSTONE_CAP_LINEAR)
+    region = capstone_cap_delinearize(&slot);
+  else if (capstone_cap_type(&slot) != CAPSTONE_CAP_NONLINEAR)
+    pym_fail(501);
+  root = capstone_cap_derive(region, 0, PYM_ARENA_BYTES);
+#ifndef PYMALLOC_SYSTEM_MALLOC
+  large_cursor = region_base + SMALL_BYTES;
+#endif
 }
 void pym_set_mode(unsigned mode) {
   if (mode > 1)
     pym_fail(502);
   protected_mode = mode;
-  arenas = pym_raw_calloc(ARENA_COUNT, sizeof *arenas);
-  large = pym_raw_calloc(LARGE_COUNT, sizeof *large);
-  if (!arenas || !large)
-    pym_fail(503);
 }
-static struct arena *arena_for(uintptr_t address) {
-  for (unsigned i = 0; i < ARENA_COUNT; ++i)
-    if (arenas[i].live && address >= arenas[i].base &&
-        address - arenas[i].base < ARENA_SIZE)
-      return &arenas[i];
-  return NULL;
+static int in_small(uintptr_t address) {
+  return address >= region_base && address - region_base < SMALL_BYTES;
 }
-static struct pool *pool_for(uintptr_t address) {
-  struct arena *a = arena_for(address);
-  if (!a)
+static struct arena *arena_of(uintptr_t address) {
+  if (!in_small(address))
     return NULL;
-  size_t index = (address - a->base) / POOL_SIZE;
-  return index < a->carved ? &a->pools[index] : NULL;
+  struct arena *a = &arenas[(address - region_base) / ARENA_SIZE];
+  return a->live ? a : NULL;
 }
+static uintptr_t arena_base(const struct arena *a) {
+  return region_base + (uintptr_t)(a - arenas) * ARENA_SIZE;
+}
+/* The arena's own capability at ADDRESS: obmalloc's view, never a client's. */
+static void *inside(struct arena *a, uintptr_t address) {
+  return (char *)a->cap + (address - arena_base(a));
+}
+
 void *pym_arena_alloc(void *ctx, size_t n) {
   (void)ctx;
   if (n != ARENA_SIZE)
@@ -104,31 +109,19 @@ void *pym_arena_alloc(void *ctx, size_t n) {
     struct arena *a = &arenas[i];
     if (a->live)
       continue;
-    if (!a->base) {
-      if (small_cursor > small_end - n)
-        return NULL;
-      a->pools = pym_raw_calloc(POOL_COUNT, sizeof *a->pools);
-      if (!a->pools)
-        return NULL;
-      a->base = small_cursor;
-      small_cursor += n;
-      sublet_carve(&small_remaining, small_cursor, &a->region);
-    }
-    a->carved = 0;
+    a->cap = capstone_cap_derive(root, (unsigned long)i * ARENA_SIZE, ARENA_SIZE);
     a->live = 1;
-    sublet_take_linear(&a->region, &a->remaining);
     ++arena_allocations;
-    /* An opaque token, not an alias spanning the arena's children. */
-    return a;
+    return a; /* an opaque token; obmalloc takes the address separately */
   }
   return NULL;
 }
 uintptr_t pym_arena_address(void *token) {
-  return ((struct arena *)token)->base;
+  return arena_base(token);
 }
 void *pym_arena_pointer(uintptr_t address) {
-  struct arena *a = arena_for(address);
-  if (!a || a->base != address)
+  struct arena *a = arena_of(address);
+  if (!a || arena_base(a) != address)
     pym_fail(505);
   return a;
 }
@@ -137,140 +130,65 @@ void pym_arena_free(void *ctx, void *token, size_t n) {
   struct arena *a = token;
   if (!a->live || n != ARENA_SIZE)
     pym_fail(506);
-  sublet_give(&a->region);
-  capstone_cap_clear(&a->remaining);
-  /* Reclaim only metadata through the separate metadata heap. Payload
-   * capabilities below the arena have all been revoked already. */
-  for (size_t i = 0; i < a->carved; ++i) {
-    pym_raw_free(a->pools[i].blocks);
-    memset(&a->pools[i], 0, sizeof a->pools[i]);
-  }
+  capstone_cap_revoke_child(root, a->cap); /* the arena and every block in it */
+  a->cap = NULL;
   a->live = 0;
   ++arena_releases;
 }
 void *pym_pool_create(uintptr_t address, size_t overhead) {
-  struct arena *a = arena_for(address);
-  if (!a || address != a->base + a->carved * POOL_SIZE ||
-      a->carved == POOL_COUNT)
+  struct arena *a = arena_of(address);
+  if (!a || (address & (POOL_SIZE - 1)) || overhead >= POOL_SIZE)
     pym_fail(507);
-  struct pool *p = &a->pools[a->carved++];
-  capstone_cap_slot pool, header;
-  p->base = address;
-  p->overhead = overhead;
-  sublet_carve(&a->remaining, address + POOL_SIZE, &pool);
-  sublet_carve(&pool, address + overhead, &header);
-  p->header = capstone_cap_delinearize(&header);
-  capstone_cap_move(&pool, &p->body);
-  return p->header;
+  return inside(a, address);
 }
 void *pym_pool_pointer(const void *ptr) {
-  struct pool *p = pool_for((uintptr_t)ptr);
-  return p ? p->header : NULL;
+  uintptr_t pool = (uintptr_t)ptr & ~(POOL_SIZE - 1);
+  struct arena *a = arena_of(pool);
+  return a ? inside(a, pool) : NULL;
 }
 void pym_pool_reclass(void *header, size_t size, size_t overhead) {
-  struct pool *p = pool_for((uintptr_t)header);
-  if (!p || p->header != header || (size & 15) || p->overhead != overhead)
+  if (!arena_of((uintptr_t)header) || (size & 15) || overhead >= POOL_SIZE)
     pym_fail(508);
-  if (p->size) {
-    for (size_t i = 0; i < p->carved; ++i)
-      if (p->blocks[i].active)
-        pym_fail(509);
-    sublet_give(&p->body);
-    capstone_cap_clear(&p->remaining);
-    pym_raw_free(p->blocks);
-  }
-  p->size = size;
-  p->carved = 0;
-  p->capacity = (POOL_SIZE - overhead) / size;
-  p->blocks = pym_raw_calloc(p->capacity, sizeof *p->blocks);
-  if (!p->blocks)
-    pym_fail(510);
-  sublet_take_linear(&p->body, &p->remaining);
 }
 void *pym_block_pointer(void *header, size_t offset) {
-  struct pool *p = pool_for((uintptr_t)header);
-  if (!p || offset < p->overhead || (offset - p->overhead) % p->size)
+  if (offset >= POOL_SIZE)
     pym_fail(511);
-  size_t index = (offset - p->overhead) / p->size;
-  if (index >= p->capacity || index > p->carved)
-    pym_fail(512);
-  struct block *b = &p->blocks[index];
-  if (index == p->carved) {
-    sublet_carve(&p->remaining, p->base + offset + p->size, &b->region);
-    b->size = p->size;
-    b->alias = sublet_take(&b->region);
-    ++p->carved;
-  }
-  return b->alias;
-}
-static struct block *block_for(void *ptr) {
-  uintptr_t address = (uintptr_t)ptr;
-  struct pool *p = pool_for(address);
-  if (p) {
-    if (address < p->base + p->overhead || !p->size)
-      pym_fail(513);
-    size_t offset = address - p->base - p->overhead;
-    if (offset % p->size || offset / p->size >= p->carved)
-      pym_fail(514);
-    return &p->blocks[offset / p->size];
-  }
-  for (unsigned i = 0; i < large_used; ++i)
-    if ((uintptr_t)large[i].alias == address)
-      return &large[i];
-  pym_fail(515);
-}
-static int same_authority(void *a, void *b) {
-  capstone_cap_slot x, y;
-  capstone_cap_store(&x, a);
-  capstone_cap_store(&y, b);
-  if (capstone_cap_type(&x) != CAPSTONE_CAP_NONLINEAR ||
-      capstone_cap_type(&y) != CAPSTONE_CAP_NONLINEAR)
-    return 0;
-  const volatile uint64_t *xx = (const volatile uint64_t *)&x;
-  const volatile uint64_t *yy = (const volatile uint64_t *)&y;
-  return xx[0] == yy[0] && xx[1] == yy[1];
+  return (char *)header + offset;
 }
 void pym_validate(void *ptr) {
-  struct block *b = block_for(ptr);
-  if (!b->active || !same_authority(ptr, b->client))
-    pym_fail(516);
+  /* A released block's reference faults here: its node is dead. */
+  if (arena_of((uintptr_t)ptr) && protected_mode)
+    (void)*(volatile unsigned char *)ptr;
 }
 void *pym_issue(void *ptr, size_t requested) {
-  struct block *b = block_for(ptr);
-  if (b->active || requested > b->size)
-    pym_fail(517);
-  if (protected_mode) {
-    sublet_give(&b->region);
-    b->alias = sublet_take(&b->region);
-  }
-  b->requested = requested;
-  b->active = 1;
-  uintptr_t base = (uintptr_t)b->alias;
-  b->client = __builtin_capstone_cap_shrink(b->alias, base,
-                                            base + (requested ? requested : 1));
+  uintptr_t address = (uintptr_t)ptr;
+  struct arena *a = arena_of(address);
+  if (!a)
+    return ptr; /* a large block: the system allocator's object as it is */
+  size_t n = requested ? requested : 1;
+  void *client = protected_mode
+      ? capstone_cap_derive(a->cap, address - arena_base(a), n)
+      : __builtin_capstone_cap_shrink(ptr, address, address + n);
 #ifdef PYMALLOC_GAP_OBSERVER
   if (!observer_inplace_resize) {
     reuse_gap_attempt(&pym_reuse);
-    reuse_gap_issue(&pym_reuse, (uint64_t)(uintptr_t)b->client,
-                    (uint64_t)(requested ? requested : 1));
+    reuse_gap_issue(&pym_reuse, (uint64_t)address, (uint64_t)n);
   }
 #endif
-  return b->client;
+  return client;
 }
 void *pym_release(void *ptr) {
-  pym_validate(ptr);
-  struct block *b = block_for(ptr);
+  uintptr_t address = (uintptr_t)ptr;
+  struct arena *a = arena_of(address);
+  if (!a)
+    return ptr;
 #ifdef PYMALLOC_GAP_OBSERVER
   if (!observer_inplace_resize)
-    reuse_gap_release(&pym_reuse, (uint64_t)(uintptr_t)ptr);
+    reuse_gap_release(&pym_reuse, (uint64_t)address);
 #endif
-  if (protected_mode) {
-    sublet_give(&b->region);
-    b->alias = sublet_take(&b->region);
-  }
-  b->active = 0;
-  b->client = NULL;
-  return b->alias;
+  if (protected_mode)
+    capstone_cap_revoke_child(a->cap, ptr);
+  return inside(a, address);
 }
 void *pym_resize(void *ptr, size_t requested) {
 #ifdef PYMALLOC_GAP_OBSERVER
@@ -286,39 +204,42 @@ void *pym_resize(void *ptr, size_t requested) {
 }
 size_t pym_requested(void *ptr) {
   pym_validate(ptr);
-  return block_for(ptr)->requested;
+  capstone_cap_slot slot;
+  capstone_cap_store(&slot, ptr);
+  return capstone_cap_end(&slot) - capstone_cap_base(&slot);
 }
+#ifdef PYMALLOC_SYSTEM_MALLOC
 void *pym_user_raw_malloc(size_t n) {
-  if (n > PYM_ARENA_BYTES / 2 - 16)
-    return NULL;
-  size_t rounded = n ? (n + 15) & ~(size_t)15 : 16;
-  for (unsigned i = 0; i < large_used; ++i)
-    if (!large[i].active && large[i].size == rounded)
-      return large[i].alias;
-  if (large_used == LARGE_COUNT || large_cursor > large_end - rounded)
-    return NULL;
-  struct block *b = &large[large_used++];
-  large_cursor += rounded;
-  sublet_carve(&large_remaining, large_cursor, &b->region);
-  b->size = rounded;
-  b->alias = sublet_take(&b->region);
-  return b->alias;
+  return malloc(n ? n : 1);
 }
 void pym_user_raw_free(void *ptr) {
-  (void)ptr; /* pym_release already returned the slot */
+  free(ptr);
 }
 void *pym_user_raw_realloc(void *ptr, size_t n) {
-  struct block *b = block_for(ptr);
-  if (n <= b->size && n > b->size / 2)
-    return pym_resize(ptr, n);
-  void *raw = pym_user_raw_malloc(n);
-  if (!raw)
+  return realloc(ptr, n ? n : 1);
+}
+#else
+void *pym_user_raw_malloc(size_t n) {
+  size_t rounded = n ? (n + 15) & ~(size_t)15 : 16;
+  if (rounded > region_base + PYM_ARENA_BYTES - large_cursor)
     return NULL;
-  void *q = pym_issue(raw, n);
-  memcpy(q, ptr, n < b->requested ? n : b->requested);
-  pym_release(ptr);
+  void *p = capstone_cap_derive(root, large_cursor - region_base, rounded);
+  large_cursor += rounded;
+  return p;
+}
+void pym_user_raw_free(void *ptr) {
+  capstone_cap_revoke_child(root, ptr); /* the bytes are not reused */
+}
+void *pym_user_raw_realloc(void *ptr, size_t n) {
+  void *q = pym_user_raw_malloc(n);
+  if (!q)
+    return NULL;
+  size_t old = pym_requested(ptr);
+  memcpy(q, ptr, n < old ? n : old);
+  pym_user_raw_free(ptr);
   return q;
 }
+#endif
 void pym_backing_stats(struct pym_header *h) {
   h->arenas = arena_allocations;
   h->arena_frees = arena_releases;

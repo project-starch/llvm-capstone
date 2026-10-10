@@ -7,9 +7,11 @@ runtime from the mode argument, so the two arms differ in exactly one thing.
   spatial (mode 0)  pym_issue/pym_release keep the block's alias, so the freed
                     block stays addressable, the stale access succeeds, and the
                     run must COMPLETE.
-  sublet  (mode 1)  every issue and release does sublet_give then sublet_take,
-                    so the stale access is a revoked alias and must FAULT -- at
-                    the labelled probe instruction, not merely somewhere.
+  sublet  (mode 1)  every issue derives the block as a child lifetime and every
+                    release revokes it (CDERIVE/CREVOKE; the 2026-09-19 results
+                    predate that and used sublet_give/sublet_take), so the stale
+                    access is a dead reference and must FAULT -- at the labelled
+                    probe instruction, not merely somewhere.
 
 The expected PC is not hardcoded. The domain publishes both probe addresses
 through its marker, and the oracle compares the fault PC against what that boot

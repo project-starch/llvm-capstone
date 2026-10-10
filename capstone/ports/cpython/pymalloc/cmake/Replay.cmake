@@ -37,9 +37,11 @@ endif()
 # the lifetime adapter unconditionally, so its spatial/sublet pair has always
 # been the NESTED arm -- but it is not paired with anything a process measures:
 # no libc, no system allocator, memory from a static region. This option puts
-# the same adapter in a Capstone process, where the arena is LENT by the system
-# allocator as one linear capability, so the protected and unprotected nested
-# arms differ in one thing and nothing else.
+# the same adapter in a Capstone process: its arena region is an ordinary object
+# from the system allocator, every block a child lifetime derived from it
+# (CDERIVE), and requests over 512 bytes go to the system allocator
+# (PYMALLOC_SYSTEM_MALLOC), so the protected and unprotected nested arms differ
+# in one thing and nothing else.
 #
 # PYMALLOC_DOMAIN is deliberately NOT defined here. It means freestanding, and
 # the corpus keys its monitor-marker instructions on it; emitting those in a
@@ -53,7 +55,7 @@ if(PORT_HOSTED)
   target_compile_definitions(replay-options INTERFACE SIZEOF_VOID_P=${CMAKE_SIZEOF_VOID_P})
   if(PYMALLOC_SUBLET)
     target_compile_definitions(replay-options INTERFACE
-      PYMALLOC_CAPABILITY PYMALLOC_BORROW_LINEAR)
+      PYMALLOC_CAPABILITY PYMALLOC_SYSTEM_MALLOC)
     target_sources(pymalloc PRIVATE src/allocators/sublet/block-lifetimes.c)
   endif()
 else()
