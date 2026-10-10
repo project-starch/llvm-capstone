@@ -155,8 +155,8 @@
     },
     "virtual-pymalloc-pools": {
       "target": "capstone-virtual",
-      "summary": "the same replay with PYMALLOC_SUBLET in mode 1: the lifetime adapter owns an arena the virtual heap lends as one linear capability (__capstone_sublet_malloc_linear, aligned by borrow-aligned-block.h), hands out one bounded capability per pymalloc block and retires it on free",
-      "mechanism": "per-block bounds and revocation in pymalloc",
+      "summary": "the same replay built with PYMALLOC_SUBLET, which applies the port's patch 0003: obmalloc hands out every block as a child lifetime of its arena, bounded to the request (CDERIVE), and revokes it on free (CREVOKE)",
+      "mechanism": "as virtual-pymalloc; per-block bounds and revocation inside obmalloc",
       "controls": {
         "uaf-block": "fault"
       },

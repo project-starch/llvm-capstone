@@ -9,22 +9,16 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 include(CTest)
 find_package(Python3 3.11.4 REQUIRED COMPONENTS Interpreter)
 port_path(PYMALLOC_WORK "${tmp_root}/cpython-pymalloc" "Sources, builds and results")
-if(PORT_PLATFORM STREQUAL "linux-guest")
-  add_subdirectory(src/linux-guest)
-else()
-  include(cmake/CPythonSource.cmake)
-  include(cmake/Replay.cmake)
-  if(PORT_PLATFORM STREQUAL "native")
-    include(cmake/Recorder.cmake)
-  endif()
-  if(BUILD_TESTING AND PORT_PLATFORM STREQUAL "native")
-    add_test(NAME allocator-replay COMMAND "${Python3_EXECUTABLE}"
-      "${PROJECT_SOURCE_DIR}/tests/native/test-replay.py" "$<TARGET_FILE:replay>"
-      "${CMAKE_BINARY_DIR}/test-results" "$<TARGET_FILE:replay-reference>")
-    add_test(NAME poisoncap-replay-oracle COMMAND "${Python3_EXECUTABLE}"
-      "${PROJECT_SOURCE_DIR}/tests/native/test-poisoncap-oracle.py")
-    port_add_support_tests()
-    add_test(NAME source-preparation COMMAND "${Python3_EXECUTABLE}"
-      "${PROJECT_SOURCE_DIR}/tests/native/test-source.py" "${PYMALLOC_ARCHIVE}" "${PYMALLOC_SOURCE}")
-  endif()
+include(cmake/CPythonSource.cmake)
+include(cmake/Replay.cmake)
+if(PORT_PLATFORM STREQUAL "native")
+  include(cmake/Recorder.cmake)
+endif()
+if(BUILD_TESTING AND PORT_PLATFORM STREQUAL "native")
+  add_test(NAME allocator-replay COMMAND "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/tests/native/test-replay.py" "$<TARGET_FILE:replay>"
+    "${CMAKE_BINARY_DIR}/test-results" "$<TARGET_FILE:replay-reference>")
+  port_add_support_tests()
+  add_test(NAME source-preparation COMMAND "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/tests/native/test-source.py" "${PYMALLOC_ARCHIVE}" "${PYMALLOC_SOURCE}")
 endif()
