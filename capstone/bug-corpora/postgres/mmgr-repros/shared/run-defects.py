@@ -24,13 +24,18 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "ports/common/host"))
 from port_support import digest, run_guest, stage_run, write_json
 
-def discover(domain_build, mode):
+def discover(domain_build, mode, control=False):
     """The corpus contract builds ONE program per case, named NN-slug, and the
     directory names are the authority. Discover them instead of keeping a
-    second list of slugs here that can drift out of step with the corpus."""
+    second list of slugs here that can drift out of step with the corpus.
+
+    With control=True this finds the negative controls instead, which the
+    build names NN-slug-<mode>-control.dom. The two sets cannot be confused:
+    the measurement glob ends in -<mode>.dom and a control never does."""
+    suffix = f"-{mode}-control.dom" if control else f"-{mode}.dom"
     found = {}
-    for path in sorted((domain_build / "bin").glob(f"[0-9][0-9]-*-{mode}.dom")):
-        stem = path.name[: -len(f"-{mode}.dom")]
+    for path in sorted((domain_build / "bin").glob(f"[0-9][0-9]-*{suffix}")):
+        stem = path.name[: -len(suffix)]
         found[int(stem[:2])] = (stem, path)
     return found
 
@@ -49,7 +54,7 @@ CASES = [
 MARKER_BASE = 0xCF18000000000000
 
 
-def classify(serial, which, mode, runner_exit):
+def classify(serial, which, mode, runner_exit, control=False):
     # Two emulator behaviours, and the difference is the whole point of the
     # delivery work. Without the local-trap-delivery change the fault HALTS the
     # domain and QEMU exits, so the guest never returns; with it the fault is
@@ -72,6 +77,26 @@ def classify(serial, which, mode, runner_exit):
         "expected": "fault" if mode == "sublet" else "complete",
         "runner_exit": runner_exit,
     }
+    if control:
+        # A CONTROL IS READ BY WHETHER IT COMPLETED, on either arm. It is the
+        # same case with the one invalid access replaced by a valid one, so a
+        # fault here means the arm faults on the allocation pattern itself and
+        # the matching measurement does not depend on the defect. That is the
+        # bad outcome, and it is the reason the control exists: on 2026-10-10
+        # a control of this shape withdrew a detection in the sibling corpus.
+        held = (
+            runner_exit == 0
+            and not faults
+            and marker in serial
+            and "__CAPSTONE_PG_DEFECT_COMPLETED__" in serial
+            and "_FAILED__" not in serial
+        )
+        cause, pc = faults[-1] if faults else ("0", "0")
+        row.update(control="held" if held else "broken",
+                   cause=int(cause), pc=pc, delivered=delivered,
+                   passed=held)
+        return row
+
     if mode == "sublet":
         following = serial.split(marker, 1)[-1] if marker in serial else ""
         sites = re.findall(r"Print = Cap\(\d+, 0x[0-9a-f]+, (0x[0-9a-f]+),", following)
@@ -112,6 +137,12 @@ def classify(serial, which, mode, runner_exit):
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("output", type=Path)
+p.add_argument("--control", action="store_true",
+               help="run each case's negative control instead of the case. "
+                    "The control is the same program with the one invalid "
+                    "access replaced by a valid one, so it must COMPLETE on "
+                    "every arm; a fault means the matching measurement does "
+                    "not depend on the defect")
 p.add_argument("--domain-build", type=Path, required=True)
 p.add_argument("--linux-build", type=Path, required=True)
 p.add_argument("--cases", default=",".join(str(i) for i in range(len(CASES))))
@@ -132,9 +163,9 @@ for which in map(int, a.cases.split(",")):
     for mode in a.modes.split(","):
         if mode not in ("spatial", "sublet"):
             p.error("invalid mode")
-        programs = discover(a.domain_build, mode)
+        programs = discover(a.domain_build, mode, a.control)
         if which not in programs:
-            p.error(f"no {mode} program for case {which} in {a.domain_build}/bin")
+            p.error(f"no {mode}{' control' if a.control else ''} program for case {which} in {a.domain_build}/bin")
         stem, image = programs[which]
         run, hashes = stage_run(
             a.output,
@@ -174,7 +205,7 @@ for which in map(int, a.cases.split(",")):
             if (run / "serial.log").exists()
             else ""
         )
-        row = classify(serial, which, mode, result.returncode)
+        row = classify(serial, which, mode, result.returncode, a.control)
         row["run"] = str(run)
         verdicts.append(row)
         write_json(run / "verdict.json", row)

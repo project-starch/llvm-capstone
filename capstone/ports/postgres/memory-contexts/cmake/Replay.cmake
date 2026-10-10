@@ -210,21 +210,36 @@ else()
       list(GET pg_dirs ${i} pg_dir)
       list(GET pg_stems ${i} pg_stem)
       foreach(mode spatial sublet)
-        set(pg_target "${pg_stem}-${mode}")
-        pg_domain("${pg_target}" "${pg_dir}/case.c" "${PG_CORPUS_DIR}/shared/driver.c"
-          src/capstone-domain/string.c)
-        target_include_directories("${pg_target}" PRIVATE "${PG_CORPUS_DIR}/shared")
-        target_link_libraries("${pg_target}" PRIVATE manager-${mode})
-        if(mode STREQUAL "sublet")
-          target_compile_definitions("${pg_target}" PRIVATE PG_DEFECTS_SUBLET)
-          target_sources("${pg_target}" PRIVATE src/allocators/sublet/context-pools.c
-            src/allocators/sublet/unsupported-allocators.c)
-        else()
-          target_sources("${pg_target}" PRIVATE src/allocators/spatial/backing-allocator.c)
-        endif()
+        # Twice: the case, and its negative control. The control is the same
+        # case.c with PG_NEGATIVE_CONTROL defined, which replaces the one
+        # invalid access with a valid one and leaves the allocation traffic
+        # byte for byte. A fault on an arm is only that case's result if the
+        # control does NOT fault, which SCHEMA rule 5 requires and this corpus
+        # went without until 2026-10-10.
+        #
+        # The suffix keeps them apart for the runner, which discovers programs
+        # by `[0-9][0-9]-*-<mode>.dom`: a control ends in -control.dom and so
+        # can never be picked up as a measurement.
+        foreach(variant "" "-control")
+          set(pg_target "${pg_stem}-${mode}${variant}")
+          pg_domain("${pg_target}" "${pg_dir}/case.c" "${PG_CORPUS_DIR}/shared/driver.c"
+            src/capstone-domain/string.c)
+          target_include_directories("${pg_target}" PRIVATE "${PG_CORPUS_DIR}/shared")
+          target_link_libraries("${pg_target}" PRIVATE manager-${mode})
+          if(variant STREQUAL "-control")
+            target_compile_definitions("${pg_target}" PRIVATE PG_NEGATIVE_CONTROL)
+          endif()
+          if(mode STREQUAL "sublet")
+            target_compile_definitions("${pg_target}" PRIVATE PG_DEFECTS_SUBLET)
+            target_sources("${pg_target}" PRIVATE src/allocators/sublet/context-pools.c
+              src/allocators/sublet/unsupported-allocators.c)
+          else()
+            target_sources("${pg_target}" PRIVATE src/allocators/spatial/backing-allocator.c)
+          endif()
+        endforeach()
       endforeach()
     endforeach()
-    message(STATUS "PostgreSQL defect corpus: ${pg_case_count} domain cases x 2 arms")
+    message(STATUS "PostgreSQL defect corpus: ${pg_case_count} domain cases x 2 arms, each with a negative control")
   endif()
   foreach(mode spatial sublet)
     pg_domain(contexts-${mode} security-tests/capstone/contexts.c src/capstone-domain/string.c)
