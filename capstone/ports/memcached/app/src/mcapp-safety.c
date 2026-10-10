@@ -881,7 +881,10 @@ static int mcapp_fixture(int n)
             if (!big_ch[k]) { printf("MCAPP-FIX %d alloc_chunk c%d FAILED\n", n, k); return MCAPP_MARK(n, 0xE0018); }
         }
         item *ia = big_it[0];
-        unsigned hdr_cls = ITEM_clsid(ia), chk_cls = big_ch[0]->slabs_clsid;
+        /* a chunked item's slabs_clsid is the big ACCOUNTING class; the header physically sits in
+           the small class the schunk records as orig_clsid (as fixture 11 reads it) */
+        unsigned hdr_cls = ((item_chunk *)ITEM_schunk(ia))->orig_clsid;
+        unsigned chk_cls = big_ch[0]->slabs_clsid;
         unsigned hdr_perslab = 0, chk_perslab = 0;
         slabs_available_chunks(hdr_cls, NULL, &hdr_perslab);
         slabs_available_chunks(chk_cls, NULL, &chk_perslab);
