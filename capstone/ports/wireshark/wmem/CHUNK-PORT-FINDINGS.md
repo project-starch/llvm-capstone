@@ -35,7 +35,7 @@ static inline void wm_release(void *p, size_t n) {
 ```
 
 That is why PoisonCap covers the chunk free and Sublet does not. It is an unimplemented hook, not a
-missing mechanism.
+missing mechanism. (The `WM_POISONCAP` backend was removed on 2026-10-10.)
 
 ## 3. But implementing it is NOT a small change, and this is the load-bearing finding
 
