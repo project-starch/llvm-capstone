@@ -60,7 +60,9 @@
     },
     "native-detect": {
       "oracle": "MEASURED two-sided 2026-10-07: ASan REPORTS on the buggy arm (heap-buffer-overflow) and is SILENT on the fixed arm, which exits 0. The crossing leaves the malloc bound, so a redzone sits exactly where the terminator lands. The runner keys on heap-buffer-overflow and never on the string 'AddressSanitizer', which LeakSanitizer's summary also contains.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-plain-heap/run-native.txt: `01_d5d9ff0_cachedump_end_marker_off_by_one plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_write_probe 1:mch_case_run at_probe=1`"
     },
     "native-fix-differential": {
       "oracle": "MEASURED 2026-10-07: the buggy arm admits the entry and the terminator lands at offset 64 of a 64-byte allocation (crossed=1, damage=1); the fixed arm's `+ 6` headroom rejects the entry and nothing is written (crossed=0). runners/run-native.sh exit 0, control arm first.",

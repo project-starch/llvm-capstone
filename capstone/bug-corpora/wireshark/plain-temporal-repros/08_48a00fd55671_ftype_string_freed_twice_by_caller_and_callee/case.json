@@ -40,7 +40,9 @@
     },
     "native-detect": {
       "oracle": "the buggy arm's stale pointer reads storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared, copied or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "capstone/bug-corpora/wireshark/plain-temporal-repros/results/2026-10-08-native-ten-cases/run-native.txt (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "native-fix-differential": {
       "oracle": "the buggy arm's stale pointer reads storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the pointer is cleared, copied or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",

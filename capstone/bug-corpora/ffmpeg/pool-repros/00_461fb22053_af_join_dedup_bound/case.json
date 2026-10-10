@@ -19,7 +19,10 @@
     "spatial": {
       "probe_case": 36,
       "oracle": "the sequence completes",
-      "role": "control for sublet: same binary and guest, one difference"
+      "role": "control for sublet: same binary and guest, one difference",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev/result-lines.txt:6,14-16 (mode 0); :9 (mode 2 pair) (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "sublet": {
       "probe_case": 36,

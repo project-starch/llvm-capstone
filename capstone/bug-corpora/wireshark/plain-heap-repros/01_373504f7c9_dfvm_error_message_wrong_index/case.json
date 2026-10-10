@@ -65,7 +65,9 @@
     },
     "native-detect": {
       "oracle": "MEASURED two-sided 2026-10-07: ASan REPORTS heap-buffer-overflow on the buggy arm and is SILENT on the fixed arm, which exits 0. The crossing leaves the malloc bound, so a redzone sits where the read lands.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-plain-heap/run-native.txt: `01_373504f7c9_dfvm_error_message_wrong_index plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:wsh_read_probe 1:wsh_case_run at_probe=1`"
     },
     "native-fix-differential": {
       "oracle": "MEASURED 2026-10-07: the buggy arm reads index 3 of a 2-entry array (crossed=1, extent=2); the fixed arm's one-character change to j reads index 1 (crossed=0). runners/run-native.sh exit 0, control arm first.",

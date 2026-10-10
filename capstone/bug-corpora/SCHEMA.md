@@ -87,7 +87,7 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
-`allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`. Optional means
+`allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `duplicate_of`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -103,6 +103,11 @@ figure is **60%**, so publishing the script's number would have been wrong by 16
 points — the unanswered probe was reading as "not nested". A tally that a
 headline depends on should come from a field, not from a substring match over
 sentences that are free to be reworded.
+
+`duplicate_of` names a sibling case directory recording the SAME upstream defect -- a backport of a fix another case
+already carries, equal by `git patch-id`. The case is kept, so numbering and citations stay valid; the checker
+requires the sibling to exist and not to be a duplicate itself, and `tools/catch-tables.py` leaves the case out of
+every table. First use: ffmpeg/plain-heap-repros 13 (2026-10-10 audit).
 
 `citation_constraint` records that a case's upstream commit cannot be quoted freely — in practice
 that its **subject line names a person**, so the fix may be cited **by hash and path only**. The

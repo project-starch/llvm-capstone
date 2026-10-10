@@ -13,29 +13,39 @@
   "note": "Moved from capstone/bug-corpora/ffmpeg/subobject-repros/09_ac59fc542f_thumbnail_carved_histogram_slice (2026-10-10). Its readings there -- every arm of that corpus, on that harness -- stay in subobject-repros/results/; this case is re-measured in this corpus's harness, where the block is the platform's calloc and the carve is ffc_carve().",
   "arms": {
     "spatial": {
-      "status": "predicted",
+      "status": "measured",
       "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES with VERDICT DEFECT-REPRODUCED -- the bump stays inside the one calloc (the driver exits 75 otherwise), and the level0 heap narrows only to the allocation.",
-      "oracle": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES with VERDICT DEFECT-REPRODUCED -- the bump stays inside the one calloc (the driver exits 75 otherwise), and the level0 heap narrows only to the allocation."
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-capstone-spatial/: **NOT CAUGHT; the defect reproduced**: the bump completed inside the one calloc; fixed arm FIXED exit=0; image 83c8eb854d08bca0; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-spatial/README.md, case 12 row"
     },
     "sublet": {
-      "status": "predicted",
+      "status": "measured",
       "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES, as spatial: nothing is freed before the access, and the Sublet heap's bound is the allocation's.",
-      "oracle": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES, as spatial: nothing is freed before the access, and the Sublet heap's bound is the allocation's."
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-capstone-sublet/: **NOT CAUGHT; the defect reproduced**: the bump completed inside the one calloc; fixed arm FIXED exit=0; image 93c206ec322aeb10; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-sublet/README.md, case 12 row"
     },
     "capstone-subobject": {
-      "status": "predicted",
+      "status": "measured",
       "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES: -fcapstone-subobject-bounds narrows ARRAY-typed struct fields, and a carved sub-slice is pointer arithmetic on one int array, not a field.",
-      "oracle": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES: -fcapstone-subobject-bounds narrows ARRAY-typed struct fields, and a carved sub-slice is pointer arithmetic on one int array, not a field."
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-capstone-capstone-subobject/: **NOT CAUGHT; the defect reproduced**: the bump completed inside the one calloc; fixed arm FIXED exit=0; image 83c8eb854d08bca0; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-capstone-subobject/README.md, case 12 row"
     },
     "capstone-carve-bounds": {
-      "status": "predicted",
+      "status": "measured",
       "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): CAUGHT at ffc_read_probe_u32, cause 5 (a load past the 1024-byte carve): the first byte the bump touches is its read.",
-      "oracle": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): CAUGHT at ffc_read_probe_u32, cause 5 (a load past the 1024-byte carve): the first byte the bump touches is its read."
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-capstone-capstone-carve-bounds/: **CAUGHT** -- cause=5 pc=0xc020ed8c address=0xc0253e8c in ffc_read_probe_u32+0x38 (the labelled probe); fixed arm FIXED exit=0; image 92d4c86b7d6da2ba; as pre-registered at 26cdee4e4d8d",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-capstone-carve-bounds/README.md, case 12 row"
     },
     "sublet-carve": {
-      "status": "predicted",
+      "status": "measured",
       "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): CAUGHT at ffc_read_probe_u32, cause 5: every sub-slice is 1024 bytes on a 16-byte boundary, so each carve is its own Sublet region with an exact bound; the fixed arm stays inside its region and prints VERDICT FIXED.",
-      "oracle": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): CAUGHT at ffc_read_probe_u32, cause 5: every sub-slice is 1024 bytes on a 16-byte boundary, so each carve is its own Sublet region with an exact bound; the fixed arm stays inside its region and prints VERDICT FIXED."
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-capstone-sublet-carve/: **CAUGHT** -- cause=5 pc=0xc0210380 address=0xc8804ffc in ffc_read_probe_u32+0x38 (the labelled probe); fixed arm FIXED exit=0; image 013420a374d09953; as pre-registered at 26cdee4e4d8d",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-sublet-carve/README.md, case 12 row"
     },
     "cheribsd-revocation": {
       "status": "predicted",

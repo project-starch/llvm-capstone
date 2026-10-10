@@ -49,13 +49,16 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "oracle": "MEASURED 2026-10-07, results/20261007-cheribsd-revocation-control/: the sequence COMPLETES, NOT CAUGHT. revocation ON, mode 0, 25 of 25 arms, runner exit 0, with the borrowed revocation control FAULTING in the same boot (tag_after_sweep=0, then SIGPROT si_code 2 at addr=pc=0x101dc0, equal to the address supervise resolved independently). The crossing stays inside the block the system allocator handed wmem, so a per-allocation capability is in bounds for it.",
-      "status": "measured"
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-libc/: **NOT CAUGHT** on stock wmem with the system allocator as CheriBSD's libc (WM_LIBC_SYSTEM, WM_CHUNKS=OFF), revocation on: the crossing stayed inside one g_malloc'd block and completed; fixed arm VERDICT FIXED. In the same boot control 90 (a jumbo g_free'd by the reset) was HELD by the quarantine and the revocation control faulted at its labelled load. The 2026-10-07 reading of this arm ran the hosted bump arena with the chunk port compiled in, where nothing reached free().",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-cheribsd-libc/README.md, rows 20-*-buggy and -fixed"
     },
     "native-detect": {
       "status": "measured",
       "verdict": "NOT CAUGHT",
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -g -O0; wmem and the port built with the same flags). Positive controls in the same run: `asan-control past 402653184` -> heap-buffer-overflow; `asan-control uaf 402653184` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (b64cd18b85d0); the arm was previously 'not written'."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -g -O0; wmem and the port built with the same flags). Positive controls in the same run: `asan-control past 402653184` -> heap-buffer-overflow; `asan-control uaf 402653184` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (b64cd18b85d0); the arm was previously 'not written'.",
+      "measured": "2026-10-10, results/2026-10-10-native-asan-libc/run-asan.txt: SILENT, the defect reproduced; wmem built with WM_LIBC_SYSTEM=ON (g_malloc/g_free are the host's malloc/free); wmem's own control 90 reported heap-use-after-free at wm_probe in the same run. The earlier reading (2026-10-09) ran the hosted bump arena, which could read nothing else."
     },
     "native-fix-differential": {
       "status": "measured",

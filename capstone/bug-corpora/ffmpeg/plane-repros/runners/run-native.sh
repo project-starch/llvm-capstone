@@ -17,6 +17,19 @@ LIB=$FFBUILD/libavutil/libavutil.a
 # That build is compiled with ASan, so every binary here links it.
 SAN=-fsanitize=address
 
+# In-run positive controls (added 2026-10-10): a silence below is only a reading if the same compiler
+# and sanitizer report a read one byte past, and a read after free of, a block the size of the alpha
+# plane the case reads (1024 bytes). Until then this arm named a sibling corpus as its control.
+echo "compiler: $("$CC" --version | head -1)"
+"$CC" -O0 -g $SAN -o "$OUT/asan-control" "$ROOT/../../tools/asan-control.c" \
+  || { echo "CONTROL-FAILED build asan-control" >&2; exit 75; }
+for spec in "past 1024=heap-buffer-overflow" "uaf 1024=heap-use-after-free"; do
+  args=${spec%%=*}; want=${spec#*=}
+  out=$("$OUT/asan-control" $args 2>&1)
+  case "$out" in *"$want"*) echo "control $args: $want (required $want) ok" ;;
+    *) echo "CONTROL-FAILED asan-control $args did not report $want" >&2; exit 75 ;; esac
+done
+
 status=0
 for dir in "$ROOT"/[0-9][0-9]_*; do
   name=$(basename "$dir")
