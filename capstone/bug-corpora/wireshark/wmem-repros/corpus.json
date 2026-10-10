@@ -13,8 +13,6 @@
     "spatial",
     "sublet",
     "cheribsd-revocation",
-    "poisoncap-spatial",
-    "poisoncap-protected",
     "native-detect"
   ],
   "arm_keys": {

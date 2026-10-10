@@ -68,24 +68,6 @@
       "verdict": "CAUGHT",
       "measured": "2026-10-10, results/2026-10-10-cheribsd-carve-bounds/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
     },
-    "poisoncap-spatial": {
-      "status": "measured",
-      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- inside the one allocation.",
-      "mode": 0,
-      "oracle": "MEASURED 2026-10-10, results/2026-10-10-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (exit 0), the bump inside the one calloc; fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-10, results/2026-10-10-poisoncap-mode0/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
-    },
-    "poisoncap-protected": {
-      "status": "measured",
-      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- mode 1 adds poison-on-free and revocation, and nothing is freed before the access.",
-      "mode": 1,
-      "oracle": "MEASURED 2026-10-10, results/2026-10-10-poisoncap-mode1/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (exit 0), the bump inside the one calloc; fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
-      "signal": null,
-      "si_code": null,
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-10, results/2026-10-10-poisoncap-mode1/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
-    },
     "native-detect": {
       "status": "measured",
       "verdict": "NOT CAUGHT",

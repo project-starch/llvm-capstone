@@ -64,8 +64,7 @@ guest through `malloc_revoke_enabled()`.
 oracle must report FAIL, and `revocation-control` — which takes no fixture —
 must still pass.
 
-**What this does not do.** There is no PoisonCap build of APR, so no protected
-arm exists on this target; `--modes 1` is refused. The guest image is the
+**What this does not do.** No protected arm exists on this target; `--modes 1` is refused. The guest image is the
 PoisonCap platform's with its libc patched (`../../../cpython/pymalloc-repros/platform/`);
 without that patch a process with revocation on dies in libc's own start-up,
 before any of this runs.

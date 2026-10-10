@@ -307,9 +307,7 @@ reading; it printed 334 when made strict, and none now. A cell reads **caught / 
 
 The columns are one mechanism each. **ASan**: the native build under AddressSanitizer, with
 positive controls reporting in the same run. **CheriBSD**: stock purecap, libc revocation on.
-**PoisonCap bounds / protected**: the rebuilt published PoisonCap platform in mode 0 (bounds, no
-revocation) and mode 1 (poison on free, then revocation) — for the nested corpora, through each
-allocator's PoisonCap adapter, as Sublet goes through each allocator's Sublet port. **Capstone
+**Capstone
 bounds**: on plain rows the level0 heap (malloc narrowed to the request); on NESTED rows the
 allocator's port in mode 0 -- each chunk its own bound (wmem's `wm_narrow`, memcached's ledger), no
 revocation -- so those cells are a port's per-chunk bound, not malloc's (corrected at the audit: this
@@ -319,29 +317,29 @@ heap, and on the nested corpora the allocator's Sublet port.
 
 **Temporal (48)**
 
-| program | allocator layer | axis | n | ASan | CheriBSD | PoisonCap mode 0 | PoisonCap mode 1 | Capstone bounds | Capstone + Sublet |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|
-| FFmpeg | AVBufferPool | nested | 4 | 0 / 4 | 0 / 4 | 0 / 4 | 4 / 4 | 0 / 4 | 4 / 4 |
-| FFmpeg | direct malloc | plain | 13 | 13 / 13 | 0 / 13 | 0 / 13 | 12 / 13 | 0 / 13 | 13 / 13 |
-| tshark | wmem | nested | 13 | 0 / 13 | 0 / 13 | 0 / 13 | 13 / 13 | 0 / 13 | 13 / 13 |
-| tshark | direct g_malloc | plain | 10 | 10 / 10 | 0 / 10 | 0 / 10 | 9 / 10 | 0 / 10 | 10 / 10 |
-| memcached | slabs.c / cache.c | nested | 5 | 0 / 5 | 0 / 5 | 0 / 5 | 5 / 5 | 0 / 5 | 5 / 5 |
-| memcached | direct malloc | plain | 3 | 3 / 3 | 0 / 3 | 0 / 3 | 3 / 3 | 0 / 3 | 3 / 3 |
-| **Total** |  | 22 n · 26 p | 48 | 26 / 48 | 0 / 48 | 0 / 48 | 46 / 48 | 0 / 48 | 48 / 48 |
+| program | allocator layer | axis | n | ASan | CheriBSD | Capstone bounds | Capstone + Sublet |
+|---|---|---|---:|---:|---:|---:|---:|
+| FFmpeg | AVBufferPool | nested | 4 | 0 / 4 | 0 / 4 | 0 / 4 | 4 / 4 |
+| FFmpeg | direct malloc | plain | 13 | 13 / 13 | 0 / 13 | 0 / 13 | 13 / 13 |
+| tshark | wmem | nested | 13 | 0 / 13 | 0 / 13 | 0 / 13 | 13 / 13 |
+| tshark | direct g_malloc | plain | 10 | 10 / 10 | 0 / 10 | 0 / 10 | 10 / 10 |
+| memcached | slabs.c / cache.c | nested | 5 | 0 / 5 | 0 / 5 | 0 / 5 | 5 / 5 |
+| memcached | direct malloc | plain | 3 | 3 / 3 | 0 / 3 | 0 / 3 | 3 / 3 |
+| **Total** |  | 22 n · 26 p | 48 | 26 / 48 | 0 / 48 | 0 / 48 | 48 / 48 |
 
 **Spatial (81)**
 
-| program | allocator layer | axis | n | ASan | CheriBSD | PoisonCap mode 0 | PoisonCap mode 1 | Capstone bounds | Capstone + Sublet |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|
-| FFmpeg | carved buffer | nested | 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 |
-| FFmpeg | frame-pool plane | nested | 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 |
-| FFmpeg | direct malloc | plain | 24 | 24 / 24 | 21 / 24 | 21 / 24 | 21 / 24 | 24 / 24 | 24 / 24 |
-| FFmpeg | inside one struct | plain | 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 |
-| tshark | wmem | nested | 9 | 0 / 9 | 0 / 9 | 9 / 9 | 9 / 9 | 9 / 9 | 9 / 9 |
-| tshark | direct g_malloc | plain | 12 | 12 / 12 | 11 / 12 | 11 / 12 | 11 / 12 | 12 / 12 | 12 / 12 |
-| memcached | slabs.c / cache.c | nested | 4 | 1 / 4 | 1 / 4 | 2 / 4 | 2 / 4 | 2 / 4 | 2 / 4 |
-| memcached | direct malloc | plain | 9 | 9 / 9 | 8 / 9 | 8 / 9 | 8 / 9 | 9 / 9 | 9 / 9 |
-| **Total** |  | 27 n · 54 p | 81 | 46 / 81 | 41 / 81 | 51 / 81 | 51 / 81 | 56 / 81 | 56 / 81 |
+| program | allocator layer | axis | n | ASan | CheriBSD | Capstone bounds | Capstone + Sublet |
+|---|---|---|---:|---:|---:|---:|---:|
+| FFmpeg | carved buffer | nested | 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 |
+| FFmpeg | frame-pool plane | nested | 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 |
+| FFmpeg | direct malloc | plain | 24 | 24 / 24 | 21 / 24 | 24 / 24 | 24 / 24 |
+| FFmpeg | inside one struct | plain | 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 |
+| tshark | wmem | nested | 9 | 0 / 9 | 0 / 9 | 9 / 9 | 9 / 9 |
+| tshark | direct g_malloc | plain | 12 | 12 / 12 | 11 / 12 | 12 / 12 | 12 / 12 |
+| memcached | slabs.c / cache.c | nested | 4 | 1 / 4 | 1 / 4 | 2 / 4 | 2 / 4 |
+| memcached | direct malloc | plain | 9 | 9 / 9 | 8 / 9 | 9 / 9 | 9 / 9 |
+| **Total** |  | 27 n · 54 p | 81 | 46 / 81 | 41 / 81 | 56 / 81 | 56 / 81 |
 
 How each reads, and why it misses what it misses:
 
@@ -352,18 +350,12 @@ How each reads, and why it misses what it misses:
   struct-member crossings stay inside one block), plain temporal 26/26, and 0 on every nested row,
   because an arena, a pool or a carve is one block to ASan. Every silent row ran with controls that
   reported a read past, and a read after free of, a block the size of that corpus's arena.
-- **CheriBSD and PoisonCap read the same on every plain spatial row** — the PoisonCap libc rounds
-  requests to the same size classes (17 and 24 bytes to 32, measured in the same boot), so the same
-  five slack rows complete on all three. On temporal, CheriBSD's quarantine withholds the freed
-  chunk (no fault, no reuse); PoisonCap mode 0 reissues it (the defect reproduces) and mode 1 traps
-  the stale access through the poison (si_code 3) — 24 of 26 plain cases. The other two (FFmpeg
-  plain-temporal 12, tshark plain-temporal 04) completed, reading 0x30: refuted predictions,
-  recorded as such; both keep a second same-size block live across the free (N = 2, no cause
-  claimed).
-- **PoisonCap on the nested corpora needs each allocator's adapter**, exactly as Sublet needs each
-  port: with it, mode 1 catches all 22 nested temporal cases, and the wmem and slab adapters'
-  per-chunk bounds catch nested spatial crossings that leave a chunk (wmem 13-21, slab 05 and 08)
-  even in mode 0.
+- **CheriBSD misses five plain spatial rows to size-class slack**: libc rounds requests to size
+  classes (17 and 24 bytes to 32), so those crossings stay inside the capability. On temporal, its
+  quarantine withholds the freed chunk (no fault, no reuse).
+- **The two PoisonCap columns** (mode 0 and mode 1 of the published PoisonCap platform, through
+  each allocator's PoisonCap adapter on the nested rows) were removed on 2026-10-10 with the
+  adapters. Their readings stay in each corpus's `results/`.
 - **Capstone bounds and Capstone + Sublet** are unchanged in kind: exact per-object bounds catch
   every plain spatial row, including the five CheriBSD slack misses; Sublet adds the temporal
   column (48/48), and nothing spatial, because a spatial bug frees nothing.

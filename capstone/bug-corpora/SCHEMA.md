@@ -156,8 +156,8 @@ passes silently.
 |---|---|---|
 | `spatial` | Capstone domain | the sequence completes |
 | `sublet` | Capstone domain | fault at the labelled read probe, with `cause` |
-| `poisoncap-spatial` | CheriBSD purecap, mode 0 | the sequence completes |
-| `poisoncap-protected` | CheriBSD purecap, mode 1 | `SIGPROT` at the labelled read probe, with `signal` and `si_code` |
+| `poisoncap-spatial` | CheriBSD purecap, PoisonCap mode 0 (PostgreSQL `mmgr-repros` only; removed elsewhere 2026-10-10) | the sequence completes |
+| `poisoncap-protected` | CheriBSD purecap, PoisonCap mode 1 (PostgreSQL `mmgr-repros` only) | `SIGPROT` at the labelled read probe, with `signal` and `si_code` |
 | `native-detect` | host | ASan, built `-O0`, run fixed then buggy by `tools/run-native-asan.py`. A silence is a reading only when the buggy arm printed `VERDICT DEFECT-REPRODUCED` and the same run's positive controls -- a read past, and a read after free of, a heap block the size of the corpus's arena or block -- were reported. Until 2026-10-09 this arm was 'declared, not written' as tautological; it is measured now, because an argument is not a reading |
 | `sysalloc-none` | Capstone domain | the whole-program run completes; the first-fit heap is built with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, so only tag integrity and the arena's bounds are left |
 | `sysalloc-bounds` | Capstone domain | the same, with the heap as applications get it since PR #170: each allocation bounded, no revocation. **The baseline a catch is measured against** |
@@ -252,7 +252,7 @@ checkable from outside, and it is the only input to the generated index.
 | `case_schema` | `case-json` (a reduction with `case.c`), `script-trigger` (a defect whose trigger is an interpreter script rather than a C reduction; each case names its own file in `trigger`), `sqlite-row` (a binding row carrying the provenance ledger's columns), or `xlang-row` (a shim row, declaration-level only) |
 | `case_macro`, `case_glob`, `case_exclude`, `case_number_base`, `case_doc` | how cases are named and found, where the defaults do not fit. Case numbers are dense from `case_number_base` (0, or 1 for the SQLite rows) |
 | `case_table`, `case_dir_column` | for `xlang-row`: the row table that is the corpus's authority, and the column naming each case directory |
-| `required_arms`, `arm_keys` | the arms every case must declare, and any arm whose oracle carries more than `oracle` (the pymalloc corpus records a `cause` on `sublet`). **Order is not significant and is not checked** — `wmem-repros` lists `cheribsd-revocation` third, to mirror the paper's column order, while `allocator-repros` and `pool-repros` list it after the two PoisonCap arms. Both are valid; noted here because the difference otherwise reads as a defect, and reordering a corpus to match another would churn every case file for nothing |
+| `required_arms`, `arm_keys` | the arms every case must declare, and any arm whose oracle carries more than `oracle` (the pymalloc corpus records a `cause` on `sublet`). **Order is not significant and is not checked**: reordering a corpus to match another would churn every case file for nothing |
 | `status` | `planned`, `built`, `measured` or `triaged`. A corpus with no cases may only be `planned` or `triaged` |
 | `live_in_pin_recorded` | whether the cases record liveness at all. If false, a `live_in_pin_note` must say why, and no case may carry the field |
 | `expect_live_in_pin` | the expected `{true, false, not_asserted}` split. The checker recomputes it from the cases and refuses a mismatch, so this number cannot drift |

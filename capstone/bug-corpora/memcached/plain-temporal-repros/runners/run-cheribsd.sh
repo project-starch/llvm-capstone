@@ -49,7 +49,7 @@ mkdir -p "$OUT/bin"
 CFLAGS="--target=riscv64-unknown-freebsd13 -march=rv64imafdcxcheri -mabi=l64pc128d"
 CFLAGS="$CFLAGS -mno-relax -B$SDK/bin --sysroot=$SYSROOT -std=gnu11 -O0 -fuse-ld=lld"
 # Optional, for another arm on the same cases: CHERI_EXTRA_CFLAGS, and CHERI_REVOCATION=off
-# (PoisonCap mode 0). Unset, this builds and boots exactly as before.
+# (a revocation-off reading). Unset, this builds and boots exactly as before.
 CFLAGS="$CFLAGS ${CHERI_EXTRA_CFLAGS:-}"
 REVOCATION=${CHERI_REVOCATION:-on}
 case "$REVOCATION" in on|off) ;; *) echo "CONTROL-FAILED CHERI_REVOCATION=$REVOCATION" >&2; exit 75;; esac
@@ -139,7 +139,7 @@ grep -q "runtime_revocation=$WANT_REV" "$OUT/run/cheribsd-abi/stdout.txt" \
 grep -q "CHERI_BOUNDARY_READY" "$OUT/run/cheribsd-bounds/stdout.txt" \
   || { echo "CONTROL-FAILED cheribsd-bounds did not report ready" >&2; exit 75; }
 # The temporal reading is void unless the revoker demonstrably sweeps in THIS guest -- when
-# revocation is on. With it off (PoisonCap mode 0) nothing can sweep, and the reading is the
+# revocation is on. With it off nothing can sweep, and the reading is the
 # unprotected one; the requirement below does not apply.
 if [ "$REVOCATION" = on ]; then
 grep -q "tag_after_sweep=0" "$OUT/run/revocation-control/stdout.txt" \

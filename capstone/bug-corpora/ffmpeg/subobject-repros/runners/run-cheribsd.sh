@@ -7,7 +7,7 @@
 # Optional, for another arm on the same cases (defaults reproduce cheribsd-revocation):
 #   CHERI_EXTRA_CFLAGS  e.g. "-Xclang -cheri-bounds=subobject-safe" -- the cheribsd-subobject arm,
 #                       applied to the cases, whose member accesses are what it narrows;
-#   CHERI_REVOCATION    on|off (off = PoisonCap mode 0).
+#   CHERI_REVOCATION    on|off (off: a revocation-off reading).
 #
 # Arms run directly, not under supervise: a fault is read from the process status, 162 = 128 +
 # SIGPROT, beside the case's own VERDICT line. An infrastructure failure exits 75.

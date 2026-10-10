@@ -112,8 +112,6 @@
         "sublet",
         "capstone-subobject",
         "capstone-carve-bounds",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "cheribsd-subobject",
         "cheribsd-carve-bounds",
@@ -170,8 +168,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential",
@@ -220,8 +216,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential"
@@ -263,8 +257,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential",
@@ -315,8 +307,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential",
@@ -368,8 +358,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential",
@@ -418,8 +406,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential"
@@ -432,7 +418,6 @@
       "runners": [
         "capstone/bug-corpora/httpd/apr-pool-repros/runners/capstone-domain/run-defects.py",
         "capstone/bug-corpora/httpd/apr-pool-repros/runners/cheribsd/run-defects.py",
-        "capstone/bug-corpora/httpd/apr-pool-repros/runners/poisoncap/run-defects.py",
         "capstone/bug-corpora/httpd/apr-pool-repros/runners/run-native.sh"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
@@ -460,8 +445,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential"
@@ -474,7 +457,6 @@
       "runners": [
         "capstone/bug-corpora/httpd/bucket-repros/runners/capstone-domain/run-defects.py",
         "capstone/bug-corpora/httpd/bucket-repros/runners/cheribsd/run-defects.py",
-        "capstone/bug-corpora/httpd/bucket-repros/runners/poisoncap/run-defects.py",
         "capstone/bug-corpora/httpd/bucket-repros/runners/run-native.sh"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
@@ -502,8 +484,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential"
@@ -517,7 +497,6 @@
       "runners": [
         "capstone/bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py",
         "capstone/bug-corpora/memcached/allocator-repros/runners/cheribsd/run-defects.py",
-        "capstone/bug-corpora/memcached/allocator-repros/runners/poisoncap/run-defects.py",
         "capstone/bug-corpora/memcached/allocator-repros/runners/run-native.sh",
         "capstone/bug-corpora/memcached/allocator-repros/runners/run-asan.sh"
       ],
@@ -554,8 +533,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential",
@@ -603,8 +580,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential"
@@ -1000,8 +975,6 @@
         "spatial",
         "sublet",
         "sublet-chunks",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential",
@@ -1056,8 +1029,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential"
@@ -1100,8 +1071,6 @@
         "spatial",
         "sublet",
         "cheribsd-revocation",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "native-detect"
       ],
       "arm_keys": {

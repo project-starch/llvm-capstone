@@ -79,9 +79,10 @@ between the two, and `verdicts.json` records them, so the two are told apart by
 their own artifacts rather than by memory. The fix has not been reported
 upstream.
 
-The platform is shared with the FFmpeg PoisonCap port. It lives here because
-this corpus is what needed it; if a second consumer appears it belongs one level
-up.
+The platform recipe lives in `ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/`, whose FFmpeg
+integration was removed on 2026-10-10. Its image still carries the stock CheriBSD arms of the
+httpd and memcached corpora, and the PostgreSQL PoisonCap arm. This fix lives here because
+this corpus is what needed it; if a second consumer appears it belongs one level up.
 
 ## A second platform defect, measured 2026-10-09: posix_memalign's status under quarantine
 

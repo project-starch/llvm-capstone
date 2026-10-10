@@ -43,8 +43,8 @@ def load_cases():
 
     This WAS a hardcoded five-entry list, which meant adding a case to the corpus silently
     left this runner measuring the old set -- the drift the contract warns about, and the
-    reason cases 5-7 could not be measured when they landed. The two sibling runners
-    (cheribsd/, poisoncap/) already discover; this one now does too, by the same pattern.
+    reason cases 5-7 could not be measured when they landed. The sibling runner
+    (cheribsd/) already discovers; this one now does too, by the same pattern.
     The tuple shape (fix, name, shape) is preserved so every existing use site is unchanged.
     """
     found = {}

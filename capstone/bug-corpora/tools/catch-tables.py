@@ -14,7 +14,7 @@ Sublet port (for a plain case, the program's whole configuration with that port 
 per bug. --board-json also writes the rows, for the slides.
 
 --all adds the other six programs -- CPython, httpd, mruby, Perl, PostgreSQL, SQLite -- to the board,
-and only to the board: their corpora carry the three columns' arms but not the six-column set.
+and only to the board: their corpora carry the three columns' arms but not the four-column set.
 Every one of their cells is an explicit `verdict` read out of the bundle that measured it (the
 arm's `verdict_from` names the row); their oracles predate the MEASURED convention and are not
 read. A column no bundle has measured for a group stays a hole, so --all exits 1 until the holes
@@ -52,7 +52,7 @@ TARGETS = ("ffmpeg", "wireshark", "memcached")
 EXTRA = ("cpython", "httpd", "mruby", "perl", "postgres", "sqlite")
 ALL = "--all" in sys.argv
 if ALL and not ({"--board", "--board-json"} & set(sys.argv)):
-    sys.exit("catch-tables: --all is for the board; the six-column tables cover FFmpeg, tshark and memcached")
+    sys.exit("catch-tables: --all is for the board; the four-column tables cover FFmpeg, tshark and memcached")
 PROGRAMS = TARGETS + EXTRA if ALL else TARGETS
 NOTRUN = {"predicted", "not written", "declined"}
 LAYER = {"pool-repros": "AVBufferPool", "plain-temporal-repros": "direct malloc", "plain-heap-repros": "direct malloc",
@@ -178,8 +178,6 @@ for p in TARGETS:
                  nested=bool(d.get("nested")),
                  asan=verdict(a.get("native-detect")),
                  cheri=verdict(a.get("cheribsd-revocation")),
-                 pc0=verdict(a.get("poisoncap-spatial")),
-                 pc1=verdict(a.get("poisoncap-protected")),
                  cap=verdict(a.get("spatial")),
                  sub=verdict(protected(a, "sublet", "sublet-chunks") if corpus != "pool-repros"
                              else protected(a, "sublet", "sublet-port")),
@@ -195,7 +193,7 @@ for p in TARGETS:
                 odd.append(f"{p}/{corpus}/{r['case']} {k}({r[k + 'arm']})={r[k]}")
         if r["c1"] not in ("fault", "held", "missed"):
             odd.append(f"{p}/{corpus}/{r['case']} c1={r['c1']}")
-        for k in ("asan", "cheri", "pc0", "pc1", "cap", "sub"):
+        for k in ("asan", "cheri", "cap", "sub"):
             if r[k] not in ("caught", "missed"):
                 odd.append(f"{p}/{corpus}/{r['case']} {k}={r[k]}")
         rows.append(r)
@@ -233,8 +231,7 @@ if ALL and {r["prog"] for r in extra} != set(EXTRA):
     sys.exit(f"catch-tables: --all found cases for {sorted({r['prog'] for r in extra})}, not all of {EXTRA}")
 BOARD_ROWS = rows + extra
 
-COLS = (("asan", "ASan"), ("cheri", "CheriBSD"), ("pc0", "PoisonCap m0"), ("pc1", "PoisonCap m1"),
-        ("cap", "Cap bounds"), ("sub", "Cap+Sublet"))
+COLS = (("asan", "ASan"), ("cheri", "CheriBSD"), ("cap", "Cap bounds"), ("sub", "Cap+Sublet"))
 
 
 def cell(g, k):
@@ -358,8 +355,8 @@ if "--markdown" in sys.argv:
     for kind in ("temporal", "spatial"):
         tr = table_rows(kind)
         print(f"\n**{kind.capitalize()} ({tr[-1][3]})**\n")
-        print("| program | allocator layer | axis | n | ASan | CheriBSD | PoisonCap mode 0 | PoisonCap mode 1 | Capstone bounds | Capstone + Sublet |")
-        print("|---|---|---|---:|---:|---:|---:|---:|---:|---:|")
+        print("| program | allocator layer | axis | n | ASan | CheriBSD | Capstone bounds | Capstone + Sublet |")
+        print("|---|---|---|---:|---:|---:|---:|---:|")
         for p, layer, ax, n, cells in tr:
             print(f"| {NAME[p]} | {layer} | {ax} | {n} | " + " | ".join(c.replace('/', ' / ') for c in cells) + " |")
 

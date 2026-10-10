@@ -12,8 +12,6 @@
   "required_arms": [
     "spatial",
     "sublet",
-    "poisoncap-spatial",
-    "poisoncap-protected",
     "cheribsd-revocation",
     "native-detect",
     "native-fix-differential"
@@ -27,7 +25,6 @@
   "runners": [
     "capstone/bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py",
     "capstone/bug-corpora/memcached/allocator-repros/runners/cheribsd/run-defects.py",
-    "capstone/bug-corpora/memcached/allocator-repros/runners/poisoncap/run-defects.py",
     "capstone/bug-corpora/memcached/allocator-repros/runners/run-native.sh",
     "capstone/bug-corpora/memcached/allocator-repros/runners/run-asan.sh"
   ],

@@ -14,8 +14,6 @@
     "sublet",
     "capstone-subobject",
     "capstone-carve-bounds",
-    "poisoncap-spatial",
-    "poisoncap-protected",
     "cheribsd-revocation",
     "cheribsd-subobject",
     "cheribsd-carve-bounds",

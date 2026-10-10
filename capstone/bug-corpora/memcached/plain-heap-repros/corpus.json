@@ -12,8 +12,6 @@
   "required_arms": [
     "spatial",
     "sublet",
-    "poisoncap-spatial",
-    "poisoncap-protected",
     "cheribsd-revocation",
     "native-detect",
     "native-fix-differential",

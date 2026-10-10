@@ -99,18 +99,18 @@ reduction class are visibly siblings rather than accidentally similar.
 | `spatial` | Capstone domain | the sequence completes without protection |
 | `sublet` | Capstone domain | fault at the labelled probe the oracle names |
 | `cheribsd` | CheriBSD purecap, libc revocation ON, plain build | whether the system allocator sees these defects |
-| `poisoncap-spatial` | CheriBSD purecap, PoisonCap mode 0 | exact bounds, no invalidation: the matched control |
-| `poisoncap-protected` | CheriBSD purecap, PoisonCap mode 1 | SIGPROT at the labelled read probe |
 | `native-detect` | host | declared, not written |
 
 The two Capstone arms run the same program; the loader picks the arm at run
-time. The two PoisonCap arms run the same purecap program with a mode argument,
-under `supervise`. Every protected oracle names an **instruction**: the run publishes the probe addresses
+time. Every protected oracle names an **instruction**: the run publishes the probe addresses
 and the fault must land on the one the case's oracle names — the read probe,
 the write probe, or the allocator's own probe when the stale pointer is handed
 back to `wmem`.
 
 ## What the four systems do, measured 2026-09-21
+
+This section is the 2026-09-21 record. Its PoisonCap arm was removed on 2026-10-10 and
+stays here, and in `results/`, as history.
 
 | system | what it acts on | caught |
 |---|---|:--:|

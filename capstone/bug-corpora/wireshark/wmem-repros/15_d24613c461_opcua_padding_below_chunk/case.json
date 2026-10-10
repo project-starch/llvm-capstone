@@ -33,24 +33,6 @@
       "verdict": "CAUGHT",
       "measured": "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-ON/matrix.tsv (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x10419e). Adapter counters: WM_POISONCAP mode=0 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held.",
-      "note": "(Superseded: measured on 2026-10-09 on the second host -- see oracle. The note below was true of the first host.) UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending.",
-      "prediction": "PREDICTED and UNMEASURABLE HERE: faults if mode 0 bounds each wmem chunk, completes if it bounds only the g_malloc'd block. Neither platform is on this host; the reading settles it.",
-      "status": "measured",
-      "verdict": "CAUGHT"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "signal": 34,
-      "si_code": 1,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x10419e). Adapter counters: WM_POISONCAP mode=1 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction -- mode 0's spatial behaviour decides it -- held: mode 0 faulted too.",
-      "note": "(Superseded: measured on 2026-10-09 on the second host -- see oracle. The note below was true of the first host.) UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending.",
-      "prediction": "PREDICTED and UNMEASURABLE HERE: mode 1 adds temporal protection and no lifetime ends here, so the spatial behaviour of mode 0 decides it.",
-      "status": "measured",
-      "verdict": "CAUGHT"
-    },
     "cheribsd-revocation": {
       "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-libc/: **NOT CAUGHT** on stock wmem with the system allocator as CheriBSD's libc (WM_LIBC_SYSTEM, WM_CHUNKS=OFF), revocation on: the crossing stayed inside one g_malloc'd block and completed; fixed arm VERDICT FIXED. In the same boot control 90 (a jumbo g_free'd by the reset) was HELD by the quarantine and the revocation control faulted at its labelled load. The 2026-10-07 reading of this arm ran the hosted bump arena with the chunk port compiled in, where nothing reached free().",
       "target": "stock CheriBSD purecap with libc revocation on",
