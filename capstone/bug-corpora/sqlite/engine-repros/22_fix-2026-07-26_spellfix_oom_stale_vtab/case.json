@@ -26,16 +26,20 @@
     },
     "virtual-malloc": {
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
-      "verdict": "MISSED",
-      "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
-      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3f9941ffb0 in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
+      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
-      "verdict": "MISSED",
-      "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
-      "verdict_from": "results/2026-10-11-virtual-lookaside/virtual-nested-pools"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3faa81ff64 in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
+      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
-  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b65c0; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; clean exit, no defect-site probe in that run"
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b65c0; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; clean exit, no defect-site probe in that run",
+  "fault_sites": [
+    "editDist3FindLang"
+  ],
+  "fault_sites_why": "host ASan on the corrected trigger, built with its SQLITE_CONFIG_HEAP call replaced so the allocator wrapper sits on the system allocator (results/2026-10-11-host-asan, variant), reports the heap-use-after-free in editDist3FindLang <- editDist3SqlFunc. Declared 2026-10-11, before the first Sublet run of that trigger."
 }

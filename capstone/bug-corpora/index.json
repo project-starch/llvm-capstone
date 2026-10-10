@@ -955,8 +955,8 @@
         "virtual-nested-pools": "virtual-sqlite-memsys5-pools"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-11-virtual-lookaside/virtual-nested-pools"
+        "virtual-malloc": "results/2026-10-11-virtual-request-bounds/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
       },
       "where": "capstone/bug-corpora/sqlite/engine-repros"
     },

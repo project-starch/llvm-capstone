@@ -28,13 +28,13 @@
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
-      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
+      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3fa0c020f8 in memcpy; by function: memcpy is where host ASan reported it",
-      "verdict_from": "results/2026-10-11-virtual-lookaside/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3fbbc020f8 in memcpy; by function: memcpy is where host ASan reported it",
+      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
   "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=213)",

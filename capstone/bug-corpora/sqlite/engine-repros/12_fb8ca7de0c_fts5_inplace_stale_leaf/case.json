@@ -27,17 +27,20 @@
     "virtual-malloc": {
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "NO-READING",
-      "verdict_note": "cause=24 pc=0x3fbda81490 in sqlite3Fts5IterTerm; in sqlite3Fts5IterTerm; ASan site not recorded",
-      "verdict_from": "results/2026-10-11-virtual/virtual-malloc",
+      "verdict_note": "cause=24 pc=0x3f85681490 in sqlite3Fts5IterTerm; in sqlite3Fts5IterTerm; ASan site ['fts5SegIterNextPage']",
+      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-malloc",
       "verdict_reason": "unattributed"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
-      "verdict": "NO-READING",
-      "verdict_note": "cause=24 pc=0x3fb2a819cc in sqlite3Fts5IterTerm; in sqlite3Fts5IterTerm; ASan site not recorded",
-      "verdict_from": "results/2026-10-11-virtual-lookaside/virtual-nested-pools",
-      "verdict_reason": "unattributed"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f8f62f350 in fts5SegIterNextPage; by function: fts5SegIterNextPage is where host ASan reported it",
+      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
-  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10321de94; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=OOB, hits=40, witnesses=2)"
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10321de94; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=OOB, hits=40, witnesses=2)",
+  "fault_sites": [
+    "fts5SegIterNextPage"
+  ],
+  "fault_sites_why": "host ASan (results/2026-10-11-host-asan) reports the heap-use-after-free in fts5SegIterNextPage <- fts5SegIterNext <- fts5MultiIterNext. That report predates the Sublet run that faulted there (round c, 2026-10-11), but the site was declared after it; it rests on the ASan report. The earlier Sublet runs stopped first at sqlite3Fts5IterTerm's &z[1] with z NULL (cause 24)."
 }

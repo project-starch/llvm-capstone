@@ -1,0 +1,831 @@
+{
+ "00_adfb203a7d_fts5_getvarint_stale_read": {
+  "result": "heap-buffer-overflow",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "4 bytes after 64-byte region",
+  "access": [
+   "sqlite3Fts5GetVarint",
+   "fts5SegIterReverse",
+   "fts5SegIterSeekInit",
+   "fts5MultiIterNew",
+   "sqlite3Fts5IndexQuery",
+   "fts5ExprNearInitAll"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "fts5DataRelease",
+   "fts5SegIterReverse",
+   "fts5SegIterSeekInit"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "fts5DataRead"
+  ]
+ },
+ "01_5e4233a9e4_agginfo_stale_after_realloc": {
+  "result": "SILENT",
+  "exit": 0,
+  "began": true,
+  "returned": true
+ },
+ "02_b9e0f62c3a_backup_pager_after_detach": {
+  "result": "SEGV",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "access": [
+   "sqlite3BtreeUpdateMeta",
+   "sqlite3_backup_step",
+   "run_case",
+   "main",
+   "__libc_start_call_main",
+   "__libc_start_main"
+  ]
+ },
+ "03_e464802d49_blob_close_after_db_close": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "696 bytes inside of 704-byte region",
+  "access": [
+   "sqlite3DbFreeNN",
+   "sqlite3DbFree",
+   "sqlite3_blob_close",
+   "run_case",
+   "main",
+   "__libc_start_call_main"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "sqlite3LeaveMutexAndCloseZombie",
+   "sqlite3_finalize",
+   "sqlite3_blob_close"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3MallocZero",
+   "openDatabase"
+  ]
+ },
+ "04_8504d37b99_blob_write_after_reopen": {
+  "result": "SILENT",
+  "exit": 0,
+  "began": true,
+  "returned": true
+ },
+ "05_6397a78b2b_detach_with_pending_trigger": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "24 bytes inside of 120-byte region",
+  "access": [
+   "findElementWithHash",
+   "sqlite3HashFind",
+   "tableOfTrigger",
+   "sqlite3DropTriggerPtr",
+   "sqlite3DropTrigger",
+   "yy_reduce"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "sqlite3DbFreeNN",
+   "sqlite3DbFree",
+   "sqlite3BtreeClose"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3DbMallocRaw",
+   "sqlite3DbMallocZero"
+  ]
+ },
+ "06_0c8c9a64b3_expert_rem_ctx_freed": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes inside of 128-byte region",
+  "access": [
+   "idxRemFunc",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step",
+   "run_case",
+   "main"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "idxPopulateStat1",
+   "sqlite3_expert_analyze",
+   "run_case"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "idxMalloc"
+  ]
+ },
+ "07_129371553c_fts3_destroy_oom_stale_table": {
+  "variant": "SQLITE_CONFIG_HEAP over sqlite_heap replaced by SQLITE_OK",
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "40 bytes inside of 592-byte region",
+  "access": [
+   "fts3DestroyMethod",
+   "sqlite3VtabCallDestroy",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step",
+   "sqlite3_exec"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "fts3DisconnectMethod",
+   "sqlite3VtabUnlock",
+   "sqlite3VtabUnlockList"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "wrapMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc"
+  ]
+ },
+ "08_51dd67080a_fts3_offsets_stale_buffer": {
+  "result": "SILENT",
+  "exit": 0,
+  "began": true,
+  "returned": true
+ },
+ "09_fix-2026-08-17_fts3_snippet_stale_buffer": {
+  "result": "SILENT",
+  "exit": 0,
+  "began": true,
+  "returned": true
+ },
+ "10_becd68ba0d_fts3_snippet_or_stale_iter": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "180 bytes inside of 208-byte region",
+  "access": [
+   "fts3SnippetAdvance",
+   "fts3SnippetNextCandidate",
+   "fts3BestSnippet",
+   "sqlite3Fts3Snippet",
+   "fts3SnippetFunc",
+   "sqlite3VdbeExec"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "sqlite3Fts3SegReaderFree",
+   "sqlite3Fts3SegReaderFinish",
+   "fts3SegReaderCursorFree"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "sqlite3Fts3SegReaderNew"
+  ]
+ },
+ "11_dee0359ddb_fts3_zterm_stale_buffer": {
+  "result": "SILENT",
+  "exit": 0,
+  "began": true,
+  "returned": true
+ },
+ "12_fb8ca7de0c_fts5_inplace_stale_leaf": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "8 bytes inside of 48-byte region",
+  "access": [
+   "fts5SegIterNextPage",
+   "fts5SegIterNext",
+   "fts5MultiIterNext",
+   "sqlite3Fts5IterNextScan",
+   "fts5VocabNextMethod",
+   "sqlite3VdbeExec"
+  ],
+  "freed_by": [
+   "realloc",
+   "sqlite3MemRealloc",
+   "sqlite3Realloc",
+   "sqlite3_realloc",
+   "fts5StructureExtendLevel",
+   "fts5FlushOneHash"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "sqlite3Fts5MallocZero"
+  ]
+ },
+ "13_fix-2026-06-08_fts5_near_stale_phrase": {
+  "result": "SILENT",
+  "exit": 0,
+  "began": true,
+  "returned": true
+ },
+ "14_25e3073741_fts5_structure_release_refcount": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes inside of 40-byte region",
+  "access": [
+   "fts5StructureRelease",
+   "fts5MultiIterFree",
+   "sqlite3Fts5IterClose",
+   "fts5ExprNearInitAll",
+   "fts5ExprNodeFirst",
+   "sqlite3Fts5ExprFirst"
+  ],
+  "freed_by": [
+   "realloc",
+   "sqlite3MemRealloc",
+   "sqlite3Realloc",
+   "sqlite3_realloc",
+   "fts5StructureAddLevel",
+   "fts5IndexMergeLevel"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "sqlite3Fts5MallocZero"
+  ]
+ },
+ "15_2639ddc474_fts5_vocab_eof_stale_poslist": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "39 bytes inside of 64-byte region",
+  "access": [
+   "sqlite3Fts5PoslistNext64",
+   "fts5VocabInstanceNext",
+   "fts5VocabNextMethod",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "fts5DataRelease",
+   "fts5SegIterNextPage",
+   "fts5SegIterNext"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "fts5DataRead"
+  ]
+ },
+ "16_unfixed_json_each_root_stale_key": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes inside of 8-byte region",
+  "access": [
+   "MemcmpInterceptorCommon(void*,",
+   "memcmp",
+   "binCollFunc",
+   "vdbeCompareMemString",
+   "sqlite3MemCompare",
+   "minmaxStep"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "jsonEachCursorReset",
+   "jsonEachFilter",
+   "sqlite3VdbeExec"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc64",
+   "jsonEachFilter"
+  ]
+ },
+ "17_28001204f4_json_each_static_stale_key": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes inside of 8-byte region",
+  "access": [
+   "MemcmpInterceptorCommon(void*,",
+   "memcmp",
+   "binCollFunc",
+   "vdbeCompareMemString",
+   "sqlite3MemCompare",
+   "minmaxStep"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "jsonEachCursorReset",
+   "jsonEachFilter",
+   "sqlite3VdbeExec"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc64",
+   "jsonEachFilter"
+  ]
+ },
+ "18_mem5-design_memsys5_inband_freelist_overwrite": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes inside of 128-byte region",
+  "access": [
+   "run_case",
+   "main",
+   "__libc_start_call_main",
+   "__libc_start_main",
+   "_start"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "run_case",
+   "main",
+   "__libc_start_call_main"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "run_case"
+  ]
+ },
+ "19_c8c9cdd9dd_rtree_cursor_stale_node": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "16 bytes inside of 488-byte region",
+  "access": [
+   "nodeRelease",
+   "rtreeSearchPointPop",
+   "rtreeNext",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "rtreeDeleteRowid",
+   "rtreeUpdate",
+   "sqlite3VdbeExec"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "nodeAcquire"
+  ]
+ },
+ "20_d21bd37c7c_rtree_inode0_stale_node": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "8 bytes inside of 1000-byte region",
+  "access": [
+   "nodeHashLookup",
+   "nodeAcquire",
+   "findLeafNode",
+   "rtreeFilter",
+   "sqlite3VdbeExec",
+   "sqlite3Step"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "nodeRelease",
+   "SplitNode",
+   "rtreeInsertCell"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "nodeNew"
+  ]
+ },
+ "21_eab0e10304_rtree_static_bind_stale_text": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "40 bytes inside of 864-byte region",
+  "access": [
+   "__asan_memcpy",
+   "sqlite3VdbeSerialPut",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step",
+   "run_case"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "nodeRelease",
+   "rtreeUpdate",
+   "sqlite3VdbeExec"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "nodeAcquire"
+  ]
+ },
+ "22_fix-2026-07-26_spellfix_oom_stale_vtab": {
+  "variant": "SQLITE_CONFIG_HEAP over sqlite_heap replaced by SQLITE_OK",
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes inside of 16-byte region",
+  "access": [
+   "editDist3FindLang",
+   "editDist3SqlFunc",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step",
+   "attempt"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "wrapFree",
+   "sqlite3_free",
+   "editDist3Install",
+   "spellfix1Register"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "wrapMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc64"
+  ]
+ },
+ "23_eab0e10304_fts3_static_bind_stale_text": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes inside of 4064-byte region",
+  "access": [
+   "__asan_memcpy",
+   "sqlite3VdbeSerialPut",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step",
+   "run_case"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "fts3SegWriterFree",
+   "fts3SegmentMerge",
+   "fts3DoOptimize"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "fts3SegWriterAdd"
+  ]
+ },
+ "24_d4b646997a_writable_schema_stale_table": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "56 bytes inside of 128-byte region",
+  "access": [
+   "sqlite3OpenTable",
+   "autoIncrementEnd",
+   "sqlite3AutoincrementEnd",
+   "sqlite3Insert",
+   "yy_reduce",
+   "sqlite3Parser"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "sqlite3DbFreeNN",
+   "sqlite3DbFree",
+   "deleteTable"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "dbMallocRawFinish",
+   "sqlite3DbMallocRawNN"
+  ]
+ },
+ "25_415540ddaa_fts5_getvarint_overread": {
+  "result": "heap-buffer-overflow",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "110 bytes after 64-byte region",
+  "access": [
+   "sqlite3Fts5GetVarint",
+   "fts5SegIterReverse",
+   "fts5SegIterSeekInit",
+   "fts5MultiIterNew",
+   "sqlite3Fts5IndexQuery",
+   "fts5ExprNearInitAll"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "fts5DataRead"
+  ]
+ },
+ "26_8f5b14a5c2_fts5_decode_getvarint32_overread": {
+  "result": "heap-buffer-overflow",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes after 64-byte region",
+  "access": [
+   "sqlite3Fts5GetVarint",
+   "sqlite3Fts5GetVarint32",
+   "fts5DecodePoslist",
+   "fts5DecodeDoclist",
+   "fts5DecodeFunction",
+   "sqlite3VdbeExec"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "sqlite3Fts5MallocZero"
+  ]
+ },
+ "27_a783931794_fts3_getvarint_overread": {
+  "result": "heap-buffer-overflow",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes after 8-byte region",
+  "access": [
+   "sqlite3Fts3GetVarint",
+   "fts3GetDeltaVarint",
+   "fts3PoslistPhraseMerge",
+   "fts3EvalIncrPhraseNext",
+   "fts3EvalPhraseNext",
+   "fts3EvalNextRow"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "fts3EvalIncrPhraseNext"
+  ]
+ },
+ "28_c7def600bd_fts3_matchinfo_overread": {
+  "result": "heap-buffer-overflow",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes after 16-byte region",
+  "access": [
+   "fts3EvalUpdateCounts",
+   "fts3EvalGatherStats",
+   "sqlite3Fts3EvalPhraseStats",
+   "fts3ExprGlobalHitsCb",
+   "fts3ExprIterate2",
+   "fts3ExprIterate"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "fts3TermSelectMerge"
+  ]
+ },
+ "29_fz02_btree_get4byte_page_overread": {
+  "result": "heap-buffer-overflow",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "253 bytes after 776-byte region",
+  "access": [
+   "statDecodePage",
+   "statNext",
+   "statNext",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "pcache1Alloc",
+   "pcache1AllocPage"
+  ]
+ },
+ "30_fz06_recordcompareint_overread": {
+  "result": "heap-buffer-overflow",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "20 bytes after 32-byte region",
+  "access": [
+   "vdbeRecordCompareInt",
+   "sqlite3BtreeMovetoUnpacked",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step",
+   "sqlite3_exec"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3BtreeMovetoUnpacked",
+   "sqlite3VdbeExec"
+  ]
+ },
+ "31_fz10_dbstat_decodepage_overflow": {
+  "result": "heap-buffer-overflow",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "access": [
+   "statDecodePage",
+   "statNext",
+   "statFilter",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step"
+  ]
+ },
+ "32_fz11_dbstat_freechain_overflow": {
+  "result": "heap-buffer-overflow",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "access": [
+   "statDecodePage",
+   "statNext",
+   "statNext",
+   "sqlite3VdbeExec",
+   "sqlite3Step",
+   "sqlite3_step"
+  ]
+ },
+ "control_uaf_mem5": {
+  "result": "heap-use-after-free",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "0 bytes inside of 64-byte region",
+  "access": [
+   "control_read",
+   "run_case",
+   "main",
+   "__libc_start_call_main",
+   "__libc_start_main",
+   "_start"
+  ],
+  "freed_by": [
+   "free",
+   "sqlite3MemFree",
+   "sqlite3_free",
+   "run_case",
+   "main",
+   "__libc_start_call_main"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "run_case"
+  ]
+ },
+ "control_bounds_mem5": {
+  "result": "heap-buffer-overflow",
+  "exit": 1,
+  "began": true,
+  "returned": false,
+  "located": "1008 bytes after 16-byte region",
+  "access": [
+   "control_write",
+   "run_case",
+   "main",
+   "__libc_start_call_main",
+   "__libc_start_main",
+   "_start"
+  ],
+  "allocated_by": [
+   "malloc",
+   "sqlite3MemMalloc",
+   "mallocWithAlarm",
+   "sqlite3Malloc",
+   "sqlite3_malloc",
+   "run_case"
+  ]
+ }
+}
