@@ -299,6 +299,23 @@ HOSTED = {
         controls_dir="controls/virtual",
         control_names={90: "chunk-free-90"},
     ),
+    # ffmpeg/pool-repros on the buffer-pool port (ports/ffmpeg/buffer-pool), built by the corpus's
+    # own shared/build-cases.sh capstone-application, whose programs print the case.c driver's lines
+    # (`case=N arm=...`, VERDICT), so observe()/fixed_ok() read them.
+    #   virtual-malloc: the stock pools, every entry one virtual-mallocng object, `fixed|buggy N`.
+    #   virtual-nested-pools: the pools with patch 0003 (FFPOOL_SUBLET), every hand-out a child
+    #     lifetime of its entry, revoked at the return: `fixed|buggy N`.
+    "pool-repros": dict(
+        format="case-line",
+        cache={"virtual-malloc": {"FFPOOL_SUBLET": "OFF"},
+               "virtual-nested-pools": {"FFPOOL_SUBLET": "ON"}},
+        cache_dir="work/port",
+        program="bin/defect-{nn}",
+        extra={"virtual-malloc": [], "virtual-nested-pools": []},
+        mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
+        controls_dir="controls/virtual",
+        control_names={90: "pool-return-90"},
+    ),
 }
 
 

@@ -21,6 +21,9 @@ int main(int argc, char **argv) {
             ff2_case_number, argv[2]);
     return 75;
   }
+#ifndef FF2_SYSTEM_MEMORY
+  /* The port's replay arenas. A Capstone process build (FF2_SYSTEM_MEMORY) takes
+   * the pools' memory from the process's own malloc instead. */
   void *metadata = aligned_alloc(64, FF2_META_BYTES);
   void *payload = aligned_alloc(64, FF2_PAYLOAD_BYTES);
   if (!metadata || !payload)
@@ -28,6 +31,7 @@ int main(int argc, char **argv) {
   ff2_memory_init(metadata, FF2_META_BYTES);
   ff2_payload_init(payload, FF2_PAYLOAD_BYTES);
   ff2_set_mode(0); /* the native arms carry no protection; that is the point */
+#endif
   ff2_reset();
   g_pool = av_buffer_pool_init(POOL_BYTES, NULL);
   if (!g_pool)
@@ -42,7 +46,9 @@ int main(int argc, char **argv) {
   int rc = ff2_case_run(fixed);
   av_buffer_pool_uninit(&g_pool);
   av_refstruct_pool_uninit(&g_refpool);
+#ifndef FF2_SYSTEM_MEMORY
   free(metadata);
   free(payload);
+#endif
   return rc;
 }

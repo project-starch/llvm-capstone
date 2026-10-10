@@ -7,6 +7,7 @@
   },
   "configurePresets": [
     {"name": "cheribsd", "inherits": "base", "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/cheribsd.cmake", "cacheVariables": {"BUILD_TESTING": false}},
+    {"name": "capstone-application", "inherits": "base", "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/capstone-application.cmake", "cacheVariables": {"BUILD_TESTING": false}},
     {
       "name": "base",
       "hidden": true,
@@ -46,6 +47,7 @@
   ],
   "buildPresets": [
     {"name": "cheribsd", "configurePreset": "cheribsd", "jobs": 2},
+    {"name": "capstone-application", "configurePreset": "capstone-application", "jobs": 4},
     {
       "name": "native",
       "configurePreset": "native",

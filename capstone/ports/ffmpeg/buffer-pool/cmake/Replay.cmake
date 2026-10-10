@@ -1,3 +1,37 @@
+option(FFPOOL_SUBLET "AVBufferPool and AVRefStructPool entries as Sublet lifetimes (patch 0003)" OFF)
+if(FFPOOL_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
+  message(FATAL_ERROR "FFPOOL_SUBLET needs the capstone-application toolchain")
+endif()
+if(PORT_PLATFORM STREQUAL "capstone-application")
+  # FFmpeg's pools as a library for a Capstone process. Payloads and metadata come from the
+  # process's own malloc (src/hosted/system-memory.c), virtual mallocng on the virtual profile,
+  # as they do in FFmpeg linked against libc. FFPOOL_SUBLET adds patch 0003.
+  if(FFPOOL_SUBLET)
+    set(ffpool_variant protected)
+  else()
+    set(ffpool_variant traced)
+  endif()
+  ffpool_source(${ffpool_variant})
+  add_subdirectory("${CAPSTONE_REPO_ROOT}/capstone/runtime"
+    "${CMAKE_BINARY_DIR}/capstone-runtime")
+  add_library(ffmpeg-pool STATIC
+    "${FFMPEG_${ffpool_variant}_SOURCE}/libavutil/buffer.c"
+    "${FFMPEG_${ffpool_variant}_SOURCE}/libavutil/refstruct.c"
+    src/shared/observe-pool-events.c
+    src/hosted/system-memory.c)
+  set_source_files_properties(
+    "${FFMPEG_${ffpool_variant}_SOURCE}/libavutil/buffer.c"
+    "${FFMPEG_${ffpool_variant}_SOURCE}/libavutil/refstruct.c" PROPERTIES GENERATED TRUE)
+  target_include_directories(ffmpeg-pool PUBLIC
+    "${PROJECT_SOURCE_DIR}/src/shared"
+    "${FFMPEG_${ffpool_variant}_SOURCE}"
+    "${PROJECT_SOURCE_DIR}/cmake/replay-config")
+  target_link_libraries(ffmpeg-pool PUBLIC Capstone::Runtime)
+  add_dependencies(ffmpeg-pool ffmpeg-${ffpool_variant}-source)
+  add_library(FFmpeg::BufferPool ALIAS ffmpeg-pool)
+  return()
+endif()
+
 if(FFPOOL_CHERI AND (NOT PORT_HOSTED OR
                       NOT CMAKE_SYSTEM_NAME STREQUAL "FreeBSD"))
   message(FATAL_ERROR "FFPOOL_CHERI requires the CheriBSD toolchain and the hosted replay entry")
