@@ -13,3 +13,10 @@ row3 / sqlite-25e3073741 -- fts5MultiIterNew caches a raw Fts5Structure*; a
  * stepping. On unprotected capstone completes -> NOTRAP.
  * NOTE: build in fts5 group (repro322_fts_stubs.c + math decl).
 ```
+
+## 2026-10-11: the trigger is the CheriBSD copy
+
+`case.c` is now byte-identical to `ports/sqlite/cheribsd/cases/` (the copy the CheriBSD probe runs used).
+The source above is the earlier trigger. Why it was replaced: the corpus copy inserted under a three-term OR scan; host ASan was silent on it. The CheriBSD copy uses upstream's shape (x3, MATCH 'one', an INSERT under the live cursor), and host ASan reports the second release in fts5StructureRelease <- fts5MultiIterFree. Evidence:
+`results/2026-10-11-host-asan/results.json`, from `shared/run-host-asan.py` (every SQLite object its own
+malloc, lookaside off).
