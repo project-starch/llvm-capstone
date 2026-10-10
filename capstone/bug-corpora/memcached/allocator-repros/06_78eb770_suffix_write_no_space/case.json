@@ -14,11 +14,17 @@
   "arms": {
     "spatial": {
       "oracle": "the sequence completes",
-      "note": "PREDICTION CONFIRMED by the run of 2026-10-05. It was filed as a prediction before any domain build existed, and the reading matches. THIS IS THE ROW THAT MATTERS: the crossing stays INSIDE the chunk, and the slab port's bound IS the chunk, so no arm sees it. A chunk-granular bound cannot see a sub-object crossing -- measured here rather than argued, and the same conclusion FFmpeg's subobject-repros corpus reaches from the other end. Judged on the unprotected spatial mode."
+      "note": "PREDICTION CONFIRMED by the run of 2026-10-05. It was filed as a prediction before any domain build existed, and the reading matches. THIS IS THE ROW THAT MATTERS: the crossing stays INSIDE the chunk, and the slab port's bound IS the chunk, so no arm sees it. A chunk-granular bound cannot see a sub-object crossing -- measured here rather than argued, and the same conclusion FFmpeg's subobject-repros corpus reaches from the other end. Judged on the unprotected spatial mode.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-0607/README.md: case 6 spatial completed=1 passed=True (as pre-registered at bbc7db0bd3d5); the same run's negative control fired on every arm"
     },
     "sublet": {
       "oracle": "the sequence completes",
-      "note": "PREDICTION CONFIRMED by the run of 2026-10-05. It was filed as a prediction before any domain build existed, and the reading matches. THIS IS THE ROW THAT MATTERS: the crossing stays INSIDE the chunk, and the slab port's bound IS the chunk, so no arm sees it. A chunk-granular bound cannot see a sub-object crossing -- measured here rather than argued, and the same conclusion FFmpeg's subobject-repros corpus reaches from the other end. Judged on the sublet mode."
+      "note": "PREDICTION CONFIRMED by the run of 2026-10-05. It was filed as a prediction before any domain build existed, and the reading matches. THIS IS THE ROW THAT MATTERS: the crossing stays INSIDE the chunk, and the slab port's bound IS the chunk, so no arm sees it. A chunk-granular bound cannot see a sub-object crossing -- measured here rather than argued, and the same conclusion FFmpeg's subobject-repros corpus reaches from the other end. Judged on the sublet mode.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-0607/README.md: case 6 sublet completed=1 passed=True (as pre-registered at bbc7db0bd3d5); the same run's negative control fired on every arm"
     },
     "poisoncap-spatial": {
       "mode": 0,

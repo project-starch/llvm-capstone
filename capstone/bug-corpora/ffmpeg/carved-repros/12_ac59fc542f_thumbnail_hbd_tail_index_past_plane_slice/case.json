@@ -48,33 +48,43 @@
       "measured": "2026-10-10, results/2026-10-10-capstone-sublet-carve/README.md, case 12 row"
     },
     "cheribsd-revocation": {
-      "status": "predicted",
+      "status": "measured",
       "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- the crossing stays inside the one allocation, and nothing is freed before it.",
-      "oracle": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- the crossing stays inside the one allocation, and nothing is freed before it."
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-revocation/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (exit 0), the bump inside the one calloc; fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-cheribsd-revocation/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
     },
     "cheribsd-subobject": {
-      "status": "predicted",
+      "status": "measured",
       "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES: -cheri-bounds=subobject-safe narrows a pointer taken to a struct member; a carved sub-slice is not one.",
-      "oracle": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES: -cheri-bounds=subobject-safe narrows a pointer taken to a struct member; a carved sub-slice is not one."
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-subobject/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (exit 0), the bump inside the one calloc; fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-cheribsd-subobject/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
     },
     "cheribsd-carve-bounds": {
-      "status": "predicted",
+      "status": "measured",
       "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): SIGPROT si_code 1 (PROT_CHERI_BOUNDS) inside ffc_read_probe_u32: cheri_bounds_set at the carve, 1024 bytes, exactly representable.",
-      "oracle": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): SIGPROT si_code 1 (PROT_CHERI_BOUNDS) inside ffc_read_probe_u32: cheri_bounds_set at the carve, 1024 bytes, exactly representable."
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-carve-bounds/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS), addr = pc = 0x10253e, INSIDE ffc_read_probe_u32 [0x10252e, 0x102548) (llvm-nm on this run's binary, sha256 4ce753e1754bed43...); fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-cheribsd-carve-bounds/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
     },
     "poisoncap-spatial": {
-      "status": "predicted",
+      "status": "measured",
       "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- inside the one allocation.",
       "mode": 0,
-      "oracle": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- inside the one allocation."
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (exit 0), the bump inside the one calloc; fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-poisoncap-mode0/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
     },
     "poisoncap-protected": {
-      "status": "predicted",
+      "status": "measured",
       "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- mode 1 adds poison-on-free and revocation, and nothing is freed before the access.",
       "mode": 1,
-      "oracle": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- mode 1 adds poison-on-free and revocation, and nothing is freed before the access.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-poisoncap-mode1/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (exit 0), the bump inside the one calloc; fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
       "signal": null,
-      "si_code": null
+      "si_code": null,
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-poisoncap-mode1/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
     },
     "native-detect": {
       "status": "measured",
@@ -88,7 +98,7 @@
       "measured": "2026-10-10, results/2026-10-10-native-differential/run-native.txt: buggy `block=12288 region=1024 touched=4092 extent=3072 noted=1 crossed=1 contained=1 damage=1` VERDICT DEFECT-REPRODUCED; fixed `touched=1020 extent=0 crossed=0 contained=1` VERDICT FIXED"
     }
   },
-  "status": "built 2026-10-10 and measured natively; every other arm is a PRE-REGISTERED prediction until its run lands",
+  "status": "measured 2026-10-10 on every arm (native, five Capstone, three CheriBSD, two PoisonCap); every arm as pre-registered at 26cdee4e4d8d",
   "live_in_pin": false,
   "live_proof": "read from the PINNED source: n9.0.1:libavfilter/vf_thumbnail.c contains the FIXED form `hist[(uint8_t) (p16[x] >> shift)]++` (1 occurrence) and the pre-fix `hist[p16[x]]++` 0 times. Two-sided. A fix-reversal."
 }

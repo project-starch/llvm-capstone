@@ -58,3 +58,29 @@ Their arms have carried oracle text only (both "complete"), backed by prose abou
 no result line. Prediction: both modes COMPLETE on both cases (06: the suffix write stays inside the
 slab chunk, which mode 0's alias and mode 1's region both bound at the chunk; 07: the 64-byte scan cap
 keeps the read inside the chunk). Then `--negative-control`, which must make every oracle fire.
+
+## Outcome (written after the runs)
+
+Every prediction above held.
+
+- **P1** (`wireshark/wmem-repros/results/2026-10-10-cheribsd-libc/`): 48 of 48 programs passed.
+  - All 22 buggy arms reproduced. For the 13 temporal cases that means each case's own same-address reuse
+    assertion held, so the chunk was reissued and the reading is "missed". All 22 fixed arms printed FIXED.
+  - Control 90 was held by the quarantine.
+  - The revocation control faulted at its labelled load.
+- **P3** (`ffmpeg/carved-repros/results/2026-10-10-capstone-*/`): 65 of 65 rows as predicted.
+  - Case 12 completes on spatial, sublet and capstone-subobject.
+  - It is caught at `ffc_read_probe_u32`, cause 5, by capstone-carve-bounds and sublet-carve.
+- **P4** (`memcached/allocator-repros/results/2026-10-10-capstone-0607/`): 4 of 4 arms completed, and the
+  negative control fired on 4 of 4. Two boots first read "BOOT PRODUCED NO RESULT". The domain had exited 0;
+  the runner's 90 s guest-command timeout cut the session before its end marker. At 400 s every run was
+  clean.
+- **P2**: (`ffmpeg/carved-repros/results/2026-10-10-{cheribsd-*,poisoncap-mode0,poisoncap-mode1}/`): 130 of 130 case
+  programs met the arm's pre-registered expectation, with the platform controls and the carve control in each boot.
+  - Case 12 is caught by `cheribsd-carve-bounds`. The fault is SIGPROT si_code 1 at 0x10253e, which `llvm-nm`
+    on the run's own binary places inside `ffc_read_probe_u32` [0x10252e, 0x102548).
+  - It completes on `cheribsd-revocation`, `cheribsd-subobject` and both PoisonCap modes.
+  - The first attempt (B2) was refused with exit 75 by the runner's per-case table, which lacked case 12 -- the
+    gate working. The re-run (B3) followed the one-line fix.
+
+What the audit found and changed is section A of `docs/ref/spatial-vs-temporal-three-programs.md`.

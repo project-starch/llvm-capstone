@@ -14,11 +14,17 @@
   "arms": {
     "spatial": {
       "oracle": "the sequence completes",
-      "note": "PREDICTION CONFIRMED by the run of 2026-10-05. It was filed as a prediction before any domain build existed, and the reading matches. The case caps its scan at 64 bytes and the chunk is larger than that, so the read never reaches the chunk's end -- which the arm's original wording anticipated ('depends on how far the scan runs'). Measured: it completes. Judged on the unprotected spatial mode."
+      "note": "PREDICTION CONFIRMED by the run of 2026-10-05. It was filed as a prediction before any domain build existed, and the reading matches. The case caps its scan at 64 bytes and the chunk is larger than that, so the read never reaches the chunk's end -- which the arm's original wording anticipated ('depends on how far the scan runs'). Measured: it completes. Judged on the unprotected spatial mode.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-0607/README.md: case 7 spatial completed=1 passed=True (as pre-registered at bbc7db0bd3d5); the same run's negative control fired on every arm"
     },
     "sublet": {
       "oracle": "the sequence completes",
-      "note": "PREDICTION CONFIRMED by the run of 2026-10-05. It was filed as a prediction before any domain build existed, and the reading matches. The case caps its scan at 64 bytes and the chunk is larger than that, so the read never reaches the chunk's end -- which the arm's original wording anticipated ('depends on how far the scan runs'). Measured: it completes. Judged on the sublet mode."
+      "note": "PREDICTION CONFIRMED by the run of 2026-10-05. It was filed as a prediction before any domain build existed, and the reading matches. The case caps its scan at 64 bytes and the chunk is larger than that, so the read never reaches the chunk's end -- which the arm's original wording anticipated ('depends on how far the scan runs'). Measured: it completes. Judged on the sublet mode.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-0607/README.md: case 7 sublet completed=1 passed=True (as pre-registered at bbc7db0bd3d5); the same run's negative control fired on every arm"
     },
     "poisoncap-spatial": {
       "mode": 0,

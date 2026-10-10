@@ -19,7 +19,7 @@ and 12. A failed assertion exits 75 and would have read "held".
 - **revocation-control** faulted at its labelled load (SIGPROT si_code 2, addr = pc = the resolved probe): the revoker
   sweeps in this guest. The platform controls passed (`cheribsd-bounds` exit 162).
 
-As pre-registered (`docs/plans/2026-10-10-bug-corpus-audit-three-programs.md`, P1, commit `bbc7db0bd3d5`): every
+As pre-registered (`docs/history/10-10-2026_17-20-00_bug-corpus-audit-three-programs.md`, P1, commit `bbc7db0bd3d5`): every
 prediction held. Image `0cb16209…`, the vehicle of every other CheriBSD reading in the three programs.
 
 Pre-registration: bbc7db0bd3d5 (P1). Runtime revocation: on (guest default preserved).

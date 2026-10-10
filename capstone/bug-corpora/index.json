@@ -187,7 +187,9 @@
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-capstone-subobject",
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-cheribsd-subobject",
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode0",
-        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode1"
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode1",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-sublet-full",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-10-native-plain-heap"
       ],
       "advisories": [],
       "shape_table": true,
