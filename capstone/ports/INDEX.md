@@ -13,7 +13,7 @@
 
 | component | pinned version | runs on | workload | corpora |
 |---|---|---|---|---|
-| `cpython/app` | 3.13.7 | capstone-domain, cheribsd-purecap | objects.py JSON/GC qualification workload | `pymalloc-repros` |
+| `cpython/app` | 3.13.7 | capstone-virtual, cheribsd-purecap | objects.py JSON/GC qualification workload | `pymalloc-repros`, `allocator-boundary-repros` |
 | `ffmpeg/app` | 9.0.1 | capstone-domain | matroska demuxer to mpeg4 decoder, per-frame framemd5 | `plain-heap-repros`, `plane-repros`, `subobject-repros` |
 | `memcached/app` | 1.6.45 | capstone-domain, capstone-virtual, native | mc-harness: a fixed text- and meta-protocol script over one connection and 2 x -t concurrent ones, compared byte for byte with the native server | `allocator-repros`, `plain-heap-repros` |
 | `micropython` | 2e3304a | capstone-domain, silicon | the registered upstream test selection | -- |

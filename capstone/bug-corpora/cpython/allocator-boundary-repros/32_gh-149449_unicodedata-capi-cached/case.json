@@ -11,12 +11,11 @@
   "allocator_layer": "L1-pymalloc-pool",
   "allocator_consumed": "yes",
   "arms": {
-    "spatial": {
-      "oracle": "no bounds fault is admissible: pymalloc sub-allocates inside an arena, so the stale access stays within the bounds of the capability that covers it. The base arm does enforce revocation (CAPSTONE_REVOCATION_ENFORCE defaults to 1 and is independent of the sublet discipline), so the admissible outcomes are completion, or a revoked-capability fault (cause 24) once pymalloc has returned the block's emptied arena to the system allocator. Which of the two occurs is a property of arena occupancy rather than of the defect, so this arm does not separate these cases. A cause 5 or 7 fault would falsify this. A fault whose cause is anything other than 24 falsifies this too, including cause 2 (ILLEGAL_INST), which is an ordinary trap that no capability mechanism produced -- control reaching non-code, the way any CPU would trap it.",
-      "oracle_premise": "Corrected at review, 2026-10-10: the premise that this arm revokes is false. Its level0 heap only marks a freed block free (capstone/ports/musl-capstone/runtime/level0.c, l0_free), patch 0009 issues no revoke, and the runtime's only revoke sites release thread context areas, reached only through __clone; so nothing on this arm revokes heap memory. A cause 24 here is UNEXP_OP_TYPE, an access through an untagged base register: a pointer slot that later data overwrote (tag integrity), or an integer or NULL used as a pointer -- not revocation. The oracle above is kept as written; see results/20261006/README.md, 'Corrections made at review'."
+    "virtual-malloc": {
+      "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it"
     },
-    "sublet": {
-      "oracle": "fault at the stale access: this arm issues and revokes pymalloc's own blocks"
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, pymalloc on its lifetime port, CPY_SUBLET_MODE=1 (tools/arms.json virtual-cpython-pools): as virtual-malloc"
     },
     "cheribsd-revocation": {
       "oracle": "completion while the block's arena stays live: pymalloc links the freed block onto its own pool free list, so the platform has no free to revoke. Once pymalloc returns an emptied arena to the system allocator (insert_to_freepool, when nf == ao->ntotalpools && ao->nextarena != NULL) the platform does have a free, and after a revocation sweep the stale access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). Both outcomes are admissible; which one occurs depends on arena occupancy and sweep timing rather than on the defect, so this arm does not separate these cases. A bounds fault (si_code=1) would falsify this."
@@ -24,5 +23,9 @@
   },
   "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial DETECTED cause=2 (not the mechanism) (spatial-20261007-020747); sublet DETECTED cause=24 (sublet-20261007-022142); cheribsd-revocation DETECTED si_code=5 (boundary-20261007-020413)",
   "sibling_issue": "../pymalloc-repros/15_gh-149449_unicodedata_capi_cached",
-  "layer_note": "unicodedata_create_capi (Modules/unicodedata.c:1465) takes the struct from PyMem_Malloc(sizeof(_PyUnicode_Name_CAPI)) = 16 bytes. The ASan nesting test cannot resolve this case because the fault is an indirect call through the dangling pointer -- ASan instruments loads and stores, not the jump, so it reports SEGV at the PC under PYTHONMALLOC unset and under PYTHONMALLOC=malloc alike. The routing was measured directly instead: PyMem_Malloc(16) freed and read back gives no ASan report with PYTHONMALLOC unset and heap-use-after-free with PYTHONMALLOC=malloc, so the MEM domain is pymalloc and 16 bytes is under the 512-byte threshold. PyMem_RawMalloc(16) reports in both, which is the control."
+  "layer_note": "unicodedata_create_capi (Modules/unicodedata.c:1465) takes the struct from PyMem_Malloc(sizeof(_PyUnicode_Name_CAPI)) = 16 bytes. The ASan nesting test cannot resolve this case because the fault is an indirect call through the dangling pointer -- ASan instruments loads and stores, not the jump, so it reports SEGV at the PC under PYTHONMALLOC unset and under PYTHONMALLOC=malloc alike. The routing was measured directly instead: PyMem_Malloc(16) freed and read back gives no ASan report with PYTHONMALLOC unset and heap-use-after-free with PYTHONMALLOC=malloc, so the MEM domain is pymalloc and 16 bytes is under the 512-byte threshold. PyMem_RawMalloc(16) reports in both, which is the control.",
+  "fault_sites": [
+    "PyCodec_NameReplaceErrors"
+  ],
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 8) at PyCodec_NameReplaceErrors Python/codecs.c:968. That run uses no Capstone arm and was recorded before any virtual arm ran."
 }
