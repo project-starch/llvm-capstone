@@ -85,20 +85,16 @@ def put(path, data):
 
 # The files a variant may patch, relative to the source root. Each variant is
 # a mirror of them with its ordered patches applied, so a patch may span
-# several files and add new ones.
+# several files.
 MIRRORED = [
     *(f"src/backend/utils/mmgr/{name}" for name in (
-        "aset.c", "mcxt.c", "generation.c", "slab.c", "bump.c", "Makefile", "meson.build")),
+        "aset.c", "mcxt.c", "generation.c", "slab.c", "bump.c")),
     "src/include/utils/memutils_memorychunk.h",
 ]
 # What the replay compiles from a variant; everything else comes from the source.
 VARIANT_SOURCES = {
     "spatial": ["aset.c"],
-    "sublet": ["aset.c", "mcxt.c", "generation.c", "slab.c", "bump.c", "sublet.c"],
-}
-VARIANT_HEADERS = {
-    "spatial": ["memutils_memorychunk.h"],
-    "sublet": ["memutils_memorychunk.h", "memutils_sublet.h"],
+    "sublet": ["aset.c", "mcxt.c", "generation.c", "slab.c", "bump.c"],
 }
 VARIANT_PATCHES = {
     "spatial": ["0001-allocset-capstone-size-classes", "0002-memorychunk-capstone-alignment"],
@@ -134,8 +130,8 @@ for mode in ("spatial", "sublet"):
     try:
         for name in VARIANT_SOURCES[mode]:
             put(root / name, (tree / "src/backend/utils/mmgr" / name).read_bytes())
-        for name in VARIANT_HEADERS[mode]:
-            put(root / "include/utils" / name, (tree / "src/include/utils" / name).read_bytes())
+        put(root / "include/utils/memutils_memorychunk.h",
+            (tree / "src/include/utils/memutils_memorychunk.h").read_bytes())
     finally:
         shutil.rmtree(tree)
     text = config.read_text()

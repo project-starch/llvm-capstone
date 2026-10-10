@@ -37,7 +37,8 @@
   "nested": true,
   "nested_why": "The object comes from PostgreSQL's own memory manager -- a chunk aset.c or slab.c carved out of a block it took from malloc -- so the defect is nested by the allocator that served it.",
   "fault_sites": [
-    "SubletRelease"
+    "SubletRelease",
+    "GetMemoryChunkMethodID"
   ],
-  "fault_sites_why": "The stale access is the second pfree, so there is no read probe. pfree hands the pointer to SubletRelease (patch 0003) before the manager sees it, and its CREVOKE of a child that is already revoked faults there. Declared 2026-10-11, before the first run of patch 0003; the lifetime adapter it replaces faulted in GetMemoryChunkMethodID instead, which read the chunk header first."
+  "fault_sites_why": "The stale access is the second pfree, so there is no read probe. pfree hands the pointer to SubletRelease (patch 0003), whose first act is to read the chunk header through it, and the pointer was revoked by the first pfree; the read is GetMemoryChunkMethodID's, inlined into SubletRelease or not. Declared 2026-10-11 for the header-parent design, before its first run; the table design declared SubletRelease alone (c41fcbef), and the lifetime adapter faulted in GetMemoryChunkMethodID."
 }

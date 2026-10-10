@@ -8,67 +8,53 @@ Depends-On: postgresql-17.0-0001-allocset-capstone-size-classes.patch
 Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
 
 Every chunk a memory context hands out is a child lifetime of its block,
-bounded to the request; pfree and repalloc revoke it, so every copy of the
-caller's pointer dies with it. The 17.0 and 17.5 manager sources are
-identical, so the same patch serves the replay and the server.
+bounded to its header and the request; pfree and repalloc revoke it, so
+every copy of the caller's pointer dies with it. The 17.0 and 17.5
+manager sources are identical, so the same patch serves the replay and
+the server.
 
 # Two instructions do the work. CDERIVE makes a child capability of a
 # non-linear parent, bounded to a sub-range and carrying MANAGE over its own
 # children; CREVOKE(parent, child) ends a direct child and everything below
 # it, and faults when the child is not a live direct child.
 #
-# The protection sits at the dispatch, not inside the context types. mcxt.c
-# issues a bounded child on the way out of every allocation entry and
-# revokes it on the way back in (pfree, repalloc), then hands the context
-# method the allocator's own pointer at the same address. The four context
-# types keep working on pointers that span their whole malloc'd object,
-# exactly as upstream: headers, free lists and block arithmetic unchanged.
+# Every block carries two lifetimes in its header: life, derived from the
+# malloc'd object, and the generation below it. Where a manager returns a
+# chunk, MemoryChunkIssue derives the caller's pointer from the generation,
+# covering the chunk header and the request, and stores the generation in
+# the header. So pfree needs nothing but the pointer: it reads the parent
+# from the header, revokes the chunk, and hands the context method a pointer
+# at the same address derived from the parent. repalloc does the same and
+# issues the result again when the manager kept the chunk in place.
 #
-# pfree has only the pointer, and a bounded pointer cannot reach the chunk
-# header in front of it. So sublet.c keeps the blocks in a table sorted by
-# address. Each block has a lifetime derived from its malloc'd object, and a
-# generation below that from which the chunks are derived. The context types
-# only report their blocks:
+# Freeing a block revokes the system allocator's lifetime of it, and every
+# chunk lies below. A reset that keeps a block (AllocSet, Generation, Bump
+# keepers) revokes its generation and derives a new one. Bump chunks have no
+# header and no pfree; bump derives them itself, and gives a zero-byte
+# request one MAXALIGN unit, because CDERIVE takes no empty child.
 #
-#   SubletBlockAdd     a new block (keeper at create, new and large blocks)
-#   SubletBlockForget  before the block's free(); freeing the malloc'd
-#                      object revokes the system allocator's lifetime of it,
-#                      and every chunk lies below that
-#   SubletBlockRenew   a reset that keeps the block: the generation is
-#                      revoked and a new one derived
-#
-# A recycled AllocSet passes through MemoryContextResetOnly first, so its
-# keeper is renewed there. alignedalloc.c needs no change: its redirect
-# chunks go through the same dispatch. Bump has no pfree upstream, and
-# keeps none.
-diff --git a/src/backend/utils/mmgr/Makefile b/src/backend/utils/mmgr/Makefile
---- a/src/backend/utils/mmgr/Makefile
-+++ b/src/backend/utils/mmgr/Makefile
-@@ -22,6 +22,7 @@ OBJS = \
- 	mcxt.o \
- 	memdebug.o \
- 	portalmem.o \
--	slab.o
-+	slab.o \
-+	sublet.o
- 
- include $(top_srcdir)/src/backend/common.mk
+# The caller's pointer can read the header in front of its chunk, as it can
+# without the patch, and so can load the generation: block-wide bounds with
+# MANAGE. A stale pointer cannot, since it is revoked; a live one handed to
+# code that loads the header deliberately gets the block. Overwriting the
+# stored parent clears its tag and the next pfree faults. The chunk header
+# grows from 16 to 32 bytes, and every block header by two capabilities.
 diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
 --- a/src/backend/utils/mmgr/aset.c
 +++ b/src/backend/utils/mmgr/aset.c
-@@ -51,6 +51,7 @@
- #include "utils/memutils.h"
- #include "utils/memutils_internal.h"
- #include "utils/memutils_memorychunk.h"
-+#include "utils/memutils_sublet.h"
+@@ -187,6 +187,7 @@ typedef struct AllocBlockData
+ 	AllocBlock	next;			/* next block in aset's blocks list, if any */
+ 	char	   *freeptr;		/* start of free space in this block */
+ 	char	   *endptr;			/* end of space in this block */
++	SubletBlock sublet;			/* this block's chunk lifetimes */
+ }			AllocBlockData;
  
- /*--------------------
-  * Chunk freelist k holds chunks of size 1 << (k + ALLOC_MINBITS),
+ /*
 @@ -467,6 +468,7 @@ AllocSetContextCreateInternal(MemoryContext parent,
  	block->endptr = ((char *) set) + firstBlockSize;
  	block->prev = NULL;
  	block->next = NULL;
-+	SubletBlockAdd(set, block, block->endptr);
++	SubletBlockInit(&block->sublet, set, block, block->endptr - (char *) block);
  
  	/* Mark unallocated space NOACCESS; leave the block header alone. */
  	VALGRIND_MAKE_MEM_NOACCESS(block->freeptr, block->endptr - block->freeptr);
@@ -76,112 +62,80 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  			block->freeptr = datastart;
  			block->prev = NULL;
  			block->next = NULL;
-+			SubletBlockRenew(block);
++			SubletBlockRenew(&block->sublet, block->endptr - (char *) block);
  		}
  		else
  		{
-@@ -587,6 +590,7 @@ AllocSetReset(MemoryContext context)
- #ifdef CLOBBER_FREED_MEMORY
- 			wipe_mem(block, block->freeptr - ((char *) block));
- #endif
-+			SubletBlockForget(block);
- 			free(block);
- 		}
- 		block = next;
-@@ -651,6 +655,7 @@ AllocSetDelete(MemoryContext context)
- 				freelist->num_free--;
- 
- 				/* All that remains is to free the header/initial block */
-+				SubletBlockForget(KeeperBlock(oldset));
- 				free(oldset);
- 			}
- 			Assert(freelist->num_free == 0);
-@@ -677,7 +682,10 @@ AllocSetDelete(MemoryContext context)
- #endif
- 
- 		if (!IsKeeperBlock(set, block))
-+		{
-+			SubletBlockForget(block);
- 			free(block);
-+		}
- 
- 		block = next;
- 	}
-@@ -685,6 +693,7 @@ AllocSetDelete(MemoryContext context)
- 	Assert(context->mem_allocated == keepersize);
- 
- 	/* Finally, free the context header, including the keeper block */
-+	SubletBlockForget(KeeperBlock(set));
- 	free(set);
- }
- 
-@@ -722,6 +731,7 @@ AllocSetAllocLarge(MemoryContext context, Size size, int flags)
+@@ -722,6 +725,7 @@ AllocSetAllocLarge(MemoryContext context, Size size, int flags)
  
  	block->aset = set;
  	block->freeptr = block->endptr = ((char *) block) + blksize;
-+	SubletBlockAdd(block, block, block->endptr);
++	SubletBlockInit(&block->sublet, block, block, blksize);
  
  	chunk = (MemoryChunk *) (((char *) block) + ALLOC_BLOCKHDRSZ);
  
-@@ -929,6 +939,7 @@ AllocSetAllocFromNewBlock(MemoryContext context, Size size, int flags,
+@@ -765,7 +769,7 @@ AllocSetAllocLarge(MemoryContext context, Size size, int flags)
+ 	/* Disallow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+ 
+-	return MemoryChunkGetPointer(chunk);
++	return MemoryChunkIssue(chunk, block->sublet.generation, size);
+ }
+ 
+ /*
+@@ -807,7 +811,7 @@ AllocSetAllocChunkFromBlock(MemoryContext context, AllocBlock block,
+ 	/* Disallow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+ 
+-	return MemoryChunkGetPointer(chunk);
++	return MemoryChunkIssue(chunk, block->sublet.generation, size);
+ }
+ 
+ /*
+@@ -929,6 +933,7 @@ AllocSetAllocFromNewBlock(MemoryContext context, Size size, int flags,
  	block->aset = set;
  	block->freeptr = ((char *) block) + ALLOC_BLOCKHDRSZ;
  	block->endptr = ((char *) block) + blksize;
-+	SubletBlockAdd(block, block, block->endptr);
++	SubletBlockInit(&block->sublet, block, block, blksize);
  
  	/* Mark unallocated space NOACCESS. */
  	VALGRIND_MAKE_MEM_NOACCESS(block->freeptr,
-@@ -1106,6 +1117,7 @@ AllocSetFree(void *pointer)
- #ifdef CLOBBER_FREED_MEMORY
- 		wipe_mem(block, block->freeptr - ((char *) block));
- #endif
-+		SubletBlockForget(block);
- 		free(block);
+@@ -1033,7 +1038,9 @@ AllocSetAlloc(MemoryContext context, Size size, int flags)
+ 		/* Disallow access to the chunk header. */
+ 		VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+ 
+-		return MemoryChunkGetPointer(chunk);
++		return MemoryChunkIssue(chunk,
++								((AllocBlock) MemoryChunkGetBlock(chunk))->sublet.generation,
++								size);
  	}
- 	else
-@@ -1225,13 +1237,21 @@ AllocSetRealloc(void *pointer, Size size, int flags)
- 		blksize = chksize + ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
- 		oldblksize = block->endptr - ((char *) block);
  
--		block = (AllocBlock) realloc(block, blksize);
--		if (block == NULL)
-+		SubletBlockForget(block);
- 		{
--			/* Disallow access to the chunk header. */
--			VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
--			return MemoryContextAllocationFailure(&set->header, size, flags);
-+			AllocBlock	oldblock = block;
-+
-+			block = (AllocBlock) realloc(block, blksize);
-+			if (block == NULL)
-+			{
-+				/* The old block is still the context's. */
-+				SubletBlockAdd(oldblock, oldblock, ((char *) oldblock) + oldblksize);
-+				/* Disallow access to the chunk header. */
-+				VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
-+				return MemoryContextAllocationFailure(&set->header, size, flags);
-+			}
- 		}
-+		SubletBlockAdd(block, block, ((char *) block) + blksize);
- 
- 		/* updated separately, not to underflow when (oldblksize > blksize) */
- 		set->header.mem_allocated -= oldblksize;
+ 	/*
+@@ -1242,6 +1249,8 @@ AllocSetRealloc(void *pointer, Size size, int flags)
+ 		/* Update pointers since block has likely been moved */
+ 		chunk = (MemoryChunk *) (((char *) block) + ALLOC_BLOCKHDRSZ);
+ 		pointer = MemoryChunkGetPointer(chunk);
++		SubletBlockInit(&block->sublet, block, block, blksize);
++		chunk->sublet_parent = block->sublet.generation;
+ 		if (block->prev)
+ 			block->prev->next = block;
+ 		else
 diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
 --- a/src/backend/utils/mmgr/bump.c
 +++ b/src/backend/utils/mmgr/bump.c
-@@ -44,6 +44,7 @@
- #include "utils/memutils.h"
- #include "utils/memutils_memorychunk.h"
- #include "utils/memutils_internal.h"
-+#include "utils/memutils_sublet.h"
+@@ -91,6 +91,7 @@ struct BumpBlock
+ #endif
+ 	char	   *freeptr;		/* start of free space in this block */
+ 	char	   *endptr;			/* end of space in this block */
++	SubletBlock sublet;			/* this block's chunk lifetimes */
+ };
  
- #define Bump_BLOCKHDRSZ	MAXALIGN(sizeof(BumpBlock))
- 
+ /*
 @@ -196,6 +197,7 @@ BumpContextCreate(MemoryContext parent, const char *name, Size minContextSize,
  	/* determine the block size and initialize it */
  	firstBlockSize = allocSize - MAXALIGN(sizeof(BumpContext));
  	BumpBlockInit(set, block, firstBlockSize);
-+	SubletBlockAdd(set, block, block->endptr);
++	SubletBlockInit(&block->sublet, set, block, firstBlockSize);
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
@@ -191,59 +145,80 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  		if (IsKeeperBlock(set, block))
 +		{
  			BumpBlockMarkEmpty(block);
-+			SubletBlockRenew(block);
++			SubletBlockRenew(&block->sublet, block->endptr - (char *) block);
 +		}
  		else
  			BumpBlockFree(set, block);
  	}
-@@ -280,6 +285,7 @@ BumpDelete(MemoryContext context)
- 	/* Reset to release all releasable BumpBlocks */
- 	BumpReset(context);
- 	/* And free the context header and keeper block */
-+	SubletBlockForget(KeeperBlock((BumpContext *) context));
- 	free(context);
- }
+@@ -308,7 +313,7 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
+ 	/* ensure there's always space for the sentinel byte */
+ 	chunk_size = MAXALIGN(size + 1);
+ #else
+-	chunk_size = MAXALIGN(size);
++	chunk_size = MAXALIGN(Max(size, 1));	/* CDERIVE takes no empty child */
+ #endif
  
-@@ -322,6 +328,7 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
+ 	required_size = chunk_size + Bump_CHUNKHDRSZ;
+@@ -322,6 +327,7 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
  
  	/* the block is completely full */
  	block->freeptr = block->endptr = ((char *) block) + blksize;
-+	SubletBlockAdd(block, block, block->endptr);
++	SubletBlockInit(&block->sublet, block, block, blksize);
  
  #ifdef MEMORY_CONTEXT_CHECKING
  	/* block with a single (used) chunk */
+@@ -359,7 +365,8 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
+ 
+ 	return MemoryChunkGetPointer(chunk);
+ #else
+-	return (void *) (((char *) block) + Bump_BLOCKHDRSZ);
++	return SubletDerive(block->sublet.generation,
++						((char *) block) + Bump_BLOCKHDRSZ, Max(size, 1));
+ #endif
+ }
+ 
+@@ -415,7 +422,7 @@ BumpAllocChunkFromBlock(MemoryContext context, BumpBlock *block, Size size,
+ 
+ 	return MemoryChunkGetPointer(chunk);
+ #else
+-	return ptr;
++	return SubletDerive(block->sublet.generation, ptr, Max(size, 1));
+ #endif							/* MEMORY_CONTEXT_CHECKING */
+ }
+ 
 @@ -459,6 +466,7 @@ BumpAllocFromNewBlock(MemoryContext context, Size size, int flags,
  
  	/* initialize the new block */
  	BumpBlockInit(set, block, blksize);
-+	SubletBlockAdd(block, block, block->endptr);
++	SubletBlockInit(&block->sublet, block, block, blksize);
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
-@@ -606,6 +614,7 @@ BumpBlockFree(BumpContext *set, BumpBlock *block)
- 	wipe_mem(block, ((char *) block->endptr - (char *) block));
+@@ -501,7 +509,7 @@ BumpAlloc(MemoryContext context, Size size, int flags)
+ 	/* ensure there's always space for the sentinel byte */
+ 	chunk_size = MAXALIGN(size + 1);
+ #else
+-	chunk_size = MAXALIGN(size);
++	chunk_size = MAXALIGN(Max(size, 1));	/* CDERIVE takes no empty child */
  #endif
  
-+	SubletBlockForget(block);
- 	free(block);
- }
- 
+ 	/*
 diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/generation.c
 --- a/src/backend/utils/mmgr/generation.c
 +++ b/src/backend/utils/mmgr/generation.c
-@@ -41,6 +41,7 @@
- #include "utils/memutils.h"
- #include "utils/memutils_internal.h"
- #include "utils/memutils_memorychunk.h"
-+#include "utils/memutils_sublet.h"
+@@ -93,6 +93,7 @@ struct GenerationBlock
+ 	int			nfree;			/* number of free chunks */
+ 	char	   *freeptr;		/* start of free space in this block */
+ 	char	   *endptr;			/* end of space in this block */
++	SubletBlock sublet;			/* this block's chunk lifetimes */
+ };
  
- 
- #define Generation_BLOCKHDRSZ	MAXALIGN(sizeof(GenerationBlock))
+ /*
 @@ -228,6 +229,7 @@ GenerationContextCreate(MemoryContext parent,
  	/* determine the block size and initialize it */
  	firstBlockSize = allocSize - MAXALIGN(sizeof(GenerationContext));
  	GenerationBlockInit(set, block, firstBlockSize);
-+	SubletBlockAdd(set, block, block->endptr);
++	SubletBlockInit(&block->sublet, set, block, firstBlockSize);
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
@@ -253,74 +228,105 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  		if (IsKeeperBlock(set, block))
 +		{
  			GenerationBlockMarkEmpty(block);
-+			SubletBlockRenew(block);
++			SubletBlockRenew(&block->sublet, block->blksize);
 +		}
  		else
  			GenerationBlockFree(set, block);
  	}
-@@ -330,6 +335,7 @@ GenerationDelete(MemoryContext context)
- 	/* Reset to release all releasable GenerationBlocks */
- 	GenerationReset(context);
- 	/* And free the context header and keeper block */
-+	SubletBlockForget(KeeperBlock((GenerationContext *) context));
- 	free(context);
- }
- 
-@@ -375,6 +381,7 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+@@ -375,6 +380,7 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
  
  	/* the block is completely full */
  	block->freeptr = block->endptr = ((char *) block) + blksize;
-+	SubletBlockAdd(block, block, block->endptr);
++	SubletBlockInit(&block->sublet, block, block, blksize);
  
  	chunk = (MemoryChunk *) (((char *) block) + Generation_BLOCKHDRSZ);
  
-@@ -491,6 +498,7 @@ GenerationAllocFromNewBlock(MemoryContext context, Size size, int flags,
+@@ -402,7 +408,7 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+ 	/* Disallow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(chunk, Generation_CHUNKHDRSZ);
+ 
+-	return MemoryChunkGetPointer(chunk);
++	return MemoryChunkIssue(chunk, block->sublet.generation, size);
+ }
+ 
+ /*
+@@ -447,7 +453,7 @@ GenerationAllocChunkFromBlock(MemoryContext context, GenerationBlock *block,
+ 	/* Disallow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(chunk, Generation_CHUNKHDRSZ);
+ 
+-	return MemoryChunkGetPointer(chunk);
++	return MemoryChunkIssue(chunk, block->sublet.generation, size);
+ }
+ 
+ /*
+@@ -491,6 +497,7 @@ GenerationAllocFromNewBlock(MemoryContext context, Size size, int flags,
  
  	/* initialize the new block */
  	GenerationBlockInit(set, block, blksize);
-+	SubletBlockAdd(block, block, block->endptr);
++	SubletBlockInit(&block->sublet, block, block, blksize);
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
-@@ -677,6 +685,7 @@ GenerationBlockFree(GenerationContext *set, GenerationBlock *block)
- 	wipe_mem(block, block->blksize);
- #endif
- 
-+	SubletBlockForget(block);
- 	free(block);
- }
- 
 diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
 --- a/src/backend/utils/mmgr/mcxt.c
 +++ b/src/backend/utils/mmgr/mcxt.c
-@@ -26,6 +26,7 @@
- #include "utils/memdebug.h"
- #include "utils/memutils.h"
- #include "utils/memutils_internal.h"
-+#include "utils/memutils_sublet.h"
- #include "utils/memutils_memorychunk.h"
+@@ -232,6 +232,55 @@ GetMemoryChunkHeader(const void *pointer)
+ 	return header;
+ }
  
- 
-@@ -199,6 +200,9 @@ GetMemoryChunkMethodID(const void *pointer)
- 	 */
- 	Assert(pointer == (const void *) MAXALIGN(pointer));
- 
-+	/* Through the allocator's pointer: a caller's ends at its chunk. */
-+	pointer = SubletInside(pointer);
++/*
++ * Sublet: the managers hand out every chunk as a child of its block's
++ * generation, covering the chunk header, and keep that parent in the header
++ * (MemoryChunkIssue).  An aligned redirect chunk is a view of an ordinary one
++ * and is passed through.
++ */
 +
- 	/* Allow access to the uint64 header */
- 	VALGRIND_MAKE_MEM_DEFINED((char *) pointer - sizeof(uint64), sizeof(uint64));
- 
-@@ -221,6 +225,8 @@ GetMemoryChunkHeader(const void *pointer)
- {
- 	uint64		header;
- 
-+	pointer = SubletInside(pointer);
++/* The allocator's pointer at pointer's address, derived from the parent. */
++static void *
++SubletInside(void *pointer)
++{
++	void	   *parent;
 +
- 	/* Allow access to the uint64 header */
- 	VALGRIND_MAKE_MEM_DEFINED((char *) pointer - sizeof(uint64), sizeof(uint64));
- 
-@@ -706,6 +712,7 @@ MemoryContextAllowInCriticalSection(MemoryContext context, bool allow)
++	if (GetMemoryChunkMethodID(pointer) == MCTX_ALIGNED_REDIRECT_ID)
++		return pointer;
++	parent = PointerGetMemoryChunk(pointer)->sublet_parent;
++	return (char *) parent +
++		((uintptr_t) pointer - __builtin_capstone_cap_get_base(parent));
++}
++
++/* End the caller's chunk (CREVOKE); faults on a pointer that is not live. */
++static pg_noinline void *
++SubletRelease(void *pointer)
++{
++	MemoryChunk *chunk = PointerGetMemoryChunk(pointer);
++	void	   *inside;
++
++	if (GetMemoryChunkMethodID(pointer) == MCTX_ALIGNED_REDIRECT_ID)
++		return pointer;
++	inside = SubletInside(pointer);
++	capstone_cap_revoke_child(chunk->sublet_parent, chunk);
++	return inside;
++}
++
++/* A chunk realloc kept in place comes back as the allocator's pointer. */
++static void *
++SubletReissue(void *pointer, Size size)
++{
++	MemoryChunk *chunk;
++
++	if (pointer == NULL ||
++		GetMemoryChunkMethodID(pointer) == MCTX_ALIGNED_REDIRECT_ID)
++		return pointer;
++	chunk = PointerGetMemoryChunk(pointer);
++	if (__builtin_capstone_cap_get_base(pointer) == (uintptr_t) chunk)
++		return pointer;			/* moved: the manager issued the new chunk */
++	return MemoryChunkIssue(chunk, chunk->sublet_parent, size);
++}
++
+ /*
+  * MemoryContextTraverseNext
+  *		Helper function to traverse all descendants of a memory context
+@@ -706,6 +755,7 @@ MemoryContextAllowInCriticalSection(MemoryContext context, bool allow)
  MemoryContext
  GetMemoryChunkContext(void *pointer)
  {
@@ -328,7 +334,7 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  	return MCXT_METHOD(pointer, get_chunk_context) (pointer);
  }
  
-@@ -720,6 +727,7 @@ GetMemoryChunkContext(void *pointer)
+@@ -720,6 +770,7 @@ GetMemoryChunkContext(void *pointer)
  Size
  GetMemoryChunkSpace(void *pointer)
  {
@@ -336,364 +342,134 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  	return MCXT_METHOD(pointer, get_chunk_space) (pointer);
  }
  
-@@ -1196,7 +1204,7 @@ MemoryContextAlloc(MemoryContext context, Size size)
- 	 * this call, consider making it the responsibility of the 'alloc'
- 	 * function instead.
- 	 */
--	ret = context->methods->alloc(context, size, 0);
-+	ret = SubletIssue(context->methods->alloc(context, size, 0), size);
- 
- 	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
- 
-@@ -1220,7 +1228,7 @@ MemoryContextAllocZero(MemoryContext context, Size size)
- 
- 	context->isReset = false;
- 
--	ret = context->methods->alloc(context, size, 0);
-+	ret = SubletIssue(context->methods->alloc(context, size, 0), size);
- 
- 	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
- 
-@@ -1247,7 +1255,7 @@ MemoryContextAllocExtended(MemoryContext context, Size size, int flags)
- 
- 	context->isReset = false;
- 
--	ret = context->methods->alloc(context, size, flags);
-+	ret = SubletIssue(context->methods->alloc(context, size, flags), size);
- 	if (unlikely(ret == NULL))
- 		return NULL;
- 
-@@ -1334,7 +1342,7 @@ palloc(Size size)
- 	 * this call, consider making it the responsibility of the 'alloc'
- 	 * function instead.
- 	 */
--	ret = context->methods->alloc(context, size, 0);
-+	ret = SubletIssue(context->methods->alloc(context, size, 0), size);
- 	/* We expect OOM to be handled by the alloc function */
- 	Assert(ret != NULL);
- 	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
-@@ -1354,7 +1362,7 @@ palloc0(Size size)
- 
- 	context->isReset = false;
- 
--	ret = context->methods->alloc(context, size, 0);
-+	ret = SubletIssue(context->methods->alloc(context, size, 0), size);
- 
- 	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
- 
-@@ -1375,7 +1383,7 @@ palloc_extended(Size size, int flags)
- 
- 	context->isReset = false;
- 
--	ret = context->methods->alloc(context, size, flags);
-+	ret = SubletIssue(context->methods->alloc(context, size, flags), size);
- 	if (unlikely(ret == NULL))
- 	{
- 		return NULL;
-@@ -1524,6 +1532,8 @@ pfree(void *pointer)
+@@ -1524,6 +1575,7 @@ pfree(void *pointer)
  	MemoryContext context = GetMemoryChunkContext(pointer);
  #endif
  
-+	/* End the caller's lifetime of the chunk; faults on a stale pointer. */
 +	pointer = SubletRelease(pointer);
  	MCXT_METHOD(pointer, free_p) (pointer);
  
  #ifdef USE_VALGRIND
-@@ -1562,7 +1572,8 @@ repalloc(void *pointer, Size size)
+@@ -1562,7 +1614,8 @@ repalloc(void *pointer, Size size)
  	 * this call, consider making it the responsibility of the 'realloc'
  	 * function instead.
  	 */
 -	ret = MCXT_METHOD(pointer, realloc) (pointer, size, 0);
 +	pointer = SubletRelease(pointer);
-+	ret = SubletIssue(MCXT_METHOD(pointer, realloc) (pointer, size, 0), size);
++	ret = SubletReissue(MCXT_METHOD(pointer, realloc) (pointer, size, 0), size);
  
  #ifdef USE_VALGRIND
  	if (method != MCTX_ALIGNED_REDIRECT_ID)
-@@ -1600,7 +1611,12 @@ repalloc_extended(void *pointer, Size size, int flags)
+@@ -1600,7 +1653,9 @@ repalloc_extended(void *pointer, Size size, int flags)
  	 * this call, consider making it the responsibility of the 'realloc'
  	 * function instead.
  	 */
 -	ret = MCXT_METHOD(pointer, realloc) (pointer, size, flags);
-+	/*
-+	 * Under Sublet the old chunk is released first, so a NO_OOM failure
-+	 * returns NULL with the old pointer already dead.
-+	 */
++	/* A NO_OOM failure returns NULL with the old chunk already ended. */
 +	pointer = SubletRelease(pointer);
-+	ret = SubletIssue(MCXT_METHOD(pointer, realloc) (pointer, size, flags), size);
++	ret = SubletReissue(MCXT_METHOD(pointer, realloc) (pointer, size, flags), size);
  	if (unlikely(ret == NULL))
  		return NULL;
  
-@@ -1655,7 +1671,7 @@ MemoryContextAllocHuge(MemoryContext context, Size size)
- 	 * this call, consider making it the responsibility of the 'alloc'
- 	 * function instead.
- 	 */
--	ret = context->methods->alloc(context, size, MCXT_ALLOC_HUGE);
-+	ret = SubletIssue(context->methods->alloc(context, size, MCXT_ALLOC_HUGE), size);
- 
- 	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
- 
-diff --git a/src/backend/utils/mmgr/meson.build b/src/backend/utils/mmgr/meson.build
---- a/src/backend/utils/mmgr/meson.build
-+++ b/src/backend/utils/mmgr/meson.build
-@@ -11,4 +11,5 @@ backend_sources += files(
-   'memdebug.c',
-   'portalmem.c',
-   'slab.c',
-+  'sublet.c',
- )
 diff --git a/src/backend/utils/mmgr/slab.c b/src/backend/utils/mmgr/slab.c
 --- a/src/backend/utils/mmgr/slab.c
 +++ b/src/backend/utils/mmgr/slab.c
-@@ -73,6 +73,7 @@
- #include "utils/memutils.h"
- #include "utils/memutils_internal.h"
- #include "utils/memutils_memorychunk.h"
-+#include "utils/memutils_sublet.h"
+@@ -151,6 +151,7 @@ typedef struct SlabBlock
+ 	MemoryChunk *freehead;		/* pointer to the first free chunk */
+ 	MemoryChunk *unused;		/* pointer to the next unused chunk */
+ 	dlist_node	node;			/* doubly-linked list for blocklist[] */
++	SubletBlock sublet;			/* this block's chunk lifetimes */
+ } SlabBlock;
  
- #define Slab_BLOCKHDRSZ	MAXALIGN(sizeof(SlabBlock))
  
-@@ -451,6 +452,7 @@ SlabReset(MemoryContext context)
- #ifdef CLOBBER_FREED_MEMORY
- 		wipe_mem(block, slab->blockSize);
- #endif
-+		SubletBlockForget(block);
- 		free(block);
- 		context->mem_allocated -= slab->blockSize;
- 	}
-@@ -467,6 +469,7 @@ SlabReset(MemoryContext context)
- #ifdef CLOBBER_FREED_MEMORY
- 			wipe_mem(block, slab->blockSize);
- #endif
-+			SubletBlockForget(block);
- 			free(block);
- 			context->mem_allocated -= slab->blockSize;
- 		}
-@@ -569,6 +572,7 @@ SlabAllocFromNewBlock(MemoryContext context, Size size, int flags)
+@@ -531,7 +532,7 @@ SlabAllocSetupNewChunk(MemoryContext context, SlabBlock *block,
+ 	/* Disallow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(chunk, Slab_CHUNKHDRSZ);
+ 
+-	return MemoryChunkGetPointer(chunk);
++	return MemoryChunkIssue(chunk, block->sublet.generation, size);
+ }
+ 
+ pg_noinline
+@@ -569,6 +570,7 @@ SlabAllocFromNewBlock(MemoryContext context, Size size, int flags)
  
  		block->slab = slab;
  		context->mem_allocated += slab->blockSize;
-+		SubletBlockAdd(block, block, ((char *) block) + slab->blockSize);
++		SubletBlockInit(&block->sublet, block, block, slab->blockSize);
  
  		/* use the first chunk in the new block */
  		chunk = SlabBlockGetChunk(slab, block, 0);
-@@ -795,6 +799,7 @@ SlabFree(void *pointer)
- #ifdef CLOBBER_FREED_MEMORY
- 			wipe_mem(block, slab->blockSize);
- #endif
-+			SubletBlockForget(block);
- 			free(block);
- 			slab->header.mem_allocated -= slab->blockSize;
- 		}
-diff --git a/src/backend/utils/mmgr/sublet.c b/src/backend/utils/mmgr/sublet.c
-new file mode 100644
---- /dev/null
-+++ b/src/backend/utils/mmgr/sublet.c
-@@ -0,0 +1,169 @@
-+/*-------------------------------------------------------------------------
-+ *
-+ * sublet.c
-+ *	  Sublet lifetimes for memory-context chunks (CDERIVE / CREVOKE).
-+ *
-+ * A caller's pointer is bounded to its chunk, so the allocator cannot reach
-+ * the chunk's header or block through it. The blocks are kept here by
-+ * address: a sorted table, searched on every pfree and repalloc. Each block
-+ * has two derived lifetimes below its malloc'd object: life, which carries
-+ * MANAGE, and the current generation below it, from which every chunk is
-+ * derived.
-+ *
-+ * src/backend/utils/mmgr/sublet.c
-+ *
-+ *-------------------------------------------------------------------------
-+ */
-+#include "postgres.h"
-+
+diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memutils_memorychunk.h
+--- a/src/include/utils/memutils_memorychunk.h
++++ b/src/include/utils/memutils_memorychunk.h
+@@ -89,6 +89,8 @@
+ 
+ #include "utils/memutils_internal.h"
+ 
 +#include <capstone/capability.h>
 +
-+#include "utils/memutils_sublet.h"
-+
+  /*
+   * The maximum allowed value that MemoryContexts can store in the value
+   * field.  Must be 1 less than a power of 2.
+@@ -139,6 +141,12 @@ typedef struct MemoryChunk
+ 	 * one word: MemoryChunkSetHdrMask and its readers are written against
+ 	 * a single sixty-four-bit field.
+ 	 */
++	/*
++	 * Sublet: the block generation this chunk is a child of (CDERIVE).  The
++	 * caller's capability covers this header, so pfree can find the parent
++	 * and revoke the chunk (CREVOKE) with nothing but the pointer.
++	 */
++	void	   *sublet_parent;
+ 	uint64		capstone_pad;
+ 	/* bitfield for storing details about the chunk */
+ 	uint64		hdrmask;		/* must be last */
+@@ -263,4 +271,48 @@ MemoryChunkGetBlock(MemoryChunk *chunk)
+ #undef HdrMaskBlockOffset
+ #undef HdrMaskCheckMagic
+ 
++/*
++ * Sublet lifetimes.  Every block has a lifetime derived from its malloc'd
++ * object and a generation below that; the chunks are children of the
++ * generation.  Freeing the block revokes all of them; a reset that keeps the
++ * block revokes the generation and derives a new one.
++ */
 +typedef struct SubletBlock
 +{
-+	uintptr_t	base;			/* the block's first byte */
-+	uintptr_t	end;			/* one past its last */
-+	char	   *inside;			/* the allocator's pointer at base */
-+	uintptr_t	alloc;			/* where its malloc'd object starts */
-+	void	   *life;			/* the block's lifetime, with MANAGE */
-+	void	   *generation;		/* the chunks' parent */
++	void	   *life;
++	void	   *generation;
 +} SubletBlock;
 +
-+static SubletBlock *blocks;
-+static size_t nblocks;
-+static size_t maxblocks;
-+
-+static uintptr_t
-+cap_base(const void *p)
++/* The block [start, start + size) inside the malloc'd object alloc. */
++static inline void
++SubletBlockInit(SubletBlock *b, void *alloc, void *start, Size size)
 +{
-+	capstone_cap_slot slot;
-+
-+	capstone_cap_store(&slot, (void *) p);
-+	return capstone_cap_base(&slot);
++	b->life = capstone_cap_derive(alloc, (char *) start - (char *) alloc, size);
++	b->generation = capstone_cap_derive(b->life, 0, size);
 +}
 +
-+/* The first entry whose base lies above a. */
-+static size_t
-+upper(uintptr_t a)
++static inline void
++SubletBlockRenew(SubletBlock *b, Size size)
 +{
-+	size_t		lo = 0,
-+				hi = nblocks;
-+
-+	while (lo < hi)
-+	{
-+		size_t		mid = (lo + hi) / 2;
-+
-+		if (blocks[mid].base <= a)
-+			lo = mid + 1;
-+		else
-+			hi = mid;
-+	}
-+	return lo;
-+}
-+
-+static SubletBlock *
-+find(uintptr_t a)
-+{
-+	size_t		i = upper(a);
-+
-+	if (i == 0 || a >= blocks[i - 1].end)
-+		return NULL;
-+	return &blocks[i - 1];
-+}
-+
-+void
-+SubletBlockAdd(void *alloc, void *block, void *end)
-+{
-+	uintptr_t	base = (uintptr_t) block;
-+	size_t		i;
-+	SubletBlock *b;
-+
-+	if (nblocks == maxblocks)
-+	{
-+		size_t		n = maxblocks ? maxblocks * 2 : 64;
-+		SubletBlock *grown = realloc(blocks, n * sizeof(SubletBlock));
-+
-+		if (grown == NULL)
-+			elog(FATAL, "out of memory for the Sublet block table");
-+		blocks = grown;
-+		maxblocks = n;
-+	}
-+	i = upper(base);
-+	memmove(&blocks[i + 1], &blocks[i], (nblocks - i) * sizeof(SubletBlock));
-+	nblocks++;
-+	b = &blocks[i];
-+	b->base = base;
-+	b->end = (uintptr_t) end;
-+	b->inside = block;
-+	b->alloc = (uintptr_t) alloc;
-+	b->life = capstone_cap_derive(alloc, base - (uintptr_t) alloc, b->end - base);
-+	b->generation = capstone_cap_derive(b->life, 0, b->end - base);
-+}
-+
-+void
-+SubletBlockForget(void *block)
-+{
-+	SubletBlock *b = find((uintptr_t) block);
-+	size_t		i;
-+
-+	if (b == NULL || b->base != (uintptr_t) block)
-+		elog(PANIC, "Sublet block %p is not registered", block);
-+	i = b - blocks;
-+	memmove(&blocks[i], &blocks[i + 1], (nblocks - i - 1) * sizeof(SubletBlock));
-+	nblocks--;
-+}
-+
-+void
-+SubletBlockRenew(void *block)
-+{
-+	SubletBlock *b = find((uintptr_t) block);
-+
-+	if (b == NULL || b->base != (uintptr_t) block)
-+		elog(PANIC, "Sublet block %p is not registered", block);
 +	capstone_cap_revoke_child(b->life, b->generation);
-+	b->generation = capstone_cap_derive(b->life, 0, b->end - b->base);
++	b->generation = capstone_cap_derive(b->life, 0, size);
 +}
 +
-+/* A pointer spanning the whole malloc'd object is the allocator's own. */
-+static bool
-+is_inside(const void *p, const SubletBlock *b)
++/* The caller's pointer to [p, p + size), a child of parent. */
++static inline void *
++SubletDerive(void *parent, void *p, Size size)
 +{
-+	return cap_base(p) == b->alloc;
++	return capstone_cap_derive(parent, (uintptr_t) p -
++							   __builtin_capstone_cap_get_base(parent), size);
 +}
 +
-+void *
-+SubletIssue(void *p, Size size)
++/* The caller's pointer to chunk: its header and size bytes, a child of parent. */
++static inline void *
++MemoryChunkIssue(MemoryChunk *chunk, void *parent, Size size)
 +{
-+	SubletBlock *b;
-+
-+	if (p == NULL)
-+		return NULL;
-+	b = find((uintptr_t) p);
-+	if (b == NULL || !is_inside(p, b))
-+		return p;
-+	return capstone_cap_derive(b->generation, (uintptr_t) p - b->base,
-+							   size ? size : 1);
++	chunk->sublet_parent = parent;
++	return (char *) SubletDerive(parent, chunk, sizeof(MemoryChunk) + size) +
++		sizeof(MemoryChunk);
 +}
 +
-+void *
-+SubletRelease(void *p)
-+{
-+	SubletBlock *b = find((uintptr_t) p);
-+
-+	if (b == NULL || is_inside(p, b))
-+		return p;
-+	/* Faults on a pointer that is not a live chunk of this block. */
-+	capstone_cap_revoke_child(b->generation, p);
-+	return b->inside + ((uintptr_t) p - b->base);
-+}
-+
-+void *
-+SubletInside(const void *p)
-+{
-+	SubletBlock *b = find((uintptr_t) p);
-+
-+	if (b == NULL)
-+		return (void *) p;
-+	return b->inside + ((uintptr_t) p - b->base);
-+}
-diff --git a/src/include/utils/memutils_sublet.h b/src/include/utils/memutils_sublet.h
-new file mode 100644
---- /dev/null
-+++ b/src/include/utils/memutils_sublet.h
-@@ -0,0 +1,34 @@
-+/*-------------------------------------------------------------------------
-+ *
-+ * memutils_sublet.h
-+ *	  Sublet lifetimes for memory-context chunks (CDERIVE / CREVOKE).
-+ *
-+ * Every chunk handed to a caller is a child lifetime of its block, bounded
-+ * to the request; pfree revokes it, so every copy of the caller's pointer
-+ * dies. The context methods keep working on the allocator's own pointers,
-+ * which span the whole malloc'd object: mcxt.c issues on the way out and
-+ * revokes on the way back in, and the context types only report their
-+ * blocks. A block's lifetime ends with its malloc'd object; a block a reset
-+ * keeps gets a fresh generation of chunks instead.
-+ *
-+ * src/include/utils/memutils_sublet.h
-+ *
-+ *-------------------------------------------------------------------------
-+ */
-+#ifndef MEMUTILS_SUBLET_H
-+#define MEMUTILS_SUBLET_H
-+
-+/* The block [block, end) lies in the malloc'd object alloc. */
-+extern void SubletBlockAdd(void *alloc, void *block, void *end);
-+extern void SubletBlockForget(void *block);
-+/* A reset keeps the block: end every chunk handed out from it. */
-+extern void SubletBlockRenew(void *block);
-+
-+/* The caller's chunk of size bytes at the allocator's pointer p. */
-+extern void *SubletIssue(void *p, Size size);
-+/* End the caller's chunk; the allocator's pointer at the same address. */
-+extern void *SubletRelease(void *p);
-+/* The allocator's pointer at p's address, without ending anything. */
-+extern void *SubletInside(const void *p);
-+
-+#endif							/* MEMUTILS_SUBLET_H */
+ #endif							/* MEMUTILS_MEMORYCHUNK_H */
