@@ -898,17 +898,35 @@ static int mcapp_fixture(int n)
         }
         /* bring the header class to two pages with plain items of its own class, then free them:
            their slots are on the free list (ITEM_SLABBED) and do not block the header-page move */
+        /* plain fillers must land in hdr_cls (a mid-size class), so search for a value size that
+           does: a tiny value lands in the smallest class, not hdr_cls (first run, class 3 stayed
+           one page). Grow nbytes until item_alloc gives hdr_cls. */
+        int fv = (int)slabs_size(hdr_cls);
+        unsigned fv_cls = 0;
+        for (int tries = 0; tries < 64 && fv_cls != hdr_cls; tries++) {
+            item *pr = item_alloc("mcapp-hp", 8, 0, 0, fv);
+            if (!pr) { fv -= 16; continue; }
+            fv_cls = ITEM_clsid(pr);
+            item_remove(pr);
+            if (fv_cls < hdr_cls) fv += 16;
+            else if (fv_cls > hdr_cls) fv -= 16;
+        }
+        if (fv_cls != hdr_cls) {
+            printf("MCAPP-FIX %d no filler value lands in hdr_cls %u\n", n, hdr_cls);
+            return MCAPP_MARK(n, 0xE0018);
+        }
         item **fill = malloc(sizeof(item *) * (hdr_perslab + 1));
         if (!fill) return MCAPP_MARK(n, 0xE0018);
         unsigned made = 0;
         for (; made <= hdr_perslab; made++) {
             char key[32]; int nkey = snprintf(key, sizeof key, "mcapp-hf-%u", made);
-            item *it = item_alloc(key, (size_t)nkey, 0, 0, 8);
+            item *it = item_alloc(key, (size_t)nkey, 0, 0, fv);
             if (!it || ITEM_clsid(it) != hdr_cls) { if (it) item_remove(it); break; }
             fill[made] = it;
         }
         for (unsigned i = 0; i < made; i++) item_remove(fill[i]);
         free(fill);
+        printf("MCAPP-FIX %d filler value=%d class=%u\n", n, fv, fv_cls);
         printf("MCAPP-FIX %d hdr fillers=%u hdr pages=%d\n", n, made, slabs_page_count(hdr_cls));
         if (slabs_page_count(hdr_cls) < 2) {
             printf("MCAPP-FIX %d triggering condition not created (header class not two pages)\n", n);
