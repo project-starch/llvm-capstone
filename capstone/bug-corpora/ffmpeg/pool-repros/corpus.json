@@ -15,7 +15,9 @@
     "cheribsd-revocation",
     "native-detect",
     "native-fix-differential",
-    "backing"
+    "backing",
+    "virtual-malloc",
+    "virtual-nested-pools"
   ],
   "arm_keys": {
     "sublet-port": [
@@ -30,7 +32,9 @@
   "runners": [
     "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-native.sh",
     "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-sublet-port.sh",
-    "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-asan.sh"
+    "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-asan.sh",
+    "capstone/bug-corpora/ffmpeg/pool-repros/shared/build-cases.sh",
+    "capstone/bug-corpora/tools/run-virtual-cases.py"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "inventory": "capstone/docs/ref/ffmpeg-pool-consumer-defects.md",
@@ -46,5 +50,9 @@
     "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-09-poisoncap"
   ],
   "advisories": [],
-  "shape_table": true
+  "shape_table": true,
+  "arm_configurations": {
+    "virtual-malloc": "virtual-ffmpeg-pool-stock",
+    "virtual-nested-pools": "virtual-ffmpeg-pool-sublet"
+  }
 }

@@ -74,6 +74,12 @@
       "status": "measured",
       "verdict": "NOT CAUGHT",
       "measured": "2026-10-04"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, AVBufferPool and AVRefStructPool stock in a Capstone process (tools/arms.json virtual-ffmpeg-pool-stock): the stale access lands in an entry the pool kept, so the case completes with VERDICT DEFECT-REPRODUCED and this arm did not see it, or it faults in ff2_case_run"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, the pools with the buffer-pool port's patch 0003 (tools/arms.json virtual-ffmpeg-pool-sublet): every hand-out a child lifetime of its pool entry, revoked when it returns: as virtual-malloc"
     }
   },
   "status": "native pair run 2026-09-20 and passed; the Capstone, Sublet and PoisonCap arms likewise. The cheribsd-revocation arm is RETRACTED to a prediction as of 2026-10-06 -- it was never measured; see that arm. SUPERSEDED (noted 2026-10-08): the arm was afterwards RE-MEASURED (2026-10-06) with a revocation control that FIRED IN THE SAME BOOT -- NOT CAUGHT -- which meets the bar the retraction set. The arm is the record; this sentence is kept as history. ADVISORY on a SEPARATE and WEAKER gap, recorded rather than left for the next reader to find: the poisoncap arms cite the same pool-0-36/37/38 names and also have no committed bundle, because cases 36-38 entered the runner after the only pilot that recorded pool cases. That is weaker than the retracted claim -- `--case pool-2-36` IS a valid selector, so the run is possible and plausibly happened uncommitted, whereas the cheribsd arm had no code path at all. It is flagged, not retracted. Run 2026-09-29 under QEMU against the Sublet port of FFmpeg's own pools (sublet-port arm, fixtures 40/41): the defect faults with cause 24 and completes with DEFECT-REPRODUCED on upstream's pools; the fix completes on both; results/20260929-qemu-sublet-port run 2026-09-29 under QEMU against the Sublet port of FFmpeg's own pools (sublet-port arm, fixtures 44/45): the defect faults with cause 24 at case.c:33 x3 and completes with DEFECT-REPRODUCED on upstream's pools x3; the fix completes x3 on both; results/20260929-qemu-sublet-port. CheriBSD MEASURED 2026-10-06 with the revocation control FAULTING in the same boot: completes, not caught (results/20261006-cheribsd/). The arm retracted this morning now carries the measurement it had only claimed. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 completes, mode 2 SIGPROT.",
@@ -83,5 +89,9 @@
     "CHERI default (stock CheriBSD, revoker on) -- PREDICTED, NOT MEASURED"
   ],
   "nested": true,
-  "nested_why": "AVBufferPool recycles the object; the platform allocator saw only the pool's block -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED."
+  "nested_why": "AVBufferPool recycles the object; the platform allocator saw only the pool's block -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED.",
+  "fault_sites": [
+    "ff2_case_run"
+  ],
+  "fault_sites_why": "Declared 2026-10-11, before the first virtual run. The case has no labelled probe: its stale access is an inline dereference in its own body, ff2_case_run, on the lines the sublet-port arm's oracle names. A fault elsewhere in ff2_case_run is ruled out by the fixed run of the same image, which executes the same setup and must complete; the faulting line is checked against case.c's line table afterwards."
 }
