@@ -1,0 +1,319 @@
+Subject: [PATCH 6/6] Slab chunks and cache objects as Sublet child lifetimes (CDERIVE/CREVOKE)
+Upstream: memcached 1.6.45
+Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
+Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd
+Build-Variants: only with -DMC_CAPSTONE_SUBLET, on the virtual profile (musl mallocng), with
+  -I capstone/runtime/include (capability.h) and NDEBUG; every other build is unchanged
+Depends-On: memcached-1.6.45-0001-capability-alignment.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+memcached's slab allocator never frees a chunk: do_slabs_free files it on its class's free list
+and do_slabs_alloc hands it out again, and cache.c keeps freed objects on a list the same way. A
+stale item or buffer pointer therefore reaches whatever the chunk holds next. Two instructions,
+inserted where the allocators hand memory out and take it back, end that
+(docs/design/virtual-capstone/isa.md): CDERIVE makes a child capability of a non-linear parent,
+bounded to a sub-range and carrying MANAGE over its own children; CREVOKE(parent, child) ends a
+direct child and everything below it, and faults when the child is not a live direct child.
+
+Slabs. Each page carries two lifetimes:
+- memory_allocate derives the page's lifetime from the memory it got; the slab lists hold it.
+- split_slab_page_into_freelist derives the generation for the class the page now serves, and
+  writes it into every chunk header (item.sublet_parent; item_chunk has the same slot, so the two
+  layouts stay in step and every item grows by one capability).
+- do_slabs_alloc returns a child of that generation bounded to the class's chunk size.
+- slabs_free reads the generation through the caller's own pointer, revokes the chunk and passes
+  do_slabs_free a pointer at the same address derived from the generation. The chained chunks of a
+  large item are revoked the same way in do_slabs_free_chunked.
+- slabs_finalize_page_move revokes the page's generation when the page leaves its class. That
+  ends, in one instruction, every chunk the page handed out, including the ones the mover rescued
+  or reclaimed in place without a free.
+
+Chunks are bounded to the chunk size and not to the request: slabs_alloc is not told the request,
+and the mover copies whole chunks (memcpy of cls_size into a chunk it allocated).
+
+The mover walks a page through the page's own pointer, which is not a child of the generation, so
+it cannot be revoked. For a linked item (MOVE_FROM_LRU, MOVE_BUSY_ACTIVE) the mover therefore takes
+the hash table's reference to it under the item lock, and every unlink, replace or remove that may
+free it uses that reference. Its three whole-chunk copies keep the destination's own parent.
+
+Cache. cache_create reserves one capability in front of each object. A new object's lifetime is
+derived from the memory malloc returned and kept in that slot; cache_alloc returns a child of it
+covering the slot and the object, positioned at the object; cache_free reads the lifetime from the
+slot, revokes the caller's object and files the lifetime on the free list. Freeing the object, or
+a page, frees the derived lifetime: the virtual heap's free() validates by a load and finds the
+slot by address (runtime/virtual/heap.c checked()). The debug redzone would share the slot, so
+the build requires NDEBUG, which memcached's own Makefile sets.
+
+What it gives up: a live pointer can read the slot in front of it, as it could read the item header
+without the patch, and so can load the generation or the object's lifetime, which have page-wide
+or object-wide bounds and MANAGE. A stale pointer cannot, since it is revoked. Overwriting the slot
+clears its tag and the next free faults. Restart mode (-e) rebuilds item pointers from addresses,
+so the items it restores are not children of a generation and their first free faults.
+
+--- a/memcached.h
++++ b/memcached.h
+@@ -618,6 +618,11 @@
+  * Structure for storing items within memcached.
+  */
+ typedef struct _stritem {
++#ifdef MC_CAPSTONE_SUBLET
++    /* Sublet: the generation of this chunk's page. The chunk is handed out as
++     * a CDERIVE child of it, and slabs_free revokes it through it. */
++    void            *sublet_parent;
++#endif
+     /* Protected by LRU locks */
+     struct _stritem *next;
+     struct _stritem *prev;
+@@ -666,6 +671,9 @@
+ 
+ /* Header when an item is actually a chunk of another item. */
+ typedef struct _strchunk {
++#ifdef MC_CAPSTONE_SUBLET
++    void             *sublet_parent; /* as in item: the layouts stay in step */
++#endif
+     struct _strchunk *next;     /* points within its own chain. */
+     struct _strchunk *prev;     /* can potentially point to the head. */
+     struct _stritem  *head;     /* always points to the owner chunk */
+--- a/slabs.c
++++ b/slabs.c
+@@ -17,6 +17,9 @@
+ #include <string.h>
+ #include <assert.h>
+ #include <pthread.h>
++#ifdef MC_CAPSTONE_SUBLET
++#include <capstone/capability.h>
++#endif
+ 
+ //#define DEBUG_SLAB_MOVER
+ /* powers-of-N allocation structures */
+@@ -66,6 +69,22 @@
+    smaller ones will be made.  */
+ static void slabs_preallocate (const unsigned int maxslabs);
+ 
++#ifdef MC_CAPSTONE_SUBLET
++/* Sublet: a CDERIVE child of parent, starting at p. */
++static inline void *sublet_derive(void *parent, const void *p, size_t size) {
++    return capstone_cap_derive(parent,
++            (uintptr_t)p - __builtin_capstone_cap_get_base(parent), size);
++}
++
++/* Sublet: end the caller's chunk (CREVOKE), which faults on a reference that
++ * is not a live chunk, and return the allocator's pointer at its address. */
++static void *slabs_take_back(void *ptr) {
++    void *gen = ((item *)ptr)->sublet_parent;
++    capstone_cap_revoke_child(gen, ptr);
++    return (char *)gen + ((uintptr_t)ptr - __builtin_capstone_cap_get_base(gen));
++}
++#endif
++
+ /*
+  * Figures out which slab class (chunk size) is required to store an item of
+  * a given size.
+@@ -354,7 +373,14 @@
+ static void split_slab_page_into_freelist(char *ptr, const unsigned int id) {
+     slabclass_t *p = &slabclass[id];
+     int x;
++#ifdef MC_CAPSTONE_SUBLET
++    /* The page's chunks in this class are children of one generation. */
++    void *gen = sublet_derive(ptr, ptr, (size_t)p->size * p->perslab);
++#endif
+     for (x = 0; x < p->perslab; x++) {
++#ifdef MC_CAPSTONE_SUBLET
++        ((item *)ptr)->sublet_parent = gen;
++#endif
+         do_slabs_free(ptr, id);
+         ptr += p->size;
+     }
+@@ -437,7 +463,12 @@
+         it->it_flags &= ~ITEM_SLABBED;
+         it->refcount = 1;
+         p->sl_curr--;
++#ifdef MC_CAPSTONE_SUBLET
++        /* The caller's chunk is a child of the page's generation. */
++        ret = sublet_derive(it->sublet_parent, it, p->size);
++#else
+         ret = (void *)it;
++#endif
+     } else {
+         ret = NULL;
+     }
+@@ -481,6 +512,9 @@
+ 
+     item_chunk *next_chunk;
+     while (chunk) {
++#ifdef MC_CAPSTONE_SUBLET
++        chunk = slabs_take_back(chunk);
++#endif
+         assert(chunk->it_flags == ITEM_CHUNK);
+         chunk->it_flags = ITEM_SLABBED;
+         p = &slabclass[chunk->slabs_clsid];
+@@ -637,6 +671,12 @@
+     }
+     mem_malloced += size;
+ 
++#ifdef MC_CAPSTONE_SUBLET
++    /* The page's lifetime, kept in the slab lists: it carries MANAGE over the
++     * generation of each class the page serves. */
++    if (ret != NULL)
++        ret = sublet_derive(ret, ret, size);
++#endif
+     return ret;
+ }
+ 
+@@ -667,6 +707,9 @@
+ 
+ void slabs_free(void *ptr, unsigned int id) {
+     pthread_mutex_lock(&slabs_lock);
++#ifdef MC_CAPSTONE_SUBLET
++    ptr = slabs_take_back(ptr);
++#endif
+     do_slabs_free(ptr, id);
+     pthread_mutex_unlock(&slabs_lock);
+ }
+@@ -755,6 +798,12 @@
+     slabclass_t *s_cls = &slabclass[sid];
+     slabclass_t *d_cls = &slabclass[did];
+ 
++#ifdef MC_CAPSTONE_SUBLET
++    /* The page leaves its class: one CREVOKE ends every chunk it handed out,
++     * the ones the mover rescued or reclaimed in place included. */
++    if (sid != SLAB_GLOBAL_PAGE_POOL)
++        capstone_cap_revoke_child(page, ((item *)page)->sublet_parent);
++#endif
+     s_cls->slabs--;
+     for (int x = 0; x < s_cls->slabs; x++) {
+         s_cls->slab_list[x] = s_cls->slab_list[x+1];
+--- a/slabs_mover.c
++++ b/slabs_mover.c
+@@ -337,7 +337,13 @@
+     if (ch == NULL) {
+         assert((new_it->it_flags & ITEM_CHUNKED) == 0);
+         /* if free memory, memcpy. clear prev/next/h_bucket */
++#ifdef MC_CAPSTONE_SUBLET
++        void *parent = new_it->sublet_parent; /* new_it's own generation */
+         memcpy(new_it, it, cls_size);
++        new_it->sublet_parent = parent;
++#else
++        memcpy(new_it, it, cls_size);
++#endif
+         new_it->prev = 0;
+         new_it->next = 0;
+         new_it->h_next = 0;
+@@ -366,7 +372,13 @@
+         ch->prev->next = nch;
+         if (ch->next)
+             ch->next->prev = nch;
++#ifdef MC_CAPSTONE_SUBLET
++        void *parent = nch->sublet_parent;
+         memcpy(nch, ch, ch->used + sizeof(item_chunk));
++        nch->sublet_parent = parent;
++#else
++        memcpy(nch, ch, ch->used + sizeof(item_chunk));
++#endif
+         ch->refcount = 0;
+         ch->it_flags = ITEM_SLABBED|ITEM_FETCHED;
+         t->rebal.chunk_rescues++;
+@@ -393,7 +405,13 @@
+ 
+     // Can only rescue active non-chunked items right now.
+     if (ch == NULL && (it->it_flags & ITEM_CHUNKED) == 0) {
++#ifdef MC_CAPSTONE_SUBLET
++        void *parent = new_it->sublet_parent;
+         memcpy(new_it, it, cls_size);
++        new_it->sublet_parent = parent;
++#else
++        memcpy(new_it, it, cls_size);
++#endif
+         new_it->prev = 0;
+         new_it->next = 0;
+         new_it->h_next = 0;
+@@ -449,6 +467,14 @@
+             // attempting to move a chunk within a larger item.
+             cbarg.it = it = ch->head;
+         }
++#ifdef MC_CAPSTONE_SUBLET
++        /* A linked item is handled through the hash table's reference, the
++         * chunk its owner was handed, so that freeing it revokes that chunk.
++         * The mover's own pointer only walks the page. */
++        if (ch == NULL && (status == MOVE_FROM_LRU || status == MOVE_BUSY_ACTIVE)) {
++            cbarg.it = it = assoc_find(ITEM_key(it), it->nkey, cbarg.hv);
++        }
++#endif
+         switch (status) {
+             case MOVE_BUSY_ACTIVE:
+             case MOVE_FROM_LRU:
+--- a/cache.c
++++ b/cache.c
+@@ -9,6 +9,12 @@
+ #endif
+ 
+ #include "cache.h"
++#ifdef MC_CAPSTONE_SUBLET
++#include <capstone/capability.h>
++#ifndef NDEBUG
++#error "MC_CAPSTONE_SUBLET keeps the object's lifetime where the debug redzone goes: build with NDEBUG"
++#endif
++#endif
+ 
+ #ifndef NDEBUG
+ const uint64_t redzone_pattern = 0xdeadbeefcafedeed;
+@@ -33,6 +39,9 @@
+ #else
+     ret->bufsize = bufsize;
+ #endif
++#ifdef MC_CAPSTONE_SUBLET
++    ret->bufsize += sizeof(void *); /* the object's lifetime, in front of it */
++#endif
+     assert(ret->bufsize >= sizeof(struct cache_free_s));
+ 
+     return ret;
+@@ -45,6 +54,9 @@
+ }
+ 
+ static inline void* get_object(void *ptr) {
++#ifdef MC_CAPSTONE_SUBLET
++    return (void **)ptr + 1;
++#endif
+ #ifndef NDEBUG
+     uint64_t *pre = ptr;
+     return pre + 1;
+@@ -83,6 +95,10 @@
+     } else if (cache->limit == 0 || cache->total < cache->limit) {
+         object = ret = malloc(cache->bufsize);
+         if (ret != NULL) {
++#ifdef MC_CAPSTONE_SUBLET
++            /* The object's lifetime: it carries MANAGE over every hand-out. */
++            ret = capstone_cap_derive(ret, 0, cache->bufsize);
++#endif
+             object = get_object(ret);
+ 
+             cache->total++;
+@@ -101,6 +117,14 @@
+                &redzone_pattern, sizeof(redzone_pattern));
+     }
+ #endif
++#ifdef MC_CAPSTONE_SUBLET
++    if (object != NULL) {
++        /* The caller's object is a child of that lifetime, which the slot in
++         * front of it keeps for cache_free. */
++        *(void **)ret = ret;
++        object = get_object(capstone_cap_derive(ret, 0, cache->bufsize));
++    }
++#endif
+ 
+     return object;
+ }
+@@ -112,6 +136,13 @@
+ }
+ 
+ void do_cache_free(cache_t *cache, void *ptr) {
++#ifdef MC_CAPSTONE_SUBLET
++    /* End the caller's object (CREVOKE), which faults on a reference that is
++     * not live, and continue with the object's lifetime. */
++    void *life = ((void **)ptr)[-1];
++    capstone_cap_revoke_child(life, ptr);
++    ptr = life;
++#endif
+ #ifndef NDEBUG
+     /* validate redzone... */
+     if (memcmp(((char*)ptr) + cache->bufsize - (2 * sizeof(redzone_pattern)),
