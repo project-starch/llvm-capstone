@@ -1497,6 +1497,44 @@ rungs are b0-stats, `b3-setclock`, `b3-oracle`, `b3-clock` and b0-stats2, with `
   - A changed oracle hash would mean the bitstream changed more than the FPU path.
 - The control is 776d9d859's own B3c record: 200,000 anomalies, `stop_seconds=inf`, and the rung not returning.
 
+## Acceptance of the R-51 + R-52 bitstream, pre-registered 2026-10-10 (before any build; hash to be pinned)
+The build is the RTL lane's to batch and hand to the synth lane. A combined branch exists as capstone-ariane
+`sup-r51-r52` d15a836fa: 776d9d859 plus ef8900e2d, f4e4d6051 and 546807884, and its core/ diff equals the two fix
+branches' hunks byte for byte. The flash is the lead's word.
+- These predictions are for a bitstream whose RTL is 776d9d859 plus those two fixes.
+- Anything else the RTL lane batches comes with its own predictions. Pin the bitstream's sha256 here before the
+  first boot.
+
+**Software reading of R-51 (checked 2026-10-10).**
+- Neither the FPGA monitor (caplifive-sbi 1f9aedd) nor the gp-captable glue reads or writes the PC word the switcher
+  parks at a RETURN. The monitor arms supervision with its own private save area (`sup_save_area`), and STEP treats the
+  domain's context as opaque. The glue keeps its own frames.
+- capstone-qemu has always restored the PC capability at RETURN (`swap_pc`). So B0-B3 have run in QEMU under exactly
+  the semantics R-51's fix brings to silicon.
+- Prediction: R-51's fix changes no B-series reading on the board.
+
+**Boot A, bare (sup-bare harness; folders under tests/rtl-smoke/):**
+- The S-16 control set: 18 of 18 complete, with accept776's readings.
+- r51-return-pcc: before the first yield, 28, unchanged. **After it, 28 where 776d9d859 executed the jump (0xBAD).**
+  That reading is R-51's fix on silicon.
+- s10b-storebuf-primed traps on 8 of 8 legs, and s06agg reads 64, both unchanged. R-52's fix touches neither path.
+
+**Boot B, Linux (the shared monitor's acceptance):** the R-43 list a1..a10 unchanged, and C5u completing with a
+supervision overhead within 0.1 points of 776d9d859's +0.680 %.
+
+**Boot C, Linux, the B-series** (private image; process-ABI module; FPGA monitor 1f9aedd).
+- The rungs, in order: b0-stats, b0-hello, b1-thread, b2-memcached, b3-setclock, b3-oracle, b3-clock (last), b0-stats2.
+- b0-hello is byte-exact, and b1-thread returns 124.
+- b2-memcached returns retval 0. b3-oracle reads e0a254c47e7ee28c, 1,931,207 bytes, with job exit 0.
+- B3e's readings (section above): arith 0 of 200,000, the self-test 1 of 12, holds 0 and 0, the harness's
+  `stop_seconds` finite, and the b3-clock rung returning.
+
+**What would refute what.**
+- A B-series failure that QEMU does not show, and that appears only after a yield: the domain does depend on an
+  untagged resume PC. That would be a new finding about R-51's fix, not a pass.
+- r51 still reading 0xBAD: the fix is not in the build. Check the bitstream's provenance first.
+- B3e's refutations stand as written above.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
