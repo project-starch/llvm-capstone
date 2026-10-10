@@ -1,0 +1,35 @@
+# wireshark/plain-heap-repros on sublet-full (pre-registered aeba7ddefb4d), one VM boot
+# the program's Sublet configuration: Sublet heap + wmem's chunk port (tools/full-config/wireshark.c, chunks.c, tsapp-wmem-chunks.c)
+# SDK heap sublet log 24, runtime cdfc061d5e9a9c1b; clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)
+# constructor line, every run (checked by the runner; first case shown): FULLCONFIG wireshark wmem=chunk-port live block=65536 chunk=256 slot_out=2 slot_back=0
+  control clean  RETURNED   required RETURNED  ok  CONTROL clean RETURNED 1
+  control oob    CAUGHT     required CAUGHT    ok  cause=7 pc=0xc020f76c address=0xc5002018 in ctl_write_probe+0x58 (the labelled probe)
+  control uaf    CAUGHT     required CAUGHT    ok  cause=24 pc=0xc020f7b8 address=0x0 in ctl_read_probe+0x38 (the labelled probe)
+  control subobj RETURNED   required RETURNED  ok  CONTROL subobj RETURNED b0=0x5a
+  00_19c51d27b9_netscaler_record_past_page                       CAUGHT             ok  cause=5 pc=0xc02109c4 address=0xc5004000 in wsh_read_probe+0x38 (the labelled probe)
+  01_373504f7c9_dfvm_error_message_wrong_index                   CAUGHT             ok  cause=5 pc=0xc0210ab0 address=0xc5002130 in wsh_read_probe+0x38 (the labelled probe)
+  02_381681583b_pcapng_nrb_custom_string_over_copy               CAUGHT             ok  cause=5 pc=0xc0210ba4 address=0xc5002010 in wsh_read_probe+0x38 (the labelled probe)
+  03_c556b648aa_strptime_reads_past_null_timezone                CAUGHT             ok  cause=5 pc=0xc02109e4 address=0xc5002001 in wsh_read_probe+0x38 (the labelled probe)
+  04_87803328179_blf_apptext_sized_without_terminator            CAUGHT             ok  cause=5 pc=0xc0210b50 address=0xc5002010 in wsh_read_probe+0x38 (the labelled probe)
+  05_140aad08e081_nettrace_packet_buf_scanned_by_strstr          CAUGHT             ok  cause=5 pc=0xc0210b40 address=0xc5002010 in wsh_read_probe+0x38 (the labelled probe)
+  06_3aad1ef236e6_t61_accent_branch_reads_the_following_byte     CAUGHT             ok  cause=5 pc=0xc0210bdc address=0xc5002010 in wsh_read_probe+0x38 (the labelled probe)
+  07_e2ca71beaed2_uat_unbinstring_leaves_no_terminator           CAUGHT             ok  cause=5 pc=0xc0210b20 address=0xc5002010 in wsh_read_probe+0x38 (the labelled probe)
+  08_0cae98570ebc_cl_find_custom_memcmp_reads_the_prefix_length  CAUGHT             ok  cause=5 pc=0xc0210b7c address=0xc5002010 in wsh_read_probe+0x38 (the labelled probe)
+  09_bf123efe154d_uat_oid_empty_field_underflows_the_index       CAUGHT             ok  cause=5 pc=0xc0210904 address=0xc5002010 in wsh_read_probe+0x38 (the labelled probe)
+  10_e9b933473e8f_address_to_str_buf_clamps_to_size_not_last_index CAUGHT             ok  cause=7 pc=0xc02109a4 address=0xc5002010 in wsh_write_probe+0x58 (the labelled probe)
+  11_4b15bf76a7f7_oid_to_str_buf_tail_reservation_one_short      CAUGHT             ok  cause=7 pc=0xc0210960 address=0xc5002010 in wsh_write_probe+0x58 (the labelled probe)
+wireshark/plain-heap-repros on sublet-full: 12 cases; {'CAUGHT': 12}; predicted CAUGHT; differing: none
+
+# image sha256 (16) per case
+00 cd735056106d9f49 CAUGHT fixed=FIXED exit=0
+01 d6b64e93da53289d CAUGHT fixed=FIXED exit=0
+02 f7f6c4d3e6919248 CAUGHT fixed=FIXED exit=0
+03 d1eaf161a53290e9 CAUGHT fixed=FIXED exit=0
+04 7eff43311d647c35 CAUGHT fixed=FIXED exit=0
+05 01043af8ea004228 CAUGHT fixed=FIXED exit=0
+06 cc9745fc6e734267 CAUGHT fixed=FIXED exit=0
+07 f4051f770b6ff976 CAUGHT fixed=FIXED exit=0
+08 19be3d8f660118d4 CAUGHT fixed=FIXED exit=0
+09 adc74397146ea6dd CAUGHT fixed=FIXED exit=0
+10 204a0417d7bc90d2 CAUGHT fixed=FIXED exit=0
+11 f6965f8d871ce241 CAUGHT fixed=FIXED exit=0

@@ -1,0 +1,218 @@
+{
+  "date": "2026-10-07",
+  "status": "PASS",
+  "profile": "virtual application R1-R3 slice with recyclable guest table; one hart, same-mm virtual thread contexts",
+  "qemu_sha256": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+  "compiler": {
+    "clang_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+    "codegen_passed": 118,
+    "codegen_unsupported": 1,
+    "codegen_failed": 0,
+    "source_sha256": {
+      "llvm/lib/Target/Capstone/CapstoneISelDAGToDAG.cpp": "62a40458df90b057c2dc620bc1abf60a8bf401200d6f8acf5708070d5f83d8d0",
+      "llvm/lib/Target/Capstone/CapstoneISelLowering.cpp": "6c5a0a357ff33901a5429ce9977847dfebc29ba5e5af80d2caba6e3ba91c7cab",
+      "llvm/test/CodeGen/Capstone/cap-image-gp-pool.ll": "d8d08482b05c36661b0dfe1367523ec5f62b570718c60df7e45279a438a7bb4f",
+      "llvm/utils/capstone-shared-drift.py": "06c25b8bba13499dc48021140d852e30a6bf057ca9b3fa33df4dfa18c5142f65"
+    },
+    "shared_manifest_check": "Pinned Myers diff algorithm; incorrect manifest count rejected"
+  },
+  "musl": {
+    "version": "1.2.5",
+    "compiled": 1355,
+    "surveyed": 1361,
+    "excluded_from_archive": "six mallocng files fail the existing 16-byte-pointer static assertion; allocator supplied by runtime",
+    "archive_sha256": "cc8fd7f7ce55cbe2209ce7b3323b8b5b0e254d4fedde87dd121570ad4b93370f",
+    "stale_source_control_exit": 2
+  },
+  "host_unit_tests": {
+    "passed": 22,
+    "total": 22
+  },
+  "qemu_regressions": {
+    "virtual_capstone_m1": {
+      "passed": 60,
+      "total": 60
+    },
+    "trusted_linux_u_access": {
+      "passed": 69,
+      "total": 69
+    },
+    "linux_r0": {
+      "passed": 8,
+      "total": 8
+    },
+    "linux_application": {
+      "passed": 20,
+      "total": 20
+    },
+    "physical_mruby": {
+      "passed": 2,
+      "total": 2
+    }
+  },
+  "instruction_gate": {
+    "passed": 33,
+    "total": 33
+  },
+  "application_gate": {
+    "passed": 22,
+    "total": 22,
+    "record": "result.json",
+    "inputs_sha256": {
+      "application": "c122743d674328c86397b439c7bdd34adf91d90f617396624956980a91e84140",
+      "sqlite": "a2fa3782eb7a805c56e082c3a3c5121794c5f7133aa9d3f7f67c300cf6bdc004",
+      "mruby": "0d1fea72042cd186c104d9296134585e41d7acb0612ce2f02d7a78fe4ca5ae25",
+      "launcher": "0afa1dfbf6381c6e26284f30c95d3ffc2d7187ffdb547445d7939fd354bb8aee",
+      "module": "804b60a5c1c45c3d101319571eeb993c0617798cc2f4535c7045b542d0e42288"
+    }
+  },
+  "recycling_gate": {
+    "program": "runtime/tests/application/contract.c, target application-contract-sublet (GRANT_BYTES 2 MiB) with CAPSTONE_APPLICATION_VIRTUAL=ON",
+    "image_sha256": "08ec4e6607a925bae0d8022d358e2172cb2cf073a86bd9e8b2a740793e785d7d",
+    "platform": "capstone_vm --profile virtual with the application gate launcher and module; one hart, 2 GiB",
+    "command": "capstone_vm exec -- /tmp/application-supervisor /usr/bin/capstone-exec /mnt/host/application-contract-sublet.dom --mode MODE, with capstone-exec --stats before and after each mode (runtime/tests/application/supervisor.c supplies stdin, cwd, environment and argv)",
+    "node_capacity": 65536,
+    "churn": {
+      "cycles": 200000,
+      "supervisor_verdict": "PASS",
+      "wait_status": 0,
+      "nodes_allocated": 200271,
+      "collections": 3,
+      "nodes_reclaimed": 195024,
+      "nodes_high_water_after": 65278
+    },
+    "fault_reused": {
+      "supervisor_verdict": "PASS",
+      "wait_status": 11,
+      "nodes_allocated": 200271,
+      "collections": 3,
+      "nodes_reclaimed": 195024,
+      "nodes_high_water_after": 65278,
+      "fault_cause": 24
+    },
+    "fault_exhaust": {
+      "supervisor_verdict": "PASS",
+      "wait_status": 11,
+      "nodes_allocated": 65278,
+      "collections": 1,
+      "nodes_reclaimed": 0,
+      "nodes_high_water_after": 65278,
+      "fault_cause": 30
+    },
+    "exhaustion_result": "cause 30 after a collection leaves at most 256 free identities; the launcher reports the fault and exits"
+  },
+  "native_application_oracles": {
+    "status": "PASS",
+    "stdout": [
+      "SQLITE_SUM=5050",
+      "SQLITE_PERSIST=100",
+      "MRUBY_SUM=5050",
+      "MRUBY_FILE=virtual"
+    ],
+    "sha256": {
+      "sqlite": "ad66493057668bacac2269f0980bdc11528ce41b2091c1ce074bb102a9efb67f",
+      "mruby": "ed134155c3551768b66687f69f689632acca0e1c433fc37aadc3461b940f4ccc"
+    }
+  },
+  "negative_controls": {
+    "missing_application": {
+      "status": "FAIL",
+      "passed_checks": [
+        "sqlite_write",
+        "sqlite_read",
+        "mruby",
+        "cleanup",
+        "sqlite_results",
+        "mruby_results",
+        "completed"
+      ],
+      "failed_checks": [
+        "normal",
+        "stale",
+        "bounds",
+        "retired",
+        "preempt",
+        "parallel_one",
+        "parallel_two",
+        "normal_output",
+        "fault_causes",
+        "same_va_reuse",
+        "spin_entered",
+        "linux_pages_released",
+        "linux_demand_faults"
+      ]
+    },
+    "service_pc_not_advanced": {
+      "binary_sha256": "8807887b03ab0253b09536b785af9908564d28bb5b51d8a9a9b56c2dd29e6ab2",
+      "exit": 1,
+      "failed_cases": [
+        "service_scalar_reply",
+        "service_linear_reply",
+        "retire_descendants",
+        "immutable_resume_roots"
+      ]
+    }
+  },
+  "physical_applications": [
+    {
+      "image": "mruby-none.dom",
+      "exit": 0,
+      "stdout": "42",
+      "sha256": "e8ab571d58a656e27078687396644ca0b876ae4d06e4af460e009b196ac68144",
+      "command": "mruby-none.dom -e 'puts 6*7'"
+    },
+    {
+      "image": "mruby-sublet.dom",
+      "exit": 0,
+      "stdout": "42",
+      "sha256": "0ab89e56171f41ea445c600cd46f1ba8aaad867075a85ef3b2c3196d2f85f71e",
+      "command": "mruby-sublet.dom -e 'puts 6*7'"
+    }
+  ],
+  "limitations": [
+    "QEMU experiment, no RTL qualification",
+    "Private anonymous mappings; pages pinned after first touch",
+    "Recycling depends on a complete registered-page and saved-context sweep; dead PCC identities remain pinned",
+    "No fork, shared tagged pages, multiple harts, swap or migration; virtual threads are same-mm and one-hart only",
+    "Allocated bounds follow the request, rounded to the representable grain for 4 KiB and larger; inherited compressed-bounds side metadata remains",
+    "Teardown clears tags only on pages the module pinned; pages Linux populated without an application fault rely on Linux zeroing before reuse"
+  ],
+  "fixture_gate": {
+    "platform": "the recycling_gate VM; images built from runtime/tests/application with CAPSTONE_APPLICATION_VIRTUAL=ON",
+    "process_sequence": {
+      "driver": "application-supervisor without --mode; loop runs under SIGTERM, SIGKILL and SIGINT",
+      "modes": [
+        "healthy",
+        "pty",
+        "fault",
+        "fault-stack",
+        "fault-vector",
+        "exit139",
+        "fault-mrev",
+        "fault-privcsr",
+        "fault-debugcap",
+        "fault-capenter",
+        "loop",
+        "loop",
+        "loop",
+        "healthy"
+      ],
+      "passed_runs": 14
+    },
+    "signals": {
+      "driver": "runtime/tests/application/run-signals.py",
+      "passed": 30,
+      "total": 30
+    },
+    "sockets": {
+      "driver": "runtime/tests/application/run-sockets.py",
+      "passed": 11,
+      "total": 11
+    },
+    "images_sha256": {
+      "application-contract.dom": "2a00b2e430eae45ad62fa87eec97205fb47c79bc1344356c04a1846c599b30a8",
+      "signal-contract.dom": "1a0d150222ffd8c6a9a65a4683b223f823abef51a15963fd99180491caa4417e",
+      "socket-contract.dom": "d678ee85fde092e6b39532b75f961207942c0f56242f89ded3da7a5bf2698749"
+    }
+  }
+}

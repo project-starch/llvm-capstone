@@ -1,0 +1,5 @@
+# Build outputs. The arm binaries are 0.69 MB each stripped and are produced by
+# shared/build-cheri.sh; the host ASan binaries by shared/build-host.sh. Neither
+# belongs in the tree -- the sources and the recorded oracles do.
+out-cheri/
+*.err

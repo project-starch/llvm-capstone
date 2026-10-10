@@ -16,5 +16,8 @@
   "evidence": [
     "capstone/ports/wireshark/app/results/2026-09-24-qemu-cma-domain-block"
   ],
-  "note": "The seven dependencies cross-build and a CMA domain block covers its size; the port found three runtime gaps (C-64, C-65, I-11) and has no README."
+  "note": "The seven dependencies cross-build and a CMA domain block covers its size; the port found three runtime gaps (C-64, C-65, I-11) and has no README.",
+  "corpora": [
+    "capstone/bug-corpora/wireshark/plain-heap-repros"
+  ]
 }

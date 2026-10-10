@@ -24,10 +24,16 @@ mkdir -p "$OBJ_DIR"
 # output. It exits 1 on a regression, which must not stop the build here: a
 # partial archive is the point. Only a harness error (2) is fatal.
 set +e
-# MUSL_SURVEY_JOBS: the survey defaults to min(16, cpus); a shared host may need fewer.
+# MUSL_SURVEY_JOBS controls shared-host parallelism.
+PROFILE_FLAGS=()
+case "${CAPSTONE_APPLICATION_PROFILE:-physical}" in
+  physical) ;;
+  virtual) PROFILE_FLAGS=(--virtual) ;;
+  *) echo "invalid CAPSTONE_APPLICATION_PROFILE" >&2; exit 2 ;;
+esac
 python3 "$SCRIPT_DIR/survey-musl-capstone.py" "$MUSL_SRC_DIR" \
         ${MUSL_SURVEY_JOBS:+--jobs "$MUSL_SURVEY_JOBS"} \
-        --objects "$OBJ_DIR" > "$OUT_DIR/survey.txt"
+        "${PROFILE_FLAGS[@]}" --objects "$OBJ_DIR" > "$OUT_DIR/survey.txt"
 survey_status=$?
 set -e
 if [[ $survey_status -ge 2 ]]; then

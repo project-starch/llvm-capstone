@@ -27,7 +27,8 @@
   ],
   "workload": "the in-memory SQL smoke, speedtest1, and the 3.22.0 silicon gate",
   "corpora": [
-    "capstone/bug-corpora/sqlite/capi-repros"
+    "capstone/bug-corpora/sqlite/capi-repros",
+    "capstone/bug-corpora/sqlite/engine-repros"
   ],
   "related": [
     "xlang/reuse-not-free"

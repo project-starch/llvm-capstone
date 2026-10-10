@@ -1,0 +1,24 @@
+case	arm	verdict	rc	harness
+03f242d09	cheribsd-revocation	SIGPROT	162	
+0cf969a2b	cheribsd-revocation	completes	0	["PASS"]
+13e017c2f	cheribsd-revocation	SIGPROT	162	
+1737589f0	cheribsd-revocation	timeout	124	
+39aecc143	cheribsd-revocation	SIGPROT	162	
+4663fef45	cheribsd-revocation	SIGPROT	162	
+4a386f80e	cheribsd-revocation	completes	0	["PASS"]
+59552ecb8	cheribsd-revocation	completes	0	["PASS"]
+606d9a6b2	cheribsd-revocation	completes	0	["Hash scans that carry a pair into a set the hash no longer
+628ccec60	cheribsd-revocation	completes	0	["Task.current.name still answers \"main\" after GC", "NOT_E
+77d1d928f	cheribsd-revocation	SIGPROT	162	
+7c5915799	cheribsd-revocation	completes	0	["Struct#== and #eql? with a member that replaces the storag
+84cc5aa60	cheribsd-revocation	SIGPROT	162	
+93eb74a59	cheribsd-revocation	SIGPROT	162	
+94993eede	cheribsd-revocation	SIGPROT	162	
+af6f23ddb	cheribsd-revocation	SIGPROT	162	
+bef45e223	cheribsd-revocation	completes	0	["pattern matching - a key that moves the subject", "NOT_FAL
+cb51fce92	cheribsd-revocation	abort	134	
+d8911416c	cheribsd-revocation	SIGPROT	162	
+eb7693857	cheribsd-revocation	SIGPROT	162	
+ec89364c4	cheribsd-revocation	SIGPROT	162	
+fb4974528	cheribsd-revocation	completes	0	["Hash#key keeps the key it answers with across the comparis
+ff047f5fe	cheribsd-revocation	SIGPROT	162	

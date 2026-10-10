@@ -109,6 +109,9 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -ffunction-sections -fdata-sections -std=c99 -O1 -w -Wno-int-conversion
     -D_XOPEN_SOURCE=700 "${INC[@]}")
 CPY_HEAP_BYTES=${CPY_HEAP_BYTES:-$((48 << 20))}
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+  CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+fi
 # The Sublet arm's allocator side. link-cpython-capstone.py links every *.o in
 # this directory, so compiling them here is the whole wiring; nothing in the link
 # step changes. The adapter and its metadata heap are the component port's,
@@ -129,9 +132,17 @@ if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
   SUBLET_INC=(-I"$PYM/shared" -I"$REPO_ROOT/capstone/runtime/include" -DSIZEOF_VOID_P=16)
   GAP_FLAGS=()
   if [[ ${CPY_GAP_OBSERVER:-0} == 1 ]]; then GAP_FLAGS=(-DPYMALLOC_GAP_OBSERVER=1); fi
-  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" "${GAP_FLAGS[@]}" -DPYMALLOC_DOMAIN \
+  # CPY_PYM_DEFINES reaches the pymalloc port's own capacity constants, which are
+  # #ifndef-guarded in shared/port.h and allocators/sublet/block-lifetimes.c.
+  # Without this there was no way to set them from a build at all: an earlier
+  # campaign passed CPY_EXTRA_CFLAGS, which nothing in this tree reads, so two
+  # images were recorded as carrying raised PYM_ARENA_BYTES and LARGE_COUNT and
+  # carried neither. Unset is the old behaviour, byte for byte.
+  PYM_FLAGS=()
+  if [[ -n ${CPY_PYM_DEFINES:-} ]]; then read -r -a PYM_FLAGS <<< "$CPY_PYM_DEFINES"; fi
+  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" "${GAP_FLAGS[@]}" "${PYM_FLAGS[@]}" -DPYMALLOC_DOMAIN \
     -c "$PYM/allocators/sublet/block-lifetimes.c" -o "$RT/pym_block_lifetimes.o"
-  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" -DPYMALLOC_DOMAIN \
+  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" "${PYM_FLAGS[@]}" -DPYMALLOC_DOMAIN \
     -c "$PYM/shared/backing.c" -o "$RT/pym_backing.o"
   "$CAPSTONE_CLANG" "${CF[@]}" "${GAP_FLAGS[@]}" \
     -c "$SCRIPT_DIR/toolchain/pym_sublet_glue.c" -o "$RT/pym_sublet_glue.o"
@@ -144,6 +155,9 @@ fi
 COMPILER_RT=$REPO_ROOT/compiler-rt/lib/builtins
 BF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w -I"$COMPILER_RT")
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+  BF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+fi
 rm -f "$CPY_ROOT/builtins"/*.o "$CPY_ROOT/builtins/failed.txt"
 built=0; failed=0
 for f in "$COMPILER_RT"/*.c; do
@@ -166,9 +180,58 @@ rm -f "$COMBINED"
 printf 'CREATE %s\nADDLIB %s\nADDLIB %s\nSAVE\nEND\n' \
   "$COMBINED" "$LIBC_ARCHIVE" "$CPY_ROOT/libclang_rt.builtins.a" | "$LLVM_AR" -M
 
+# ---- the heap this image links -----------------------------------------
+# CPYD_HEAP names the arm, because the arm is the heap plus whether the port's
+# own nested allocator is sublet too, and a result that names only the knob
+# cannot be read later (docs/ref/runtime-terms-glossary.md section 6):
+#
+#   none             level0 heap with per-object bounds OFF   sysalloc-none
+#   bounds           level0 heap as applications get it       sysalloc-bounds
+#   sublet           the Sublet heap, pymalloc NOT sublet     sysalloc-sublet
+#   sublet-pymalloc  the Sublet heap AND patch 0014           sublet-pymalloc
+#
+# The last two differ by one thing only: whether pymalloc's own pools and
+# arenas are issued and revoked. That difference is what a nested-allocator
+# corpus measures, so the two must be separate images and not one.
+#
+# UNSET IS THE OLD BEHAVIOUR, byte for byte: no CAPSTONE_APPLICATION_HEAP (the
+# CMake default is level0), no bounds macro, and CPY_SUBLET alone decides 0014.
+# An earlier arm built that way was level0 + 0014 and was CALLED "sublet"; it is
+# not sublet-pymalloc, because its system heap was never the Sublet one.
 SDK_FLAGS=()
+if [[ -n ${CPYD_HEAP:-} ]]; then
+  case "$CPYD_HEAP" in
+    none)            APP_HEAP=level0; APP_BOUNDS=0; WANT_0014=0 ;;
+    bounds)          APP_HEAP=level0; APP_BOUNDS=1; WANT_0014=0 ;;
+    sublet)          APP_HEAP=sublet; APP_BOUNDS=1; WANT_0014=0 ;;
+    sublet-pymalloc) APP_HEAP=sublet; APP_BOUNDS=1; WANT_0014=1 ;;
+    *) echo "CPYD_HEAP=$CPYD_HEAP? (none, bounds, sublet, sublet-pymalloc)" >&2; exit 2 ;;
+  esac
+  # Refuse a contradiction rather than silently preferring one of them: an arm
+  # built from a heap it did not ask for is the mistake this project has made
+  # most often.
+  if [[ -n ${CPY_SUBLET:-} && ${CPY_SUBLET} != "$WANT_0014" ]]; then
+    echo "CPYD_HEAP=$CPYD_HEAP implies CPY_SUBLET=$WANT_0014, but CPY_SUBLET=$CPY_SUBLET was set" >&2
+    exit 2
+  fi
+  CPY_SUBLET=$WANT_0014
+  SDK_FLAGS+=(-DCAPSTONE_APPLICATION_HEAP="$APP_HEAP")
+  if [[ $APP_HEAP == sublet ]]; then
+    # CONTEXTS=1 is not a tuning choice, it is required. At the default 15,
+    # REGION_DATA is 16 * 256 KiB = exactly 4.00 MiB, which is the buddy
+    # allocator's largest block, and capstone-exec then fails with "cannot
+    # allocate launch regions". An earlier Sublet build here hit that and had
+    # its SDK rebuilt by hand afterwards because prepare offered no hook; the
+    # hook is this block, so the flag belongs here rather than in a caller.
+    SDK_FLAGS+=(-DCAPSTONE_APPLICATION_CONTEXTS=1)
+  fi
+  if [[ $APP_BOUNDS == 0 ]]; then
+    SDK_FLAGS+=(-DCMAKE_C_FLAGS_RELEASE="-O1 -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0")
+  fi
+  log "arm $CPYD_HEAP: application heap $APP_HEAP, per-object bounds $APP_BOUNDS, pymalloc-under-sublet $WANT_0014"
+fi
 if [[ ${CPY_SUBLET:-0} == 1 ]]; then
-  SDK_FLAGS=(-DCAPSTONE_APPLICATION_GRANT_BYTES=83886080)
+  SDK_FLAGS+=(-DCAPSTONE_APPLICATION_GRANT_BYTES=83886080)
 fi
 bash "$PORTS_DIR/common/application/build-sdk.sh" "$RT" "$MUSL_DIR" "$COMBINED" \
   -DCAPSTONE_APPLICATION_ARENA_BYTES="$CPY_HEAP_BYTES" "${SDK_FLAGS[@]}"

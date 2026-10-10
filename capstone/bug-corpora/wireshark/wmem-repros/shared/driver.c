@@ -18,6 +18,21 @@
 
 wmem_allocator_t *wm_packet;
 unsigned char *volatile wm_held;
+int wm_fixed, wm_observe, wm_defect;
+
+void wm_reoccupy(const void *stale, unsigned long bytes) {
+  if (!wm_observe)
+    return; /* every arm but the native fix differential: nothing added */
+  unsigned char *next = wmem_alloc(wm_packet, bytes);
+  CHECK(next, 0xbad90101);
+  /* In the buggy sequence the freed storage is what the next dissection gets: asserted, so a
+   * marker read through the stale pointer is evidence of aliasing rather than coincidence. In the
+   * fixed sequence the stale pointer names storage that outlived the packet, which this
+   * allocation cannot land on. */
+  if (!wm_fixed)
+    CHECK(next == stale, 0xbad90102);
+  memset(next, WM_MARKER, bytes);
+}
 
 _Noreturn void wm_give_up(unsigned long code) {
 #ifdef WM_CORPUS_HOSTED
@@ -99,8 +114,20 @@ int main(int argc, char **argv) {
   /* Strict input rejection is the runner's control. Without PoisonCap only
    * the unprotected shape exists, so mode 0 is the only mode accepted. */
   setvbuf(stdout, NULL, _IONBF, 0);
-  if (argc < 2 || argc > 3 || (strcmp(argv[1], "0") && strcmp(argv[1], "1")))
+  if (argc < 2 || argc > 4 || (strcmp(argv[1], "0") && strcmp(argv[1], "1")))
     return 75;
+  /* `program 0 N buggy|fixed`: the native fix differential. Mode 0 only, and never with PoisonCap:
+   * it observes aliasing, which a protected arm exists to prevent. */
+  int differential = argc == 4;
+  if (differential) {
+    if (strcmp(argv[1], "0") || (strcmp(argv[3], "buggy") && strcmp(argv[3], "fixed")))
+      return 75;
+#ifdef WM_POISONCAP
+    return 75;
+#endif
+    wm_fixed = !strcmp(argv[3], "fixed");
+    wm_observe = 1;
+  }
   if (argc == 3 && (unsigned)atoi(argv[2]) != wm_case_number) {
     fprintf(stderr, "CONTROL-FAILED fixture is case %u, run asked for %s\n",
             wm_case_number, argv[2]);
@@ -120,6 +147,17 @@ int main(int argc, char **argv) {
   start();
   wm_case_run();
   printf("WM_DEFECT case=%u mode=%u completed\n", wm_case_number, mode);
+  if (differential) {
+    /* The defect reproduces when the buggy sequence reached another object's storage and the
+     * fixed one did not. A case that cannot say which is INCONCLUSIVE, never a pass. */
+    if (!wm_fixed && wm_defect)
+      printf("VERDICT DEFECT-REPRODUCED the access reached storage outside its object\n");
+    else if (wm_fixed && !wm_defect)
+      printf("VERDICT FIXED the fix's sequence does not reach another object's storage\n");
+    else
+      printf("VERDICT INCONCLUSIVE\n");
+    return wm_fixed ? !!wm_defect : !wm_defect;
+  }
 #ifdef WM_POISONCAP
   wm_poisoncap_report();
 #endif

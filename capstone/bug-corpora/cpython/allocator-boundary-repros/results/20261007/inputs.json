@@ -1,0 +1,34 @@
+{
+  "what": "host re-measurement of allocator_consumed for all 32 cases; no arm, no VM",
+  "date_utc": "2026-10-07",
+  "interpreter": "CPython 3.13.7, ASan build, shared/build-asan/python",
+  "asan_options": "detect_leaks=0:abort_on_error=0",
+  "per_case_timeout_s": 180,
+  "method": {
+    "column_asan_pymalloc": "PYTHONMALLOC unset, so pymalloc is active",
+    "column_asan_libc_malloc": "PYTHONMALLOC=malloc, which obmalloc.c:640-665 routes RAW, MEM and OBJ to libc",
+    "rule": "a heap report with pymalloc still active means the object is not a pymalloc block (no); a heap report only once pymalloc is off means it is (yes); no heap report in either column measures nothing and is recorded as inconclusive, not as no",
+    "not_used": "region size is not a discriminator: case 07 (gh140594) is a 100-byte non-nested object"
+  },
+  "routing_control": {
+    "what": "the routing the rule depends on, measured rather than derived",
+    "PyMem_Malloc(16)": {
+      "PYTHONMALLOC unset": "no report (pymalloc block)",
+      "PYTHONMALLOC=malloc": "heap-use-after-free"
+    },
+    "PyMem_RawMalloc(16)": {
+      "PYTHONMALLOC unset": "heap-use-after-free",
+      "PYTHONMALLOC=malloc": "heap-use-after-free"
+    },
+    "reads": "the MEM domain is pymalloc by default (obmalloc.c:351 PYMEM_ALLOC = PYMALLOC_ALLOC); only the RAW domain bypasses it"
+  },
+  "totals": {
+    "cases": 32,
+    "agree_with_recorded": 30,
+    "inconclusive": [
+      "18_gh-157335_fix-out-of-bounds-write-in",
+      "32_gh-149449_unicodedata-capi-cached"
+    ],
+    "mismatch": []
+  }
+}

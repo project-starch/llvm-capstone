@@ -1,0 +1,27 @@
+{
+ "case": 8,
+ "upstream_fix": "b7b77ffc1e",
+ "title": "CLEAR_ERRSV grows a one-byte buffer over a glob's GP, so the next write to $@ runs past it",
+ "consumer": "perl.h",
+ "class": "spatial",
+ "trigger": "trigger.pl",
+ "live_in_pin": true,
+ "live_proof": "upstream fixed it in b7b77ffc1e (b7b77ffc1ef26998503489eb59864f835cc04edd) (2025-10-01). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin perl.h:1718 CLEAR_ERRSV lacks the isGV_with_GP check; sv.h:2274 SvPVCLEAR -> sv_setpv_bufsize -> SvGROW on a PVGV). Host ASan at the pin: ASan: SEGV (rc=77); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
+ "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+ "arms": {
+  "sysalloc-bounds": {
+   "oracle": "capability fault, cause 5 (load bounds)"
+  },
+  "sysalloc-sublet": {
+   "oracle": "capability fault, cause 5 (load bounds)"
+  },
+  "sublet-svheads": {
+   "oracle": "capability fault, cause 5 (load bounds)"
+  },
+  "cheribsd-revocation": {
+   "oracle": "SIGPROT: the defence reports; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: SIGPROT: the defence reports"
+  }
+ },
+ "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
+ "allocator_layer": "system allocator (a 1-byte malloc'ed buffer installed over GvGP; the GP itself from Newx)"
+}

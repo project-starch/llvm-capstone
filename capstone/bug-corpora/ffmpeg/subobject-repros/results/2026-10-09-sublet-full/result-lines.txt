@@ -1,0 +1,31 @@
+# ffmpeg/subobject-repros on sublet-full (pre-registered aeba7ddefb4d; subobject driver shim a28d6c33fd97), one VM boot
+# the program's Sublet configuration: Sublet heap + FFmpeg's pools on their Sublet port (tools/full-config/ffmpeg.c, ffsublet.c, the app port's FF_SUBLET_POOLS=1 libavutil)
+# SDK heap sublet log 27, runtime e5427101c0a73b9c; clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)
+# constructor line, every run (checked by the runner; first case shown): FULLCONFIG ffmpeg pools=sublet-port live gives=1 ends=0
+  control clean  RETURNED   required RETURNED  ok  CONTROL clean RETURNED 1
+  control oob    CAUGHT     required CAUGHT    ok  cause=7 pc=0xc020f70c address=0xc8002018 in ctl_write_probe+0x58 (the labelled probe)
+  control uaf    CAUGHT     required CAUGHT    ok  cause=24 pc=0xc020f758 address=0x0 in ctl_read_probe+0x38 (the labelled probe)
+  control subobj RETURNED   required RETURNED  ok  CONTROL subobj RETURNED b0=0x5a
+  00_8864fd0aec_cbs_h265_pic_timing_member                       DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED index 600 of num_nalus_in_du_minus1[600] overwrote the low half of du_cpb_removal_de
+  01_68845e26f7_vulkan_hevc_refpicset_member                     DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED nb_refs = 16 wrote 8 bytes past RefPicSetStCurrBefore[8] into RefPicSetStCurrAfter,
+  02_e058af88ab_vulkan_hevc_dpb_member                           DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED the DPB walk wrote ref_src[16], which is h265_refs[0], inside one refstruct allocati
+  03_89de2f0de1_aac_arith_last_member                            DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED index 512 of last[512] read the low byte of last_len, inside one allocation, and fed
+  04_1a00ea51cb_rtsp_control_url_underflow                       DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED strlen(control_url)-1 wrapped to SIZE_MAX and the read landed one byte before contro
+  05_d29ff88422_vulkan_av1_tile_sizes                            DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED the pre-loop `> MAX_TILES` check let tileCount reach 256 and the write landed on std
+  06_a809a784ec_vvc_entry_point_start_ctu                        DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED j was bounded by nothing, so the writes walked 8 words off the end of entry_point_st
+  07_275e217b10_hlsenc_key_uri_strlcpy_size                      DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED the source length was passed as av_strlcpy's destination size, so the copy ran 16 by
+  08_fb862976df_cbs_h266_col_width_val                           DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED the loop's guard was keyed to num_tile_columns, which is assigned only after the loo
+  09_ac59fc542f_thumbnail_carved_histogram_slice                 DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED a 10-bit sample was used unshifted as an index, so the bump landed 768 entries past
+ffmpeg/subobject-repros on sublet-full: 10 cases; {'DEFECT-REPRODUCED': 10}; predicted DEFECT-REPRODUCED; differing: none
+
+# image sha256 (16) per case
+00 66b07336b740630f DEFECT-REPRODUCED fixed=FIXED exit=0
+01 08208c587719799e DEFECT-REPRODUCED fixed=FIXED exit=0
+02 e0a6b75a2955d39e DEFECT-REPRODUCED fixed=FIXED exit=0
+03 6403f861c92082eb DEFECT-REPRODUCED fixed=FIXED exit=0
+04 e3e9f0f822376c9b DEFECT-REPRODUCED fixed=FIXED exit=0
+05 81c061cfdbe8ca87 DEFECT-REPRODUCED fixed=FIXED exit=0
+06 0a183213e71b29a4 DEFECT-REPRODUCED fixed=FIXED exit=0
+07 0e30e26b4d71c0aa DEFECT-REPRODUCED fixed=FIXED exit=0
+08 d86a865c2d1d97a9 DEFECT-REPRODUCED fixed=FIXED exit=0
+09 b67f3aac67475790 DEFECT-REPRODUCED fixed=FIXED exit=0

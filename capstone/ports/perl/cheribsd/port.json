@@ -13,5 +13,10 @@
     "cheribsd-purecap"
   ],
   "workload": "the 17-section smoke, under both libc revocation switches",
-  "note": "No inner SV lifetime adapter yet, which is why Perl is not a measured application in the reuse study."
+  "note": "PERL_CHERI_STATIC=1 links the interpreter statically, which the stock CheriBSD loader requires (dynamically linked it is refused with \"Traditional TLS not supported\" before main). The static image is then rejected at run time: SIGPROT inside perl_construct, on every invocation including perl -v, while a static purecap C hello and mruby's static purecap binary both run on that same image. So this port cannot yet host a corpus arm; see capstone/bug-corpora/perl/release-differential/results/20261006-cheribsd-blocked. The dynamic image's 17-section smoke passed on the PoisonCap platform, whose own sshd dies on a poison exception during a file copy. No inner SV lifetime adapter here either, which is the other reason Perl is not a measured application in the reuse study.",
+  "related": [
+    "capstone/ports/perl/musl",
+    "capstone/ports/perl/sv-heads",
+    "capstone/bug-corpora/perl/release-differential"
+  ]
 }

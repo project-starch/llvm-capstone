@@ -21,9 +21,18 @@ WM_CASE(8) {
   memcpy(cseq_method, "INVITE", 7);
   p_val->cseq = 1;
   p_val->method = cseq_method; /* :5352 */
+  if (wm_fixed) {
+    /* THE FIX, 31ab1a0a17: wmem_strdup(wmem_file_scope(), cseq_method) -- the record keeps its own
+     * copy in its own scope. */
+    unsigned char *copy = wmem_alloc(wm_file_scope(), 48);
+    CHECK(copy, 3);
+    memcpy(copy, cseq_method, 48);
+    p_val->method = copy;
+  }
   wm_next_packet(); /* epan_dissect_reset, epan.c:591 */
+  wm_reoccupy(cseq_method, 48); /* native observer only */
   /* The next SIP packet checks whether it is a resend. */
   wm_held = p_val->method;
   wm_mark();
-  (void)wm_probe(wm_held); /* strcmp(cseq_method, p_val->method) in sip_is_packet_resend, :5375 */
+  WM_READ(wm_held, WM_MARKER); /* strcmp(cseq_method, p_val->method) in sip_is_packet_resend, :5375 */
 }

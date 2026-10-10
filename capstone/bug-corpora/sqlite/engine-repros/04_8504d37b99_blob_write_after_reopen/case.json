@@ -1,0 +1,25 @@
+{
+  "case": 4,
+  "upstream_fix": "8504d37b99",
+  "title": "row20",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "inspection with line numbers in the 3.22.0 tree: blobReadWrite() calls sqlite3BtreeIntegerKey() at vdbeblob.c:420 with no cursor-valid check, and the preupdate hook runs with that key at :421. Fixed upstream in 3.51.0 by reseeking first and skipping the hook if it cannot restore",
+  "allocator_layer": "memsys5",
+  "object": "the btree page the blob cursor was parked on",
+  "lifetime_ender": "another writer modifies or deletes the row, so the cursor is saved and the page released, but pCur->pPage is left set",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator. Needs -DSQLITE_ENABLE_PREUPDATE_HOOK, without which the second half of the sequence does not exist",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+    }
+  },
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
+}

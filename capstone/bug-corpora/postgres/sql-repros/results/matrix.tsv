@@ -1,0 +1,28 @@
+case	arm	verdict	evidence
+01_12a6206864a0_to_char_tz_overflow	spatial	silent	completed with no directive and no fault
+01_12a6206864a0_to_char_tz_overflow	sublet	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xc0202214 address=0xc9dcf8f0 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x38 preparing=0x38 sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom
+01_12a6206864a0_to_char_tz_overflow	cheribsd-revocation	silent	ran to the prompt with no fault
+02_3ed3dbbf44_ts_headline_int16_overflow	spatial	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xc02023a8 address=0xc1df8900 entry=0xc0200de0 code=0xc0200000-0xc5250000 last=0x4f preparing=0x4f sha256=25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e image=/mnt/host/applications/postgres-25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e.dom
+02_3ed3dbbf44_ts_headline_int16_overflow	sublet	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xc0202414 address=0xc9dd0650 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x4f preparing=0x4f sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom
+02_3ed3dbbf44_ts_headline_int16_overflow	cheribsd-revocation	detected	SIGPROT(34) -- a capability violation
+03_8c34261109_ltree_lquery_uint16_overflow	spatial	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xc02023a8 address=0xc1e134a0 entry=0xc0200de0 code=0xc0200000-0xc5250000 last=0x4f preparing=0x4f sha256=25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e image=/mnt/host/applications/postgres-25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e.dom
+03_8c34261109_ltree_lquery_uint16_overflow	sublet	control-broken	WITHDRAWN -- not a verdict. The arm faulted, but the fault does not depend on the defect. The negative control (control.sql, 64 OR-variants against the trigger's 66, so 64512 bytes against a 65535 ceiling that is never crossed) faults too, at the SAME instruction: cause 7, pc=0xe0202414, on the same image fcaa4a36beef67f1 and the same fixture (results/sublet-control-20261010-043120, against results/sublet-20261008-080000). Whatever this arm trips on while parsing a large lquery, it is not the uint16 wrap, so the case is out of this arm's denominator until the fault is understood. Found by review on PR #198, which asked for exactly this control before a single-run detection was trusted; it was right to ask.
+03_8c34261109_ltree_lquery_uint16_overflow	cheribsd-revocation	detected	SIGPROT(34) -- a capability violation
+04_3d160401b65e_oidvector_oob_read	spatial	differential	errors 0/2 expected
+04_3d160401b65e_oidvector_oob_read	sublet	detected	capability fault: capstone-exec: domain fault cause=5 pc=0xc0ae994c address=0xc9d60520 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x43 preparing=0x43 sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom
+04_3d160401b65e_oidvector_oob_read	cheribsd-revocation	silent	ran to the prompt with no fault
+05_849da8210539_ascii_multibyte_oob_read	spatial	silent	completed with no directive and no fault
+05_849da8210539_ascii_multibyte_oob_read	sublet	silent	completed with no directive and no fault
+05_849da8210539_ascii_multibyte_oob_read	cheribsd-revocation	silent	ran to the prompt with no fault
+06_e91dcfccaa_regexp_conv_buf_overrun	spatial	silent	completed with no directive and no fault
+06_e91dcfccaa_regexp_conv_buf_overrun	sublet	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xc0e403ac address=0xca01fdc0 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x4f preparing=0x4f sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom
+06_e91dcfccaa_regexp_conv_buf_overrun	cheribsd-revocation	silent	ran to the prompt with no fault
+07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec	spatial	silent	completed with no directive and no fault
+07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec	sublet	silent	completed with no directive and no fault
+07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec	cheribsd-revocation	silent	ran to the prompt with no fault
+08_c4d51b6274_levenshtein_stop_column_oob_write	spatial	silent	completed with no directive and no fault
+08_c4d51b6274_levenshtein_stop_column_oob_write	sublet	silent	completed with no directive and no fault
+08_c4d51b6274_levenshtein_stop_column_oob_write	cheribsd-revocation	silent	ran to the prompt with no fault
+09_7a7d9693c7_pgp_sesskey_overflow	spatial	silent	completed with no directive and no fault
+09_7a7d9693c7_pgp_sesskey_overflow	sublet	silent	completed with no directive and no fault
+09_7a7d9693c7_pgp_sesskey_overflow	cheribsd-revocation	silent	ran to the prompt with no fault

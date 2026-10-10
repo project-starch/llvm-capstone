@@ -231,6 +231,10 @@ COMMON_FLAGS=(
   -I"$ADAPTED_DIR/stubinc"
   -I"$ADAPTED_DIR"
   -I"$SCRIPT_DIR"
+  # The corpus owns the case sources now, so a case compiled from
+  # bug-corpora/sqlite/engine-repros/NN_*/case.c must still find the
+  # harness headers that stay with the port.
+  -I"$SCRIPT_DIR/repro322"
   "${SUBLET_FLAGS[@]}"
   -I"$VFS_SKELETON_DIR"
   -I"$SQLITE322_INC"
@@ -240,8 +244,27 @@ COMMON_FLAGS=(
   ${SQLITE_CFLAGS_EXTRA:-}
 )
 
+# Cooperative fault recovery (capstone/runtime/domain-faults.md). OFF by default:
+# the recorded Capstone results came from the plain build and must stay
+# reproducible from it, and this also needs the trap-delivery QEMU -- an old
+# emulator still halts on these faults, so defaulting it on would change nothing
+# on one machine and everything on another.
+FAULT_RECOVERY_FLAGS=()
+FAULT_RECOVERY_OBJECTS=()
+if [ -n "${SQLITE_DOMAIN_FAULT_RECOVERY:-}" ]; then
+  FAULT_RECOVERY_FLAGS=(-DCAPSTONE_DOMAIN_FAULT_RECOVERY)
+fi
+
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
-  -ffreestanding -O0 -c "$START_SRC" -o "$OBJ_DIR/start.o"
+  -ffreestanding -O0 ${FAULT_RECOVERY_FLAGS[@]+"${FAULT_RECOVERY_FLAGS[@]}"} \
+  -c "$START_SRC" -o "$OBJ_DIR/start.o"
+
+if [ -n "${SQLITE_DOMAIN_FAULT_RECOVERY:-}" ]; then
+  "$CLANG" -target capstone64-unknown-elf -ffreestanding -O0 \
+    -c "$CAPSTONE_REPO_ROOT/capstone/runtime/domain/gct-section-end.S" \
+    -o "$OBJ_DIR/gct-section-end.o"
+  FAULT_RECOVERY_OBJECTS=("$OBJ_DIR/gct-section-end.o")
+fi
 
 # CORPUS_CACHE_SQLITE=1 (opt-in): skip recompiling the 8 MB amalgamation when a
 # cached sqlite3.o already exists for the SAME flags+source. A stamp records the
@@ -312,6 +335,12 @@ done
 # size on an ordinary target.
 SQLITE_DOMAIN_STACK=${SQLITE_DOMAIN_STACK:-$((1024 * 1024))}
 SQLITE_DOMAIN_DATA=${SQLITE_DOMAIN_DATA:-$SQLITE_DOMAIN_STACK}
+if [ -n "${SQLITE_DOMAIN_FAULT_RECOVERY:-}" ]; then
+  # Domain.cmake: "Must match the reservation in the shared entry assembly."
+  # The 256 bytes sit OUTSIDE the application's stack bounds, so they are added
+  # to the declared requirement rather than taken out of the stack.
+  SQLITE_DOMAIN_DATA=$((SQLITE_DOMAIN_DATA + 256))
+fi
 
 _segs() { "$LLVM_READOBJ" --program-headers "$OUT_DOM" | grep -E 'Offset|VirtualAddress|FileSize|MemSize'; }
 
@@ -324,7 +353,8 @@ _segs() { "$LLVM_READOBJ" --program-headers "$OUT_DOM" | grep -E 'Offset|Virtual
   "$OBJ_DIR/sqlite_os.o" \
   "$OBJ_DIR/domain.o" \
   "${EXTRA_OBJECTS[@]}" \
-  "${BUILTIN_OBJECTS[@]}"
+  "${BUILTIN_OBJECTS[@]}" \
+  ${FAULT_RECOVERY_OBJECTS[@]+"${FAULT_RECOVERY_OBJECTS[@]}"}
 _before=$(_segs)
 
 "$CLANG" -target capstone64-unknown-elf -ffreestanding \
@@ -342,6 +372,7 @@ _before=$(_segs)
   "$OBJ_DIR/domain.o" \
   "${EXTRA_OBJECTS[@]}" \
   "${BUILTIN_OBJECTS[@]}" \
+  ${FAULT_RECOVERY_OBJECTS[@]+"${FAULT_RECOVERY_OBJECTS[@]}"} \
   "$OBJ_DIR/domreq.o"
 
 # The section is non-alloc, so NOTHING LOADED MAY MOVE. Verified, not asserted:

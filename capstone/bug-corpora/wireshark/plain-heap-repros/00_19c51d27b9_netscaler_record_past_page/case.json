@@ -1,0 +1,98 @@
+{
+  "case": 0,
+  "upstream_fix": "19c51d27b9",
+  "title": "PACKET_DESCRIBE copies a NetScaler record out of the page buffer using a length taken straight from the file",
+  "consumer": "wiretap/netscaler.c, the PACKET_DESCRIBE macro",
+  "object": "nstrace_buf, one g_malloc(NSPR_PAGESIZE) page buffer of 8192 bytes",
+  "lifetime_ender": "NONE -- the page buffer is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "a record size read from the file makes the copy start inside the page buffer and run past its end",
+  "allocator_layer": "the system allocator itself: one g_malloc, no inner layer. wiretap does not use wmem, which is what makes this the NOT-NESTED spatial row for tshark.",
+  "fidelity": "real allocator, model consumer. The allocation is the upstream size (NSPR_PAGESIZE = 8192, wiretap/netscaler.c:52, unchanged at the pin) and the length is the upstream field's full range. GLib is not linked: g_malloc is malloc plus abort-on-failure and g_free is free, which is all this case uses of it. The copy is REDUCED TO ITS FIRST CROSSING BYTE -- the unreduced memcpy spans 65471 bytes past the allocation, and walking all of it would be an unbounded read through whatever follows; the magnitude is reported as extent= and stated in PROVENANCE.md. The fix adds three guards; the case is reduced to the one that bounds the copy.",
+  "live_in_pin": false,
+  "live_proof": "the fix is an ancestor of v4.6.8 and the pin carries its guards: v4.6.8:wiretap/netscaler.c contains 2 occurrences of \"record crosses page boundary\", and the page buffer is still g_malloc(NSPR_PAGESIZE) at :731. The parent 19c51d27b9^ has the allocation at :682 and no guard at all. The case reconstructs the pre-fix consumer shape against the shipped allocator, the convention at ../../memcached/allocator-repros/README.md:132-135.",
+  "distinguishing": "the arms differ by ONE guard -- whether the remaining room in the page is compared with the record size. The allocation, the offset and the record size are identical in both.",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm reports cap=8192 touched=73663 extent=65471 crossed=1 damage=1; the fixed arm crossed=0 damage=0 with the same cap, touched and extent, because the guard refuses the record rather than changing its size. MEASURED 2026-10-06, results/20261006-native-plain-heap/.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "oracle": "ASan REPORTS. The crossing leaves the malloc bound, so a redzone sits exactly where it lands. MEASURED two-sided 2026-10-06 -- buggy 'heap-buffer-overflow ... READ of size 1 ... 0 bytes after 8192-byte region', attributed to the labelled read_probe (shared/corpus.h:64) with the allocation at case.c:28; fixed arm silent, exit 0. The wmem and sub-object corpora record the opposite reading for the opposite reason.",
+      "status": "measured"
+    },
+    "spatial": {
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc020f074, address=0xc0254000.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image e99e9a95dfad8d9d. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: faults at the labelled probe. The crossing leaves the g_malloc bound, which per-object bounds enforce, so the bounds-only arm must catch it. The corresponding malloc-granular reading already exists in the tshark app port: fixtures fx2 and fx3 read level0 RETURN and shrink FAULT oob there. NOT YET MEASURED as a corpus case -- this corpus has no capstone-domain runner.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
+    },
+    "sublet": {
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc02101c8, address=0xc8804000. Nothing had been freed, so the catch is the per-object bound, not revocation.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image eefa9782a125e883. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the page buffer is alive; the catch is the inherited per-object bound. NOT YET MEASURED as a corpus case.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
+    },
+    "sublet-chunks": {
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-sublet-chunks/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc02109c4, address=0xc5004000 (the labelled probe). Fixed run of the same image: VERDICT FIXED, exit 0. Arm: tshark's chunks configuration: the Sublet heap (HEAP_LOG 24, 40 MiB arena) with the wmem chunk port linked. These cases call g_malloc and no wmem, so the chunk port is present and never called; the bound is the Sublet heap's per-object bound. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc020f76c address=0xc5002018); uaf CAUGHT (cause=24 pc=0xc020f7b8 address=0x0); subobj RETURNED. Image 37cf95d3f4c6be78. Predicted before the run (49498f856e87): CAUGHT; the prediction held.",
+      "status": "measured",
+      "cause": 5,
+      "prediction": "PREDICTED: faults, and for the SAME reason as the spatial arm rather than a different one. The chunk port narrows wmem chunks, and wiretap's page buffer is not a wmem chunk -- it is a direct g_malloc -- so the port changes nothing here. That is the point of the row: it is the one tshark case the inner-allocator port is irrelevant to. NOT YET MEASURED.",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet heap_log=24 runtime cdfc061d5e9a; compiler 7d01722aab88"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x10236c pc=0x10236c; fault pc 0x10236c INSIDE wsh_read_probe [0x10235c, 0x102378). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions and 2852edcdd747 (size-class slack)).",
+      "note": "UNMEASURABLE ON THIS HOST at the time of writing, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them, and no SDK, purecap sysroot or image existed here.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: mode 0 bounds each allocation, so it catches a crossing of the malloc bound.",
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 1,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x10236c pc=0x10236c; fault pc 0x10236c INSIDE wsh_read_probe [0x10235c, 0x102378). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions and 2852edcdd747 (size-class slack)).",
+      "note": "UNMEASURABLE ON THIS HOST at the time of writing, same check as the arm above.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: mode 1 adds temporal protection to the same bounds, so it catches the crossing for the mode-0 reason.",
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "MEASURED 2026-10-06 on this host: CAUGHT. signal=34 (SIGPROT), **si_code=1**, addr=pc=0x102006, and SUPERVISE resolved 'expect read_probe 0x102006' independently -- so the fault is AT the labelled probe and SCHEMA rule 2 is met for this row. The crossing is 65471 bytes past a g_malloc(8192), whose capability is exactly 8192 long (measured), so it leaves the allocation by far more than any size-class slack. the platform's own bounds control fired in the same boot: cheribsd-bounds runs abi-probe oob, which sets bounds to exactly 16 and reads offset 16, and it PASSED alongside cheribsd-abi reporting CHERI_ABI pointer_bytes=16 runtime_revocation=1. A spatial completion is therefore a reading, not a silent detector. si_code 1 is the BOUNDS code; every runner in this tree hardcodes PROT_CHERI_TAG=2, which is the TAG code, and the bounds code was not recorded anywhere before this run. RE-MEASURED 2026-10-07 by the committed runner, results/20261007-cheribsd/: CAUGHT. signal=34 (SIGPROT), si_code=1 (the BOUNDS code), addr=pc=0x1023c4, and supervise resolved `expect wsh_read_probe 0x1023b4` from the ELF independently of the run. The fault lies INSIDE the labelled probe, whose extent is [0x1023b4, 0x1023d0) (size 0x1c) -- the offset is the -O0 frame setup, and the RANGE is the attribution criterion, not equality with the symbol address. The crossing is 65471 bytes past a g_malloc(8192), and 8192 is exactly a size class, so it leaves the USABLE allocation by far more than any slack could absorb. ATTRIBUTION IS NOW ESTABLISHED, which it was not before. This corpus declared its probe `static` in shared/corpus.h until 2026-10-07, so every translation unit had a private copy and supervise reported the symbol unavailable -- the reason this row read 'attribution: not established'. The probe is now DECLARED in the header and DEFINED ONCE in shared/driver.c. Proven inert: the native runner was re-run afterwards and its verdict summary is unchanged (plain=reproduced, asan-buggy=heap-buffer-overflow, asan-fixed=silent). The platform controls fired in the same boot: cheribsd-abi reported `CHERI_ABI pointer_bytes=16 runtime_revocation=1` and cheribsd-bounds reported CHERI_BOUNDARY_READY, both PASS, and the committed runner refuses to report a suite whose controls did not fire (exit 75) rather than letting an empty boot read as a result.\n\nRE-MEASURED 2026-10-08 in the same vehicle: MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **CAUGHT.** signal=34, si_code=1 (the BOUNDS code), fault at 0x1023ec, with supervise resolving `expect wsh_read_probe 0x1023dc` from the ELF independently of the run -- the fault lies inside the probe's extent, the offset being the -O0 frame setup, and the RANGE is the attribution criterion rather than equality with the symbol address. The crossing leaves the allocator's USABLE size, which is what malloc bounds the capability to, so there is no size-class slack for it to hide in. tools/size-class-audit.py predicted this reading from the measured request size alone, and the two agree.",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot.",
+      "status": "measured"
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-subobject/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc670f074, address=0xc6754000 (the labelled probe). Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -Xclang -fcapstone-subobject-bounds: C1 v1 narrows a struct's non-last ARRAY field to the field; scalars, the last member and flexible arrays are not narrowed. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751958); uaf RETURNED; subobj CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751948). Image e99e9a95dfad8d9d. Predicted before the run (49498f856e87): CAUGHT; the prediction held."
+    },
+    "cheribsd-subobject": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, every case built with -Xclang -cheri-bounds=subobject-safe (booted on the second host)",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x10242c pc=0x10242c; fault pc 0x10242c INSIDE wsh_read_probe [0x10241c, 0x102438). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162). Predicted before the run (886abf4cc336)."
+    },
+    "sublet-full": {
+      "target": "Capstone domain, the program's whole Sublet configuration: the Sublet heap plus wmem's chunk port (chunks.c over tsapp-wmem-chunks.c), a block open with one chunk issued and retired before main (tools/full-config/wireshark.c)",
+      "oracle": "the same reading as the sublet arm (CAUGHT): this case's objects come straight from malloc, so the nested allocator's port is live in the image but off the bug's path. A different reading would be an interaction, not a catch by the port. Every run must print the constructor's FULLCONFIG line. MEASURED 2026-10-09, results/2026-10-09-sublet-full/: **CAUGHT** -- cause=5 pc=0xc02109c4 address=0xc5004000 in wsh_read_probe+0x38 (the labelled probe); fixed FIXED exit=0; image cd735056106d9f49; FULLCONFIG wireshark wmem=chunk-port live block=65536 chunk=256 slot_out=2 slot_back=0.",
+      "prediction": "CAUGHT",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "aeba7ddefb4d"
+    }
+  },
+  "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plain-heap/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner yet. CheriBSD MEASURED 2026-10-06: CAUGHT at the labelled probe, si_code 1. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. sublet-chunks measured 2026-10-09 (results/2026-10-09-capstone-sublet-chunks/): CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): CAUGHT.",
+  "nested": false,
+  "nested_why": "nothing sub-allocated the crossed region: the object is one allocation the platform or FFmpeg's own av_malloc handed out directly, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED."
+}

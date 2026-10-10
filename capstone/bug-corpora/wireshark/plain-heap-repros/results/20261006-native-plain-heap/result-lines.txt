@@ -1,0 +1,24 @@
+# Result lines, as runners/run-native.sh printed them. Two builds of one program:
+# plain for the fix differential, ASan for native-detect. The control arm runs first.
+
+00_19c51d27b9_netscaler_record_past_page plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent
+
+# Both arms in full. cap, touched and extent are identical on both: the guard refuses
+# the record, it does not change its size.
+#   fixed  case=0 arm=fixed  cap=8192 touched=73663 extent=65471 crossed=0 damage=0  VERDICT FIXED
+#   buggy  case=0 arm=buggy  cap=8192 touched=73663 extent=65471 crossed=1 damage=1  VERDICT DEFECT-REPRODUCED
+#
+# extent=65471 is the magnitude the UNREDUCED memcpy would span past the allocation --
+# about 64 KB out of an 8192-byte page buffer. The case probes only the first crossing
+# byte; walking the rest would be an unbounded read through whatever follows.
+#
+# The ASan report's own words on the buggy arm:
+#   ERROR: AddressSanitizer: heap-buffer-overflow
+#   READ of size 1
+#   #0 read_probe shared/corpus.h:64
+#   #1 wsh_case_run 00_19c51d27b9_netscaler_record_past_page/case.c:68
+#   0 bytes after 8192-byte region, allocated by malloc at case.c:28
+# and on the fixed arm: no report, exit 0.
+#
+# runner exit status 0 = the plain pair reproduced AND the sanitiser fired on the buggy
+# arm AND stayed silent on the fixed one.

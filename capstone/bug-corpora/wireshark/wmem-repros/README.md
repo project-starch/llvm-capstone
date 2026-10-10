@@ -6,6 +6,14 @@ and its four allocators from the pinned 4.6.8 release, compiled unmodified but
 for the guarded authority hooks the port applies. The consumers are reduced,
 the allocator is not.
 
+> **Looking for more cases?** [`../LIVE-CANDIDATES.md`](../LIVE-CANDIDATES.md) lists **92
+> defects live at the 4.6.8 pin**, checked by content rather than by ancestry, with the two
+> sharpest verified by hand against the pinned source. The reason they were not found earlier
+> is the population: the previous triage searched `v4.6.8..release-4.6`, 83 commits, which by
+> construction cannot see a defect whose fix was **never backported**. `v4.6.8..master` is
+> 4,401. The checker is committed beside the list as `../check-liveness-at-pin.py`.
+
+
 The layout is the contract in
 [`../../SCHEMA.md`](../../SCHEMA.md):
 one directory per case, `NN_<upstream-fix>_<slug>/`, holding a `case.c` that is
@@ -124,6 +132,30 @@ By shape, for the two mechanisms that catch anything:
 | packet-controlled negative index reads below the chunk, inside the same block | 15 | **1 / 1** (bounds, cause 5) | not run |
 | fixed-offset parity write lands past the buffer, inside the same block | 16 | **1 / 1** (bounds on a STORE, cause 7) | not run |
 | a size one larger than the chunk permits a one-byte write past it | 17 | **1 / 1** (bounds on a STORE, cause 7) | not run |
+| a guard disabled by its own default preference lets the counter run off the arrays | 18 | not run | not run |
+| metadata written before the allocation it describes, so a consumer trusts a length the buffer lacks | 19 | not run | not run |
+| a marking loop bounded by the field's extent rather than by the bitmap's length | 20 | not run | not run |
+| a fixed, compile-time-known output larger than its fixed buffer | 21 | not run | not run |
+
+**Cases 18-21 were added 2026-10-07, and two candidates from the same lists were REJECTED rather
+than built.** The leads came from [`../LIVE-CANDIDATES.md`](../LIVE-CANDIDATES.md) and from the
+class-B candidates `docs/ref/wireshark-spatial-defect-triage.md:226-229` named and left unbuilt.
+Rejected, with the reason recorded so nobody re-derives it:
+
+| candidate | why not |
+|---|---|
+| `1c090e9292` | a **stack** buffer overflow — no heap allocator boundary, the same reason memcached's `11b5f9b` was disqualified |
+| `d7d1686a95` | indexes a **static** `value_string` array — likewise no allocator |
+| `0939cf989d` | the same ETSI DCP defect as case 16 under a second hash — a duplicate, not a case |
+| `b2bc518e4d` | crosses a **tvb** bound, not an allocator's |
+| `76459b8134`, `de719cc5ac` | signed/unsigned overflow of a length, with the spatial consequence downstream — the class this project retracted `f207d25f4b` for |
+
+**Why the corpus stopped at 22 rather than going further.** The spatial-wording population is large —
+234 commits across `v4.4.0..v4.6.8` and `v4.6.8..HEAD` in `epan` and `wiretap` — but it and the
+hand-verified LIVE list are both **dominated by integer overflow**, which this corpus's filter
+excludes by design. The table above is what the remaining named candidates came to. Going further
+would have meant admitting rows whose defect class would then have to be misdescribed, which is how
+the two retractions of 2026-10-06 happened.
 
 Across cases 0-12 every `spatial` and every plain-CheriBSD arm completed. **Case 13 is the
 exception and it is not a counter-example:** it is the one spatial row, so its unprotected arm
@@ -186,3 +218,32 @@ domain result. `--negative-control` corrupts the input record so the program
 refuses it before any case runs; every arm must then FAIL, and the flag makes
 the exit status 0 only if every one did. `../../tools/check-corpus.py --self-test`
 enforces the contract and first proves it can reject four corruptions.
+
+## Vetted upstream candidates NOT built here (2026-10-08)
+
+Seven wmem defects were mined and vetted on 2026-10-08 but not reduced, because the batch that day
+went to the two cells that were EMPTY — `wireshark/plain-heap-repros` and the new
+`wireshark/plain-temporal-repros` — while this corpus already held 22 cases. They are recorded so
+the next pass does not re-mine them. Each was read at the fix's parent; the class and the crossing
+below are from that read, not from the commit message.
+
+| fix | path | kind | what crosses |
+|---|---|---|---|
+| `5441003874` | `epan/conversation.c` | spatial | `wmem_alloc(..., sizeof(conversation_element_t) * (DEINTD_ENDP_NO_PORTS_IDX+1))` is 3 elements, and the NO_PORTS arm writes index 3 as well — one 24-byte element past the chunk |
+| `d5f2657825e6` | `epan/to_str.c` | spatial | `wmem_alloc0(pool, 256+64)` sized for "256 bits and one space per four", while the loop is bounded by the caller's `no_of_bits` and emits 11 characters per 8 bits — unbounded, overflowing from about `no_of_bits = 234` |
+| `9de18e88f501` | `epan/addr_resolv.c` | allocator mismatch | `wmem_new(wmem_epan_scope(), ...)` released with `g_free` — the platform allocator handed an interior pointer into a wmem block |
+| `661743e4da6b` | `epan/addr_resolv.c` | allocator mismatch | `fgetline`'s `wmem_alloc`/`wmem_realloc` line buffer released with `g_free` |
+| `14f2a654d43c` | `epan/addr_resolv.c` | allocator mismatch | the same shape in the sibling reader; collapse with the row above if one row per MECHANISM is wanted rather than per instance |
+| `a2c8ff7cb6b0` | `epan/dissectors/packet-umts_rlc.c` | allocator mismatch | `tvb_memdup(wmem_file_scope(), ...)` released with `g_free` on both teardown paths |
+| `b1e0cb01b33d` | `epan/dissectors/packet-coap.c` | temporal | a PACKET-scope string stored in a FILE-scope struct, so the next `wmem_free_all` of the packet pool reclaims it while the struct still points at it |
+
+**Every one of these crossings leaves the wmem allocation and stays inside the platform one** —
+wmem's block allocator carves 16-byte-aligned chunks out of an 8 MiB `g_malloc`'d block
+(`WMEM_ALIGN_AMOUNT`, `WMEM_BLOCK_SIZE` in `wsutil/wmem/wmem_allocator_block.c`). That is the
+nested-allocator property this corpus exists to exercise, and it is why these belong here rather
+than in `../plain-heap-repros`.
+
+Two more were mined and REJECTED, with the reason worth keeping: `9ea014637ece` (`wiretap/pcapng.c`,
+a genuine heap write-overflow where `pcapng_compute_string_option_size` returns
+`strlen(...) & 0xffff` and the writer then copies the full string) needs two functions to explain,
+and `984e52244f08` (`epan/column-utils.c`) has its allocation in a different file from its crossing.

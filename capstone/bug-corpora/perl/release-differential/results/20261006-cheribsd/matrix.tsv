@@ -1,0 +1,12 @@
+case	revocation_off	revocation_on
+1189b87114	SIGPROT	SIGPROT
+17535c984a	clean	clean
+254b30e378	clean	SIGPROT
+39b4841b25	clean	SIGPROT
+40727c420c	SIGPROT	SIGPROT
+9e298ab597	clean	clean
+ad5fedb002	SIGPROT	SIGPROT
+af11b0c528	clean	clean
+b7b77ffc1e	SIGPROT	SIGPROT
+d2cddbe1df	perl panic	perl panic
+e4be969235	SIGPROT	SIGPROT

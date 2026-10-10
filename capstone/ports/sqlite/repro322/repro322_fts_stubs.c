@@ -19,6 +19,11 @@ double log(double x) {
 double log10(double x) { return log(x) * 0.4342944819032518; }
 double log2(double x)  { return log(x) * 1.4426950408889634; }
 
+/* capstone_sqlite_libc.h:35 has `#define fabs(X) (__builtin_fabs(X))`, so without this
+** undef the definition below expands to a definition of __builtin_fabs and clang rejects
+** it. It only bites once -USQLITE_OMIT_FLOATING_POINT restores real doubles -- with the
+** flag on, `double` is sqlite_int64 and the signatures never line up with the builtin. */
+#undef fabs
 double fabs(double x) { return x < 0.0 ? -x : x; }
 double floor(double x){ double n=(double)(long long)x; return (n>x)?n-1.0:n; }
 double ceil(double x) { double n=(double)(long long)x; return (n<x)?n+1.0:n; }

@@ -1,0 +1,54 @@
+00_8864fd0aec_cbs_h265_pic_timing_member case=0 arm=fixed
+00_8864fd0aec_cbs_h265_pic_timing_member VERDICT FIXED the fix's bound of 599 keeps every write inside its own member
+00_8864fd0aec_cbs_h265_pic_timing_member case=0 arm=buggy
+00_8864fd0aec_cbs_h265_pic_timing_member VERDICT DEFECT-REPRODUCED index 600 of num_nalus_in_du_minus1[600] overwrote the low half of du_cpb_removal_delay_increment_minus1[0], inside one refstruct allocation
+01_68845e26f7_vulkan_hevc_refpicset_member case=1 arm=fixed
+01_68845e26f7_vulkan_hevc_refpicset_member VERDICT FIXED the fix's FF_ARRAY_ELEMS guard keeps every write inside its own array
+01_68845e26f7_vulkan_hevc_refpicset_member case=1 arm=buggy
+01_68845e26f7_vulkan_hevc_refpicset_member VERDICT DEFECT-REPRODUCED nb_refs = 16 wrote 8 bytes past RefPicSetStCurrBefore[8] into RefPicSetStCurrAfter, inside one refstruct allocation
+02_e058af88ab_vulkan_hevc_dpb_member case=2 arm=fixed
+02_e058af88ab_vulkan_hevc_dpb_member VERDICT FIXED the fix's nb_refs >= HEVC_MAX_REFS guard stops the walk at the array's end
+02_e058af88ab_vulkan_hevc_dpb_member case=2 arm=buggy
+02_e058af88ab_vulkan_hevc_dpb_member VERDICT DEFECT-REPRODUCED the DPB walk wrote ref_src[16], which is h265_refs[0], inside one refstruct allocation
+03_89de2f0de1_aac_arith_last_member case=3 arm=fixed
+03_89de2f0de1_aac_arith_last_member cap=513 touched=512 term=0x0000
+03_89de2f0de1_aac_arith_last_member VERDICT FIXED the fix's last[512 + 1] makes index 512 an element of its own member
+03_89de2f0de1_aac_arith_last_member case=3 arm=buggy
+03_89de2f0de1_aac_arith_last_member cap=512 touched=512 term=0x5a00
+03_89de2f0de1_aac_arith_last_member VERDICT DEFECT-REPRODUCED index 512 of last[512] read the low byte of last_len, inside one allocation, and fed it into the arithmetic-coding context
+04_1a00ea51cb_rtsp_control_url_underflow case=4 arm=fixed
+04_1a00ea51cb_rtsp_control_url_underflow cap=4128 member_offset=28 strlen=0 saw=0xff
+04_1a00ea51cb_rtsp_control_url_underflow VERDICT FIXED the fix's len == 0 check short-circuits and the address is never formed
+04_1a00ea51cb_rtsp_control_url_underflow case=4 arm=buggy
+04_1a00ea51cb_rtsp_control_url_underflow cap=4128 member_offset=28 strlen=0 saw=0x5a
+04_1a00ea51cb_rtsp_control_url_underflow VERDICT DEFECT-REPRODUCED strlen(control_url)-1 wrapped to SIZE_MAX and the read landed one byte before control_url, on interleaved_max, inside one allocation
+05_d29ff88422_vulkan_av1_tile_sizes case=5 arm=fixed
+05_d29ff88422_vulkan_av1_tile_sizes cap=1024 touched=256 out_of_member=0 clobbered=0
+05_d29ff88422_vulkan_av1_tile_sizes VERDICT FIXED the fix's in-loop `>= MAX_TILES` check stops before index 256 is formed
+05_d29ff88422_vulkan_av1_tile_sizes case=5 arm=buggy
+05_d29ff88422_vulkan_av1_tile_sizes cap=1024 touched=257 out_of_member=1 clobbered=1
+05_d29ff88422_vulkan_av1_tile_sizes VERDICT DEFECT-REPRODUCED the pre-loop `> MAX_TILES` check let tileCount reach 256 and the write landed on std_ref's first four bytes, inside one allocation
+06_a809a784ec_vvc_entry_point_start_ctu case=6 arm=fixed
+06_a809a784ec_vvc_entry_point_start_ctu cap=256 entries=64 past=0 clobbered=0
+06_a809a784ec_vvc_entry_point_start_ctu VERDICT FIXED the fix returns AVERROR_INVALIDDATA once j reaches the array's length
+06_a809a784ec_vvc_entry_point_start_ctu case=6 arm=buggy
+06_a809a784ec_vvc_entry_point_start_ctu cap=256 entries=72 past=8 clobbered=8
+06_a809a784ec_vvc_entry_point_start_ctu VERDICT DEFECT-REPRODUCED j was bounded by nothing, so the writes walked 8 words off the end of entry_point_start_ctu and overwrote the next member, inside one allocation
+07_275e217b10_hlsenc_key_uri_strlcpy_size case=7 arm=fixed
+07_275e217b10_hlsenc_key_uri_strlcpy_size cap=64 source_len=80 size_arg=64 past=0
+07_275e217b10_hlsenc_key_uri_strlcpy_size VERDICT FIXED the fix's FFMIN(end - ptr + 1, sizeof(key_uri)) keeps the copy inside its member
+07_275e217b10_hlsenc_key_uri_strlcpy_size case=7 arm=buggy
+07_275e217b10_hlsenc_key_uri_strlcpy_size cap=64 source_len=80 size_arg=80 past=15
+07_275e217b10_hlsenc_key_uri_strlcpy_size VERDICT DEFECT-REPRODUCED the source length was passed as av_strlcpy's destination size, so the copy ran 16 bytes past key_uri into key_string (15 'A' plus the terminator), inside one allocation
+08_fb862976df_cbs_h266_col_width_val case=8 arm=fixed
+08_fb862976df_cbs_h266_col_width_val cap=40 columns=20 past=0 clobbered=0 stale_guard=20
+08_fb862976df_cbs_h266_col_width_val VERDICT FIXED the fix keys the guard to i and tests it inside the loop
+08_fb862976df_cbs_h266_col_width_val case=8 arm=buggy
+08_fb862976df_cbs_h266_col_width_val cap=40 columns=26 past=6 clobbered=6 stale_guard=26
+08_fb862976df_cbs_h266_col_width_val VERDICT DEFECT-REPRODUCED the loop's guard was keyed to num_tile_columns, which is assigned only after the loop, so 6 writes ran past col_width_val into row_height_val
+09_ac59fc542f_thumbnail_carved_histogram_slice case=9 arm=fixed
+09_ac59fc542f_thumbnail_carved_histogram_slice cap_entries=768 sub_slice=256 index=1023 past_entries=768 unreduced_past_bytes=261120 in_allocation=1
+09_ac59fc542f_thumbnail_carved_histogram_slice VERDICT FIXED the fix shifts by bitdepth-8 and masks to a byte, keeping the index in its sub-slice
+09_ac59fc542f_thumbnail_carved_histogram_slice case=9 arm=buggy
+09_ac59fc542f_thumbnail_carved_histogram_slice cap_entries=768 sub_slice=256 index=1023 past_entries=768 unreduced_past_bytes=261120 in_allocation=1
+09_ac59fc542f_thumbnail_carved_histogram_slice VERDICT DEFECT-REPRODUCED a 10-bit sample was used unshifted as an index, so the bump landed 768 entries past its 256-entry carved sub-slice, inside one av_calloc

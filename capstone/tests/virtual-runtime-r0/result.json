@@ -1,0 +1,163 @@
+{
+  "status": "PASS",
+  "tests": [
+    "scattered_linux_mappings",
+    "cap_bounds",
+    "pte_write",
+    "cap_execute",
+    "pte_execute",
+    "fresh_retry",
+    "destroyed_context_tags_cleared",
+    "capstone_compiled_c"
+  ],
+  "scope": "one hart, resident private mappings, explicit virtual C entry",
+  "additional_kernel_core_patch": false,
+  "additional_firmware_patch": false,
+  "control_omit_probe": false,
+  "source_sha256": {
+    "build.sh": "6bb5b4a47e310dd17495a752ae36d64cfa38ca089897d3cde851c95892a89d8b",
+    "entry.c": "a1589226c96e7509c2c744f3c848e62c7c466c825c4268bef02e39258046cc00",
+    "probe.c": "df92048abd5141a24e3e35e869563a8ea944fe501d03d15cf5246c18782c7129",
+    "program.S": "2cdae1b2e8285fcda65d21255d7a322b3fe9e2e46ea2ca62172beb2777a6bfd3",
+    "run.py": "45632d3d9ba30b540ec52d78f2f8b540f47a8c00c5bb11eab8a7199cc56a69a9",
+    "runtime_r0.c": "b6fc321f7619b0683337b3cd7525aafbc8c8fc2426dcb90cd173eba8c7fe1bf7",
+    "wire.h": "51e933b90598c8d37d37b8b61d811493224f905ac5f92c0f799397b4a3c616cc"
+  },
+  "sha256": {
+    "qemu": "15a874043dcacd2de488005112428e01be9c8d92a6421536798810da811d15e6",
+    "module": "bc4855c43d83f94d6a66974d2961bd5512f2d34ef5ed2a13a98e2cebeff0acc4",
+    "probe": "1143c3313a0ac47422b0899c3976ea2490a310cec3c7f7a2dd879c14c4fefffa",
+    "c_entry": "420b182b167a24cfb28cb2dbbfaf33e9fcc452dc46c0c17e3301b9ad5774e92c",
+    "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "date": "2026-10-06",
+  "qemu_base": "dc8878185d9dd1fd209897c3c03bfb6689a26581",
+  "instruction_gate": {
+    "passed": 21,
+    "total": 21,
+    "cases": [
+      "scattered_pages",
+      "cap_bounds",
+      "pte_write",
+      "cap_execute",
+      "pte_execute",
+      "pcc_bounds",
+      "revoked_pcc",
+      "no_satp_write",
+      "cap_write",
+      "supervisor_pte",
+      "missing_page",
+      "linear_transfer",
+      "quantum_resume",
+      "no_debug_mint",
+      "no_offsetmmu",
+      "stc_consumes",
+      "ldc_consumes",
+      "revoked_data",
+      "fetch_full_width",
+      "revoked_cached_pcc",
+      "rejects_wrong_fault_pc"
+    ]
+  },
+  "regressions": {
+    "virtual_capstone_m1": {
+      "passed": 60,
+      "total": 60
+    },
+    "trusted_linux_u_access": {
+      "passed": 69,
+      "total": 69
+    }
+  },
+  "controls": {
+    "teardown_tag_clear_removed": {
+      "expected_runner_exit": 1,
+      "observed_runner_exit": 1,
+      "assertion": "stale slot rejected before dereference",
+      "input_sha256": {
+        "qemu": "53c5f517a2f1536a0876002d5a3e99f5f3a49881864a307d0e83a3816723b4b9",
+        "module": "b535f41e3cb27a233b0beb25763b7e25c8f703503e1a279858e03926e75c108b",
+        "probe": "1143c3313a0ac47422b0899c3976ea2490a310cec3c7f7a2dd879c14c4fefffa",
+        "c_entry": "420b182b167a24cfb28cb2dbbfaf33e9fcc452dc46c0c17e3301b9ad5774e92c",
+        "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      }
+    },
+    "probe_omitted": {
+      "expected_runner_exit": 1,
+      "observed_runner_exit": 1,
+      "assertion": "probe exit 127 rejected by runner",
+      "input_sha256": {
+        "qemu": "53c5f517a2f1536a0876002d5a3e99f5f3a49881864a307d0e83a3816723b4b9",
+        "module": "bc4855c43d83f94d6a66974d2961bd5512f2d34ef5ed2a13a98e2cebeff0acc4",
+        "probe": "1143c3313a0ac47422b0899c3976ea2490a310cec3c7f7a2dd879c14c4fefffa",
+        "c_entry": "420b182b167a24cfb28cb2dbbfaf33e9fcc452dc46c0c17e3301b9ad5774e92c",
+        "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      }
+    },
+    "cached_pcc_check_removed": {
+      "exit": 1,
+      "failed_cases": [
+        "revoked_cached_pcc"
+      ]
+    }
+  },
+  "legacy_physical": {
+    "status": "PASS",
+    "applications": {
+      "mruby-none.dom": {
+        "expression": "puts 6*7",
+        "stdout": "42",
+        "exit": 0
+      },
+      "mruby-sublet.dom": {
+        "expression": "puts 6*7",
+        "stdout": "42",
+        "exit": 0
+      }
+    },
+    "post_run_stats": {
+      "version": 1,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 273219584,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 2417,
+      "nodes_live": 53,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 2425,
+      "tag_pages": 283,
+      "node_capacity": 65536
+    },
+    "input_sha256": {
+      "qemu": "15a874043dcacd2de488005112428e01be9c8d92a6421536798810da811d15e6",
+      "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+      "firmware": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+      "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+      "launcher": "e604885a6e40f18c636496dcc0c46865fe5cf62a76ae9e3a2390cbc4bc4826fa",
+      "module": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+      "job_helper": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168",
+      "mruby-none.dom": "e8ab571d58a656e27078687396644ca0b876ae4d06e4af460e009b196ac68144",
+      "mruby-sublet.dom": "0ab89e56171f41ea445c600cd46f1ba8aaad867075a85ef3b2c3196d2f85f71e"
+    },
+    "memory": "8G",
+    "cma_mib": 1024,
+    "process_cache_mib": 768,
+    "environment": {
+      "CAPSTONE_GP_NONLIN": "1",
+      "CAPSTONE_REV_NODES": "65536"
+    }
+  },
+  "toolchain_sha256": {
+    "clang": "a9742bc912a1c19b0224780d1b87bbd0d45f8e27956b4ef06d8b243e3931823e",
+    "ld.lld": "61a1bcc5ab1c55dd3a662af1e58e2de5d44078085eddf0355eb9136abeecf1d4",
+    "llvm-objcopy": "b5eb29317fac70175da72beb7243a323b1559c9b7a1712088a216c2068c65115"
+  },
+  "qemu_commit": "5adb91104352f861eed7bc87c9d38505c96ee557"
+}

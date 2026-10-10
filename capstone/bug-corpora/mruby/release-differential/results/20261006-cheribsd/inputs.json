@@ -1,0 +1,25 @@
+{
+  "platform": "CheriBSD 15.0-CURRENT riscv64-purecap, QEMU",
+  "binary": {
+    "path": "src/build/cheribsd/bin/mruby",
+    "sha256": "5784fa990c80eb2adccabdf7df457caf6964098e3db27269dee644956e987a6b",
+    "linkage": "static"
+  },
+  "revocation": {
+    "security.cheri.runtime_revocation_default": "1",
+    "security.cheri.runtime_revocation_async": "1",
+    "security.cheri.runtime_revocation_every_free_default": "0",
+    "note": "the default: revocation on, sweeps batched and asynchronous. Read back inside the guest before any case ran; a value other than 1 aborts the run instead of scoring it"
+  },
+  "controls": [
+    "the interpreter evaluates: ./mruby -e 'puts 6*7' must print 42",
+    "40-frame recursion must print DEEP 40 40",
+    "500-frame recursion must print DEEP 500 500"
+  ],
+  "cases": 23,
+  "builder": "capstone/ports/mruby/cheribsd/build.sh",
+  "malloc_bounds": {
+    "measured": "request -> capability length: 7->16, 20->32, 33->48, 100->112, 1000->1024, 4097->5120, 70000->81920",
+    "means": "CheriBSD's allocator bounds each allocation to its jemalloc size class, not to the request"
+  }
+}

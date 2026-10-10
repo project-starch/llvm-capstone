@@ -17,9 +17,19 @@ static unsigned observer_inplace_resize;
 
 #define ARENA_SIZE 1048576UL
 #define POOL_SIZE 16384UL
+/* Capacity. Overridable from the build: an earlier campaign raised these by
+ * editing the source, so the raised values lived in one working tree only and
+ * the next build silently went back to the defaults. The defaults are
+ * unchanged; -D on the compiler line now takes effect. */
+#ifndef ARENA_COUNT
 #define ARENA_COUNT 32
+#endif
+#ifndef POOL_COUNT
 #define POOL_COUNT 64
+#endif
+#ifndef LARGE_COUNT
 #define LARGE_COUNT 4096
+#endif
 struct block {
   capstone_cap_slot region;
   void *alias, *client;

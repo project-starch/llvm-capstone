@@ -1,0 +1,26 @@
+{
+  "case": 18,
+  "upstream_fix": "gh-157335",
+  "title": "[3.13] gh-157335: Fix out-of-bounds write in mmap.mmap.__setitem__ (#157438)",
+  "consumer": "mmapmodule.c",
+  "class": "spatial",
+  "trigger": "trigger.py",
+  "live_in_pin": true,
+  "live_proof": "measured, not asserted: the trigger runs on the pinned 3.13.7 ASan build (PYTHONMALLOC=malloc, ASAN_OPTIONS=detect_leaks=0) and reports ASAN:SEGV in safe_byte_copy (mmapmodule.c:361). Running it is the liveness proof -- a sanitizer report here means the defect is present in this tree.",
+  "fidelity": "the trigger is upstream's own reproducer from the issue, run through the real interpreter rather than reduced to a C model. What it does NOT establish is which arm ought to catch it.",
+  "allocator_layer": "mmap mapping (mmapmodule.c); no allocator issues this object, so no pymalloc pool is involved in any configuration",
+  "allocator_consumed": "no",
+  "layer_note": "The ASan nesting test is structurally inconclusive here and that is expected: the buffer IS the mmap mapping, so a write past its end reaches the guard page and ASan reports SEGV rather than a heap region, with PYTHONMALLOC unset and with PYTHONMALLOC=malloc alike. allocator_consumed is 'no' on the mapping's provenance, not on that test.",
+  "arms": {
+    "spatial": {
+      "oracle": "a bounds fault (cause 7) at the write past the end of the mapping, if the mapping's capability is bounded to the requested length. This case is the arm's test of that: the buffer IS the mmap mapping, so no allocator is involved and revocation has nothing to act on."
+    },
+    "sublet": {
+      "oracle": "fault: the object is a libc malloc block"
+    },
+    "cheribsd-revocation": {
+      "oracle": "a bounds fault, SIGPROT si_code=1 (PROT_CHERI_BOUNDS), at the write past the end of the mapping, if the mapping's capability is bounded to the requested length. No allocator issues this object, so revocation has nothing to act on."
+    }
+  },
+  "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial NOTIMPL [delivered=no] (spatial-20261006-105111); sublet NOTIMPL [delivered=no] (sublet-20261006-123446); cheribsd-revocation SILENT [delivered=held-out] (cheri11)"
+}

@@ -40,7 +40,7 @@ DECL_OPTIONAL = {"upstream", "expect_live_in_pin", "live_in_pin_note", "case_mac
                  "case_dir_column", "case_doc", "required_arms", "arm_keys",
                  "expect_provenance", "runners", "checker", "inventory", "evidence",
                  "advisories", "related", "note", "shape_table", "shape_prose"}
-SCHEMAS = {"case-json", "sqlite-row", "xlang-row"}
+SCHEMAS = {"case-json", "sqlite-row", "script-trigger", "xlang-row"}
 STATUSES = {"planned", "built", "measured", "triaged"}
 PATH_FIELDS = ("runners", "checker", "inventory", "evidence", "related")
 
@@ -54,11 +54,48 @@ CASE_REQUIRED = {
                   "shape", "allocator_layer", "fidelity", "arms", "status"],
     "sqlite-row": ["case", "upstream_fix", "title", "consumer", "class", "verdict",
                    "primitive", "arms", "status"],
+    # A defect whose trigger is an interpreter script rather than a C
+    # reduction -- SQL against a running server, a .rb against mruby, a .t
+    # against perl. There is no case.c and no allocator to name: the case IS
+    # its script, and what distinguishes one from another is the defect class
+    # and how faithful the script is to the upstream report. Each case names
+    # its own file in `trigger`, so one corpus may mix .t and .pl.
+    "script-trigger": ["case", "upstream_fix", "title", "consumer", "class",
+                       "trigger", "fidelity", "arms", "status"],
 }
 CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "sibling_issue", "size_class", "size_note", "layer_note", "note",
                  "advisory", "shape", "object", "capstone_column", "comparison",
-                 "taxonomy_class"}
+                 "taxonomy_class", "allocator_layer", "lifetime_ender",
+                 "allocator_consumed", "channel", "harness_limit",
+                 "oracle_is_recording", "nested", "nested_why",
+                 "citation_constraint"}
+# `citation_constraint` records that a case's upstream commit cannot be quoted
+# freely -- in practice that its SUBJECT names a person, so the fix may be cited
+# by HASH AND PATH ONLY. This tree's naming rule is absolute and applies to
+# committed files, so the constraint belongs in the case rather than in someone's
+# memory: the first instance (memcached d5d9ff0) sat undispositioned in a triage
+# doc precisely because the reason it was awkward was not recorded as a field.
+# `nested` is a BOOLEAN, and it exists because the inventory's headline nesting
+# share was being computed from `allocator_layer` PROSE. On 2026-10-06 a script
+# doing that put 11 of 25 spatial cases into an "unclassified" bucket and
+# reported 44%; the correct figure is 60%, so taking that number would have
+# published one wrong by 16 points -- the unanswered probe was reading as "not
+# nested". `nested_why` carries the one-sentence reason. The axis is WHO
+# ALLOCATED THE OBJECT: an inner allocator's sub-allocation is nested, a direct
+# malloc is not. It is NOT which bound the access crosses; collapsing those two
+# produced a retraction on 2026-10-05.
+# `harness_limit` says this case cannot execute on the arms at all (it needs a
+# postmaster, a transaction block, something the harness does not provide), and
+# `oracle_is_recording` says its directive was written from its own run and so
+# necessarily fires. Both exist so a runner can act on them: the same facts are
+# in `fidelity` as prose, and a scorer matching prose matches wording, which
+# drifts. A case carrying either must be excluded from that arm's denominator
+# rather than given a verdict.
+# `trigger` is deliberately NOT here. A field meaningful in exactly one schema
+# belongs in that schema's required list; putting it in the global optional set
+# would stop the unknown-field check from catching a stray `trigger` on a
+# case-json or sqlite-row case, which is the typo that check exists to find.
 # Arm -> the keys that arm's oracle must carry. An arm may instead declare
 # itself unwritten with {"status": "not written"}.
 ARM_ORACLES = {
@@ -67,6 +104,34 @@ ARM_ORACLES = {
     "poisoncap-spatial": {"oracle", "mode"},
     "poisoncap-protected": {"oracle", "mode", "signal", "si_code"},
     "cheribsd-revocation": {"oracle"},
+    # The three system-allocator arms of docs/ref/runtime-terms-glossary.md
+    # section 6. They are one image each of the same source, differing only in
+    # the heap it links: the first-fit heap without per-object bounds, the same
+    # heap as applications get it today, and the Sublet heap. A port that also
+    # sublets its own allocator names that arm for the port (sublet-gc,
+    # sublet-svheads) -- the name says which nested allocator was sublet, because
+    # a program has more than one and only the named one is protected.
+    "sysalloc-none": {"oracle"},
+    "sysalloc-bounds": {"oracle"},
+    "sysalloc-sublet": {"oracle"},
+    "sublet-gc": {"oracle"},
+    "sublet-svheads": {"oracle"},
+    # Bounds narrower than the allocation, the remedies for a crossing that stays inside one:
+    # struct-field bounds from each compiler, and the carved corpus's narrowing at the carve.
+    "capstone-subobject": {"oracle"},
+    "cheribsd-subobject": {"oracle"},
+    "capstone-carve-bounds": {"oracle"},
+    "cheribsd-carve-bounds": {"oracle"},
+    # tshark's chunk allocator over the Sublet heap (the wireshark plain-heap corpus).
+    "sublet-chunks": {"oracle"},
+    # The three columns asked for per bug (docs/ref/spatial-vs-temporal-three-programs.md section 0):
+    # Sublet ONLY as the system allocator under the program's stock nested allocator; the whole
+    # program's Sublet configuration (heap + its nested allocator's port) on a plain case; and the
+    # Sublet port of a carving routine (regions split from a linear block, each its own alias).
+    "sublet-malloc": {"oracle"},
+    "sublet-full": {"oracle"},
+    "sublet-carve": {"oracle"},
+    "sublet-pymalloc": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),
@@ -187,6 +252,8 @@ def check_cases(corpus, decl, dirs, problems):
     recorded = decl["live_in_pin_recorded"]
     required_arms = set(decl.get("required_arms", []))
     macro = decl.get("case_macro")
+    # case-json fixes the name; script-trigger takes it from each case, so a
+    # corpus may mix .t and .pl, or .sql and anything else, without splitting.
     source_name = "case.c" if decl["case_schema"] == "case-json" else None
     live = {"true": 0, "false": 0, "not_asserted": 0}
     arm_keys = dict(ARM_ORACLES)
@@ -219,7 +286,7 @@ def check_cases(corpus, decl, dirs, problems):
         number, fix = case.get("case"), case.get("upstream_fix")
         if isinstance(number, int) and fix:
             prefix = f"row{number}_" if decl["case_schema"] == "sqlite-row" \
-                else f"{number:02d}_{fix}_"
+                else f"{number:02d}_{fix}_"   # case-json and script-trigger share this
             if not where.startswith(prefix):
                 problems.append(f"{where}: directory should start with {prefix!r}")
         if isinstance(number, int):
@@ -264,10 +331,15 @@ def check_cases(corpus, decl, dirs, problems):
                 if not isinstance(arm, dict):
                     problems.append(f"{where}: arm {name!r} is not an object")
                     continue
-                if arm.get("status") == "not written":
-                    continue
+                # Name before status. An unwritten arm still has to be a real
+                # arm: short-circuiting on "not written" first let a misspelled
+                # name through silently, which is the one case where nobody
+                # would ever notice, because an unwritten arm produces no
+                # output to look wrong.
                 if name not in arm_keys:
                     problems.append(f"{where}: arm {name!r} is not in SCHEMA.md")
+                    continue
+                if arm.get("status") == "not written":
                     continue
                 for key in sorted(arm_keys[name] - set(arm)):
                     problems.append(f"{where}: arm {name!r} lacks {key!r}")
@@ -276,6 +348,18 @@ def check_cases(corpus, decl, dirs, problems):
             provenance += 1
         elif "expect_provenance" not in decl:
             problems.append(f"{where}: no PROVENANCE.md")
+        if decl["case_schema"] == "script-trigger":
+            named = str(case.get("trigger", "")).strip()
+            # Shape before existence. A name like "../x.t" is both malformed
+            # and absent, and reporting the absence sends the reader looking
+            # for a missing file instead of at the field they mistyped. Once
+            # the order is right, elif is correct: a malformed name has no
+            # meaningful existence to report, so the second message is noise.
+            if named and ("/" in named or named.startswith(".")):
+                problems.append(f"{where}: trigger {named!r} must be a plain filename "
+                                f"inside the case directory")
+            elif named and not (path / named).is_file():
+                problems.append(f"{where}: trigger names {named!r}, which is not here")
         if source_name:
             source = path / source_name
             if not source.is_file():
@@ -367,15 +451,27 @@ def check_one(manifest):
 
 
 def self_test():
-    """Prove the checker rejects corruption. Without this its silence is unproven."""
+    """Prove the checker rejects corruption. Without this its silence is unproven.
+
+    Returns (accepted, attempted). The caller reports the attempted count rather
+    than a written-out number: a hard-coded "five" keeps printing five when a
+    sixth corruption is added, and keeps printing five when one stops running.
+    The number has to come from the list that ran, or it is decoration.
+    """
     victim = CORPORA / "cpython/pymalloc-repros"
     accepted = []
-    for label, mutate in (
+    corruptions = (
         ("a missing required field", lambda c: c.pop("consumer")),
         ("a case number the directory does not carry", lambda c: c.update(case=42)),
         ("an arm with neither oracle nor status", lambda c: c["arms"].update(spatial={})),
         ("live_in_pin without its proof", lambda c: c.update(live_proof="")),
-    ):
+        # An unwritten arm produces no output, so a misspelled one is the single
+        # corruption nobody would ever spot by reading a run. It has to be the
+        # gate that spots it.
+        ("a misspelled arm hidden behind 'not written'",
+         lambda c: c["arms"].update(spatail={"status": "not written"})),
+    )
+    for label, mutate in corruptions:
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "corpus"
             shutil.copytree(victim, copy, ignore=shutil.ignore_patterns("results", ".git"))
@@ -388,7 +484,7 @@ def self_test():
             check_cases(copy, decl, sorted(copy.glob("[0-9][0-9]_*")), problems)
             if not problems:
                 accepted.append(label)
-    return accepted
+    return accepted, len(corruptions)
 
 
 def main():
@@ -398,11 +494,15 @@ def main():
     args = parser.parse_args()
 
     if args.self_test:
-        accepted = self_test()
+        accepted, attempted = self_test()
         if accepted:
             print("CHECKER BROKEN: it accepted " + "; ".join(accepted), file=sys.stderr)
             return 2
-        print("self-test: the checker rejected all four corruptions")
+        if not attempted:
+            print("CHECKER BROKEN: the self-test ran no corruptions at all",
+                  file=sys.stderr)
+            return 2
+        print(f"self-test: the checker rejected all {attempted} corruptions")
 
     manifests = declarations(args.corpus)
     if not manifests:

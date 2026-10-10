@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-07",
+  "runner": "ports/common/host/cheribsd/run.py",
+  "runtime_revocation": "on",
+  "guest_default_revocation": "preserved",
+  "modes": [
+    0
+  ],
+  "cases": 22,
+  "caught": [],
+  "completed": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+  ],
+  "arms_total": 25,
+  "arms_passed": 25,
+  "runner_exit": 0,
+  "controls": {
+    "cheribsd-abi": "CHERI_ABI pointer_bytes=16 runtime_revocation=1 -- PASS",
+    "cheribsd-bounds": "CHERI_BOUNDARY_READY -- PASS",
+    "revocation-control": "FAULTED -- REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1, then SIGPROT si_code 2 (PROT_CHERI_TAG) at addr=pc=0x101dc0, equal to the mc_defect_read address supervise resolved from the ELF independently of the run"
+  },
+  "why_this_run_exists": "the 20260921-cheribsd bundle covers 13 of these 18 cases at revocation ON, but contains NO revocation control: its README cites a PoisonCap mode-0 'matched control', a mode-1 arm that faults, and a bounds control. A bounds control and a PoisonCap differential do not show that CheriBSD's REVOKER sweeps, which is the only thing that makes a temporal completion mean 'the mechanism is active and did not fire'. That is the bar the ffmpeg and memcached readings meet, and this run brings wmem to it. The 5 spatial rows (13-17) additionally had no bundle at all.",
+  "control_is_borrowed": "ports/memcached/allocators/security-tests/cheribsd/revocation-control.c, unchanged. Borrowing is proven: the ffmpeg pool reading used the same file, and the control exports its probe as a global asm label so one supervisor resolves it regardless of which corpus is under test.",
+  "mode_0_is_the_stock_arm": "mode 0 is the port's unprotected baseline -- objects are request-bounded and a packet-pool reset revokes nothing -- which is exactly the arm that asks what the SHIPPING temporal mechanism does. Modes 1/2 are the port's own protection and are measured elsewhere.",
+  "platform": {
+    "image_sha256": "0cb16209c16c5edf9f81148eedf33f750af404f890af6d65d9bd43ecf61aa4f4",
+    "note": "stock CheriBSD purecap built on this host; kernel CHERI-PURECAP-QEMU from releng/26.07-88f39900c329 = pins.env's CHERIBSD_REV. BYTE-IDENTICAL to the vehicle the ffmpeg and memcached readings used. The 20260921 bundle used image 3571a6d2..., a different (PoisonCap-tree) vehicle, so this run also makes the three programs' columns comparable rather than merely all labelled CheriBSD."
+  },
+  "supersedes": "results/20260921-cheribsd for the stock-CheriBSD question. That bundle is kept: it carries the PoisonCap arms, which this run does not measure.",
+  "n_per_cell": 1,
+  "extended": "re-run the same day over 22 cases after 18-21 were added, on the same vehicle and with the same borrowed control. The 18-case reading it replaces was a subset of this one, not a different measurement."
+}

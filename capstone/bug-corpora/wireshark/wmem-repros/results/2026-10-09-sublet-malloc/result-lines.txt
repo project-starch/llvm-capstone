@@ -1,0 +1,30 @@
+# wmem-repros, sublet-malloc arm: wmem AS RELEASED (WM_VARIANT=reference) on Sublet regions, mode 1
+# pre-registered f7adf03a1009; capstone-qemu 6e5e136a070b0ee9; clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)
+# image sha256 (16) | runner line
+3c108ea70c60f2d4 | OK   case=0 00-rpcrdma-write-offsets-global          sublet   (recorded non-detection: completion required)
+306ad73be0256c18 | OK   case=1 01-cms-oid-global                        sublet   (recorded non-detection: completion required)
+7cecc6645aaced8b | OK   case=2 02-mdb-address-column                    sublet   (recorded non-detection: completion required)
+0143ba0fc0806bf2 | OK   case=3 03-cola-info-column                      sublet   (recorded non-detection: completion required)
+02e64d7c30855f63 | OK   case=4 04-qnet6-col-set-str                     sublet   (recorded non-detection: completion required)
+44266e2ccbb869bf | OK   case=5 05-usbll-address-struct                  sublet   (recorded non-detection: completion required)
+16554b720f20055d | OK   case=6 06-x509if-last-dn-static                 sublet   (recorded non-detection: completion required)
+0b54f830208374c0 | OK   case=7 07-mysql-auth-method                     sublet   (recorded non-detection: completion required)
+050695fceff5399d | OK   case=8 08-sip-cseq-method                       sublet   (recorded non-detection: completion required)
+973f81cd62cc1af1 | OK   case=9 09-geonw-proto-data-tvb                  sublet   (recorded non-detection: completion required)
+c8a93f26181c3890 | OK   case=10 10-t38-reassembly-buffer                 sublet   (recorded non-detection: completion required)
+a7acf59ce2d5d149 | OK   case=11 11-http-header-map                       sublet   (recorded non-detection: completion required)
+6526f51779e63ccf | OK   case=12 12-xml-root-name-recycled                sublet   (recorded non-detection: completion required)
+875507e6d274eddf | OK   case=13 13-http-range-cursor-past-chunk          sublet   (recorded non-detection: completion required)
+14fc307a39cc937e | OK   case=14 14-solaredge-payload-six-past            sublet   (recorded non-detection: completion required)
+79a4542592343d9c | OK   case=15 15-opcua-padding-below-chunk             sublet   (recorded non-detection: completion required)
+a14c435fdfd221bd | OK   case=16 16-dcp-etsi-rs-parity-write              sublet   (recorded non-detection: completion required)
+35883f913e6c0da1 | OK   case=17 17-dns-one-byte-write                    sublet   (recorded non-detection: completion required)
+4508542c578a6c43 | OK   case=18 18-rtps-batch-sample-info-unguarded      sublet   (recorded non-detection: completion required)
+38a7ca5b48bd1509 | OK   case=19 19-ntlmssp-blob-length-before-check      sublet   (recorded non-detection: completion required)
+6df5048ba086d034 | OK   case=20 20-proto-undecoded-bitmap-unbounded      sublet   (recorded non-detection: completion required)
+3fe2857e464747ad | OK   case=21 21-tcp-flags-str-sixteen-bytes           sublet   (recorded non-detection: completion required)
+
+# positive control, same build options, its own image (controls/sublet-malloc):
+# image c4f5f519b916bb92; first attempt: infra flake (QEMU stopped before the guest login, boot produced no result, exit 75); second attempt:
+OK   case=90 90-jumbo-freed-by-reset                  spatial
+OK   case=90 90-jumbo-freed-by-reset                  sublet   cause=24 pc=0x101901278 expected=0x101901278 site=read

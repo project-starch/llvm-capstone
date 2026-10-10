@@ -33,6 +33,7 @@ not build.
 | one byte written past an item's data into the next chunk of the page | 5 | native only | not run |
 | four bytes written into an item field that has no room, inside the chunk | 6 | native only | not run |
 | unbounded read forward from an item key with no terminator | 7 | native only | not run |
+| an unbounded scan runs past a CACHE object into the next object of the same cache | 8 |
 
 Five cases in five shapes, across both of the allocators the port carries.
 Cases 0 and 1 are consumer mistakes in `cache.c`'s object caches, read one

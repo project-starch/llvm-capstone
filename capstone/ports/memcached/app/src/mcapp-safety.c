@@ -561,9 +561,19 @@ static int mcapp_fixture(int n)
             printf("MCAPP-FIX 17 realloc grew IN PLACE: triggering condition not created\n");
             return MCAPP_MARK(n, 0xE0017);
         }
-        unsigned char *taker = malloc(sz);        /* the next owner of the released block */
-        if (!taker) return MCAPP_MARK(n, 0xE0011);
-        unsigned same = mcapp_cur(taker) == rbuf_addr;
+        unsigned char *taker = NULL;
+        unsigned same = 0;
+        /* mallocng deliberately cycles offsets. Immediate reuse is not an
+           allocator guarantee: search for actual reissue without changing
+           its policy. A bounded failure still means no triggering condition. */
+        for (unsigned attempt = 0; attempt < 4096; ++attempt) {
+            taker = malloc(sz);
+            if (!taker) return MCAPP_MARK(n, 0xE0011);
+            same = mcapp_cur(taker) == rbuf_addr;
+            if (same) break;
+            free(taker);
+            taker = NULL;
+        }
         if (!same) {
             printf("MCAPP-FIX 17 released block NOT reissued: triggering condition not created\n");
             return MCAPP_MARK(n, 0xE0017);

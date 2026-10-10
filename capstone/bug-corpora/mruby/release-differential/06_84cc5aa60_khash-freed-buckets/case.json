@@ -1,0 +1,27 @@
+{
+  "case": 6,
+  "upstream_fix": "84cc5aa60",
+  "title": "khash caches keys and ed_flags across a Ruby hash or eql? callback that rehashes and frees h->data",
+  "consumer": "include/mruby/khash.h",
+  "class": "temporal",
+  "trigger": "trigger.rb",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in 84cc5aa60 (84cc5aa60130a575c93bdae56e84d8298f71f997) (2026-07-26), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: heap-use-after-free (with MRB_HEAP_PAGE_SIZE=1: heap-use-after-free); the same case on master: no report",
+  "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-none": {
+      "oracle": "capability fault, cause 24"
+    },
+    "sysalloc-bounds": {
+      "oracle": "capability fault, cause 5"
+    },
+    "sublet-gc": {
+      "oracle": "capability fault, cause 24"
+    },
+    "cheribsd-revocation": {
+      "oracle": "SIGPROT: the defence reports"
+    }
+  },
+  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
+  "allocator_layer": "the khash bucket array (system allocator)"
+}

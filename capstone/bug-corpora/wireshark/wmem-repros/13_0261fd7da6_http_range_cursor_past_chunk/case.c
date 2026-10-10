@@ -39,7 +39,11 @@ WM_CASE(13) {
   CHECK(8 >= len, 5);
   CHECK((uintptr_t)str + 8 < (uintptr_t)neighbour + 64, 6);
   /* "str += 8", :3789, unconditional. Then strtoul reads from the cursor. */
+  /* THE FIX, 0261fd7da6: the range value is checked to hold the prefix before the cursor skips it,
+   * so a value shorter than the skip is rejected and nothing is read past it. */
+  if (wm_fixed && len <= 8)
+    return;
   wm_held = (unsigned char *)str + 8;
   wm_mark();
-  (void)wm_probe(wm_held);
+  WM_READ_AT(wm_held, str, len);
 }

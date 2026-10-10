@@ -1,5 +1,74 @@
 # Current Capstone state
 
+## 2026-10-08 — mallocng executes locally in virtual Capstone
+
+Branch `virtual-musl-local` replaces the virtual buddy heap with Capstone-compiled
+musl 1.2.5 mallocng. malloc/free and ownership operations execute in the
+application's virtual C context. Actual syscall/VM, node-pressure, fault and
+scheduling paths cross the existing trusted Linux adapter. Upstream allocation
+policy is retained; patch 0009 ports capability representation and lifetime
+hooks. The fixed allocator block/arena arrays are removed.
+
+ABI v5 requires QEMU's opt-in exact physical-shadow bounds profile, pinned at
+`24b1e95b1dac`. This is extra QEMU metadata, not a tag-bit-only or RTL design.
+The default physical processor profile and physical allocator selection retain
+their previous behavior. Linux core and firmware are unchanged.
+
+The [qualification](../../runtime/virtual/results/local-mallocng/README.md)
+records 19/19 allocator, 42/42 runtime, 10/10 pthread, 16/16 other normal-port
+and 73/73 memcached checks, plus 202 processor checks. It includes 200,000
+lifetimes, 70,000 live objects, exact-site spatial/temporal denials and a
+control detecting an inserted allocation-loop service. All eight application
+ports are relinked with the new SDK. The compiler and platform are reused;
+the two long sparse runtime cases and the CPython inner / FFmpeg-tshark safety
+corpora are not requalified here. The memcached fixture-17 setup now searches
+for actual reissue; its original temporal-fault prediction is unchanged.
+
+The withdrawn native-heap branches are not the integration target. Merge the
+node-growth stack, then QEMU [#19](https://github.com/project-starch/capstone-qemu/pull/19),
+then the matching local-mallocng runtime. Rebuild SDK and applications together.
+The [allocator contract](../../runtime/virtual/mallocng.md) explains the
+representation, metadata cost, VM remap transaction and remaining limits.
+
+## 2026-10-07 — growing virtual node tables
+
+The `review/virtual-node-growth` branch builds on `dev` at `08cf07d75ad2`
+and the application build repairs in `review/virtual-build-repairs`. Its QEMU
+pin includes the `b649187a989c` UNINIT diagnostic fix and a paged guest node
+store with a stable physical root,
+unchanged 31-bit IDs and 16-byte records, and chained collection requests.
+The trusted Linux module allocates base pages on demand and reuses IDs only
+after the existing complete stale-tag sweep. The SDK requests node capacity
+before heap allocation. Linux core, firmware, upstream musl and the legacy
+host-tree algorithm are unchanged. Applications should be relinked with the
+new SDK to use proactive growth.
+
+The [node gate](../../runtime/virtual/results/node-growth/nodes.json) passes
+15/15 checks: two rounds of 70,000 simultaneously live structural nodes,
+140,004 reclaimed IDs, stable capacity at 70,656 slots (1,142,784 metadata
+bytes), stale denial, bounded quota failures and teardown. Processor gates
+pass 69/69 virtual-runtime, 60/60 M1 and 69/69 U-access checks. The actual C
+node backend matches the forest model for 8,949 prefixes per binding
+(host, flat guest, paged guest), with 19 directed paging checks and mutation
+controls. The [pthread gate](../../runtime/virtual/results/node-growth/pthreads.json)
+passes 9/9.
+
+The [complete runtime gate](../../runtime/virtual/results/node-growth/runtime.json)
+passes 46/46, including both 200,000-allocation recycling cases, exact-site
+stale denial, spatial checks, SQLite persistence, mruby and Perl smoke. The
+sparse positive case uses 348 KiB of node metadata, reclaims 188,631 IDs and
+leaves unused payload pages unpopulated. All processor and runtime gates use
+the same QEMU executable. See the [qualification manifest](../../runtime/virtual/results/node-growth/qualification.json)
+for hashes, reused compiler/musl/platform inputs and application relink scope.
+The rebase also passes 87/87 native CTest checks under ASan/UBSan. An additional
+physical LINEAR/UNINIT corpus attempt fails at `create_dom` before its probes;
+the cause remains unresolved and physical compatibility is not requalified.
+
+This is one-hart QEMU evidence. The 65,536 allocator block-record limit is
+separate and unchanged. Node capacity is bounded by RAM, an optional module
+quota and the ID field; individual published pages are retained until exit.
+See the [runtime mechanism and reproduction commands](../../runtime/virtual/README.md).
+
 ## 2026-10-05 — B0: a gp-captable delegated application runs byte-exact on silicon
 
 - **b0-hello passes on `caplifive_supcall_715bdd1fe.bit`, byte-exact under a `cmp` oracle, N=2** (boots 13 and

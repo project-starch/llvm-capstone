@@ -69,6 +69,29 @@ SKIPPED_BINARY=()
 # every commit that touches it fail on its own regexes. Excluding it is not a weakened
 # pattern -- a detector's rule list is not a violation. Announced below, never silent.
 SELF='capstone/tests/precommit-scan.sh'
+# ADDED LINES ONLY, for EVERY diff-fed mode below -- `--range` and the default
+# staged/unstaged one alike. A deletion cannot publish anything, so feeding `-` lines to the
+# detectors made the gate unable to pass the one commit that REMOVES a name: the fix is
+# blocked by the very string it is removing. Found 2026-10-07 taking a collaborator's name out
+# of a handoff doc that had just been merged into dev -- every hit was on a `-` line, the tree
+# was already clean, and the gate still said BLOCKED.
+#
+# That is worse than a nuisance. The gate's own advice is "do not weaken the patterns to make
+# it pass", and an operator facing an unpassable gate on an urgent name removal is being pushed
+# toward exactly that. Scanning additions is not a weakened pattern: the same name in a
+# message, in an added line, or in an untracked file still blocks, and the controls at the foot
+# of this file prove all three. Context lines are dropped for the same reason -- they are
+# already-committed content the change is not touching, and `--tree` is the mode for auditing
+# those.
+#
+# THIS IS DEFINED HERE, NOT INSIDE ONE BRANCH, BECAUSE HALF A FIX IS A LIVE DEFECT. The first
+# version of this change filtered only the staged/unstaged branch and left `--range`
+# unfiltered, which is the mode the PRE-PUSH hook and every PR audit use -- so the exact
+# failure it was written to remove survived in the exact place it costs most: a name removal
+# could be committed and then not pushed. Fixed 2026-10-07, same day, after the gap was found
+# while preparing to audit 15 incoming PRs with `--range`. `--tree` does not use this: it cats
+# whole tracked files, where every line is current content by definition.
+ADDED_ONLY() { grep -E '^(\+\+\+|\+)' | grep -vE '^\+\+\+ /dev/null' || true; }
 if [[ "$TREE" == "1" ]]; then
   # Every TRACKED file's full content. Binary is skipped by content and named out loud, exactly as
   # the untracked path below does, and for the same reason: catting a blob in raw makes ugrep treat
@@ -136,16 +159,18 @@ elif [[ -n "$RANGE" ]]; then
   fi
   git log --format='%H%n%an <%ae>%n%cn <%ce>%n%s%n%b' "$RANGE" 2>/dev/null \
     | { if [[ "$ME" != " <>" ]]; then grep -vxF -- "$ME" || true; else cat; fi; } >> "$TMP"
-  git diff "$RANGE" -- . ":(exclude)$SELF"         >> "$TMP" 2>/dev/null
+  # ADDED LINES ONLY -- see ADDED_ONLY's definition above for why, and for why it being absent
+  # from THIS line until 2026-10-07 was the worse half of the defect.
+  git diff "$RANGE" -- . ":(exclude)$SELF" 2>/dev/null | ADDED_ONLY >> "$TMP"
 else
-  git diff --cached -- . ":(exclude)$SELF"         >> "$TMP" 2>/dev/null
+  git diff --cached -- . ":(exclude)$SELF" 2>/dev/null | ADDED_ONLY >> "$TMP"
   # ALSO the unstaged and the UNTRACKED. Without these the scan is only as good as the
   # user's staging discipline, and it silently was not: running it BEFORE `git add` scanned
   # the commit message and nothing else, then printed CLEAN. A brand-new file -- exactly the
   # kind that carries a fresh name or a pasted console URL -- appears in NO diff until it is
   # staged, so the most dangerous content was the least likely to be seen. Caught 2026-08-18
   # when a new plans/ document passed a scan that had never read a byte of it.
-  git diff -- . ":(exclude)$SELF"                  >> "$TMP" 2>/dev/null
+  git diff -- . ":(exclude)$SELF" 2>/dev/null | ADDED_ONLY >> "$TMP"
   while IFS= read -r -d '' f; do
     [[ "$f" == "$SELF" ]] && continue
     printf '=== untracked: %s ===\n' "$f" >> "$TMP"

@@ -1,0 +1,27 @@
+{
+  "case": 4,
+  "upstream_fix": "606d9a6b2",
+  "title": "Hash#merge and pattern **rest keep the pair only in C locals; it is collected and the freed object reaches the write barrier",
+  "consumer": "src/hash.c",
+  "class": "temporal",
+  "trigger": "trigger.rb",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in 606d9a6b2 (606d9a6b2c02cc4fe916a55e1c03db6ec5a667a9) (2026-09-12), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: heap-use-after-free (with MRB_HEAP_PAGE_SIZE=1: heap-use-after-free); the same case on master: no report",
+  "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-none": {
+      "oracle": "completes, and the harness reports a wrong answer rather than a fault -- a differential, not a detection: [\"Hash scans that carry a pair into a set the hash no longer holds\", \"NOT_EQUAL\", \"\\\"the value only that entry holds\\\"\","
+    },
+    "sysalloc-bounds": {
+      "oracle": "completes, and the harness reports a wrong answer rather than a fault -- a differential, not a detection: [\"Hash scans that carry a pair into a set the hash no longer holds\", \"NOT_EQUAL\", \"\\\"the value only that entry holds\\\"\","
+    },
+    "sublet-gc": {
+      "oracle": "capability fault, cause 24"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, and the harness reports a wrong answer rather than a fault -- a differential, not a detection: [\"Hash scans that carry a pair into a set the hash no longer holds\", \"NOT_EQUAL\", \"\\\"the value only that entry"
+    }
+  },
+  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
+  "allocator_layer": "a GC object slot in an mrb_heap_page"
+}

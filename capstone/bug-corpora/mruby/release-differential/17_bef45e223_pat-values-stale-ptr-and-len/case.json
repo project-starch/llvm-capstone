@@ -1,0 +1,27 @@
+{
+  "case": 17,
+  "upstream_fix": "bef45e223",
+  "title": "__pat_values and __except hold the key array's pointer and its length across Ruby: the freed buffer is read and the stale length indexes past the shorter array",
+  "consumer": "src/hash.c",
+  "class": "both",
+  "trigger": "trigger.rb",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in bef45e223 (bef45e223bf013f6e3a919ddb20bdc7dfc4e6c99) (2026-08-12), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: heap-use-after-free (with MRB_HEAP_PAGE_SIZE=1: heap-use-after-free); the same case on master: no report",
+  "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-none": {
+      "oracle": "capability fault, cause 24"
+    },
+    "sysalloc-bounds": {
+      "oracle": "capability fault, cause 24"
+    },
+    "sublet-gc": {
+      "oracle": "capability fault, cause 24"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, and the harness reports a wrong answer rather than a fault -- a differential, not a detection: [\"pattern matching - a key that moves the subject\", \"NOT_FALSE\", \"[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1"
+    }
+  },
+  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
+  "allocator_layer": "an Array's and a Hash's storage (system allocator)"
+}

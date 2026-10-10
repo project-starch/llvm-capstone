@@ -1,0 +1,27 @@
+{
+  "case": 15,
+  "upstream_fix": "af6f23ddb",
+  "title": "String#prepend with a self-referencing argument memcpys past the resized buffer",
+  "consumer": "mrbgems/mruby-string-ext/src/string.c",
+  "class": "spatial",
+  "trigger": "trigger.rb",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in af6f23ddb (af6f23ddb3f2e2dd92625c102c0d463ba62e09ee) (2026-04-10), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: heap-buffer-overflow (with MRB_HEAP_PAGE_SIZE=1: heap-buffer-overflow); the same case on master: no report",
+  "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-none": {
+      "oracle": "capability fault, cause 24"
+    },
+    "sysalloc-bounds": {
+      "oracle": "capability fault, cause 7"
+    },
+    "sublet-gc": {
+      "oracle": "capability fault, cause 7"
+    },
+    "cheribsd-revocation": {
+      "oracle": "SIGPROT: the defence reports"
+    }
+  },
+  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
+  "allocator_layer": "a String buffer (system allocator)"
+}

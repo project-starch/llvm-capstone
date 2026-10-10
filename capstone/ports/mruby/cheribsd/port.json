@@ -1,0 +1,24 @@
+{
+  "program": "mruby",
+  "role": "platform-build",
+  "title": "mruby 4.0.0-rc2 cross-built for CheriBSD purecap, the release corpus's fourth arm",
+  "upstream": {
+    "version": "4.0.0-rc2",
+    "commit": "9d523e2f74f2e63ca02840937523de61398a617d",
+    "pin_source": {
+      "file": "capstone/ports/mruby/cheribsd/build.sh",
+      "grep": "COMMIT=9d523e2f74f2e63ca02840937523de61398a617d"
+    }
+  },
+  "targets": [
+    "cheribsd-purecap"
+  ],
+  "workload": "the 23 cases of the release corpus, plus its own controls: the interpreter evaluates, and 40- and 500-frame recursion survives revocation",
+  "evidence": [
+    "capstone/bug-corpora/mruby/release-differential/results/20261006-cheribsd"
+  ],
+  "corpora": [
+    "capstone/bug-corpora/mruby/release-differential"
+  ],
+  "note": "Not a port of an allocator: mruby's own allocators are unchanged here. The point is the comparison -- the same defects under CheriBSD's deployed heap revocation instead of ours."
+}

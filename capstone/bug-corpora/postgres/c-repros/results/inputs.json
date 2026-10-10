@@ -1,0 +1,63 @@
+{
+  "spatial": {
+    "arm": "spatial",
+    "bindir": "/tmp/crepros-spatial",
+    "image_sha256": {
+      "00_CVE-2026-6477_pqfn_unbounded_result_copy": "5a33833c384e8cbe3d7bbc55e7a40f52eb3466bc69ccaa563072579d7960f298",
+      "01_CVE-2026-19385_pgdump_transform_list_overread": "0768c1628cd18aab9356d5f07c046b63f8606fc829382ed4950175ff1f0e3e7d",
+      "02_CVE-2026-16241_ecpg_bytea_negative_length": "8b111cecfd1840529ca57259b0054bca38b09a9e6b95e5f4c61b42064c315849",
+      "03_5d61bdd114_saslprep_truncated_utf8_overread": "b2b69f3b57caed146449cd025b3e35be2e27be753a52b5e23c23a26c599d20bb",
+      "04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer": "c7de42e2c6a81dd6d501c56c1d8a5b7995698650f557ff6234d42d19e02161b7"
+    },
+    "runner_sha256": "7ca76962907c4863e344fd00f54cc30ba962be1bc845377e04aa57ec504ba5c9",
+    "started_utc": "20261006-160406",
+    "mechanism_gate": {
+      "case": "00",
+      "passed": true,
+      "kind": "a corpus case required to be detected"
+    },
+    "cases": 5,
+    "scored": 5,
+    "verdicts": {
+      "detected": 5
+    }
+  },
+  "sublet": {
+    "arm": "sublet",
+    "bindir": "/tmp/crepros-sublet",
+    "image_sha256": {
+      "00_CVE-2026-6477_pqfn_unbounded_result_copy": "ec8474926b1dcae7b3f875fae3254fdba15fae04ecf323552919236d9de71700",
+      "01_CVE-2026-19385_pgdump_transform_list_overread": "2add7053a77339fb486849282aedc2485786b27dba4031334f4ffd0208fb05e1",
+      "02_CVE-2026-16241_ecpg_bytea_negative_length": "963944b02018f07edad40ae6d0c4d47ba04c4dbefa58d1f26b6ded93c814742f",
+      "03_5d61bdd114_saslprep_truncated_utf8_overread": "1ef0b6fb2b7f56557d7e9398e941afe8dbdefaf1d54153534924755d2026bde5",
+      "04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer": "4262e9e801f26112d8eb9275153a71aa4cb4ab0a2dad38c10549c19d8983d680"
+    },
+    "runner_sha256": "7ca76962907c4863e344fd00f54cc30ba962be1bc845377e04aa57ec504ba5c9",
+    "started_utc": "20261006-161014",
+    "mechanism_gate": {
+      "case": "00",
+      "passed": true,
+      "kind": "a corpus case required to be detected"
+    },
+    "cases": 5,
+    "scored": 5,
+    "verdicts": {
+      "detected": 5
+    }
+  },
+  "cheribsd-revocation": {
+    "arm": "cheribsd-revocation",
+    "kernel": "15.0-CURRENT",
+    "revocation_default": "1",
+    "revocation_every_free_default": "0",
+    "binaries": "/home/zephyr/work/pg-corpus/capstone/bug-corpora/postgres/c-repros/out-cheri",
+    "started_utc": "20261006-162023",
+    "positive_control": {
+      "case": "00_CVE-2026-6477_pqfn_unbounded_result_copy",
+      "exit": 162,
+      "kind": "a corpus case doing double duty: a 4096-byte write into an 8-byte malloc'd object, which must raise SIGPROT if bounds are enforced"
+    },
+    "cases": 5,
+    "scored": 5
+  }
+}

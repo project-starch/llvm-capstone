@@ -75,6 +75,10 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -ffunction-sections -fdata-sections -O1 -w -Wno-int-conversion "${INC[@]}")
 RF=("${CF[@]}" -std=c99 -D_XOPEN_SOURCE=700
     -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+  CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+  RF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+fi
 O=$ROOT/runtime
 if stage runtime; then
   EXTRA=()
@@ -93,7 +97,12 @@ export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
 # ---- the source, patched -------------------------------------------------------
 cd "$ROOT/domain"
 MODE_FILE=$ROOT/domain/nested.mode
-PATCH_HASH=$(sha256sum "$SCRIPT_DIR"/patches/*.patch | sha256sum | cut -d' ' -f1)
+# Over each patch's name and contents, not the paths sha256sum would print:
+# the same patch set in a second worktree is the same patch set, and hashing
+# the paths made every build root look stale outside the tree that made it.
+PATCH_HASH=$({ for p in "$SCRIPT_DIR"/patches/*.patch; do
+                 printf '%s ' "$(basename "$p")"; sha256sum < "$p"
+               done; } | sha256sum | cut -d' ' -f1)
 if [[ -d postgresql-17.5 && $(cat "$ROOT/domain/patchset.sha256" 2>/dev/null) != "$PATCH_HASH" ]]; then
   echo "source patch set changed; use a fresh PG_SU_ROOT" >&2; exit 2
 fi
@@ -119,6 +128,13 @@ if [[ ! -d postgresql-17.5 ]]; then
     done
   fi
 fi
+# The corpus's own module, copied in rather than kept in the tarball: cases 05
+# and 06 are reached by a C caller because no SQL statement can reach them, and
+# a module is how a C caller gets to run inside the backend. Copied on every
+# run so an edit to it rebuilds, and harmless on a reused root.
+mkdir -p postgresql-17.5/contrib/pgcorpus_reach
+cp "$SCRIPT_DIR"/reach-module/* postgresql-17.5/contrib/pgcorpus_reach/
+
 printf '%s\n' "$NESTED" > "$MODE_FILE"
 printf '%s\n' "$PATCH_HASH" > "$ROOT/domain/patchset.sha256"
 cd postgresql-17.5
@@ -145,9 +161,20 @@ if stage configure; then
   grep -E '^#define (MAXIMUM_ALIGNOF|SIZEOF_VOID_P|USE_SYSV_SHARED_MEMORY)' src/include/pg_config.h | sed 's/^/[build-domain] /'
 fi
 
-# The loadable modules initdb's setup SQL needs (name:directory), linked into the
-# image because a domain cannot dlopen (patch 0015, toolchain/static_modules.c).
+# The modules linked into the image, because a domain cannot dlopen (patch 0015,
+# toolchain/static_modules.c): name:directory, the directory relative to the
+# source root. The first two are what initdb's setup SQL needs. The contrib
+# three carry defects this corpus measures and declare no SHLIB_LINK, so they
+# cross-compile with the backend's own settings and need nothing new.
+#
+# pgcrypto is deliberately not here. Its 17.5 OBJS list openssl.o and
+# pgp-mpi-openssl.o unconditionally and its Makefile adds -lcrypto, and no
+# OpenSSL is cross-built for capstone64, so the module cannot link into a
+# domain image. Its case is measured on the CheriBSD arm only.
 MODULES="dict_snowball:src/backend/snowball plpgsql:src/pl/plpgsql/src"
+MODULES="$MODULES ltree:contrib/ltree pg_trgm:contrib/pg_trgm"
+MODULES="$MODULES fuzzystrmatch:contrib/fuzzystrmatch"
+MODULES="$MODULES pgcorpus_reach:contrib/pgcorpus_reach"
 module_objs() { make -s -C "$1" -f Makefile -f "$SCRIPT_DIR/toolchain/print-objs.mk" print-objs; }
 
 # ---- make ---------------------------------------------------------------------------
@@ -190,9 +217,29 @@ if stage make; then
   for md in $MODULES; do
     m=${md%%:*} d=${md#*:}
     # shellcheck disable=SC2046
-    make -k -j"$JOBS" -C "$d" COPT="-DPg_magic_func=${m}_Pg_magic_func -D_PG_init=${m}__PG_init" \
+    # CFLAGS_SL= drops the -fPIC -fvisibility=hidden a contrib MODULE_big adds
+    # for a shared library. Hidden symbols are local, and the table below is
+    # built from the global ones, so with it left in place a module links into
+    # the image with nothing dfmgr can resolve.
+    make -k -j"$JOBS" -C "$d" CFLAGS_SL= COPT="-DPg_magic_func=${m}_Pg_magic_func -D_PG_init=${m}__PG_init" \
       $(module_objs "$d") >> "$ROOT/domain-modules.log" 2>&1 || true
   done
+  # CREATE EXTENSION reads <name>.control and the version scripts from the share
+  # directory and fails there, before it ever asks dfmgr for the library, so the
+  # objects alone are not enough: a run whose share directory lacks these files
+  # records a silent arm for a statement that never executed. Staged here, and
+  # the runner copies this tree into the guest's share directory.
+  EXTDIR=$ROOT/share/extension
+  rm -rf "$EXTDIR"; mkdir -p "$EXTDIR"
+  for md in $MODULES; do
+    d=${md#*:}
+    case $d in contrib/*) ;; *) continue ;; esac
+    m=${md%%:*}
+    [[ -f $d/$m.control ]] || { echo "module $m: no $d/$m.control" >&2; exit 2; }
+    cp "$d/$m.control" "$EXTDIR/"
+    cp "$d"/"$m"--*.sql "$EXTDIR/"
+  done
+  log "extension files staged in $EXTDIR: $(find "$EXTDIR" -type f | wc -l)"
   # The survey log names an object as make named it, relative to its own directory;
   # what counts is whether the backend's link inputs exist, so look there.
   missing=$(find src/backend src/timezone -name objfiles.txt -exec cat {} + | tr ' ' '\n' | grep -v '^$' | while read -r o; do [[ -f $o ]] || echo "$o"; done)
@@ -241,6 +288,10 @@ for md in $MODULES; do
   grep -q "PGSU_SYMBOL($m, \"Pg_magic_func\"" "$TABLE" || { echo "module $m: no Pg_magic_func" >&2; exit 2; }
   objs="$objs $mo"
 done
+# Publish the exact backend/module inputs for the common application relinker.
+# Keep one list so newly admitted contrib modules cannot disappear at relink.
+# shellcheck disable=SC2086
+printf '%s\n' $objs | sort -u > "$ROOT/link/backend-objects.txt"
 "$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -O1 -I"$ROOT/link" -c "$SCRIPT_DIR/toolchain/static_modules.c" \
   -o "$ROOT/link/static_modules.o"
 log "modules linked in: $(grep -c PGSU_MODULE_END "$TABLE"), $(grep -c PGSU_SYMBOL "$TABLE") functions"

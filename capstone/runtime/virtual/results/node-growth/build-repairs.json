@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "base": "08cf07d75ad28ff670087247fd9ed2827431e43c",
+  "repair_commit": "17bc4e6d691a",
+  "native_ctest": {
+    "passed": 87,
+    "total": 87,
+    "sanitizers": [
+      "address",
+      "undefined"
+    ],
+    "log_sha256": "0c0dd83269c5da2511228f75efa8f1db8d5c7546f63f937d67fac8d2f7194b96"
+  },
+  "sqlite": {
+    "status": "PASS",
+    "scope": "Fresh 3.22.0 preparation; all five generated source/header inputs match the previously qualified inputs",
+    "sha256": {
+      "shell.c": "ee64ba1fc18c7c4ae20024ea7074b73d7bbe404fbb8ffa226ad04c67dd1dec4d",
+      "speedtest1.c": "16750ede41d01935a1f423298b7676027048ddc0ce7951cc828b9f1760407291",
+      "sqlite3-stock.c": "7991acd0d8c78435d47523a43aeeb117f0aa264c4d7d0d10410f0128ed1f6004",
+      "sqlite3.c": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+      "sqlite3.h": "51f12458cf2b223291be95d131051f12dc73586a4f81ab98cd8cbfbf17fc9ced",
+      "sqlite3ext.h": "f446a85a9b71a20eef1f6bc5eb2201c020462a17839a3fe4a606231bdef1c229"
+    }
+  },
+  "postgres": {
+    "status": "PASS",
+    "scope": "Existing 17.5 objects relinked with a fresh virtual SDK using the published backend/module list; not a new full source build or workload run",
+    "image_sha256": "f849ca0127e4977695e30913d17c97804ef6694d666b20a02f8889d2b789c6ae",
+    "backend_objects_sha256": "7f05e5c72f7741a83278eae69a84008c439ae0bc72fb499a8f894b2212554a3c"
+  }
+}

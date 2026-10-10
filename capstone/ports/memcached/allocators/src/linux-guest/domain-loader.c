@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 int main(int argc, char **argv) {
-  if (argc != 5 || (strcmp(argv[4], "0") && strcmp(argv[4], "1")))
+  if (argc != 5 || (strcmp(argv[4], "0") && strcmp(argv[4], "1") && strcmp(argv[4], "2")))
     return 2;
   setbuf(stdout, NULL);
   FILE *f = fopen(argv[2], "rb");

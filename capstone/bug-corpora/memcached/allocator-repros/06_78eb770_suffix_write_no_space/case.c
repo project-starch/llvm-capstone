@@ -43,9 +43,10 @@ MC_CASE(6) {
   held = suffix;
   mark(6); /* LAST thing before the access */
   if (!fixed) {
-    /* items.c before the fix: memcpy(ITEM_suffix(it), &flags, sizeof(flags)) */
+    /* items.c before the fix: memcpy(ITEM_suffix(it), &flags, sizeof(flags)). ITEM_suffix's
+     * region is nsuffix = 0 bytes long, which mc_carve() states under MC_CARVE_BOUNDS. */
     for (size_t i = 0; i < sizeof flags; i++)
-      write_probe((volatile unsigned char *)(suffix + i));
+      write_probe((volatile unsigned char *)(mc_carve(suffix, 0) + i));
   }
   /* The fix is "if (nsuffix > 0)", and nsuffix is 0 here, so the fixed arm
    * writes nothing at all. */

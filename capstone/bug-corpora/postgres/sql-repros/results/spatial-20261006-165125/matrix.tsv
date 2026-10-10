@@ -1,0 +1,10 @@
+case	arm	verdict	evidence
+01_12a6206864a0_to_char_tz_overflow	spatial	silent	completed with no directive and no fault
+02_3ed3dbbf44_ts_headline_int16_overflow	spatial	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xc02023a8 address=0xc1df8900 entry=0xc0200de0 code=0xc0200000-0xc5250000 last=0x4f preparing=0x4f sha256=25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e image=/mnt/host/applications/postgres-25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e.dom
+03_8c34261109_ltree_lquery_uint16_overflow	spatial	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xc02023a8 address=0xc1e134a0 entry=0xc0200de0 code=0xc0200000-0xc5250000 last=0x4f preparing=0x4f sha256=25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e image=/mnt/host/applications/postgres-25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e.dom
+04_3d160401b65e_oidvector_oob_read	spatial	differential	errors 0/2 expected
+05_849da8210539_ascii_multibyte_oob_read	spatial	silent	completed with no directive and no fault
+06_e91dcfccaa_regexp_conv_buf_overrun	spatial	silent	completed with no directive and no fault
+07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec	spatial	silent	completed with no directive and no fault
+08_c4d51b6274_levenshtein_stop_column_oob_write	spatial	silent	completed with no directive and no fault
+09_7a7d9693c7_pgp_sesskey_overflow	spatial	not-applicable	this image cannot create pgcrypto -- outside this arm's denominator, not a verdict about it
