@@ -1,0 +1,11 @@
+arm	cheribsd-revocation
+python_sha256	c9bec41630d4b70746d525f5f9a0554dd7c926a556f0ab7b8a6355d970eea794
+revocation_default	1
+every_free_default	0
+started_utc	2026-10-10T18:55:41Z
+positive_control	EXP-OK cpython 552
+sicode_control	bounds si_code=1 (PROT_CHERI_BOUNDS), revoked si_code=2 (PROT_CHERI_TAG)
+quarantine_control	QUARANTINE shadow=mapped allocs=4945 frees=4878 quarantined_after_free=4878 reused_while_quarantined=0 sweeps=0
+case_budget	1800
+only	19,20,21
+ended_utc	2026-10-10T18:59:04Z

@@ -1,0 +1,4 @@
+case	arm	rc	signal	si_code	quarantine	last
+19_gh-142664_fix-uaf-in-memoryview-hash-via	cheribsd-revocation	1			QUARANTINE shadow=null allocs=0 frees=0 quarantined_after_free=0 reused_while_quarantined=0 sweeps=0	    import test.support ModuleNotFoundError: No module named 'test' 
+20_gh-143308_use-after-free-in-save-picklebuffer	cheribsd-revocation	0			QUARANTINE shadow=null allocs=0 frees=0 quarantined_after_free=0 reused_while_quarantined=0 sweeps=0	
+21_gh-146169_segfault-ub-from-expat-when-re	cheribsd-revocation	162	34	si_code=2 (PROT_CHERI_TAG)		SICODE signal=34 si_code=2 (PROT_CHERI_TAG) addr=0x420bd6a8 

@@ -1,0 +1,4 @@
+case	arm	rc	signal	si_code	ending	quarantine	last
+19_gh-142664_fix-uaf-in-memoryview-hash-via	cheribsd-revocation	1			ABR EXIT 1	QUARANTINE shadow=mapped allocs=22669 frees=22336 quarantined_after_free=22336 reused_while_quarantined=0 sweeps=24	 FAILED (failures=12, skipped=19) 
+20_gh-143308_use-after-free-in-save-picklebuffer	cheribsd-revocation	0			ABR RETURNED	QUARANTINE shadow=mapped allocs=6279 frees=6191 quarantined_after_free=6191 reused_while_quarantined=0 sweeps=2	
+21_gh-146169_segfault-ub-from-expat-when-re	cheribsd-revocation	162	34	si_code=2 (PROT_CHERI_TAG)	no end line		SICODE signal=34 si_code=2 (PROT_CHERI_TAG) addr=0x426656a8 
