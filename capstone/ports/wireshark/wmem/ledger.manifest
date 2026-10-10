@@ -16,4 +16,3 @@ src/allocators/sublet/regions.c allocator retained authority and revocation, and
 src/shared/replay.c test event validation and synthetic payload checks across all four allocators
 security-tests/shared/lifetimes.c test live, stale, bounds and refusal controls with labelled access sites
 src/linux-guest/domain-loader.c test prints the chunk port's counts from the report page, or says they are absent
-src/cheribsd/poisoncap.c allocator PoisonCap backing: mapped regions, exact published bounds, invalidation at reset, release and chunk free

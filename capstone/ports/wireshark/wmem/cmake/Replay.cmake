@@ -1,22 +1,11 @@
 add_subdirectory("${CAPSTONE_REPO_ROOT}/capstone/runtime" "${CMAKE_BINARY_DIR}/runtime")
 set(WM_SHARED src/shared/scopes.c src/shared/freestanding.c)
 # The backing policy is the one part that differs per platform: Capstone
-# regions with Sublet handles, a native bump, or PoisonCap-mapped regions.
+# regions with Sublet handles, or a native bump.
 set(WM_BACKING src/shared/backing.c)
-if(PORT_PLATFORM STREQUAL "cheribsd")
-  option(WM_POISONCAP "PoisonCap lifetimes on CheriBSD" OFF)
-  if(WM_POISONCAP)
-    set(WM_BACKING src/cheribsd/poisoncap.c)
-  endif()
-endif()
 # The chunk port (patches/...-0002): every chunk of the block allocator is a
-# region of its own, so a chunk free is a revoke. It needs the Sublet backing,
-# so the PoisonCap arm keeps the region-granular hooks and its own per-chunk
-# poisoning.
-set(WM_CHUNKS_HOSTED)
-if(NOT WM_POISONCAP)
-  set(WM_CHUNKS_HOSTED src/native/chunks.c)
-endif()
+# region of its own, so a chunk free is a revoke. It needs the Sublet backing.
+set(WM_CHUNKS_HOSTED src/native/chunks.c)
 # WM_CHUNKS=OFF builds the region-granular hooks alone from the same tree: every hunk of 0002 is
 # guarded by WMEM_PORT_CHUNKS, so the patch is applied and inert. With WM_P2_CONTROL the fixtures'
 # check that a stale unprotected read sees the old byte is compiled in anyway -- the positive
@@ -56,10 +45,7 @@ function(wm_executable name variant)
   # The shim directory shadows glib.h and the ws_* headers the upstream units include.
   target_include_directories(${name} PRIVATE src/shared/shim src/shared "${source}/wsutil/wmem")
   target_compile_definitions(${name} PRIVATE WMEM_PORT_HOOKS)
-  if(WM_POISONCAP)
-    target_compile_definitions(${name} PRIVATE WM_POISONCAP)
-    target_include_directories(${name} PRIVATE src/cheribsd)
-  elseif(WM_CHUNKS)
+  if(WM_CHUNKS)
     target_compile_definitions(${name} PRIVATE WMEM_PORT_CHUNKS)
   endif()
   if(WM_P2_CONTROL)
@@ -91,19 +77,16 @@ if(PORT_HOSTED)
   target_compile_definitions(wireshark-wmem PUBLIC WMEM_PORT_HOOKS)
   # WM_LIBC_SYSTEM: g_malloc/g_free are the host's malloc/free (src/shared/backing.c), so the
   # unported arms -- ASan natively, libc revocation on stock CheriBSD -- see wmem's system
-  # requests as a stock build makes them. Hosted only, and not with the chunk port or PoisonCap,
-  # both of which own the backing.
+  # requests as a stock build makes them. Hosted only, and not with the chunk port, which owns
+  # the backing.
   option(WM_LIBC_SYSTEM "hosted: g_malloc and g_free are the host's malloc and free" OFF)
-  if(WM_LIBC_SYSTEM AND (WM_POISONCAP OR WM_CHUNKS))
-    message(FATAL_ERROR "WM_LIBC_SYSTEM needs WM_CHUNKS=OFF and no PoisonCap: those own the backing")
+  if(WM_LIBC_SYSTEM AND WM_CHUNKS)
+    message(FATAL_ERROR "WM_LIBC_SYSTEM needs WM_CHUNKS=OFF: the chunk port owns the backing")
   endif()
   if(WM_LIBC_SYSTEM)
     target_compile_definitions(wireshark-wmem PUBLIC WM_LIBC_SYSTEM)
   endif()
-  if(WM_POISONCAP)
-    target_compile_definitions(wireshark-wmem PUBLIC WM_POISONCAP)
-    target_include_directories(wireshark-wmem PUBLIC src/cheribsd)
-  elseif(WM_CHUNKS)
+  if(WM_CHUNKS)
     target_compile_definitions(wireshark-wmem PUBLIC WMEM_PORT_CHUNKS)
   endif()
   if(PORT_PLATFORM STREQUAL "cheribsd")

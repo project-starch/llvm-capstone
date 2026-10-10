@@ -6,8 +6,8 @@
 (`runtime/virtual/heap.c`): exact bounds per object, lifetime retired on free. The physical
 domain's heaps -- the first-fit `level0.c` and the Sublet heap -- are no longer built for CPython:
 `prepare-cpython-capstone.sh` refuses any other profile, and the `CPYD_HEAP` switch between them
-is gone. `cheribsd/` cross-builds the same release for CheriBSD purecap, with ordinary pymalloc or
-the PoisonCap component. Fourteen patches carry the pointer-layout changes (0014, the protection, only with `CPY_SUBLET=1`), and `port.json`
+is gone. `cheribsd/` cross-builds the same release for CheriBSD purecap, with ordinary pymalloc.
+Fourteen patches carry the pointer-layout changes (0014, the protection, only with `CPY_SUBLET=1`), and `port.json`
 states the pin and the role.
 
 ## Build and run

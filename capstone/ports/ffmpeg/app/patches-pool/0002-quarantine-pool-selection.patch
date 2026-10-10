@@ -1,7 +1,7 @@
 Subject: Keep quarantined pool entries unavailable to application lease requests
 
-All backends use the same selection hooks; only the PoisonCap application
-backend can withhold entries. Destruction uses an explicit trusted hook and
+All backends use the same selection hooks; a backend that quarantines
+entries can withhold them. Destruction uses an explicit trusted hook and
 is excluded from the application lease observer.
 
 --- a/libavutil/buffer.c

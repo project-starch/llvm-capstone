@@ -157,10 +157,5 @@ The guest's system default is otherwise preserved. Optional
 and helper processes also use that default. The report records this separate
 setting; test programs still receive their explicit `--runtime-revocation`
 policy. The console is continuously drained during SSH operations.
-The experimental PoisonCap workflows for
-[FFmpeg](../../../ffmpeg/buffer-pool/host/cheribsd/poisoncap/README.md)
-and [memcached](../../../memcached/allocators/host/cheribsd/poisoncap/README.md)
-reuse a reconstructed platform and add explicit per-lease hooks.
-They have their own modes and measurements; the generic examples use the default
-CheriBSD adapter. No cross-system security or performance equivalence is
+The generic examples use the default CheriBSD adapter. No cross-system security or performance equivalence is
 implied by a successful build or example.

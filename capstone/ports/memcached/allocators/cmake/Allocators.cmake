@@ -10,14 +10,10 @@ target_include_directories(allocators-options INTERFACE
 # whole capabilities. The shim defaults to 8 so a census keeps upstream's table.
 target_compile_definitions(allocators-options INTERFACE NDEBUG CHUNK_ALIGN_BYTES=16)
 target_compile_options(allocators-options INTERFACE -ffunction-sections -fdata-sections -Wall -Wextra)
-option(MCP_POISONCAP "Use the experimental PoisonCap adapter on the CheriBSD build" OFF)
-if(MCP_POISONCAP AND NOT PORT_PLATFORM STREQUAL "cheribsd")
-  message(FATAL_ERROR "MCP_POISONCAP requires the CheriBSD purecap toolchain")
-endif()
 # The lifetime ledger. Stock CheriBSD has its own, because the platform's malloc
-# places every unit and there is no region to carve. Everywhere else -- native,
-# the Capstone domain and PoisonCap -- the SAME ledger runs over one region and
-# only the authority layer beneath it differs.
+# places every unit and there is no region to carve. Everywhere else -- native
+# and the Capstone domain -- the SAME ledger runs over one region and only the
+# authority layer beneath it differs.
 # MCP_STOCK_MALLOC: the hosted build on the same stock ledger, so a native tool
 # (AddressSanitizer) sees what upstream memcached gives it -- each slab page and
 # each cache.c object its own malloc -- rather than one arena with no redzones
@@ -26,7 +22,7 @@ option(MCP_STOCK_MALLOC "Hosted native build: pages and objects from the host ma
 if(MCP_STOCK_MALLOC AND (NOT PORT_HOSTED OR PORT_PLATFORM STREQUAL "cheribsd"))
   message(FATAL_ERROR "MCP_STOCK_MALLOC is for the hosted native build; stock CheriBSD already uses that ledger")
 endif()
-if((PORT_PLATFORM STREQUAL "cheribsd" AND NOT MCP_POISONCAP) OR MCP_STOCK_MALLOC)
+if(PORT_PLATFORM STREQUAL "cheribsd" OR MCP_STOCK_MALLOC)
   set(ledger src/cheribsd/malloc-leases.c)
 else()
   set(ledger src/shared/leases.c)
@@ -47,39 +43,21 @@ if(PORT_HOSTED)
   find_package(Threads REQUIRED)
   target_link_libraries(allocators-options INTERFACE Threads::Threads)
   if(PORT_PLATFORM STREQUAL "cheribsd")
-    # Either CheriBSD adapter owns its own backing, so the entry passes none.
+    # The CheriBSD ledger owns its own backing, so the entry passes none.
     target_compile_definitions(allocators-options INTERFACE MCP_ADAPTER_BACKING)
     # The SDK ships ld.lld and no ld; without this clang falls back to the host
     # linker. The cheribsd preset says the same through CMAKE_EXE_LINKER_FLAGS,
     # but the shared host/cheribsd/build.py configures from the toolchain file
     # alone, so the port says it here too.
     add_link_options(-fuse-ld=lld)
-    if(MCP_POISONCAP)
-      # PoisonCap: one mmap'd arena with poison authority under the shared
-      # ledger. Mode 0 is bounded leases; mode 1 poisons and sweeps a unit as
-      # it is released.
-      target_compile_definitions(allocators-options INTERFACE MCP_POISONCAP)
-      target_include_directories(allocators-options INTERFACE
-        "${PROJECT_SOURCE_DIR}/src/cheribsd")
-      target_sources(mc-allocators PRIVATE src/cheribsd/poisoncap-authority.c)
-      # The platform's own instruction control, referenced where it already
-      # lives rather than copied: live access, poison, sweep, reuse, and a
-      # retained old alias that must be refused.
-      add_executable(poisoncap-probe
-        "${PROJECT_SOURCE_DIR}/../../ffmpeg/buffer-pool/security-tests/cheribsd/poisoncap-probe.c")
-      target_link_libraries(poisoncap-probe PRIVATE allocators-options)
-      # The poison primitives and the published revocation header are GNU C.
-      set_target_properties(poisoncap-probe mc-allocators PROPERTIES C_EXTENSIONS ON)
-    else()
-      # Stock CheriBSD: pages and objects from the platform's own malloc, so its
-      # revocation is asked the question at the level where it lives. No payload
-      # region, no ledger over one: src/cheribsd/malloc-leases.c is the seam.
-      # The positive control: this guest's libc revocation, made to fire at the
-      # corpus's own labelled load shape. Pure libc, no port library.
-      add_executable(revocation-control security-tests/cheribsd/revocation-control.c)
-      # The probes use GNU inline asm with a "C" operand, as cheric.h does.
-      set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
-    endif()
+    # Stock CheriBSD: pages and objects from the platform's own malloc, so its
+    # revocation is asked the question at the level where it lives. No payload
+    # region, no ledger over one: src/cheribsd/malloc-leases.c is the seam.
+    # The positive control: this guest's libc revocation, made to fire at the
+    # corpus's own labelled load shape. Pure libc, no port library.
+    add_executable(revocation-control security-tests/cheribsd/revocation-control.c)
+    # The probes use GNU inline asm with a "C" operand, as cheric.h does.
+    set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
   elseif(MCP_STOCK_MALLOC)
     # The ledger owns its backing, as on stock CheriBSD; the entry passes none.
     target_compile_definitions(allocators-options INTERFACE MCP_ADAPTER_BACKING)

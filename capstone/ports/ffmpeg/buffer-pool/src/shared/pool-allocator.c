@@ -97,12 +97,8 @@ static void *issue(struct payload_block *b, int observed) {
   return p;
 }
 static int reusable(const struct payload_block *b) {
-#ifdef FFPOOL_POISONCAP
-  return ff2_poisoncap_reusable(b, mode);
-#else
   (void)b;
   return 1;
-#endif
 }
 static struct payload_block *by_address(uintptr_t address) {
   for (unsigned i = 0; i < nblocks; i++)
@@ -171,9 +167,6 @@ int ff2_payload_reusable(uintptr_t address) {
   return b->idle && reusable(b);
 }
 static void *teardown(struct payload_block *b) {
-#ifdef FFPOOL_POISONCAP
-  ff2_poisoncap_teardown(b, mode);
-#endif
   return issue(b, 0);
 }
 void *ff2_payload_teardown(uintptr_t address) {

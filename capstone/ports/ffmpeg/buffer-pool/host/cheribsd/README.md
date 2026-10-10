@@ -80,7 +80,7 @@ some sizes; the adjacent backing block must remain outside the issued bounds.
 ## Temporal comparison boundary
 
 A custom arena bypasses libc `free()` on pool return. Per-return temporal
-protection needs an explicit adapter such as the [PoisonCap backend](poisoncap/README.md).
+protection needs an explicit adapter.
 Ancestor/child authority and finite-metadata reclamation require their own
 controls; successful lease tests do not establish them.
 
@@ -113,8 +113,3 @@ bookkeeping excluded from arena watermarks:
 python3 "$PORT/host/cheribsd/elf-storage.py" "$ELF_JSON" \
   capstone="$DOMAIN_BUILD/bin/replay.dom" cheri-spatial="$BUILD/bin/replay"
 ```
-
-## Experimental PoisonCap integration
-
-The separate [PoisonCap workflow](poisoncap/README.md) reconstructs the paper
-platform and adds an explicitly selected pool-lifetime adapter and control suite.

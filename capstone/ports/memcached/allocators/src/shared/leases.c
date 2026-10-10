@@ -76,7 +76,6 @@ void mcp_set_mode(unsigned mode) {
    * malloc_granular: page-wide chunks, revocation only at discard (mode 2). */
   protected_mode = mode == 1;
   malloc_granular = mode == 2;
-  mcp_authority_set_mode(mode == 1);
   pages = mcp_meta_calloc(MAX_PAGES, sizeof *pages);
   page_map = mcp_meta_calloc(GRAINS, sizeof *page_map);
   objects = mcp_meta_calloc(MAX_OBJECTS, sizeof *objects);

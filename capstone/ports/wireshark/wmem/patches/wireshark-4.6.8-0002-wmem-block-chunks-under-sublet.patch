@@ -2,7 +2,7 @@ Subject: Give every chunk of the block allocator a region of its own, so a chunk
 Upstream: wireshark 4.6.8
 Upstream-Archive: https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz
 Upstream-SHA256: c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0
-Build-Variants: native port, Capstone domain; inert in full Wireshark and in the PoisonCap arm (every hunk is guarded by WMEM_PORT_CHUNKS, except four lines that name WMEM_FREE_MIN_LEN, which expands to upstream's own expression without it)
+Build-Variants: native port, Capstone domain; inert in full Wireshark (every hunk is guarded by WMEM_PORT_CHUNKS, except four lines that name WMEM_FREE_MIN_LEN, which expands to upstream's own expression without it)
 Depends-On: wireshark-4.6.8-0001-wmem-authority-hooks.patch
 Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
 
