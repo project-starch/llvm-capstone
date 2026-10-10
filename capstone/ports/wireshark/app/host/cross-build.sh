@@ -5,12 +5,8 @@
 #   cross-build.sh          -> $TS_WORK/xbuild: static libwsutil, libwiretap and libwireshark,
 #                              plus tshark linked by capstone-cc as a first link check
 #
-# Source: the pinned tarball (upstream.json), plus every patch in patches/ except 0007, plus
+# Source: the pinned tarball (upstream.json), plus every patch in patches/, plus
 # src/capstone-stubs.c copied into epan/dissectors/ (the whitelist lists it as a dissector file).
-# 0007 (wmem's block size) belongs to the sublet heap arm alone: host/build-domain.sh applies it
-# to its own copies of the two wmem files. Applied here as well, it would land in every arm's
-# libwsutil (moving wmem's asserts' __LINE__ even where its define is off) and then fail to apply
-# a second time in the sublet arm.
 #
 # What makes it a cross build, each from reading the tree (the M0 plan's Step C3):
 # - BUILD_SHARED_LIBS=OFF: capstone-cc links domains, never shared objects;
@@ -47,7 +43,6 @@ echo "$SHA  $TAR" | sha256sum -c --quiet -
 rm -rf "$SRC" "$B" "$LOG"; mkdir -p "$SRC" "$B" "$LOG"
 tar -xf "$TAR" -C "$SRC" --strip-components=1
 for p in "$APP"/patches/0*.patch; do
-  case $p in */0007-*) continue ;; esac
   patch -s -d "$SRC" -p1 < "$p"
 done
 cp "$APP/src/capstone-stubs.c" "$SRC/epan/dissectors/"

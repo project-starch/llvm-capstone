@@ -1,66 +1,26 @@
 #!/usr/bin/env python3
 """Run delegated tshark stages or compare complete output with native tshark.
 
-Two checks carried over from the pre-v2 runner (host/run-qemu.sh before #128):
-
-- The revocation-node budget per guest boot. A full run on the sublet heap spends about 12,600
-  nodes (split + mrev on its TSAPP-HEAP line), and a boot that ran out died on QEMU's pool
-  assertion (2026-09-25). So a boot holds at most 4 full sublet runs. The guest outlives this
-  process, so the count is kept per guest boot (its boot_id) in the VM's state directory, and a
-  request that would pass the limit is refused before anything runs.
-- stderr against the native MINIMAL build (TSAPP_MINIMAL, default $TS_WORK/native-min-pa/run/tshark:
-  the same whitelist, patches and generated dissectors.c), because patch 0002's registration
-  notices go to stderr and stock tshark writes none. The guest's stderr, less its TSAPP-HEAP line
-  (src/tsapp-heap.c) and, when the domain runs with CAPSTONE_DELEGATE_STATS, the runtime's and
-  launcher's `capstone-domain:` / `capstone-exec:` report lines, must equal it byte for byte. An
-  empty reference is an error, never a comparison: it would match anything. TSAPP_MINIMAL=none
-  skips the check and says so on every verdict line.
+A check carried over from the pre-v2 runner (host/run-qemu.sh before #128): stderr against the
+native MINIMAL build (TSAPP_MINIMAL, default $TS_WORK/native-min-pa/run/tshark: the same whitelist,
+patches and generated dissectors.c), because patch 0002's registration notices go to stderr and
+stock tshark writes none. The guest's stderr, less its TSAPP-HEAP line (src/tsapp-heap.c) and, when
+the domain runs with CAPSTONE_DELEGATE_STATS, the runtime's and launcher's `capstone-domain:` /
+`capstone-exec:` report lines, must equal it byte for byte. An empty reference is an error, never a
+comparison: it would match anything. TSAPP_MINIMAL=none skips the check and says so on every
+verdict line.
 """
 import argparse
-import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[4]
 sys.path.insert(0, str(HERE.parents[2] / 'common/application'))
 from verification import VM
 
-# Full (M5) runs a guest boot may hold, per heap arm; None: not limited.
-RUNS_PER_BOOT = {'sublet': 4}
 REPORT_PREFIXES = (b'capstone-domain: ', b'capstone-exec: ')
-
-
-def guest_boot_id(state):
-    env = dict(os.environ, PYTHONPATH=str(REPO / 'capstone/runtime/host'))
-    out = subprocess.run([sys.executable, '-m', 'capstone_vm', '--state', str(state), 'exec',
-                          'cat', '/proc/sys/kernel/random/boot_id'],
-                         capture_output=True, text=True, env=env, check=True).stdout.strip()
-    if len(out) != 36:
-        raise RuntimeError(f'no guest boot_id: {out!r}')
-    return out
-
-
-def claim_runs(state, heap, planned):
-    """Charge `planned` full runs to this guest boot, or refuse. Returns a line for the log."""
-    limit = RUNS_PER_BOOT.get(heap)
-    if limit is None:
-        return None
-    boot = guest_boot_id(state)
-    ledger = Path(state) / 'tsapp-full-runs.json'
-    used = 0
-    if ledger.exists():
-        record = json.loads(ledger.read_text())
-        used = record['runs'] if record.get('boot_id') == boot else 0
-    if used + planned > limit:
-        sys.exit(f'refused: {planned} full {heap} run(s) would make {used + planned} on guest boot '
-                 f'{boot}, over the limit of {limit} (the revocation-node budget). '
-                 'Restart the VM for a fresh boot.')
-    # Charged before the runs: a run that fails has still spent its nodes.
-    ledger.write_text(json.dumps({'boot_id': boot, 'runs': used + planned}))
-    return f'guest boot {boot}: {heap} full runs {used} + {planned} of {limit}'
 
 
 def guest_stderr(data, stats):
@@ -83,8 +43,8 @@ def main():
         parser.error('oracle needs capture names')
     work = Path(os.environ.get('TS_WORK', '/tmp/capstone/tshark-app'))
     heap = os.environ.get('TSAPP_HEAP', 'level0')
-    if heap not in ('level0', 'shrink', 'sublet'):
-        parser.error('TSAPP_HEAP must be level0, shrink or sublet')
+    if heap not in ('level0', 'shrink'):
+        parser.error('TSAPP_HEAP must be level0 or shrink')
     images = Path(os.environ.get('TSAPP_DOMAIN_DIR', work / ('domain' + ('-' + heap if heap != 'level0' else ''))))
     stock = Path(os.environ.get('TSAPP_STOCK', work / 'native-stock/run/tshark'))
     minimal = os.environ.get('TSAPP_MINIMAL', str(work / 'native-min-pa/run/tshark'))
@@ -99,9 +59,6 @@ def main():
     for capture in captures:
         if Path(capture).name != capture:
             parser.error('capture names must not contain directories')
-    charged = claim_runs(args.state, heap, len(captures))
-    if charged:
-        print(charged, flush=True)
     vm = VM(args.state, work / 'runs')
     passed = True
     try:
