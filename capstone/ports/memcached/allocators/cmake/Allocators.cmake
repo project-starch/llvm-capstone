@@ -18,7 +18,15 @@ endif()
 # places every unit and there is no region to carve. Everywhere else -- native,
 # the Capstone domain and PoisonCap -- the SAME ledger runs over one region and
 # only the authority layer beneath it differs.
-if(PORT_PLATFORM STREQUAL "cheribsd" AND NOT MCP_POISONCAP)
+# MCP_STOCK_MALLOC: the hosted build on the same stock ledger, so a native tool
+# (AddressSanitizer) sees what upstream memcached gives it -- each slab page and
+# each cache.c object its own malloc -- rather than one arena with no redzones
+# inside it. Off, the native build keeps the shared ledger over one region.
+option(MCP_STOCK_MALLOC "Hosted native build: pages and objects from the host malloc, as upstream" OFF)
+if(MCP_STOCK_MALLOC AND (NOT PORT_HOSTED OR PORT_PLATFORM STREQUAL "cheribsd"))
+  message(FATAL_ERROR "MCP_STOCK_MALLOC is for the hosted native build; stock CheriBSD already uses that ledger")
+endif()
+if((PORT_PLATFORM STREQUAL "cheribsd" AND NOT MCP_POISONCAP) OR MCP_STOCK_MALLOC)
   set(ledger src/cheribsd/malloc-leases.c)
 else()
   set(ledger src/shared/leases.c)
@@ -72,6 +80,9 @@ if(PORT_HOSTED)
       # The probes use GNU inline asm with a "C" operand, as cheric.h does.
       set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
     endif()
+  elseif(MCP_STOCK_MALLOC)
+    # The ledger owns its backing, as on stock CheriBSD; the entry passes none.
+    target_compile_definitions(allocators-options INTERFACE MCP_ADAPTER_BACKING)
   else()
     target_sources(mc-allocators PRIVATE src/native/authority.c)
   endif()

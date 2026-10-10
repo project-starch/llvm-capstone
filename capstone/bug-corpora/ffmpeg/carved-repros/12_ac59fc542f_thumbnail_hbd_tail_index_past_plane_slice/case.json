@@ -1,0 +1,104 @@
+{
+  "case": 12,
+  "upstream_fix": "ac59fc542f",
+  "title": "get_hist16's tail loop uses a raw high-bit-depth sample as a histogram index, so the bump lands outside the 256-entry sub-slice carved for that plane",
+  "consumer": "libavfilter/vf_thumbnail.c:190-192, get_hist16() tail loop",
+  "object": "one av_calloc holding nb_threads slices of 3*256 ints, carved twice by pointer arithmetic: hist = thread_histogram + HIST_SIZE * jobnr (:206), then hhist = hist + 256 * plane (:259)",
+  "lifetime_ender": "NONE -- the object is alive throughout. Spatial, as every row of this corpus.",
+  "shape": "the vectorised loop above shifts and masks the sample; the tail loop -- reached only when the width is not a multiple of 4, the 'odd sized HBD input' of the subject line -- does not, so a 10-bit sample up to 1023 indexes a 256-entry sub-slice",
+  "allocator_layer": "FFmpeg's own carve, one level down from the allocation: av_calloc hands out ONE block (vf_thumbnail.c:337) and the filter carves it into per-thread slices and per-plane sub-slices by pointer arithmetic (:206, :259). The crossing leaves a sub-slice and stays in the block.",
+  "fidelity": "real allocator, model consumer. HIST_SIZE (3*256) and the 256-entry per-plane stride are unreduced, as is the carve arithmetic. The sample is 10-bit, deliberately: a 16-bit sample would leave the allocation and the row would then be measuring a different boundary than the corpus's. get_hist16's vectorised body is left out because it is not the path that crosses -- the tail is, which is why the defect needs an odd width.",
+  "nested": true,
+  "nested_why": "the crossed region was made by FFmpeg's carving code, not by the allocator that handed out the block: under this inventory's axis -- WHO ALLOCATED THE OBJECT -- the object is the carved sub-slice, so the row is NESTED, as every carve in this corpus is. Until 2026-10-10 it was subobject-repros case 09 and marked NOT NESTED there, against the rule this corpus and tools/catch-tables.py state for carves.",
+  "note": "Moved from capstone/bug-corpora/ffmpeg/subobject-repros/09_ac59fc542f_thumbnail_carved_histogram_slice (2026-10-10). Its readings there -- every arm of that corpus, on that harness -- stay in subobject-repros/results/; this case is re-measured in this corpus's harness, where the block is the platform's calloc and the carve is ffc_carve().",
+  "arms": {
+    "spatial": {
+      "status": "measured",
+      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES with VERDICT DEFECT-REPRODUCED -- the bump stays inside the one calloc (the driver exits 75 otherwise), and the level0 heap narrows only to the allocation.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-capstone-spatial/: **NOT CAUGHT; the defect reproduced**: the bump completed inside the one calloc; fixed arm FIXED exit=0; image 83c8eb854d08bca0; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-spatial/README.md, case 12 row"
+    },
+    "sublet": {
+      "status": "measured",
+      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES, as spatial: nothing is freed before the access, and the Sublet heap's bound is the allocation's.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-capstone-sublet/: **NOT CAUGHT; the defect reproduced**: the bump completed inside the one calloc; fixed arm FIXED exit=0; image 93c206ec322aeb10; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-sublet/README.md, case 12 row"
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES: -fcapstone-subobject-bounds narrows ARRAY-typed struct fields, and a carved sub-slice is pointer arithmetic on one int array, not a field.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-capstone-capstone-subobject/: **NOT CAUGHT; the defect reproduced**: the bump completed inside the one calloc; fixed arm FIXED exit=0; image 83c8eb854d08bca0; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-capstone-subobject/README.md, case 12 row"
+    },
+    "capstone-carve-bounds": {
+      "status": "measured",
+      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): CAUGHT at ffc_read_probe_u32, cause 5 (a load past the 1024-byte carve): the first byte the bump touches is its read.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-capstone-capstone-carve-bounds/: **CAUGHT** -- cause=5 pc=0xc020ed8c address=0xc0253e8c in ffc_read_probe_u32+0x38 (the labelled probe); fixed arm FIXED exit=0; image 92d4c86b7d6da2ba; as pre-registered at 26cdee4e4d8d",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-capstone-carve-bounds/README.md, case 12 row"
+    },
+    "sublet-carve": {
+      "status": "measured",
+      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): CAUGHT at ffc_read_probe_u32, cause 5: every sub-slice is 1024 bytes on a 16-byte boundary, so each carve is its own Sublet region with an exact bound; the fixed arm stays inside its region and prints VERDICT FIXED.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-capstone-sublet-carve/: **CAUGHT** -- cause=5 pc=0xc0210380 address=0xc8804ffc in ffc_read_probe_u32+0x38 (the labelled probe); fixed arm FIXED exit=0; image 013420a374d09953; as pre-registered at 26cdee4e4d8d",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-capstone-sublet-carve/README.md, case 12 row"
+    },
+    "cheribsd-revocation": {
+      "status": "measured",
+      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- the crossing stays inside the one allocation, and nothing is freed before it.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-revocation/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (exit 0), the bump inside the one calloc; fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-cheribsd-revocation/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
+    },
+    "cheribsd-subobject": {
+      "status": "measured",
+      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES: -cheri-bounds=subobject-safe narrows a pointer taken to a struct member; a carved sub-slice is not one.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-subobject/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (exit 0), the bump inside the one calloc; fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-cheribsd-subobject/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
+    },
+    "cheribsd-carve-bounds": {
+      "status": "measured",
+      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): SIGPROT si_code 1 (PROT_CHERI_BOUNDS) inside ffc_read_probe_u32: cheri_bounds_set at the carve, 1024 bytes, exactly representable.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-carve-bounds/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS), addr = pc = 0x10253e, INSIDE ffc_read_probe_u32 [0x10252e, 0x102548) (llvm-nm on this run's binary, sha256 4ce753e1754bed43...); fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-cheribsd-carve-bounds/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
+    },
+    "poisoncap-spatial": {
+      "status": "measured",
+      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- inside the one allocation.",
+      "mode": 0,
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (exit 0), the bump inside the one calloc; fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-poisoncap-mode0/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
+    },
+    "poisoncap-protected": {
+      "status": "measured",
+      "prediction": "PREDICTED 2026-10-10 (pre-registration on lane branch audit-three-programs, committed before any Capstone, CheriBSD or PoisonCap run of this case): COMPLETES -- mode 1 adds poison-on-free and revocation, and nothing is freed before the access.",
+      "mode": 1,
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-poisoncap-mode1/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (exit 0), the bump inside the one calloc; fixed arm exit 0 (passed); platform controls and the carve control in the same boot; as pre-registered at 26cdee4e4d8d",
+      "signal": null,
+      "si_code": null,
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-poisoncap-mode1/README.md, rows ffc-12-fixed and ffc-12-buggy (binary sha256 in provenance.tsv)"
+    },
+    "native-detect": {
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "prediction": "PREDICTED: ASan SILENT -- its redzones sit around an allocation, never inside one. NOT pre-registered: run natively once while the case was written (2026-10-10), before this record existed.",
+      "measured": "2026-10-10, results/2026-10-10-native-asan/run-asan.txt: `12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice SILENT the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing`; in the same run the controls reported one byte past a 34816-, a 132- and a 12288-byte block (this case's own block size) and a read after free of a 34816-byte block"
+    },
+    "native-fix-differential": {
+      "status": "measured",
+      "verdict": "TWO-SIDED",
+      "measured": "2026-10-10, results/2026-10-10-native-differential/run-native.txt: buggy `block=12288 region=1024 touched=4092 extent=3072 noted=1 crossed=1 contained=1 damage=1` VERDICT DEFECT-REPRODUCED; fixed `touched=1020 extent=0 crossed=0 contained=1` VERDICT FIXED"
+    }
+  },
+  "status": "measured 2026-10-10 on every arm (native, five Capstone, three CheriBSD, two PoisonCap); every arm as pre-registered at 26cdee4e4d8d",
+  "live_in_pin": false,
+  "live_proof": "read from the PINNED source: n9.0.1:libavfilter/vf_thumbnail.c contains the FIXED form `hist[(uint8_t) (p16[x] >> shift)]++` (1 occurrence) and the pre-fix `hist[p16[x]]++` 0 times. Two-sided. A fix-reversal."
+}

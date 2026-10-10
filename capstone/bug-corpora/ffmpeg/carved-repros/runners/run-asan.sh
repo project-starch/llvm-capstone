@@ -27,4 +27,5 @@ python3 "$TOOLS/run-native-asan.py" --corpus "$ROOT" --bin "$OUT/bin/{name}" --o
   --build-note "$($CC --version | head -1); $SAN" \
   --control "$OUT/bin/asan-control past 34816=heap-buffer-overflow" \
   --control "$OUT/bin/asan-control past 132=heap-buffer-overflow" \
+  --control "$OUT/bin/asan-control past 12288=heap-buffer-overflow" \
   --control "$OUT/bin/asan-control uaf 34816=heap-use-after-free"

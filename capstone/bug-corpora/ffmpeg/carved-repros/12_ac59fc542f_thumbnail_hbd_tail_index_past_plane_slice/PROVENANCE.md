@@ -1,5 +1,11 @@
 # ac59fc542f — uses a raw high-bit-depth sample as a histogram index, leaving the carved sub-slice
 
+> **Moved 2026-10-10** from `../../subobject-repros/09_ac59fc542f_thumbnail_carved_histogram_slice`, where it was
+> filed NOT NESTED as an 'inside one allocation' row. The region it leaves is a carve -- FFmpeg's arithmetic on one
+> av_calloc -- and this corpus is where a carve is the inner allocator, so it is NESTED here, by the one rule
+> `tools/catch-tables.py` states for carves. Its readings in the old corpus stay in that corpus's `results/`; this
+> case is re-measured in this corpus's harness (the platform's calloc, `ffc_carve()`).
+
 ## The defect
 
 `get_hist16`'s tail loop — the one reached when the width is not a multiple of 4, i.e. the

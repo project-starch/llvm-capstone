@@ -1,0 +1,13 @@
+# source: /tmp/capstone/q1009-ap13/ffmpeg-plane-cheribsd-subobject-r2/run/summary.json
+# matched-by: arm cheribsd-subobject; the only ffp run with subobj-control (exit 162); buggy exit 0 + VERDICT line match
+# platform qemu=16135483052dfdd6eb0a3fb060a79097eabcbb95fcac756b37ce83407657f0dc firmware=f0e1fe57b0f850756273135d82c4edcec7b354edfc36741cd327d6f2744832cb kernel=8ab453f46dc76cf27faf0fc159761f4e68f2cfb739ed9c0a22d440bab8914530 image=0cb16209c16c5edf9f81148eedf33f750af404f890af6d65d9bd43ecf61aa4f4
+# platform-libc=fdce2289224bb5193526ab2a1fde9a74860c764f2222e0cb2a77bfea039559a8
+# runtime_revocation=on
+# controls: cheribsd-abi=0 cheribsd-bounds=162 subobj-control=162
+# summary status=complete ran_all_cases=True failed_cases=0 (an oracle scored FAIL is data, see the README)
+program	exit	expected_exit	passed	binary_sha256	stdout_sha256
+cheribsd-abi	0	0	true	4f4b08ee65f90abed5cb432e915bc40b8885a2135a492b63f208d3d3042b43d0	9470e900152738b85544c73ceb0dd0f3fe53261bd3ce0d1460cae0d0201561c3
+cheribsd-bounds	162	162	true	4f4b08ee65f90abed5cb432e915bc40b8885a2135a492b63f208d3d3042b43d0	904c72f88b254911f97105bb6cd1e232e373cf2d3da7dc149ab2d9c83b780a7f
+subobj-control	162	162	true	ac8a1c89aec57378287c959d6220387df37746969316274b9c21bbbd99af5ed9	9622f485d95efdf858323553d70bb2ddeba8072c508c673b4441d77c67a35ab8
+ffp-00-fixed	0	0	true	c934faf07a5b5030ae52ee62a385f55547fbc287d2cc25135be55e946de57358	273b93ce78d4cc428bda24153587ac0730949cf6eff0617b2e9c7fe97b275ea4
+ffp-00-buggy	0	0	true	c934faf07a5b5030ae52ee62a385f55547fbc287d2cc25135be55e946de57358	f46673d738a84d89cdbd69642a2ee970fcc543b37ca995947bcf6f8a10caa9c0

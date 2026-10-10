@@ -22,6 +22,9 @@ mkdir -p "$OUT"
 CC=${CC:-cc}
 
 status=0
+# The compiler is part of the reading: an ASan silence or report is a property of
+# the toolchain that built the probe.
+echo "compiler: $("$CC" --version | head -1)"
 for dir in "$ROOT"/[0-9][0-9]_*; do
   name=$(basename "$dir")
   n=${name%%_*}; n=${n#0}; n=${n:-0}
@@ -56,8 +59,15 @@ for dir in "$ROOT"/[0-9][0-9]_*; do
   buggy_reported=0
   case "$asan_buggy" in *heap-buffer-overflow*) buggy_reported=1 ;; esac
 
+  # Attribution, not only presence: the report's first two frames, and whether
+  # either is the case's labelled probe (an interceptor such as memcpy can be
+  # frame #0, with the probe or the case's own copy at #1).
+  frames=$(printf '%s\n' "$asan_buggy" | grep -m2 -E '^ +#[01] ' | sed -E 's/^ +#([01]) 0x[0-9a-f]+ in ([^ ]+).*/\1:\2/' | tr '\n' ' ')
+  at_probe=0
+  case "$frames" in *ffh_*probe*) at_probe=1 ;; esac
   printf '%s\n%s\n' "$fixed_out" "$buggy_out" | sed "s|^|$name |"
-  printf '%s asan fixed_clean=%s buggy_reported=%s\n' "$name" "$fixed_clean" "$buggy_reported"
+  printf '%s asan fixed_clean=%s buggy_reported=%s frames=%s at_probe=%s\n' \
+    "$name" "$fixed_clean" "$buggy_reported" "${frames% }" "$at_probe"
 
   case "$buggy_out" in
     *"VERDICT DEFECT-REPRODUCED"*) ;;

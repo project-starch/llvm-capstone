@@ -1,12 +1,11 @@
 # FFmpeg sub-object spatial defects: a bound crossed INSIDE ONE ALLOCATION
 
 A sibling of [`../pool-repros/`](../pool-repros/README.md), deliberately separate. That corpus's
-boundary is storage an `AVBufferPool` handed out; these ten defects cross a bound **inside a
-single allocation** — between adjacent members of a struct, or between two slices carved from one
-block by arithmetic — which is a different boundary and would have been misdescribed by widening the
-other corpus's.
+boundary is storage an `AVBufferPool` handed out; these nine defects cross a bound **inside a
+single allocation**, between adjacent members of a struct, which is a different boundary and would
+have been misdescribed by widening the other corpus's.
 
-**Cases 0, 1, 2, 5 and 6 are LIVE at the `n9.0.1` pin; 3, 4, 7, 8 and 9 are fix-reversals.**
+**Cases 0, 1, 2, 5 and 6 are LIVE at the `n9.0.1` pin; 3, 4, 7 and 8 are fix-reversals.**
 Liveness is **recorded, never required** — the convention is at
 [`../../memcached/allocator-repros/README.md:132-135`](../../memcached/allocator-repros/README.md),
 and treating it as a requirement is what kept this corpus at three cases until 2026-10-06. Every
@@ -16,9 +15,14 @@ backported fixes live before. Triage and the full candidate disposition:
 [`docs/ref/ffmpeg-spatial-defect-triage.md`](../../../docs/ref/ffmpeg-spatial-defect-triage.md).
 
 **Under this inventory's axis — *who allocated the object* — every row here is NOT NESTED.** The
-object is one allocation and nothing sub-allocated the crossed region. Case 9 is the row most likely
-to be mis-filed: its bound is a slice carved by `base + i*stride`, which is a *sub-object*, not an
-inner allocator's sub-allocation. The tally is per corpus, so that sentence is load-bearing.
+object is one allocation and nothing sub-allocated the crossed region.
+
+**Case 9 moved out on 2026-10-10** and is now `../carved-repros` case 12. Its bound was a slice
+carved by `base + i*stride`, and this README argued that made it a sub-object and NOT NESTED. The
+carved corpus, added 2026-10-09, and `tools/catch-tables.py` state the opposite rule: where code
+carves the object out of a block, that carve is the innermost allocator, so the row is NESTED. One
+rule has to hold for both corpora, and the carve rule is the one the tables use; the case is
+re-measured there in the carve harness. Its readings in this corpus stay in `results/`.
 
 ## What makes this class worth a corpus of its own
 
@@ -29,7 +33,6 @@ inner allocator's sub-allocation. The tally is per corpus, so that sentence is l
 | index **underflows** out of the START of a member into the one before it | 4 | **0 / 1** | the upstream fix |
 | an **unbounded loop** walks off a member's end into the next member | 6, 8 | **0 / 2** | the upstream fix |
 | a copy sized by its **source** length overruns the destination member | 7 | **0 / 1** | the upstream fix |
-| a **carved sub-slice** crossed by a data-controlled index | 9 | **0 / 1** | the upstream fix |
 
 **Nothing we have catches any of them, and measuring that is the point.** Every per-allocation
 bound — `shrink`, `sublet`, the pool arms, CHERI — is *in bounds* for a crossing interior to one

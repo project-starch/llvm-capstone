@@ -55,7 +55,9 @@
     },
     "native-detect": {
       "oracle": "ASan reports heap-buffer-overflow at the labelled write probe on the buggy arm and is silent on the fixed arm. Keyed on the string heap-buffer-overflow, never on AddressSanitizer, which LeakSanitizer's summary also contains.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-plain-heap/run-native.txt: `04_b3c7ebc1ed_swaprect_temp_sized_for_plane0 asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1`"
     },
     "native-fix-differential": {
       "oracle": "the buggy arm's chroma row copy crosses and the case's damage flag is set; the fixed arm's buffer is sized by the widest plane and the same copy fits. The arms differ by the upstream fix, not by protection.",

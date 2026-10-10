@@ -1,0 +1,39 @@
+FFmpeg plain-heap size classes: the granted capability length for 17- and 24-byte requests
+===========================================================================================
+
+ANSWER (all RESOLVED, read from surviving guest stdout, not from any README):
+  image 0cb16209 (stock CheriBSD, revocation on):  request 17 -> length 32 (slack 15);  request 24 -> length 32 (slack 8)
+  image c8df9e17 (PoisonCap) mode 0 (revocation off): 17 -> 32 (slack 15);  24 -> 32 (slack 8)
+  image c8df9e17 (PoisonCap) mode 1 (revocation on):  17 -> 32 (slack 15);  24 -> 32 (slack 8)
+So 17 and 24 share the 32-byte class on both images and in both PoisonCap modes.
+
+The lines, with their source (every stdout below hashes to the stdout_sha256 its summary records):
+
+image 0cb16209 -- the corpus's own cap-bounds program (8 sizes), from the matched 2026-10-08 run:
+  source <scratch>/cheri-ffmpeg-190515/run/cap-bounds/stdout.txt  (summary <scratch>/cheri-ffmpeg-190515/run/summary.json, exit 0)
+    CAPBOUNDS request=17 length=32 slack=15 base=0x40a1a000 addr_eq_base=1
+    CAPBOUNDS request=24 length=32 slack=8 base=0x40a1a020 addr_eq_base=1
+  identical lines in <scratch>/cheri-ffmpeg-183305/run/cap-bounds/stdout.txt, <scratch>/cheri-ffmpeg-184840/run/cap-bounds/stdout.txt
+  and /tmp/capstone/q1009-ap13/ffmpeg-heap-cheribsd-subobject/run/cap-bounds/stdout.txt
+  independent earlier readings on the same image:
+  source /tmp/capstone/capbounds-out/cap-bounds-probe/stdout.txt  (2026-10-06, the memcached/wireshark calloc probe, exit 0)
+    CAPBOUNDS awkward request=17 length=32 base=0x40a2e000
+  source <scratch>/ffh-cheri-run2/ffh-cap-bounds/stdout.txt  (2026-10-06, the run matched to ffmpeg/plain-heap-repros/results/20261006-cheribsd)
+    CAPBOUNDS request=24 length=32 slack=8 base=0x40a1a000 addr_eq_base=1
+
+image c8df9e17, PoisonCap mode 0 (summary runtime_revocation=off):
+  source /tmp/capstone/q1009-ap13/ffmpeg-heap-poisoncap-0/run/cap-bounds/stdout.txt  (summary .../ffmpeg-heap-poisoncap-0/run/summary.json, exit 0)
+    CAPBOUNDS request=17 length=32 slack=15 base=0x40a1a000 addr_eq_base=1
+    CAPBOUNDS request=24 length=32 slack=8 base=0x40a1a000 addr_eq_base=1
+
+image c8df9e17, PoisonCap mode 1 (summary runtime_revocation=on):
+  source /tmp/capstone/q1009-ap13/ffmpeg-heap-poisoncap-1/run/cap-bounds/stdout.txt  (summary .../ffmpeg-heap-poisoncap-1/run/summary.json, exit 0)
+    CAPBOUNDS request=17 length=32 slack=15 base=0x40a1a000 addr_eq_base=1
+    CAPBOUNDS request=24 length=32 slack=8 base=0x40a1a020 addr_eq_base=1
+
+Side observation (not a length difference): in mode 0 the 24- and 32-byte blocks reuse base 0x40a1a000, the
+address the 17-byte block had; on the stock image and in mode 1 they get fresh addresses (0x40a1a020,
+0x40a1a040). That looks like immediate re-issue with revocation off; it was not checked against the probe's
+source (whether it frees between sizes), so treat it as an observation only.
+The cap-bounds binary is the same in both PoisonCap modes (sha256 11c551d7...) and differs from the stock-image
+one (c1182ed1...), so each image's reading is from a binary built for it.

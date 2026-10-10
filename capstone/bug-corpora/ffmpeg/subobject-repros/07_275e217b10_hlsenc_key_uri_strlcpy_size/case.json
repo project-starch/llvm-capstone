@@ -55,7 +55,9 @@
     },
     "native-detect": {
       "oracle": "MEASURED two-sided 2026-10-06, results/20261006-native-subobject-7/: NO ASan report, and the arm also prints the value it crossed into, so the silence is not the access failing to happen. The positive control fires in the same probe: asan-probe-7.c's 'past' arm, one uint32 past the whole allocation, reports heap-buffer-overflow and exits 1. Built -O0, which is load-bearing -- at -O1 the dead stores are optimised away and the control cannot fire. The probe allocates with plain malloc rather than the port's arena, deliberately: inside a case binary av_malloc carves one arena, so ASan could not see an allocation bound even in principle and a silence there would prove nothing. DETECTOR NOTE: the first run of this probe read as a detection on ALL arms because it grepped for the string 'AddressSanitizer' while the probe leaked, and LeakSanitizer's summary line contains that string. Keyed on heap-buffer-overflow and with the leak fixed, the reading inverts. Recorded because a positive finding from a mis-keyed check is the mirror of a clean zero.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "bug-corpora/ffmpeg/subobject-repros/results/20261006-native-subobject-7/asan-arms.txt:2-8 (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "native-fix-differential": {
       "oracle": "the buggy arm passes size_arg=80 for a 64-byte destination and lands 16 bytes past key_uri -- 15 'A' plus the terminator, counted and asserted separately so the number and the prose cannot drift; the fixed arm passes 64, reaches past=0 and terminates inside its own member.",

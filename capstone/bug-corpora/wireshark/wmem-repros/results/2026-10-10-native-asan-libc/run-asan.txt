@@ -1,0 +1,26 @@
+  control 0: heap-use-after-free (required heap-use-after-free) ok  wm_probe <repo>/capstone/bug-corpora/wireshark/wmem-repros/controls/sublet-malloc/shared/driver.c:51
+  control 1: heap-buffer-overflow (required heap-buffer-overflow) ok  touch <repo>/capstone/bug-corpora/tools/asan-control.c:14
+  00_3c8be14c82_rpcrdma_write_offsets_global                     SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  01_c14d731e45_cms_oid_global                                   SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  02_99da8c2cdc_mdb_address_column                               SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  03_6eab9f83ab_cola_info_column                                 SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  04_b48759e4a4_qnet6_col_set_str                                SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  05_5a109265a6_usbll_address_struct                             SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  06_a8b16d74e1_x509if_last_dn_static                            SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  07_fb504bc76c_mysql_auth_method                                SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  08_31ab1a0a17_sip_cseq_method                                  SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  09_693dc40936_geonw_proto_data_tvb                             SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  10_6fd3af5e99_t38_reassembly_buffer                            SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  11_3a5f82dfb5_http_header_map                                  SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  12_90bb3a5c9e_xml_root_name_recycled                           SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  13_0261fd7da6_http_range_cursor_past_chunk                     SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  14_1d8acb21ab_solaredge_payload_six_past                       SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  15_d24613c461_opcua_padding_below_chunk                        SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  16_e8ef9df09d_dcp_etsi_rs_parity_write                         SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  17_5a560f3f6a_dns_one_byte_write                               SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  18_716a200295_rtps_batch_sample_info_unguarded                 SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  19_4a4871a831_ntlmssp_blob_length_before_check                 SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  20_ed20250c13_proto_undecoded_bitmap_unbounded                 SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  21_69dac89280_tcp_flags_str_sixteen_bytes                      SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+
+wmem-repros: 22 cases; {'SILENT': 22}; not a reading: none

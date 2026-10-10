@@ -55,7 +55,9 @@
     },
     "native-detect": {
       "oracle": "MEASURED two-sided 2026-10-06, 20261006-native-plain-heap/: ASan REPORTS. The crossing leaves the malloc bound, so a redzone sits exactly where it lands. The FIXED arm is silent and exits 0, so the detector is shown to separate the arms rather than merely to fire. The runner keys on heap-buffer-overflow, never on the string 'AddressSanitizer' -- LeakSanitizer's summary contains that string and would make a leak read as a bounds detection. Built -O0, so a discarded out-of-bounds read is not optimised away.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-plain-heap/run-native.txt: `00_d133b4a231_showcwt_kernel_scan_past_array asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe 1:ffh_case_run at_probe=1`"
     },
     "native-fix-differential": {
       "oracle": "the buggy arm reaches touched=4 at cap=4, crossed=1; the fixed arm touched=3, crossed=0. ASan two-sided: buggy REPORTS heap-buffer-overflow, fixed silent, exit 0.",

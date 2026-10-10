@@ -1,0 +1,12 @@
+# source: /tmp/capstone/q1009-ap13/ffmpeg-plane-cheribsd-carve-r2/run/summary.json
+# matched-by: arm cheribsd-carve-bounds; the only ffp run where ffp-00-buggy exits 162 (CAUGHT); image 0cb16209
+# platform qemu=16135483052dfdd6eb0a3fb060a79097eabcbb95fcac756b37ce83407657f0dc firmware=f0e1fe57b0f850756273135d82c4edcec7b354edfc36741cd327d6f2744832cb kernel=8ab453f46dc76cf27faf0fc159761f4e68f2cfb739ed9c0a22d440bab8914530 image=0cb16209c16c5edf9f81148eedf33f750af404f890af6d65d9bd43ecf61aa4f4
+# platform-libc=fdce2289224bb5193526ab2a1fde9a74860c764f2222e0cb2a77bfea039559a8
+# runtime_revocation=on
+# controls: cheribsd-abi=0 cheribsd-bounds=162
+# summary status=failed ran_all_cases=True failed_cases=1 (an oracle scored FAIL is data, see the README)
+program	exit	expected_exit	passed	binary_sha256	stdout_sha256
+cheribsd-abi	0	0	true	bc4faad5503df79cbe9f044acfc54b4b11de52c0a07a4921699feb34852e3e67	9470e900152738b85544c73ceb0dd0f3fe53261bd3ce0d1460cae0d0201561c3
+cheribsd-bounds	162	162	true	bc4faad5503df79cbe9f044acfc54b4b11de52c0a07a4921699feb34852e3e67	904c72f88b254911f97105bb6cd1e232e373cf2d3da7dc149ab2d9c83b780a7f
+ffp-00-fixed	0	0	true	5a9747b24d03a737529c038fd934841628830125c5e1b1a8c3410591e5245c69	273b93ce78d4cc428bda24153587ac0730949cf6eff0617b2e9c7fe97b275ea4
+ffp-00-buggy	162	0	false	5a9747b24d03a737529c038fd934841628830125c5e1b1a8c3410591e5245c69	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
