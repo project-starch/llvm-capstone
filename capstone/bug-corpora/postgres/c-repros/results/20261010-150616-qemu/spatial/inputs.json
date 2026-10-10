@@ -1,0 +1,28 @@
+{
+  "arm": "spatial",
+  "build": {
+    "heap": "level0",
+    "opt": "-O0",
+    "runtime_sha256": "aecc4f91778b1f47d3939c6fde2512068788d34d31e50a461de211f440f6ae01",
+    "sdk": "/tmp/capstone/pg-su-none/runtime",
+    "virtual": "OFF"
+  },
+  "cases": 5,
+  "configuration": "app-level0",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/c-repros",
+  "platform": {
+    "compiler": "a951a180589d096b5cfbc0f8d49864244f808644b4740c3877d041070fa0a6e7",
+    "exact_bounds": false,
+    "firmware": "b2cd0c0da50ae1f084d895b76b9d8b41a419ead4461c4bb672201c5860525033",
+    "judge": "c5e5872372b392de5325a2951e0ef57798cb9295d753b2b77db7223732c7a25f",
+    "kernel": "457f3e2db2e5cebcc2ac041e6f7705f930a1c5f2e56311caa373af7d412ac821",
+    "profile": "physical",
+    "qemu": "0d6506b7e99c6fa28ade61dd006c2b9eda8e897931308b88eaaa4587963aafd4",
+    "rootfs": "d584da23ad6de66a621fadbbd71dd01604612887640c1b57a70c31a006d52c5f",
+    "runner": "ea4e3c4530a9f8bc463cc539855bb37d49cbfffedcee3a707734d2d29e569f2c"
+  },
+  "tally": {
+    "CAUGHT": 5
+  }
+}

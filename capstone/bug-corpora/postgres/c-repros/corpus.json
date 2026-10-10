@@ -37,13 +37,15 @@
     "capstone/bug-corpora/postgres/c-repros/results/spatial-20261006-160406",
     "capstone/bug-corpora/postgres/c-repros/results/sublet-20261006-161014",
     "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023",
-    "capstone/bug-corpora/postgres/c-repros/results/2026-10-10-virtual"
+    "capstone/bug-corpora/postgres/c-repros/results/2026-10-10-virtual",
+    "capstone/bug-corpora/postgres/c-repros/results/20261010-150616-qemu/spatial"
   ],
   "arm_configurations": {
     "spatial": "app-level0",
     "virtual-malloc": "virtual-mallocng"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+    "spatial": "results/20261010-150616-qemu/spatial"
   }
 }

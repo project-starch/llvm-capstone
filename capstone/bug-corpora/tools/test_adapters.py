@@ -130,6 +130,37 @@ class MmgrCaseControlDiscovery(unittest.TestCase):
             Path(self.tmp.name), "sublet")), [0])
 
 
+class SqlThresholdProbe(unittest.TestCase):
+    """The probe generator must reproduce what was actually run.
+
+    The bisection that attributed case 03's fault is only reproducible if the inputs are. The
+    committed control is the generator's own output at 48 variants, so the two cannot drift.
+    """
+    gen = load(CORPORA / "postgres/sql-repros/shared/make-threshold-probe.py", "pg_probe_gen")
+    CORPUS = CORPORA / "postgres/sql-repros"
+
+    def test_48_variants_is_the_committed_control(self):
+        control = next(self.CORPUS.glob("03_*")) / "control.sql"
+        sent = [ln for ln in control.read_text().splitlines()
+                if ln.strip() and not ln.lstrip().startswith("--")]
+        self.assertEqual(self.gen.probe(48).splitlines(), sent)
+
+    def test_66_variants_is_the_committed_trigger(self):
+        trigger = next(self.CORPUS.glob("03_*")) / "trigger.sql"
+        sent = [ln for ln in trigger.read_text().splitlines()
+                if ln.strip() and not ln.lstrip().startswith("--")]
+        self.assertEqual(self.gen.probe(66).splitlines(), sent)
+
+    def test_the_count_is_the_number_of_variants(self):
+        self.assertNotIn("||", self.gen.probe(1))
+        for n in (2, 48, 63, 64, 66):
+            self.assertIn(f", {n - 1}))", self.gen.probe(n))
+
+    def test_a_level_needs_at_least_one_variant(self):
+        with self.assertRaises(ValueError):
+            self.gen.probe(0)
+
+
 class CReprosCaseControl(unittest.TestCase):
     """A case's OWN negative control, which is what attributes its fault to its defect.
 
