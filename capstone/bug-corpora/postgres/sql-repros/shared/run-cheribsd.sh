@@ -1,7 +1,15 @@
 #!/bin/bash
 # Run the sql-repros cases in a booted CheriBSD purecap guest.
 #
-#   run-cheribsd.sh [out dir]
+#   run-cheribsd.sh [--control] [out dir]
+#
+# --control runs each case control.sql instead of its trigger.sql: the same
+# statement moved to the safe side of the boundary the defect crosses. A
+# control is read by whether it COMPLETED, not by whether the mechanism fired,
+# so the verdicts become control-held / control-broken. Until 2026-10-10 this
+# script had no control mode at all, and a run launched to collect controls
+# silently re-ran the defects instead; the results directory is now named for
+# what it ran.
 #
 # The guest is expected to be up on PG_CHERI_PORT (default 10086) with the
 # purecap PostgreSQL already deployed under /usr/local/pgsql and a cluster
@@ -26,6 +34,9 @@
 #   differential     the case's own EXPECT directive fired.
 #   silent           ran to the prompt, no fault, no directive.
 #   BADRUN           no stand-alone backend prompt: nothing executed.
+# With --control, detected becomes control-broken and silent/differential
+# become control-held; a case with no control.sql is no-control and is not
+# scored.
 set -uo pipefail
 C=$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)
 CORPUS=$(cd "$C/.." && pwd)
@@ -33,13 +44,33 @@ PORT=${PG_CHERI_PORT:-10086}
 BASE=${PG_CHERI_BASE:-/home/pg/data}
 PGBIN=${PG_CHERI_PGBIN:-/usr/local/pgsql/bin}
 GATE=${PG_CHERI_GATE:-02}
+CONTROL=${CONTROL:-}
+args=()
+for a in "$@"; do
+  case "$a" in --control) CONTROL=1 ;; *) args+=("$a") ;; esac
+done
+set -- ${args[@]+"${args[@]}"}
+SQLNAME=trigger.sql
+[ -n "$CONTROL" ] && SQLNAME=control.sql
 STAMP=$(date -u +%Y%m%d-%H%M%S)
-OUT=${1:-$CORPUS/results/cheribsd-revocation-$STAMP}
+OUT=${1:-$CORPUS/results/cheribsd-revocation-${CONTROL:+control-}$STAMP}
 PY=${PYTHON:-/home/zephyr/arms/cpython/bin/python3}
 
 K="-i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no"
 K="$K -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
 G() { ssh -n $K -p "$PORT" root@localhost "$@" 2>/dev/null; }
+# A COPY THAT FAILS IS NOT A RUN. scp here used to discard its own exit status,
+# so a failed copy left the PREVIOUS case file in /tmp and the next case was
+# scored against it. The hash is read back out of the guest.
+put() {
+  scp $K -P "$PORT" "$1" root@localhost:"$2" >/dev/null 2>&1 || {
+    echo "COPY FAILED: $1 -> guest:$2" >&2; return 1; }
+  local want have
+  want=$(sha256sum < "$1" | cut -d" " -f1)
+  have=$(G "sha256 -q $2" | tr -d "\r")
+  [ -n "$have" ] && [ "$want" = "$have" ] || {
+    echo "COPY MISMATCH: $1 -> guest:$2 ($want != ${have:-unreadable})" >&2; return 1; }
+}
 mkdir -p "$OUT"
 
 CASES=$(cd "$CORPUS" && ls -d [0-9][0-9]_*/ 2>/dev/null | tr -d / | sort)
@@ -72,13 +103,13 @@ G "test -d $BASE" >/dev/null || {
 # 2026-10-05 the Capstone arms scored a case `silent` from an image with no
 # ltree in it, because CREATE EXTENSION failed, the trigger's real statement
 # never ran, and the backend prompt still appeared.
-WANT=$(cd "$CORPUS" && cat */trigger.sql 2>/dev/null \
+WANT=$(cd "$CORPUS" && cat */$SQLNAME 2>/dev/null \
        | grep -oiE 'CREATE[[:space:]]+EXTENSION[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?[a-z_]+' \
        | awk '{print tolower($NF)}' | sort -u)
 echo "extensions the corpus needs: $(echo $WANT | tr '\n' ' ')"
 PRE=$OUT/preflight.sql
 { echo "SELECT 1 AS backend_runs_sql;"; for e in $WANT; do echo "CREATE EXTENSION $e;"; done; } > "$PRE"
-scp $K -P "$PORT" "$PRE" root@localhost:/tmp/preflight.sql >/dev/null 2>&1
+put "$PRE" /tmp/preflight.sql || exit 2
 preout=$(G "su -m pg -c 'w=\$(mktemp -d /tmp/pre-XXXXXX); cp -R $BASE \$w/data; \
   $PGBIN/postgres --single -D \$w/data postgres < /tmp/preflight.sql 2>&1; rm -rf \$w'")
 printf '%s\n' "$preout" > "$OUT/preflight.out"
@@ -103,10 +134,16 @@ for tag in $CASES; do
   d=$CORPUS/$tag
   limit=$("$PY" -c "import json,sys;print(json.load(open(sys.argv[1])).get('harness_limit','') or '')" "$d/case.json")
   need=$(grep -oiE 'CREATE[[:space:]]+EXTENSION[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?[a-z_]+' \
-         "$d/trigger.sql" 2>/dev/null | awk '{print tolower($NF)}' | sort -u)
+         "$d/$SQLNAME" 2>/dev/null | awk '{print tolower($NF)}' | sort -u)
   miss=""
   for e in $need; do case " $AVAIL " in *" $e "*) ;; *) miss="$miss $e" ;; esac; done
 
+  if [ ! -f "$d/$SQLNAME" ]; then
+    v=no-control
+    why="this case has no $SQLNAME -- nothing was run, and this is not a verdict about the arm"
+    printf "%-52s %-16s %s\n" "$tag" "$v" "${why:0:60}"
+    printf "%s\tcheribsd-revocation\t%s\t%s\n" "$tag" "$v" "$why" >> "$TSV"; continue
+  fi
   if [ -n "$limit" ]; then
     v=not-runnable; why="declared by the case: ${limit:0:110}"
     printf '%-52s %-16s %s\n' "$tag" "$v" "${why:0:60}"
@@ -119,9 +156,14 @@ for tag in $CASES; do
     printf '%s\tcheribsd-revocation\t%s\t%s\n' "$tag" "$v" "$why" >> "$TSV"; continue
   fi
 
-  scp $K -P "$PORT" "$d/trigger.sql" root@localhost:/tmp/trigger.sql >/dev/null 2>&1
+  if ! put "$d/$SQLNAME" /tmp/run.sql; then
+    v=other
+    why="$SQLNAME did not reach the guest intact -- an infrastructure failure, not a measurement"
+    printf "%-52s %-16s %s\n" "$tag" "$v" "${why:0:60}"
+    printf "%s\tcheribsd-revocation\t%s\t%s\n" "$tag" "$v" "$why" >> "$TSV"; continue
+  fi
   raw=$(G "su -m pg -c 'w=\$(mktemp -d /tmp/pcrun-XXXXXX); cp -R $BASE \$w/data; \
-    timeout 900 $PGBIN/postgres --single -D \$w/data postgres < /tmp/trigger.sql 2>&1; \
+    timeout 900 $PGBIN/postgres --single -D \$w/data postgres < /tmp/run.sql 2>&1; \
     echo __EXIT=\$?; rm -rf \$w'")
   ex=$(printf '%s' "$raw" | grep -o '__EXIT=[0-9]*' | tail -1 | cut -d= -f2)
   body=$(printf '%s' "$raw" | grep -v '__EXIT=')
@@ -159,18 +201,33 @@ for tag in $CASES; do
   else
     v=silent; why="ran to the prompt with no fault${last:+; first message: $last}"
   fi
+  if [ -n "$CONTROL" ]; then
+    # A control is read by whether it COMPLETED, not by whether the mechanism
+    # fired. It runs below the threshold the defect crosses, so a fault here
+    # cannot be that defect, and the arm row it was run for must be withdrawn.
+    case "$v" in
+      detected)
+        v=control-broken
+        why="the control ran below the defect threshold and FAULTED ANYWAY, so the trigger fault is not this defect; $why" ;;
+      silent|differential)
+        v=control-held
+        why="the control ran below the defect threshold and completed, as a control must; $why" ;;
+    esac
+  fi
   printf '%-52s %-16s %s\n' "$tag" "$v" "${why:0:60}"
   printf '%s\tcheribsd-revocation\t%s\t%s\n' "$tag" "$v" "$why" >> "$TSV"
 done
 
 gv=$(awk -F'\t' -v g="$GATE" 'NR>1 && substr($1,1,2)==g {print $3}' "$TSV" | head -1)
-if [ "${gv:-}" != detected ]; then
+if [ -n "$CONTROL" ]; then
+  gv=not-applicable-in-a-control-run
+elif [ "${gv:-}" != detected ]; then
   echo >&2
   echo "MECHANISM GATE: case $GATE is ${gv:-absent}, not detected. Every silent row" >&2
   echo "in this run is unqualified; the matrix is written but inputs.json records" >&2
   echo "the gate as failed, and the rows should not be published as negatives." >&2
 fi
-scored=$(awk -F'\t' 'NR>1 && $3!="control-failure" && $3!="BADRUN" && $3!="other" && $3!="not-applicable" && $3!="not-runnable"' "$TSV" | wc -l)
+scored=$(awk -F'\t' 'NR>1 && $3!="control-failure" && $3!="BADRUN" && $3!="other" && $3!="not-applicable" && $3!="not-runnable" && $3!="no-control"' "$TSV" | wc -l)
 cat > "$OUT/inputs.json" <<JSON
 {
   "arm": "cheribsd-revocation",
@@ -185,9 +242,10 @@ cat > "$OUT/inputs.json" <<JSON
   "mechanism_gate": {
     "case": "$GATE",
     "verdict": "${gv:-absent}",
-    "passed": $([ "${gv:-}" = detected ] && echo true || echo false),
+    "passed": $([ -n "$CONTROL" ] || [ "${gv:-}" = detected ] && echo true || echo false),
     "kind": "a corpus case required to be detected, which is weaker than a purpose-built control: it says the mechanism reported on something in this configuration, not that it would have reported on each silent case"
   },
+  "ran": "$SQLNAME",
   "only": "${ONLY:-all}",
   "cases": $n,
   "scored": $scored

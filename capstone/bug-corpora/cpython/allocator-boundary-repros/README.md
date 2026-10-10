@@ -63,10 +63,12 @@ inside one of its blocks.
 Every case is live at the pin and the proof is a measurement, never an
 assertion: the trigger is upstream's own reproducer from the issue, and running
 it on the pinned 3.13.7 ASan build produces the sanitizer report quoted in
-`live_proof`. All 21 reproduce from their case directory with the oracle
-recorded for them.
+`live_proof`. All 32 reproduce from their case directory with the oracle
+recorded for them -- the 21 filling the three cells `pymalloc-repros`
+does not cover, and the 11 temporal/nested cases that re-measure its
+issues through the interpreter.
 
-Two things that had to be got right for those runs to mean anything:
+Three things that had to be got right for those runs to mean anything:
 
 * `ASAN_OPTIONS=detect_leaks=0`. With leak checking on, the leak summary buries
   the report and a reproducing case reads as silent.
@@ -74,6 +76,15 @@ Two things that had to be got right for those runs to mean anything:
   address space with `ulimit -v`, which stops ASan reserving its ~15 TB shadow
   region; 84 cases came back "no violation" when the instrument had never
   started.
+* A negative control, because a positive one only proves the instrument
+  started. Two are run and they answer different questions: a weak one that
+  replaces every trigger with a stub, which all three arms pass, and a strong
+  per-case one that keeps the allocation traffic and makes only the offending
+  access valid, which exists for 18 of the 32 cases and has been run on the
+  base arm. For the remaining 14 the defect is not one invalid access in an
+  otherwise ordinary program, and three of those 14 are the cases no arm
+  delivers. What each control settles, and what neither does, is in the
+  results README.
 
 ## Arms
 

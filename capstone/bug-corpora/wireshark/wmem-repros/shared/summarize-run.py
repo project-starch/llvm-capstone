@@ -30,8 +30,15 @@ for r in sorted(verdicts, key=lambda r: (r["case"], r["mode"])):
     images[r["name"]] = m["sha256"]["defect.dom"]
     tools = {"domain_loader": m["sha256"]["host.user"], "qemu": m["qemu_sha256"],
              "clang": m["compiler_sha256"], "node_capacity": m["node_capacity"]}
-    row = {**r, "fix": c["upstream_fix"], "shape": c["shape"],
-           "completed": "" if r["mode"] == "sublet" else r["passed"]}
+    # `completed` says whether the run ran to its end. For a row expected to COMPLETE that is what
+    # `passed` measures. For a row expected to FAULT it is whether no fault happened -- it used to
+    # copy `passed` here too, so every row that faulted as predicted read completed=True (4 matrices,
+    # corrected 2026-10-10).
+    if r["expected"] == "complete":
+        done = "" if r["mode"] == "sublet" else r["passed"]
+    else:
+        done = int(r.get("cause") or 0) == 0
+    row = {**r, "fix": c["upstream_fix"], "shape": c["shape"], "completed": done}
     lines.append("\t".join("" if row.get(k) is None else str(row.get(k)) for k in columns))
 (a.results / "matrix.tsv").write_text("\n".join(lines) + "\n")
 (a.results / "inputs.json").write_text(json.dumps({

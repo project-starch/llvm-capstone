@@ -7,7 +7,9 @@ allocator as libc (`WM_LIBC_SYSTEM=ON`: `g_malloc`/`g_free` are CheriBSD's `mall
 runs every case in the fix-differential invocation, where a temporal case ASSERTS that the next dissection's first
 allocation reoccupies the freed storage before reading through the stale pointer -- `wm_reoccupy`'s
 `CHECK(next == stale)` in cases 02-10, and the same check written inline (`CHECK(next == address)`) in 00, 01, 11
-and 12. A failed assertion exits 75 and would have read "held".
+and 12. A failed assertion exits 75, CONTROL-FAILED (`wm_give_up`: "an infrastructure failure is never a verdict"):
+it would have meant the chunk was not reissued, as a quarantine hold would do, but the run would have reported it as
+no reading rather than scored it held. None failed.
 
 - **All 22 buggy arms: VERDICT DEFECT-REPRODUCED, exit 0.** For the 13 temporal cases (00-12) that is the
   reoccupation assertion holding: the stale chunk was REISSUED inside the block wmem kept, so the quarantine never

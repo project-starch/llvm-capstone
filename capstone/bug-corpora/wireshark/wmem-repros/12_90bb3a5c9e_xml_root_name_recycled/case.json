@@ -53,7 +53,7 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-libc/: **NOT CAUGHT** on stock wmem with the system allocator as CheriBSD's libc (WM_LIBC_SYSTEM, WM_CHUNKS=OFF), revocation on: the buggy arm's reoccupation assertion held -- the stale chunk was REISSUED inside the block wmem kept, so libc's quarantine never saw it (missed, reused); fixed arm VERDICT FIXED. In the same boot control 90 (a jumbo g_free'd by the reset) was HELD by the quarantine and the revocation control faulted at its labelled load. The 2026-10-07 reading of this arm ran the hosted bump arena with the chunk port compiled in, where nothing reached free().",
-      "control": "the PoisonCap mode-1 arm in the same bundle and the same boots faults 13/13 with SIGPROT at the labelled read probe, so the platform CAN be made to catch these cases; the completion here is therefore a measured miss and not an absent integration",
+      "control": "in the same boot (results/2026-10-10-cheribsd-libc/, provenance.tsv): the revocation control faulted at its labelled load (exit 162), the bounds control exited 162, and wmem's own control 90 -- a jumbo the reset hands to g_free, the one wmem path that does reach free() -- was HELD by libc's quarantine. So revocation was live and wmem traffic that reaches free() is seen; the completion here is a measured miss, not an absent integration. (The PoisonCap mode-1 13/13 this field used to cite is results/20260921-cheribsd/, a different bundle.)",
       "guest_default": "preserved",
       "measured": "2026-10-10, results/2026-10-10-cheribsd-libc/README.md, rows 12-*-buggy and -fixed",
       "status": "measured",

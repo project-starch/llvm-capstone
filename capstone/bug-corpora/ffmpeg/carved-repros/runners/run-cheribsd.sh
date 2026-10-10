@@ -71,6 +71,13 @@ python3 "$CAP/ports/common/host/cheribsd/run.py" "$OUT/run" \
   --abi-probe "$OUT/bin/cheribsd-abi-probe" \
   --runtime-revocation "$REV" --cases "$OUT/cases.json" --continue-on-failure
 rc=$?
+# A boot that died partway is not a reading: --continue-on-failure keeps a failing CASE from
+# stopping the run, but only run.py's ran_all_cases says every selected case actually executed.
+# Without this, a guest that died after the controls read as "suite exit 1, which is data".
+python3 - "$OUT/run/summary.json" <<'RANALL' || { echo "INFRA: the boot did not run every case (ran_all_cases is not true): not a reading" >&2; exit 75; }
+import json, sys
+sys.exit(0 if json.load(open(sys.argv[1])).get("ran_all_cases") is True else 1)
+RANALL
 for c in cheribsd-abi cheribsd-bounds carve-control-fixed carve-control-buggy; do
   out="$OUT/run/$c/stdout.txt"
   [ -s "$out" ] || { echo "CONTROL-FAILED $c produced no output: not a reading" >&2; exit 75; }

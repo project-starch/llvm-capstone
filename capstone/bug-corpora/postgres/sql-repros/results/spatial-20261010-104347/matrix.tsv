@@ -1,0 +1,2 @@
+case	arm	verdict	evidence
+03_8c34261109_ltree_lquery_uint16_overflow	spatial	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xe02023a8 address=0xe1e0a650 entry=0xe0200de0 code=0xe0200000-0xe5250000 last=0x4f preparing=0x4f sha256=a5e1592ce215fe0350181525ff4f05c5f035b61d5c97c963accf5468dc4b8bcf image=/mnt/host/applications/postgres-a5e1592ce215fe0350181525ff4f05c5f035b61d5c97c963accf5468dc4b8bcf.dom; ran against a fixture that already carried ltree, so this arm did not have to create it and this row says nothing about whether it can

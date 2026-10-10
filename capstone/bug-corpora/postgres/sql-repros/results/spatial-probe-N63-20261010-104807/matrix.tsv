@@ -1,0 +1,2 @@
+case	arm	verdict	evidence
+03_8c34261109_ltree_lquery_uint16_overflow	spatial	probe-completed	probe N63.sql: completed with no directive and no fault; ran against a fixture that already carried ltree, so this arm did not have to create it and this row says nothing about whether it can

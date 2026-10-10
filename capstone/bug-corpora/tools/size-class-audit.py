@@ -8,6 +8,12 @@ CLEAN -- for a reason that is a property of the allocator's granularity and has 
 the defect. A clean arm that could never have been anything else is not a negative result; it is
 an unproven instrument, and this tree has a standing rule against treating one as the other.
 
+WHERE IT MEASURES. On the x86-64 HOST build, where a pointer is 8 bytes. On a purecap target a pointer is
+16, so any allocation whose elements are pointers is twice as large there; the case's own oracle must
+say whether the doubled request still lands where this tool predicts (as of 2026-10-10 four cases have
+pointer-sized elements -- memcached plain-heap 02, 03, 08 and wireshark plain-heap 01 -- and each still
+lands exactly on a size class). The tool prints host sizes; it does not model the purecap ABI.
+
 WHAT THIS TOOL DOES. For each case it measures, rather than infers:
 
   * the crossed allocation's size in bytes, by interposing on malloc/calloc at run time;

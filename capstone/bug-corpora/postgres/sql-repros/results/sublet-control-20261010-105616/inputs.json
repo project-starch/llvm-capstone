@@ -1,0 +1,26 @@
+{
+  "arm": "sublet",
+  "image": "/tmp/capstone/pg-su-sublet/link/postgres.dom",
+  "image_sha256": "95157fa1d77f22552075bcda8a6dd26c405cd7473d247c2b64cf86f3716b93fd",
+  "runner_sha256": "b2433002608aeebb8f0d96180cd4a7adfbc15be8ffc85d668c1503fe116f168d",
+  "fixture": "/home/zephyr/arms/postgres/capstone/build/fixture-ltree",
+  "extensions_staged_from": "/tmp/capstone/pg-su-sublet/share/extension",
+  "started_utc": "20261010-105616",
+  "extensions_wanted": [
+    "ltree"
+  ],
+  "extensions_available": [
+    "ltree"
+  ],
+  "extensions_preinstalled": [
+    "ltree"
+  ],
+  "fixture_provenance": null,
+  "mechanism_gate": null,
+  "ran": "control.sql",
+  "cases": 1,
+  "scored": 1,
+  "verdicts": {
+    "control-held": 1
+  }
+}
