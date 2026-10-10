@@ -53,5 +53,9 @@
   "arm_configurations": {
     "virtual-malloc": "virtual-memcached-stock",
     "virtual-nested-pools": "virtual-memcached-ledger"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
   }
 }

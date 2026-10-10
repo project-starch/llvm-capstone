@@ -337,3 +337,21 @@ Predictions:
   - Every fixed arm printed VERDICT FIXED with exit 0.
   - The virtual columns agree with the physical ones cell for cell: sublet-malloc 0/22 and
     sublet-chunks 22/22.
+- **R8, first attempt**: the runner wrote no bundle. Both boots ran and printed every case, but the
+  runner then crashed: in `run_hosted` a loop variable named `argv` shadowed the helper of the same
+  name. The unit tests cover the observers, not `run_hosted` end to end, so they could not see it. The
+  helper is now `run_argv`. R8b reruns under the same pre-registration; the bundle records the runner's
+  hash.
+- **R8b** (`allocator-repros/results/2026-10-10-virtual/<arm>/`, derived): as predicted, 18 of 18 cells.
+  - Controls: bounds-malloc and uaf-malloc fault on both arms. 90 completes on `virtual-malloc` and
+    faults on `virtual-nested-pools`.
+  - `virtual-malloc`: 00-07 MISSED, each with DEFECT-REPRODUCED. 08 is CAUGHT, cause 28, at
+    `mc_case_body+436`, which is `lbu` at `case.c:66`: the defective `while (*ptr == ' ')` scan
+    stepping past the rbuf object.
+  - `virtual-nested-pools`: 9 CAUGHT.
+    - 00-04: cause 24 at `read_probe+0x14`.
+    - 05 and 06: cause 28 at `write_probe+0x18`.
+    - 07: cause 28 at `read_probe`.
+    - 08: cause 28 at the same scan load.
+  - The prior-art branch's one-pc fault did not recur. That branch did not build the stock ledger.
+  - Both columns agree with the physical ones: 1/9, and 9/9 (counting `sublet-carve` for 06 and 07).

@@ -430,16 +430,16 @@ def run_hosted(a, corpus):
             return 75
         port_controls[name] = (d, prog)
     plan = [(f"control-{c}", controls_img, [c]) for c in spec["controls"] if c not in port_controls]
-    def argv(which, n):
+    def run_argv(which, n):
         if caseline:
             return [which, n, *ad["extra"][a.arm]]
         return [mode, n, "fixed"] if which == "fixed" else [mode, n, *ad["buggy"][a.arm]]
 
-    plan += [(f"control-{name}", prog, argv("buggy", str(int(d.name[:2])))) for name, (d, prog) in port_controls.items()]
+    plan += [(f"control-{name}", prog, run_argv("buggy", str(int(d.name[:2])))) for name, (d, prog) in port_controls.items()]
     for d in found:
         n = str(int(d.name[:2]))
-        plan += [(f"{d.name}-fixed", programs[d.name], argv("fixed", n)),
-                 (f"{d.name}-buggy", programs[d.name], argv("buggy", n))]
+        plan += [(f"{d.name}-fixed", programs[d.name], run_argv("fixed", n)),
+                 (f"{d.name}-buggy", programs[d.name], run_argv("buggy", n))]
 
     batch = virtualvm.Batch(raw / "stage")
     for name, image, argv in plan:
@@ -504,7 +504,7 @@ def run_hosted(a, corpus):
         "configuration": config,
         "build": {"sdk_identity": [heap, profile], "prebuilt": local_path(str(a.prebuilt)),
                   "cache": {k: (m.group(1) if m else None) for k, m in opts.items()},
-                  "argv": {"fixed": argv("fixed", "N"), "buggy": argv("buggy", "N")},
+                  "argv": {"fixed": run_argv("fixed", "N"), "buggy": run_argv("buggy", "N")},
                   "controls": {c: v.sha256(prog) for c, (_, prog) in port_controls.items()}},
         "platform": platform})
     print(f"--- {a.arm} ({config}): {record['tally']}\nresults: {out}")
