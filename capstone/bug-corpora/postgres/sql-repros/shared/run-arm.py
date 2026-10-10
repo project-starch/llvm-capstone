@@ -383,6 +383,12 @@ def main():
                              "staged; defaults to <image>/../../share/extension")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--only", help="comma-separated case numbers")
+    parser.add_argument("--control", action="store_true",
+                        help="run each case's control.sql instead of its "
+                             "trigger.sql. The control is the same statement "
+                             "below the threshold the defect needs, so it must "
+                             "COMPLETE; a fault there means the trigger's fault "
+                             "was not the defect and the row must be withdrawn")
     parser.add_argument("--gate", default="02",
                         help="the case that must be detected for the run to count")
     parser.add_argument("--no-gate", action="store_true",
@@ -404,7 +410,8 @@ def main():
         sys.exit(f"the VM state's share is {config['share']} but this run uses {args.share}")
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = args.out or (CORPUS / "results" / f"{args.arm}-{stamp}")
+    out = args.out or (CORPUS / "results"
+                       / f"{args.arm}-{'control-' if args.control else ''}{stamp}")
     out.mkdir(parents=True, exist_ok=True)
 
     # One run at a time: two would share the staging directory under the share.
@@ -426,12 +433,32 @@ def main():
         tag = case_dir.name
         name = f"pgdata-{tag}"
         cluster(args, name)
-        text, result = backend(args, case_dir / "trigger.sql", name,
+        sql = case_dir / ("control.sql" if args.control else "trigger.sql")
+        if not sql.is_file():
+            rows.append((tag, "no-control",
+                         f"{sql.name} does not exist for this case"))
+            print(f"{tag:<52} no-control", flush=True)
+            shutil.rmtree(args.share / name, ignore_errors=True)
+            continue
+        text, result = backend(args, sql, name,
                                out / f"{tag}.json", out / f"{tag}.out")
         shutil.rmtree(args.share / name, ignore_errors=True)
         if text.strip():
             produced += 1
         verdict, why = score(case_dir, text, result, available, preinstalled)
+        if args.control:
+            # A control is read by whether it COMPLETED, not by whether the
+            # mechanism reported. `detected` here is the bad outcome: it says
+            # the fault does not depend on the threshold the defect needs, so
+            # whatever the trigger produced was not this defect.
+            verdict = {"detected": "control-broken",
+                       "silent": "control-held",
+                       "differential": "control-held"}.get(verdict, verdict)
+            why = ("the control ran below the defect's threshold and "
+                   + ("FAULTED ANYWAY, so the trigger's fault is not this "
+                      "defect" if verdict == "control-broken"
+                      else "completed, as a control must")
+                   + "; " + why)
         rows.append((tag, verdict, why))
         print(f"{tag:<52} {verdict:<16} {why[:64]}", flush=True)
 
@@ -439,6 +466,8 @@ def main():
         sys.exit("NO CASE PRODUCED OUTPUT -- a harness failure, not a measurement of zero")
 
     gated = None
+    if args.control:
+        args.no_gate = True          # nothing in a control run should fault
     if not args.no_gate:
         hit = [v for t, v, _ in rows if t.split("_")[0] == args.gate]
         if not hit:
@@ -487,6 +516,7 @@ def main():
         "mechanism_gate": {"case": args.gate, "passed": gated,
                            "kind": "a corpus case required to be detected"}
         if not args.no_gate else None,
+        "ran": "control.sql" if args.control else "trigger.sql",
         "cases": len(rows),
         "scored": scored,
         "verdicts": counts,

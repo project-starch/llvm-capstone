@@ -3,29 +3,34 @@
 9 defects in PostgreSQL 17.5 and its contrib extensions, each a `trigger.sql`
 run against a real stand-alone backend, measured on three arms on 2026-10-06.
 
-| arm | detected | scored | not applicable |
+| arm | detected | scored | out of denominator |
 |---|---:|---:|---:|
 | `spatial` (base Capstone) | **2** | 9 | 0 |
-| `sublet` (Capstone + Sublet) | **5** | 9 | 0 |
+| `sublet` (Capstone + Sublet) | **4** | 8 | 1 |
 | `cheribsd-revocation` (purecap) | **2** | 9 | 0 |
 
-Every denominator is the cases *that arm can run*, and all three are now
-whole.
+Every denominator is the cases *that arm can run*. One cell is out of one:
+case 03 on sublet, withdrawn below.
 
-**Case 03 on `sublet` was measured against a fixture cluster that already
-carried ltree, and that is not the same as the arm being able to create it.**
-`CREATE EXTENSION ltree` still takes a capability fault there. The defect is
-in the lquery parser rather than in extension creation, so the extension was
-created once on the `spatial` arm (`shared/make-fixture.py`) and the cluster
-handed to `sublet`, which then ran the statement the case is about. The two
-runs of 2026-10-08 are a controlled pair: the same image against the plain
-fixture reports FAULTS ON CREATE and scores the case `not-applicable`, and
-against the ltree fixture scores it `detected`. Only the fixture differs.
+**Case 03 on `sublet` is withdrawn, and the negative control is why.** The
+arm faults on the trigger, but it faults on `control.sql` too -- the same
+statement with 64 OR-variants against the trigger's 66, so 64512 bytes
+against a 65535 ceiling that is never crossed -- at the same instruction,
+cause 7 `pc=0xe0202414`, on the same image and the same fixture. Whatever the
+arm trips on while parsing a large lquery, it is not the uint16 wrap, so the
+cell is out of the denominator rather than counted as a detection.
 
-That fault is deterministic, unfixed, and worth reporting on its own -- a
-capability fault while loading an extension is a finding about the port, not
-about any defect in this corpus. The case's `underlying_fault_still_open`
-field carries the detail.
+This was asked for in review on PR #198 before a single-run detection was
+trusted, and the run disagreed with the row. Two faults on that arm remain
+open and unexplained: `CREATE EXTENSION ltree`, and now a plain large lquery
+parse.
+
+**Case 02's control held**, and the pair is what makes either reading
+defensible. Cases 02 and 03 fault at the *same* instruction on this arm, so
+the instruction alone distinguishes nothing. 02's control -- a 32000-character
+StartSel against the trigger's 32768, below the int16 ceiling -- completes.
+03's does not. A shared faulting address is not by itself evidence either
+way; the controls are.
 
 Case 09 was outside both Capstone arms until 2026-10-06, because it reached
 the defect through pgcrypto and no OpenSSL is cross-compiled for capstone64.
@@ -36,7 +41,7 @@ It now runs the same three statements as a C caller against pgcrypto's real
 all nine are nested by the allocator that serves them: the damage stays inside
 a chunk that AllocSet carved out of a block it took from malloc, and an arm
 whose bounds are the malloc block has nothing to check. Sublet bounds each
-sub-allocation and reports 5 of 9 where base Capstone reports 2 of 9 and the
+sub-allocation and reports 4 of 8 where base Capstone reports 2 of 9 and the
 purecap guest 2 of 9.
 
 ## What produced these numbers
