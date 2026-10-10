@@ -3,24 +3,36 @@
 #
 #   bash runners/run-asan.sh <fresh outdir>
 #
-# wmem's BLOCK allocator carves every chunk out of blocks inside ONE payload the driver takes with
-# aligned_alloc (WM_PAYLOAD_BYTES, 384 MiB), and a pool reset or an individual free hands chunks
-# back to wmem, never to free(). The controls make the silence a reading: in the same build ASan
-# must report one byte past, and a read after free of, a block of exactly that size. That block is
-# larger than ASan's default 256 MiB quarantine, which unmaps it at once on free so the stale read
-# SEGVs unreported (first run, 2026-10-09); the quarantine is raised so the control can report.
+# wmem is built hosted with WM_LIBC_SYSTEM (ports/wireshark/wmem/src/shared/backing.c): g_malloc and
+# g_free ARE the host's malloc and free, at the requested size, as a stock build gets them from glib.
+# So ASan sees every block wmem asks the system for, every jumbo, and every g_free -- what it would
+# see in an upstream fuzz build under the wmem allocator override -- and a chunk wmem carves inside
+# one of those blocks is still invisible to it, which is the reading.
+#
+# Until 2026-10-10 this arm ran on the hosted bump arena (one 384 MiB aligned_alloc, nothing ever
+# handed back), where no reading but "silent" was possible and the only controls were separate
+# programs. Now the positive control is wmem's own: control 90 (controls/sublet-malloc), a jumbo the
+# packet reset frees with g_free and then reads, built with the SAME options in this run, must
+# report heap-use-after-free; and the plain asan-control must report one byte past a block.
 set -uo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd -- "$HERE/.." && pwd)
+PORT=$(cd -- "$ROOT/../../../ports/wireshark/wmem" && pwd)
 TOOLS=$(cd -- "$ROOT/../../tools" && pwd)
 OUT=${1:?usage: run-asan.sh <fresh outdir>}
 SAN="-fsanitize=address -fno-omit-frame-pointer -g -O0"
-bash "$HERE/run-native.sh" "$OUT" -DCMAKE_C_FLAGS="$SAN" -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address > "$OUT.native.log" 2>&1
+OPTS=(-DWM_LIBC_SYSTEM=ON -DCMAKE_C_FLAGS="$SAN" -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address)
+bash "$HERE/run-native.sh" "$OUT" "${OPTS[@]}" > "$OUT.native.log" 2>&1
 rc=$?; [ $rc -eq 75 ] && { echo "CONTROL-FAILED ASan build (see $OUT.native.log)" >&2; exit 75; }
+CTL="$OUT-control90"
+cmake --preset native -S "$PORT" -B "$CTL" -DWM_CORPUS_DIR="$ROOT/controls/sublet-malloc" -DWM_CHUNKS=OFF \
+  "${OPTS[@]}" > "$CTL.configure.log" 2>&1 && cmake --build "$CTL" -j "${JOBS:-8}" > "$CTL.build.log" 2>&1 \
+  || { echo "CONTROL-FAILED control-90 build (see $CTL.build.log)" >&2; exit 75; }
+ctl90=$(ls "$CTL"/bin/90-* 2>/dev/null | head -1)
+[ -x "$ctl90" ] || { echo "CONTROL-FAILED control 90 not built" >&2; exit 75; }
 ${CC:-cc} $SAN -o "$OUT/bin/asan-control" "$TOOLS/asan-control.c" || exit 75
 python3 "$TOOLS/run-native-asan.py" --corpus "$ROOT" --bin "$OUT/bin/case-{nn}" --out "$OUT/run" \
   --buggy-args "0 {n} buggy" --fixed-args "0 {n} fixed" \
-  --asan-options quarantine_size_mb=1024 \
-  --build-note "$(${CC:-cc} --version | head -1); $SAN; wmem and the port built with the same flags" \
-  --control "$OUT/bin/asan-control past 402653184=heap-buffer-overflow" \
-  --control "$OUT/bin/asan-control uaf 402653184=heap-use-after-free"
+  --build-note "$(${CC:-cc} --version | head -1); $SAN; wmem and the port built with the same flags; WM_LIBC_SYSTEM=ON, WM_CHUNKS=OFF" \
+  --control "$ctl90 0 90 buggy=heap-use-after-free" \
+  --control "$OUT/bin/asan-control past 4096=heap-buffer-overflow"

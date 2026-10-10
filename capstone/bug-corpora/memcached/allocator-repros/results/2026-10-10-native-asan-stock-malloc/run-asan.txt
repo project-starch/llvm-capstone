@@ -1,0 +1,13 @@
+  control 0: heap-buffer-overflow (required heap-buffer-overflow) ok  touch <repo>/capstone/bug-corpora/tools/asan-control.c:14
+  control 1: heap-use-after-free (required heap-use-after-free) ok  touch <repo>/capstone/bug-corpora/tools/asan-control.c:14
+  00_7af02b0c87_rbuf_copied_after_cache_free                     SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  01_0ad4de66ae_io_walk_reads_freed_link                         SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  02_59bd02ce29_tail_repair_frees_referenced_item                SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  03_a8c4a82787_refcount_overflow_frees_linked_item              SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  04_152ddb68f7_unlocked_refcount_drift                          SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  05_2d61f18_item_data_one_past                                  SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  06_78eb770_suffix_write_no_space                               SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  07_ecdb011_unterminated_key_read                               SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  08_e8364b5_ascii_all_spaces_scan_past_rbuf                     REPORTED         heap-buffer-overflow at mc_case_body <scratch>
+
+allocator-repros: 9 cases; {'SILENT': 8, 'REPORTED': 1}; not a reading: none
