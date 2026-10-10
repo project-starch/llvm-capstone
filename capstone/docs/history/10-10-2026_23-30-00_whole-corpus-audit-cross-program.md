@@ -28,3 +28,62 @@ Predictions:
 - revocation control: faults at its labelled load.
 If 08's fault is elsewhere, or its fixed arm does not complete, the cell becomes NO-READING and
 memcached's nested spatial CHERI cell drops from 1/4 to 0/3.
+
+### R2. FFmpeg subobject-repros, capstone-subobject arm: the accept-anywhere waiver replaced
+
+`tools/run-capstone-domain.py` accepted a fault ANYWHERE as a catch on this arm (`or subobject`).
+It now accepts a fault only at the labelled probe or in a function the case declared before the
+run (`fault_sites`). Its probe pattern also failed to recognise the unprefixed `write_probe` of
+cases 05 and 08. Declared sites, from the source:
+- `ff2_case_run` for 00-03, where the case body makes the defective member access;
+- `memcpy` for 07 (`ff2_strlcpy`'s copy). This is the weaker form, stated as such in its case.json.
+
+Platform: the 2026-10-10 audit's physical Capstone VM (capstone-qemu 32e7c9754f9a, kernel e58613598c89,
+firmware 6f2b082cb677, module a88ed2159b43, capstone-exec 0752aa7c49c9), SDK level0, with
+`-Xclang -fcapstone-subobject-bounds`, all 9 cases, one boot.
+
+Predictions:
+- controls: clean RETURNED, oob CAUGHT, uaf RETURNED, subobj CAUGHT.
+- 00, 01, 02, 03: CAUGHT in `ff2_case_run`, a declared site.
+- 05, 08: CAUGHT at `write_probe`, the labelled probe.
+- 07: CAUGHT in `memcpy`, a declared site.
+- 04, 06: NOT CAUGHT (the defect reproduces).
+- Every fixed arm FIXED.
+
+### R3. CheriBSD subobject and plane carve-bounds arms, supervised
+
+Until now both runners ran the buggy arm directly, so their catches carried an exit status (162) and
+no pc. The buggy arm now runs under `supervise`, and `tools/attribute-cheribsd-faults.py` names the
+function each fault landed in (`attribution.tsv`). Platform: stock CheriBSD 0cb16209, one boot per
+corpus.
+- R3a `ffmpeg/subobject-repros`, `CHERI_EXTRA_CFLAGS="-Xclang -cheri-bounds=subobject-safe"`
+  (cheribsd-subobject):
+  - fixed: all 9 FIXED;
+  - buggy: SIGPROT for 00, 01, 02, 03, 05, 06, 07 and 08, and 04 completes;
+  - attribution: 00-03 in `ff2_case_run`, 05/06/08 at `write_probe`, 07 in `memcpy`.
+- R3b `ffmpeg/plane-repros`, `CHERI_EXTRA_CFLAGS=-DFFP_CARVE_BOUNDS` (cheribsd-carve-bounds): fixed
+  FIXED; buggy SIGPROT at `ffp_read_probe`.
+
+### R4. wmem PoisonCap: the fixed runner, as a validation run
+
+`ports/wireshark/wmem/host/cheribsd/poisoncap/run.py` now resolves each case's own label, with a
+`supervise-wm_defect_write` for the write cases. The 2026-10-09 run attributed 16, 17, 18, 20 and 21 by
+hand. Run: cases 13-21 (the spatial cases), modes 0 and 1, PoisonCap image c8df9e17, revocation on.
+
+Prediction:
+- every arm SIGPROT, bounds, in both modes (as on 2026-10-09);
+- the runner itself reports "at probe" for all nine: 13, 14, 15 and 19 at `wm_defect_probe`, and 16,
+  17, 18, 20 and 21 at `wm_defect_write`;
+- 0 faulted_elsewhere.
+
+### R5. FFmpeg pool-repros column 2 (`poolstock`) with an in-boot Sublet-heap control
+
+Only the build tied the `poolstock` arm (column 2: FFmpeg's pools stock on the Sublet heap) to the
+Sublet heap. A level0 heap would also let the four cases complete. Run in one physical Capstone VM
+boot:
+- app safety fixtures 4 and 5 on `poolstock` (`ports/ffmpeg/app/host/safety-expect.txt`, rows added
+  today), predicted FAULT temporal -- what the Sublet heap does and level0 does not;
+- then the four cases (`runners/run-sublet-port.sh poolstock`), predicted to complete as recorded
+  (the pool keeps the buffer; nothing reaches free()).
+
+Images are the existing `domain-sublet-poolstock` build; their hashes go in the record.
