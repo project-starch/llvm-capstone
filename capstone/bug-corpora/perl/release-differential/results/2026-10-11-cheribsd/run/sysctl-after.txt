@@ -1,0 +1,12 @@
+security.cheri.ptrace_caps: 0
+security.cheri.cloadtags_stride: 4
+security.cheri.sealcap: 0x0 [,0x0-0x20000]
+security.cheri.runtime_revocation_async: 1
+security.cheri.runtime_revocation_every_free_default: 0
+security.cheri.runtime_revocation_default: 1
+security.cheri.check_perm_syscall: 0
+security.cheri.bound_legacy_capabilities: 0
+security.cheri.abort_on_memcpy_tag_loss: 0
+security.cheri.stats.untagged_ptrace_caps: 0
+security.cheri.stats.forged_ptrace_caps: 0
+security.cheri.capability_size: 16
