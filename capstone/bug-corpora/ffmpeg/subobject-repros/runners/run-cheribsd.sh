@@ -125,7 +125,7 @@ for d in sorted(root.glob('[0-9][0-9]_*')):
 PY
 )
 python3 "$CAP/bug-corpora/tools/attribute-cheribsd-faults.py" --run "$OUT/run" --nm "$SDK/bin/llvm-nm" \
-  --anchor ff2_case_run "${ATTR[@]}" > "$OUT/attribution.tsv"
+  --sysroot "$SYSROOT" --anchor ff2_case_run "${ATTR[@]}" > "$OUT/attribution.tsv"
 arc=$?
 echo "run-cheribsd: controls fired; suite exit $rc (non-zero = an arm's status was not the recorded one, which is data);" \
      "attribution exit $arc (non-zero = a fault not at a declared site or probe, which is data) -- $OUT/attribution.tsv"

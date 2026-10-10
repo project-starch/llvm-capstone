@@ -142,7 +142,7 @@ subobj_control_check "$OUT" || exit 75
 
 ATTR=(); for prog in "$OUT"/bin/ffp-[0-9][0-9]; do ATTR+=(--arm "$(basename "$prog")-buggy=$prog" --sites "$(basename "$prog")-buggy=ffp_read_probe"); done
 python3 "$CAP/bug-corpora/tools/attribute-cheribsd-faults.py" --run "$OUT/run" --nm "$SDK/bin/llvm-nm" \
-  --anchor ffp_read_probe "${ATTR[@]}" > "$OUT/attribution.tsv"
+  --sysroot "$SYSROOT" --anchor ffp_read_probe "${ATTR[@]}" > "$OUT/attribution.tsv"
 echo "run-cheribsd: attribution exit $? (non-zero = a fault not at ffp_read_probe, which is data) -- $OUT/attribution.tsv"
 echo "run-cheribsd: controls fired; suite exit $rc (non-zero = an oracle did not hold, which is data)"
 echo "run-cheribsd: per-case output in $OUT/run/"

@@ -28,17 +28,51 @@ import sys
 EXPECT = re.compile(r"^SUPERVISE expect (\S+) (?:0x([0-9a-f]+)|unavailable)\s*$", re.M)
 FAULT = re.compile(r"^SUPERVISE fault signal=(\d+) code=(\S+) addr=(\S+) pc=0x([0-9a-f]+)\s*$", re.M)
 EXIT = re.compile(r"^SUPERVISE exit (signalled|status)=(\d+)\s*$", re.M)
+# Printed by supervise.c since 2026-10-10: the mapped object holding the fault pc (and the return
+# address), with that object's load base, so a fault in a shared library resolves against the
+# library rather than reading as "outside every function" of the program.
+OBJECT = re.compile(r"^SUPERVISE (fault-object|fault-ra) 0x([0-9a-f]+) in (\S+) base=0x([0-9a-f]+)\s*$", re.M)
 
 
 def symbols(nm, program):
-    out = subprocess.run([str(nm), "-S", "--defined-only", str(program)],
-                         capture_output=True, text=True, check=True).stdout
+    """Defined functions; a stripped shared library falls back to its dynamic table."""
     table = {}
-    for line in out.splitlines():
-        parts = line.split()
-        if len(parts) == 4 and parts[2] in "tTwW":
-            table[parts[3]] = (int(parts[0], 16), int(parts[1], 16))
+    for extra in ([], ["-D"]):
+        out = subprocess.run([str(nm), "-S", "--defined-only", *extra, str(program)],
+                             capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) == 4 and parts[2] in "tTwWiI":
+                # a versioned dynamic name (memcpy@@FBSD_1.0) is the function's plain name
+                table.setdefault(parts[3].split("@", 1)[0], (int(parts[0], 16), int(parts[1], 16)))
+        if table:
+            break
     return table
+
+
+def in_object(nm, elf, base, addr):
+    """Every name of the function holding addr in an object loaded at base (a library exports one
+    function under several aliases: memcpy, __memcpy, ...), from that object's own ELF."""
+    hits = [(name, addr - base - value) for name, (value, size) in symbols(nm, elf).items()
+            if size and value <= addr - base < value + size]
+    if not hits:
+        return "", addr - base
+    return "|".join(sorted({n for n, _ in hits})), hits[0][1]
+
+
+def resolve_object(text, which, program, sysroot):
+    """(host ELF, base, addr) for the object a fault-object / fault-ra line names, or None. The
+    program is staged in the guest as ./target or under its own name; a library maps to the sysroot."""
+    for kind, addr, path, base in OBJECT.findall(text):
+        if kind != which:
+            continue
+        name = path.rsplit("/", 1)[-1]
+        if name in ("target", "program", pathlib.Path(program).name):
+            return program, int(base, 16), int(addr, 16)
+        if sysroot and (sysroot / path.lstrip("/")).is_file():
+            return sysroot / path.lstrip("/"), int(base, 16), int(addr, 16)
+        return None
+    return None
 
 
 def attribute(table, anchor, anchor_rt, pc):
@@ -58,11 +92,12 @@ def main():
     p.add_argument("--anchor", required=True)
     p.add_argument("--arm", action="append", default=[], help="ARM=PROGRAM, repeatable")
     p.add_argument("--sites", action="append", default=[], help="ARM=fn1,fn2: declared fault sites, repeatable")
+    p.add_argument("--sysroot", type=pathlib.Path, help="the guest's sysroot, to resolve a fault in a shared library")
     a = p.parse_args()
     if not a.arm:
         p.error("name at least one --arm")
     sites = {k: set(v.split(",")) for k, v in (s.split("=", 1) for s in a.sites)}
-    print("arm\tfault\tsi_code\tpc\tfunction\toffset\tdeclared_site_holds")
+    print("arm\tfault\tsi_code\tpc\tfunction\toffset\tdeclared_site_holds\tcaller")
     bad = 0
     for spec in a.arm:
         arm, program = spec.split("=", 1)
@@ -81,14 +116,23 @@ def main():
         m = EXPECT.search(text)
         anchor_rt = int(m.group(2), 16) if (m and m.group(1) == a.anchor and m.group(2)) else None
         fn, off = attribute(symbols(a.nm, program), a.anchor, anchor_rt, int(pc, 16))
+        lib = resolve_object(text, "fault-object", program, a.sysroot)
+        if lib and str(lib[0]) != str(program):
+            fn, off = in_object(a.nm, lib[0], lib[1], lib[2])
+            fn = f"{fn}" if fn else ""
+        caller = ""
+        ra = resolve_object(text, "fault-ra", program, a.sysroot)
+        if ra:
+            cfn, coff = in_object(a.nm, ra[0], ra[1], ra[2])
+            caller = f"{cfn or '?'}+{coff:#x} ({pathlib.Path(ra[0]).name})"
         if fn is None:
             print(f"{arm}\tSIGNAL {sig}\t{code}\t0x{pc}\tUNATTRIBUTED (no {a.anchor} anchor)\t\t")
             bad += 1
             continue
-        holds = "" if arm not in sites else ("yes" if fn in sites[arm] else "NO")
+        holds = "" if arm not in sites else ("yes" if set(fn.split("|")) & sites[arm] else "NO")
         if holds == "NO" or not fn:
             bad += 1
-        print(f"{arm}\tSIGNAL {sig}\t{code}\t0x{pc}\t{fn or 'outside every function'}\t{off:#x}\t{holds}")
+        print(f"{arm}\tSIGNAL {sig}\t{code}\t0x{pc}\t{fn or 'outside every function'}\t{off:#x}\t{holds}\t{caller}")
     return 1 if bad else 0
 
 

@@ -88,6 +88,18 @@ boot:
 
 Images are the existing `domain-sublet-poolstock` build; their hashes go in the record.
 
+### R3c. subobject-repros on cheribsd-subobject again, with the supervisor reporting the faulting object
+
+In R3a, case 07's fault pc lay outside the program image: libc is a shared library on CheriBSD, and
+`attribute-cheribsd-faults.py` resolved only the program's own symbols. So it read "outside every
+function". `supervise.c` now prints, after a fault, the mapped object that holds the pc and the one
+that holds the return address, each with its load base. The tool resolves both against that object's
+ELF (the program, or the library under the sysroot).
+
+Same platform and flags as R3a. Predictions are as R3a for all 9, and for 07: SIGPROT in libc's
+`memcpy`, the declared site, with its return address in the program (`ff2_strlcpy` or
+`ff2_case_run`).
+
 ## Outcomes (written after each run)
 
 - **R1** (`memcached/allocator-repros/results/2026-10-10-cheribsd-fixed-buggy/`): as predicted, 18 of 18 arms.
