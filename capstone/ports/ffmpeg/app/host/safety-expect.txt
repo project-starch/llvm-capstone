@@ -101,43 +101,10 @@ level0  16  RETURN *
 shrink  16  RETURN *
 sublet  16  RETURN *
 
-# poolsublet: the Sublet PORT of FFmpeg's own pools (ports/ffmpeg/sublet), FFAPP_POOL=sublet.
-# Registered with ports/ffmpeg/sublet/PREREGISTRATION.md, before its first ported line. 11-14 are
-# Phase A (AVBufferPool); 15-17 are Phase B (refstruct), which lands after Phase A.
-poolsublet   11  RETURN b00001
-poolsublet   11  LEN    64
-poolsublet   12  FAULT  temporal
-poolsublet   13  FAULT  temporal
-poolsublet   14  FAULT  oob
-poolsublet   15  FAULT  temporal
-poolsublet   16  FAULT  oob
-poolsublet   17  FAULT  temporal
-
-# poolstock: the matched control of poolsublet (FFAPP_POOL=stock): the same patched source, built
-# with FF_SUBLET_POOLS=0, so FFmpeg's pools run upstream's path on the Sublet heap. The two arms
-# differ in that macro alone. Registered 2026-09-29, after poolsublet's fixtures 11-14 had run and
-# before poolstock was first built; the values are PREREGISTRATION.md A1's statement that "on the
-# heap arms 12 and 13 complete, because a pool never calls free", made testable, and the values the
-# substitute's unprotected pool0 arm returned on 2026-09-24 for the same fixtures. 14 faults here
-# too: a stock pool's entry is its own av_malloc on the Sublet heap, bounded to 64 bytes.
-poolstock    11  RETURN b00001
-poolstock    11  LEN    64
-poolstock    12  RETURN c000a0
-poolstock    13  RETURN d0015b
-poolstock    14  FAULT  oob
-poolstock    15  RETURN f000a0
-poolstock    16  RETURN *
-poolstock    17  RETURN 1100177
-
-# Fixtures 20 and 21: what a pool's END costs, counted across FFmpeg's own uninit (v2, after the
-# 2026-09-29 claim audit showed the first measurement could not fire). Registered with
-# sublet/PREREGISTRATION.md's v2 addendum, before v2 was first built. The mark is
-# (the pool layer's file revokes across the 8 returns) << 8 | (the same across the pool's end):
-# 8 returns are 8 gives, and the end gives nothing back. poolstock has no pool layer: 0xE00F0.
-poolsublet   20  RETURN 1400800
-poolsublet   21  RETURN 1500800
-poolstock    20  RETURN 14e00f0
-poolstock    21  RETURN 15e00f0
+# poolsublet and poolstock, the Sublet port of FFmpeg's own pools (ports/ffmpeg/sublet) and its
+# one-macro control, with fixtures 11-23 and 20-21 registered against them, were removed on
+# 2026-10-11 with that port; their rows are in this file's history. The pools' protection is now
+# the buffer-pool port's patch 0003, measured by bug-corpora/ffmpeg/pool-repros.
 
 # TRACK B, af_join as FFmpeg's real code (fixtures 18 and 19; build with FFAPP_EXTRA_CONFIGURE=
 # "--enable-avfilter --enable-filter=join --enable-decoder=pcm_s16le_planar"). Registered with
@@ -148,10 +115,6 @@ poolstock    21  RETURN 15e00f0
 # taken, input 1's buffer goes back to its pool when the join frees its inputs, the next packet's
 # frame is handed that buffer (same-address 1), and the stale read sees the new packet's 0x77 --
 # unless the pool port revoked the buffer when it came back, and the read faults.
-poolstock    18  RETURN 120005b
-poolstock    19  RETURN 1300177
-poolsublet   18  RETURN 120005b
-poolsublet   19  FAULT  temporal
 
 # 30-33: configure-only DIAGNOSTICS for fixture 18's graph, which faulted inside
 # avfilter_graph_config on both pool arms (2026-09-29) while the same graph runs clean natively
@@ -165,10 +128,6 @@ poolsublet   19  FAULT  temporal
 # as rows rather than deleted so the bundle that reports those ERRORs still resolves against this file,
 # but they are NOT owed a measurement: do not schedule boots for them. If the negotiation question ever
 # reopens, re-register them with a fresh date rather than reviving these.
-poolsublet   30  RETURN 1e00001
-poolsublet   31  RETURN 1f00001
-poolsublet   32  RETURN 2000001
-poolsublet   33  RETURN 2100001
 level0       30  RETURN 1e00001
 
 # TRACK B, vidstab as FFmpeg's real code (fixtures 22 and 23; build with FFAPP_EXTRA_CONFIGURE=
@@ -181,10 +140,6 @@ level0       30  RETURN 1e00001
 # fix reverted: libvidstab keeps a shallow pointer to frame 1's plane and copies frame 2 into it,
 # so the victim reads frame 2's 0x5b -- unless the pool port revoked the plane when it came back,
 # and libvidstab's copy faults, at frame 1's plane, after the touch line.
-poolstock    22  RETURN 1600177
-poolstock    23  RETURN 170015b
-poolsublet   22  RETURN 1600177
-poolsublet   23  FAULT  temporal
 
 # FIXTURES 24 and 25: two UPSTREAM FFmpeg defects, both live at the 9.0.1 pin, transcribed into
 # the heap arms. Registered 2026-10-02 BEFORE either fixture was built or run on any arm, and
@@ -213,10 +168,3 @@ sublet  24  FAULT  temporal
 level0  25  RETURN 190015b
 shrink  25  RETURN 190015b
 sublet  25  FAULT  temporal
-
-# 2026-10-10, pre-registered before the run (bug-corpus whole-corpus audit, R5): fixtures 4 and 5 on
-# poolstock, run in the same VM boot as pool-repros' four cases, as the in-boot control that the
-# poolstock arm's heap really is the Sublet heap. On sublet they FAULT temporal (rows above) and on
-# level0 they RETURN, so a level0 heap under a poolstock label would read RETURN here.
-poolstock    4  FAULT  temporal
-poolstock    5  FAULT  temporal

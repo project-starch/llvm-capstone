@@ -85,18 +85,24 @@ guest a per-case script would have to reinvent. A Capstone domain:
     bash ../../../ports/ffmpeg/buffer-pool/security-tests/qemu/run.sh <out> \
       --cases 36,37,38 --modes 0,2 --rounds 1
 
-and against the Sublet port of FFmpeg's own pools, each `case.c` unchanged, in the FFmpeg app
-port's domain (build first with `FFAPP_HEAP=sublet FFAPP_POOL=sublet|stock
-FFAPP_CORPUS_DIR=<this corpus>` `ports/ffmpeg/app/host/build-domain.sh`):
+On the virtual profile, each `case.c` unchanged against the buffer-pool port's library in a
+Capstone process: `virtual-malloc` (the stock pools, every entry one virtual-mallocng object) and
+`virtual-nested-pools` (`-DFFPOOL_SUBLET=ON`, the port's patch 0003: every hand-out a child lifetime
+of its pool entry, revoked when it returns). Build both, then run each in one boot:
 
-    CAPSTONE_VM_STATE=<running VM> FFAPP_CORPUS_OUT=<new dir> \
-      bash runners/run-sublet-port.sh <poolsublet|poolstock> [rounds]
+    CAPSTONE_SDK=<virtual SDK> bash shared/build-cases.sh capstone-application <cases> [-DFFPOOL_SUBLET=ON]
+    CAPSTONE_SDK=<virtual SDK> bash controls/virtual/shared/build-cases.sh capstone-application <controls> [same]
+    python3 ../../tools/run-virtual-cases.py --corpus . --arm virtual-nested-pools \
+      --virtual-kit <kit> --sdk <virtual SDK> --llvm-bin <toolchain>/bin \
+      --prebuilt <cases> --prebuilt-controls <controls>
 
-(the delegated application ABI: each image is a `capstone-exec` application, and the verdict
-reads its exit status, the launcher's fault record and the QEMU log over that run;
-`results/20260929-qemu-sublet-port/` was taken on the earlier HostCall transport; the same
-predictions re-run on this transport, 36/36 as registered, are in
-`ports/common/application/results/20260929-dev-merge.json`).
+The control (`controls/virtual/`) is a buffer returned to the pool and read through its old
+pointer, which must complete on the stock arm and fault on the protected one.
+
+Until 2026-10-11 the cases also ran against the Sublet port of FFmpeg's own pools
+(`ports/ffmpeg/sublet`) in the FFmpeg app port's physical domain, with upstream's pools as the
+one-macro control (`runners/run-sublet-port.sh`). Patch 0003 replaced that port; its results stay
+in `results/20260929-qemu-sublet-port/`.
 
 A third protected arm, CheriBSD with PoisonCap, ran until 2026-10-10, when its runner and
 backend were removed; its readings stay in the table below and in `results/`.
@@ -113,6 +119,7 @@ backend was removed on 2026-10-10.
 | **CHERI default** *(MEASURED 2026-10-06, revocation on)* | `free()` → quarantine → sweep | — | — | — |
 | **PoisonCap** | the lease return: poison, then sweep before reissue | **SIGPROT** 162 | **SIGPROT** 162 | **SIGPROT** 162 |
 | **Sublet port of FFmpeg's own pools** (2026-09-29) | FFmpeg's own `buffer.c`: the return to the pool is a revoke | **fault**, cause 24, at `case.c:85` | **fault**, cause 24, at `case.c:48` | **fault**, cause 24, at `case.c:33` |
+| **virtual Capstone, patch 0003** (2026-10-11) | FFmpeg's own pools: every hand-out a child lifetime, revoked at the return | **fault**, cause 25, at `case.c:85` | **fault**, cause 25, at `case.c:48` | **fault**, cause 25, at `case.c:33` |
 
 > **MEASURED LATER THE SAME DAY — the row below is now a reading, and the retraction that
 > preceded it is kept rather than deleted.** `results/20261006-cheribsd/`: all four cases
@@ -155,10 +162,14 @@ backend was removed on 2026-10-10.
 > counting different sets, which is exactly the kind of agreement that should not be mistaken for
 > corroboration. The audit's figure is unchanged, because FFmpeg's bundle is not in its population.
 
-The last row is the Sublet port of FFmpeg's own pools (`ports/ffmpeg/sublet`), not the
-buffer-pool port's substitute that the `Sublet` row measures. Each `case.c` runs unchanged against
+The 2026-09-29 row is the Sublet port of FFmpeg's own pools (`ports/ffmpeg/sublet`, removed
+2026-10-11), not the buffer-pool port's substitute that the `Sublet` row measures. Each `case.c` runs unchanged against
 it, in the FFmpeg app port's domain, with upstream's pools as the one-macro control:
 [`results/20260929-qemu-sublet-port/`](results/20260929-qemu-sublet-port/README.md), N = 3 per cell.
+
+The last row is patch 0003 on the virtual profile (`results/2026-10-11-virtual`): `virtual-malloc`
+missed all four cases with its controls as declared, `virtual-nested-pools` caught all four, cause
+25, each at the stale access the line table names (case 03, the side table, at `case.c:104`).
 
 It catches whoever listens for the moment the nested allocator takes the storage
 back. The other two listen for an event that never happens here: Capstone

@@ -47,26 +47,6 @@ if [ "${1:-}" = --pristine ]; then
   echo "$SRC"; exit 0
 fi
 
-# --sublet: the Sublet PORT of FFmpeg's own pools (ports/ffmpeg/sublet), on top of the app's
-# patches. Keyed by every file it applies or copies, so a change rebuilds instead of reusing.
-if [ "${1:-}" = --sublet ]; then
-  SP="$APP_DIR/../sublet"
-  SUBLET_FILES=("$APP_DIR"/patches/*.patch "$SP"/*.patch "$SP/ffsublet.h")
-  SUBLET_KEY=$(cat "${SUBLET_FILES[@]}" | sha256sum | cut -c1-12)
-  SRC="$WORK/src-$VERSION-sublet-$SUBLET_KEY"
-  if [ ! -f "$SRC/.ffapp-prepared" ]; then
-    rm -rf "$SRC" "$SRC.tmp"; mkdir -p "$SRC.tmp"
-    tar xf "$TARBALL" -C "$SRC.tmp" --strip-components=1
-    for p in "$APP_DIR"/patches/*.patch "$SP"/*.patch; do
-      patch -d "$SRC.tmp" -p1 --batch --forward --fuzz=0 < "$p" >/dev/null \
-        || { echo "prepare-source: $(basename "$p") does not apply at fuzz 0" >&2; exit 1; }
-    done
-    cp "$SP/ffsublet.h" "$SRC.tmp/libavutil/ffsublet.h"
-    touch "$SRC.tmp/.ffapp-prepared"; mv "$SRC.tmp" "$SRC"
-  fi
-  echo "$SRC"; exit 0
-fi
-
 if [ "${1:-}" = --pool ]; then
   BP="$APP_DIR/../buffer-pool"
   BP_PATCHES=("$BP"/patches/ffmpeg-9.0.1-0001-*.patch "$BP"/patches/ffmpeg-9.0.1-0002-*.patch)

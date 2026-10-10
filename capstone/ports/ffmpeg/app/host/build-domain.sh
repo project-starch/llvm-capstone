@@ -53,36 +53,23 @@ esac
 #   0  the payloads are bounded per object and never revoked
 #   2  a Sublet lease per pool get, revoked when the buffer returns to its pool
 # The two differ in nothing but that mode: the matched pair for the pool fixtures.
-#   sublet  NOT the buffer-pool port's substitute but the Sublet PORT of FFmpeg's own pools
-#           (ports/ffmpeg/sublet): the pools keep their policy and take their storage LINEAR
-#           from the Sublet heap, so there is no payload region and no buffer-pool file.
-#   stock   the matched control of `sublet`: the SAME patched source with the port's macro at 0,
-#           so FFmpeg's pools run upstream's path on the Sublet heap. It differs from `sublet` in
-#           FF_SUBLET_POOLS alone, and builds the pool fixtures, which no heap arm does.
+# The Sublet port of FFmpeg's own pools (modes sublet and stock, ports/ffmpeg/sublet) was removed
+# on 2026-10-11: the pools' protection is now the buffer-pool port's patch 0003 (CDERIVE/CREVOKE).
 POOL=${FFAPP_POOL:-}
 POOL_REGION=${FFAPP_POOL_REGION_BYTES:-$((4 * 1024 * 1024))}
 POOLF=(); FFEXTRA=()
 if [ -n "$POOL" ]; then
   [ "$HEAP" = sublet ] || { echo "FFAPP_POOL needs FFAPP_HEAP=sublet" >&2; exit 2; }
-  case $POOL in 0|2|sublet|stock) ;; *) echo "FFAPP_POOL must be 0, 2, sublet or stock" >&2; exit 2 ;; esac
+  case $POOL in 0|2) ;; *) echo "FFAPP_POOL must be 0 or 2" >&2; exit 2 ;; esac
   OUT="$WORK/domain-sublet-pool$POOL"
-  if [ "$POOL" = sublet ]; then
-    POOLF=(-DFFAPP_SUBLET_POOLS=1)
-    FFEXTRA=(-DFF_SUBLET_POOLS=1)
-  elif [ "$POOL" = stock ]; then
-    FFEXTRA=(-DFF_SUBLET_POOLS=0)
-  else
-    POOLF=(-DFFAPP_POOL_MODE="$POOL" -DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL"
-           -I"$APP_DIR/../buffer-pool/src/shared")
-  fi
+  POOLF=(-DFFAPP_POOL_MODE="$POOL" -DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL"
+         -I"$APP_DIR/../buffer-pool/src/shared")
 fi
 OUT="$OUT$SFX"
 BASE="$WORK/domain"                  # the shared FFmpeg build and configure stubs
 RT="$OUT/runtime"
 XB="$BASE/ffmpeg-build"
 [ -n "$POOL" ] && XB="$BASE/ffmpeg-build-pool"
-[ "$POOL" = sublet ] && XB="$BASE/ffmpeg-build-poolsublet"
-[ "$POOL" = stock ] && XB="$BASE/ffmpeg-build-poolstock"
 mkdir -p "$RT" "$XB"
 
 CLANG=${CAPSTONE_CLANG:?}
@@ -101,9 +88,7 @@ if [[ ! -f "$ARCHIVE" || $(cat "$WORK/musl-build/compiler.sha256" 2>/dev/null) !
   OUT_DIR=$WORK/musl-build bash "$MUSL_PORT/build-musl-capstone.sh"
   printf '%s\n' "$COMPILER_HASH" > "$WORK/musl-build/compiler.sha256"
 fi
-if [ "$POOL" = sublet ] || [ "$POOL" = stock ]; then
-  SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" --sublet | tail -1)
-elif [ -n "$POOL" ]; then
+if [ -n "$POOL" ]; then
   SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" --pool | tail -1)
 else
   SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" | tail -1)
@@ -257,12 +242,6 @@ FFLIBS=(); for _d in $(ff_libdirs); do FFLIBS+=("$XB/$_d/$_d.a"); done
 FFLIBS+=("${VSLIB[@]}")   # after libavfilter, which calls it; libvidstab itself needs only libc
 for _l in "${FFLIBS[@]}"; do [ -f "$_l" ] || { echo "configure enabled $(basename "$_l") but it was not built" >&2; exit 1; }; done
 
-# The Sublet port's level below: FFmpeg's pools take their blocks from the Sublet heap.
-if [ "$POOL" = sublet ]; then
-  "$CLANG" "${FLAGS[@]}" -I"$XB" -I"$SRC" -I"$REPO_ROOT/capstone/sublet" \
-    -c "$APP_DIR/src/capstone-domain/ffsublet.c" -o "$RT/ffsublet.o"
-  RUNTIME+=("$RT/ffsublet.o")
-fi
 # The pool arms' payload allocator and Capstone backend: the buffer-pool port's files,
 # unmodified. Compiled after FFmpeg, because libavutil/mem.h needs the generated avconfig.h.
 if [ "$POOL" = 0 ] || [ "$POOL" = 2 ]; then
@@ -442,31 +421,6 @@ for fx in $FIXTURES; do
     "${RUNTIME[@]}" \
     "$OUT/ffapp_safety_$fx.o" "${FIXLINK[@]}" "${FFLIBS[@]}" "$ARCHIVE"
 done
-# FFAPP_CORPUS_DIR: the FFmpeg pool bug corpus (capstone/bug-corpora/ffmpeg/pool-repros), each
-# case.c UNCHANGED against this image's libavutil, on the Sublet port of the pools and on its
-# stock control only (the substitute's arms have the corpus's own runner). Fixture 40 + 2 * case
-# + fixed: the case with upstream's defect, then with the fix. case.c is compiled with -g, so
-# a fault's pc can be named by its source line (the corpus runner's verdict does that).
-if [ -n "${FFAPP_CORPUS_DIR:-}" ]; then
-  { [ "$POOL" = sublet ] || [ "$POOL" = stock ]; } \
-    || { echo "FFAPP_CORPUS_DIR needs FFAPP_POOL=sublet or stock" >&2; exit 2; }
-  CORPUS_CASES=("$FFAPP_CORPUS_DIR"/[0-9][0-9]_*/case.c)
-  [ -f "${CORPUS_CASES[0]}" ] || { echo "no NN_*/case.c under $FFAPP_CORPUS_DIR" >&2; exit 2; }
-  CORPUSF=(-I"$FFAPP_CORPUS_DIR/shared" -I"$APP_DIR/../buffer-pool/src/shared")
-  for c in "${CORPUS_CASES[@]}"; do
-    n=$(basename "$(dirname "$c")"); n=$((10#${n%%_*}))
-    for fixed in 0 1; do
-      fx=$((40 + 2 * n + fixed))
-      "$CLANG" "${APPF[@]}" "${CORPUSF[@]}" -g -c "$c" -o "$OUT/ffapp_corpus_case_$fx.o"
-      "$CLANG" "${APPF[@]}" "${CORPUSF[@]}" -DFFAPP_FIXTURE="$fx" -DFFAPP_CORPUS_FIXED="$fixed" \
-        -c "$APP_DIR/src/capstone-domain/ffapp_corpus.c" -o "$OUT/ffapp_corpus_$fx.o"
-      "$SDK/capstone-cc" -o "$OUT/ffapp_fx$fx.dom" \
-        "${RUNTIME[@]}" \
-        "$OUT/ffapp_corpus_$fx.o" "$OUT/ffapp_corpus_case_$fx.o" "${FFLIBS[@]}" "$ARCHIVE"
-    done
-  done
-  echo "corpus images: ${#CORPUS_CASES[@]} cases x (defect, fix) from $FFAPP_CORPUS_DIR"
-fi
 echo "safety fixture images ($HEAP heap${POOL:+, pool mode $POOL}): $(ls "$OUT"/ffapp_fx*.dom | wc -l)"
 
 # --- C-50 gate: no integer address formed off sp/s0 and used as a store base ------------

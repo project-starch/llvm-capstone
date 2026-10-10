@@ -177,7 +177,6 @@ passes silently.
 | `cheribsd-revocation` | stock CheriBSD purecap | the case under CheriBSD's malloc with heap revocation on (the platform default, or forced per process where the corpus says so), a revocation control faulting at its labelled load in the same boot. `NOT-REISSUED` is the plain-temporal reading for a freed chunk HELD in quarantine (the stale pointer followed, the chunk never reissued); column 1 of `tools/catch-tables.py --board` counts it as caught and shows it apart |
 | `native-fix-differential` | host | the buggy and the fixed build of the same reduction, run plainly: `TWO-SIDED` means the buggy run reproduces the defect and the fixed run does not. It shows the reduction is about the fix; it is not a protection mechanism and no table counts it as one |
 | `backing` | Capstone domain | FFmpeg pool corpora: revocation only at the pool's BACKING allocation (mode 1), so a buffer the pool never frees is never revoked. `n/a` where there is no block distinct from the object |
-| `sublet-port` | Capstone domain | FFmpeg pool corpora: `case.c` unchanged against the Sublet port of FFmpeg's own pools (app port, `FFAPP_POOL=sublet`); a fault counts only at an instruction the case's line table puts on a line that dereferences the stale pointer. Column 3 for pooled cases |
 | `host-asan` | host | the upstream function built with ASan at the pin: the oracle is the report (kind, access, region) it must produce. Liveness evidence and the row corpora's only arm, not a protection column |
 
 The four above are the glossary's system-allocator arms

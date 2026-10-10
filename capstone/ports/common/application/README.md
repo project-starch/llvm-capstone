@@ -46,11 +46,11 @@ the PostgreSQL source archive and host Meson for GLib. CPython's distribution
 library and PostgreSQL's cluster/share files must accompany their images.
 
 `CPY_SUBLET=1` and `PGSU_NESTED=sublet` select their protected inner allocator
-variants through the wrapper. For FFmpeg pools and tshark wmem chunks, invoke
-their source recipes directly with the virtual profile and
-`FFAPP_HEAP=sublet FFAPP_POOL=sublet` or `TSAPP_HEAP=chunks`; use their
-`domain-sublet-poolsublet/ffapp_m5.dom` or `domain-chunks/tshark_m5.dom` output.
-The generic relinker does not include those additional allocator objects.
+variants through the wrapper. FFmpeg's pools are protected by the buffer-pool
+port's patch 0003 and measured as a component (`bug-corpora/ffmpeg/pool-repros`). For
+tshark wmem chunks, invoke its source recipe directly with the virtual profile and
+`TSAPP_HEAP=chunks`; use its `domain-chunks/tshark_m5.dom` output. The generic
+relinker does not include those additional allocator objects.
 Historical memory-study observers remain outside this virtual qualification.
 The inner CPython image (`CPY_SUBLET=1`) revokes every pymalloc block on free:
 patch 0014 derives each block as a child lifetime and revokes it (`CDERIVE`,

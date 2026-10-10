@@ -29,18 +29,6 @@
       "oracle": "fault at the labelled read probe",
       "cause": 24
     },
-    "sublet-port": {
-      "fixtures": [
-        42,
-        43
-      ],
-      "oracle": "case.c unchanged against the Sublet port of FFmpeg's own pools (app port, FFAPP_POOL=sublet): the defect faults, cause 24, at an instruction case.c's line table puts on a line that dereferences the stale pointer (48,49,52), before the verdict line; the fix completes with VERDICT FIXED",
-      "control": "the same case.c and driver objects (byte-identical), linked against upstream's pools (FFAPP_POOL=stock): the defect completes with VERDICT DEFECT-REPRODUCED, the fix with VERDICT FIXED",
-      "cause": 24,
-      "status": "measured",
-      "verdict": "CAUGHT",
-      "measured": "2026-10-04, ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/result-lines.txt: fx42: AS PREDICTED  predicted: FAULT 48,49,52  got: cause 24 at image 0x21314, case.c:48, value_hi a3890033c0"
-    },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "oracle": "MEASURED 2026-10-06 on this host, revocation ON, guest default preserved: the sequence COMPLETES. NOT CAUGHT. pool-0-37 reported `FF2 status=0 events=1 metadata=4800 payload=512`, runner exit 0, 7 of 7 cases passed. The mechanism, now evidenced rather than argued: a buffer returned to an AVBufferPool never reaches free(), so it never enters the quarantine the revoker sweeps and the sweep has nothing to find. THE CONTROL FIRED IN THE SAME BOOT, which is the bar the retraction set and the one the withdrawn claim never met: revocation-control reported `REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1` and then FAULTED -- SIGPROT, si_code 2 (PROT_CHERI_TAG), addr=pc=0x101dc0, equal to the address supervise resolved for mc_defect_read independently of the run. So the revoker demonstrably sweeps in this guest, and a completion here is 'the mechanism is active and did not fire' rather than 'the mechanism is absent'. The platform controls passed alongside it: cheribsd-abi `CHERI_ABI pointer_bytes=16 runtime_revocation=1`, cheribsd-bounds CHERI_BOUNDARY_READY. THIS IS THE READING THAT 18a16640682b CLAIMED AND NEVER TOOK -- see the `retraction` field below, which is kept rather than deleted. The predicted OUTCOME was right; what was wrong was asserting it had been observed. It has now been observed. HOW IT WAS MEASURED, stated here because the retraction below says the cited runner 'cannot produce it' and a reader should not take that as 'unmeasurable': the reading was taken by running the SAME purecap pool-security binary through ports/common/host/cheribsd/run.py with --runtime-revocation on. What cannot produce it is the port's own PoisonCap wrapper, whose unconditional literal 'off' at poisoncap/run.py:129-130 is the specific thing the retraction withdrew a citation to.",
