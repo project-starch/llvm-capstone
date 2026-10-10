@@ -47,12 +47,17 @@
     "capstone/ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39",
     "capstone/bug-corpora/ffmpeg/pool-repros/results/20261006-cheribsd",
     "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-09-native-asan",
-    "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-09-poisoncap"
+    "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-09-poisoncap",
+    "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-11-virtual"
   ],
   "advisories": [],
   "shape_table": true,
   "arm_configurations": {
     "virtual-malloc": "virtual-ffmpeg-pool-stock",
     "virtual-nested-pools": "virtual-ffmpeg-pool-sublet"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
   }
 }

@@ -568,7 +568,7 @@ def run_hosted(a, corpus):
     record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", a.arm, rows, {
         "configuration": config,
         "build": {"sdk_identity": [heap, profile], "prebuilt": local_path(str(a.prebuilt)),
-                  "cache": {k: (m.group(1) if m else None) for k, m in opts.items()},
+                  "cache": {k: (local_path(m.group(1)) if m else None) for k, m in opts.items()},
                   "argv": {"fixed": run_argv("fixed", "N"), "buggy": run_argv("buggy", "N")},
                   "controls": {c: v.sha256(prog) for c, (_, prog) in port_controls.items()}},
         "platform": platform})
