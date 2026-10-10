@@ -3,10 +3,9 @@
 
 Every count in this corpus's prose had been typed by hand, and by the time the
 corpus was reviewed four files gave four different sets of numbers. This prints
-the two tables the READMEs carry -- the per-cell table of
-results/20261006/README.md and the per-arm summary of README.md -- and --check
-fails if either README's copy differs, so the prose cannot drift from the
-matrix again.
+the two tables results/20261006/README.md carries -- the per-cell table and the
+per-arm summary -- and --check fails if either copy differs, so the prose
+cannot drift from the matrix again.
 
 A cell is `detected / delivered`. A row counts as delivered when its
 `delivered` column is `yes`, and as detected only when the fault is the arm's
@@ -26,7 +25,7 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent.parent
 MATRIX = HERE / "results/20261006/matrix.tsv"
 CELL_README = HERE / "results/20261006/README.md"
-SUMMARY_README = HERE / "README.md"
+SUMMARY_README = HERE / "results/20261006/README.md"
 ARMS = ["spatial", "sublet", "cheribsd-revocation"]
 CELLS = [("spatial", "nested"), ("spatial", "non-nested"),
          ("temporal", "nested"), ("temporal", "non-nested")]
