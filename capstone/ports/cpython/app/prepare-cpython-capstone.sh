@@ -363,6 +363,17 @@ if [[ ${CPY_TEST_CAPI:-0} == 1 ]]; then
   log "test C-API modules built in: _testinternalcapi, _testlimitedcapi"
 fi
 
+# sysconfig's build-time variables, the module the interpreter imports as
+# _sysconfigdata__linux_. The survey and link never run the make target that
+# writes it, and without it `import sysconfig` -- and test.support, and every
+# upstream reproducer that uses either -- stops with ModuleNotFoundError. The
+# native build Python writes it from this tree's Makefile, so the values are
+# the target's.
+(cd "$BUILD_DIR" && make pybuilddir.txt > pybuilddir.log 2>&1) \
+  || { tail -12 "$BUILD_DIR/pybuilddir.log" >&2; echo "make pybuilddir.txt failed" >&2; exit 2; }
+[[ -f "$BUILD_DIR/$(cat "$BUILD_DIR/pybuilddir.txt")/_sysconfigdata__linux_.py" ]] \
+  || { echo "no _sysconfigdata__linux_.py under $(cat "$BUILD_DIR/pybuilddir.txt")" >&2; exit 2; }
+
 # The environment the survey needs to drive make with the same wrapper.
 cat > "$BUILD_DIR/capstone-env.sh" <<EOF
 export CAPSTONE_CLANG='$CAPSTONE_CLANG' CAPSTONE_LD_LLD='$CAPSTONE_LD_LLD'
