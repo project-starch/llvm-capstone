@@ -102,6 +102,12 @@ def observe(number, text, result, symbols=None, sites=()):
     return o
 
 
+def evidence_line(result, text):
+    """What a control showed, as one line: its fault line, else the last line it printed. (Until
+    2026-10-11 this indexed [0] into the fault STRING and kept its first character.)"""
+    return (result.get("fault") or next(iter(text.strip().splitlines()[-1:]), ""))[:160]
+
+
 def fixed_ok(number, text, result):
     return (f"case={number} arm=fixed" in text and re.search(r"^VERDICT FIXED", text, re.M)
             and result.get("kind") == "exit" and result.get("value") == 0)
@@ -202,7 +208,7 @@ def main():
             continue
         text, result = runs[f"control-{name}"]
         controls.append(v.Control(name, observe_control(name, text, result),
-                                  (result.get("fault") or text.strip().splitlines()[-1:] or [""])[0][:160]))
+                                  evidence_line(result, text)))
         print(f"  control {name:<14} {controls[-1].observed:<9} (expected {spec['controls'][name]})", flush=True)
 
     rows = []
@@ -294,6 +300,16 @@ HOSTED = {
         control_names={90: "chunk-free-90"},
     ),
 }
+
+
+def port_control_argv(ad, arm, mode, n):
+    """A port control runs its sequence once and unobserved: `buggy N [extra]` for the case-line
+    drivers, `MODE N` for the hosted wmem driver -- never the fix differential, whose verdict line would
+    judge a control by a case's observation. (R7b ran wmem's controls as `MODE N`; the runner of
+    7759d9d91b27 turned them into the differential until 2026-10-11, which the claim audit caught.)"""
+    if ad.get("format") == "case-line":
+        return ["buggy", n, *ad["extra"][arm]]
+    return [mode, n]
 
 
 def stem(case_dir):
@@ -464,7 +480,8 @@ def run_hosted(a, corpus):
             return [which, n, *ad["extra"][a.arm]]
         return [mode, n, "fixed"] if which == "fixed" else [mode, n, *ad["buggy"][a.arm]]
 
-    plan += [(f"control-{name}", prog, run_argv("buggy", str(int(d.name[:2])))) for name, (d, prog) in port_controls.items()]
+    plan += [(f"control-{name}", prog, port_control_argv(ad, a.arm, mode, str(int(d.name[:2]))))
+             for name, (d, prog) in port_controls.items()]
     for d in found:
         n = str(int(d.name[:2]))
         plan += [(f"{d.name}-fixed", programs[d.name], run_argv("fixed", n)),
@@ -498,7 +515,7 @@ def run_hosted(a, corpus):
         else:
             text, result = runs[f"control-{c}"]
             controls.append(v.Control(c, observe_control(c, text, result),
-                                      (result.get("fault") or text.strip().splitlines()[-1:] or [""])[0][:160]))
+                                      evidence_line(result, text)))
         print(f"  control {c:<16} {controls[-1].observed:<9} (expected {spec['controls'][c]})", flush=True)
 
     rows = []

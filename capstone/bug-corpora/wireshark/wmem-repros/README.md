@@ -129,7 +129,7 @@ By shape, for the two mechanisms that catch anything:
 | packet-scope object held by a column or address past the scope's end | 2, 3, 4, 5 | 4 / 4 | 4 / 4 |
 | packet-scope object kept by file-scope state across packets | 7, 8, 9, 10, 11 | 5 / 5 | 5 / 5 |
 | stale pointer after an individual recycler free | 12 | **0 / 1** | **1 / 1** |
-| double free into the block allocator's free list | 22 | not yet run (pre-registered: region build completes, chunk port faults at the allocator's handback) | not yet run (pre-registered: SIGPROT in wm_widen) |
+| double free into the block allocator's free list | 22 | region build **0 / 1**; chunk port **1 / 1** (cause 24 at the allocator's handback probe) | **1 / 1** (SIGPROT in wm_widen) |
 | cursor advanced past its chunk by a fixed skip, read inside the same block | 13 | **1 / 1** (bounds, cause 5) | not run |
 | loop reads a fixed offset past its chunk into the next chunk of the same block | 14 | **1 / 1** (bounds, cause 5) | not run |
 | packet-controlled negative index reads below the chunk, inside the same block | 15 | **1 / 1** (bounds, cause 5) | not run |

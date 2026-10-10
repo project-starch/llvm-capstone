@@ -304,6 +304,23 @@ Predictions, with the control that must fire in the same session:
 - **virtual-malloc**: MISSED, DEFECT-REPRODUCED. **virtual-nested-pools**: CAUGHT at
   `wm_widen_probe`, cause 24. Controls 90 and 91 behave as in R7b.
 
+### R9b. wmem-repros on virtual Capstone again, all 23 cases, with the runner the claim audit fixed
+
+The claim audit of 2026-10-11 found three things in `tools/run-virtual-cases.py`:
+- The runner of 7759d9d91b27 (the memcached adapter) ran wmem's port controls as the fix differential
+  (`MODE N buggy`), not unobserved (`MODE N`) as R7b had.
+  - No recorded run used that: R8b's memcached controls are the case-line form, and R9's virtual steps
+    ran after the fix (their gate.sh shows `0 91` and `1 91`).
+- The control evidence in every 2026-10-10 virtual bundle was cut to its first character. The
+  `observed` fields are right.
+
+Both are fixed, with tests. wmem's bundles are re-made from one run of all 23 cases on the fixed runner,
+which puts case 22 in the same bundle as 0-21. The predictions are the recorded readings:
+- `virtual-malloc`: 23 MISSED;
+- `virtual-nested-pools`: 23 CAUGHT, at `wm_probe`/`wm_write_probe` for 0-21 and at `wm_widen_probe`
+  for 22;
+- controls as in R7b.
+
 ## Outcomes (written after each run)
 
 - **R1** (`memcached/allocator-repros/results/2026-10-10-cheribsd-fixed-buggy/`): as predicted, 18 of 18 arms.
@@ -369,9 +386,11 @@ Predictions, with the control that must fire in the same session:
   payload (`WM_VIRTUAL_PAYLOAD_MIB`, appended after `port.h`'s include guard so that no line moves). The
   physical images are again 185/185 byte-identical. R7b reruns it under the same pre-registration.
 - **R7b** (`wmem-repros/results/2026-10-10-virtual/<arm>/`, derived): as predicted, 44 of 44 cells.
-  - Controls, `virtual-malloc`: bounds-malloc, uaf-malloc and 90 fault; 91 completes. Controls,
-    `virtual-nested-pools`: all four fault. So both columns showed, in their own boot, that they can
-    read either way.
+  - Controls, `virtual-malloc`: bounds-malloc, uaf-malloc and 90 fault; 91 completes. So column 2
+    showed, in its own boot, that it can read either way. Controls, `virtual-nested-pools`: all four
+    fault. Its completion side comes only from the fixed arms (VERDICT FIXED, exit 0), not from a
+    control. (Corrected 2026-10-11: this line used to say that both columns showed it through their
+    controls.)
   - `virtual-malloc`: 22 MISSED. Every buggy differential printed DEFECT-REPRODUCED and exited 0,
     including the 13 temporal cases' reoccupation assertions.
   - `virtual-nested-pools`: 22 CAUGHT.
@@ -401,3 +420,44 @@ Predictions, with the control that must fire in the same session:
     - 08: cause 28 at the same scan load.
   - The prior-art branch's one-pc fault did not recur. That branch did not build the stock ledger.
   - Both columns agree with the physical ones: 1/9, and 9/9 (counting `sublet-carve` for 06 and 07).
+- **R9** (`wmem-repros/results/2026-10-11-case22/`): as predicted, 11 of 11 arms, plus the predicted
+  mode-0 observation.
+  - Missed:
+    - native-detect: no report; the ASan controls reported;
+    - cheribsd-revocation: complete; the revocation control faulted;
+    - poisoncap-spatial;
+    - spatial and sublet on the region build: both complete; case 11 faulted in the same session;
+    - sublet-malloc: complete; control 90 faulted;
+    - virtual-malloc.
+  - Caught:
+    - sublet-chunks: cause 24 AT the published allocator probe, `wm_widen_probe`;
+    - poisoncap-protected: SIGPROT si_code 2 in `wm_widen` (`poisoncap.c:173`), called from
+      `wmem_block_free`;
+    - virtual-nested-pools: cause 24 at `wm_widen_probe`'s own instruction.
+  - Mode 0 on the chunk-port build stopped at `WM return=260`, the port's own `!chunk->used` check, as
+    pre-registered.
+  - The native fix differential is two-sided.
+- **The claim audit of 2026-10-11** (before landing; claim-auditor over R1, R2c/R3c, R7b/R8b and Perl 03):
+  - All four attributions hold at the instruction level:
+    - R1's `mc_case_body+0x1e8` is `lbu` at `case.c:66`, the scan;
+    - R2c's offsets are each case's defective member access;
+    - every column-3 catch in R7b and R8b is at its probe's single access.
+  - Corrected:
+    - **Perl 03's NO-READING reason, retracted on dev** (76bc5a72f2a5). "Its own assertion passes, so the
+      stale slot never holds a stale pointer" rests on `pass()`, which `harness/shim.pl:8` makes
+      unconditional. The cell stands, because the trigger has no reach observation.
+    - Case 07's `fault_sites_why` claimed "the case's only memcpy and the buffer-pool core calls none".
+      The image has many memcpy callers, including `av_refstruct_unref`, which the case calls. The
+      attribution now rests on the heap fault address, the fixed/buggy pair and R3c's return address.
+    - R3c's `caller` column is the live return address. It names a caller only where the faulting
+      function is a leaf (05-08), not for 00-03, and the oracles for 00-03 no longer say "called from".
+      The tool's column is now `return_address`.
+    - R1's `program_sha256` was the supervisor's hash. The record is relabelled from that run's guest
+      summary, and the runner fixed.
+    - R7b's "both columns showed it through their controls": on column 3 only the fixed arms complete.
+    - The runner drift and the truncated control evidence, under R9b above.
+  - Not changed, and stated where the record is read:
+    - R2c's `record.json` says `as_predicted: false` for its seven catches: the runner's corpus-wide
+      default prediction, explained in its README.
+    - The column-3 temporal catches have no same-image mode-0 buggy arm beside them. What carries them
+      is cause 24 with a non-zero `value_hi`: a capability whose tag the revocation cleared.

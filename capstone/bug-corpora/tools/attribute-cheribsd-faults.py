@@ -14,6 +14,10 @@ landed. That is the attribution the 2026-10-10 audits otherwise did by hand with
     attribute-cheribsd-faults.py --run RUN --nm SDK/bin/llvm-nm --anchor ff2_case_run \\
         --arm so-00-buggy=BIN/so-00 [--arm ...] [--sites so-00-buggy=ff2_case_run ...] > attribution.tsv
 
+The last column is the fault's live return-address register, resolved: it names the CALLER only when
+the faulting function is a leaf (a probe, a libc memcpy); in a function that has made calls of its own it
+is a stale return point. (Until 2026-10-11 the column was headed `caller`.)
+
 RUN is run.py's output directory (one sub-directory per arm with stdout.txt). Prints one TSV row
 per arm. Exit 0 when every arm was attributed (or completed without a fault); 1 when any fault
 could not be attributed, or when a declared site does not hold the fault; 2 on bad input. A fault
@@ -97,7 +101,7 @@ def main():
     if not a.arm:
         p.error("name at least one --arm")
     sites = {k: set(v.split(",")) for k, v in (s.split("=", 1) for s in a.sites)}
-    print("arm\tfault\tsi_code\tpc\tfunction\toffset\tdeclared_site_holds\tcaller")
+    print("arm\tfault\tsi_code\tpc\tfunction\toffset\tdeclared_site_holds\treturn_address")
     bad = 0
     for spec in a.arm:
         arm, program = spec.split("=", 1)

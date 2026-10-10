@@ -394,6 +394,17 @@ class VirtualHosted(unittest.TestCase):
             (d / "case.json").write_text('{"fault_sites": ["wm_widen"]}\n')
             self.assertIsNone(self.rv.wmem_probe(d))
 
+    def test_port_controls_run_unobserved(self):
+        w, m = self.rv.HOSTED["wmem-repros"], self.rv.HOSTED["allocator-repros"]
+        self.assertEqual(self.rv.port_control_argv(w, "virtual-malloc", "0", "91"), ["0", "91"])
+        self.assertEqual(self.rv.port_control_argv(w, "virtual-nested-pools", "1", "90"), ["1", "90"])
+        self.assertEqual(self.rv.port_control_argv(m, "virtual-nested-pools", "1", "90"), ["buggy", "90", "1"])
+
+    def test_control_evidence_is_a_line_not_a_character(self):
+        self.assertEqual(self.rv.evidence_line({"fault": "capstone-exec: domain fault cause=24"}, ""),
+                         "capstone-exec: domain fault cause=24")
+        self.assertEqual(self.rv.evidence_line({}, "a\nCONTROL x RETURNED\n"), "CONTROL x RETURNED")
+
     def test_stem_matches_the_ports_program_name(self):
         self.assertEqual(self.rv.stem(Path("13_0261fd7da6_http_range_cursor_past_chunk")),
                          "13-http-range-cursor-past-chunk")

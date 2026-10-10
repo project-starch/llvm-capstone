@@ -50,3 +50,5 @@ Platform (stock CheriBSD, revocation on): qemu 16135483052dfdd6, firmware f0e1fe
 Program sha256: so-00 17066c29d9e216c8, so-01 3dba58950bafae85, so-02 4bb915dc7c3883e6, so-03 3727d59d13cfa71c, so-04 f3275202bd81f69d, so-05 e36e30a3189bcd52, so-06 faf546d2e9c37cc3, so-07 f5907d8464da5d93, so-08 f35353ea2fda6499
 
 `attribution.tsv` beside this file is tools/attribute-cheribsd-faults.py's table (with `--sysroot`) for the buggy arms.
+
+**On the `caller` column of attribution.tsv (corrected 2026-10-11, from the claim audit).** It is the supervisor's fault-ra line, the live return-address register at the fault, so it names the caller only when the faulting function is a leaf: true for 05, 06 and 08 (write_probe) and 07 (libc memcpy, whose return address is ff2_strlcpy+0x7e, the instruction after the case's own call). For 00-03 the fault is in ff2_case_run itself, and the column shows a stale return point from an earlier call, not a caller.

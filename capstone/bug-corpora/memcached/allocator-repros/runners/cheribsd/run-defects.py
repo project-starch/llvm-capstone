@@ -500,7 +500,10 @@ def main():
             claims[number],
             arm="fixed" if fixed else "buggy",
             fixture_sha256=hashes[(number, fixed)],
-            program_sha256=summary["binaries"][name],
+            # The guest ran `supervise ./target`: binaries[name] is the SUPERVISOR. The case's own image
+            # is the staged input `target` (until 2026-10-11 this field recorded the supervisor's hash).
+            program_sha256=(next((r["inputs"].get("target") for r in summary["results"] if r["name"] == name), None)),
+            supervisor_sha256=summary["binaries"][name],
         )
         if a.negative_control:
             verdict["control_fired"] = control_fired(verdict)
