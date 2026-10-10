@@ -160,3 +160,23 @@ Predictions:
   - Cases 00-07: fixed and buggy both complete.
   - The revocation control faulted at its labelled load.
   - memcached's nested spatial CHERI 1/4 stands, now with a control and an attributed site.
+- **R2, first attempt**: no reading. My chain script passed only the subobject flag, not the buffer-pool
+  sources that the 2026-10-09 record's command names, so all 9 cases were BUILD-FAILED (the controls ran
+  and passed). It is re-run as R2b with the recorded arguments, under the same pre-registration, since
+  this attempt read nothing.
+- **R3a** (cheribsd-subobject, supervised): 8 of 9 as predicted.
+  - Attributed as predicted: 00-03 in `ff2_case_run`; 05, 06 and 08 at `write_probe`; 04 completes.
+  - Case 07 faulted at a pc outside the program image, in libc, a shared library here. The attribution
+    tool knew only the program's symbols, so it read "outside every function": an instrument limit, not a
+    refutation. It is fixed and re-run as R3c.
+- **R3b** (`plane-repros/results/2026-10-10-cheribsd-carve-bounds-supervised/`): as predicted. The fixed
+  arm completes; the buggy arm faults with SIGPROT si_code 1 AT `ffp_read_probe`.
+- **R4** (`wmem-repros/results/2026-10-10-poisoncap-supervised-13-21/`): as predicted. All 18 arms
+  (cases 13-21, modes 0 and 1) fault with SIGPROT, bounds, AT their case's own label:
+  - `wm_defect_probe` for 13, 14, 15 and 19;
+  - `wm_defect_write` for 16, 17, 18, 20 and 21.
+  The runner now produces what the 2026-10-09 run needed a hand attribution for.
+- **R5** (`pool-repros/results/2026-10-10-poolstock-control/`): as predicted.
+  - App fixtures 4 and 5 FAULT temporal on the poolstock image, so its heap is the Sublet heap.
+  - In the same boot the four cases complete: fixed FIXED, buggy DEFECT-REPRODUCED.
+  - Column 2's four pool misses now stand on an in-boot control.
