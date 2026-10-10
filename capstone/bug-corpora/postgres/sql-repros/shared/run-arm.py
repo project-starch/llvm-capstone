@@ -86,6 +86,23 @@ def backend(args, sql_path, data_name, out_base, timeout=1800):
         run_args=["--user", "1000:1000", "--stdin", str(sql_path)], timeout=timeout)
 
 
+def statements(path):
+    """The file's statements, one per line, with comment-only and blank lines dropped.
+
+    `postgres --single` prints a prompt for every input LINE, comments included, and the setup
+    attribution below counts prompts against the number of CREATE EXTENSION lines ahead of the
+    trigger. A control file with a fifty-line header therefore looks as though it ran fifty
+    statements, so a fault inside CREATE EXTENSION would be attributed to the trigger instead of
+    to setup. Raised in review on PR #198, where case 03's control showed 23 prompts for one
+    CREATE EXTENSION. Dropping what is not a statement makes the count exact. The corpus already
+    requires one statement per line, because this backend has no line continuation, so no
+    statement is split by this. What was sent is written out beside the run.
+    """
+    keep = [ln for ln in path.read_text().splitlines()
+            if ln.strip() and not ln.lstrip().startswith("--")]
+    return "".join(ln + "\n" for ln in keep)
+
+
 def cluster(args, name):
     """A fresh cluster per run: a case must not inherit another's damage."""
     data = args.share / name
@@ -167,12 +184,15 @@ def observe(case_dir, text, result, available, preinstalled=(), symbols=None):
         o.notes = (f"ran against a fixture that already carried {', '.join(pre)}; "
                    "this row says nothing about whether this arm can create it")
     setup = len(needed)
+    # Exact because the runner sends statements only; see statements().
     prompts = text.count("backend>")
     fault = faulted(text, result, symbols)
     if fault:
         o.fault = fault
         o.reached = prompts > setup
-        o.reach_evidence = f"{prompts} backend prompt(s) for {setup} CREATE EXTENSION line(s) ahead of the trigger"
+        o.reach_evidence = (f"{prompts} statement(s) reached the backend, against {setup} CREATE "
+                            f"EXTENSION line(s) ahead of the trigger; comment and blank lines are "
+                            f"not sent, so the count is statements and not input lines")
         sites = set(meta.get("fault_sites", []))
         if fault.symbol and fault.symbol in sites:
             o.attribution, o.attribution_evidence = "function", f"{fault.symbol} is a declared fault site"
@@ -325,15 +345,15 @@ def measure(args, spec, raw, preinstalled, symbols):
 
     rows = []
     for case_dir in cases(args):
-        text, result = session(args, case_dir / "trigger.sql", case_dir.name, raw)
+        text, result = session(args, statements(case_dir / "trigger.sql"), case_dir.name, raw)
         if planning:
             if (case_dir / "control.sql").is_file():
-                session(args, case_dir / "control.sql", f"{case_dir.name}-control", raw)
+                session(args, statements(case_dir / "control.sql"), f"{case_dir.name}-control", raw)
             continue
         o = observe(case_dir, text, result, available, preinstalled, symbols)
         o.arm, o.image_sha256, o.controls = args.arm, v.sha256(args.image), list(controls)
         if o.fault and o.reached and not o.attribution and (case_dir / "control.sql").is_file():
-            ctext, cresult = session(args, case_dir / "control.sql", f"{case_dir.name}-control", raw)
+            ctext, cresult = session(args, statements(case_dir / "control.sql"), f"{case_dir.name}-control", raw)
             if faulted(ctext, cresult):
                 o.attribution_evidence += "; its control.sql FAULTS too, so the fault is not the defect's"
             elif "backend>" in ctext and cresult.get("kind") == "exit":
@@ -425,11 +445,34 @@ def main():
 
     record = v.write_bundle(out, "postgres/sql-repros", args.arm, rows, {
         "configuration": config, "image": {"sha256": v.sha256(args.image), "nested": nested, "heap": heap},
-        "fixture": {"cluster_tree_sha256": tree_sha(args.fixture), "preinstalled": sorted(preinstalled)},
+        "fixture": fixture_record(args.fixture, preinstalled),
         "extensions": {"wanted": wanted, "available": sorted(available)},
         "platform": platform})
     print(f"--- {args.arm} ({config}): {record['tally']}\nresults: {out}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
+
+
+def fixture_record(fixture, preinstalled):
+    """What the fixture is, and where it came from.
+
+    The tree hash says WHICH cluster this was, so "the same fixture" no longer rests on a host
+    path -- the gap raised in review on PR #198. It does not say which build produced it, and a
+    cluster whose extensions were created by one image is being handed to another. make-fixture.py
+    writes that beside the fixture as <fixture>.provenance.json, so it is carried here when it
+    exists and its absence is recorded rather than passed over.
+    """
+    prov = Path(str(fixture) + ".provenance.json")
+    if not prov.is_file():
+        prov = Path(fixture).with_suffix(".provenance.json")
+    record = {"cluster_tree_sha256": tree_sha(fixture), "preinstalled": sorted(preinstalled)}
+    if prov.is_file():
+        record["provenance"] = json.loads(prov.read_text())
+        record["provenance_from"] = str(prov)
+    else:
+        record["provenance"] = None
+        record["provenance_note"] = ("no provenance file beside the fixture, so which image "
+                                     "created its extensions is not recorded in this run")
+    return record
 
 
 def tree_sha(root):

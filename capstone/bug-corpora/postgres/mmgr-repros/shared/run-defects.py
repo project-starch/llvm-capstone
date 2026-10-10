@@ -60,6 +60,21 @@ def discover(build, mode):
     return found
 
 
+def discover_case_controls(build, mode):
+    """Each case's OWN negative control, built as `NN-slug-<mode>-control.dom`.
+
+    A different question from the programs under controls/: those ask whether this configuration
+    reports at all, and this asks whether THIS fault depends on THIS defect -- the same case.c with
+    PG_NEGATIVE_CONTROL, which replaces the one invalid access with a valid one and leaves the
+    allocation traffic unchanged. discover() cannot pick these up: its glob ends at `-<mode>.dom`.
+    """
+    found = {}
+    for path in sorted((build / "bin").glob(f"[0-9][0-9]-*-{mode}-control.dom")):
+        stem = path.name[: -len(f"-{mode}-control.dom")]
+        found[int(stem[:2])] = (stem, path)
+    return found
+
+
 def dirs(root):
     """Case directories under root, dense from zero, with their case.json (controls have none)."""
     found = sorted(d for d in root.glob("[0-9][0-9]_*") if (d / "case.c").is_file())
@@ -295,7 +310,9 @@ def main():
         config = configurations[mode]
         spec = arms[config]
         built = {**{("case", n): x for n, x in discover(a.domain_build, mode).items()},
-                 **{("control", n): x for n, x in discover(a.controls_build, mode).items()}}
+                 **{("control", n): x for n, x in discover(a.controls_build, mode).items()},
+                 **{("case-control", n): x
+                    for n, x in discover_case_controls(a.domain_build, mode).items()}}
         for (kind, n), (stem, image) in built.items():
             SYMBOLS[str(image)] = v.Symbols(llvm / "bin", image)
 
@@ -329,6 +346,28 @@ def main():
                 o = observe(serial, n, rc, image, set(claims.get("fault_sites", [])))
                 o.case, o.arm, o.controls = d.name, mode, list(observed_controls)
                 o.notes = (o.notes + f" run={run.name}").strip()
+                # The case's own control, on the same build, when the fault is not attributed yet.
+                if o.fault and o.reached and not o.attribution:
+                    if ("case-control", n) not in built:
+                        o.attribution_evidence += ("; this case has no negative control program in "
+                                                   "this build")
+                    else:
+                        cstem, cimage = built[("case-control", n)]
+                        crun, cserial, crc, _ = boot(a.output, cstem + "-control", mode, cimage, n,
+                                                     mode == "sublet", env)
+                        co = observe(cserial, n, crc, cimage, set())
+                        if co.fault:
+                            o.attribution_evidence += (
+                                f"; its negative control FAULTS too ({crun.name}), so this fault "
+                                "does not depend on the defect")
+                        elif co.completed and co.reached:
+                            o.attribution = "control"
+                            o.attribution_evidence = (
+                                "its own negative control -- the same program with the one invalid "
+                                f"access made valid -- completed on this build ({crun.name})")
+                        else:
+                            o.attribution_evidence += (
+                                f"; its negative control neither completed nor faulted ({crun.name})")
             verdict = v.judge(o, spec)
             rows.append((o, verdict))
             differs = verdict[0] != PREDICTED[mode]

@@ -51,6 +51,17 @@ as the defect's only in the function the case names before its access (`expect_f
 `fault_sites` entry its `case.json` justifies; the pc is resolved from the image's own symbols. The
 bundle goes to `results/<stamp>-qemu/<arm>/`; console logs stay outside the repository.
 
+Each case also carries its **own** negative control, which is the other way a fault is attributed.
+`controls.dom` asks whether this configuration reports at all; a case's control asks whether THIS
+fault depends on THIS defect. It is the same program built with `-DPGCLIENT_NEGATIVE_CONTROL`,
+which moves one value to the safe side of the boundary the defect crosses and leaves the
+allocation, the call and the function under test as they were, so it must COMPLETE. The build
+emits it as `<case>-control.dom` -- a suffix no case discovery matches, so a control can never be
+picked up as a measurement -- and the runner runs it in the same boot, from the same build, only
+when a case faulted without being attributed by its declared function. A control that completes
+attributes the fault; a control that faults says the fault was not the defect, and the row says
+so instead of counting.
+
 ## Results on record
 
 `results/matrix.tsv` and the three `results/*-20261006-*` directories are the 2026-10-06 runs,

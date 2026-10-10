@@ -1,5 +1,14 @@
 #include "corpus.h"
 
+/* NEGATIVE CONTROL, under -DPGCLIENT_NEGATIVE_CONTROL.
+ *
+ * SCHEMA rule 5. A fault is this case's result only if it depends on the
+ * defect, and an arm that would fault on the same shape just below the
+ * threshold is reporting something else. The control keeps the allocation,
+ * the call and the function under test, and moves ONE value to the safe side
+ * of the boundary the defect crosses. It must complete.
+ */
+
 PGCLIENT_CASE(3) {
 /* Overread in SASLprep's UTF-8 validation. Fixed by 5d61bdd114; live at the
  * 17.5 pin.
@@ -28,7 +37,14 @@ PGCLIENT_CASE(3) {
   /* The password an application handed to PQconnectdb, ending in a lead byte
    * that declares a three-byte sequence it does not have. Sized exactly: the
    * allocation ends at the NUL, so the overread leaves it. */
+#ifdef PGCLIENT_NEGATIVE_CONTROL
+  /* The same length and the same allocation, with the truncated lead byte
+   * replaced by an ASCII character. pg_utf_mblen then returns 1 where it
+   * returned 3, and the walk stops at the terminator inside the buffer. */
+  static const char truncated[] = "pwx";
+#else
   static const char truncated[] = "pw\xE2";
+#endif
   size_t  n = sizeof(truncated);              /* 4: 'p','w',0xE2,'\0' */
   char   *password = pgclient_malloc(n);
 

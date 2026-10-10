@@ -77,6 +77,23 @@ def observe(number, text, result, symbols=None, sites=()):
     return o
 
 
+def case_control(number, text, result, symbols=None):
+    """Read a case's own negative control: ('held'|'broken'|'none', evidence).
+
+    It runs below the threshold the defect needs, so it must COMPLETE. A fault in it cannot be
+    that defect, which means the case's fault was not attributed by it and the row has to say so.
+    """
+    if f"case {number} BEGIN" not in text:
+        return "none", "the control image did not run"
+    fault = v.domain_fault(result.get("fault") or "", symbols) or v.domain_fault(text, symbols)
+    if fault:
+        return "broken", (f"it faults too, at cause {fault.cause} in "
+                          f"{fault.symbol or 'no known function'}")
+    if f"case {number} RETURNED" in text:
+        return "held", "it completed on this image, in this boot"
+    return "none", "it neither completed nor faulted"
+
+
 def observe_control(name, text, result):
     """'fault' when the control faulted after its mark, 'complete' when it returned, else 'none'."""
     if f"CONTROL {name} mark" not in text:
@@ -132,6 +149,12 @@ def main():
     plan = [(f"control-{n}", controls_image, [n]) for n in spec["controls"] if controls_image.is_file()]
     plan += [(d.name, a.bindir / f"{d.name}.dom", [str(int(d.name[:2]))])
              for d in found if (a.bindir / f"{d.name}.dom").is_file()]
+    # Each case's OWN control, in the same boot and from the same build: the same program with
+    # one value on the safe side of the boundary the defect crosses (-DPGCLIENT_NEGATIVE_CONTROL).
+    # controls.dom above asks whether this configuration reports at all; this asks whether THIS
+    # fault depends on THIS defect, which is the judge's attribution by `control`.
+    plan += [(f"{d.name}-control", a.bindir / f"{d.name}-control.dom", [str(int(d.name[:2]))])
+             for d in found if (a.bindir / f"{d.name}-control.dom").is_file()]
 
     if a.virtual_kit:
         batch = virtualvm.Batch(raw / "stage")
@@ -171,6 +194,19 @@ def main():
             text, result = runs[d.name]
             o = observe(number, text, result, v.Symbols(a.llvm_bin, image), claims.get("fault_sites", ()))
             o.case, o.arm, o.image_sha256 = d.name, a.arm, v.sha256(image)
+            if o.fault and o.reached and not o.attribution:
+                ctl = a.bindir / f"{d.name}-control.dom"
+                if f"{d.name}-control" in runs and ctl.is_file():
+                    ctext, cresult = runs[f"{d.name}-control"]
+                    seen, why = case_control(number, ctext, cresult, v.Symbols(a.llvm_bin, ctl))
+                    if seen == "held":
+                        o.attribution = "control"
+                        o.attribution_evidence = ("its own negative control, the same program below "
+                                                  "the threshold, completed: " + why)
+                    else:
+                        o.attribution_evidence += f"; its negative control gives no attribution -- {why}"
+                else:
+                    o.attribution_evidence += "; this case has no negative control image in this build"
         o.controls = list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
