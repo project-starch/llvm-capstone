@@ -8,12 +8,6 @@
  * host/build-domain.sh), in whole blocks with their headers. peak_end is what sizes the arena:
  * first fit leaves holes, so a run needs an arena of at least peak_end.
  *
- * On the sublet heap arm (-DTSAPP_SUBLET_HEAP, runtime/sublet_heap.c) the numbers are that heap's
- * instead, and the line reads
- *   TSAPP-HEAP status=<n> sublet alloc=<n> free=<n> merge=<n> peak_live=<objects> split=<n>
- *              mrev=<n> delin=<n> revoke=<n> init=<n> unserved=... stdout=open|closed
- * where split + mrev is the revocation-node spend (sublet_heap.c).
- *
  * The unserved syscalls are reported HERE, on fd 2, as well as by the runtime, whose own line
  * goes to the task's fd 2 once the program has finished, and only with CAPSTONE_DELEGATE_STATS
  * set. (When that line went to fd 1, a program that closed fd 1 lost it without a trace: the full
@@ -32,8 +26,6 @@
 #if defined(TSAPP_VIRTUAL_HEAP)
 /* The growing VM heap is reported by CAPSTONE_VM_STATS in the launcher.
  * Physical level0/buddy counters do not describe it. */
-#elif defined(TSAPP_SUBLET_HEAP)
-void __capstone_sublet_heap_stats(unsigned long out[9]);
 #else
 size_t __capstone_level0_in_use(void);
 size_t __capstone_level0_peak_in_use(void);
@@ -49,15 +41,6 @@ int __capstone_at_exit(int status)
 	size_t cap = sizeof line - 2;
 #if defined(TSAPP_VIRTUAL_HEAP)
 	int n = snprintf(line, cap, "TSAPP-HEAP status=%d virtual unserved=", status);
-#elif defined(TSAPP_SUBLET_HEAP)
-	unsigned long st[9];
-	__capstone_sublet_heap_stats(st);
-	int n = snprintf(line, cap,
-	                 "TSAPP-HEAP status=%d sublet alloc=%lu free=%lu merge=%lu peak_live=%lu split=%lu"
-	                 " mrev=%lu delin=%lu revoke=%lu init=%lu",
-	                 status, st[0], st[1], st[2], st[3], st[4], st[5], st[6], st[7], st[8]);
-	if (n > 0 && (size_t)n < cap)
-		n += snprintf(line + n, cap - (size_t)n, " unserved=");
 #else
 	int n = snprintf(line, cap,
 	                 "TSAPP-HEAP status=%d in_use=%zu peak_in_use=%zu peak_end=%zu arena=%zu unserved=",

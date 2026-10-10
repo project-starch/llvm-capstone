@@ -8,13 +8,12 @@ HEAP=${TSAPP_HEAP:-level0}
 case $HEAP in
   level0) OUT=$TS_WORK/domain HEAPF=(-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0) ;;
   shrink) OUT=$TS_WORK/domain-shrink HEAPF=() ;;
-  sublet) OUT=$TS_WORK/domain-sublet HEAPF=() ;;
-  *) echo "TSAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
+  *) echo "TSAPP_HEAP must be level0 or shrink" >&2; exit 2 ;;
 esac
 ARENA=${TSAPP_ARENA_BYTES:-$((40 << 20))}
 STACK=${TSAPP_STACK_BYTES:-$((1 << 20))}
 LD=${CAPSTONE_LD_LLD:?}
-mkdir -p "$OUT"; rm -rf "$OUT"/*.dom "$OUT"/*.o "$OUT/wmem-src"
+mkdir -p "$OUT"; rm -rf "$OUT"/*.dom "$OUT"/*.o
 [ -f "$B/build.ninja" ] || { echo "no cross build in $B; run host/cross-build.sh" >&2; exit 2; }
 
 # tshark's link inputs, from ninja: objects and archives (the -l flags are musl's own).
@@ -42,45 +41,23 @@ for n in 1 2 3 4; do
 done
 
 SDK=$OUT/sdk
-SDK_HEAP=$HEAP
-[[ $HEAP == shrink ]] && SDK_HEAP=level0
 bash "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh" \
   "$SDK" "$TS_MUSL" "$TS_LIBC_ARCHIVE" \
-  -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG=24 \
+  -DCAPSTONE_APPLICATION_HEAP=level0 \
   -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" -DCAPSTONE_APPLICATION_STACK_BYTES="$STACK" \
-  -DCMAKE_C_FLAGS_RELEASE="-O1 -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS ${HEAPF[*]}"
+  -DCMAKE_C_FLAGS_RELEASE="-O1 -DCAPSTONE_LEVEL0_STATS ${HEAPF[*]}"
 export CAPSTONE_SDK=$SDK
 PROFILEF=()
 [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} != virtual ]] || PROFILEF=(-DTSAPP_VIRTUAL_HEAP)
-RT=() HEAPOBJ=()
-if [[ $HEAP == sublet ]]; then
-  "$SDK/capstone-cc" -O1 "${PROFILEF[@]}" -DTSAPP_SUBLET_HEAP -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
-  # wmem's block allocators from patch 0007, with their own ninja commands (less the dependency
-  # files, which would overwrite ninja's record), on copies: the cross-built tree stays as it is.
-  mkdir -p "$OUT/wmem-src/wsutil/wmem"
-  for f in wmem_allocator_block wmem_allocator_block_fast; do
-    cp "$TS_WORK/xsrc/wsutil/wmem/$f.c" "$OUT/wmem-src/wsutil/wmem/"
-  done
-  patch -s -d "$OUT/wmem-src" -p1 < "$APP/patches/0007-capstone-wmem-block-size-for-the-sublet-heap.patch"
-  HEAPOBJ=()
-  for f in wmem_allocator_block wmem_allocator_block_fast; do
-    o=wsutil/CMakeFiles/wsutil.dir/wmem/$f.c.o
-    c=$(ninja -C "$B" -t commands "$o" | tail -1)
-    tail=" -MD -MT $o -MF $o.d -o $o -c $TS_WORK/xsrc/wsutil/wmem/$f.c"
-    [[ $c == *"$tail" ]] || { echo "$o's compile command does not end as expected" >&2; exit 1; }
-    ( cd "$B" && eval "${c%"$tail"} -I$TS_WORK/xsrc/wsutil/wmem -DCAPSTONE_WMEM_BLOCK_BYTES=1048576 -o $OUT/$f.o -c $OUT/wmem-src/wsutil/wmem/$f.c" )
-    HEAPOBJ+=("$OUT/$f.o")
-  done
-else
-  "$SDK/capstone-cc" -O1 "${PROFILEF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
-fi
+RT=()
+"$SDK/capstone-cc" -O1 "${PROFILEF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
 
 link() {  # out-image tshark-object [runtime objects...]
   local out=$1 tso=$2; shift 2
   local ins=(); for i in "${INPUTS[@]}"; do
     if [ "$i" = "$TSO" ]; then ins+=("$tso"); elif [ "${i#/}" != "$i" ]; then ins+=("$i"); else ins+=("$B/$i"); fi
   done
-  "$SDK/capstone-cc" -o "$out" "$@" "${HEAPOBJ[@]}" "$OUT/tsapp-heap.o" \
+  "$SDK/capstone-cc" -o "$out" "$@" "$OUT/tsapp-heap.o" \
     "${ins[@]}" "$TS_LIBC_ARCHIVE"
 }
 gates() {  # image label

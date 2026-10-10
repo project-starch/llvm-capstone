@@ -21,19 +21,17 @@ verdict and says so on every verdict line. `ntp` must differ on stdout because i
 outside the whitelist. Use `TSAPP_USER=UID:GID` for an unprivileged existing guest
 account.
 
-`TSAPP_HEAP=level0|shrink|sublet` selects the heap arm for both
-`host/build-domain.sh` and the runner.
-
-Every full run on the sublet heap spends revocation nodes (about 12,600 on dhcp, `split` +
-`mrev` on its `TSAPP-HEAP` line), and a boot that ran out of them once died on QEMU's pool
-assertion. So a guest boot holds at most 4 full `sysalloc-sublet` runs. The runner counts M5 runs
-per guest boot (its `boot_id`, in the VM's state directory, since the guest outlives one
-invocation). It refuses a request that would pass the limit before anything runs; restart the VM
-for a fresh boot.
+tshark takes its `malloc` from the platform's allocator. On the virtual profile
+(`CAPSTONE_APPLICATION_PROFILE=virtual`) that is musl's mallocng, which bounds every
+object and ends its lifetime on `free`; `TSAPP_HEAP` then selects nothing. On the
+physical profile `TSAPP_HEAP=level0|shrink` selects the first-fit heap without or
+with per-object bounds, for both `host/build-domain.sh` and the runner. The Sublet
+heap arm (`TSAPP_HEAP=sublet`, `runtime/sublet_heap.c`, and patch 0007, which shrank
+wmem's blocks to fit its pool) was removed on 2026-10-11; its runs stay in `results/`.
 
 `host/build-domain.sh` gates every image: no undefined weak symbol, and no constructor section
-outside the arrays the runtime walks. **Open:** the `sysalloc-none` (`TSAPP_HEAP=level0`), `sysalloc-bounds`
-(`TSAPP_HEAP=shrink`) and `sysalloc-sublet` arms run no link control. An ABI-v2 SDK links its runtime archive whole, so there is no runtime object to
+outside the arrays the runtime walks. **Open:** the `sysalloc-none` (`TSAPP_HEAP=level0`) and `sysalloc-bounds`
+(`TSAPP_HEAP=shrink`) arms run no link control. An ABI-v2 SDK links its runtime archive whole, so there is no runtime object to
 leave out, and no v2 equivalent has been defined for them.
 
 Safety fixtures use `common/application/check-safety.py --port wireshark`, with
