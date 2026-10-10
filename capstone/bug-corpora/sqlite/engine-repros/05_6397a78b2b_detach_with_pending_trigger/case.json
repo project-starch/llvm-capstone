@@ -27,14 +27,15 @@
     "virtual-malloc": {
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3fb2d8ceb4 in sqlite3DropTriggerPtr; by function: sqlite3DropTriggerPtr is where host ASan reported it",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+      "verdict_note": "cause=24 pc=0x3f8898ce90 in sqlite3DropTriggerPtr; by function: sqlite3DropTriggerPtr is where host ASan reported it",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
-      "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3fb6d0220c in tableOfTrigger; by function: tableOfTrigger is where host ASan reported it",
-      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
+      "verdict": "NO-READING",
+      "verdict_note": "cause=25 pc=0x3f9c8fdb10 in findElementWithHash; in findElementWithHash; ASan site ['sqlite3DropTriggerPtr', 'sqlite3HashFind', 'tableOfTrigger']",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools",
+      "verdict_reason": "unattributed"
     }
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021300c8; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1020a8f18; cheribsd-revocation run 2026-10-04/05: no verdict: detachtrig before drop",

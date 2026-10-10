@@ -43,7 +43,7 @@
     "virtual-nested-pools": "virtual-sqlite-memsys5-pools"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+    "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
   }
 }
