@@ -7,6 +7,7 @@ measurement is that build. `SPEEDTEST1_SUBLET=1` in `run-sqlite-speedtest1.sh`, 
 
 | File | What it is |
 |---|---|
+| `sublet-3220000-pagecache.patch` | the 3.22.0 port of the THIRD nested allocator, the page cache: a page's data is a child lifetime of the buffer while the page object is assigned to a page number, revoked when the cache recycles or drops it (`pcache1Issue`/`pcache1Retire`). The page is reused, never freed, so that end is one no malloc-level mechanism can see. Applied after the memsys5 patch by `build-virtual.py --pagecache`; its header records the two designs measured and refuted first |
 | `sublet-3220000-memsys5.patch` | the 3.22.0 port of memsys5 and the lookaside on the two lifetime instructions: every block a child of the pool (CDERIVE), bounded to its request rounded to 8 bytes, revoked by `sqlite3_free` (CREVOKE), and every lookaside slot a child of the lookaside's generation, revoked by `sqlite3DbFree`; the pool stays the heap `SQLITE_CONFIG_HEAP` is given. The page cache is not covered. Applied by `repro322/build-virtual.py --sublet`; its header says what it gives up. The rest of this README describes the 3.53.3 patch |
 | `sublet-3530300.patch` | the port of memsys5 and the lookaside pool: 28 hunks against `sqlite3-capstone.c` as the build produces it from the amalgamation, each hunk classed in the header (I interface, H hierarchy, M metadata layout). Applied with `patch -F0 -p1` to the copy in the build directory, before any instrument's patch |
 
