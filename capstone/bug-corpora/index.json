@@ -798,7 +798,9 @@
         "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu-delivery",
         "capstone/bug-corpora/postgres/mmgr-repros/results/20261008-cheribsd",
         "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-10-qemu",
-        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-10-virtual"
+        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-10-virtual",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-11-exact",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-11-virtual"
       ],
       "advisories": [],
       "note": "The allocator pin is 17.0; the complete single-user backend port is 17.5. 2026-10-05: a cheribsd-revocation arm was added by this project and run on all 8. The corpus had no plain-purecap arm, only the two PoisonCap ones, and PoisonCap is out of scope for the study these results feed; without it these 8 could not be compared with the other PostgreSQL corpora, which all carry that arm. The build path already existed -- cmake/Replay.cmake builds one hosted executable per case under PG_CORPUS_DIR and says 'plain CheriBSD' when PG_POISONCAP is off -- so nothing in the corpus or the port was changed to produce it. One qualification on reading those 8 silences, because it bites elsewhere: the guest's security.cheri.runtime_revocation_every_free_default is 0, so a revocation sweep runs only once a quarantine threshold is crossed, and a short case that frees a handful of objects may never cross one -- a silence can then mean 'no sweep ran yet' rather than 'the mechanism could not see it'. That confound does NOT apply here, and the reason is worth stating: pfree returns a chunk to its context and never returns the block to malloc, so there is no malloc free for a sweep to act on at any threshold. The silence is a property of the nesting, not of when the quarantine happens to flush. Re-pinned from 17.0 to 17.5 on 2026-10-06, and three cases moved to not-live-at-17-5/ because `git merge-base --is-ancestor` shows their upstream fixes are already in REL_17_5: 83ce20d671, 727bc6ac33f6 and 9d5ce4f1a00a. The 17.0 pin was the only one in the PostgreSQL study, and it is what let three already-fixed defects appear in a 17.5 result table. The five that remain all have fixes later than REL_17_5 (2025-05-05): 2025-08-02, 2025-08-30, 2025-10-03, 2025-10-09 and 2026-03-30. COMPARABILITY, recorded 2026-10-06 rather than resolved. This corpus's `spatial` and `sublet` rows were measured on 2026-09-18, before the 17.5 re-pin, and against the memory-contexts replay study's level 0 (ports/postgres/memory-contexts/src/allocators): backing-allocator.c for the unprotected arm and the refusing unsupported-allocators.c for the protected one. The sibling corpora sql-repros and c-repros were measured on 2026-10-06 against the application domain, whose level 0 is ports/musl-capstone/runtime/level0.c with CAPSTONE_LEVEL0_OBJECT_BOUNDS on. The two are different allocators with different bounds behaviour -- the replay one hands out pointers carrying the whole arena's bounds, the application one narrows to the request -- so these five rows may be added to a per-arm total only with that stated. They are not withdrawn: each is a real measurement of its own arm, and the temporal result they carry (sublet 5 of 5 where both others report 0 of 5) does not depend on bounds granularity, because a use-after-free is caught by revocation and not by a bound. Rerunning them against the application domain would make the three corpora directly comparable and has not been done. 2026-10-11: the arms are native-detect, cheribsd-revocation, virtual-malloc and virtual-pg-pools. The freestanding domain pair (spatial, sublet) and the PoisonCap pair are removed with their builds; their bundles stay in results/. virtual-pg-pools is now the port's patch 0003 (chunks as CDERIVE children of their blocks, revoked by CREVOKE) instead of the lifetime adapter over a lent linear arena.",
@@ -807,8 +809,8 @@
         "virtual-pg-pools": "virtual-mallocng-replay-pools"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-        "virtual-pg-pools": "results/2026-10-10-virtual/virtual-pg-pools"
+        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
+        "virtual-pg-pools": "results/2026-10-11-virtual/virtual-pg-pools"
       },
       "where": "capstone/bug-corpora/postgres/mmgr-repros"
     },
@@ -855,7 +857,9 @@
         "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261008-080219",
         "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043120",
         "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043643",
-        "capstone/bug-corpora/postgres/sql-repros/results/2026-10-10-virtual"
+        "capstone/bug-corpora/postgres/sql-repros/results/2026-10-10-virtual",
+        "capstone/bug-corpora/postgres/sql-repros/results/2026-10-11-exact",
+        "capstone/bug-corpora/postgres/sql-repros/results/2026-10-11-virtual"
       ],
       "runners": [
         "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",
@@ -866,8 +870,8 @@
         "virtual-pg-pools": "virtual-mallocng-pg-pools"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-        "virtual-pg-pools": "results/2026-10-10-virtual/virtual-pg-pools"
+        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
+        "virtual-pg-pools": "results/2026-10-11-virtual/virtual-pg-pools"
       },
       "where": "capstone/bug-corpora/postgres/sql-repros"
     },
