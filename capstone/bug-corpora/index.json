@@ -2,6 +2,44 @@
   "corpora": [
     {
       "program": "cpython",
+      "boundary": "which allocator owns the object the defect touches: pymalloc (nested) or libc malloc (non-nested). Decided per case by MEASUREMENT, not by the object's size -- the ASan heap report is run twice and the question is whether it SURVIVES PYTHONMALLOC=pymalloc",
+      "title": "CPython 3.13.7 spatial defects at the pymalloc boundary, plus temporal and spatial defects whose memory comes straight from libc malloc",
+      "upstream": {
+        "version": "3.13.7",
+        "port": "capstone/ports/cpython/pymalloc"
+      },
+      "cases": 32,
+      "case_schema": "script-trigger",
+      "case_number_base": 1,
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "cheribsd-revocation"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "true": 32
+      },
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "related": [
+        "capstone/bug-corpora/cpython/pymalloc-repros",
+        "capstone/ports/cpython/pymalloc"
+      ],
+      "advisories": [],
+      "note": "A sibling of pymalloc-repros. That corpus is scoped to consumer-side TEMPORAL defects whose memory comes from pymalloc and asserts completeness for that cell (20 cases, expect_live_in_pin {true: 20}, a shape_prose regex on \"[Tt]wenty reports\"), so cases here were not added there. 32 cases from 31 upstream fixes (03 and 04 are two triggers for gh-140492). Cases 01-21 are the three cells pymalloc-repros does not cover: 13 spatial/nested, 5 spatial/non-nested, 3 temporal/non-nested. Cases 22-32 are 11 temporal/nested defects, the same upstream issues pymalloc-repros holds as C models (each carries a sibling_issue pointer), here because a C model and an interpreter run of one defect are not the same measurement -- on the base arm the C models all complete while three of the eleven fault, all with cause 24; the two corpora's numbers must not be pooled. Liveness and the nested/non-nested side are both measured on the pinned ASan build. The arms are named as pymalloc-repros names them: spatial is base Capstone (level0 heap, per-object bounds, pymalloc stock via patch 0009; nothing in it revokes heap memory), sublet is the same level0 heap plus patch 0014 (pymalloc's blocks and its >512-byte fallback issued and revoked). Measured 2026-10-06 to 2026-10-09 over the same 29 cases per arm: base 14/29, sublet 27/29, cheribsd-revocation 11/29; probe/counts.py derives these from results/20261006/matrix.tsv. The cheribsd binary hashes were reconstructed after the runs; see results/20261006/README.md.",
+      "runners": [
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/run-arm.sh",
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/run-all.sh",
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/run-cheribsd.sh",
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/analyse.py",
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/build-image-with-modules.sh",
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/build-cheribsd-with-modules.sh"
+      ],
+      "where": "capstone/bug-corpora/cpython/allocator-boundary-repros"
+    },
+    {
+      "program": "cpython",
       "boundary": "pymalloc",
       "title": "Consumer-side temporal defects in CPython whose memory comes from pymalloc",
       "upstream": {
@@ -1862,6 +1900,7 @@
     "wireshark/wmem"
   ],
   "cases_by_corpus": {
+    "capstone/bug-corpora/cpython/allocator-boundary-repros": 32,
     "capstone/bug-corpora/cpython/pymalloc-repros": 20,
     "capstone/bug-corpora/ffmpeg/carved-repros": 12,
     "capstone/bug-corpora/ffmpeg/plain-heap-repros": 25,
@@ -1890,10 +1929,10 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 264,
+  "cases_here": 296,
   "cases_xlang": 30,
-  "cases_total": 294,
-  "live_true": 117,
+  "cases_total": 326,
+  "live_true": 149,
   "live_false": 119,
   "live_not": 28,
   "advisories_total": 22,
@@ -1958,6 +1997,8 @@
     ]
   },
   "gaps": [
+    "`capstone/bug-corpora/cpython/allocator-boundary-repros` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/cpython/allocator-boundary-repros` commits no result bundle of its own.",
     "`capstone/bug-corpora/ffmpeg/plain-temporal-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.",
     "`capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.",
@@ -1982,6 +2023,7 @@
     "`capstone/ports/micropython` is a complete application with no corpus.",
     "`capstone/ports/postgres/app` is a complete application with no corpus.",
     "`capstone/ports/sqlite/app` is a complete application with no corpus.",
+    "`capstone/bug-corpora/cpython/allocator-boundary-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/ffmpeg/carved-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/ffmpeg/plain-temporal-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/memcached/plain-temporal-repros` is not referenced by any port.json.",
