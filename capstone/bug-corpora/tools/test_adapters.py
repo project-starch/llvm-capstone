@@ -3,7 +3,7 @@
     python3 -m unittest discover -s capstone/bug-corpora/tools -p 'test_*.py'
 
 The c-repros inputs are the committed console and result files of its 2026-10-06 runs; the mmgr
-inputs are lines from a 2026-10-10 serial log, quoted as the guest printed them.
+inputs are the launcher's lines from a 2026-10-10 virtual run, quoted as the guest printed them.
 """
 import importlib.util
 import json
@@ -198,36 +198,36 @@ class Sqlite(unittest.TestCase):
 
 class Mmgr(unittest.TestCase):
     mmgr = load(CORPORA / "postgres/mmgr-repros/shared/run-defects.py", "mmgr_run")
-    SERIAL = """[CAPSTONE] Print = Scalar(0xcf18000000000002)
-[CAPSTONE] Print = Cap(1, 0x7, 0x101a1280c, 0x101a00000, 0x101ae9800)
-[CAPSTONE] Print = Cap(1, 0x7, 0x101a1287c, 0x101a00000, 0x101ae9800)
-[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x101a1280c, tval = 0x0, badaddr = 0x0
-"""
+    FAULT = ("capstone-exec: domain fault cause=24 pc=0x3f9d810ba8 address=0x3f98e1e050 "
+             "entry=0x3f9d800890 code=0x3f9d800000-0x3f9da00000 last=0x42 preparing=0x42")
+    TEXT = f"PG_DEFECT case=3 ready\ncapstone-vm: {FAULT}\ncapstone-vm: application terminated by signal 11\n"
+    RESULT = {"kind": "signal", "value": 11, "fault": FAULT, "image_sha256": "0" * 64}
 
-    def observe(self, serial, sites=()):
-        self.mmgr.SYMBOLS = {"img": FakeSymbols("pg_probe")}
-        orig = v.sha256
-        self.mmgr.v.sha256 = lambda p: "0" * 64
-        try:
-            return self.mmgr.observe(serial, 2, 1, "img", set(sites))
-        finally:
-            self.mmgr.v.sha256 = orig
+    def observe(self, text, result, symbol="pg_probe", sites=()):
+        return self.mmgr.observe_hosted(3, text, result, FakeSymbols(symbol), set(sites))
 
-    def test_fault_at_the_published_probe(self):
-        o = self.observe(self.SERIAL)
+    def test_fault_in_the_probe(self):
+        o = self.observe(self.TEXT, self.RESULT)
         self.assertEqual((o.reached, o.attribution, o.fault.cause), (True, "probe", 24))
 
+    def test_fault_at_a_declared_site(self):
+        o = self.observe(self.TEXT, self.RESULT, "SubletRelease", {"SubletRelease"})
+        self.assertEqual(o.attribution, "function")
+
     def test_fault_elsewhere_is_unattributed(self):
-        o = self.observe(self.SERIAL.replace("pc = 0x101a1280c", "pc = 0x101a05cf0"))
-        self.assertIsNone(o.attribution)
+        self.assertIsNone(self.observe(self.TEXT, self.RESULT, "AllocSetAlloc").attribution)
 
-    def test_delivered_fault_needs_the_launcher_death(self):
-        serial = self.SERIAL.replace("domain halted by capability fault", "domain capability fault delivered")
-        self.assertIsNone(self.observe(serial).fault)
-        self.assertIsNotNone(self.observe(serial + "__EXIT_CODE__139\n").fault)
+    def test_completion_without_fault(self):
+        o = self.observe("PG_DEFECT case=3 ready\nPG_DEFECT case=3 mode=0 completed\n",
+                         {"kind": "exit", "value": 0})
+        self.assertEqual((o.reached, o.completed, o.fault), (True, True, None))
 
-    def test_no_serial_is_infra(self):
-        self.assertEqual(self.observe("").infra, "infra")
+    def test_control_failure_is_infra(self):
+        o = self.observe("CONTROL-FAILED fixture is case 3, run asked for 4\n", {"kind": "exit", "value": 75})
+        self.assertEqual(o.infra, "infra")
+
+    def test_no_output_is_infra(self):
+        self.assertEqual(self.observe("", {"kind": "exit", "value": 1}).infra, "infra")
 
 
 if __name__ == "__main__":

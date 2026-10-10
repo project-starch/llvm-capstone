@@ -66,12 +66,6 @@ def add(s):
         elif name in ("native-detect", "native-fix-differential", "backing"):
             new["oracle"] = s["native_oracle"]
             new["status"] = "measured"
-        elif name.startswith("poisoncap") and not keep:
-            # No PoisonCap run exists for this corpus yet, and these arms' schema requires
-            # run-specific keys -- mode, signal, si_code. Those are properties of the runner and
-            # of the actual fault, not things to predict, so the arm declares itself unwritten
-            # rather than carrying a value that would read as a measurement.
-            new = {"status": "not written"}
         else:
             new["oracle"] = s["predicted"]
             new["status"] = "predicted"
