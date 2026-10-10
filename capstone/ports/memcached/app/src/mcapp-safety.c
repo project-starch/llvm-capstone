@@ -958,16 +958,25 @@ static int mcapp_fixture(int n)
         printf("MCAPP-FIX %d hdr_dst=%u chk_dst=%u hdr_flags_addr=%lx\n", n, hdr_dst, chk_dst, hdr_flags_addr);
         if (!hdr_dst || !chk_dst) return MCAPP_MARK(n, 0xE0018);
         mcapp_reverse_c0e5a99 = (n == 24);
-        /* first move: the header's page. After it, under 24 the chunks are orphaned. */
-        if (slabs_reassign(settings.slab_rebal, (int)hdr_cls, (int)hdr_dst, 0) != REASSIGN_OK)
-            return MCAPP_MARK(n, 0xE0018);
+        /* first move: the header's page. After it, under 24 the chunks are orphaned. The mover
+           thread is shared, so a reassign can return REASSIGN_RUNNING until it is idle; retry. */
+        enum reassign_result_type r1 = REASSIGN_RUNNING;
+        for (int w = 0; w < 300 && r1 == REASSIGN_RUNNING; w++) {
+            r1 = slabs_reassign(settings.slab_rebal, (int)hdr_cls, (int)hdr_dst, 0);
+            if (r1 == REASSIGN_RUNNING) usleep(10000);
+        }
+        if (r1 != REASSIGN_OK) { printf("MCAPP-FIX %d header reassign=%d\n", n, (int)r1); return MCAPP_MARK(n, 0xE0018); }
         int hdr_moved = 0;
         for (int w = 0; w < 300 && !hdr_moved; w++) { usleep(10000); hdr_moved = slabs_page_count(hdr_cls) == 1; }
         printf("MCAPP-FIX %d header-page-moved=%d reversed=%d\n", n, hdr_moved, mcapp_reverse_c0e5a99);
         if (!hdr_moved) return MCAPP_MARK(n, 0x7);     /* the mover waited: header page not moved */
         /* second move: a data chunk's page. The mover reads the orphan chunk's head here. */
         mcapp_touching(n, hdr_flags_addr);
-        enum reassign_result_type r2 = slabs_reassign(settings.slab_rebal, (int)chk_cls, (int)chk_dst, 0);
+        enum reassign_result_type r2 = REASSIGN_RUNNING;
+        for (int w = 0; w < 300 && r2 == REASSIGN_RUNNING; w++) {
+            r2 = slabs_reassign(settings.slab_rebal, (int)chk_cls, (int)chk_dst, 0);
+            if (r2 == REASSIGN_RUNNING) usleep(10000);
+        }
         int chk_moved = 0;
         for (int w = 0; w < 300 && !chk_moved; w++) { usleep(10000); chk_moved = slabs_page_count(chk_cls) < 2; }
         printf("MCAPP-FIX %d chunk-reassign=%d chunk-page-moved=%d\n", n, (int)r2, chk_moved);
