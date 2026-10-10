@@ -12,15 +12,20 @@
   "allocator_consumed": "no",
   "layer_note": "The ASan nesting test is structurally inconclusive here and that is expected: the buffer IS the mmap mapping, so a write past its end reaches the guard page and ASan reports SEGV rather than a heap region, with PYTHONMALLOC unset and with PYTHONMALLOC=malloc alike. allocator_consumed is 'no' on the mapping's provenance, not on that test.",
   "arms": {
-    "spatial": {
-      "oracle": "a bounds fault (cause 7) at the write past the end of the mapping, if the mapping's capability is bounded to the requested length. This case is the arm's test of that: the buffer IS the mmap mapping, so no allocator is involved and revocation has nothing to act on."
+    "virtual-malloc": {
+      "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it"
     },
-    "sublet": {
-      "oracle": "fault: the object is a libc malloc block"
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, pymalloc on its lifetime port, CPY_SUBLET_MODE=1 (tools/arms.json virtual-cpython-pools): as virtual-malloc"
     },
     "cheribsd-revocation": {
       "oracle": "a bounds fault, SIGPROT si_code=1 (PROT_CHERI_BOUNDS), at the write past the end of the mapping, if the mapping's capability is bounded to the requested length. No allocator issues this object, so revocation has nothing to act on."
     }
   },
-  "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial NOTIMPL [delivered=no] (spatial-20261006-105111); sublet NOTIMPL [delivered=no] (sublet-20261006-123446); cheribsd-revocation SILENT [delivered=held-out] (cheri11)"
+  "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial NOTIMPL [delivered=no] (spatial-20261006-105111); sublet NOTIMPL [delivered=no] (sublet-20261006-123446); cheribsd-revocation SILENT [delivered=held-out] (cheri11)",
+  "fault_sites": [
+    "safe_byte_copy",
+    "mmap_ass_subscript"
+  ],
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports SEGV () at safe_byte_copy Modules/mmapmodule.c:361 | mmap_ass_subscript Modules/mmapmodule.c:1379. That run uses no Capstone arm and was recorded before any virtual arm ran."
 }

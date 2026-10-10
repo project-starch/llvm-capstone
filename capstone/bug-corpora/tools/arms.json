@@ -163,6 +163,32 @@
       "controls_for_missed": [
         "uaf-block"
       ]
+    },
+    "virtual-cpython": {
+      "target": "capstone-virtual",
+      "summary": "the CPython 3.13.7 interpreter for the virtual profile (ports/common/application/build-virtual.sh cpython, CPY_TEST_CAPI=1) run as a process under capstone-vexec: its one heap is musl mallocng, which bounds and retires every object it hands out -- PyMem_Raw allocations, objects over 512 bytes, and the arenas pymalloc takes -- while pymalloc stock (patch 0009) carves its blocks inside those arenas unbounded",
+      "mechanism": "exact bounds and lifetime retirement of malloc objects; none per pymalloc block",
+      "controls": {
+        "uaf-block": "complete",
+        "bounds-block": "complete"
+      },
+      "controls_for_missed": [
+        "uaf-block",
+        "bounds-block"
+      ]
+    },
+    "virtual-cpython-pools": {
+      "target": "capstone-virtual",
+      "summary": "the same interpreter with CPY_SUBLET=1 run with CPY_SUBLET_MODE=1: pymalloc on its lifetime port (patch 0014, ports/cpython/pymalloc/src/allocators/sublet/block-lifetimes.c) over a linear grant the virtual runtime splits into payload and metadata (ports/common/application/regions.c); every pymalloc block, and pymalloc's fallback for larger requests, is its own bounded capability, retired on free",
+      "mechanism": "as virtual-cpython; per-block bounds and revocation in pymalloc",
+      "controls": {
+        "uaf-block": "fault",
+        "bounds-block": "fault"
+      },
+      "controls_for_missed": [
+        "uaf-block",
+        "bounds-block"
+      ]
     }
   }
 }
