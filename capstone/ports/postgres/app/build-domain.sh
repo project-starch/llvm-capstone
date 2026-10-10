@@ -29,6 +29,9 @@ ROOT=${PG_SU_ROOT:-$CAPSTONE_TMP_ROOT/pg-single-user}
 RT=${RUNTIME_REPO:-$CAPSTONE_REPO_ROOT}
 NESTED=${PGSU_NESTED:-none}
 case "$NESTED" in none|sublet) ;; *) echo "PGSU_NESTED=$NESTED?" >&2; exit 2 ;; esac
+# The spatial observer patches mcxt.c, which patch 0003 rewrites the dispatch of.
+[[ $NESTED == none || ${PGSU_GAP_OBSERVER:-0} == 0 ]] \
+  || { echo "PGSU_GAP_OBSERVER is the unprotected arm's instrument" >&2; exit 2; }
 MANAGER=$SCRIPT_DIR/../memory-contexts
 MUSL_PORT=$RT/capstone/ports/musl-capstone
 MRT=$MUSL_PORT/runtime
@@ -81,10 +84,8 @@ if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
 fi
 O=$ROOT/runtime
 if stage runtime; then
-  EXTRA=()
-  [[ $NESTED == sublet ]] && EXTRA=(-DCAPSTONE_APPLICATION_GRANT_BYTES=67108864)
   bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
-    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
+    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA"
 fi
 export CAPSTONE_SDK=$O
 export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
@@ -115,17 +116,17 @@ fi
 if [[ ! -d postgresql-17.5 ]]; then
   tar xjf "$TARBALL"
   for p in "$SCRIPT_DIR"/patches/*.patch; do
-    # This patch targets CheriBSD's external freelist, not the Capstone backend.
-    case $p in */0018-*) continue ;; esac
+    # The spatial observer's hooks sit where patch 0003 changes mcxt.c.
+    [[ $NESTED == sublet && $p == */0017-* ]] && continue
     (cd postgresql-17.5 && patch -p1 -s < "$p") || { echo "patch $p did not apply" >&2; exit 2; }
     log "applied $(basename "$p")"
   done
   if [[ $NESTED == sublet ]]; then
-    for p in "$MANAGER"/patches/postgresql-17.0-000{3,4,5,6,7}-*.patch; do
-      (cd postgresql-17.5 && patch --batch --forward --fuzz=0 -p1 -s < "$p") \
-        || { echo "nested patch $p did not apply" >&2; exit 2; }
-      log "applied $(basename "$p") to PostgreSQL 17.5"
-    done
+    # The 17.0 and 17.5 manager sources are identical; the replay's patch serves both.
+    p=$MANAGER/patches/postgresql-17.0-0003-memory-contexts-sublet-lifetimes.patch
+    (cd postgresql-17.5 && patch --batch --forward --fuzz=0 -p1 -s < "$p") \
+      || { echo "nested patch $p did not apply" >&2; exit 2; }
+    log "applied $(basename "$p") to PostgreSQL 17.5"
   fi
 fi
 # The corpus's own module, copied in rather than kept in the tarball: cases 05
@@ -144,7 +145,7 @@ if stage configure; then
   [[ -f config.status ]] && make distclean >/dev/null 2>&1 || true
   nested_flags=
   if [[ $NESTED == sublet ]]; then
-    nested_flags="-I$MANAGER/src/allocators/sublet -I$RT/capstone/runtime/include"
+    nested_flags="-I$RT/capstone/runtime/include"
   elif [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
     nested_flags="-DPG_SPATIAL_GAP_OBSERVER=1 -I$SCRIPT_DIR/toolchain"
   fi
@@ -246,16 +247,7 @@ if stage make; then
   [[ -z $missing ]] \
     || { echo "backend build incomplete: missing objects $missing" >&2; exit 2; }
   log "objects compiled: $(find src/backend -name '*.o' | wc -l); link inputs missing: ${missing:-none}"
-  if [[ $NESTED == sublet ]]; then
-    GAP_FLAGS=()
-    if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then GAP_FLAGS=(-DPG_REUSE_GAP_OBSERVER=1); fi
-    "$CAPSTONE_CLANG" "${CF[@]}" -I"$RT/capstone/runtime/include" \
-      -I"$MANAGER/src/allocators/sublet" \
-      "${GAP_FLAGS[@]}" \
-      -c "$MANAGER/src/allocators/sublet/context-pools.c" \
-      -o "$ROOT/link/context-pools.o"
-    log "Sublet context-pool backend: $ROOT/link/context-pools.o"
-  elif [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
+  if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
     "$CAPSTONE_CLANG" "${CF[@]}" -I"$SCRIPT_DIR/toolchain" \
       -I"$SCRIPT_DIR/../../../experiments/study" \
       -c "$SCRIPT_DIR/toolchain/spatial-reuse-gap.c" \
@@ -302,12 +294,7 @@ printf '%s\n' $objs | LC_ALL=C sort -u > "$ROOT/link/backend-objects.txt"
   -o "$ROOT/link/static_modules.o"
 log "modules linked in: $(grep -c PGSU_MODULE_END "$TABLE"), $(grep -c PGSU_SYMBOL "$TABLE") functions"
 EXTRA=()
-if [[ $NESTED == sublet ]]; then
-  EXTRA+=("$ROOT/link/context-pools.o" -O1 -DEXP_PG_CONTEXT_SUBLET
-    -Wl,--wrap=main,--wrap=__capstone_region -I"$RT/capstone/runtime/include"
-    "$RT/capstone/ports/common/application/regions.c"
-    "$RT/capstone/ports/common/application/initialize.c")
-elif [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
+if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
   EXTRA+=("$ROOT/link/spatial-reuse-gap.o")
 fi
 # shellcheck disable=SC2086

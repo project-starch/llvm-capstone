@@ -2,7 +2,7 @@
 
 Five upstream use-after-free and double-free defects in PostgreSQL's memory
 managers, all live at 17.5, reduced to programs that run against PostgreSQL's
-**own** allocator: `aset.c`, `mcxt.c` and `slab.c` from the pinned 17.0 release, compiled
+**own** allocator: the memory-context managers from the pinned 17.0 release, compiled
 unmodified but for the capability-ABI and Sublet patches the port applies. The
 consumers are reduced, the allocator is not.
 
@@ -44,44 +44,29 @@ reduction class are visibly siblings rather than accidentally similar.
 | stale pointer into a deleted ancestor | an ancestor context dies, taking a grandchild's arena with it |
 | same-address reuse from a fixed-size free list | reuse is deterministic, so the successor lands at the identical address |
 
-## The four systems
-
-Two independent capability systems are compared here, each with and without its
-temporal mechanism. They are different architectures under different emulators
-and different operating systems; what is compared is what each mechanism denies
-at the same eight defects, not the systems' performance.
+## The systems
 
 | system | what it is |
 |---|---|
-| **Capstone** | this project's capability architecture on RISC-V. LLVM fork (clang 22, `capstone64-unknown-elf`), QEMU fork (`virt-capstone`); programs run as freestanding **domains** loaded by a Linux guest |
-| **Sublet** | a linear slot discipline over Capstone's revocation, applied through the manager's lifetime hooks |
-| **CheriBSD** | CHERI-RISC-V purecap, CheriBSD 15.0-CURRENT under QEMU, clang 17. Its own temporal safety is malloc quarantine plus a revoker sweep |
-| **PoisonCap** | a published CHERI extension for temporal safety through poison capabilities, [arXiv:2605.13210](https://arxiv.org/abs/2605.13210). Run against its published research artifact: patched kernel, libc, QEMU and LLVM |
+| **virtual Capstone** | this project's capability architecture on RISC-V. LLVM fork (`capstone64-unknown-elf`), QEMU fork (`virt-capstone`); each case runs as a Linux process under `capstone-vexec`, its heap musl mallocng |
+| **Sublet** | two instructions on virtual Capstone: `CDERIVE` makes a child lifetime of a capability, `CREVOKE` ends a direct child and everything below it. The port's patch 0003 makes every chunk a child of its block and revokes it in `pfree` and `repalloc` |
+| **CheriBSD** | CHERI-RISC-V purecap, CheriBSD under QEMU. Its own temporal safety is malloc quarantine plus a revoker sweep |
 
-The same `case.c` builds for both targets. That is what makes the comparison
+The same `case.c` builds for every target. That is what makes the comparison
 one: it is the same source, not two reimplementations.
 
 ## Arms
 
 | arm | target | what it establishes |
 |---|---|---|
-| `spatial` | Capstone domain | the sequence completes without protection |
-| `sublet` | Capstone domain | fault at the labelled read probe |
-| `cheribsd` | CheriBSD purecap, libc revocation ON | whether the system allocator sees these defects |
-| `poisoncap-spatial` | CheriBSD purecap, adapter invalidation off | the matched control for the arm below |
-| `poisoncap-protected` | CheriBSD purecap, adapter invalidation on | SIGPROT at the labelled read probe |
-| `native-detect` | host, `before.c` | written for cases 3 and 7 only |
+| `virtual-malloc` | virtual Capstone, the managers with the capability-layout patches | whether bounds and the system allocator see these defects |
+| `virtual-pg-pools` | the same with patch 0003 (`PG_SUBLET=ON`) | fault at the labelled read probe; case 0 in `SubletRelease` |
+| `cheribsd-revocation` | CheriBSD purecap, libc revocation on | whether the system allocator's revocation sees them |
+| `native-detect` | host, `before.c` | written for cases 2 and 4 only |
 
-The two protected arms name an **instruction**, not merely a fault: the runner
-resolves the labelled probe from the child's own map plus the target ELF and
-publishes the address, so a relink cannot turn the check into a tautology.
-
-There are three UNPROTECTED arms and they are not interchangeable. `spatial`
-and `cheribsd` hand out offsets inside one arena capability -- the backing
-allocator narrows nothing per chunk. `poisoncap-spatial` bounds every chunk
-exactly, so it is the strictest spatial baseline available on this hardware,
-and it still lets all eight through. That is the arm the "bounds do not cover
-this class" claim should rest on.
+What an arm must show is its configuration's, in `tools/arms.json`; the shared
+judge (`tools/verdicts.py`) refuses to score a silence from an arm whose
+controls did not behave.
 
 ## Building and running
 
@@ -92,104 +77,57 @@ is configured for:
     -DPG_CORPUS_DIR=<repo>/capstone/bug-corpora/postgres/mmgr-repros
 
 Programs are named as the contract names run artifacts --
-`03-live-parts-stale-alias`, and `03-live-parts-stale-alias-sublet` for a
-domain arm -- so an archived result tree stays readable away from the corpus.
+`03-pgoutput-entry-cxt-teardown` -- so an archived result tree stays readable
+away from the corpus.
 
-**The CheriBSD arms** run through
-`ports/postgres/memory-contexts/host/cheribsd/poisoncap/run.py`. Build with
-`-DPG_POISONCAP=ON` for the PoisonCap arms, without it for the plain CheriBSD
-arm; `--runtime-revocation on|off` selects whether the guest's own libc
-revocation is active, and the shared runner's ABI probe verifies the setting
-took effect, so it cannot silently do nothing.
+**The virtual arms** run through `shared/run-defects.py`, against a VM started
+with `capstone_vm --profile virtual`. Two builds per arm, both with the
+`capstone-application` preset on a virtual SDK, the second from `controls/`
+([controls/README.md](controls/README.md)); `virtual-pg-pools` adds
+`-DPG_SUBLET=ON` to both:
 
-**The Capstone domain arms** run through `shared/run-defects.py`. It needs four
-things that are NOT the defaults and each of which cost a failed attempt to
-find:
+    python3 shared/run-defects.py OUT --state VM_STATE --arm virtual-pg-pools \
+      --hosted-build BUILD --controls-hosted-build BUILD_CONTROLS \
+      --llvm-bin <toolchain>/bin --raw LOGS
 
-    # pexpect is not in the system interpreter; the platform venv has it
-    /tmp/capstone/venv/bin/python3 shared/run-defects.py OUT \
-      --domain-build BUILD_DOMAIN --controls-build BUILD_CONTROLS --linux-build BUILD_LINUX
+The runner refuses a build whose `PG_SUBLET` or SDK does not match the arm. It
+reports one Observation per run and the shared judge decides; it writes
+`OUT/<arm>/` bundles, and `tools/derive-verdicts.py` turns the bundles named in
+`corpus.json` `verdict_bundles` into the `case.json` verdicts and
+`results/verdicts.tsv` (SCHEMA.md, "Verdicts").
 
-`BUILD_CONTROLS` is the same port configured with `-DPG_CORPUS_DIR=<this corpus>/controls`
-([controls/README.md](controls/README.md)). The runner reports one Observation per boot and the
-shared judge (`tools/verdicts.py`) decides; it writes `OUT/<arm>/` bundles, and
-`tools/derive-verdicts.py` turns the bundles named in `corpus.json` `verdict_bundles` into the
-`case.json` verdicts and `results/verdicts.tsv` (SCHEMA.md, "Verdicts").
+**The CheriBSD arm** builds the same cases with the `cheribsd` preset and runs
+them under the guest's own libc revocation; `results/20261008-cheribsd` is that
+run.
 
-    export CAPSTONE_QEMU_BINARY=<tree>/capstone/capstone-qemu/build/qemu-system-riscv64
-    export CAPSTONE_LLVM_BUILD_DIR=<tree>/llvm/build-rel      # NOT cmake-build-debug
-    export CAPSTONE_BUILDROOT_DIR=<tree>/capstone/caplifive-buildroot
+## Why the system allocator's mechanisms miss these
 
-One of those failures printed `FAIL ... spatial` and `FAIL ... sublet cause=0
-pc=0`, which reads like "Capstone caught nothing" and was a guest that never
-started. Check for a `serial.log` in the run directory before believing a
-domain result: an arm that produced none did not run.
+PostgreSQL asks the system allocator for a block once and hands out chunks
+from it itself, so between the `pfree` and the stale read there is nothing on
+the layer that `free()`-time revocation watches. The same reason ASan is silent
+here. Only a mechanism that listens for the moment the NESTED allocator takes
+the chunk back can catch them.
 
-**PoisonCap and the guest's own revocation need the platform fix.** Without
-`bug-corpora/cpython/pymalloc-repros/platform/mrs-poison-retire.patch` the two
-together panic the guest kernel (`share->excl` in `vm_map_lookup`) at the first
-arm that sweeps; eight unprotected arms before it are unaffected. With the
-patch applied the same command pairs all eight. Any result taken that way is
-"PoisonCap with that fix" and must say so.
+## History
 
-## What the four systems do, measured 2026-09-21
-
-These measurements, and every other mention of "eight" cases in this file,
-predate the 17.5 re-pin. They cover the five cases above plus the three now
-parked, under the old numbering 0-7.
-
-| system | what it acts on | caught |
-|---|---|:--:|
-| Capstone | bounds and tags; no lifetime event | **0 / 8** |
-| **Sublet** | the chunk's return to the sub-pool | **8 / 8**, cause 24 |
-| CheriBSD default | `free()` → quarantine → revoker sweep | **0 / 8** |
-| **PoisonCap** | the same return: poison, then sweep | **8 / 8**, SIGPROT 162 |
-
-The two that catch these defects are the two that listen for the moment the
-NESTED allocator takes the storage back. The other two listen for an event that
-never happens: PostgreSQL asks the system allocator for a block once and hands
-out chunks from it itself, so between the `pfree` and the stale read there is
-nothing on the layer they watch. The same reason ASan is silent here.
-
-Seven of the eight faults land on the labelled stale access, compared against
-an address the run resolves from the child's own map and the target ELF. Case 0
-has no probe -- its stale access is a second `pfree` -- and faults in
-`GetMemoryChunkMethodID`, where the manager reads the revoked chunk's header.
-Both protected systems land in that same function, established independently.
-
-### Provenance of these numbers
-
-- **Capstone and Sublet**: `virt-capstone` QEMU, one domain image per case and
-  arm. Two sixteen-arm runs gave 14/16 each with the failures in DIFFERENT
-  arms, and the four affected arms passed when re-run singly; the harness is
-  flaky at roughly one arm in eight, signature `runner_exit 1` with no
-  `serial.log`. Every arm has passed, but not all in one run.
-- **CheriBSD default and PoisonCap**: the same CheriBSD purecap guest, libc
-  revocation ON in both, verified per run by the ABI probe reporting
-  `runtime_revocation=1`.
-- **The platform carries the local libc fix**
-  (`bug-corpora/cpython/pymalloc-repros/platform/mrs-poison-retire.patch`,
-  libc `6726fdb0…`). Without it PoisonCap and the guest's own revocation panic
-  the kernel; the CheriBSD-default arm gives 0/8 either way, measured on both.
+Until 2026-10-11 the corpus also ran a `spatial`/`sublet` pair in a physical
+Capstone domain (`results/20260918-qemu`, `results/2026-10-10-qemu`) and a
+PoisonCap pair on CheriBSD (2026-09-20). Both used the port's lifetime adapter,
+which `CDERIVE`/`CREVOKE` made unnecessary, and `virtual-pg-pools` measured that
+adapter over a lent linear arena (`results/2026-10-10-virtual`). Their targets
+and runners are removed and their results stay as recorded. The 2026-09-21
+comparison of eight cases (before the 17.5 re-pin) found the nested-allocator
+mechanisms catching 8/8 and the system allocator's 0/8; case 0 faulted in
+`GetMemoryChunkMethodID` under the adapter, which read the revoked chunk's
+header first.
 
 ## What is NOT established
 
-- **The Capstone `spatial` and `sublet` arms are re-run for the five live
-  cases** (`results/2026-10-10-qemu`, one program per case, controls in the
-  same invocation): spatial MISSED 5/5, sublet CAUGHT 5/5, four at the
-  labelled probe and case 0 in its declared `GetMemoryChunkMethodID`. They
-  ran on the compiler and QEMU of the 2026-09-18 run (sha256 `5003f54c...`,
-  `ce93cb32...`), not on dev's current pins; `inputs.json` records both.
-- **`native-detect` for six of the eight.** Cases 3 and 7 have a `before.c`;
-  the others do not.
-- **No cost claim.** The counters in each run (`sweeps`, `poison_bytes`,
-  `mapped_bytes`, `padding_bytes`) are adapter measurements under a
-  deliberately conservative synchronous-sweep policy, in an emulator. They are
-  not a PoisonCap overhead figure and must not be quoted as one.
+- **`native-detect` for cases 0, 1 and 3.** Only cases 2 and 4 have a `before.c`.
 
 ## What IS established, and how
 
-All eight cases carry a `live_proof` in their `case.json`: an inspection at the
+Every case carries a `live_proof` in their `case.json`: an inspection at the
 pin with file and line, cross-checked against the upstream commit's date, since
 every one of these fixes postdates the 17.0 release of 2024-09-26.
 
@@ -202,10 +140,3 @@ fix addresses which half — and the inventory in
 `docs/ref/postgres-nested-allocator-defects.md` calling them "same, 2024
 instance" reinforced the error. Their `distinguishing` fields now say which is
 which.
-
-The PoisonCap arms paired on all eight on 2026-09-20, over two independent
-boots for cases 1-7 and a third after case 0's control was repaired. Each
-protected arm's trap PC is compared against the probe address that the run
-resolves from the child's own map and the target ELF, so the check cannot
-become a tautology across a relink — the two boots differ by exactly 0x8 in
-every address and still match.

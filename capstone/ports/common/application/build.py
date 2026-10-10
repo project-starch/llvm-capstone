@@ -112,8 +112,6 @@ def main():
     if args.musl: musl = args.musl.resolve()
     if args.libc: libc = args.libc.resolve()
     objects = inputs(args.app, root)
-    if args.nested == 'postgres':
-        objects += [root / 'link/context-pools.o']
     if args.nested == 'perl':
         # Built by ports/perl/musl/build-perl-domain.sh with PERLD_SV_HEADS=1.
         objects += [root / 'link/perl-sv-heads.o']
@@ -140,25 +138,23 @@ def main():
          '-DCAPSTONE_APPLICATION_ARENA_BYTES=' + str(args.arena),
          '-DCMAKE_BUILD_TYPE=Release',
          '-DCMAKE_C_FLAGS_RELEASE=-O1' +
-         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'postgres': 64, 'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
+         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
     run(['cmake', '--build', sdk, '-j8'])
     probe = out / 'memory.o'
-    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_PG_CONTEXT_SUBLET'] if args.nested == 'postgres' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
+    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
     if args.reuse_gap: defines += ['-DEXP_PG_REUSE_GAP']
     if args.allocations: defines += ['-DEXP_ALLOCATIONS', '-DEXP_CAPSTONE']
-    memory_includes = (['-I', REPO / 'capstone/ports/postgres/memory-contexts/src/allocators/sublet',
-                        '-I', REPO / 'capstone/runtime/include']
-                       if args.nested == 'postgres' else [])
     if args.instrument:
-        run([sdk / 'capstone-cc', '-O1', *defines, *memory_includes,
+        run([sdk / 'capstone-cc', '-O1', *defines,
              '-c', EXPERIMENTS / 'memory.c', '-o', probe])
     image = out / (args.app + '.dom')
     extra = []
     if args.allocations:
         extra += ['-O1', *defines, EXPERIMENTS / 'allocations.c',
                   '-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free']
-    # CPython's protection is patch 0014 inside obmalloc: no objects, no regions.
-    if args.nested not in ('none', 'cpython'):
+    # CPython's protection is patch 0014 inside obmalloc, PostgreSQL's patch
+    # 0003 inside its memory contexts: no objects, no regions.
+    if args.nested not in ('none', 'cpython', 'postgres'):
         extra += ['-O1', '-Wl,--wrap=__capstone_region', *defines, '-I',
                   REPO / 'capstone/runtime/include', HERE / 'regions.c']
     if args.reuse_gap:
@@ -170,8 +166,6 @@ def main():
         if args.app == 'ffmpeg': extra += ['-I', REPO / 'capstone/ports/ffmpeg/app/src/shared']
     if args.instrument:
         extra += ['-Wl,--wrap=main,--wrap=write', probe]
-    elif args.nested == 'postgres':
-        extra += ['-O1', '-Wl,--wrap=main', *defines, HERE / 'initialize.c']
     run([sdk / 'capstone-cc', *extra, *objects, '-o', image])
     run([args.toolchain / 'bin/llvm-objcopy', '--strip-debug', image])
     manifest = dict(application=args.app, application_abi=2, profile=args.profile,

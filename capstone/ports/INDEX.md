@@ -33,7 +33,7 @@
 | `ffmpeg/buffer-pool` | 9.0.1 | capstone-domain, cheribsd-purecap, native | -- | `pool-repros` |
 | `memcached/allocators` | 1.6.45 | capstone-domain, cheribsd-purecap, native | -- | `allocator-repros` |
 | `nginx` | 1.28.0 | capstone-domain, native | -- | -- |
-| `postgres/memory-contexts` | 17.0 | capstone-domain, cheribsd-purecap, linux-guest, native | -- | `mmgr-repros` |
+| `postgres/memory-contexts` | 17.0 | capstone-virtual, cheribsd-purecap, native | -- | `mmgr-repros` |
 | `whisper/ggml-context` | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | -- |
 | `wireshark/wmem` | 4.6.8 | capstone-domain, cheribsd-purecap, native | -- | `wmem-repros` |
 

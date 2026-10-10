@@ -30,18 +30,16 @@ clean, which is the reason this corpus records the class per case.
 
 | arm | configuration (`tools/arms.json`) | what it is |
 |---|---|---|
-| `spatial` | `app-level0` | the server as an application domain (`ports/postgres/app/build-domain.sh`, `PGSU_NESTED=none`): malloc bounds each object; palloc chunks are unbounded inside their block |
-| `sublet` | `app-level0-pg-nested-sublet` | the same with PostgreSQL's memory contexts on Sublet context pools (`PGSU_NESTED=sublet`): palloc chunks bounded and revoked per chunk; malloc still level0 |
 | `virtual-malloc` | `virtual-mallocng` | the server built for the virtual Capstone profile (`ports/common/application/build-virtual.sh postgres`): a Linux process under `capstone-vexec`, malloc is musl mallocng run locally with exact bounds and lifetime retirement; palloc chunks unbounded inside their block |
-| `virtual-pg-pools` | `virtual-mallocng-pg-pools` | the same with `PGSU_NESTED=sublet`: PostgreSQL's contexts on Sublet context pools, chunks bounded and retired per chunk |
+| `virtual-pg-pools` | `virtual-mallocng-pg-pools` | the same with `PGSU_NESTED=sublet`: the memory-context port's patch 0003 makes every palloc chunk a child lifetime of its block (`CDERIVE`), bounded to the request and revoked by `pfree`/`repalloc` (`CREVOKE`) |
 | `cheribsd-revocation` | -- | stock CheriBSD purecap, revocation at the platform default (`shared/run-cheribsd.sh`) |
 
 On the virtual profile the runner takes `--virtual-kit <platform>` and `--image
 <build-virtual.sh OUT>/image/postgres.dom`, stages the image, the share and the fixture cluster, and
 runs every session -- each on a fresh copy of the cluster, as `nobody` -- in one boot.
 
-`shared/run-arm.py` reads what an image IS from its build root -- `domain/nested.mode` and the
-runtime SDK's heap -- and refuses an arm whose configuration needs another build. Before any case
+`shared/run-arm.py` reads what an image IS from the manifest `build-virtual.sh` wrote beside it --
+its `nested` and its heap -- and refuses an arm whose configuration needs another build. Before any case
 it runs the configuration's controls inside the server through pgcorpus_reach's
 `corpus_control()` (a write past and a read after free, through malloc and, on the nested arm,
 through palloc), then each `trigger.sql` on a fresh copy of the fixture. It reports one Observation
@@ -79,3 +77,12 @@ catches too, so it could not show that the sublet arm's pools were active.
 Our own constructed memory-context demonstrators are deliberately not here.
 They are this project's fixtures, and `../../README.md` places those under
 `ports/*/security-tests` rather than in bug material.
+
+## History
+
+Until 2026-10-11 the corpus also ran a `spatial`/`sublet` pair as physical Capstone application
+domains (`app-level0`, `app-level0-pg-nested-sublet`; the `spatial-*`, `sublet-*` and
+`sublet-control-*` results), and `virtual-pg-pools` used the memory-context port's lifetime
+adapter over a separately granted 64 MiB arena (`results/2026-10-10-virtual`). `CDERIVE`/`CREVOKE`
+made the adapter unnecessary; the pair's configurations are removed and their results stay as
+recorded.

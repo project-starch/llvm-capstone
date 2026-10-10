@@ -25,9 +25,9 @@ decision, 2026-10-10).
 
 **The arm recorded as `sublet` on 2026-10-06 was not the Sublet heap, and is dropped.** It ran on
 the SDK that `ports/postgres/app/build-domain.sh` builds for the server's `PGSU_NESTED=sublet` arm.
-Both PostgreSQL SDKs keep the default `CAPSTONE_APPLICATION_HEAP level0`
-(`runtime/application/CMakeLists.txt`); the sublet one only adds a grant for the server's context
-pools, which these programs never use. Its five catches -- at the same pcs as the `spatial` run --
+Both PostgreSQL SDKs kept the default `CAPSTONE_APPLICATION_HEAP level0`
+(`runtime/application/CMakeLists.txt`); the sublet one only added a grant for the server's context
+pools, which these programs never use (the grant went with the lifetime adapter on 2026-10-11). Its five catches -- at the same pcs as the `spatial` run --
 were level0 bounds under a Sublet label. The run stays in `results/sublet-20261006-161014` as the
 record of what was measured; no verdict is taken from it.
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Run the sql-repros cases on one Capstone domain arm, and record what each run showed.
+"""Run the sql-repros cases on one virtual Capstone arm, and record what each run showed.
 
-    run-arm.py --arm spatial|sublet --state <vm state> --image <root>/link/postgres.dom
+    run-arm.py --arm virtual-malloc|virtual-pg-pools --virtual-kit <kit> | --state <vm state>
+               --image <out>/image/postgres.dom
                --fixture <initdb'd cluster> --llvm-bin <compiler>/bin [--out <dir>] [--only 02,03]
 
 This runner REPORTS; tools/verdicts.py decides. Each case is its trigger.sql on a stand-alone
@@ -18,13 +19,13 @@ backend against a fresh copy of the fixture, and becomes one Observation:
               neither is not a catch: case 03's sublet fault was in exactly that position, and
               its control faulted at the same instruction
 
-WHAT THE ARM IS, read from the image's build root and never from the label: `domain/nested.mode`
-(none, or sublet for PostgreSQL's context pools) and the runtime SDK's heap. corpus.json maps the
+WHAT THE ARM IS, read from the image's manifest and never from the label: `nested` (none, or
+postgres for the memory-context port's patch 0003) and the heap. corpus.json maps the
 arm to a configuration in tools/arms.json, which fixes both; a mismatch is refused.
 
 Before any case the configuration's controls run in the server, on the same image, through
 pgcorpus_reach's corpus_control(): a write past and a read after free of a malloc'd object, and
-on the nested-sublet configuration the same through palloc. A silence is MISSED only when every
+on the pools configuration the same through palloc. A silence is MISSED only when every
 control did what the configuration declares.
 
 WHAT THIS STILL REFUSES, each because it went wrong once: scoring a run whose backend prompt never
@@ -52,9 +53,7 @@ import virtualvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
 # What each configuration's image must be: (nested mode, SDK heap).
-BUILD = {"app-level0": ("none", "level0"),
-         "app-level0-pg-nested-sublet": ("sublet", "level0"),
-         "virtual-mallocng": ("none", "virtual-mallocng"),
+BUILD = {"virtual-mallocng": ("none", "virtual-mallocng"),
          "virtual-mallocng-pg-pools": ("sublet", "virtual-mallocng")}
 PG_ARGS = ("--single -D {data} -c shared_buffers=4MB -c max_connections=10 -c timezone=GMT "
            "-c log_timezone=GMT -c dynamic_shared_memory_type=sysv postgres")
@@ -378,7 +377,7 @@ def main():
     decl = json.loads((CORPUS / "corpus.json").read_text())
     config = decl.get("arm_configurations", {}).get(args.arm)
     if config not in BUILD:
-        sys.exit(f"arm {args.arm!r} is not a Capstone domain arm of this corpus")
+        sys.exit(f"arm {args.arm!r} is not a virtual arm of this corpus")
     spec = v.load_arms()[config]
     nested, heap, root = identity(args.image)
     if (nested, heap) != BUILD[config] or (spec["target"] == "capstone-virtual") != bool(args.virtual_kit or appvm.profile(args.state) == "virtual"):

@@ -272,7 +272,6 @@ class Traces(unittest.TestCase):
         cases = [
             ("whisper/ggml-context", "whisper.ggml-context"),
             ("ffmpeg/buffer-pool", "ffmpeg.buffer-pool"),
-            ("postgres/memory-contexts", "postgres.a11"),
             ("wireshark/wmem", "wireshark.wmem"),
         ]
         for component, name in cases:
@@ -316,12 +315,8 @@ class Traces(unittest.TestCase):
                                 *([0] * (words - 5)),
                             )
                         )
-                    elif name == "ffmpeg.buffer-pool":
-                        (run / "share/capstone.bin").write_bytes(data)
                     else:
-                        (run / "serial.log").write_text(
-                            "__CAPSTONE_PG_REPLAY_DONE__\n__CAPSTONE_PG_REPLAY_BALANCED__\n"
-                        )
+                        (run / "share/capstone.bin").write_bytes(data)
                     return subprocess.CompletedProcess([], 0)
 
                 argv = [

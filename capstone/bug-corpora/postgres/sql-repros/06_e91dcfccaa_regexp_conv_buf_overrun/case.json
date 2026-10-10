@@ -10,19 +10,6 @@
   "live_proof": "upstream e91dcfccaa, \"Fix potential buffer overrun in regexp match/split functions\", which postdates the 17.5 pin. Five lines of src/backend/utils/adt/regexp.c establish it on the pin. :1444 -- pg_mb2wchar_with_len() converts the subject string and, as upstream states, silently accepts bytes that are invalid in the database encoding, turning each such byte into one pg_wchar. :1579 -- maxsiz = eml * (int64) maxlen is the honest worst case. :1592-1593 -- `if (maxsiz > orig_len) conv_bufsiz = orig_len + 1;` throws that worst case away and caps the buffer at the subject's own byte length, on the assumption that converting back cannot produce more bytes than came in. That assumption holds only for valid input: one invalid byte becomes one pg_wchar, and pg_wchar2mb_with_len can spend more than one byte re-encoding it. :1597 -- the undersized buffer is palloc'd. :1644-1648 and :1793-1815 -- the two write sites call pg_wchar2mb_with_len into that buffer and check the result only with `Assert(len < matchctx->conv_bufsiz)`, which a non-assert build compiles out. The overrun is up to the subject's own length.",
   "fidelity": "real server, core, real allocator; reached by a C caller rather than by SQL. A subject of 64 bytes of 0x80, each invalid as a UTF8 lead byte. pg_mb2wchar_with_len turns each into one pg_wchar and pg_wchar2mb_with_len spends two bytes putting it back, so 64 bytes in become 128 out against the conv_buf of orig_len + 1 = 65 that regexp.c:1592 settled on.",
   "arms": {
-    "spatial": {
-      "oracle": "the 63-byte overrun of the 65-byte conv_buf is reported, or the sequence completes and the arm did not see it",
-      "verdict": "silent",
-      "evidence": "completed with no directive and no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
-    },
-    "sublet": {
-      "oracle": "the 63-byte overrun of the 65-byte conv_buf is reported, or the sequence completes and the arm did not see it",
-      "verdict": "CAUGHT",
-      "evidence": "capability fault: capstone-exec: domain fault cause=7 pc=0xc0e403ac address=0xca01fdc0 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x4f preparing=0x4f sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
-      "verdict_from": "results/matrix.tsv sublet: detected"
-    },
     "cheribsd-revocation": {
       "oracle": "the 63-byte overrun of the 65-byte conv_buf is reported, or the sequence completes and the arm did not see it",
       "verdict": "MISSED",
@@ -37,13 +24,13 @@
       "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
     },
     "virtual-pg-pools": {
-      "oracle": "virtual profile with PostgreSQL's contexts on Sublet context pools (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
+      "oracle": "virtual profile with the memory-context port's patch 0003: every palloc chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
       "verdict": "CAUGHT",
       "verdict_note": "cause=28 pc=0x3f84bc5f74 in pg_wchar2utf_with_len; by function: pg_wchar2utf_with_len is a declared fault site",
       "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
     }
   },
-  "status": "measured on all three arms 2026-10-06: spatial=silent, sublet=detected, cheribsd-revocation=silent",
+  "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle. The physical spatial/sublet pair measured 2026-10-06 to 2026-10-10 stays in results/",
   "note": "Reached by a C caller inside the backend, not by SQL. No SQL statement reaches this defect: it needs a multibyte database encoding and an invalid byte sequence stored at the same time, and those are mutually exclusive in PostgreSQL -- measured against a native 17.5 cluster on 2026-10-06, where a UTF8 database refused invalid bytes on every route, convert_from(bytea,'LATIN1') produced valid UTF-8, and a SQL_ASCII database had pg_encoding_max_length 1, which skips the branch. Upstream guards one of the two with Assert rather than a runtime check, which says the same thing. palloc does not validate, so the corpus module at ports/postgres/app/reach-module builds the datum and hands it to the defective code, which is how upstream's own note about already-corrupt on-disk data describes it being reached. What the arms then measure is the memory safety of the defective code once reached, not SQL-level exploitability. Reached and witnessed on the host cassert ASan build on 2026-10-06: TRAP: failed Assert(\"len < matchctx->conv_bufsiz\"), src/backend/utils/adt/regexp.c:1648, with regexp_match+0x510 in the stack. That is one of the two write sites named in PROVENANCE.md, and the assertion is the only check a non-assert build compiles out.",
   "nested": true,
   "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it.",
