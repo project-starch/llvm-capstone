@@ -73,10 +73,16 @@
       "measured": "2026-10-04"
     },
     "virtual-malloc": {
-      "oracle": "virtual profile, AVBufferPool and AVRefStructPool stock in a Capstone process (tools/arms.json virtual-ffmpeg-pool-stock): the stale access lands in an entry the pool kept, so the case completes with VERDICT DEFECT-REPRODUCED and this arm did not see it, or it faults in ff2_case_run"
+      "oracle": "virtual profile, AVBufferPool and AVRefStructPool stock in a Capstone process (tools/arms.json virtual-ffmpeg-pool-stock): the stale access lands in an entry the pool kept, so the case completes with VERDICT DEFECT-REPRODUCED and this arm did not see it, or it faults in ff2_case_run",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, the pools with the buffer-pool port's patch 0003 (tools/arms.json virtual-ffmpeg-pool-sublet): every hand-out a child lifetime of its pool entry, revoked when it returns: as virtual-malloc"
+      "oracle": "virtual profile, the pools with the buffer-pool port's patch 0003 (tools/arms.json virtual-ffmpeg-pool-sublet): every hand-out a child lifetime of its pool entry, revoked when it returns: as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3fa301117c in ff2_case_run; by function: the fault is in ff2_case_run, a site the case declared before the run (case.json fault_sites)",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
     }
   },
   "status": "declared 2026-10-03; the native-fix-differential arm MEASURED the same day (bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-four-cases/), and the spatial/sublet pair MEASURED 2026-10-04 as probe case 39 (ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/), both cells as pre-registered in a9a5df563658. The sublet-port rows (fixtures 46/47) remain PREDICTIONS: they need the FFmpeg app port, MEASURED 2026-10-04 in ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/: fixture 46 faults with cause 24 at case.c:104 and 47 completes FIXED, with the poolstock control completing both. So every protected arm this case can carry on this host is now measured. RETRACTED 2026-10-04, same day: the earlier wording here said that port's SDK ABI gate 'refuses every toolchain on this host for want of the intcap extensions'. That is false. A qualified toolchain IS present -- llvm-capstone-cc/build-release/bin/clang, commit 7d01722aab88 -- and check_toolchain accepts it end to end (both the two-call direct-call probe and __uintcap_t pass). The error was generalising from a glob over */llvm/cmake-build-* to 'every toolchain on this host'; docs/ref/ffmpeg-live-defect-triage.md:281-284 already named that compiler. So sublet-port is reachable and merely unrun. The fault lines were re-registered 84,85,88 -> 99,100,103 -> 104,105,108 when the reduction was corrected to track both released tables and to give rpl_tab its own fill; the predicted outcomes did not change. CheriBSD MEASURED 2026-10-06 with the revocation control FAULTING in the same boot: completes, not caught (results/20261006-cheribsd/). The arm retracted this morning now carries the measurement it had only claimed. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 completes, mode 2 SIGPROT. Backing arm measured: completes.",

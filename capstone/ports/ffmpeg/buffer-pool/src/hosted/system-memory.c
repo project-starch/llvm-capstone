@@ -2,6 +2,7 @@
  * mallocng on the virtual profile. The pools' payloads and metadata come from it, as they do in
  * FFmpeg linked against libc; every allocation is one heap object, bounded to its request and
  * retired by free. Aligned to 64 bytes, as FFmpeg's av_malloc aligns for its SIMD code. */
+#define _POSIX_C_SOURCE 200112L /* posix_memalign under -std=c11 */
 #include "libavutil/log.h"
 #include "libavutil/mem.h"
 #include <stdlib.h>
