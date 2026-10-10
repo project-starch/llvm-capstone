@@ -10,8 +10,8 @@
   "case_macro": "PGCLIENT",
   "required_arms": [
     "spatial",
-    "sublet",
-    "cheribsd-revocation"
+    "cheribsd-revocation",
+    "virtual-malloc"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -36,6 +36,14 @@
   "evidence": [
     "capstone/bug-corpora/postgres/c-repros/results/spatial-20261006-160406",
     "capstone/bug-corpora/postgres/c-repros/results/sublet-20261006-161014",
-    "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023"
-  ]
+    "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023",
+    "capstone/bug-corpora/postgres/c-repros/results/2026-10-10-virtual"
+  ],
+  "arm_configurations": {
+    "spatial": "app-level0",
+    "virtual-malloc": "virtual-mallocng"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+  }
 }

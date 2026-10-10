@@ -18,15 +18,29 @@
     },
     "sublet": {
       "oracle": "the three-byte over-read past a five-byte palloc chunk is reported, or the sequence completes and the arm did not see it",
-      "verdict": "silent",
+      "verdict": "MISSED",
       "evidence": "completed with no directive and no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict_from": "results/matrix.tsv sublet: silent"
     },
     "cheribsd-revocation": {
       "oracle": "the three-byte over-read past a five-byte palloc chunk is reported, or the sequence completes and the arm did not see it",
-      "verdict": "silent",
+      "verdict": "MISSED",
       "evidence": "ran to the prompt with no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict_from": "results/matrix.tsv cheribsd-revocation: silent"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the trigger statement ran (3 prompts, 1 setup line(s))) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-pg-pools": {
+      "oracle": "virtual profile with PostgreSQL's contexts on Sublet context pools (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the trigger statement ran (3 prompts, 1 setup line(s))) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
     }
   },
   "status": "measured on all three arms 2026-10-06: spatial=silent, sublet=silent, cheribsd-revocation=silent",

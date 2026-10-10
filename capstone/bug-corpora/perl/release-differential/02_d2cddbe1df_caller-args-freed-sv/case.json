@@ -13,13 +13,22 @@
    "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
   },
   "sysalloc-sublet": {
-   "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
+   "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)",
+   "verdict": "NO-READING",
+   "verdict_from": "results/20261006/matrix.tsv d2cddbe1df sysalloc-sublet: silent (exit 255)",
+   "verdict_note": "perl exits 255 by its own check before any mechanism reports"
   },
   "sublet-svheads": {
-   "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
+   "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)",
+   "verdict": "NO-READING",
+   "verdict_from": "results/20261006/matrix.tsv d2cddbe1df sublet-svheads: silent (exit 255)",
+   "verdict_note": "perl exits 255 by its own check before any mechanism reports"
   },
   "cheribsd-revocation": {
-   "oracle": "no report: Perl's own check aborts; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: Perl's own check aborts"
+   "oracle": "no report: Perl's own check aborts; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: Perl's own check aborts",
+   "verdict": "NO-READING",
+   "verdict_from": "results/20261006-cheribsd/matrix.tsv d2cddbe1df: revocation_on=perl panic, revocation_off=perl panic",
+   "verdict_note": "perl panic: perl stops itself before any mechanism reports"
   }
  },
  "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",

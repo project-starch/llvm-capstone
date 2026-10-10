@@ -1,0 +1,26 @@
+{
+  "arm": "sublet",
+  "cases": 5,
+  "configuration": "replay-sublet",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/mmgr-repros",
+  "platform": {
+    "compiler": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+    "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "judge": "de4f38a543b34b24dba0f1a5d9d503aec7b5f61e0743f15013eb1cb58176f3ef",
+    "kernel": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "qemu": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "runner": "99b35d545deef75327275efaa7e75c675595455cf62b73c2353fcc3fe10d94d3"
+  },
+  "predicted": "CAUGHT",
+  "regions": {
+    "arena": 67108864,
+    "payload": 65536,
+    "scratch": 50331648,
+    "trace": 67108864
+  },
+  "tally": {
+    "CAUGHT": 5
+  }
+}

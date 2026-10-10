@@ -16,10 +16,14 @@
       "oracle": "completes, and the harness reports a wrong answer rather than a fault -- a differential, not a detection: [\"Hash scans that carry a pair into a set the hash no longer holds\", \"NOT_EQUAL\", \"\\\"the value only that entry holds\\\"\","
     },
     "sublet-gc": {
-      "oracle": "capability fault, cause 24"
+      "oracle": "capability fault, cause 24",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/20261006/matrix.tsv 606d9a6b2 sublet-gc: fault c24"
     },
     "cheribsd-revocation": {
-      "oracle": "completes, and the harness reports a wrong answer rather than a fault -- a differential, not a detection: [\"Hash scans that carry a pair into a set the hash no longer holds\", \"NOT_EQUAL\", \"\\\"the value only that entry"
+      "oracle": "completes, and the harness reports a wrong answer rather than a fault -- a differential, not a detection: [\"Hash scans that carry a pair into a set the hash no longer holds\", \"NOT_EQUAL\", \"\\\"the value only that entry",
+      "verdict": "MISSED",
+      "verdict_from": "results/20261006-cheribsd/matrix.tsv 606d9a6b2: completes rc=0"
     }
   },
   "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",

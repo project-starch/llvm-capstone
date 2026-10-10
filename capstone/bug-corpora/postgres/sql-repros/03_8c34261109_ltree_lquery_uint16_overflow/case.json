@@ -18,17 +18,34 @@
     },
     "sublet": {
       "oracle": "the mechanism reports, or the case completes and it did not",
-      "verdict": "control-broken",
+      "verdict": "NO-READING",
       "evidence": "WITHDRAWN -- not a verdict. The arm faulted, but the fault does not depend on the defect. The negative control (control.sql, 64 OR-variants against the trigger's 66, so 64512 bytes against a 65535 ceiling that is never crossed) faults too, at the SAME instruction: cause 7, pc=0xe0202414, on the same image fcaa4a36beef67f1 and the same fixture (results/sublet-control-20261010-043120, against results/sublet-20261008-080000). Whatever this arm trips on while parsing a large lquery, it is not the uint16 wrap, so the case is out of this arm's denominator until the fault is understood. Found by review on PR #198, which asked for exactly this control before a single-run detection was trusted; it was right to ask.",
       "run": "trigger run 2026-10-08, control run 2026-10-10, same image and fixture; see results/",
       "extension_precreated": "ltree. Still true, and still not evidence that this arm can create it -- but moot for the verdict, since the verdict is withdrawn.",
-      "underlying_fault_still_open": "`CREATE EXTENSION ltree` faults on this arm, and now a plain large lquery parse faults as well, below any overflow. Both are open and both belong to whoever owns the Sublet runtime."
+      "underlying_fault_still_open": "`CREATE EXTENSION ltree` faults on this arm, and now a plain large lquery parse faults as well, below any overflow. Both are open and both belong to whoever owns the Sublet runtime.",
+      "verdict_from": "results/matrix.tsv sublet: control-broken",
+      "verdict_note": "WITHDRAWN -- not a verdict. The arm faulted, but the fault does not depend on the defect. The negative control (control.sql, 64 OR-variants against the trigger's 66, so 64512 bytes against a 65535 ceiling that is never crossed) faults too, at the SAME instruction: cause 7, pc=0xe0202414, on the same"
     },
     "cheribsd-revocation": {
       "oracle": "SIGPROT on the plain purecap build -- CHERI-DETECTED (2026-10-04). SIGPROT(34) on both purecap builds. ~65 KB, leaves the malloc block.",
-      "verdict": "detected",
+      "verdict": "CAUGHT",
       "evidence": "SIGPROT(34) -- a capability violation",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict_from": "results/matrix.tsv cheribsd-revocation: detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
+      "verdict": "NO-READING",
+      "verdict_note": "cause=28 pc=0x3f95001c7c in memcpy; in memcpy; declared sites none; its control.sql FAULTS too, so the fault is not the defect's",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc",
+      "verdict_reason": "unattributed"
+    },
+    "virtual-pg-pools": {
+      "oracle": "virtual profile with PostgreSQL's contexts on Sublet context pools (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
+      "verdict": "NO-READING",
+      "verdict_note": "this image cannot create ltree",
+      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools",
+      "verdict_reason": "out-of-denominator"
     }
   },
   "status": "spatial and cheribsd-revocation measured 2026-10-06, both detected; sublet is out of the denominator -- its fault does not depend on the defect, shown by the negative control",

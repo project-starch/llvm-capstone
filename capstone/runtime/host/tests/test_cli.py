@@ -94,6 +94,33 @@ class TransportTests(unittest.TestCase):
                 self.assertEqual(args.launcher, Path("/tmp/launcher"))
                 self.assertEqual(args.module, Path("/tmp/module"))
 
+    def test_restart_preserves_exact_bounds_and_only_when_set(self):
+        for recorded in (True, None):
+            with tempfile.TemporaryDirectory() as directory:
+                state = Path(directory)
+                identity = {"files": {k: {"path": "/tmp/" + k, "sha256": "old"}
+                            for k in ("qemu", "kernel", "firmware", "rootfs", "launcher", "module")},
+                            "share": "/tmp/share", "memory": "2G", "cma_mib": 768,
+                            "process_cache_mib": 384, "environment": {}, "profile": "virtual"}
+                if recorded:
+                    identity["exact_bounds"] = True
+                (state / "config.json").write_text(json.dumps({"identity": identity}))
+                with patch.object(cli, "running", return_value=False), patch.object(cli, "start", return_value=0) as start:
+                    self.assertEqual(cli.main(["--state", directory, "restart"]), 0)
+                    args, _ = start.call_args.args
+                    self.assertEqual(args.exact_bounds, bool(recorded))
+
+    def test_exact_bounds_is_refused_on_the_physical_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for name in ("qemu", "kernel", "firmware", "rootfs"):
+                Path(directory, name).write_text("x")
+            with self.assertRaises(cli.VMError):
+                cli.start(cli.argparse.Namespace(
+                    qemu=Path(directory, "qemu"), kernel=Path(directory, "kernel"),
+                    firmware=Path(directory, "firmware"), rootfs=Path(directory, "rootfs"),
+                    share=Path(directory), profile="physical", exact_bounds=True, memory="2G",
+                    cma_mib=512, process_cache_mib=384, port=0, boot_timeout=1), Path(directory))
+
     def test_qmp_events_and_partial_messages(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)

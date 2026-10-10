@@ -53,7 +53,8 @@
         "spatial",
         "sublet",
         "poisoncap-spatial",
-        "poisoncap-protected"
+        "poisoncap-protected",
+        "cheribsd-revocation"
       ],
       "arm_keys": {
         "sublet": [
@@ -74,7 +75,8 @@
       "inventory": "capstone/docs/ref/cpython-pymalloc-defects.md",
       "evidence": [
         "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20",
-        "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control"
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control",
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd"
       ],
       "advisories": [],
       "shape_table": true,
@@ -736,8 +738,8 @@
       "case_macro": "PGCLIENT",
       "required_arms": [
         "spatial",
-        "sublet",
-        "cheribsd-revocation"
+        "cheribsd-revocation",
+        "virtual-malloc"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -762,8 +764,16 @@
       "evidence": [
         "capstone/bug-corpora/postgres/c-repros/results/spatial-20261006-160406",
         "capstone/bug-corpora/postgres/c-repros/results/sublet-20261006-161014",
-        "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023"
+        "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023",
+        "capstone/bug-corpora/postgres/c-repros/results/2026-10-10-virtual"
       ],
+      "arm_configurations": {
+        "spatial": "app-level0",
+        "virtual-malloc": "virtual-mallocng"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+      },
       "where": "capstone/bug-corpora/postgres/c-repros"
     },
     {
@@ -783,7 +793,9 @@
         "poisoncap-spatial",
         "poisoncap-protected",
         "native-detect",
-        "cheribsd-revocation"
+        "cheribsd-revocation",
+        "virtual-malloc",
+        "virtual-pg-pools"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -799,10 +811,25 @@
       "inventory": "capstone/docs/ref/postgres-nested-allocator-defects.md",
       "evidence": [
         "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu",
-        "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu-delivery"
+        "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu-delivery",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/20261008-cheribsd",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-10-qemu",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-10-virtual"
       ],
       "advisories": [],
       "note": "The allocator pin is 17.0; the complete single-user backend port is 17.5. 2026-10-05: a cheribsd-revocation arm was added by this project and run on all 8. The corpus had no plain-purecap arm, only the two PoisonCap ones, and PoisonCap is out of scope for the study these results feed; without it these 8 could not be compared with the other PostgreSQL corpora, which all carry that arm. The build path already existed -- cmake/Replay.cmake builds one hosted executable per case under PG_CORPUS_DIR and says 'plain CheriBSD' when PG_POISONCAP is off -- so nothing in the corpus or the port was changed to produce it. One qualification on reading those 8 silences, because it bites elsewhere: the guest's security.cheri.runtime_revocation_every_free_default is 0, so a revocation sweep runs only once a quarantine threshold is crossed, and a short case that frees a handful of objects may never cross one -- a silence can then mean 'no sweep ran yet' rather than 'the mechanism could not see it'. That confound does NOT apply here, and the reason is worth stating: pfree returns a chunk to its context and never returns the block to malloc, so there is no malloc free for a sweep to act on at any threshold. The silence is a property of the nesting, not of when the quarantine happens to flush. Re-pinned from 17.0 to 17.5 on 2026-10-06, and three cases moved to not-live-at-17-5/ because `git merge-base --is-ancestor` shows their upstream fixes are already in REL_17_5: 83ce20d671, 727bc6ac33f6 and 9d5ce4f1a00a. The 17.0 pin was the only one in the PostgreSQL study, and it is what let three already-fixed defects appear in a 17.5 result table. The five that remain all have fixes later than REL_17_5 (2025-05-05): 2025-08-02, 2025-08-30, 2025-10-03, 2025-10-09 and 2026-03-30. COMPARABILITY, recorded 2026-10-06 rather than resolved. This corpus's `spatial` and `sublet` rows were measured on 2026-09-18, before the 17.5 re-pin, and against the memory-contexts replay study's level 0 (ports/postgres/memory-contexts/src/allocators): backing-allocator.c for the unprotected arm and the refusing unsupported-allocators.c for the protected one. The sibling corpora sql-repros and c-repros were measured on 2026-10-06 against the application domain, whose level 0 is ports/musl-capstone/runtime/level0.c with CAPSTONE_LEVEL0_OBJECT_BOUNDS on. The two are different allocators with different bounds behaviour -- the replay one hands out pointers carrying the whole arena's bounds, the application one narrows to the request -- so these five rows may be added to a per-arm total only with that stated. They are not withdrawn: each is a real measurement of its own arm, and the temporal result they carry (sublet 5 of 5 where both others report 0 of 5) does not depend on bounds granularity, because a use-after-free is caught by revocation and not by a bound. Rerunning them against the application domain would make the three corpora directly comparable and has not been done.",
+      "arm_configurations": {
+        "spatial": "replay-arena",
+        "sublet": "replay-sublet",
+        "virtual-malloc": "virtual-mallocng-replay",
+        "virtual-pg-pools": "virtual-mallocng-replay-pools"
+      },
+      "verdict_bundles": {
+        "spatial": "results/2026-10-10-qemu/spatial",
+        "sublet": "results/2026-10-10-qemu/sublet",
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-pg-pools": "results/2026-10-10-virtual/virtual-pg-pools"
+      },
       "where": "capstone/bug-corpora/postgres/mmgr-repros"
     },
     {
@@ -819,7 +846,9 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "cheribsd-revocation"
+        "cheribsd-revocation",
+        "virtual-malloc",
+        "virtual-pg-pools"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -847,12 +876,23 @@
         "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261008-080000",
         "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261008-080219",
         "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043120",
-        "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043643"
+        "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043643",
+        "capstone/bug-corpora/postgres/sql-repros/results/2026-10-10-virtual"
       ],
       "runners": [
         "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",
         "capstone/bug-corpora/postgres/sql-repros/shared/run-cheribsd.sh"
       ],
+      "arm_configurations": {
+        "spatial": "app-level0",
+        "sublet": "app-level0-pg-nested-sublet",
+        "virtual-malloc": "virtual-mallocng",
+        "virtual-pg-pools": "virtual-mallocng-pg-pools"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-pg-pools": "results/2026-10-10-virtual/virtual-pg-pools"
+      },
       "where": "capstone/bug-corpora/postgres/sql-repros"
     },
     {
@@ -907,7 +947,9 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "cheribsd-revocation"
+        "cheribsd-revocation",
+        "virtual-malloc",
+        "virtual-nested-pools"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -919,17 +961,27 @@
         "capstone/ports/sqlite/repro322/tags.tsv",
         "capstone/ports/sqlite/cheribsd/build-corpus-cheri.sh",
         "capstone/ports/sqlite/cheribsd/deploy-corpus.sh",
-        "capstone/ports/sqlite/cheribsd/run-corpus-cheri.sh"
+        "capstone/ports/sqlite/cheribsd/run-corpus-cheri.sh",
+        "capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "evidence": [
-        "capstone/bug-corpora/sqlite/engine-repros/results"
+        "capstone/bug-corpora/sqlite/engine-repros/results",
+        "capstone/bug-corpora/sqlite/engine-repros/results/2026-10-10-virtual"
       ],
       "related": [
         "capstone/bug-corpora/sqlite/capi-repros"
       ],
       "shape_table": true,
       "note": "Sibling of capi-repros, not an extension of it: those 19 rows are pointer-lifetime defects in host BINDINGS over the C API, and that corpus records SQLite's engine-internal defects as out of scope. These 43 are engine-internal. Five further R2 fuzz-diff images (fz01, fz03, fz04, fz05, fz07) are collected and carry a host-ASan signature but no derived trigger, so they are not cases here; deriving them needs the 3.43.1 fuzz corpus re-extracted for db-by-sql pairing. Eight more entries in the collection are diagnostics rather than defects -- five baseline probes and three allocator demonstrators -- and stay in the port. The memsys5 boundary is the point: a sub-allocation is the address arena+i*atom, so it inherits the whole arena's bounds, and both a use-after-free and an overflow that stays inside the arena are in bounds for a capability machine. Narrowed to this study's scope on 2026-10-06: five cases moved to not-in-scope/ because they are neither spatial nor temporal -- two non-terminating loops, one unbounded recursion (the exhausted resource is the C stack), one dereference of the literal address 0x3 and one NULL dereference. The last two were not visible in the shape field, which grouped them under \"stale or wild pointer dereference\" together with two genuine out-of-bounds reads; they were separated by reading each case. The same line was drawn for PostgreSQL at the reviewer's request, so one rule now holds across the study. What remains is 26 temporal and 12 spatial. The runners list now names the CheriBSD side too, which it did not: the two Capstone arms are driven by corpus322.sh and the two CheriBSD arms by the scripts under ports/sqlite/cheribsd, and only the first was declared. tags.tsv is listed with them because it is what the runners take their case list from -- `ls out/` answers what was built, not what the corpus contains, and the difference is not always visible. Narrowed again on 2026-10-06, 38 to 33: five cases moved to no-binary-verdict/ because on at least one arm they produced neither detected nor not-detected. Three had a probe showing hits=0 on cheribsd-revocation -- the defect site never executed, so the arm had nothing to miss -- and two hung on a Capstone arm, neither completing nor faulting. Scoring any of them as not-detected would credit an arm with a silent miss on code that did not run. The cost is recorded there and is not nothing: 26_2c7a73eaea was the only case whose damage left the memsys5 arena, so Table 1b's \"leaves the arena\" column now has no measured member.",
+      "arm_configurations": {
+        "virtual-malloc": "virtual-sqlite-memsys5",
+        "virtual-nested-pools": "virtual-sqlite-memsys5-pools"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+      },
       "where": "capstone/bug-corpora/sqlite/engine-repros"
     },
     {
