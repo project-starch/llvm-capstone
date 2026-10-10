@@ -1,0 +1,23 @@
+case	revocation	rc	signal	si_code	harness	quarantine
+01_ad5fedb002_for-loop-gv-freed-early	on	162	34	si_code=2 (PROT_CHERI_TAG) addr=0x63f334		
+01_ad5fedb002_for-loop-gv-freed-early	off	162	34	si_code=2 (PROT_CHERI_TAG) addr=0x63f334		
+02_d2cddbe1df_caller-args-freed-sv	on	255			panic: attempt to copy freed scalar 41411c90 to 4155c150 at trigger.pl line 14.	QUARANTINE shadow=mapped allocs=6149 frees=3792 quarantined_after_free=3792 reused_while_quarantined=0 sweeps=0
+02_d2cddbe1df_caller-args-freed-sv	off	255			panic: attempt to copy freed scalar 41410c90 to 4154b180 at trigger.pl line 14.	QUARANTINE shadow=mapped allocs=6153 frees=3814 quarantined_after_free=0 reused_while_quarantined=0 sweeps=0
+03_9e298ab597_av-extend-unshift-stale-slots	on	0			[PASS] 1	QUARANTINE shadow=mapped allocs=6076 frees=3720 quarantined_after_free=3720 reused_while_quarantined=0 sweeps=0
+03_9e298ab597_av-extend-unshift-stale-slots	off	0			[PASS] 1	QUARANTINE shadow=mapped allocs=6082 frees=3745 quarantined_after_free=0 reused_while_quarantined=0 sweeps=0
+04_e4be969235_join-delimiter-freed-by-magic	on	162	34	si_code=2 (PROT_CHERI_TAG) addr=0x67d70a		
+04_e4be969235_join-delimiter-freed-by-magic	off	162	34	si_code=2 (PROT_CHERI_TAG) addr=0x67d70a		
+05_17535c984a_cloned-const-sub-unrefcounted	on	0			[FAIL] 1 of 2: 2,ok,no 'Attempt to free unreferenced scalar'	QUARANTINE shadow=mapped allocs=7714 frees=4732 quarantined_after_free=4732 reused_while_quarantined=0 sweeps=0
+05_17535c984a_cloned-const-sub-unrefcounted	off	0			[FAIL] 1 of 2: 2,ok,no 'Attempt to free unreferenced scalar'	QUARANTINE shadow=mapped allocs=7718 frees=4762 quarantined_after_free=0 reused_while_quarantined=0 sweeps=0
+06_40727c420c_code-blocks-count-reused	on	162	34	si_code=2 (PROT_CHERI_TAG) addr=0x67d70a		
+06_40727c420c_code-blocks-count-reused	off	162	34	si_code=2 (PROT_CHERI_TAG) addr=0x67d70a		
+07_39b4841b25_recursive-code-eval-rex-freed	on	0			[FAIL] 1 of 1: 1,is,GH22869,got=[A-[X-,X-,XY,XY],XY,XY,XY],want=[A-[X-,X-,XY,XY],A-,AB,AB]	QUARANTINE shadow=mapped allocs=7467 frees=4564 quarantined_after_free=4564 reused_while_quarantined=0 sweeps=0
+07_39b4841b25_recursive-code-eval-rex-freed	off	0			[FAIL] 1 of 1: 1,is,GH22869,got=[A-[X-,X-,XY,XY],XY,XY,XY],want=[A-[X-,X-,XY,XY],A-,AB,AB]	QUARANTINE shadow=mapped allocs=7472 frees=4597 quarantined_after_free=0 reused_while_quarantined=0 sweeps=0
+08_b7b77ffc1e_clear-errsv-on-a-glob	on	162	34	si_code=2 (PROT_CHERI_TAG) addr=0x680834		
+08_b7b77ffc1e_clear-errsv-on-a-glob	off	162	34	si_code=2 (PROT_CHERI_TAG) addr=0x680834		
+09_1189b87114_special-block-cv-freed	on	162	34	si_code=2 (PROT_CHERI_TAG) addr=0x5dc46e		
+09_1189b87114_special-block-cv-freed	off	162	34	si_code=2 (PROT_CHERI_TAG) addr=0x5dc46e		
+10_254b30e378_perlio-scalar-write-overlap	on	0			[PASS] 1	QUARANTINE shadow=mapped allocs=6891 frees=4288 quarantined_after_free=4288 reused_while_quarantined=0 sweeps=0
+10_254b30e378_perlio-scalar-write-overlap	off	0			[PASS] 1	QUARANTINE shadow=mapped allocs=6895 frees=4318 quarantined_after_free=0 reused_while_quarantined=0 sweeps=0
+11_af11b0c528_cow-subbeg-across-code-eval	on	0			[FAIL] 3 of 3: 1,is,[perl #16952] failed (?{}) branch keeps prior captures,got=foo-o	QUARANTINE shadow=mapped allocs=7567 frees=4727 quarantined_after_free=4727 reused_while_quarantined=0 sweeps=0
+11_af11b0c528_cow-subbeg-across-code-eval	off	0			[FAIL] 3 of 3: 1,is,[perl #16952] failed (?{}) branch keeps prior captures,got=foo-o	QUARANTINE shadow=mapped allocs=7572 frees=4769 quarantined_after_free=0 reused_while_quarantined=0 sweeps=0

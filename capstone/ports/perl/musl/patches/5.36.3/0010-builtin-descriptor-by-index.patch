@@ -1,0 +1,61 @@
+builtin.c: the call checker finds its builtin:: descriptor by index, not by an address kept as an integer.
+
+Perl_boot_core_builtin hands each builtin:: function's call checker its descriptor as
+newSVuv(PTR2UV(builtin)), and the three checkers turn it back with NUM2PTR(..., SvUV(ckobj)).
+Where a pointer is a capability, the round trip through a UV keeps the address and loses the
+tag, so the first use faults: every builtin:: function, and every program that loads overload.pm
+(which calls builtin::blessed). Measured 2026-10-11 on both ports of this release: cause 24 in
+ck_builtin_func1 on the Capstone virtual profile, SIGPROT PROT_CHERI_TAG in Perl_sv_2uv_flags on
+CheriBSD purecap, with revocation on and off alike. The checker object now holds the index into
+builtins[], and S_builtin_at returns &builtins[index]. Behaviour is unchanged elsewhere.
+
+diff --git builtin.c builtin.c
+index 9df6630..32083fd 100644
+--- a/builtin.c
++++ b/builtin.c
+@@ -58,7 +58,12 @@ enum {
+ };
+ 
++/* capstone: the call checker's ckobj holds the descriptor's INDEX in builtins[],
++   not its address as an integer. A pointer turned into a UV and back loses its
++   capability tag, so every builtin:: function, and `use overload` with it, faulted. */
++static const struct BuiltinFuncDescriptor *S_builtin_at(UV index);
++
+ static OP *ck_builtin_const(pTHX_ OP *entersubop, GV *namegv, SV *ckobj)
+ {
+-    const struct BuiltinFuncDescriptor *builtin = NUM2PTR(const struct BuiltinFuncDescriptor *, SvUV(ckobj));
++    const struct BuiltinFuncDescriptor *builtin = S_builtin_at(SvUV(ckobj));
+ 
+     warn_experimental_builtin(builtin->name, false);
+@@ -288,5 +293,5 @@ XS(XS_builtin_created_as_number)
+ static OP *ck_builtin_func1(pTHX_ OP *entersubop, GV *namegv, SV *ckobj)
+ {
+-    const struct BuiltinFuncDescriptor *builtin = NUM2PTR(const struct BuiltinFuncDescriptor *, SvUV(ckobj));
++    const struct BuiltinFuncDescriptor *builtin = S_builtin_at(SvUV(ckobj));
+ 
+     warn_experimental_builtin(builtin->name, false);
+@@ -360,5 +365,5 @@ XS(XS_builtin_indexed)
+ static OP *ck_builtin_funcN(pTHX_ OP *entersubop, GV *namegv, SV *ckobj)
+ {
+-    const struct BuiltinFuncDescriptor *builtin = NUM2PTR(const struct BuiltinFuncDescriptor *, SvUV(ckobj));
++    const struct BuiltinFuncDescriptor *builtin = S_builtin_at(SvUV(ckobj));
+ 
+     warn_experimental_builtin(builtin->name, false);
+@@ -437,4 +442,10 @@ XS(XS_builtin_import)
+ }
+ 
++static const struct BuiltinFuncDescriptor *
++S_builtin_at(UV index)
++{
++    return &builtins[index];
++}
++
+ void
+ Perl_boot_core_builtin(pTHX)
+@@ -454,5 +465,5 @@ Perl_boot_core_builtin(pTHX)
+ 
+         if(builtin->checker) {
+-            cv_set_call_checker_flags(cv, builtin->checker, newSVuv(PTR2UV(builtin)), 0);
++            cv_set_call_checker_flags(cv, builtin->checker, newSVuv((UV)i), 0);
+         }
+     }
