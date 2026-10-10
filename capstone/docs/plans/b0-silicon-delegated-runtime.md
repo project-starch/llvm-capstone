@@ -1515,12 +1515,32 @@ branches' hunks byte for byte. The flash is the lead's word.
 
 **Boot A, bare (sup-bare harness; folders under tests/rtl-smoke/):**
 - The S-16 control set: 18 of 18 complete, with accept776's readings.
-- r51-return-pcc: before the first yield, 28, unchanged. **After it, 28 where 776d9d859 executed the jump (0xBAD).**
-  That reading is R-51's fix on silicon.
+- r51-return-pcc, the three CAPPRINT readings: the shared word after the first return, the shared word after the
+  second, and mcause in the caller.
+  - **After the yield: 0 / 0x1C / 0x1C. On 776d9d859 the board read 0 / 0xBAD / 0.** The third reading changes too: the
+    domain now traps, and its trap writes the mcause the caller reads.
+  - Before the yield: 0x1C / 0x1C, unchanged.
+  - Pinned 2026-10-10 from the RTL lane's run on 0568f93a9 (sup-run20 .sup/batch). The committed trace reads x29 = 0, then
+    0x1c, then x5 = 0x1c in the after arm, and x29 = 0x1c, then x5 = 0x1c, in the before arm. The test header's "#3 = 0"
+    describes 776d9d859.
 - s10b-storebuf-primed traps on 8 of 8 legs, and s06agg reads 64, both unchanged. R-52's fix touches neither path.
 
 **Boot B, Linux (the shared monitor's acceptance):** the R-43 list a1..a10 unchanged, and C5u completing with a
 supervision overhead within 0.1 points of 776d9d859's +0.680 %.
+- **Exception: a10's trap reading may change, and that would be R-51's, not a regression.**
+  - The pre-synthesis audit (2026-10-10) found it: at a trap the frontend jumps to mtvec but keeps the PC metadata
+    (frontend.sv:436-437, :455). QEMU swaps to ctvec.
+  - So once a domain has yielded with RETURN, its trap handler runs under the domain's code capability, as it already
+    does at first entry. A handler outside that capability faults 28.
+  - a10 is R-35's stale probe, called several times. Its revocation fault (mcause 25, latched mepc DBAS+0x4354, on
+    776d9d859) comes in a later invocation, so after a yield.
+  - Predicted: k800 4 and ENT1 unchanged. The trap log reads either mcause 25 at DBAS+0x4354 as before (handler inside
+    the code capability), or a 28 at mtvec (handler outside). Either way a10 still wedges by design.
+  - The rule: a post-yield fault on the new bitstream reads what a first-entry fault reads on the board in the same
+    configuration.
+  - Supervised escapes are unaffected: the escape already parks a tagged word (commit_stage.sv:741-742).
+  - The RTL lane is asked for a sim arm that settles a10's outcome before the reflash, and for a diff of
+    testlist_sup.yaml between 776d9d859 and 0568f93a9.
 
 **Boot C, Linux, the B-series** (private image; process-ABI module; FPGA monitor 1f9aedd).
 - The rungs, in order: b0-stats, b0-hello, b1-thread, b2-memcached, b3-setclock, b3-oracle, b3-clock (last), b0-stats2.
