@@ -89,6 +89,17 @@ if(PORT_HOSTED)
   target_include_directories(wireshark-wmem PUBLIC src/shared/shim src/shared
     "${CMAKE_BINARY_DIR}/source-ported/wsutil/wmem")
   target_compile_definitions(wireshark-wmem PUBLIC WMEM_PORT_HOOKS)
+  # WM_LIBC_SYSTEM: g_malloc/g_free are the host's malloc/free (src/shared/backing.c), so the
+  # unported arms -- ASan natively, libc revocation on stock CheriBSD -- see wmem's system
+  # requests as a stock build makes them. Hosted only, and not with the chunk port or PoisonCap,
+  # both of which own the backing.
+  option(WM_LIBC_SYSTEM "hosted: g_malloc and g_free are the host's malloc and free" OFF)
+  if(WM_LIBC_SYSTEM AND (WM_POISONCAP OR WM_CHUNKS))
+    message(FATAL_ERROR "WM_LIBC_SYSTEM needs WM_CHUNKS=OFF and no PoisonCap: those own the backing")
+  endif()
+  if(WM_LIBC_SYSTEM)
+    target_compile_definitions(wireshark-wmem PUBLIC WM_LIBC_SYSTEM)
+  endif()
   if(WM_POISONCAP)
     target_compile_definitions(wireshark-wmem PUBLIC WM_POISONCAP)
     target_include_directories(wireshark-wmem PUBLIC src/cheribsd)

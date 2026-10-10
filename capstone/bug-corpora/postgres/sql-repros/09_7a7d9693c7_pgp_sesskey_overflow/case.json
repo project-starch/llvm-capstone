@@ -18,15 +18,29 @@
     },
     "sublet": {
       "oracle": "the copy past sess_key is reported, or the case completes and this arm did not see it",
-      "verdict": "silent",
+      "verdict": "MISSED",
       "evidence": "completed with no directive and no fault",
-      "run": "run 2026-10-06 in the C-caller form, after the case stopped needing pgcrypto; see results/"
+      "run": "run 2026-10-06 in the C-caller form, after the case stopped needing pgcrypto; see results/",
+      "verdict_from": "results/matrix.tsv sublet: silent"
     },
     "cheribsd-revocation": {
       "oracle": "the copy past sess_key is reported, or the case completes and this arm did not see it",
-      "verdict": "silent",
+      "verdict": "MISSED",
       "evidence": "ran to the prompt with no fault",
-      "run": "run 2026-10-06 in the C-caller form, after the case stopped needing pgcrypto; see results/"
+      "run": "run 2026-10-06 in the C-caller form, after the case stopped needing pgcrypto; see results/",
+      "verdict_from": "results/matrix.tsv cheribsd-revocation: silent"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the trigger statement ran (4 prompts, 1 setup line(s))) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-pg-pools": {
+      "oracle": "virtual profile with PostgreSQL's contexts on Sublet context pools (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the trigger statement ran (4 prompts, 1 setup line(s))) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
     }
   },
   "status": "measured on all three arms 2026-10-06, silent on each: the 29-byte copy past sess_key stays inside the aset chunk that holds the 184-byte PGP_Context, so no arm's bounds are crossed. PostgreSQL's own chunk sentinel does see it on a host assert build, which is the distinction this corpus exists to measure.",

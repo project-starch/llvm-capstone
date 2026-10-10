@@ -2,6 +2,44 @@
   "corpora": [
     {
       "program": "cpython",
+      "boundary": "which allocator owns the object the defect touches: pymalloc (nested) or libc malloc (non-nested). Decided per case by MEASUREMENT, not by the object's size -- the ASan heap report is run twice and the question is whether it SURVIVES PYTHONMALLOC=pymalloc",
+      "title": "CPython 3.13.7 spatial defects at the pymalloc boundary, plus temporal and spatial defects whose memory comes straight from libc malloc",
+      "upstream": {
+        "version": "3.13.7",
+        "port": "capstone/ports/cpython/pymalloc"
+      },
+      "cases": 32,
+      "case_schema": "script-trigger",
+      "case_number_base": 1,
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "cheribsd-revocation"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "true": 32
+      },
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "related": [
+        "capstone/bug-corpora/cpython/pymalloc-repros",
+        "capstone/ports/cpython/pymalloc"
+      ],
+      "advisories": [],
+      "note": "A sibling of pymalloc-repros. That corpus is scoped to consumer-side TEMPORAL defects whose memory comes from pymalloc and asserts completeness for that cell (20 cases, expect_live_in_pin {true: 20}, a shape_prose regex on \"[Tt]wenty reports\"), so cases here were not added there. 32 cases from 31 upstream fixes (03 and 04 are two triggers for gh-140492). Cases 01-21 are the three cells pymalloc-repros does not cover: 13 spatial/nested, 5 spatial/non-nested, 3 temporal/non-nested. Cases 22-32 are 11 temporal/nested defects, the same upstream issues pymalloc-repros holds as C models (each carries a sibling_issue pointer), here because a C model and an interpreter run of one defect are not the same measurement -- on the base arm the C models all complete while three of the eleven fault, all with cause 24; the two corpora's numbers must not be pooled. Liveness and the nested/non-nested side are both measured on the pinned ASan build. The arms are named as pymalloc-repros names them: spatial is base Capstone (level0 heap, per-object bounds, pymalloc stock via patch 0009; nothing in it revokes heap memory), sublet is the same level0 heap plus patch 0014 (pymalloc's blocks and its >512-byte fallback issued and revoked). Measured 2026-10-06 to 2026-10-09 over the same 29 cases per arm: base 14/29, sublet 27/29, cheribsd-revocation 11/29; probe/counts.py derives these from results/20261006/matrix.tsv. The cheribsd binary hashes were reconstructed after the runs; see results/20261006/README.md. results/20261006/ also carries the negative controls: a weak one that passes on all three arms, and a strong per-case one, which exists for 18 of the 32 cases and has been run on the base arm; what each settles and what neither does is in that README.",
+      "runners": [
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/run-arm.sh",
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/run-all.sh",
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/run-cheribsd.sh",
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/analyse.py",
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/build-image-with-modules.sh",
+        "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/build-cheribsd-with-modules.sh"
+      ],
+      "where": "capstone/bug-corpora/cpython/allocator-boundary-repros"
+    },
+    {
+      "program": "cpython",
       "boundary": "pymalloc",
       "title": "Consumer-side temporal defects in CPython whose memory comes from pymalloc",
       "upstream": {
@@ -15,7 +53,10 @@
         "spatial",
         "sublet",
         "poisoncap-spatial",
-        "poisoncap-protected"
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "virtual-malloc",
+        "virtual-nested-pools"
       ],
       "arm_keys": {
         "sublet": [
@@ -30,13 +71,16 @@
       },
       "runners": [
         "capstone/bug-corpora/cpython/pymalloc-repros/runners/capstone-domain/run-defects.py",
-        "capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py"
+        "capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py",
+        "capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "inventory": "capstone/docs/ref/cpython-pymalloc-defects.md",
       "evidence": [
         "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20",
-        "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control"
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control",
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd",
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-virtual"
       ],
       "advisories": [],
       "shape_table": true,
@@ -45,6 +89,14 @@
         "The (\\w+) shapes, and what each"
       ],
       "note": "The inventory states this is the whole reachable set at the pin, not a sample.",
+      "arm_configurations": {
+        "virtual-malloc": "virtual-pymalloc",
+        "virtual-nested-pools": "virtual-pymalloc-pools"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+      },
       "where": "capstone/bug-corpora/cpython/pymalloc-repros"
     },
     {
@@ -55,7 +107,7 @@
         "version": "n9.0.1",
         "port": "capstone/ports/ffmpeg/buffer-pool"
       },
-      "cases": 12,
+      "cases": 13,
       "case_schema": "case-json",
       "case_macro": "FFC",
       "required_arms": [
@@ -74,7 +126,7 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "false": 11,
+        "false": 12,
         "true": 1
       },
       "runners": [
@@ -96,13 +148,15 @@
         "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-cheribsd-subobject",
         "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-cheribsd-carve-bounds",
         "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-poisoncap-mode0",
-        "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-poisoncap-mode1"
+        "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-poisoncap-mode1",
+        "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-10-native-differential",
+        "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-10-native-asan"
       ],
       "advisories": [
         "CVE-2011-3895 (case 11's fix says it fixes part of it)"
       ],
       "shape_table": true,
-      "note": "FFmpeg's nested spatial row, which had one case (plane-repros) before this corpus. Every arm measured 2026-10-09: native differential 12/12 two-sided; ASan, CheriBSD, PoisonCap (both modes), Capstone bounds, Capstone + Sublet and both compilers' field bounds 0/12 -- the crossing stays inside one allocation and is not a field; carve bounds 12/12 on Capstone and on CheriBSD, at the labelled probe, every fixed arm FIXED under the same narrowing. Case 11 (vorbis) is live at the n9.0.1 pin by source reading. The candidates and the rejected commits are in docs/ref/ffmpeg-spatial-defect-triage.md (the 2026-10-09 section).",
+      "note": "FFmpeg's nested spatial row, which had one case (plane-repros) before this corpus. Every arm measured 2026-10-09: native differential 12/12 two-sided; ASan, CheriBSD, PoisonCap (both modes), Capstone bounds, Capstone + Sublet and both compilers' field bounds 0/12 -- the crossing stays inside one allocation and is not a field; carve bounds 12/12 on Capstone and on CheriBSD, at the labelled probe, every fixed arm FIXED under the same narrowing. Case 11 (vorbis) is live at the n9.0.1 pin by source reading. The candidates and the rejected commits are in docs/ref/ffmpeg-spatial-defect-triage.md (the 2026-10-09 section). Case 12 (vf_thumbnail's high-bit-depth histogram, ac59fc542f) joined on 2026-10-10 from subobject-repros, where it had been filed as case 09 NOT NESTED although its region is a carve; its native arms are measured (results/2026-10-10-native-*) and every other arm was pre-registered before its run.",
       "where": "capstone/bug-corpora/ffmpeg/carved-repros"
     },
     {
@@ -147,7 +201,9 @@
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-capstone-subobject",
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-cheribsd-subobject",
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode0",
-        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode1"
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode1",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-sublet-full",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-10-native-plain-heap"
       ],
       "advisories": [],
       "shape_table": true,
@@ -304,12 +360,12 @@
     {
       "program": "ffmpeg",
       "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
-      "title": "Upstream FFmpeg spatial defects that cross a bound INSIDE ONE ALLOCATION -- between two members of a struct, or between two slices carved from one block by arithmetic",
+      "title": "Upstream FFmpeg spatial defects that cross a bound INSIDE ONE ALLOCATION -- between two members of a struct",
       "upstream": {
         "version": "n9.0.1",
         "port": "capstone/ports/ffmpeg/buffer-pool"
       },
-      "cases": 10,
+      "cases": 9,
       "case_schema": "case-json",
       "case_macro": "FF2",
       "required_arms": [
@@ -328,7 +384,7 @@
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
         "true": 5,
-        "false": 5
+        "false": 4
       },
       "runners": [
         "capstone/bug-corpora/ffmpeg/subobject-repros/runners/run-native.sh",
@@ -347,7 +403,7 @@
       ],
       "advisories": [],
       "shape_table": true,
-      "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. Cases 0-2 are LIVE at the n9.0.1 pin; cases 3-9 were added 2026-10-06, of which 5, 6 are live and 3, 4, 7, 8, 9 are fix-reversals -- liveness is RECORDED, never required, and requiring it is what kept this cell at three cases. Under this inventory's axis (WHO ALLOCATED THE OBJECT) every row here is NOT NESTED: the object is one allocation and nothing sub-allocated the crossed region. No arm we have catches any of them; the oracle is the upstream fix. The Capstone arms for 3-9 are declared predictions -- cases 0-2 got theirs from probe cases 40-42 of ports/ffmpeg/buffer-pool/security-tests, which is the seam 3-9 will use. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 0 of 10 caught, 22/22 arms, both platform controls firing -- and the reason is recorded as WEAKER than 'the bound is the allocation', because the port's av_malloc is an un-narrowed arena carve.",
+      "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. Cases 0-2 are LIVE at the n9.0.1 pin; cases 3-9 were added 2026-10-06, of which 5, 6 are live and 3, 4, 7, 8, 9 are fix-reversals -- liveness is RECORDED, never required, and requiring it is what kept this cell at three cases. Under this inventory's axis (WHO ALLOCATED THE OBJECT) every row here is NOT NESTED: the object is one allocation and nothing sub-allocated the crossed region. No arm we have catches any of them; the oracle is the upstream fix. The Capstone arms for 3-9 are declared predictions -- cases 0-2 got theirs from probe cases 40-42 of ports/ffmpeg/buffer-pool/security-tests, which is the seam 3-9 will use. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 0 of 10 caught, 22/22 arms, both platform controls firing -- and the reason is recorded as WEAKER than 'the bound is the allocation', because the port's av_malloc is an un-narrowed arena carve. Case 09 (vf_thumbnail, ac59fc542f) moved to ../carved-repros as its case 12 on 2026-10-10: the bound it crosses is a carved slice, not a member, and a carve is a nested allocator under this inventory's axis. Its readings here stay in results/.",
       "inventory": "capstone/docs/ref/ffmpeg-spatial-defect-triage.md",
       "where": "capstone/bug-corpora/ffmpeg/subobject-repros"
     },
@@ -698,8 +754,8 @@
       "case_macro": "PGCLIENT",
       "required_arms": [
         "spatial",
-        "sublet",
-        "cheribsd-revocation"
+        "cheribsd-revocation",
+        "virtual-malloc"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -724,8 +780,16 @@
       "evidence": [
         "capstone/bug-corpora/postgres/c-repros/results/spatial-20261006-160406",
         "capstone/bug-corpora/postgres/c-repros/results/sublet-20261006-161014",
-        "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023"
+        "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023",
+        "capstone/bug-corpora/postgres/c-repros/results/2026-10-10-virtual"
       ],
+      "arm_configurations": {
+        "spatial": "app-level0",
+        "virtual-malloc": "virtual-mallocng"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+      },
       "where": "capstone/bug-corpora/postgres/c-repros"
     },
     {
@@ -745,7 +809,9 @@
         "poisoncap-spatial",
         "poisoncap-protected",
         "native-detect",
-        "cheribsd-revocation"
+        "cheribsd-revocation",
+        "virtual-malloc",
+        "virtual-pg-pools"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -761,10 +827,25 @@
       "inventory": "capstone/docs/ref/postgres-nested-allocator-defects.md",
       "evidence": [
         "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu",
-        "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu-delivery"
+        "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu-delivery",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/20261008-cheribsd",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-10-qemu",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-10-virtual"
       ],
       "advisories": [],
       "note": "The allocator pin is 17.0; the complete single-user backend port is 17.5. 2026-10-05: a cheribsd-revocation arm was added by this project and run on all 8. The corpus had no plain-purecap arm, only the two PoisonCap ones, and PoisonCap is out of scope for the study these results feed; without it these 8 could not be compared with the other PostgreSQL corpora, which all carry that arm. The build path already existed -- cmake/Replay.cmake builds one hosted executable per case under PG_CORPUS_DIR and says 'plain CheriBSD' when PG_POISONCAP is off -- so nothing in the corpus or the port was changed to produce it. One qualification on reading those 8 silences, because it bites elsewhere: the guest's security.cheri.runtime_revocation_every_free_default is 0, so a revocation sweep runs only once a quarantine threshold is crossed, and a short case that frees a handful of objects may never cross one -- a silence can then mean 'no sweep ran yet' rather than 'the mechanism could not see it'. That confound does NOT apply here, and the reason is worth stating: pfree returns a chunk to its context and never returns the block to malloc, so there is no malloc free for a sweep to act on at any threshold. The silence is a property of the nesting, not of when the quarantine happens to flush. Re-pinned from 17.0 to 17.5 on 2026-10-06, and three cases moved to not-live-at-17-5/ because `git merge-base --is-ancestor` shows their upstream fixes are already in REL_17_5: 83ce20d671, 727bc6ac33f6 and 9d5ce4f1a00a. The 17.0 pin was the only one in the PostgreSQL study, and it is what let three already-fixed defects appear in a 17.5 result table. The five that remain all have fixes later than REL_17_5 (2025-05-05): 2025-08-02, 2025-08-30, 2025-10-03, 2025-10-09 and 2026-03-30. COMPARABILITY, recorded 2026-10-06 rather than resolved. This corpus's `spatial` and `sublet` rows were measured on 2026-09-18, before the 17.5 re-pin, and against the memory-contexts replay study's level 0 (ports/postgres/memory-contexts/src/allocators): backing-allocator.c for the unprotected arm and the refusing unsupported-allocators.c for the protected one. The sibling corpora sql-repros and c-repros were measured on 2026-10-06 against the application domain, whose level 0 is ports/musl-capstone/runtime/level0.c with CAPSTONE_LEVEL0_OBJECT_BOUNDS on. The two are different allocators with different bounds behaviour -- the replay one hands out pointers carrying the whole arena's bounds, the application one narrows to the request -- so these five rows may be added to a per-arm total only with that stated. They are not withdrawn: each is a real measurement of its own arm, and the temporal result they carry (sublet 5 of 5 where both others report 0 of 5) does not depend on bounds granularity, because a use-after-free is caught by revocation and not by a bound. Rerunning them against the application domain would make the three corpora directly comparable and has not been done.",
+      "arm_configurations": {
+        "spatial": "replay-arena",
+        "sublet": "replay-sublet",
+        "virtual-malloc": "virtual-mallocng-replay",
+        "virtual-pg-pools": "virtual-mallocng-replay-pools"
+      },
+      "verdict_bundles": {
+        "spatial": "results/2026-10-10-qemu/spatial",
+        "sublet": "results/2026-10-10-qemu/sublet",
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-pg-pools": "results/2026-10-10-virtual/virtual-pg-pools"
+      },
       "where": "capstone/bug-corpora/postgres/mmgr-repros"
     },
     {
@@ -781,7 +862,9 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "cheribsd-revocation"
+        "cheribsd-revocation",
+        "virtual-malloc",
+        "virtual-pg-pools"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -805,12 +888,27 @@
         "capstone/bug-corpora/postgres/sql-repros/results/cheribsd-revocation-20261006-165125",
         "capstone/bug-corpora/postgres/sql-repros/results/spatial-20261006-181644",
         "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261006-181930",
-        "capstone/bug-corpora/postgres/sql-repros/results/cheribsd-revocation-20261006-181644"
+        "capstone/bug-corpora/postgres/sql-repros/results/cheribsd-revocation-20261006-181644",
+        "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261008-080000",
+        "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261008-080219",
+        "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043120",
+        "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043643",
+        "capstone/bug-corpora/postgres/sql-repros/results/2026-10-10-virtual"
       ],
       "runners": [
         "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",
         "capstone/bug-corpora/postgres/sql-repros/shared/run-cheribsd.sh"
       ],
+      "arm_configurations": {
+        "spatial": "app-level0",
+        "sublet": "app-level0-pg-nested-sublet",
+        "virtual-malloc": "virtual-mallocng",
+        "virtual-pg-pools": "virtual-mallocng-pg-pools"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-pg-pools": "results/2026-10-10-virtual/virtual-pg-pools"
+      },
       "where": "capstone/bug-corpora/postgres/sql-repros"
     },
     {
@@ -865,7 +963,9 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "cheribsd-revocation"
+        "cheribsd-revocation",
+        "virtual-malloc",
+        "virtual-nested-pools"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -877,17 +977,27 @@
         "capstone/ports/sqlite/repro322/tags.tsv",
         "capstone/ports/sqlite/cheribsd/build-corpus-cheri.sh",
         "capstone/ports/sqlite/cheribsd/deploy-corpus.sh",
-        "capstone/ports/sqlite/cheribsd/run-corpus-cheri.sh"
+        "capstone/ports/sqlite/cheribsd/run-corpus-cheri.sh",
+        "capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "evidence": [
-        "capstone/bug-corpora/sqlite/engine-repros/results"
+        "capstone/bug-corpora/sqlite/engine-repros/results",
+        "capstone/bug-corpora/sqlite/engine-repros/results/2026-10-10-virtual"
       ],
       "related": [
         "capstone/bug-corpora/sqlite/capi-repros"
       ],
       "shape_table": true,
       "note": "Sibling of capi-repros, not an extension of it: those 19 rows are pointer-lifetime defects in host BINDINGS over the C API, and that corpus records SQLite's engine-internal defects as out of scope. These 43 are engine-internal. Five further R2 fuzz-diff images (fz01, fz03, fz04, fz05, fz07) are collected and carry a host-ASan signature but no derived trigger, so they are not cases here; deriving them needs the 3.43.1 fuzz corpus re-extracted for db-by-sql pairing. Eight more entries in the collection are diagnostics rather than defects -- five baseline probes and three allocator demonstrators -- and stay in the port. The memsys5 boundary is the point: a sub-allocation is the address arena+i*atom, so it inherits the whole arena's bounds, and both a use-after-free and an overflow that stays inside the arena are in bounds for a capability machine. Narrowed to this study's scope on 2026-10-06: five cases moved to not-in-scope/ because they are neither spatial nor temporal -- two non-terminating loops, one unbounded recursion (the exhausted resource is the C stack), one dereference of the literal address 0x3 and one NULL dereference. The last two were not visible in the shape field, which grouped them under \"stale or wild pointer dereference\" together with two genuine out-of-bounds reads; they were separated by reading each case. The same line was drawn for PostgreSQL at the reviewer's request, so one rule now holds across the study. What remains is 26 temporal and 12 spatial. The runners list now names the CheriBSD side too, which it did not: the two Capstone arms are driven by corpus322.sh and the two CheriBSD arms by the scripts under ports/sqlite/cheribsd, and only the first was declared. tags.tsv is listed with them because it is what the runners take their case list from -- `ls out/` answers what was built, not what the corpus contains, and the difference is not always visible. Narrowed again on 2026-10-06, 38 to 33: five cases moved to no-binary-verdict/ because on at least one arm they produced neither detected nor not-detected. Three had a probe showing hits=0 on cheribsd-revocation -- the defect site never executed, so the arm had nothing to miss -- and two hung on a Capstone arm, neither completing nor faulting. Scoring any of them as not-detected would credit an arm with a silent miss on code that did not run. The cost is recorded there and is not nothing: 26_2c7a73eaea was the only case whose damage left the memsys5 arena, so Table 1b's \"leaves the arena\" column now has no measured member.",
+      "arm_configurations": {
+        "virtual-malloc": "virtual-sqlite-memsys5",
+        "virtual-nested-pools": "virtual-sqlite-memsys5-pools"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+      },
       "where": "capstone/bug-corpora/sqlite/engine-repros"
     },
     {
@@ -1858,13 +1968,14 @@
     "wireshark/wmem"
   ],
   "cases_by_corpus": {
+    "capstone/bug-corpora/cpython/allocator-boundary-repros": 32,
     "capstone/bug-corpora/cpython/pymalloc-repros": 20,
-    "capstone/bug-corpora/ffmpeg/carved-repros": 12,
+    "capstone/bug-corpora/ffmpeg/carved-repros": 13,
     "capstone/bug-corpora/ffmpeg/plain-heap-repros": 25,
     "capstone/bug-corpora/ffmpeg/plain-temporal-repros": 13,
     "capstone/bug-corpora/ffmpeg/plane-repros": 1,
     "capstone/bug-corpora/ffmpeg/pool-repros": 4,
-    "capstone/bug-corpora/ffmpeg/subobject-repros": 10,
+    "capstone/bug-corpora/ffmpeg/subobject-repros": 9,
     "capstone/bug-corpora/httpd/apr-pool-repros": 1,
     "capstone/bug-corpora/httpd/bucket-repros": 8,
     "capstone/bug-corpora/memcached/allocator-repros": 9,
@@ -1886,10 +1997,10 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 264,
+  "cases_here": 296,
   "cases_xlang": 30,
-  "cases_total": 294,
-  "live_true": 117,
+  "cases_total": 326,
+  "live_true": 149,
   "live_false": 119,
   "live_not": 28,
   "advisories_total": 22,
@@ -1954,6 +2065,8 @@
     ]
   },
   "gaps": [
+    "`capstone/bug-corpora/cpython/allocator-boundary-repros` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/cpython/allocator-boundary-repros` commits no result bundle of its own.",
     "`capstone/bug-corpora/ffmpeg/plain-temporal-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.",
     "`capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.",
@@ -1978,6 +2091,7 @@
     "`capstone/ports/micropython` is a complete application with no corpus.",
     "`capstone/ports/postgres/app` is a complete application with no corpus.",
     "`capstone/ports/sqlite/app` is a complete application with no corpus.",
+    "`capstone/bug-corpora/cpython/allocator-boundary-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/ffmpeg/carved-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/ffmpeg/plain-temporal-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/memcached/plain-temporal-repros` is not referenced by any port.json.",

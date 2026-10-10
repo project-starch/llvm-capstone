@@ -15,10 +15,26 @@
       "oracle": "completes"
     },
     "sublet": {
-      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 15 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "MISSED",
+      "verdict_from": "results/matrix.tsv case 15 cheribsd-revocation: not-detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
     }
   },
   "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=7, witnesses=1)"

@@ -13,7 +13,10 @@
   "distinguishing": "the only case whose fix is on the store side (copy into the column) rather than on the allocation's scope; introduced and fixed within one release by a mass conversion that mistook a heap string for a literal",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "complete",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port/matrix.tsv (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "sublet": {
       "oracle": "fault at the labelled read probe",
@@ -21,7 +24,10 @@
     },
     "sublet-chunks": {
       "oracle": "fault at the labelled read probe: the packet pool is BLOCK_FAST, which the chunk port leaves unchanged",
-      "cause": 24
+      "cause": 24,
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port/matrix.tsv (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -42,15 +48,17 @@
     "native-detect": {
       "status": "measured",
       "verdict": "NOT CAUGHT",
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -g -O0; wmem and the port built with the same flags). Positive controls in the same run: `asan-control past 402653184` -> heap-buffer-overflow; `asan-control uaf 402653184` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (b64cd18b85d0); the arm was previously 'not written'."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -g -O0; wmem and the port built with the same flags). Positive controls in the same run: `asan-control past 402653184` -> heap-buffer-overflow; `asan-control uaf 402653184` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (b64cd18b85d0); the arm was previously 'not written'.",
+      "measured": "2026-10-10, results/2026-10-10-native-asan-libc/run-asan.txt: SILENT, the defect reproduced; wmem built with WM_LIBC_SYSTEM=ON (g_malloc/g_free are the host's malloc/free); wmem's own control 90 reported heap-use-after-free at wm_probe in the same run. The earlier reading (2026-10-09) ran the hosted bump arena, which could read nothing else."
     },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
-      "oracle": "the sequence completes: the stale storage is wmem-managed, and a scope reset or an individual recycler free returns it inside a block that malloc still owns, so nothing reaches free() and the quarantine the revoker sweeps never holds it MEASURED 2026-10-07 WITH A REVOCATION CONTROL, results/20261007-cheribsd-revocation-control/: the sequence COMPLETES, NOT CAUGHT. 21 of 21 arms passed, runner exit 0, mode 0 (the port's unprotected baseline, which is the arm that asks what the shipping temporal mechanism does). The control FAULTED in the same boot -- tag_after_sweep=0 reissued=1, then SIGPROT si_code 2 at addr=pc=0x101dc0, equal to the probe address supervise resolved from the ELF independently -- so the revoker is shown to sweep and this completion means 'the mechanism is active and did not fire'. WHY A SECOND RUN: the 20260921-cheribsd bundle measured cases 0-12 at revocation on but contained NO revocation control, only a bounds control and a PoisonCap differential, neither of which shows the revoker sweeps; and it ran on image 3571a6d2..., a different vehicle. This run uses the image byte-identical to the ffmpeg and memcached readings, so the three programs' columns are comparable. The earlier bundle is kept for its PoisonCap arms.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-libc/: **NOT CAUGHT** on stock wmem with the system allocator as CheriBSD's libc (WM_LIBC_SYSTEM, WM_CHUNKS=OFF), revocation on: the buggy arm's reoccupation assertion held -- the stale chunk was REISSUED inside the block wmem kept, so libc's quarantine never saw it (missed, reused); fixed arm VERDICT FIXED. In the same boot control 90 (a jumbo g_free'd by the reset) was HELD by the quarantine and the revocation control faulted at its labelled load. The 2026-10-07 reading of this arm ran the hosted bump arena with the chunk port compiled in, where nothing reached free().",
       "control": "the PoisonCap mode-1 arm in the same bundle and the same boots faults 13/13 with SIGPROT at the labelled read probe, so the platform CAN be made to catch these cases; the completion here is therefore a measured miss and not an absent integration",
       "guest_default": "preserved",
-      "measured": "2026-09-21, results/20260921-cheribsd/ (matrix.tsv, arm=cheribsd): expected complete, passed True, exit 0. 0 of 13 caught across the corpus",
-      "status": "measured"
+      "measured": "2026-10-10, results/2026-10-10-cheribsd-libc/README.md, rows 04-*-buggy and -fixed",
+      "status": "measured",
+      "verdict": "NOT CAUGHT"
     },
     "native-fix-differential": {
       "status": "measured",

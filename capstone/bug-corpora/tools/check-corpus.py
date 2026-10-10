@@ -39,7 +39,8 @@ DECL_OPTIONAL = {"upstream", "expect_live_in_pin", "live_in_pin_note", "case_mac
                  "case_glob", "case_exclude", "case_number_base", "case_table",
                  "case_dir_column", "case_doc", "required_arms", "arm_keys",
                  "expect_provenance", "runners", "checker", "inventory", "evidence",
-                 "advisories", "related", "note", "shape_table", "shape_prose"}
+                 "advisories", "related", "note", "shape_table", "shape_prose",
+                 "arm_configurations", "verdict_bundles"}
 SCHEMAS = {"case-json", "sqlite-row", "script-trigger", "xlang-row"}
 STATUSES = {"planned", "built", "measured", "triaged"}
 PATH_FIELDS = ("runners", "checker", "inventory", "evidence", "related")
@@ -69,7 +70,12 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
-                 "citation_constraint"}
+                 "citation_constraint", "fault_sites", "fault_sites_why", "duplicate_of"}
+# `duplicate_of` names a sibling case directory that records the SAME upstream defect -- e.g. a
+# release-branch backport of the fix another case already carries (`git patch-id` equal). The case
+# stays in the corpus, so its numbering and every record that cites it stay valid, and
+# tools/catch-tables.py leaves it out of every table. The checker requires the sibling to exist and
+# to be a real, non-duplicate case of the same corpus.
 # `citation_constraint` records that a case's upstream commit cannot be quoted
 # freely -- in practice that its SUBJECT names a person, so the fix may be cited
 # by HASH AND PATH ONLY. This tree's naming rule is absolute and applies to
@@ -131,6 +137,14 @@ ARM_ORACLES = {
     "sublet-malloc": {"oracle"},
     "sublet-full": {"oracle"},
     "sublet-carve": {"oracle"},
+    "sublet-pymalloc": {"oracle"},
+    # The virtual Capstone profile (capstone/runtime/virtual): local mallocng with capability
+    # lifetimes, and PostgreSQL's contexts on Sublet context pools over it. tools/arms.json says
+    # what each is; they are not the physical Sublet heap.
+    "virtual-malloc": {"oracle"},
+    "virtual-pg-pools": {"oracle"},
+    # A nested allocator's own pool port on the virtual profile, for ports other than PostgreSQL.
+    "virtual-nested-pools": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),
@@ -294,6 +308,18 @@ def check_cases(corpus, decl, dirs, problems):
         if "shape" in required and not str(case.get("shape", "")).strip():
             problems.append(f"{where}: shape is empty")
 
+        # A declared fault site lets a fault outside the labelled probe count as the defect's, so
+        # it has to say why that function is the defect's access -- from the source or an earlier
+        # independent run, never from the fault it is about to excuse.
+        if "fault_sites" in case:
+            sites = case["fault_sites"]
+            if not (isinstance(sites, list) and sites and all(isinstance(x, str) and x for x in sites)):
+                problems.append(f"{where}: fault_sites must be a non-empty list of function names")
+            if not str(case.get("fault_sites_why", "")).strip():
+                problems.append(f"{where}: fault_sites without fault_sites_why")
+        elif "fault_sites_why" in case:
+            problems.append(f"{where}: fault_sites_why without fault_sites")
+
         # live_in_pin is the field the index reports per version, so its
         # absence must be a corpus-wide decision rather than a per-case
         # oversight: a corpus either records it for every case or for none.
@@ -343,6 +369,13 @@ def check_cases(corpus, decl, dirs, problems):
                 for key in sorted(arm_keys[name] - set(arm)):
                     problems.append(f"{where}: arm {name!r} lacks {key!r}")
 
+        dup = case.get("duplicate_of")
+        if dup is not None:
+            sib = path.parent / str(dup)
+            if not (isinstance(dup, str) and sib.is_dir() and (sib / "case.json").is_file()):
+                problems.append(f"{where}: duplicate_of names {dup!r}, not a sibling case directory")
+            elif json.loads((sib / "case.json").read_text()).get("duplicate_of"):
+                problems.append(f"{where}: duplicate_of names {dup!r}, which is itself a duplicate")
         if (path / "PROVENANCE.md").is_file():
             provenance += 1
         elif "expect_provenance" not in decl:
@@ -421,6 +454,31 @@ def check_one(manifest):
                         f"{sorted(SCHEMAS)}")
     if decl["status"] not in STATUSES:
         problems.append(f"status {decl['status']!r} is not one of {sorted(STATUSES)}")
+    # Which configuration in tools/arms.json each arm name of this corpus measures. The name is a
+    # label; two corpora's `spatial` need not be the same thing, and the configuration is what
+    # tools/verdicts.py judges a run against and what a total may add up.
+    # A corpus whose verdicts are derived from its bundles is held to them: every case.json verdict
+    # and results/verdicts.tsv must be what tools/derive-verdicts.py writes, re-judged now.
+    if "verdict_bundles" in decl:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("derive_verdicts", TOOLS / "derive-verdicts.py")
+        derive = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(derive)
+        by_case, tsv, found = derive.derive(corpus)
+        problems += [f"verdicts: {line}" for line in found]
+        if not found:
+            problems += [f"verdicts: {path} is not what derive-verdicts.py writes"
+                         for path in derive.apply(corpus, by_case, write=False)]
+            table = corpus / "results/verdicts.tsv"
+            if not table.is_file() or table.read_text() != tsv:
+                problems.append("verdicts: results/verdicts.tsv is not what derive-verdicts.py writes")
+    if "arm_configurations" in decl:
+        known = json.loads((TOOLS / "arms.json").read_text())["arms"]
+        for arm, config in sorted(decl["arm_configurations"].items()):
+            if config not in known:
+                problems.append(f"arm_configurations: {arm} -> {config!r} is not in tools/arms.json")
+            if arm not in decl.get("required_arms", []):
+                problems.append(f"arm_configurations: {arm!r} is not one of required_arms")
     if not isinstance(decl["cases"], int) or decl["cases"] < 0:
         problems.append("cases is not a non-negative integer")
     if not isinstance(decl["live_in_pin_recorded"], bool):
@@ -469,6 +527,8 @@ def self_test():
         # gate that spots it.
         ("a misspelled arm hidden behind 'not written'",
          lambda c: c["arms"].update(spatail={"status": "not written"})),
+        # A duplicate leaves every table, so one naming nothing would silently drop a case.
+        ("duplicate_of naming no sibling case", lambda c: c.update(duplicate_of="99_no_such_case")),
     )
     for label, mutate in corruptions:
         with tempfile.TemporaryDirectory() as tmp:

@@ -10,6 +10,14 @@ backend changes are unnecessary. See the [qualification and commands](../design/
 This is a task-branch result, not a merged baseline or an allocator-port,
 performance or RTL claim.
 
+## 2026-10-10 — `fpga-testing-dev` rebuilt as one linear history (RTL lane)
+
+- capstone-ariane's default branch is now 44 commits above the fork `e1b3db6ba`, one per logical change, tip `5382266b8`;
+  its RTL is byte-identical to `776d9d859` (the current bitstream). Old tip `0bf09b1d6` = tag
+  `backup/fpga-testing-dev-2026-10-10`. Lane branches, the parent's submodule pointer and R-51/R-52's branches are
+  untouched. Method, table of hashes and the carried arms' readings:
+  `docs/history/10-10-2026_08-40-00_fpga-testing-dev-rebuilt-linear.md`.
+
 ## 2026-10-08 — mallocng executes locally in virtual Capstone
 
 Branch `virtual-musl-local` replaces the virtual buddy heap with Capstone-compiled

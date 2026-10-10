@@ -87,7 +87,8 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
-`allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`. Optional means
+`allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `fault_sites`,
+`fault_sites_why`, `duplicate_of`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -103,6 +104,11 @@ figure is **60%**, so publishing the script's number would have been wrong by 16
 points — the unanswered probe was reading as "not nested". A tally that a
 headline depends on should come from a field, not from a substring match over
 sentences that are free to be reworded.
+
+`duplicate_of` names a sibling case directory recording the SAME upstream defect -- a backport of a fix another case
+already carries, equal by `git patch-id`. The case is kept, so numbering and citations stay valid; the checker
+requires the sibling to exist and not to be a duplicate itself, and `tools/catch-tables.py` leaves the case out of
+every table. First use: ffmpeg/plain-heap-repros 13 (2026-10-10 audit).
 
 `citation_constraint` records that a case's upstream commit cannot be quoted freely — in practice
 that its **subject line names a person**, so the fix may be cited **by hash and path only**. The
@@ -123,6 +129,12 @@ A field that is meaningful in exactly one schema belongs in that schema's
 required list, not here. `trigger` is the worked example: it is required for
 `script-trigger`, and keeping it out of the optional set is what lets the
 unknown-field check still catch a stray `trigger` on a `case-json` case.
+
+`fault_sites` names the functions a fault may land in and still be this defect's, for a case whose
+stale access has no labelled probe -- a double free faults inside the manager, a copy routine faults
+inside `memcpy`. It needs `fault_sites_why`, and the reason must come from the source or from an
+earlier independent run, never from the fault it is about to admit: a site chosen after seeing where
+a run faulted would turn every crash into a catch.
 
 ## Arms
 
@@ -159,6 +171,11 @@ passes silently.
 | `sublet-malloc` | Capstone domain | the nested corpora: Sublet ONLY as the system allocator, the program's nested allocator stock -- wmem as released (`WM_VARIANT=reference`, every `g_malloc` a region, every `g_free` a revoke; positive control `wmem-repros/controls/sublet-malloc`), memcached's ledger in mode 2 (a chunk carries its page's bound, nothing revoked until a page or object is given back), FFmpeg's pools unported on the Sublet heap (`poolstock`). Column 2 of the per-bug table |
 | `sublet-full` | Capstone domain | a plain case built in the program's whole Sublet configuration: the Sublet heap plus the program's nested-allocator port linked and initialised (tshark's is `sublet-chunks`). The bug's path never enters the nested allocator, so this equals `sublet` by construction; the run confirms no interaction. Column 3 for plain cases |
 | `sublet-carve` | Capstone domain | the carved corpus: `-DFFC_SUBLET_CARVE` takes the block LINEAR from the Sublet heap and splits it into one region per carve, each issued as a bounded alias (a re-carve revokes the old aliases); a temporal carve control must fault in the same boot. Column 3 for carved cases |
+| `sublet-svheads` | Capstone domain | the same for Perl: `sysalloc-sublet` plus Perl's SV head arena |
+| `sublet-pymalloc` | Capstone domain | the same for CPython: `sysalloc-sublet` plus pymalloc's pools and arenas, via patch 0014. The difference between this arm and `sysalloc-sublet` is what sublets the nested allocator rather than only the allocation under it, which is the whole comparison a nested/non-nested corpus exists to make |
+| `virtual-malloc` | virtual Capstone (`capstone/runtime/virtual`) | the case on the virtual profile, its nested allocator stock: the application runs under `capstone-vexec` with musl mallocng compiled for Capstone and run locally, which bounds each object exactly and retires its lifetime on free. Configuration `virtual-mallocng` in `tools/arms.json`; not the physical Sublet heap |
+| `virtual-pg-pools` | virtual Capstone | `virtual-malloc` with PostgreSQL's memory contexts on the Sublet context pools, built for the virtual profile (`build-virtual.sh postgres`, `PGSU_NESTED=sublet`). Configuration `virtual-mallocng-pg-pools` |
+| `virtual-nested-pools` | virtual Capstone | `virtual-malloc` with the program's nested allocator on its own pool port (SQLite: memsys5 on `sublet-3220000-memsys5.patch`, its pool lent linear by the virtual heap). The configuration in `tools/arms.json` names which |
 
 The four above are the glossary's system-allocator arms
 (`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the
@@ -196,6 +213,32 @@ allocator refusing the request.
    `matrix.tsv`, an `inputs.json` and a README. Raw serial or console logs are
    not committed.
 
+## Verdicts: one judge, one original
+
+A corpus that declares `arm_configurations` and `verdict_bundles` (PostgreSQL's three, so far) keeps
+its results under one contract, implemented in `tools/verdicts.py` and tested in
+`tools/test_verdicts.py`:
+
+* **A runner reports, it does not decide.** Each run of a case on an arm becomes an Observation:
+  did the case reach the marker before its defective access, did it complete, where did it fault,
+  and what ties the fault to the defect (`probe`, a declared `fault_sites` function, or a paired
+  `control` run). The verdict comes from the shared judge.
+* **Three verdicts.** `CAUGHT` needs reached, a fault, and an attribution. `MISSED` needs reached,
+  completed, and the configuration's controls behaving in the same invocation. Anything else is
+  `NO-READING` with one closed reason (`infra`, `build-failed`, `not-reached`, `setup-fault`,
+  `control-failed`, `unattributed`, `out-of-denominator`, `inconclusive`) and counts as neither.
+* **An arm name is a label; the configuration is the thing measured.** `tools/arms.json` describes
+  each configuration and the controls a run of it must show -- a use-after-free control that
+  COMPLETES is what shows an arm does not revoke. `arm_configurations` maps the corpus's arm names
+  onto it, so two corpora whose `spatial` differ cannot be summed as one.
+* **The bundle is the only original.** `results/<stamp>/<arm>/` holds `verdicts.jsonl` (each
+  Observation with its verdict) and `inputs.json` (configuration, and the compiler, QEMU, firmware,
+  kernel and runner hashes, each said or said to be `unrecorded`). `verdict_bundles` names the
+  current bundle per arm; `tools/derive-verdicts.py` writes each `case.json` arm's `verdict`,
+  `verdict_reason`, `verdict_note`, `verdict_from` and `results/verdicts.tsv` from them, and
+  `check-corpus.py` fails when either differs from what it would write -- re-judging every stored
+  Observation, so a change to the judge or to `arms.json` cannot leave an old verdict standing.
+
 ## The corpus declaration: `corpus.json`
 
 One per corpus, at its root. It is what makes a corpus findable, countable and
@@ -217,6 +260,8 @@ checkable from outside, and it is the only input to the generated index.
 | `runners`, `checker`, `inventory`, `evidence`, `related` | repository-root-relative paths. Every one must exist |
 | `advisories` | one entry per advisory, with its aliases in the same string, so counting entries counts advisories rather than identifiers |
 | `shape_table`, `shape_prose` | whether the README carries a shape table that must partition the cases, and any prose claim about its size |
+| `arm_configurations` | arm name -> configuration in `tools/arms.json`; see "Verdicts" above |
+| `verdict_bundles` | arm name -> the current `tools/verdicts.py` bundle, relative to the corpus |
 | `note` | anything a reader needs that no field above holds |
 
 **`live_in_pin` is three-valued.** `true` and `false` both need a `live_proof`

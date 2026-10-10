@@ -1,8 +1,8 @@
 # PostgreSQL memory-context defects
 
-Eight upstream use-after-free and double-free defects in PostgreSQL's memory
-managers, reduced to programs that run against PostgreSQL's **own** allocator:
-`aset.c`, `mcxt.c` and `slab.c` from the pinned 17.0 release, compiled
+Five upstream use-after-free and double-free defects in PostgreSQL's memory
+managers, all live at 17.5, reduced to programs that run against PostgreSQL's
+**own** allocator: `aset.c`, `mcxt.c` and `slab.c` from the pinned 17.0 release, compiled
 unmodified but for the capability-ABI and Sublet patches the port applies. The
 consumers are reduced, the allocator is not.
 
@@ -20,12 +20,15 @@ also report results beside it.
 |---|---|---|---|---|
 | 0 | `1f5b6a5e5d` | double free through a stale array entry | aset | **yes** |
 | 1 | `3549ffb6af` | stale pointer to a recreated object | aset | **yes** |
-| 2 | `83ce20d671` | stale pointer to a recreated object | aset | **open** |
-| 3 | `ed394c4bdf` | alias freed through a sibling | aset | **yes** |
-| 4 | `727bc6ac33f6` | alias freed through a sibling | aset | **yes** |
-| 5 | `9d5ce4f1a00a` | stale pointer into a reset context | aset | **yes** |
-| 6 | `a61592253e` | stale pointer into a deleted ancestor | aset | **yes** |
-| 7 | `9e0b4b1ab5` | same-address reuse from a fixed-size free list | slab | **yes** |
+| 2 | `ed394c4bdf` | alias freed through a sibling | aset | **yes** |
+| 3 | `a61592253e` | stale pointer into a deleted ancestor | aset | **yes** |
+| 4 | `9e0b4b1ab5` | same-address reuse from a fixed-size free list | slab | **yes** |
+
+Three more (`83ce20d671`, `727bc6ac33f6`, `9d5ce4f1a00a`) are live at 17.0 but
+already fixed in 17.5, so they are parked in
+[`not-live-at-17-5/`](not-live-at-17-5/README.md) with their results.
+`shared/run-defects.py` reads the case list from these directories, so it
+labels and numbers runs the same way this table does.
 
 ## Shapes
 
@@ -105,7 +108,13 @@ find:
 
     # pexpect is not in the system interpreter; the platform venv has it
     /tmp/capstone/venv/bin/python3 shared/run-defects.py OUT \
-      --domain-build BUILD_DOMAIN --linux-build BUILD_LINUX
+      --domain-build BUILD_DOMAIN --controls-build BUILD_CONTROLS --linux-build BUILD_LINUX
+
+`BUILD_CONTROLS` is the same port configured with `-DPG_CORPUS_DIR=<this corpus>/controls`
+([controls/README.md](controls/README.md)). The runner reports one Observation per boot and the
+shared judge (`tools/verdicts.py`) decides; it writes `OUT/<arm>/` bundles, and
+`tools/derive-verdicts.py` turns the bundles named in `corpus.json` `verdict_bundles` into the
+`case.json` verdicts and `results/verdicts.tsv` (SCHEMA.md, "Verdicts").
 
     export CAPSTONE_QEMU_BINARY=<tree>/capstone/capstone-qemu/build/qemu-system-riscv64
     export CAPSTONE_LLVM_BUILD_DIR=<tree>/llvm/build-rel      # NOT cmake-build-debug
@@ -124,6 +133,10 @@ patch applied the same command pairs all eight. Any result taken that way is
 "PoisonCap with that fix" and must say so.
 
 ## What the four systems do, measured 2026-09-21
+
+These measurements, and every other mention of "eight" cases in this file,
+predate the 17.5 re-pin. They cover the five cases above plus the three now
+parked, under the old numbering 0-7.
 
 | system | what it acts on | caught |
 |---|---|:--:|
@@ -161,10 +174,12 @@ Both protected systems land in that same function, established independently.
 
 ## What is NOT established
 
-- **The Capstone `spatial` and `sublet` arms have not been re-run** since the
-  corpus was split into one program per case. The build for them is written
-  but has not been configured on a host with a built Capstone toolchain, so
-  two of the four arms are empty for these eight cases.
+- **The Capstone `spatial` and `sublet` arms are re-run for the five live
+  cases** (`results/2026-10-10-qemu`, one program per case, controls in the
+  same invocation): spatial MISSED 5/5, sublet CAUGHT 5/5, four at the
+  labelled probe and case 0 in its declared `GetMemoryChunkMethodID`. They
+  ran on the compiler and QEMU of the 2026-09-18 run (sha256 `5003f54c...`,
+  `ce93cb32...`), not on dev's current pins; `inputs.json` records both.
 - **`native-detect` for six of the eight.** Cases 3 and 7 have a `before.c`;
   the others do not.
 - **No cost claim.** The counters in each run (`sweeps`, `poison_bytes`,

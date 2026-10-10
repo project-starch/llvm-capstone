@@ -17,7 +17,9 @@
     },
     "native-detect": {
       "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-plain-heap/run-native.txt: `06_212c3820c7bb_key_hash_filter_tag_length_underflow plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_read_probe 1:mch_case_run at_probe=1`"
     },
     "spatial": {
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at mch_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc020f2d8, address=0xc0252260.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 01f07c71e945ea16. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
@@ -39,7 +41,8 @@
       "status": "measured",
       "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
       "verdict": "CAUGHT",
-      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)",
+      "attribution": "2026-10-10, by llvm-nm on this run's own case binary (identified by sha256), results/2026-10-08-cheribsd/attribution-2026-10-10.txt: the fault pc lies at mch_read_probe+0x10, inside this READ defect's labelled probe, and outside mch_write_probe. Any 'mch_write_probe' in the text above is the supervisor's built-in expectation -- runners/run-cheribsd.sh compiled it for the write probe for every case until 2026-10-10 -- not where the fault is. Positive control: write defects 01 and 05 in the same runs fault inside mch_write_probe."
     },
     "poisoncap-protected": {
       "mode": 1,
@@ -49,14 +52,16 @@
       "status": "measured",
       "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault.",
       "verdict": "CAUGHT",
-      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)",
+      "attribution": "2026-10-10, by llvm-nm on this run's own case binary (identified by sha256), results/2026-10-08-cheribsd/attribution-2026-10-10.txt: the fault pc lies at mch_read_probe+0x10, inside this READ defect's labelled probe, and outside mch_write_probe. Any 'mch_write_probe' in the text above is the supervisor's built-in expectation -- runners/run-cheribsd.sh compiled it for the write probe for every case until 2026-10-10 -- not where the fault is. Positive control: write defects 01 and 05 in the same runs fault inside mch_write_probe."
     },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
       "oracle": "MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **CAUGHT.** signal=34, si_code=1 (the BOUNDS code), fault at 0x1025ac, with supervise resolving `expect mch_write_probe 0x102578` from the ELF independently of the run -- the fault lies inside the probe's extent, the offset being the -O0 frame setup, and the RANGE is the attribution criterion rather than equality with the symbol address. The crossing leaves the allocator's USABLE size, which is what malloc bounds the capability to, so there is no size-class slack for it to hide in. tools/size-class-audit.py predicted this reading from the measured request size alone, and the two agree.",
       "status": "measured",
-      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot."
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot.",
+      "attribution": "2026-10-10, by llvm-nm on this run's own case binary (identified by sha256), results/2026-10-08-cheribsd/attribution-2026-10-10.txt: the fault pc lies at mch_read_probe+0x10, inside this READ defect's labelled probe, and outside mch_write_probe. Any 'mch_write_probe' in the text above is the supervisor's built-in expectation -- runners/run-cheribsd.sh compiled it for the write probe for every case until 2026-10-10 -- not where the fault is. Positive control: write defects 01 and 05 in the same runs fault inside mch_write_probe."
     },
     "capstone-subobject": {
       "status": "measured",
@@ -68,7 +73,8 @@
       "status": "measured",
       "verdict": "CAUGHT",
       "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, every case built with -Xclang -cheri-bounds=subobject-safe (booted on the second host)",
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x1025ec pc=0x1025ec; fault pc 0x1025ec OUTSIDE mch_write_probe [0x1025b8, 0x1025dc). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162). Predicted before the run (886abf4cc336)."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x1025ec pc=0x1025ec; fault pc 0x1025ec OUTSIDE mch_write_probe [0x1025b8, 0x1025dc). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162). Predicted before the run (886abf4cc336).",
+      "attribution": "2026-10-10, by llvm-nm on this run's own case binary (identified by sha256), results/2026-10-08-cheribsd/attribution-2026-10-10.txt: the fault pc lies at mch_read_probe+0x10, inside this READ defect's labelled probe, and outside mch_write_probe. Any 'mch_write_probe' in the text above is the supervisor's built-in expectation -- runners/run-cheribsd.sh compiled it for the write probe for every case until 2026-10-10 -- not where the fault is. Positive control: write defects 01 and 05 in the same runs fault inside mch_write_probe."
     },
     "sublet-full": {
       "target": "Capstone domain, the program's whole Sublet configuration: the Sublet heap plus the slab/cache Sublet port (the allocators port's ledger, mode 1, 64 MiB lent payload), one page carved and one chunk issued and released before main (tools/full-config/memcached.c)",

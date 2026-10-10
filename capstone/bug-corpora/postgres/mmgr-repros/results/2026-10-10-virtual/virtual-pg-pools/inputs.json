@@ -1,0 +1,26 @@
+{
+  "arm": "virtual-pg-pools",
+  "cases": 5,
+  "configuration": "virtual-mallocng-replay-pools",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/mmgr-repros",
+  "platform": {
+    "compiler": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+    "exact_bounds": true,
+    "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "job_helper": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+    "judge": "de4f38a543b34b24dba0f1a5d9d503aec7b5f61e0743f15013eb1cb58176f3ef",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "launcher": "5240ec2c6b04c30b5d4c73710a0cfca0745e13b30cf4b11146785791474b457c",
+    "module": "2394a455036735288a119887d4eca24c1ae9c9ab2b679da5591ae5ba935932fd",
+    "profile": "virtual",
+    "qemu": "c676fd490087e3f4684b63b19c60c2751925d6b55a7422975931d9a8d83bc849",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "runner": "9b195b3f993337523eb5714f5b94de7d83a619473850e79f192a526ce63bfe31",
+    "ssh_server": "900e4b0526538c4af35825f33ba192acb5f2f9b7dc49938039b5b8084db29882"
+  },
+  "predicted": "CAUGHT",
+  "tally": {
+    "CAUGHT": 5
+  }
+}

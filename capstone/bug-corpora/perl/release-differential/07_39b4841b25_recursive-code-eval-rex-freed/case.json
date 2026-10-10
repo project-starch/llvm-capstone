@@ -13,13 +13,19 @@
    "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
   },
   "sysalloc-sublet": {
-   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
+   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))",
+   "verdict": "CAUGHT",
+   "verdict_from": "results/20261006/matrix.tsv 39b4841b25 sysalloc-sublet: fault cause 24"
   },
   "sublet-svheads": {
-   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
+   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))",
+   "verdict": "CAUGHT",
+   "verdict_from": "results/20261006/matrix.tsv 39b4841b25 sublet-svheads: fault cause 24"
   },
   "cheribsd-revocation": {
-   "oracle": "SIGPROT: the defence reports; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
+   "oracle": "SIGPROT: the defence reports; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes",
+   "verdict": "CAUGHT",
+   "verdict_from": "results/20261006-cheribsd/matrix.tsv 39b4841b25: revocation_on=SIGPROT, revocation_off=clean"
   }
  },
  "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",

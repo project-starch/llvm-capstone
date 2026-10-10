@@ -84,7 +84,13 @@ MC_CASE(8) {
   CHECK((uintptr_t)ptr <= (uintptr_t)successor + READ_BUFFER_SIZE, 786);
 
   o->unit_reissued = 0;                /* nothing is freed or reissued here */
-  held = (unsigned char *)rcurr + rbytes;  /* set while live, as the seam requires */
+  /* The probe reads the first byte past the object on the buggy arm, and on the
+   * fixed arm the byte the bounded scan stopped at. Until 2026-10-10 both arms
+   * probed rcurr + rbytes, so the FIXED arm made the out-of-bounds read itself;
+   * the arena backing hid it (the next object follows), and a per-object malloc
+   * -- upstream's own backing, and ASan's -- reported it as heap-buffer-overflow. */
+  held = fixed ? (unsigned char *)ptr
+               : (unsigned char *)rcurr + rbytes;  /* set while live, as the seam requires */
   mark(8); /* LAST thing before the access: its presence is the setup's evidence */
   (void)read_probe((const volatile unsigned char *)held);
 

@@ -19,14 +19,29 @@
     "sublet": {
       "oracle": "the mechanism reports: capability fault: capstone-exec: domain fault cause=7 pc=0xc0202414 address=0xc9dd0650 entry=0xc0200e4c code=0xc0200000-0xc52f0000 last=0x4f preparing=0x4f sha256=be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268 image=/mnt/host/applications/postgres-be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268.dom",
       "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
-      "verdict": "detected",
-      "evidence": "capability fault: capstone-exec: domain fault cause=7 pc=0xc0202414 address=0xc9dd0650 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x4f preparing=0x4f sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom"
+      "verdict": "CAUGHT",
+      "evidence": "capability fault: capstone-exec: domain fault cause=7 pc=0xc0202414 address=0xc9dd0650 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x4f preparing=0x4f sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom",
+      "negative_control": "HELD. control.sql is the same statement with a 32000-character StartSel against the trigger's 32768, so nothing overflows the int16, and it completes on the same image (results/sublet-control-20261010-043643). This matters here because this case and case 03 fault at the SAME instruction on this arm, and case 03's control faults -- so the shared instruction alone says nothing, and the controls are what tell the two apart.",
+      "verdict_from": "results/matrix.tsv sublet: detected"
     },
     "cheribsd-revocation": {
       "oracle": "SIGPROT on the plain purecap build -- CHERI-DETECTED (2026-10-04). SIGPROT(34) on BOTH the plain and the cassert purecap build. ~32 KB overflow leaves the malloc block, so the capability bound is crossed.",
-      "verdict": "detected",
+      "verdict": "CAUGHT",
       "evidence": "SIGPROT(34) -- a capability violation",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict_from": "results/matrix.tsv cheribsd-revocation: detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3fa3001c7c in memcpy; by control: control.sql (the statement below the threshold) completed on this image",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-pg-pools": {
+      "oracle": "virtual profile with PostgreSQL's contexts on Sublet context pools (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f88001ce8 in memcpy; by control: control.sql (the statement below the threshold) completed on this image",
+      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
     }
   },
   "status": "measured on all three arms 2026-10-06: spatial=detected, sublet=detected, cheribsd-revocation=detected",

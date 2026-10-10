@@ -8,6 +8,34 @@ small adapter to derive/revoke-child and requalify its negative cases before
 measuring workloads. No allocator capacity/performance improvement is yet
 claimed by this implementation.
 
+2026-10-10 — **The next bitstream is approved and in synthesis: `next-bitstream-r51-r52` = capstone-ariane
+`0568f93a9` (776d9d859 + R-52 + R-51). The lead's word: "yes, go, approve synth".**
+
+Content: R-52 (546807884, the FPR clobber predicate un-negated; every hard-float native result on silicon was stale) and
+R-51 (ef8900e2d + f4e4d6051, RETURN parks the domain's PC capability, so a resumed domain is bounds-checked). The board
+lane's cherry-pick d15a836fa has the identical tree. Validation on that tree, all on apollo: lint gate PASS at the
+committed baseline with the negative control firing; 95-test sweep vs 776d9d859 90/90 identical incl. cycles; the 79 arms
+shared by both testlist_sup lists 76/76 identical (3 without a baseline log); 25 directed arms PASS by tohost (12 rv64ud,
+s18 x2, r51 x2, the sup ladder); the six stcsb variants read their reference resume counts.
+
+Predictions on record with the synth and board lanes before the build: routed WNS inside −13.335..−5.855; loop
+membership by stem unchanged; LUTLP-1 0; R-52 flips one polarity term per scoreboard entry (an earlier "a few hundred LUTs
+restored" was WITHDRAWN: the pre-fix line was a live mirror of the integer side, nothing was pruned); the discriminator is
+whether failing endpoints move into issue_read_operands or the scoreboard. R-52's registry mechanism was corrected on dev
+the same day (ecaa3691ae3c).
+
+The audit's trap-entry question is measured (branch `r51-trap-after-yield` c2e2ed44b, tests only): after the fix a resumed
+domain's handler runs under the domain's code capability as at a first entry; a vector of 0, the monitor's bare-domain
+shape, storms ILLEGAL_INSTR identically on both trees, and the debug latch filters cause 2, so the R-43 list's a10 is
+predicted unchanged (25 at DBAS+0x4354); the refuting signature is mepc 0 with cause 28.
+
+Next: the synth lane's routed numbers to the board lane; the reflash on the lead's own word; the board lane's three
+pre-registered boots (bare acceptance incl. r51 28-after-yield; the R-43 list + C5u; b0..b3 with b3-clock last). The next
+RTL candidate after this cycle is R-44 (the CPMP revnode tracker adopts unseen ids: S/U-mode enforcement, live now that
+native Linux processes run on silicon); it needs an evidence feed plus a seed for cpmp(0..2) or the board does not boot. Design proposal for the lead's
+decision: `docs/plans/r44-cpmp-evidence-tracker.md` (fail-closed on install, the allocator's reserved indices 0..2 as the
+seed, evidence from the rev-node fill taps, one install-time probe through the LSU's R-43 probe block).
+
 2026-10-08 — **The virtual stack, node growth and local mallocng are all merged. Two items below
 are corrected: one was DONE, one was FALSE.**
 

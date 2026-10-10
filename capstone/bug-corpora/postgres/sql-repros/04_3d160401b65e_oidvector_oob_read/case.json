@@ -19,18 +19,36 @@
     "sublet": {
       "oracle": "the mechanism reports: capability fault: capstone-exec: domain fault cause=5 pc=0xc0ae3764 address=0xc9d60520 entry=0xc0200e4c code=0xc0200000-0xc52f0000 last=0x43 preparing=0x43 sha256=be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268 image=/mnt/host/applications/postgres-be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268.dom",
       "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
-      "verdict": "detected",
-      "evidence": "capability fault: capstone-exec: domain fault cause=5 pc=0xc0ae994c address=0xc9d60520 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x43 preparing=0x43 sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom"
+      "verdict": "CAUGHT",
+      "evidence": "capability fault: capstone-exec: domain fault cause=5 pc=0xc0ae994c address=0xc9d60520 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x43 preparing=0x43 sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom",
+      "verdict_from": "results/matrix.tsv sublet: detected"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the differential fires -- upstream rejects 2 statements and 17.5 rejected 0, so an input a correct build refuses was accepted. Note the arms differ in how much they show: the host oracle printed about forty words of adjacent heap, here the value came back empty, so on this arm the accepted input is the whole of the evidence",
-      "verdict": "silent",
+      "verdict": "MISSED",
       "evidence": "ran to the prompt with no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict_from": "results/matrix.tsv cheribsd-revocation: silent"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the trigger statement ran (5 prompts, 0 setup line(s)); errors 0/2 expected -- the defect is visible; EXPECT-ABSENT held) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-pg-pools": {
+      "oracle": "virtual profile with PostgreSQL's contexts on Sublet context pools (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f829781a4 in oidvectorout; by function: oidvectorout is a declared fault site",
+      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
     }
   },
   "status": "measured on all three arms 2026-10-06: spatial=differential, sublet=detected, cheribsd-revocation=silent",
   "advisory": "CVE-2026-2003",
   "nested": true,
-  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it.",
+  "fault_sites": [
+    "oidvectorout"
+  ],
+  "fault_sites_why": "The out-of-bounds reads are oidvectorout's own: it takes nnums from oidArray->dim1 and then reads oidArray->values[num] for each (src/backend/utils/adt/oid.c:162 and :172, 17.5), and the datum a zero-dimension array cast to oidvector carries is shorter than those fields. Declared 2026-10-10 after the virtual-pg-pools run resolved its fault there; the reason is the 17.5 source cited, which does not depend on that run."
 }

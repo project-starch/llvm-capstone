@@ -1,0 +1,78 @@
+00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short case=0 arm=fixed carve=pointer
+00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short block=35840 region=320 touched=288 extent=0 noted=1 crossed=0 contained=1 damage=0
+00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short VERDICT FIXED the fix carves V ten U-rows on, so all ten U rows stay in U
+00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short case=0 arm=buggy carve=pointer
+00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short block=34816 region=288 touched=288 extent=9 noted=1 crossed=1 contained=1 damage=1
+00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short VERDICT DEFECT-REPRODUCED U's edge emulation wrote 9 + field_based rows into a 9-row block, so its tenth row was V's first, which V's emulation then overwrote
+01_699341d647_apedec_array_0000_writes_64_into_channel_1 case=1 arm=fixed carve=pointer
+01_699341d647_apedec_array_0000_writes_64_into_channel_1 block=320 region=160 touched=156 extent=0 noted=1 crossed=0 contained=1 damage=0
+01_699341d647_apedec_array_0000_writes_64_into_channel_1 VERDICT FIXED the fix stops the loop at blockstodecode, the channel's own length
+01_699341d647_apedec_array_0000_writes_64_into_channel_1 case=1 arm=buggy carve=pointer
+01_699341d647_apedec_array_0000_writes_64_into_channel_1 block=320 region=160 touched=160 extent=96 noted=1 crossed=1 contained=1 damage=0
+01_699341d647_apedec_array_0000_writes_64_into_channel_1 VERDICT DEFECT-REPRODUCED decode_array_0000 wrote 64 outputs into a 40-sample channel, so 24 of them landed in decoded[1]
+02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel case=2 arm=fixed carve=pointer
+02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel block=0 region=0 touched=0 extent=0 noted=0 crossed=0 contained=0 damage=0
+02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel VERDICT FIXED the fix returns before the delay line when order >= length
+02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel case=2 arm=buggy carve=pointer
+02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel block=576 region=288 touched=288 extent=224 noted=1 crossed=1 contained=1 damage=0
+02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel VERDICT DEFECT-REPRODUCED the delay line read 128 samples from a 72-sample channel, 56 of them from decoded[1]
+03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix case=3 arm=fixed carve=pointer
+03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix block=320 region=160 touched=156 extent=0 noted=1 crossed=0 contained=1 damage=0
+03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix VERDICT FIXED the fix stops the loop at block_length
+03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix case=3 arm=buggy carve=pointer
+03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix block=320 region=160 touched=160 extent=32 noted=1 crossed=1 contained=1 damage=1
+03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix VERDICT DEFECT-REPRODUCED the RA loop reconstructed 24 samples of a 16-sample block, so it decremented the first of channel 1's carry-over samples
+04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel case=4 arm=fixed carve=pointer
+04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel block=396 region=132 touched=44 extent=0 noted=1 crossed=0 contained=1 damage=0
+04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel VERDICT FIXED the fix gives each channel num_buffers slots, so the terminator stays in channel 0's own carve
+04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel case=4 arm=buggy carve=pointer
+04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel block=132 region=44 touched=44 extent=4 noted=1 crossed=1 contained=1 damage=1
+04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel VERDICT DEFECT-REPRODUCED channel 0's dependency list ran one slot past its one-slot carve, and channel 1's entry then replaced its terminator
+05_9d3032b960_alsdec_opt_order_past_max_order case=5 arm=fixed carve=pointer
+05_9d3032b960_alsdec_opt_order_past_max_order block=0 region=0 touched=0 extent=0 noted=0 crossed=0 contained=0 damage=0
+05_9d3032b960_alsdec_opt_order_past_max_order VERDICT FIXED the fix refuses a block whose opt_order exceeds max_order
+05_9d3032b960_alsdec_opt_order_past_max_order case=5 arm=buggy carve=pointer
+05_9d3032b960_alsdec_opt_order_past_max_order block=160 region=80 touched=80 extent=44 noted=1 crossed=1 contained=1 damage=1
+05_9d3032b960_alsdec_opt_order_past_max_order VERDICT DEFECT-REPRODUCED opt_order 31 wrote 11 coefficients past channel 0's 20-word slice, into channel 1's
+06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420 case=6 arm=fixed carve=pointer
+06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420 block=1280 region=32 touched=31 extent=0 noted=1 crossed=0 contained=1 damage=0
+06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420 VERDICT FIXED the fix carves each uv context at 16 bytes per column
+06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420 case=6 arm=buggy carve=pointer
+06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420 block=1120 region=16 touched=16 extent=16 noted=1 crossed=1 contained=1 damage=0
+06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420 VERDICT DEFECT-REPRODUCED the 4:4:4 clear wrote 16 bytes per superblock column into an 8-byte above_uv_nnz_ctx[0], running into above_uv_nnz_ctx[1]
+07_2563a33856_vp9_intra_pred_carved_for_old_bpp case=7 arm=fixed carve=pointer
+07_2563a33856_vp9_intra_pred_carved_for_old_bpp block=1664 region=256 touched=255 extent=0 noted=1 crossed=0 contained=1 damage=0
+07_2563a33856_vp9_intra_pred_carved_for_old_bpp VERDICT FIXED the fix re-carves on a bit-depth change, so [0] is 256 bytes
+07_2563a33856_vp9_intra_pred_carved_for_old_bpp case=7 arm=buggy carve=pointer
+07_2563a33856_vp9_intra_pred_carved_for_old_bpp block=1280 region=128 touched=128 extent=128 noted=1 crossed=1 contained=1 damage=1
+07_2563a33856_vp9_intra_pred_carved_for_old_bpp VERDICT DEFECT-REPRODUCED a thread at 10-bit backed up 256 luma bytes into an intra_pred_data[0] carved for 8-bit, 128 bytes, running into intra_pred_data[1]
+08_b5ff61695f_swscale_v_line_at_pre_doubling_stride case=8 arm=fixed carve=pointer
+08_b5ff61695f_swscale_v_line_at_pre_doubling_stride block=833 region=416 touched=252 extent=0 noted=1 crossed=0 contained=1 damage=0
+08_b5ff61695f_swscale_v_line_at_pre_doubling_stride VERDICT FIXED the fix places V half a doubled stride on, 416 bytes, past U's 256
+08_b5ff61695f_swscale_v_line_at_pre_doubling_stride case=8 arm=buggy carve=pointer
+08_b5ff61695f_swscale_v_line_at_pre_doubling_stride block=833 region=208 touched=208 extent=48 noted=1 crossed=1 contained=1 damage=1
+08_b5ff61695f_swscale_v_line_at_pre_doubling_stride VERDICT DEFECT-REPRODUCED U's 256 bytes of int32 samples ran past V's offset of 208 bytes, and V then overwrote U's tail
+09_043bcdcdb0_svq1enc_inter_block_runs_into_source case=9 arm=fixed carve=pointer
+09_043bcdcdb0_svq1enc_inter_block_runs_into_source block=1536 region=512 touched=511 extent=0 noted=1 crossed=0 contained=1 damage=0
+09_043bcdcdb0_svq1enc_inter_block_runs_into_source VERDICT FIXED the fix predicts at temp + 16 * stride inside a 32-row temp, and src starts after it
+09_043bcdcdb0_svq1enc_inter_block_runs_into_source case=9 arm=buggy carve=pointer
+09_043bcdcdb0_svq1enc_inter_block_runs_into_source block=1024 region=256 touched=256 extent=16 noted=1 crossed=1 contained=1 damage=1
+09_043bcdcdb0_svq1enc_inter_block_runs_into_source VERDICT DEFECT-REPRODUCED the 16x16 inter prediction at temp + 16 with a 16-byte stride ended past temp's 16 rows, overwriting src's first row
+10_d2213b6493_rv34_b_block_carved_at_old_linesize case=10 arm=fixed carve=pointer
+10_d2213b6493_rv34_b_block_carved_at_old_linesize block=6144 region=2048 touched=1935 extent=0 noted=1 crossed=0 contained=1 damage=0
+10_d2213b6493_rv34_b_block_carved_at_old_linesize VERDICT FIXED the fix re-carves the block at the new linesize
+10_d2213b6493_rv34_b_block_carved_at_old_linesize case=10 arm=buggy carve=pointer
+10_d2213b6493_rv34_b_block_carved_at_old_linesize block=3072 region=1024 touched=1024 extent=912 noted=1 crossed=1 contained=1 damage=1
+10_d2213b6493_rv34_b_block_carved_at_old_linesize VERDICT DEFECT-REPRODUCED after the linesize doubled, direction 0's prediction ran from tmp_b_block_y[0] into tmp_b_block_y[1], which direction 1 then overwrote
+11_68226ed9ec_vorbis_type1_residue_end_spans_channels case=11 arm=fixed carve=pointer
+11_68226ed9ec_vorbis_type1_residue_end_spans_channels block=0 region=0 touched=0 extent=0 noted=0 crossed=0 contained=0 damage=0
+11_68226ed9ec_vorbis_type1_residue_end_spans_channels VERDICT FIXED the fix refuses a type-0/1 residue that ends past one channel's blocksize/2
+11_68226ed9ec_vorbis_type1_residue_end_spans_channels case=11 arm=buggy carve=pointer
+11_68226ed9ec_vorbis_type1_residue_end_spans_channels block=1024 region=512 touched=512 extent=512 noted=1 crossed=1 contained=1 damage=1
+11_68226ed9ec_vorbis_type1_residue_end_spans_channels VERDICT DEFECT-REPRODUCED a type-1 residue ending at 2 * vlen added channel 0's codevectors into channel 1's slice of channel_residues
+12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice case=12 arm=fixed carve=pointer
+12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice block=12288 region=1024 touched=1020 extent=0 noted=1 crossed=0 contained=1 damage=0
+12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice VERDICT FIXED the fix shifts by bitdepth-8 and masks to a byte, keeping the index in its sub-slice
+12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice case=12 arm=buggy carve=pointer
+12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice block=12288 region=1024 touched=4092 extent=3072 noted=1 crossed=1 contained=1 damage=1
+12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice VERDICT DEFECT-REPRODUCED a 10-bit sample indexed the 256-entry plane histogram unshifted, so the bump landed 767 entries past its carved sub-slice, in thread 1's slice

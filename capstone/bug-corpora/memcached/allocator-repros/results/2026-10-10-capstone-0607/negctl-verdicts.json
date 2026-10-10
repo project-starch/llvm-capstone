@@ -1,0 +1,54 @@
+[
+  {
+    "case": 6,
+    "fix": "78eb770",
+    "name": "suffix-write-no-space",
+    "shape": "four bytes written into an item field that has no room, inside the chunk",
+    "mode": "spatial",
+    "expected": "complete",
+    "oracle_arm": "spatial",
+    "runner_exit": 0,
+    "completed": null,
+    "passed": false,
+    "run": "<out>/mc0607-negctl-t400-1/06-suffix-write-no-space-spatial-ylf2o4ck"
+  },
+  {
+    "case": 6,
+    "fix": "78eb770",
+    "name": "suffix-write-no-space",
+    "shape": "four bytes written into an item field that has no room, inside the chunk",
+    "mode": "sublet",
+    "expected": "complete",
+    "oracle_arm": "sublet",
+    "runner_exit": 0,
+    "completed": null,
+    "passed": false,
+    "run": "<out>/mc0607-negctl-t400-1/06-suffix-write-no-space-sublet-3bfz0s6c"
+  },
+  {
+    "case": 7,
+    "fix": "ecdb011",
+    "name": "unterminated-key-read",
+    "shape": "unbounded read forward from an item key with no terminator",
+    "mode": "spatial",
+    "expected": "complete",
+    "oracle_arm": "spatial",
+    "runner_exit": 0,
+    "completed": null,
+    "passed": false,
+    "run": "<out>/mc0607-negctl-t400-1/07-unterminated-key-read-spatial-4n7x_pdc"
+  },
+  {
+    "case": 7,
+    "fix": "ecdb011",
+    "name": "unterminated-key-read",
+    "shape": "unbounded read forward from an item key with no terminator",
+    "mode": "sublet",
+    "expected": "complete",
+    "oracle_arm": "sublet",
+    "runner_exit": 0,
+    "completed": null,
+    "passed": false,
+    "run": "<out>/mc0607-negctl-t400-1/07-unterminated-key-read-sublet-wvoytcm9"
+  }
+]

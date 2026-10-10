@@ -1,0 +1,89 @@
+{
+  "corpus": "<repo>/capstone/bug-corpora/memcached/allocator-repros",
+  "started": "2026-10-10T17:44:52+0800",
+  "build": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -O1 -g; port library with the same sanitizer, MCP_STOCK_MALLOC=ON",
+  "asan_options": "detect_leaks=0:abort_on_error=0:halt_on_error=1:color=never",
+  "controls": [
+    {
+      "command": "/tmp/capstone/audit/mc-asan/bin/asan-control past 1048576",
+      "required": "heap-buffer-overflow",
+      "report": "heap-buffer-overflow",
+      "frame": "touch <repo>/capstone/bug-corpora/tools/asan-control.c:14",
+      "rc": 1,
+      "ok": true
+    },
+    {
+      "command": "/tmp/capstone/audit/mc-asan/bin/asan-control uaf 1048576",
+      "required": "heap-use-after-free",
+      "report": "heap-use-after-free",
+      "frame": "touch <repo>/capstone/bug-corpora/tools/asan-control.c:14",
+      "rc": 1,
+      "ok": true
+    }
+  ],
+  "rows": [
+    {
+      "case": "00_7af02b0c87_rbuf_copied_after_cache_free",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "01_0ad4de66ae_io_walk_reads_freed_link",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "02_59bd02ce29_tail_repair_frees_referenced_item",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "03_a8c4a82787_refcount_overflow_frees_linked_item",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "04_152ddb68f7_unlocked_refcount_drift",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "05_2d61f18_item_data_one_past",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "06_78eb770_suffix_write_no_space",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "07_ecdb011_unterminated_key_read",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "08_e8364b5_ascii_all_spaces_scan_past_rbuf",
+      "outcome": "REPORTED",
+      "detail": "heap-buffer-overflow at mc_case_body <repo>/capstone/bug-corpora/memcached/allocator-repros/08_e8364b5_ascii_all_spaces_scan_past_rbuf//case.c:66",
+      "fixed_rc": 0,
+      "buggy_rc": 1
+    }
+  ]
+}

@@ -15,11 +15,31 @@
       "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b3428"
     },
     "sublet": {
-      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b45e8"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b45e8",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 19 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 19 cheribsd-revocation: detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3f8be17490 in nodeRelease; by function: nodeRelease is where host ASan reported it",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3fa1e19290 in nodeRelease; by function: nodeRelease is where host ASan reported it",
+      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
     }
   },
-  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b3428; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b45e8; cheribsd-revocation run 2026-10-04/05: no verdict: rtreecursor nested delete rc=0"
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b3428; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b45e8; cheribsd-revocation run 2026-10-04/05: no verdict: rtreecursor nested delete rc=0",
+  "fault_sites": [
+    "nodeRelease"
+  ],
+  "fault_sites_why": "rtreeNext -> rtreeSearchPointPop -> nodeRelease reads pNode->nRef out of the freed block (PROVENANCE.md, host ASan: READ of size 4 into a 488-byte region). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs."
 }

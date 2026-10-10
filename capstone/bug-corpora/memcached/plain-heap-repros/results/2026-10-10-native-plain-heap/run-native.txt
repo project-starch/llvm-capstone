@@ -1,0 +1,11 @@
+compiler: cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+00_ddee3e2_authfile_scan_past_calloc plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_write_probe 1:mch_case_run at_probe=1
+01_d5d9ff0_cachedump_end_marker_off_by_one plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_write_probe 1:mch_case_run at_probe=1
+02_391f2e4762bf_freesuffix_realloc_sized_in_bytes plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_write_probe 1:mch_case_run at_probe=1
+03_16a809e2a062_cache_create_freelist_sized_by_object plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_write_probe 1:mch_case_run at_probe=1
+04_40aff8b0f113_stats_end_marker_past_exact_buffer plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_write_probe 1:mch_case_run at_probe=1
+05_49f3b0ca9b57_out_string_crlf_copied_with_its_nul plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_write_probe 1:mch_case_run at_probe=1
+06_212c3820c7bb_key_hash_filter_tag_length_underflow plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_read_probe 1:mch_case_run at_probe=1
+07_0f605245cf3f_bin_delete_logs_unterminated_key plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_read_probe 1:mch_case_run at_probe=1
+08_fa51ad8452d5_slab_list_shuffle_reads_one_past plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_read_probe 1:mch_case_run at_probe=1
+exit=0

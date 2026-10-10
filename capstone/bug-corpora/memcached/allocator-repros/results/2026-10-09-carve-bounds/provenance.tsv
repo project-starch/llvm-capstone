@@ -1,0 +1,17 @@
+# source: /tmp/capstone/q1009-ap13/mc-0607-cheribsd-carve/guest/summary.json
+# matched-by: CheriBSD half only: cases 06/07 exit 162 at pc 0x104d5c / 0x104d18 and revocation-control 0x101e42 match (the Capstone half ran on the Capstone domain runner and has no summary of this schema)
+# platform qemu=16135483052dfdd6eb0a3fb060a79097eabcbb95fcac756b37ce83407657f0dc firmware=f0e1fe57b0f850756273135d82c4edcec7b354edfc36741cd327d6f2744832cb kernel=8ab453f46dc76cf27faf0fc159761f4e68f2cfb739ed9c0a22d440bab8914530 image=0cb16209c16c5edf9f81148eedf33f750af404f890af6d65d9bd43ecf61aa4f4
+# platform-libc=fdce2289224bb5193526ab2a1fde9a74860c764f2222e0cb2a77bfea039559a8
+# runtime_revocation=on
+# controls: cheribsd-abi=0 cheribsd-bounds=162 revocation-control=162
+# summary status=failed ran_all_cases=True failed_cases=2 (an oracle scored FAIL is data, see the README)
+# note: binary_sha256 is the summary's "binaries" entry; for a supervised arm that is the supervise wrapper (or a shared replay driver), and the case binary or fixture is the per-program input hashed below (summary results[].inputs):
+# inputs revocation-control: control=10c95ce2b8431b65f221502be97de89616e022ee78710ca4f21584be731c9242
+# inputs 06-suffix-write-no-space-mode0: target=f82a382213a97d8be501c2a0855bf05953f61d86750533a87a002d6558c78853 input.bin=0d40233ec819e2e225a1304b9fa0505498d67aba162c1b81f35c7c309ba496a3
+# inputs 07-unterminated-key-read-mode0: target=a21eaeb1a424a83985aad4d12cfba2cb35fc7a9be2d2cd1bcf16e2402494bd65 input.bin=a570f93ad8b61123a584b4c1e916b5deb7ef63feb4a50fb127f114cbfc78aec6
+program	exit	expected_exit	passed	binary_sha256	stdout_sha256
+cheribsd-abi	0	0	true	5e10986aa7d8e9b514d94786db17b97cdcc2aaf74d7391148b5de2e7d70a282f	9470e900152738b85544c73ceb0dd0f3fe53261bd3ce0d1460cae0d0201561c3
+cheribsd-bounds	162	162	true	5e10986aa7d8e9b514d94786db17b97cdcc2aaf74d7391148b5de2e7d70a282f	904c72f88b254911f97105bb6cd1e232e373cf2d3da7dc149ab2d9c83b780a7f
+revocation-control	162	162	true	0c680eb0641bd5a8e813036be96f54fe732ca787bb06de4fd4b8aaf802d474a8	acce47799ce8a03b9e9cb0ce5ef9fd119ea40311715428df379d9395a3f19280
+06-suffix-write-no-space-mode0	162	0	false	0c680eb0641bd5a8e813036be96f54fe732ca787bb06de4fd4b8aaf802d474a8	a1449905ec08543dc9272cb8278563fdfa6276301ff2a88f223df9705dfd804a
+07-unterminated-key-read-mode0	162	0	false	0c680eb0641bd5a8e813036be96f54fe732ca787bb06de4fd4b8aaf802d474a8	39626c04b59d3469d9cdc3a60dccb536e490325c1f0c113b5c4ac08cd105d2eb

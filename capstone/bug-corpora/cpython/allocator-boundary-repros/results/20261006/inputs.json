@@ -1,0 +1,702 @@
+{
+  "arms": {
+    "cheribsd-revocation": {
+      "arm": "cheribsd-revocation",
+      "ended_utc": "2026-10-06T14:51:08Z",
+      "every_free_default": "0",
+      "positive_control": "EXP-OK cpython 552",
+      "python_sha256": "3172023cb8d0a889 (first 16; the full hash of the binary the guest ran)",
+      "revocation_default": "1",
+      "sicode_control": "si_code=1 (PROT_CHERI_BOUNDS) via mech-control S_OOB",
+      "started_utc": "2026-10-06T14:15:18Z",
+      "python_sha256_note": "corrected. The runner recorded the host-side $PY, not the guest's copy; the two were different builds -- .text differed by 5,088 bytes -- and the guest ran the select-enabled binary. run-cheribsd.sh now hashes the guest's copy and refuses a mismatch, so this cannot recur."
+    },
+    "spatial": {
+      "arm": "spatial",
+      "case_timeout": "600",
+      "cases": "11",
+      "discipline": "none",
+      "ended_utc": "2026-10-06T14:41:33Z",
+      "image_sha256": "7788ac72f70a02aceca2544df7403c79fcf6819da7d0c79f6a5c750deff5b1db",
+      "only": "22,23,24,25,26,27,28,29,30,31,32",
+      "positive_control": "EXP-OK cpython 552",
+      "rev_nodes": "65536",
+      "started_utc": "2026-10-06T14:18:58Z"
+    },
+    "sublet": {
+      "arm": "sublet",
+      "case_timeout": "600",
+      "cases": "11",
+      "discipline": "CPY-SUBLET mode=1",
+      "ended_utc": "2026-10-06T15:12:38Z",
+      "image_sha256": "1dd1c0f6df64d5951d78e86a7ba4298b097fba6c09d11c9abd08a631fe1517ae",
+      "only": "22,23,24,25,26,27,28,29,30,31,32",
+      "positive_control": "EXP-OK cpython 552",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-06T14:41:33Z"
+    }
+  },
+  "cases": 32,
+  "note": "Each cell is the arm's own verdict word. TIMEOUT, CAPACITY and STAGING-FAILED are not measurements (SCHEMA rule 4) and are excluded from every rate; oracle_met is blank for them.",
+  "runs": [
+    "boundary-20261006-104241",
+    "cheri11",
+    "cheri11",
+    "spatial-20261006-105111",
+    "spatial-20261006-131005",
+    "spatial-20261006-141858",
+    "sublet-20261006-112658",
+    "sublet-20261006-123446",
+    "sublet-20261006-144133",
+    "spatial-20261007-020747",
+    "spatial-hicap-20261007-021742",
+    "sublet-20261007-022142",
+    "sublet-hicap-20261007-023111",
+    "boundary-20261007-020413",
+    "spatial-20261008-033909",
+    "sublet-20261008-034649",
+    "spatial-mod-20261009-031346",
+    "sublet-mod-20261009-034006",
+    "sublet-mod96-20261009-052148",
+    "sublet-modL-20261009-081625",
+    "boundary-20261008-075318"
+  ],
+  "reruns_20261007": [
+    {
+      "arm": "spatial",
+      "capacity": "base",
+      "image": "spatial",
+      "image_sha256": "7788ac72f70a02aceca2544df7403c79fcf6819da7d0c79f6a5c750deff5b1db",
+      "rev_nodes": "65536",
+      "started_utc": "2026-10-07T02:07:48Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "none",
+      "case_timeout": "1800",
+      "only": "07,32,21",
+      "ended_utc": "2026-10-07T02:17:42Z",
+      "cases": "3",
+      "dir": "spatial-20261007-020747"
+    },
+    {
+      "arm": "spatial",
+      "capacity": "hicap",
+      "image": "spatial-hicap",
+      "image_sha256": "06e42d510a6a1a3fe7c17d4314e8b21dfff48adc008e7f63b007f4949e2445aa",
+      "rev_nodes": "65536",
+      "started_utc": "2026-10-07T02:17:42Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "none",
+      "case_timeout": "600",
+      "only": "08,13",
+      "ended_utc": "2026-10-07T02:21:42Z",
+      "cases": "2",
+      "dir": "spatial-hicap-20261007-021742"
+    },
+    {
+      "arm": "sublet",
+      "capacity": "base",
+      "image": "sublet",
+      "image_sha256": "1dd1c0f6df64d5951d78e86a7ba4298b097fba6c09d11c9abd08a631fe1517ae",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-07T02:21:43Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "CPY-SUBLET mode=1",
+      "case_timeout": "1800",
+      "only": "07,32,21",
+      "ended_utc": "2026-10-07T02:31:11Z",
+      "cases": "3",
+      "dir": "sublet-20261007-022142"
+    },
+    {
+      "arm": "sublet",
+      "capacity": "hicap",
+      "image": "sublet-hicap",
+      "image_sha256": "dee1ac02805524e7bf9b3bdd6e9fd521e7266bc848433ef4b550c86dae8479fa",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-07T02:31:11Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "CPY-SUBLET mode=1",
+      "case_timeout": "600",
+      "only": "08",
+      "ended_utc": "2026-10-07T02:33:19Z",
+      "cases": "1",
+      "dir": "sublet-hicap-20261007-023111"
+    },
+    {
+      "arm": "cheribsd-revocation",
+      "python_sha256": "3172023cb8d0a889 (first 16; the full hash of the binary the guest ran)",
+      "revocation_default": "1",
+      "every_free_default": "0",
+      "started_utc": "2026-10-07T02:04:21Z",
+      "positive_control": "EXP-OK cpython 552",
+      "sicode_control": "si_code=1 (PROT_CHERI_BOUNDS) via mech-control S_OOB",
+      "case_budget": "600",
+      "only": "02,07,13,32",
+      "ended_utc": "2026-10-07T02:08:01Z",
+      "dir": "boundary-20261007-020413",
+      "python_sha256_note": "corrected. The runner recorded the host-side $PY, not the guest's copy; the two were different builds -- .text differed by 5,088 bytes -- and the guest ran the select-enabled binary. run-cheribsd.sh now hashes the guest's copy and refuses a mismatch, so this cannot recur."
+    }
+  ],
+  "note_20261007": "Four rows per Capstone arm and four on cheribsd were re-measured on 2026-10-07; the matrix's run column says which row came from which. 07 and 32 carry new single-process triggers and were deliberately measured on the SAME image as the other rows (CAP=base). Only 08 and 13 were given the raised image (CAP=hicap), and neither was recovered by it: 08's trigger has readinto claim 2147483647 bytes and 13 uses a pointer as a length and asks for 0x9fad41ee2fbf, about 175 TB. Capacity was not the limit on either. 21 was given 1800 s where it had had 600 s, and completed in roughly 430 s -- but in a three-case subset, where its 600 s timeout had occurred in a full 32-case pass, so subset and full runs are not freely comparable.",
+  "reruns_20261008": [
+    {
+      "arm": "spatial",
+      "capacity": "base",
+      "image": "spatial",
+      "image_sha256": "7788ac72f70a02aceca2544df7403c79fcf6819da7d0c79f6a5c750deff5b1db",
+      "rev_nodes": "65536",
+      "started_utc": "2026-10-08T03:39:10Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "none",
+      "case_timeout": "600",
+      "only": "08,24",
+      "ended_utc": "2026-10-08T03:46:49Z",
+      "cases": "2",
+      "dir": "spatial-20261008-033909"
+    },
+    {
+      "arm": "sublet",
+      "capacity": "base",
+      "image": "sublet",
+      "image_sha256": "1dd1c0f6df64d5951d78e86a7ba4298b097fba6c09d11c9abd08a631fe1517ae",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-08T03:46:49Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "CPY-SUBLET mode=1",
+      "case_timeout": "600",
+      "only": "08",
+      "ended_utc": "2026-10-08T03:51:47Z",
+      "cases": "1",
+      "dir": "sublet-20261008-034649"
+    }
+  ],
+  "delivered": {
+    "per_arm": 29,
+    "rule": "all three arms are reported over the SAME 29 cases, so every cell is directly comparable. 11, 13 and 18 are outside it on every arm.",
+    "outside": {
+      "11": "needs _ctypes, which needs libffi; there is none for capstone64 or this purecap sysroot",
+      "13": "the defect uses a pointer as a length and asks for about 175 TB, so base answers MemoryError. sublet (cause 5) and cheribsd (si_code 2) do measure it; both are delivered=held-out",
+      "18": "needs mmap, which the domain's guest kernel answers with Errno 38, and serving it would make obmalloc map arenas through it. cheribsd measures it (SILENT); delivered=held-out"
+    }
+  },
+  "note_20261008": "Cases 08 and 24 were recovered by fixing triggers rather than images, and both detect: 08 gives cause 5 on both Capstone arms and 24 gives cause 24 on base. 08's readinto now claims 1048576 rather than 2147483647, chosen by measuring both host builds -- every value from 2147483647 down to 8194 overflows under ASan, but without bounds checking the loop only terminates if the claimed copy runs off into unmapped memory, so 8194 and 65536 hang and 1048576 does not. 24 carries the 127-byte UTC TZif in its trigger, used only when the image has no tzdata. Both ran with CAP=base: 08 asks for 1 MiB of a 48 MiB heap and must be measured on the same image as the other rows.",
+  "runs_20261008_09": [
+    {
+      "arm": "spatial",
+      "capacity": "mod",
+      "image": "spatial-mod",
+      "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+      "rev_nodes": "65536",
+      "started_utc": "2026-10-09T03:13:46Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "none",
+      "case_timeout": "600",
+      "only": "01,07,08,15,19,23,24,31",
+      "ended_utc": "2026-10-09T03:40:06Z",
+      "cases": "8",
+      "dir": "spatial-mod-20261009-031346"
+    },
+    {
+      "arm": "sublet",
+      "capacity": "mod",
+      "image": "sublet-mod",
+      "image_sha256": "494281a104891e05f04886a82e3750d4630a5ff64b96e49cfc314603c5328f00",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-09T03:40:07Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "CPY-SUBLET mode=1",
+      "case_timeout": "600",
+      "only": "01,07,08,15,19,23,24,31",
+      "ended_utc": "2026-10-09T04:02:07Z",
+      "cases": "8",
+      "dir": "sublet-mod-20261009-034006"
+    },
+    {
+      "arm": "sublet",
+      "capacity": "mod96",
+      "image": "sublet-mod96",
+      "image_sha256": "43f0619104c0be0bd204bbaed9664250ac4bee10b161161f0fd0a0adca933b1f",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-09T05:21:48Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "CPY-SUBLET mode=1",
+      "case_timeout": "600",
+      "only": "01,07,08,15,19,23,24,31",
+      "ended_utc": "2026-10-09T05:41:58Z",
+      "cases": "8",
+      "dir": "sublet-mod96-20261009-052148"
+    },
+    {
+      "arm": "sublet",
+      "capacity": "modL",
+      "image": "sublet-modL",
+      "image_sha256": "73157bf5833b4956f6e4b50acf80ca2989afc394c9b153663a7c545cec8fa05d",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-09T08:16:25Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "CPY-SUBLET mode=1",
+      "case_timeout": "600",
+      "only": "01,07,08,15,19,23,24,31",
+      "ended_utc": "2026-10-09T08:40:40Z",
+      "cases": "8",
+      "dir": "sublet-modL-20261009-081625"
+    },
+    {
+      "arm": "cheribsd-revocation",
+      "python_sha256": "df12471900102041c96f0f2b1111c7a6bbea1b0ec7641baad65ea797485d5f2a",
+      "revocation_default": "1",
+      "every_free_default": "0",
+      "started_utc": "2026-10-08T07:53:28Z",
+      "positive_control": "EXP-OK cpython 552",
+      "sicode_control": "si_code=1 (PROT_CHERI_BOUNDS) via mech-control S_OOB",
+      "case_budget": "600",
+      "only": "01,07,12,19,21,22,23,31",
+      "ended_utc": "2026-10-08T08:01:21Z",
+      "dir": "boundary-20261008-075318"
+    }
+  ],
+  "note_20261009": "Six rows recovered by changing images and triggers, never by lowering a bar. 12, 21, 22 and 23 on cheribsd needed _interpreters, pyexpat, _elementtree and _testlimitedcapi compiled into the purecap build; 15 and 23 on the Capstone arms needed _testinternalcapi and _testlimitedcapi in the images. Every image change was accepted only after six previously measured rows reproduced their verdicts on it, and on sublet that gate did its job: the modules at default capacity, and again at a 96 MiB heap, lost rows 19 and 31, which were detections. The application arena was not what ran out -- both heaps failed with identical tracebacks -- the sublet port's own `large` table was, at LARGE_COUNT 4096. Raised to 65536 both come back and 15 and 23 are recovered; that table is separate from the arenas, so arena-return timing is untouched, and block-lifetimes.o differs in exactly two instructions. Two recording errors were also corrected: CPY_EXTRA_CFLAGS is read by nothing in the ports tree, so two images recorded as carrying raised PYM_* carried none of it (a CPY_PYM_DEFINES hook now reaches those constants), and the cheribsd run's python_sha256 named a different binary from the one the guest ran, which the runner now refuses by hashing the guest's copy first.",
+  "cheribsd_binaries": {
+    "2026-10-06, 2026-10-07 runs": "3172023cb8d0a889  select-enabled build",
+    "2026-10-08, 2026-10-09 runs": "df12471900102041  the same build plus _interpreters, pyexpat, _elementtree, _testlimitedcapi",
+    "note": "the earlier runs' run.meta named fba7e8d8..., which is a different build: .text differed by 5,088 bytes, so it was not a strip of the same one. The measurements stand -- the binary the guest ran was a qualified build and the positive control passed in every batch -- but the recorded hash was wrong and is corrected here."
+  },
+  "revocation_enforcement": "Corrected at review, 2026-10-10. At the pinned capstone-qemu 1a6dd207, CAPSTONE_REVOCATION_ENFORCE is defined at target/riscv/op_helper.c:1635 and gates capstone_cap_revoked(); a still-tagged revoked capability faults with cause 25 at :1712-1718, and one reloaded from memory comes back untagged at :2006-2010 (helper_reg_set_cap_compressed), so a later dereference raises cause 24. Both need a csrevoke first. Nothing on the base (spatial) arm revokes heap memory -- level0's l0_free only marks the block free and patch 0009 issues no revoke -- so its cause-24 faults are tag integrity, not revocation. The note this replaces cited :1420 and :1641-1642, which are not those lines in that tree, and concluded the base arm revokes.",
+  "negative_controls": {
+    "rule": "SCHEMA rule 5: every oracle has a negative control. A suite whose oracles cannot say FAIL proves nothing by saying PASS.",
+    "kinds": {
+      "weak": "trigger.py replaced by a stub that prints a marker and exits. Shows the arm does not fault on the harness. Passing it is not evidence that any individual detection is defect-dependent.",
+      "strong": "trigger.py replaced by a per-case variant that performs the same allocations and frees and differs only in that the access the defect makes out-of-bounds or stale is in bounds and live. Committed as negative_control.py next to the trigger; --negative-control prefers it over the stub."
+    },
+    "executed_is_counted_from_the_marker": true,
+    "void_rule": "A control that cannot show positive evidence that every case it claims to have run actually started is void, not passing. run-arm.sh aborts the run when the VM reports 'VM is not running'.",
+    "runs": [
+      {
+        "run": "boundary-negctl-20261010-074922",
+        "arm": "cheribsd-revocation",
+        "kind": "weak",
+        "cases": 32,
+        "executed": 32,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": null,
+        "only": "all",
+        "image_sha256": null,
+        "void": false
+      },
+      {
+        "run": "spatial-negctl-20261010-061543",
+        "arm": "spatial",
+        "kind": "weak",
+        "cases": 32,
+        "executed": 3,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": "300",
+        "only": "all",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": true
+      },
+      {
+        "run": "spatial-negctl-20261010-065110",
+        "arm": "spatial",
+        "kind": "weak",
+        "cases": 32,
+        "executed": 32,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": "300",
+        "only": "all",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": false
+      },
+      {
+        "run": "spatial-negctl-20261010-081957",
+        "arm": "spatial",
+        "kind": "strong",
+        "cases": 9,
+        "executed": 8,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": "300",
+        "only": "01,03,04,05,07,09,12,14,24",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": true
+      },
+      {
+        "run": "spatial-negctl-20261010-083844",
+        "arm": "spatial",
+        "kind": "strong",
+        "cases": 9,
+        "executed": 8,
+        "faults": 1,
+        "fault_cases": {
+          "24_gh-142783_zoneinfo-eager-decref": "7"
+        },
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": "300",
+        "only": "01,03,04,05,07,09,12,14,24",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": false
+      },
+      {
+        "run": "spatial-negctl-20261010-090107",
+        "arm": "spatial",
+        "kind": "strong",
+        "cases": 1,
+        "executed": 0,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": [
+          "24_gh-142783_zoneinfo-eager-decref"
+        ],
+        "selftest_failed": null,
+        "case_timeout_s": "120",
+        "only": "24",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": false
+      },
+      {
+        "run": "spatial-negctl-20261010-090622",
+        "arm": "spatial",
+        "kind": "strong",
+        "cases": 5,
+        "executed": 5,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": [
+          "31_gh-148660_odict-copy-stale-link"
+        ],
+        "case_timeout_s": "900",
+        "only": "24,10,15,30,31",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": false
+      },
+      {
+        "run": "sublet-negctl-20261010-062057",
+        "arm": "sublet",
+        "kind": "weak",
+        "cases": 32,
+        "executed": 32,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": "300",
+        "only": "all",
+        "image_sha256": "73157bf5833b4956f6e4b50acf80ca2989afc394c9b153663a7c545cec8fa05d",
+        "void": false
+      }
+    ]
+  },
+  "fault_sites": {
+    "what": "Every fault line that survives in a run log, as the launcher printed it. pc is reported for every cause and was not being recorded; this is the first record of it.",
+    "address_is_not_a_faulting_value_for_cause_24": "RISCV_EXCP_UNEXP_OP_TYPE is raised by riscv_raise_exception(env, ..., GETPC()) in capstone-qemu target/riscv/op_helper.c, which takes no address and sets no badaddr, so the address field on a cause-24 line is unset rather than the faulting value. The evidence is in the counts below: every surviving cause-24 line reads address=0x0, at nine distinct pcs across nine defects, while every bounds line reads a distinct non-zero address.",
+    "the_operand_value_is_printed_and_was_discarded": "_helper_access_with_cap prints the untagged base register's word unconditionally (CAPSTONE_DEBUG_PRINT is an unguarded fprintf to stderr), and capstone_vm already redirects QEMU's stderr to <state>/qemu.log. That file is opened \"wb\" on every restart and the run directory did not keep it, so the one field that tells a pointer which lost its tag from an integer that never was one was produced on every run and retained on none. run-arm.sh now keeps the per-case slice as <case>.qemu.log and records pc, address and untagged_value in verdicts.tsv. Classifying the base arm's cause-24 faults needs a re-run under that harness.",
+    "logs_retained": "The 2026-10-06 and most 2026-10-07 run directories were under /tmp and were lost to a reboot. Of the delivered detections, the runs below are what survives; a site is evidence about its own run, and is_cited_run says whether that is the run the matrix cites for the row.",
+    "sites": [
+      {
+        "case": "01_gh-139071_heap-overflow-in-set-dealloc-setobject",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 24,
+        "pc": "0xc036ea88",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "07_gh-140594_fix-an-out-of-bounds-read",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 5,
+        "pc": "0xc026de94",
+        "address": "0xc103b0bf",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "spatial",
+        "run": "spatial-20261008-033909",
+        "cause": 5,
+        "pc": "0xc02030c8",
+        "address": "0xc19e0ee1",
+        "is_cited_run": true,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 5,
+        "pc": "0xc02030c8",
+        "address": "0xc1a3b001",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "15_gh-148973_fix-segfault-on-mismatch-between-consts",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 24,
+        "pc": "0xc056a848",
+        "address": "0x0",
+        "is_cited_run": true,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "24_gh-142783_zoneinfo-eager-decref",
+        "arm": "spatial",
+        "run": "spatial-20261008-033909",
+        "cause": 24,
+        "pc": "0xc038912c",
+        "address": "0x0",
+        "is_cited_run": true,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "24_gh-142783_zoneinfo-eager-decref",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 24,
+        "pc": "0xc03897f8",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "31_gh-148660_odict-copy-stale-link",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 24,
+        "pc": "0xc03c05e8",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "01_gh-139071_heap-overflow-in-set-dealloc-setobject",
+        "arm": "sublet",
+        "run": "sublet-mod-20261009-034006",
+        "cause": 5,
+        "pc": "0xc0370df4",
+        "address": "0xc8e53a30",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "01_gh-139071_heap-overflow-in-set-dealloc-setobject",
+        "arm": "sublet",
+        "run": "sublet-mod96-20261009-052148",
+        "cause": 5,
+        "pc": "0xc0370df4",
+        "address": "0xd0e53a30",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "01_gh-139071_heap-overflow-in-set-dealloc-setobject",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 5,
+        "pc": "0xc0370df4",
+        "address": "0xc8e53a30",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "07_gh-140594_fix-an-out-of-bounds-read",
+        "arm": "sublet",
+        "run": "sublet-mod-20261009-034006",
+        "cause": 5,
+        "pc": "0xc027034c",
+        "address": "0xc0f38bdf",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "07_gh-140594_fix-an-out-of-bounds-read",
+        "arm": "sublet",
+        "run": "sublet-mod96-20261009-052148",
+        "cause": 5,
+        "pc": "0xc027034c",
+        "address": "0xc0f38d4f",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "07_gh-140594_fix-an-out-of-bounds-read",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 5,
+        "pc": "0xc027034c",
+        "address": "0xc0f38d0f",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "sublet",
+        "run": "sublet-20261008-034649",
+        "cause": 5,
+        "pc": "0xc0203134",
+        "address": "0xcc9bdfb1",
+        "is_cited_run": true,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "sublet",
+        "run": "sublet-mod-20261009-034006",
+        "cause": 5,
+        "pc": "0xc0203134",
+        "address": "0xcadbdfd1",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "sublet",
+        "run": "sublet-mod96-20261009-052148",
+        "cause": 5,
+        "pc": "0xc0203134",
+        "address": "0xd2dbdfd1",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 5,
+        "pc": "0xc0203134",
+        "address": "0xcadbdfd1",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "15_gh-148973_fix-segfault-on-mismatch-between-consts",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 7,
+        "pc": "0xc05646f0",
+        "address": "0xc878c680",
+        "is_cited_run": true,
+        "matrix_detail": "7",
+        "delivered": "yes"
+      },
+      {
+        "case": "19_gh-142664_fix-uaf-in-memoryview-hash-via",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 24,
+        "pc": "0xc05c4640",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "23_gh-142560_bytearray-search-realloc",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 24,
+        "pc": "0xc0202f84",
+        "address": "0x0",
+        "is_cited_run": true,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "24_gh-142783_zoneinfo-eager-decref",
+        "arm": "sublet",
+        "run": "sublet-mod-20261009-034006",
+        "cause": 24,
+        "pc": "0xc035d68c",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "24_gh-142783_zoneinfo-eager-decref",
+        "arm": "sublet",
+        "run": "sublet-mod96-20261009-052148",
+        "cause": 24,
+        "pc": "0xc035d68c",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "24_gh-142783_zoneinfo-eager-decref",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 24,
+        "pc": "0xc035d68c",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "31_gh-148660_odict-copy-stale-link",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 24,
+        "pc": "0xc0343760",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      }
+    ],
+    "counts_by_cause": {
+      "5": {
+        "sites": 13,
+        "address_zero": 0,
+        "address_nonzero": 13
+      },
+      "7": {
+        "sites": 1,
+        "address_zero": 0,
+        "address_nonzero": 1
+      },
+      "24": {
+        "sites": 11,
+        "address_zero": 11,
+        "address_nonzero": 0
+      }
+    }
+  }
+}

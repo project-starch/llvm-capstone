@@ -18,7 +18,9 @@
     },
     "native-detect": {
       "oracle": "NO ASan report, and that is the finding rather than a gap: the read leaves the PLANE, not the ALLOCATION, so no redzone sits where it lands. MEASURED two-sided 2026-10-06 -- silent on both arms, exit 0. The positive control for the detector is a sibling corpus rather than a contrived case: memcached/plain-heap-repros/00 crosses the malloc bound and ASan reports it in the same tree on the same day.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-plane/run-native.txt: `00_b7946098b1_alphablend_row_past_plane plain=reproduced asan=silent-as-expected plane_slack=1024`, after both in-run controls reported (one byte past, and a read after free of, a 1024-byte block)"
     },
     "spatial": {
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **NOT CAUGHT; the defect reproduced**: the sequence completed with the crossing made, which the case's own CHECKs place inside ONE allocation, so an allocation-granular bound is in bounds for it. The bound that was in force: this libavutil was configured with HAVE_POSIX_MEMALIGN 0, so av_frame_get_buffer -> av_buffer_alloc -> av_malloc reaches the SDK's malloc, which narrows the frame's single buffer to its size. The read at offset 160 of the alpha plane lies inside upstream's own 1024-byte padded plane, inside that bound.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 9708638436b7117b. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
