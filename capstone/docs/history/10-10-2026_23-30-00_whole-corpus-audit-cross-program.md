@@ -258,6 +258,52 @@ Predictions:
   recurs here, those cells are NO-READING (unattributed or setup-fault), never catches. It would be a
   port defect to find, not a reading.
 
+### R9. wmem-repros 22 (c702b44a01, USB HID double free) on every arm
+
+**The case.** It comes from the nested-shape hunt (`docs/ref/nested-shape-hunt-2026-10.md`). It is a fix
+reversal, like cases 16 and 17. The record is `22_c702b44a01_usbhid_output_usages_freed_twice/`:
+case.c, case.json and PROVENANCE.md, which quotes `c702b44a01^` by line.
+
+**Construction.** The native fix differential was run while building the case (the case's own
+gate 8), so that arm's outcome was seen before this pre-registration:
+- the first reduction's observable (two allocations sharing storage) did not occur in the faithful
+  sequence;
+- the recorded observable is the free list losing the INPUT field's freed array;
+- buggy DEFECT-REPRODUCED and fixed FIXED, 3 of 3 each.
+
+No protected arm has run.
+
+**Runner changes, each tested both ways before this run:**
+- `poisoncap/run.py`: a case with no labelled probe and declared `fault_sites` uses `wm_defect_probe`
+  only as the load-base anchor, and is caught only by a fault in a declared function. In a stubbed
+  test, a fault in `wmem_block_free` and an unresolved pc both read unpaired.
+- `run-virtual-cases.py`: a declared site that is a zero-size label (`wm_widen_probe`) matches only
+  its own instruction. A pc 4 bytes off reads NO-READING (unattributed).
+
+**Sites, declared from source before any protected run (case.json):**
+- `wm_widen`: PoisonCap's handback load;
+- `wm_widen_probe`: the chunk port's `wm_chunk_of` handback probe on Capstone.
+
+Predictions, with the control that must fire in the same session:
+- **native-fix-differential** (`runners/run-native.sh`): two-sided.
+- **native-detect** (`runners/run-asan.sh`): no ASan report; the fixed arm FIXED; the ASan controls
+  fire.
+- **cheribsd-revocation** (stock CheriBSD 0cb16209, `WM_LIBC_SYSTEM`, differential under
+  supervise): complete, DEFECT-REPRODUCED, NOT CAUGHT. The revocation control faults at its label.
+- **poisoncap-spatial** (mode 0): complete. **poisoncap-protected** (mode 1): SIGPROT si_code 2 in
+  `wm_widen`.
+- **Capstone domain, region build** (`WM_CHUNKS=OFF`): `spatial` and `sublet` both complete. Case 11
+  in the same runs must fault at the read probe in sublet mode, cause 24.
+- **Capstone domain, chunk-port build** (`WM_CHUNKS=ON`): `sublet-chunks` (mode 1) faults at the
+  labelled allocator probe `wm_widen_probe`, cause 24.
+  - Mode 0 on this build is predicted to stop at the port's own double-free check (`wm_chunk_of`,
+    `wm_fail(260)`). That is the port's bookkeeping, not a capability, and it is run and recorded
+    as an observation, not as a cell.
+- **Capstone domain, reference build** (`sublet-malloc`, mode 1): complete. Control 90, built with the
+  same options, faults at the read probe, cause 24.
+- **virtual-malloc**: MISSED, DEFECT-REPRODUCED. **virtual-nested-pools**: CAUGHT at
+  `wm_widen_probe`, cause 24. Controls 90 and 91 behave as in R7b.
+
 ## Outcomes (written after each run)
 
 - **R1** (`memcached/allocator-repros/results/2026-10-10-cheribsd-fixed-buggy/`): as predicted, 18 of 18 arms.

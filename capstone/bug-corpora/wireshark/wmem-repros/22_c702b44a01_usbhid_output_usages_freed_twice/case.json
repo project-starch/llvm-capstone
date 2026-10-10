@@ -1,0 +1,64 @@
+{
+  "case": 22,
+  "upstream_fix": "c702b44a01",
+  "title": "USB HID report descriptor: two OUTPUT fields share one usages array, and the error path frees it twice into the file scope's block allocator",
+  "consumer": "epan/dissectors/packet-usb-hid.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: v4.6.8's parse_report_descriptor (packet-usb-hid.c:3734) starts a fresh usages array after the OUTPUT append (:3790, 'field.usages = wmem_array_new(scope, sizeof(uint32_t));'), the fix's line; c702b44a01^ appends at :3347 and starts none (:3341-3350). A fix reversal, as cases 16 and 17 are. The pre-fix shape is quoted from c702b44a01^ in PROVENANCE.md.",
+  "object": "an OUTPUT field's usages array header, a wmem_array_t in the file scope",
+  "lifetime_ender": "the error path's wmem_free of each field's usages (:3464-3470): the shared array's chunk is freed once, then again -- a double free into the file scope's BLOCK allocator, whose recycler list lives in the freed chunks",
+  "shape": "double free into the block allocator's free list",
+  "allocator_layer": "block -- wmem_file_scope() (parse_report_descriptor, :3301); the free list is the recycler written over freed chunks",
+  "fidelity": "model-consumer, real allocator: each wmem_array_new is reduced to its two allocations (the header, sized as wmem_array_t's members, and a one-element buffer); the descriptor is INPUT, OUTPUT, OUTPUT, then a malformed item, in that order. The defective access is the second wmem_free itself.",
+  "distinguishing": "the corpus's first double free, and its first row whose defective access is a call INTO the allocator: a protected arm must stop at the allocator's handback (wm_widen_probe / wm_widen), not at wm_defect_probe. Natively the double free does not alias two allocations: re-adding a chunk already on BLOCK's circular recycler relinks it to itself, and the INPUT field's freed array drops off the list -- never reissued, where the fixed sequence reissues it at once. That lost chunk is what the native fix differential's DEFECT-REPRODUCED means here; the driver's generic wording ('reached storage outside its object') does not describe it.",
+  "fault_sites": [
+    "wm_widen",
+    "wm_widen_probe"
+  ],
+  "fault_sites_why": "Declared from source before any protected run (2026-10-11). PoisonCap: the build has the port's hooks without the chunk port, so wmem_block_free begins 'ptr = wm_widen(ptr)' (wireshark-4.6.8-0002 patch, the #else of WMEM_PORT_CHUNKS), and wm_widen (src/cheribsd/poisoncap.c:172-178) loads through the pointer first; the first free poisoned and swept the chunk (wm_release_chunk, :193-198), so the second free's handed-back capability faults there. Capstone (domain and virtual) names the same handback by its label, wm_widen_probe -- declared here too, matched to that label's own instruction, never to the static function around it (src/shared/backing.c, probe() under WM_CAPABILITY), which the chunk port's wm_chunk_of calls before anything else.",
+  "status": "predicted 2026-10-11; see each arm",
+  "nested": true,
+  "nested_why": "wmem's BLOCK allocator carved the array header out of a block it took from g_malloc, so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED.",
+  "arms": {
+    "spatial": {
+      "oracle": "complete: mode 0 on the region-granular build (WM_CHUNKS=OFF) revokes nothing; the handback's own load succeeds and the double free goes through"
+    },
+    "sublet": {
+      "oracle": "complete: mode 1 on the region-granular build revokes whole regions only; a BLOCK chunk free inside a live block ends no region, so the handed-back pointer is still valid"
+    },
+    "sublet-chunks": {
+      "oracle": "fault at the labelled allocator probe (wm_widen_probe): under the chunk port (WM_CHUNKS=ON) mode 1 the first free revoked the chunk's region, and wm_chunk_of probes the handed-back pointer before anything else",
+      "cause": 24
+    },
+    "sublet-malloc": {
+      "target": "Capstone domain, wmem AS RELEASED (WM_VARIANT=reference) on Sublet regions, mode 1: Sublet only as the system allocator",
+      "oracle": "complete: both frees stay inside the file scope's BLOCK allocator; nothing reaches g_free"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete: mode 0 poisons nothing; wm_widen's load succeeds"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "SIGPROT in wm_widen (a declared fault site): the first free poisoned and swept the chunk, so the second free's handed-back capability is revoked when wm_widen loads through it"
+    },
+    "native-detect": {
+      "oracle": "no ASan report: both frees are wmem_block_free inside a block one malloc returned; ASan sees neither"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on, wmem on libc (WM_LIBC_SYSTEM, WM_CHUNKS=OFF)",
+      "oracle": "complete (VERDICT DEFECT-REPRODUCED): the double free never reaches libc free(); the quarantine sees nothing"
+    },
+    "native-fix-differential": {
+      "oracle": "two-sided: the buggy sequence loses the INPUT field's freed array from the free list (VERDICT DEFECT-REPRODUCED), the fixed one reissues it (VERDICT FIXED)"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, wmem stock on virtual mallocng (tools/arms.json virtual-wmem-libc; tools/run-virtual-cases.py --prebuilt, the fix differential `0 N buggy`): a fault in the case's labelled probe function or at a declared allocator label, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, wmem's Sublet region and chunk layers over a payload the virtual heap lends linear (tools/arms.json virtual-wmem-chunks; tools/run-virtual-cases.py --prebuilt, `1 N`): a fault in the case's labelled probe function or at a declared allocator label, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
+    }
+  }
+}
