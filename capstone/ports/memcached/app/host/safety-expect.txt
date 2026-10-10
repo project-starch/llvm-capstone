@@ -317,3 +317,31 @@ lifetimes  18  FAULT  temporal
 lifetimes  19  RETURN 130015b
 lifetimes  20  FAULT  oob
 lifetimes  21  FAULT  oob
+
+# ---------------------------------------------------------------------------------------------
+# FIXTURES 22 AND 23, registered 2026-10-11 BEFORE either was built or booted, and pushed with the
+# lane branch before the first run. Upstream a836eab ("fix memory corruption in slab page mover",
+# 2015, shipped broken in 1.4.23-1.4.24), one of the page-mover defects re-read from the full
+# history (docs/ref/memcached-allocator-defect-triage.md, "RECONSTRUCTED 2026-10-11").
+#   22  the fix reversed at run time (patch 0005's mcapp_reverse_a836eab in slabs_mover.c): item a
+#       is allocated in a fresh class and never linked (its upload in progress); its page gets a
+#       second page beside it and freed fillers; slabs_reassign moves a's page to a large class;
+#       the mover takes a's chunk for cleared, wipes the page and splits it into the other class;
+#       a dst item covering a's address is allocated; a writes 0xee and the dst item reads it.
+#   23  the same sequence as shipped: the mover waits for the upload (MOVE_BUSY_FLOATING).
+# Rows only for the two virtual arms run-virtual.py runs; the physical heap arms are not run.
+# WHAT EACH PREDICTION RESTS ON:
+# - sublet 22: the page is never freed to the system (slab pages are not returned), so the outer
+#   heap sees nothing; a's pointer carries the whole page's bound and still names it: the write
+#   lands in the dst item, mark (1 << 8) | 0xee.
+# - lifetimes 22: finishing the page move revokes the page's generation (patch 0006,
+#   slabs_finalize_page_move), and a's chunk is a child of it: the write faults temporal at a's
+#   address, the printed target.
+# - 23 on both arms: the page is not moved within the 3 s wait, mark 0x7.
+# - A 0xE0016 mark means the triggering condition was not created (class not fresh, no second page,
+#   reassign refused, no dst item over a's address): a finding about the fixture, never a pass.
+
+sublet      22  RETURN 16001ee
+sublet      23  RETURN 1700007
+lifetimes   22  FAULT  temporal
+lifetimes   23  RETURN 1700007
