@@ -36,15 +36,49 @@ def discover(bins):
             if p.is_file() and p.suffix == ""]
 
 
+def declared_sites(which):
+    """The functions the case's case.json declared, before any run, as where its defective access
+    faults when it is a call INTO the allocator rather than a labelled probe (fault_sites)."""
+    case = next(CORPUS.glob(f"{which:02d}_*")) / "case.json"
+    return set(json.loads(case.read_text()).get("fault_sites") or ())
+
+
 def probe_label(which):
-    """The label of the one probe the case's own case.c calls; anything else is refused."""
+    """The label of the one probe the case's own case.c calls; anything else is refused -- except a
+    case that calls none and declares fault_sites (its access is the allocator call itself, e.g. a
+    double free). For that case wm_defect_probe, which every program carries, is only the ANCHOR the
+    supervisor resolves to learn the load base; the catch is judged against the declared sites."""
     src = next(CORPUS.glob(f"{which:02d}_*")) / "case.c"
     text = src.read_text()
     reads = "WM_READ" in text or "wm_probe(" in text
     writes = "WM_WRITE" in text or "wm_write_probe(" in text
+    if not reads and not writes and declared_sites(which):
+        return "wm_defect_probe"
     if reads == writes:
         raise SystemExit(f"CONTROL-FAILED case {which} calls {'both' if reads else 'no'} labelled probe")
     return "wm_defect_probe" if reads else "wm_defect_write"
+
+
+def function_at(nm, program, anchor, anchor_rt, pc):
+    """The defined function of PROGRAM holding runtime pc, through the anchor label's runtime address
+    (the supervisor's `expect` line) minus its ELF value. None when it cannot be resolved."""
+    if anchor_rt is None:
+        return None
+    out = subprocess.run([str(nm), "-S", "--defined-only", str(program)], capture_output=True, text=True).stdout
+    table = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 4 and parts[2] in "tTwW":
+            table[parts[3]] = (int(parts[0], 16), int(parts[1], 16))
+        elif len(parts) == 3 and parts[1] in "tT":
+            table.setdefault(parts[2], (int(parts[0], 16), 0))
+    if anchor not in table:
+        return None
+    off = pc - (anchor_rt - table[anchor][0])
+    for name, (value, size) in table.items():
+        if size and value <= off < value + size:
+            return name
+    return ""
 
 
 def defect_case(program, mode, which, timeout):
@@ -82,12 +116,16 @@ def read_arm(directory):
     )
 
 
-def pair_verdict(which, zero, one):
-    """A pair is only a pair when the unprotected arm reached the same site."""
+def pair_verdict(which, zero, one, site_of=None):
+    """A pair is only a pair when the unprotected arm reached the same site. For a case that declares
+    fault_sites, `site_of(pc)` names the function a fault lies in, and the site must be a declared one."""
     completed = zero["exit_kind"] == "status" and zero["exit_value"] == 0
     faulted = one["exit_kind"] == "signalled" and one["exit_value"] == SIGPROT
     at_probe = None
-    if faulted and one["probe_address"] is not None:
+    sites = declared_sites(which) if site_of else set()
+    if faulted and sites:
+        at_probe = any(site_of(f["pc"], one["probe_address"]) in sites for f in one["faults"])
+    elif faulted and one["probe_address"] is not None:
         at_probe = any(f["pc"] == one["probe_address"] for f in one["faults"])
     return dict(
         case=which, unprotected_completed=completed, protected_faulted=faulted,
@@ -98,7 +136,7 @@ def pair_verdict(which, zero, one):
     )
 
 
-def single_verdict(which, zero):
+def single_verdict(which, zero, site_of=None):
     """The plain CheriBSD arm has one mode. Completing means the layer below
     saw nothing; a SIGPROT counts as a catch ONLY at the case's labelled probe.
     A SIGPROT anywhere else -- or one whose probe the supervisor could not resolve
@@ -107,7 +145,10 @@ def single_verdict(which, zero):
     completed = zero["exit_kind"] == "status" and zero["exit_value"] == 0
     faulted = zero["exit_kind"] == "signalled" and zero["exit_value"] == SIGPROT
     at_probe = None
-    if faulted and zero["probe_address"] is not None:
+    sites = declared_sites(which) if site_of else set()
+    if faulted and sites:
+        at_probe = any(site_of(f["pc"], zero["probe_address"]) in sites for f in zero["faults"])
+    elif faulted and zero["probe_address"] is not None:
         at_probe = any(f["pc"] == zero["probe_address"] for f in zero["faults"])
     return dict(case=which, completed=completed, caught=faulted and at_probe is True,
                 faulted_elsewhere=faulted and at_probe is not True, fault_at_probe=at_probe,
@@ -177,11 +218,15 @@ def main():
             if d.is_dir():
                 arms.setdefault(which, {})[mode] = read_arm(d)
     rows = []
+    programs = dict(found)
+    nm = a.sdk / "bin" / "llvm-nm"
     for which in sorted(arms):
+        def site_of(pc, anchor_rt, program=programs[which]):
+            return function_at(nm, program, "wm_defect_probe", anchor_rt, pc)
         if 1 in modes and {0, 1} <= set(arms[which]):
-            rows.append(pair_verdict(which, arms[which][0], arms[which][1]))
+            rows.append(pair_verdict(which, arms[which][0], arms[which][1], site_of))
         elif modes == [0] and 0 in arms[which]:
-            rows.append(single_verdict(which, arms[which][0]))
+            rows.append(single_verdict(which, arms[which][0], site_of))
     matrix = dict(complete=True, modes=modes, runtime_revocation=a.runtime_revocation,
                   oracle_failures=summary.get("failed_cases", []), rows=rows)
     if 1 in modes:

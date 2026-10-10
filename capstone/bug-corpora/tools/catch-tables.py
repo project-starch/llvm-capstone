@@ -390,6 +390,8 @@ if "--board-virtual" in sys.argv:
         for r in vrows:
             if r["kind"] == kind:
                 groups.setdefault((r["prog"], r["layer"], axis(r)), []).append(r)
+        if not groups:
+            continue  # a kind with no rows on this board (mruby's "other" has no virtual arm)
         print(f"\n**{kind.capitalize()}, virtual Capstone**\n")
         print("| program | allocator layer | axis | n | " + " | ".join(h for _, h in VB) + " |")
         print("|---|---|---|---:|---:|---:|---:|")

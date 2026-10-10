@@ -367,6 +367,33 @@ class VirtualHosted(unittest.TestCase):
             self.assertIn("MCP_SUBLET", self.rv.cache_says(t / ad["cache_dir"], ad["cache"]["virtual-nested-pools"], sdk))
             self.assertIn("no ", self.rv.cache_says(t, ad["cache"]["virtual-malloc"], sdk))
 
+    def test_declared_label_matches_its_exact_instruction_only(self):
+        # FAULT is pc=0x10234, code=0x10000; FakeSymbols' base decides the link pc
+        sym = FakeSymbols("probe")
+        sym.base = 0x10000
+        link = 0x10234 - 0x10000 + sym.base
+        text = "WM_DEFECT case=22 ready\n" + self.FAULT
+        o = self.rv.observe_hosted("22", "1", text, {"kind": "signal", "value": 11}, sym, None, self.READY,
+                                   self.DONE, False, ("wm_widen", "wm_widen_probe"), {"wm_widen_probe": link})
+        o.controls = [v.Control("c", "fault", "")]
+        self.assertEqual(v.judge(o, self.CTL)[0], v.CAUGHT)
+        off = self.rv.observe_hosted("22", "1", text, {"kind": "signal", "value": 11}, sym, None, self.READY,
+                                     self.DONE, False, ("wm_widen", "wm_widen_probe"), {"wm_widen_probe": link + 4})
+        off.controls = [v.Control("c", "fault", "")]
+        self.assertEqual(v.judge(off, self.CTL)[:2], (v.NO_READING, "unattributed"))
+
+    def test_undeclared_case_without_a_probe_is_refused(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / "23_x_y"
+            d.mkdir()
+            (d / "case.c").write_text("WM_CASE(23) { wmem_free(0, 0); }\n")
+            (d / "case.json").write_text("{}\n")
+            with self.assertRaises(SystemExit):
+                self.rv.wmem_probe(d)
+            (d / "case.json").write_text('{"fault_sites": ["wm_widen"]}\n')
+            self.assertIsNone(self.rv.wmem_probe(d))
+
     def test_port_controls_run_unobserved(self):
         w, m = self.rv.HOSTED["wmem-repros"], self.rv.HOSTED["allocator-repros"]
         self.assertEqual(self.rv.port_control_argv(w, "virtual-malloc", "0", "91"), ["0", "91"])

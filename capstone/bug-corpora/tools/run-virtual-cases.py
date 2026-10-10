@@ -247,12 +247,15 @@ def main():
 # ---- prebuilt hosted programs: the nested corpora ------------------------------------------------
 
 def wmem_probe(case_dir):
-    """The probe function the case's own case.c calls; a case calling both or neither is refused. In
-    the hosted build the probes are the noinline functions wm_probe / wm_write_probe (driver.c), whose
-    one data access is the labelled read or write."""
+    """The probe function the case's own case.c calls; a case calling both or neither is refused,
+    except one that calls neither and declares fault_sites (its access is a call into the allocator,
+    judged against those sites). In the hosted build the probes are the noinline functions wm_probe /
+    wm_write_probe (driver.c), whose one data access is the labelled read or write."""
     text = (case_dir / "case.c").read_text()
     reads = "WM_READ" in text or "wm_probe(" in text
     writes = "WM_WRITE" in text or "wm_write_probe(" in text
+    if not reads and not writes and json.loads((case_dir / "case.json").read_text()).get("fault_sites"):
+        return None
     if reads == writes:
         sys.exit(f"CONTROL-FAILED {case_dir.name} calls {'both' if reads else 'no'} labelled probe")
     return "wm_probe" if reads else "wm_write_probe"
@@ -336,8 +339,25 @@ def cache_says(build, want, sdk):
     return "; ".join(bad)
 
 
-def observe_hosted(n, mode, text, result, symbols, probe, ready, done, differential):
-    """What one buggy run of a hosted case showed, as facts."""
+def label_addresses(llvm_bin, image, names):
+    """Link addresses of the named symbols, zero-size labels included (wm_widen_probe is a label
+    inside a static function, which Symbols.lookup would report as that function instead)."""
+    if not names:
+        return {}
+    out = subprocess.run([str(Path(llvm_bin) / "llvm-nm"), "--defined-only", str(image)],
+                         capture_output=True, text=True).stdout
+    found = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[2] in names:
+            found[parts[2]] = int(parts[0], 16)
+    return found
+
+
+def observe_hosted(n, mode, text, result, symbols, probe, ready, done, differential, sites=(), labels=None):
+    """What one buggy run of a hosted case showed, as facts. `sites` are the functions or labels the
+    case declared (case.json fault_sites) for an access that is a call into the allocator; `labels`
+    maps those of them that are labels to their link address, matched to the exact instruction."""
     o = v.Observation(case="", arm="")
     if "[runner] TIMEOUT" in text or result.get("kind") == "none":
         o.infra, o.notes = "infra", "the step began and never ended (timeout or the guest died)"
@@ -353,11 +373,20 @@ def observe_hosted(n, mode, text, result, symbols, probe, ready, done, different
     fault = v.domain_fault(result.get("fault") or "", symbols) or v.domain_fault(text, symbols)
     if fault:
         o.fault = fault
+        m = v.FAULT_LINE.search(result.get("fault") or "") or v.FAULT_LINE.search(text)
+        base = getattr(symbols, "base", None)
+        link_pc = (int(m.group(2), 16) - int(m.group(4), 16) + base) if (m and base is not None) else None
+        at_label = next((name for name, addr in (labels or {}).items() if link_pc == addr), None)
         if fault.symbol == probe:
             o.attribution = "probe"
             o.attribution_evidence = f"the fault is in {probe}, the case's labelled probe, whose one data access is the defect's"
+        elif at_label or (fault.symbol and fault.symbol in set(sites)):
+            o.attribution = "function"
+            o.attribution_evidence = (f"the fault is at {at_label or fault.symbol}, a site the case declared before the run "
+                                      "(case.json fault_sites)" + (" -- the label's own instruction" if at_label else ""))
         else:
-            o.attribution_evidence = f"the fault is in {fault.symbol or 'no known function'}; the case's probe is {probe}"
+            o.attribution_evidence = (f"the fault is in {fault.symbol or 'no known function'}; the case's probe is {probe}"
+                                      + (f", its declared sites {sorted(sites)}" if sites else ""))
         return o
     if result.get("kind") == "signal":
         o.notes = f"signal {result.get('value')} with no domain fault line"
@@ -506,8 +535,10 @@ def run_hosted(a, corpus):
                 sites = json.loads((d / "case.json").read_text()).get("fault_sites") or ()
                 o = observe(n, btext, bres, v.Symbols(a.llvm_bin, programs[d.name]), sites)
             else:
+                sites = json.loads((d / "case.json").read_text()).get("fault_sites") or ()
                 o = observe_hosted(n, mode, btext, bres, v.Symbols(a.llvm_bin, programs[d.name]), ad["probe"](d),
-                                   ad["ready"], ad["done"], bool(ad["buggy"][a.arm]))
+                                   ad["ready"], ad["done"], bool(ad["buggy"][a.arm]), sites,
+                                   label_addresses(a.llvm_bin, programs[d.name], set(sites)))
         o.case, o.arm, o.image_sha256 = d.name, a.arm, v.sha256(programs[d.name])
         o.controls = list(controls)
         verdict = v.judge(o, spec)

@@ -258,6 +258,69 @@ Predictions:
   recurs here, those cells are NO-READING (unattributed or setup-fault), never catches. It would be a
   port defect to find, not a reading.
 
+### R9. wmem-repros 22 (c702b44a01, USB HID double free) on every arm
+
+**The case.** It comes from the nested-shape hunt (`docs/ref/nested-shape-hunt-2026-10.md`). It is a fix
+reversal, like cases 16 and 17. The record is `22_c702b44a01_usbhid_output_usages_freed_twice/`:
+case.c, case.json and PROVENANCE.md, which quotes `c702b44a01^` by line.
+
+**Construction.** The native fix differential was run while building the case (the case's own
+gate 8), so that arm's outcome was seen before this pre-registration:
+- the first reduction's observable (two allocations sharing storage) did not occur in the faithful
+  sequence;
+- the recorded observable is the free list losing the INPUT field's freed array;
+- buggy DEFECT-REPRODUCED and fixed FIXED, 3 of 3 each.
+
+No protected arm has run.
+
+**Runner changes, each tested both ways before this run:**
+- `poisoncap/run.py`: a case with no labelled probe and declared `fault_sites` uses `wm_defect_probe`
+  only as the load-base anchor, and is caught only by a fault in a declared function. In a stubbed
+  test, a fault in `wmem_block_free` and an unresolved pc both read unpaired.
+- `run-virtual-cases.py`: a declared site that is a zero-size label (`wm_widen_probe`) matches only
+  its own instruction. A pc 4 bytes off reads NO-READING (unattributed).
+
+**Sites, declared from source before any protected run (case.json):**
+- `wm_widen`: PoisonCap's handback load;
+- `wm_widen_probe`: the chunk port's `wm_chunk_of` handback probe on Capstone.
+
+Predictions, with the control that must fire in the same session:
+- **native-fix-differential** (`runners/run-native.sh`): two-sided.
+- **native-detect** (`runners/run-asan.sh`): no ASan report; the fixed arm FIXED; the ASan controls
+  fire.
+- **cheribsd-revocation** (stock CheriBSD 0cb16209, `WM_LIBC_SYSTEM`, differential under
+  supervise): complete, DEFECT-REPRODUCED, NOT CAUGHT. The revocation control faults at its label.
+- **poisoncap-spatial** (mode 0): complete. **poisoncap-protected** (mode 1): SIGPROT si_code 2 in
+  `wm_widen`.
+- **Capstone domain, region build** (`WM_CHUNKS=OFF`): `spatial` and `sublet` both complete. Case 11
+  in the same runs must fault at the read probe in sublet mode, cause 24.
+- **Capstone domain, chunk-port build** (`WM_CHUNKS=ON`): `sublet-chunks` (mode 1) faults at the
+  labelled allocator probe `wm_widen_probe`, cause 24.
+  - Mode 0 on this build is predicted to stop at the port's own double-free check (`wm_chunk_of`,
+    `wm_fail(260)`). That is the port's bookkeeping, not a capability, and it is run and recorded
+    as an observation, not as a cell.
+- **Capstone domain, reference build** (`sublet-malloc`, mode 1): complete. Control 90, built with the
+  same options, faults at the read probe, cause 24.
+- **virtual-malloc**: MISSED, DEFECT-REPRODUCED. **virtual-nested-pools**: CAUGHT at
+  `wm_widen_probe`, cause 24. Controls 90 and 91 behave as in R7b.
+
+### R9b. wmem-repros on virtual Capstone again, all 23 cases, with the runner the claim audit fixed
+
+The claim audit of 2026-10-11 found three things in `tools/run-virtual-cases.py`:
+- The runner of 7759d9d91b27 (the memcached adapter) ran wmem's port controls as the fix differential
+  (`MODE N buggy`), not unobserved (`MODE N`) as R7b had.
+  - No recorded run used that: R8b's memcached controls are the case-line form, and R9's virtual steps
+    ran after the fix (their gate.sh shows `0 91` and `1 91`).
+- The control evidence in every 2026-10-10 virtual bundle was cut to its first character. The
+  `observed` fields are right.
+
+Both are fixed, with tests. wmem's bundles are re-made from one run of all 23 cases on the fixed runner,
+which puts case 22 in the same bundle as 0-21. The predictions are the recorded readings:
+- `virtual-malloc`: 23 MISSED;
+- `virtual-nested-pools`: 23 CAUGHT, at `wm_probe`/`wm_write_probe` for 0-21 and at `wm_widen_probe`
+  for 22;
+- controls as in R7b.
+
 ## Outcomes (written after each run)
 
 - **R1** (`memcached/allocator-repros/results/2026-10-10-cheribsd-fixed-buggy/`): as predicted, 18 of 18 arms.
@@ -357,6 +420,23 @@ Predictions:
     - 08: cause 28 at the same scan load.
   - The prior-art branch's one-pc fault did not recur. That branch did not build the stock ledger.
   - Both columns agree with the physical ones: 1/9, and 9/9 (counting `sublet-carve` for 06 and 07).
+- **R9** (`wmem-repros/results/2026-10-11-case22/`): as predicted, 11 of 11 arms, plus the predicted
+  mode-0 observation.
+  - Missed:
+    - native-detect: no report; the ASan controls reported;
+    - cheribsd-revocation: complete; the revocation control faulted;
+    - poisoncap-spatial;
+    - spatial and sublet on the region build: both complete; case 11 faulted in the same session;
+    - sublet-malloc: complete; control 90 faulted;
+    - virtual-malloc.
+  - Caught:
+    - sublet-chunks: cause 24 AT the published allocator probe, `wm_widen_probe`;
+    - poisoncap-protected: SIGPROT si_code 2 in `wm_widen` (`poisoncap.c:173`), called from
+      `wmem_block_free`;
+    - virtual-nested-pools: cause 24 at `wm_widen_probe`'s own instruction.
+  - Mode 0 on the chunk-port build stopped at `WM return=260`, the port's own `!chunk->used` check, as
+    pre-registered.
+  - The native fix differential is two-sided.
 - **The claim audit of 2026-10-11** (before landing; claim-auditor over R1, R2c/R3c, R7b/R8b and Perl 03):
   - All four attributions hold at the instruction level:
     - R1's `mc_case_body+0x1e8` is `lbu` at `case.c:66`, the scan;
@@ -381,3 +461,12 @@ Predictions:
       default prediction, explained in its README.
     - The column-3 temporal catches have no same-image mode-0 buggy arm beside them. What carries them
       is cause 24 with a non-zero `value_hi`: a capability whose tag the revocation cleared.
+- **R9b** (`wmem-repros/results/2026-10-11-virtual/<arm>/`, now the corpus's `verdict_bundles`; derived): as
+  predicted, 46 of 46 cells.
+  - Controls are as in R7b, now run unobserved, with their evidence recorded as whole lines.
+  - `virtual-malloc`: 23 MISSED.
+  - `virtual-nested-pools`: 23 CAUGHT:
+    - 13 at `wm_probe`, cause 24;
+    - 9 spatial at `wm_probe`/`wm_write_probe`, cause 28;
+    - case 22 at `wm_widen_probe`'s own instruction, cause 24.
+  - R7b's bundles (`2026-10-10-virtual/`) stay as the earlier record.
