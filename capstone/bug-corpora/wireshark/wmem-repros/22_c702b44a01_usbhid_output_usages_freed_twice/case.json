@@ -40,10 +40,16 @@
       "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
     },
     "virtual-malloc": {
-      "oracle": "virtual profile, wmem as released on virtual mallocng (tools/arms.json virtual-wmem): a fault at the labelled probe or a declared fault site, or the case completes and this arm did not see it"
+      "oracle": "virtual profile, wmem as released on virtual mallocng (tools/arms.json virtual-wmem): a fault at the labelled probe or a declared fault site, or the case completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the hosted driver's ready mark) and completed with no fault",
+      "verdict_from": "results/2026-10-11-virtual-23/virtual-malloc"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc"
+      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f94612cb4 in wmem_block_sublet_free; by function: wmem_block_sublet_free is the case's declared fault site",
+      "verdict_from": "results/2026-10-11-virtual-23/virtual-nested-pools"
     }
   }
 }

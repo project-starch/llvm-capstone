@@ -10,7 +10,7 @@
 
 | sort | where | count | what it is |
 |---|---|---:|---|
-| third-party defects, as cases | `capstone/bug-corpora/` | 296 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
+| third-party defects, as cases | `capstone/bug-corpora/` | 297 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 30 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 107 open, 77 resolved | the registry, not reproduced cases |
@@ -44,13 +44,13 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/sqlite/engine-repros`](sqlite/engine-repros) | sqlite | 3.22.0 amalgamation | 33 | 33 live | 0 | case-json | measured |
 | [`capstone/bug-corpora/wireshark/plain-heap-repros`](wireshark/plain-heap-repros) | wireshark | 4.6.8 | 12 | 1 live, 11 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/wireshark/plain-temporal-repros`](wireshark/plain-temporal-repros) | wireshark | 4.6.8 | 10 | 10 fixed before the pin | 0 | case-json | measured |
-| [`capstone/bug-corpora/wireshark/wmem-repros`](wireshark/wmem-repros) | wireshark | 4.6.8 | 22 | 3 live, 19 fixed before the pin | 0 | case-json | measured |
+| [`capstone/bug-corpora/wireshark/wmem-repros`](wireshark/wmem-repros) | wireshark | 4.6.8 | 23 | 3 live, 20 fixed before the pin | 0 | case-json | measured |
 | [`xlang/lua-cdp`](../../xlang/lua-cdp) | Lua C-data-pointer bindings | per row | 13 | not recorded | 0 | xlang-row | measured |
 | [`xlang/repro`](../../xlang/repro) | cross-language FFI (12 of 15 rows are mruby or an mruby gem) | per row | 15 | not recorded | 11 | xlang-row | measured |
 | [`xlang/reuse-not-free`](../../xlang/reuse-not-free) | sqlite | per row | 2 | not recorded | 0 | xlang-row | built |
 | [`xlang/toctou-double-fetch`](../../xlang/toctou-double-fetch) | various (sandbox and host boundaries) | per row | 0 | not recorded | 0 | xlang-row | triaged |
 
-**326 cases in 28 corpora**, of which 149 are recorded live in the version their corpus pins, 119 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
+**327 cases in 28 corpora**, of which 149 are recorded live in the version their corpus pins, 120 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 
@@ -77,7 +77,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/sqlite` | full-application | 3.53.3, 3.22.0 | capstone-domain, silicon, native | `capi-repros`, `engine-repros` | 52 |
 | `capstone/ports/whisper/ggml-context` | allocator-component | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | 0 |
 | `capstone/ports/wireshark/app` | full-application | 4.6.8 | capstone-domain | `plain-heap-repros` | 12 |
-| `capstone/ports/wireshark/wmem` | allocator-component | 4.6.8 | capstone-virtual, cheribsd-purecap, native | `wmem-repros` | 22 |
+| `capstone/ports/wireshark/wmem` | allocator-component | 4.6.8 | capstone-virtual, cheribsd-purecap, native | `wmem-repros` | 23 |
 
 ## Gaps, as the declarations state them
 

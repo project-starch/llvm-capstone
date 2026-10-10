@@ -1064,7 +1064,7 @@
         "version": "4.6.8",
         "port": "capstone/ports/wireshark/wmem"
       },
-      "cases": 22,
+      "cases": 23,
       "case_schema": "case-json",
       "case_macro": "WM",
       "required_arms": [
@@ -1077,7 +1077,7 @@
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
         "true": 3,
-        "false": 19
+        "false": 20
       },
       "runners": [
         "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py",
@@ -1100,7 +1100,8 @@
         "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-differential",
         "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-domain-regression",
         "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-poisoncap",
-        "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual"
+        "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual-23"
       ],
       "advisories": [],
       "shape_table": true,
@@ -1111,8 +1112,8 @@
         "virtual-nested-pools": "virtual-wmem-pools"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
+        "virtual-malloc": "results/2026-10-11-virtual-23/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-11-virtual-23/virtual-nested-pools"
       },
       "where": "capstone/bug-corpora/wireshark/wmem-repros"
     },
@@ -1945,17 +1946,17 @@
     "capstone/bug-corpora/sqlite/engine-repros": 33,
     "capstone/bug-corpora/wireshark/plain-heap-repros": 12,
     "capstone/bug-corpora/wireshark/plain-temporal-repros": 10,
-    "capstone/bug-corpora/wireshark/wmem-repros": 22,
+    "capstone/bug-corpora/wireshark/wmem-repros": 23,
     "xlang/lua-cdp": 13,
     "xlang/repro": 15,
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 296,
+  "cases_here": 297,
   "cases_xlang": 30,
-  "cases_total": 326,
+  "cases_total": 327,
   "live_true": 149,
-  "live_false": 119,
+  "live_false": 120,
   "live_not": 28,
   "advisories_total": 22,
   "renames": {

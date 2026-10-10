@@ -37,13 +37,13 @@
       "oracle": "virtual profile, wmem as released on virtual mallocng (tools/arms.json virtual-wmem): a fault at the labelled read or write probe, or the case completes and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the hosted driver's ready mark) and completed with no fault",
-      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
+      "verdict_from": "results/2026-10-11-virtual-23/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3f80691184 in wm_probe; by probe: the pc lies in wm_probe, the labelled read",
-      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3f87211184 in wm_probe; by probe: the pc lies in wm_probe, the labelled read",
+      "verdict_from": "results/2026-10-11-virtual-23/virtual-nested-pools"
     }
   },
   "status": "measured natively (native-detect, native-fix-differential) and on stock CheriBSD (cheribsd-revocation); on virtual Capstone (virtual-malloc, virtual-nested-pools; each arm's verdict_from names its bundle). The Capstone domain arms (spatial, sublet, sublet-chunks, sublet-malloc) and PoisonCap left the case on 2026-10-11 with their builds; their bundles stay in results/.",
