@@ -71,21 +71,25 @@ def load_cases():
             title=claim["title"],
             shape=claim["shape"],
             allocator_layer=claim["allocator_layer"],
+            # Functions a buggy fault may land in and still be this defect's -- declared from the
+            # source before the run (SCHEMA.md, `fault_sites`). A case with sites is expected to
+            # FAULT there; a case without is expected to complete.
+            fault_sites=claim.get("fault_sites") or [],
         )
     if not cases or sorted(cases) != list(range(len(cases))):
         raise SystemExit("the corpus case numbers are not 0..N-1")
     return cases
 
 
-def fixture(number, negative_control):
-    """One event, 128 bytes, the case number in the event id.
+def fixture(number, negative_control, fixed=False):
+    """One event, 128 bytes, the case number in the event id; value 1 asks for the FIXED sequence.
 
     Under the negative control the header's count says two events while the
     file carries one, so the program refuses the input before any cache is
     created and no case is performed at all.
     """
     count = 2 if negative_control else 1
-    return struct.pack("<16Q", MAGIC, count, *([0] * 10), 0, number, 0, 0)
+    return struct.pack("<16Q", MAGIC, count, *([0] * 10), 0, number, 0, 1 if fixed else 0)
 
 
 def fault_oracle():
@@ -96,10 +100,10 @@ def fault_oracle():
     )
 
 
-def build_case(number, supervisor, program, input_path, timeout, slug=""):
+def build_case(number, supervisor, program, input_path, timeout, slug="", fixed=False, expect_fault=False):
     label = f"{number:02d}-{slug.replace('_', '-')}" if slug else f"defect-{number}"
-    return dict(
-        name=f"{label}-mode0",
+    case = dict(
+        name=f"{label}-{'fixed' if fixed else 'mode0'}",
         program=str(supervisor),
         args=["./target", "input.bin", "output.bin", "0"],
         inputs={"target": str(program), "input.bin": str(input_path)},
@@ -108,6 +112,35 @@ def build_case(number, supervisor, program, input_path, timeout, slug=""):
         exit=0,
         outputs=["output.bin"],
     )
+    if expect_fault and not fixed:
+        case.update(expect=f"SUPERVISE exit signalled={SIGPROT}", exit=SIGPROT_EXIT, outputs=[])
+    return case
+
+
+def symbols(nm, program):
+    """{name: (value, size)} for the program's defined functions, from its own ELF."""
+    out = subprocess.run([str(nm), "-S", "--defined-only", str(program)], capture_output=True, text=True, check=True).stdout
+    table = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 4 and parts[2] in "tTwW":
+            table[parts[3]] = (int(parts[0], 16), int(parts[1], 16))
+    if not table:
+        raise SystemExit(f"no symbols read from {program}: the attribution cannot be made")
+    return table
+
+
+def attribute(table, expect, pc, anchor="mc_defect_read"):
+    """The function the fault pc lies in. The supervisor resolves `anchor` in the running child
+    (its `expect` line), which gives the load base; None when that is not possible."""
+    if expect is None or anchor not in table:
+        return None
+    base = int(expect, 16) - table[anchor][0]
+    off = int(pc, 16) - base
+    for name, (value, size) in table.items():
+        if size and value <= off < value + size:
+            return dict(function=name, offset=hex(off - value))
+    return dict(function=None, offset=hex(off))
 
 
 def build_revocation_control(supervisor, control, revocation_on, timeout):
@@ -172,6 +205,23 @@ def observed_fault(stdout):
         else None
     )
     return expect, fault, len(faults)
+
+
+def evaluate_fault(number, row, stdout, sites, table):
+    """A buggy arm with declared fault sites: it must FAULT, with SIGPROT, at a pc inside one of them."""
+    expect, fault, seen = observed_fault(stdout)
+    where = attribute(table, expect, fault["pc"]) if fault else None
+    verdict = dict(
+        case=number, mode=0, expected="fault in " + "/".join(sites), ran=row is not None,
+        exit=row["exit"] if row else None, expected_exit=SIGPROT_EXIT,
+        runner_oracle=bool(row and row["passed"]), stdout_sha256=row["stdout_sha256"] if row else None,
+        report=None, expect=expect, fault=fault, faults_seen=seen, attributed=where,
+    )
+    verdict["passed"] = bool(
+        verdict["runner_oracle"] and verdict["exit"] == SIGPROT_EXIT and fault is not None
+        and fault["signal"] == SIGPROT and where is not None and where["function"] in sites
+    )
+    return verdict
 
 
 def evaluate(number, row, stdout, report):
@@ -302,6 +352,9 @@ def main():
     if a.timeout < 1:
         p.error("the per-arm timeout must be positive")
     bins = a.build.resolve() / "bin"
+    nm = a.sdk.resolve() / "bin" / "llvm-nm"
+    if not nm.is_file():
+        p.error(f"no llvm-nm at {nm}: the fault attribution needs the SDK's own nm")
     programs = {n: bins / f"defect-{n:02d}" for n in selected}
     supervisor = bins / "supervise"
     probe = bins / "cheribsd-abi-probe"
@@ -317,17 +370,22 @@ def main():
 
     arms_wanted, hashes = [], {}
     for number in selected:
-        path = fixtures / f"case-{number}.bin"
-        path.write_bytes(fixture(number, a.negative_control))
-        hashes[number] = hashlib.sha256(path.read_bytes()).hexdigest()
-        arms_wanted.append(
-            (
-                number,
-                build_case(
-                    number, supervisor, programs[number], path, a.timeout, claims[number]["slug"]
-                ),
+        # The FIXED arm first, then the buggy one, on the same program in the same boot: the fixed
+        # run is the case's own control (the same allocations, minus the defect). Added 2026-10-10;
+        # until then this arm had no fixed run, so a fault could not be tied to the defect.
+        for fixed in (True, False):
+            path = fixtures / f"case-{number}{'-fixed' if fixed else ''}.bin"
+            path.write_bytes(fixture(number, a.negative_control, fixed))
+            hashes[(number, fixed)] = hashlib.sha256(path.read_bytes()).hexdigest()
+            arms_wanted.append(
+                (
+                    number,
+                    build_case(
+                        number, supervisor, programs[number], path, a.timeout, claims[number]["slug"],
+                        fixed=fixed, expect_fault=bool(claims[number]["fault_sites"]),
+                    ),
+                )
             )
-        )
     # The revocation control runs first: a case verdict is only worth reading
     # after the instrument has shown it can distinguish on from off.
     cases = [build_revocation_control(supervisor, control, revocation_on, a.timeout)]
@@ -432,10 +490,16 @@ def main():
             return EXIT_INFRASTRUCTURE
         blob = guest / name / "output.bin"
         report = blob.read_bytes() if blob.is_file() else None
-        verdict = evaluate(number, row, stdout_of(name), report)
+        fixed = name.endswith("-fixed")
+        sites = claims[number]["fault_sites"]
+        if sites and not fixed and not a.negative_control:
+            verdict = evaluate_fault(number, row, stdout_of(name), sites, symbols(nm, programs[number]))
+        else:
+            verdict = evaluate(number, row, stdout_of(name), report)
         verdict.update(
             claims[number],
-            fixture_sha256=hashes[number],
+            arm="fixed" if fixed else "buggy",
+            fixture_sha256=hashes[(number, fixed)],
             program_sha256=summary["binaries"][name],
         )
         if a.negative_control:
@@ -459,7 +523,7 @@ def main():
             f = verdict["fault"]
             detail += f" FAULT signal={f['signal']} code={f['code']} pc={f['pc']}"
         print(
-            f"{flag} case={number:<2} mode=0 revocation={a.runtime_revocation} "
+            f"{flag} case={number:<2} {verdict['arm']:5} revocation={a.runtime_revocation} "
             f"{claims[number]['upstream_fix']:<10} exit={verdict['exit']}{detail}",
             flush=True,
         )
