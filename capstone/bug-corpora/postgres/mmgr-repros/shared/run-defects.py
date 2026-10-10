@@ -84,15 +84,29 @@ def classify(serial, which, mode, runner_exit, control=False):
     # broken controls, which would have read as "the arm faults without the
     # defect" -- the exact opposite of what had happened, which was that
     # nothing ran at all.
-    if runner_exit == 75 or (not serial.strip() and not faults):
+    # The test is POSITIVE EVIDENCE THAT THE PROGRAM RAN, not the absence of a
+    # complaint. The driver prints the marker before the defect, so no marker
+    # and no fault means it never got far enough to be measured, whatever the
+    # exit status says. An empty serial log is only the most obvious shape of
+    # that; a log left over from an earlier boot is another, and an exit status
+    # of 1 from a dead VM looks exactly like an exit status of 1 from a case
+    # that ran and failed.
+    #
+    # The CPython lane hit the dangerous direction of this on 2026-10-10: 29 of
+    # its 32 control runs never executed, their rc 1 read as SILENT, and the
+    # control reported a clean pass. A control that passes because nothing ran
+    # is the failure the control exists to catch.
+    if runner_exit == 75 or (marker not in serial and not faults):
+        why = "no marker in the serial log and no fault, so the program did not reach the point where it could be measured"
+        if runner_exit == 75:
+            why = "the shared qemu lock wait expired (exit 75), so nothing ran"
+        elif not serial.strip():
+            why = "the guest produced no serial output at all"
         row.update(
             control="norun" if control else None,
             passed=False,
-            norun=("the guest produced nothing"
-                   + (" and the shared qemu lock wait expired (exit 75)"
-                      if runner_exit == 75 else "")
-                   + "; this is an infrastructure failure and carries no"
-                     " verdict either way"),
+            norun=why + "; an infrastructure failure, which carries no verdict"
+                        " in either direction",
         )
         return row
 
