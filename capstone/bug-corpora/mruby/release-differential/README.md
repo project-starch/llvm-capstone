@@ -312,3 +312,17 @@ test suite (`mrbtest`, 1,710 tests) runs to the same result on both images --
 Patch 0008 is 61 lines of code in `gc.c`. It replaces the adapter of 438 patch
 lines that held the GC's slots linearly in a region of the Sublet heap.
 
+## The system-allocator cases on the baseline and on CheriBSD (2026-10-11)
+
+Seven cases free their object through libc: 01, 03, 06, 09, 10, 11 and 17.
+[results/2026-10-11-system-group](results/2026-10-11-system-group/README.md)
+reads them, pre-registered with fault sites from host ASan, on the 2026-10-06
+bounds-only image (no temporal protection) and on CheriBSD with a quarantine
+probe, each fault placed by the image's symbols. The baseline reaches the
+access in five: 03, 09, 10 complete, 06 and 11 fault at their site; 01 and 17
+fault elsewhere (`mrb_vformat`, `mrb_func_basic_p`). On CheriBSD 06 faults at
+its site by bounds, 01 in `mrb_vformat` as on the baseline, and the other five
+complete while the probe shows every free quarantined, nothing reissued and no
+sweep: the block was held. So CheriBSD's verdicts for 03, 09, 10, 11 and 17
+are now `NOT-REISSUED` (the board's "held"), 01's `NO-READING`.
+

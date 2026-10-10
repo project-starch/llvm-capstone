@@ -38,7 +38,11 @@ sys.path.insert(0, str(REPO / "capstone/ports/common/host/cheribsd"))
 from guest import Guest  # noqa: E402
 
 CHURN = 'a = nil; 200_000.times { |i| a = "x" * 64 + i.to_s }; puts "CHURN done"\n'
-DEPTH = 'def d(n) n == 0 ? 0 : 1 + d(n - 1) end; puts "DEEP %d %d" % [{n}, d({n})]\n'
+# The 2026-10-06 arm's own depth controls, verbatim. FMT_DEPTH is not a control: the same
+# recursion printed through String#% took SIGPROT here at 40 frames on 2026-10-11, so it runs
+# after the controls as an observation, with its fault located like a case's.
+DEPTH = 'def deep(n) = n == 0 ? 0 : 1 + deep(n - 1)\nputs "DEEP {n} #{{deep({n})}}"\n'
+FMT_DEPTH = 'def d(n) n == 0 ? 0 : 1 + d(n - 1) end; puts "DEEP %d %d" % [40, d(40)]\n'
 
 
 def symbolize(nm, image, pc):
@@ -60,19 +64,20 @@ def main():
     p.add_argument("--bins", type=Path, required=True)
     p.add_argument("--cases", nargs="+", required=True)
     p.add_argument("--port", type=int, default=10093)
+    p.add_argument("--nm", type=Path, help="llvm-nm for the symbols (default: the SDK's)")
     a = p.parse_args()
     out = a.output / time.strftime("run-%H%M%S")
     out.mkdir(parents=True)
     if (a.bins / "mruby").read_bytes() != (a.bins / "mruby-relink").read_bytes():
         sys.exit("DIR/mruby is not the relinked interpreter")
-    nm = a.cheri / "sdk/bin/llvm-nm"
+    nm = a.nm or a.cheri / "sdk/bin/llvm-nm"
     cases = []
     for n in a.cases:
         d = next(CORPUS.glob(f"{int(n):02d}_*"))
         claims = json.loads((d / "case.json").read_text())
         cases.append((d.name, claims["trigger"], d, claims.get("fault_sites", [])))
-    tar = out / "kit.tar"
-    with tarfile.open(tar, "w") as t:
+    tar = out / "kit.tar.gz"   # static images with debug info: 121 MB raw, past scp's 120 s in the guest
+    with tarfile.open(tar, "w:gz") as t:
         for f in ("mruby", "mruby-qprobe", "revocation-control"):
             t.add(a.bins / f, arcname=f)
         for name, trig, d, _ in cases:
@@ -81,7 +86,8 @@ def main():
                     t.add(a.bins / f, arcname=f)
             else:
                 t.add(d / trig, arcname=f"cases/{name[:2]}.rb")
-        for f, text in (("churn.rb", CHURN), ("d40.rb", DEPTH.format(n=40)), ("d500.rb", DEPTH.format(n=500))):
+        for f, text in (("churn.rb", CHURN), ("d40.rb", DEPTH.format(n=40)), ("d500.rb", DEPTH.format(n=500)),
+                        ("fmt-d40.rb", FMT_DEPTH)):
             (out / f).write_text(text)
             t.add(out / f, arcname=f)
 
@@ -105,10 +111,12 @@ def main():
             sh(f"sysctl {k}=1")
         rec["exception_logging"] = {k: sh(f"sysctl -n {k}").strip() for k in knobs}
         print("exception logging", rec["exception_logging"], flush=True)
+        print(f"copying {tar.stat().st_size >> 20} MiB", flush=True)
         rec["uname"] = sh("uname -rm").strip()
         sh("rm -rf /root/s && mkdir -p /root/s")
-        g.copy(str(tar), "root@127.0.0.1:/root/s/kit.tar")
-        sh("cd /root/s && tar xf kit.tar && chmod +x mruby* capi-* revocation-control 2>/dev/null; true")
+        subprocess.run(["scp", "-O", *g.ssh_options, "-P", str(a.port), str(tar), "root@127.0.0.1:/root/s/kit.tar.gz"],
+                       check=True, capture_output=True, timeout=1800)
+        sh("cd /root/s && tar xzf kit.tar.gz && chmod +x mruby* capi-* revocation-control 2>/dev/null; true")
 
         def run(label, cmd, image, timeout=60):
             sh("dmesg -c > /dev/null 2>&1 || true")
@@ -143,6 +151,7 @@ def main():
         rec["controls"]["ok"] = ok
         if not ok:
             raise SystemExit("a control failed; refusing to score")
+        run("observation:fmt-depth40", "./mruby fmt-d40.rb", "mruby")
         for name, trig, d, sites in cases:
             nn = name[:2]
             if trig.endswith(".c"):

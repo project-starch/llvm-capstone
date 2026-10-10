@@ -21,8 +21,9 @@
     },
     "cheribsd-revocation": {
       "oracle": "completes and the harness reports PASS: the defect executes and nothing here sees it",
-      "verdict": "MISSED",
-      "verdict_from": "results/20261006-cheribsd/matrix.tsv 59552ecb8: completes rc=0"
+      "verdict": "NOT-REISSUED",
+      "verdict_from": "results/2026-10-11-system-group/cheribsd/matrix.tsv 03",
+      "verdict_note": "completes, [\"PASS\"]; with the quarantine probe: 1238 frees, all 1238 quarantined, 0 allocations returned while quarantined, 0 sweeps -- the freed block was held, never reissued, so the stale pointer read the dead object and no other (2026-10-11, default revocation, revocation control faulting in the same boot)"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, mruby 4.0.0-rc2 as ported on musl mallocng (exact bounds, lifetime retirement on free); its GC object slots are unbounded offsets in a malloc'd heap page: a capability fault (cause 24-30) is CAUGHT, a run that completes is MISSED",

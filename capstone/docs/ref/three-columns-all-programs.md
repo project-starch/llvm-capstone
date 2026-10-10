@@ -97,11 +97,11 @@ quarantine reading either way.
 | CPython | pymalloc | nested | 20 | 0 / 20 | 0 / 20 | 20 / 20 |
 | httpd | APR buckets | nested | 8 | 0 / 8 | 0 / 0 (+8 ?) | 8 / 8 |
 | httpd | APR pools | nested | 1 | 0 / 1 | 0 / 0 (+1 ?) | 1 / 1 |
-| mruby | whole program | unsplit | 11 | 4 / 10 (+1 ?) | 8 / 11 | 11 / 11 |
+| mruby | whole program | unsplit | 11 | 7 / 10 (4 held) (+1 ?) | 8 / 11 | 11 / 11 |
 | Perl | whole program | unsplit | 10 | 6 / 8 (+2 ?) | 6 / 8 (+2 ?) | 7 / 8 (+2 ?) |
 | PostgreSQL | memory contexts | nested | 5 | 0 / 5 | 0 / 5 | 5 / 5 |
 | SQLite | memsys5 | nested | 25 | 5 / 25 | 4 / 22 (+3 ?) | 13 / 23 (+2 ?) |
-| **Total** |  | 82 n · 26 p · 21 u | 129 | 41 / 126 (26 held) (+3 ?) | 44 / 115 (+14 ?) | 114 / 125 (+4 ?) |
+| **Total** |  | 82 n · 26 p · 21 u | 129 | 44 / 126 (30 held) (+3 ?) | 44 / 115 (+14 ?) | 114 / 125 (+4 ?) |
 
 **Spatial (109)**
 
@@ -126,8 +126,8 @@ quarantine reading either way.
 
 | program | allocator layer | axis | n | CHERI (quarantine = caught) | Sublet in malloc | Sublet in nested |
 |---|---|---|---:|---:|---:|---:|
-| mruby | whole program | unsplit | 7 | 5 / 6 (+1 ?) | 7 / 7 | 7 / 7 |
-| **Total** |  | 0 n · 0 p · 7 u | 7 | 5 / 6 (+1 ?) | 7 / 7 | 7 / 7 |
+| mruby | whole program | unsplit | 7 | 6 / 6 (1 held) (+1 ?) | 7 / 7 | 7 / 7 |
+| **Total** |  | 0 n · 0 p · 7 u | 7 | 6 / 6 (1 held) (+1 ?) | 7 / 7 | 7 / 7 |
 
 ## The same board on virtual Capstone (2026-10-11)
 
@@ -154,10 +154,10 @@ have no virtual recipe yet; they and SQLite's and PostgreSQL's own NO-READING ce
 | memcached | slabs.c / cache.c | nested | 5 | 0 / 5 | 0 / 5 | 5 / 5 |
 | memcached | direct malloc | plain | 3 | 3 / 3 (3 held) | 3 / 3 | 3 / 3 |
 | CPython | pymalloc | nested | 20 | 0 / 20 | 0 / 20 | 20 / 20 |
-| mruby | whole program | unsplit | 11 | 4 / 10 (+1 ?) | 8 / 11 | 11 / 11 |
+| mruby | whole program | unsplit | 11 | 7 / 10 (4 held) (+1 ?) | 8 / 11 | 11 / 11 |
 | PostgreSQL | memory contexts | nested | 5 | 0 / 5 | 0 / 5 | 5 / 5 |
 | SQLite | memsys5 | nested | 25 | 5 / 25 | 4 / 22 (+3 ?) | 13 / 23 (+2 ?) |
-| **Total** |  |  | 110 | 35 / 109 (26 held) (+1 ?) | 38 / 103 (+7 ?) | 94 / 104 (+6 ?) |
+| **Total** |  |  | 110 | 38 / 109 (30 held) (+1 ?) | 38 / 103 (+7 ?) | 94 / 104 (+6 ?) |
 
 **Spatial, virtual Capstone**
 
@@ -181,17 +181,16 @@ have no virtual recipe yet; they and SQLite's and PostgreSQL's own NO-READING ce
 
 | program | allocator layer | axis | n | CHERI (quarantine = caught) | virtual malloc | virtual nested |
 |---|---|---|---:|---:|---:|---:|
-| mruby | whole program | unsplit | 7 | 5 / 6 (+1 ?) | 7 / 7 | 7 / 7 |
-| **Total** |  |  | 7 | 5 / 6 (+1 ?) | 7 / 7 | 7 / 7 |
+| mruby | whole program | unsplit | 7 | 6 / 6 (1 held) (+1 ?) | 7 / 7 | 7 / 7 |
+| **Total** |  |  | 7 | 6 / 6 (1 held) (+1 ?) | 7 / 7 | 7 / 7 |
 
 ## What is not a reading, and why
 
 Fifteen cells ran but did not answer:
 
-- **mruby, CHERI, 2 cases**: one aborts (rc 134) and one hits the run's timeout. The abort is case 11,
-  run with `trigger.rb`, which at the 4.0.0-rc2 pin does not reach the defect (`Task#close` postdates
-  the pin). Columns 2 and 3 read case 11 through its C-API driver `capi.c`, which does; it has not run
-  on CheriBSD.
+- **mruby, CHERI, 2 cases**: 23 hits the run's timeout, and 01 takes a CHERI tag fault in
+  `mrb_vformat`, not at its access (`mrb_vm_exec`, where host ASan reports it); the bounds-only Capstone
+  baseline faults in the same function (`results/2026-10-11-system-group`).
 - **Perl 02, all three columns**: Perl's own check panics ("attempt to copy freed scalar") before
   any mechanism reports.
 - **Perl 03, all three columns**: the defect is not shown reached on any arm -- the trigger observes
@@ -218,9 +217,11 @@ Fifteen cells ran but did not answer:
 - **Perl's CHERI catches 01, 04, 06, 08 and 09 also fault with revocation off.** Something other
   than revocation fired -- bounds or a CHERI check on a stale field -- and no fixed-arm control has
   shown that the fault is the defect. Each cell's `verdict_note` says so.
-- **mruby's CHERI catches carry the same doubt, and no run to settle it.** Its CheriBSD record calls
-  them "a strict subset of our 16" `sysalloc-bounds` catches (`results/20261006-cheribsd/README.md`),
-  and that arm ran with revocation on only, so none of them is shown to need revocation.
+- **mruby's CHERI catches carry the same doubt.** Its CheriBSD record calls its faults "a strict
+  subset of our 16" `sysalloc-bounds` catches (`results/20261006-cheribsd/README.md`), and that arm
+  ran with revocation on only, so none of them is shown to need revocation; 06, re-run on 2026-10-11,
+  is a bounds fault at its access. Its five `held` cells (03, 09, 10, 11, 17) come from the quarantine
+  probe: every free quarantined, nothing reissued, no sweep (`results/2026-10-11-system-group`).
 - **Neither mruby's nor Perl's temporal catches are separated from bounds.** For FFmpeg, tshark and
   memcached the bounds-only arm reads 0 of 48 temporal, so every temporal catch there is a lifetime
   catch. mruby's and Perl's bounds-only arms (`sysalloc-none`/`sysalloc-bounds`) carry no `verdict`,
