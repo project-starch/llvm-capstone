@@ -90,42 +90,17 @@ sublet  10  RETURN a0015b
 sublet  11  RETURN b0015b
 sublet  12  RETURN c000ee
 
-# FIXTURE 13 on the sublet arm, the chunks arm's matched control (wmem step 2, registered with
-# ports/wireshark/wmem/PREREGISTRATION-tshark-step2.md before the first chunks boot). The freed
+# FIXTURE 13 on the sublet arm, registered as the matched control of the chunks arm (removed
+# 2026-10-11 with the wmem port's chunk port; its records stay in results/). The freed
 # chunk stays readable: upstream's free changes nothing the old pointer's capability covers. Its
 # first bytes may now hold a free-list link, so the value is not predicted.
 sublet  13  RETURN *
-
-# THE CHUNKS ARM (host/build-domain.sh TSAPP_HEAP=chunks): the sublet arm with wmem's BLOCK
-# allocator under the chunk port (ports/wireshark/wmem, patches 0001+0002). Registered before any
-# chunks image had booted, and pushed before its first run.
-# - 1-9 do not touch wmem, and the heap is the sublet arm's: the same verdicts.
-# - 10 is BLOCK_FAST, which the chunk port leaves unchanged: RETURN, as on the sublet arm.
-# - 11: a BLOCK reset is one revoke of the block's senior handle, so the pointer kept across it
-#   faults, temporal. 12: every chunk is handed out through an alias bounded to its request, so a
-#   write past the first allocation into the second faults, oob, at the printed target. 13: the
-#   chunk free is a revoke, so the read faults, temporal.
-chunks   1  RETURN 100001
-chunks   1  LEN    64
-chunks   2  FAULT  oob
-chunks   3  FAULT  oob
-chunks   4  FAULT  temporal
-chunks   5  FAULT  temporal
-chunks   6  FAULT  temporal
-chunks   7  FAULT  oob
-chunks   8  FAULT  oob
-chunks   9  RETURN 90005b
-chunks  10  RETURN a0015b
-chunks  11  FAULT  temporal
-chunks  12  FAULT  oob
-chunks  13  FAULT  temporal
 
 # ---------------------------------------------------------------------------------------------
 # Fixtures 14 and 15, registered 2026-10-03 BEFORE either was built or run on any arm.
 # The two upstream Wireshark defects confirmed LIVE at our v4.6.8 pin by the cherry-pick probe
 # (git log v4.6.8 --grep='cherry picked from commit <sha>', empty for both, non-empty for a
-# control fix that WAS backported). Both are HEAP class, so `chunks` is predicted to behave
-# exactly as `sublet`: its difference is wmem's block allocator, which neither fixture uses.
+# control fix that WAS backported). Both are HEAP class: neither uses wmem's block allocator.
 #
 # Values are DERIVED, not copied from another row: fill() writes v0 + i, the new owner's v0 is
 # 0x5b, so the byte read is 0x5b + <object offset>. Fixture 14 touches through an INTERIOR key at
@@ -139,8 +114,6 @@ chunks  13  FAULT  temporal
 level0  14  RETURN e00163
 shrink  14  RETURN e00163
 sublet  14  FAULT  temporal
-chunks  14  FAULT  temporal
 level0  15  RETURN f0015b
 shrink  15  RETURN f0015b
 sublet  15  FAULT  temporal
-chunks  15  FAULT  temporal

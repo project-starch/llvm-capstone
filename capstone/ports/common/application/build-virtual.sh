@@ -8,10 +8,9 @@ APP=$1
 OUT=$(realpath -m "$2")
 [[ ! -e "$OUT" ]] || { echo "use a fresh output directory: $OUT" >&2; exit 2; }
 case "$APP" in cpython|postgres|ffmpeg|tshark) ;; *) echo "unsupported application: $APP" >&2; exit 2;; esac
-# Specialized decoder pools and wmem chunks keep their source recipe's link.
+# Specialized decoder pools keep their source recipe's link.
 # The generic relinker does not carry their extra allocator objects.
-if [[ $APP == ffmpeg && -n ${FFAPP_POOL:-} ]] ||
-   [[ $APP == tshark && ${TSAPP_HEAP:-level0} == chunks ]]; then
+if [[ $APP == ffmpeg && -n ${FFAPP_POOL:-} ]]; then
   echo 'use the application source recipe directly for this inner allocator variant' >&2
   exit 2
 fi

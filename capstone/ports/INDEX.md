@@ -35,7 +35,7 @@
 | `nginx` | 1.28.0 | capstone-domain, native | -- | -- |
 | `postgres/memory-contexts` | 17.0 | capstone-virtual, cheribsd-purecap, native | -- | `mmgr-repros` |
 | `whisper/ggml-context` | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | -- |
-| `wireshark/wmem` | 4.6.8 | capstone-domain, cheribsd-purecap, native | -- | `wmem-repros` |
+| `wireshark/wmem` | 4.6.8 | capstone-virtual, cheribsd-purecap, native | -- | `wmem-repros` |
 
 ## platform-build -- the same release built for another platform, without an adapter
 

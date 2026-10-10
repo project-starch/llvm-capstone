@@ -6,8 +6,8 @@
  * supplies only its sequence, inside WM_CASE(NN).
  *
  * The allocator is real: wmem's core and its four allocators from the pinned
- * 4.6.8 release, compiled unmodified but for the guarded authority hooks the
- * port applies. The consumers are reduced to the allocator calls the upstream
+ * 4.6.8 release, compiled unmodified but for the Sublet patch the port
+ * applies in its protected build. The consumers are reduced to the allocator calls the upstream
  * defect makes, in the same order, because reaching them in place needs a
  * dissector, a capture file and the whole of epan.
  */
@@ -41,20 +41,20 @@ void wm_next_packet(void);
 extern unsigned char *volatile wm_held;
 
 /* The stale access, labelled so a run can require the fault to land HERE
- * rather than merely somewhere. wm_mark() publishes the case and the probe
- * addresses and must be the LAST thing before the access: its presence is the
- * evidence that the setup ran. */
+ * rather than merely somewhere. wm_mark() prints the case's ready mark and
+ * must be the LAST thing before the access: its presence is the evidence that
+ * the setup ran. */
 unsigned wm_probe(const volatile unsigned char *p);
 void wm_write_probe(volatile unsigned char *p);
 void wm_mark(void);
 
 _Noreturn void wm_give_up(unsigned long code);
 
-/* THE NATIVE FIX DIFFERENTIAL (added 2026-10-09). Hosted builds only: `program 0 N buggy|fixed`.
- * Every other invocation -- the Capstone domain, CheriBSD, and the hosted `program
- * mode N` the existing runners use -- leaves all three flags 0, so every allocation, store and the
- * labelled access those arms measured are unchanged; the only addition on their path is that the
- * probe's result is kept (WM_READ/WM_WRITE), after the access.
+/* THE NATIVE FIX DIFFERENTIAL (added 2026-10-09): `program 0 N buggy|fixed`.
+ * Every other invocation -- `program 0 N`, which every other arm runs -- leaves all three flags 0,
+ * so every allocation, store and the labelled access those arms measure are unchanged; the only
+ * addition on their path is that the probe's result is kept (WM_READ/WM_WRITE), after the
+ * access.
  *   wm_fixed    run the upstream fix's behaviour where the case models it (`if (wm_fixed) ...`).
  *   wm_observe  make a stale access VISIBLE natively: after a lifetime ends, the next dissection's
  *               first allocation reoccupies the freed storage and is filled with WM_MARKER, so a

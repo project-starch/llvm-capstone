@@ -7,7 +7,6 @@ _Noreturn void wm_fail(unsigned code) {
   exit(1);
 }
 int main(int argc, char **argv) {
-  unsigned mode = 0;
   if (argc != 3)
     return 2;
   FILE *f = fopen(argv[1], "rb");
@@ -22,23 +21,17 @@ int main(int argc, char **argv) {
       n != sizeof *trace + trace->count * sizeof(struct wm_event))
     return 3;
   fclose(f);
-  void *payload = aligned_alloc(16, WM_PAYLOAD_BYTES);
-  if (!payload)
-    return 4;
-  wm_init_backing(NULL, payload, mode);
   struct wm_header report = {0};
-  report.mode = mode;
   wm_replay(trace, &report);
   f = fopen(argv[2], "wb");
   if (!f || fwrite(&report, sizeof report, 1, f) != 1 || fclose(f))
     return 5;
-  printf("WM completed=%llu allocs=%llu checksum=%llu regions=%llu peak=%llu\n",
+  printf("WM completed=%llu allocs=%llu checksum=%llu system=%llu peak=%llu\n",
          (unsigned long long)report.completed,
          (unsigned long long)report.allocs,
          (unsigned long long)report.checksum,
-         (unsigned long long)report.regions_created,
-         (unsigned long long)report.regions_peak);
-  free(payload);
+         (unsigned long long)report.system_allocs,
+         (unsigned long long)report.system_peak);
   free(trace);
   return 0;
 }

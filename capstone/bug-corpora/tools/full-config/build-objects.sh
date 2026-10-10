@@ -4,7 +4,6 @@
 # tools/run-capstone-domain.py --arm sublet-full as --cc-arg inputs. FFmpeg's (the Sublet port of its
 # pools, ports/ffmpeg/sublet) was removed on 2026-10-11 with that port.
 #
-#   build-objects.sh wireshark SDK OUT
 #   build-objects.sh memcached SDK OUT MEMCACHED_SRC            (the allocators port's prepared
 #                                                              memcached-1.6.45 source)
 #
@@ -14,19 +13,12 @@
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CAP=$(cd -- "$HERE/../../.." && pwd)
-PROG=${1:?wireshark|memcached}; SDK=${2:?SDK}; OUT=${3:?OUT}
+PROG=${1:?memcached}; SDK=${2:?SDK}; OUT=${3:?OUT}
 CC=$SDK/capstone-cc
 mkdir -p "$OUT"
 grep -q '^CAPSTONE_APPLICATION_HEAP:STRING=sublet$' "$SDK/CMakeCache.txt" \
   || { echo "build-objects: $SDK is not a Sublet-heap SDK" >&2; exit 2; }
 case $PROG in
-wireshark)
-  WP=$CAP/ports/wireshark/wmem
-  for s in "$WP/src/allocators/sublet/chunks.c" "$CAP/ports/wireshark/app/src/tsapp-wmem-chunks.c"; do
-    "$CC" -O1 -std=c11 -DWM_DOMAIN -I"$WP/src/shared" -I"$CAP/runtime/include" -c "$s" -o "$OUT/$(basename "${s%.c}").o"
-  done
-  "$CC" -O0 -std=c11 -DWM_DOMAIN -I"$WP/src/shared" -I"$CAP/runtime/include" -c "$HERE/wireshark.c" -o "$OUT/full-config.o"
-  ;;
 memcached)
   MS=${4:?MEMCACHED_SRC}; MP=$CAP/ports/memcached/allocators
   F=(-DNDEBUG -DCHUNK_ALIGN_BYTES=16 -DMCP_DOMAIN -I"$MP/src/shared" -I"$MS" -I"$MP/../adapted" -I"$CAP/runtime/include")

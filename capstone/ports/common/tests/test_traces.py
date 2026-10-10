@@ -272,7 +272,6 @@ class Traces(unittest.TestCase):
         cases = [
             ("whisper/ggml-context", "whisper.ggml-context"),
             ("ffmpeg/buffer-pool", "ffmpeg.buffer-pool"),
-            ("wireshark/wmem", "wireshark.wmem"),
         ]
         for component, name in cases:
             with self.subTest(component=component):
@@ -301,7 +300,7 @@ class Traces(unittest.TestCase):
                         metadata["trace"]["sha256"], hashlib.sha256(data).hexdigest()
                     )
                     self.assertEqual(metadata["trace"]["format"], name)
-                    if name in ("cpython.pymalloc", "whisper.ggml-context", "wireshark.wmem"):
+                    if name in ("cpython.pymalloc", "whisper.ggml-context"):
                         words = 12 if name == "cpython.pymalloc" else 16
                         magic = struct.unpack_from("<Q", data)[0]
                         (run / "share/report.bin").write_bytes(
