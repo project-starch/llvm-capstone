@@ -1,0 +1,48 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "cc_args": [
+      "-std=c11",
+      "-Daligned_alloc(a,n)=malloc(n)",
+      "-isystem",
+      "/tmp/capstone/virt-stack/llvm-build/lib/clang/22/include",
+      "-I<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/src/shared",
+      "-I/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported",
+      "-I<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/cmake/replay-config",
+      "-I<scratch>/wt-merge/capstone/runtime/include",
+      "/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported/libavutil/buffer.c",
+      "/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported/libavutil/refstruct.c",
+      "<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/src/shared/observe-pool-events.c",
+      "<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/src/shared/pool-allocator.c",
+      "<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c",
+      "<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/src/native/replay/payload-pointers.c"
+    ],
+    "flags": [
+      "-O0",
+      "-DCORPUS_VIRTUAL"
+    ],
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ]
+  },
+  "cases": 9,
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "ffmpeg/subobject-repros",
+  "platform": {
+    "compiler": "7977ad4b53d445e89114468b57371c4c9ecbb412b0b575db474fe169b85dcf16",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "c5e5872372b392de5325a2951e0ef57798cb9295d753b2b77db7223732c7a25f",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "5ba594e5877556bd019ecde8873e5e285396d55d5fcf480b394b88fed43e7e36",
+    "module": "d36fab7edce1a32b785a50c7fc954cc77f18624ecfdef4b552ff231af1839721",
+    "profile": "virtual",
+    "qemu": "172111865d9a5f6279f73fcc35642d75ad89920c0f7e370efa1ebba8eaf1f3ae",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "78bbac0cd8724b002cf9429637f974fec2ad263e81b3df998ed8d7cc95f8aa56"
+  },
+  "tally": {
+    "MISSED": 9
+  }
+}

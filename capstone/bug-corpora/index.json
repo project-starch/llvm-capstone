@@ -163,6 +163,10 @@
         "virtual-malloc": "virtual-mallocng",
         "virtual-nested-pools": "virtual-ffmpeg-carve"
       },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+      },
       "where": "capstone/bug-corpora/ffmpeg/carved-repros"
     },
     {
@@ -218,6 +222,9 @@
       "arm_configurations": {
         "virtual-malloc": "virtual-mallocng"
       },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+      },
       "where": "capstone/bug-corpora/ffmpeg/plain-heap-repros"
     },
     {
@@ -263,6 +270,9 @@
       "shape_table": true,
       "arm_configurations": {
         "virtual-malloc": "virtual-mallocng"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
       },
       "where": "capstone/bug-corpora/ffmpeg/plain-temporal-repros"
     },
@@ -422,6 +432,9 @@
       "inventory": "capstone/docs/ref/ffmpeg-spatial-defect-triage.md",
       "arm_configurations": {
         "virtual-malloc": "virtual-mallocng"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
       },
       "where": "capstone/bug-corpora/ffmpeg/subobject-repros"
     },
@@ -613,6 +626,9 @@
       "arm_configurations": {
         "virtual-malloc": "virtual-mallocng"
       },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+      },
       "where": "capstone/bug-corpora/memcached/plain-heap-repros"
     },
     {
@@ -658,6 +674,9 @@
       "shape_table": true,
       "arm_configurations": {
         "virtual-malloc": "virtual-mallocng"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
       },
       "where": "capstone/bug-corpora/memcached/plain-temporal-repros"
     },
@@ -1086,6 +1105,9 @@
       "arm_configurations": {
         "virtual-malloc": "virtual-mallocng"
       },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+      },
       "where": "capstone/bug-corpora/wireshark/plain-heap-repros"
     },
     {
@@ -1131,6 +1153,9 @@
       "shape_table": true,
       "arm_configurations": {
         "virtual-malloc": "virtual-mallocng"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
       },
       "where": "capstone/bug-corpora/wireshark/plain-temporal-repros"
     },

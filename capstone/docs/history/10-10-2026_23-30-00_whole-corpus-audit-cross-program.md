@@ -180,3 +180,30 @@ Predictions:
   - App fixtures 4 and 5 FAULT temporal on the poolstock image, so its heap is the Sublet heap.
   - In the same boot the four cases complete: fixed FIXED, buggy DEFECT-REPRODUCED.
   - Column 2's four pool misses now stand on an in-boot control.
+- **R2b**: no reading, my error again. It linked `sdk-level0` (runtime 3c72f36acd5b); the 2026-10-09 record
+  names runtime afa624ec6387, which is `sdk-level0-cap`. That heap could not hold the corpus's payload, so
+  every fixed and buggy run stopped at CONTROL-FAILED 604 (`driver.c`: `aligned_alloc` returned NULL) before
+  any case code ran. The controls passed. What would have caught it: matching the SDK's runtime hash
+  against the record before the run, not after.
+- **R2c** (`subobject-repros/results/2026-10-10-capstone-subobject/`): as predicted, 9 of 9.
+  - 00-03 CAUGHT in `ff2_case_run`, the declared site; 05 and 08 CAUGHT AT `write_probe`, which the
+    runner now recognises as the labelled probe; 07 CAUGHT in `memcpy`, declared; 04 and 06 reproduce.
+  - Every image is byte-identical to the 2026-10-09 run's, at the same offsets. So the stricter rule
+    keeps all seven catches: the waiver was unsound, but nothing it admitted was wrong.
+  - 07 stays the weaker form on Capstone, which records no return address; R3c names its caller.
+- **R3c** (`subobject-repros/results/2026-10-10-cheribsd-subobject-supervised/`): as predicted, 9 of 9.
+  - 00-03 in `ff2_case_run`; 05, 06 and 08 AT `write_probe`; 04 completes.
+  - 07 in libc's `memcpy+0x80`, with return address `ff2_strlcpy+0x7e`, the case's own copy. The
+    extended supervisor reports the mapped object and the return address, and the tool resolves both
+    against the sysroot's libc.
+  - The suite's exit 1 is its stale expectation that buggy arms complete; the attribution exit is 0.
+- **R6** (`<corpus>/results/2026-10-10-virtual/<arm>/`, derived into case.json by `derive-verdicts.py`):
+  as predicted, with no cell off its prediction.
+  - plain-heap: 46 of 46 CAUGHT at the probe, cause 28. That includes the five cases CheriBSD's size
+    classes absorb.
+  - plain-temporal: 26 of 26 CAUGHT at the probe.
+  - carved: 13 MISSED on `virtual-malloc`, and 13 CAUGHT at the probe on `virtual-nested-pools`.
+  - Every control faulted and every fixed arm printed VERDICT FIXED with exit 0.
+  - The subobject run built nothing, from the same chain omission as R2's first attempt; it is R6b.
+- **R6b** (`subobject-repros/results/2026-10-10-virtual/virtual-malloc/`): as predicted, 9 of 9 MISSED.
+  Each buggy arm printed DEFECT-REPRODUCED and completed; each fixed arm printed FIXED.

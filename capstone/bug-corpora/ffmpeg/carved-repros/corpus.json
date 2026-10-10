@@ -61,5 +61,9 @@
   "arm_configurations": {
     "virtual-malloc": "virtual-mallocng",
     "virtual-nested-pools": "virtual-ffmpeg-carve"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
   }
 }

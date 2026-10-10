@@ -86,7 +86,10 @@
       "preregistered": "aeba7ddefb4d"
     },
     "virtual-malloc": {
-      "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
+      "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f852110d0 in mch_write_probe; by probe: the fault is at the labelled probe mch_write_probe",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
     }
   },
   "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plain-heap/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner yet, and the port fixture that carries the same shape is measured separately. CheriBSD MEASURED 2026-10-06: NOT caught, refuting this case's prediction; the mechanism was then measured rather than inferred. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): NOT CAUGHT.",

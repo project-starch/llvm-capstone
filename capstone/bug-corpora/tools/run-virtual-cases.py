@@ -218,11 +218,21 @@ def main():
         print(f"{d.name:<60} {verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:90]}", flush=True)
 
     record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", a.arm, rows, {
-        "configuration": config, "build": {"sdk_identity": [heap, profile], "cc_args": a.cc_arg,
+        "configuration": config, "build": {"sdk_identity": [heap, profile], "cc_args": [local_path(c) for c in a.cc_arg],
                                            "flags": ["-O0", "-DCORPUS_VIRTUAL"]},
         "platform": platform})
     print(f"--- {a.arm} ({config}): {record['tally']}\nresults: {out}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
+
+
+
+SCRATCH = re.compile(r"/tmp/claude-\d+/[^/]+/[^/]+/scratchpad/")
+
+
+def local_path(arg):
+    """A build argument as recorded: a session scratchpad prefix (which spells the host account) and
+    the home directory are abbreviated; the files' identity is the image hash, not their path."""
+    return SCRATCH.sub("<scratch>/", arg).replace(str(Path.home()) + "/", "~/")
 
 
 if __name__ == "__main__":

@@ -41,5 +41,8 @@
   "shape_table": true,
   "arm_configurations": {
     "virtual-malloc": "virtual-mallocng"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
   }
 }

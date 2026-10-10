@@ -1,0 +1,10 @@
+case	arm	configuration	verdict	reason	evidence	bundle
+00_8864fd0aec_cbs_h265_pic_timing_member	virtual-malloc	virtual-mallocng	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+01_68845e26f7_vulkan_hevc_refpicset_member	virtual-malloc	virtual-mallocng	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+02_e058af88ab_vulkan_hevc_dpb_member	virtual-malloc	virtual-mallocng	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+03_89de2f0de1_aac_arith_last_member	virtual-malloc	virtual-mallocng	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+04_1a00ea51cb_rtsp_control_url_underflow	virtual-malloc	virtual-mallocng	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+05_d29ff88422_vulkan_av1_tile_sizes	virtual-malloc	virtual-mallocng	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+06_a809a784ec_vvc_entry_point_start_ctu	virtual-malloc	virtual-mallocng	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+07_275e217b10_hlsenc_key_uri_strlcpy_size	virtual-malloc	virtual-mallocng	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
+08_fb862976df_cbs_h266_col_width_val	virtual-malloc	virtual-mallocng	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-10-virtual/virtual-malloc
