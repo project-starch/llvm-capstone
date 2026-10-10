@@ -1,0 +1,33 @@
+case	arm	verdict	rc	cause	last
+01_gh-139071_heap-overflow-in-set-dealloc-setobject	spatial	SILENT	0		NEGATIVE-CONTROL no defect performed
+02_gh-140471_fix-buffer-overflow-in-ast-node	spatial	SILENT	0		NEGATIVE-CONTROL no defect performed
+03_gh-140492_heap-buffer-overflow-in-ast-copy	spatial	SILENT	0		NEGATIVE-CONTROL no defect performed
+04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer	spatial	SILENT	1		capstone-vm: Guest command ended without a waitpid result; completion is unknown
+05_gh-140497_cpython-crash-heap-buffer-overflow-python	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+06_gh-140551_crash-in-dict-if-hash-eq	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+07_gh-140594_fix-an-out-of-bounds-read	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+08_gh-140607_heap-buffer-overflow-in-io-rawiobase	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+09_gh-140802_heap-buffer-overflow-in-pycore-interpframe	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+10_gh-142554_avoid-divmod-crashes-due-to-bad	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+11_gh-143005_heap-buffer-overflow-in-ctypes-array	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+12_gh-143377_heap-buffer-overflow-in-format-tracebackexception	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+13_gh-144169_fix-three-crashes-in-ast-objects	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+14_gh-144475_heap-buffer-overflow-in-functools-partial	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+15_gh-148973_fix-segfault-on-mismatch-between-consts	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+16_gh-156075_heap-buffer-overflow	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+17_gh-157325_fix-an-oob-read-in-the	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+18_gh-157335_fix-out-of-bounds-write-in	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+19_gh-142664_fix-uaf-in-memoryview-hash-via	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+20_gh-143308_use-after-free-in-save-picklebuffer	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+21_gh-146169_segfault-ub-from-expat-when-re	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+22_gh-139210_iterparse-event-name	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+23_gh-142560_bytearray-search-realloc	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+24_gh-142783_zoneinfo-eager-decref	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+25_gh-142829_hamt-eq-interior-cursor	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+26_gh-142831_json-encoder-list-item	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+27_gh-143004_counter-update-borrowed-value	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+28_gh-143543_groupby-reentrant-eq	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+29_gh-146011_decimal-signaldict-outlives-context	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+30_gh-146613_grouper-parent-key	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+31_gh-148660_odict-copy-stale-link	spatial	SILENT	1		capstone-vm: VM is not running; use up first
+32_gh-149449_unicodedata-capi-cached	spatial	SILENT	1		capstone-vm: VM is not running; use up first

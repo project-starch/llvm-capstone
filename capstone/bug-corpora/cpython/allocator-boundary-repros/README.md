@@ -80,11 +80,14 @@ Three things that had to be got right for those runs to mean anything:
   started. Two are run and they answer different questions: a weak one that
   replaces every trigger with a stub, which all three arms pass, and a strong
   per-case one that keeps the allocation traffic and makes only the offending
-  access valid, which exists for 18 of the 32 cases and has been run on the
-  base arm. For the remaining 14 the defect is not one invalid access in an
-  otherwise ordinary program, and three of those 14 are the cases no arm
-  delivers. What each control settles, and what neither does, is in the
-  results README.
+  access valid, which exists for 18 of the 32 cases and has now been run on
+  all three arms. It qualifies every detection the two Capstone arms report on
+  those cases -- base 11 of 11, Sublet 17 of 17 -- and 2 of the 6 on
+  CheriBSD, where the other 4 were measured on an earlier binary than the
+  control could be run against. For the remaining 14 cases the defect is not
+  one invalid access in an otherwise ordinary program, and three of those 14
+  are the cases no arm delivers. What each control settles, and what neither
+  does, is in the results README.
 
 ## Arms
 
