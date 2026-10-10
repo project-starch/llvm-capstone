@@ -272,6 +272,24 @@ HOSTED = {
         controls_dir="controls/virtual",
         control_names={90: "jumbo-reset-90", 91: "chunk-free-91"},
     ),
+    # memcached/allocator-repros on the allocators port (ports/memcached/allocators), built by the
+    # corpus's own shared/build-cases.sh capstone-application, whose programs print the case.c
+    # drivers' lines (`case=N arm=...`, VERDICT), so observe()/fixed_ok() read them.
+    #   virtual-malloc: the stock ledger, every slab page and cache.c object one virtual-mallocng
+    #     object (MCP_STOCK_MALLOC, as the ASan arm), `fixed|buggy N`.
+    #   virtual-nested-pools: the shared ledger on the Sublet authority over a payload the virtual
+    #     heap lends linear (MCP_SUBLET, shared/driver-virtual.c), mode 1: `fixed|buggy N 1`.
+    "allocator-repros": dict(
+        format="case-line",
+        cache={"virtual-malloc": {"MCP_STOCK_MALLOC": "ON", "MCP_SUBLET": "OFF"},
+               "virtual-nested-pools": {"MCP_SUBLET": "ON", "MCP_STOCK_MALLOC": "OFF"}},
+        cache_dir="work/port",
+        program="bin/defect-{nn}",
+        extra={"virtual-malloc": [], "virtual-nested-pools": ["1"]},
+        mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
+        controls_dir="controls/virtual",
+        control_names={90: "chunk-free-90"},
+    ),
 }
 
 
@@ -365,7 +383,8 @@ def run_hosted(a, corpus):
         print(f"CONTROL-FAILED {a.sdk} is a {profile} SDK (heap {heap})", file=sys.stderr)
         return 75
     for build in (a.prebuilt, a.prebuilt_controls):
-        why = cache_says(build, ad["cache"][a.arm], a.sdk) if build else "no --prebuilt-controls"
+        why = (cache_says(build / ad.get("cache_dir", ""), ad["cache"][a.arm], a.sdk) if build
+               else "no --prebuilt-controls")
         if why:
             print(f"CONTROL-FAILED {build} is not the {a.arm} build: {why}", file=sys.stderr)
             return 75
@@ -383,7 +402,12 @@ def run_hosted(a, corpus):
     if a.only:
         keep = set(a.only.split(","))
         found = [d for d in found if d.name[:2] in keep]
-    programs = {d.name: a.prebuilt / "bin" / stem(d) for d in found}
+    caseline = ad.get("format") == "case-line"
+
+    def program(build, d):
+        return build / (ad["program"].format(nn=d.name[:2]) if caseline else f"bin/{stem(d)}")
+
+    programs = {d.name: program(a.prebuilt, d) for d in found}
     absent = [str(p) for p in programs.values() if not p.is_file()]
     if absent:
         print(f"CONTROL-FAILED the build lacks {absent[:3]}", file=sys.stderr)
@@ -400,17 +424,22 @@ def run_hosted(a, corpus):
         name = ad["control_names"][int(d.name[:2])]
         if name not in spec["controls"]:
             continue
-        prog = a.prebuilt_controls / "bin" / stem(d)
+        prog = program(a.prebuilt_controls, d)
         if not prog.is_file():
             print(f"CONTROL-FAILED the controls build lacks {prog}", file=sys.stderr)
             return 75
         port_controls[name] = (d, prog)
     plan = [(f"control-{c}", controls_img, [c]) for c in spec["controls"] if c not in port_controls]
-    plan += [(f"control-{name}", prog, [mode, str(int(d.name[:2]))]) for name, (d, prog) in port_controls.items()]
+    def argv(which, n):
+        if caseline:
+            return [which, n, *ad["extra"][a.arm]]
+        return [mode, n, "fixed"] if which == "fixed" else [mode, n, *ad["buggy"][a.arm]]
+
+    plan += [(f"control-{name}", prog, argv("buggy", str(int(d.name[:2])))) for name, (d, prog) in port_controls.items()]
     for d in found:
         n = str(int(d.name[:2]))
-        plan += [(f"{d.name}-fixed", programs[d.name], [mode, n, "fixed"]),
-                 (f"{d.name}-buggy", programs[d.name], [mode, n, *ad["buggy"][a.arm]])]
+        plan += [(f"{d.name}-fixed", programs[d.name], argv("fixed", n)),
+                 (f"{d.name}-buggy", programs[d.name], argv("buggy", n))]
 
     batch = virtualvm.Batch(raw / "stage")
     for name, image, argv in plan:
@@ -427,8 +456,11 @@ def run_hosted(a, corpus):
         elif c in port_controls:
             d, prog = port_controls[c]
             text, result = runs[f"control-{c}"]
-            o = observe_hosted(str(int(d.name[:2])), mode, text, result, v.Symbols(a.llvm_bin, prog),
-                               ad["probe"](d), ad["ready"], ad["done"], False)
+            if caseline:
+                o = observe(str(int(d.name[:2])), text, result, v.Symbols(a.llvm_bin, prog))
+            else:
+                o = observe_hosted(str(int(d.name[:2])), mode, text, result, v.Symbols(a.llvm_bin, prog),
+                                   ad["probe"](d), ad["ready"], ad["done"], False)
             seen = ("fault" if o.fault and o.reached and o.attribution == "probe" else
                     "complete" if o.reached and o.completed else "none")
             detail = (result.get("fault") or o.attribution_evidence or o.notes
@@ -448,11 +480,14 @@ def run_hosted(a, corpus):
         else:
             ftext, fres = runs[f"{d.name}-fixed"]
             btext, bres = runs[f"{d.name}-buggy"]
-            if not fixed_hosted(n, mode, ftext, fres, ad["done"]):
+            if not (fixed_ok(n, ftext, fres) if caseline else fixed_hosted(n, mode, ftext, fres, ad["done"])):
                 o = v.Observation(case=d.name, arm=a.arm, infra="control-failed",
                                   notes="the FIXED run of the same image did not finish with VERDICT FIXED and exit 0: "
                                         + (next((l for l in ftext.splitlines() if "VERDICT" in l or "CONTROL-FAILED" in l),
                                                 str(fres)))[:200])
+            elif caseline:
+                sites = json.loads((d / "case.json").read_text()).get("fault_sites") or ()
+                o = observe(n, btext, bres, v.Symbols(a.llvm_bin, programs[d.name]), sites)
             else:
                 o = observe_hosted(n, mode, btext, bres, v.Symbols(a.llvm_bin, programs[d.name]), ad["probe"](d),
                                    ad["ready"], ad["done"], bool(ad["buggy"][a.arm]))
@@ -462,13 +497,14 @@ def run_hosted(a, corpus):
         rows.append((o, verdict))
         print(f"{d.name:<60} {verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:90]}", flush=True)
 
-    opts = {k: re.search(rf"^{k}:\w+=(.*)$", (a.prebuilt / "CMakeCache.txt").read_text(), re.M)
-            for k in ("WM_LIBC_SYSTEM", "WM_CHUNKS", "WM_SUBLET", "CMAKE_BUILD_TYPE", "CMAKE_C_FLAGS")}
+    cache_text = (a.prebuilt / ad.get("cache_dir", "") / "CMakeCache.txt").read_text()
+    opts = {k: re.search(rf"^{k}:\w+=(.*)$", cache_text, re.M)
+            for k in (*ad["cache"][a.arm], "CMAKE_BUILD_TYPE", "CMAKE_C_FLAGS")}
     record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", a.arm, rows, {
         "configuration": config,
         "build": {"sdk_identity": [heap, profile], "prebuilt": local_path(str(a.prebuilt)),
                   "cache": {k: (m.group(1) if m else None) for k, m in opts.items()},
-                  "argv": {"fixed": [mode, "N", "fixed"], "buggy": [mode, "N", *ad["buggy"][a.arm]]},
+                  "argv": {"fixed": argv("fixed", "N"), "buggy": argv("buggy", "N")},
                   "controls": {c: v.sha256(prog) for c, (_, prog) in port_controls.items()}},
         "platform": platform})
     print(f"--- {a.arm} ({config}): {record['tally']}\nresults: {out}")

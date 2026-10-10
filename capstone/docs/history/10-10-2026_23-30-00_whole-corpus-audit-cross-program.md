@@ -210,6 +210,54 @@ Predictions:
   - A 384 MiB payload the VM cannot give reads CONTROL-FAILED, and every case would be NO-READING; the
     fix would then be a smaller payload, recorded.
 
+### R8. memcached allocator-repros on virtual Capstone: both columns
+
+**The port.** From the prior-art branch (6483372d3ffa) come the `capstone-application` preset and
+`MCP_SUBLET`: the shared ledger on the Sublet authority, in a process. Its `main.c` hunk is not taken,
+because the corpus has its own driver. A guard refuses `MCP_SUBLET` together with `MCP_STOCK_MALLOC`.
+134 of 134 physical images are byte-identical before and after: native, native stock, domain,
+CheriBSD and PoisonCap.
+
+**The corpus.** `shared/build-cases.sh capstone-application` builds the port on the virtual SDK and links
+each case with its `capstone-cc`. `shared/driver-virtual.c` (MCP_SUBLET builds only) includes
+`driver.c` unchanged, and replaces `main()`:
+- the mode is an argument;
+- the payload is lent by `capstone_borrow_aligned_block`.
+
+The Sublet build also compiles the cases with `MC_CARVE_BOUNDS`, because the physical column 3 reads
+`sublet-carve` for 06 and 07. For every other case the flag leaves the code identical; case 02's and
+case 05's disassembly was compared. The new control `controls/virtual/90_ctl_chunk_freed_to_slab`
+frees a slab chunk to its class with `slabs_free`, then reads it.
+
+**The arms:**
+- `virtual-malloc` maps to `virtual-memcached-stock`: `MCP_STOCK_MALLOC`, the ASan arm's ledger, run as
+  `buggy N`.
+- `virtual-nested-pools` maps to `virtual-memcached-ledger`: `MCP_SUBLET`, mode 1, run as `buggy N 1`.
+
+Both arms take the runner's `--prebuilt` mode with the corpus's own result lines. A catch is a fault in
+`read_probe`/`write_probe`, or in a site declared before the run: case 08's `mc_case_body`, declared
+for R1.
+
+Predictions:
+- Controls: bounds-malloc and uaf-malloc fault on both arms. 90 completes on `virtual-malloc` and faults
+  at `read_probe` on `virtual-nested-pools`.
+- `virtual-malloc`, 1 CAUGHT and 8 MISSED, the physical `sublet-malloc` reading (1/9):
+  - 00-04 (temporal): MISSED. A chunk goes back to its class's free list and an object to cache.c's;
+    neither reaches `free()`, and ASan saw none of them (0/5).
+  - 05, 06, 07 (crossings inside one page): MISSED.
+  - 08: CAUGHT, cause 28, in `mc_case_body`. The scan runs past the 16 KiB rbuf object, which is its own
+    virtual-mallocng object.
+- `virtual-nested-pools`, 9 CAUGHT, the physical column 3 (5/5 temporal, 4/4 spatial):
+  - 00-04: cause 24 at `read_probe`;
+  - 05: cause 28 at `write_probe`;
+  - 06: cause 28 at `write_probe`, the carve's suffix bound;
+  - 07: cause 28 at `read_probe`, the carve's key bound;
+  - 08: cause 28 in `mc_case_body`.
+- Every fixed arm: VERDICT FIXED, exit 0.
+- Hazard: the prior-art branch's stock run faulted 6 cases at one pc with cause 24, unattributed. If that
+  recurs here, those cells are NO-READING (unattributed or setup-fault), never catches. It would be a
+  port defect to find, not a reading.
+
 ## Outcomes (written after each run)
 
 - **R1** (`memcached/allocator-repros/results/2026-10-10-cheribsd-fixed-buggy/`): as predicted, 18 of 18 arms.

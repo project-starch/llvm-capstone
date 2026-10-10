@@ -353,6 +353,20 @@ class VirtualHosted(unittest.TestCase):
             self.assertIn("WM_LIBC_SYSTEM", self.rv.cache_says(t, want["virtual-malloc"], sdk))
             self.assertIn("CAPSTONE_SDK", self.rv.cache_says(t, want["virtual-nested-pools"], t))
 
+    def test_memcached_cache_lives_in_the_port_work_dir_and_names_its_ledger(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            sdk = t / "sdk"
+            (t / "work/port").mkdir(parents=True)
+            sdk.mkdir()
+            (t / "work/port/CMakeCache.txt").write_text(f"MCP_STOCK_MALLOC:BOOL=ON\nCAPSTONE_SDK:PATH={sdk}\n"
+                                                        "PORT_PLATFORM:STRING=capstone-application\n")
+            ad = self.rv.HOSTED["allocator-repros"]
+            self.assertEqual(self.rv.cache_says(t / ad["cache_dir"], ad["cache"]["virtual-malloc"], sdk), "")
+            self.assertIn("MCP_SUBLET", self.rv.cache_says(t / ad["cache_dir"], ad["cache"]["virtual-nested-pools"], sdk))
+            self.assertIn("no ", self.rv.cache_says(t, ad["cache"]["virtual-malloc"], sdk))
+
     def test_stem_matches_the_ports_program_name(self):
         self.assertEqual(self.rv.stem(Path("13_0261fd7da6_http_range_cursor_past_chunk")),
                          "13-http-range-cursor-past-chunk")

@@ -540,7 +540,9 @@
         "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
-        "native-fix-differential"
+        "native-fix-differential",
+        "virtual-malloc",
+        "virtual-nested-pools"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -572,6 +574,10 @@
         "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-poisoncap"
       ],
       "inventory": "capstone/docs/ref/memcached-allocator-defect-triage.md",
+      "arm_configurations": {
+        "virtual-malloc": "virtual-memcached-stock",
+        "virtual-nested-pools": "virtual-memcached-ledger"
+      },
       "where": "capstone/bug-corpora/memcached/allocator-repros"
     },
     {

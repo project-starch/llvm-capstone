@@ -77,6 +77,12 @@
       "cause": 5,
       "measured": "2026-10-09",
       "preregistered": "f7adf03a1009"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, slabs.c/cache.c stock on virtual mallocng (tools/arms.json virtual-memcached-stock; tools/run-virtual-cases.py --prebuilt, `buggy N`): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, the allocators' shared ledger on the Sublet authority over a payload the virtual heap lends linear, mode 1 (tools/arms.json virtual-memcached-ledger; tools/run-virtual-cases.py --prebuilt, `buggy N 1`): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
     }
   },
   "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0 over all nine cases, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. The Capstone, PoisonCap and CheriBSD arms are declared predictions -- this case has not had a domain or guest run. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1, REFUTING this case's prediction -- the port malloc's each cache object separately, so an object crossing leaves a real bound while the slab chunk rows stay inside their page's malloc. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-case8/): spatial CAUGHT, sublet CAUGHT, both in the scan before the probe. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): CAUGHT in both modes.",
