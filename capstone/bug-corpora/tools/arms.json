@@ -92,8 +92,8 @@
     },
     "virtual-sqlite-memsys5-pools": {
       "target": "capstone-virtual",
-      "summary": "the same with memsys5 on its Sublet port (build-virtual.py --sublet, ports/sqlite/sublet/sublet-3220000-memsys5.patch): the pool is lent by the virtual heap as one linear capability, carved into one capability per block, each retired on sqlite3_free",
-      "mechanism": "per-block bounds and revocation in memsys5",
+      "summary": "the same static arena with memsys5 on its Sublet port (build-virtual.py --sublet, ports/sqlite/sublet/sublet-3220000-memsys5.patch): every block goes out as a child lifetime of the pool (CDERIVE), bounded to the block, and sqlite3_free revokes it (CREVOKE). The lookaside is not covered",
+      "mechanism": "per-block bounds and revocation in memsys5 (CDERIVE/CREVOKE)",
       "controls": {
         "uaf-mem5": "fault",
         "bounds-mem5": "fault"

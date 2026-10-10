@@ -1,241 +1,101 @@
+Subject: [PATCH] memsys5 blocks as Sublet lifetimes (CDERIVE/CREVOKE)
+Upstream: sqlite 3.22.0 amalgamation
+Upstream-SHA256: 7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2 (sqlite3.c)
+Applies-To: sqlite3-capstone.c, the copy ports/sqlite/repro322/build-virtual.py
+  stages (sqlite3.c with fts5-azarg-patch.py), with patch -F0 -p1
+
+Every block memsys5 hands out is a child lifetime of its pool, bounded to
+the block; sqlite3_free revokes it, so every copy of the caller's pointer
+dies with it. The heap stays what SQLITE_CONFIG_HEAP is given.
+
+# Two instructions do the work. CDERIVE makes a child capability of a
+# non-linear parent, bounded to a sub-range and carrying MANAGE over its own
+# children; CREVOKE(parent, child) ends a direct child and everything below
+# it, and faults when the child is not a live direct child.
+#
+# memsys5Init derives the heap's lifetime from the configured heap and the
+# pool below it; the heap pointer itself carries no MANAGE, so the pool
+# needs a parent that does. memsys5MallocUnsafe returns a child of the pool
+# covering the whole block, memsys5FreeUnsafe revokes it before the buddy
+# code runs, and memsys5Shutdown revokes the pool. Split and merge are
+# unchanged: they only move indices, and memsys5 reaches every block, the
+# in-band free-list links included, through the pool.
+#
+# What it gives up: the bounds are the block, a power of two of 64-byte
+# atoms, not the request, because SQLite treats sqlite3MallocSize() as the
+# usable size (memsys5Size, and memsys5Realloc keeps a block that still
+# fits). An overrun inside that rounding is not caught. A block carries the
+# heap's data rights; issued from a static array, that includes execute.
+# The lookaside, SQLite's second pool, is carved from one memsys5 block and
+# is not covered: its slots are pushed back on a free list, not revoked.
 --- a/sqlite3-capstone.c
 +++ b/sqlite3-capstone.c
-@@ -19,6 +19,7 @@
- */
- #define SQLITE_CORE 1
- #define SQLITE_AMALGAMATION 1
-+#include <sublet/sublet.h>
- #ifndef SQLITE_PRIVATE
- # define SQLITE_PRIVATE static
- #endif
-@@ -17394,6 +17395,7 @@
- SQLITE_PRIVATE int sqlite3MallocInit(void);
- SQLITE_PRIVATE void sqlite3MallocEnd(void);
- SQLITE_PRIVATE void *sqlite3Malloc(u64);
-+SQLITE_PRIVATE void *sqlite3MallocLinear(u64, capstone_cap_slot*);
- SQLITE_PRIVATE void *sqlite3MallocZero(u64);
- SQLITE_PRIVATE void *sqlite3DbMallocZero(sqlite3*, u64);
- SQLITE_PRIVATE void *sqlite3DbMallocRaw(sqlite3*, u64);
-@@ -22993,7 +22995,7 @@
-   */
+@@ -22955,6 +22955,17 @@
+ #ifdef SQLITE_ENABLE_MEMSYS5
+ 
+ /*
++** Sublet lifetimes.  The pool is a child lifetime of the configured heap
++** (CDERIVE), and every block goes out as a child of the pool, bounded to
++** the block.  A free revokes the caller's block (CREVOKE) before memsys5
++** touches it: every copy of the caller's pointer dies, and a pointer that
++** is not a live block of this pool faults.  memsys5 keeps reaching the
++** block through the pool, so the free-list links stay in the freed block.
++** Shutdown revokes the pool and every block below it.
++*/
++#include <capstone/capability.h>
++
++/*
+ ** A minimum allocation is an instance of the following structure.
+ ** Larger allocations are an array of these structures where the
+ ** size of the array is a power of 2.
+@@ -22994,6 +23005,7 @@
    int szAtom;      /* Smallest possible allocation in bytes */
    int nBlock;      /* Number of szAtom sized blocks in zPool */
--  u8 *zPool;       /* Memory available to be allocated */
-+  uptr poolBase;   /* Address of the revocable pool */
+   u8 *zPool;       /* Memory available to be allocated */
++  void *pHeap;     /* The heap's lifetime, parent of zPool */
    
    /*
    ** Mutex to control access to the memory allocation subsystem.
-@@ -23027,8 +23029,46 @@
-   */
-   u8 *aCtrl;
- 
-+  /*
-+  ** Sublet.  The pool arrives as one linear capability and is carved into
-+  ** blocks, each with its own revocation node.  aCap[i] holds the block that
-+  ** starts at atom i: linear while it is free, its revocation handle while it
-+  ** is checked out.  aPar holds, for every block that was split, the handle
-+  ** taken before the split; it is senior to both halves, so one revoke of it
-+  ** merges them again.  The free-list links live in aLink, beside the pool,
-+  ** because a freed block is revoked memory.
-+  */
-+  Mem5Link *aLink;
-+  capstone_cap_slot *aCap;
-+  capstone_cap_slot *aPar;
-+  int aParOff[LOGMAX+2];
-+
- } mem5;
- 
-+/* The pool as the level below handed it over: linear, its handle kept there. */
-+static capstone_cap_slot memsys5Grant;
-+
-+SQLITE_API void sqlite3_sublet_grant(void *pLinear){
-+  capstone_cap_store(&memsys5Grant, pLinear);
-+}
-+SQLITE_API void sqlite3_sublet_pool(unsigned long *pBase, unsigned long *pEnd){
-+  if( capstone_cap_type(&memsys5Grant)==7 ){ *pBase = *pEnd = 0; return; }
-+  *pBase = capstone_cap_base(&memsys5Grant);
-+  *pEnd = capstone_cap_end(&memsys5Grant);
-+}
-+SQLITE_API void sqlite3_sublet_stats(unsigned long *aOut){
-+  aOut[0] = sublet_stats.split;
-+  aOut[1] = sublet_stats.mrev;
-+  aOut[2] = sublet_stats.delin;
-+  aOut[3] = sublet_stats.revoke;
-+  aOut[4] = sublet_stats.init;
-+}
-+
-+/* Where the handle senior to the block of 2^iLog atoms at i is kept. */
-+static capstone_cap_slot *memsys5Parent(int i, int iLog){
-+  return &mem5.aPar[mem5.aParOff[iLog] + (i>>iLog)];
-+}
-+
- /*
- ** Access the static variable through a macro for SQLITE_OMIT_WSD.
- */
-@@ -23038,7 +23078,7 @@
- ** Assuming mem5.zPool is divided up into an array of Mem5Link
- ** structures, return a pointer to the idx-th such link.
- */
--#define MEM5LINK(idx) ((Mem5Link *)(&mem5.zPool[(idx)*mem5.szAtom]))
-+#define MEM5LINK(idx) (&mem5.aLink[idx])
- 
- /*
- ** Unlink the chunk at mem5.aPool[i] from list it is currently
-@@ -23099,7 +23139,7 @@
- static int memsys5Size(void *p){
-   int iSize, i;
-   assert( p!=0 );
--  i = (int)(((u8 *)p-mem5.zPool)/mem5.szAtom);
-+  i = (int)(((uptr)p-mem5.poolBase)/mem5.szAtom);
-   assert( i>=0 && i<mem5.nBlock );
-   iSize = mem5.szAtom * (1 << (mem5.aCtrl[i]&CTRL_LOGSIZE));
-   return iSize;
-@@ -23115,7 +23155,7 @@
- ** routine so there is never any chance that two or more
- ** threads can be in this routine at the same time.
- */
--static void *memsys5MallocUnsafe(int nByte){
-+static int memsys5CarveUnsafe(int nByte){
-   int i;           /* Index of a mem5.aPool[] slot */
-   int iBin;        /* Index into mem5.aiFreelist[] */
-   int iFullSz;     /* Size of allocation rounded up to power of 2 */
-@@ -23125,7 +23165,7 @@
-   assert( nByte>0 );
- 
-   /* No more than 1GiB per allocation */
--  if( nByte > 0x40000000 ) return 0;
-+  if( nByte > 0x40000000 ) return -1;
- 
- #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
-   /* Keep track of the maximum allocation request.  Even unfulfilled
-@@ -23147,7 +23187,7 @@
-   if( iBin>LOGMAX ){
-     testcase( sqlite3GlobalConfig.xLog!=0 );
-     sqlite3_log(SQLITE_NOMEM, "failed to allocate %u bytes", nByte);
--    return 0;
-+    return -1;
-   }
-   i = mem5.aiFreelist[iBin];
-   memsys5Unlink(i, iBin);
-@@ -23156,6 +23196,11 @@
- 
-     iBin--;
-     newSize = 1 << iBin;
-+    /* The handle senior to both halves, then the split: a fresh node for the
-+    ** upper half, the lower half keeps the block's. */
-+    sublet_handle(&mem5.aCap[i], memsys5Parent(i, iBin+1));
-+    sublet_split(&mem5.aCap[i], mem5.poolBase+(uptr)(i+newSize)*mem5.szAtom,
-+                 &mem5.aCap[i+newSize]);
-     mem5.aCtrl[i+newSize] = CTRL_FREE | iBin;
-     memsys5Link(i+newSize, iBin);
-   }
-@@ -23172,14 +23217,23 @@
-   if( mem5.maxOut<mem5.currentOut ) mem5.maxOut = mem5.currentOut;
+@@ -23178,8 +23190,8 @@
+   memset(&mem5.zPool[i*mem5.szAtom], 0xAA, iFullSz);
  #endif
- 
--#ifdef SQLITE_DEBUG
--  /* Make sure the allocated memory does not assume that it is set to zero
--  ** or retains a value from a previous allocation */
--  memset(&mem5.zPool[i*mem5.szAtom], 0xAA, iFullSz);
--#endif
-+  return i;
-+}
  
 -  /* Return a pointer to the allocated memory. */
 -  return (void*)&mem5.zPool[i*mem5.szAtom];
-+/* The block goes out under a handle this level keeps: as an alias for the
-+** caller, or linear, to a level that carves it into objects of its own.
-+*/
-+static void *memsys5MallocUnsafe(int nByte){
-+  int i = memsys5CarveUnsafe(nByte);
-+  return i<0 ? 0 : sublet_take(&mem5.aCap[i]);
-+}
-+SQLITE_PRIVATE void *sqlite3MallocLinear(u64 nByte, capstone_cap_slot *pBlock){
-+  int i;
-+  if( nByte>0x7fffff00 ) return 0;
-+  memsys5Enter();
-+  i = memsys5CarveUnsafe((int)nByte);
-+  memsys5Leave();
-+  return i<0 ? 0 : (void*)sublet_take_linear(&mem5.aCap[i], pBlock);
++  /* Return the block as a child of the pool, bounded to the block. */
++  return capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, iFullSz);
  }
  
  /*
-@@ -23192,11 +23246,11 @@
+@@ -23189,6 +23201,9 @@
+   u32 size, iLogsize;
+   int iBlock;
+ 
++  /* End the caller's block (CREVOKE); faults on a pointer that is not live. */
++  capstone_cap_revoke_child(mem5.zPool, pOld);
++
    /* Set iBlock to the index of the block pointed to by pOld in 
    ** the array of mem5.szAtom byte blocks pointed to by mem5.zPool.
    */
--  iBlock = (int)(((u8 *)pOld-mem5.zPool)/mem5.szAtom);
-+  iBlock = (int)(((uptr)pOld-mem5.poolBase)/mem5.szAtom);
- 
-   /* Check that the pointer pOld points to a valid, non-free block. */
-   assert( iBlock>=0 && iBlock<mem5.nBlock );
--  assert( ((u8 *)pOld-mem5.zPool)%mem5.szAtom==0 );
-+  assert( ((uptr)pOld-mem5.poolBase)%mem5.szAtom==0 );
-   assert( (mem5.aCtrl[iBlock] & CTRL_FREE)==0 );
- 
-   iLogsize = mem5.aCtrl[iBlock] & CTRL_LOGSIZE;
-@@ -23216,6 +23270,7 @@
- #endif
- 
-   mem5.aCtrl[iBlock] = CTRL_FREE | iLogsize;
-+  sublet_give(&mem5.aCap[iBlock]);
-   while( ALWAYS(iLogsize<LOGMAX) ){
-     int iBuddy;
-     if( (iBlock>>iLogsize) & 1 ){
-@@ -23236,15 +23291,13 @@
-       mem5.aCtrl[iBlock] = CTRL_FREE | iLogsize;
-       mem5.aCtrl[iBuddy] = 0;
-     }
-+    /* The handle taken before the split covers both halves: one revoke and
-+    ** the block is whole again; the upper half's capability died with it. */
-+    sublet_give_to(memsys5Parent(iBlock, iLogsize), &mem5.aCap[iBlock]);
-+    capstone_cap_clear(&mem5.aCap[iBlock+size]);
-     size *= 2;
+@@ -23374,7 +23389,9 @@
    }
  
--#ifdef SQLITE_DEBUG
--  /* Overwrite freed memory with the 0x55 bit pattern to verify that it is
--  ** not used after being freed */
--  memset(&mem5.zPool[iBlock*mem5.szAtom], 0x55, size);
--#endif
--
-   memsys5Link(iBlock, iLogsize);
- }
- 
-@@ -23373,9 +23426,24 @@
-     mem5.szAtom = mem5.szAtom << 1;
-   }
- 
--  mem5.nBlock = (nByte / (mem5.szAtom+sizeof(u8)));
+   mem5.nBlock = (nByte / (mem5.szAtom+sizeof(u8)));
 -  mem5.zPool = zByte;
--  mem5.aCtrl = (u8 *)&mem5.zPool[mem5.nBlock*mem5.szAtom];
-+  /* The pool is the grant, linear, from the level below.  The configured
-+  ** heap holds only the tables beside it: control bytes, links, one
-+  ** capability per atom and the handles of the split blocks. */
-+  mem5.poolBase = capstone_cap_base(&memsys5Grant);
-+  mem5.nBlock = (int)((capstone_cap_end(&memsys5Grant)-mem5.poolBase)/mem5.szAtom);
-+  mem5.aParOff[0] = 0;
-+  mem5.aParOff[1] = 0;
-+  for(ii=1; ii<=LOGMAX; ii++){
-+    mem5.aParOff[ii+1] = mem5.aParOff[ii] + (mem5.nBlock>>ii) + 1;
-+  }
-+  mem5.aCtrl = zByte;
-+  mem5.aLink = (Mem5Link*)&zByte[(mem5.nBlock+15)&~15];
-+  mem5.aCap = (capstone_cap_slot*)&zByte[((u8*)&mem5.aLink[mem5.nBlock]-zByte+15)&~15];
-+  mem5.aPar = &mem5.aCap[mem5.nBlock];
-+  if( (u8*)&mem5.aPar[mem5.aParOff[LOGMAX+1]] > &zByte[nByte] ){
-+    return SQLITE_NOMEM;
-+  }
-+  memset(zByte, 0, (size_t)((u8*)&mem5.aPar[mem5.aParOff[LOGMAX+1]]-zByte));
++  mem5.pHeap = capstone_cap_derive(zByte,
++      (uptr)zByte - __builtin_capstone_cap_get_base(zByte), nByte);
++  mem5.zPool = capstone_cap_derive(mem5.pHeap, 0, nByte);
+   mem5.aCtrl = (u8 *)&mem5.zPool[mem5.nBlock*mem5.szAtom];
  
    for(ii=0; ii<=LOGMAX; ii++){
-     mem5.aiFreelist[ii] = -1;
-@@ -23386,6 +23454,8 @@
-     int nAlloc = (1<<ii);
-     if( (iOffset+nAlloc)<=mem5.nBlock ){
-       mem5.aCtrl[iOffset] = ii | CTRL_FREE;
-+      sublet_carve(&memsys5Grant, mem5.poolBase+(uptr)(iOffset+nAlloc)*mem5.szAtom,
-+                   &mem5.aCap[iOffset]);
-       memsys5Link(iOffset, ii);
-       iOffset += nAlloc;
-     }
+@@ -23406,6 +23423,10 @@
+ static void memsys5Shutdown(void *NotUsed){
+   UNUSED_PARAMETER(NotUsed);
+   mem5.mutex = 0;
++  if( mem5.zPool ){
++    capstone_cap_revoke_child(mem5.pHeap, mem5.zPool);
++    mem5.zPool = 0;
++  }
+   return;
+ }
+ 

@@ -2,7 +2,7 @@
 """Build the SQLite 3.22.0 engine corpus for the VIRTUAL address space.
 
     build-virtual-sqlite322.py --sdk <virtual SDK> --amalgamation <dir with
-        sqlite3.c and sqlite3.h> --out <new dir> [--memsys5] [--only 00,07]
+        sqlite3.c and sqlite3.h> --out <new dir> [--memsys5 | --sublet] [--only 00,07]
 
 WHY THIS CORPUS NEEDS ITS OWN BUILDER. The other C corpora are one translation
 unit plus a driver, or one call into a port's CMake seam. These 33 cases are
@@ -37,16 +37,13 @@ WHAT IT CHANGES AGAINST THE PHYSICAL ARM, and why:
     Without it SQLite allocates through the platform -- here the virtual
     runtime's own allocator, one bounded object per allocation and a revoke on
     every free. That pair IS the experiment; see repro322_common.h.
-  * `--sublet` selects the THIRD arm: memsys5 again, under its own Sublet port.
-    The amalgamation is copied, `ports/sqlite/sublet/sublet-3220000-memsys5.patch`
-    is applied to the copy with `-F0` so a source it was not written for is
-    refused rather than patched somewhere near, and the pool is borrowed from
-    the system allocator as one linear capability instead of being a static
-    array. Two include roots join here and the ORDER IS LOAD-BEARING:
-    `capstone/runtime/include` must precede `capstone/`, because two different
-    headers are both reachable as `sublet/sublet.h` and only the first declares
-    the `capstone_cap_slot` type this patch uses. The same ordering is spelled
-    out in ports/sqlite/build-sqlite-capstone.sh.
+  * `--sublet` selects the THIRD arm: memsys5 again, over the same static
+    array, under its own Sublet port. The amalgamation is copied and
+    `ports/sqlite/sublet/sublet-3220000-memsys5.patch` is applied to the copy
+    with `-F0`, so a source it was not written for is refused rather than
+    patched somewhere near. The patch issues every block as a child lifetime
+    of the pool (CDERIVE) and revokes it on free (CREVOKE); it includes
+    <capstone/capability.h> from `capstone/runtime/include`.
 
 -O0 for both the amalgamation and the case, as corpus322.sh uses: these are
 defects that turn on one specific access, and an optimiser that moves it moves
@@ -184,9 +181,7 @@ def main():
         if done.returncode:
             sys.exit(f'the Sublet patch did not apply: {done.stdout}{done.stderr}')
         print(f'  patched {source.name} with {patch.name}')
-        sublet_includes = [f'-I{REPO}/capstone/runtime/include',
-                           f'-I{REPO}/capstone/sublet', f'-I{REPO}/capstone',
-                           f'-I{patch.parent}']
+        sublet_includes = [f'-I{REPO}/capstone/runtime/include']
     engine = {}
     for group in sorted({g for _, g, _ in cases.values()}):
         if group not in flags:
@@ -217,15 +212,6 @@ def main():
         if configures_heap and not a.memsys5:
             print(f'  {case.name:<52} not-applicable (reaches for sqlite_heap, '
                   f'which only the memsys5 arm has)')
-            skipped.append(case.name)
-            continue
-        if configures_heap and a.sublet:
-            # Under the port the pool is a grant, not an array: there is nothing
-            # named sqlite_heap to reach for, and the case's way of forcing OOM
-            # is to fill that array. Rewriting it to fill the pool through
-            # allocations would be a different case.
-            print(f'  {case.name:<52} not-applicable (configures the heap itself '
-                  f'from sqlite_heap; under the Sublet port the pool is a grant)')
             skipped.append(case.name)
             continue
         sources = [str(case / 'case.c')]
