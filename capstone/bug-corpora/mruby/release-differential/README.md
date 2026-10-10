@@ -185,11 +185,18 @@ and it is reachable at all only because the port now builds `mruby-task`.
     bash probe/depth-probe.sh
 
     # the virtual arms: build-mruby-domain.sh with MRBD_SDK=<virtual SDK>, and
-    # MRBD_SUBLET=1 for the protected image; then, per arm, on a virtual VM
+    # MRBD_SUBLET=1 for the protected image; the C-API drivers (case 11) against
+    # each build; then, per arm, on a virtual VM
+    bash probe/build-capi.sh <stock>/src/mruby SDK CAPI-STOCK
+    bash probe/build-capi.sh <MRBD_SUBLET=1>/src/mruby SDK CAPI-SUBLET
     python3 probe/run-virtual.py OUT --state VM --arm virtual-malloc \
-        --image <stock>/build/capstone/bin/mruby --llvm-bin BIN
+        --image <stock>/build/capstone/bin/mruby --capi-dir CAPI-STOCK --llvm-bin BIN
     python3 probe/run-virtual.py OUT --state VM --arm virtual-nested-pools \
-        --image <MRBD_SUBLET=1>/build/capstone/bin/mruby --llvm-bin BIN
+        --image <MRBD_SUBLET=1>/build/capstone/bin/mruby --capi-dir CAPI-SUBLET --llvm-bin BIN
+
+    # case 11's native matched pair: the pin, and the pin with the fix's task.c hunks
+    git -C <mruby clone> show cb51fce92 -- mrbgems/mruby-task/src/task.c > fix.diff
+    bash probe/native-control.sh <stock>/src/mruby 11_cb51fce92_task-stack-envs fix.diff OUT
 
 The 2026-10-06 run also had `sublet` and `sublet-gc` images on the Sublet heap,
 which needed `CAPSTONE_REV_NODES=16777216`; `probe/analyse.py` reads that run's
@@ -260,28 +267,40 @@ its default.
 The 23 cases run as the port's mruby built for the virtual profile
 (`build-mruby-domain.sh` with `MRBD_SDK` naming a virtual SDK), one process per
 case under `capstone-vexec`, by `probe/run-virtual.py`
-([results/2026-10-11-virtual](results/2026-10-11-virtual/README.md)). Two arms,
-two images that differ by one patch:
+([results/2026-10-11-virtual](results/2026-10-11-virtual/README.md); case 11 through its
+C-API driver in [results/2026-10-11-virtual-capi](results/2026-10-11-virtual-capi/README.md)). Two
+arms, two images that differ by one patch:
 
 | arm | mruby | caught | missed | no reading |
 |---|---|---:|---:|---:|
-| `virtual-malloc` | as ported, on musl mallocng: every malloc'd object bounded and retired on free; a GC object slot is an unbounded offset in its heap page | 19 | 3 | 1 |
-| `virtual-nested-pools` | the same with patch 0008 (`MRBD_SUBLET=1`): every GC object slot a `CDERIVE` child of its page, revoked by `CREVOKE` when the sweep frees it | 22 | 0 | 1 |
+| `virtual-malloc` | as ported, on musl mallocng: every malloc'd object bounded and retired on free; a GC object slot is an unbounded offset in its heap page | 20 | 3 | 0 |
+| `virtual-nested-pools` | the same with patch 0008 (`MRBD_SUBLET=1`): every GC object slot a `CDERIVE` child of its page, revoked by `CREVOKE` when the sweep frees it | 23 | 0 | 0 |
 
 The three that only the patch catches are the three GC-slot rows the old
 `sublet-gc` adapter alone caught -- `04_606d9a6b2`, `05_628ccec60` and
 `08_fb4974528` -- each now faulting with cause 25, an invalid lifetime, where
 `virtual-malloc` completes with the harness's wrong answer. `02_39aecc143`
 faults on both arms, earlier under the patch: at the revoked slot (cause 25)
-rather than after its reuse (cause 24). `11_cb51fce92` faults with cause 12, an
-instruction fault and not a capability fault, on both: no reading, as on every
-earlier arm. It is not a miss: at the pin the trigger never reaches the defect
-it was extracted for. `Task#close` postdates the pin, so the script raises
-`NoMethodError`, and raising after a task has run longjmps through a stale
-`jmp_buf` on the C stack -- a second mruby-task defect, which crashes the
-native build the same way (SIGSEGV in `__longjmp`). The other paths that free a
-task's stack are C API. The case's `harness_limit` field has the evidence; it
-needs a C-API reduction before any arm can read it.
+rather than after its reuse (cause 24).
+
+`11_cb51fce92` is measured through a C-API driver, `capi.c`. At the pin no
+script reaches its defect: upstream's test (`trigger.rb`) calls `Task#close`,
+which postdates the pin, so it raises `NoMethodError`, and raising after a task
+has run longjmps through a stale `jmp_buf` on the C stack -- a second
+mruby-task defect, which crashes the native build too (SIGSEGV in `__longjmp`),
+and which is what `trigger.rb` reached on both virtual images (cause 12, before
+the GC marks anything). The other paths that
+free a task's stack are C API. `capi.c` takes upstream's `TaskTest.run_sync`
+path without the helper: a closure escapes a proc run by
+`mrb_execute_proc_synchronously`, which frees the task's stack without
+detaching the closure's env, and a full collection then marks the env. Both
+arms fault there, cause 25 in `gc_mark_children`: the stack is a malloc'd
+block, so mallocng's retirement on free catches it without patch 0008. Two
+matched pairs, the pin against the pin with cb51fce92's `task.c` hunks alone,
+show the driver reaches that defect: natively SIGSEGV in `mrb_gc_mark` under
+`gc_mark_children` (upstream's backtrace) against `CASE11 completed 30`, and on
+`virtual-malloc` cause 25 against exit 0, twice each
+(`probe/native-control.sh`, the bundle's README).
 
 A catch counts only if the patch does not fault on correct code. mruby's own
 test suite (`mrbtest`, 1,710 tests) runs to the same result on both images --

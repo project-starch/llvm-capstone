@@ -2,11 +2,15 @@
 """Run the 23 cases on one virtual arm, and record what each run showed.
 
     run-virtual.py OUT --state VM --arm {virtual-malloc,virtual-nested-pools} \
-        --image MRUBY --llvm-bin BIN [--smoke SCRIPT]
+        --image MRUBY --capi-dir DIR --llvm-bin BIN [--smoke SCRIPT]
 
 The image is the port's virtual-profile mruby (build-mruby-domain.sh with MRBD_SDK naming a
-virtual SDK): stock for virtual-malloc, MRBD_SUBLET=1 for virtual-nested-pools. Each case's
-trigger.rb runs as `mruby trigger.rb` under capstone-vexec, staged in the VM's share.
+virtual SDK): stock for virtual-malloc, MRBD_SUBLET=1 for virtual-nested-pools. A case whose
+trigger is a script runs as `mruby trigger.rb` under capstone-vexec, staged in the VM's share. A
+case whose trigger is a C-API driver (case.json "trigger": "capi.c") runs its own image,
+DIR/capi-NN.dom from probe/build-capi.sh against the same mruby build; it prints `CASE<N> ready`
+just before its defective access, and its row records whether that mark came and whether the
+fault lies in one of the case's declared fault_sites.
 
 This runner REPORTS. Per case it writes one row: the outcome (completed, fault, timeout, exit),
 the fault's cause and the function its pc lies in, from the image's own symbols, and the first
@@ -60,6 +64,8 @@ def main():
     p.add_argument("--state", type=Path, required=True)
     p.add_argument("--arm", required=True, choices=("virtual-malloc", "virtual-nested-pools"))
     p.add_argument("--image", type=Path, required=True)
+    p.add_argument("--capi-dir", type=Path, required=True,
+                   help="probe/build-capi.sh's output for this arm's mruby build")
     p.add_argument("--llvm-bin", type=Path, required=True)
     p.add_argument("--smoke", type=Path, default=REPO / "capstone/ports/mruby/app/scripts/smoke.rb")
     a = p.parse_args()
@@ -83,17 +89,34 @@ def main():
 
     rows = []
     for d in sorted(CORPUS.glob("[0-9][0-9]_*")):
-        script = stage / f"{d.name[:2]}.rb"
-        shutil.copy(d / "trigger.rb", script)
-        text, result = run(a.state, a.image, f"/mnt/host/mruby-cases/{script.name}", raw / d.name[:2])
-        kind, cause, func, first = outcome(text, result, symbols)
+        claims = json.loads((d / "case.json").read_text())
+        trigger = d / claims["trigger"]
+        reached = in_sites = ""
+        if trigger.suffix == ".c":
+            image = a.capi_dir / f"capi-{d.name[:2]}.dom"
+            if not image.is_file():
+                print(f"CONTROL-FAILED no {image}", file=sys.stderr)
+                return 75
+            text, result = appvm.run_app(a.state, image, [], raw / d.name[:2], timeout=TIMEOUT)
+            kind, cause, func, first = outcome(text, result, v.Symbols(a.llvm_bin, image))
+            reached = "yes" if f"CASE{int(d.name[:2])} ready" in text else "no"
+            in_sites = "yes" if func in claims.get("fault_sites", []) else ("no" if kind == "fault" else "")
+            first = next((l.strip() for l in text.splitlines() if l.startswith("CASE")), first)
+            driver_sha = v.sha256(image)
+        else:
+            script = stage / f"{d.name[:2]}.rb"
+            shutil.copy(trigger, script)
+            text, result = run(a.state, a.image, f"/mnt/host/mruby-cases/{script.name}", raw / d.name[:2])
+            kind, cause, func, first = outcome(text, result, symbols)
+            driver_sha = ""
         rows.append({"case": d.name, "arm": a.arm, "outcome": kind, "cause": cause, "function": func,
-                     "harness": first[:160],
-                     "trigger_sha256": hashlib.sha256((d / "trigger.rb").read_bytes()).hexdigest()})
-        print(f"  {d.name[:44]:44} {kind:9} {cause:>3} {func[:28]:28} {first[:50]}", flush=True)
+                     "reached": reached, "in_fault_sites": in_sites, "harness": first[:160],
+                     "trigger_sha256": hashlib.sha256(trigger.read_bytes()).hexdigest(),
+                     "driver_sha256": driver_sha})
+        print(f"  {d.name[:44]:44} {kind:9} {cause:>3} {func[:28]:28} {reached:3} {first[:44]}", flush=True)
 
     a.output.mkdir(parents=True, exist_ok=True)
-    cols = ("case", "arm", "outcome", "cause", "function", "harness")
+    cols = ("case", "arm", "outcome", "cause", "function", "reached", "in_fault_sites", "harness")
     (a.output / "matrix.tsv").write_text(
         "\t".join(cols) + "\n" + "".join("\t".join(r[c] for c in cols) + "\n" for r in rows))
     (a.output / "inputs.json").write_text(json.dumps({
@@ -102,6 +125,7 @@ def main():
         "timeout_s": TIMEOUT,
         "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE),
         "triggers": {r["case"]: r["trigger_sha256"] for r in rows},
+        "drivers": {r["case"]: r["driver_sha256"] for r in rows if r["driver_sha256"]},
     }, indent=2) + "\n")
     tally = {}
     for r in rows:

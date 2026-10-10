@@ -4,10 +4,22 @@
   "title": "a task's stack is freed while on-stack envs still point into it, and the GC then marks freed memory",
   "consumer": "mrbgems/mruby-task/src/task.c",
   "class": "temporal",
-  "trigger": "trigger.rb",
+  "trigger": "capi.c",
   "live_in_pin": true,
   "live_proof": "upstream fixed it in cb51fce92 (cb51fce921fc7beceb5337231c0e17b7299c1279) (2026-07-31), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: SIGABRT (with MRB_HEAP_PAGE_SIZE=1: SIGABRT); the same case on master: no report",
-  "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "fidelity": "a C-API reduction of the Ruby test upstream added with its fix. At the 4.0.0-rc2 pin no Ruby script reaches the defect (trigger.rb, upstream's test extracted onto a harness, is kept as the record of what upstream ran): Task#close arrived upstream in 306d265cd (2026-07-14), after the pin, and mrb_execute_proc_synchronously and mrb_task_init_context are C API that upstream's test reaches only through C helpers (TaskTest) in mrbtest. capi.c does what upstream's TaskTest.run_sync test does, without the helper: it runs a proc whose closure escapes into $esc through mrb_execute_proc_synchronously, which frees the temporary task's stack without detaching the env, prints CASE11 ready, and runs a full collection, which marks the env and reads e->stack[i] on the freed stack. probe/build-capi.sh links it against each arm's own libmruby.a; probe/native-control.sh builds it natively against the pin and against the pin with cb51fce92's task.c hunks alone. What the driver does NOT establish is which arm ought to catch it",
+  "fault_sites": [
+    "gc_mark_children",
+    "mrb_gc_mark",
+    "gc_mark_gray_list",
+    "incremental_marking_phase",
+    "final_marking_phase",
+    "incremental_gc",
+    "incremental_gc_finish",
+    "mrb_full_gc",
+    "mrb_incremental_gc"
+  ],
+  "fault_sites_why": "the GC's marking path from mrb_full_gc down to the read of e->stack[i] in gc_mark_children's MRB_TT_ENV case, which the inliner may fold into any caller on it. Upstream's fix message (cb51fce92) reports the crash at mrb_gc_mark under gc_mark_children (MRB_TT_ENV, e->stack[i]) under mrb_full_gc; capi.c built natively against the pin (probe/native-control.sh) crashes with SIGSEGV in mrb_gc_mark under gc_mark_children, incremental_marking_phase, incremental_gc, incremental_gc_finish, mrb_full_gc (gdb, 2026-10-11). The list was written after two staged runs of capi.c on each virtual image had already faulted in gc_mark_children; it is upstream's and the native run's path, not theirs.",
   "arms": {
     "sysalloc-none": {
       "oracle": "capability fault, cause 2"
@@ -19,22 +31,21 @@
       "oracle": "abort: the C runtime stops it (not a capability fault)",
       "verdict": "NO-READING",
       "verdict_from": "results/20261006-cheribsd/matrix.tsv cb51fce92: abort rc=134",
-      "verdict_note": "abort (rc 134): no mechanism report"
+      "verdict_note": "abort (rc 134): no mechanism report. Measured with trigger.rb, which at the pin raises NoMethodError (Task#close) and does not reach this defect; capi.c has not run on CheriBSD"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, mruby 4.0.0-rc2 as ported on musl mallocng (exact bounds, lifetime retirement on free); its GC object slots are unbounded offsets in a malloc'd heap page: a capability fault (cause 24-30) is CAUGHT, a run that completes is MISSED",
-      "verdict": "NO-READING",
-      "verdict_note": "fault cause 12: not a capability fault",
-      "verdict_from": "results/2026-10-11-virtual/virtual-malloc/matrix.tsv 11"
+      "verdict": "CAUGHT",
+      "verdict_note": "capi.c (stock libmruby, driver 261f758d08f5229a): CASE11 ready, then capability fault, cause 25, in gc_mark_children, one of the case's fault_sites",
+      "verdict_from": "results/2026-10-11-virtual-capi/virtual-malloc/matrix.tsv 11"
     },
     "virtual-nested-pools": {
       "oracle": "the same with patch 0008 (MRBD_SUBLET=1): every GC object slot a CDERIVE child of its heap page, revoked by CREVOKE when the sweep frees it: as virtual-malloc",
-      "verdict": "NO-READING",
-      "verdict_note": "fault cause 12: not a capability fault",
-      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools/matrix.tsv 11"
+      "verdict": "CAUGHT",
+      "verdict_note": "capi.c (patch 0008 libmruby, driver 09d77f573a6ed51d): CASE11 ready, then capability fault, cause 25, in gc_mark_children, one of the case's fault_sites",
+      "verdict_from": "results/2026-10-11-virtual-capi/virtual-nested-pools/matrix.tsv 11"
     }
   },
-  "status": "sysalloc-none and sysalloc-bounds measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default; virtual-malloc and virtual-nested-pools measured 2026-10-11 on the virtual profile. The sublet-gc arm left the case with the Sublet heap and the GC-slot adapter on 2026-10-11; its readings stay in results/20261006.",
-  "allocator_layer": "the task's VM stack (system allocator)",
-  "harness_limit": "Checked 2026-10-11: at the 4.0.0-rc2 pin the trigger does not reach the defect cb51fce92 fixes. Every path that frees a live task's stack with an env still pointing into it is out of a Ruby script's reach there: Task#close arrived upstream in 306d265cd (2026-07-14), after the pin, and mrb_execute_proc_synchronously and mrb_task_init_context are C API reached by upstream's test only through C helpers (TaskTest) in mrbtest. In a plain mruby the first test's t.close raises NoMethodError, and raising any exception after a task has run longjmps through a stale jmp_buf the scheduler left on the C stack: natively SIGSEGV in __longjmp (exit 139), on Capstone a jump to a heap address (cause 12), on both virtual images and before the GC marks anything (staged probes, t.terminate then t.close). That is a second mruby-task defect, in exception handling and on the C stack, which no heap lifetime covers. Every arm's NO-READING on this case is therefore not a miss of cb51fce92: the case needs a C-API reduction to measure it at the pin."
+  "status": "sysalloc-none and sysalloc-bounds measured 2026-10-06 on the Capstone application VM, and cheribsd-revocation on 2026-10-06 on CheriBSD purecap with libc revocation at its default, all three with trigger.rb, which does not reach the defect at the pin; virtual-malloc and virtual-nested-pools measured 2026-10-11 on the virtual profile with capi.c. The sublet-gc arm left the case with the Sublet heap and the GC-slot adapter on 2026-10-11; its readings stay in results/20261006.",
+  "allocator_layer": "the task's VM stack (system allocator)"
 }

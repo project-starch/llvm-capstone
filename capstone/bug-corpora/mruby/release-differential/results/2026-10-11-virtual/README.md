@@ -32,7 +32,7 @@ Per case (`matrix.tsv` in each bundle): cause and the function the fault's pc li
 | 08 `fb4974528` | completes, wrong answer | **25 `mrb_vm_exec`** |
 | 09 `0cf969a2b` | 25 `mrb_iv_foreach` | 25 `mrb_iv_foreach` |
 | 10 `7c5915799` | 25 `mrb_struct_equal` | 25 `mrb_struct_equal` |
-| 11 `cb51fce92` | 12 (not a capability fault) | 12 (not a capability fault) |
+| 11 `cb51fce92` | 12 (not a capability fault)* | 12 (not a capability fault)* |
 | 12 `4663fef45` | 28 `ar_get` | 28 `ar_get` |
 | 13 `4a386f80e` | 28 `mrb_pack_pack` | 28 `mrb_pack_pack` |
 | 14 `93eb74a59` | 28 `mrb_obj_ceqq` | 28 `mrb_obj_ceqq` |
@@ -46,6 +46,10 @@ Per case (`matrix.tsv` in each bundle): cause and the function the fault's pc li
 Causes: 24 a capability without a tag (or of the wrong type), 25 an invalid lifetime, 28 out of
 bounds (`docs/design/virtual-capstone/isa.md`). Every difference between the arms is on a GC
 object slot, and each is cause 25.
+
+\* `trigger.rb`, which at the pin does not reach case 11's defect. The case is read through its
+C-API driver in [2026-10-11-virtual-capi](../2026-10-11-virtual-capi/README.md): cause 25 in
+`gc_mark_children` on both arms.
 
 ## Soundness of the patch
 
