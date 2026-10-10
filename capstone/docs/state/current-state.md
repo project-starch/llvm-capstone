@@ -1,5 +1,15 @@
 # Current Capstone state
 
+## 2026-10-10 — CheriBSD PoisonCap removed (branch `nested/poisoncap-removal`)
+
+Our CheriBSD PoisonCap adapter is gone from every port except PostgreSQL, which goes with
+its rewrite: the FFmpeg, wmem, memcached, APR and Perl SV-head backends, their runners,
+the `poisoncap-*` arms of the fourteen FFmpeg, tshark, memcached and httpd corpora, the
+two PoisonCap columns of `catch-tables.py`, and the study's `nested-poisoncap` planner
+and build paths. The platform recipe (`ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/`)
+and its libc fix stay, because the stock CheriBSD runners of the httpd and memcached corpora
+boot that image. Every PoisonCap entry below is history; its results stay in `results/`.
+
 ## 2026-10-10 — Sublet lifetime extension on `isa/sublet-lifetimes`
 
 `CDERIVE`/two-operand `CREVOKE`, node-scoped MANAGE and explicit parent links

@@ -1,3 +1,7 @@
+2026-10-10 — **CheriBSD PoisonCap is removed** (branch `nested/poisoncap-removal`; PostgreSQL's arm
+goes with its rewrite). Every PoisonCap next step below is void, and its results stay as history.
+See `current-state.md`.
+
 2026-10-10 — **Sublet lifetime extension: review the paired QEMU/runtime change
 on `isa/sublet-lifetimes`.** Its [qualification](../design/virtual-capstone/development.md#sublet-lifetime-qualification)
 covers the ISA, storage formats, public C wrappers and existing processor
