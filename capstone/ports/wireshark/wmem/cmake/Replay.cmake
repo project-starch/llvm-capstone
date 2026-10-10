@@ -47,6 +47,12 @@ option(WM_SUBLET "Nested lifetimes in a Capstone process: the Sublet region and 
 if(WM_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
   message(FATAL_ERROR "WM_SUBLET needs the capstone-application toolchain")
 endif()
+# One allocation on the virtual profile is at most 256 MiB (runtime/virtual/vm.h), below the 384 MiB
+# payload every other platform takes; see the end of src/shared/port.h.
+set(WM_VIRTUAL_PAYLOAD_MIB 128 CACHE STRING "capstone-application: the payload in MiB (the virtual heap caps one allocation at 256)")
+if(PORT_PLATFORM STREQUAL "capstone-application")
+  add_compile_definitions("WM_VIRTUAL_PAYLOAD_BYTES=(${WM_VIRTUAL_PAYLOAD_MIB}UL << 20)")
+endif()
 function(wm_executable name variant)
   set(workload ${ARGN})
   set(source "${CMAKE_BINARY_DIR}/source-${variant}")

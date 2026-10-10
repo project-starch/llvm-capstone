@@ -265,3 +265,12 @@ Predictions:
   - The subobject run built nothing, from the same chain omission as R2's first attempt; it is R6b.
 - **R6b** (`subobject-repros/results/2026-10-10-virtual/virtual-malloc/`): as predicted, 9 of 9 MISSED.
   Each buggy arm printed DEFECT-REPRODUCED and completed; each fixed arm printed FIXED.
+- **R7, first attempt**: no reading, on the hazard the pre-registration named. The virtual heap caps one
+  allocation at 256 MiB (`runtime/virtual/vm.h`, `CAP_VM_MAX_BYTES`), so the 384 MiB payload failed:
+  - every case and both wmem controls exited 75 in both columns;
+  - column 3 printed `CONTROL-FAILED the virtual heap lent no 402653184-byte payload`;
+  - column 2's driver returned 75 silently at `aligned_alloc`.
+
+  The mallocng controls faulted as required. The fix: the capstone-application builds take a 128 MiB
+  payload (`WM_VIRTUAL_PAYLOAD_MIB`, appended after `port.h`'s include guard so that no line moves). The
+  physical images are again 185/185 byte-identical. R7b reruns it under the same pre-registration.
