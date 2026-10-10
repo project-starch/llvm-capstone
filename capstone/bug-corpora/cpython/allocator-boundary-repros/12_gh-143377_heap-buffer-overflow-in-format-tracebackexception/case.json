@@ -2,7 +2,7 @@
   "case": 12,
   "upstream_fix": "gh-143377",
   "title": "Heap buffer overflow in `_format_TracebackException` when `TracebackException.format` omits newline",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

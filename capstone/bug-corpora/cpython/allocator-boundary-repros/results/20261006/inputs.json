@@ -5,10 +5,11 @@
       "ended_utc": "2026-10-06T14:51:08Z",
       "every_free_default": "0",
       "positive_control": "EXP-OK cpython 552",
-      "python_sha256": "fba7e8d89796a2221e3eb029aff1c1adefe4a60648bcd8af604abf94587e638b",
+      "python_sha256": "3172023cb8d0a889 (first 16; the full hash of the binary the guest ran)",
       "revocation_default": "1",
       "sicode_control": "si_code=1 (PROT_CHERI_BOUNDS) via mech-control S_OOB",
-      "started_utc": "2026-10-06T14:15:18Z"
+      "started_utc": "2026-10-06T14:15:18Z",
+      "python_sha256_note": "corrected. The runner recorded the host-side $PY, not the guest's copy; the two were different builds -- .text differed by 5,088 bytes -- and the guest ran the select-enabled binary. run-cheribsd.sh now hashes the guest's copy and refuses a mismatch, so this cannot recur."
     },
     "spatial": {
       "arm": "spatial",
@@ -123,7 +124,7 @@
     },
     {
       "arm": "cheribsd-revocation",
-      "python_sha256": "fba7e8d89796a2221e3eb029aff1c1adefe4a60648bcd8af604abf94587e638b",
+      "python_sha256": "3172023cb8d0a889 (first 16; the full hash of the binary the guest ran)",
       "revocation_default": "1",
       "every_free_default": "0",
       "started_utc": "2026-10-07T02:04:21Z",
@@ -132,7 +133,8 @@
       "case_budget": "600",
       "only": "02,07,13,32",
       "ended_utc": "2026-10-07T02:08:01Z",
-      "dir": "boundary-20261007-020413"
+      "dir": "boundary-20261007-020413",
+      "python_sha256_note": "corrected. The runner recorded the host-side $PY, not the guest's copy; the two were different builds -- .text differed by 5,088 bytes -- and the guest ran the select-enabled binary. run-cheribsd.sh now hashes the guest's copy and refuses a mismatch, so this cannot recur."
     }
   ],
   "note_20261007": "Four rows per Capstone arm and four on cheribsd were re-measured on 2026-10-07; the matrix's run column says which row came from which. 07 and 32 carry new single-process triggers and were deliberately measured on the SAME image as the other rows (CAP=base). Only 08 and 13 were given the raised image (CAP=hicap), and neither was recovered by it: 08's trigger has readinto claim 2147483647 bytes and 13 uses a pointer as a length and asks for 0x9fad41ee2fbf, about 175 TB. Capacity was not the limit on either. 21 was given 1800 s where it had had 600 s, and completed in roughly 430 s -- but in a three-case subset, where its 600 s timeout had occurred in a full 32-case pass, so subset and full runs are not freely comparable.",
@@ -253,5 +255,11 @@
       "dir": "boundary-20261008-075318"
     }
   ],
-  "note_20261009": "Six rows recovered by changing images and triggers, never by lowering a bar. 12, 21, 22 and 23 on cheribsd needed _interpreters, pyexpat, _elementtree and _testlimitedcapi compiled into the purecap build; 15 and 23 on the Capstone arms needed _testinternalcapi and _testlimitedcapi in the images. Every image change was accepted only after six previously measured rows reproduced their verdicts on it, and on sublet that gate did its job: the modules at default capacity, and again at a 96 MiB heap, lost rows 19 and 31, which were detections. The application arena was not what ran out -- both heaps failed with identical tracebacks -- the sublet port's own `large` table was, at LARGE_COUNT 4096. Raised to 65536 both come back and 15 and 23 are recovered; that table is separate from the arenas, so arena-return timing is untouched, and block-lifetimes.o differs in exactly two instructions. Two recording errors were also corrected: CPY_EXTRA_CFLAGS is read by nothing in the ports tree, so two images recorded as carrying raised PYM_* carried none of it (a CPY_PYM_DEFINES hook now reaches those constants), and the cheribsd run's python_sha256 named a different binary from the one the guest ran, which the runner now refuses by hashing the guest's copy first."
+  "note_20261009": "Six rows recovered by changing images and triggers, never by lowering a bar. 12, 21, 22 and 23 on cheribsd needed _interpreters, pyexpat, _elementtree and _testlimitedcapi compiled into the purecap build; 15 and 23 on the Capstone arms needed _testinternalcapi and _testlimitedcapi in the images. Every image change was accepted only after six previously measured rows reproduced their verdicts on it, and on sublet that gate did its job: the modules at default capacity, and again at a 96 MiB heap, lost rows 19 and 31, which were detections. The application arena was not what ran out -- both heaps failed with identical tracebacks -- the sublet port's own `large` table was, at LARGE_COUNT 4096. Raised to 65536 both come back and 15 and 23 are recovered; that table is separate from the arenas, so arena-return timing is untouched, and block-lifetimes.o differs in exactly two instructions. Two recording errors were also corrected: CPY_EXTRA_CFLAGS is read by nothing in the ports tree, so two images recorded as carrying raised PYM_* carried none of it (a CPY_PYM_DEFINES hook now reaches those constants), and the cheribsd run's python_sha256 named a different binary from the one the guest ran, which the runner now refuses by hashing the guest's copy first.",
+  "cheribsd_binaries": {
+    "2026-10-06, 2026-10-07 runs": "3172023cb8d0a889  select-enabled build",
+    "2026-10-08, 2026-10-09 runs": "df12471900102041  the same build plus _interpreters, pyexpat, _elementtree, _testlimitedcapi",
+    "note": "the earlier runs' run.meta named fba7e8d8..., which is a different build: .text differed by 5,088 bytes, so it was not a strip of the same one. The measurements stand -- the binary the guest ran was a qualified build and the positive control passed in every batch -- but the recorded hash was wrong and is corrected here."
+  },
+  "revocation_enforcement": "CAPSTONE_REVOCATION_ENFORCE is defined at capstone-qemu/target/riscv/op_helper.c:1420 and gates the capstone_cap_revoked() predicate there; the ENFORCEMENT is at :1641-1642, in helper_reg_set_cap_compressed, where a revoked capability reloaded from memory comes back untagged so a later dereference tag-faults. An earlier note in this corpus cited :1420 as the enforcement site, which is the macro, not the check that acts."
 }

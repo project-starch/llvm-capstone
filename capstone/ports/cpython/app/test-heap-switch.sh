@@ -2,7 +2,10 @@
 # Test the real decision block, extracted from the script rather than copied,
 # so the test cannot drift from what runs.
 SRC=~/arms/cpython/pairs-worktree/capstone/ports/cpython/app/prepare-cpython-capstone.sh
-BLOCK=/tmp/heap-block.sh
+# mktemp, not a fixed /tmp path: two runs of this test, or another user on
+# the same box, would share one file and the second would read the first.
+BLOCK=$(mktemp -t heap-block.XXXXXX.sh)
+trap 'rm -f "$BLOCK"' EXIT
 # From the marker comment through the fi that closes the GRANT_BYTES block.
 # Counting fi does not work: the inner "if [[ \$APP_BOUNDS == 0 ]]" adds one,
 # and an earlier version of this test truncated there and reported two failures

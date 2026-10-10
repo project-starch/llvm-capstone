@@ -2,7 +2,7 @@
   "case": 5,
   "upstream_fix": "gh-140497",
   "title": "cpython crash (heap-buffer-overflow) Python/generated_cases.c.h _PyEval_EvalFrameDefault",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

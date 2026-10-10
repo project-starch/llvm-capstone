@@ -2,7 +2,7 @@
   "case": 19,
   "upstream_fix": "gh-142664",
   "title": "[3.13] gh-142664: fix UAF in `memoryview.__hash__` via re-entrant data's `__hash__` (GH-143217) (#143222)",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "temporal",
   "trigger": "trigger.py",
   "live_in_pin": true,

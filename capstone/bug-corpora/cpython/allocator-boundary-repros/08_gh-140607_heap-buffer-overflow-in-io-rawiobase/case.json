@@ -2,7 +2,7 @@
   "case": 8,
   "upstream_fix": "gh-140607",
   "title": "heap-buffer-overflow in _io__RawIOBase_read",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

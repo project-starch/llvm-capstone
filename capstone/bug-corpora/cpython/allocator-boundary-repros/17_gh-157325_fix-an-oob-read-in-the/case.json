@@ -2,7 +2,7 @@
   "case": 17,
   "upstream_fix": "gh-157325",
   "title": "[3.13] gh-157325: Fix an OOB read in the `hz` incremental decoder on a trailing `~` (gh-157333) (#158161)",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

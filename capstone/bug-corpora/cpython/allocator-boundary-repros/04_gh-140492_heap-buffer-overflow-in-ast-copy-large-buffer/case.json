@@ -2,7 +2,7 @@
   "case": 4,
   "upstream_fix": "gh-140492",
   "title": "heap buffer overflow in ast _copy_characters",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

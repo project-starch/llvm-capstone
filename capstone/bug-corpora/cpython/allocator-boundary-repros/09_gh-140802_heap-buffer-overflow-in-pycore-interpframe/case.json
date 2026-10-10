@@ -2,7 +2,7 @@
   "case": 9,
   "upstream_fix": "gh-140802",
   "title": "heap-buffer-overflow in pycore_interpframe.h _PyFrame_Initialize",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

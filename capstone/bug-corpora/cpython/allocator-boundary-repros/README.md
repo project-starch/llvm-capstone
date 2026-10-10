@@ -86,9 +86,22 @@ read side by side:
 | `sublet` | the same heap plus patch 0014, so pymalloc's pools and arenas are issued and revoked too |
 | `cheribsd-revocation` | CheriBSD purecap, libc revocation as the platform ships it |
 
-**None has been run.** Every case declares all three as
-`{"status": "not written"}` rather than leaving the gap silent, and
-`corpus.json` says `built`, not `measured`.
+**All three have been run.** `results/20261006/` holds the combined
+`matrix.tsv`, an `inputs.json` carrying every run's image hash and capacity
+variant, and the guest's `security.cheri` subtree read before and after each
+CheriBSD batch. All three arms are reported over the **same 29** of the 32
+cases; the three outside that set, and why no arm reports them, are in the
+results README.
+
+| arm | detected / scored | of the detections, the mechanism |
+|---|---:|---:|
+| `spatial` | 14 / 29 | 14 |
+| `sublet` | **27 / 29** | 27 |
+| `cheribsd-revocation` | 11 / 29 | 11 |
+
+A fault whose cause is not one the capability hardware raises is not counted as
+a detection: case 32 on `spatial` raises `cause=2`, `RISCV_EXCP_ILLEGAL_INST`,
+which is the CPU trapping a call into non-code and not this arm's mechanism.
 
 ### Pre-registered expectation, written before the runs
 
@@ -106,6 +119,25 @@ Recorded here so the result can contradict it rather than be explained by it:
 
 Each of these can fail. In particular (2) predicts a *strict superset*; a case
 that `sublet` misses and `spatial` catches would contradict it outright.
+
+### How those three held up
+
+1. **Held in shape, and for a reason the expectation had wrong.** `spatial` 14
+   and `cheribsd-revocation` 11 are close, but not because neither revokes:
+   `CAPSTONE_REVOCATION_ENFORCE` defaults to 1 and is independent of the sublet
+   discipline, so the base arm revokes too, and 11 of its 14 detections carry
+   `cause=24`. The arm is not the bounds-only baseline this expectation assumed.
+2. **Held.** `sublet` 27 against 14 and 11, and its 29 is the same 29. No case
+   is caught by `spatial` and missed by `sublet`, so the strict superset stands.
+3. **Failed, on two arms.** The non-nested cases are 04, 07, 08, 12 and 18.
+   `spatial` and `sublet` each catch 4 of the 4 in the delivered set, but
+   `cheribsd-revocation` catches 3 of 4 -- it is silent on 04, where the
+   overread stays inside the bounds its malloc actually set, since that guest
+   rounds capability bounds up to a size class -- and on the three non-nested
+   TEMPORAL cases `spatial` catches 0 of 3 and `cheribsd-revocation` 1 of 3. A
+   non-nested defect is not visible to every arm, and the reasons differ per
+   arm: allocator rounding on CheriBSD, and on base a revocation that is
+   sweep-free but still only acts where the system allocator freed.
 
 ## Fidelity, stated as a limitation
 

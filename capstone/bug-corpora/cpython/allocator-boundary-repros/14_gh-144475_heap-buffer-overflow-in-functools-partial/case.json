@@ -2,7 +2,7 @@
   "case": 14,
   "upstream_fix": "gh-144475",
   "title": "heap-buffer-overflow in functools.partial.__repr__()",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

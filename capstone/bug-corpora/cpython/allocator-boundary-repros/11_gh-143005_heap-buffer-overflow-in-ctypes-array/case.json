@@ -2,7 +2,7 @@
   "case": 11,
   "upstream_fix": "gh-143005",
   "title": "Heap buffer overflow in ctypes array assignment via `__class__` swap",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

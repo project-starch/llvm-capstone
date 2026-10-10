@@ -2,7 +2,7 @@
   "case": 13,
   "upstream_fix": "gh-144169",
   "title": "[3.13] gh-144169: Fix three crashes in AST objects with non-str kwargs (GH-144178) (#144260)",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

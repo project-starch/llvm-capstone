@@ -2,7 +2,7 @@
   "case": 15,
   "upstream_fix": "gh-148973",
   "title": "[3.13] gh-148973: fix segfault on mismatch between consts size and oparg in compiler (GH-148974) (#148997)",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

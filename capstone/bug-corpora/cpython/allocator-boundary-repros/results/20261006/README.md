@@ -1,12 +1,12 @@
-# Three arms over 27 cases per arm, 2026-10-06 to 2026-10-08
+# Three arms over 29 cases per arm, 2026-10-06 to 2026-10-09
 
 | | | corpus | spatial | sublet | cheribsd-revocation |
 |---|---|---:|---:|---:|---:|
-| spatial | nested | 13 | 6/10 | **8/10** | 6/12 |
-| spatial | non-nested | 5 | 4/4 | **4/4** | 2/4 |
-| temporal | nested | 11 | 4/10 | **10/10** | 2/9 |
-| temporal | non-nested | 3 | 0/3 | **3/3** | 0/2 |
-| **total** | | **32** | **14/27** | **25/27** | **10/27** |
+| spatial | nested | 13 | 7/11 | **9/11** | 5/11 |
+| spatial | non-nested | 5 | 4/4 | **4/4** | 3/4 |
+| temporal | nested | 11 | 3/11 | **11/11** | 2/11 |
+| temporal | non-nested | 3 | 0/3 | **3/3** | 1/3 |
+| **total** | | **32** | **14/29** | **27/29** | **11/29** |
 
 Each cell is `detected / measured`. A row is a measurement only if the trigger
 reached the defect site. A case that timed out, exhausted the application heap,
@@ -15,29 +15,33 @@ not implement is **not** a measurement (SCHEMA rule 4) and is out of the
 denominator rather than counted as silence. Nor is a row whose trigger has since
 been replaced.
 
-## The delivered 27
+## The delivered 29
 
-Each arm is reported over the 27 cases it can run, and the matrix's `delivered`
-column carries that per row. **Base and Sublet are reported over the same 27**
--- the ones both can run -- so the two Capstone columns are a pair, including
-the nested/spatial cell where `6/10` and `8/10` are the same ten cases.
-CheriBSD's 27 is a different set: it runs `13`, `15` and `18`, which the
-Capstone images cannot, and loses three others to missing modules, so its
-column is not a per-cell pair with the other two.
+**All three arms are reported over the same 29 cases**, and the matrix's
+`delivered` column carries that per row. Every column is therefore a per-cell
+pair with every other: in the nested/spatial cell, `7/11`, `9/11` and `5/11` are
+the same eleven cases.
 
-One measured row is held out rather than deleted. Sublet detects `13` with
-`cause=5`; base cannot run that case at all, and counting it would report the
-Capstone pair over different sets. The verdict stays in `matrix.tsv` with
-`delivered = held-out`, distinguishable from a row that was never a
-measurement, and Sublet's figure would be 26 of 28 with it.
+Three rows are measured and held out rather than deleted, because the arm that
+measured them is being compared against arms that cannot run them:
 
-### What is outside each arm's 27
+| case | arm | measured | why it is held out |
+|---|---|---|---|
+| `13` | `sublet` | DETECTED `cause=5` | base cannot run it at all |
+| `13` | `cheribsd-revocation` | DETECTED `si_code=2` | the same |
+| `18` | `cheribsd-revocation` | SILENT | neither Capstone arm can run it |
+
+Each stays in `matrix.tsv` as `delivered = held-out`, distinguishable from a row
+that was never a measurement. Counted, Sublet would be 28 of 30 and CheriBSD 12
+of 31, over sets the other arms do not share.
+
+### What is outside the 29
 
 | arm | delivered | out of it | cases |
 |---|---:|---:|---|
-| `spatial` | 27 | 5 | **CAPACITY** `13`; **NOMODULE** `11` `23`; **NOTIMPL** `18`; **SKIPPED** `15` |
-| `sublet` | 27 | 4 | **NOMODULE** `11` `23`; **NOTIMPL** `18`; **SKIPPED** `15` |
-| `cheribsd-revocation` | 27 | 5 | **NOMODULE** `11` `12` `21` `22` `23` |
+| `spatial` | 29 | 3 | **CAPACITY** `13`; **NOMODULE** `11`; **NOTIMPL** `18` |
+| `sublet` | 29 | 3 | **HELD-OUT DETECTED** `13`; **NOMODULE** `11`; **NOTIMPL** `18` |
+| `cheribsd-revocation` | 29 | 3 | **HELD-OUT DETECTED** `13`; **HELD-OUT SILENT** `18`; **NOMODULE** `11` |
 
 An earlier version of this file read "that sublet loses twice as many as spatial
 is itself a result: revocation's cost is what pushes those cases over the limit".
@@ -51,8 +55,14 @@ way.
 
 ## What the measurements say about the oracles
 
-The oracles were derived from the mechanism, per cell, and written before these
-runs. 33 measurements contradicted them. **The spatial arm's oracles have since
+The oracles were derived from the mechanism, per cell. **They were not all
+written before the runs, and the earlier claim that they were is withdrawn.**
+`git log` is the record: cases `01`-`21` carry their oracles from the commit that
+added those cases, before any arm ran, while cases `22`-`32` first appear in the
+same commit as `matrix.tsv`, so for those eleven no prediction was recorded
+before the result. That is why the figure this file leans on is not `oracle_met`
+but how many cases the classification *predicts* the outcome for -- a property
+of the mechanism and the case, not of when someone wrote a sentence. 33 measurements contradicted them. **The spatial arm's oracles have since
 been rewritten**, and because rewriting an oracle after seeing the results is
 the easiest way to launder a disagreement into an agreement, the change is set
 out here in full. No verdict was changed; only the `oracle_met` column was
@@ -64,7 +74,7 @@ Both spatial oracle texts described a bounds-only baseline: "complete: the stale
 access stays inside one arena the system allocator still holds" for the nested
 cases, "fault: the heap bounds each allocation" for the non-nested ones. The arm
 is not bounds-only. `CAPSTONE_REVOCATION_ENFORCE` defaults to 1
-(`capstone-qemu/target/riscv/op_helper.c:1420`) and is independent of the sublet
+(`capstone-qemu/target/riscv/op_helper.c:1420`, enforced at `:1641-1642`) and is independent of the sublet
 heap discipline, so the base arm enforces revocation as well.
 
 The measurements say how much this matters. Of the arm's 11 detections, **10
@@ -81,7 +91,7 @@ entirely by revocation. No cell in this corpus isolates spatial safety.
 | non-nested, temporal class | a fault | `cause=24`; a bounds fault or completion falsifies |
 | `18_gh-157335` | a fault | `cause=7` at the write past the mapping's end |
 
-`oracle_met` on this arm went from 16/30 to 25/30. **Nine rows flipped, every one
+`oracle_met` on this arm went from 16/30 to 25/29 as the denominator grew. **Nine rows flipped, every one
 of them from False to True, and none the other way.** That direction is exactly
 what a results-fitted rewrite produces, so read the number for what it is: the
 new nested oracle is *weaker* than the old one. It admits two outcomes where the
@@ -265,9 +275,15 @@ recomputation flipped nothing.
 
 | arm | detections | by the capability mechanism | an ordinary trap |
 |---|---:|---:|---|
-| `spatial` | 15 | **14** | `32` cause 2 |
+| `spatial` | 14 | **14** | none |
 | `sublet` | 27 | **27** | none |
 | `cheribsd-revocation` | 11 | **11** | none |
+
+The last column is not a detection and is not in the first. Case `32` does fault
+on `spatial`, with `cause=2`, and that fault is excluded by this corpus's own
+rule: a fault whose cause is not one the capability hardware raises is the CPU
+trapping, not the arm's mechanism. An earlier version of this file counted it
+and reported base as 15 of 29; it is 14.
 
 Case `32` is why this column exists. Its dangling `_ucnhash_CAPI` pointer is
 **called**, and on the base arm control lands on non-code at `0x87d0` and the CPU
@@ -289,16 +305,16 @@ itself with a `si_code`, so every fault there is one.
 ## How much each arm discriminates, which is not what `oracle_met` measures
 
 Both the spatial and the cheribsd oracles have now been corrected, and both
-corrections moved `oracle_met` up and only up: spatial 16/30 -> 24/27,
-cheribsd 18/30 -> 29/30, with 9 and 11 rows flipping from False to True and
+corrections moved `oracle_met` up and only up: spatial 16/30 -> 25/29,
+cheribsd 18/30 -> 29/29, with 9 and 11 rows flipping from False to True and
 none the other way. Read on its own that looks like the corpus improving. It is
 not, and the number that says what actually happened is this one:
 
 | arm | delivered | `oracle_met` | cases the classification PREDICTS | of those, met |
 |---|---:|---:|---:|---:|
-| `spatial` | 27 | 23/27 | **7/27** | 4 |
-| `sublet` | 27 | 25/27 | **27/27** | 25 |
-| `cheribsd-revocation` | 27 | 26/27 | **1/27** | 0 |
+| `spatial` | 29 | 25/29 | **7/29** | 4 |
+| `sublet` | 29 | 27/29 | **29/29** | 27 |
+| `cheribsd-revocation` | 29 | 29/29 | **0/29** | 0 |
 
 The corrected oracles stopped predicting outcomes the mechanism does not
 determine, so they are met more often and say less. On the base arm, whether a
@@ -315,8 +331,13 @@ Those outcomes are reproducible: the triggers are deterministic. They are simply
 not derivable from the case's class and side, which is the whole claim a
 four-cell table makes. **`sublet` is the only arm whose outcome follows from the
 defect's classification for every case it measured**, and it is therefore the
-only arm whose misses are informative: two of them, `06`, `17`,
-where the oracle names a fault and the arm was silent.
+only arm whose misses are informative: two of them, `06` and `17`, where the
+oracle names a fault and the arm was silent.
+
+CheriBSD's figure is 0 of 29 for a reason worth stating plainly: every one of
+its oracles now admits more than one outcome, because that guest's revocation is
+sweep-based and asynchronous. The arm is measured and its verdicts are
+reproducible; what it is not is predictable from a case's class and side.
 
 The base arm's four unmet rows are `19`, `20`, `21`, `32`. `19`, `20` and
 `21` are non-nested use-after-free on system-allocator blocks, which is what

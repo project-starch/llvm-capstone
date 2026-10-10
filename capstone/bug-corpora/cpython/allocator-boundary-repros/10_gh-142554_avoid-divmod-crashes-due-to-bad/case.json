@@ -2,7 +2,7 @@
   "case": 10,
   "upstream_fix": "gh-142554",
   "title": "[3.13] gh-142554: avoid `divmod` crashes due to bad `_pylong.int_divmod` (GH-142673) (#142697)",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

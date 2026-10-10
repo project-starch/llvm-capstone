@@ -2,7 +2,7 @@
   "case": 2,
   "upstream_fix": "gh-140471",
   "title": "[3.13] gh-140471: Fix buffer overflow in AST node initialization with malformed `_fields` (GH-140506) (#140510)",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

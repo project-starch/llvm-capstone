@@ -2,7 +2,7 @@
   "case": 1,
   "upstream_fix": "gh-139071",
   "title": "heap overflow in set_dealloc (setobject.c)",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,

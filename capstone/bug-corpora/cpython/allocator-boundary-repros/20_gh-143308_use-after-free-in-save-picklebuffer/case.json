@@ -2,7 +2,7 @@
   "case": 20,
   "upstream_fix": "gh-143308",
   "title": "Use-after-free in `save_picklebuffer` via re-entrant `buffer_callback` and `__bool__`",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "temporal",
   "trigger": "trigger.py",
   "live_in_pin": true,

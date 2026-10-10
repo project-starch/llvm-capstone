@@ -2,7 +2,7 @@
   "case": 6,
   "upstream_fix": "gh-140551",
   "title": "Crash in `dict` if `hash` `__eq__` function has side effects",
-  "consumer": "unknown.c",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
   "class": "spatial",
   "trigger": "trigger.py",
   "live_in_pin": true,
