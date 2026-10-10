@@ -398,5 +398,305 @@
         "void": false
       }
     ]
+  },
+  "fault_sites": {
+    "what": "Every fault line that survives in a run log, as the launcher printed it. pc is reported for every cause and was not being recorded; this is the first record of it.",
+    "address_is_not_a_faulting_value_for_cause_24": "RISCV_EXCP_UNEXP_OP_TYPE is raised by riscv_raise_exception(env, ..., GETPC()) in capstone-qemu target/riscv/op_helper.c, which takes no address and sets no badaddr, so the address field on a cause-24 line is unset rather than the faulting value. The evidence is in the counts below: every surviving cause-24 line reads address=0x0, at nine distinct pcs across nine defects, while every bounds line reads a distinct non-zero address.",
+    "the_operand_value_is_printed_and_was_discarded": "_helper_access_with_cap prints the untagged base register's word unconditionally (CAPSTONE_DEBUG_PRINT is an unguarded fprintf to stderr), and capstone_vm already redirects QEMU's stderr to <state>/qemu.log. That file is opened \"wb\" on every restart and the run directory did not keep it, so the one field that tells a pointer which lost its tag from an integer that never was one was produced on every run and retained on none. run-arm.sh now keeps the per-case slice as <case>.qemu.log and records pc, address and untagged_value in verdicts.tsv. Classifying the base arm's cause-24 faults needs a re-run under that harness.",
+    "logs_retained": "The 2026-10-06 and most 2026-10-07 run directories were under /tmp and were lost to a reboot. Of the delivered detections, the runs below are what survives; a site is evidence about its own run, and is_cited_run says whether that is the run the matrix cites for the row.",
+    "sites": [
+      {
+        "case": "01_gh-139071_heap-overflow-in-set-dealloc-setobject",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 24,
+        "pc": "0xc036ea88",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "07_gh-140594_fix-an-out-of-bounds-read",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 5,
+        "pc": "0xc026de94",
+        "address": "0xc103b0bf",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "spatial",
+        "run": "spatial-20261008-033909",
+        "cause": 5,
+        "pc": "0xc02030c8",
+        "address": "0xc19e0ee1",
+        "is_cited_run": true,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 5,
+        "pc": "0xc02030c8",
+        "address": "0xc1a3b001",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "15_gh-148973_fix-segfault-on-mismatch-between-consts",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 24,
+        "pc": "0xc056a848",
+        "address": "0x0",
+        "is_cited_run": true,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "24_gh-142783_zoneinfo-eager-decref",
+        "arm": "spatial",
+        "run": "spatial-20261008-033909",
+        "cause": 24,
+        "pc": "0xc038912c",
+        "address": "0x0",
+        "is_cited_run": true,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "24_gh-142783_zoneinfo-eager-decref",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 24,
+        "pc": "0xc03897f8",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "31_gh-148660_odict-copy-stale-link",
+        "arm": "spatial",
+        "run": "spatial-mod-20261009-031346",
+        "cause": 24,
+        "pc": "0xc03c05e8",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "01_gh-139071_heap-overflow-in-set-dealloc-setobject",
+        "arm": "sublet",
+        "run": "sublet-mod-20261009-034006",
+        "cause": 5,
+        "pc": "0xc0370df4",
+        "address": "0xc8e53a30",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "01_gh-139071_heap-overflow-in-set-dealloc-setobject",
+        "arm": "sublet",
+        "run": "sublet-mod96-20261009-052148",
+        "cause": 5,
+        "pc": "0xc0370df4",
+        "address": "0xd0e53a30",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "01_gh-139071_heap-overflow-in-set-dealloc-setobject",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 5,
+        "pc": "0xc0370df4",
+        "address": "0xc8e53a30",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "07_gh-140594_fix-an-out-of-bounds-read",
+        "arm": "sublet",
+        "run": "sublet-mod-20261009-034006",
+        "cause": 5,
+        "pc": "0xc027034c",
+        "address": "0xc0f38bdf",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "07_gh-140594_fix-an-out-of-bounds-read",
+        "arm": "sublet",
+        "run": "sublet-mod96-20261009-052148",
+        "cause": 5,
+        "pc": "0xc027034c",
+        "address": "0xc0f38d4f",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "07_gh-140594_fix-an-out-of-bounds-read",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 5,
+        "pc": "0xc027034c",
+        "address": "0xc0f38d0f",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "sublet",
+        "run": "sublet-20261008-034649",
+        "cause": 5,
+        "pc": "0xc0203134",
+        "address": "0xcc9bdfb1",
+        "is_cited_run": true,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "sublet",
+        "run": "sublet-mod-20261009-034006",
+        "cause": 5,
+        "pc": "0xc0203134",
+        "address": "0xcadbdfd1",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "sublet",
+        "run": "sublet-mod96-20261009-052148",
+        "cause": 5,
+        "pc": "0xc0203134",
+        "address": "0xd2dbdfd1",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "08_gh-140607_heap-buffer-overflow-in-io-rawiobase",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 5,
+        "pc": "0xc0203134",
+        "address": "0xcadbdfd1",
+        "is_cited_run": false,
+        "matrix_detail": "5",
+        "delivered": "yes"
+      },
+      {
+        "case": "15_gh-148973_fix-segfault-on-mismatch-between-consts",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 7,
+        "pc": "0xc05646f0",
+        "address": "0xc878c680",
+        "is_cited_run": true,
+        "matrix_detail": "7",
+        "delivered": "yes"
+      },
+      {
+        "case": "19_gh-142664_fix-uaf-in-memoryview-hash-via",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 24,
+        "pc": "0xc05c4640",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "23_gh-142560_bytearray-search-realloc",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 24,
+        "pc": "0xc0202f84",
+        "address": "0x0",
+        "is_cited_run": true,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "24_gh-142783_zoneinfo-eager-decref",
+        "arm": "sublet",
+        "run": "sublet-mod-20261009-034006",
+        "cause": 24,
+        "pc": "0xc035d68c",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "24_gh-142783_zoneinfo-eager-decref",
+        "arm": "sublet",
+        "run": "sublet-mod96-20261009-052148",
+        "cause": 24,
+        "pc": "0xc035d68c",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "24_gh-142783_zoneinfo-eager-decref",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 24,
+        "pc": "0xc035d68c",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      },
+      {
+        "case": "31_gh-148660_odict-copy-stale-link",
+        "arm": "sublet",
+        "run": "sublet-modL-20261009-081625",
+        "cause": 24,
+        "pc": "0xc0343760",
+        "address": "0x0",
+        "is_cited_run": false,
+        "matrix_detail": "24",
+        "delivered": "yes"
+      }
+    ],
+    "counts_by_cause": {
+      "5": {
+        "sites": 13,
+        "address_zero": 0,
+        "address_nonzero": 13
+      },
+      "7": {
+        "sites": 1,
+        "address_zero": 0,
+        "address_nonzero": 1
+      },
+      "24": {
+        "sites": 11,
+        "address_zero": 11,
+        "address_nonzero": 0
+      }
+    }
   }
 }

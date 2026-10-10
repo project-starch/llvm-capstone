@@ -201,7 +201,8 @@ in_subset() {  # $1 = case directory name
   [ -z "$ONLY" ] && return 0
   case ",$ONLY," in *",${1%%_*},"*) return 0 ;; *) return 1 ;; esac
 }
-printf 'case\tarm\tverdict\trc\tcause\tlast\n' > "$OUT/verdicts.tsv"
+printf 'case\tarm\tverdict\trc\tcause\tlast\tpc\taddress\tuntagged_value\n' \
+  > "$OUT/verdicts.tsv"
 printf 'case_timeout\t%s\nonly\t%s\n' "$CASE_TIMEOUT" "${ONLY:-all}" >> "$OUT/run.meta"
 n=0
 for d in "$CORPUS"/[0-9][0-9]_*/; do
@@ -239,7 +240,7 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
       'sys.exit(0)' > "$stage/trigger.py"
   fi
   [ -f "$stage/trigger.py" ] || {
-    printf '%s\t%s\tSTAGING-FAILED\t\t\t\n' "$c" "$arm" >> "$OUT/verdicts.tsv"
+    printf '%s\t%s\tSTAGING-FAILED\t\t\t\t\t\t\n' "$c" "$arm" >> "$OUT/verdicts.tsv"
     printf '  %-56s STAGING-FAILED\n' "${c:0:56}"; continue; }
   before=$(wc -l < "$ST/qemu.log" 2>/dev/null || echo 0)
   out=$(cd "$stage" && timeout "$CASE_TIMEOUT" python3 -m capstone_vm --state "$ST" run \
@@ -247,6 +248,24 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
           "/mnt/host/$GUESTDOM" trigger.py 2>&1); rc=$?
   printf '%s\n' "$out" > "$OUT/$c.log"
   tailq=$(tail -n +$((before+1)) "$ST/qemu.log" 2>/dev/null)
+  # Keep the slice. qemu.log is opened "wb" on every restart, so whatever the
+  # emulator printed about a fault is gone at the next boot unless the run
+  # keeps it. That is how the operand value below came to be produced on every
+  # run and retained on none.
+  [ -n "$tailq" ] && printf '%s\n' "$tailq" > "$OUT/$c.qemu.log"
+  # pc is reported for every cause and was being dropped. address is reported
+  # for the bounds causes only: RISCV_EXCP_UNEXP_OP_TYPE is raised by
+  # riscv_raise_exception(env, ..., GETPC()), which takes no address and sets
+  # no badaddr, so a cause-24 line carries address=0x0 as an unset field and
+  # not as the faulting value. Recording it anyway is what makes that legible.
+  fpc=$(printf '%s' "$out$tailq" | grep -oE "pc ?= ?0x[0-9a-f]+" | tail -1 | grep -oE "0x[0-9a-f]+")
+  faddr=$(printf '%s' "$out$tailq" | grep -oE "address ?= ?0x[0-9a-f]+" | tail -1 | grep -oE "0x[0-9a-f]+")
+  # What the untagged base register actually held. The emulator prints it
+  # unconditionally from _helper_access_with_cap (target/riscv/op_helper.c),
+  # and it is the one field that tells a pointer which lost its tag from an
+  # integer that never was one.
+  fval=$(printf '%s' "$tailq" | grep -E "Cap mem access requires capability" \
+         | tail -1 | grep -oE "value = [0-9a-f]+" | grep -oE "[0-9a-f]+$")
   # The launcher relays the fault on the run's own stdout with NO spaces around
   # "=", while qemu.log writes "cause = 24". Read both: a parser that matched
   # only the spaced form once scored a real cause=24 as NORUN.
@@ -259,7 +278,7 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   # the monitor. Every case after that returns rc 1 with this message, and
   # rc 1 reads as SILENT, so the run would keep going and manufacture silence.
   if printf %s "$out" | grep -qE "VM is not running|use up first"; then
-    printf '%s\t%s\tVM-GONE\t%s\t\t%s\n' "$c" "$arm" "$rc" \
+    printf '%s\t%s\tVM-GONE\t%s\t\t%s\t\t\t\n' "$c" "$arm" "$rc" \
       "the VM was not running; nothing after this point executed" >> "$OUT/verdicts.tsv"
     printf '  %-56s VM-GONE\n' "${c:0:56}"
     echo "ABORTING: the VM is not running, so nothing further can be measured." >&2
@@ -277,7 +296,8 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   else
     v="OTHER-rc$rc"
   fi
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$c" "$arm" "$v" "$rc" "${cause:-}" "$last" >> "$OUT/verdicts.tsv"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$c" "$arm" "$v" "$rc" \
+    "${cause:-}" "$last" "${fpc:-}" "${faddr:-}" "${fval:-}" >> "$OUT/verdicts.tsv"
   [ "$NEGCTL" = 1 ] && printf '%s\t%s\n' "$c" "${NCKIND:-stub}" >> "$OUT/control-kind.tsv"
   printf '  %-54s %-9s rc=%-4s %s\n' "${c:0:54}" "$v" "$rc" "${cause:+cause=$cause}"
 done

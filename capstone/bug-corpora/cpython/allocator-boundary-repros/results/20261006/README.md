@@ -407,6 +407,57 @@ arm was silent. *(Corrected at review.)* That row is now held out, which is why
 the table reads 0 of 29. It is not measured on the Capstone arms: both read
 NOTIMPL, because the guest kernel has no `mmap`.
 
+## A cause 24 carries no faulting value, and the one that exists was discarded
+
+The review that corrected the base arm's premise ends on an open question: a
+cause 24 on that arm is an access through an untagged base register, which is
+either a pointer slot that later data overwrote -- tag integrity -- or an
+integer or NULL that was never a pointer, and "the matrix records no faulting
+value to tell those apart". Two things turned out to be true about that, and
+they point in opposite directions.
+
+**The fault report cannot answer it.** `RISCV_EXCP_UNEXP_OP_TYPE` is raised by
+`riscv_raise_exception(env, ..., GETPC())`, which takes no address and sets no
+`badaddr`, so the `address=` field on a cause-24 line is an unset field rather
+than the faulting value. The run logs agree: every surviving cause-24 line
+reads `address=0x0`, at 9 distinct pcs across as many defects, while every
+surviving bounds line reads a distinct non-zero address.
+
+| cause | sites | `address=0x0` | non-zero |
+|---|---:|---:|---:|
+| 5 | 13 | 0 | 13 |
+| 7 | 1 | 0 | 1 |
+| 24 | 11 | 11 | 0 |
+
+So this is not a recording gap in the matrix. At this pin the hardware reports
+no faulting value for an operand-type fault, and no amount of care with the
+matrix would have produced one.
+
+**The emulator does print the value, and the harness was throwing it away.**
+`_helper_access_with_cap` prints the untagged register's word on exactly this
+path, and the comment beside it says why: without it "telling a pointer that
+lost its tag from an integer that was never one costs a disassembly session".
+`CAPSTONE_DEBUG_PRINT` is an unguarded `fprintf` to stderr, and `capstone_vm`
+already redirects QEMU's stderr to `<state>/qemu.log`. But that file is opened
+`"wb"` on every `restart`, and the run directory did not keep a copy -- so the
+one field that answers the question was produced on every run and retained on
+none.
+
+`run-arm.sh` now keeps the per-case slice as `<case>.qemu.log` and records
+`pc`, `address` and `untagged_value` in `verdicts.tsv`. Classifying the base
+arm's cause-24 faults needs a re-run under that harness; it is not derivable
+from what is on disk.
+
+**What is on disk.** `pc` was reported all along and was being dropped;
+`inputs.json`'s `fault_sites` now carries every fault line that survives, 25
+of them. Read each as evidence about its own run: the 2026-10-06 and most
+2026-10-07 directories were under `/tmp` and were lost to a reboot, so only 6
+of these sites come from the run the matrix cites for that row, and
+`is_cited_run` says which. Two checks fall out of them and both hold: case 24's
+pc differs between the base and the module image, as two different links
+should, and is identical across the three sublet images, which differ only in
+heap capacity.
+
 ## The negative controls, and the two questions they answer
 
 Rule 5 of the SCHEMA requires every oracle to have a negative control:
@@ -463,25 +514,30 @@ exists it is committed next to the trigger as `negative_control.py`, and
 `--negative-control` prefers it over the stub; `control-kind.tsv` in each
 run records which kind each case received.
 
-Eleven of the 32 cases have such a variant: `01`, `03`, `04`, `05`, `09`, `10`, `14`, `15`, `24`, `30`, `31`.
-Four of those are the ones whose trigger runs an upstream test file
+18 of the 32 cases have such a variant: `01`, `02`, `03`, `04`, `05`, `09`, `10`, `14`, `15`, `17`, `19`, `23`, `24`, `25`, `27`, `28`, `30`, `31`.
+11 of those are the ones whose trigger runs an upstream test file
 through `runpy`. For those the variant is the upstream file itself,
-committed as `negative_control_test.py`, with the offending literal
-changed and the assertion that no longer applies replaced by one that
-checks the now-valid result -- a two-hunk diff against the file the
-trigger runs, with the `runpy`, `unittest` and import traffic
-identical. Every variant was first run on the pinned host interpreter,
-where it has to print its marker, exit 0 and produce no ASan report
-under either allocator, before it was run in a domain. The other 21
-defects cannot be expressed as one invalid access in an otherwise
-ordinary program -- they need a reentrant comparison, a deallocation
-ordering or a C-level cache that the defect *is* -- so those cases
-receive the stub, and their detections are qualified by the mechanism
-table above rather than by a control.
+committed as `negative_control_test.py`, with the offending literal or
+the reentrant call removed and any assertion that no longer applies
+replaced by one that checks the now-valid result -- a diff of one to four
+hunks against the file the trigger runs, with the `runpy`, `unittest` and
+import traffic identical. Every variant is first run on the pinned host
+interpreter, where it has to print its marker, exit 0 and produce no
+ASan report under either allocator, before it is run in a domain.
+
+The remaining 14 cases receive the stub: `06`, `07`, `08`, `11`, `12`, `13`, `16`, `18`, `20`, `21`, `22`, `26`, `29`, `32`.
+`11`, `13`, `18` are the three no arm delivers, so 11 scored cases are qualified by
+the mechanism table above rather than by a control. For those the defect
+is not one invalid access in an otherwise ordinary program -- the
+reentrant comparison, the deallocation ordering or the C-level cache *is*
+the defect, and removing it removes the case.
 
 The strong control has been run on the base arm only. Sublet's 27 and
 cheribsd-revocation's 11 are qualified by the weak control and by the
-fault mechanism each reports, not case by case.
+fault mechanism each reports, not case by case. `run-cheribsd.sh` could
+not run a variant at all until now -- only the stub path was implemented
+there -- so that arm's per-case control is new code waiting on a run,
+not a measurement that came back empty.
 
 | arm | run | cases | executed | faults | case timeout | status |
 |---|---|---|---|---|---|---|
@@ -499,6 +555,14 @@ What the strong control settles, and what it does not:
   `spatial-negctl-20261010-083844`, so the per-case evidence is there,
   but neither run carries a clean run-level verdict. A re-run under the
   fixed evidence gate is outstanding.
+- Built and verified on the pinned host interpreter, never yet run in a
+  domain: `02`, `17`, `19`, `23`, `25`, `27`, `28`. One of them, `19`, carries
+  an allowed-failure list: `test_hex_use_after_free` is the same
+  reentrancy through `memoryview.hex()`, a sibling defect unfixed at this
+  pin, and the trigger's own run of that file fails it in all six
+  parametrised classes. The control removes exactly the six
+  `test_hash_use_after_free` failures and no others, which is evidence it
+  edited the method the case is about.
 - `31` ran its full 299 tests with no fault, and its control's own
   self-test then failed on two `test_sizeof_exact` assertions. Those
   assert exact `sys.getsizeof` values, which capability pointers widen,

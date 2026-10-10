@@ -133,11 +133,21 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   G "mkdir -p /root/boundary/$c"
   # Every .py the case carries -- see the note in run-arm.sh's staging loop.
   ( cd "$d" && tar -cf - ./*.py ) | G "tar -C /root/boundary/$c -xf -"
-  if [ "$NEGCTL" = 1 ]; then
+  if [ "$NEGCTL" = 1 ] && [ -f "$d/negative_control.py" ]; then
+    # The strong control: the case's own allocation and free traffic with only
+    # the offending access made valid. It is the one that qualifies a
+    # detection, and this arm could not run it until now -- only the stub below
+    # was implemented here, so sublet's and this arm's detections were
+    # qualified by the weak control alone.
+    G "cp /root/boundary/$c/negative_control.py /root/boundary/$c/trigger.py"
+    NCKIND=variant
+  elif [ "$NEGCTL" = 1 ]; then
+    NCKIND=stub
     # Only the trigger is replaced: an import failure would be a different
     # experiment. The interpreter starts, loads and exits without a defect.
     G "printf '%s\n' 'import sys' 'print(\"NEGATIVE-CONTROL no defect performed\")' 'sys.exit(0)' > /root/boundary/$c/trigger.py"
   fi
+  [ "$NEGCTL" = 1 ] && printf '%s\t%s\n' "$c" "${NCKIND:-stub}" >> "$OUT/control-kind.tsv"
   # Staging is verified per case: a missing trigger.py produced 10 verdicts in
   # this lane that looked like defect results and were "can't open file".
   G "test -f /root/boundary/$c/trigger.py" || { echo "$c: staging failed" >&2; exit 2; }
