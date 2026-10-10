@@ -20,6 +20,15 @@ RTL/FPGA result.
 | Namespace sweep | Recycled IDs do not resurrect stale tagged pointers | All contexts must stop and every tag-bearing storage location must be accounted for |
 | PCC checks | Execution stays within live executable authority, including cached code | Compiler call convention and code-mapping contracts still apply |
 
+The PCC row's condition is concrete: the compiler profile calls by address
+within PCC and returns by scalar address, so neither a function pointer's
+nor a return address's own capability is checked when control passes
+through it. A pointer tightened to remove X still calls its function, and a
+jump to a heap address is stopped only by the page's permissions
+(`runtime/virtual/call-rights.c`, README "Indirect calls"). The guarantee
+above therefore covers data accesses through capabilities; it does not
+include control-flow integrity for indirect calls, returns or `longjmp`.
+
 For example, a stale pointer to an outer `malloc` block is invalidated by
 its free path. A stale pointer to a slab item can remain usable if the slab
 allocator reuses the item without creating/revoking an item lifetime.

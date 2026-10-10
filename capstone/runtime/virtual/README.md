@@ -281,7 +281,33 @@ allocator's block-record count. Rebuild the runtime SDK and relink applications
 to use its proactive node-budget service; old SDKs can return `ENOMEM` from
 their fixed-budget check before an instruction requests node growth.
 
-## Qualification and limits
+### Indirect calls: what a jump is checked against
+
+The compiler profile calls by address within PCC (`-capstone-gp-free`) and
+returns, `setjmp` and `longjmp` by scalar address, so the capability a call
+goes through is not what authorizes the fetch: PCC and the page permissions
+are. `call-rights.c` shows it:
+
+```sh
+"$out/sdk/capstone-cc" -O1 capstone/runtime/virtual/call-rights.c -o "$out/call-rights.dom"
+capstone-vexec call-rights.dom perm      # rights of a function pointer and of a malloc'd buffer
+capstone-vexec call-rights.dom control   # a call through a function pointer: returns 42
+capstone-vexec call-rights.dom noexec    # the same pointer tightened to READ only
+capstone-vexec call-rights.dom heap      # a malloc'd buffer holding `ret`, called
+```
+
+Measured 2026-10-11 on the virtual profile with exact bounds (the
+Sublet-lifetime QEMU): `perm` prints code=7 (X, W, R) and buf=6 (W, R);
+`control` returns 42; **`noexec` returns 42** with its pointer at rights 4,
+so a function pointer's missing X right is not enforced; `heap` is stopped
+by cause 12, an instruction page fault at the buffer, because the heap's
+pages are not executable -- not by a capability check at the jump. A stale
+return address in a `jmp_buf` that a `longjmp` follows is therefore not a
+capability event either (mruby-task's stale `jmp_buf`,
+`bug-corpora/mruby/release-differential/11_cb51fce92_task-stack-envs`). A
+profile that jumps through capabilities would fault `noexec` and `heap` at
+the jump; this program is the check for that change.
+
 
 The growing-table [qualification manifest](results/node-growth/qualification.json)
 records 15/15 node-growth checks, 9/9 pthread checks, 46/46 runtime/application
