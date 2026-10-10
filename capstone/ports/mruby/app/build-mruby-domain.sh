@@ -15,18 +15,12 @@
 # MRBD_PIN picks the mruby: head (default, 2026-09-17, every known defect fixed)
 # or 4.0.0-rc2 (2026-03-12, the Sublet evaluation's pin: temporal defects on
 # mruby's own allocators, fixed later). Each pin has its own patches/<pin>/.
-# MRBD_HEAP picks the domain's malloc, which mruby's mrb_malloc sits on:
-# level0 (default; every pointer carries the arena's bounds, free only marks) or
-# sublet (runtime/sublet_heap.c: a buddy heap over a region the host grants, one
-# bounded alias per block, every free revokes). The sublet arm differs in three
-# runtime objects -- the heap, hostcall.o (which parks the grant) and the entry
-# (which reports the heap's counters) -- and in the host (the grant); mruby is
-# the same. sublet-gc is sublet plus every GC object slot issued and revoked on
-# its own (patches/4.0.0-rc2/0008, MRB_CAPSTONE_GC_SUBLET): the GC carves its
-# pages from a 32 MiB pool split from the descriptor's combined grant.
-# MRBD_HEAP_LOG sets its pool, 2^26 = 64 MiB by default; the host must
-# grant twice that (requested by the descriptor), since a CMA
-# region is only 1 MiB-aligned and the pool is a self-aligned block inside it.
+# MRBD_HEAP picks the physical domain's malloc, which mruby's mrb_malloc sits on:
+# level0 (default; the first-fit heap). With MRBD_SDK naming a virtual-profile SDK,
+# malloc is the SDK's musl mallocng instead, and MRBD_HEAP selects nothing.
+# MRBD_SUBLET=1 (4.0.0-rc2, virtual SDK only) makes every GC object slot a Sublet
+# child lifetime of its heap page (patches/4.0.0-rc2/0008, MRB_CAPSTONE_SUBLET):
+# handed out by CDERIVE, revoked by CREVOKE when the sweep frees it.
 # Knobs (see build_config.rb): MRBD_BOXING, MRBD_DISPATCH, MRBD_OPT, MRBD_TESTS,
 # MRBD_DEFINES. MRBD_FROM=runtime|mruby starts at that stage. MRUBY_MIRROR=<a
 # local mruby clone> clones from there instead of GitHub (its Prism submodule too).
@@ -44,12 +38,13 @@ FROM=${MRBD_FROM:-all}
 BOXING=${MRBD_BOXING:-no}
 PIN=${MRBD_PIN:-head}
 HEAP=${MRBD_HEAP:-level0}
-HEAP_LOG=${MRBD_HEAP_LOG:-26}
-case "$HEAP" in level0|sublet|sublet-gc) ;; *) echo "MRBD_HEAP=$HEAP? (level0, sublet, sublet-gc)" >&2; exit 2 ;; esac
-if [[ $HEAP == sublet-gc ]]; then
-  [[ -f "$SCRIPT_DIR/patches/$PIN/0008-gc-slots-under-sublet.patch" ]] \
-    || { echo "MRBD_HEAP=sublet-gc needs patches/$PIN/0008-gc-slots-under-sublet.patch" >&2; exit 2; }
-  export MRBD_GC_SUBLET_INCLUDE=$RT/capstone/sublet
+case "$HEAP" in level0) ;; *) echo "MRBD_HEAP=$HEAP? (level0)" >&2; exit 2 ;; esac
+if [[ ${MRBD_SUBLET:-0} == 1 ]]; then
+  [[ -f "$SCRIPT_DIR/patches/$PIN/0008-gc-slots-as-sublet-lifetimes.patch" ]] \
+    || { echo "MRBD_SUBLET=1 needs patches/$PIN/0008-gc-slots-as-sublet-lifetimes.patch" >&2; exit 2; }
+  grep -qx 'CAPSTONE_APPLICATION_VIRTUAL:BOOL=ON' "${MRBD_SDK:-/nonexistent}/CMakeCache.txt" 2>/dev/null \
+    || { echo "MRBD_SUBLET=1 needs MRBD_SDK to name a virtual-profile SDK" >&2; exit 2; }
+  export MRBD_SUBLET_INCLUDE=$RT/capstone/runtime/include
 fi
 
 # The pinned trees. head: mruby of 2026-09-17 and the Prism its .gitmodules
@@ -92,13 +87,8 @@ log "musl $MUSL, archive $ARCHIVE"
 
 # ---- shared delegated application SDK --------------------------------------
 O=$ROOT/runtime
-SDK_HEAP=$HEAP
-[[ $HEAP == sublet-gc ]] && SDK_HEAP=sublet
 if stage runtime; then
   EXTRA=()
-  if [[ $HEAP == sublet-gc ]]; then
-    EXTRA=(-DCAPSTONE_APPLICATION_GRANT_BYTES="$(( (2 << HEAP_LOG) + (32 << 20) ))")
-  fi
   # MRBD_SDK_CFLAGS adds C flags to the SDK's own -O1. It must arrive as ONE cmake
   # argument: a flag list that is word-split becomes separate -D arguments, and cmake
   # takes an unknown -D as a cache variable and silently compiles without it, so the
@@ -109,7 +99,7 @@ if stage runtime; then
     EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${MRBD_SDK_CFLAGS}")
   fi
   bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
-    -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
+    -DCAPSTONE_APPLICATION_HEAP="$HEAP" \
     -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
   printf '%s\n' "$HEAP ${MRBD_SDK_CFLAGS:-}" > "$O/.heap"
 fi
@@ -122,13 +112,6 @@ export LLVM_AR=$CAPSTONE_LLVM_BIN/llvm-ar
 "$O/capstone-cc" --check-toolchain
 "$O/capstone-cc" -O1 -c "$SCRIPT_DIR/spawn-shell.c" -o "$O/spawn-shell.o"
 export MRBD_SPAWN_OBJECT=$O/spawn-shell.o
-# The GC adapter takes region 1; the common application descriptor grants one pool.
-if [[ $HEAP == sublet-gc ]]; then
-  "$O/capstone-cc" -O1 -I"$RT/capstone/runtime/include" -DEXP_HEAP_AND_POOL \
-    -DPORT_HEAP_REGION_BYTES="$((2 << HEAP_LOG))UL" -DPORT_INNER_REGION_BYTES=33554432UL \
-    -c "$RT/capstone/ports/common/application/regions.c" -o "$O/regions.o"
-  export MRBD_REGION_OBJECT=$O/regions.o
-fi
 
 # ---- mruby, pinned and patched ----------------------------------------------
 M=$ROOT/src/mruby
