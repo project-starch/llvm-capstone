@@ -1525,6 +1525,17 @@ supervision overhead within 0.1 points of 776d9d859's +0.680 %.
 **Boot C, Linux, the B-series** (private image; process-ABI module; FPGA monitor 1f9aedd).
 - The rungs, in order: b0-stats, b0-hello, b1-thread, b2-memcached, b3-setclock, b3-oracle, b3-clock (last), b0-stats2.
 - b0-hello is byte-exact, and b1-thread returns 124.
+- **Images, staged 2026-10-10:** private image b844f0dbc6cf, firmware 1f9cdf960640 (monitor 1f9aedd). In it:
+  - b0-hello db4385ff32deddf6, B1a's control;
+  - b1-thread ac2369aa6a548926;
+  - memcached ba7e6921cf27f2b6, as b2-memcached.dom and b3-oracle.dom;
+  - harness b433cd6ec88207a4 and probe 5aa140cf39647700.
+- **Why b1-thread is not B1f's image.** B1f's 29b82435ce095d98 predates the carve alignment, and check-repr.py
+  finds it AT RISK at 7 of 255 bases. In a boot with several rungs the block need not land at B1f's 0xac100000, so R-11
+  could fault it and confound R-51's acceptance.
+  - ac2369aa6a548926 is the aligned build, OK at all 255 bases.
+  - In QEMU with fabrication off (2026-10-10, firmware d5c57ee765c9) it gave `B1: thread returned 124`, and b0-hello
+    its hello line.
 - b2-memcached returns retval 0. b3-oracle reads e0a254c47e7ee28c, 1,931,207 bytes, with job exit 0.
 - B3e's readings (section above): arith 0 of 200,000, the self-test 1 of 12, holds 0 and 0, the harness's
   `stop_seconds` finite, and the b3-clock rung returning.
