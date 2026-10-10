@@ -17,6 +17,10 @@ One fixture also reverses an upstream fix at run time: in slabs_mover.c, with mc
 set (fixture 22 only), an item that is allocated but not yet linked is taken for cleared, as before
 a836eab, instead of MOVE_BUSY_FLOATING. Unset, the mover is upstream's.
 
+A second reversal (fixture 24 only, mcapp_reverse_c0e5a99): in the expired-item branch an expired
+CHUNKED header is freed header-only, as before c0e5a99, instead of taking the full chunked-free
+path, so its data chunks are orphaned with a dangling head. Unset, the mover is upstream's.
+
 --- a/proto_text.c
 +++ b/proto_text.c
 @@ -19,6 +19,12 @@
@@ -62,3 +66,18 @@ a836eab, instead of MOVE_BUSY_FLOATING. Unset, the mover is upstream's.
          }
      }
  
+@@ -463,7 +472,14 @@
+                     || item_is_flushed(it)) {
+                     /* Expired, don't save. */
+                     STORAGE_delete(t->storage, it);
++#ifdef MC_CAPSTONE_SAFETY_FIXTURES
++                    /* fixture 24 reverses c0e5a99: before it, an expired CHUNKED header took this
++                       header-only free branch, orphaning its data chunks with a dangling head */
++                    extern volatile int mcapp_reverse_c0e5a99;
++                    if (!ch && ((it->it_flags & ITEM_CHUNKED) == 0 || mcapp_reverse_c0e5a99)) {
++#else
+                     if (!ch && (it->it_flags & ITEM_CHUNKED) == 0) {
++#endif
+                         do_item_unlink(it, cbarg.hv);
+                         if (it->refcount == 1) {
+                             it->it_flags = ITEM_SLABBED|ITEM_FETCHED;

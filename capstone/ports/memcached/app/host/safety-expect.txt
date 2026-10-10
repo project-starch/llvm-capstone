@@ -345,3 +345,30 @@ sublet      22  RETURN 16001ee
 sublet      23  RETURN 1700007
 lifetimes   22  FAULT  temporal
 lifetimes   23  RETURN 1700007
+
+# ---------------------------------------------------------------------------------------------
+# FIXTURES 24 AND 25, registered 2026-10-11 BEFORE either was built or booted, pushed before the run.
+# Upstream c0e5a99 ("slabs: fix crash in page mover", 2020, shipped broken 1.5.20-1.5.21), the second
+# reconstructed page-mover lifetime defect (docs/ref/memcached-allocator-defect-triage.md).
+#   24  c0e5a99 reversed (patch 0005's mcapp_reverse_c0e5a99): an expired CHUNKED item's header is
+#       freed header-only when its page moves, orphaning its data chunk with a dangling head; a
+#       later move of the data chunk's page makes the mover read that head.
+#   25  the same sequence as shipped: the full chunked free runs, no orphan.
+# WHAT EACH PREDICTION RESTS ON:
+# - lifetimes 24: the header's page move revokes its generation (patch 0006); the orphan chunk's
+#   head is a child of it, so when the mover reads head->it_flags on the second move it faults
+#   temporal, in the mover thread, at the printed target (&ia->it_flags, computed while ia is live).
+# - sublet 24 (the plain virtual heap, no per-chunk revocation): the freed header is reused, head
+#   still names live storage, and the read does not fault. The mover then mis-handles a wrong item
+#   (NDEBUG drops the sanity assert), so the returned mark is not predictable: RETURN with this
+#   fixture's prefix, value not fixed. (If instead the mover walks into a wild pointer and the
+#   process faults away from the target, that is a finding about the plain arm, recorded, not an
+#   edit here.)
+# - 25 on both arms: no orphan, the data chunk's page moves, RETURN with the fixture's prefix.
+# - A 0xE0018 mark means the triggering condition was not created; 0x7 means the header page did not
+#   move within the wait. Either is a finding about the fixture, never a pass.
+
+sublet      24  RETURN *
+sublet      25  RETURN *
+lifetimes   24  FAULT  temporal
+lifetimes   25  RETURN *
