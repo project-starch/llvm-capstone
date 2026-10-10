@@ -22,7 +22,9 @@ predicted unchanged (25 at DBAS+0x4354); the refuting signature is mepc 0 with c
 Next: the synth lane's routed numbers to the board lane; the reflash on the lead's own word; the board lane's three
 pre-registered boots (bare acceptance incl. r51 28-after-yield; the R-43 list + C5u; b0..b3 with b3-clock last). The next
 RTL candidate after this cycle is R-44 (the CPMP revnode tracker adopts unseen ids: S/U-mode enforcement, live now that
-native Linux processes run on silicon); it needs an evidence feed plus a seed for cpmp(0..2) or the board does not boot.
+native Linux processes run on silicon); it needs an evidence feed plus a seed for cpmp(0..2) or the board does not boot. Design proposal for the lead's
+decision: `docs/plans/r44-cpmp-evidence-tracker.md` (fail-closed on install, the allocator's reserved indices 0..2 as the
+seed, evidence from the rev-node fill taps, one install-time probe through the LSU's R-43 probe block).
 
 2026-10-08 — **The virtual stack, node growth and local mallocng are all merged. Two items below
 are corrected: one was DONE, one was FALSE.**
