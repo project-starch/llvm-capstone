@@ -2,13 +2,11 @@
 # Complete Perl 5.36.3, cross-built for CheriBSD purecap, with Perl's upstream
 # nested allocators.
 #
-# PERL_CHERI_STATIC=1 links the interpreter statically. A dynamically linked
-# purecap perl is refused by the loader on the stock CheriBSD image with
-# "Traditional TLS not supported", before main -- measured 2026-10-06 on both an
-# earlier dynamic build and the recipe build, with and without a libc preload.
-# The mruby port links static for the same reason (../mruby/cheribsd/build.sh).
-# The dynamic image only ever ran on the PoisonCap platform, whose own sshd dies
-# on a poison exception part way through a file copy, so it cannot carry a corpus.
+# The compiler carries -cheri-tgot-tls, as the SDK's own purecap configuration
+# (bin/cheribsd-riscv64-purecap.cfg) does. Without it the purecap loader refuses a
+# dynamic perl before main with "Traditional TLS not supported" (measured
+# 2026-10-06), which is why this recipe once had to link statically.
+# PERL_CHERI_STATIC=1 still links the interpreter statically.
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$HERE/../../../tests/capstone-test-env.sh" >/dev/null
@@ -39,7 +37,7 @@ import shlex, sys
 path, sdk, sysroot = map(Path, sys.argv[1:])
 argv = [str(sdk / 'bin/clang'), '--target=riscv64-unknown-freebsd13',
         '--sysroot=' + str(sysroot), '-march=rv64imafdcxcheri', '-mabi=l64pc128d',
-        '-mno-relax', '-fuse-ld=lld', '-B' + str(sdk / 'bin')]
+        '-mno-relax', '-cheri-tgot-tls', '-fuse-ld=lld', '-B' + str(sdk / 'bin')]
 path.write_text('#!/bin/sh\nexec ' + shlex.join(argv) + ' "$@"\n')
 path.chmod(0o755)
 PY

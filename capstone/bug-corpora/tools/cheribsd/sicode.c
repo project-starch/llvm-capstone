@@ -15,7 +15,8 @@
  *                       forces a revocation pass with malloc_revoke_quarantine_force_flush()
  *                       and reads through the stale pointer. Each must end with the matching
  *                       line; a run that prints nothing has shown that the handler or its
- *                       preload cannot be trusted, not that nothing faulted.            */
+ *                       preload cannot be trusted, not that nothing faulted. With revocation
+ *                       switched off for the process, `revoked` must complete instead.  */
 #include <cheri/cheric.h>
 #include <signal.h>
 #include <stdio.h>
@@ -72,10 +73,13 @@ int main(int argc, char **argv) {
   if (!strcmp(argv[1], "bounds")) {
     printf("read %d\n", p[32]);
   } else if (!strcmp(argv[1], "revoked")) {
-    if (!malloc_revoke_enabled()) { printf("SELFTEST revocation is off\n"); return 4; }
+    /* With revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same read must complete: that
+       is the control that the per-process knob is live. */
+    int on = malloc_revoke_enabled();
+    printf("SELFTEST revocation is %s\n", on ? "on" : "off");
     p[0] = 1;
     free((void *)p);
-    if (malloc_revoke_quarantine_force_flush() != 0) return 3;
+    if (on && malloc_revoke_quarantine_force_flush() != 0) return 3;
     printf("read %d\n", p[0]);
   } else {
     return 2;
