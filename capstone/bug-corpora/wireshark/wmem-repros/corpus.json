@@ -42,7 +42,8 @@
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-differential",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-domain-regression",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-poisoncap",
-    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual"
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual-23"
   ],
   "advisories": [],
   "shape_table": true,
@@ -53,7 +54,7 @@
     "virtual-nested-pools": "virtual-wmem-pools"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
+    "virtual-malloc": "results/2026-10-11-virtual-23/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-11-virtual-23/virtual-nested-pools"
   }
 }
