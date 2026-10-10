@@ -5,7 +5,7 @@ Every cell of the published per-bug tables (`docs/ref/spatial-vs-temporal-three-
 read-only audits, one per program family. The findings, the fixes, and the runs below. Lane branch
 `audit-three-programs`.
 
-## Pre-registered runs (written before each run; this file's commit is the timestamp)
+## Pre-registered runs (written before each run except P3, see Outcome; this file's commit is the timestamp)
 
 Case 12 of `ffmpeg/carved-repros` (moved from `subobject-repros/09`) is pre-registered in its own
 `case.json`, commit `26cdee4e4d8d`.
@@ -69,6 +69,9 @@ Every prediction above held.
   - Control 90 was held by the quarantine.
   - The revocation control faulted at its labelled load.
 - **P3** (`ffmpeg/carved-repros/results/2026-10-10-capstone-*/`): 65 of 65 rows as predicted.
+  - Timing: P3 started at 18:09, after `26cdee4e4d8d` was pushed (18:05) and BEFORE this file was
+    (18:14). So what pre-registered it is not this section. It is the readings already on `dev` for
+    cases 0-11 and that commit's `case.json` for case 12.
   - Case 12 completes on spatial, sublet and capstone-subobject.
   - It is caught at `ffc_read_probe_u32`, cause 5, by capstone-carve-bounds and sublet-carve.
 - **P4** (`memcached/allocator-repros/results/2026-10-10-capstone-0607/`): 4 of 4 arms completed, and the

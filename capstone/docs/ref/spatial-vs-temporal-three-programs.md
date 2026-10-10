@@ -16,7 +16,8 @@ Every cell the tables below are computed from -- 1,103 (case, arm) cells over th
 the run record that produced it, by four independent read-only audits (FFmpeg nested, FFmpeg plain, tshark,
 memcached), each told to attack named gaps and to quote a record for every claim. The plan and the
 pre-registrations of every run the audit needed are `docs/history/10-10-2026_17-20-00_bug-corpus-audit-three-programs.md`
-(`bbc7db0bd3d5`) and carved case 12's own `case.json` (`26cdee4e4d8d`). **Every pre-registered prediction held.**
+(`bbc7db0bd3d5`) and carved case 12's own `case.json` (`26cdee4e4d8d`). The Capstone carved arms started
+before the plan was pushed, so their predictions were the readings already on `dev`. **Every pre-registered prediction held.**
 
 **No cell contradicted its record.** What the audit found instead:
 
