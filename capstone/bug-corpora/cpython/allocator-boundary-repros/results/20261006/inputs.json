@@ -261,5 +261,142 @@
     "2026-10-08, 2026-10-09 runs": "df12471900102041  the same build plus _interpreters, pyexpat, _elementtree, _testlimitedcapi",
     "note": "the earlier runs' run.meta named fba7e8d8..., which is a different build: .text differed by 5,088 bytes, so it was not a strip of the same one. The measurements stand -- the binary the guest ran was a qualified build and the positive control passed in every batch -- but the recorded hash was wrong and is corrected here."
   },
-  "revocation_enforcement": "Corrected at review, 2026-10-10. At the pinned capstone-qemu 1a6dd207, CAPSTONE_REVOCATION_ENFORCE is defined at target/riscv/op_helper.c:1635 and gates capstone_cap_revoked(); a still-tagged revoked capability faults with cause 25 at :1712-1718, and one reloaded from memory comes back untagged at :2006-2010 (helper_reg_set_cap_compressed), so a later dereference raises cause 24. Both need a csrevoke first. Nothing on the base (spatial) arm revokes heap memory -- level0's l0_free only marks the block free and patch 0009 issues no revoke -- so its cause-24 faults are tag integrity, not revocation. The note this replaces cited :1420 and :1641-1642, which are not those lines in that tree, and concluded the base arm revokes."
+  "revocation_enforcement": "Corrected at review, 2026-10-10. At the pinned capstone-qemu 1a6dd207, CAPSTONE_REVOCATION_ENFORCE is defined at target/riscv/op_helper.c:1635 and gates capstone_cap_revoked(); a still-tagged revoked capability faults with cause 25 at :1712-1718, and one reloaded from memory comes back untagged at :2006-2010 (helper_reg_set_cap_compressed), so a later dereference raises cause 24. Both need a csrevoke first. Nothing on the base (spatial) arm revokes heap memory -- level0's l0_free only marks the block free and patch 0009 issues no revoke -- so its cause-24 faults are tag integrity, not revocation. The note this replaces cited :1420 and :1641-1642, which are not those lines in that tree, and concluded the base arm revokes.",
+  "negative_controls": {
+    "rule": "SCHEMA rule 5: every oracle has a negative control. A suite whose oracles cannot say FAIL proves nothing by saying PASS.",
+    "kinds": {
+      "weak": "trigger.py replaced by a stub that prints a marker and exits. Shows the arm does not fault on the harness. Passing it is not evidence that any individual detection is defect-dependent.",
+      "strong": "trigger.py replaced by a per-case variant that performs the same allocations and frees and differs only in that the access the defect makes out-of-bounds or stale is in bounds and live. Committed as negative_control.py next to the trigger; --negative-control prefers it over the stub."
+    },
+    "executed_is_counted_from_the_marker": true,
+    "void_rule": "A control that cannot show positive evidence that every case it claims to have run actually started is void, not passing. run-arm.sh aborts the run when the VM reports 'VM is not running'.",
+    "runs": [
+      {
+        "run": "boundary-negctl-20261010-074922",
+        "arm": "cheribsd-revocation",
+        "kind": "weak",
+        "cases": 32,
+        "executed": 32,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": null,
+        "only": "all",
+        "image_sha256": null,
+        "void": false
+      },
+      {
+        "run": "spatial-negctl-20261010-061543",
+        "arm": "spatial",
+        "kind": "weak",
+        "cases": 32,
+        "executed": 3,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": "300",
+        "only": "all",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": true
+      },
+      {
+        "run": "spatial-negctl-20261010-065110",
+        "arm": "spatial",
+        "kind": "weak",
+        "cases": 32,
+        "executed": 32,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": "300",
+        "only": "all",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": false
+      },
+      {
+        "run": "spatial-negctl-20261010-081957",
+        "arm": "spatial",
+        "kind": "strong",
+        "cases": 9,
+        "executed": 8,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": "300",
+        "only": "01,03,04,05,07,09,12,14,24",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": true
+      },
+      {
+        "run": "spatial-negctl-20261010-083844",
+        "arm": "spatial",
+        "kind": "strong",
+        "cases": 9,
+        "executed": 8,
+        "faults": 1,
+        "fault_cases": {
+          "24_gh-142783_zoneinfo-eager-decref": "7"
+        },
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": "300",
+        "only": "01,03,04,05,07,09,12,14,24",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": false
+      },
+      {
+        "run": "spatial-negctl-20261010-090107",
+        "arm": "spatial",
+        "kind": "strong",
+        "cases": 1,
+        "executed": 0,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": [
+          "24_gh-142783_zoneinfo-eager-decref"
+        ],
+        "selftest_failed": null,
+        "case_timeout_s": "120",
+        "only": "24",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": false
+      },
+      {
+        "run": "spatial-negctl-20261010-090622",
+        "arm": "spatial",
+        "kind": "strong",
+        "cases": 5,
+        "executed": 5,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": [
+          "31_gh-148660_odict-copy-stale-link"
+        ],
+        "case_timeout_s": "900",
+        "only": "24,10,15,30,31",
+        "image_sha256": "68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2",
+        "void": false
+      },
+      {
+        "run": "sublet-negctl-20261010-062057",
+        "arm": "sublet",
+        "kind": "weak",
+        "cases": 32,
+        "executed": 32,
+        "faults": 0,
+        "fault_cases": null,
+        "timeouts": null,
+        "selftest_failed": null,
+        "case_timeout_s": "300",
+        "only": "all",
+        "image_sha256": "73157bf5833b4956f6e4b50acf80ca2989afc394c9b153663a7c545cec8fa05d",
+        "void": false
+      }
+    ]
+  }
 }

@@ -407,6 +407,136 @@ arm was silent. *(Corrected at review.)* That row is now held out, which is why
 the table reads 0 of 29. It is not measured on the Capstone arms: both read
 NOTIMPL, because the guest kernel has no `mmap`.
 
+## The negative controls, and the two questions they answer
+
+Rule 5 of the SCHEMA requires every oracle to have a negative control:
+a suite whose oracles cannot say FAIL proves nothing by saying PASS.
+Two controls are run here and they answer different questions. Keeping
+them apart matters, because the weaker one is cheap and passing it is
+not evidence that any particular detection depended on the defect.
+
+Rule 5 is written for the `case-json` corpora, where the control
+corrupts a C fixture the program then refuses. A `script-trigger`
+corpus has no fixture to corrupt, so the control replaces the trigger
+instead. The requirement it has to meet is the same one: the oracles
+must be able to say FAIL.
+
+### The weak control: nothing faults when no defect is performed
+
+Every case directory is staged exactly as in a measurement run -- same
+image, same interpreter, same stage, same harness -- but `trigger.py`
+is replaced by a stub that prints a marker and exits. An arm that
+faults here faults on the harness rather than on the defect, and every
+detection it reports would be worthless. All three arms pass.
+
+| arm | run | cases | executed | faults | case timeout | status |
+|---|---|---|---|---|---|---|
+| cheribsd-revocation | `boundary-negctl-20261010-074922` | 32 | 32 | 0 | n/a | pass |
+| base | `spatial-negctl-20261010-065110` | 32 | 32 | 0 | 300s | pass |
+| sublet | `sublet-negctl-20261010-062057` | 32 | 32 | 0 | 300s | pass |
+
+`executed` is counted from the marker, not from the exit status, and
+that distinction is the whole value of the control. An earlier base
+run, `spatial-negctl-20261010-061543`, reported 32 silent cases and 0
+faults and would have been recorded as a pass; the marker appears in
+only 3 of its 32 logs. The VM had died after the third
+case and the remaining invocations returned "VM is not running" with
+a nonzero status, which the classifier scored as silence. That run is
+kept in the record as void. The harness now aborts the whole run on
+that message, and a control that cannot show positive evidence that
+every case it claims to have run actually started is void rather than
+passing.
+
+| arm | run | cases | executed | faults | case timeout | status |
+|---|---|---|---|---|---|---|
+| base | `spatial-negctl-20261010-061543` | 32 | 3 | 0 | 300s | void |
+
+### The strong control: the same traffic, with the one access made valid
+
+Passing the weak control only shows that an arm does not fault on an
+empty program. It says nothing about whether a given detection depended
+on the defect or merely on the allocation pattern the case happens to
+perform. For that, a case needs a variant that performs the same
+allocations and frees and differs only in that the access the defect
+makes out-of-bounds or stale is in bounds and live. Where such a variant
+exists it is committed next to the trigger as `negative_control.py`, and
+`--negative-control` prefers it over the stub; `control-kind.tsv` in each
+run records which kind each case received.
+
+Eleven of the 32 cases have such a variant: `01`, `03`, `04`, `05`, `09`, `10`, `14`, `15`, `24`, `30`, `31`.
+Four of those are the ones whose trigger runs an upstream test file
+through `runpy`. For those the variant is the upstream file itself,
+committed as `negative_control_test.py`, with the offending literal
+changed and the assertion that no longer applies replaced by one that
+checks the now-valid result -- a two-hunk diff against the file the
+trigger runs, with the `runpy`, `unittest` and import traffic
+identical. Every variant was first run on the pinned host interpreter,
+where it has to print its marker, exit 0 and produce no ASan report
+under either allocator, before it was run in a domain. The other 21
+defects cannot be expressed as one invalid access in an otherwise
+ordinary program -- they need a reentrant comparison, a deallocation
+ordering or a C-level cache that the defect *is* -- so those cases
+receive the stub, and their detections are qualified by the mechanism
+table above rather than by a control.
+
+The strong control has been run on the base arm only. Sublet's 27 and
+cheribsd-revocation's 11 are qualified by the weak control and by the
+fault mechanism each reports, not case by case.
+
+| arm | run | cases | executed | faults | case timeout | status |
+|---|---|---|---|---|---|---|
+| base | `spatial-negctl-20261010-081957` | 9 | 8 | 0 | 300s | void -- case 24 produced no marker, see below |
+| base | `spatial-negctl-20261010-083844` | 9 | 8 | 1 | 300s | failed -- re-run of the above; case 24's first variant faulted, see below |
+| base | `spatial-negctl-20261010-090107` | 1 | 0 | 0 | 120s | no measurement -- case 24's second variant under the 120s default |
+| base | `spatial-negctl-20261010-090622` | 5 | 5 | 0 | 900s | ran, self-test failed -- case 31 ran 299 tests with no fault, see below |
+
+What the strong control settles, and what it does not:
+
+- Clean on the base arm, so these detections are defect-dependent: `10`, `15`, `24`, `30`.
+- Measured only inside runs that were voided or failed for case 24's
+  sake: `01`, `03`, `04`, `05`, `09`, `14`. Each was silent with its marker
+  present in `spatial-negctl-20261010-081957` and again in
+  `spatial-negctl-20261010-083844`, so the per-case evidence is there,
+  but neither run carries a clean run-level verdict. A re-run under the
+  fixed evidence gate is outstanding.
+- `31` ran its full 299 tests with no fault, and its control's own
+  self-test then failed on two `test_sizeof_exact` assertions. Those
+  assert exact `sys.getsizeof` values, which capability pointers widen,
+  so they fail on this substrate for reasons unrelated to the control;
+  the trigger's own run of the file fails them too. The control now
+  allows those two by name, and a re-run to record the clean verdict is
+  outstanding.
+
+#### Case 24 took two variants, and the first one was wrong
+
+The first variant for `24` kept the defect's descriptor on
+`_weak_cache` and made it return one stable `Cache()` instead of a fresh
+one. On the base arm it faulted -- but with cause 7, a store bounds
+fault, where the real trigger produces cause 24. A control that faults by
+a different mechanism than the trigger is not evidence that the arm
+faults on ordinary traffic; it is evidence that the variant introduced a
+second defect of its own, since it still installs a non-dict descriptor
+where the interpreter expects a mapping.
+
+The second variant removes the descriptor entirely: same `ZoneInfo`
+subclass, same construction, same vendored tzdata, nothing abnormal on
+the class. It is silent on the base arm. So the fault belonged to the
+first variant, and `24`'s detection on base is defect-dependent and
+stands. The first variant is kept next to the trigger as
+`negative_control.variantA.py` -- a control that is itself defective is
+worth keeping visible, because it is the failure mode a reader should
+expect from this kind of control.
+
+The same case also shows why the case timeout is part of the control's
+declaration rather than a detail. Variant B first ran under the 120 s
+default and returned TIMEOUT, which is not a measurement either way
+(rule 4). It completes well inside 900 s. A trigger that faults exits
+early; a control has to run the case to the end, so a control needs more
+time than the measurement it qualifies, not the same.
+
+Neither variant changes any number in the tables above: `24`'s detection
+on base stands, so base is still 14 of 29.
+
 ## Provenance
 
 `inputs.json` carries every run directory. *(Corrected at review.)* It has a

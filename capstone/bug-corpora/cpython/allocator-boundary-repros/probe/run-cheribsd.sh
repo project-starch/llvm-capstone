@@ -23,7 +23,16 @@ GUEST=${GUEST:-/root/cpython}
 PYHOME=${PYHOME:-$GUEST/pyhome}
 SICODE=${SICODE:-/root/sicode.so}
 GUEST_PORT=${GUEST_PORT:-10086}
-OUT=${1:-$HOME/arms/cpython/cheribsd/results/boundary-$(date -u +%Y%m%d-%H%M%S)}
+# --negative-control: see run-arm.sh. Detect BEFORE filtering -- the first
+# version detected after the flag had been removed, so the control ran the real
+# triggers.
+NEGCTL=0
+args=()
+for a in "$@"; do
+  if [ "$a" = --negative-control ]; then NEGCTL=1; else args+=("$a"); fi
+done
+set -- "${args[@]+"${args[@]}"}"
+OUT=${1:-$HOME/arms/cpython/cheribsd/results/boundary$( [ "$NEGCTL" = 1 ] && echo -negctl )-$(date -u +%Y%m%d-%H%M%S)}
 BUDGET=${CASE_BUDGET:-120}
 # ONLY=01,10,18 runs just those case numbers. It gates BOTH the staging loop
 # and the run loop: a subset that stages 32 cases but runs 3 leaves 29 stale
@@ -124,6 +133,11 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   G "mkdir -p /root/boundary/$c"
   # Every .py the case carries -- see the note in run-arm.sh's staging loop.
   ( cd "$d" && tar -cf - ./*.py ) | G "tar -C /root/boundary/$c -xf -"
+  if [ "$NEGCTL" = 1 ]; then
+    # Only the trigger is replaced: an import failure would be a different
+    # experiment. The interpreter starts, loads and exits without a defect.
+    G "printf '%s\n' 'import sys' 'print(\"NEGATIVE-CONTROL no defect performed\")' 'sys.exit(0)' > /root/boundary/$c/trigger.py"
+  fi
   # Staging is verified per case: a missing trigger.py produced 10 verdicts in
   # this lane that looked like defect results and were "can't open file".
   G "test -f /root/boundary/$c/trigger.py" || { echo "$c: staging failed" >&2; exit 2; }
@@ -164,5 +178,16 @@ else
   diff "$OUT/sysctl-before.txt" "$OUT/sysctl-after.txt" >&2
 fi
 printf 'ended_utc\t%s\n' "$(date -u +%FT%TZ)" >> "$OUT/run.meta"
+if [ "$NEGCTL" = 1 ]; then
+  bad=$(awk -F'\t' 'NR>1 && $5 != "" {print $1}' "$OUT/verdicts.tsv")
+  m=$(printf '%s' "$bad" | grep -c . || true)
+  printf 'negative_control\t1\nnegative_control_faults\t%s\n' "$m" >> "$OUT/run.meta"
+  if [ "$m" != 0 ]; then
+    echo "NEGATIVE CONTROL FAILED: $m case(s) faulted with no defect performed:" >&2
+    printf '  %s\n' $bad >&2
+    exit 1
+  fi
+  echo "negative control: 0 of $n cases faulted, as required"
+fi
 echo "rows: $(($(wc -l < "$OUT/verdicts.tsv")-1)) / $n"
 echo "out:  $OUT"
