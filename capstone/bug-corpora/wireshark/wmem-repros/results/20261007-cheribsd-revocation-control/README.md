@@ -1,5 +1,14 @@
 # All 18 wmem defects complete on stock CheriBSD — and this time with a revocation control
 
+> **Corrections, 2026-10-10 audit** (the reading below is kept as recorded):
+> - Its own `result-lines.txt` has 25 programs (22 cases + 3 controls) and 22 case PASS lines, not "21 of 21" and "0 of 18".
+> - "Every arm of this harness narrows a wmem allocation via `wm_narrow()`" is not true of THIS arm: on stock CheriBSD
+>   `wm_narrow` is the identity (`ports/wireshark/wmem/src/shared/wmem-port-hooks.h`); it narrows on Capstone and PoisonCap.
+> - The build had `WM_CHUNKS=ON` and the hosted bump arena (one 384 MiB `aligned_alloc`, `g_free` a no-op), so no wmem
+>   object could reach libc `free()` -- not even a jumbo -- and "completes" was the only possible reading. The arm is
+>   re-measured on stock wmem with the system allocator as libc in `../2026-10-10-cheribsd-libc/`.
+
+
 Stock CheriBSD purecap, **libc revocation ON**, `guest_default: preserved`, mode 0.
 **21 of 21 arms passed, runner exit 0. 0 of 18 caught.**
 

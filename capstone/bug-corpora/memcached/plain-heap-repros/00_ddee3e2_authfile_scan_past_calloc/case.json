@@ -18,7 +18,9 @@
     },
     "native-detect": {
       "oracle": "ASan REPORTS, and that is the contrast this corpus exists to draw: the crossing leaves the malloc bound, so a redzone sits exactly where it lands. MEASURED two-sided 2026-10-06 -- buggy 'heap-buffer-overflow ... WRITE of size 1 ... 0 bytes after 9-byte region', attributed to the labelled write_probe (shared/corpus.h:62) with the allocation at case.c:37; fixed arm silent, exit 0. The sub-object corpora record the opposite reading for the opposite reason.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-plain-heap/run-native.txt: `00_ddee3e2_authfile_scan_past_calloc plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:mch_write_probe 1:mch_case_run at_probe=1`"
     },
     "spatial": {
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at mch_write_probe+0x58 -- cause 7, a bounds violation on a store; pc=0xc020f040, address=0xc0251f99. CheriBSD did NOT catch this crossing: its malloc bounds to a size class and the crossing landed in the slack. level0 bounds to the request, so there is none.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 36e178db06b6419c. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",

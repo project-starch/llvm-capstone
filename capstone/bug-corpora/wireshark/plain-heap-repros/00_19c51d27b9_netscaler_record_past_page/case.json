@@ -18,7 +18,9 @@
     },
     "native-detect": {
       "oracle": "ASan REPORTS. The crossing leaves the malloc bound, so a redzone sits exactly where it lands. MEASURED two-sided 2026-10-06 -- buggy 'heap-buffer-overflow ... READ of size 1 ... 0 bytes after 8192-byte region', attributed to the labelled read_probe (shared/corpus.h:64) with the allocation at case.c:28; fixed arm silent, exit 0. The wmem and sub-object corpora record the opposite reading for the opposite reason.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-plain-heap/run-native.txt: `00_19c51d27b9_netscaler_record_past_page plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:wsh_read_probe 1:wsh_case_run at_probe=1`"
     },
     "spatial": {
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc020f074, address=0xc0254000.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image e99e9a95dfad8d9d. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",

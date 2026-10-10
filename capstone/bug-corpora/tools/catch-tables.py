@@ -23,11 +23,21 @@ are measured, by design.
 The source of the per-program tables in docs/ref/spatial-vs-temporal-three-programs.md section 0.
 
 Verdict sources, in order: an arm's explicit `verdict`; then the opening words of its oracle, after
-any `MEASURED ...:` prefix -- caught: CAUGHT / REPORTED / ASan REPORTS / SIGPROT / fault; missed:
+a `MEASURED ...:` prefix -- caught: CAUGHT / REPORTED / ASan REPORTS / SIGPROT / fault; missed:
 NOT CAUGHT / NO FAULT / NO ASan report / SILENT / complete / the sequence completes. An arm whose
 status is predicted / not written / declined, or whose oracle begins PREDICTED, is NOT RUN. A
 `verdict` of NO-READING is a run that ended without the mechanism answering either way (the
-program's own check stopped it, a non-capability trap, a timeout): neither caught nor missed."""
+program's own check stopped it, a non-capability trap, a timeout): neither caught nor missed.
+
+STRICT (2026-10-10): an oracle is a PREDICTION unless the arm says it was measured -- an explicit
+`verdict`, `status: measured`, or a `MEASURED` prefix. Until then a bare oracle such as "fault at the
+labelled read probe" was read as a catch on its opening word, so a cell with no run behind it could
+not be told from one with a record; the audit found 26 such cells in memcached alone, and every one
+then had to be traced by hand. A bare oracle is now NOT RUN, and so is a cell the old ASan-text
+fallback used to accept.
+
+A case whose case.json carries `duplicate_of` (the same upstream defect as another case of the same
+corpus, e.g. a release-branch backport of the same fix) is left out of every table and listed."""
 import collections
 import json
 import pathlib
@@ -65,6 +75,8 @@ def verdict(arm):
     o = str(arm.get("oracle", "")).strip()
     if o.upper().startswith("PREDICTED"):
         return "not run"
+    if arm.get("status") != "measured" and not re.match(r"\s*\**\s*MEASURED", o):
+        return "not run"  # a bare oracle is a prediction, not a reading
     m = re.match(r"MEASURED[^:]*:\s*(.*)", o, re.S)
     head = (m.group(1) if m else o).lstrip("*").lstrip().lower()
     if head.startswith(("not caught", "no fault", "no asan", "silent", "complete", "the sequence completes")):
@@ -73,9 +85,6 @@ def verdict(arm):
         return "caught"
     if o.lower().startswith("no asan report"):
         return "missed"
-    # Older measured ASan arms state the oracle first and the reading after it.
-    if arm.get("status") == "measured" and re.search(r"asan reports heap-", o, re.I):
-        return "caught"
     return "UNCLASSIFIED"
 
 
@@ -151,10 +160,13 @@ def protected(arms, plain, port):
     return a if (a and verdict(a) in ("caught", "missed")) else arms.get(plain)
 
 
-rows, odd = [], []
+rows, odd, dups = [], [], []
 for p in TARGETS:
     for cj in sorted((BC / p).glob("*/[0-9][0-9]_*/case.json")):
         d = json.loads(cj.read_text())
+        if d.get("duplicate_of"):
+            dups.append(f"{p}/{cj.parts[-3]}/{cj.parent.name} = {d['duplicate_of']}")
+            continue
         corpus = cj.parts[-3]
         le = str(d.get("lifetime_ender", "")).strip().upper()
         kind = "spatial" if (le.startswith("NONE") or "SPATIAL" in le) else "temporal"
@@ -203,6 +215,9 @@ for p in EXTRA if ALL else ():
             sys.exit(f"catch-tables: {p}/{corpus} has cases but no entry in EXTRA_GROUPS")
         layer, nested, c2arm, c3arm = EXTRA_GROUPS[(p, corpus)]
         d = json.loads(cj.read_text())
+        if d.get("duplicate_of"):
+            dups.append(f"{p}/{corpus}/{cj.parent.name} = {d['duplicate_of']}")
+            continue
         a = d["arms"]
         r = dict(prog=p, corpus=corpus, layer=layer, case=cj.parent.name, kind=extra_kind(d), nested=nested,
                  c1=cheri_board(a.get("cheribsd-revocation")),
@@ -229,7 +244,8 @@ def cell(g, k):
     return f"{c['caught']}/{run}" + (f" (+{extra} ?)" if extra else "")
 
 
-print(f"cases: {len(rows)}")
+print(f"cases: {len(rows)}" + (f" (and {len(dups)} duplicate{'s' if len(dups) > 1 else ''} left out: "
+                                 + "; ".join(dups) + ")" if dups else ""))
 for kind in ("temporal", "spatial"):
     print(f"\n{kind.upper()}")
     print(f"  {'program':<10}{'layer':<20}{'axis':<8}{'n':>4} | " + " | ".join(f"{h:>12}" for _, h in COLS))

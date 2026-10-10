@@ -16,25 +16,37 @@
     "spatial": {
       "mode": 0,
       "oracle": "the sequence completes: report.completed == 1, no fault, the case marker printed",
-      "role": "control for sublet: same binary and guest, one difference. A chunk keeps the alias it was carved with, so the holder's pointer still names live storage -- the next item's -- and the read succeeds"
+      "role": "control for sublet: same binary and guest, one difference. A chunk keeps the alias it was carved with, so the holder's pointer still names live storage -- the next item's -- and the read succeeds",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects/result-lines.txt:14 (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "sublet": {
       "mode": 1,
       "oracle": "fault at the labelled read probe mc_defect_read, and nowhere else: exactly one fault, pc equal to the address the run's own marker published",
       "cause": 24,
-      "note": "release and issue each revoke the chunk, so the holder's pointer is dead by the time it is read"
+      "note": "release and issue each revoke the chunk, so the holder's pointer is dead by the time it is read",
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects/result-lines.txt:15 (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "poisoncap-spatial": {
       "mode": 0,
       "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor, and the adapter's own line reports sweeps=0",
-      "role": "control for poisoncap-protected: bounded leases and no invalidation, so the freed chunk stays addressable and the stale read succeeds"
+      "role": "control for poisoncap-protected: bounded leases and no invalidation, so the freed chunk stays addressable and the stale read succeeds",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-poisoncap/README.md:18 (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "poisoncap-protected": {
       "mode": 1,
       "oracle": "fault at the labelled read probe mc_defect_read, observed from outside: SIGPROT with si_code PROT_CHERI_TAG, and the faulting address and the PC both equal to the address the supervisor resolved from the child's ELF and memory map",
       "signal": 34,
       "si_code": 2,
-      "note": "si_code 2 and not 3: the sweep has run and the holder's alias is revoked, which is a different refusal from an access to a poisoned but unswept granule"
+      "note": "si_code 2 and not 3: the sweep has run and the holder's alias is revoked, which is a different refusal from an access to a poisoned but unswept granule",
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-poisoncap/README.md:19 (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
@@ -49,7 +61,8 @@
       "status": "measured",
       "requires": "the chunk never reaches free(), so ASan has no event; it would see the reuse only as an ordinary live object",
       "verdict": "NOT CAUGHT",
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -O1 -g; port library with the same sanitizer). Positive controls in the same run: `asan-control past 67108864` -> heap-buffer-overflow; `asan-control uaf 67108864` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (3ef5169ae90b); the arm was previously 'not written'."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -O1 -g; port library with the same sanitizer). Positive controls in the same run: `asan-control past 67108864` -> heap-buffer-overflow; `asan-control uaf 67108864` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (3ef5169ae90b); the arm was previously 'not written'.",
+      "measured": "2026-10-10, results/2026-10-10-native-asan-stock-malloc/run-asan.txt: SILENT -- the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing; built with MCP_STOCK_MALLOC=ON (each page and cache.c object its own malloc, as upstream); both controls reported in the same run"
     },
     "native-fix-differential": {
       "oracle": "the buggy arm lets the count wrap, so the first two releases free an item 65536 clients still hold, the next slabs_alloc returns the same chunk, and the holder reads the other item's bytes; the fixed arm answers the get as a miss at the limit and the count never wraps",

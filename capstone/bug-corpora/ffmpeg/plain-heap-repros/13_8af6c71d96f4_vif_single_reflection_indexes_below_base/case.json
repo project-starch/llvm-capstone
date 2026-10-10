@@ -1,6 +1,7 @@
 {
   "case": 13,
   "upstream_fix": "8af6c71d96f4",
+  "duplicate_of": "02_56309e476a_vf_vif_mirror_below_base",
   "title": "a hand-rolled mirror reflected only once and produced a negative index",
   "consumer": "libavfilter/vf_vif.c, vif_filter1d",
   "object": "temp, one av_calloc of width floats, indexed by the mirrored position",
@@ -54,7 +55,9 @@
     },
     "native-detect": {
       "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-plain-heap/run-native.txt: `13_8af6c71d96f4_vif_single_reflection_indexes_below_base asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe 1:ffh_case_run at_probe=1`"
     },
     "native-fix-differential": {
       "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
@@ -86,5 +89,6 @@
   "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): CAUGHT.",
   "nested": false,
   "nested_why": "the crossed buffer came straight from av_malloc / av_mallocz / av_calloc / av_malloc_array -- which on the platform is malloc -- with no AVBufferPool or AVRefStructPool between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested.",
-  "distinguishing": "this is the corpus's only crossing BELOW the base in this batch, which is why the outcome struct's `touched` is signed: `2 * w - jj - 1` goes negative as soon as w is smaller than half the filter width, so the index is not merely out of range but on the wrong side of the allocation. A detector that checks only an upper bound cannot see it."
+  "distinguishing": "this is the corpus's only crossing BELOW the base in this batch, which is why the outcome struct's `touched` is signed: `2 * w - jj - 1` goes negative as soon as w is smaller than half the filter width, so the index is not merely out of range but on the wrong side of the allocation. A detector that checks only an upper bound cannot see it.",
+  "note": "DUPLICATE (2026-10-10 audit): 8af6c71d96f4 is the release/9.0 backport of 56309e476a, case 02's fix -- same subject, same body, byte-identical diff, `git patch-id --stable` 03b9184e7cc8 for both (a third copy, 339931f548, is on release/8.1). One upstream defect, so this case is left out of every table; its readings stay, as a second reduction of the same bug."
 }

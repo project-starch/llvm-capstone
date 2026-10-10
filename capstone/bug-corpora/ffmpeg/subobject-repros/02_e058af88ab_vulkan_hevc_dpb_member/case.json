@@ -15,12 +15,18 @@
     "spatial": {
       "oracle": "the sequence completes. NOTHING WE HAVE CATCHES THIS, and measuring that is the row's purpose. The crossing is between two members of ONE allocation, so every per-allocation bound -- shrink, sublet, the pool arms, CHERI -- is in bounds for it. The authority that would have to be narrowed is per struct member, which means the compiler or the allocation site, not an allocator. That is the taxonomy's partial-squared cell, where table6-cheri-vs-capstone-explained.md already gives CHERI and Capstone the same verdict. ALSO MEASURED 2026-10-09 as this corpus's own case.c in an application domain (results/2026-10-09-capstone/): NOT CAUGHT, VERDICT DEFECT-REPRODUCED the DPB walk wrote ref_src[16], which is h265_refs[0], inside one refstruct allocation; fixed run VERDICT FIXED.",
       "probe_case": 42,
-      "note": "Measured as probe case 42 of ports/ffmpeg/buffer-pool/security-tests (pool-lifetime-probes.c), which is how pool-repros measures its own Capstone arms. The probe ASSERTS the crossing happened -- the neighbouring member's sentinel must change and its far end must survive -- so a completion is a measurement and not a quiet nothing. verify-outcomes.py's fault predicate deliberately does not list these cases, because a crossing inside one allocation is in bounds for every per-allocation bound."
+      "note": "Measured as probe case 42 of ports/ffmpeg/buffer-pool/security-tests (pool-lifetime-probes.c), which is how pool-repros measures its own Capstone arms. The probe ASSERTS the crossing happened -- the neighbouring member's sentinel must change and its far end must survive -- so a completion is a measurement and not a quiet nothing. verify-outcomes.py's fault predicate deliberately does not list these cases, because a crossing inside one allocation is in bounds for every per-allocation bound.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-capstone/README.md (## spatial, case row) (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "sublet": {
       "oracle": "the sequence completes: revocation has nothing to fire on, no lifetime ends here, and the bound is the whole allocation. NOTHING WE HAVE CATCHES THIS, and measuring that is the row's purpose. The crossing is between two members of ONE allocation, so every per-allocation bound -- shrink, sublet, the pool arms, CHERI -- is in bounds for it. The authority that would have to be narrowed is per struct member, which means the compiler or the allocation site, not an allocator. That is the taxonomy's partial-squared cell, where table6-cheri-vs-capstone-explained.md already gives CHERI and Capstone the same verdict. ALSO MEASURED 2026-10-09 as this corpus's own case.c in an application domain (results/2026-10-09-capstone/): NOT CAUGHT, VERDICT DEFECT-REPRODUCED the DPB walk wrote ref_src[16], which is h265_refs[0], inside one refstruct allocation; fixed run VERDICT FIXED.",
       "probe_case": 42,
-      "note": "Measured as probe case 42 of ports/ffmpeg/buffer-pool/security-tests (pool-lifetime-probes.c), which is how pool-repros measures its own Capstone arms. The probe ASSERTS the crossing happened -- the neighbouring member's sentinel must change and its far end must survive -- so a completion is a measurement and not a quiet nothing. verify-outcomes.py's fault predicate deliberately does not list these cases, because a crossing inside one allocation is in bounds for every per-allocation bound."
+      "note": "Measured as probe case 42 of ports/ffmpeg/buffer-pool/security-tests (pool-lifetime-probes.c), which is how pool-repros measures its own Capstone arms. The probe ASSERTS the crossing happened -- the neighbouring member's sentinel must change and its far end must survive -- so a completion is a measurement and not a quiet nothing. verify-outcomes.py's fault predicate deliberately does not list these cases, because a crossing inside one allocation is in bounds for every per-allocation bound.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "bug-corpora/ffmpeg/subobject-repros/results/2026-10-09-capstone/README.md (## sublet, case row) (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -52,7 +58,9 @@
     },
     "native-detect": {
       "oracle": "NO ASan report, MEASURED two-sided. The member-to-member crossing is inside one allocation, so there is no redzone to poison; a write one uint16_t PAST the same allocation is the positive control and ASan does report it (heap-buffer-overflow, exit 1). Without that control the silence would say nothing about the subject and something about the instrument -- and the first build of the probe proved the point: at -O1 the control was silent too, because the dead store had been optimised away.",
-      "measured": "2026-10-05, results/20261005-native-subobject/ (asan-probe.c and its two arms)"
+      "measured": "bug-corpora/ffmpeg/subobject-repros/results/20261006-native-subobject-7/asan-arms.txt:2,8 (cited: 20261005-native-subobject, which does not contain this case) (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)",
+      "status": "measured",
+      "verdict": "NOT CAUGHT"
     },
     "native-fix-differential": {
       "oracle": "the buggy arm's write crosses into the neighbouring member and the sentinel there changes; the fixed arm's bound keeps every write inside its own member. This pair differs by the upstream fix, not by protection -- which is the ONLY oracle available for this class."

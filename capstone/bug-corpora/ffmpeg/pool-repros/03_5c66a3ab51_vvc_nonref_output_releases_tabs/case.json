@@ -33,7 +33,9 @@
       "probe_case": 39,
       "oracle": "the sequence completes",
       "role": "control for sublet: same binary and guest, one difference",
-      "measured": "2026-10-04, ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/: mode 0 completed, passed, runner_exit 0"
+      "measured": "ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/result-lines.txt:6 (mode 0); :7 (mode 2) (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)",
+      "status": "measured",
+      "verdict": "NOT CAUGHT"
     },
     "sublet": {
       "probe_case": 39,

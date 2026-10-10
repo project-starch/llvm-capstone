@@ -46,9 +46,15 @@ for dir in "$ROOT"/[0-9][0-9]_*/; do
   "$SDK/bin/clang" $CFLAGS -I"$ROOT/shared" "$dir/case.c" "$ROOT/shared/driver.c" \
     -o "$OUT/bin/mch-$n" || { echo "CONTROL-FAILED purecap build case $n" >&2; exit 75; }
 done
-"$SDK/bin/clang" $CFLAGS -DPROBE_SYMBOL='"mch_write_probe"' \
-  "$CAP/bug-corpora/cpython/pymalloc-repros/observe/supervise.c" -lutil \
-  -o "$OUT/bin/supervise" || { echo "CONTROL-FAILED supervise build" >&2; exit 75; }
+# One supervisor per labelled probe, chosen per case below from the probe its case.c calls. Until
+# 2026-10-10 a single supervisor was built for mch_write_probe, so the READ defects 06-08 printed
+# "SUPERVISE expect mch_write_probe" and their records said the fault lay in that probe's extent; it
+# lies in mch_read_probe (attributed with llvm-nm, results/2026-10-08-cheribsd/attribution-2026-10-10.txt).
+for sym in mch_write_probe mch_read_probe; do
+  "$SDK/bin/clang" $CFLAGS -DPROBE_SYMBOL="\"$sym\"" \
+    "$CAP/bug-corpora/cpython/pymalloc-repros/observe/supervise.c" -lutil \
+    -o "$OUT/bin/supervise-$sym" || { echo "CONTROL-FAILED supervise build ($sym)" >&2; exit 75; }
+done
 "$SDK/bin/clang" $CFLAGS "$CAP/ports/common/host/cheribsd/abi-probe.c" \
   -o "$OUT/bin/cheribsd-abi-probe" || { echo "CONTROL-FAILED abi-probe build" >&2; exit 75; }
 
@@ -93,19 +99,28 @@ if missing or extra:
     if extra:   msg.append('CASES names %s, which is not a case directory' % extra)
     sys.exit('CONTROL-FAILED cases.json: ' + '; '.join(msg))
 
+def probe_of(n):
+    src = next(CORPUS.glob('%02d_*' % n)) / 'case.c'
+    text = src.read_text()
+    reads, writes = 'read_probe(' in text, 'write_probe(' in text
+    if reads == writes:
+        sys.exit('CONTROL-FAILED cases.json: case %d calls %s labelled probe' % (n, 'both' if reads else 'no'))
+    return 'mch_read_probe' if reads else 'mch_write_probe'
+
 cases = []
 for p in sorted(BIN.glob('mch-[0-9][0-9]')):
     n = int(p.name.split('-')[1])
     request, what, expect = CASES[n]
+    supervise = BIN / ('supervise-' + probe_of(n))
     cases.append(dict(name='%s-fixed' % p.name, program=str(p), args=['fixed', str(n)],
                       timeout=300, expect_regex=r'VERDICT FIXED .*', exit=0))
     if expect == 'FAULT':
-        cases.append(dict(name='%s-buggy' % p.name, program=str(BIN/'supervise'),
+        cases.append(dict(name='%s-buggy' % p.name, program=str(supervise),
                           args=['./target','buggy',str(n)], inputs={'target': str(p)},
                           timeout=300, expect='SUPERVISE exit signalled=%d' % SIGPROT,
                           exit=128+SIGPROT))
     else:
-        cases.append(dict(name='%s-buggy' % p.name, program=str(BIN/'supervise'),
+        cases.append(dict(name='%s-buggy' % p.name, program=str(supervise),
                           args=['./target','buggy',str(n)], inputs={'target': str(p)},
                           timeout=300, expect='SUPERVISE exit status=0', exit=0))
 OUT.write_text(json.dumps(cases, indent=2) + '\n')

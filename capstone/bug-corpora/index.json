@@ -54,7 +54,9 @@
         "sublet",
         "poisoncap-spatial",
         "poisoncap-protected",
-        "cheribsd-revocation"
+        "cheribsd-revocation",
+        "virtual-malloc",
+        "virtual-nested-pools"
       ],
       "arm_keys": {
         "sublet": [
@@ -69,14 +71,16 @@
       },
       "runners": [
         "capstone/bug-corpora/cpython/pymalloc-repros/runners/capstone-domain/run-defects.py",
-        "capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py"
+        "capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py",
+        "capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "inventory": "capstone/docs/ref/cpython-pymalloc-defects.md",
       "evidence": [
         "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20",
         "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control",
-        "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd"
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd",
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-virtual"
       ],
       "advisories": [],
       "shape_table": true,
@@ -85,6 +89,14 @@
         "The (\\w+) shapes, and what each"
       ],
       "note": "The inventory states this is the whole reachable set at the pin, not a sample.",
+      "arm_configurations": {
+        "virtual-malloc": "virtual-pymalloc",
+        "virtual-nested-pools": "virtual-pymalloc-pools"
+      },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+      },
       "where": "capstone/bug-corpora/cpython/pymalloc-repros"
     },
     {
@@ -95,7 +107,7 @@
         "version": "n9.0.1",
         "port": "capstone/ports/ffmpeg/buffer-pool"
       },
-      "cases": 12,
+      "cases": 13,
       "case_schema": "case-json",
       "case_macro": "FFC",
       "required_arms": [
@@ -114,7 +126,7 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "false": 11,
+        "false": 12,
         "true": 1
       },
       "runners": [
@@ -136,13 +148,15 @@
         "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-cheribsd-subobject",
         "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-cheribsd-carve-bounds",
         "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-poisoncap-mode0",
-        "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-poisoncap-mode1"
+        "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-poisoncap-mode1",
+        "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-10-native-differential",
+        "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-10-native-asan"
       ],
       "advisories": [
         "CVE-2011-3895 (case 11's fix says it fixes part of it)"
       ],
       "shape_table": true,
-      "note": "FFmpeg's nested spatial row, which had one case (plane-repros) before this corpus. Every arm measured 2026-10-09: native differential 12/12 two-sided; ASan, CheriBSD, PoisonCap (both modes), Capstone bounds, Capstone + Sublet and both compilers' field bounds 0/12 -- the crossing stays inside one allocation and is not a field; carve bounds 12/12 on Capstone and on CheriBSD, at the labelled probe, every fixed arm FIXED under the same narrowing. Case 11 (vorbis) is live at the n9.0.1 pin by source reading. The candidates and the rejected commits are in docs/ref/ffmpeg-spatial-defect-triage.md (the 2026-10-09 section).",
+      "note": "FFmpeg's nested spatial row, which had one case (plane-repros) before this corpus. Every arm measured 2026-10-09: native differential 12/12 two-sided; ASan, CheriBSD, PoisonCap (both modes), Capstone bounds, Capstone + Sublet and both compilers' field bounds 0/12 -- the crossing stays inside one allocation and is not a field; carve bounds 12/12 on Capstone and on CheriBSD, at the labelled probe, every fixed arm FIXED under the same narrowing. Case 11 (vorbis) is live at the n9.0.1 pin by source reading. The candidates and the rejected commits are in docs/ref/ffmpeg-spatial-defect-triage.md (the 2026-10-09 section). Case 12 (vf_thumbnail's high-bit-depth histogram, ac59fc542f) joined on 2026-10-10 from subobject-repros, where it had been filed as case 09 NOT NESTED although its region is a carve; its native arms are measured (results/2026-10-10-native-*) and every other arm was pre-registered before its run.",
       "where": "capstone/bug-corpora/ffmpeg/carved-repros"
     },
     {
@@ -187,7 +201,9 @@
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-capstone-subobject",
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-cheribsd-subobject",
         "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode0",
-        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode1"
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-poisoncap-mode1",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-09-sublet-full",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/2026-10-10-native-plain-heap"
       ],
       "advisories": [],
       "shape_table": true,
@@ -344,12 +360,12 @@
     {
       "program": "ffmpeg",
       "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
-      "title": "Upstream FFmpeg spatial defects that cross a bound INSIDE ONE ALLOCATION -- between two members of a struct, or between two slices carved from one block by arithmetic",
+      "title": "Upstream FFmpeg spatial defects that cross a bound INSIDE ONE ALLOCATION -- between two members of a struct",
       "upstream": {
         "version": "n9.0.1",
         "port": "capstone/ports/ffmpeg/buffer-pool"
       },
-      "cases": 10,
+      "cases": 9,
       "case_schema": "case-json",
       "case_macro": "FF2",
       "required_arms": [
@@ -368,7 +384,7 @@
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
         "true": 5,
-        "false": 5
+        "false": 4
       },
       "runners": [
         "capstone/bug-corpora/ffmpeg/subobject-repros/runners/run-native.sh",
@@ -387,7 +403,7 @@
       ],
       "advisories": [],
       "shape_table": true,
-      "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. Cases 0-2 are LIVE at the n9.0.1 pin; cases 3-9 were added 2026-10-06, of which 5, 6 are live and 3, 4, 7, 8, 9 are fix-reversals -- liveness is RECORDED, never required, and requiring it is what kept this cell at three cases. Under this inventory's axis (WHO ALLOCATED THE OBJECT) every row here is NOT NESTED: the object is one allocation and nothing sub-allocated the crossed region. No arm we have catches any of them; the oracle is the upstream fix. The Capstone arms for 3-9 are declared predictions -- cases 0-2 got theirs from probe cases 40-42 of ports/ffmpeg/buffer-pool/security-tests, which is the seam 3-9 will use. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 0 of 10 caught, 22/22 arms, both platform controls firing -- and the reason is recorded as WEAKER than 'the bound is the allocation', because the port's av_malloc is an un-narrowed arena carve.",
+      "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. Cases 0-2 are LIVE at the n9.0.1 pin; cases 3-9 were added 2026-10-06, of which 5, 6 are live and 3, 4, 7, 8, 9 are fix-reversals -- liveness is RECORDED, never required, and requiring it is what kept this cell at three cases. Under this inventory's axis (WHO ALLOCATED THE OBJECT) every row here is NOT NESTED: the object is one allocation and nothing sub-allocated the crossed region. No arm we have catches any of them; the oracle is the upstream fix. The Capstone arms for 3-9 are declared predictions -- cases 0-2 got theirs from probe cases 40-42 of ports/ffmpeg/buffer-pool/security-tests, which is the seam 3-9 will use. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 0 of 10 caught, 22/22 arms, both platform controls firing -- and the reason is recorded as WEAKER than 'the bound is the allocation', because the port's av_malloc is an un-narrowed arena carve. Case 09 (vf_thumbnail, ac59fc542f) moved to ../carved-repros as its case 12 on 2026-10-10: the bound it crosses is a carved slice, not a member, and a carve is a nested allocator under this inventory's axis. Its readings here stay in results/.",
       "inventory": "capstone/docs/ref/ffmpeg-spatial-defect-triage.md",
       "where": "capstone/bug-corpora/ffmpeg/subobject-repros"
     },
@@ -1954,12 +1970,12 @@
   "cases_by_corpus": {
     "capstone/bug-corpora/cpython/allocator-boundary-repros": 32,
     "capstone/bug-corpora/cpython/pymalloc-repros": 20,
-    "capstone/bug-corpora/ffmpeg/carved-repros": 12,
+    "capstone/bug-corpora/ffmpeg/carved-repros": 13,
     "capstone/bug-corpora/ffmpeg/plain-heap-repros": 25,
     "capstone/bug-corpora/ffmpeg/plain-temporal-repros": 13,
     "capstone/bug-corpora/ffmpeg/plane-repros": 1,
     "capstone/bug-corpora/ffmpeg/pool-repros": 4,
-    "capstone/bug-corpora/ffmpeg/subobject-repros": 10,
+    "capstone/bug-corpora/ffmpeg/subobject-repros": 9,
     "capstone/bug-corpora/httpd/apr-pool-repros": 1,
     "capstone/bug-corpora/httpd/bucket-repros": 8,
     "capstone/bug-corpora/memcached/allocator-repros": 9,

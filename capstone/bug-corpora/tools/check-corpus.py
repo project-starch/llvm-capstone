@@ -70,7 +70,12 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
-                 "citation_constraint", "fault_sites", "fault_sites_why"}
+                 "citation_constraint", "fault_sites", "fault_sites_why", "duplicate_of"}
+# `duplicate_of` names a sibling case directory that records the SAME upstream defect -- e.g. a
+# release-branch backport of the fix another case already carries (`git patch-id` equal). The case
+# stays in the corpus, so its numbering and every record that cites it stay valid, and
+# tools/catch-tables.py leaves it out of every table. The checker requires the sibling to exist and
+# to be a real, non-duplicate case of the same corpus.
 # `citation_constraint` records that a case's upstream commit cannot be quoted
 # freely -- in practice that its SUBJECT names a person, so the fix may be cited
 # by HASH AND PATH ONLY. This tree's naming rule is absolute and applies to
@@ -364,6 +369,13 @@ def check_cases(corpus, decl, dirs, problems):
                 for key in sorted(arm_keys[name] - set(arm)):
                     problems.append(f"{where}: arm {name!r} lacks {key!r}")
 
+        dup = case.get("duplicate_of")
+        if dup is not None:
+            sib = path.parent / str(dup)
+            if not (isinstance(dup, str) and sib.is_dir() and (sib / "case.json").is_file()):
+                problems.append(f"{where}: duplicate_of names {dup!r}, not a sibling case directory")
+            elif json.loads((sib / "case.json").read_text()).get("duplicate_of"):
+                problems.append(f"{where}: duplicate_of names {dup!r}, which is itself a duplicate")
         if (path / "PROVENANCE.md").is_file():
             provenance += 1
         elif "expect_provenance" not in decl:
@@ -515,6 +527,8 @@ def self_test():
         # gate that spots it.
         ("a misspelled arm hidden behind 'not written'",
          lambda c: c["arms"].update(spatail={"status": "not written"})),
+        # A duplicate leaves every table, so one naming nothing would silently drop a case.
+        ("duplicate_of naming no sibling case", lambda c: c.update(duplicate_of="99_no_such_case")),
     )
     for label, mutate in corruptions:
         with tempfile.TemporaryDirectory() as tmp:

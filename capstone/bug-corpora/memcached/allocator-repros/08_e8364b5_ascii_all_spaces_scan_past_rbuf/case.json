@@ -59,10 +59,11 @@
       "status": "measured"
     },
     "native-detect": {
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -O1 -g; port library with the same sanitizer). Positive controls in the same run: `asan-control past 67108864` -> heap-buffer-overflow; `asan-control uaf 67108864` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (3ef5169ae90b); the arm was previously 'not written'.",
+      "oracle": "MEASURED 2026-10-10, results/2026-10-10-native-asan-stock-malloc/: **ASan REPORTS heap-buffer-overflow** in the scan, 0 bytes after the 16384-byte rbuf object, on upstream's own backing (each cache.c object its own malloc). Until 2026-10-10 this arm ran the port's arena backing -- one 64 MiB aligned_alloc -- and read NOT CAUGHT; that was the harness, not memcached. The fixed arm is silent (its probe no longer reads past the object; see case.c).",
       "status": "measured",
       "prediction": "NOT WRITTEN, and declined rather than pending for the reason this corpus records for its other rows: the port hands cache.c one arena, so ASan sees a single allocation and its silence would measure the fixture rather than memcached. A positive control would have to create a crossing of the ARENA, which is not this defect.",
-      "verdict": "NOT CAUGHT"
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-asan-stock-malloc/run-asan.txt: REPORTED -- heap-buffer-overflow at mc_case_body <repo>/capstone/bug-corpora/memcached/allocator-repros/08_e8364b5_ascii_all_spaces_scan_past_rbuf//case.c:66; built with MCP_STOCK_MALLOC=ON (each page and cache.c object its own malloc, as upstream); both controls reported in the same run"
     },
     "sublet-malloc": {
       "target": "Capstone domain, the allocators port's ledger in mode 2: stock slabs.c/cache.c on Sublet as the SYSTEM allocator -- a chunk carries its whole page's bound, an object its own, and nothing is revoked until a page or object is given back",

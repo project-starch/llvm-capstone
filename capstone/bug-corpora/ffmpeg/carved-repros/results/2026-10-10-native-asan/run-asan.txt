@@ -1,0 +1,19 @@
+  control 0: heap-buffer-overflow (required heap-buffer-overflow) ok  touch <repo>/capstone/bug-corpora/tools/asan-control.c:14
+  control 1: heap-buffer-overflow (required heap-buffer-overflow) ok  touch <repo>/capstone/bug-corpora/tools/asan-control.c:14
+  control 2: heap-buffer-overflow (required heap-buffer-overflow) ok  touch <repo>/capstone/bug-corpora/tools/asan-control.c:14
+  control 3: heap-use-after-free (required heap-use-after-free) ok  touch <repo>/capstone/bug-corpora/tools/asan-control.c:14
+  00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short         SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  01_699341d647_apedec_array_0000_writes_64_into_channel_1       SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel      SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix    SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel        SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  05_9d3032b960_alsdec_opt_order_past_max_order                  SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420                     SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  07_2563a33856_vp9_intra_pred_carved_for_old_bpp                SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  08_b5ff61695f_swscale_v_line_at_pre_doubling_stride            SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  09_043bcdcdb0_svq1enc_inter_block_runs_into_source             SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  10_d2213b6493_rv34_b_block_carved_at_old_linesize              SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  11_68226ed9ec_vorbis_type1_residue_end_spans_channels          SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+  12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice        SILENT           the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing
+
+carved-repros: 13 cases; {'SILENT': 13}; not a reading: none

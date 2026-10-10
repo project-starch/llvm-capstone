@@ -63,6 +63,65 @@ static void *issue(struct entry *e) {
     peak = live;
   return e->region.alias;
 }
+#if defined(WM_LIBC_SYSTEM) && !defined(WM_DOMAIN)
+/* WM_LIBC_SYSTEM (hosted only): g_malloc and g_free ARE the host's malloc and
+ * free, at the requested size, exactly as a stock wmem build gets them from
+ * glib. A native tool (AddressSanitizer) or the platform's own allocator
+ * (CheriBSD's libc revocation) then sees every block wmem asks the system
+ * for, every jumbo, and every g_free -- instead of one bump arena that hands
+ * nothing back. The entry table still records each live block, so the port's
+ * hosted hooks (wm_epoch) resolve addresses as before; a freed entry's slot is
+ * reused for bookkeeping, never its memory. */
+static struct entry *slot(void) {
+  for (unsigned i = 0; i < count; ++i)
+    if (!entries[i].live && !entries[i].linear)
+      return &entries[i];
+  if (count == WM_REGIONS)
+    wm_fail(206);
+  return &entries[count++];
+}
+void *wm_sys_alloc(size_t n) {
+  if (!n || n > WM_PAYLOAD_BYTES)
+    wm_fail(205);
+  struct entry *e = slot();
+  void *p = malloc(n);
+  if (!p)
+    wm_fail(205);
+  e->region.alias = p;
+  e->region.size = n;
+  e->base = (uintptr_t)p;
+  e->size = n;
+  e->linear = 0;
+  ++created;
+  return issue(e);
+}
+void wm_sys_free(void *p) {
+  if (!p)
+    return;
+  struct entry *e = find((uintptr_t)p, 1);
+  if (!e)
+    wm_fail(207);
+  e->live = 0;
+  e->base = 0;
+  --live;
+  free(p);
+}
+void *wm_sys_realloc(void *p, size_t n) {
+  if (!p)
+    return wm_sys_alloc(n);
+  if (!n) {
+    wm_sys_free(p);
+    return NULL;
+  }
+  struct entry *e = find((uintptr_t)p, 1);
+  if (!e)
+    wm_fail(208);
+  void *q = wm_sys_alloc(n);
+  memcpy(q, p, e->size < n ? e->size : n);
+  wm_sys_free(p);
+  return q;
+}
+#else
 void *wm_sys_alloc(size_t n) {
   if (!n || n > WM_PAYLOAD_BYTES || n > SIZE_MAX - 15)
     wm_fail(205);
@@ -106,6 +165,7 @@ void *wm_sys_realloc(void *p, size_t n) {
   wm_sys_free(p);
   return q;
 }
+#endif
 void *wm_epoch(void *p) {
   struct entry *e = find((uintptr_t)p, 0);
   if (!e)
