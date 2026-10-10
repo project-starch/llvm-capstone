@@ -82,13 +82,13 @@ read side by side:
 
 | arm | what it is |
 |---|---|
-| `spatial` | base Capstone: the level0 heap with per-object bounds, which is what applications get since PR #170 |
-| `sublet` | the same heap plus patch 0014, so pymalloc's pools and arenas are issued and revoked too |
+| `spatial` | base Capstone = `sysalloc-bounds`: the level0 heap with per-object bounds, which is what applications get since PR #170, and pymalloc stock (patch 0009). **Nothing in it revokes heap memory**: `free` only marks the block free (`capstone/ports/musl-capstone/runtime/level0.c`, `l0_free`) |
+| `sublet` | the same level0 heap plus patch 0014. pymalloc's blocks, and its separately accounted fallback for requests over 512 bytes, are issued and revoked by the Sublet adapter. The system heap is still level0, not the Sublet heap |
 | `cheribsd-revocation` | CheriBSD purecap, libc revocation as the platform ships it |
 
 **All three have been run.** `results/20261006/` holds the combined
-`matrix.tsv`, an `inputs.json` carrying every run's image hash and capacity
-variant, and the guest's `security.cheri` subtree read before and after each
+`matrix.tsv`, an `inputs.json` carrying the image hashes and capacity variants
+(per run from 2026-10-07, per arm for the earliest runs), and the guest's `security.cheri` subtree read before and after each
 CheriBSD batch. All three arms are reported over the **same 29** of the 32
 cases; the three outside that set, and why no arm reports them, are in the
 results README.
@@ -122,13 +122,20 @@ that `sublet` misses and `spatial` catches would contradict it outright.
 
 ### How those three held up
 
-1. **Held in shape, and for a reason the expectation had wrong.** `spatial` 14
-   and `cheribsd-revocation` 11 are close, but not because neither revokes:
-   `CAPSTONE_REVOCATION_ENFORCE` defaults to 1 and is independent of the sublet
-   discipline, so the base arm revokes too, and 11 of its 14 detections carry
-   `cause=24`. The arm is not the bounds-only baseline this expectation assumed.
-2. **Held.** `sublet` 27 against 14 and 11, and its 29 is the same 29. No case
-   is caught by `spatial` and missed by `sublet`, so the strict superset stands.
+1. **Failed.** The expectation was that both arms catch the same cases, and
+   they disagree on `03`, `04`, `15` and `21`. The totals, 14 and 11, are close.
+   *(Corrected at review.)* This item used to say the base arm "revokes too". It
+   does not: nothing in it revokes heap memory. 11 of its 14 detections carry
+   `cause=24`, an access through an untagged register, which is tag integrity and
+   not revocation (`results/20261006/README.md`, "Corrections made at review").
+   It is still not the bounds-only baseline this expectation assumed.
+2. **Partly held.** `sublet` 27 against 14 and 11, over the same 29. No case is
+   caught by `spatial` and missed by `sublet`, so the strict-superset half
+   stands. The other half, "the cases it adds should be the nested ones", does
+   not. Of the 18 delivered cases among `01`-`21`, Sublet adds 5 to base's 11, and
+   only `02` and `16` are nested. `19`, `20` and `21` are non-nested. They are
+   likely reached through patch 0014's revoking fallback for requests over
+   512 bytes, but that is not traced per case.
 3. **Failed, on two arms.** The non-nested cases are 04, 07, 08, 12 and 18.
    `spatial` and `sublet` each catch 4 of the 4 in the delivered set, but
    `cheribsd-revocation` catches 3 of 4 -- it is silent on 04, where the
@@ -136,8 +143,9 @@ that `sublet` misses and `spatial` catches would contradict it outright.
    rounds capability bounds up to a size class -- and on the three non-nested
    TEMPORAL cases `spatial` catches 0 of 3 and `cheribsd-revocation` 1 of 3. A
    non-nested defect is not visible to every arm, and the reasons differ per
-   arm: allocator rounding on CheriBSD, and on base a revocation that is
-   sweep-free but still only acts where the system allocator freed.
+   arm: allocator rounding on CheriBSD, and on base a heap that does not revoke
+   at all (corrected at review; this used to read "a revocation that ... only
+   acts where the system allocator freed").
 
 ## Fidelity, stated as a limitation
 

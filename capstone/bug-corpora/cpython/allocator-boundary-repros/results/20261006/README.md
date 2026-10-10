@@ -15,6 +15,53 @@ not implement is **not** a measurement (SCHEMA rule 4) and is out of the
 denominator rather than counted as silence. Nor is a row whose trigger has since
 been replaced.
 
+`../../probe/counts.py` derives this table from `matrix.tsv`, and
+`counts.py --check` fails if this copy differs.
+
+## Corrections made at review, 2026-10-10
+
+Three statements in this corpus were wrong after the author's own review pass.
+They are corrected where they stand, each marked *(Corrected at review)*:
+
+1. **The base arm does not revoke heap memory.** This file said that
+   `CAPSTONE_REVOCATION_ENFORCE` makes it revoke and that its `cause=24` faults
+   are revoked capabilities.
+   - The level0 heap's `free` only marks the block free
+     (`capstone/ports/musl-capstone/runtime/level0.c`, `l0_free`).
+   - Patch 0009 contains no revoke.
+   - The runtime's only revoke sites (`musl-capstone/runtime/context.c`) release
+     a thread's context area, and they are reached only through `__clone`, which
+     no trigger uses.
+
+   At the pinned QEMU, `1a6dd207`, `CAPSTONE_REVOCATION_ENFORCE` is defined at
+   `op_helper.c:1635`. It acts only on a capability whose revocation node a
+   `csrevoke` has invalidated:
+   - a still-tagged one raises 25 (`:1712-1718`);
+   - one reloaded from memory comes back untagged (`:2006-2010`) and raises 24.
+
+   The line numbers cited before (`:1420`, `:1641-1642`) are not those lines in
+   that tree. Both paths need a revoke first, and nothing on this arm issues one.
+   So a `cause=24` here is an access through a register that held no tag: a
+   pointer slot that later data overwrote (**tag integrity**, which the hardware
+   gives every arm; SCHEMA.md `sysalloc-bounds`, "no revocation"), or an integer
+   or NULL used as a pointer. The matrix records no faulting value, so these are
+   not told apart; each case log's `value =` line (`op_helper.c:1706-1708`) would
+   do it. The 31 `spatial` oracles that assume the arm revokes keep their text
+   and carry an `oracle_premise` note.
+2. **No per-case oracle was written before the runs.** This file said cases
+   `01`-`21` carry theirs from the commit that added them. That commit has every
+   arm as `{"status": "not written"}`, and so does the next one. The per-case
+   oracles for all 32 cases first appear in the commit that also adds
+   `matrix.tsv` (2026-10-06 15:41 UTC, after runs from 10:51 UTC). The only
+   predictions that predate the runs are the three cell-level expectations in
+   the top-level README.
+3. **The CheriBSD hashes were established after the runs, not by them.** The
+   runs' own `run.meta` named `fba7e8d8…`, which is now known to be a different
+   build. `3172023c…` is recorded as a 16-digit prefix, and `df124719…`
+   predates the runner's guest-copy check. Both are reconstructions. Record the
+   full digest of the guest binary, and re-run if it is no longer available,
+   before citing the cheribsd column by hash.
+
 ## The delivered 29
 
 **All three arms are reported over the same 29 cases**, and the matrix's
@@ -55,12 +102,13 @@ way.
 
 ## What the measurements say about the oracles
 
-The oracles were derived from the mechanism, per cell. **They were not all
-written before the runs, and the earlier claim that they were is withdrawn.**
-`git log` is the record: cases `01`-`21` carry their oracles from the commit that
-added those cases, before any arm ran, while cases `22`-`32` first appear in the
-same commit as `matrix.tsv`, so for those eleven no prediction was recorded
-before the result. That is why the figure this file leans on is not `oracle_met`
+The oracles were derived from the mechanism, per cell. **They were not written
+before the runs, and the earlier claim that they were is withdrawn.**
+*(Corrected at review.)* `git log` is the record. The commit that added cases
+`01`-`21`, and the one after it, declare every arm `{"status": "not written"}`.
+The per-case oracles for all 32 cases first appear in the same commit as
+`matrix.tsv`. Only the top-level README's three cell-level expectations were
+recorded before the result. That is why the figure this file leans on is not `oracle_met`
 but how many cases the classification *predicts* the outcome for -- a property
 of the mechanism and the case, not of when someone wrote a sentence. 33 measurements contradicted them. **The spatial arm's oracles have since
 been rewritten**, and because rewriting an oracle after seeing the results is
@@ -73,14 +121,17 @@ recomputed.
 Both spatial oracle texts described a bounds-only baseline: "complete: the stale
 access stays inside one arena the system allocator still holds" for the nested
 cases, "fault: the heap bounds each allocation" for the non-nested ones. The arm
-is not bounds-only. `CAPSTONE_REVOCATION_ENFORCE` defaults to 1
-(`capstone-qemu/target/riscv/op_helper.c:1420`, enforced at `:1641-1642`) and is independent of the sublet
-heap discipline, so the base arm enforces revocation as well.
+is not bounds-only, because tag integrity is in the hardware and cannot be
+switched off. *(Corrected at review.)* This used to say the arm "enforces
+revocation as well". It does not: nothing on it revokes heap memory (correction
+1 above).
 
-The measurements say how much this matters. Of the arm's 11 detections, **10
-carry `cause=24`**, a dereference of a revoked capability, and exactly **one**
-(`12_gh-143377`) carries `cause=7`, a store bounds fault. The arm detects almost
-entirely by revocation. No cell in this corpus isolates spatial safety.
+The measurements say how much this matters. Of the arm's 14 detections, **11
+carry `cause=24`**, an access through an untagged register. That is an
+overwritten pointer slot, or an integer or NULL used as a pointer, but not a
+revoked capability. Three are bounds faults: `cause=5` on `07` and `08`, and
+`cause=7` on `12`. The arm detects mostly by tag integrity, not by bounds. No
+cell in this corpus isolates spatial safety.
 
 ### The rewrite, and why it is not an improvement
 
@@ -110,9 +161,11 @@ predicting a completion it cannot guarantee.
 Four rows remain unmet on the base arm, and they are the informative ones:
 
 - `19_gh-142664`, `20_gh-143308`, `21_gh-146169` -- temporal, non-nested,
-  silent. A use-after-free on a system-allocator block is what revocation exists
-  to catch, and this arm did not catch it. Sublet catches all three, `21` with
-  `cause=24`.
+  silent. *(Corrected at review.)* That silence is what this arm predicts. Its
+  heap does not revoke, so a use-after-free on a system-allocator block is
+  invisible to it unless a later owner overwrites a pointer slot. Their oracles
+  demanded a revocation fault, so `oracle_met = False` records a wrong oracle,
+  not a miss. Sublet catches all three, with `cause=24`.
 - `32_gh-149449` -- unmet not for silence but for the kind of fault: `cause=2`,
   an ordinary illegal-instruction trap rather than the arm's mechanism. Sublet
   faults on the same case with `cause=24`.
@@ -130,13 +183,15 @@ denominator rather than a miss, because the guest kernel answers `mmap` with
 declared oracle, not a failure. The same defects reached through the
 **interpreter** fault on the same arm in 3 of 11 cases.
 
-Those 3 all carry `cause=24`. That resolves it. A C model frees its object back
-to its own pool and so never produces an allocator-level free, which is the only
-thing a revoked-capability fault can come from. The interpreter runs a real
-object lifetime and does reach the path where pymalloc returns an emptied arena
-to the system allocator. The two corpora's `spatial` arms are therefore not
-measuring the same thing, and their numbers still must not be pooled -- but the
-reason is now known rather than open.
+Those 3 all carry `cause=24`. *(Corrected at review.)* This used to be
+"resolved" as revocation, which this arm does not do. What `cause=24` does
+establish is an access through a register that held no tag. The likely
+difference between the two corpora is reuse. The interpreter runs a real object
+lifetime, so a freed block is reused by a new owner that writes data over the
+old object's pointer fields. A C model that frees back to its own pool, with
+nothing else allocating, produces no such overwrite. That reuse has not been
+traced case by case. The two corpora's `spatial` arms still do not measure the
+same thing, and their numbers must not be pooled.
 
 ## What the re-runs settled, and what is left
 
@@ -289,7 +344,8 @@ Case `32` is why this column exists. Its dangling `_ucnhash_CAPI` pointer is
 **called**, and on the base arm control lands on non-code at `0x87d0` and the CPU
 raises `cause=2`, `RISCV_EXCP_ILLEGAL_INST` -- the way any CPU traps that, with no
 capability mechanism involved. The same case on sublet faults with `cause=24`,
-`UNEXP_OP_TYPE`, a revoked capability used as a pointer, which IS the mechanism.
+`UNEXP_OP_TYPE`, an untagged capability used as a pointer (on sublet, a revoked
+one reloads untagged), which IS the mechanism.
 Counting both as a detection would credit the base arm with a protection that
 did not act, so the spatial oracles now name their falsifier: a fault whose cause
 is anything other than 24 falsifies them, `cause=2` included. That tightening
@@ -340,18 +396,23 @@ sweep-based and asynchronous. The arm is measured and its verdicts are
 reproducible; what it is not is predictable from a case's class and side.
 
 The base arm's four unmet rows are `19`, `20`, `21`, `32`. `19`, `20` and
-`21` are non-nested use-after-free on system-allocator blocks, which is what
-revocation exists to catch and this arm did not; `21` is the one sublet does
-catch, with `cause=24`. `32` is unmet because its fault is `cause=2`, an ordinary
+`21` are non-nested use-after-free on system-allocator blocks. *(Corrected at
+review.)* This arm's heap does not revoke, so its silence there is the expected
+outcome and the oracle was wrong. Sublet catches all three, with `cause=24`. `32` is unmet because its fault is `cause=2`, an ordinary
 illegal-instruction trap rather than the arm's mechanism.
 
-The one case the cheribsd oracle does predict is `18_gh-157335`, and it is not
-met. Its buffer is an mmap mapping, so a bounds fault was the prediction and the
-arm was silent -- the same outcome it has on the other two arms.
+The one case the cheribsd oracle did predict is `18_gh-157335`, and it was not
+met. Its buffer is an mmap mapping, so the prediction was a bounds fault, and the
+arm was silent. *(Corrected at review.)* That row is now held out, which is why
+the table reads 0 of 29. It is not measured on the Capstone arms: both read
+NOTIMPL, because the guest kernel has no `mmap`.
 
 ## Provenance
 
-`inputs.json` carries every run directory and its `run.meta`: the arm, the image
+`inputs.json` carries every run directory. *(Corrected at review.)* It has a
+`run.meta` only from the later runs: the earliest 2026-10-06 run directories are
+listed by name, and one `image_sha256` per arm stands for them. A `run.meta`
+records the arm, the image
 sha256 for the Capstone arms, `CAPSTONE_REV_NODES`, and for CheriBSD the whole
 `security.cheri` subtree read inside the guest before any case ran and again
 afterwards. Both Capstone arms refuse to boot an image whose hash is not the one

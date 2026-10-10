@@ -13,7 +13,8 @@
   "layer_note": "measured: ASan reported a 524321-byte region, over the 512 B SMALL_REQUEST_THRESHOLD",
   "arms": {
     "spatial": {
-      "oracle": "a fault at the offending access: cause 5 on a load or 7 on a store where the access leaves the object's own capability, or cause 24 where it reaches memory the system allocator has already freed and revoked. The object is a system allocator block, so one of the two applies; completion would falsify this. The fault must carry cause 5, 7 or 24; any other cause, cause 2 (ILLEGAL_INST) among them, is an ordinary trap rather than this arm's mechanism and falsifies this."
+      "oracle": "a fault at the offending access: cause 5 on a load or 7 on a store where the access leaves the object's own capability, or cause 24 where it reaches memory the system allocator has already freed and revoked. The object is a system allocator block, so one of the two applies; completion would falsify this. The fault must carry cause 5, 7 or 24; any other cause, cause 2 (ILLEGAL_INST) among them, is an ordinary trap rather than this arm's mechanism and falsifies this.",
+      "oracle_premise": "Corrected at review, 2026-10-10: the premise that this arm revokes is false. Its level0 heap only marks a freed block free (capstone/ports/musl-capstone/runtime/level0.c, l0_free), patch 0009 issues no revoke, and the runtime's only revoke sites release thread context areas, reached only through __clone; so nothing on this arm revokes heap memory. A cause 24 here is UNEXP_OP_TYPE, an access through an untagged base register: a pointer slot that later data overwrote (tag integrity), or an integer or NULL used as a pointer -- not revocation. The oracle above is kept as written; see results/20261006/README.md, 'Corrections made at review'."
     },
     "sublet": {
       "oracle": "fault: the object is a libc malloc block"
@@ -22,6 +23,6 @@
       "oracle": "the arm does not separate this case, and the admissible outcomes are stated rather than one of them predicted: si_code=1 (PROT_CHERI_BOUNDS) where the access goes beyond the bounds the allocator actually set, si_code=2 (PROT_CHERI_TAG) where it instead lands in memory a revocation sweep has already reclaimed, or completion where it stays inside the bounds the allocator set -- malloc may bound a capability to a rounded size class rather than the requested length. The mechanism is live and the run proves it rather than assuming it: mech-control S_OOB faults with si_code=1. Any other si_code would falsify this."
     }
   },
-  "status": "three arms measured 2026-10-06: cheri11, spatial-20261006-105111, sublet-20261006-112658",
+  "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial DETECTED cause=24 (spatial-20261006-105111); sublet DETECTED cause=5 (sublet-20261006-112658); cheribsd-revocation SILENT (cheri11)",
   "distinguishing": "the same upstream defect as case 03 with the victim object enlarged, which moves it over the 512-byte threshold: case 03 is the nested manifestation, this is the non-nested one. Kept because it still FIRES at the larger size (524321-byte region), not because the size was changed"
 }

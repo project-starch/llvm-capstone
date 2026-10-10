@@ -6,8 +6,9 @@ Test file at the fix: Lib/test/test_ast/test_ast.py
 Test: ASTConstructorTests.test_malformed_fields_with_bytes
 
 Run with the pinned 3.13.7 host-oracle interpreter. The test METHOD is
-named explicitly so the run cannot pass by skipping it; the harness
-requires the interpreter to confirm "Ran 1 test".
+named explicitly so the run cannot quietly measure some other test. Nothing in
+probe/ checks for "Ran 1 test", although an earlier version of this docstring
+said the harness did. A skipped method shows only in the case's own log.
 """
 
 # test.test_ast is pruned from the guest's Lib on the cheribsd arm, so

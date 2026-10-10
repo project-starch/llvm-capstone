@@ -22,5 +22,5 @@
       "oracle": "a bounds fault, SIGPROT si_code=1 (PROT_CHERI_BOUNDS), at the write past the end of the mapping, if the mapping's capability is bounded to the requested length. No allocator issues this object, so revocation has nothing to act on."
     }
   },
-  "status": "three arms measured 2026-10-06: cheri11, spatial-20261006-105111, sublet-20261006-123446"
+  "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial NOTIMPL [delivered=no] (spatial-20261006-105111); sublet NOTIMPL [delivered=no] (sublet-20261006-123446); cheribsd-revocation SILENT [delivered=held-out] (cheri11)"
 }

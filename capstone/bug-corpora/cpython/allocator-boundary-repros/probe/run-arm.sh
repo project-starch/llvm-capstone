@@ -1,5 +1,5 @@
 #!/bin/bash
-# run-arm.sh <arm> [out]: boot once with that arm's image, run all 21 cases.
+# run-arm.sh <arm> [out]: boot once with that arm's image, run every case (ONLY= selects a subset).
 #
 # The arm is the heap the image links. Three things are checked before any case
 # runs, each because skipping it has produced wrong rows in this lane:

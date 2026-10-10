@@ -6,8 +6,9 @@ Test file at the fix: Lib/test/test_multibytecodec.py
 Test: Test_IncrementalDecoder.test_hz_keep_buffer
 
 Run with the pinned 3.13.7 host-oracle interpreter. The test METHOD is
-named explicitly so the run cannot pass by skipping it; the harness
-requires the interpreter to confirm "Ran 1 test".
+named explicitly so the run cannot quietly measure some other test. Nothing in
+probe/ checks for "Ran 1 test", although an earlier version of this docstring
+said the harness did. A skipped method shows only in the case's own log.
 """
 import runpy, sys, os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))

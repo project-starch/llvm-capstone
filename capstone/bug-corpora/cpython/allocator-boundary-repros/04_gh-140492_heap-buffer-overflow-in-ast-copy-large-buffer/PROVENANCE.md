@@ -45,5 +45,6 @@ says nothing about which arm ought to catch it.
 
 ## Arms
 
-None run. All four are declared `{"status": "not written"}` in `case.json` so
-the gap is visible rather than silently absent.
+Measured on three arms, 2026-10-06 to 2026-10-09. The rows are in
+`../results/20261006/matrix.tsv`, and `case.json`'s `status` names the run each
+came from. (This section said "None run" until the review of 2026-10-10.)

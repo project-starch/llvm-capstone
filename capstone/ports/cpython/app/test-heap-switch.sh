@@ -1,7 +1,10 @@
 #!/bin/bash
 # Test the real decision block, extracted from the script rather than copied,
 # so the test cannot drift from what runs.
-SRC=~/arms/cpython/pairs-worktree/capstone/ports/cpython/app/prepare-cpython-capstone.sh
+# The script beside this one, so the test reads the tree it is checked out in.
+# SRC= points it at another copy.
+SRC=${SRC:-$(dirname "$(readlink -f "$0")")/prepare-cpython-capstone.sh}
+[ -f "$SRC" ] || { echo "no prepare-cpython-capstone.sh at $SRC"; exit 2; }
 # mktemp, not a fixed /tmp path: two runs of this test, or another user on
 # the same box, would share one file and the second would read the first.
 BLOCK=$(mktemp -t heap-block.XXXXXX.sh)

@@ -10,6 +10,14 @@ catch, because tag integrity is in the hardware and cannot be switched off.
 The pair this corpus exists for is sysalloc-sublet against sublet-pymalloc:
 the first issues and revokes only the outer allocation, the second pymalloc's
 own blocks too, so the difference is what sublets the nested allocator.
+
+(Review note, 2026-10-10.) The paragraph above describes the earlier five-arm
+design. The corpus now runs the three arms corpus.json lists: spatial is
+sysalloc-bounds, sublet is level0 plus patch 0014 (not sysalloc-sublet), and
+cheribsd-revocation. results/20261006/matrix.tsv was NOT written by this script.
+It has a different shape (one row per case and arm, with a delivered column),
+and the verdicts.tsv files this script reads are not committed.
+probe/counts.py derives the published table from that matrix.
 """
 import argparse, csv, json, pathlib, sys
 

@@ -7,8 +7,10 @@ Test: test_setitem_resize_reentrancy  (selected with -k so it is found in whiche
 concrete TestCase subclass defines or inherits it)
 
 Run with the pinned 3.13.7 host-oracle interpreter. The test METHOD is
-selected by pattern so the run cannot pass by skipping it; the harness
-requires the interpreter to confirm it ran at least one test.
+selected by pattern so the run cannot quietly measure some other test. Nothing
+in probe/ checks that at least one test ran, although an earlier version of
+this docstring said the harness did. A skipped method shows only in the case's
+own log.
 """
 import runpy, sys, os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))

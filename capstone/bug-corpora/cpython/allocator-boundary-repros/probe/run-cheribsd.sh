@@ -86,7 +86,7 @@ case "$pc" in
   EXP-OK*) ;;
   *) echo "REFUSING: the interpreter is not qualified on this guest." >&2
      echo "  Got: ${pc:-<no output>}" >&2
-     echo "  A run now would record 21 silences that are the harness, not the arm." >&2
+     echo "  A run now would record one silence per case, and each would be the harness, not the arm." >&2
      exit 2 ;;
 esac
 # si_code reporting is what makes this arm informative at all: without it a
