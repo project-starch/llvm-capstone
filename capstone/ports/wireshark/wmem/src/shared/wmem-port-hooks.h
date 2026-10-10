@@ -5,7 +5,7 @@
 /* Narrow a returned object to its request. wmem never hands out zero-byte
  * objects, so SHRINK always has a nonempty interval to encode. */
 static inline void *wm_narrow(void *p, size_t n) {
-#if defined(WM_DOMAIN)
+#if defined(WM_CAPABILITY)
   uintptr_t base = (uintptr_t)p;
   return __builtin_capstone_cap_shrink(p, base, base + n);
 #else

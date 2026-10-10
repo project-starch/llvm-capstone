@@ -119,10 +119,13 @@ Of the eleven, ten execute their defect somewhere and **eight are caught**:
   on purpose, so the adapter answers `SvIS_FREED` and `SvTYPE` from its sidecar; making
   that path fault stops three upstream test files. Perl's own
   `panic: attempt to copy freed scalar` catches it instead, on both platforms.
-- **`03_9e298ab597` is a trigger that does not travel.** Its own assertion passes on every
-  arm and on CheriBSD with revocation off *and* on, so the stale element slot never holds
-  a stale pointer there. Host ASan reports SEGV, so the defect is real. It is the only
-  case outside every denominator, which is therefore 10.
+- **`03_9e298ab597` is a trigger that does not travel.** No arm reports the defect, on every
+  arm and on CheriBSD with revocation off *and* on, but the trigger cannot say whether the stale
+  element slot ever holds a stale pointer there: its only check is `pass()`, which
+  `harness/shim.pl:8` makes unconditional. (Corrected 2026-10-11; this line used to read
+  "its own assertion passes ..., so the stale element slot never holds a stale pointer", which
+  that unconditional pass cannot show.) Host ASan reports SEGV, so the defect is real. It is the
+  only case outside every denominator, which is therefore 10.
 
 ### A library gap that cost a verdict, and the two traps in fixing it
 

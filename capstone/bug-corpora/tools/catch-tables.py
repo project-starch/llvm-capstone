@@ -51,13 +51,21 @@ TARGETS = ("ffmpeg", "wireshark", "memcached")
 # --all: the board only, for these as well.
 EXTRA = ("cpython", "httpd", "mruby", "perl", "postgres", "sqlite")
 ALL = "--all" in sys.argv
-if ALL and not ({"--board", "--board-json"} & set(sys.argv)):
+if ALL and not ({"--board", "--board-json", "--board-virtual"} & set(sys.argv)):
     sys.exit("catch-tables: --all is for the board; the four-column tables cover FFmpeg, tshark and memcached")
 PROGRAMS = TARGETS + EXTRA if ALL else TARGETS
 NOTRUN = {"predicted", "not written", "declined"}
 LAYER = {"pool-repros": "AVBufferPool", "plain-temporal-repros": "direct malloc", "plain-heap-repros": "direct malloc",
          "subobject-repros": "inside one struct", "plane-repros": "frame-pool plane", "carved-repros": "carved buffer",
          "wmem-repros": "wmem", "allocator-repros": "slabs.c / cache.c"}
+
+
+VERDICT_WORDS = {"CAUGHT": "caught", "MISSED": "missed", "NOT CAUGHT": "missed",
+                 # CheriBSD: freed chunk held in quarantine. A miss here; column 1 counts it as held.
+                 "NOT-REISSUED": "missed",
+                 "NO-READING": "no reading",
+                 # native-fix-differential: buggy reproduces and fixed does not. Not a mechanism.
+                 "TWO-SIDED": "two-sided"}
 
 
 def verdict(arm):
@@ -69,9 +77,12 @@ def verdict(arm):
         return "n/a"
     v = arm.get("verdict")
     if v:
-        if v.upper() == "NO-READING":
-            return "no reading"
-        return "caught" if v.upper() == "CAUGHT" else "missed"
+        # Every verdict word the corpora use, each with its reading. A word not listed here is NOT
+        # a miss: it lands in the NOT A READING list, which stops the board and names the cell.
+        # (Until 2026-10-10 any word but CAUGHT read as "missed", so a legacy `detected` -- on
+        # postgres' spatial arms -- would have scored as a miss had a table ever read it.)
+        r = VERDICT_WORDS.get(str(v).strip().upper())
+        return r if r else f"UNKNOWN VERDICT {v!r}"
     o = str(arm.get("oracle", "")).strip()
     if o.upper().startswith("PREDICTED"):
         return "not run"
@@ -123,6 +134,12 @@ NOT_ON_BOARD = {
         "landed on dev in #213 after this board was built; its rows are oracle prose with no verdict "
         "field, and its nested/plain split is decided per case in its README, so placing it needs its "
         "own pass rather than a guess",
+    ("sqlite", "capi-repros"):
+        "a host-ASan row corpus (`sqlite-row`): its only arm is host-asan, its cases are `rowN_` "
+        "directories with no Capstone, Sublet or CheriBSD arm, and its top-level `verdict` is a "
+        "provenance verdict (literal / modeled / out-of-scope), not a mechanism's reading",
+    ("mruby", "gc-slot-repros"):
+        "planned, no cases yet (its hand-found rows live on another branch)",
 }
 EXTRA_GROUPS = {
     ("cpython", "pymalloc-repros"): ("pymalloc", True, "virtual-malloc", "virtual-nested-pools"),
@@ -185,6 +202,11 @@ for p in TARGETS:
                  kcap=verdict(a.get("capstone-carve-bounds")), kcheri=verdict(a.get("cheribsd-carve-bounds")),
                  scarve=verdict(a.get("sublet-carve")),
                  c1=cheri_board(a.get("cheribsd-revocation")),
+                 # The virtual-Capstone columns (2026-10-10), read only by --board-virtual: column 2 on
+                 # virtual mallocng, column 3 the nested allocator's port on it where one was measured,
+                 # else the same virtual-malloc run (a plain case has no nested allocator).
+                 v2=verdict(a.get("virtual-malloc")),
+                 v3=verdict(a.get("virtual-nested-pools") or a.get("virtual-malloc")),
                  c2=verdict(a.get(COL2.get(corpus, "sublet"))), c2arm=COL2.get(corpus, "sublet"),
                  c3=verdict(a.get(col3_arm(corpus, a))), c3arm=col3_arm(corpus, a),
                  title=str(d.get("title", ""))[:140])
@@ -203,6 +225,13 @@ if {r["prog"] for r in rows} != set(TARGETS):
     sys.exit(f"catch-tables: {len(rows)} cases under {BC}; every one of {TARGETS} must have some")
 
 extra = []
+if ALL:
+    # A corpus is found by its corpus.json, not by the case glob: a corpus whose case directories do
+    # not match the glob (sqlite/capi-repros' rowN_) would otherwise vanish from --all silently.
+    for decl in sorted(BC.glob("*/*/corpus.json")):
+        key = (decl.parts[-3], decl.parts[-2])
+        if key[0] in EXTRA and key not in EXTRA_GROUPS and key not in NOT_ON_BOARD:
+            sys.exit(f"catch-tables: {key[0]}/{key[1]} is a corpus with no entry in EXTRA_GROUPS or NOT_ON_BOARD")
 for p in EXTRA if ALL else ():
     for cj in sorted((BC / p).glob("*/[0-9][0-9]_*/case.json")):
         corpus = cj.parts[-3]
@@ -294,7 +323,8 @@ def board_cell(g, k):
         held = sum(r["c1"] == "held" for r in g)
         caught = sum(r["c1"] in ("fault", "held") for r in g)
         run = sum(r["c1"] in ("fault", "held", "missed") for r in g)
-        return f"{caught}/{run}" + (f" ({held} held)" if held else "")
+        extra = len(g) - run  # a cell with no reading is shown, as columns 2 and 3 show theirs
+        return f"{caught}/{run}" + (f" ({held} held)" if held else "") + (f" (+{extra} ?)" if extra else "")
     return cell(g, k)
 
 
@@ -341,6 +371,36 @@ if "--board" in sys.argv:
         nested = {True: "yes", False: "no", None: "unsplit"}[r["nested"]]
         print(f"| {NAMES[r['prog']]} | {r['corpus']} | {r['case']} | {r['kind']} | {nested} | "
               f"{WORD.get(r['c1'], r['c1'])} | {WORD.get(r['c2'], r['c2'])} | {WORD.get(r['c3'], r['c3'])} |")
+
+if "--board-virtual" in sys.argv:
+    # The same rows on VIRTUAL Capstone: CHERI | virtual malloc | virtual nested. Holes are expected while
+    # the nested corpora's virtual arms are unmeasured; they are printed as (+N ?) and counted, and this
+    # table never changes --board's exit status. With --all, the six programs' rows read their own
+    # virtual arms where their EXTRA_GROUPS column is a virtual one (pymalloc, PostgreSQL, SQLite).
+    VB = (("c1", "CHERI (quarantine = caught)"), ("v2", "virtual malloc"), ("v3", "virtual nested"))
+    vrows = [r for r in rows]
+    for r in extra:
+        if r["c2arm"].startswith("virtual-"):
+            vrows.append(dict(r, v2=r["c2"], v3=r["c3"]))
+    for kind in KINDS:
+        groups = collections.OrderedDict()
+        for r in vrows:
+            if r["kind"] == kind:
+                groups.setdefault((r["prog"], r["layer"], axis(r)), []).append(r)
+        if not groups:
+            continue  # a kind with no rows on this board (mruby's "other" has no virtual arm)
+        print(f"\n**{kind.capitalize()}, virtual Capstone**\n")
+        print("| program | allocator layer | axis | n | " + " | ".join(h for _, h in VB) + " |")
+        print("|---|---|---|---:|---:|---:|---:|")
+        allr = []
+        for (pg, layer, ax), g in sorted(groups.items(), key=lambda kv: (ORDER[kv[0][0]], kv[0][2] != "nested", kv[0][1])):
+            allr += g
+            print(f"| {NAMES[pg]} | {layer} | {ax} | {len(g)} | " + " | ".join(
+                (board_cell(g, k) if k == "c1" else cell(g, k)).replace('/', ' / ') for k, _ in VB) + " |")
+        print(f"| **Total** |  |  | {len(allr)} | " + " | ".join(
+            (board_cell(allr, k) if k == "c1" else cell(allr, k)).replace('/', ' / ') for k, _ in VB) + " |")
+    holes = sum(r[k] not in ("caught", "missed") for r in vrows for k in ("v2", "v3"))
+    print(f"\nvirtual cells that are not a reading yet: {holes}")
 
 if "--board-json" in sys.argv:
     out = sys.argv[sys.argv.index("--board-json") + 1]

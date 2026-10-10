@@ -16,7 +16,7 @@ set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CORPUS=$(cd -- "$HERE/.." && pwd)
 REPO=$(git -C "$HERE" rev-parse --show-toplevel)
-TARGET=${1:?usage: build-cases.sh native|capstone-domain|cheribsd OUT [cmake options]}
+TARGET=${1:?usage: build-cases.sh native|capstone-domain|cheribsd|capstone-application OUT [cmake options]}
 OUT=${2:?select an output directory}
 shift 2
 PORT="$REPO/capstone/ports/memcached/allocators"
@@ -73,6 +73,33 @@ cheribsd)
         "$REPO/capstone/bug-corpora/cpython/pymalloc-repros/observe/supervise.c" \
         -lutil -o "$OUT/bin/supervise"
     fi
+    built=$((built + 1))
+  done
+  ;;
+capstone-application)
+  # The virtual Capstone process build, for the virtual-malloc and virtual-nested-pools arms: the
+  # port's capstone-application preset on the virtual SDK (CAPSTONE_SDK, CAPSTONE_LLVM_BUILD_DIR),
+  # then each case linked as the native arms are, with the SDK's capstone-cc. Built with
+  # -DMCP_SUBLET=ON the driver is shared/driver-virtual.c: the payload lent linear by the virtual
+  # heap, the mode an argument. Otherwise it is driver.c, unchanged. The Sublet build also takes the
+  # carve remedy (MC_CARVE_BOUNDS, the identity for every case but 06 and 07), because the physical
+  # column 3 reads `sublet-carve` for those two: the nested column is the same remedy on both platforms.
+  : "${CAPSTONE_SDK:?set CAPSTONE_SDK to a virtual Capstone application SDK}"
+  work="$OUT/work/port"
+  cmake --preset capstone-application -S "$PORT" -B "$work" "$@" >"$OUT/work/port.log" 2>&1
+  cmake --build "$work" >>"$OUT/work/port.log" 2>&1
+  SRC=$(ls -d "$work"/source/memcached-*)
+  driver="$CORPUS/shared/driver.c"
+  carve=()
+  if grep -q '^MCP_SUBLET:BOOL=ON$' "$work/CMakeCache.txt"; then
+    driver="$CORPUS/shared/driver-virtual.c"; carve=(-DMC_CARVE_BOUNDS)
+  fi
+  for dir in "$CORPUS"/[0-9][0-9]_*/; do
+    number=$(basename "$dir" | cut -c1-2)
+    "$CAPSTONE_SDK/capstone-cc" -std=c11 -O1 -g -Wall -Wextra -DNDEBUG -DCHUNK_ALIGN_BYTES=16 "${carve[@]}" \
+      -I"$CORPUS/shared" -I"$PORT/src/shared" -I"$SRC" -I"$PORT/../adapted" \
+      -I"$REPO/capstone/runtime/include" -I"$REPO/capstone/ports/common/include" \
+      -o "$OUT/bin/defect-$number" "$dir/case.c" "$driver" "$work/libmemcached-allocators.a"
     built=$((built + 1))
   done
   ;;

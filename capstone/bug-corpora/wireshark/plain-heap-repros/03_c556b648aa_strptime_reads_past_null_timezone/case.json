@@ -46,7 +46,7 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "oracle": "MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **NOT CAUGHT, and clean here is NOT a negative result about the defect.** The sequence COMPLETES, exit status 0, with supervise resolving `expect wsh_read_probe 0x10237a` from the ELF -- so the probe was found and simply never faulted. THE MECHANISM: malloc bounds a capability to the allocator's USABLE size and not to the request, so a crossing shorter than the gap to the next size class stays inside the same allocation and no capability check can see it. This is a property of the allocator's granularity, not of the bug. tools/size-class-audit.py reports this case ABSORBED from the measured request size, and the two agree. The Capstone arms are the discriminating ones here.",
+      "oracle": "MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **NOT CAUGHT, and clean here is NOT a negative result about the defect.** The sequence COMPLETES, exit status 0, with supervise resolving `expect wsh_read_probe 0x10237a` from the ELF -- so the probe was found and simply never faulted. THE MECHANISM: malloc bounds a capability to the allocator's USABLE size and not to the request, so a crossing shorter than the gap to the next size class stays inside the same allocation and no capability check can see it. This is a property of the allocator's granularity, not of the bug. tools/size-class-audit.py reports this case ABSORBED from the request size measured on the x86-64 host build (no element of this allocation is a pointer, so the purecap request is the same), and the two agree. The Capstone arms are the discriminating ones here.",
       "status": "measured",
       "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot."
     },
@@ -71,6 +71,12 @@
       "verdict": "CAUGHT",
       "measured": "2026-10-09",
       "preregistered": "aeba7ddefb4d"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f9d41112c in wsh_read_probe; by probe: the fault is at the labelled probe wsh_read_probe",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
     }
   },
   "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. sublet-chunks measured 2026-10-09 (results/2026-10-09-capstone-sublet-chunks/): CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT.",

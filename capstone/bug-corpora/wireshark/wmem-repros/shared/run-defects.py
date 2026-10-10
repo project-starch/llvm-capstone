@@ -128,6 +128,13 @@ def refuse_if_no_result(serial, which, mode, run, negative_control=False):
         # Neither the case's own marker nor a fault: the boot says nothing about this
         # case either way.
         return f"BOOT PRODUCED NO RESULT for case={which} mode={mode}: {run}"
+    if "WM_DEFECT_DONE" not in serial and not re.search(
+        r"domain (?:halted by capability fault|capability fault delivered)", serial
+    ):
+        # The marker was reached, but the session ended before run.sh's end marker and with no
+        # fault: the guest command was cut (timeout, dead VM). A FAIL row here would read as the
+        # defect not reproducing. Exit 75, as for a boot that said nothing at all.
+        return f"SESSION ENDED BEFORE WM_DEFECT_DONE, with no fault, for case={which} mode={mode}: {run}"
     return None
 
 

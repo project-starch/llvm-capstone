@@ -173,7 +173,7 @@ void *wm_epoch(void *p) {
   wm_region_renew(&e->region, temporal);
   return (char *)e->region.alias + ((uintptr_t)p - e->base);
 }
-#ifdef WM_DOMAIN
+#ifdef WM_CAPABILITY
 /* A stale pointer handed back to the allocator must fail here, on its own
  * authority, before any block-wide authority is looked up by address. The
  * label lets the fault oracle name this access. */

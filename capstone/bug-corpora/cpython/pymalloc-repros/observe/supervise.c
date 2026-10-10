@@ -54,9 +54,34 @@
 #ifdef __CHERI_PURE_CAPABILITY__
 #include <cheri/cheric.h>
 #define PC_OF(regs) ((unsigned long)cheri_getaddress((void *)(regs).sepcc))
+#define RA_OF(regs) ((unsigned long)cheri_getaddress((void *)(regs).cra))
 #else
 #define PC_OF(regs) ((unsigned long)(regs).sepc)
+#define RA_OF(regs) ((unsigned long)(regs).ra)
 #endif
+
+/* The mapped object holding ADDR in the child, and that object's lowest mapping: printed beside a
+ * fault so a pc in a shared library (libc's memcpy, say) can be resolved against THAT library's ELF
+ * rather than read as "outside every function" of the program. Added 2026-10-10. */
+static void report_object(pid_t pid, const char *what, unsigned long addr) {
+  int count = 0;
+  struct kinfo_vmentry *map = kinfo_getvmmap(pid, &count);
+  const char *path = NULL;
+  for (int i = 0; map && i < count; i++)
+    if (addr >= (unsigned long)map[i].kve_start && addr < (unsigned long)map[i].kve_end) {
+      path = map[i].kve_path;
+      break;
+    }
+  unsigned long low = 0;
+  for (int i = 0; path && path[0] && i < count; i++)
+    if (!strcmp(map[i].kve_path, path) && (low == 0 || (unsigned long)map[i].kve_start < low))
+      low = (unsigned long)map[i].kve_start;
+  if (path && path[0])
+    printf("SUPERVISE %s 0x%lx in %s base=0x%lx\n", what, addr, path, low);
+  else
+    printf("SUPERVISE %s 0x%lx in an anonymous or unmapped region\n", what, addr);
+  free(map);
+}
 
 /* The load base of the child's main object: the LOWEST mapping of that file.
  *
@@ -203,6 +228,10 @@ int main(int argc, char **argv) {
       printf("SUPERVISE fault signal=%d code=unavailable addr=unavailable "
              "pc=0x%lx\n",
              signo, have_regs ? PC_OF(regs) : 0UL);
+    if (have_regs) {
+      report_object(child, "fault-object", PC_OF(regs));
+      report_object(child, "fault-ra", RA_OF(regs));
+    }
     fflush(stdout);
     /* Let the signal through so the child dies its own death. */
     trace(PT_CONTINUE, child, (void *)1, signo);

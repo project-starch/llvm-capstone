@@ -33,10 +33,11 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "oracle": "MEASURED 2026-10-07: **CAUGHT -- which REFUTES this arm's prediction.** exit=162, FAULT signal=34, si_code=1 (BOUNDS), pc=0x105530. The arm predicted a COMPLETION on the reasoning that the crossing leaves the cache OBJECT but stays inside the page cache.c carved it from. That reasoning assumed cache.c sub-allocates objects out of pages the way slabs.c carves chunks. **It does not on this port**, and the port's own source says so: ports/memcached/allocators/src/cheribsd/malloc-leases.c:79 takes a slab PAGE with `void *page = malloc(size)`, while :161 takes each cache OBJECT with its own `void *object = malloc(size)`. So an object crossing leaves a real malloc bound, and CHERI sees it. THE REFUTATION IS WORTH MORE THAN THE PREDICTION WOULD HAVE BEEN, because it separates the corpus's two inner layers under CHERI rather than lumping them: cases 5, 6 and 7 cross a SLAB CHUNK and complete, because the chunk's crossing stays inside the one malloc the page came from; case 8 crosses a CACHE OBJECT and faults, because each object is its own malloc. 'memcached is 0 of 9 on CheriBSD' would have been the wrong summary -- it is 0 of 8 and 1 of 1, split by which inner allocator carved the storage. The platform controls and the revocation control all PASSED in the same boot, so this is a reading: cheribsd-abi, cheribsd-bounds, and revocation-control faulting as it must.",
+      "oracle": "MEASURED 2026-10-07: **CAUGHT -- which REFUTES this arm's prediction.** exit=162, FAULT signal=34, si_code=1 (BOUNDS), pc=0x105530. The arm predicted a COMPLETION on the reasoning that the crossing leaves the cache OBJECT but stays inside the page cache.c carved it from. That reasoning assumed cache.c sub-allocates objects out of pages the way slabs.c carves chunks. **It does not on this port**, and the port's own source says so: ports/memcached/allocators/src/cheribsd/malloc-leases.c:79 takes a slab PAGE with `void *page = malloc(size)`, while :161 takes each cache OBJECT with its own `void *object = malloc(size)`. So an object crossing leaves a real malloc bound, and CHERI sees it. THE REFUTATION IS WORTH MORE THAN THE PREDICTION WOULD HAVE BEEN, because it separates the corpus's two inner layers under CHERI rather than lumping them: cases 5, 6 and 7 cross a SLAB CHUNK and complete, because the chunk's crossing stays inside the one malloc the page came from; case 8 crosses a CACHE OBJECT and faults, because each object is its own malloc. 'memcached is 0 of 9 on CheriBSD' would have been the wrong summary -- it is 0 of 8 and 1 of 1, split by which inner allocator carved the storage. The platform controls and the revocation control all PASSED in the same boot, so this is a reading: cheribsd-abi, cheribsd-bounds, and revocation-control faulting as it must. RE-MEASURED 2026-10-10, results/2026-10-10-cheribsd-fixed-buggy/ (R1, pre-registered at dba29812b295): buggy SIGPROT si_code 1 at mc_case_body+0x1e8 -- inside the fault site declared before the run (case.json fault_sites) -- and the FIXED arm, the same program in the same boot, completes. The catch was a bare pc until then.",
       "status": "measured",
       "signal": 34,
-      "si_code": 1
+      "si_code": 1,
+      "measured": "2026-10-10, results/2026-10-10-cheribsd-fixed-buggy/"
     },
     "native-fix-differential": {
       "oracle": "MEASURED 2026-10-07: the buggy arm's cursor ends past the object (accessed_through_stale=1, damage=1) and the fixed arm's stops inside it. The case ASSERTS both -- past the object at the pin, inside it under the fix -- so a reduction whose arithmetic missed fails rather than reporting a verdict. runners/run-native.sh exit 0 over all nine cases, control arm first.",
@@ -60,7 +61,23 @@
       "cause": 5,
       "measured": "2026-10-09",
       "preregistered": "f7adf03a1009"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, slabs.c/cache.c stock on virtual mallocng (tools/arms.json virtual-memcached-stock; tools/run-virtual-cases.py --prebuilt, `buggy N`): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3fa6a90c3c in mc_case_body; by function: the fault is in mc_case_body, a site the case declared before the run (case.json fault_sites)",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, the allocators' shared ledger on the Sublet authority over a payload the virtual heap lends linear, mode 1 (tools/arms.json virtual-memcached-ledger; tools/run-virtual-cases.py --prebuilt, `buggy N 1`): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f99d10dd4 in mc_case_body; by function: the fault is in mc_case_body, a site the case declared before the run (case.json fault_sites)",
+      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
     }
   },
-  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0 over all nine cases, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. The Capstone, PoisonCap and CheriBSD arms are declared predictions -- this case has not had a domain or guest run. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1, REFUTING this case's prediction -- the port malloc's each cache object separately, so an object crossing leaves a real bound while the slab chunk rows stay inside their page's malloc. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-case8/): spatial CAUGHT, sublet CAUGHT, both in the scan before the probe. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): CAUGHT in both modes."
+  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0 over all nine cases, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. The Capstone, PoisonCap and CheriBSD arms are declared predictions -- this case has not had a domain or guest run. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1, REFUTING this case's prediction -- the port malloc's each cache object separately, so an object crossing leaves a real bound while the slab chunk rows stay inside their page's malloc. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-case8/): spatial CAUGHT, sublet CAUGHT, both in the scan before the probe. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): CAUGHT in both modes.",
+  "fault_sites": [
+    "mc_case_body"
+  ],
+  "fault_sites_why": "the defect's access is the leading-space scan itself (case.c, `while (*(volatile char *)ptr == ' ')` in mc_case_body, the reduction of proto_text.c's try_read_command_ascii :370-372): under a per-object bound it faults on the first byte past the 16 KiB cache.c object, BEFORE mark(8) and the read probe. Declared from the source, and from the earlier independent Capstone and PoisonCap runs, which fault inside the same scan (this case.json, 2026-10-09); declared 2026-10-10 before the CheriBSD fixed/buggy re-run, not after it."
 }
