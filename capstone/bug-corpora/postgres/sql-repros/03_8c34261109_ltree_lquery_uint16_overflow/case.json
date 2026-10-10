@@ -21,17 +21,15 @@
     },
     "virtual-malloc": {
       "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
-      "verdict": "NO-READING",
-      "verdict_note": "cause=28 pc=0x3f95001c7c in memcpy; in memcpy; declared sites none; its control.sql FAULTS too, so the fault is not the defect's",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc",
-      "verdict_reason": "unattributed"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3fa3001c7c in memcpy; by control: control.sql (the statement below the threshold) completed on this image",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
     },
     "virtual-pg-pools": {
       "oracle": "virtual profile with the memory-context port's patch 0003: every palloc chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
-      "verdict": "NO-READING",
-      "verdict_note": "this image cannot create ltree",
-      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools",
-      "verdict_reason": "out-of-denominator"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f84001c7c in memcpy; by control: control.sql (the statement below the threshold) completed on this image",
+      "verdict_from": "results/2026-10-11-virtual/virtual-pg-pools"
     }
   },
   "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle. The physical spatial/sublet pair measured 2026-10-06 to 2026-10-10 stays in results/",

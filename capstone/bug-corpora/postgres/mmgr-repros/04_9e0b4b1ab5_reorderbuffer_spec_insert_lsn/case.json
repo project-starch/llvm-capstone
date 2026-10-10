@@ -25,13 +25,13 @@
       "oracle": "virtual profile, the replay's managers stock on virtual mallocng (tools/arms.json virtual-mallocng-replay): a fault in pg_probe (case 0: its declared function), or the case completes and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the hosted driver's ready mark) and completed with no fault",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
     },
     "virtual-pg-pools": {
       "oracle": "virtual profile, the managers with the port's patch 0003: every chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-replay-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3f88a10cc4 in pg_probe; by probe: the pc lies in pg_probe, the labelled read",
-      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
+      "verdict_note": "cause=25 pc=0x3f95791120 in pg_probe; by probe: the pc lies in pg_probe, the labelled read",
+      "verdict_from": "results/2026-10-11-virtual/virtual-pg-pools"
     }
   },
   "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle",

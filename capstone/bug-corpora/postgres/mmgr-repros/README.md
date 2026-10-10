@@ -100,6 +100,20 @@ reports one Observation per run and the shared judge decides; it writes
 them under the guest's own libc revocation; `results/20261008-cheribsd` is that
 run.
 
+## Measured 2026-10-11
+
+On the Sublet platform (QEMU `af37cc32`, module `a1c6cb6b`, launcher `3975314a`), both
+replays built from c775cdf0, bundles in `results/2026-10-11-virtual`:
+
+| arm | result | control |
+|---|---|---|
+| `virtual-malloc` | MISSED 5/5 | complete |
+| `virtual-pg-pools` | CAUGHT 5/5, every fault cause 25 (stale); cases 1-4 in `pg_probe`, case 0 in `GetMemoryChunkMethodID` | fault |
+
+Case 3 is a context deleted under a live alias: the chunk dies because freeing its block
+revokes everything below it. `results/2026-10-11-exact` is the same corpus under the
+exact-request bounds of 93971f29, with the same readings.
+
 ## Why the system allocator's mechanisms miss these
 
 PostgreSQL asks the system allocator for a block once and hands out chunks
