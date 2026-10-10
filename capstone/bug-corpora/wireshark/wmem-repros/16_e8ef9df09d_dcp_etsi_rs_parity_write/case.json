@@ -85,6 +85,18 @@
       "verdict": "NOT CAUGHT",
       "measured": "2026-10-09",
       "preregistered": "f7adf03a1009"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, wmem stock on virtual mallocng (tools/arms.json virtual-wmem-libc; tools/run-virtual-cases.py --prebuilt, the fix differential `0 N buggy`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case printed `WM_DEFECT case=16 ready`, the last thing before its defective access; VERDICT DEFECT-REPRODUCED (the stale or crossing access reached other storage)) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, wmem's Sublet region and chunk layers over a payload the virtual heap lends linear (tools/arms.json virtual-wmem-chunks; tools/run-virtual-cases.py --prebuilt, `1 N`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3fa3210f48 in wm_write_probe; by probe: the fault is in wm_write_probe, the case's labelled probe, whose one data access is the defect's",
+      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
     }
   },
   "status": "MEASURED 2026-10-05 under QEMU on BOTH builds (WM_CHUNKS=ON and OFF): cause 7 at the labelled WRITE probe, with the pc equal to the probe address the run resolved from the image. 12/12 arms on each build, runner exit 0, with case 11 in the same runs as the temporal regression control reading cause 24, and the suite's negative control reporting 12/12 oracles FAIL as they must. Bundles: results/20261005-qemu-spatial-5-{ON,OFF}/. A fix-reversal. Both arms read the same because wm_narrow() narrows every wmem allocation on every arm, so this harness has no malloc-granular arm and the row does not discriminate the chunk port. PoisonCap and CheriBSD are unmeasurable here; native-detect is declined, not pending -- see the corpus README. N = 1 per cell. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on: completes, not caught. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 CAUGHT, mode 1 CAUGHT.",

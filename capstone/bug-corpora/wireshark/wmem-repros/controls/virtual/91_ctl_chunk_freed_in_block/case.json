@@ -1,0 +1,14 @@
+{
+  "case": 91,
+  "title": "CONTROL: a BLOCK chunk freed individually stays inside its block, so the system allocator never sees it end; the chunk port revokes it",
+  "control_for": "the virtual-malloc and virtual-nested-pools arms of wmem-repros",
+  "arms": {
+    "virtual-malloc": {
+      "oracle": "complete: wmem_free keeps the chunk on the block's free list; virtual mallocng sees no free"
+    },
+    "virtual-nested-pools": {
+      "oracle": "fault at the labelled read probe: the chunk port revoked the chunk at its free (mode 1)",
+      "cause": 24
+    }
+  }
+}

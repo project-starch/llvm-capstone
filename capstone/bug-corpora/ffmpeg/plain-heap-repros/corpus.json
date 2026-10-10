@@ -18,7 +18,8 @@
     "native-detect",
     "native-fix-differential",
     "capstone-subobject",
-    "cheribsd-subobject"
+    "cheribsd-subobject",
+    "virtual-malloc"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -46,5 +47,11 @@
   ],
   "advisories": [],
   "shape_table": true,
-  "note": "The third plain-heap corpus, after memcached's and wireshark's, and a sibling of subobject-repros and pool-repros rather than part of either: those boundaries are 'inside one allocation' and 'storage an AVBufferPool handed out', while every case here leaves a buffer FFmpeg obtained DIRECTLY from av_malloc_array or av_calloc. Under this inventory's axis (WHO ALLOCATED THE OBJECT) all four rows are NOT NESTED. ASan REPORTS all four, two-sided, unlike the sub-object corpora -- which is the contrast this corpus exists to draw. Case 2 is the only row in the whole inventory that crosses BELOW an allocation's base. All four are fix-reversals: liveness is recorded, never required, and requiring it is what kept FFmpeg's spatial count at four. WHY THE PLATFORM ALLOCATOR. These cases call the platform's calloc, not the buffer-pool port's av_malloc. That port's av_malloc (ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26) is a bump/freelist carve out of ONE arena returning a raw interior pointer, and it rounds every request up to 64 bytes; __builtin_capstone_cap_shrink appears only in src/capstone-domain/payload-capabilities.c:57, on pool PAYLOAD blocks. Routing these cases through it would leave no per-allocation bound to cross AND would absorb every small crossing in the round-up, so the reading would be about the arena, not the defect. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 3 of 4 CAUGHT with the fault attributed to the labelled probe, si_code 1; case 1 NOT caught, refuting its pre-registered prediction because its 24-byte request yields a 32-byte capability. This is the first CheriBSD reading of any FFmpeg corpus, and the first in the tree where attribution is established -- the probes are defined once externally rather than static per translation unit."
+  "note": "The third plain-heap corpus, after memcached's and wireshark's, and a sibling of subobject-repros and pool-repros rather than part of either: those boundaries are 'inside one allocation' and 'storage an AVBufferPool handed out', while every case here leaves a buffer FFmpeg obtained DIRECTLY from av_malloc_array or av_calloc. Under this inventory's axis (WHO ALLOCATED THE OBJECT) all four rows are NOT NESTED. ASan REPORTS all four, two-sided, unlike the sub-object corpora -- which is the contrast this corpus exists to draw. Case 2 is the only row in the whole inventory that crosses BELOW an allocation's base. All four are fix-reversals: liveness is recorded, never required, and requiring it is what kept FFmpeg's spatial count at four. WHY THE PLATFORM ALLOCATOR. These cases call the platform's calloc, not the buffer-pool port's av_malloc. That port's av_malloc (ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26) is a bump/freelist carve out of ONE arena returning a raw interior pointer, and it rounds every request up to 64 bytes; __builtin_capstone_cap_shrink appears only in src/capstone-domain/payload-capabilities.c:57, on pool PAYLOAD blocks. Routing these cases through it would leave no per-allocation bound to cross AND would absorb every small crossing in the round-up, so the reading would be about the arena, not the defect. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 3 of 4 CAUGHT with the fault attributed to the labelled probe, si_code 1; case 1 NOT caught, refuting its pre-registered prediction because its 24-byte request yields a 32-byte capability. This is the first CheriBSD reading of any FFmpeg corpus, and the first in the tree where attribution is established -- the probes are defined once externally rather than static per translation unit.",
+  "arm_configurations": {
+    "virtual-malloc": "virtual-mallocng"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+  }
 }
