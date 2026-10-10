@@ -1,7 +1,7 @@
 /* Adapt the existing nested ports' grant layout to the SDK's single grant.
  * No authority is duplicated. mruby receives a 32 MiB slot pool. CPython's
- * pymalloc takes its regions from mallocng and derives its blocks (CDERIVE),
- * so it has no grant. */
+ * pymalloc and PostgreSQL's memory contexts take their memory from mallocng
+ * and derive their blocks (CDERIVE), so they have no grant. */
 #include <capstone/capability.h>
 #include <stdlib.h>
 void *__real___capstone_region(unsigned);

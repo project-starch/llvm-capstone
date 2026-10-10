@@ -11,67 +11,38 @@ the archive SHA-256 in both build scripts.
 
 Source `capstone/tests/capstone-test-env.sh` first. `build-domain.sh` builds a
 Capstone image with `PGSU_NESTED=none` or `sublet`; use separate `PG_SU_ROOT`
-directories for those modes. The Sublet build applies the existing AllocSet,
-Generation, Slab and Bump lifetime patches to 17.5 and links
-`context-pools.o`. The application SDK's `build.py --app postgres --nested
-postgres` supplies a separate 64 MiB inner arena and its counters.
-For inner reuse measurement, `PGSU_GAP_OBSERVER=1` compiles the fixed
-integer histogram into either build. The original-layout build observes
-memory-context chunk handouts, explicit frees and reallocations, plus live
-chunks retired on context reset or deletion. Aligned-allocation wrappers
-delegate to the ordinary chunk methods, so they are counted once. The Sublet
-build observes its chunk handout/release path, including chunks retired by a
-block or context reset. Both report `PG_REUSE_GAP` at exit. Link the complete
-image through the application SDK with `--reuse-gap` so that the report and
-the observer object survive section collection. Set `PGSU_ARGV0_OVERRIDE` to a dedicated share-local `.dom`
-path when staging a measurement image beside its own PostgreSQL `share/`
-directory; this avoids replacing another study's staged binary.
+directories for those modes, and `ports/common/application/build-virtual.sh
+postgres` to build either for the virtual profile. The Sublet build applies
+the memory-context port's patch 0003
+(`../memory-contexts/patches/postgresql-17.0-0003-memory-contexts-sublet-lifetimes.patch`)
+to 17.5: every chunk a context hands out is a child lifetime of its block
+(`CDERIVE`), and `pfree`/`repalloc` revoke it (`CREVOKE`). The 17.0 and 17.5
+manager sources are identical. Nothing is linked beside the backend and no
+separate arena is granted; the blocks come from the process's malloc.
 
-`build-cheribsd.sh` uses `CHERI_SDK`, `CHERI_SYSROOT`, `PG_CHERI_MODE=spatial`
-or `poisoncap`, and a distinct `PG_CHERI_ROOT` per mode. It applies the same
-application ABI patches as the Capstone build where relevant, pins
-`MAXIMUM_ALIGNOF=16`, and rebuilds `src/port/qsort.o` after the tag-preserving
-swap patch. Study builds require a fresh root; `PG_CHERI_REUSE=1` permits an
-explicit development rebuild, refreshes the adapter sources, and records root
-reuse in `manifest.json`. Each build also records the archive, applied patches,
-compiler, ABI settings and binary hashes. The PoisonCap variant links the
-existing memory-context hook backend, with a quarantine policy selected for
-the complete application.
-Set `PG_POISONCAP_MODE=0` for its matched adapter-layout spatial control or `1` for poison,
-sweep and detox. The two modes use the same binary and context layout.
-`PG_CHERI_GAP_OBSERVER=1` adds a fixed-capacity, integer-only observer at
-the inner chunk handout/release boundary. Its `PG_REUSE_GAP` report contains
-32 log-binned release-to-reissue distances, counts and an error code; reject
-runs with a nonzero error or a histogram sum different from `reuses`.
-The index counts successful handouts, so this report describes observed
-reuses rather than the fixed-follow-up retirement metric.
+For inner reuse measurement in the unprotected build, `PGSU_GAP_OBSERVER=1`
+compiles the fixed integer histogram (patch 0017). It observes memory-context
+chunk handouts, explicit frees and reallocations, plus live chunks retired on
+context reset or deletion. Aligned-allocation wrappers delegate to the
+ordinary chunk methods, so they are counted once. It reports `PG_REUSE_GAP`
+at exit. Link the complete image through the application SDK with
+`--reuse-gap` so that the report and the observer object survive section
+collection. The Sublet build skips patch 0017, whose hooks sit where patch 0003
+changes `mcxt.c`, and refuses the observer. Set `PGSU_ARGV0_OVERRIDE` to a
+dedicated share-local `.dom` path when staging a measurement image beside its
+own PostgreSQL `share/` directory; this avoids replacing another study's
+staged binary.
 
-The batch policy transfers the published SQLite MEMSYS5 thresholds: poison on
-free, sweep after insertion when held spans reach 16 MiB and quarantined spans
-reach one quarter of held spans, or before adding an entry to a full
-4,096-entry queue. The full-queue path revokes before clearing, following the
-study's documented correctness repair. Freed blocks also remain unavailable;
-their spans replace overlapping queued chunks in the accounting. Held spans
-are live rounded chunk spans plus quarantined chunk/block spans (including
-used block prefixes). Reserved, unused block tails are not held spans.
-Allocation skips poisoned free-list entries and never triggers an early sweep.
-A managed reset that requires immediate reuse has a separately reported
-exception counter; the published-policy measurement runner rejects nonzero
-`managed_reset_sweeps`.
-
-The complete backend defaults to 65,536 chunk and 8,192 block metadata entries,
-configurable with `PG_CHERI_CHUNK_CAPACITY` and `PG_CHERI_BLOCK_CAPACITY`.
-Both runtime modes use identical capacities. These are metadata limits, not
-quarantine thresholds. The old 8,191 usable chunk entries were exhausted by
-live and retained chunks; returning NULL caused recursive allocation during
-PostgreSQL error formatting. Exhaustion now reports a direct failure and
-bypasses allocation-using exit callbacks. Reused build roots reject mismatched
-compiler flags and missing quarantine patches.
-
-Reports include occupied/peak chunk records, static chunk-table bytes, queue
-counts and spans, sweeps by cause, poison/clear/zero spans and mapped backing.
-These are selected ledgers, not total RSS. The direct-link component without
-the batch definition retains its synchronous policy for defect checks.
+`build-cheribsd.sh` uses `CHERI_SDK`, `CHERI_SYSROOT` and a fresh
+`PG_CHERI_ROOT`. It builds the stock memory contexts, for the platform's own
+libc revocation. It applies the same application ABI patches as the Capstone
+build where relevant, pins `MAXIMUM_ALIGNOF=16`, and rebuilds
+`src/port/qsort.o` after the tag-preserving swap patch. Study builds require a
+fresh root; `PG_CHERI_REUSE=1` permits an explicit development rebuild and
+records root reuse in `manifest.json`. Each build also records the archive,
+applied patches, compiler, ABI settings and binary hashes. Until 2026-10-11 it
+also built a PoisonCap variant (`PG_CHERI_MODE=poisoncap`, patch 0018 and the
+memory-context port's lifetime adapter); its results stay as recorded.
 
 For a pristine Capstone input cluster, run
 `python3 capstone/ports/postgres/app/build-native16-fixture.py`
@@ -115,9 +86,9 @@ recorded separately from the application's enabled outer policy.
 
 Compare each result with an independent native 17.5 `work.sql` result using
 `work-compare.py`. It requires all 22 result rows and the final count before
-checking exact row equality. Also require successful process termination and
-the mode-specific adapter report: `su` can return zero after a child SIGPROT,
-so its status alone does not qualify a run. Do not use a row-equivalent but
+checking exact row equality. Also require successful process termination:
+`su` can return zero after a child SIGPROT, so its status alone does not
+qualify a run. Do not use a row-equivalent but
 faulted attempt as a paper measurement.
 
 The full four-arm memory comparison additionally needs phase-level live,

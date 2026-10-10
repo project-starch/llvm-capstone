@@ -10,19 +10,6 @@
   "live_proof": "upstream 7a7d9693c7, \"pgcrypto: Fix buffer overflow in pgp_pub_decrypt_bytea()\" (CVE-2026-2005), which postdates the 17.5 pin. Four lines carry it. contrib/pgcrypto/pgp-pubdec.c:217 -- `msglen = m->bytes - (msg - m->data)`, a length derived from the message the caller supplied. :227 -- `ctx->sess_key_len = msglen - 3;` with no check of any kind against the destination. :228 -- `memcpy(ctx->sess_key, msg + 1, ctx->sess_key_len);`. contrib/pgcrypto/pgp.h:171 -- `uint8 sess_key[PGP_MAX_KEY]`, and :112 -- `#define PGP_MAX_KEY (256/8)`, so the destination is 32 bytes inline in PGP_Context. The fix adds exactly the missing guard: `if (sess_key_len > PGP_MAX_KEY) { res = PXE_PGP_KEY_TOO_BIG; goto out; }`. Nothing between :217 and :228 bounds the length at the pin.",
   "fidelity": "real struct, real arithmetic, reached by a C caller rather than through pgcrypto. The three statements the case runs are pgp-pubdec.c:226-228 verbatim and the context is pgcrypto's own PGP_Context from pgp.h, so the offsets are upstream's and not a look-alike's: on the host sess_key is at 148 of a 184-byte struct and sess_key_len is the next member at 180, so a copy of more than 32 bytes clobbers the length field and more than 36 leaves the struct. The module reports the figures for whichever platform it runs on.",
   "arms": {
-    "spatial": {
-      "oracle": "the copy past sess_key is reported, or the case completes and this arm did not see it",
-      "verdict": "silent",
-      "evidence": "completed with no directive and no fault",
-      "run": "run 2026-10-06 in the C-caller form, after the case stopped needing pgcrypto; see results/"
-    },
-    "sublet": {
-      "oracle": "the copy past sess_key is reported, or the case completes and this arm did not see it",
-      "verdict": "MISSED",
-      "evidence": "completed with no directive and no fault",
-      "run": "run 2026-10-06 in the C-caller form, after the case stopped needing pgcrypto; see results/",
-      "verdict_from": "results/matrix.tsv sublet: silent"
-    },
     "cheribsd-revocation": {
       "oracle": "the copy past sess_key is reported, or the case completes and this arm did not see it",
       "verdict": "MISSED",
@@ -37,13 +24,13 @@
       "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
     },
     "virtual-pg-pools": {
-      "oracle": "virtual profile with PostgreSQL's contexts on Sublet context pools (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
+      "oracle": "virtual profile with the memory-context port's patch 0003: every palloc chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
       "verdict": "MISSED",
       "verdict_note": "reached (the trigger statement ran (4 prompts, 1 setup line(s))) and completed with no fault",
       "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
     }
   },
-  "status": "measured on all three arms 2026-10-06, silent on each: the 29-byte copy past sess_key stays inside the aset chunk that holds the 184-byte PGP_Context, so no arm's bounds are crossed. PostgreSQL's own chunk sentinel does see it on a host assert build, which is the distinction this corpus exists to measure.",
+  "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle. The physical spatial/sublet pair measured 2026-10-06 to 2026-10-10 stays in results/",
   "nested": true,
   "nested_why": "PGP_Context is palloc0'd, so the copy runs off an inline array into the rest of an aset chunk and then out of it.",
   "note": "WHY NOT UPSTREAM'S OWN TRIGGER DATA, which this case used until 2026-10-06. That data reaches the defect through pgp_pub_decrypt_bytea and an RSA or ElGamal decryption, so it needs pgcrypto, which needs OpenSSL, which is not cross-compiled for capstone64 -- the extension cannot be created on either Capstone arm and the case had no verdict on two of three arms. Supplying the message length directly drops the cipher the platform lacks and keeps everything the defect consists of: the overflow at :228 happens before any cipher is instantiated, and ctx->cipher_algo on the line above is read but not yet used. Measured through pgcrypto on the purecap guest on 2026-10-06 before the change, for the record: silent. REACHED AND WITNESSED on the host ASan build on 2026-10-06, by PostgreSQL's own allocator: 'WARNING: problem in alloc set ExprContext: detected write past chunk end'. The call also returns 0 rather than the 61 it computed, because the copy overwrote sess_key_len itself -- the field that records the length is the first thing the overflow destroys."

@@ -57,7 +57,7 @@ class PinTests(unittest.TestCase):
 
     def test_patch_metadata(self):
         patches = sorted((PORT / "patches").glob("*.patch"))
-        self.assertEqual(len(patches), 7)
+        self.assertEqual(len(patches), 3)
         for patch in patches:
             self.assertTrue(patch.name.startswith(f"postgresql-{PIN['version']}-"))
             text = patch.read_text()
@@ -68,8 +68,6 @@ class PinTests(unittest.TestCase):
     def test_entry_points_share_manifest(self):
         for name in (
             "build-mmgr-host.sh",
-            "build-mmgr-domain.sh",
-            "build-mmgr-sublet.sh",
             "census-capstone.sh",
         ):
             text = (PORT.parent / name).read_text()

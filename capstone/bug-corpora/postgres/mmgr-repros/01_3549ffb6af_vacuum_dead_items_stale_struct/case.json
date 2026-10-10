@@ -11,34 +11,12 @@
   "allocator_layer": "aset",
   "fidelity": "model-consumer, real allocator",
   "arms": {
-    "spatial": {
-      "oracle": "complete",
-      "verdict": "MISSED",
-      "verdict_note": "reached (pg_mark() marker) and completed with no fault; run=01-vacuum-dead-items-stale-struct-spatial-55ve9cz2",
-      "verdict_from": "results/2026-10-10-qemu/spatial"
-    },
-    "sublet": {
-      "oracle": "fault at the labelled read probe",
-      "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x101a127f4 in pg_probe; by probe: pc equals the labelled probe 0x101a127f4",
-      "verdict_from": "results/2026-10-10-qemu/sublet"
-    },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "complete"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "oracle": "SIGPROT at the labelled read probe",
-      "signal": 34,
-      "si_code": 2
-    },
     "native-detect": {
       "status": "not written"
     },
     "cheribsd-revocation": {
       "oracle": "completes with no capability fault; the case's own PG_DEFECT probe prints twice, so the defective sequence provably executed -- REACHED-SILENT (2026-10-05, plain purecap, revocation=1 every_free=0). A use-after-free between two palloc chunks never crosses a malloc boundary, so there is nothing for a malloc-granular revoker to reclaim.",
-      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts with PG_POISONCAP off",
+      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts",
       "verdict": "MISSED",
       "verdict_from": "results/20261008-cheribsd/result-lines.txt mmgr-01: PG_DEFECT case=1 ready, then mode=0 completed; quarantine.tsv row 1"
     },
@@ -49,13 +27,13 @@
       "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
     },
     "virtual-pg-pools": {
-      "oracle": "virtual profile, the managers on the Sublet context pools with the arena lent linear (tools/arms.json virtual-mallocng-replay-pools): as virtual-malloc",
+      "oracle": "virtual profile, the managers with the port's patch 0003: every chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-replay-pools): as virtual-malloc",
       "verdict": "CAUGHT",
       "verdict_note": "cause=24 pc=0x3fbe810b44 in pg_probe; by probe: the pc lies in pg_probe, the labelled read",
       "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
     }
   },
-  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case.",
+  "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle",
   "sibling_issue": "02_83ce20d671_tidstore_context_deleted_first",
   "distinguishing": "the caller's field is stale here; case 2 is the callee's own local, a separate defect at the same site fixed ten months earlier",
   "nested": true,

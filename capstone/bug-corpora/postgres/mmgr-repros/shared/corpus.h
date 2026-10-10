@@ -5,7 +5,7 @@
  * root context and the labelled probes; a case supplies only its sequence,
  * inside PG_CASE(NN).
  *
- * The allocator is real: PostgreSQL 17.0's aset.c, mcxt.c and slab.c, compiled
+ * The allocator is real: PostgreSQL 17.0's memory-context managers, compiled
  * unmodified but for the capability-ABI and Sublet patches the port applies.
  * The consumers are reduced to the allocator calls the upstream defect makes,
  * in the same order, because reaching them in place needs a backend, a planner,
@@ -37,9 +37,9 @@ extern unsigned char *volatile pg_held;
 MemoryContext pg_aset_child(MemoryContext parent, const char *name);
 
 /* The stale access, labelled so a run can require the fault to land HERE
- * rather than merely somewhere. pg_mark() publishes the case and both probe
- * addresses and must be the LAST thing before the access: its presence is the
- * evidence that the setup ran. */
+ * rather than merely somewhere. pg_mark() prints the case's ready mark and
+ * must be the LAST thing before the access: its presence is the evidence that
+ * the setup ran. */
 unsigned pg_probe(const volatile unsigned char *p);
 void pg_write_probe(volatile unsigned char *p);
 void pg_mark(void);

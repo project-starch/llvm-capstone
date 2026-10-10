@@ -1,91 +1,45 @@
-# PostgreSQL's memory manager, outside PostgreSQL
+# PostgreSQL
 
-## Choose the build path
+| directory | what it is |
+|---|---|
+| [`memory-contexts/`](memory-contexts/README.md) | the memory managers outside the server: replay, client examples, the mmgr corpus's build seam, and the Sublet patch (0003) |
+| [`app/`](app/README.md) | the complete 17.5 single-user backend on virtual Capstone and CheriBSD; `PGSU_NESTED=sublet` applies the same patch 0003 |
 
-The canonical component for new allocator work is
-[`memory-contexts/`](memory-contexts/), using the
-[shared port layout](../README.md) and CMake presets `native`,
-`capstone-domain` and `linux-guest`. Its `host/memory/` tools and `results/`
-hold the profiling workflow and compact evidence. Read
-[`upstream.json`](memory-contexts/upstream.json) for this revision's pin.
+The memory-context component is where allocator work starts. Its `upstream.json` is the single
+**PostgreSQL 17.0** pin for the component, the scripts below and the native defect corpus.
 
-The shell drivers described below remain the older experiment/gate path.
-Their Sublet adapter is AllocSet-only. The four-manager CMake extension
-(AllocSet, Generation, Slab and Bump), client examples and unified 17.0 pin
-are included here from [PR #51](https://github.com/project-starch/llvm-capstone/pull/51).
-The component, shell drivers and native corpus read the same 17.0 manifest.
-The existing memory-profile campaign measured 17.5; those results must retain
-that identity after the pin changes. The paragraphs below describe the shell
-path, not the versioned patches inside `memory-contexts/patches/`.
+## The host scripts
 
-## Existing shell drivers
-The shared-template component and its runnable CMake instructions are in
-[`memory-contexts/`](memory-contexts/README.md). Its `upstream.json` is the
-single **PostgreSQL 17.0** pin for that component, these original scripts and
-the native defect corpus. The original scripts remain for existing experiment
-drivers; the allocator implementations have not yet been consolidated. The
-older 17.5 memory-profile campaign remains labeled with its actual version.
+    bash build-mmgr-host.sh      # the host build and replay the native corpus prepares from
+    bash census-capstone.sh      # what a freestanding capability compile of the seven files costs
 
-The following describes the original shell-based layout.
+`build-mmgr-host.sh` configures the pinned tree that
+`../../bug-corpora/postgres/mmgr-repros/run-host-repros.sh` builds its native arm from, and
+replays a recording against the unmodified manager (`tools/replay.c`, `a11trace.h`). The host
+build is checked against the backend itself: the recording carries what the real manager asked
+of `malloc` over the same workload, and the host replay must ask for exactly that.
+`census-capstone.sh` compiles the seven files for capstone64 against `port/stubinc` and reports
+what fails, rather than asserting, so a compiler or PostgreSQL change shows up as a different list.
 
+## Two things a reader would otherwise get wrong
 
-PostgreSQL the program does not run under capabilities and is not meant to: it
-wants an operating system, a file system, sockets and processes. Its memory
-manager is another matter. The seven files of `src/backend/utils/mmgr` are a
-hierarchical allocator with reset and delete semantics, the only one in this
-project's set that exercises a tree, and they come out of the tree whole.
+**Two lines, and the allocator names them itself.** `aset.c` asserts that its free-list link fits
+in the smallest chunk, because that link lives inside the freed chunk. A capability is sixteen
+bytes and the smallest chunk was eight, so the assertion fails. Raising the minimum to sixteen
+doubles the ladder, so one size class comes off to keep its top at the 8 KiB chunk limit, which a
+second assertion checks. `port/aset-capstone.patch` and the component's patch 0001 are those two
+lines. Any machine with sixteen-byte pointers needs them, and the size classes on a capability
+machine are 16 to 8192 and not 8 to 8192, so the host's exact block count does not carry over.
 
-This port is those seven files, unchanged, plus what the backend would have
-provided, plus a driver that replays a recording of a real workload against
-them. There is no `adapted/` and no `patches/`: the manager is compiled as it
-ships, and the two patches under `port/` are applied to a copy at build time.
+**The allocator had the bug the compiler exists to find.** It aligned its region by masking the
+address and casting it back, which discards the capability and faults on the first dereference
+(`-Wcapstone-pointer-roundtrip`). It aligns by moving the pointer now.
 
-    bash run-pg-gate.sh          # does it still run under capabilities
-    bash run-pg-sublet-gate.sh   # does the discipline still hold
-    bash census-capstone.sh      # what a capability build costs
+## History
 
-Every script says at its head what it does and why. The two gates need no
-recording, generate their own workload and are what the nightly runs. For a
-run against a real recording, `run-pg-replay.sh` and `run-pg-sublet.sh` take
-one as their argument. `sublet/README.md` says why the protected arm looks the
-way it does.
-
-## Three things a reader would otherwise get wrong
-
-**Two lines, and the allocator names them itself.** `aset.c` asserts that its
-free-list link fits in the smallest chunk, because that link lives inside the
-freed chunk. A capability is sixteen bytes and the smallest chunk was eight, so
-the assertion fails. Raising the minimum to sixteen doubles the ladder, so one
-size class comes off to keep its top at the 8 KiB chunk limit, which a second
-assertion checks. `port/aset-capstone.patch` is those two lines.
-
-This is not Sublet's change and not a workaround: any machine with sixteen-byte
-pointers needs it. The consequence is real and belongs in the measurement. The
-size classes on a capability machine are 16 to 8192 and not 8 to 8192, so the
-sequence of blocks differs from the x86 run, and the host arm's exact block
-count does not carry over to the domain.
-
-**The capability-roundtrip warning is not ours.** The compiler flags
-`DatumGetPointer`, an inline function in `postgres.h` that casts an integer
-back to a pointer. Of the files in the memory manager, only `dsa.c` calls it,
-and `dsa.c` is not one of the seven.
-
-**The allocator had the bug the compiler exists to find.** It aligned its
-region by masking the address and casting it back, which discards the
-capability and faults on the first dereference
-(`-Wcapstone-pointer-roundtrip`). It aligns by moving the pointer now. That is
-the class that made eighteen of MicroPython's twenty-one patches, met on the
-first file written for this port.
-
-## Why the host arm is the gate and not a convenience
-
-The manager is built twice from one configured tree, once against glibc and
-once for capstone64. The host build exists to be checked against the backend
-itself: the recording carries what the real manager asked of `malloc` over the
-same workload, and the host arm must ask for exactly that. If it does not, the
-recording is not the manager's workload and nothing downstream means anything.
-
-The domain build cannot be checked that way, for the reason the first section
-gives: its size classes differ, so its block counts differ by construction.
-What it checks instead is that it gave back what it took, and that every object
-the recording freed still held what was written into it.
+Until 2026-10-11 this directory also held the original freestanding-domain path: domain builds
+of the manager (`build-mmgr-domain.sh`, `domain-build.sh`), their gates (`run-pg-gate.sh`,
+`run-pg-sublet-gate.sh`) and runners, the guest loader (`pg_host.c`), and an AllocSet-only
+Sublet adapter (`port/aset-sublet.patch`, `port/pg_subpool.h`, `port/freestanding/`). The
+memory-context component's patch 0003 replaced the adapter, and the domain targets are not
+part of the virtual platform.

@@ -15,7 +15,7 @@
 | our own silicon defects | `capstone/tests/fpga-repros/` | 30 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 107 open, 77 resolved | the registry, not reproduced cases |
 
-Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 6 components have them: `apr/pools`, `ffmpeg/buffer-pool`, `memcached/allocators`, `postgres/memory-contexts`, `whisper/ggml-context`, `wireshark/wmem`.
+Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 5 components have them: `apr/pools`, `ffmpeg/buffer-pool`, `memcached/allocators`, `whisper/ggml-context`, `wireshark/wmem`.
 
 ## Every corpus
 
@@ -71,7 +71,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/perl/cheribsd` | platform-build | 5.36.3 | cheribsd-purecap | -- | 0 |
 | `capstone/ports/perl/musl` | full-application | 5.36.3 | capstone-domain, capstone-virtual, native | `release-differential` | 11 |
 | `capstone/ports/postgres/app` | full-application | 17.5 | capstone-domain, cheribsd-purecap | -- | 0 |
-| `capstone/ports/postgres/memory-contexts` | allocator-component | 17.0 | capstone-domain, cheribsd-purecap, linux-guest, native | `mmgr-repros` | 5 |
+| `capstone/ports/postgres/memory-contexts` | allocator-component | 17.0 | capstone-virtual, cheribsd-purecap, native | `mmgr-repros` | 5 |
 | `capstone/ports/sqlite/app` | full-application | 3.22.0 | capstone-domain, native | -- | 0 |
 | `capstone/ports/sqlite/cheribsd` | platform-build | 3.22.0 | cheribsd-purecap | `engine-repros` | 33 |
 | `capstone/ports/sqlite` | full-application | 3.53.3, 3.22.0 | capstone-domain, silicon, native | `capi-repros`, `engine-repros` | 52 |

@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tarfile
@@ -82,63 +83,61 @@ def put(path, data):
         path.write_bytes(data)
 
 
-def patched(original, patches):
-    data = original.read_bytes()
+# The files a variant may patch, relative to the source root. Each variant is
+# a mirror of them with its ordered patches applied, so a patch may span
+# several files and add new ones.
+MIRRORED = [
+    *(f"src/backend/utils/mmgr/{name}" for name in (
+        "aset.c", "mcxt.c", "generation.c", "slab.c", "bump.c", "Makefile", "meson.build")),
+    "src/include/utils/memutils_memorychunk.h",
+]
+# What the replay compiles from a variant; everything else comes from the source.
+VARIANT_SOURCES = {
+    "spatial": ["aset.c"],
+    "sublet": ["aset.c", "mcxt.c", "generation.c", "slab.c", "bump.c", "sublet.c"],
+}
+VARIANT_HEADERS = {
+    "spatial": ["memutils_memorychunk.h"],
+    "sublet": ["memutils_memorychunk.h", "memutils_sublet.h"],
+}
+VARIANT_PATCHES = {
+    "spatial": ["0001-allocset-capstone-size-classes", "0002-memorychunk-capstone-alignment"],
+    "sublet": [
+        "0001-allocset-capstone-size-classes",
+        "0002-memorychunk-capstone-alignment",
+        "0003-memory-contexts-sublet-lifetimes",
+    ],
+}
+
+
+def variant_tree(patches):
+    tree = Path(tempfile.mkdtemp(dir=args.variants))
+    for relative in MIRRORED:
+        target = tree / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((args.source / relative).read_bytes())
     for name in patches:
-        with tempfile.TemporaryDirectory(dir=args.variants) as temporary:
-            target = Path(temporary) / original.name
-            target.write_bytes(data)
-            patch_path = args.patches / f"postgresql-{args.version}-{name}.patch"
-            with patch_path.open("rb") as patch:
-                subprocess.run(
-                    [
-                        args.patch_tool,
-                        "--batch",
-                        "--forward",
-                        "--fuzz=0",
-                        "-s",
-                        "-p1",
-                        str(target),
-                    ],
-                    stdin=patch,
-                    check=True,
-                )
-            data = target.read_bytes()
-    return data
+        patch_path = args.patches / f"postgresql-{args.version}-{name}.patch"
+        with patch_path.open("rb") as patch:
+            subprocess.run(
+                [args.patch_tool, "--batch", "--forward", "--fuzz=0", "-s", "-p1", "-d", str(tree)],
+                stdin=patch,
+                check=True,
+            )
+    return tree
 
 
 args.variants.mkdir(parents=True, exist_ok=True)
 for mode in ("spatial", "sublet"):
     root = args.variants / mode
-    aset_patches = ["0001-allocset-capstone-size-classes"]
-    chunk_patches = ["0002-memorychunk-capstone-alignment"]
-    if mode == "sublet":
-        chunk_patches.append("0003-memorychunk-sublet-metadata-indices")
-        aset_patches.append("0004-allocset-sublet-context-revocation")
-    put(
-        root / "aset.c",
-        patched(
-            args.source / "src/backend/utils/mmgr/aset.c",
-            aset_patches,
-        ),
-    )
-    put(
-        root / "include/utils/memutils_memorychunk.h",
-        patched(
-            args.source / "src/include/utils/memutils_memorychunk.h",
-            chunk_patches,
-        ),
-    )
-    if mode == "sublet":
-        for manager, patch in (
-            ("slab", "0005-slab-sublet-lifetimes"),
-            ("generation", "0006-generation-sublet-lifetimes"),
-            ("bump", "0007-bump-sublet-lifetimes"),
-        ):
-            put(
-                root / f"{manager}.c",
-                patched(args.source / f"src/backend/utils/mmgr/{manager}.c", [patch]),
-            )
+    tree = variant_tree(VARIANT_PATCHES[mode])
+    try:
+        for name in VARIANT_SOURCES[mode]:
+            put(root / name, (tree / "src/backend/utils/mmgr" / name).read_bytes())
+        for name in VARIANT_HEADERS[mode]:
+            put(root / "include/utils" / name, (tree / "src/include/utils" / name).read_bytes())
+    finally:
+        shutil.rmtree(tree)
     text = config.read_text()
     if text.count("#define MAXIMUM_ALIGNOF 8\n") != 1:
         raise SystemExit(
