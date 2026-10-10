@@ -914,7 +914,12 @@ static int mcapp_fixture(int n)
         /* link and expire all four big items, so each takes the header-only free path and none is a
            floating (upload-in-progress) item that would stall the move */
         for (int k = 0; k < 4; k++) {
-            item_link(big_it[k]);                 /* refcount 1 -> 2, ITEM_LINKED, assoc + LRU */
+            /* link through the real locked path: the pin has no item_link() wrapper, the server
+               calls do_item_link under the item lock it holds (proto_parser.c) */
+            uint32_t hv = hash(ITEM_key(big_it[k]), big_it[k]->nkey);
+            item_lock(hv);
+            do_item_link(big_it[k], hv, 0);       /* refcount 1 -> 2, ITEM_LINKED, assoc + LRU */
+            item_unlock(hv);
             item_remove(big_it[k]);               /* the storing client lets go -> 1 */
             big_it[k]->exptime = 1;               /* 1 < current_time: expired */
         }
