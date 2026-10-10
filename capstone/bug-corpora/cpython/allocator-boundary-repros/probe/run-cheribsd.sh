@@ -24,6 +24,9 @@ GUEST=${GUEST:-/root/cpython}
 # With the wrong one every case dies before any Python runs, with
 # "No module named encodings" -- indistinguishable from a silent arm.
 PYHOME=${PYHOME:-$GUEST/pyhome}
+# The release's Lib, for the `test` package the stdlib zip leaves out and the
+# upstream tests import (test.support). The virtual runner stages all of Lib.
+CPY_LIB=${CPY_LIB:-$(dirname "$PY")/src/Python-3.13.7/Lib}
 # Both built from capstone/bug-corpora/tools/cheribsd/sicode.c and
 # capstone/bug-corpora/postgres/mmgr-repros/results/20261008-cheribsd/quarantine-probe.c.
 SICODE=${SICODE:-/root/sicode.so}
@@ -132,6 +135,33 @@ sc="bounds $sb, revoked $sr"
 echo "si_code control:  $sc"
 printf 'positive_control\t%s\nsicode_control\t%s\nquarantine_control\t%s\n' "$pc" "$sc" "$qpc" >> "$OUT/run.meta"
 
+# ---- stage: the test package, which the stdlib zip does not carry --------
+# Without it every case that imports test.support stops at the import, with
+# rc=1 and no fault: on 2026-10-11 that read as case 19 completing.
+[[ -f $CPY_LIB/test/support/__init__.py ]] || { echo "no test package under $CPY_LIB" >&2; exit 2; }
+tar -C "$CPY_LIB" -cf - --exclude=__pycache__ test | G "mkdir -p $PYHOME/lib/python3.13 && rm -rf $PYHOME/lib/python3.13/test && tar -C $PYHOME/lib/python3.13 -xf -"
+G "test -f $PYHOME/lib/python3.13/test/support/__init__.py" || { echo "staging the test package failed" >&2; exit 2; }
+printf 'test_package\t%s\n' "$CPY_LIB/test" >> "$OUT/run.meta"
+
+# The launcher the virtual runner uses: ABR BEGIN before the trigger, and how it
+# ended after it, so an import failure is never read as a quiet run.
+LAUNCH=$(mktemp)
+cat > "$LAUNCH" <<'PY'
+import os, runpy, sys
+path = sys.argv[1]
+sys.argv[:] = [path]
+os.write(1, b"ABR BEGIN\n")
+try:
+    runpy.run_path(path, run_name="__main__")
+except SystemExit as e:
+    os.write(1, ("ABR EXIT %r\n" % (e.code,)).encode())
+    raise
+except BaseException as e:
+    os.write(1, ("ABR RAISED %s\n" % type(e).__name__).encode())
+    raise
+os.write(1, b"ABR RETURNED\n")
+PY
+
 # ---- stage: one directory per case, named as the corpus names it --------
 G "rm -rf /root/boundary && mkdir -p /root/boundary"
 n=0
@@ -141,6 +171,7 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   G "mkdir -p /root/boundary/$c"
   # Every .py the case carries -- see the note in run-arm.sh's staging loop.
   ( cd "$d" && tar -cf - ./*.py ) | G "tar -C /root/boundary/$c -xf -"
+  G "cat > /root/boundary/$c/launch.py" < "$LAUNCH"
   if [ "$NEGCTL" = 1 ] && [ -f "$d/negative_control.py" ]; then
     # The strong control: the case's own allocation and free traffic with only
     # the offending access made valid. It is the one that qualifies a
@@ -164,13 +195,14 @@ done
 echo "staged $n cases"
 
 # ---- run ---------------------------------------------------------------
-printf 'case\tarm\trc\tsignal\tsi_code\tquarantine\tlast\n' > "$OUT/verdicts.tsv"
+printf 'case\tarm\trc\tsignal\tsi_code\tending\tquarantine\tlast\n' > "$OUT/verdicts.tsv"
+mkdir -p "$OUT/raw"
 printf 'case_budget\t%s\nonly\t%s\n' "$BUDGET" "${ONLY:-all}" >> "$OUT/run.meta"
 for d in "$CORPUS"/[0-9][0-9]_*/; do
   c=$(basename "$d")
   in_subset "$c" || continue
   out=$(G "cd /root/boundary/$c && env PYTHONDONTWRITEBYTECODE=1 PYTHONHOME=$PYHOME \
-            LD_PRELOAD=$SICODE:$QPROBE timeout $BUDGET $GUEST/python trigger.py 2>&1; \
+            LD_PRELOAD=$SICODE:$QPROBE timeout $BUDGET $GUEST/python launch.py trigger.py 2>&1; \
           echo RC=\$?")
   # -a, and strip non-printables before anything is matched or recorded. Case
   # 02's upstream test asserts on a GARBLED field name -- the overflow's own
@@ -181,11 +213,18 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   rc=$(printf '%s' "$out" | grep -a -oE 'RC=[0-9]+' | tail -1 | cut -d= -f2)
   sig=$(printf '%s' "$out" | grep -a -oE 'signal=[0-9]+' | head -1 | cut -d= -f2)
   code=$(printf '%s' "$out" | grep -a -oE 'si_code=[0-9]+ \([A-Z_]+\)' | head -1)
-  q=$(printf '%s' "$out" | grep -a -o 'QUARANTINE .*' | tail -1)
-  last=$(printf '%s' "$out" | grep -a -v '^RC=\|^QUARANTINE ' | tail -2 | tr '\n' ' ')
-  printf '%s\tcheribsd-revocation\t%s\t%s\t%s\t%s\t%s\n' \
-    "$c" "${rc:-?}" "${sig:-}" "${code:-}" "${q:-}" "$last" >> "$OUT/verdicts.tsv"
-  printf '  %-56s rc=%-4s %s\n' "${c:0:56}" "${rc:-?}" "${code:-}"
+  printf '%s\n' "$out" > "$OUT/raw/$c.out"
+  # The preload loads into `timeout` too, which allocates nothing and exits
+  # last; only a process that allocated has mapped the shadow (the interpreter).
+  q=$(printf '%s' "$out" | grep -a -o 'QUARANTINE shadow=mapped.*' | paste -sd'|' -)
+  if ! printf '%s' "$out" | grep -aq '^ABR BEGIN'; then ending="not started"
+  else ending=$(printf '%s' "$out" | grep -a -oE '^ABR (RETURNED|EXIT .*|RAISED [A-Za-z]+)' | tail -1)
+       [[ -n $ending ]] || ending="no end line"; fi
+  case "$ending" in *ImportError|*ModuleNotFoundError) ending="$ending (not reached)" ;; esac
+  last=$(printf '%s' "$out" | grep -a -v '^RC=\|^QUARANTINE \|^ABR ' | tail -2 | tr '\n' ' ')
+  printf '%s\tcheribsd-revocation\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$c" "${rc:-?}" "${sig:-}" "${code:-}" "$ending" "${q:-}" "$last" >> "$OUT/verdicts.tsv"
+  printf '  %-56s rc=%-4s %s %s\n' "${c:0:56}" "${rc:-?}" "${code:-}" "$ending"
 done
 
 # ---- the configuration again, to show it did not move under the run ----

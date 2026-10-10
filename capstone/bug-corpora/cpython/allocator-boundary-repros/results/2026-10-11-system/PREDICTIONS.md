@@ -151,3 +151,31 @@ Predictions:
 | 21 | SIGPROT, `PROT_CHERI_TAG`, as the 2026-10-08 run recorded; presumably a sweep runs between the 512 KiB block's free and the read, but the mechanism is not what is predicted, the ending is | none (the process dies before the probe's destructor) | yes |
 
 A use-after-free is caught, as opposed to rendered harmless, only in the third.
+
+## CheriBSD, first run (0bac348cd567): two runner defects, fixed before the rerun
+
+Guest controls all passed: binary c9bec41630d4 on host and guest, `revocation_default=1`,
+`every_free_default=0`, the workload `EXP-OK cpython 552` with the probe reporting 4,878 frees, all
+quarantined, none reused, no sweep; the self-test `PROT_CHERI_BOUNDS` and `PROT_CHERI_TAG`.
+
+| case | ending | what it showed |
+|---|---|---|
+| 19 | rc 1, `ModuleNotFoundError: No module named 'test'` | not reached: the stdlib zip leaves out the `test` package, and the upstream file imports `test.support` |
+| 20 | rc 0, no fault | the probe line recorded was `allocs=0`: it was `timeout`'s |
+| 21 | SIGPROT, `si_code=2 (PROT_CHERI_TAG)` | as predicted |
+
+The two defects, both the runner's:
+
+* it did not stage the `test` package, and it had no reach marker, so an import failure ended
+  like a quiet run. Under the rule above, case 19 would have been credited on a run that never
+  reached its defect. The runner now stages the release's `Lib/test` beside the zip and wraps
+  each trigger in the virtual runner's launcher (`ABR BEGIN`, then `ABR RETURNED`, `ABR EXIT` or
+  `ABR RAISED <type>`). An ending on `ImportError` or `ModuleNotFoundError` is marked not reached,
+  and a row without `ABR BEGIN` is not started;
+* the preload also loads into `timeout`, which allocates nothing, exits after the interpreter and
+  reports last. The runner now records only probe lines from a process that mapped the shadow,
+  that is, one that allocated.
+
+Added to the rule: a row earns the CheriBSD column only if its trigger began and did not end
+on an import error. The three cases are rerun on the same guest image, binary and helpers. The
+predictions stand as registered.
