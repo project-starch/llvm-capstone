@@ -3,18 +3,34 @@
 9 defects in PostgreSQL 17.5 and its contrib extensions, each a `trigger.sql`
 run against a real stand-alone backend, measured on three arms on 2026-10-06.
 
-| arm | detected | scored | not applicable |
+| arm | detected | scored | out of denominator |
 |---|---:|---:|---:|
 | `spatial` (base Capstone) | **2** | 9 | 0 |
 | `sublet` (Capstone + Sublet) | **4** | 8 | 1 |
 | `cheribsd-revocation` (purecap) | **2** | 9 | 0 |
 
-Every denominator is the cases *that arm can run*, and the one gap is named
-rather than absorbed. `sublet` cannot create ltree: `CREATE EXTENSION ltree`
-takes a capability fault on that arm before any of case 03's own SQL runs, so
-that cell is `not-applicable` and not a verdict about the mechanism. The
-case's own `investigation` field records where the fault is and what has been
-ruled out.
+Every denominator is the cases *that arm can run*. One cell is out of one:
+case 03 on sublet, withdrawn below.
+
+**Case 03 on `sublet` is withdrawn, and the negative control is why.** The
+arm faults on the trigger, but it faults on `control.sql` too -- the same
+statement with 64 OR-variants against the trigger's 66, so 64512 bytes
+against a 65535 ceiling that is never crossed -- at the same instruction,
+cause 7 `pc=0xe0202414`, on the same image and the same fixture. Whatever the
+arm trips on while parsing a large lquery, it is not the uint16 wrap, so the
+cell is out of the denominator rather than counted as a detection.
+
+This was asked for in review on PR #198 before a single-run detection was
+trusted, and the run disagreed with the row. Two faults on that arm remain
+open and unexplained: `CREATE EXTENSION ltree`, and now a plain large lquery
+parse.
+
+**Case 02's control held**, and the pair is what makes either reading
+defensible. Cases 02 and 03 fault at the *same* instruction on this arm, so
+the instruction alone distinguishes nothing. 02's control -- a 32000-character
+StartSel against the trigger's 32768, below the int16 ceiling -- completes.
+03's does not. A shared faulting address is not by itself evidence either
+way; the controls are.
 
 Case 09 was outside both Capstone arms until 2026-10-06, because it reached
 the defect through pgcrypto and no OpenSSL is cross-compiled for capstone64.
@@ -68,3 +84,12 @@ Each produced a row that read as a result and was not one.
    when that session faulted on its second statement, the three extensions
    after it were recorded available although they never ran. Each extension
    now gets its own session and has to be read back out of `pg_extension`.
+
+### One row comes from a different build
+
+Case 03's `sublet` figure was measured on 2026-10-08, after the build tree
+that produced the other eight had been cleaned from `/tmp`. The image was
+rebuilt from the same pinned tarball (sha256 `fcb7ab38...`, re-fetched and
+verified) with the same patch set, but a rebuild is not byte-identical and the
+image hashes differ. Both `inputs.json` files record which image each row came
+from.

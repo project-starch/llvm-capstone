@@ -110,7 +110,22 @@ def directives(sql_text):
     return errors, absent
 
 
-def score(case_dir, text, result, available):
+def score(case_dir, text, result, available, preinstalled=()):
+    verdict, why = _score(case_dir, text, result, available, preinstalled)
+    # On every verdict, not only the ones that reach the end of _score. A
+    # `detected` obtained against a pre-created extension has to carry that
+    # fact where the verdict is read -- in results/matrix.tsv and in the arm's
+    # evidence -- and not only in a field beside it.
+    pre = [e for e in extensions_needed(case_dir) if e in preinstalled]
+    if pre and verdict not in ("not-applicable", "not-runnable"):
+        why += ("; ran against a fixture that already carried "
+                + ", ".join(pre)
+                + ", so this arm did not have to create it and this row says "
+                  "nothing about whether it can")
+    return verdict, why
+
+
+def _score(case_dir, text, result, available, preinstalled=()):
     """(verdict, evidence). Controls first, mechanism second, directives last.
 
     The order is the whole point. A control failure that is scored as a verdict
@@ -122,7 +137,13 @@ def score(case_dir, text, result, available):
     if limit:
         return "not-runnable", f"declared by the case: {limit}"
 
-    missing = [e for e in extensions_needed(case_dir) if e not in available]
+    # An extension the fixture already carries is not one this arm has to be
+    # able to create. The case still says CREATE EXTENSION, which succeeds as a
+    # no-op lookup of a row that is already there, and the statement the case
+    # is actually about then runs. Every verdict reached this way says so.
+    pre = [e for e in extensions_needed(case_dir) if e in preinstalled]
+    missing = [e for e in extensions_needed(case_dir)
+               if e not in available and e not in preinstalled]
     if missing:
         return ("not-applicable",
                 "this image cannot create " + ", ".join(missing)
@@ -158,7 +179,18 @@ def score(case_dir, text, result, available):
 
     # An extension the preflight said was available but that failed here is a
     # control failure for this case, not a silent arm.
+    #
+    # EXCEPT "already exists", for one the fixture carries. That error is the
+    # expected outcome of the case's own CREATE EXTENSION line when the
+    # extension is pre-created, and matching it here made the oracle
+    # one-sided: every run that did not fault was scored control-failure, so
+    # `silent` was unreachable and a `detected` had nothing to be contrasted
+    # with. Any OTHER error naming a pre-created extension is still a control
+    # failure.
     for name in extensions_needed(case_dir):
+        if name in pre and re.search(
+                rf'ERROR:.*extension "{re.escape(name)}" already exists', text):
+            continue
         if re.search(rf'ERROR:.*extension "{re.escape(name)}"', text) or \
            re.search(rf'ERROR:.*could not (open extension control file|load library).*{re.escape(name)}', text):
             return ("control-failure",
@@ -292,7 +324,16 @@ def preflight(args, out):
                      f"{out / f'preflight-{index:02d}.out'}")
         if f"PREFLIGHT-OK-{name}" in text:
             available.add(name)
-            notes[name] = "created"
+            # The row exists, which is what decides whether a case can run.
+            # Whether THIS probe put it there is a different question, and
+            # conflating them hid something once: with a fixture that already
+            # carried ltree, the probe reported "created" on an arm that in
+            # fact cannot create it -- CREATE EXTENSION errored with "already
+            # exists" and the extension's script, which is what faults, never
+            # ran.
+            notes[name] = ("already in the fixture"
+                           if re.search(rf'ERROR:.*extension "{re.escape(name)}" already exists', text)
+                           else "created")
         elif result.get("fault") or result.get("kind") == "signal":
             # Creating it faults. Not available for measurement, and worth its
             # own word: a case built on it would record a fault that belongs to
@@ -302,6 +343,17 @@ def preflight(args, out):
             notes[name] = "NOT AVAILABLE"
         print(f"  extension {name:<16} {notes[name]}")
     return wanted, available
+
+
+def _fixture_provenance(fixture):
+    """What make-fixture.py recorded beside this cluster, if anything."""
+    side = fixture.with_suffix(".provenance.json")
+    if not side.is_file():
+        return None
+    try:
+        return json.loads(side.read_text())
+    except ValueError:
+        return {"unreadable": str(side)}
 
 
 def cases(args):
@@ -322,11 +374,21 @@ def main():
     parser.add_argument("--image", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True,
                         help="an initdb'd cluster, copied fresh for every case")
+    parser.add_argument("--preinstalled", default="",
+                        help="comma-separated extensions already created in the "
+                             "fixture, which this arm therefore does not have to "
+                             "create; recorded with every verdict that used one")
     parser.add_argument("--extensions", type=Path,
                         help="the control and version scripts build-domain.sh "
                              "staged; defaults to <image>/../../share/extension")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--only", help="comma-separated case numbers")
+    parser.add_argument("--control", action="store_true",
+                        help="run each case's control.sql instead of its "
+                             "trigger.sql. The control is the same statement "
+                             "below the threshold the defect needs, so it must "
+                             "COMPLETE; a fault there means the trigger's fault "
+                             "was not the defect and the row must be withdrawn")
     parser.add_argument("--gate", default="02",
                         help="the case that must be detected for the run to count")
     parser.add_argument("--no-gate", action="store_true",
@@ -348,7 +410,8 @@ def main():
         sys.exit(f"the VM state's share is {config['share']} but this run uses {args.share}")
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = args.out or (CORPUS / "results" / f"{args.arm}-{stamp}")
+    out = args.out or (CORPUS / "results"
+                       / f"{args.arm}-{'control-' if args.control else ''}{stamp}")
     out.mkdir(parents=True, exist_ok=True)
 
     # One run at a time: two would share the staging directory under the share.
@@ -358,21 +421,44 @@ def main():
     except BlockingIOError:
         sys.exit("another run holds the share's lock")
 
+    preinstalled = {e.strip() for e in args.preinstalled.split(",") if e.strip()}
     digest = sha256(args.image)
     print(f"arm={args.arm} image={digest[:16]}")
     wanted, available = preflight(args, out)
+    if preinstalled:
+        print("  pre-created in the fixture: " + ", ".join(sorted(preinstalled)))
 
     rows, produced = [], 0
     for case_dir in cases(args):
         tag = case_dir.name
         name = f"pgdata-{tag}"
         cluster(args, name)
-        text, result = backend(args, case_dir / "trigger.sql", name,
+        sql = case_dir / ("control.sql" if args.control else "trigger.sql")
+        if not sql.is_file():
+            rows.append((tag, "no-control",
+                         f"{sql.name} does not exist for this case"))
+            print(f"{tag:<52} no-control", flush=True)
+            shutil.rmtree(args.share / name, ignore_errors=True)
+            continue
+        text, result = backend(args, sql, name,
                                out / f"{tag}.json", out / f"{tag}.out")
         shutil.rmtree(args.share / name, ignore_errors=True)
         if text.strip():
             produced += 1
-        verdict, why = score(case_dir, text, result, available)
+        verdict, why = score(case_dir, text, result, available, preinstalled)
+        if args.control:
+            # A control is read by whether it COMPLETED, not by whether the
+            # mechanism reported. `detected` here is the bad outcome: it says
+            # the fault does not depend on the threshold the defect needs, so
+            # whatever the trigger produced was not this defect.
+            verdict = {"detected": "control-broken",
+                       "silent": "control-held",
+                       "differential": "control-held"}.get(verdict, verdict)
+            why = ("the control ran below the defect's threshold and "
+                   + ("FAULTED ANYWAY, so the trigger's fault is not this "
+                      "defect" if verdict == "control-broken"
+                      else "completed, as a control must")
+                   + "; " + why)
         rows.append((tag, verdict, why))
         print(f"{tag:<52} {verdict:<16} {why[:64]}", flush=True)
 
@@ -380,6 +466,8 @@ def main():
         sys.exit("NO CASE PRODUCED OUTPUT -- a harness failure, not a measurement of zero")
 
     gated = None
+    if args.control:
+        args.no_gate = True          # nothing in a control run should fault
     if not args.no_gate:
         hit = [v for t, v, _ in rows if t.split("_")[0] == args.gate]
         if not hit:
@@ -414,6 +502,13 @@ def main():
         "started_utc": stamp,
         "extensions_wanted": wanted,
         "extensions_available": sorted(available),
+        # Extensions the fixture carried. A verdict on a case needing one of
+        # these says nothing about whether this arm could have created it.
+        "extensions_preinstalled": sorted(preinstalled),
+        # Which image wrote the catalog this run read, when the fixture
+        # carries a pre-created extension. Without it the row says an
+        # extension was pre-created but not by what.
+        "fixture_provenance": _fixture_provenance(args.fixture),
         # The gate is a corpus case doing double duty, which is weaker than a
         # purpose-built control: it says the mechanism reported on SOMETHING in
         # this configuration, not that it would have reported on each silent
@@ -421,6 +516,7 @@ def main():
         "mechanism_gate": {"case": args.gate, "passed": gated,
                            "kind": "a corpus case required to be detected"}
         if not args.no_gate else None,
+        "ran": "control.sql" if args.control else "trigger.sql",
         "cases": len(rows),
         "scored": scored,
         "verdicts": counts,
