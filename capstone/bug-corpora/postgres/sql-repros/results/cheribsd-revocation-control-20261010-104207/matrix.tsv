@@ -1,0 +1,10 @@
+case	arm	verdict	evidence
+01_12a6206864a0_to_char_tz_overflow	cheribsd-revocation	control-held	the control ran below the defect threshold and completed, as a control must; ran to the prompt with no fault
+02_3ed3dbbf44_ts_headline_int16_overflow	cheribsd-revocation	control-held	the control ran below the defect threshold and completed, as a control must; ran to the prompt with no fault
+03_8c34261109_ltree_lquery_uint16_overflow	cheribsd-revocation	control-held	the control ran below the defect threshold and completed, as a control must; ran to the prompt with no fault
+04_3d160401b65e_oidvector_oob_read	cheribsd-revocation	control-held	the control ran below the defect threshold and completed, as a control must; ran to the prompt with no fault
+05_849da8210539_ascii_multibyte_oob_read	cheribsd-revocation	no-control	this case has no control.sql -- nothing was run, and this is not a verdict about the arm
+06_e91dcfccaa_regexp_conv_buf_overrun	cheribsd-revocation	control-held	the control ran below the defect threshold and completed, as a control must; ran to the prompt with no fault
+07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec	cheribsd-revocation	no-control	this case has no control.sql -- nothing was run, and this is not a verdict about the arm
+08_c4d51b6274_levenshtein_stop_column_oob_write	cheribsd-revocation	no-control	this case has no control.sql -- nothing was run, and this is not a verdict about the arm
+09_7a7d9693c7_pgp_sesskey_overflow	cheribsd-revocation	no-control	this case has no control.sql -- nothing was run, and this is not a verdict about the arm

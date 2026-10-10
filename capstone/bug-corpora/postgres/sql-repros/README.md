@@ -51,9 +51,13 @@ per run to the shared judge (`tools/verdicts.py`, SCHEMA.md "Verdicts"):
   after the case's CREATE EXTENSION lines, counted by backend prompts, and the evidence says so;
 * a fault counts as the defect's only when the case's `control.sql` -- the same statement below the
   defect's threshold -- completes on the same image in the same invocation, or when it lies in a
-  function `case.json` `fault_sites` justifies. Two cases have a control so far (02, 03). A fault
-  with neither is NO-READING, `unattributed`: case 03's sublet fault was a fault of exactly that
-  kind, and its control faulted at the same instruction (2026-10-10, withdrawn on review);
+  function `case.json` `fault_sites` justifies. Five cases have a control (01, 02, 03, 04, 06). A
+  fault with neither is NO-READING, `unattributed`. Case 03's sublet fault was recorded that way on
+  2026-10-10 because its control faulted at the same instruction -- and the control was what was
+  wrong. 64 OR-variants wrap the same uint16 the defect wraps wherever `MAXIMUM_ALIGNOF` is 16,
+  which is every arm here, so it crossed the boundary it was written to stay under. The control is
+  now 48 variants, the threshold is measured per arm instead of computed -- it faults at 64 and
+  completes at 63 on all three arms, which is where the wrap is -- and the fault is attributed;
 * a silence is MISSED only when the controls behaved, and its evidence carries what the trigger's
   directives showed:
 

@@ -1,0 +1,26 @@
+{
+  "arm": "spatial",
+  "image": "/tmp/capstone/pg-su-none/link/postgres.dom",
+  "image_sha256": "a5e1592ce215fe0350181525ff4f05c5f035b61d5c97c963accf5468dc4b8bcf",
+  "runner_sha256": "b2433002608aeebb8f0d96180cd4a7adfbc15be8ffc85d668c1503fe116f168d",
+  "fixture": "/home/zephyr/arms/postgres/capstone/build/fixture-ltree",
+  "extensions_staged_from": "/tmp/capstone/pg-su-none/share/extension",
+  "started_utc": "20261010-104617",
+  "extensions_wanted": [
+    "ltree"
+  ],
+  "extensions_available": [
+    "ltree"
+  ],
+  "extensions_preinstalled": [
+    "ltree"
+  ],
+  "fixture_provenance": null,
+  "mechanism_gate": null,
+  "ran": "/tmp/ltree-host/N64.sql",
+  "cases": 1,
+  "scored": 0,
+  "verdicts": {
+    "probe-faulted": 1
+  }
+}

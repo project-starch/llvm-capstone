@@ -1,55 +1,62 @@
 {
-  "case": 3,
-  "upstream_fix": "8c34261109",
-  "title": "lquery level with enough OR-variants wraps a uint16 totallen, ~65 KB -- leaves its block",
-  "consumer": "lquery cast (ltree extension)",
-  "class": "spatial",
-  "allocator_layer": "aset",
-  "trigger": "trigger.sql",
-  "live_in_pin": true,
-  "live_proof": "upstream 8c34261109, \"ltree: Fix overflows with lquery parsing\", absent at the 17.5 pin. Upstream: a single lquery level with many OR-separated variants overflows totallen, which is a uint16, because each variant contributes MAXALIGN(LVAR_HDRSIZE + len); once it wraps, the data written by LQL_NEXT() is corrupt and the access goes out of bounds. The trigger here is 66 variants of 1000 characters, about 66 KB against a uint16 ceiling of 65535. Independently established on the pin by host ASan (heap-buffer-overflow in the lquery path) and by the purecap arm, which raises SIGPROT on both builds.",
-  "fidelity": "real server, real allocator, in a contrib extension rather than core. ~65 KB, so it leaves its block",
-  "arms": {
-    "spatial": {
-      "oracle": "completes; the mechanism does not report",
-      "verdict": "detected",
-      "evidence": "capability fault: capstone-exec: domain fault cause=7 pc=0xc02023a8 address=0xc1e134a0 entry=0xc0200de0 code=0xc0200000-0xc5250000 last=0x4f preparing=0x4f sha256=25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e image=/mnt/host/applications/postgres-25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e.dom",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
-    },
-    "sublet": {
-      "oracle": "the mechanism reports, or the case completes and it did not",
-      "verdict": "NO-READING",
-      "evidence": "WITHDRAWN -- not a verdict. The arm faulted, but the fault does not depend on the defect. The negative control (control.sql, 64 OR-variants against the trigger's 66, so 64512 bytes against a 65535 ceiling that is never crossed) faults too, at the SAME instruction: cause 7, pc=0xe0202414, on the same image fcaa4a36beef67f1 and the same fixture (results/sublet-control-20261010-043120, against results/sublet-20261008-080000). Whatever this arm trips on while parsing a large lquery, it is not the uint16 wrap, so the case is out of this arm's denominator until the fault is understood. Found by review on PR #198, which asked for exactly this control before a single-run detection was trusted; it was right to ask.",
-      "run": "trigger run 2026-10-08, control run 2026-10-10, same image and fixture; see results/",
-      "extension_precreated": "ltree. Still true, and still not evidence that this arm can create it -- but moot for the verdict, since the verdict is withdrawn.",
-      "underlying_fault_still_open": "`CREATE EXTENSION ltree` faults on this arm, and now a plain large lquery parse faults as well, below any overflow. Both are open and both belong to whoever owns the Sublet runtime.",
-      "verdict_from": "results/matrix.tsv sublet: control-broken",
-      "verdict_note": "WITHDRAWN -- not a verdict. The arm faulted, but the fault does not depend on the defect. The negative control (control.sql, 64 OR-variants against the trigger's 66, so 64512 bytes against a 65535 ceiling that is never crossed) faults too, at the SAME instruction: cause 7, pc=0xe0202414, on the same"
-    },
-    "cheribsd-revocation": {
-      "oracle": "SIGPROT on the plain purecap build -- CHERI-DETECTED (2026-10-04). SIGPROT(34) on both purecap builds. ~65 KB, leaves the malloc block.",
-      "verdict": "CAUGHT",
-      "evidence": "SIGPROT(34) -- a capability violation",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
-      "verdict_from": "results/matrix.tsv cheribsd-revocation: detected"
-    },
-    "virtual-malloc": {
-      "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
-      "verdict": "NO-READING",
-      "verdict_note": "cause=28 pc=0x3f95001c7c in memcpy; in memcpy; declared sites none; its control.sql FAULTS too, so the fault is not the defect's",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc",
-      "verdict_reason": "unattributed"
-    },
-    "virtual-pg-pools": {
-      "oracle": "virtual profile with PostgreSQL's contexts on Sublet context pools (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
-      "verdict": "NO-READING",
-      "verdict_note": "this image cannot create ltree",
-      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools",
-      "verdict_reason": "out-of-denominator"
-    }
+ "case": 3,
+ "upstream_fix": "8c34261109",
+ "title": "lquery level with enough OR-variants wraps a uint16 totallen, ~65 KB -- leaves its block",
+ "consumer": "lquery cast (ltree extension)",
+ "class": "spatial",
+ "allocator_layer": "aset",
+ "trigger": "trigger.sql",
+ "live_in_pin": true,
+ "live_proof": "upstream 8c34261109, \"ltree: Fix overflows with lquery parsing\", absent at the 17.5 pin. Upstream: a single lquery level with many OR-separated variants overflows totallen, which is a uint16, because each variant contributes MAXALIGN(LVAR_HDRSIZE + len); once it wraps, the data written by LQL_NEXT() is corrupt and the access goes out of bounds. The trigger here is 66 variants of 1000 characters, about 66 KB against a uint16 ceiling of 65535. Independently established on the pin by host ASan (heap-buffer-overflow in the lquery path) and by the purecap arm, which raises SIGPROT on both builds.",
+ "fidelity": "real server, real allocator, in a contrib extension rather than core. ~65 KB, so it leaves its block",
+ "arms": {
+  "spatial": {
+   "oracle": "completes; the mechanism does not report",
+   "verdict": "detected",
+   "evidence": "capability fault: capstone-exec: domain fault cause=7 pc=0xe02023a8 address=0xe1e0a650 entry=0xe0200de0 code=0xe0200000-0xe5250000 last=0x4f preparing=0x4f sha256=a5e1592ce215fe0350181525ff4f05c5f035b61d5c97c963accf5468dc4b8bcf image=/mnt/host/applications/postgres-a5e1592ce215fe0350181525ff4f05c5f035b61d5c97c963accf5468dc4b8bcf.dom; ran against a fixture that already carried ltree, so this arm did not have to create it and this row says nothing about whether it can",
+   "run": "trigger, control and both threshold probes run 2026-10-10 on one image by shared/run-arm.py, so the control qualifies the detection",
+   "verdict_note": "Attributed by its own control and by the threshold: control.sql at 48 variants (16 + 48 x 1024 = 49168, under the 65535 ceiling by 16367) COMPLETES on the same image and fixture, and the same statement at 64 variants faults at the SAME instruction as the trigger while 63 completes. 64 is the first count that wraps, so the instruction fires at the boundary and not on large lqueries in general. This column has not been migrated to the judge's vocabulary yet, so the word here stays the one its nine cells use.",
+   "verdict_from": "results/spatial-20261010-104347",
+   "negative_control": "control-held, results/spatial-control-20261010-104936; threshold probes results/spatial-probe-N64-20261010-104617 (faulted) and results/spatial-probe-N63-20261010-104807 (completed)"
   },
-  "status": "spatial and cheribsd-revocation measured 2026-10-06, both detected; sublet is out of the denominator -- its fault does not depend on the defect, shown by the negative control",
-  "note": "The 2026-10-05 spatial and sublet runs are WITHDRAWN and carry no verdict. Both recorded silent on an image that did not contain ltree. A domain cannot dlopen, so an extension reaches it only by being linked in (patch 0015, ports/postgres/app/toolchain/static_modules.c), and the MODULES list of ports/postgres/app/build-domain.sh named only dict_snowball and plpgsql; the guest share directory likewise held plpgsql.control alone. The trigger's first statement, CREATE EXTENSION ltree, therefore failed on the missing control file and the lquery cast never executed. A control failure, so both arms are out of their denominators until they are rerun. build-domain.sh now links ltree, pg_trgm and fuzzystrmatch and stages their control and version scripts; both arm images were rebuilt on 2026-10-06 and carry six modules.",
-  "nested": true,
-  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
+  "sublet": {
+   "oracle": "the mechanism reports, or the case completes and it did not",
+   "verdict": "CAUGHT",
+   "evidence": "capability fault: capstone-exec: domain fault cause=7 pc=0xe0202414 address=0xe9e39440 entry=0xe0200e4c code=0xe0200000-0xe5320000 last=0x4f preparing=0x4f sha256=95157fa1d77f22552075bcda8a6dd26c405cd7473d247c2b64cf86f3716b93fd image=/mnt/host/applications/postgres-95157fa1d77f22552075bcda8a6dd26c405cd7473d247c2b64cf86f3716b93fd.dom; ran against a fixture that already carried ltree, so this arm did not have to create it and this row says nothing about whether it can",
+   "run": "trigger, control and both threshold probes run 2026-10-10 on one image by shared/run-arm.py, so the control qualifies the detection",
+   "extension_precreated": "ltree. Still true, and still not evidence that this arm can create it -- but moot for the verdict, since the verdict is withdrawn.",
+   "underlying_fault_still_open": "CREATE EXTENSION ltree faults on this arm, which is why the case runs against a fixture that already carries the extension. Stack size and .gct size are ruled out by measurement, and the purecap guest creates the extension without faulting, so the extension script is not what faults. It is unrelated to this case's verdict and belongs to the Sublet runtime.",
+   "verdict_from": "results/sublet-20261010-105107",
+   "verdict_note": "Attributed by its own control and by the threshold: control.sql at 48 variants (16 + 48 x 1024 = 49168, under the 65535 ceiling by 16367) COMPLETES on the same image and fixture, and the same statement at 64 variants faults at the SAME instruction as the trigger while 63 completes. 64 is the first count that wraps, so the instruction fires at the boundary and not on large lqueries in general.",
+   "negative_control": "control-held, results/sublet-control-20261010-105616; threshold probes results/sublet-probe-N64-20261010-105255 (faulted) and results/sublet-probe-N63-20261010-105440 (completed)",
+   "verdict_correction": "This cell was NO-READING until 2026-10-10 on a control of 64 variants that faulted too. That control was wrong: the per-level totallen accumulates MAXALIGN(LVAR_HDRSIZE + len), 1024 bytes per variant wherever MAXIMUM_ALIGNOF is 16, which is every arm here, so 64 variants came to 65552 and crossed the boundary the control was written to stay under."
+  },
+  "cheribsd-revocation": {
+   "oracle": "SIGPROT on the plain purecap build -- CHERI-DETECTED (2026-10-04). SIGPROT(34) on both purecap builds. ~65 KB, leaves the malloc block.",
+   "verdict": "CAUGHT",
+   "evidence": "SIGPROT(34) -- a capability violation",
+   "run": "defect and control run 2026-10-10 by shared/run-cheribsd.sh against the same deployed purecap tree",
+   "verdict_from": "results/cheribsd-revocation-20261010-094729",
+   "negative_control": "control-held, results/cheribsd-revocation-control-20261010-104207",
+   "verdict_note": "Attributed by its own control and by the threshold, bisected in the guest with one backend per input: CREATE EXTENSION ltree alone, and 2, 32 and 63 variants, all exit 0; 64 and 66 variants both exit 162 (SIGPROT). A variant costs 1024 bytes on this build, read back in band as the difference between pg_column_size of a 2-variant and a 3-variant lquery (2080 -> 3104), so 64 is the first count that wraps. The installed pg_config.h in the guest says MAXIMUM_ALIGNOF 8, which is not what the deployed ltree behaves as."
+  },
+  "virtual-malloc": {
+   "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
+   "verdict": "NO-READING",
+   "verdict_note": "cause=28 pc=0x3f95001c7c in memcpy; in memcpy; declared sites none; its control.sql FAULTS too, so the fault is not the defect's",
+   "verdict_from": "results/2026-10-10-virtual/virtual-malloc",
+   "verdict_reason": "unattributed"
+  },
+  "virtual-pg-pools": {
+   "oracle": "virtual profile with PostgreSQL's contexts on Sublet context pools (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
+   "verdict": "NO-READING",
+   "verdict_note": "this image cannot create ltree",
+   "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools",
+   "verdict_reason": "out-of-denominator"
+  }
+ },
+ "status": "spatial and cheribsd-revocation measured 2026-10-06, both detected; sublet is out of the denominator -- its fault does not depend on the defect, shown by the negative control",
+ "note": "The 2026-10-05 spatial and sublet runs are WITHDRAWN and carry no verdict. Both recorded silent on an image that did not contain ltree. A domain cannot dlopen, so an extension reaches it only by being linked in (patch 0015, ports/postgres/app/toolchain/static_modules.c), and the MODULES list of ports/postgres/app/build-domain.sh named only dict_snowball and plpgsql; the guest share directory likewise held plpgsql.control alone. The trigger's first statement, CREATE EXTENSION ltree, therefore failed on the missing control file and the lquery cast never executed. A control failure, so both arms are out of their denominators until they are rerun. build-domain.sh now links ltree, pg_trgm and fuzzystrmatch and stages their control and version scripts; both arm images were rebuilt on 2026-10-06 and carry six modules.",
+ "nested": true,
+ "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
 }

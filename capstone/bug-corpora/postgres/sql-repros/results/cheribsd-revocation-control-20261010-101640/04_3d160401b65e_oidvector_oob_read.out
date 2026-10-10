@@ -1,0 +1,12 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> 	 1: array	(typeid = 30, len = -1, typmod = -1, byval = f)
+	----
+	 1: array = "0 0"	(typeid = 30, len = -1, typmod = -1, byval = f)
+	----
+backend> 	 1: array	(typeid = 22, len = -1, typmod = -1, byval = f)
+	----
+	 1: array = "0 0"	(typeid = 22, len = -1, typmod = -1, byval = f)
+	----
+backend> 2026-10-10 10:24:08.673 UTC [2794] LOG:  checkpoint starting: shutdown immediate
+2026-10-10 10:24:09.273 UTC [2794] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.546 s, sync=0.005 s, total=0.602 s; sync files=2, longest=0.003 s, average=0.002 s; distance=0 kB, estimate=0 kB; lsn=0/15549B0, redo lsn=0/15549B0
