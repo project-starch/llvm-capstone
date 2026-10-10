@@ -29,13 +29,15 @@ of its 5 hunks apply, and the fifth, in `mrb_close_task`, has no target at the p
 |---|---|---|
 | native, pin (`probe/native-control.sh`) | 1 | `CASE11 ready`, SIGSEGV (exit 139) in `mrb_gc_mark` < `gc_mark_children` < `incremental_marking_phase` < `incremental_gc` < `incremental_gc_finish` < `mrb_full_gc` (gdb) |
 | native, pin + fix | 1 | `CASE11 completed 30`, exit 0 |
+| native ASan, pin (`NC_ASAN=1`) | 1 | `CASE11 ready`, then heap-use-after-free, READ of size 4, in `gc_mark_children` (gc.c:837), 8 bytes into a 1024-byte block freed by `mrb_free` in `mrb_execute_proc_synchronously` (task.c:1199) and allocated in `task_init_context` (task.c:267): the task's stack |
+| native ASan, pin + fix | 1 | `CASE11 completed 30`, exit 0, no report |
 | virtual-malloc, pin (`261f758d08f5229a`) | 2 | `CASE11 ready`, cause 25 in `gc_mark_children`, both runs |
 | virtual-malloc, pin + fix (`bc758328cbab8b70`) | 2 | exit 0 both runs; `CASE11 completed 30` printed on one, the other's console lost that line |
 
 The native backtrace is the one upstream's fix message reports (`mrb_gc_mark` under
 `gc_mark_children`, the `MRB_TT_ENV` case, under `mrb_full_gc`). The virtual pair ran in one boot,
 alternating. The fixed virtual build is `build-mruby-domain.sh` over a copy of the stock tree with
-the hunks applied (79 s); the native pair is two full native builds with the port's native
-configuration (127 s for both, with the runs).
+the hunks applied (79 s); each native pair is two full native builds with the port's native
+configuration (127 s for both, with the runs; 144 s under ASan).
 
 N = 1 per case cell in the matrix; N = 2 per arm for the virtual pair.
