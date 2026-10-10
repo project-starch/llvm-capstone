@@ -33,8 +33,8 @@
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3fbb426cd4 in sqlite3BtreeUpdateMeta; by function: sqlite3BtreeUpdateMeta is where host ASan reported it",
-      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
+      "verdict_note": "cause=24 pc=0x3f83426cd4 in sqlite3BtreeUpdateMeta; by function: sqlite3BtreeUpdateMeta is where host ASan reported it",
+      "verdict_from": "results/2026-10-11-virtual-lookaside/virtual-nested-pools"
     }
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10280b794; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10200b994; cheribsd-revocation run 2026-10-04/05: no verdict: backup step1 rc=0",

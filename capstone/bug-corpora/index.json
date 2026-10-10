@@ -956,7 +956,7 @@
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
+        "virtual-nested-pools": "results/2026-10-11-virtual-lookaside/virtual-nested-pools"
       },
       "where": "capstone/bug-corpora/sqlite/engine-repros"
     },

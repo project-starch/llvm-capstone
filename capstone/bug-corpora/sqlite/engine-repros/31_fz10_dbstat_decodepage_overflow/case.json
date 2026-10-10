@@ -33,8 +33,8 @@
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=28 pc=0x3fa2a12804 in statDecodePage; by function: statDecodePage is where host ASan reported it",
-      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
+      "verdict_note": "cause=28 pc=0x3fa6e12b10 in statDecodePage; by function: statDecodePage is where host ASan reported it",
+      "verdict_from": "results/2026-10-11-virtual-lookaside/virtual-nested-pools"
     }
   },
   "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",
