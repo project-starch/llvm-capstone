@@ -13,10 +13,18 @@
   "layer_note": "",
   "arms": {
     "virtual-malloc": {
-      "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it"
+      "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
+      "verdict": "NO-READING",
+      "verdict_note": "cause=25 pc=0x3fae3ac038 in fnv; in fnv; ASan sites ['memcpy', 'siphash13']",
+      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc",
+      "verdict_reason": "unattributed"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc"
+      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
+      "verdict": "NO-READING",
+      "verdict_note": "cause=25 pc=0x3f923ac260 in fnv; in fnv; ASan sites ['memcpy', 'siphash13']",
+      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools",
+      "verdict_reason": "unattributed"
     },
     "cheribsd-revocation": {
       "oracle": "completion is admissible and is the expected outcome under this guest's configuration: the run records security.cheri.runtime_revocation_every_free_default as 0 and runtime_revocation_async as 1, so revocation is sweep-based and asynchronous, and a stale access reached before the next sweep still holds a tagged capability. Where a sweep has run first the access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). A bounds fault would falsify this."

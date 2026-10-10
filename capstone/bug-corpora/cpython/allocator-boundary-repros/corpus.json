@@ -36,5 +36,9 @@
  "arm_configurations": {
   "virtual-malloc": "virtual-cpython",
   "virtual-nested-pools": "virtual-cpython-pools"
+ },
+ "verdict_bundles": {
+  "virtual-malloc": "results/2026-10-10-sublet-isa/virtual-malloc",
+  "virtual-nested-pools": "results/2026-10-10-sublet-isa/virtual-nested-pools"
  }
 }
