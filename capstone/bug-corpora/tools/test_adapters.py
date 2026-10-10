@@ -282,3 +282,77 @@ class VirtualCases(unittest.TestCase):
         self.assertTrue(self.rv.fixed_ok("3", ok, {"kind": "exit", "value": 0}))
         self.assertFalse(self.rv.fixed_ok("3", ok, {"kind": "exit", "value": 1}))
         self.assertFalse(self.rv.fixed_ok("3", "case=3 arm=fixed\nVERDICT DEFECT-REPRODUCED\n", {"kind": "exit", "value": 0}))
+
+
+class VirtualHosted(unittest.TestCase):
+    """run-virtual-cases.py --prebuilt: the nested corpora's port-built programs (wmem first)."""
+    rv = load(HERE / "run-virtual-cases.py", "run_virtual_cases_hosted")
+    FAULT = VirtualCases.FAULT
+    READY, DONE = "WM_DEFECT case={n} ready", "WM_DEFECT case={n} mode={mode} completed"
+    CTL = {"controls": {"c": "fault"}, "controls_for_missed": ["c"]}
+
+    def obs(self, text, result, symbol, differential=True, mode="0"):
+        o = self.rv.observe_hosted("13", mode, text, result, FakeSymbols(symbol), "wm_probe",
+                                   self.READY, self.DONE, differential)
+        o.controls = [v.Control("c", "fault", "")]
+        return o
+
+    def test_fault_at_the_cases_probe_after_ready_is_caught(self):
+        o = self.obs("WM_DEFECT case=13 ready\n" + self.FAULT, {"kind": "signal", "value": 11}, "wm_probe")
+        self.assertEqual(v.judge(o, self.CTL)[0], v.CAUGHT)
+
+    def test_planted_fault_off_the_probe_is_unattributed_not_caught(self):
+        o = self.obs("WM_DEFECT case=13 ready\n" + self.FAULT, {"kind": "signal", "value": 11}, "wmem_block_free")
+        self.assertEqual(v.judge(o, self.CTL)[:2], (v.NO_READING, "unattributed"))
+
+    def test_the_other_probe_function_is_not_this_cases(self):
+        o = self.obs("WM_DEFECT case=13 ready\n" + self.FAULT, {"kind": "signal", "value": 11}, "wm_write_probe")
+        self.assertEqual(v.judge(o, self.CTL)[:2], (v.NO_READING, "unattributed"))
+
+    def test_fault_before_ready_is_a_setup_fault(self):
+        o = self.obs(self.FAULT, {"kind": "signal", "value": 11}, "wm_probe")
+        self.assertEqual(v.judge(o, self.CTL)[:2], (v.NO_READING, "setup-fault"))
+
+    def test_differential_reproduced_and_finished_is_missed(self):
+        text = "WM_DEFECT case=13 ready\nWM_DEFECT case=13 mode=0 completed\nVERDICT DEFECT-REPRODUCED x\n"
+        o = self.obs(text, {"kind": "exit", "value": 0}, None)
+        self.assertEqual(v.judge(o, self.CTL)[0], v.MISSED)
+
+    def test_differential_without_reproduced_is_not_a_miss(self):
+        text = "WM_DEFECT case=13 ready\nWM_DEFECT case=13 mode=0 completed\nVERDICT INCONCLUSIVE\n"
+        o = self.obs(text, {"kind": "exit", "value": 1}, None)
+        self.assertEqual(v.judge(o, self.CTL)[:2], (v.NO_READING, "inconclusive"))
+
+    def test_protected_run_that_finished_is_missed_and_one_that_did_not_is_not(self):
+        done = "WM_DEFECT case=13 ready\nWM_DEFECT case=13 mode=1 completed\n"
+        self.assertEqual(v.judge(self.obs(done, {"kind": "exit", "value": 0}, None, False, "1"), self.CTL)[0], v.MISSED)
+        cut = "WM_DEFECT case=13 ready\n"
+        self.assertEqual(v.judge(self.obs(cut, {"kind": "exit", "value": 0}, None, False, "1"), self.CTL)[:2],
+                         (v.NO_READING, "inconclusive"))
+
+    def test_exit_75_is_control_failed(self):
+        o = self.obs("CONTROL-FAILED the virtual heap lent no payload\n", {"kind": "exit", "value": 75}, None)
+        self.assertEqual(o.infra, "control-failed")
+
+    def test_fixed_needs_finished_line_verdict_and_exit_0(self):
+        ok = "WM_DEFECT case=13 mode=1 completed\nVERDICT FIXED y\n"
+        self.assertTrue(self.rv.fixed_hosted("13", "1", ok, {"kind": "exit", "value": 0}, self.DONE))
+        self.assertFalse(self.rv.fixed_hosted("13", "0", ok, {"kind": "exit", "value": 0}, self.DONE))
+        self.assertFalse(self.rv.fixed_hosted("13", "1", ok, {"kind": "exit", "value": 1}, self.DONE))
+
+    def test_cache_check_refuses_the_wrong_configuration_and_sdk(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            sdk = t / "sdk"
+            sdk.mkdir()
+            (t / "CMakeCache.txt").write_text(f"WM_SUBLET:BOOL=ON\nWM_CHUNKS:BOOL=ON\nCAPSTONE_SDK:PATH={sdk}\n"
+                                              "PORT_PLATFORM:STRING=capstone-application\n")
+            want = self.rv.HOSTED["wmem-repros"]["cache"]
+            self.assertEqual(self.rv.cache_says(t, want["virtual-nested-pools"], sdk), "")
+            self.assertIn("WM_LIBC_SYSTEM", self.rv.cache_says(t, want["virtual-malloc"], sdk))
+            self.assertIn("CAPSTONE_SDK", self.rv.cache_says(t, want["virtual-nested-pools"], t))
+
+    def test_stem_matches_the_ports_program_name(self):
+        self.assertEqual(self.rv.stem(Path("13_0261fd7da6_http_range_cursor_past_chunk")),
+                         "13-http-range-cursor-past-chunk")

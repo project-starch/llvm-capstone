@@ -152,6 +152,64 @@ Predictions:
 - carved on virtual-nested-pools, 13: CAUGHT at the labelled probe, as the physical Sublet carve read
   (13/13).
 
+### R7. wmem-repros on virtual Capstone: both columns, with controls that can fire both ways
+
+**The port.** The changes come from the unmerged prior-art branch `virtual-capstone-bug-corpora`,
+commits 319f385c2d3e and 6483372d3ffa. Only the hunks the corpus needs were taken:
+- a `capstone-application` preset;
+- a `WM_SUBLET` option, which puts the Sublet region and chunk layers into a hosted capability build;
+- `WM_DOMAIN` split into `WM_DOMAIN` (freestanding) and `WM_CAPABILITY` (Sublet handles).
+
+The branch's line-shifting hunks were dropped (comments in `backing.c`, the `port.h` payload override,
+`main.c`), because the CheriBSD and PoisonCap builds are Debug builds and their line tables moved. With
+those hunks gone, 185 of 185 physical images are byte-identical before and after the change:
+- the domain builds: chunks, region, reference and control 90;
+- native libc and native chunks;
+- CheriBSD libc;
+- PoisonCap.
+
+A rebuild with no change also reproduces every hash, so the comparison can fire.
+
+**The corpus.** `driver.c` is untouched. `shared/driver-virtual.c` includes it and replaces only the
+hosted `main()`:
+- both modes run;
+- the payload comes from `__capstone_sublet_malloc_linear`;
+- the fix differential runs in either mode.
+
+The new control `controls/virtual/91_ctl_chunk_freed_in_block` frees a BLOCK chunk individually, then
+reads it. `controls/virtual/90` is a link to the existing jumbo control.
+
+**The runner.** `tools/run-virtual-cases.py --prebuilt` runs the port's own builds:
+- `virtual-malloc`: `-DWM_LIBC_SYSTEM=ON -DWM_CHUNKS=OFF`, the build the CheriBSD libc arm ran.
+- `virtual-nested-pools`: `-DWM_SUBLET=ON -DWM_CHUNKS=ON`.
+
+It refuses a build whose CMakeCache or SDK is not the arm's. A catch is a fault in the case's own probe
+function (`wm_probe` for a read, `wm_write_probe` for a write, from its case.c), after its
+`WM_DEFECT case=N ready` line. Its tests include a planted off-probe fault (NO-READING) and a mutant
+that accepts any fault (2 tests fail).
+
+Platform: the Phase 0 kit, the virtual SDK and LLVM bd372e25f5fb. One boot per arm. The controls run
+in the same boot.
+
+Predictions:
+- Controls on `virtual-malloc`: bounds-malloc, uaf-malloc and 90 fault; 91 completes. On
+  `virtual-nested-pools`: all four fault.
+- `virtual-malloc`, 22 MISSED. Each buggy differential prints DEFECT-REPRODUCED and exits 0, as all 22
+  did on the CheriBSD libc arm:
+  - the 13 temporal cases' stale chunk is reoccupied inside a block wmem kept;
+  - the 9 spatial crossings stay inside one block;
+  - virtual mallocng sees neither.
+- `virtual-nested-pools`, 22 CAUGHT in the case's probe function, as the physical sublet-chunks arm read
+  (22/22):
+  - temporal: cause 24 or 25;
+  - spatial: cause 28.
+- Every fixed arm: VERDICT FIXED, exit 0.
+- Hazards, written down before the run:
+  - Several cases faulting at one pc outside their probe is a harness fault, never a catch. The rule
+    reads it NO-READING (unattributed). The prior-art branch's memcached run showed 6 such faults.
+  - A 384 MiB payload the VM cannot give reads CONTROL-FAILED, and every case would be NO-READING; the
+    fix would then be a smaller payload, recorded.
+
 ## Outcomes (written after each run)
 
 - **R1** (`memcached/allocator-repros/results/2026-10-10-cheribsd-fixed-buggy/`): as predicted, 18 of 18 arms.

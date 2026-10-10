@@ -176,6 +176,40 @@
         "bounds-malloc",
         "uaf-malloc"
       ]
+    },
+    "virtual-wmem-libc": {
+      "target": "capstone-virtual",
+      "summary": "wireshark/wmem-repros on the virtual profile with wmem STOCK on virtual mallocng: the wmem port's hosted build (preset capstone-application, -DWM_LIBC_SYSTEM=ON -DWM_CHUNKS=OFF), so g_malloc/g_free are the virtual heap's malloc/free at the requested size -- the build the CheriBSD libc arm ran. A packet-pool block, an epan BLOCK block and a jumbo are each one object to the heap; the chunks wmem carves inside a block are not",
+      "mechanism": "exact bounds and lifetime retirement of every block wmem takes from the system; none per chunk",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "jumbo-reset-90": "fault",
+        "chunk-free-91": "complete"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "jumbo-reset-90",
+        "chunk-free-91"
+      ]
+    },
+    "virtual-wmem-chunks": {
+      "target": "capstone-virtual",
+      "summary": "the same corpus with the wmem port's Sublet region and chunk layers in the process (-DWM_SUBLET=ON -DWM_CHUNKS=ON, shared/driver-virtual.c): the payload is lent by the virtual heap as one linear capability (__capstone_sublet_malloc_linear), every block a region inside it and every chunk of the block allocator a region of its own; run in mode 1, a packet-pool reset and a chunk free revoke",
+      "mechanism": "per-chunk bounds and revocation in wmem, over a payload the virtual heap lends",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "jumbo-reset-90": "fault",
+        "chunk-free-91": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "jumbo-reset-90",
+        "chunk-free-91"
+      ]
     }
   }
 }
