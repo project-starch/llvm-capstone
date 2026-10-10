@@ -1,0 +1,27 @@
+{
+ "case": 6,
+ "upstream_fix": "40727c420c",
+ "title": "reg_code_blocks carries one count for both its size and its used entries, so a recursive compile writes into a reallocated array",
+ "consumer": "regcomp.c",
+ "class": "temporal",
+ "trigger": "trigger.pl",
+ "live_in_pin": true,
+ "live_proof": "upstream fixed it in 40727c420c (40727c420c8e9ed61971dd46fc738132b9e4d5db) (2024-05-06). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin regexp.h:94 int count (one field for both size and used); regcomp.c:7291 dst = &pRExC_state->code_blocks->cb[n] with n reset per recursion). Host ASan at the pin: ASan: SEGV (rc=77); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
+ "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+ "arms": {
+  "sysalloc-bounds": {
+   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
+  },
+  "sysalloc-sublet": {
+   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
+  },
+  "sublet-svheads": {
+   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
+  },
+  "cheribsd-revocation": {
+   "oracle": "SIGPROT: the defence reports; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: SIGPROT: the defence reports"
+  }
+ },
+ "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
+ "allocator_layer": "system allocator (the reg_code_block array, via Newx/Renew)"
+}

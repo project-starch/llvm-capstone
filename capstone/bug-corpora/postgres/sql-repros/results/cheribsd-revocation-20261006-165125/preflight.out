@@ -1,0 +1,8 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> 	 1: backend_runs_sql	(typeid = 23, len = 4, typmod = -1, byval = t)
+	----
+	 1: backend_runs_sql = "1"	(typeid = 23, len = 4, typmod = -1, byval = t)
+	----
+backend> backend> backend> backend> backend> backend> 2026-10-06 16:52:25.036 UTC [12566] LOG:  checkpoint starting: shutdown immediate
+2026-10-06 16:52:25.407 UTC [12566] LOG:  checkpoint complete: wrote 170 buffers (1.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.342 s, sync=0.011 s, total=0.372 s; sync files=47, longest=0.001 s, average=0.001 s; distance=1174 kB, estimate=1174 kB; lsn=0/167A500, redo lsn=0/167A500

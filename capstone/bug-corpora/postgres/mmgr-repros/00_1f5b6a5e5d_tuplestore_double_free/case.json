@@ -29,7 +29,13 @@
     },
     "native-detect": {
       "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes with no capability fault; the case's own PG_DEFECT probe prints twice, so the defective sequence provably executed -- REACHED-SILENT (2026-10-05, plain purecap, revocation=1 every_free=0). A use-after-free between two palloc chunks never crosses a malloc boundary, so there is nothing for a malloc-granular revoker to reclaim.",
+      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts with PG_POISONCAP off"
     }
   },
-  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU: mode 0 completes with tolerated_double_drops=1 and mode 1 faults in GetMemoryChunkMethodID, so the pair holds. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case."
+  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU: mode 0 completes with tolerated_double_drops=1 and mode 1 faults in GetMemoryChunkMethodID, so the pair holds. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case.",
+  "nested": true,
+  "nested_why": "The object comes from PostgreSQL's own memory manager -- a chunk aset.c or slab.c carved out of a block it took from malloc -- so the defect is nested by the allocator that served it."
 }

@@ -1,0 +1,103 @@
+{
+  "case": 0,
+  "upstream_fix": "b7946098b1",
+  "title": "ff_sws_alphablendaway averages the alpha row below the plane's last on a subsampled odd size",
+  "consumer": "libswscale/alphablend.c, ff_sws_alphablendaway()",
+  "object": "the alpha plane of a YUVA420P frame, one of four planes av_frame_get_buffer carves from a single AVBuffer",
+  "lifetime_ender": "NONE -- the frame is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "a vertical average reads one row past the alpha plane, inside the frame's single AVBuffer",
+  "allocator_layer": "av_frame_get_buffer over av_malloc: every plane of the frame is carved from ONE AVBuffer, which is what makes the crossing nested",
+  "fidelity": "real allocator, model consumer. The frame, its planes and its single AVBuffer come from real libavutil; the case asserts both structural facts rather than assuming them -- buf[1] == NULL, and a whole row past the alpha plane still inside the buffer (measured slack 1024 bytes). The consumer is reduced to the one average the fix changed, at x = 0 on the last subsampled row, with the fix's own condition subsample_row = y_subsample && (y << y_subsample) + 1 < lum_h as the only difference between the arms. The horizontal half of the same overread, a[2x + 1] past the row's width, is left out; PROVENANCE.md says so.",
+  "live_in_pin": false,
+  "live_proof": "the fix is an ancestor of n9.0.1 (git merge-base --is-ancestor b7946098b1 n9.0.1 succeeds), and the pin carries the fixed form: 'subsample_row' occurs 5 times in n9.0.1:libswscale/alphablend.c while the pre-fix 'x_subsample || y_subsample' condition occurs 0 times, with ff_sws_alphablendaway present as the positive control that the search reaches the file. The case reconstructs the pre-fix consumer shape against the shipped allocator -- the convention at ../../memcached/allocator-repros/README.md:132-135, carried by 27 of the 33 cases in this tree.",
+  "distinguishing": "the arms differ by the fix's own condition and by nothing else. The frame, the plane, the row and the x index are identical in both; only whether the row below is averaged changes.",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm reports crossed=1 contained=1 damage=1, the fixed arm crossed=0 contained=1 damage=0. contained=1 on BOTH arms is the structural claim: a whole row past the plane is inside the frame's one AVBuffer, with 1024 bytes to spare. MEASURED 2026-10-06, results/20261006-native-plane/.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "oracle": "NO ASan report, and that is the finding rather than a gap: the read leaves the PLANE, not the ALLOCATION, so no redzone sits where it lands. MEASURED two-sided 2026-10-06 -- silent on both arms, exit 0. The positive control for the detector is a sibling corpus rather than a contrived case: memcached/plain-heap-repros/00 crosses the malloc bound and ASan reports it in the same tree on the same day.",
+      "status": "measured"
+    },
+    "spatial": {
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **NOT CAUGHT; the defect reproduced**: the sequence completed with the crossing made, which the case's own CHECKs place inside ONE allocation, so an allocation-granular bound is in bounds for it. The bound that was in force: this libavutil was configured with HAVE_POSIX_MEMALIGN 0, so av_frame_get_buffer -> av_buffer_alloc -> av_malloc reaches the SDK's malloc, which narrows the frame's single buffer to its size. The read at offset 160 of the alpha plane lies inside upstream's own 1024-byte padded plane, inside that bound.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 9708638436b7117b. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: the sequence completes. The crossing stays inside one av_malloc, so a per-allocation bound is in bounds for it and the bounds-only arm cannot see it. NOT MEASURED -- this corpus has no capstone-domain runner.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "NOT CAUGHT"
+    },
+    "sublet": {
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **NOT CAUGHT; the defect reproduced**: the sequence completed with the crossing made, which the case's own CHECKs place inside ONE allocation, so an allocation-granular bound is in bounds for it. The bound that was in force: this libavutil was configured with HAVE_POSIX_MEMALIGN 0, so av_frame_get_buffer -> av_buffer_alloc -> av_malloc reaches the SDK's malloc, which narrows the frame's single buffer to its size. The read at offset 160 of the alpha plane lies inside upstream's own 1024-byte padded plane, inside that bound.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image de9a3e0e6d8c189c. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED: the sequence completes, for the spatial arm's reason plus its own -- revocation has nothing to fire on while the frame is alive. RETRACTED 2026-10-06: this oracle previously said a discriminating reading needs a plane-narrowing adapter. Measured, it does not help: av_frame_get_buffer pads to FFALIGN(height,32), so the alpha plane's OWN allocated extent is 1024 bytes while the logical plane is 160, and this case reads at offset 160 -- inside upstream's own plane extent. An adapter narrowing to FFmpeg's layout cannot see it; only a bound tighter than upstream's own allocation could, and that would fault legitimate code (SIMD tail reads, av_image_copy_to_buffer over padded_height). NOT MEASURED, and not a gap.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "NOT CAUGHT"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the last row's vertical average read the alpha row below the plane's last, inside the frame's ). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed prediction).",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset after sourcing the project environment, and no SDK, purecap sysroot or image exists here.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: completes -- mode 0 bounds the allocation, and the crossing stays inside it.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF; libavutil built FFPURECAP_MALLOC_ONLY=1 (booted on the second host)"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the last row's vertical average read the alpha row below the plane's last, inside the frame's ). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed prediction).",
+      "note": "UNMEASURABLE ON THIS HOST, same check as the arm above.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: completes -- mode 1 adds temporal protection and no lifetime ends here.",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation; libavutil built FFPURECAP_MALLOC_ONLY=1, because this platform's posix_memalign returns a non-zero status under quarantine (booted on the second host)"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "MEASURED 2026-10-08 on this host, revocation ON: the sequence COMPLETES on both arms and prints its own verdict -- VERDICT FIXED on the fixed arm, VERDICT DEFECT-REPRODUCED on the buggy one. **NOT CAUGHT, which CONFIRMS this arm's committed prediction** (the sibling plain-heap corpus's bundle records a REFUTED prediction; this one is the other way round). THE MECHANISM IS THIS CORPUS'S OWN MEASUREMENT, not an inference: av_frame_get_buffer carves every plane from ONE AVBuffer and pads to FFALIGN(height, 32), so the alpha plane's allocated extent is 1024 bytes against a logical 160 -- the row past the plane is still inside the allocation. CheriBSD bounds the allocation, not the plane, so no fault is possible and none occurred. That is the nested-spatial cell stated as a measurement rather than as a prediction: a per-allocation bound is blind here by construction. Platform controls fired in the same boot: cheribsd-abi reported `CHERI_ABI pointer_bytes=16 runtime_revocation=1`, cheribsd-bounds reported CHERI_BOUNDARY_READY and SIGPROT.",
+      "note": "Measured at last. The earlier note said UNMEASURABLE ON THIS HOST, 'same check as the PoisonCap arms' -- that was true of PoisonCap and WRONG of CheriBSD once a purecap vehicle existed here. The real blocker was specific to this corpus and is now removed: the cases link REAL libavutil, so a purecap libavutil had to be cross-built (verified by ELF flags EF_RISCV_CAP_MODE/EF_RISCV_CHERIABI, not by the build command), and the read probe had to stop being `static` in corpus.h so supervise could resolve it. PoisonCap remains genuinely absent from this host: not yet done is not the same as cannot be done.",
+      "status": "measured",
+      "evidence": "capstone/bug-corpora/ffmpeg/plane-repros/results/20261008-cheribsd"
+    },
+    "capstone-subobject": {
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-subobject/: **NOT CAUGHT; the defect reproduced**: the sequence completed with the crossing made, inside one allocation and outside anything this arm narrows. Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -Xclang -fcapstone-subobject-bounds: C1 v1 narrows a struct's non-last ARRAY field to the field; scalars, the last member and flexible arrays are not narrowed. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751958); uaf RETURNED; subobj CAUGHT (cause=7 pc=0xc670e5b8 address=0xc6751948). Image 2af6bd8d96b8a1ad. Predicted before the run (49498f856e87): DEFECT-REPRODUCED; the prediction held."
+    },
+    "capstone-carve-bounds": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 heap_log=22 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone-carve-bounds/: **CAUGHT** at ffp_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc020fba0, address=0xc02788a0 (the labelled probe). Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap with -DFFC_CARVE_BOUNDS: ffc_carve() narrows each carved region to its own extent with __builtin_capstone_cap_shrink, the remedy at the carving code. Controls in the same boot: clean RETURNED; oob CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251948); uaf RETURNED; subobj RETURNED. Image f10ad50364ba5d9d. Predicted before the run (83dcfa032845): CAUGHT; the prediction held."
+    },
+    "cheribsd-subobject": {
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, every case built with -Xclang -cheri-bounds=subobject-safe (booted on the second host)",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-subobject/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED the last row's vertical average read the alpha row below the plane's last, inside the frame's ). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; subobj-control: exit 162). Predicted before the run (886abf4cc336)."
+    },
+    "cheribsd-carve-bounds": {
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, the case built with -DFFP_CARVE_BOUNDS (booted on the second host)",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd-carve-bounds/: **CAUGHT**: SIGPROT, exit 162 (the runner does not supervise this corpus, so si_code is not recorded). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (83dcfa032845)."
+    },
+    "sublet-carve": {
+      "target": "Capstone domain, Sublet heap; -DFFP_SUBLET_CARVE: the Sublet port of av_frame_get_buffer's carve (shared/sublet-frame.c, linked with -Wl,--wrap=av_frame_get_buffer) -- the frame buffer lent LINEAR and split into one Sublet region per plane, each plane pointer an alias bounded to the plane's allocated extent as upstream lays it out (offsets learned from the real av_frame_get_buffer; extents av_image_fill_plane_sizes at FFALIGN(height, 32))",
+      "oracle": "the sequence completes: the read at offset 160 of the alpha plane is inside the 1024 bytes upstream allocates for that plane (padded_height = 32 rows), which is the extent a faithful port issues. This is a finding about the remedy, not a gap: the only bound that catches it is tighter than FFmpeg's own allocation and faults legitimate padded_height reads (README, 'Arms not measured here'). The plane controls must fault in the same boot: a read one byte past the extent (bound) and a read after av_frame_free (revocation). MEASURED 2026-10-09, results/2026-10-09-sublet-carve/: the sequence COMPLETES, **NOT CAUGHT** -- VERDICT DEFECT-REPRODUCED the last row's vertical average read the alpha row below the plane's last, inside the frame's one AVBuffer; alpha region [2144,3168); fixed FIXED exit=0; image 581663c4959757fe; plane-bound-control faulted (cause 5) and plane-free-control faulted (cause 24) in the same boot.",
+      "prediction": "NOT CAUGHT",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "03c471feabcc"
+    }
+  },
+  "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-carve-bounds/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): NOT CAUGHT.",
+  "nested": true,
+  "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
+}

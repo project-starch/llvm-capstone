@@ -1,0 +1,27 @@
+{
+  "case": 19,
+  "upstream_fix": "gh-142664",
+  "title": "[3.13] gh-142664: fix UAF in `memoryview.__hash__` via re-entrant data's `__hash__` (GH-143217) (#143222)",
+  "consumer": "not established; the trigger is the upstream fix's own regression test",
+  "class": "temporal",
+  "trigger": "trigger.py",
+  "live_in_pin": true,
+  "live_proof": "measured, not asserted: the trigger runs on the pinned 3.13.7 ASan build (PYTHONMALLOC=malloc, ASAN_OPTIONS=detect_leaks=0) and reports ASAN:heap-use-after-free in a 4355-byte region. Running it is the liveness proof -- a sanitizer report here means the defect is present in this tree.",
+  "fidelity": "the trigger is upstream's own reproducer from the issue, run through the real interpreter rather than reduced to a C model. What it does NOT establish is which arm ought to catch it.",
+  "allocator_layer": "libc malloc (the object never reaches a pymalloc pool)",
+  "allocator_consumed": "no",
+  "layer_note": "",
+  "arms": {
+    "spatial": {
+      "oracle": "a revoked-capability fault (cause 24) at the stale access: the object is a system allocator block and the base arm enforces revocation on its free. A bounds fault or completion would falsify this. The fault must carry cause 5, 7 or 24; any other cause, cause 2 (ILLEGAL_INST) among them, is an ordinary trap rather than this arm's mechanism and falsifies this.",
+      "oracle_premise": "Corrected at review, 2026-10-10: the premise that this arm revokes is false. Its level0 heap only marks a freed block free (capstone/ports/musl-capstone/runtime/level0.c, l0_free), patch 0009 issues no revoke, and the runtime's only revoke sites release thread context areas, reached only through __clone; so nothing on this arm revokes heap memory. A cause 24 here is UNEXP_OP_TYPE, an access through an untagged base register: a pointer slot that later data overwrote (tag integrity), or an integer or NULL used as a pointer -- not revocation. The oracle above is kept as written; see results/20261006/README.md, 'Corrections made at review'."
+    },
+    "sublet": {
+      "oracle": "fault: the object is a libc malloc block"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completion is admissible and is the expected outcome under this guest's configuration: the run records security.cheri.runtime_revocation_every_free_default as 0 and runtime_revocation_async as 1, so revocation is sweep-based and asynchronous, and a stale access reached before the next sweep still holds a tagged capability. Where a sweep has run first the access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). A bounds fault would falsify this."
+    }
+  },
+  "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial SILENT (spatial-20261006-131005); sublet DETECTED cause=24 (sublet-20261006-123446); cheribsd-revocation SILENT (boundary-20261008-075318)"
+}

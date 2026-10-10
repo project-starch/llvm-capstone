@@ -1,0 +1,22 @@
+# plane-repros on sublet-carve (pre-registered 03c471feabcc), one VM boot
+# SDK heap sublet, runtime b73508e5005bd77e; clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)
+# cc args: -DFFP_SUBLET_CARVE -isystem ~/dev/llvm-capstone-cc/build-release/lib/clang/22/include -I/tmp/capstone/ffmpeg-app/src-9.0.1-f7e8b586f7b4 -I/tmp/capstone/ffmpeg-app/domain/ffmpeg-build -Icapstone/runtime/include capstone/bug-corpora/ffmpeg/plane-repros/shared/sublet-frame.c -Wl,--wrap=av_frame_get_buffer /tmp/capstone/ffmpeg-app/domain/ffmpeg-build/libavutil/libavutil.a
+  control clean  RETURNED   required RETURNED  ok  CONTROL clean RETURNED 1
+  control oob    CAUGHT     required CAUGHT    ok  cause=7 pc=0xc020f70c address=0xc4802018 in ctl_write_probe+0x58 (the labelled probe)
+  control uaf    CAUGHT     required CAUGHT    ok  cause=24 pc=0xc020f758 address=0x0 in ctl_read_probe+0x38 (the labelled probe)
+  control subobj RETURNED   required RETURNED  ok  CONTROL subobj RETURNED b0=0x5a
+  control carve-99 fixed=FIXED buggy=CAUGHT ok  cause=5 pc=0xc0210f60 address=0xc4803c60 in ffp_read_probe+0x38 (the labelled probe)
+  control carve-98 fixed=FIXED buggy=CAUGHT ok  cause=24 pc=0xc0210f54 address=0x0 in ffp_read_probe+0x38 (the labelled probe)
+  00_b7946098b1_alphablend_row_past_plane                        DEFECT-REPRODUCED  ok  VERDICT DEFECT-REPRODUCED the last row's vertical average read the alpha row below the plane's last, inside th
+
+# image 581663c4959757fe; the regions the port issued, and the verdicts:
+fixed: sublet-frame plane 0 region=[0,1024) linesize=32
+fixed: sublet-frame plane 1 region=[1056,1568) linesize=32
+fixed: sublet-frame plane 2 region=[1600,2112) linesize=32
+fixed: sublet-frame plane 3 region=[2144,3168) linesize=32
+fixed: VERDICT FIXED subsample_row is false on the last row, so only rows inside the plane are averaged
+buggy: sublet-frame plane 0 region=[0,1024) linesize=32
+buggy: sublet-frame plane 1 region=[1056,1568) linesize=32
+buggy: sublet-frame plane 2 region=[1600,2112) linesize=32
+buggy: sublet-frame plane 3 region=[2144,3168) linesize=32
+buggy: VERDICT DEFECT-REPRODUCED the last row's vertical average read the alpha row below the plane's last, inside the frame's one AVBuffer

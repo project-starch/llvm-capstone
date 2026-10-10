@@ -1,0 +1,8 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> backend> 	 1: marker	(typeid = 25, len = -1, typmod = -1, byval = f)
+	----
+	 1: marker = "PREFLIGHT-OK-ltree"	(typeid = 25, len = -1, typmod = -1, byval = f)
+	----
+backend> 2026-10-06 16:52:29.498 GMT [384] LOG:  checkpoint starting: shutdown immediate
+2026-10-06 16:52:30.668 GMT [384] LOG:  checkpoint complete: wrote 128 buffers (25.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.709 s, sync=0.145 s, total=1.179 s; sync files=46, longest=0.020 s, average=0.004 s; distance=863 kB, estimate=863 kB; lsn=0/16097D0, redo lsn=0/16097D0

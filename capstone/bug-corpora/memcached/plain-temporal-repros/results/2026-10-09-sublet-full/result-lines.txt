@@ -1,0 +1,17 @@
+# memcached/plain-temporal-repros on sublet-full (pre-registered aeba7ddefb4d), one VM boot
+# the program's Sublet configuration: Sublet heap + the slab/cache Sublet port in mode 1 (tools/full-config/memcached.c, the allocators port's leases.c/metadata.c/authority.c; SDK HEAP_LOG 27)
+# SDK heap sublet log 27, runtime e5427101c0a73b9c; clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)
+# constructor line, every run (checked by the runner; first case shown): FULLCONFIG memcached slabs=sublet-port live mode=1 pages=1 chunk_releases=1
+  control clean  RETURNED   required RETURNED  ok  CONTROL clean RETURNED 1
+  control oob    CAUGHT     required CAUGHT    ok  cause=7 pc=0xc020f70c address=0xc8002018 in ctl_write_probe+0x58 (the labelled probe)
+  control uaf    CAUGHT     required CAUGHT    ok  cause=24 pc=0xc020f758 address=0x0 in ctl_read_probe+0x38 (the labelled probe)
+  control subobj RETURNED   required RETURNED  ok  CONTROL subobj RETURNED b0=0x5a
+  00_0d4901071c74_restart_line_freed_at_entry_but_not_cleared    CAUGHT             ok  cause=24 pc=0xc020fdc8 address=0x0 in mct_read_probe+0x38 (the labelled probe)
+  01_e7793811f8c8_logger_write_to_watcher_freed_by_the_poll      CAUGHT             ok  cause=24 pc=0xc020fdc4 address=0x0 in mct_write_probe+0x58 (the labelled probe)
+  02_3bc58f6ea55a_logger_loop_condition_still_reads_the_freed_watcher CAUGHT             ok  cause=24 pc=0xc020fe2c address=0x0 in mct_read_probe+0x38 (the labelled probe)
+memcached/plain-temporal-repros on sublet-full: 3 cases; {'CAUGHT': 3}; predicted CAUGHT; differing: none
+
+# image sha256 (16) per case
+00 9339a00b6d8eff9a CAUGHT fixed=FIXED exit=0
+01 282cc48c6ff33250 CAUGHT fixed=FIXED exit=0
+02 40f64bb1e9bd3c11 CAUGHT fixed=FIXED exit=0

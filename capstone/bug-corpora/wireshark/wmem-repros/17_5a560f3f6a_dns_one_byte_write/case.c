@@ -35,7 +35,8 @@ WM_CASE(17) {
   CHECK((uintptr_t)successor > (uintptr_t)np, 3);
   /* g_snprintf with a size of MAXNAME + 1 may write index MAXNAME: one past. */
   CHECK((uintptr_t)np + MAXNAME < (uintptr_t)successor + 64, 4);
-  wm_held = np + MAXNAME;
+  /* THE FIX, 5a560f3f6a: snprintf(np, maxname, ...) -- the terminator lands on the last byte. */
+  wm_held = np + (wm_fixed ? MAXNAME - 1 : MAXNAME);
   wm_mark();
-  wm_write_probe(wm_held);
+  WM_WRITE_AT(wm_held, np, MAXNAME);
 }

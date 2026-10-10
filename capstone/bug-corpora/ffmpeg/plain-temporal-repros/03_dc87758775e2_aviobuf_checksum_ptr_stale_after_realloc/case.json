@@ -1,0 +1,75 @@
+{
+  "arms": {
+    "spatial": {
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **NOT CAUGHT; the defect reproduced**: the stale pointer read the NEW object's marker. An exact bound cannot see a dead object -- the stale capability still carries the freed object's bounds, and level0 reissued the same block.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image e0e02f21c46a6e16. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=level0 runtime 3c72f36acd5b; compiler 7d01722aab88",
+      "verdict": "NOT CAUGHT"
+    },
+    "sublet": {
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at fft_read_probe+0x38 -- cause 24, an access through revoked authority; pc=0xc020fc90, address=0x0. free had revoked every capability to the object, so the stale pointer was dead before the access. On capstone-qemu a revoked capability reloads untagged (ISSUES Q-11); deployed silicon lets such a data access retire, so this is a detection on the emulator, not a silicon claim.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the Sublet system allocator: per-object bounds as level0, and free revokes every capability to the released object. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020f70c address=0xc8802018), use-after-free read CAUGHT (cause=24 pc=0xc020f758 address=0x0), clean access RETURNED. Image 33e8d3837a25f120. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED, not measured: this corpus was created on 2026-10-08 and has had no platform run yet. The object is a direct allocation whose lifetime ended, so a revocation or quarantine mechanism SHOULD fault at the labelled probe; a bounds-only configuration should NOT, because the stale pointer is in bounds of the reused allocation.",
+      "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
+      "verdict": "CAUGHT"
+    },
+    "poisoncap-spatial": {
+      "status": "measured",
+      "mode": 0,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED checksum_ptr still pointed into the IO buffer that the seekback growth freed, so the checksum ). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY; revocation-control: exit 0). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED 2026-10-09, before the first PoisonCap run: COMPLETES -- mode 0 is the PoisonCap image with runtime revocation off, so free neither poisons nor quarantines and nothing faults on the stale access. Whether the block was reissued (aliased) is recorded, not predicted: stock CheriBSD's quarantine read NOT-REISSUED, and without it the allocator may reuse at once.",
+      "verdict": "NOT CAUGHT",
+      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
+    },
+    "poisoncap-protected": {
+      "status": "measured",
+      "mode": 1,
+      "signal": 34,
+      "si_code": 3,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **CAUGHT**: SIGPROT, si_code 3 (raw), addr=0x1022aa pc=0x1022aa; fault pc 0x1022aa INSIDE fft_read_probe [0x10229a, 0x1022b6). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; revocation-control: exit 162; SUPERVISE fault signal=34 code=2 addr=0x101dd6 pc=0x101dd6). Predicted before the run (2852edcdd747).",
+      "prediction": "PREDICTED 2026-10-09, before the first PoisonCap run: SIGPROT at the labelled probe -- mode 1 poisons the block on free (mrs POISON_ON_FREE), so the stale access traps before any revocation sweep; where stock CheriBSD's quarantine let the same access complete (NOT-REISSUED), poison is the difference. si_code is recorded from the run.",
+      "verdict": "CAUGHT",
+      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
+    },
+    "cheribsd-revocation": {
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-cheribsd/: **NO FAULT, AND NO REUSE.** The sequence completes with aliased=0: the stale pointer was followed, but the chunk it names was never handed to another allocation, because CheriBSD's libc holds a released chunk in QUARANTINE until the revoker has swept every capability to it. So the access reads only the dead object -- the exploitable half of a use-after-free, reading or writing SOMEONE ELSE'S object, did not happen. It is not a fault, because nothing forced a sweep between the free and the access: the stale capability still carried its tag, as the case was built to leave it. revocation control in the same boot: revocation=1 tag_after_sweep=0 reissued=1, then SIGPROT si_code 2 at the control's own probe, so the revoker demonstrably acts in this guest and a completion here is the mechanism's design, not an inactive mechanism. CONTRAST, measured in the sibling nested corpora: there the inner allocator reissues the storage at once and the stale pointer DOES read another object, because nothing reaches free(). Predicted before the run; the prediction held.",
+      "status": "measured",
+      "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); cheribsd-abi, cheribsd-bounds and the revocation control all PASSED in the same boot.",
+      "verdict": "NOT-REISSUED"
+    },
+    "native-detect": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's stale pointer reads or writes storage that now belongs to a different live object, and the case's aliasing flag is set; under the fix the stale pointer is cleared, rebased or never followed, so nothing aliases. The arms differ by the upstream fix, not by protection. ASan reports heap-use-after-free at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-use-after-free, never on the string AddressSanitizer, which LeakSanitizer's summary also matches.",
+      "status": "measured"
+    },
+    "sublet-full": {
+      "target": "Capstone domain, the program's whole Sublet configuration: the Sublet heap plus FFmpeg's pools on their Sublet port (FF_SUBLET_POOLS=1 libavutil + ffsublet.c), a pool live with one buffer taken and returned before main (tools/full-config/ffmpeg.c)",
+      "oracle": "the same reading as the sublet arm (CAUGHT): this case's objects come straight from malloc, so the nested allocator's port is live in the image but off the bug's path. A different reading would be an interaction, not a catch by the port. Every run must print the constructor's FULLCONFIG line. MEASURED 2026-10-09, results/2026-10-09-sublet-full/: **CAUGHT** -- cause=24 pc=0xc02111b8 address=0x0 in fft_read_probe+0x38 (the labelled probe); fixed FIXED exit=0; image 34b3d1a2d6e56d11; FULLCONFIG ffmpeg pools=sublet-port live gives=1 ends=0.",
+      "prediction": "CAUGHT",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "aeba7ddefb4d"
+    }
+  },
+  "case": 3,
+  "title": "a saved pointer into the IO buffer was not rebased when the buffer was reallocated",
+  "consumer": "libavformat/aviobuf.c, ffio_ensure_seekback",
+  "object": "the AVIOContext's IO buffer, replaced by a fresh allocation, with s->checksum_ptr into the old",
+  "lifetime_ender": "av_free(s->buffer) inside ffio_ensure_seekback, after a new buffer is installed",
+  "shape": "a long-lived pointer into a buffer that was replaced, left pointing at the old one",
+  "allocator_layer": "the platform allocator itself: one direct av_malloc-family allocation, with no pool or refstruct layer. FFmpeg's av_malloc is malloc plus alignment.",
+  "fidelity": "model consumer, real lifetime: the allocation, the free and the later access through the stale pointer are upstream's, quoted in PROVENANCE.md. The later access is `update_checksum(..., s->checksum_ptr, ...)`, a read.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. CheriBSD measured 2026-10-09 (results/2026-10-09-cheribsd/): NOT-REISSUED. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): CAUGHT.",
+  "upstream_fix": "dc87758775e2",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: n9.0.1:libavformat/aviobuf.c carries the offset save/restore around the buffer replacement (the function now ends `s->checksum_ptr = s->buffer;`). The unrebased form is at dc87758775e2^ and is absent from the pin.",
+  "nested": false,
+  "nested_why": "the object came straight from av_malloc/av_mallocz/av_malloc_array/av_realloc -- which on the platform is malloc -- with no AVBufferPool, AVRefStructPool or other recycling layer between it and the request. So under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NOT nested. Its sibling ../pool-repros holds the nested ones.",
+  "distinguishing": "the dangling pointer is a FIELD saved for later rather than a local, and the two operations that create the bug are in different functions -- the buffer is replaced by ffio_ensure_seekback and the stale field is read by the checksum path. The fix records the field as an OFFSET across the replacement, which is the general remedy for this shape."
+}

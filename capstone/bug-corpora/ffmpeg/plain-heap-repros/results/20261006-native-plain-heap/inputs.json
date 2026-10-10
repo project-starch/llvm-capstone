@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-06",
+  "runner": "runners/run-native.sh",
+  "runner_exit": 0,
+  "cases": 4,
+  "arms_measured": ["native-fix-differential", "native-detect"],
+  "arms_declared_not_measured": ["spatial", "sublet", "poisoncap-spatial", "poisoncap-protected", "cheribsd-revocation"],
+  "native_compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "plain_build": "cc -O1 -g",
+  "asan_build": "cc -O0 -g -fsanitize=address",
+  "asan_keyed_on": "heap-buffer-overflow",
+  "asan_not_keyed_on": "the string 'AddressSanitizer' -- LeakSanitizer's summary line contains it, which inverted a reading in the sibling sub-object corpus on 2026-10-06",
+  "asan_o0_rationale": "case 1's out-of-bounds read is discarded by upstream's own description, so at -O1 it can be optimised away and the silence would be the compiler's",
+  "allocator": "the platform's calloc/free, NOT the buffer-pool port's arena-backed av_malloc",
+  "liveness_method": "read from the n9.0.1 source two-sided, keyed on the IDENTIFIER not the bare expression; NOT git merge-base --is-ancestor",
+  "live_in_pin": {"true": [], "false": [0, 1, 2, 3]},
+  "asan_two_sided": {"0": "buggy reports, fixed clean", "1": "buggy reports, fixed clean", "2": "buggy reports, fixed clean", "3": "buggy reports, fixed clean"},
+  "n_per_cell": 1
+}

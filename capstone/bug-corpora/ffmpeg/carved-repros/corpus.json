@@ -1,0 +1,57 @@
+{
+  "program": "ffmpeg",
+  "boundary": "a region FFmpeg carved out of one allocation by pointer arithmetic",
+  "title": "Upstream FFmpeg spatial defects that cross between CARVED REGIONS of one allocation, FFmpeg's nested row",
+  "upstream": {
+    "version": "n9.0.1",
+    "port": "capstone/ports/ffmpeg/buffer-pool"
+  },
+  "cases": 12,
+  "case_schema": "case-json",
+  "case_macro": "FFC",
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "capstone-subobject",
+    "capstone-carve-bounds",
+    "poisoncap-spatial",
+    "poisoncap-protected",
+    "cheribsd-revocation",
+    "cheribsd-subobject",
+    "cheribsd-carve-bounds",
+    "native-detect",
+    "native-fix-differential"
+  ],
+  "status": "measured",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "false": 11,
+    "true": 1
+  },
+  "runners": [
+    "capstone/bug-corpora/ffmpeg/carved-repros/runners/run-native.sh",
+    "capstone/bug-corpora/ffmpeg/carved-repros/runners/run-asan.sh",
+    "capstone/bug-corpora/ffmpeg/carved-repros/runners/run-cheribsd.sh",
+    "capstone/bug-corpora/tools/run-capstone-domain.py"
+  ],
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
+  "evidence": [
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-capstone-spatial",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-capstone-sublet",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-capstone-capstone-subobject",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-capstone-capstone-carve-bounds",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-native-differential",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-native-asan",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-cheribsd-revocation",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-cheribsd-subobject",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-cheribsd-carve-bounds",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-poisoncap-mode0",
+    "capstone/bug-corpora/ffmpeg/carved-repros/results/2026-10-09-poisoncap-mode1"
+  ],
+  "advisories": [
+    "CVE-2011-3895 (case 11's fix says it fixes part of it)"
+  ],
+  "shape_table": true,
+  "note": "FFmpeg's nested spatial row, which had one case (plane-repros) before this corpus. Every arm measured 2026-10-09: native differential 12/12 two-sided; ASan, CheriBSD, PoisonCap (both modes), Capstone bounds, Capstone + Sublet and both compilers' field bounds 0/12 -- the crossing stays inside one allocation and is not a field; carve bounds 12/12 on Capstone and on CheriBSD, at the labelled probe, every fixed arm FIXED under the same narrowing. Case 11 (vorbis) is live at the n9.0.1 pin by source reading. The candidates and the rejected commits are in docs/ref/ffmpeg-spatial-defect-triage.md (the 2026-10-09 section)."
+}

@@ -1,0 +1,23 @@
+-- NEGATIVE CONTROL for trigger.sql, and the reason it is needed.
+--
+-- This arm faults inside ltree's own extension script, which is why the case
+-- is run against a fixture that already carries the extension. On an arm
+-- already known to fault nearby, one detected verdict is not evidence by
+-- itself: the fault has to be shown to depend on the defect. This file is the
+-- same statement below the wrap, and it must COMPLETE on the same image and
+-- the same fixture. If it faults too, the trigger's fault is not this defect
+-- and the row must be withdrawn.
+--
+-- The arithmetic. Each OR-variant contributes MAXALIGN(LVAR_HDRSIZE + len) to
+-- a totallen that is a uint16, and the domain builds force MAXIMUM_ALIGNOF to
+-- 16, so a 1000-character variant costs 1008 bytes:
+--
+--   trigger.sql  66 variants x 1008 = 66528  >  65535   wraps
+--   control.sql  64 variants x 1008 = 64512  <= 65535   does not wrap
+--
+-- 65 would also stay under, at 65520, but only by 15 bytes; 64 leaves a
+-- margin wide enough that a different LVAR_HDRSIZE or alignment on some
+-- future target cannot quietly push the control over the line and turn a
+-- control failure into what looks like a confirmed detection.
+CREATE EXTENSION ltree;
+SELECT (repeat('x', 1000) || repeat('|' || repeat('x', 1000), 63))::lquery;

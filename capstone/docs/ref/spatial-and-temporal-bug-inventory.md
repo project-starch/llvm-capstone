@@ -39,50 +39,61 @@ An access that leaves a bound. Built from upstream defects:
 
 | program | nested | not nested | total | where |
 |---|---:|---:|---:|---|
-| memcached | **3** | 0 | **3** | `allocator-repros/05-07` — item data, suffix field, unterminated key; the objects are `slabs.c` chunks |
-| tshark | **5** | 0 | **5** | `wmem-repros/13-17` — cursor skip, fixed-offset loop, negative index, parity write, off-by-one size |
-| FFmpeg | 0 | **3** | **3** | `subobject-repros/00-02` — three members written past, inside one `av_malloc` |
-| **total** | **8** | **3** | **11** | |
+| memcached | **4** | **2** | **6** | `allocator-repros/05-07` (`slabs.c` chunks); `plain-heap-repros/00-01` (`ddee3e2`, one byte past a `calloc`; `d5d9ff0`, a headroom guard one byte short) |
+| tshark | **9** | **2** | **11** | `wmem-repros/13-17` and `18-21` (wmem chunks; 18 is `716a200295`, **live at the pin**, a guard its own default disables); `plain-heap-repros/00` (`19c51d27b9`, 65471 bytes past a `g_malloc`) |
+| FFmpeg | **1** | **14** | **15** | `plane-repros/00` (`b7946098b1`, one row past a frame plane); `subobject-repros/00-09` (inside one allocation); `plain-heap-repros/00-03` (past a direct `av_malloc_array`/`av_calloc`) |
+| **total** | **14** | **18** | **32** | |
 
-And the **synthetic baseline**, which is where the not-nested spatial row really lives:
+> **SUPERSEDED COUNTS, 2026-10-09.** This table is the 2026-10-06 state. FFmpeg's nested spatial row
+> is now **13** -- `plane-repros/00` plus the twelve cases of `ffmpeg/carved-repros` (regions carved
+> out of one allocation) -- and the current per-program, per-arm table for all three programs is
+> `spatial-vs-temporal-three-programs.md` section 0.
+
+And the **synthetic baseline**, which carried the not-nested spatial row alone until
+`plain-heap-repros/00` landed and which still does the job no upstream case can -- showing
+the arms discriminate at `malloc` granularity on demand:
 
 | probe | programs | role |
 |---|---|---|
 | fx2 `heap_neighbour`, fx3 `heap_one_past` | all three app ports | the standing malloc-granular control: `level0` RETURN, `shrink` FAULT `oob` |
 | fixtures 20, 21 | memcached (new, 2026-10-05) | two more class-A probes, modelled on historical defects: **measured 15/15**, `results/2026-10-05-qemu-classa-fixtures/` |
 
-### The one remaining zero that IS a gap: FFmpeg nested spatial
+### FFmpeg nested spatial: the cell is filled, and ASan's silence is the finding
 
-FFmpeg contributes 3 not-nested spatial cases and **0 nested** ones, and unlike the zeros discussed
-below this one is a genuine gap with a named candidate.
+It stood at 0 and is now `bug-corpora/ffmpeg/plane-repros/00` — `b7946098b1`,
+`swscale/alphablend`, *"don't overread alpha plane on subsampled odd size"*. On the last subsampled
+row the vertical average takes the alpha row **below the plane's last**, and the fix says so in one
+added line: `int subsample_row = y_subsample && (y << y_subsample) + 1 < lum_h;`.
 
-**`9edd06f861` — `avcodec/proresenc_kostya`, "fill macroblock rows past the end of the bottom
-field".** Verified live at our pin, two-sided: the vulnerable expression
-`avctx->height / ctx->pictures_per_frame` occurs **4 times** in `n9.0.1`'s
-`libavcodec/proresenc_kostya.c`, the fix's marker `picture_height` **0 times**, with `encode_slice`
-at 5 occurrences as the positive control that the search reaches that file at all. The read is
-`src = pic->data[i] + line_add * pic->linesize[i]` passed to `get_slice_data` with that height, so
-for an interlaced frame the encoder reads **past the bottom field's last row**.
+**Why it is nested, measured rather than assumed.** `ff_sws_alphablendaway` reads the caller's
+planes (`const uint8_t *const src[]`), and `av_frame_get_buffer` carves every plane of a frame from
+**one** `AVBuffer`. A `YUVA420P` frame reports `buf[1] == NULL` with **1024 bytes of slack after the
+alpha plane inside that buffer**, so a whole row past the plane is still inside the allocation. The
+case asserts both facts itself rather than trusting the note.
 
-**Why that is the nested shape.** The overflowed object is a *frame plane*, and the planes of a
-frame from `av_frame_get_buffer` are carved from **one** `AVBuffer` — literally the nested note the
-triage tool carries for FFmpeg. A crossing from one plane into the next stays inside that single
-allocation, so per-`malloc` bounds are in bounds for it and only a plane-granular adapter could
-separate them. Same structure as tshark's wmem chunks, one axis over.
+**Measured 2026-10-06**, `results/20261006-native-plane/`: buggy `crossed=1 contained=1 damage=1`,
+fixed `crossed=0 contained=1 damage=0`, and **ASan silent on both arms**. That silence is the row's
+finding, not a gap — the read leaves the *plane*, not the *allocation*, so no redzone sits where it
+lands. The detector is not merely assumed to work: the same tree, the same day, records
+`memcached/plain-heap-repros/00` crossing the `malloc` bound and ASan reporting it. **The pair is
+the project's axis, measured rather than argued.**
 
-**What building it would and would not buy.** It would move this cell from 0 to 1 and give FFmpeg
-its first nested spatial case. It would **not** by itself produce a discriminating reading: FFmpeg's
-existing arms narrow pool buffers, not frame planes, so without a new adapter the case would read
-"completes on every arm" — a legitimate measured row of the same kind as the three sub-object cases,
-and the `partial²` verdict again. A discriminating cell needs a plane-narrowing port, which is new
-port work rather than a new case. Before building, check the allocation's padding: `linesize` is
-aligned and padded, so the crossing must be shown to leave the *plane* in a frame whose planes are
-actually adjacent.
+**What it does not yet buy.** `spatial` and `sublet` are declared predictions to *complete*, because
+nothing in the port narrows frame planes today.
 
-Two weaker candidates from the same pass, allocation sites **not** opened: `56309e476a`
-(`vf_vif`, index mirroring with small dimensions) and `2a20737f66` (a **revert** of a bwdif
-heap-overflow fix, so provenance needs care before it is called a defect). Disqualified on sight as
-not in our build: `884590dd4a` (AltiVec/PPC), `8b4fad11ac` (LoongArch), `ffe0104574` (CUDA).
+> **RETRACTED 2026-10-06.** This said a discriminating reading needs a plane-narrowing adapter, i.e.
+> that the cell is a gap awaiting port work. **Measured, it is not.** `av_frame_get_buffer` pads to
+> `FFALIGN(height, 32)`, so the alpha plane's own allocated extent is **1024 bytes** against a
+> logical plane of **160**, and the case reads at offset **160** — inside upstream's own plane
+> extent. An adapter narrowing each plane to FFmpeg's layout would not catch it; only a bound
+> tighter than upstream's own allocation would, and that faults legitimate code. **The FFmpeg plane
+> arm is a measured non-gap**, the sub-object verdict one level out: the crossing leaves a bound the
+> consumer keeps in its head and no allocator sets.
+
+`9edd06f861` (ProRes, a field crossing) remains a live-at-pin candidate for a second case.
+`30c6667dad` was disqualified on inspection: its overread is of the OBMC window table, not a frame
+plane. Still unopened: `56309e476a`, `1168447626`, `041d4f010e`, `c79dfd29e6`. Disqualified as not
+in our build: `884590dd4a` (AltiVec/PPC), `8b4fad11ac` (LoongArch), `ffe0104574` (CUDA).
 
 ### Why the not-nested spatial column has no live upstream defect in it
 
@@ -111,11 +122,59 @@ into a current release is the crossing no existing tool sees: inside a nested al
 inside a single allocation. **That is the project's thesis, and the 0 is evidence for it rather than
 a hole in the data.**
 
-So the not-nested spatial baseline is **synthetic by necessity**, and that is the right instrument:
-a baseline row's job is to show the arms discriminate, not to count upstream defects. memcached
-fixtures 20 and 21 are modelled on two historical defects (`ddee3e2`'s authfile scan and
-`d5d9ff0`'s cachedump `END\r\n` reservation, both fixed at the pin — `items.c:678` now reads
-`bufcurr + len + 6`). They are **probes, not upstream-defect reductions**, and are counted as such.
+> **RETRACTED 2026-10-06.** What stood here said the not-nested spatial baseline is synthetic
+> **by necessity**, and that the zero is "a result, not a gap". **The measurement stands and is
+> unchanged: 0 of the candidates read is live at the pin.** What is withdrawn is the inference from
+> it to an empty cell, which rested on a premise never stated and never checked — *that a case must
+> be live at the pin to be built*.
+>
+> It is not. **27 of the 33 existing corpus cases carry `live_in_pin: false`**, and the convention is
+> explicit at `bug-corpora/memcached/allocator-repros/README.md:132-135`: each fix is an ancestor of
+> the pin, "so the shipped allocator is exercised by a pre-fix consumer shape the commit's own diff
+> shows -- the FFmpeg corpus's tier." Liveness is a **field recorded in the case**, not a gate on
+> building one. Every temporal case in this inventory is itself a fix-reversal.
+>
+> So "class A is fixed upstream first" remains true *about liveness* and explains why the live count
+> is 0. It does not explain an empty cell, and it was wrong to present the cell as closed. The cell
+> is **open**, with one verified buildable candidate (below).
+>
+> The check that would have caught it is the one already written down: test the single sentence the
+> conclusion rests on. Here that sentence was "a case must be live", which no document asserts and
+> the corpus contradicts 27 times.
+
+**Re-dispositioned against the correct criterion** — *a reconstructible heap defect whose crossing
+leaves the allocation*, with liveness recorded rather than required:
+
+| candidate | under the correct criterion |
+|---|---|
+| memcached `ddee3e2` | **BUILDABLE.** Its subject is "Fix minor severity heap buffer overflow reading `--auth-file`"; before the fix `auth_data = calloc(1, sb.st_size)` is scanned by an unclamped `fgets(auth_cur, MAX_ENTRY_LEN, ...)`, so the read leaves the allocation. A fix-reversal case exactly like the 27 |
+| tshark `7ffc11e38f` | **RETRACTED 2026-10-06: hardening, not a reachable defect.** The row called it buildable because the fix adds `file_type_subtype < 0`, and I read the guard's existence as proof the hole was reachable. It is not. The fix guards three functions, and every caller of all three supplies a validated or construction-valid type: `mergecap.c:257` rejects a negative `-F` before `:392` uses it; `editcap.c:1018`, `:1054` and `tshark.c:3309` pass `wtap_dump_file_type_subtype(pdh)` from an open dump; `file.c:4470` is reached only through the short-circuit `save_format == cf->cd_t &&` at `:4468`, so the value equals the capture file's own type; and the Qt dialog's calls use the format list it built. That list is the complete set of callers in the fix's PARENT tree, not only the ones at our pin. **A bounds check added upstream is not evidence that the unbounded path was reachable** -- that needs a caller, and none was found |
+| tshark `f207d25f4b` | no — read at last, from the diff: it replaces `orig_size -= phdr_len` and `packet_size -= phdr_len` with checked `ckd_sub`, so the defect is an **unsigned underflow** of a reported length, the same class as `830cf562a0` that filter 1 excludes by its own wording. Its downstream consequence may be spatial; the defect is not |
+| tshark `3be1c99180` | no — `ws_buffer` over-allocates, so the crossing stays inside the allocation. Class C |
+| tshark `be813ede9d` | no — a fix-reversal needs the code to exist at the pin, and `etw_dump_write_ldap_event` does not |
+| tshark `06d08c5811` | no — unchanged, no access leaves the allocation |
+| memcached `11b5f9b` | no — unchanged, a stack array |
+| tshark `830cf562a0` | no — unchanged, an integer-underflow subject |
+
+**This does not put tshark's 21 back in play.** Most still fail on capacity-versus-length or on the
+code having to exist at the pin; what changed is the criterion, not the evidence.
+
+**One of the three empty cells has been filled; the other two are still empty.** The memcached
+row is now `plain-heap-repros/00`, built and measured. The tshark candidate did not survive its
+reachability check and was retracted the same day, which is why this table names what each cell
+has rather than what it might:
+
+| cell | candidate | the crossing |
+|---|---|---|
+| memcached, not-nested spatial | **BUILT** — `plain-heap-repros/00` (`ddee3e2`) | an unclamped `fgets` scan leaves `calloc(1, sb.st_size)`; measured two-sided on both native arms, and ASan reports it |
+| tshark, not-nested spatial | **BUILT** — `wireshark/plain-heap-repros/00` (`19c51d27b9`) | a file-supplied record size runs the copy 65471 bytes past a `g_malloc(8192)` page buffer; measured two-sided, and ASan reports it |
+| FFmpeg, **nested** spatial | **BUILT** — `plane-repros/00` (`b7946098b1`) | one row past a frame plane, inside the frame's single `AVBuffer`; measured two-sided, and ASan is silent |
+
+They are **candidates until built and measured**, and neither is counted in any table yet.
+
+
+The synthetic probes keep their role regardless: fx2/fx3 and memcached 20/21 show the arms
+discriminate at `malloc` granularity, which is a different job from counting upstream defects.
 
 ---
 
@@ -126,12 +185,42 @@ fixtures 20 and 21 are modelled on two historical defects (`ddee3e2`'s authfile 
 | | nested | not nested | total |
 |---|---:|---:|---:|
 | temporal | **22** | **5** | **27** |
-| spatial (upstream reductions) | **8** | **3** | **11** |
-| **total** | **30** | **8** | **38** |
+| spatial (upstream reductions) | **14** | **18** | **32** |
+| **total** | **36** | **23** | **59** |
 
-**30 of 38 are instances of nesting (79%).** On the spatial side specifically, 8 of 11. Add the
-synthetic baseline probes and the not-nested spatial row grows, but those are probes and are kept
-out of the defect count on purpose.
+**36 of 59 are instances of nesting (61%).** On the spatial side specifically, 14 of 32. Add the
+synthetic baseline probes and the not-nested spatial row grows further, but those are probes and
+are kept out of the defect count on purpose.
+
+> **Moved again on 2026-10-07, and this time for the OPPOSITE reason — which is the thing to say.**
+> 60% -> 61%, and the nested count went **31 -> 36**: tshark gained four nested spatial rows and two
+> not-nested, memcached one of each. Yesterday's move was purely a denominator effect with the
+> numerator fixed; today's numerator moved too, so the two must not be read as the same kind of
+> change. The share is nearly flat precisely because the additions split across both columns, which
+> is a coincidence of this batch rather than a fact about the programs. **Read the per-axis rows**:
+> nesting still dominates temporal (22 of 27) and still does not dominate spatial (**14 of 32**).
+>
+> *(This note was itself stale for part of 2026-10-07: it said 35 and "13 of 30" while the batch was
+> still landing. Recomputed from the `nested` fields at the end of it. A dated note that quotes
+> live counts has to be re-read when the batch it describes finishes.)*
+>
+> **This share MOVED on 2026-10-06, and anything quoting the old figure needs re-reading.** It was
+> **31 of 41 (76%)**. Eleven not-nested spatial cases were added that day — FFmpeg's
+> `subobject-repros` grew 3 → 10 and a new `ffmpeg/plain-heap-repros` added 4 — and *none* of them is
+> an instance of nesting. The nested count did not change at all: **31 before, 31 after.** So the
+> drop is entirely a denominator effect, and it is a correction rather than a new result: the old
+> 76% was high because the not-nested spatial cell had been left thin by a search that required its
+> candidates to be live at the pin, which no document asks for. The honest reading of both figures
+> together is that **nesting dominates the TEMPORAL axis and does not dominate the spatial one** —
+> which the per-axis rows above say directly and the single blended percentage obscures. *As of
+> 2026-10-06 those rows read 22 of 27 and 9 of 25; see the note above for where they stand now.*
+> Prefer the per-axis rows, and read them from the table rather than from this paragraph.
+>
+> **The share is now COMPUTABLE, not prose-derived.** Each spatial `case.json` carries an explicit
+> `nested` boolean with a `nested_why`. This was added because a script that classified the cases by
+> reading `allocator_layer` text put **11 of 25 into an "unclassified" bucket** and reported 44%;
+> taking that number would have published a figure wrong by 16 points, since the bucket was being
+> read as "not nested" rather than as "the probe did not answer".
 
 ### (b) How many does Capstone catch without extra protection, and with Sublet?
 
@@ -141,7 +230,7 @@ out of the defect count on purpose.
 |---|---:|---:|---:|
 | temporal, 22 nested | **0 of 22** | **21 of 22** | **22 of 22** |
 | temporal, 5 not nested | **0 of 5** | **5 of 5** | tshark **2 of 2** |
-| spatial, 11 upstream | **6 of 11** | **6 of 11** | tshark **5 of 5** |
+| spatial, 32 upstream | **6 of 11 measured**, 21 declared | **6 of 11 measured**, 21 declared | tshark **5 of 5** |
 
 - **Temporal, 0 of 22 without protection, measured** — not predicted. A bound cannot see a dead
   object: the stale address is in bounds by construction.
@@ -158,6 +247,24 @@ out of the defect count on purpose.
   dead object. fx2/fx3 ran in all ten boots and faulted on every enforcing arm, so the two axes are
   separated inside each boot: the same image that returns on a temporal fixture faults on a spatial
   one.
+- **Which 11, and which 3.** Eleven of the fourteen spatial cases are measured under Capstone:
+  tshark's five wmem cases, memcached's three slab cases and FFmpeg's three sub-object cases. The
+  **three declared-but-unmeasured** are the ones added on 2026-10-06 — `memcached/plain-heap-repros/00`,
+  `wireshark/plain-heap-repros/00` and `ffmpeg/plane-repros/00`. None of the three has a
+  Capstone-domain runner, and giving them one is port work rather than a case: only `ports/ffmpeg/app`
+  carries a corpus hook (`FFAPP_CORPUS_DIR`), while the memcached and wireshark app ports have none.
+  **Their predictions are not bare**, which is why the cell says *declared* rather than *blank*: the
+  two plain-heap cases predict `shrink` FAULT, and the app ports have already measured exactly that
+  shape at malloc granularity — memcached fixture 20 and tshark fx2/fx3 read `level0` RETURN with
+  `shrink` FAULT `oob`. The plane case predicts *completes*, for the reason its own row gives.
+- **The twelfth case is counted but not yet measured under Capstone.**
+  `bug-corpora/memcached/plain-heap-repros/00` (`ddee3e2`) is measured on both NATIVE arms,
+  two-sided — the fix differential and, unlike every sub-object case in this tree, an **ASan report**
+  (`heap-buffer-overflow`, WRITE of size 1, 0 bytes after a 9-byte region). Its `spatial` and
+  `sublet` arms are declared **predictions to fault**, because that corpus has no domain runner yet;
+  the corresponding reading already exists in the port as memcached fixture 20, which carries the
+  same shape and reads `level0` RETURN / `shrink` FAULT `oob`. So the measured catch counts above
+  stay at 6 of 11 rather than silently becoming 7 of 12.
 - **Spatial: Sublet adds nothing, and that is expected.** Sublet *is* revocation, and revocation has
   nothing to fire on while the object is alive. The 6 spatial catches are `shrink`'s per-object
   bounds, which the `sublet` arm inherits by construction. The two columns being identical is a
@@ -170,7 +277,7 @@ cannot carry two meanings silently:
 |---|---|---:|
 | tshark | **per-chunk, not per-malloc.** `wm_narrow()` (`ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15`) narrows *every* wmem allocation on *every* arm, so this harness has **no malloc-granular arm** at all | 5 of 5 |
 | memcached | **per-chunk** — the slab carve | 1 of 3 |
-| FFmpeg | **malloc-granular**, and still blind: each crossing is between two members of one `av_malloc` | 0 of 3 |
+| FFmpeg | **malloc-granular**, and still blind on the measured cohort: each of those crossings is between two members of one `av_malloc` | 0 of 3 measured (`subobject-repros/00-02`); the other 12 FFmpeg rows are declared, and `plain-heap-repros/00-03` predict a **catch** because they leave the allocation |
 
 So tshark's 5 of 5 must **not** be read as "bounds alone suffice". It is the opposite: that harness
 narrows everywhere, and the malloc-granular contrast is only visible in the app ports' fx12 ladder,
@@ -180,10 +287,84 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 
 | | caught | measured | not measured |
 |---|---:|---:|---:|
-| temporal, 22 nested | **0** | **18** | 4 |
-| spatial, 11 upstream | **0** | **0** | 11 |
+| temporal, 22 nested | **0** | **22** | 0 |
+| spatial, 32 upstream | **7** | **31** | 1 |
 
-- **Temporal: 0 caught, and 18 of the 22 are MEASURED with a positive control that fires.**
+> **A SPLIT INSIDE ONE CORPUS, measured 2026-10-07, and it changes how memcached's row should be
+> read.** `allocator-repros` case 8 is **CAUGHT** on stock CheriBSD while cases 5-7 **complete**, and
+> the reason is the inner allocator, not the defect: the port's CheriBSD build takes a slab **page**
+> with one `malloc` and lets `slabs.c` carve chunks out of it
+> (`src/cheribsd/malloc-leases.c:79`), but takes each **cache object** with its own `malloc`
+> (`:161`). So a slab-chunk crossing stays inside one allocation and a cache-object crossing does
+> not. **"memcached is 0 of 9 on CheriBSD" would be the wrong summary — it is 0 of 8 and 1 of 1,
+> split by which inner allocator carved the storage.** This refuted the prediction written for case 8
+> before the run, and the refutation is the more useful result: it separates two layers that a single
+> number would have merged.
+>
+> **FFmpeg entered this table on 2026-10-06**, and until that day contributed **zero**
+> measured rows — which is what the retraction of its `pool-repros` arm established.
+> `ffmpeg/plain-heap-repros` 0-3 were run with revocation on and both platform controls
+> firing (`results/20261006-cheribsd/`): **3 of 4 CAUGHT**, `si_code` **1** (bounds), and in
+> every catch the fault address EQUALS the probe address `supervise` resolved from the ELF
+> independently — so these are the first rows in the tree where attribution is established
+> rather than noted as absent.
+>
+> **Case 1 was NOT caught, refuting its own pre-registered prediction**, and the mechanism
+> was measured in the same boot: it requests 24 bytes and CheriBSD's `malloc` returns a
+> capability of length **32**, so the read at offset 24 is inside the bounds. That is the
+> **second** instance of the usable-size mechanism — `memcached/plain-heap-repros/00` was
+> refuted by it at request 9 → length 16 — so it is now measured at two size classes.
+> Case 2 crosses **below the base** and was caught, which shows the mechanism cannot absorb
+> a downward crossing. **So the qualification on "spatial is a tie with CHERI" is now
+> measured rather than argued: it holds only for crossings that leave the USABLE allocation,
+> and not at all below the base.**
+>
+> **`subobject-repros` 0-9 were measured the same day** (`results/20261006-cheribsd/`): **0 of 10
+> caught**, 22 of 22 arms, both platform controls firing, each case printing its own verdict so a
+> completion is a reading rather than a silent pass. Together with plain-heap's 3 of 4 that is the
+> whole contrast measured on one platform in one day: **a crossing that leaves the usable allocation
+> is caught; one interior to it is not.**
+>
+> **The 0 of 10 carries a weaker reason than it looks, and the arms say so.** That corpus's driver
+> hands the port's `av_malloc` one arena, which bumps a cursor and rounds to 64 bytes, so there is no
+> per-allocation bound on the struct on that harness at all. The completion shows nothing bounded
+> anything at that granularity — not that a bound was in force and held. This is the over-claim
+> corrected on the `wmem` arms, recorded before it could be made again.
+>
+> **`-O0` is load-bearing and the proof is two-sided.** A first sub-object suite built `-O1` returned
+> `VERDICT INCONCLUSIVE` for case 0 while the other nineteen arms passed and both controls fired:
+> case 0's index is a compile-time constant one past its member, and clang folded the store away.
+> Rebuilt `-O0` with nothing else changed it reads `DEFECT-REPRODUCED`. Reporting the `-O1` suite
+> would have put a **compiler artifact into this table as a CheriBSD reading**. The native arms use
+> gcc and were unaffected, which is why it surfaced only here.
+>
+> **The one row still unmeasured is `plane-repros/00`, and the blocker was tried, not assumed:** that
+> corpus links a real native `libavutil.a` (`runners/run-native.sh:16`), so a purecap reading needs a
+> purecap `libavutil`, which this project has never built. The port's own purecap build was attempted
+> and WORKS — `cmake --preset cheribsd` configures and builds `libffmpeg-pool.a` — which is what
+> unblocked the ten sub-object rows; it just does not contain `libavutil`'s frame code.
+
+- **Temporal: 0 caught, and ALL 22 are now MEASURED with a positive control that fires.**
+
+> **Reconciled 2026-10-06 with `cheribsd-denominator-audit.md`, which counts 22 and not 18.** The two
+> numbers were flagged as a possible discrepancy; they are not one. They count **different
+> populations under different evidence conventions**:
+> - this table's figure WAS **18** = tshark 13 + memcached 5, i.e. the measured temporal rows *of
+>   the three programs this inventory covers*, with memcached's five recorded in their `case.json`
+>   files because that corpus's `.gitignore` deliberately keeps run summaries out of the
+>   repository. **It is now 22**: FFmpeg's four `pool-repros` rows were measured on 2026-10-06 with
+>   the revocation control faulting in the same boot, closing the gap the morning's retraction
+>   opened. **That makes this a DIFFERENT 22 from the audit's** — tshark 13 + memcached 5 +
+>   FFmpeg 4 against Wireshark 13 + Apache 9 — so the two now coincide numerically while counting
+>   different sets, which must not be read as corroboration;
+> - the audit's **22** = Wireshark 13 + Apache 9, i.e. every corpus *with a committed bundle*. It
+>   excludes memcached precisely because there is no bundle, and excludes PostgreSQL and CPython
+>   because there is nothing at all.
+>
+> So 13 rows are common to both; memcached's 5 and FFmpeg's 4 are in this figure and not the
+> audit's, and Apache's 9 are in the audit's and not this one. Neither figure is wrong; what was
+> missing was the statement that they are not comparable — and that matters more now that they
+> happen to be equal.
   - tshark 13 — `results/20260921-cheribsd/` (`matrix.tsv`, `arm=cheribsd`): expected complete,
     passed, exit 0, **0 of 13 caught**. The control: the PoisonCap mode-1 arm in the *same bundle
     and the same boots* faults **13/13** with `SIGPROT` at the labelled read probe. The platform
@@ -200,16 +381,57 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
     table with no oracle at all; it was declared on 2026-10-05 with its siblings' mechanism — the
     two side tables return to their `AVRefStructPool`s (`refs.c:153`, `:157`) rather than to
     `free()` — marked **predicted, not measured**, and naming what a reading would need. So this
-    column is **22 declared, 18 measured, 0 caught**, with no blanks left in it.
+    column is **22 declared, 22 measured, 0 caught**, with no blanks left in it.
 - **The 5 not-nested temporal are the one cell this column predicts NON-ZERO, and it is unmeasured.**
   Same mechanism, run the other way: the nested cases complete because the stale storage never
   reaches `free()` — it returns to an inner allocator's own free list inside a block `malloc` still
   owns. **These five have no inner allocator**, so the quarantine does hold the object and the
   revoker does sweep it. Predicted **caught, 5 of 5**; not measurable here. That prediction is what
-  gives the measured 0 of 18 its meaning — a system catching nothing anywhere would be
+  gives the measured 0 of 22 its meaning — a system catching nothing anywhere would be
   indistinguishable from a dead instrument, while one that catches the plain cases and misses the
   nested ones is measuring the nesting. **It is therefore the first thing an SDK host should run**,
   and a miss would refute the mechanism rather than add a data point.
+- **The new plain-heap case is the first spatial row predicted CAUGHT by stock CheriBSD**, and it
+  is unmeasured like the rest. The reason is structural rather than hopeful: CHERI bounds each
+  `malloc`, and this crossing leaves the `malloc` bound instead of staying inside a slab page or a
+  struct. Revocation is irrelevant to it; the bounds are not. A miss would refute the bounds claim
+  rather than add a data point — which is what makes it worth running first on an SDK host, beside
+  the five not-nested temporal fixtures.
+- **The column's first CATCH, and the measured reason the other small-overflow row is a miss.**
+  On 2026-10-06 seven more spatial cases ran on the same vehicle: tshark's five wmem cases
+  (`wmem-repros/13-17`) and both plain-heap rows. The wmem five **complete**. The two plain-heap
+  rows **split**, and the split is the finding:
+
+  | row | the crossing | CheriBSD |
+  |---|---|---|
+  | `wireshark/plain-heap-repros/00` | 65471 bytes past a `g_malloc(8192)` | **CAUGHT** — `SIGPROT`, `si_code` **1**, `addr` = `pc` = `0x102006`, and `supervise` resolved the labelled probe to that same address, so SCHEMA rule 2 is met |
+  | `memcached/plain-heap-repros/00` | 1 byte past a `calloc(1, 9)` | **not caught** |
+
+  **Measured in the same guest, not inferred:** CheriBSD's `malloc` sets the capability to the
+  allocator's *usable size*, not the request — `calloc(1,1)` and `calloc(1,9)` both return
+  `length=16`, `calloc(1,17)` returns 32, `calloc(1,8192)` returns exactly 8192. Offset 9 is inside
+  a 16-byte capability, so no fault is possible there; 65471 past 8192 leaves the allocation by far
+  more than any size-class slack.
+
+  **So "spatial is a tie with CHERI" holds only for crossings that leave the USABLE allocation.**
+  Capstone's `shrink` bounds to the *request* and catches this exact shape — memcached app fixture
+  20 is the same defect and reads `shrink` FAULT `oob`. That is an allocator-policy difference, not
+  a hardware one: CHERI can express a 9-byte bound, and this `malloc` chooses not to.
+
+  **`si_code` 1 is the BOUNDS code.** Every runner in this tree hardcodes `PROT_CHERI_TAG = 2`,
+  which is the *tag* code; the bounds code was recorded nowhere before this run, which is why it was
+  deliberately not predicted.
+- **The first measured spatial cells, 2026-10-06.** memcached's three slab cases (`allocator-repros/05-07`)
+  ran on a **stock CheriBSD vehicle built on this host** with
+  `tests/cheri-baseline/provision-cheri-vehicle.sh`, revocation on: **8 of 8 arms passed, 0 of 8
+  caught**, the five temporal cases included. The control fired in the same boot —
+  `revocation-control` exit 162, signal 34 (`SIGPROT`), `si_code` 2 (`PROT_CHERI_TAG`), with `pc`
+  equal to the address the supervisor resolved independently — and the platform's own
+  `cheribsd-abi` and `cheribsd-bounds` probes passed beside it. So this zero is a reading.
+  The vehicle is a stock published purecap world, **not** the PoisonCap platform of the 2026-09-21
+  bundles, and its hashes differ by construction; the kernel is `CHERI-PURECAP-QEMU` from
+  `releng/26.07-88f39900c329`, which is `pins.env`'s `CHERIBSD_REV`. Per this corpus's own policy
+  run summaries stay outside the repository, so each reading lives in its case file.
 - **Spatial: 0 of 11 measured.** All 11 carry a prediction that the case *completes*, and the reason
   is structural: CHERI bounds the slab page or the enclosing allocation, which is one `malloc`. Not
   measurable on this host, checked rather than assumed —
@@ -243,14 +465,19 @@ this is what a host that has them needs in order to extend the measured column:
 
 | | count | source |
 |---|---:|---|
-| `case.json` files across the four corpora | 33 | `memcached/allocator-repros` 8, `wireshark/wmem-repros` 18, `ffmpeg/pool-repros` 4, `ffmpeg/subobject-repros` 3 |
-| temporal corpus cases | 22 | 5 + 13 + 4 |
-| spatial corpus cases | 11 | 3 + 5 + 3 |
+| `case.json` files across the **eight** corpora | **54** | `memcached/allocator-repros` 9 + `plain-heap-repros` 2, `wireshark/wmem-repros` 22 + `plain-heap-repros` 2, `ffmpeg/pool-repros` 4 + `subobject-repros` 10 + `plane-repros` 1 + `plain-heap-repros` 4 |
+| temporal corpus cases | **22** | 5 + 13 + 4 |
+| spatial corpus cases | **32** | memcached 4 + 2, tshark 9 + 2, FFmpeg 10 + 4 + 1 |
 | not-nested temporal, as app fixtures | 5 | memcached 17/18, tshark 14/15, FFmpeg 24 |
-| **total defects in both tables** | **38** | 27 temporal + 11 spatial |
+| **total defects in both tables** | **59** | 27 temporal + 32 spatial |
+| fix-reversals (`live_in_pin: false`) | **44 of 54** | liveness is recorded, never required. Recomputed from the `live_in_pin` fields, not adjusted by hand |
 
-Arm cells for the 11 spatial cases: **36 measured, 33 unavailable, 8 declined, 3 n/a = 80**, which
-is the closed accounting in the companion document.
+*These are recomputed from the `case.json` files, not typed. They drifted once already — the
+headline tables were updated and this section was not — which is the defect
+`bug-corpora/tools/build-index.py` exists to prevent, and whose `--check` mode now gates it.*
+
+Arm cells for the **13** spatial cases: the 80-cell accounting in the companion document covers
+the original 11; the two corpora added on 2026-10-06 carry their own, in their result bundles.
 
 **The two new memcached fixtures are MEASURED.** `results/2026-10-05-qemu-classa-fixtures/`,
 **15 of 15 cells as predicted** against rows registered before any image existed — fixtures 20 and

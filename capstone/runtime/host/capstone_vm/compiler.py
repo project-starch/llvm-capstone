@@ -133,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
                   "-Xclang", "-target-feature", "-Xclang", "+m",
                   "-Xclang", "-target-feature", "-Xclang", "+a",
                   "-ffreestanding", "-fno-builtin", "-fno-jump-tables", "-nostdinc"]
+        target.extend(config.get("codegen", []))
         for suffix in ("arch/capstone64", "arch/generic", "obj/include", "include"):
             target.extend(("-isystem", str(Path(config["musl"]) / suffix)))
         if any(a in ("-c", "-S", "-E", "-M", "-MM", "--version", "-dumpmachine",

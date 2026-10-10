@@ -65,9 +65,9 @@ CONTROL_MUST_PASS = "src/stdlib/abs.c"
 # The replacement fails for a reason that is structural rather than a missing backend feature:
 # mallocng derives a static assert from sizeof(void*), and a 16-byte pointer makes the assert
 # expression zero, so the negative-size array reports "array is too large (2^64-1 elements)".
-# It will keep failing for as long as a pointer is a capability. It is also the one component
-# a domain never wants, since every port here brings its own level 0, so fixing it is not on
-# any milestone and the control is not standing in front of planned work.
+# The virtual profile now ports this layout while preserving UNIT=16 and
+# requires the control to PASS. The physical profile keeps the upstream layout
+# and its failure control. Virtual mallocng runs in the Capstone application.
 CONTROL_MUST_FAIL = "src/malloc/mallocng/malloc.c"
 
 FOREIGN_ARCH_KEEP = {"riscv64", "capstone64", "generic"}
@@ -141,7 +141,9 @@ def bucket(message: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("musl_dir")
-    parser.add_argument("--expect-ok", type=int, default=BASELINE_OK)
+    parser.add_argument("--virtual", action="store_true",
+                        help="use representable gp and within-PCC calls for virtual C")
+    parser.add_argument("--expect-ok", type=int, default=None)
     parser.add_argument("--jobs", type=int, default=min(16, (os.cpu_count() or 4)))
     parser.add_argument("--list-failures", action="store_true")
     parser.add_argument("--objects", metavar="DIR",
@@ -150,6 +152,8 @@ def main() -> int:
                              "file set then have exactly one definition, here.")
     args = parser.parse_args()
 
+    if args.expect_ok is None:
+        args.expect_ok = 1361 if args.virtual else BASELINE_OK
     musl = pathlib.Path(args.musl_dir).resolve()
     clang = os.environ.get("CAPSTONE_CLANG")
     if not clang or not pathlib.Path(clang).exists():
@@ -174,6 +178,8 @@ def main() -> int:
         return 2
 
     flags = compile_flags(musl)
+    if args.virtual:
+        flags += ["-mllvm", "-capstone-gp-free", "-mllvm", "-capstone-image-gp", "-DCAPSTONE_MUSL_MALLOC=1"]
 
     objdir = pathlib.Path(args.objects).resolve() if args.objects else None
 
@@ -236,7 +242,7 @@ def main() -> int:
             print(f"  {r[0]}\n      {r[2]}")
 
     status = 0
-    for control, must_pass in ((CONTROL_MUST_PASS, True), (CONTROL_MUST_FAIL, False)):
+    for control, must_pass in ((CONTROL_MUST_PASS, True), (CONTROL_MUST_FAIL, args.virtual)):
         got = by_path.get(control)
         if got is None:
             print(f"\nERROR: control {control} was not surveyed at all", file=sys.stderr)

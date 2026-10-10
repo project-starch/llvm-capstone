@@ -108,6 +108,13 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   target_compile_definitions(delegate-service-test PRIVATE _GNU_SOURCE)
   target_link_libraries(delegate-service-test PRIVATE Capstone::Delegate)
   add_test(NAME delegate-service COMMAND delegate-service-test)
+  add_executable(delegate-thread-test ../tests/application/delegate-thread-test.c
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
+  target_compile_options(delegate-thread-test PRIVATE -UNDEBUG)
+  target_link_libraries(delegate-thread-test PRIVATE Capstone::Delegate Threads::Threads)
+  add_test(NAME delegate-thread-isolation COMMAND delegate-thread-test)
+  set_tests_properties(delegate-thread-isolation PROPERTIES TIMEOUT 15)
   add_executable(delegate-edge-test ../tests/application/delegate-edge-test.c
     ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
     ../linux/park.c)

@@ -17,7 +17,14 @@ WM_CASE(6) {
   /* register_frame_end_routine(actx->pinfo, x509if_frame_end), :912 -- on the
    * copy, so nothing clears last_dn_buf when the packet ends. */
   wm_next_packet(); /* epan_dissect_reset, epan.c:591 */
+  /* THE FIX, a8b16d74e1: EAP no longer hands its sub-dissectors a stack copy of pinfo, so the
+   * frame-end routine is registered on the real one and clears last_dn_buf when the packet ends. */
+  if (wm_fixed)
+    last_dn_buf = NULL;
+  wm_reoccupy(dn, 2600); /* native observer only */
   wm_held = last_dn_buf; /* x509if_get_last_dn(), read by "%s" at x509af:323-324 */
+  if (!wm_held)
+    return; /* the fix: the frame-end routine ran, nothing stale to append */
   wm_mark();
-  (void)wm_probe(wm_held);
+  WM_READ(wm_held, WM_MARKER);
 }

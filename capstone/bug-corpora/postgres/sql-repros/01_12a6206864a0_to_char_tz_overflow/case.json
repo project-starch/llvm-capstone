@@ -1,0 +1,36 @@
+{
+  "case": 1,
+  "upstream_fix": "12a6206864a0",
+  "title": "to_char(timestamptz,'TZ') heap overflow write, ~36 B -- stays inside its aset block",
+  "consumer": "to_char(timestamptz, 'TZ')",
+  "class": "spatial",
+  "allocator_layer": "aset",
+  "trigger": "trigger.sql",
+  "live_in_pin": true,
+  "live_proof": "CVE-2026-14669, fixed upstream in 12a6206864a0, which postdates the 17.5 pin. Reproduced on the pin: PostgreSQL's own MEMORY_CONTEXT_CHECKING reports 'detected write past chunk end' in ExprContext, followed by four alloc-set integrity warnings",
+  "fidelity": "real server, real allocator, upstream's own trigger shape. The overflow is about 36 bytes and stays inside its aset block, so ASan is structurally blind to it, and so are capability bounds on the block or the arena (cheribsd-revocation, spatial). It does leave its aset chunk: PostgreSQL's own check reports damaged chunk headers (bad chunk size, bad block offset), and the sublet arm, which bounds each aset chunk, faults on the store (cause 7, 2026-10-05) -- that is the measurement, not a weakness of the case",
+  "arms": {
+    "spatial": {
+      "oracle": "completes; the mechanism does not report. completed with no directive and no fault",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict": "silent",
+      "evidence": "completed with no directive and no fault"
+    },
+    "sublet": {
+      "oracle": "the mechanism reports: capability fault: capstone-exec: domain fault cause=7 pc=0xc0202214 address=0xc9dcf8f0 entry=0xc0200e4c code=0xc0200000-0xc52f0000 last=0x38 preparing=0x38 sha256=be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268 image=/mnt/host/applications/postgres-be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268.dom",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict": "detected",
+      "evidence": "capability fault: capstone-exec: domain fault cause=7 pc=0xc0202214 address=0xc9dcf8f0 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x38 preparing=0x38 sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes; the defect is witnessed by PostgreSQL's own check or by the differential -- REACHED-SILENT (2026-10-04, probe run). Plain purecap rc=0, no fault. The cassert build's own MEMORY_CONTEXT_CHECKING fires: detected write past chunk end; bad chunk size; bad block offset; req size > alloc size; found inconsistent memory block. The overflow stays inside the palloc chunk, so CHERI is correct to stay silent -- but the defect provably executed.",
+      "verdict": "silent",
+      "evidence": "ran to the prompt with no fault",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+    }
+  },
+  "status": "measured on all three arms 2026-10-06: spatial=silent, sublet=detected, cheribsd-revocation=silent",
+  "advisory": "CVE-2026-14669",
+  "nested": true,
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
+}

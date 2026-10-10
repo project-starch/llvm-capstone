@@ -24,30 +24,53 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "PREDICTED and UNMEASURABLE HERE; neither platform is on this host.",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable."
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at mc_defect_write, the labelled write probe. The corpus runner scores this row FAIL because its oracles were written for the temporal cases; the fault line is the reading. No outcome was predicted for this arm (its record said only that the platform was unavailable).",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE; neither platform is on this host.",
+      "status": "measured",
+      "verdict": "CAUGHT"
     },
     "poisoncap-protected": {
       "mode": 1,
       "signal": 34,
-      "si_code": 2,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: mode 1 adds temporal protection and no lifetime ends here.",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable."
+      "si_code": 1,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at mc_defect_write, the labelled write probe. The corpus runner scores this row FAIL because its oracles were written for the temporal cases; the fault line is the reading. The prediction -- mode 0's spatial behaviour decides it -- held.",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable.",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: mode 1 adds temporal protection and no lifetime ends here.",
+      "status": "measured",
+      "verdict": "CAUGHT"
     },
     "cheribsd-revocation": {
-      "oracle": "PREDICTED and UNMEASURABLE HERE: completes -- CHERI bounds the slab page, which is one malloc.",
+      "oracle": "MEASURED 2026-10-06 on this host: the sequence COMPLETES. exit=0, completed=1, object_reuses=0, chunk_reuses=0. Not caught. Both reuse counters are 0, as they must be for a spatial case: nothing is freed here, and the crossing stays inside the slab page, which is one malloc. EVIDENCE COMMITTED 2026-10-06: results/20261006-cheribsd/. Both controls are in that bundle -- the revocation control FAULTED with addr == pc == the independently resolved expectation (0x101e42), proving the revoker sweeps in this guest AND attributing the fault; and a NEGATIVE CONTROL run on the same vehicle makes all 8 case oracles FAIL while the three platform controls still pass, so none of these completions is vacuous. The image hash is byte-identical to the vehicle the ffmpeg readings of the same day used, so the two programs' columns are comparable.",
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable."
+      "control": "the control fired in the SAME boot: revocation-control exit=162 signal=34 (SIGPROT) si_code=2 (PROT_CHERI_TAG) with pc == the address the supervisor resolved independently (0x101e42). The platform controls cheribsd-abi and cheribsd-bounds passed in the same run.",
+      "platform": "stock CheriBSD purecap built on this host with tests/cheri-baseline/provision-cheri-vehicle.sh (kernel CHERI-PURECAP-QEMU, releng/26.07-88f39900c329 = pins.env's CHERIBSD_REV; hw.machine_arch riscv64c; qemu 16135483052dfdd6, firmware f0e1fe57b0f85075, kernel 8ab453f46dc76cf2, libc fdce2289224bb519, image 0cb16209c16c5edf). NOT the PoisonCap platform the 2026-09-21 bundles used, so those hashes differ by construction.",
+      "status": "measured"
     },
     "native-detect": {
-      "status": "declined",
-      "oracle": "NO ASan report expected: the crossing stays inside the slab page, which is one malloc, so there is no redzone between chunks. Needs its own positive control before the silence means anything -- see the FFmpeg subobject-repros bundle, where that control is measured and where it first failed to fire at -O1.",
-      "note": "DECLINED, not pending, and the reason is a measurement rather than an estimate: the two-sided shape is already established by the FFmpeg sub-object probe (ffmpeg/subobject-repros/results/20261005-native-subobject/asan-probe.c), where the member-to-member crossing draws NO report while a write one element past the whole allocation draws heap-buffer-overflow. Every crossing in this corpus stays inside one g_malloc'd block or slab page by the same mechanism, so eight more silent-with-control runs would confirm what one already showed. Two further reasons not to spend them: the wireshark corpus has no standalone native build to instrument, and the memcached one would have to instrument the case while linking an uninstrumented port library -- the mixed mode in which that probe's own -O1 artefact arose, where BOTH arms went silent because the dead stores were optimised away. If this arm is ever wanted, it needs its positive control in the same binary."
+      "status": "measured",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -O1 -g; port library with the same sanitizer). Positive controls in the same run: `asan-control past 67108864` -> heap-buffer-overflow; `asan-control uaf 67108864` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (3ef5169ae90b); the arm was previously 'declined'.",
+      "note": "DECLINED, not pending, and the reason is a measurement rather than an estimate: the two-sided shape is already established by the FFmpeg sub-object probe (ffmpeg/subobject-repros/results/20261005-native-subobject/asan-probe.c), where the member-to-member crossing draws NO report while a write one element past the whole allocation draws heap-buffer-overflow. Every crossing in this corpus stays inside one g_malloc'd block or slab page by the same mechanism, so eight more silent-with-control runs would confirm what one already showed. Two further reasons not to spend them: the wireshark corpus has no standalone native build to instrument, and the memcached one would have to instrument the case while linking an uninstrumented port library -- the mixed mode in which that probe's own -O1 artefact arose, where BOTH arms went silent because the dead stores were optimised away. If this arm is ever wanted, it needs its positive control in the same binary.",
+      "prediction": "NO ASan report expected: the crossing stays inside the slab page, which is one malloc, so there is no redzone between chunks. Needs its own positive control before the silence means anything -- see the FFmpeg subobject-repros bundle, where that control is measured and where it first failed to fire at -O1.",
+      "verdict": "NOT CAUGHT"
     },
     "native-fix-differential": {
       "oracle": "the buggy arm's write or read crosses and the case's damage flag is set; the fixed arm's bound keeps it inside. This pair differs by the upstream fix, not by protection."
+    },
+    "sublet-malloc": {
+      "target": "Capstone domain, the allocators port's ledger in mode 2: stock slabs.c/cache.c on Sublet as the SYSTEM allocator -- a chunk carries its whole page's bound, an object its own, and nothing is revoked until a page or object is given back",
+      "mode": 2,
+      "oracle": "the sequence completes: the write leaves item a's data for the next chunk of the SAME page, and in mode 2 a chunk carries its whole page's bound MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (completed=1, image 59d41478f9698d66).",
+      "prediction": "complete",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "f7adf03a1009"
     }
   },
-  "status": "MEASURED 2026-10-05, both paths. QEMU domain, cases 2,5,6,7 in one pass: 8/8 arms, runner exit 0, with case 2 as the temporal regression control reading cause 24 as before, and the suite's negative control reporting 8/8 oracles fired. This row FAULTS on BOTH modes with cause 7 at the labelled WRITE probe, pc 0x10186a0e4 equal to the resolved probe address. Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. The prediction that it faults is CONFIRMED; that both modes fault shows the slab port narrows per chunk whatever the temporal mode, as wm_narrow() does on the wireshark side; and cause 7 rather than 5 is the store-versus-load distinction, which the pre-registration did not anticipate here either."
+  "status": "MEASURED 2026-10-05, both paths. QEMU domain, cases 2,5,6,7 in one pass: 8/8 arms, runner exit 0, with case 2 as the temporal regression control reading cause 24 as before, and the suite's negative control reporting 8/8 oracles fired. This row FAULTS on BOTH modes with cause 7 at the labelled WRITE probe, pc 0x10186a0e4 equal to the resolved probe address. Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. The prediction that it faults is CONFIRMED; that both modes fault shows the slab port narrows per chunk whatever the temporal mode, as wm_narrow() does on the wireshark side; and cause 7 rather than 5 is the store-versus-load distinction, which the pre-registration did not anticipate here either. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): CAUGHT in both modes.",
+  "nested": true,
+  "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
 }

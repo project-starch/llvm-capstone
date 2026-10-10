@@ -1,0 +1,27 @@
+{
+  "case": 9,
+  "upstream_fix": "0cf969a2b",
+  "title": "shaped_iv_foreach caches the shaped-IV block across a user #inspect that adds or removes an instance variable and frees it",
+  "consumer": "src/variable.c",
+  "class": "temporal",
+  "trigger": "trigger.rb",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in 0cf969a2b (0cf969a2b79462e8709e244da9d66144203f3651) (2026-09-18), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: heap-use-after-free (with MRB_HEAP_PAGE_SIZE=1: heap-use-after-free); the same case on master: no report",
+  "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-none": {
+      "oracle": "completes and the harness reports PASS: the defect executes and is silent in every sense this arm can see"
+    },
+    "sysalloc-bounds": {
+      "oracle": "completes and the harness reports PASS: the defect executes and is silent in every sense this arm can see"
+    },
+    "sublet-gc": {
+      "oracle": "capability fault, cause 24"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes and the harness reports PASS: the defect executes and nothing here sees it"
+    }
+  },
+  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
+  "allocator_layer": "the shaped-IV block (system allocator)"
+}

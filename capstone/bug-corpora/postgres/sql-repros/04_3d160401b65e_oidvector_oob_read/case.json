@@ -1,0 +1,36 @@
+{
+  "case": 4,
+  "upstream_fix": "3d160401b65e",
+  "title": "array[]::oidvector out-of-bounds read, ~40 heap words -- stays inside its aset block",
+  "consumer": "array[]::oidvector cast",
+  "class": "spatial/oob-read",
+  "allocator_layer": "aset",
+  "trigger": "trigger.sql",
+  "live_in_pin": true,
+  "live_proof": "CVE-2026-2003, fixed upstream in 3d160401b65e, which postdates the 17.5 pin. On the pin the cast is accepted where a correct build rejects it: the purecap run errors on 0 of the 2 statements upstream refuses",
+  "fidelity": "real server, core. The out-of-bounds read stays inside its aset block, so no sanitizer sees it and neither do capability bounds on the block or the arena (cheribsd-revocation, spatial); there the accepted input is the evidence. The sublet arm bounds each aset chunk and faults on the read (cause 5, 2026-10-05). On the host the same case printed about forty words of adjacent heap, and on the purecap arm the value came back empty -- the arms show different amounts of the same defect, which is recorded rather than averaged",
+  "arms": {
+    "spatial": {
+      "oracle": "completes with no fault; the trigger's own directive fires -- the defect is witnessed by its effect, not by the access. errors 0/2 expected",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict": "differential",
+      "evidence": "errors 0/2 expected"
+    },
+    "sublet": {
+      "oracle": "the mechanism reports: capability fault: capstone-exec: domain fault cause=5 pc=0xc0ae3764 address=0xc9d60520 entry=0xc0200e4c code=0xc0200000-0xc52f0000 last=0x43 preparing=0x43 sha256=be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268 image=/mnt/host/applications/postgres-be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268.dom",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict": "detected",
+      "evidence": "capability fault: capstone-exec: domain fault cause=5 pc=0xc0ae994c address=0xc9d60520 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x43 preparing=0x43 sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes; the differential fires -- upstream rejects 2 statements and 17.5 rejected 0, so an input a correct build refuses was accepted. Note the arms differ in how much they show: the host oracle printed about forty words of adjacent heap, here the value came back empty, so on this arm the accepted input is the whole of the evidence",
+      "verdict": "silent",
+      "evidence": "ran to the prompt with no fault",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+    }
+  },
+  "status": "measured on all three arms 2026-10-06: spatial=differential, sublet=detected, cheribsd-revocation=silent",
+  "advisory": "CVE-2026-2003",
+  "nested": true,
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
+}

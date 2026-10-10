@@ -1,0 +1,20 @@
+# Result lines, as runners/run-native.sh printed them. The control arm runs first.
+# Built against real libavutil (ffmpeg-native-vidstab), which is an ASan build, so
+# both arms carry the sanitiser.
+
+00_b7946098b1_alphablend_row_past_plane plain=reproduced asan=silent-as-expected plane_slack=1024
+
+# Both arms in full, so the one condition that differs is visible:
+#   fixed  case=0 arm=fixed  crossed=0 contained=1 damage=0 plane_slack=1024  VERDICT FIXED
+#   buggy  case=0 arm=buggy  crossed=1 contained=1 damage=1 plane_slack=1024  VERDICT DEFECT-REPRODUCED
+#
+# contained=1 on BOTH arms is the row's structural claim, asserted in the case:
+# a whole row past the alpha plane is still inside the frame's single AVBuffer,
+# with 1024 bytes to spare.
+#
+# ASan stays SILENT on both arms, and that is the finding rather than a gap: the
+# read leaves the PLANE, not the ALLOCATION, so no redzone sits where it lands.
+# The memcached plain-heap corpus records the opposite reading for the opposite
+# reason, and the pair is the axis.
+#
+# runner exit status 0 = the plain pair reproduced AND the sanitiser stayed silent.

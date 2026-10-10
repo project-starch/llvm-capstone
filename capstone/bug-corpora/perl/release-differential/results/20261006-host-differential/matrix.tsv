@@ -1,0 +1,12 @@
+case	pin_rc	pin_report	pin_harness	blead_rc	blead_report	blead_harness
+1189b87114	77	SEGV	—	0	none	[PASS]
+17535c984a	0	none	[FAIL]	0	none	[PASS]
+254b30e378	77	heap-use-after-free	—	0	none	[PASS]
+39b4841b25	77	heap-use-after-free	—	0	none	[PASS]
+40727c420c	77	SEGV	[FAIL]	0	none	[PASS]
+9e298ab597	77	SEGV	—	0	none	[PASS]
+ad5fedb002	77	SEGV	—	0	none	[PASS]
+af11b0c528	0	none	[FAIL]	0	none	[PASS]
+b7b77ffc1e	77	SEGV	—	0	none	[PASS]
+d2cddbe1df	255	none	[PASS]	0	none	[PASS]
+e4be969235	77	heap-use-after-free	—	0	none	[PASS]

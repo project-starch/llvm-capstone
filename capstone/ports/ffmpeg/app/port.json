@@ -19,5 +19,10 @@
   "related": [
     "capstone/ports/ffmpeg/buffer-pool"
   ],
-  "note": "Its pool fixtures run the buffer-pool port's Sublet leases inside the whole decoder; the pool corpus's cases belong to that component, not to this one."
+  "note": "Its pool fixtures run the buffer-pool port's Sublet leases inside the whole decoder; the pool corpus's cases belong to that component, not to this one.",
+  "corpora": [
+    "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+    "capstone/bug-corpora/ffmpeg/plane-repros",
+    "capstone/bug-corpora/ffmpeg/subobject-repros"
+  ]
 }

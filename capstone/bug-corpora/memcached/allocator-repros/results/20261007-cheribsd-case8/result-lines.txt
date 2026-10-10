@@ -1,0 +1,30 @@
+# memcached/allocator-repros case 8 on stock CheriBSD purecap, revocation ON, 2026-10-07.
+# The run that REFUTED this case's prediction. Result lines only.
+
+BOOT CheriBSD allocator suite
+PASS cheribsd-abi
+PASS cheribsd-bounds
+PASS revocation-control
+PASS 00-rbuf-copied-after-cache-free-mode0
+PASS 01-io-walk-reads-freed-link-mode0
+PASS 02-tail-repair-frees-referenced-item-mode0
+PASS 03-refcount-overflow-frees-linked-item-mode0
+PASS 04-unlocked-refcount-drift-mode0
+PASS 05-item-data-one-past-mode0
+PASS 06-suffix-write-no-space-mode0
+PASS 07-unterminated-key-read-mode0
+FAIL 08-ascii-all-spaces-scan-past-rbuf-mode0
+FAIL case=8  mode=0 revocation=on e8364b5    exit=162 FAULT signal=34 code=1 pc=0x105530
+
+## the refuting line
+FAIL case=8  mode=0 revocation=on e8364b5    exit=162 FAULT signal=34 code=1 pc=0x105530
+
+## the eight rows that completed, for contrast -- all slab chunks or temporal
+OK   case=0  mode=0 revocation=on 7af02b0c87 exit=0 completed=1 object_reuses=1 chunk_reuses=0
+OK   case=1  mode=0 revocation=on 0ad4de66ae exit=0 completed=1 object_reuses=1 chunk_reuses=0
+OK   case=2  mode=0 revocation=on 59bd02ce29 exit=0 completed=1 object_reuses=0 chunk_reuses=1
+OK   case=3  mode=0 revocation=on a8c4a82787 exit=0 completed=1 object_reuses=0 chunk_reuses=1
+OK   case=4  mode=0 revocation=on 152ddb68f7 exit=0 completed=1 object_reuses=0 chunk_reuses=1
+OK   case=5  mode=0 revocation=on 2d61f18    exit=0 completed=1 object_reuses=0 chunk_reuses=0
+OK   case=6  mode=0 revocation=on 78eb770    exit=0 completed=1 object_reuses=0 chunk_reuses=0
+OK   case=7  mode=0 revocation=on ecdb011    exit=0 completed=1 object_reuses=0 chunk_reuses=0

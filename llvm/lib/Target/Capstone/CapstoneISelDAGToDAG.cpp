@@ -88,6 +88,13 @@ cl::opt<bool> CapstoneGpFree(
              "(silicon domain ABI); default off"),
     cl::init(false));
 
+// Virtual application startup supplies a readable, image-wide gp. Unlike a
+// per-global cap table it can address anonymous constants in that image.
+static cl::opt<bool> CapstoneImageGp(
+    "capstone-image-gp", cl::Hidden,
+    cl::desc("Use the gp-free ABI with a readable image-wide gp authority"),
+    cl::init(false));
+
 // gp-captable: the silicon-correct global-addressing half of the gp-free domain
 // ABI. gp is the base of a per-global cap-table (data authority, derived in-glue
 // from sp/cscratch) rather than a cap over the code image; a global at cap-table
@@ -192,6 +199,9 @@ int getGpCaptableIndex(const GlobalValue *GV) {
 // non-indexable symbol refs. So every gp-free ABI decision is active under either
 // flag; this is the single predicate the call/ret/spill/global sites consult.
 bool capstoneGpFreeAbiActive() { return CapstoneGpFree || CapstoneGpCaptable; }
+bool capstoneImageGpAbiActive() {
+  return CapstoneImageGp && CapstoneGpFree && !CapstoneGpCaptable;
+}
 
 #define GET_DAGISEL_BODY CapstoneDAGToDAGISel
 #include "CapstoneGenDAGISel.inc"

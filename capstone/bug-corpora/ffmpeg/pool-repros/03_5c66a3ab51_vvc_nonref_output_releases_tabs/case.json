@@ -25,7 +25,9 @@
       "oracle": "case.c unchanged against the Sublet port of FFmpeg's own pools (app port, FFAPP_POOL=sublet): the defect faults at an instruction case.c's line table puts on a line that dereferences the stale table pointer, before the verdict line; the fix completes with VERDICT FIXED",
       "control": "the same case.c and driver objects linked against upstream's pools (FFAPP_POOL=stock): the defect completes with VERDICT DEFECT-REPRODUCED, the fix with VERDICT FIXED",
       "cause": 24,
-      "measured": "2026-10-04, ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/: poolsublet fixture 46 FAULT cause 24 attributed to case.c:104 (registered 104,105,108) with value_hi 1198a902a20 non-zero, and fixture 47 COMPLETE VERDICT FIXED; the poolstock control completes 46 with VERDICT DEFECT-REPRODUCED and 47 with FIXED. All 16 cells of 40-47 as predicted on both arms. Built with the qualified toolchain 7d01722aab88, the only one on this host passing the application SDK's ABI gate -- a comparability caveat, since other FFmpeg arms used b7b31421e9fa"
+      "measured": "2026-10-04, ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/: poolsublet fixture 46 FAULT cause 24 attributed to case.c:104 (registered 104,105,108) with value_hi 1198a902a20 non-zero, and fixture 47 COMPLETE VERDICT FIXED; the poolstock control completes 46 with VERDICT DEFECT-REPRODUCED and 47 with FIXED. All 16 cells of 40-47 as predicted on both arms. Built with the qualified toolchain 7d01722aab88, the only one on this host passing the application SDK's ABI gate -- a comparability caveat, since other FFmpeg arms used b7b31421e9fa",
+      "status": "measured",
+      "verdict": "CAUGHT"
     },
     "spatial": {
       "probe_case": 39,
@@ -40,25 +42,55 @@
       "measured": "2026-10-04, same bundle: mode 2 faulted with cause 24 at pc 0x101a11720 == expected_pc, exactly one fault; the same domain_sha256 ac4473aa27353f9e in both modes, so the pair differs only in the runtime mode argument"
     },
     "poisoncap-spatial": {
-      "status": "not written"
+      "status": "measured",
+      "mode": 0,
+      "case": "pool-0-39",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **NOT CAUGHT** -- the sequence completes, exit 0. Platform controls in the same boot: poison-live exit 0; poison-read exit 162; poison-write exit 162; poison-reuse exit 0; poison-reused-read exit 162; cheribsd-abi exit 0; cheribsd-bounds exit 162.",
+      "prediction": "PREDICTED 2026-10-09: the sequence completes, exit 0 -- as cases 0-2 (pool-0-36..38); mode 0 has no lease protection.",
+      "verdict": "NOT CAUGHT"
     },
     "poisoncap-protected": {
-      "status": "not written"
+      "status": "measured",
+      "mode": 2,
+      "case": "pool-2-39",
+      "signal": 34,
+      "si_code": null,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT** -- SIGPROT (exit 162) after the setup marker FF2_PROBE case=39 ready. Platform controls in the same boot: poison-live exit 0; poison-read exit 162; poison-write exit 162; poison-reuse exit 0; poison-reused-read exit 162; cheribsd-abi exit 0; cheribsd-bounds exit 162.",
+      "prediction": "PREDICTED 2026-10-09: SIGPROT after the setup marker FF2_PROBE case=39 ready -- as cases 0-2; mode 2 issues a poisoned lease per buffer, and the probe reads through the released one.",
+      "verdict": "CAUGHT"
     },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap, libc revocation enabled",
-      "oracle": "PREDICTED, NOT MEASURED: the sequence completes. The two side tables go back to their AVRefStructPools (refs.c:153 and :157) rather than to free(), so the storage never enters the quarantine the revoker sweeps -- the same mechanism this corpus's other three cases state, and the reason every nested temporal case completes under stock CheriBSD.",
-      "guest_default": "preserved -- the kernel default stays on, as in the sibling cases",
-      "control": "NOT RUN HERE. The reading this arm would need is the cheribsd-abi probe reporting runtime_revocation=1 in the same guest immediately before the case, plus a revocation control that FAULTS in the same boot; without both, a completion is not a reading. The platform (SDK, purecap sysroot, image) is absent on this host: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them, and both are unset after sourcing the project environment.",
-      "status": "declared 2026-10-05, unmeasured. Replaces the bare {\"status\": \"not written\"} that made this the one cell in either inventory table with no oracle."
+      "oracle": "MEASURED 2026-10-06 on this host, revocation ON, guest default preserved: the sequence COMPLETES. NOT CAUGHT. pool-0-39 reported `FF2 status=0 events=1 metadata=384 payload=320`, runner exit 0, 7 of 7 cases passed. The mechanism, now evidenced rather than argued: a buffer returned to an AVBufferPool never reaches free(), so it never enters the quarantine the revoker sweeps and the sweep has nothing to find. THE CONTROL FIRED IN THE SAME BOOT, which is the bar the retraction set and the one the withdrawn claim never met: revocation-control reported `REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1` and then FAULTED -- SIGPROT, si_code 2 (PROT_CHERI_TAG), addr=pc=0x101dc0, equal to the address supervise resolved for mc_defect_read independently of the run. So the revoker demonstrably sweeps in this guest, and a completion here is 'the mechanism is active and did not fire' rather than 'the mechanism is absent'. The platform controls passed alongside it: cheribsd-abi `CHERI_ABI pointer_bytes=16 runtime_revocation=1`, cheribsd-bounds CHERI_BOUNDARY_READY. THIS IS THE READING THAT 18a16640682b CLAIMED AND NEVER TOOK -- see the `retraction` field below, which is kept rather than deleted. The predicted OUTCOME was right; what was wrong was asserting it had been observed. It has now been observed. HOW IT WAS MEASURED, stated here because the retraction below says the cited runner 'cannot produce it' and a reader should not take that as 'unmeasurable': the reading was taken by running the SAME purecap pool-security binary through ports/common/host/cheribsd/run.py with --runtime-revocation on. What cannot produce it is the port's own PoisonCap wrapper, whose unconditional literal 'off' at poisoncap/run.py:129-130 is the specific thing the retraction withdrew a citation to.",
+      "guest_default": "preserved",
+      "control": "THE CONTROL FIRED IN THE SAME BOOT, which is the bar the retraction set and the one the withdrawn claim never met: revocation-control reported `REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1` and then FAULTED -- SIGPROT, si_code 2 (PROT_CHERI_TAG), addr=pc=0x101dc0, equal to the address supervise resolved for mc_defect_read independently of the run. So the revoker demonstrably sweeps in this guest, and a completion here is 'the mechanism is active and did not fire' rather than 'the mechanism is absent'. The platform controls passed alongside it: cheribsd-abi `CHERI_ABI pointer_bytes=16 runtime_revocation=1`, cheribsd-bounds CHERI_BOUNDARY_READY.",
+      "status": "measured",
+      "platform": "stock CheriBSD purecap built on this host (kernel CHERI-PURECAP-QEMU, releng/26.07-88f39900c329 = pins.env's CHERIBSD_REV) -- the same vehicle as the memcached, wireshark and ffmpeg spatial readings.",
+      "case": "pool-0-39"
     },
     "native-detect": {
-      "status": "not written"
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -g -O0; port library built with the same flags). Positive controls in the same run: `asan-control past 67108864` -> heap-buffer-overflow; `asan-control uaf 67108864` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (3ef5169ae90b); the arm was previously 'not written'."
     },
     "backing": {
-      "status": "not written"
+      "status": "measured",
+      "mode": 1,
+      "case": "probe case 39, mode 1",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **NOT CAUGHT** -- mode 1 (revocation at the pool's backing allocation) completes, completed, as cases 0-2: the pool never frees its backing, it recycles out of it. Image ac4473aa27353f9e.",
+      "prediction": "PREDICTED 2026-10-09: the sequence completes -- as cases 0-2: revocation acts on the pool's backing allocation, which the pool never frees, so the recycled buffer's stale alias stays valid.",
+      "verdict": "NOT CAUGHT"
+    },
+    "sublet-malloc": {
+      "target": "the FFmpeg application port's poolstock arm: FFmpeg's own pools UNPORTED (FF_SUBLET_POOLS=0) on the Sublet heap, where every free revokes -- Sublet only as the system allocator",
+      "oracle": "the sequence completes. MEASURED 2026-10-04, ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/result-lines.txt (fixture 46, this case.c unchanged under the app's driver; matched fixed fixture 47 read FIXED): VERDICT DEFECT-REPRODUCED the decoder's side table went back to the pool and was reissued. NOT CAUGHT. Recorded here 2026-10-09 as column 2 of the per-bug table; the fixture-to-case map is the results README's table (rows 0..3 = fixtures 40/41..46/47).",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-04"
     }
   },
-  "status": "declared 2026-10-03; the native-fix-differential arm MEASURED the same day (bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-four-cases/), and the spatial/sublet pair MEASURED 2026-10-04 as probe case 39 (ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/), both cells as pre-registered in a9a5df563658. The sublet-port rows (fixtures 46/47) remain PREDICTIONS: they need the FFmpeg app port, MEASURED 2026-10-04 in ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/: fixture 46 faults with cause 24 at case.c:104 and 47 completes FIXED, with the poolstock control completing both. So every protected arm this case can carry on this host is now measured. RETRACTED 2026-10-04, same day: the earlier wording here said that port's SDK ABI gate 'refuses every toolchain on this host for want of the intcap extensions'. That is false. A qualified toolchain IS present -- llvm-capstone-cc/build-release/bin/clang, commit 7d01722aab88 -- and check_toolchain accepts it end to end (both the two-call direct-call probe and __uintcap_t pass). The error was generalising from a glob over */llvm/cmake-build-* to 'every toolchain on this host'; docs/ref/ffmpeg-live-defect-triage.md:281-284 already named that compiler. So sublet-port is reachable and merely unrun. The fault lines were re-registered 84,85,88 -> 99,100,103 -> 104,105,108 when the reduction was corrected to track both released tables and to give rpl_tab its own fill; the predicted outcomes did not change.",
-  "note": "The arms left 'not written' are the ones this case cannot honestly carry yet: the PoisonCap and CheriBSD arms need platforms this host does not have, and native-detect would measure the fixture rather than FFmpeg because the port's payload arena is one allocation. spatial and sublet were filled on 2026-10-04 by probe slot 39 in ports/ffmpeg/buffer-pool, which is what this note previously said was missing; 36-38 remain cases 0-2."
+  "status": "declared 2026-10-03; the native-fix-differential arm MEASURED the same day (bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-four-cases/), and the spatial/sublet pair MEASURED 2026-10-04 as probe case 39 (ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/), both cells as pre-registered in a9a5df563658. The sublet-port rows (fixtures 46/47) remain PREDICTIONS: they need the FFmpeg app port, MEASURED 2026-10-04 in ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/: fixture 46 faults with cause 24 at case.c:104 and 47 completes FIXED, with the poolstock control completing both. So every protected arm this case can carry on this host is now measured. RETRACTED 2026-10-04, same day: the earlier wording here said that port's SDK ABI gate 'refuses every toolchain on this host for want of the intcap extensions'. That is false. A qualified toolchain IS present -- llvm-capstone-cc/build-release/bin/clang, commit 7d01722aab88 -- and check_toolchain accepts it end to end (both the two-call direct-call probe and __uintcap_t pass). The error was generalising from a glob over */llvm/cmake-build-* to 'every toolchain on this host'; docs/ref/ffmpeg-live-defect-triage.md:281-284 already named that compiler. So sublet-port is reachable and merely unrun. The fault lines were re-registered 84,85,88 -> 99,100,103 -> 104,105,108 when the reduction was corrected to track both released tables and to give rpl_tab its own fill; the predicted outcomes did not change. CheriBSD MEASURED 2026-10-06 with the revocation control FAULTING in the same boot: completes, not caught (results/20261006-cheribsd/). The arm retracted this morning now carries the measurement it had only claimed. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 completes, mode 2 SIGPROT. Backing arm measured: completes.",
+  "note": "The arms left 'not written' are the ones this case cannot honestly carry yet: the PoisonCap and CheriBSD arms need platforms this host does not have, and native-detect would measure the fixture rather than FFmpeg because the port's payload arena is one allocation. spatial and sublet were filled on 2026-10-04 by probe slot 39 in ports/ffmpeg/buffer-pool, which is what this note previously said was missing; 36-38 remain cases 0-2.",
+  "nested": true,
+  "nested_why": "AVRefStructPool (libavutil/refstruct.c) recycles the object, with the frame's planes on AVBufferPool alongside; the platform allocator saw only the pools' blocks -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED."
 }

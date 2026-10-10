@@ -1,5 +1,18 @@
 # Capstone project documentation
 
+Start with the [virtual Capstone guide](design/virtual-capstone/README.md)
+to understand the supervised virtual C profile: ownership,
+processor interface, Linux runtime, application ports and safety limits.
+The core virtual stack is on `dev`. The growing node-table extension is on
+`review/virtual-node-growth`, based on `dev` plus `review/virtual-build-repairs`.
+Use its pinned QEMU and the [runtime build instructions](../runtime/virtual/README.md);
+[qualification records](../runtime/virtual/results/node-growth/qualification.json)
+identify the exact tested inputs and scope.
+The `virtual-musl-local` branch adds [local Capstone-compiled mallocng](../runtime/virtual/mallocng.md)
+with upstream allocation policy and capability lifetime hooks. Its
+[qualification](../runtime/virtual/results/local-mallocng/README.md) records
+the local service-boundary, safety, thread and application checks.
+
 Lane-only work on `delegation-threads` (not landed on `dev`):
 [the threads computing model](design/delegated-threads-model.md),
 [thread plan and integration constraints](plans/delegation-threads.md),

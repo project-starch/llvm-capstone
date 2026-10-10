@@ -28,6 +28,15 @@ option(WM_P2_CONTROL "compile the old-byte check without the chunk port" OFF)
 # only for fixtures that never reissue the freed chunk (4 and 13); anything that does would take a
 # slot still holding a lent handle.
 option(WM_P1_ABLATE "the port with a chunk free's revoke stubbed out" OFF)
+# WM_VARIANT=reference builds the defect corpus's domain programs against wmem AS RELEASED: none
+# of the port's patches, so no hook fires, no reset ends an epoch and no chunk is a region. What is
+# left is Sublet as the SYSTEM allocator -- every g_malloc a region, every g_free a revoke -- under
+# a stock wmem: the corpus's `sublet-malloc` arm. The replay and security programs stay ported.
+set(WM_VARIANT "ported" CACHE STRING "wmem source the corpus's domain programs build against")
+set_property(CACHE WM_VARIANT PROPERTY STRINGS ported reference)
+if(NOT WM_VARIANT MATCHES "^(ported|reference)$")
+  message(FATAL_ERROR "WM_VARIANT must be ported or reference, not ${WM_VARIANT}")
+endif()
 function(wm_executable name variant)
   set(workload ${ARGN})
   set(source "${CMAKE_BINARY_DIR}/source-${variant}")
@@ -104,6 +113,9 @@ if(PORT_HOSTED)
   wm_executable(replay-reference reference src/shared/replay.c)
 else()
   wm_executable(wmem-security ported security-tests/shared/lifetimes.c)
+  if(WM_VARIANT STREQUAL "reference")
+    wm_source(reference)
+  endif()
 endif()
 # The defect corpus: one program per NN_*/case.c, named as the contract names
 # run artifacts. Case material lives in bug-corpora, not inside the port.
@@ -144,7 +156,7 @@ if(wm_case_count GREATER 0)
       target_compile_definitions("${wm_stem}" PRIVATE WM_CORPUS_HOSTED)
       target_link_libraries("${wm_stem}" PRIVATE Wireshark::Wmem)
     else()
-      wm_executable("${wm_stem}" ported "${wm_dir}/case.c" "${WM_CORPUS_DIR}/shared/driver.c")
+      wm_executable("${wm_stem}" ${WM_VARIANT} "${wm_dir}/case.c" "${WM_CORPUS_DIR}/shared/driver.c")
       target_include_directories("${wm_stem}" PRIVATE "${WM_CORPUS_DIR}/shared")
     endif()
   endforeach()

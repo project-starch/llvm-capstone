@@ -1,0 +1,88 @@
+{
+  "case": 21,
+  "upstream_fix": "69dac89280",
+  "title": "tcp_flags_to_str_first_letter writes nine flags, their separators and a terminator into a sixteen-byte buffer",
+  "consumer": "epan/dissectors/packet-tcp.c:4303-4330, tcp_flags_to_str_first_letter()",
+  "object": "pbuf, a packet-scope chunk of maxlength = 16 bytes",
+  "lifetime_ender": "NONE -- the object is alive throughout. This is a SPATIAL row.",
+  "shape": "the buffer size is a local constant of 16 while the output is nine letters plus eight separators plus a terminator, 18 bytes, written unconditionally",
+  "allocator_layer": "wmem, a chunk the BLOCK or BLOCK_FAST allocator carved from a block g_malloc handed out. An inner allocator carved the crossed region, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "nested": true,
+  "nested_why": "an inner allocator (wmem) carved the crossed region out of a larger block it had itself obtained from g_malloc, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "fidelity": "real allocator, model consumer. MAXLENGTH 16 and NFLAGS 9 are upstream's own values, unreduced. The case asserts that the output does not fit and that the overrun stays inside the block.",
+  "live_in_pin": false,
+  "live_proof": "read from the PINNED source, and the first probe was REPLACED because it was not two-sided: `tcp_flags_to_str_first_letter` is the function's name and exists on BOTH sides of the fix, so it cannot distinguish them. Re-keyed on the fix's own added constant: v4.6.8:epan/dissectors/packet-tcp.c contains `const unsigned flags_count = 12` 1 time and the pre-fix `const int maxlength = 16` 0 times. Two-sided. A fix-reversal.",
+  "distinguishing": "the only row here reachable with NO crafted input: nine flags into sixteen bytes is a fixed, compile-time-known overflow, which is why it was found by inspection rather than by a fuzzer. Also the only spatial row in this corpus whose arms differ by the WRITTEN LENGTH rather than by one term -- the fix rewrites the function instead of adjusting the constant, and the case says so rather than letting a reader assume a one-term reversal.",
+  "arms": {
+    "spatial": {
+      "oracle": "fault at the labelled write probe",
+      "status": "measured",
+      "prediction": "PREDICTED: faults. Every arm of this harness narrows a wmem allocation to its request via wm_narrow(), so a spatial crossing faults on ALL arms and this row does not discriminate the chunk port -- the corpus.json note states that for the corpus as a whole. NOT YET MEASURED for this case: it needs a Capstone domain build, which the four 2026-10-07 additions have not had.",
+      "cause": 7,
+      "note": "ORACLE COMPLETED 2026-10-09, AFTER THE FIRST RUN, FROM THE SOURCE. The pre-registered text (kept in `prediction`) said only 'faults', naming neither probe nor cause, so the runner fell back to its defaults -- the READ probe and the temporal causes 24/25 -- and scored the first run FAIL although the domain faulted where the case is built to. The probe is fixed by case.c, which calls wm_write_probe at line 51; the cause by the access: a bounds violation on a store raises 7 (established by cases 16-17 on 2026-10-05). Neither was read off the result. MEASURED 2026-10-09, results/20261009-qemu-capstone-18-21/: cause 7 at pc=0x1019014e4, equal to the write probe address the boot published; runner exit 0 with controls 11 (temporal) and 13 (spatial) as recorded, negative control 12/12.",
+      "verdict": "CAUGHT"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled write probe",
+      "status": "measured",
+      "prediction": "PREDICTED: faults, identically to the spatial arm, and for the same reason -- wm_narrow() bounds every allocation on every arm. Revocation has nothing to fire on: nothing is freed in a spatial row. NOT YET MEASURED.",
+      "cause": 7,
+      "note": "ORACLE COMPLETED 2026-10-09, AFTER THE FIRST RUN, FROM THE SOURCE. The pre-registered text (kept in `prediction`) said only 'faults', naming neither probe nor cause, so the runner fell back to its defaults -- the READ probe and the temporal causes 24/25 -- and scored the first run FAIL although the domain faulted where the case is built to. The probe is fixed by case.c, which calls wm_write_probe at line 51; the cause by the access: a bounds violation on a store raises 7 (established by cases 16-17 on 2026-10-05). Neither was read off the result. Judged on the WM_CHUNKS=OFF build. MEASURED 2026-10-09, results/20261009-qemu-capstone-18-21/: cause 7 at pc=0x1019014e4, equal to the write probe address the boot published; runner exit 0 with controls 11 (temporal) and 13 (spatial) as recorded, negative control 12/12.",
+      "verdict": "CAUGHT"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x1041aa, NOT the probe). Adapter counters: WM_POISONCAP mode=0 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "verdict": "CAUGHT"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 1,
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x1041aa, NOT the probe). Adapter counters: WM_POISONCAP mode=1 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held.",
+      "status": "measured",
+      "prediction": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "verdict": "CAUGHT"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "MEASURED 2026-10-07, results/20261007-cheribsd-revocation-control/: the sequence COMPLETES, NOT CAUGHT. revocation ON, mode 0, 25 of 25 arms, runner exit 0, with the borrowed revocation control FAULTING in the same boot (tag_after_sweep=0, then SIGPROT si_code 2 at addr=pc=0x101dc0, equal to the address supervise resolved independently). The crossing stays inside the block the system allocator handed wmem, so a per-allocation capability is in bounds for it.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the defective access ran and ASan did not see it. The fixed arm exits 0 with VERDICT FIXED and no report. Built with the port's own allocator library under the same sanitizer (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -g -O0; wmem and the port built with the same flags). Positive controls in the same run: `asan-control past 402653184` -> heap-buffer-overflow; `asan-control uaf 402653184` -> heap-use-after-free -- so ASan reports on a heap block the size of this corpus's arena, and the silence is the arena: one malloc'd block, carved and recycled without free(). Predicted before the run (b64cd18b85d0); the arm was previously 'not written'."
+    },
+    "native-fix-differential": {
+      "status": "measured",
+      "verdict": "TWO-SIDED",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-differential/: the buggy sequence reaches storage outside its object (VERDICT DEFECT-REPRODUCED, exit 0) and the fixed sequence -- this case's upstream fix, modelled in case.c under wm_fixed -- does not (VERDICT FIXED, exit 0). Hosted build, upstream wmem allocator (WM_CHUNKS=OFF), `program 0 N buggy|fixed` (runners/run-native.sh). Spatial: the access address lies outside [object, object+size) in the buggy sequence and inside it, or is not made, in the fixed one. Previously 'not written'."
+    },
+    "sublet-malloc": {
+      "target": "Capstone domain, wmem AS RELEASED (WM_VARIANT=reference: none of the port's patches) on Sublet regions, mode 1: every g_malloc a region, every g_free a revoke -- Sublet only as the system allocator",
+      "oracle": "complete: the crossing leaves its wmem chunk but stays inside the block wmem carved it from, one g_malloc; without the port nothing narrows below that region (the same mechanism as the stock CheriBSD reading of this case, which completes). MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (image 3fe2857e464747ad); the positive control 90 faulted in mode 1 and completed in mode 0 of the same build options.",
+      "prediction": "complete",
+      "status": "measured",
+      "control": "controls/sublet-malloc/90_ctl_jumbo_freed_by_reset must fault in the same build",
+      "predicted": "2026-10-09",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "f7adf03a1009"
+    },
+    "sublet-chunks": {
+      "oracle": "fault at the labelled write probe: the chunk port bounds every chunk, as the region-granular hooks do, and the crossing leaves its chunk MEASURED 2026-10-09, results/2026-10-09-sublet-chunks-18-21/: cause 7 at the labelled write probe (pc 0x101902478, image 06ecdeef83dd05bd).",
+      "prediction": "fault at the labelled write probe",
+      "status": "measured",
+      "predicted": "2026-10-09",
+      "cause": 7,
+      "verdict": "CAUGHT",
+      "measured": "2026-10-09",
+      "preregistered": "f7adf03a1009"
+    }
+  },
+  "status": "built 2026-10-07 and MEASURED on stock CheriBSD the same day (revocation on, 25 of 25 arms, control firing): completes, not caught. The case's own CHECK assertions must hold for it to exit 0, so the crossing was created rather than merely described. The Capstone, PoisonCap and native arms are declared: these four have not had a domain build. N = 1 per cell. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-18-21/): spatial CAUGHT, sublet CAUGHT. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 CAUGHT, mode 1 CAUGHT."
+}

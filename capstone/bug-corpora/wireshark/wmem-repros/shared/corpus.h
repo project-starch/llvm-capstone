@@ -49,6 +49,32 @@ void wm_write_probe(volatile unsigned char *p);
 void wm_mark(void);
 
 _Noreturn void wm_give_up(unsigned long code);
+
+/* THE NATIVE FIX DIFFERENTIAL (added 2026-10-09). Hosted builds only: `program 0 N buggy|fixed`.
+ * Every other invocation -- the Capstone domain, CheriBSD, PoisonCap, and the hosted `program
+ * mode N` the existing runners use -- leaves all three flags 0, so every allocation, store and the
+ * labelled access those arms measured are unchanged; the only addition on their path is that the
+ * probe's result is kept (WM_READ/WM_WRITE), after the access.
+ *   wm_fixed    run the upstream fix's behaviour where the case models it (`if (wm_fixed) ...`).
+ *   wm_observe  make a stale access VISIBLE natively: after a lifetime ends, the next dissection's
+ *               first allocation reoccupies the freed storage and is filled with WM_MARKER, so a
+ *               read through the stale pointer returns the marker (wm_reoccupy).
+ *   wm_defect   the case's own verdict: the access reached storage that is not its object's --
+ *               a read returned another object's marker, or a write landed past the object
+ *               (the case's CHECKs establish where). */
+#define WM_MARKER 0x5a
+extern int wm_fixed, wm_observe, wm_defect;
+void wm_reoccupy(const void *stale, unsigned long bytes);
+#define WM_READ(p, marker) (wm_defect = (wm_probe(p) == (unsigned)(marker)))
+#define WM_WRITE(p) (wm_write_probe(p), wm_defect = 1)
+/* Spatial rows: the verdict is WHERE the access went, the definition the plain-heap corpora use for
+ * `crossed`. The address arithmetic the case CHECKs is what places it outside [obj, obj + n), so a
+ * fix that clamps the access to its object reads FIXED while still performing it. */
+#define WM_OUTSIDE(p, obj, n)                                                  \
+  ((const unsigned char *)(p) < (const unsigned char *)(obj) ||               \
+   (const unsigned char *)(p) >= (const unsigned char *)(obj) + (n))
+#define WM_READ_AT(p, obj, n) ((void)wm_probe(p), wm_defect = WM_OUTSIDE(p, obj, n))
+#define WM_WRITE_AT(p, obj, n) (wm_write_probe(p), wm_defect = WM_OUTSIDE(p, obj, n))
 #define CHECK(c, n)                                                            \
   do {                                                                         \
     if (!(c))                                                                  \

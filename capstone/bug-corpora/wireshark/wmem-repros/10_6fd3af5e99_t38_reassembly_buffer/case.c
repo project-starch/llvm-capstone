@@ -14,14 +14,16 @@ WM_CASE(10) {
  * against the stored buffer through tvb_memeql. */
   struct fd_head *head = wmem_alloc(wm_file_scope(), sizeof *head); /* the table */
   CHECK(head, 1);
-  unsigned char *data = wmem_alloc(wm_packet, 1); /* wmem_alloc(pinfo->pool, size), packet-t38.c:358 */
+  /* THE FIX, 6fd3af5e99: the forced-defragmented buffer is allocated in file scope, the table's. */
+  unsigned char *data = wmem_alloc(wm_fixed ? wm_file_scope() : wm_packet, 1); /* wmem_alloc(pinfo->pool, size), packet-t38.c:358 */
   CHECK(data, 2);
   data[0] = 0x4c;
   head->tvb_data = data; /* fd_head->tvb_data = tvb_new_real_data(data, ...), :359 */
   head->len = 1;
   wm_next_packet(); /* epan_dissect_reset, epan.c:602 */
+  wm_reoccupy(data, 1); /* native observer only */
   /* The next T.38 frame retrieves the head from the table. */
   wm_held = head->tvb_data;
   wm_mark();
-  (void)wm_probe(wm_held); /* memcmp in tvb_memeql, reassemble.c:2064 */
+  WM_READ(wm_held, WM_MARKER); /* memcmp in tvb_memeql, reassemble.c:2064 */
 }

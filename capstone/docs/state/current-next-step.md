@@ -1,3 +1,95 @@
+2026-10-08 — **The virtual stack, node growth and local mallocng are all merged. Two items below
+are corrected: one was DONE, one was FALSE.**
+
+Landed today, each with its gates run rather than its PR body taken on trust:
+`capstone-qemu` `virtual-capstone` = `1a6dd20732` (#17 paged node stores, #19 exact-bounds
+profile, #20 PCC/access liveness cache); `llvm-capstone` `dev` = `4c8a3f12155e` (#194 build
+repairs, #195 node growth, #197 local mallocng). Zero PRs open in any repo at that point.
+
+**The submodule pin needed correcting on BOTH runtime PRs, and this is now a pattern, not an
+accident.** #195 pinned `736f4a7a4e7a` and #197 pinned `24b1e95b1dac`; both are review-branch
+heads, reachable from no integration branch. Each was repinned forward to the landed
+`virtual-capstone` commit, with source-tree identity checked (#17's merge and `736f4a7a` share the
+tree `713ffa8074`). #197's pin conflicted three ways precisely *because* dev's pin had already been
+corrected, so taking either side mechanically would have pointed dev at an unreachable commit.
+**Before landing anything that touches `capstone/capstone-qemu`, check whether the pin names a
+commit on `virtual-capstone`.** The full trail is in
+`docs/history/07-10-2026_16-11-23_virtual-capstone-stack-audit-and-landing.md`.
+
+Corrections to the 2026-10-04 list below:
+
+- **Item 3 (INDEX/index.json consolidated regeneration) is DONE.** One regeneration, `build-index.py
+  --check` now reports current. It also closed ten gap lines by fixing the declarations behind them
+  rather than the index: `corpora` on the three full-application ports, and `inventory` on
+  `wmem-repros`, `allocator-repros` and `subobject-repros`, whose triage documents already existed
+  and each say in their own opening lines that they ARE that inventory.
+- **Item 4 is FALSE and is withdrawn.** It says CheriBSD "is absent from this host. Not a gap that
+  work here can close." A stock CheriBSD purecap vehicle has been built here since 2026-10-05, and
+  **53 of the 54 cases across the three programs now carry a `cheribsd-revocation` arm with status
+  `measured`**, over ten committed bundles. The claim was written before those runs and never
+  revisited. **PoisonCap remains genuinely absent** — that half stands, and the distinction matters:
+  *not yet done* is not *cannot be done*.
+
+Open, with the blocker named rather than implied:
+
+- **`ffmpeg/plane-repros` case 0 is the ONE remaining unmeasured CheriBSD arm** of the 54. Its probe
+  is now an external symbol so `supervise` can resolve it (it was header-`static`, which would have
+  made every arm read UNRESOLVED). The real blocker is that this corpus links **real `libavutil`**,
+  unlike its plain-heap siblings, so a purecap run needs libavutil cross-built with the CHERI SDK.
+  Predicted reading, recorded before any run: **completes, not caught** — the crossing stays inside
+  the frame's single `AVBuffer` (measured slack 1024 bytes), which is exactly why this is the
+  nested-discriminating cell.
+- **`plane-repros` must NOT be grown.** `docs/ref/ffmpeg-spatial-defect-triage.md` records the
+  measurement that settles it: per-plane pool slack of 1024 against a logical 160 forced the
+  retraction of this corpus's discriminating-arm claim, and the plane/row shape is "exhausted at one
+  case". FFmpeg's nested-spatial cell standing at 1 is a finding about FFmpeg's allocation
+  discipline, not a shortfall in the search. The same document names the two candidates that ARE
+  open, both NOT nested and both for `subobject-repros`: `01701bdcd5` (its own "next candidate") and
+  the re-filing of `30c6667dad`.
+- **`check-ports.py` is BLOCKED on dev with one problem, and no gate runs it** — it is named in four
+  READMEs and in `build-index.py`'s docstring, and in no script. Registering `capstone-virtual` (a
+  target the virtual stack added) and the CheriBSD `arms` field took it 3 problems to 1; the
+  remaining one was *unmasked* by that fix and is real: `ports/sqlite/cheribsd` declares version
+  3.22.0 against a `pin_source` line that carries no version.
+- **Committed files carry foreign home-directory paths** across 36 files, including one
+  collaborator's account name several hundred times, and `precommit-scan.sh` has no `/home/<user>`
+  pattern so the gate cannot see them. Whether an account handle counts under the no-names rule is
+  the project lead's call; evidence is under `/tmp/capstone/`, deliberately not committed.
+
+One instrument note for anyone re-running the corpus gates: **run them from a tree at dev's tip.**
+The shared clone is ~170 commits behind and reports 14 corpora / 108 cases there against the real
+23 / 218 — a reading from it looks plausible and is wrong.
+
+2026-10-07 — **Review the growing node tables on `review/virtual-node-growth`.**
+
+## Local virtual mallocng review
+
+Use `virtual-musl-local` for the local allocator architecture, based on
+`review/virtual-node-growth`. Merge node growth before the exact-bounds QEMU
+PR #19, then the matching runtime. Keep QEMU and SDK/application ABI v5
+in sync; ordinary malloc/free run in Capstone. Review the representation and
+lifetime hooks against upstream policy, the VM remap transaction, and the
+[qualification](../../runtime/virtual/results/local-mallocng/README.md).
+
+Further work remains separate: metadata-cost tuning, full benchmark timing,
+CPython inner and FFmpeg/tshark corpus requalification, and a hardware storage
+contract for exact bounds. The extra-shadow profile is a QEMU prototype.
+
+The original virtual stack is merged into `dev`. Merge
+[QEMU #17](https://github.com/project-starch/capstone-qemu/pull/17) into
+`virtual-capstone` and [build repairs #194](https://github.com/project-starch/llvm-capstone/pull/194)
+into `dev`, then retarget the stacked runtime PR from
+`review/virtual-build-repairs` to `dev`. If the repairs are squashed, rebase
+only the runtime commits onto the landed `dev` first. Preserve
+the QEMU pin's tested source when moving it to the landed processor commit.
+
+For new work, branch from the runtime review head and initialize its pinned
+QEMU. The [runtime README](../../runtime/virtual/README.md) gives build and
+qualification commands; the [ISA chapter](../design/virtual-capstone/isa.md#lifetime-storage-and-encoding)
+defines publication and complete-sweep reuse. The separate malloc block-record
+ceiling, empty-page reclamation, multi-hart and virtual RTL remain future work.
+Historical physical/silicon tasks below retain their recorded scope.
+
 2026-10-05, night: **R-29 AND S-10b HAVE A LINT-CLEAN RTL FIX IN SIMULATION** (capstone-ariane `sup-call` 776d9d859; the
 dated blocks in ISSUES R-29 and S-10b). A read whose granule has a conflicting store in flight -- a plain store for a 16-byte
 read, a capability store for a plain high-word read -- now waits in the dcache read controller until the store has drained,

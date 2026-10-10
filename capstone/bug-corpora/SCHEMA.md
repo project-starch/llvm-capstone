@@ -43,6 +43,28 @@ per-case script would have to reinvent twenty times.
 `case.c` must declare the number its directory carries. A fixture naming
 another case is refused rather than silently run.
 
+## `script-trigger`: a case that is an interpreter script
+
+Some defects are not reducible to a C program against an allocator. A
+PostgreSQL engine defect is reached by running SQL against a real server; an
+mruby or Perl defect is reached by running a script through the interpreter.
+Their oracles are a fault, one of the program's own assertions, or a
+differential against what a correct build prints. For those the case directory
+carries a trigger script in place of `case.c`, and declares:
+
+    case, upstream_fix, title, consumer, class, trigger, fidelity, arms, status
+
+`class` is what kind of defect it is (`spatial`, `integer`, `invariant`,
+`type-confusion`, `wrong-answer`, …) rather than a reduction shape, because
+there is no reduction. `trigger` names the file the case runs, and the checker
+holds the case to it: the name is per case, not per corpus, so one corpus may
+mix `.t` and `.pl`, or `.sql` and anything else, without splitting in two or
+renaming upstream files to fit. `allocator_layer` is optional here -- a Perl
+case has one, a PostgreSQL integer-overflow case does not. `object`,
+`lifetime_ender` and `shape` do not apply either; a case may still carry
+`shape` where one genuinely fits. Everything else -- the directory name, dense numbering, the
+arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
+
 ## Required fields
 
 | field | meaning |
@@ -64,8 +86,43 @@ another case is refused rather than silently run.
 ## Optional fields
 
 `distinguishing` (why this case is not a duplicate of its siblings),
-`sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`. Optional
-means optional: the checker does not invent them, and absence is not a defect.
+`sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
+`allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`. Optional means
+optional:
+the checker does not invent them, and absence is not a defect.
+
+`nested` is a **boolean**, and `nested_why` its one-sentence reason. The axis is
+**who allocated the object**: an inner allocator's sub-allocation is nested, a
+direct `malloc` is not. It is **not** which bound the access crosses — collapsing
+those two produced a retraction on 2026-10-05.
+
+It exists because the inventory's headline nesting share was being computed from
+`allocator_layer` **prose**. On 2026-10-06 a script doing that put 11 of 25
+spatial cases into an "unclassified" bucket and reported **44%**; the correct
+figure is **60%**, so publishing the script's number would have been wrong by 16
+points — the unanswered probe was reading as "not nested". A tally that a
+headline depends on should come from a field, not from a substring match over
+sentences that are free to be reworded.
+
+`citation_constraint` records that a case's upstream commit cannot be quoted freely — in practice
+that its **subject line names a person**, so the fix may be cited **by hash and path only**. The
+naming rule in this tree is absolute for committed files, so the constraint belongs in the case
+rather than in a reader's memory. The first instance, memcached `d5d9ff0`, sat undispositioned in a
+triage doc for exactly that reason: what made it awkward was written in prose somewhere else.
+
+`allocator_consumed` is the companion to `allocator_layer`, and a corpus that
+records one without the other has half of axis 2. The layer says which
+allocator the memory came from; `allocator_consumed` says whether the damage
+stayed inside one block of that allocator, which is the difference between a
+defect the system allocator cannot see and one it can. The two do not share an
+empty count -- a case can have a measured layer and no consumed verdict -- so a
+corpus reporting coverage must count them separately rather than quoting one
+number for both.
+
+A field that is meaningful in exactly one schema belongs in that schema's
+required list, not here. `trigger` is the worked example: it is required for
+`script-trigger`, and keeping it out of the optional set is what lets the
+unknown-field check still catch a stray `trigger` on a `case-json` case.
 
 ## Arms
 
@@ -74,13 +131,45 @@ and in `results/`. An arm that is declared but not written says so with
 `"status": "not written"` instead of an oracle, so the gap is visible rather
 than silently absent.
 
+An unwritten arm may carry **`not_run_reason`**: one or two sentences saying
+why it was not run and whether it can be. A bare "not run" is the one cell a
+reader cannot interpret -- it covers a case that is impossible here, a case
+waiting on a build change, and a case nobody got to, and those three carry
+different weight in a denominator. Without the field the reason survives only
+in whoever ran it. The checker does not yet enforce this: an unwritten arm
+short-circuits before its keys are examined, so a misspelt `not_run_reason`
+passes silently.
+
 | arm | target | oracle |
 |---|---|---|
 | `spatial` | Capstone domain | the sequence completes |
 | `sublet` | Capstone domain | fault at the labelled read probe, with `cause` |
 | `poisoncap-spatial` | CheriBSD purecap, mode 0 | the sequence completes |
 | `poisoncap-protected` | CheriBSD purecap, mode 1 | `SIGPROT` at the labelled read probe, with `signal` and `si_code` |
-| `native-detect` | host | declared, not written: it needs Valgrind, and ASan's silence here is tautological because the memory never reached `malloc` |
+| `native-detect` | host | ASan, built `-O0`, run fixed then buggy by `tools/run-native-asan.py`. A silence is a reading only when the buggy arm printed `VERDICT DEFECT-REPRODUCED` and the same run's positive controls -- a read past, and a read after free of, a heap block the size of the corpus's arena or block -- were reported. Until 2026-10-09 this arm was 'declared, not written' as tautological; it is measured now, because an argument is not a reading |
+| `sysalloc-none` | Capstone domain | the whole-program run completes; the first-fit heap is built with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, so only tag integrity and the arena's bounds are left |
+| `sysalloc-bounds` | Capstone domain | the same, with the heap as applications get it since PR #170: each allocation bounded, no revocation. **The baseline a catch is measured against** |
+| `sysalloc-sublet` | Capstone domain | the Sublet heap: per-object bounds and a revoke on every free |
+| `sublet-gc` | Capstone domain | `sysalloc-sublet` plus the program's own Sublet port, so its nested allocator's objects are issued and revoked too |
+| `sublet-chunks` | Capstone domain | tshark's chunk allocator linked over the Sublet heap (`HEAP_LOG 24`, 40 MiB arena): the configuration the tshark application runs in |
+| `capstone-subobject` | Capstone domain | the `spatial` arm with `-Xclang -fcapstone-subobject-bounds`: an ARRAY-typed field that is not the last member is narrowed to the field. The tool's `subobj` control must be CAUGHT in the same boot |
+| `cheribsd-subobject` | CheriBSD purecap | stock CheriBSD with `-Xclang -cheri-bounds=subobject-safe`: a pointer taken to a member is narrowed to it (size-0/1 trailing arrays excepted). The shared field-crossing control must die by `SIGPROT` in the same boot |
+| `capstone-carve-bounds` | Capstone domain | the carved corpus only: `-DFFC_CARVE_BOUNDS` makes `ffc_carve()` narrow each carved region to its own extent -- the remedy at the carving code. Fixed arms run under the same narrowing |
+| `cheribsd-carve-bounds` | CheriBSD purecap | the same with `cheri_bounds_set`; the run prints each carve's granted length, and a carve control must fault in the same boot |
+| `sublet-malloc` | Capstone domain | the nested corpora: Sublet ONLY as the system allocator, the program's nested allocator stock -- wmem as released (`WM_VARIANT=reference`, every `g_malloc` a region, every `g_free` a revoke; positive control `wmem-repros/controls/sublet-malloc`), memcached's ledger in mode 2 (a chunk carries its page's bound, nothing revoked until a page or object is given back), FFmpeg's pools unported on the Sublet heap (`poolstock`). Column 2 of the per-bug table |
+| `sublet-full` | Capstone domain | a plain case built in the program's whole Sublet configuration: the Sublet heap plus the program's nested-allocator port linked and initialised (tshark's is `sublet-chunks`). The bug's path never enters the nested allocator, so this equals `sublet` by construction; the run confirms no interaction. Column 3 for plain cases |
+| `sublet-carve` | Capstone domain | the carved corpus: `-DFFC_SUBLET_CARVE` takes the block LINEAR from the Sublet heap and splits it into one region per carve, each issued as a bounded alias (a re-carve revokes the old aliases); a temporal carve control must fault in the same boot. Column 3 for carved cases |
+| `sublet-svheads` | Capstone domain | the same for Perl: `sysalloc-sublet` plus Perl's SV head arena |
+| `sublet-pymalloc` | Capstone domain | the same for CPython: `sysalloc-sublet` plus pymalloc's pools and arenas, via patch 0014. The difference between this arm and `sysalloc-sublet` is what sublets the nested allocator rather than only the allocation under it, which is the whole comparison a nested/non-nested corpus exists to make |
+
+The four above are the glossary's system-allocator arms
+(`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the
+same source and differ only in the heap the image links, so a difference between
+them is the heap's protection and nothing else -- which is the whole reason the
+unprotected one exists. It is not a C baseline: tag integrity is in the hardware
+and cannot be switched off, so a defect that reads a pointer out of overwritten
+memory faults there too. The nearest C baseline is a host run, recorded per case
+in `live_proof`.
 
 The two protected arms name an instruction, not merely a fault. That is the
 point: the process status alone cannot tell this corpus reproducing from an
@@ -119,7 +208,7 @@ checkable from outside, and it is the only input to the generated index.
 | `program`, `boundary`, `title` | what the corpus is about: the upstream program, the allocator or API boundary its cases cross, and one line of scope |
 | `upstream` | `{version, port}` -- the release the cases are built against, and the port component that pins it. Absent where each row pins its own commit |
 | `cases` | how many cases the corpus has. The checker counts the tree and refuses a mismatch |
-| `case_schema` | `case-json` (a reduction with `case.c`), `sqlite-row` (a binding row carrying the provenance ledger's columns), or `xlang-row` (a shim row, declaration-level only) |
+| `case_schema` | `case-json` (a reduction with `case.c`), `script-trigger` (a defect whose trigger is an interpreter script rather than a C reduction; each case names its own file in `trigger`), `sqlite-row` (a binding row carrying the provenance ledger's columns), or `xlang-row` (a shim row, declaration-level only) |
 | `case_macro`, `case_glob`, `case_exclude`, `case_number_base`, `case_doc` | how cases are named and found, where the defaults do not fit. Case numbers are dense from `case_number_base` (0, or 1 for the SQLite rows) |
 | `case_table`, `case_dir_column` | for `xlang-row`: the row table that is the corpus's authority, and the column naming each case directory |
 | `required_arms`, `arm_keys` | the arms every case must declare, and any arm whose oracle carries more than `oracle` (the pymalloc corpus records a `cause` on `sublet`). **Order is not significant and is not checked** — `wmem-repros` lists `cheribsd-revocation` third, to mirror the paper's column order, while `allocator-repros` and `pool-repros` list it after the two PoisonCap arms. Both are valid; noted here because the difference otherwise reads as a defect, and reordering a corpus to match another would churn every case file for nothing |

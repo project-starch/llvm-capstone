@@ -122,6 +122,33 @@ __attribute__((unused)) static void mark(unsigned which) {
 #endif
 }
 
+/* The carve-bounds remedy, MC_CARVE_BOUNDS (added 2026-10-09). memcached carves an item's key,
+ * suffix and value out of the item's flexible array data[] by pointer arithmetic -- ITEM_key,
+ * ITEM_suffix, ITEM_data -- and nothing narrows the result, so an access that runs from one into the
+ * next stays inside the chunk and inside every bound this tree has. With the switch, a case hands
+ * its consumer the region narrowed to its own length, as those macros would if they narrowed.
+ * Without it this is the identity, so every other arm builds byte-identically.
+ *
+ * An EMPTY region (case 6's suffix when nsuffix is 0): CHERI takes a zero-length capability;
+ * Capstone cannot express one -- its shrink requires base < end -- so the region is encoded as the
+ * one byte BEFORE it, which leaves the cursor at the region and no byte at or after it reachable. */
+#if defined(MC_CARVE_BOUNDS)
+__attribute__((unused)) static unsigned char *mc_carve(unsigned char *p, unsigned long len) {
+#if defined(__CHERI_PURE_CAPABILITY__)
+  return __builtin_cheri_bounds_set(p, len);
+#elif defined(__CAPSTONE__)
+  unsigned long long at = __builtin_capstone_cap_get_cursor(p);
+  return len ? __builtin_capstone_cap_shrink(p, at, at + len)
+             : __builtin_capstone_cap_shrink(p, at - 1, at);
+#else
+#error "MC_CARVE_BOUNDS needs a capability target: CHERI purecap or Capstone"
+#endif
+}
+#else
+/* The identity as a macro, not a function, so the build without the switch is byte-identical. */
+#define mc_carve(p, len) (p)
+#endif
+
 extern const int mc_case_number;
 void mc_case_body(int fixed, struct mc_outcome *o);
 

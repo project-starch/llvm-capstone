@@ -29,10 +29,20 @@ PORTS = REPO / "capstone/ports"
 RENAMES = PORTS / "renames.json"
 
 REQUIRED = {"program", "role", "title", "upstream", "targets"}
-OPTIONAL = {"workload", "evidence", "corpora", "related", "note", "status"}
+# `arms`: a prose map from arm name to how that arm is built and run, carried by the CheriBSD
+# platform build since 4edd61f9a46d. It was never registered here, so this checker has been
+# BLOCKED on it ever since -- unnoticed, because no gate runs check-ports.py (2026-10-08).
+OPTIONAL = {"workload", "evidence", "corpora", "related", "note", "status", "arms"}
 ROLES = {"full-application", "allocator-component", "platform-build", "domain-libc",
          "census"}
-TARGETS = {"capstone-domain", "cheribsd-purecap", "linux-guest", "silicon", "native"}
+# `capstone-virtual`: the supervised virtual-C target, introduced with the virtual stack
+# (1354aee956cd and the application profiles beside it). Registering it is what the checker's own
+# message asks for -- "add it to SCHEMA.md and to this checker, or drop it" -- and the target is
+# real: ports/memcached/app and ports/perl/musl both build for it. This is vocabulary catching up
+# with the tree, not a pattern relaxed to make a failure go away; a target NOT in this set still
+# blocks, which the self-test checks.
+TARGETS = {"capstone-domain", "capstone-virtual", "cheribsd-purecap", "linux-guest",
+           "silicon", "native"}
 PATH_FIELDS = ("evidence", "corpora", "related")
 
 

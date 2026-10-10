@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-06",
+  "runner": "runners/run-native.sh",
+  "runner_exit": 0,
+  "cases_in_corpus": 10,
+  "cases_added_here": [3, 4, 5, 6, 7, 8, 9],
+  "arms_measured": ["native-fix-differential", "native-detect"],
+  "arms_declared_not_measured": ["spatial", "sublet", "poisoncap-spatial", "poisoncap-protected", "cheribsd-revocation", "backing"],
+  "native_compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "port_build": "/tmp/capstone/ffmpeg-buffer-pool/build/native (libffmpeg-pool.a)",
+  "liveness_method": "read from the n9.0.1 source two-sided (vulnerable construct and fix marker both grepped); NOT git merge-base --is-ancestor, which has called backported fixes live before",
+  "live_in_pin": {"true": [5, 6], "false": [3, 4, 7, 8, 9]},
+  "asan_probe": {
+    "file": "asan-probe-7.c",
+    "built": "cc -O0 -g -fsanitize=address",
+    "arms": ["member", "member-read", "underflow", "walk", "copy", "slice", "past"],
+    "positive_control": "past",
+    "result": "6 of 6 intra-allocation shapes silent; the 'past' control reports heap-buffer-overflow",
+    "detector_keyed_on": "heap-buffer-overflow",
+    "detector_error_corrected": "the first run grepped for the string 'AddressSanitizer' and the probe never freed, so LeakSanitizer's summary line made all seven arms read as detections -- the inverse of the truth. The probe now frees before reporting and leaks=0 is recorded per arm.",
+    "o0_is_load_bearing": "at -O1 the dead stores are optimised away and the control cannot fire, which would make the blindness an artefact of the compiler"
+  },
+  "n_per_cell": 1
+}

@@ -23,7 +23,10 @@
 # PERL_MIRROR=<dir with the tarballs> and PERL_CROSS_MIRROR=<a perl-cross clone>
 # avoid the network. PERLD_SV_HEADS=1 builds the study variant: SV heads come
 # from the lifetime adapter in ../sv-heads (its patch, -DPERL_SV_HEAD_ADAPTER,
-# and link/perl-sv-heads.o for experiments/applications/build.py --nested perl).
+# and link/perl-sv-heads.o for ../../common/application/build.py --nested perl,
+# which is what grants the adapter its region; the image this script leaves behind
+# only proves the link resolves). PERLD_SDK_CFLAGS adds C flags to the SDK's own
+# -O1 -- the corpus's unprotected arm is PERLD_SDK_CFLAGS=-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0.
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../../tests/capstone-test-env.sh" >/dev/null
@@ -32,13 +35,31 @@ RT=${RUNTIME_REPO:-$CAPSTONE_REPO_ROOT}
 MUSL_PORT=$RT/capstone/ports/musl-capstone
 MRT=$MUSL_PORT/runtime
 ARENA=${PERLD_ARENA_BYTES:-$((64 * 1024 * 1024))}
+VIRTUAL_BLOCKS=${PERLD_VIRTUAL_BLOCKS:-65536}
+VIRTUAL_ARENAS=${PERLD_VIRTUAL_ARENAS:-256}
 JOBS=${JOBS:-16}
 FROM=${PERLD_FROM:-all}
 HEAP=${PERLD_HEAP:-level0}
 HEAP_LOG=${PERLD_HEAP_LOG:-26}
-case "$HEAP" in level0|sublet) ;; *) echo "PERLD_HEAP=$HEAP? (level0, sublet)" >&2; exit 2 ;; esac
-SV_HEADS=${PERLD_SV_HEADS:-0}
+PROFILE=${PERLD_PROFILE:-physical}
+case "$PROFILE" in physical|virtual) ;; *) echo "PERLD_PROFILE=$PROFILE? (physical, virtual)" >&2; exit 2;; esac
+if [[ $PROFILE == virtual && -z ${PERLD_ROOT:-} ]]; then
+  ROOT=$CAPSTONE_TMP_ROOT/perl-domain-virtual
+fi
+case "$HEAP" in level0|sublet|sublet-svheads) ;;
+  *) echo "PERLD_HEAP=$HEAP? (level0, sublet, sublet-svheads)" >&2; exit 2 ;; esac
+# sublet-svheads is CUMULATIVE and is this port's analogue of the mruby port's
+# sublet-gc: the Sublet heap for the system allocator AND the SV head arena through
+# the lifetime adapter, in one image. It implies PERLD_SV_HEADS=1.
+[[ $HEAP == sublet-svheads ]] && SV_HEADS_DEFAULT=1 || SV_HEADS_DEFAULT=0
+SV_HEADS=${PERLD_SV_HEADS:-$SV_HEADS_DEFAULT}
 case "$SV_HEADS" in 0|1) ;; *) echo "PERLD_SV_HEADS=$SV_HEADS? (0, 1)" >&2; exit 2 ;; esac
+if [[ $PROFILE == virtual && $SV_HEADS == 1 ]]; then
+  echo "virtual SV-head arena integration is not qualified; use PERLD_SV_HEADS=0" >&2
+  exit 2
+fi
+[[ $HEAP == sublet-svheads && $SV_HEADS == 0 ]] \
+  && { echo "PERLD_HEAP=sublet-svheads is the adapter arm; it cannot take PERLD_SV_HEADS=0" >&2; exit 2; }
 
 # The pin. 5.36.3 is the evaluation's release (docs/design/perl-sublet-port-evaluation.md):
 # the SV arena mechanism is the same in every release perl-cross supports, and 5.36
@@ -70,23 +91,64 @@ mkdir -p "$MUSL_CACHE_ROOT"
 [[ -f "$MUSL_CACHE_ROOT/musl-1.2.5.tar.gz" || ! -f "$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5.tar.gz" ]] \
   || cp "$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5.tar.gz" "$MUSL_CACHE_ROOT/"
 MUSL=$(bash "$MUSL_PORT/prepare-musl-capstone.sh" | tail -1)
-if stage musl; then
-  OUT_DIR=$ROOT/musl-build bash "$MUSL_PORT/build-musl-capstone.sh" >/dev/null
+if [[ $PROFILE == virtual ]]; then
+  VROOT=$ROOT/runtime-virtual
+  VIRTUAL_EXTRA=()
+  if [[ -n ${PERLD_SDK_CFLAGS:-} ]]; then
+    VIRTUAL_EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${PERLD_SDK_CFLAGS}")
+  fi
+  if stage runtime || [[ ! -f "$VROOT/libc/libc-capstone-virtual.a" ]]; then
+    bash "$RT/capstone/runtime/virtual/build-sdk.sh" "$VROOT" "$MUSL" \
+      -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
+      -DCAPSTONE_APPLICATION_STACK_BYTES="${PERLD_STACK_BYTES:-1048576}" \
+      -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" \
+      -DCAPSTONE_APPLICATION_HEAP="$HEAP" \
+      -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
+      -DCAPSTONE_APPLICATION_VIRTUAL_BLOCKS="$VIRTUAL_BLOCKS" \
+      -DCAPSTONE_APPLICATION_VIRTUAL_ARENAS="$VIRTUAL_ARENAS" "${VIRTUAL_EXTRA[@]}"
+  fi
+  ARCHIVE=$VROOT/libc/libc-capstone-virtual.a
+  O=$VROOT/sdk
+  printf '%s\n' "$HEAP ${PERLD_SDK_CFLAGS:-}" > "$O/.heap"
+else
+  if stage musl; then
+    OUT_DIR=$ROOT/musl-build bash "$MUSL_PORT/build-musl-capstone.sh" >/dev/null
+  fi
+  ARCHIVE=$ROOT/musl-build/libc-capstone.a
+  O=$ROOT/runtime
 fi
-ARCHIVE=$ROOT/musl-build/libc-capstone.a
 [[ -f "$ARCHIVE" ]] || { echo "no $ARCHIVE" >&2; exit 2; }
 log "musl $MUSL, archive $ARCHIVE"
 
 # ---- shared application SDK (also usable by other upstream build systems) ----
-O=$ROOT/runtime
+if [[ $PROFILE == physical ]]; then
+SDK_HEAP=$HEAP
+[[ $HEAP == sublet-svheads ]] && SDK_HEAP=sublet
 if stage runtime; then
+  EXTRA=()
+  if [[ $HEAP == sublet-svheads ]]; then
+    # One grant, split by regions.c below: the Sublet heap takes region 0 and the
+    # SV head adapter region 1. Without the extra 32 MiB the split aborts.
+    EXTRA+=(-DCAPSTONE_APPLICATION_GRANT_BYTES="$(( (2 << HEAP_LOG) + (32 << 20) ))")
+  fi
+  # PERLD_SDK_CFLAGS adds C flags to the SDK's own -O1, for an arm that differs from the
+  # default only in how the system allocator bounds its objects. It must arrive as ONE cmake
+  # argument: a flag list that is word-split becomes separate -D arguments, and cmake takes
+  # an unknown -D as a cache variable and silently compiles without it, so the arm builds
+  # and comes out byte-identical to the default one (seen 2026-10-05 on the mruby port's
+  # unprotected control, caught only by comparing image hashes). CMAKE_C_FLAGS itself belongs
+  # to the domain toolchain (-nostdinc, -isystem ...); overriding that drops the sysroot.
+  if [[ -n ${PERLD_SDK_CFLAGS:-} ]]; then
+    EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${PERLD_SDK_CFLAGS}")
+  fi
   bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
-    -DCAPSTONE_APPLICATION_HEAP="$HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
+    -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
     -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
-    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA"
-  printf '%s\n' "$HEAP" > "$O/.heap"
+    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
+  printf '%s\n' "$HEAP ${PERLD_SDK_CFLAGS:-}" > "$O/.heap"
 fi
-[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP" && -x "$O/capstone-cc" ]] \
+fi
+[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP ${PERLD_SDK_CFLAGS:-}" && -x "$O/capstone-cc" ]] \
   || { echo "rebuild the application SDK (PERLD_FROM=runtime)" >&2; exit 2; }
 export CAPSTONE_SDK=$O
 export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
@@ -208,7 +270,19 @@ PY
     mkdir -p "$ROOT/link"
     "$O/capstone-cc" -O1 -I"$RT/capstone/runtime/include" \
       -c "$SCRIPT_DIR/../sv-heads/capstone.c" -o "$ROOT/link/perl-sv-heads.o"
-    MAKE_VARS=("LIBS=$ROOT/link/perl-sv-heads.o")
+    LINK_OBJS=("$ROOT/link/perl-sv-heads.o")
+    if [[ $HEAP == sublet-svheads ]]; then
+      # The cumulative arm has TWO consumers of the grant, so the single pool is
+      # split: PORT_HEAP_REGION_BYTES to the Sublet heap as region 0, the rest to
+      # the adapter as region 1. The default wrapper in regions.c returns 0 for
+      # index 0, which a Sublet outer heap cannot survive -- the same split the
+      # mruby port uses for sublet-gc.
+      "$O/capstone-cc" -O1 -I"$RT/capstone/runtime/include" -DEXP_HEAP_AND_POOL \
+        -DPORT_HEAP_REGION_BYTES="$((2 << HEAP_LOG))UL" -DPORT_INNER_REGION_BYTES=33554432UL \
+        -c "$RT/capstone/ports/common/application/regions.c" -o "$ROOT/link/regions.o"
+      LINK_OBJS+=("$ROOT/link/regions.o" "-Wl,--wrap=__capstone_region")
+    fi
+    MAKE_VARS=("LIBS=${LINK_OBJS[*]}")
   fi
   # The upstream Makefile cannot see the external SDK archive dependencies.
   # Relink on each requested Perl build; compiled upstream objects remain reusable.
@@ -223,5 +297,58 @@ PY
   fi
   log "domain image $S/perl"
   printf '%s\n' "$CC_HASH" > "$ROOT/.compiler-hash"
+fi
+
+# ---- the runnable library ----
+# perl-cross populates the TARGET lib/ with almost nothing: 639 of the pure-Perl
+# modules the same release installs natively are absent, XSLoader.pm and
+# DynaLoader.pm among them. That matters even though every extension here is
+# linked statically (-Uusedl), because perl still reaches an XS layer through its
+# .pm: PerlIO_find_layer("scalar") does `require PerlIO::scalar`, that does
+# `XSLoader::load`, and with no XSLoader.pm the require fails SILENTLY --
+# `open $fh, '>', \$str` then succeeds with the generic `perlio` layer pushed
+# instead of `scalar`, writes are discarded, and the backing scalar stays undef.
+# Measured 2026-10-06: the domain reported `LAYERS perlio` where native reports
+# `LAYERS scalar`, which cost a corpus case its verdict (bug-corpora/perl/
+# release-differential, 10_254b30e378) and would silently degrade any workload
+# needing a module. The native reference is the same release built by this script,
+# so its lib/ is the right source; the cross tree's own copy of a file always wins,
+# which keeps the target's Config.pm.
+if [[ -d $ROOT/native/lib/$PERL_VERSION && -d $S/lib ]]; then
+  # TWO source roots, and the second is easy to miss: perl installs the .pm stub of
+  # an XS module under lib/<ver>/<archname>/, not at the root, so a walk of the
+  # version directory alone copies DynaLoader.pm and PerlIO/scalar.pm to
+  # lib/<archname>/... where @INC never looks -- the fill then reports hundreds of
+  # files and still leaves the two that matter missing. Flattening them is correct
+  # here: their content is architecture-independent (byte-identical to the host
+  # build's own copies), and the XS they front is already linked into the image.
+  # Ask the native perl for its archname rather than guessing the directory: a
+  # name test picks up Net/ as well, because Net::Config exists, and Net/*.pm
+  # would then be flattened into the library root under the wrong names.
+  ARCH=$("$ROOT/native/bin/perl" -MConfig -e 'print $Config{archname}')
+  [[ -n $ARCH ]] || { echo "cannot read the native reference's archname" >&2; exit 2; }
+  SRCS=("$ROOT/native/lib/$PERL_VERSION")
+  [[ -d $ROOT/native/lib/$PERL_VERSION/$ARCH ]] && SRCS+=("$ROOT/native/lib/$PERL_VERSION/$ARCH")
+  filled=0
+  for src in "${SRCS[@]}"; do
+    while IFS= read -r rel; do
+      if [[ ! -e $S/lib/$rel ]]; then
+        mkdir -p "$S/lib/$(dirname "$rel")"
+        cp "$src/$rel" "$S/lib/$rel"
+        filled=$((filled + 1))
+      fi
+    done < <(cd "$src" && find . \( -name '*.pm' -o -name '*.pl' \) \
+               -not -path './unicore/*' -not -path "./$ARCH/*" -printf '%P\n')
+  done
+  log "library: filled $filled module(s) the cross build did not install"
+  for must in XSLoader.pm DynaLoader.pm PerlIO/scalar.pm; do
+    [[ -e $S/lib/$must ]] \
+      || { echo "library staging missed $must; an XS layer cannot be registered without it" >&2; exit 2; }
+  done
+  # A positive control on the result, because the failure mode is silence: the
+  # layer the in-memory filehandle pushes must be `scalar`, not `perlio`.
+  "$ROOT/native/bin/perl" -e 'open my $fh, ">", \my $s or die; print $fh "x";
+    die "native reference cannot do in-memory files" if !defined $s' \
+    || { echo "the native reference itself cannot open an in-memory file" >&2; exit 2; }
 fi
 ls -la "$S/perl" "$ROOT/native/bin/perl" 2>/dev/null | awk '{print "[build-perl] " $NF, $5" bytes"}'
