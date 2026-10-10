@@ -34,8 +34,8 @@
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3fba21b0d8 in nodeHashLookup; by function: nodeHashLookup is where host ASan reported it",
-      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3f80e1b3e4 in nodeHashLookup; by function: nodeHashLookup is where host ASan reported it",
+      "verdict_from": "results/2026-10-11-virtual-lookaside/virtual-nested-pools"
     }
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1029b34d8; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: no verdict: rtreeinode0 before dangling-hash query",
