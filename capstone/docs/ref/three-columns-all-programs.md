@@ -20,6 +20,16 @@ the board was built. Its rows are oracle prose without a `verdict` field, and wh
 nested is decided per case in its README, so it is listed in `NOT_ON_BOARD` with that reason instead
 of being placed by a guess.
 
+**SQLite is measured on virtual Capstone** (2026-10-10, under `tools/verdicts.py`): memsys5 stock as
+"Sublet in malloc" -- the system allocator, virtual mallocng, sees one arena -- and memsys5 on its
+Sublet port as "Sublet in nested". This replaced the physical `sublet` arm, whose "detected"
+counted 25 VM halts at one kernel pc (`0x800239e4`) that nothing ties to a defect; every catch now
+lies in the function the case's source or host-ASan run names (`fault_sites`). The column fell from
+24/25 temporal and 7/8 spatial to 13/23 and 5/8. Two faults that every arm hit were platform, not
+defect: FTS5's default tokenizer computes NULL + 16 (fixed by the port's own fts5-azarg-patch.py,
+which the virtual builder had not applied) and `sqlite3Fts5IterTerm` returns `&z[1]` with `z` NULL
+(case 12, unresolved, no reading).
+
 ## Where each of the six programs' cells comes from
 
 Every cell of the six is an explicit `verdict` in the case's arm, with `verdict_from` naming the
@@ -32,26 +42,23 @@ run should show -- so the tool does not read them for these programs.
 | httpd/apr-pool-repros, bucket-repros | `results/2026092{1,2}-cheribsd`, revocation on | not measured | `sublet`, `results/2026092{1,2}-qemu` |
 | mruby/release-differential | `results/20261006-cheribsd` | not measured | `sublet-gc`, `results/20261006` |
 | perl/release-differential | `results/20261006-cheribsd`, `revocation_on` | `sysalloc-sublet`, `results/20261006` | `sublet-svheads`, `results/20261006` |
-| postgres/c-repros | `results/matrix.tsv` | not measured (below) | not measured (below) |
-| postgres/mmgr-repros | `results/20261008-cheribsd` (new) | not measured | `sublet`, `results/20260918-qemu` |
-| postgres/sql-repros | `results/matrix.tsv` | not measured | `sublet`, `results/matrix.tsv` |
-| sqlite/engine-repros | `results/matrix.tsv` | not measured | `sublet`, `results/matrix.tsv` |
+| postgres/c-repros | `results/matrix.tsv` | `virtual-malloc`, `results/2026-10-10-virtual` | the same run (no nested allocator) |
+| postgres/mmgr-repros | `results/20261008-cheribsd` (new) | `virtual-malloc`, `results/2026-10-10-virtual` | `virtual-pg-pools`, `results/2026-10-10-virtual` |
+| postgres/sql-repros | `results/matrix.tsv` | `virtual-malloc`, `results/2026-10-10-virtual` | `virtual-pg-pools`, `results/2026-10-10-virtual` |
+| sqlite/engine-repros | `results/matrix.tsv` | `virtual-malloc`, `results/2026-10-10-virtual` (virtual Capstone) | `virtual-nested-pools`, `results/2026-10-10-virtual` (virtual Capstone) |
 
-**Column 2 is the gap.** For a group with its own allocator, "Sublet in malloc" is the program with
-its nested allocator STOCK on the Sublet heap -- the `sublet-malloc` arm the three programs gained
-on 2026-10-09. None of these groups has that run, so 99 cells are holes (and postgres/c-repros adds
-ten, below). Perl is the exception: its
-`sysalloc-sublet` arm is exactly that configuration.
+**Column 2 is the gap.** For a group with its own allocator, column 2 is the program with its
+nested allocator STOCK on a protecting system allocator, and column 3 the same with the nested
+allocator's own port. PostgreSQL and SQLite are measured that way on virtual Capstone (2026-10-10):
+the system allocator is virtual mallocng -- exact bounds, lifetime retired on free -- and column 3
+adds the port's pools (`virtual-malloc`, `virtual-pg-pools`, `virtual-nested-pools`; the
+configurations are in `tools/arms.json`). The physical Sublet heap is not used any more. CPython,
+httpd and mruby have no such run yet, so 52 cells are holes. Perl's `sysalloc-sublet` is the
+column-2 configuration on the physical Sublet heap and stays until Perl is measured on virtual.
 
-**postgres/c-repros, columns 2 and 3.** These are frontend programs -- libpq, pg_dump, ecpg -- that
-link no nested allocator at all, so both columns are the Sublet heap itself (`sysalloc-sublet`). The
-corpus's recorded `sublet` arm is not that run. Both PostgreSQL SDKs are built with the default
-`CAPSTONE_APPLICATION_HEAP level0` (`runtime/application/CMakeLists.txt`); the sublet SDK only adds
-a grant for the server's context pools (`ports/postgres/app/build-domain.sh`), which a frontend
-program never touches. So its five catches are level0 object bounds under a Sublet label, and the
-two columns stay holes until the cases run on an SDK built with the Sublet heap. For the three
-programs a plain case's column 3 is a separate `sublet-full` run, because their ports are linked in
-the same process.
+**postgres/c-repros** links no nested allocator, so both columns are the same `virtual-malloc` run.
+Its earlier `sublet` arm is dropped: both PostgreSQL SDKs had the default level0 heap, so it measured
+level0 bounds under a Sublet label.
 
 **The CHERI column applies the quarantine rule only where a run measured it.** The three programs'
 plain temporal cases are caught as `held` because a probe showed the freed chunk sitting in
@@ -79,8 +86,8 @@ quarantine reading either way.
 | mruby | whole program | unsplit | 11 | 4 / 10 | 0 / 0 (+11 ?) | 10 / 10 (+1 ?) |
 | Perl | whole program | unsplit | 10 | 6 / 9 | 6 / 9 (+1 ?) | 7 / 9 (+1 ?) |
 | PostgreSQL | memory contexts | nested | 5 | 0 / 5 | 0 / 0 (+5 ?) | 5 / 5 |
-| SQLite | memsys5 | nested | 25 | 5 / 25 | 0 / 0 (+25 ?) | 24 / 25 |
-| **Total** |  | 81 n · 26 p · 21 u | 128 | 41 / 126 (26 held) | 32 / 57 (+71 ?) | 123 / 126 (+2 ?) |
+| SQLite | memsys5 | nested | 25 | 5 / 25 | 4 / 22 (+3 ?) | 13 / 23 (+2 ?) |
+| **Total** |  | 81 n · 26 p · 21 u | 128 | 41 / 126 (26 held) | 36 / 79 (+49 ?) | 112 / 124 (+4 ?) |
 
 **Spatial (110)**
 
@@ -97,9 +104,9 @@ quarantine reading either way.
 | mruby | whole program | unsplit | 5 | 4 / 5 | 0 / 0 (+5 ?) | 5 / 5 |
 | Perl | whole program | unsplit | 1 | 1 / 1 | 1 / 1 | 1 / 1 |
 | PostgreSQL | palloc, whole server | nested | 9 | 2 / 9 | 0 / 0 (+9 ?) | 4 / 8 (+1 ?) |
-| PostgreSQL | direct malloc | plain | 5 | 3 / 5 | 0 / 0 (+5 ?) | 0 / 0 (+5 ?) |
-| SQLite | memsys5 | nested | 8 | 0 / 8 | 0 / 0 (+8 ?) | 7 / 8 |
-| **Total** |  | 43 n · 61 p · 6 u | 110 | 52 / 110 | 48 / 83 (+27 ?) | 88 / 104 (+6 ?) |
+| PostgreSQL | direct malloc | plain | 5 | 3 / 5 | 5 / 5 | 5 / 5 |
+| SQLite | memsys5 | nested | 8 | 0 / 8 | 0 / 8 | 5 / 8 |
+| **Total** |  | 43 n · 61 p · 6 u | 110 | 52 / 110 | 53 / 96 (+14 ?) | 91 / 109 (+1 ?) |
 
 **Other (7)**
 
@@ -110,26 +117,34 @@ quarantine reading either way.
 
 ## What is not a reading, and why
 
-Seven cells ran but did not answer:
+Thirteen cells ran but did not answer:
 
 - **mruby, CHERI, 2 cases**: one aborts (rc 134) and one hits the run's timeout.
 - **mruby 11, Sublet in nested**: the `sublet-gc` run stops on cause 2, an illegal instruction --
-  a stop, but not a capability fault. The bundle's README counts all 23 `sublet-gc` faults as
-  catches; this table does not count that one.
+  a stop, but not a capability fault.
 - **Perl 02, all three columns**: Perl's own check panics ("attempt to copy freed scalar") before
   any mechanism reports.
-- **postgres/sql-repros 03, Sublet in nested**: the arm faults, but its negative control (a large
-  lquery that never crosses the uint16 ceiling) faults at the same instruction, so the fault does
-  not depend on the defect; the case records the row as withdrawn (`control-broken`).
+- **postgres/sql-repros 03, columns 2 and 3**: on the stock arm its fault is not tied to the defect,
+  and with the pools `CREATE EXTENSION ltree` faults before the case's SQL runs.
+- **sqlite 06, column 2**: the program's own `assert` in `idxRemFunc` aborts on the freed context
+  before any mechanism reports.
+- **sqlite 07, column 3**: the case fills memsys5's static array itself, which the Sublet port does
+  not have (not applicable).
+- **sqlite 12, columns 2 and 3**: both arms fault on `&z[1]` with `z` NULL in `sqlite3Fts5IterTerm`
+  (NULL + 1, which Capstone traps); nothing ties that to the defect.
+- **sqlite 20, column 2**: the stock arm faults in `nodeRelease`, which is not the access the
+  source names (`nodeAcquire`'s bucket walk).
 
 ## What a reader should not take from these numbers
 
 - **Perl's CHERI catches 01, 04, 06, 08 and 09 also fault with revocation off.** Something other
   than revocation fired -- bounds or a CHERI check on a stale field -- and no fixed-arm control has
   shown that the fault is the defect. Each cell's `verdict_note` says so.
-- **PostgreSQL mmgr's column 3 was measured on 2026-09-18 against the replay study's level-0
-  allocator**, not the application domain's that sql-repros and c-repros ran on; the group's own
-  `corpus.json` note records that comparability caveat.
+- **PostgreSQL mmgr runs the replay program, not the server**: its columns are the managers alone
+  (`virtual-mallocng-replay`, `-replay-pools`), sql-repros' the whole server.
+- **Columns 2 and 3 mix platforms across groups.** FFmpeg, tshark and memcached were measured on the
+  physical application domain, PostgreSQL and SQLite on virtual Capstone. The configuration of every
+  cell is in its bundle; totals across both are sums over different machines.
 - **mruby and Perl are whole-program corpora.** Their cases cross different allocator boundaries
   and are not split into nested and plain here (`unsplit`).
 - **mruby's `other` row** holds the cases whose class is neither temporal nor spatial (null

@@ -170,6 +170,7 @@ passes silently.
 | `sublet-pymalloc` | Capstone domain | the same for CPython: `sysalloc-sublet` plus pymalloc's pools and arenas, via patch 0014. The difference between this arm and `sysalloc-sublet` is what sublets the nested allocator rather than only the allocation under it, which is the whole comparison a nested/non-nested corpus exists to make |
 | `virtual-malloc` | virtual Capstone (`capstone/runtime/virtual`) | the case on the virtual profile, its nested allocator stock: the application runs under `capstone-vexec` with musl mallocng compiled for Capstone and run locally, which bounds each object exactly and retires its lifetime on free. Configuration `virtual-mallocng` in `tools/arms.json`; not the physical Sublet heap |
 | `virtual-pg-pools` | virtual Capstone | `virtual-malloc` with PostgreSQL's memory contexts on the Sublet context pools, built for the virtual profile (`build-virtual.sh postgres`, `PGSU_NESTED=sublet`). Configuration `virtual-mallocng-pg-pools` |
+| `virtual-nested-pools` | virtual Capstone | `virtual-malloc` with the program's nested allocator on its own pool port (SQLite: memsys5 on `sublet-3220000-memsys5.patch`, its pool lent linear by the virtual heap). The configuration in `tools/arms.json` names which |
 
 The four above are the glossary's system-allocator arms
 (`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the

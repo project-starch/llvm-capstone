@@ -120,9 +120,9 @@ EXTRA_GROUPS = {
     ("mruby", "release-differential"): ("whole program", None, "sysalloc-sublet", "sublet-gc"),
     ("perl", "release-differential"): ("whole program", None, "sysalloc-sublet", "sublet-svheads"),
     ("postgres", "c-repros"): ("direct malloc", False, "virtual-malloc", "virtual-malloc"),
-    ("postgres", "mmgr-repros"): ("memory contexts", True, "sublet-malloc", "sublet"),
-    ("postgres", "sql-repros"): ("palloc, whole server", True, "sublet-malloc", "sublet"),
-    ("sqlite", "engine-repros"): ("memsys5", True, "sublet-malloc", "sublet"),
+    ("postgres", "mmgr-repros"): ("memory contexts", True, "virtual-malloc", "virtual-pg-pools"),
+    ("postgres", "sql-repros"): ("palloc, whole server", True, "virtual-malloc", "virtual-pg-pools"),
+    ("sqlite", "engine-repros"): ("memsys5", True, "virtual-malloc", "virtual-nested-pools"),
 }
 
 

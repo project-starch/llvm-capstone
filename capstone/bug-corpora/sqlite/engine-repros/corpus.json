@@ -11,7 +11,9 @@
   "required_arms": [
     "spatial",
     "sublet",
-    "cheribsd-revocation"
+    "cheribsd-revocation",
+    "virtual-malloc",
+    "virtual-nested-pools"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -23,15 +25,25 @@
     "capstone/ports/sqlite/repro322/tags.tsv",
     "capstone/ports/sqlite/cheribsd/build-corpus-cheri.sh",
     "capstone/ports/sqlite/cheribsd/deploy-corpus.sh",
-    "capstone/ports/sqlite/cheribsd/run-corpus-cheri.sh"
+    "capstone/ports/sqlite/cheribsd/run-corpus-cheri.sh",
+    "capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "evidence": [
-    "capstone/bug-corpora/sqlite/engine-repros/results"
+    "capstone/bug-corpora/sqlite/engine-repros/results",
+    "capstone/bug-corpora/sqlite/engine-repros/results/2026-10-10-virtual"
   ],
   "related": [
     "capstone/bug-corpora/sqlite/capi-repros"
   ],
   "shape_table": true,
-  "note": "Sibling of capi-repros, not an extension of it: those 19 rows are pointer-lifetime defects in host BINDINGS over the C API, and that corpus records SQLite's engine-internal defects as out of scope. These 43 are engine-internal. Five further R2 fuzz-diff images (fz01, fz03, fz04, fz05, fz07) are collected and carry a host-ASan signature but no derived trigger, so they are not cases here; deriving them needs the 3.43.1 fuzz corpus re-extracted for db-by-sql pairing. Eight more entries in the collection are diagnostics rather than defects -- five baseline probes and three allocator demonstrators -- and stay in the port. The memsys5 boundary is the point: a sub-allocation is the address arena+i*atom, so it inherits the whole arena's bounds, and both a use-after-free and an overflow that stays inside the arena are in bounds for a capability machine. Narrowed to this study's scope on 2026-10-06: five cases moved to not-in-scope/ because they are neither spatial nor temporal -- two non-terminating loops, one unbounded recursion (the exhausted resource is the C stack), one dereference of the literal address 0x3 and one NULL dereference. The last two were not visible in the shape field, which grouped them under \"stale or wild pointer dereference\" together with two genuine out-of-bounds reads; they were separated by reading each case. The same line was drawn for PostgreSQL at the reviewer's request, so one rule now holds across the study. What remains is 26 temporal and 12 spatial. The runners list now names the CheriBSD side too, which it did not: the two Capstone arms are driven by corpus322.sh and the two CheriBSD arms by the scripts under ports/sqlite/cheribsd, and only the first was declared. tags.tsv is listed with them because it is what the runners take their case list from -- `ls out/` answers what was built, not what the corpus contains, and the difference is not always visible. Narrowed again on 2026-10-06, 38 to 33: five cases moved to no-binary-verdict/ because on at least one arm they produced neither detected nor not-detected. Three had a probe showing hits=0 on cheribsd-revocation -- the defect site never executed, so the arm had nothing to miss -- and two hung on a Capstone arm, neither completing nor faulting. Scoring any of them as not-detected would credit an arm with a silent miss on code that did not run. The cost is recorded there and is not nothing: 26_2c7a73eaea was the only case whose damage left the memsys5 arena, so Table 1b's \"leaves the arena\" column now has no measured member."
+  "note": "Sibling of capi-repros, not an extension of it: those 19 rows are pointer-lifetime defects in host BINDINGS over the C API, and that corpus records SQLite's engine-internal defects as out of scope. These 43 are engine-internal. Five further R2 fuzz-diff images (fz01, fz03, fz04, fz05, fz07) are collected and carry a host-ASan signature but no derived trigger, so they are not cases here; deriving them needs the 3.43.1 fuzz corpus re-extracted for db-by-sql pairing. Eight more entries in the collection are diagnostics rather than defects -- five baseline probes and three allocator demonstrators -- and stay in the port. The memsys5 boundary is the point: a sub-allocation is the address arena+i*atom, so it inherits the whole arena's bounds, and both a use-after-free and an overflow that stays inside the arena are in bounds for a capability machine. Narrowed to this study's scope on 2026-10-06: five cases moved to not-in-scope/ because they are neither spatial nor temporal -- two non-terminating loops, one unbounded recursion (the exhausted resource is the C stack), one dereference of the literal address 0x3 and one NULL dereference. The last two were not visible in the shape field, which grouped them under \"stale or wild pointer dereference\" together with two genuine out-of-bounds reads; they were separated by reading each case. The same line was drawn for PostgreSQL at the reviewer's request, so one rule now holds across the study. What remains is 26 temporal and 12 spatial. The runners list now names the CheriBSD side too, which it did not: the two Capstone arms are driven by corpus322.sh and the two CheriBSD arms by the scripts under ports/sqlite/cheribsd, and only the first was declared. tags.tsv is listed with them because it is what the runners take their case list from -- `ls out/` answers what was built, not what the corpus contains, and the difference is not always visible. Narrowed again on 2026-10-06, 38 to 33: five cases moved to no-binary-verdict/ because on at least one arm they produced neither detected nor not-detected. Three had a probe showing hits=0 on cheribsd-revocation -- the defect site never executed, so the arm had nothing to miss -- and two hung on a Capstone arm, neither completing nor faulting. Scoring any of them as not-detected would credit an arm with a silent miss on code that did not run. The cost is recorded there and is not nothing: 26_2c7a73eaea was the only case whose damage left the memsys5 arena, so Table 1b's \"leaves the arena\" column now has no measured member.",
+  "arm_configurations": {
+    "virtual-malloc": "virtual-sqlite-memsys5",
+    "virtual-nested-pools": "virtual-sqlite-memsys5-pools"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+  }
 }

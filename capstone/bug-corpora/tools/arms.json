@@ -115,6 +115,32 @@
       "controls_for_missed": [
         "uaf-chunk"
       ]
+    },
+    "virtual-sqlite-memsys5": {
+      "target": "capstone-virtual",
+      "summary": "SQLite 3.22.0 built for the virtual profile with memsys5 stock over one static array (ports/sqlite/repro322/build-virtual.py --memsys5): every SQLite allocation is an offset inside that arena, so the system allocator -- virtual mallocng -- sees one object and no frees",
+      "mechanism": "none below the arena",
+      "controls": {
+        "uaf-mem5": "complete",
+        "bounds-mem5": "complete"
+      },
+      "controls_for_missed": [
+        "uaf-mem5",
+        "bounds-mem5"
+      ]
+    },
+    "virtual-sqlite-memsys5-pools": {
+      "target": "capstone-virtual",
+      "summary": "the same with memsys5 on its Sublet port (build-virtual.py --sublet, ports/sqlite/sublet/sublet-3220000-memsys5.patch): the pool is lent by the virtual heap as one linear capability, carved into one capability per block, each retired on sqlite3_free",
+      "mechanism": "per-block bounds and revocation in memsys5",
+      "controls": {
+        "uaf-mem5": "fault",
+        "bounds-mem5": "fault"
+      },
+      "controls_for_missed": [
+        "uaf-mem5",
+        "bounds-mem5"
+      ]
     }
   }
 }

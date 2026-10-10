@@ -30,6 +30,32 @@ Every case declares one of these, and the table partitions the corpus.
 | `sublet` | Capstone domain, nested-allocator discipline | does per-sub-allocation revocation notice? |
 | `cheribsd-revocation` | CheriBSD riscv64-purecap, revocation on | does CHERI plus revocation notice? |
 
+## On virtual Capstone (2026-10-10), under the shared judge
+
+| arm | configuration (`tools/arms.json`) | caught | missed | no reading |
+|---|---|---:|---:|---:|
+| `virtual-malloc` | `virtual-sqlite-memsys5`: memsys5 stock over its static arena; virtual mallocng below sees one object | 4 | 26 | 3 |
+| `virtual-nested-pools` | `virtual-sqlite-memsys5-pools`: memsys5 on its Sublet port, the pool lent linear by the virtual heap | 18 | 13 | 2 |
+
+Built by `ports/sqlite/repro322/build-virtual.py` (`--memsys5`, `--sublet`) from the adapted 3.22.0
+amalgamation plus `fts5-azarg-patch.py`, run by `shared/run-virtual.py` on a persistent virtual VM,
+judged by `tools/verdicts.py`; bundles in `results/2026-10-10-virtual/<arm>`, verdicts derived into
+each `case.json`. Before any case each arm runs `controls/` -- a memsys5 block used after free and
+written 1 KiB past its start -- which complete on the stock arm and fault on the port, as declared.
+
+A fault counts only in a function the case justifies (`fault_sites`): where host ASan reported it
+(cases 00, 25-32), or what the source and `PROVENANCE.md` name as the stale access. The harness
+prints `<tag> BEGIN` before the case body, not at the access, so a MISSED here rests on the case
+having begun and returned.
+
+Two faults every arm hit were the platform, not a defect: FTS5's default tokenizer computes
+`&azArg[1]` with `azArg` NULL (CINCOFFSET on a non-capability traps on Capstone) -- the physical
+build had fixed that with `ports/sqlite/fts5-azarg-patch.py`, which the virtual builder now applies
+too -- and `sqlite3Fts5IterTerm` returns `&z[1]` with `z` NULL (case 12, open, no reading).
+
+**The physical `sublet` arm below is superseded for the per-bug table.** 25 of its 34 "detected"
+were VM halts at one kernel pc that nothing ties to a defect.
+
 ## What the three arms measured
 
 `results/20261004/matrix.tsv`, one row per case per arm:

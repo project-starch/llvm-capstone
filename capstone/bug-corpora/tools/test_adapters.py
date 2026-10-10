@@ -171,6 +171,31 @@ class VirtualSteps(unittest.TestCase):
         self.assertNotIn("05_case", self.vm.split(self.SERIAL))
 
 
+class Sqlite(unittest.TestCase):
+    sqlite = load(CORPORA / "sqlite/engine-repros/shared/run-virtual.py", "sqlite_run_virtual")
+    LINE = ("capstone-exec: domain fault cause=28 pc=0x3fa4a2379c address=0x1 entry=0x2 "
+            "code=0x3fa4800000-0x3fa4c00000 last=0x39")
+
+    def test_fault_in_the_asan_function_is_caught(self):
+        o = self.sqlite.observe("t", "t BEGIN\n", {"kind": "signal", "value": 11, "fault": self.LINE},
+                             FakeSymbols("sqlite3Fts5GetVarint32"), {"sqlite3Fts5GetVarint32"})
+        self.assertEqual((o.reached, o.attribution), (True, "function"))
+
+    def test_fault_elsewhere_is_not(self):
+        o = self.sqlite.observe("t", "t BEGIN\n", {"kind": "signal", "value": 11, "fault": self.LINE},
+                             FakeSymbols("sqlite3Fts5GetTokenizer"), {"sqlite3Fts5GetVarint32"})
+        self.assertIsNone(o.attribution)
+
+    def test_own_assert_abort_is_not_a_silence(self):
+        o = self.sqlite.observe("t", "t BEGIN\nAssertion failed\n", {"kind": "signal", "value": 6}, None, set())
+        verdict = v.judge(o, {"controls": {}, "controls_for_missed": []})
+        self.assertEqual(verdict[:2], (v.NO_READING, "inconclusive"))
+
+    def test_returned_is_completed(self):
+        o = self.sqlite.observe("t", "t BEGIN\nt RETURNED\n", {"kind": "exit", "value": 0}, None, set())
+        self.assertTrue(o.reached and o.completed)
+
+
 class Mmgr(unittest.TestCase):
     mmgr = load(CORPORA / "postgres/mmgr-repros/shared/run-defects.py", "mmgr_run")
     SERIAL = """[CAPSTONE] Print = Scalar(0xcf18000000000002)

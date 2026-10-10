@@ -138,6 +138,8 @@ ARM_ORACLES = {
     # what each is; they are not the physical Sublet heap.
     "virtual-malloc": {"oracle"},
     "virtual-pg-pools": {"oracle"},
+    # A nested allocator's own pool port on the virtual profile, for ports other than PostgreSQL.
+    "virtual-nested-pools": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),
