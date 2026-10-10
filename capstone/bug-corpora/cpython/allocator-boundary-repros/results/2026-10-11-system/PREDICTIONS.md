@@ -89,3 +89,65 @@ Prediction for case 19 under the amended rule, both arms: `probe-142664.py` faul
 in `fnv` at the trigger's offset, `negative_control.py` runs its six tests clean, and the row is
 CAUGHT by control. Falsifiers: the probe not faulting, or faulting elsewhere (then the whole-file
 fault in `fnv` is not shown to be gh-142664's), or the scoped control faulting.
+
+## Second amendment: case 21's timeout
+
+On the run of 9239e39689e9 case 21 ended `NO-READING:infra`, runner timeout, on both arms: the
+trigger was still running after the runner's 300 s, with no fault (so not the 1 MiB run's stack
+overflow either). Natively on p13 the same trigger takes 1.7 s on the build's own 3.13.7 (it ends
+on SIGSEGV, rc 139, the stale read hitting the unmapped 512 KiB buffer) and 2.1 s on the ASan
+build (heap-use-after-free, READ of size 1). Case 21 is rerun alone with `--timeout 3600` on the
+same images and runner. A timeout is not a reading in either direction, so lengthening it does
+not choose the answer; the prediction for case 21 above stands unchanged.
+
+## CheriBSD, registered 2026-10-11 before the interpreter was built
+
+The CheriBSD column of 2026-10-06 to -09 was measured on another machine with an si_code reporter
+and a mech-control program that never reached the repository, on a binary whose hash was
+reconstructed afterwards (`results/20261006/README.md`). Neither the binary nor the helpers exist
+on any machine this lane can reach, so the arm is rebuilt from the repository:
+
+* the interpreter from `capstone/ports/cpython/app/cheribsd/build.sh`, which now passes
+  `-cheri-tgot-tls` (the SDK's own purecap configuration carries it) and builds and stages the
+  extension modules (`make python sharedmods`, `lib-dynload`). Before, it built `python` alone,
+  so `_pickle`, `pyexpat` and `array` were missing: case 20's `pickle` would have fallen back to
+  pure Python, where the defect cannot happen, and case 21 would have stopped at its import. The
+  recipe now refuses a build without `_pickle`, `pyexpat`, `array` and `_struct`. Three things
+  do not compile for purecap and are configured out, each named in the recipe: `select.kqueue`
+  (it keeps a kevent's ident and udata as integers of `uintptr_t`'s size, 16 bytes here),
+  `_multiprocessing` (no integer format code of `void *`'s size) and `_ctypes` (no libffi in the
+  sysroot). None of the three cases uses them. The build of this recipe on p13 staged 57 modules
+  beside the interpreter, binary `c9bec41630d4b707...`;
+* `capstone/bug-corpora/tools/cheribsd/sicode.c`, a fault reporter preloaded in front of the
+  interpreter, and its self-test, which runs under the same preload and must report
+  `PROT_CHERI_BOUNDS` for a read past an allocation and `PROT_CHERI_TAG` for a read through a
+  freed pointer after a forced revocation pass;
+* the quarantine probe of `postgres/mmgr-repros/results/20261008-cheribsd`, preloaded beside it.
+  The runner refuses a guest where the workload ends without the probe's line.
+
+Guest: the purecap image e7470361 on p13, booted from snapshot, with revocation as the platform
+ships it; `run-cheribsd.sh` refuses `runtime_revocation_default` other than 1 and records the whole
+`security.cheri` subtree before and after.
+
+How a row is read for the table's CheriBSD column, which credits use-after-reallocation
+protection: the stale pointer must not have reached a reallocated object. A row earns it when
+either
+
+* the process ends on SIGPROT with `PROT_CHERI_TAG` (a sweep revoked the stale capability before
+  the access), or
+* the process ends without a fault and the probe reports every free quarantined
+  (`quarantined_after_free` = `frees`) and `reused_while_quarantined=0`: the freed object could
+  not be handed out again before a sweep, and a sweep would have untagged the stale capability.
+
+Any other ending (another signal, a bounds fault, a free that did not enter the quarantine, no
+probe line on a run that ended normally) earns nothing and is reported as it is.
+
+Predictions:
+
+| case | ending | probe | UAR credit |
+|---|---|---|---|
+| 19 | no fault: the stale reads come within the same call as the release, before any sweep | all frees quarantined, none reused | yes |
+| 20 | no fault, for the same reason | the same | yes |
+| 21 | SIGPROT, `PROT_CHERI_TAG`, as the 2026-10-08 run recorded; presumably a sweep runs between the 512 KiB block's free and the read, but the mechanism is not what is predicted, the ending is | none (the process dies before the probe's destructor) | yes |
+
+A use-after-free is caught, as opposed to rendered harmless, only in the third.

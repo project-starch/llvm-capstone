@@ -48,21 +48,41 @@ fi
 [[ $("$BUILD_PYTHON" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])') == 3.13.7 ]] \
   || { echo "build Python must be 3.13.7" >&2; exit 2; }
 
-CC="$CHERI_SDK/bin/clang --target=riscv64-unknown-freebsd13 --sysroot=$CHERI_SYSROOT -march=rv64imafdcxcheri -mabi=l64pc128d -mno-relax -fuse-ld=lld -B$CHERI_SDK/bin"
+# -cheri-tgot-tls is in the SDK's own purecap configuration (bin/cheribsd-riscv64-purecap.cfg):
+# the purecap rtld refuses a dynamic binary with traditional TLS.
+CC="$CHERI_SDK/bin/clang --target=riscv64-unknown-freebsd13 --sysroot=$CHERI_SYSROOT -march=rv64imafdcxcheri -mabi=l64pc128d -mno-relax -cheri-tgot-tls -fuse-ld=lld -B$CHERI_SDK/bin"
 (
   cd "$ROOT/build"
+  # ac_cv_func_kqueue=no: select.kqueue keeps a kevent's ident and udata as integer members of
+  # uintptr_t's size, and selectmodule.c stops on "uintptr_t does not match int, long, or long
+  # long" where uintptr_t is a 16-byte capability. select keeps select() and poll().
+  # Two modules do not compile for purecap and are left out, as configure leaves out a module a
+  # platform lacks: _multiprocessing ("can't find format code for unsigned integer of same size
+  # as void*") and _ctypes (the sysroot has no libffi).
   CC="$CC" CFLAGS='-O1 -Wno-error' ac_cv_file__dev_ptmx=no \
-    ac_cv_file__dev_ptc=no ac_cv_buggy_getaddrinfo=no \
+    ac_cv_file__dev_ptc=no ac_cv_buggy_getaddrinfo=no ac_cv_func_kqueue=no \
+    py_cv_module__multiprocessing=n/a py_cv_module__ctypes=n/a \
     "$SRC/configure" --host=riscv64-unknown-freebsd13 \
     --build=x86_64-pc-linux-gnu --with-build-python="$BUILD_PYTHON" \
     --disable-test-modules --without-ensurepip --without-readline \
     --disable-ipv6 > configure.log 2>&1
-  make -j"$JOBS" python > make.log 2>&1 \
+  make -j"$JOBS" python sharedmods > make.log 2>&1 \
     || { tail -n 60 make.log >&2; exit 1; }
 )
 "$CHERI_SDK/bin/llvm-strip" --strip-debug -o "$ROOT/python" "$ROOT/build/python"
 "$BUILD_PYTHON" "$PORT/make-stdlib-zip.py" "$SRC/Lib" \
   "$ROOT/pyhome/lib/python313.zip" > "$ROOT/stdlib.log"
+# The extension modules a Linux build ships beside the interpreter, where CPython looks for them.
+# Without them a module such as _pickle is silently replaced by its pure-Python fallback, and a
+# defect in the C module cannot happen at all.
+mkdir -p "$ROOT/pyhome/lib/python3.13/lib-dynload"
+cp "$ROOT"/build/Modules/*.cpython-313.so "$ROOT/pyhome/lib/python3.13/lib-dynload/"
+cp "$ROOT/build/$(cat "$ROOT/build/pybuilddir.txt")"/_sysconfigdata_*.py "$ROOT/pyhome/lib/python3.13/"
+for module in _pickle pyexpat array _struct; do
+  [[ -f $ROOT/pyhome/lib/python3.13/lib-dynload/$module.cpython-313.so ]] ||
+    grep -q "PyInit_$module\b" "$ROOT/build/Modules/config.c" ||
+    { echo "module $module was neither built in nor built as a shared object" >&2; exit 1; }
+done
 python3 - "$ROOT" "$ARCHIVE" "$HERE" "$PORT" "$CHERI_SDK" "$CHERI_SYSROOT" "$MODE" \
           "$BUILD_PYTHON" "${PATCHES[@]}" <<'PY'
 import hashlib
@@ -97,6 +117,7 @@ document = {
     'source_archive_sha256': sha256(archive),
     'binary_sha256': sha256(root / 'python'),
     'stdlib_zip_sha256': sha256(root / 'pyhome/lib/python313.zip'),
+    'shared_modules_sha256': {f.name: sha256(f) for f in sorted((root / 'pyhome/lib/python3.13/lib-dynload').glob('*.so'))},
     'pyconfig_sha256': sha256(root / 'build/pyconfig.h'),
     'compiler_sha256': sha256(sdk / 'bin/clang'),
     'build_python_sha256': sha256(build_python),
