@@ -1,5 +1,7 @@
 # Memory figures from complete applications
 
+> **Removed 2026-10-10.** CheriBSD PoisonCap (our adapter, its backends and runners) is gone from the tree; PostgreSQL's arm goes with its rewrite. This plan's PoisonCap arms are history; the results they produced stay where they were recorded.
+
 Status: proposed publication layout and measurement contract. The SQLite layout
 preview uses previously collected data; it is not a new experiment or a
 preregistered confirmatory result. This refines the presentation of the

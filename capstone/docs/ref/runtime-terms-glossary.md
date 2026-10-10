@@ -273,7 +273,7 @@ libc, syscall ABI, kernel user ABI handling, and related Linux runtime surfaces.
 
 ## 6. Allocator terms
 
-The allocator work (Sublet, PoisonCap, the ports under `ports/`, the corpora under
+The allocator work (Sublet, the ports under `ports/`, the corpora under
 `bug-corpora/`) uses the six words below, each with one meaning. The programs we port
 use the same words for other things, so **an upstream name always carries its
 program**: aset chunk, pymalloc block, pymalloc pool, wmem block, memcached page,
@@ -354,8 +354,8 @@ Per-object bounds became the first-fit heap's default with PR #170 (on `dev`
 `level0` result recorded earlier is `sysalloc-none`.
 
 An arm that changes a nested allocator keeps its corpus name: `spatial` (per-object
-bounds, no revocation), `sublet` (the allocator's Sublet port), `poisoncap-spatial`,
-`poisoncap-protected`. `cheribsd-revocation` is CheriBSD's system allocator with
+bounds, no revocation), `sublet` (the allocator's Sublet port), and, in PostgreSQL's corpus only since
+2026-10-10, `poisoncap-spatial` and `poisoncap-protected`. `cheribsd-revocation` is CheriBSD's system allocator with
 revocation on and the nested allocator unchanged. An arm that changes both says
 so: mruby's `sublet-gc` and tshark's `chunks` are `sysalloc-sublet` plus that
 program's Sublet port (mruby's GC object slots, wmem's block allocator).

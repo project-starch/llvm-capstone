@@ -86,8 +86,7 @@ attempt denominator. It does not implement another VM manager or vendor suites.
 
 The general catalog has six applications and eight candidate suites. The
 mruby AO case now has a repeated four-arm memory measurement through the
-shared guest runners. `study.py` now admits its pinned four-arm PoisonCap
-binding; unregistered application adapters remain blocked. Previous discovery results are not renamed as standard
+shared guest runners. Previous discovery results are not renamed as standard
 benchmarks. The [research and execution plan](../../docs/plans/application-benchmark-study.md)
 explains benchmark selection, measurement layers and the rollout.
 
@@ -122,53 +121,13 @@ a separate comparison continuing the earlier experiments. Neither means
 disabling the Capstone ISA. The first-fit heap is the SDK's arena allocator, not jemalloc;
 cross-platform differences include allocator policy and OS/runtime differences.
 
-`--comparison nested-poisoncap --profile nested` instead plans `capstone`,
-`capstone-sublet`, `poisoncap-spatial` and `poisoncap-temporal`. PoisonCap has its
-own platform identity and repetition blocks. `points` preserves unavailable
-cells and never relabels ordinary CheriBSD binaries as PoisonCap applications.
-The registered mruby GC-slot adapter now admits only a four-arm binding with
-one PoisonCap binary, the shared AO input, a preserved binary-output oracle,
-the observed inner mode and pinned QEMU/kernel/libc files. The measured mruby
-campaign used the shared runners directly; its [binding](results/mruby-gc-memory-20260927/bindings.json)
-qualifies future planned runs and does not retroactively label those measurements
-as pre-registered. Other nested boundaries need their own runner validation
-and adapter registration. The existing `--comparison cheribsd` is the default, and
-existing plan identities remain valid.
-
-The separate `catalog-poisoncap.json` pins the published SQLite 3.22.0 anchor
-and the measured mruby 4.0.0-rc2 AO case. It does not silently substitute
-SQLite 3.22.0 for the current 3.53.3 application catalog:
-
-```sh
-python3 capstone/experiments/study/study.py plan \
-  --comparison nested-poisoncap --profile nested \
-  --catalog capstone/experiments/study/catalog-poisoncap.json \
-  --suites sqlite-poisoncap-speedtest1 --repeat 3 --seed 20260927 \
-  --out "$STUDY_ROOT/poisoncap-plan.json"
-```
-
-To emit the qualified mruby matrix after restoring its [raw archive](results/mruby-gc-memory-20260927/archive.json)
-under `/tmp/capstone`, use the committed [two-size matrix](results/mruby-gc-memory-20260927/matrix.json)
-and binding. The plan has 24 cells; each platform command emits its 12 cells
-for one persistent guest:
-
-```sh
-source capstone/tests/capstone-test-env.sh
-python3 capstone/experiments/study/study.py plan \
-  --comparison nested-poisoncap --profile nested \
-  --catalog capstone/experiments/study/catalog-poisoncap.json \
-  --suites mruby-poisoncap-ao --repeat 3 --seed 20260927 \
-  --matrix capstone/experiments/study/results/mruby-gc-memory-20260927/matrix.json \
-  --out /tmp/capstone/mruby-study-plan.json
-python3 capstone/experiments/study/study.py points \
-  --plan /tmp/capstone/mruby-study-plan.json \
-  --bindings capstone/experiments/study/results/mruby-gc-memory-20260927/bindings.json \
-  --platform capstone --out /tmp/capstone/mruby-study-capstone-points.json
-python3 capstone/experiments/study/study.py points \
-  --plan /tmp/capstone/mruby-study-plan.json \
-  --bindings capstone/experiments/study/results/mruby-gc-memory-20260927/bindings.json \
-  --platform poisoncap --out /tmp/capstone/mruby-study-poisoncap-points.json
-```
+Until 2026-10-10 `study.py` also planned a `nested-poisoncap` comparison
+(`capstone`, `capstone-sublet`, `poisoncap-spatial`, `poisoncap-temporal`) from a
+separate `catalog-poisoncap.json`, and `applications/comparison-build.py` built
+the PoisonCap mruby and FFmpeg binaries. Both were removed with the PoisonCap
+adapters. The campaigns above that used them stay as recorded, and the plot
+scripts and `applications/cheribsd-run.py` keep the PoisonCap parsing that
+re-validates their raw archives.
 
 CheriBSD uses one kernel, libc, application binary and inputs for both arms.
 Only `_RUNTIME_REVOCATION_ENABLE=1` versus `_RUNTIME_REVOCATION_DISABLE=1`
@@ -359,9 +318,8 @@ out and the main result oracle is absent. The
 [external readiness archive](results/20260927-poisoncap-archive.json) preserves
 the commands, raw output, builds and tested sources, excluding guest credentials.
 
-The planner has fourteen tests for pairing, matrix identity, missing controls,
+The planner has thirteen tests for pairing, matrix identity, missing controls,
 scope, input/observer/oracle identity, and preservation of failed attempts.
-They also reject substitution of ordinary CheriBSD qualification for PoisonCap.
 Six CheriBSD runner tests cover false passes and explicit policy selection.
 The real policy smoke uses existing FFmpeg/mruby discovery images, not known
 benchmark results: both on/off pairs and a subsequent on process pass in one

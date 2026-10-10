@@ -86,10 +86,8 @@ PoisonCap temporal adapter delays it. The selected GC-page metadata and
 post-render retention countercosts are reported alongside the advantage. The
 [full-application campaign contract](plans/application-memory-campaign.md)
 fixes the same four memory experiments for each admitted benchmark. The
-[planner](../experiments/study/README.md) now admits a pinned mruby four-arm
-binding for subsequent runs; other PoisonCap application boundaries still
-need registered adapters. The measured AO campaign used the shared guest
-runners directly.
+measured AO campaign used the shared guest runners directly. CheriBSD PoisonCap
+was removed on 2026-10-10; the campaigns above that used it stay as history.
 
 Application memory behavior: [twelve paired workload configurations](../experiments/applications/results/20260927-reuse/README.md)
 pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU

@@ -1,5 +1,7 @@
 # Temporal-safety security comparison: Capstone, Sublet, CheriBSD, PoisonCap
 
+> **Removed 2026-10-10.** CheriBSD PoisonCap (our adapter, its backends and runners) is gone from the tree; PostgreSQL's arm goes with its rewrite. This plan's PoisonCap arms are history; the results they produced stay where they were recorded.
+
 Base: `ports/9-poisoncap-ffmpeg`, commit `69925e284db7`, merged with `origin/dev`
 `8abc0545f0dd`.
 Work branch: `ports/10-temporal-security`.

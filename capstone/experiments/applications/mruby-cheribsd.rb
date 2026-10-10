@@ -18,12 +18,10 @@ MRuby::CrossBuild.new('cheribsd') do |conf|
   conf.toolchain :clang
   conf.cc.command = ENV.fetch('EXP_CC')
   conf.cc.flags = ['-O1'] + common
-  conf.cc.flags += ['-DMRB_GC_STUDY_POISONCAP'] if ENV['EXP_GC_STUDY'] == '1'
   conf.cc.defines += %w(MRB_NO_BOXING MRB_NO_IO_POPEN MRB_WITH_IO_PREAD_PWRITE MRB_STR_LENGTH_MAX=0)
   conf.archiver.command = ENV.fetch('EXP_AR')
   conf.linker.command = ENV.fetch('EXP_CC')
   conf.linker.flags += ['-Wl,--wrap=main,--wrap=write', ENV.fetch('EXP_MEMORY_SOURCE')]
-  conf.linker.flags += ['-DEXP_MRB_GC_STUDY'] if ENV['EXP_GC_STUDY'] == '1'
   if ENV['EXP_ALLOCATIONS'] == '1'
     conf.linker.flags += ['-DEXP_ALLOCATIONS', ENV.fetch('EXP_ALLOC_SOURCE'),
       '-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free,--wrap=posix_memalign,--wrap=aligned_alloc']
