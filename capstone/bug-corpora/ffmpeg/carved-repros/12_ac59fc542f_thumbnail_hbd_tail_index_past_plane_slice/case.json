@@ -96,6 +96,12 @@
       "status": "measured",
       "verdict": "TWO-SIDED",
       "measured": "2026-10-10, results/2026-10-10-native-differential/run-native.txt: buggy `block=12288 region=1024 touched=4092 extent=3072 noted=1 crossed=1 contained=1 damage=1` VERDICT DEFECT-REPRODUCED; fixed `touched=1020 extent=0 crossed=0 contained=1` VERDICT FIXED"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile with the carve on Sublet (-DFFC_SUBLET_CARVE; tools/arms.json virtual-ffmpeg-carve; tools/run-virtual-cases.py): a fault at the case's labelled probe, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
     }
   },
   "status": "measured 2026-10-10 on every arm (native, five Capstone, three CheriBSD, two PoisonCap); every arm as pre-registered at 26cdee4e4d8d",

@@ -121,7 +121,9 @@
         "cheribsd-subobject",
         "cheribsd-carve-bounds",
         "native-detect",
-        "native-fix-differential"
+        "native-fix-differential",
+        "virtual-malloc",
+        "virtual-nested-pools"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -157,6 +159,10 @@
       ],
       "shape_table": true,
       "note": "FFmpeg's nested spatial row, which had one case (plane-repros) before this corpus. Every arm measured 2026-10-09: native differential 12/12 two-sided; ASan, CheriBSD, PoisonCap (both modes), Capstone bounds, Capstone + Sublet and both compilers' field bounds 0/12 -- the crossing stays inside one allocation and is not a field; carve bounds 12/12 on Capstone and on CheriBSD, at the labelled probe, every fixed arm FIXED under the same narrowing. Case 11 (vorbis) is live at the n9.0.1 pin by source reading. The candidates and the rejected commits are in docs/ref/ffmpeg-spatial-defect-triage.md (the 2026-10-09 section). Case 12 (vf_thumbnail's high-bit-depth histogram, ac59fc542f) joined on 2026-10-10 from subobject-repros, where it had been filed as case 09 NOT NESTED although its region is a carve; its native arms are measured (results/2026-10-10-native-*) and every other arm was pre-registered before its run.",
+      "arm_configurations": {
+        "virtual-malloc": "virtual-mallocng",
+        "virtual-nested-pools": "virtual-ffmpeg-carve"
+      },
       "where": "capstone/bug-corpora/ffmpeg/carved-repros"
     },
     {
@@ -179,7 +185,8 @@
         "native-detect",
         "native-fix-differential",
         "capstone-subobject",
-        "cheribsd-subobject"
+        "cheribsd-subobject",
+        "virtual-malloc"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -208,6 +215,9 @@
       "advisories": [],
       "shape_table": true,
       "note": "The third plain-heap corpus, after memcached's and wireshark's, and a sibling of subobject-repros and pool-repros rather than part of either: those boundaries are 'inside one allocation' and 'storage an AVBufferPool handed out', while every case here leaves a buffer FFmpeg obtained DIRECTLY from av_malloc_array or av_calloc. Under this inventory's axis (WHO ALLOCATED THE OBJECT) all four rows are NOT NESTED. ASan REPORTS all four, two-sided, unlike the sub-object corpora -- which is the contrast this corpus exists to draw. Case 2 is the only row in the whole inventory that crosses BELOW an allocation's base. All four are fix-reversals: liveness is recorded, never required, and requiring it is what kept FFmpeg's spatial count at four. WHY THE PLATFORM ALLOCATOR. These cases call the platform's calloc, not the buffer-pool port's av_malloc. That port's av_malloc (ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26) is a bump/freelist carve out of ONE arena returning a raw interior pointer, and it rounds every request up to 64 bytes; __builtin_capstone_cap_shrink appears only in src/capstone-domain/payload-capabilities.c:57, on pool PAYLOAD blocks. Routing these cases through it would leave no per-allocation bound to cross AND would absorb every small crossing in the round-up, so the reading would be about the arena, not the defect. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 3 of 4 CAUGHT with the fault attributed to the labelled probe, si_code 1; case 1 NOT caught, refuting its pre-registered prediction because its 24-byte request yields a 32-byte capability. This is the first CheriBSD reading of any FFmpeg corpus, and the first in the tree where attribution is established -- the probes are defined once externally rather than static per translation unit.",
+      "arm_configurations": {
+        "virtual-malloc": "virtual-mallocng"
+      },
       "where": "capstone/bug-corpora/ffmpeg/plain-heap-repros"
     },
     {
@@ -227,7 +237,8 @@
         "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
-        "native-fix-differential"
+        "native-fix-differential",
+        "virtual-malloc"
       ],
       "arm_keys": {},
       "status": "measured",
@@ -250,6 +261,9 @@
       ],
       "advisories": [],
       "shape_table": true,
+      "arm_configurations": {
+        "virtual-malloc": "virtual-mallocng"
+      },
       "where": "capstone/bug-corpora/ffmpeg/plain-temporal-repros"
     },
     {
@@ -378,7 +392,8 @@
         "native-fix-differential",
         "backing",
         "capstone-subobject",
-        "cheribsd-subobject"
+        "cheribsd-subobject",
+        "virtual-malloc"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -405,6 +420,9 @@
       "shape_table": true,
       "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. Cases 0-2 are LIVE at the n9.0.1 pin; cases 3-9 were added 2026-10-06, of which 5, 6 are live and 3, 4, 7, 8, 9 are fix-reversals -- liveness is RECORDED, never required, and requiring it is what kept this cell at three cases. Under this inventory's axis (WHO ALLOCATED THE OBJECT) every row here is NOT NESTED: the object is one allocation and nothing sub-allocated the crossed region. No arm we have catches any of them; the oracle is the upstream fix. The Capstone arms for 3-9 are declared predictions -- cases 0-2 got theirs from probe cases 40-42 of ports/ffmpeg/buffer-pool/security-tests, which is the seam 3-9 will use. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 0 of 10 caught, 22/22 arms, both platform controls firing -- and the reason is recorded as WEAKER than 'the bound is the allocation', because the port's av_malloc is an un-narrowed arena carve. Case 09 (vf_thumbnail, ac59fc542f) moved to ../carved-repros as its case 12 on 2026-10-10: the bound it crosses is a carved slice, not a member, and a carve is a nested allocator under this inventory's axis. Its readings here stay in results/.",
       "inventory": "capstone/docs/ref/ffmpeg-spatial-defect-triage.md",
+      "arm_configurations": {
+        "virtual-malloc": "virtual-mallocng"
+      },
       "where": "capstone/bug-corpora/ffmpeg/subobject-repros"
     },
     {
@@ -563,7 +581,8 @@
         "native-detect",
         "native-fix-differential",
         "capstone-subobject",
-        "cheribsd-subobject"
+        "cheribsd-subobject",
+        "virtual-malloc"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -591,6 +610,9 @@
       "shape_table": true,
       "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 29 of this tree's 35 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none. Case 1 (d5d9ff0) added 2026-10-07: item_cachedump's headroom guard reserves five bytes for \"END\\r\\n\" and the marker is written with a terminating NUL, so the NUL lands one byte past malloc(memlimit). Cited by HASH ONLY -- its subject names an outside contributor. It was the one class-A candidate in docs/ref/memcached-spatial-defect-triage.md that had never been dispositioned.",
       "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
+      "arm_configurations": {
+        "virtual-malloc": "virtual-mallocng"
+      },
       "where": "capstone/bug-corpora/memcached/plain-heap-repros"
     },
     {
@@ -610,7 +632,8 @@
         "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
-        "native-fix-differential"
+        "native-fix-differential",
+        "virtual-malloc"
       ],
       "arm_keys": {},
       "status": "measured",
@@ -633,6 +656,9 @@
       ],
       "advisories": [],
       "shape_table": true,
+      "arm_configurations": {
+        "virtual-malloc": "virtual-mallocng"
+      },
       "where": "capstone/bug-corpora/memcached/plain-temporal-repros"
     },
     {
@@ -1021,7 +1047,8 @@
         "native-detect",
         "native-fix-differential",
         "capstone-subobject",
-        "cheribsd-subobject"
+        "cheribsd-subobject",
+        "virtual-malloc"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -1056,6 +1083,9 @@
           "cause"
         ]
       },
+      "arm_configurations": {
+        "virtual-malloc": "virtual-mallocng"
+      },
       "where": "capstone/bug-corpora/wireshark/plain-heap-repros"
     },
     {
@@ -1075,7 +1105,8 @@
         "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
-        "native-fix-differential"
+        "native-fix-differential",
+        "virtual-malloc"
       ],
       "arm_keys": {},
       "status": "measured",
@@ -1098,6 +1129,9 @@
       ],
       "advisories": [],
       "shape_table": true,
+      "arm_configurations": {
+        "virtual-malloc": "virtual-mallocng"
+      },
       "where": "capstone/bug-corpora/wireshark/plain-temporal-repros"
     },
     {

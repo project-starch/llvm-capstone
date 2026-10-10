@@ -100,6 +100,58 @@ Same platform and flags as R3a. Predictions are as R3a for all 9, and for 07: SI
 `memcpy`, the declared site, with its return address in the program (`ff2_strlcpy` or
 `ff2_case_run`).
 
+### Phase 0: the virtual platform, rebuilt on apollo, and its gate (done before any case below ran)
+
+The CPython, PostgreSQL and SQLite virtual bundles name a platform (compiler 4c6135fe, qemu c676fd49,
+kernel e833dfb1, launcher 5240ec2c, module 2394a455) that exists on no host this lane can reach, and
+whose builder recorded no host. So the platform was rebuilt from dev and the virtual-capstone QEMU
+branch:
+- compiler: Release LLVM at dev bd372e25f5fb (`capstone-image-gp` present);
+- qemu: capstone-qemu `virtual-capstone` 1a6dd2073206, qemu-system-riscv64 172111865d9a,
+  `x-capstone-exact-bounds` present;
+- kernel e58613598c89, firmware 6f2b082cb677 and rootfs 9903242c37a7 (the physical platform's images,
+  copied into the kit);
+- adapter built against that kernel's prepared tree, with the QEMU tree's revocation-table ABI
+  header: capstone-vexec 5ba594e58775, capstone_vm.ko d36fab7edce1.
+
+It is a DIFFERENT platform from the other programs' bundles, digest by digest, and every bundle
+written on it says so.
+
+Gate, on this kit:
+- the runtime's own contract program: VIRTUAL_APPLICATION_OK (argv env files heap_growth
+  heap_retirement mmap);
+- postgres/c-repros on `virtual-malloc`, through its own runner: 5 of 5 cases agree with the committed
+  2026-10-10 bundle on verdict, reason, fault cause and faulting function (all CAUGHT, cause 28);
+- the comparison itself fires: a copy of that bundle with one verdict flipped reads 1 of 5 differing;
+- with exact bounds OFF (a kit whose qemu strips the flag), 5 of 5 differ -- the launcher does not run
+  an image at all without exact bounds, so every case reads NO-READING infra.
+
+`tools/run-virtual-cases.py` passed a synthetic smoke case:
+- both controls faulted;
+- a synthetic over-read was caught at `ffh_read_probe` with cause 28;
+- a physical SDK and a physical configuration were refused with exit 75.
+
+### R6. FFmpeg, tshark and memcached on virtual Capstone: plain-heap, plain-temporal, subobject, carved
+
+Arm `virtual-malloc` (configuration `virtual-mallocng`) on all eight corpora, and `virtual-nested-pools`
+(`virtual-ffmpeg-carve`, `-DFFC_SUBLET_CARVE`) on carved-repros. Runner `tools/run-virtual-cases.py`,
+one boot per corpus on the kit above. The controls bounds-malloc and uaf-malloc run in each boot, and
+every fixed arm runs on the same image.
+
+Predictions:
+- controls fault; every fixed arm prints VERDICT FIXED and exits 0.
+- plain-heap, 46 cases (25 FFmpeg, 12 tshark, 9 memcached): CAUGHT at the labelled probe, cause 28.
+  This includes the five cases CheriBSD's size classes absorb, since mallocng bounds each object
+  exactly. A case at a size whose padding the virtual heap leaves accessible would read MISSED, and
+  would be the representability question the virtual README leaves open.
+- plain-temporal, 26 cases: CAUGHT at the labelled probe, cause 24 or 25 (mallocng retires the freed
+  object's lifetime).
+- subobject, 9: MISSED. The member crossing stays inside one allocation, and this arm has no field
+  bounds.
+- carved on virtual-malloc, 13: MISSED. The crossing stays inside the one av_calloc block.
+- carved on virtual-nested-pools, 13: CAUGHT at the labelled probe, as the physical Sublet carve read
+  (13/13).
+
 ## Outcomes (written after each run)
 
 - **R1** (`memcached/allocator-repros/results/2026-10-10-cheribsd-fixed-buggy/`): as predicted, 18 of 18 arms.

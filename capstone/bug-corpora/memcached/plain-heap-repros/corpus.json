@@ -18,7 +18,8 @@
     "native-detect",
     "native-fix-differential",
     "capstone-subobject",
-    "cheribsd-subobject"
+    "cheribsd-subobject",
+    "virtual-malloc"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -45,5 +46,8 @@
   "advisories": [],
   "shape_table": true,
   "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 29 of this tree's 35 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none. Case 1 (d5d9ff0) added 2026-10-07: item_cachedump's headroom guard reserves five bytes for \"END\\r\\n\" and the marker is written with a terminating NUL, so the NUL lands one byte past malloc(memlimit). Cited by HASH ONLY -- its subject names an outside contributor. It was the one class-A candidate in docs/ref/memcached-spatial-defect-triage.md that had never been dispositioned.",
-  "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md"
+  "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
+  "arm_configurations": {
+    "virtual-malloc": "virtual-mallocng"
+  }
 }

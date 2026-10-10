@@ -57,6 +57,9 @@
       "verdict": "CAUGHT",
       "measured": "2026-10-09",
       "preregistered": "aeba7ddefb4d"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
     }
   },
   "case": 5,
