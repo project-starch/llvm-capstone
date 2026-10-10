@@ -2,11 +2,12 @@
 """The memcached Safety milestone: run fixtures in the safety image of one heap arm, one guest boot,
 and judge each against host/safety-expect.txt.
 
-    run-safety.py --arm level0|shrink|sublet|slabsublet0|slabsublet1 --out DIR [--expect FILE] FIXTURE...
+    run-safety.py --arm level0|shrink|sublet --out DIR [--expect FILE] FIXTURE...
 
-slabsublet0 and slabsublet1 run host/build-slab-sublet.sh's safety image (Sublet inside memcached's
-slab and cache allocators) with MC_SLAB_SUBLET_MODE=0 (spatial) or 1 (sublet), and the arm's server
-flags -m 48 -o no_slab_reassign (the adapter's page half is 48 MiB, and the page mover is not hooked).
+The physical slabsublet0/slabsublet1 arms (the allocators port's ledger inside memcached, on the Sublet
+heap) were removed on 2026-10-11; their predictions stay in host/safety-expect.txt as the record.
+Sublet inside the allocators is now patch 0006 on the virtual profile: host/build-sublet.sh,
+host/run-virtual.py --arm sublet.
 
 Env: MC_WORK (host/build-safety.sh's images), CAPSTONE_VM_UP_ARGS (capstone-vm up platform arguments),
 CAPSTONE_BUILDROOT_DIR (the guest cross compiler), capstone-vm on PATH.
@@ -43,7 +44,6 @@ spec.loader.exec_module(check_safety)
 
 PORT = 21299
 FLAGS = ['-l', '127.0.0.1', '-p', str(PORT), '-U', '0', '-m', '64', '-t', '4']
-SLAB_SUBLET_FLAGS = ['-m', '48', '-o', 'no_slab_reassign']
 
 
 def vm(state, *args, **kw):
@@ -52,11 +52,11 @@ def vm(state, *args, **kw):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--arm', choices=['level0', 'shrink', 'sublet', 'slabsublet0', 'slabsublet1'], required=True)
+    parser.add_argument('--arm', choices=['level0', 'shrink', 'sublet'], required=True)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--expect', type=Path, default=APP / 'host/safety-expect.txt')
     parser.add_argument('--env', action='append', default=[], metavar='NAME=VALUE',
-                        help='more server environment (e.g. MC_SLAB_SUBLET_REPORT=1 for the adapter counters on stderr)')
+                        help='more server environment')
     parser.add_argument('fixtures', nargs='+', type=int)
     args = parser.parse_args()
 
@@ -71,12 +71,8 @@ def main():
 
     work = Path(os.environ['MC_WORK'])
     image = work / 'safety' / f'memcached-safety-{args.arm}.dom'
-    flags, env = list(FLAGS), ''
-    if args.arm.startswith('slabsublet'):
-        image = work / 'slabsublet' / 'memcached-safety-slabsublet.dom'
-        flags += SLAB_SUBLET_FLAGS
-        env = f'MC_SLAB_SUBLET_MODE={args.arm[-1]} '
-    env += ''.join(f'{e} ' for e in args.env)
+    flags = list(FLAGS)
+    env = ''.join(f'{e} ' for e in args.env)
     if not image.is_file():
         parser.error(f'no {image}: run host/build-safety.sh')
     args.out.mkdir(parents=True, exist_ok=False)

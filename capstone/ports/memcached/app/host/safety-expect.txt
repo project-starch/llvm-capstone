@@ -271,3 +271,49 @@ slabsublet0  20  FAULT  oob
 slabsublet0  21  FAULT  oob
 slabsublet1  20  FAULT  oob
 slabsublet1  21  FAULT  oob
+
+# ---------------------------------------------------------------------------------------------
+# THE LIFETIMES ARM (host/build-sublet.sh; run-virtual.py --arm sublet), registered 2026-10-11 BEFORE
+# any lifetimes image was built or booted, and pushed with the lane branch before its first run.
+# The virtual profile's outer revoking heap (virtual mallocng), as the `sublet` rows above are judged
+# on by run-virtual.py --arm virtual, plus patch 0006 (-DMC_CAPSTONE_SUBLET): slabs.c and cache.c
+# hand out every chunk and object as a CDERIVE child -- a chunk bounded to its slab class's chunk
+# size, an object to its cache's object -- and slabs_free / cache_free revoke it (CREVOKE).
+# WHAT EACH PREDICTION RESTS ON:
+# - 1-8 and 17-21 never touch slabs.c or cache.c (plain malloc, calloc, realloc, the bipbuffer, a
+#   global and the stack): the outer heap's `sublet` predictions, row for row.
+# - 9 writes through item a's pointer at b's address. a is bounded to its own chunk and b is another
+#   chunk, so the poke faults oob at the printed target, whichever chunk b is.
+# - 10 frees item a (item_remove -> item_free -> slabs_free: CREVOKE of a's chunk) and reads a[0]
+#   through the old pointer after b took the chunk: FAULT temporal at the printed address.
+# - 11 the same for a CHUNKED item: do_slabs_free_chunked revokes the header and every chained chunk,
+#   so the old data pointer into the 512 KiB chunk faults temporal.
+# - 12 and 13 (cases 00, 01): cache_free revokes the object, so the read through the freed buffer
+#   (12) and the walk's step through the freed IO (13) fault temporal at the printed address.
+# - 14-16 (cases 02-04): each premature free reaches slabs_free and revokes the item's chunk, so the
+#   holder's read faults temporal.
+# - A RETURN, an oob where temporal is predicted, or a fault before the touch line is a finding about
+#   patch 0006 or about the fixture, never an edit here.
+
+lifetimes   1  RETURN 100001
+lifetimes   1  LEN    64
+lifetimes   2  FAULT  oob
+lifetimes   3  FAULT  oob
+lifetimes   4  FAULT  temporal
+lifetimes   5  FAULT  temporal
+lifetimes   6  FAULT  temporal
+lifetimes   7  FAULT  oob
+lifetimes   8  FAULT  oob
+lifetimes   9  FAULT  oob
+lifetimes  10  FAULT  temporal
+lifetimes  11  FAULT  temporal
+lifetimes  12  FAULT  temporal
+lifetimes  13  FAULT  temporal
+lifetimes  14  FAULT  temporal
+lifetimes  15  FAULT  temporal
+lifetimes  16  FAULT  temporal
+lifetimes  17  FAULT  temporal
+lifetimes  18  FAULT  temporal
+lifetimes  19  RETURN 130015b
+lifetimes  20  FAULT  oob
+lifetimes  21  FAULT  oob
