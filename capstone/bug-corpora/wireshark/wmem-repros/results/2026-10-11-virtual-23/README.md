@@ -1,6 +1,6 @@
 # wireshark/wmem-repros on virtual Capstone, 23 cases -- 2026-10-11
 
-The run of `../2026-10-11-virtual/` repeated with case 22 (`c702b44a01`, a double free into the
+The run of `../2026-10-11-virtual-22/` repeated with case 22 (`c702b44a01`, a double free into the
 block allocator), which reached this branch from dev. Source: commit `46e2a5d0dd84`
 (`nested/wireshark-sublet`), the same virtual SDK, QEMU and VM setup; hashes in each bundle's
 `inputs.json`. These are the bundles `corpus.json` names under `verdict_bundles`.

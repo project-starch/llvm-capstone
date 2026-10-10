@@ -81,13 +81,13 @@ SIGPROT = 34
 CASES = {
     0: (9,  '1 byte past calloc(1, 9), whose capability is 16 long -- ABSORBED', 'COMPLETE'),
     1: (64, '1 byte past malloc(64), and 64 is exactly a size class',            'FAULT'),
-    2: (64, '1 byte past a 64-byte realloc of the suffix freelist',              'FAULT'),
+    2: (16, '1 byte past the buggy 16-byte realloc of the suffix freelist (sized in bytes, not pointers)', 'FAULT'),
     3: (64, '1 byte past a 64-byte object-cache freelist array',                 'FAULT'),
     4: (64, '1 byte past a 64-byte stats buffer',                                'FAULT'),
     5: (16, '1 byte past a 16-byte connection write buffer',                     'FAULT'),
     6: (16, '1 byte past a 16-byte proxy key buffer',                            'FAULT'),
     7: (16, '1 byte past a 16-byte binary-protocol key',                         'FAULT'),
-    8: (16, '1 element (8 bytes) past a 16-byte slab page list',                 'FAULT'),
+    8: (32, '1 element past a 2-pointer slab page list (32 bytes on purecap, 16 on the host)', 'FAULT'),
 }
 # A case directory with no row here is one the run would be silent about. The
 # FFmpeg sibling had exactly that: a table of 4 while the corpus held 25.
@@ -144,6 +144,13 @@ python3 "$CAP/ports/common/host/cheribsd/run.py" "$OUT/run" \
   --abi-probe "$OUT/bin/cheribsd-abi-probe" \
   --runtime-revocation "$REVOCATION" --cases "$OUT/cases.json" --continue-on-failure
 rc=$?
+# A boot that died partway is not a reading: --continue-on-failure keeps a failing CASE from
+# stopping the run, but only run.py's ran_all_cases says every selected case actually executed.
+# Without this, a guest that died after the controls read as "suite exit 1, which is data".
+python3 - "$OUT/run/summary.json" <<'RANALL' || { echo "INFRA: the boot did not run every case (ran_all_cases is not true): not a reading" >&2; exit 75; }
+import json, sys
+sys.exit(0 if json.load(open(sys.argv[1])).get("ran_all_cases") is True else 1)
+RANALL
 
 # The suite's status cannot distinguish "an oracle did not hold" -- which is DATA
 # -- from "the boot produced nothing". The platform controls decide that.

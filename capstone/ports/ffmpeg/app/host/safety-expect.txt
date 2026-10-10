@@ -213,3 +213,10 @@ sublet  24  FAULT  temporal
 level0  25  RETURN 190015b
 shrink  25  RETURN 190015b
 sublet  25  FAULT  temporal
+
+# 2026-10-10, pre-registered before the run (bug-corpus whole-corpus audit, R5): fixtures 4 and 5 on
+# poolstock, run in the same VM boot as pool-repros' four cases, as the in-boot control that the
+# poolstock arm's heap really is the Sublet heap. On sublet they FAULT temporal (rows above) and on
+# level0 they RETURN, so a level0 heap under a poolstock label would read RETURN here.
+poolstock    4  FAULT  temporal
+poolstock    5  FAULT  temporal

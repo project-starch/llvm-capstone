@@ -174,6 +174,11 @@ passes silently.
 | `virtual-malloc` | virtual Capstone (`capstone/runtime/virtual`) | the case on the virtual profile, its nested allocator stock: the application runs under `capstone-vexec` with musl mallocng compiled for Capstone and run locally, which bounds each object exactly and retires its lifetime on free. Configuration `virtual-mallocng` in `tools/arms.json`; not the physical Sublet heap |
 | `virtual-pg-pools` | virtual Capstone | `virtual-malloc` with PostgreSQL's memory contexts protected by the memory-context port's patch 0003: every chunk a child lifetime of its block (`CDERIVE`), revoked by `pfree`/`repalloc` (`CREVOKE`). The server is built with `build-virtual.sh postgres`, `PGSU_NESTED=sublet` (configuration `virtual-mallocng-pg-pools`); the replay with `PG_SUBLET=ON` (`virtual-mallocng-replay-pools`) |
 | `virtual-nested-pools` | virtual Capstone | `virtual-malloc` with the program's nested allocator on its own pool port (SQLite: memsys5 on `sublet-3220000-memsys5.patch`, its pool lent linear by the virtual heap; wmem: the wmem port's patch 0001, every `block` and `block_fast` object a child lifetime of its block). The configuration in `tools/arms.json` names which |
+| `cheribsd-revocation` | stock CheriBSD purecap | the case under CheriBSD's malloc with heap revocation on (the platform default, or forced per process where the corpus says so), a revocation control faulting at its labelled load in the same boot. `NOT-REISSUED` is the plain-temporal reading for a freed chunk HELD in quarantine (the stale pointer followed, the chunk never reissued); column 1 of `tools/catch-tables.py --board` counts it as caught and shows it apart |
+| `native-fix-differential` | host | the buggy and the fixed build of the same reduction, run plainly: `TWO-SIDED` means the buggy run reproduces the defect and the fixed run does not. It shows the reduction is about the fix; it is not a protection mechanism and no table counts it as one |
+| `backing` | Capstone domain | FFmpeg pool corpora: revocation only at the pool's BACKING allocation (mode 1), so a buffer the pool never frees is never revoked. `n/a` where there is no block distinct from the object |
+| `sublet-port` | Capstone domain | FFmpeg pool corpora: `case.c` unchanged against the Sublet port of FFmpeg's own pools (app port, `FFAPP_POOL=sublet`); a fault counts only at an instruction the case's line table puts on a line that dereferences the stale pointer. Column 3 for pooled cases |
+| `host-asan` | host | the upstream function built with ASan at the pin: the oracle is the report (kind, access, region) it must produce. Liveness evidence and the row corpora's only arm, not a protection column |
 
 The four above are the glossary's system-allocator arms
 (`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the
@@ -213,7 +218,8 @@ allocator refusing the request.
 
 ## Verdicts: one judge, one original
 
-A corpus that declares `arm_configurations` and `verdict_bundles` (PostgreSQL's three, so far) keeps
+A corpus that declares `arm_configurations` and `verdict_bundles` (PostgreSQL's three, CPython's pymalloc-repros and
+SQLite's engine-repros as of 2026-10-10; none of FFmpeg's, tshark's or memcached's yet) keeps
 its results under one contract, implemented in `tools/verdicts.py` and tested in
 `tools/test_verdicts.py`:
 

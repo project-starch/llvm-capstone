@@ -67,6 +67,25 @@ CheriBSD runs each case **twice**: the plain purecap build gives the verdict, an
 `Assert()` and its `MEMORY_CONTEXT_CHECKING` chunk sentinel. Its runner is not yet on the shared
 judge.
 
+## Measured 2026-10-11
+
+On the Sublet platform (QEMU `af37cc32`, module `a1c6cb6b`, launcher `3975314a`), the
+servers built from c775cdf0, bundles in `results/2026-10-11-virtual`, every control as
+declared:
+
+| arm | CAUGHT | MISSED | NO-READING |
+|---|---|---|---|
+| `virtual-malloc` | 02, 03 | 01, 04-09 | -- |
+| `virtual-pg-pools` (patch 0003) | 01, 02, 03, 04, 06 | 05, 08 | 07, 09 (unattributed) |
+
+07 faults in `pg_popcount_optimized` during the CREATE INDEX whose picksplit the defect
+reads past a signature in, and 09 in `memcpy` in the pgcrypto session-key path; neither
+case has a control or a declared fault site, so the judge does not count them, and
+naming a site after the run would fit the instrument to the reading. The exact-request
+bounds of 93971f29 (`results/2026-10-11-exact`) also faulted 05, and faulted 07 in
+`nsphash_lookup`: PostgreSQL's word-at-a-time string hash reading the aligned word that
+holds a terminator, a false positive that `MAXALIGN` bounds removed.
+
 ## What these results do not say
 
 `results/matrix.tsv` and the `results/*-20261006-*`, `-20261008-*` and `-control-20261010-*`
