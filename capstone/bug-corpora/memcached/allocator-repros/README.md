@@ -126,10 +126,6 @@ referenced rather than copied. Where this corpus differs:
   CheriBSD with its own libc revocation, pages and objects from the platform's
   `malloc`, mode 0 only, with a positive control in the same boot. It is the
   APR and FFmpeg corpora's arm of that name.
-* **`poisoncap-spatial` / `poisoncap-protected`** are the contract's own arms
-  and are written: the port's PoisonCap adapter, one binary, the mode chosen at
-  run time. The spatial arm additionally requires the adapter to report
-  `sweeps=0`, because a control that swept would be a second protected arm.
 * **`live_in_pin` is `false`** for both cases with the proof beside it: each
   fix is an ancestor of the 1.6.45 tag (GitHub compare `status=behind`), so
   the shipped allocator is exercised by a pre-fix consumer shape the commit's
@@ -138,7 +134,7 @@ referenced rather than copied. Where this corpus differs:
   race; the fixture performs the interleaving the commit message describes in
   program order, and says so.
 
-## Four targets, one sequence
+## Three targets, one sequence
 
 Real: `cache.c` (and `slabs.c`, initialised and idle) from the 1.6.45 pin,
 unmodified but for the two patches the port
@@ -152,7 +148,6 @@ both targets; [`shared/corpus.h`](shared/corpus.h) is the seam.
     shared/build-cases.sh native <out>            then runners/run-native.sh
     shared/build-cases.sh capstone-domain <out>   then runners/capstone-domain/
     shared/build-cases.sh cheribsd <out>          then runners/cheribsd/
-    shared/build-cases.sh poisoncap <out>         then runners/poisoncap/
 
 The [domain runner's manual](runners/capstone-domain/README.md) has the
 commands, the two modes and the oracle. In short: `spatial` must complete,
@@ -161,8 +156,8 @@ the run and never hardcoded, and `--negative-control` must make every oracle
 say FAIL before a PASS is believed. The [CheriBSD manual](runners/cheribsd/README.md)
 runs the same cases against the platform's own `malloc` with libc revocation on
 or off, beside a control that shows the revocation can fire at the same shape.
-The [PoisonCap manual](runners/poisoncap/README.md) runs the pair the contract
-names, behind the platform's own instruction controls.
+The PoisonCap pair and its runner were removed on 2026-10-10; their records stay in
+`results/`.
 
 One thing the first run taught, now in `corpus.h`: in this emulator,
 arithmetic on a revoked alias faults at the arithmetic (`cincoffsetimm with an
@@ -181,7 +176,7 @@ second contract, and a checker that fails by design is noise.
 
 | what it reports | why |
 |---|---|
-| `cheribsd-revocation` | the contract's CheriBSD arms are the PoisonCap pair. This one has no adapter at all: it is the platform as shipped, and calling it `poisoncap-spatial` would claim an adapter that is not in the binary |
+| `cheribsd-revocation` | the contract names no stock CheriBSD arm. This one has no adapter at all: it is the platform as shipped |
 | `native-fix-differential` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
 | `case.c declares no PYC_CASE` | the macro is the corpus's seam to its allocator; here it is `MC_CASE`. The rule the checker means -- a case declares the number its directory carries, and the driver refuses a fixture that names another -- is implemented |
 

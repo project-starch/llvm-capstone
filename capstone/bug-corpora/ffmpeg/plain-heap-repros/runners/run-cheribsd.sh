@@ -43,7 +43,7 @@ mkdir -p "$OUT/bin"
 CFLAGS="--target=riscv64-unknown-freebsd13 -march=rv64imafdcxcheri -mabi=l64pc128d"
 CFLAGS="$CFLAGS -mno-relax -B$SDK/bin --sysroot=$SYSROOT -std=gnu11 -O0 -fuse-ld=lld"
 # Optional, for another arm on the same cases: CHERI_EXTRA_CFLAGS (e.g. -Xclang
-# -cheri-bounds=subobject-safe for cheribsd-subobject) and CHERI_REVOCATION=off (PoisonCap mode 0).
+# -cheri-bounds=subobject-safe for cheribsd-subobject) and CHERI_REVOCATION=off (a revocation-off reading).
 # Both default to this runner's own arm, so an unset environment builds and boots exactly as before.
 CFLAGS="$CFLAGS ${CHERI_EXTRA_CFLAGS:-}"
 REVOCATION=${CHERI_REVOCATION:-on}

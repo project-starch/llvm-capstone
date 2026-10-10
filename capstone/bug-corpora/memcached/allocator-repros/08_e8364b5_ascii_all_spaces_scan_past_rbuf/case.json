@@ -30,22 +30,6 @@
       "cause": 5,
       "note": "MEASURED 2026-10-09, results/20261009-qemu-capstone-case8/: cause 5, a 1-byte load at 0xe4a04000 against bounds [0xe4a00000, 0xe4a04000) -- the rbuf object exactly -- by the `lb` of `while (*ptr == ' ')` in mc_case_body (offset 0xb79c from the code capability base, ELF 0x1b79c, identical on both modes). mark(8) never ran. PREDICTION REFUTED ON LOCATION, HELD ON OUTCOME: it said 'faults at the labelled probe'; the bound stops the overrun one statement earlier, at the line upstream fixed. run-defects.py therefore reports this row FAIL -- it requires the fault at the probe after the marker -- and that FAIL is this reading, not a regression. Control: case 5 faulted at its published write probe on both modes in the same runner; negative control 2/2 fired."
     },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at mc_case_body+0x1e8 -- inside the defective scan, one statement before the labelled read probe, as on Capstone. The corpus runner scores this row FAIL because its oracles were written for the temporal cases; the fault line is the reading. The prediction held.",
-      "status": "measured",
-      "prediction": "PREDICTED and UNMEASURABLE HERE: faults, for the spatial arm's reason. PoisonCap is unavailable on this host -- checked, not assumed.",
-      "verdict": "CAUGHT"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "signal": 34,
-      "si_code": 1,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at mc_case_body+0x1e8 -- inside the defective scan, one statement before the labelled read probe, as on Capstone. The corpus runner scores this row FAIL because its oracles were written for the temporal cases; the fault line is the reading. The prediction held.",
-      "status": "measured",
-      "prediction": "PREDICTED and UNMEASURABLE HERE: faults, for the mode-0 reason.",
-      "verdict": "CAUGHT"
-    },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",

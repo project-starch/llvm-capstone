@@ -11,9 +11,6 @@
 #ifdef WM_CORPUS_HOSTED
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef WM_POISONCAP
-#include "poisoncap.h"
-#endif
 #endif
 
 wmem_allocator_t *wm_packet;
@@ -84,11 +81,6 @@ void wm_mark(void) {
 #ifdef WM_CORPUS_HOSTED
   printf("WM_DEFECT case=%u ready\n", wm_case_number);
   fflush(stdout);
-#ifdef WM_POISONCAP
-  /* The protected arm dies at the access that follows; the adapter's counters
-   * up to this point are the evidence of which hook fired, so print them now. */
-  wm_poisoncap_report();
-#endif
 #else
   extern void wm_defect_probe(void), wm_defect_write(void), wm_widen_probe(void);
   unsigned long code = 0xcf16000000000000UL | wm_case_number;
@@ -111,20 +103,17 @@ static void start(void) {
 #ifdef WM_CORPUS_HOSTED
 _Noreturn void wm_fail(unsigned code) { wm_give_up(code); }
 int main(int argc, char **argv) {
-  /* Strict input rejection is the runner's control. Without PoisonCap only
-   * the unprotected shape exists, so mode 0 is the only mode accepted. */
+  /* Strict input rejection is the runner's control. Hosted, only the
+   * unprotected shape exists, so mode 0 is the only mode accepted. */
   setvbuf(stdout, NULL, _IONBF, 0);
   if (argc < 2 || argc > 4 || (strcmp(argv[1], "0") && strcmp(argv[1], "1")))
     return 75;
-  /* `program 0 N buggy|fixed`: the native fix differential. Mode 0 only, and never with PoisonCap:
-   * it observes aliasing, which a protected arm exists to prevent. */
+  /* `program 0 N buggy|fixed`: the native fix differential. Mode 0 only: it observes
+   * aliasing, which a protected arm exists to prevent. */
   int differential = argc == 4;
   if (differential) {
     if (strcmp(argv[1], "0") || (strcmp(argv[3], "buggy") && strcmp(argv[3], "fixed")))
       return 75;
-#ifdef WM_POISONCAP
-    return 75;
-#endif
     wm_fixed = !strcmp(argv[3], "fixed");
     wm_observe = 1;
   }
@@ -134,16 +123,12 @@ int main(int argc, char **argv) {
     return 75;
   }
   unsigned mode = (unsigned)(argv[1][0] - '0');
-#ifdef WM_POISONCAP
-  wm_init_backing(NULL, NULL, mode);
-#else
   if (mode)
     return 75; /* no protected mode exists in this build */
   void *payload = aligned_alloc(16, WM_PAYLOAD_BYTES);
   if (!payload)
     return 75;
   wm_init_backing(NULL, payload, 0);
-#endif
   start();
   wm_case_run();
   printf("WM_DEFECT case=%u mode=%u completed\n", wm_case_number, mode);
@@ -158,9 +143,6 @@ int main(int argc, char **argv) {
       printf("VERDICT INCONCLUSIVE\n");
     return wm_fixed ? !!wm_defect : !wm_defect;
   }
-#ifdef WM_POISONCAP
-  wm_poisoncap_report();
-#endif
   return 0;
 }
 #else

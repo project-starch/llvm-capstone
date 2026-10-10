@@ -30,22 +30,6 @@
       "verdict": "CAUGHT",
       "measured": "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port/matrix.tsv (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **NOT CAUGHT**: the sequence completes. Adapter counters: WM_POISONCAP mode=0 sweeps=0 poison_bytes=0 epochs=1 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16.",
-      "prediction": "complete",
-      "status": "measured",
-      "verdict": "NOT CAUGHT"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 2 (PROT_CHERI_TAG) at wm_defect_probe (pc 0x104164). Adapter counters: WM_POISONCAP mode=1 sweeps=1 poison_bytes=2097152 epochs=1 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16.",
-      "signal": 34,
-      "si_code": 2,
-      "prediction": "SIGPROT at the labelled read probe",
-      "status": "measured",
-      "verdict": "CAUGHT"
-    },
     "native-detect": {
       "status": "measured",
       "verdict": "NOT CAUGHT",

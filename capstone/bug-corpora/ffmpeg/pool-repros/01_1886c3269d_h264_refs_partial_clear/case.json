@@ -51,28 +51,6 @@
       "guest_default": "preserved",
       "case": "pool-0-37"
     },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "case": "pool-0-37",
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **NOT CAUGHT** -- the sequence completes, exit 0. Platform controls in the same boot: poison-live exit 0; poison-read exit 162; poison-write exit 162; poison-reuse exit 0; poison-reused-read exit 162; cheribsd-abi exit 0; cheribsd-bounds exit 162.",
-      "role": "control for poisoncap-protected: same binary and guest, one difference",
-      "prediction": "the sequence completes, exit 0",
-      "status": "measured",
-      "verdict": "NOT CAUGHT"
-    },
-    "poisoncap-protected": {
-      "mode": 2,
-      "case": "pool-2-37",
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT** -- SIGPROT (exit 162) after the setup marker FF2_PROBE case=37 ready. Platform controls in the same boot: poison-live exit 0; poison-read exit 162; poison-write exit 162; poison-reuse exit 0; poison-reused-read exit 162; cheribsd-abi exit 0; cheribsd-bounds exit 162.",
-      "exit": 162,
-      "note": "CheriBSD reports a process status, not a fault PC, so the marker is what separates this from an arbitrary crash: it is printed only once reuse at the same address has been checked",
-      "signal": 34,
-      "si_code": null,
-      "si_code_note": "not captured: the runner records a process exit status and 162 is 128+34, so the signal is derived, but si_code is not recoverable from an exit status and is not guessed here",
-      "prediction": "SIGPROT after the setup marker FF2_PROBE case=37 ready",
-      "status": "measured",
-      "verdict": "CAUGHT"
-    },
     "native-detect": {
       "status": "measured",
       "requires": "the port's payload arena is one allocation, so ASan's silence here would measure the fixture rather than FFmpeg",
@@ -101,8 +79,7 @@
   "comparison": [
     "Capstone (spatial)",
     "Sublet",
-    "CHERI default (stock CheriBSD, revoker on) -- PREDICTED, NOT MEASURED",
-    "PoisonCap (mode 2)"
+    "CHERI default (stock CheriBSD, revoker on) -- PREDICTED, NOT MEASURED"
   ],
   "nested": true,
   "nested_why": "AVBufferPool recycles the object; the platform allocator saw only the pool's block -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED."

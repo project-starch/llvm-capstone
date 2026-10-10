@@ -33,24 +33,6 @@
       "verdict": "CAUGHT",
       "measured": "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects/result-lines.txt:9 (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
     },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor, and the adapter's own line reports sweeps=0",
-      "role": "control for poisoncap-protected: the same binary in the same boot, one difference. Bounded leases and no invalidation, so the freed object stays addressable and the stale access succeeds -- the defect as upstream ships it. sweeps=0 is part of the oracle: a control that swept would be a second protected arm under the control's name",
-      "status": "measured",
-      "verdict": "NOT CAUGHT",
-      "measured": "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-poisoncap/README.md:12 (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "oracle": "fault at the labelled read probe mc_defect_read, observed from outside: SIGPROT with si_code PROT_CHERI_TAG, and the faulting address and the PC both equal to the address the supervisor resolved from the child's ELF and memory map",
-      "signal": 34,
-      "si_code": 2,
-      "note": "si_code separates the platform's two refusals and only one of them is this arm: 3 is an access to a granule that is poisoned but not yet swept, with the capability still tagged; 2 is an access through an alias the sweep revoked. The platform's own controls produce both in the same boot",
-      "status": "measured",
-      "verdict": "CAUGHT",
-      "measured": "capstone/bug-corpora/memcached/allocator-repros/results/2026-10-09-poisoncap/README.md:13 (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
-    },
     "native-detect": {
       "status": "measured",
       "requires": "the buffer never reaches free(), so ASan has no event at the push; it would see the reuse only as an ordinary live object",

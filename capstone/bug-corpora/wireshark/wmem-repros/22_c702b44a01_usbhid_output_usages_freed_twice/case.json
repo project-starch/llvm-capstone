@@ -46,22 +46,6 @@
       "verdict": "NOT CAUGHT",
       "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
     },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **NOT CAUGHT** -- mode 0 completes. Predicted before the run: complete: mode 0 poisons nothing; wm_widen's load succeeds",
-      "status": "measured",
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "signal": 34,
-      "si_code": 2,
-      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **CAUGHT** -- SIGPROT si_code 2 at pc 0x104e6e = wm_widen (poisoncap.c:173, its load through the handed-back pointer), called from wmem_block_free (wmem_allocator_block.c:1272): a declared fault site; the first free had poisoned and swept the chunk (released_chunks=2). Predicted before the run: SIGPROT in wm_widen (a declared fault site): the first free poisoned and swept the chunk, so the second free's handed-back capability is revoked when wm_widen loads through it",
-      "status": "measured",
-      "verdict": "CAUGHT",
-      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
-    },
     "native-detect": {
       "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **NOT CAUGHT** -- no ASan report on the buggy arm, which reproduced the defect; both ASan controls reported in the same run. Predicted before the run: no ASan report: both frees are wmem_block_free inside a block one malloc returned; ASan sees neither",
       "status": "measured",

@@ -51,7 +51,7 @@ void wm_mark(void);
 _Noreturn void wm_give_up(unsigned long code);
 
 /* THE NATIVE FIX DIFFERENTIAL (added 2026-10-09). Hosted builds only: `program 0 N buggy|fixed`.
- * Every other invocation -- the Capstone domain, CheriBSD, PoisonCap, and the hosted `program
+ * Every other invocation -- the Capstone domain, CheriBSD, and the hosted `program
  * mode N` the existing runners use -- leaves all three flags 0, so every allocation, store and the
  * labelled access those arms measured are unchanged; the only addition on their path is that the
  * probe's result is kept (WM_READ/WM_WRITE), after the access.

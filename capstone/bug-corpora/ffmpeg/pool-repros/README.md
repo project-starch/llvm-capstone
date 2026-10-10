@@ -98,23 +98,13 @@ reads its exit status, the launcher's fault record and the QEMU log over that ru
 predictions re-run on this transport, 36/36 as registered, are in
 `ports/common/application/results/20260929-dev-merge.json`).
 
-and CheriBSD with PoisonCap, where the same three cases are registered as
-`pool-<mode>-<case>`:
-
-    python3 ../../../ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/run.py \
-      <build> <out> --stage pool --disable-default-revocation \
-      --case poison-live --case poison-read --case poison-write \
-      --case poison-reuse --case poison-reused-read \
-      --case pool-0-36 --case pool-2-36 --case pool-0-37 --case pool-2-37 \
-      --case pool-0-38 --case pool-2-38 --sdk ... --rootfs ... --image ...
-
-Keep the five `poison-*` controls in that selection. Without them the run shows
-only that mode 2 ends differently from mode 0, which is a differential and not
-evidence that poisoning was active; with them the platform is demonstrated
-independently of these cases. `selection.json` records `complete_suite: false`
-for any subset, so a partial run cannot later read as a full one.
+A third protected arm, CheriBSD with PoisonCap, ran until 2026-10-10, when its runner and
+backend were removed; its readings stay in the table below and in `results/`.
 
 ## Four systems
+
+This is the measured record. The PoisonCap row and its mode-0 control are history: the
+backend was removed on 2026-10-10.
 
 | system | what it acts on | af_join | h264_refs | vidstab |
 |---|---|:--:|:--:|:--:|
@@ -230,10 +220,6 @@ pymalloc corpus's `PYC`. What each one means is unchanged.
 |---|---|
 | `native-fix-differential` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
 | `cheribsd-revocation` | stock CheriBSD with `libc` revocation enabled: a fourth system. **Declared, NOT measured** — this line previously read "the arm that makes the blindness claim a measurement", which was retracted on 2026-10-06; see the retraction note above |
-
-`poisoncap-protected` carries `si_code: null` with a note. The runner records a
-process exit status; 162 is 128+34 so the signal is derived, but `si_code` is not
-recoverable from an exit status and is not guessed.
 
 Extending the checker to know these is a change to the pymalloc corpus and
 belongs in a conversation with it, not a unilateral edit from here.
