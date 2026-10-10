@@ -16,10 +16,16 @@
       "oracle": "capability fault, cause 2"
     },
     "sublet-gc": {
-      "oracle": "capability fault, cause 2"
+      "oracle": "capability fault, cause 2",
+      "verdict": "NO-READING",
+      "verdict_from": "results/20261006/matrix.tsv cb51fce92 sublet-gc: fault c2",
+      "verdict_note": "fault c2: not a capability fault"
     },
     "cheribsd-revocation": {
-      "oracle": "abort: the C runtime stops it (not a capability fault)"
+      "oracle": "abort: the C runtime stops it (not a capability fault)",
+      "verdict": "NO-READING",
+      "verdict_from": "results/20261006-cheribsd/matrix.tsv cb51fce92: abort rc=134",
+      "verdict_note": "abort (rc 134): no mechanism report"
     }
   },
   "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",

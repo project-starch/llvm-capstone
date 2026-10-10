@@ -13,7 +13,8 @@
     "spatial",
     "sublet",
     "poisoncap-spatial",
-    "poisoncap-protected"
+    "poisoncap-protected",
+    "cheribsd-revocation"
   ],
   "arm_keys": {
     "sublet": [
@@ -34,7 +35,8 @@
   "inventory": "capstone/docs/ref/cpython-pymalloc-defects.md",
   "evidence": [
     "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20",
-    "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control"
+    "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control",
+    "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd"
   ],
   "advisories": [],
   "shape_table": true,

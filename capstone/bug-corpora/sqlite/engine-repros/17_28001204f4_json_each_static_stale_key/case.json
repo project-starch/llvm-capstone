@@ -15,10 +15,14 @@
       "oracle": "completes"
     },
     "sublet": {
-      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b801c"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b801c",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 17 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "MISSED",
+      "verdict_from": "results/matrix.tsv case 17 cheribsd-revocation: not-detected"
     }
   },
   "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b801c; cheribsd-revocation run 2026-10-04/05: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=14)"

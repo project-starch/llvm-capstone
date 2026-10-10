@@ -15,10 +15,14 @@
       "oracle": "completes"
     },
     "sublet": {
-      "oracle": "capability fault delivered, cause 5 load out of bounds (spatial) pc=0x1021ba380"
+      "oracle": "capability fault delivered, cause 5 load out of bounds (spatial) pc=0x1021ba380",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 25 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "MISSED",
+      "verdict_from": "results/matrix.tsv case 25 cheribsd-revocation: not-detected"
     }
   },
   "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 5 load out of bounds (spatial) pc=0x1021ba380; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=5, witnesses=1)"

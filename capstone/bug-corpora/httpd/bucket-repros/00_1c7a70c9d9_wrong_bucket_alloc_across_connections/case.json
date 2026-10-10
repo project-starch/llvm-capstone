@@ -25,13 +25,17 @@
       "measured": "2026-09-22 through the port's CheriBSD build: completed, exit 0; the run's revocation-control faulted at apr_defect_read (signal 34, code 2) in the same guest. 2026-09-21, census build with free() interposed: completed, freed_to_malloc=0",
       "control": "the run's cheribsd-abi probe prints CHERI_ABI pointer_bytes=16 runtime_revocation=1 from CheriBSD's own malloc_revoke_enabled(), in the same guest, immediately before these cases",
       "guest_default": "preserved -- nothing is disabled to make room for this measurement",
-      "runner": "runners/cheribsd/run-defects.py, built by shared/build-cases.sh cheribsd"
+      "runner": "runners/cheribsd/run-defects.py, built by shared/build-cases.sh cheribsd",
+      "verdict": "MISSED",
+      "verdict_from": "results/20260922-cheribsd/matrix.tsv case 0 revocation=on: completed, exit=0, same-boot control 'tag fault at apr_defect_read' passed"
     },
     "spatial": {
       "oracle": "complete: the stale read returns whatever the storage now holds; a pool node or a bucket piece keeps its alias across the free lists, so nothing is revoked"
     },
     "sublet": {
-      "oracle": "fault at the labelled read probe (cause 24, revoked authority): the backend allocator's blocks went back to APR at its destroy, the pool port revoked each block, and the frontend's read through the bucket's alias finds it dead"
+      "oracle": "fault at the labelled read probe (cause 24, revoked authority): the backend allocator's blocks went back to APR at its destroy, the pool port revoked each block, and the frontend's read through the bucket's alias finds it dead",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/20260922-qemu/matrix.tsv case 0 mode sublet: passed=True cause=24 pc=0x10186a5f8 expected_pc=0x10186a5f8"
     },
     "poisoncap-spatial": {
       "mode": 0,

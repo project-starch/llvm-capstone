@@ -15,10 +15,14 @@
       "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b3428"
     },
     "sublet": {
-      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b45e8"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b45e8",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 19 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 19 cheribsd-revocation: detected"
     }
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b3428; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b45e8; cheribsd-revocation run 2026-10-04/05: no verdict: rtreecursor nested delete rc=0"

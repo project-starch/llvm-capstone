@@ -16,10 +16,14 @@
     },
     "sublet": {
       "oracle": "fault at cause 24, untagged dereference, pc=0x800239e4 -- detected (2026-10-05). Runnable at all only after the case was ported from the legacy standalone domain onto REPRO322_MAIN: the old entry point never captured the Sublet grant, so memsys5Init faulted before the case ran.",
-      "run": "2026-10-05"
+      "run": "2026-10-05",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 3 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "MISSED",
+      "verdict_from": "results/matrix.tsv case 3 cheribsd-revocation: not-detected"
     }
   },
   "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"

@@ -18,15 +18,17 @@
     },
     "sublet": {
       "oracle": "the three-byte over-read past a five-byte palloc chunk is reported, or the sequence completes and the arm did not see it",
-      "verdict": "silent",
+      "verdict": "MISSED",
       "evidence": "completed with no directive and no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict_from": "results/matrix.tsv sublet: silent"
     },
     "cheribsd-revocation": {
       "oracle": "the three-byte over-read past a five-byte palloc chunk is reported, or the sequence completes and the arm did not see it",
-      "verdict": "silent",
+      "verdict": "MISSED",
       "evidence": "ran to the prompt with no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict_from": "results/matrix.tsv cheribsd-revocation: silent"
     }
   },
   "status": "measured on all three arms 2026-10-06: spatial=silent, sublet=silent, cheribsd-revocation=silent",

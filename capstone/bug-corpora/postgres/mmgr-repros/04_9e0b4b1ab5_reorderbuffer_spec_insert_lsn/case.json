@@ -15,7 +15,9 @@
       "oracle": "complete"
     },
     "sublet": {
-      "oracle": "fault at the labelled read probe"
+      "oracle": "fault at the labelled read probe",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/20260918-qemu/matrix.tsv case 4: sublet=PASS:fault cause=24 fault_pc=0x101a147d4 probe_pc=0x101a147d4"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -33,7 +35,9 @@
     },
     "cheribsd-revocation": {
       "oracle": "completes with no capability fault; the case's own PG_DEFECT probe prints twice, so the defective sequence provably executed -- REACHED-SILENT (2026-10-05, plain purecap, revocation=1 every_free=0). A use-after-free between two palloc chunks never crosses a malloc boundary, so there is nothing for a malloc-granular revoker to reclaim.",
-      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts with PG_POISONCAP off"
+      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts with PG_POISONCAP off",
+      "verdict": "MISSED",
+      "verdict_from": "results/20261008-cheribsd/result-lines.txt mmgr-04: PG_DEFECT case=4 ready, then mode=0 completed; quarantine.tsv row 4"
     }
   },
   "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case.",
