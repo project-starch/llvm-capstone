@@ -36,12 +36,14 @@ each variant as a mirror of the manager files with its ordered patches applied:
 | 0003 memory-contexts-sublet-lifetimes | the Sublet protection: every chunk a child lifetime of its block (`CDERIVE`), revoked by `pfree` and `repalloc` (`CREVOKE`) | | x |
 
 The capability platforms build `spatial`, or `sublet` with `PG_SUBLET=ON` (capstone-application
-only); native builds the pristine managers. Patch 0003 works at the dispatch: `mcxt.c` issues a
-child bounded to the request on the way out of every allocation entry and revokes it on the way
-back in, handing the context method the allocator's own pointer at the same address. The context
-types only report their blocks to `sublet.c` (add, forget before `free`, renew on a reset that
-keeps the block), because `pfree` has nothing but the pointer and a bounded pointer cannot reach
-the chunk header in front of it. Its header states the reasons in full.
+only); native builds the pristine managers. Patch 0003 needs no table and no
+new file: every block keeps a lifetime and a generation in its header, the
+managers issue each chunk at their return sites as a child of the generation
+covering the chunk header and the request, and store the parent in the header.
+`pfree` reads the parent through the caller's own pointer, revokes the chunk,
+and hands the context method a pointer derived from the parent. Its header
+states the reasons and the one thing it gives up: a live pointer can load its
+block's generation from the header in front of it.
 
 The patches require PostgreSQL's release-layout configuration; `MEMORY_CONTEXT_CHECKING` and
 `CLOBBER_FREED_MEMORY` are not supported.
