@@ -8,7 +8,7 @@ Depends-On: postgresql-17.0-0001-allocset-capstone-size-classes.patch
 Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
 
 Every chunk a memory context hands out is a child lifetime of its block,
-bounded to its header and the request; pfree and repalloc revoke it, so
+bounded to its header and the MAXALIGNed request; pfree and repalloc revoke it, so
 every copy of the caller's pointer dies with it. The 17.0 and 17.5
 manager sources are identical, so the same patch serves the replay and
 the server.
@@ -21,8 +21,11 @@ the server.
 # Every block carries two lifetimes in its header: life, derived from the
 # malloc'd object, and the generation below it. Where a manager returns a
 # chunk, MemoryChunkIssue derives the caller's pointer from the generation,
-# covering the chunk header and the request, and stores the generation in
-# the header. So pfree needs nothing but the pointer: it reads the parent
+# covering the chunk header and MAXALIGN(size), and stores the generation in
+# the header. MAXALIGN, PostgreSQL's allocation unit, and not the exact
+# request: its own string hashing (fasthash_accum_cstring_aligned) reads the
+# whole aligned word that holds a terminator, and exact bounds made that read
+# fault in the search-path cache on the first run of this design. So pfree needs nothing but the pointer: it reads the parent
 # from the header, revokes the chunk, and hands the context method a pointer
 # at the same address derived from the parent. repalloc does the same and
 # issues the result again when the manager kept the chunk in place.
@@ -30,8 +33,8 @@ the server.
 # Freeing a block revokes the system allocator's lifetime of it, and every
 # chunk lies below. A reset that keeps a block (AllocSet, Generation, Bump
 # keepers) revokes its generation and derives a new one. Bump chunks have no
-# header and no pfree; bump derives them itself, and gives a zero-byte
-# request one MAXALIGN unit, because CDERIVE takes no empty child.
+# header and no pfree; bump derives them itself, at its chunk size, and gives
+# a zero-byte request one MAXALIGN unit, because CDERIVE takes no empty child.
 #
 # The caller's pointer can read the header in front of its chunk, as it can
 # without the patch, and so can load the generation: block-wide bounds with
@@ -173,7 +176,7 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  #else
 -	return (void *) (((char *) block) + Bump_BLOCKHDRSZ);
 +	return SubletDerive(block->sublet.generation,
-+						((char *) block) + Bump_BLOCKHDRSZ, Max(size, 1));
++						((char *) block) + Bump_BLOCKHDRSZ, chunk_size);
  #endif
  }
  
@@ -182,7 +185,7 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  	return MemoryChunkGetPointer(chunk);
  #else
 -	return ptr;
-+	return SubletDerive(block->sublet.generation, ptr, Max(size, 1));
++	return SubletDerive(block->sublet.generation, ptr, chunk_size);
  #endif							/* MEMORY_CONTEXT_CHECKING */
  }
  
@@ -424,7 +427,7 @@ diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memuti
  	uint64		capstone_pad;
  	/* bitfield for storing details about the chunk */
  	uint64		hdrmask;		/* must be last */
-@@ -263,4 +271,48 @@ MemoryChunkGetBlock(MemoryChunk *chunk)
+@@ -263,4 +271,53 @@ MemoryChunkGetBlock(MemoryChunk *chunk)
  #undef HdrMaskBlockOffset
  #undef HdrMaskCheckMagic
  
@@ -463,12 +466,17 @@ diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memuti
 +							   __builtin_capstone_cap_get_base(parent), size);
 +}
 +
-+/* The caller's pointer to chunk: its header and size bytes, a child of parent. */
++/*
++ * The caller's pointer to chunk: its header and MAXALIGN(size) bytes, a child
++ * of parent.  MAXALIGN and not size: PostgreSQL's own code reads whole
++ * aligned words past a string's terminator (fasthash_accum_cstring_aligned).
++ */
 +static inline void *
 +MemoryChunkIssue(MemoryChunk *chunk, void *parent, Size size)
 +{
 +	chunk->sublet_parent = parent;
-+	return (char *) SubletDerive(parent, chunk, sizeof(MemoryChunk) + size) +
++	return (char *) SubletDerive(parent, chunk,
++								 sizeof(MemoryChunk) + MAXALIGN(size)) +
 +		sizeof(MemoryChunk);
 +}
 +
