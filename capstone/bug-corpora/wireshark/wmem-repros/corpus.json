@@ -6,7 +6,7 @@
     "version": "4.6.8",
     "port": "capstone/ports/wireshark/wmem"
   },
-  "cases": 22,
+  "cases": 23,
   "case_schema": "case-json",
   "case_macro": "WM",
   "required_arms": [
@@ -19,7 +19,7 @@
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
     "true": 3,
-    "false": 19
+    "false": 20
   },
   "runners": [
     "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py",

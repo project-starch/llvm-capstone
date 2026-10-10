@@ -1,0 +1,49 @@
+{
+  "case": 22,
+  "upstream_fix": "c702b44a01",
+  "title": "USB HID report descriptor: two OUTPUT fields share one usages array, and the error path frees it twice into the file scope's block allocator",
+  "consumer": "epan/dissectors/packet-usb-hid.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: v4.6.8's parse_report_descriptor (packet-usb-hid.c:3734) starts a fresh usages array after the OUTPUT append (:3790, 'field.usages = wmem_array_new(scope, sizeof(uint32_t));'), the fix's line; c702b44a01^ appends at :3347 and starts none (:3341-3350). A fix reversal, as cases 16 and 17 are. The pre-fix shape is quoted from c702b44a01^ in PROVENANCE.md.",
+  "object": "an OUTPUT field's usages array header, a wmem_array_t in the file scope",
+  "lifetime_ender": "the error path's wmem_free of each field's usages (:3464-3470): the shared array's chunk is freed once, then again -- a double free into the file scope's BLOCK allocator, whose recycler list lives in the freed chunks",
+  "shape": "double free into the block allocator's free list",
+  "allocator_layer": "block -- wmem_file_scope() (parse_report_descriptor, :3301); the free list is the recycler written over freed chunks",
+  "fidelity": "model-consumer, real allocator: each wmem_array_new is reduced to its two allocations (the header, sized as wmem_array_t's members, and a one-element buffer); the descriptor is INPUT, OUTPUT, OUTPUT, then a malformed item, in that order. The defective access is the second wmem_free itself.",
+  "distinguishing": "the corpus's first double free, and its first row whose defective access is a call INTO the allocator: a protected arm must stop at the allocator's handback (wm_widen_probe / wm_widen), not at wm_defect_probe. Natively the double free does not alias two allocations: re-adding a chunk already on BLOCK's circular recycler relinks it to itself, and the INPUT field's freed array drops off the list -- never reissued, where the fixed sequence reissues it at once. That lost chunk is what the native fix differential's DEFECT-REPRODUCED means here; the driver's generic wording ('reached storage outside its object') does not describe it.",
+  "fault_sites": [
+    "wmem_block_sublet_free",
+    "wmem_block_sublet_release"
+  ],
+  "fault_sites_why": "The stale access is the second wmem_free, so there is no read probe. Under the wmem port's patch 0001 the first free revoked the chunk's child lifetime; the second free goes through wmem_block_sublet_free, which finds the block by address and calls wmem_block_sublet_release, whose CREVOKE of the already-revoked child faults (stale operand). The pc lies in wmem_block_sublet_release, or in wmem_block_sublet_free where the compiler inlines it. Declared from source on 2026-10-11, before the first run of this design; the chunk port's earlier declaration (wm_widen, wm_widen_probe) named functions patch 0001 removed.",
+  "status": "measured natively (native-detect, native-fix-differential) and on stock CheriBSD (cheribsd-revocation); on virtual Capstone (virtual-malloc, virtual-nested-pools; each arm's verdict_from names its bundle). The Capstone domain arms (spatial, sublet, sublet-chunks, sublet-malloc) and PoisonCap left the case on 2026-10-11 with their builds; their bundles stay in results/.",
+  "nested": true,
+  "nested_why": "wmem's BLOCK allocator carved the array header out of a block it took from g_malloc, so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED.",
+  "arms": {
+    "native-detect": {
+      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **NOT CAUGHT** -- no ASan report on the buggy arm, which reproduced the defect; both ASan controls reported in the same run. Predicted before the run: no ASan report: both frees are wmem_block_free inside a block one malloc returned; ASan sees neither",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on, wmem on libc (WM_LIBC_SYSTEM, WM_CHUNKS=OFF)",
+      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **NOT CAUGHT** -- stock CheriBSD, revocation on, wmem on libc: the buggy arm reproduced the defect and exited 0 (both frees stay inside wmem's BLOCK allocator; libc never sees one), the fixed arm VERDICT FIXED; the revocation control faulted at its label in the same boot. Predicted before the run: complete (VERDICT DEFECT-REPRODUCED): the double free never reaches libc free(); the quarantine sees nothing",
+      "status": "measured",
+      "verdict": "NOT CAUGHT",
+      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
+    },
+    "native-fix-differential": {
+      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **TWO-SIDED** -- buggy VERDICT DEFECT-REPRODUCED (the INPUT field's freed array never reissued: the free list lost it), fixed VERDICT FIXED; both exit 0. Predicted before the run: two-sided: the buggy sequence loses the INPUT field's freed array from the free list (VERDICT DEFECT-REPRODUCED), the fixed one reissues it (VERDICT FIXED)",
+      "status": "measured",
+      "verdict": "TWO-SIDED",
+      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, wmem as released on virtual mallocng (tools/arms.json virtual-wmem): a fault at the labelled probe or a declared fault site, or the case completes and this arm did not see it"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc"
+    }
+  }
+}
