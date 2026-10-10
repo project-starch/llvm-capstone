@@ -461,17 +461,32 @@ def fixture_record(fixture, preinstalled):
     writes that beside the fixture as <fixture>.provenance.json, so it is carried here when it
     exists and its absence is recorded rather than passed over.
     """
-    prov = Path(str(fixture) + ".provenance.json")
-    if not prov.is_file():
-        prov = Path(fixture).with_suffix(".provenance.json")
     record = {"cluster_tree_sha256": tree_sha(fixture), "preinstalled": sorted(preinstalled)}
-    if prov.is_file():
-        record["provenance"] = json.loads(prov.read_text())
-        record["provenance_from"] = str(prov)
-    else:
-        record["provenance"] = None
-        record["provenance_note"] = ("no provenance file beside the fixture, so which image "
-                                     "created its extensions is not recorded in this run")
+    # make-fixture.py writes <fixture>.provenance.json. A fixture built before it did leaves only
+    # its run record, <fixture>.json, which carries the builder image's sha256 under image_sha256
+    # -- the same fact under another name. Either is taken, and the record says which file it came
+    # from, because "which build created these extensions" is the question and not the filename.
+    for candidate in (Path(str(fixture) + ".provenance.json"),
+                      Path(fixture).with_suffix(".provenance.json"),
+                      Path(str(fixture) + ".json"),
+                      Path(fixture).with_suffix(".json")):
+        if not candidate.is_file():
+            continue
+        try:
+            loaded = json.loads(candidate.read_text())
+        except json.JSONDecodeError:
+            continue
+        digest = loaded.get("builder_image_sha256") or loaded.get("image_sha256")
+        if not digest:
+            continue
+        record["provenance"] = loaded
+        record["provenance_from"] = str(candidate)
+        record["builder_image_sha256"] = digest
+        return record
+    record["provenance"] = None
+    record["provenance_note"] = ("no provenance beside the fixture and no builder image in its "
+                                 "run record, so which image created its extensions is not "
+                                 "recorded in this run")
     return record
 
 
