@@ -92,7 +92,7 @@
     },
     "virtual-sqlite-memsys5-pools": {
       "target": "capstone-virtual",
-      "summary": "the same static arena with memsys5 on its Sublet port (build-virtual.py --sublet, ports/sqlite/sublet/sublet-3220000-memsys5.patch): every block goes out as a child lifetime of the pool (CDERIVE), bounded to the block, and sqlite3_free revokes it (CREVOKE); the lookaside's slots the same, revoked by sqlite3DbFree. The page cache is not covered",
+      "summary": "the same static arena with memsys5 on its Sublet port (build-virtual.py --sublet, ports/sqlite/sublet/sublet-3220000-memsys5.patch): every block goes out as a child lifetime of the pool (CDERIVE), bounded to its request rounded to 8 bytes, and sqlite3_free revokes it (CREVOKE); the lookaside's slots the same, revoked by sqlite3DbFree. The page cache is not covered",
       "mechanism": "per-block bounds and revocation in memsys5 (CDERIVE/CREVOKE)",
       "controls": {
         "uaf-mem5": "fault",
