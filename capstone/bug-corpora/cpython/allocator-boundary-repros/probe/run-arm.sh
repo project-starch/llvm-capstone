@@ -22,7 +22,21 @@ KIT=${KIT:-${CAPSTONE_TMP_ROOT:-/tmp/capstone}/cpython-arms}
 # directory is fixed by the VM state and the domain reads it directly.
 SHARE=${SHARE:-$HOME/arms/cpython/shared/domain/share}
 ST=${ST:-$HOME/arms/cpython/shared/domain/vm-state}
-arm=${1:?usage: run-arm.sh <arm> [out]}
+# --negative-control stages a trigger that reaches no defect, runs every selected
+# case anyway, and exits 0 only if NONE of them is scored DETECTED: a detection
+# with no defect executed is a fault that does not depend on the defect.
+#
+# Detect BEFORE filtering. The first version of this scanned "$@" further down,
+# after the flag had already been removed, so NEGCTL was always 0 and the
+# "control" ran the real triggers -- it reported a detection on case 01 and
+# looked like the base arm faulting without a defect.
+NEGCTL=0
+args=()
+for a in "$@"; do
+  if [ "$a" = --negative-control ]; then NEGCTL=1; else args+=("$a"); fi
+done
+set -- "${args[@]+"${args[@]}"}"
+arm=${1:?usage: run-arm.sh <arm> [out] [--negative-control]}
 STAMP=$(date -u +%Y%m%d-%H%M%S)
 OUT=${2:-$KIT/results/$arm-$STAMP}
 export PYTHONPATH=$REPO/capstone/runtime/host
@@ -81,6 +95,7 @@ case $CAP in
   *) echo "CAP must be base, hicap, mod, mod96 or modL, not '$CAP'" >&2; exit 2 ;;
 esac
 [ "$CAP" = base ] || OUT=${2:-$KIT/results/$arm-$CAP-$STAMP}
+[ "$NEGCTL" = 0 ] || OUT=${2:-$KIT/results/$arm-negctl-$STAMP}
 
 # ---- the arm must be one the corpus declares -----------------------------
 DECL=$(python3 -c "import json,sys; print(' '.join(json.load(open(sys.argv[1]))['required_arms']))" \
@@ -182,7 +197,12 @@ printf 'positive_control\t%s\ndiscipline\t%s\n' "$pc" "${pcmode:-none}" >> "$OUT
 # watchdog must not silently re-measure cases that already produced a verdict
 # under the stricter setting, so the subset is explicit and recorded.
 ONLY=${ONLY:-}
-printf 'case\tarm\tverdict\trc\tcause\tlast\n' > "$OUT/verdicts.tsv"
+in_subset() {  # $1 = case directory name
+  [ -z "$ONLY" ] && return 0
+  case ",$ONLY," in *",${1%%_*},"*) return 0 ;; *) return 1 ;; esac
+}
+printf 'case\tarm\tverdict\trc\tcause\tlast\tpc\taddress\tuntagged_value\n' \
+  > "$OUT/verdicts.tsv"
 printf 'case_timeout\t%s\nonly\t%s\n' "$CASE_TIMEOUT" "${ONLY:-all}" >> "$OUT/run.meta"
 n=0
 for d in "$CORPUS"/[0-9][0-9]_*/; do
@@ -199,8 +219,28 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   # staging step that copied only two files left those cases dying at import
   # while the row read as the arm staying quiet.
   cp "$d"/*.py "$stage/" 2>/dev/null
+  if [ "$NEGCTL" = 1 ] && [ -f "$d/negative_control.py" ]; then
+    # The strong control: the case's own allocation and free traffic with only
+    # the offending access made valid. This is the one that qualifies a
+    # detection -- the stub below only shows the arm does not fault on any
+    # input, not that a near-miss is safe.
+    cp "$d/negative_control.py" "$stage/trigger.py"
+    NCKIND=variant
+  elif [ "$NEGCTL" = 1 ]; then
+    NCKIND=stub
+    # Keep the case's other files -- an import failure would be a different
+    # experiment -- and replace only the trigger, so the interpreter starts,
+    # loads, and exits without performing the defect.
+    printf '%s\n' \
+      'import sys' \
+      '# negative control: the real trigger is not run. Nothing here reaches a' \
+      '# defect, so a DETECTED verdict would be a fault that does not depend on' \
+      '# one.' \
+      'print("NEGATIVE-CONTROL no defect performed")' \
+      'sys.exit(0)' > "$stage/trigger.py"
+  fi
   [ -f "$stage/trigger.py" ] || {
-    printf '%s\t%s\tSTAGING-FAILED\t\t\t\n' "$c" "$arm" >> "$OUT/verdicts.tsv"
+    printf '%s\t%s\tSTAGING-FAILED\t\t\t\t\t\t\n' "$c" "$arm" >> "$OUT/verdicts.tsv"
     printf '  %-56s STAGING-FAILED\n' "${c:0:56}"; continue; }
   before=$(wc -l < "$ST/qemu.log" 2>/dev/null || echo 0)
   out=$(cd "$stage" && timeout "$CASE_TIMEOUT" python3 -m capstone_vm --state "$ST" run \
@@ -208,6 +248,24 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
           "/mnt/host/$GUESTDOM" trigger.py 2>&1); rc=$?
   printf '%s\n' "$out" > "$OUT/$c.log"
   tailq=$(tail -n +$((before+1)) "$ST/qemu.log" 2>/dev/null)
+  # Keep the slice. qemu.log is opened "wb" on every restart, so whatever the
+  # emulator printed about a fault is gone at the next boot unless the run
+  # keeps it. That is how the operand value below came to be produced on every
+  # run and retained on none.
+  [ -n "$tailq" ] && printf '%s\n' "$tailq" > "$OUT/$c.qemu.log"
+  # pc is reported for every cause and was being dropped. address is reported
+  # for the bounds causes only: RISCV_EXCP_UNEXP_OP_TYPE is raised by
+  # riscv_raise_exception(env, ..., GETPC()), which takes no address and sets
+  # no badaddr, so a cause-24 line carries address=0x0 as an unset field and
+  # not as the faulting value. Recording it anyway is what makes that legible.
+  fpc=$(printf '%s' "$out$tailq" | grep -oE "pc ?= ?0x[0-9a-f]+" | tail -1 | grep -oE "0x[0-9a-f]+")
+  faddr=$(printf '%s' "$out$tailq" | grep -oE "address ?= ?0x[0-9a-f]+" | tail -1 | grep -oE "0x[0-9a-f]+")
+  # What the untagged base register actually held. The emulator prints it
+  # unconditionally from _helper_access_with_cap (target/riscv/op_helper.c),
+  # and it is the one field that tells a pointer which lost its tag from an
+  # integer that never was one.
+  fval=$(printf '%s' "$tailq" | grep -E "Cap mem access requires capability" \
+         | tail -1 | grep -oE "value = [0-9a-f]+" | grep -oE "[0-9a-f]+$")
   # The launcher relays the fault on the run's own stdout with NO spaces around
   # "=", while qemu.log writes "cause = 24". Read both: a parser that matched
   # only the spaced form once scored a real cause=24 as NORUN.
@@ -216,6 +274,17 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   # Order matters. A fault is a measurement whatever else the log says; a
   # watchdog kill and an exhausted allocator are not measurements at all and
   # must never be read as "ran and the mechanism was silent".
+  # The VM can die mid-run -- a host-side kill, an out-of-memory, a crash in
+  # the monitor. Every case after that returns rc 1 with this message, and
+  # rc 1 reads as SILENT, so the run would keep going and manufacture silence.
+  if printf %s "$out" | grep -qE "VM is not running|use up first"; then
+    printf '%s\t%s\tVM-GONE\t%s\t\t%s\t\t\t\n' "$c" "$arm" "$rc" \
+      "the VM was not running; nothing after this point executed" >> "$OUT/verdicts.tsv"
+    printf '  %-56s VM-GONE\n' "${c:0:56}"
+    echo "ABORTING: the VM is not running, so nothing further can be measured." >&2
+    printf 'aborted\tVM gone\n' >> "$OUT/run.meta"
+    exit 4
+  fi
   if [ -n "${cause:-}" ]; then
     v="DETECTED"
   elif [ "$rc" = 124 ]; then
@@ -227,9 +296,45 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   else
     v="OTHER-rc$rc"
   fi
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$c" "$arm" "$v" "$rc" "${cause:-}" "$last" >> "$OUT/verdicts.tsv"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$c" "$arm" "$v" "$rc" \
+    "${cause:-}" "$last" "${fpc:-}" "${faddr:-}" "${fval:-}" >> "$OUT/verdicts.tsv"
+  [ "$NEGCTL" = 1 ] && printf '%s\t%s\n' "$c" "${NCKIND:-stub}" >> "$OUT/control-kind.tsv"
   printf '  %-54s %-9s rc=%-4s %s\n' "${c:0:54}" "$v" "$rc" "${cause:+cause=$cause}"
 done
 printf 'ended_utc\t%s\ncases\t%s\n' "$(date -u +%FT%TZ)" "$n" >> "$OUT/run.meta"
+if [ "$NEGCTL" = 1 ]; then
+  # A fault IS evidence that the case ran, so detections are judged first. The
+  # first version asked for the marker first and reported a case that faulted
+  # before printing as one that never started -- hiding the only outcome that
+  # matters.
+  bad=$(awk -F'\t' 'NR>1 && $3=="DETECTED"{print $1}' "$OUT/verdicts.tsv")
+  # Cases that are silent AND left no marker did not run; they cannot support
+  # "no detection" and they void the run. 29 of 32 once came back from a dead VM
+  # and the summary read "0 of 32 detected, as required".
+  nolog=0
+  for d in "$CORPUS"/[0-9][0-9]_*/; do
+    c=$(basename "$d"); in_subset "$c" || continue
+    case " $bad " in *" $c "*) continue ;; esac
+    grep -q "NEGATIVE-CONTROL no defect performed" "$OUT/$c.log" 2>/dev/null || {
+      echo "  $c: silent and no marker, so this case did not run" >&2; nolog=$((nolog+1)); }
+  done
+  if [ -z "$bad" ] && [ "$nolog" != 0 ]; then
+    printf 'negative_control\tVOID\nnegative_control_not_run\t%s\n' "$nolog" >> "$OUT/run.meta"
+    echo "NEGATIVE CONTROL VOID: $nolog case(s) produced no evidence of running." >&2
+    echo "  A control cannot pass on cases that never started." >&2
+    exit 5
+  fi
+  # Not "n": that holds the number of cases this run staged and the summary
+  # line below still needs it. Clobbering it printed "rows: 5 / 0".
+  ndet=$(printf '%s' "$bad" | grep -c . || true)
+  printf 'negative_control\t1\nnegative_control_detections\t%s\n' "$ndet" >> "$OUT/run.meta"
+  if [ "$ndet" != 0 ]; then
+    echo "NEGATIVE CONTROL FAILED: $ndet case(s) scored DETECTED with no defect performed:" >&2
+    printf '  %s\n' $bad >&2
+    echo "  those faults do not depend on the defect, so the detections they back are not evidence." >&2
+    exit 1
+  fi
+  echo "negative control: 0 of $(($(wc -l < "$OUT/verdicts.tsv")-1)) cases detected, as required"
+fi
 echo "rows: $(($(wc -l < "$OUT/verdicts.tsv")-1)) / $n"
 echo "out:  $OUT"
