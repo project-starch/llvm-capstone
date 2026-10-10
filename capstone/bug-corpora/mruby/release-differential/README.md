@@ -275,7 +275,13 @@ The three that only the patch catches are the three GC-slot rows the old
 faults on both arms, earlier under the patch: at the revoked slot (cause 25)
 rather than after its reuse (cause 24). `11_cb51fce92` faults with cause 12, an
 instruction fault and not a capability fault, on both: no reading, as on every
-earlier arm.
+earlier arm. It is not a miss: at the pin the trigger never reaches the defect
+it was extracted for. `Task#close` postdates the pin, so the script raises
+`NoMethodError`, and raising after a task has run longjmps through a stale
+`jmp_buf` on the C stack -- a second mruby-task defect, which crashes the
+native build the same way (SIGSEGV in `__longjmp`). The other paths that free a
+task's stack are C API. The case's `harness_limit` field has the evidence; it
+needs a C-API reduction before any arm can read it.
 
 A catch counts only if the patch does not fault on correct code. mruby's own
 test suite (`mrbtest`, 1,710 tests) runs to the same result on both images --
