@@ -13,10 +13,17 @@
   "layer_note": "measured: ASan reported a 200-byte region, at or under the 512 B SMALL_REQUEST_THRESHOLD",
   "arms": {
     "virtual-malloc": {
-      "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it"
+      "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
+      "verdict": "NO-READING",
+      "verdict_note": "cause=24 pc=0x3f8d15c090 in _PyObject_Malloc; in _PyObject_Malloc; ASan sites ['_PyEval_EvalFrameDefault']",
+      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc",
+      "verdict_reason": "unattributed"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc"
+      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3fb22ea6b8 in _PyEval_EvalFrameDefault; by function: _PyEval_EvalFrameDefault is where host ASan reported the access",
+      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools"
     },
     "cheribsd-revocation": {
       "oracle": "completion while the block's arena stays live: pymalloc links the freed block onto its own pool free list, so the platform has no free to revoke. Once pymalloc returns an emptied arena to the system allocator (insert_to_freepool, when nf == ao->ntotalpools && ao->nextarena != NULL) the platform does have a free, and after a revocation sweep the stale access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). Both outcomes are admissible; which one occurs depends on arena occupancy and sweep timing rather than on the defect, so this arm does not separate these cases. A bounds fault (si_code=1) would falsify this."

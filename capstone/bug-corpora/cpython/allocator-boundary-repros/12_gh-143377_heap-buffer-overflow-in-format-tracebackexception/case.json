@@ -13,10 +13,16 @@
   "layer_note": "measured: ASan reported a 1-byte region, at or under the 512 B SMALL_REQUEST_THRESHOLD",
   "arms": {
     "virtual-malloc": {
-      "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it"
+      "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f9134123c in _PyXI_excinfo_InitFromException; by function: _PyXI_excinfo_InitFromException is where host ASan reported the access",
+      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc"
+      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f85341464 in _PyXI_excinfo_InitFromException; by function: _PyXI_excinfo_InitFromException is where host ASan reported the access",
+      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools"
     },
     "cheribsd-revocation": {
       "oracle": "the arm does not separate this case, and the admissible outcomes are stated rather than one of them predicted: si_code=1 (PROT_CHERI_BOUNDS) where the access goes beyond the bounds the allocator actually set, si_code=2 (PROT_CHERI_TAG) where it instead lands in memory a revocation sweep has already reclaimed, or completion where it stays inside the bounds the allocator set -- malloc may bound a capability to a rounded size class rather than the requested length. The mechanism is live and the run proves it rather than assuming it: mech-control S_OOB faults with si_code=1. Any other si_code would falsify this."
