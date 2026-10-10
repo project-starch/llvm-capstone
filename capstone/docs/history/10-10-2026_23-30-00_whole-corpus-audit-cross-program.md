@@ -274,3 +274,18 @@ Predictions:
   The mallocng controls faulted as required. The fix: the capstone-application builds take a 128 MiB
   payload (`WM_VIRTUAL_PAYLOAD_MIB`, appended after `port.h`'s include guard so that no line moves). The
   physical images are again 185/185 byte-identical. R7b reruns it under the same pre-registration.
+- **R7b** (`wmem-repros/results/2026-10-10-virtual/<arm>/`, derived): as predicted, 44 of 44 cells.
+  - Controls, `virtual-malloc`: bounds-malloc, uaf-malloc and 90 fault; 91 completes. Controls,
+    `virtual-nested-pools`: all four fault. So both columns showed, in their own boot, that they can
+    read either way.
+  - `virtual-malloc`: 22 MISSED. Every buggy differential printed DEFECT-REPRODUCED and exited 0,
+    including the 13 temporal cases' reoccupation assertions.
+  - `virtual-nested-pools`: 22 CAUGHT.
+    - The 13 temporal cases are cause 24 in `wm_probe`.
+    - The 9 spatial cases are cause 28 in `wm_probe` (13, 14, 15, 19) or `wm_write_probe` (16, 17, 18,
+      20, 21). These are the labels R4 resolved on PoisonCap.
+    - Every fault is at the probe's own access instruction: `wm_probe+0x14` is its `lbu`, and
+      `wm_write_probe+0x18` its `sb`.
+  - Every fixed arm printed VERDICT FIXED with exit 0.
+  - The virtual columns agree with the physical ones cell for cell: sublet-malloc 0/22 and
+    sublet-chunks 22/22.

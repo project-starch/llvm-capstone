@@ -1222,6 +1222,10 @@
         "virtual-malloc": "virtual-wmem-libc",
         "virtual-nested-pools": "virtual-wmem-chunks"
       },
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+      },
       "where": "capstone/bug-corpora/wireshark/wmem-repros"
     },
     {

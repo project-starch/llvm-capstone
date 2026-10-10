@@ -78,10 +78,16 @@
       "preregistered": "f7adf03a1009"
     },
     "virtual-malloc": {
-      "oracle": "virtual profile, wmem stock on virtual mallocng (tools/arms.json virtual-wmem-libc; tools/run-virtual-cases.py --prebuilt, the fix differential `0 N buggy`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
+      "oracle": "virtual profile, wmem stock on virtual mallocng (tools/arms.json virtual-wmem-libc; tools/run-virtual-cases.py --prebuilt, the fix differential `0 N buggy`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case printed `WM_DEFECT case=0 ready`, the last thing before its defective access; VERDICT DEFECT-REPRODUCED (the stale or crossing access reached other storage)) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, wmem's Sublet region and chunk layers over a payload the virtual heap lends linear (tools/arms.json virtual-wmem-chunks; tools/run-virtual-cases.py --prebuilt, `1 N`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
+      "oracle": "virtual profile, wmem's Sublet region and chunk layers over a payload the virtual heap lends linear (tools/arms.json virtual-wmem-chunks; tools/run-virtual-cases.py --prebuilt, `1 N`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3fa6d10ef4 in wm_probe; by probe: the fault is in wm_probe, the case's labelled probe, whose one data access is the defect's",
+      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
     }
   },
   "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe, as before; results/20260929-qemu-chunk-port ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 completes, mode 1 CAUGHT.",
