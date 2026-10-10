@@ -12,25 +12,6 @@
   "allocator_layer": "pymalloc",
   "fidelity": "model-consumer, real allocator",
   "arms": {
-    "spatial": {
-      "oracle": "complete"
-    },
-    "sublet": {
-      "oracle": "fault at the labelled read probe",
-      "cause": 24,
-      "verdict": "CAUGHT",
-      "verdict_from": "results/20260919-qemu-20/matrix.tsv case 6 mode sublet: passed=True cause=24 pc=0x101a0db1c expected_pc=0x101a0db1c"
-    },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "complete"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "oracle": "SIGPROT at the labelled read probe",
-      "signal": 34,
-      "si_code": 2
-    },
     "cheribsd-revocation": {
       "target": "stock CheriBSD riscv64-purecap, libc revocation at the platform default (on, asynchronous, batched)",
       "oracle": "MEASURED 2026-10-08: completes. The case body, including its stale access, runs to completed=1 and the supervisor observes no fault; the quarantine probe shows the freed object never reached free() (pymalloc returns it to its own pool)",
@@ -42,14 +23,14 @@
       "oracle": "virtual profile, pymalloc stock in an arena from virtual mallocng (tools/arms.json virtual-pymalloc): a fault at the labelled read probe, or the case completes and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (PYM completed=1, after the case's read_probe) and completed with no fault",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc"
+      "verdict_from": "results/2026-10-10-patch0003/virtual-malloc"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, pymalloc on the lifetime adapter, mode 1 (tools/arms.json virtual-pymalloc-pools): as virtual-malloc",
+      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (the port's patch 0003, CDERIVE/CREVOKE; tools/arms.json virtual-pymalloc-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3f8a918958 in read_probe; by probe: the pc lies in read_probe (pyc_defect_read)",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3f8d218070 in read_probe; by probe: the pc lies in read_probe (pyc_defect_read)",
+      "verdict_from": "results/2026-10-10-patch0003/virtual-nested-pools"
     }
   },
-  "status": "run 2026-09-18 under QEMU; both arms passed"
+  "status": "measured on virtual Capstone (virtual-malloc, virtual-nested-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle"
 }

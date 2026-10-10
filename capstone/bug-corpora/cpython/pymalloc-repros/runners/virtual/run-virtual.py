@@ -15,9 +15,9 @@ src/native/main.c around the case's PYC_CASE body), run as a process on a persis
   attribution `probe` when the pc lies in read_probe, the function that carries pyc_defect_read
 
 WHAT THE ARM IS: virtual-malloc builds the replay with pymalloc stock (its arena one block from
-virtual mallocng); virtual-nested-pools with PYMALLOC_SUBLET, the lifetime adapter owning an arena
-the virtual heap lends linear, run in mode 1 (retire on free). The build's CMakeCache says which, and
-the VM must be a virtual-profile one; a mismatch is refused.
+virtual mallocng); virtual-nested-pools with PYMALLOC_SUBLET, which applies the port's patch 0003:
+every pymalloc block a child lifetime of its arena (CDERIVE), revoked on free (CREVOKE). The
+build's CMakeCache says which, and the VM must be a virtual-profile one; a mismatch is refused.
 """
 import argparse
 import json
@@ -93,12 +93,11 @@ def main():
             return 75
     share = Path(json.loads((a.state / "config.json").read_text())["share"])
     a.raw.mkdir(parents=True, exist_ok=True)
-    mode = ["1"] if a.arm == "virtual-nested-pools" else []
 
     def run(image, number, tag):
         name = f"pym-fixture-{number:02d}.bin"
         (share / name).write_bytes(fixture(number))
-        return appvm.run_app(a.state, image, [f"/mnt/host/{name}", "/tmp/pym-report.bin", *mode],
+        return appvm.run_app(a.state, image, [f"/mnt/host/{name}", "/tmp/pym-report.bin"],
                              a.raw / tag, timeout=300)
 
     controls = []
@@ -127,7 +126,7 @@ def main():
         print(f"{'ok  ' if verdict[0] == PREDICTED[a.arm] else 'DIFF'} {d.name[:50]:<50} "
               f"{verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:80]}", flush=True)
     record = v.write_bundle(a.output, "cpython/pymalloc-repros", a.arm, rows, {
-        "configuration": config, "predicted": PREDICTED[a.arm], "mode": mode[0] if mode else "stock",
+        "configuration": config, "predicted": PREDICTED[a.arm], 
         "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
     print(f"--- {a.arm} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0

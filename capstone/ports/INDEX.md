@@ -29,7 +29,7 @@
 | component | pinned version | runs on | workload | corpora |
 |---|---|---|---|---|
 | `apr/pools` | 1.7.4 | capstone-domain, cheribsd-purecap, native | -- | `apr-pool-repros`, `bucket-repros` |
-| `cpython/pymalloc` | 3.13.7 | capstone-domain, cheribsd-purecap, native | -- | `pymalloc-repros` |
+| `cpython/pymalloc` | 3.13.7 | capstone-virtual, cheribsd-purecap, native | -- | `pymalloc-repros` |
 | `ffmpeg/buffer-pool` | 9.0.1 | capstone-domain, cheribsd-purecap, native | -- | `pool-repros` |
 | `memcached/allocators` | 1.6.45 | capstone-domain, cheribsd-purecap, native | -- | `allocator-repros` |
 | `nginx` | 1.28.0 | capstone-domain, native | -- | -- |

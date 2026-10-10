@@ -1321,7 +1321,7 @@ Automatic libc revocation remains explicitly off while adapter sweeps remain
 on, using the documented platform workaround. Native tests and all four
 backend builds pass. This is not whole-interpreter protection or isolation of
 hostile nested managers. [Pilot and provenance](../../ports/cpython/pymalloc/results/20260919-poisoncap/README.md),
-[build/link/run guide](../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
+build/link/run guide (removed 2026-10-10 with the adapter; see the [port README's History](../../ports/cpython/pymalloc/README.md#history)).
 
 ## 2026-09-19 — Experimental PoisonCap FFmpeg port
 

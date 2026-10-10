@@ -155,8 +155,8 @@
     },
     "virtual-pymalloc-pools": {
       "target": "capstone-virtual",
-      "summary": "the same replay with PYMALLOC_SUBLET in mode 1: the lifetime adapter derives a child of its arena region (an ordinary aligned_alloc object from virtual mallocng), one child per arena and one child per block, each bounded to the request (CDERIVE), and revokes a block's child when pymalloc takes it back (CREVOKE); requests over 512 bytes go to mallocng",
-      "mechanism": "per-block bounds and revocation in pymalloc",
+      "summary": "the same replay built with PYMALLOC_SUBLET, which applies the port's patch 0003: obmalloc hands out every block as a child lifetime of its arena, bounded to the request (CDERIVE), and revokes it on free (CREVOKE)",
+      "mechanism": "as virtual-pymalloc; per-block bounds and revocation inside obmalloc",
       "controls": {
         "uaf-block": "fault"
       },

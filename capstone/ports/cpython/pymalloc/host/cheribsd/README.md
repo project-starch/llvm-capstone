@@ -17,14 +17,9 @@ to the build script to link your own `bin/allocator-client` through that target.
 The example shows initialization, ownership and the public allocator calls.
 `cmake --preset cheribsd` is an equivalent configure entry point.
 
-The port uses the capability-preserving arena/pool patch and the real 16-byte pointer size. The unmodified native reference is not compiled for purecap: its pointer-size assumptions are not a valid CHERI reference. The example checks small allocations, zeroed storage, raw fallback and a capability-bearing realloc. Arena and pool frees do not automatically invalidate retained aliases.
+The port uses the capability-preserving arena/pool patch and the real 16-byte pointer size. The unmodified native reference is not compiled for purecap: its pointer-size assumptions are not a valid CHERI reference. Arena and pool frees do not automatically invalidate retained aliases.
 
 This is a single-threaded component port. The surrounding libc's revocation
 policy is checked separately by the runner; enabling it does not add Sublet's
 inner-lifetime semantics. Keep native recording validation and target replay
 validation explicit when using these builds for a comparison.
-
-The experimental [PoisonCap workflow](poisoncap/README.md) uses the published
-platform and an explicitly selected inner-lifetime adapter. Its mode 1,
-synchronous sweep policy and separate controls do not change this standard
-CheriBSD build's protection scope.
