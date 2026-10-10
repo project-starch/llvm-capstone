@@ -62,6 +62,10 @@ os.write(1, b"ABR RETURNED\\n")
 WORKLOAD = ('import json,gc; a=[{"n":n} for n in range(1000)]; '
             'assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")')
 CAPACITY = re.compile(r"MemoryError|cannot allocate|CPY-SUBLET-FAIL|out of memory")
+# The interpreter itself failing: a C function returned an error without setting one. It is not the
+# program running to its end, and the physical runner already read it as a failed run.
+BROKEN = re.compile(r"SystemError|returned NULL without setting an exception|"
+                    r"error return without exception set")
 
 
 def stage_stdlib(build, share):
@@ -70,10 +74,14 @@ def stage_stdlib(build, share):
     native = build / "source/build-python/python"
     home = share / "cpy"
     stamp = home / ".staged-from"
-    if stamp.is_file() and stamp.read_text() == str(lib):
+    if stamp.is_file() and stamp.read_text() == str(lib) and \
+            (home / "lib/python3.13/_sysconfigdata__linux_.py").is_file():
         return
     shutil.rmtree(home, ignore_errors=True)
     shutil.copytree(lib, home / "lib/python3.13", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    # sysconfig's build-time variables, which prepare-cpython-capstone.sh generates for the target.
+    pybuild = build / "source/build" / (build / "source/build/pybuilddir.txt").read_text().strip()
+    shutil.copy(pybuild / "_sysconfigdata__linux_.py", home / "lib/python3.13")
     # Some test files are deliberately invalid Python, so compileall's status is not checked.
     subprocess.run([str(native), "-m", "compileall", "-q", "-f", "-d", "/mnt/host/cpy/lib/python3.13",
                     str(home / "lib/python3.13")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -117,10 +125,11 @@ def observe(text, result, symbols, sites):
         else:
             o.attribution_evidence = f"in {fault.symbol or 'no known function'}; ASan sites {sorted(sites) or 'none recorded'}"
         return o
-    if CAPACITY.search(text):
-        o.reached, o.infra = False, "infra"
-        o.notes = "capacity: " + CAPACITY.search(text).group(0)
-        return o
+    for pattern, what in ((CAPACITY, "capacity"), (BROKEN, "interpreter failure")):
+        if pattern.search(text):
+            o.reached, o.infra = False, "infra"
+            o.notes = f"{what}: {pattern.search(text).group(0)}"
+            return o
     end = re.search(r"ABR (RETURNED|EXIT [^\n]*|RAISED \w+)", text)
     o.completed = bool(end)
     if end and end.group(1) != "RETURNED":
