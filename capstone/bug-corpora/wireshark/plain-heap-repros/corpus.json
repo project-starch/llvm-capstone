@@ -19,7 +19,8 @@
     "native-detect",
     "native-fix-differential",
     "capstone-subobject",
-    "cheribsd-subobject"
+    "cheribsd-subobject",
+    "virtual-malloc"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -53,5 +54,11 @@
       "oracle",
       "cause"
     ]
+  },
+  "arm_configurations": {
+    "virtual-malloc": "virtual-mallocng"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
   }
 }

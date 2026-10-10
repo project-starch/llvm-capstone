@@ -232,3 +232,179 @@ class Mmgr(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VirtualCases(unittest.TestCase):
+    """tools/run-virtual-cases.py, the FFmpeg/tshark/memcached case.c corpora on the virtual profile.
+    Inputs are the launcher's own line format and the drivers' printf lines."""
+    rv = load(HERE / "run-virtual-cases.py", "run_virtual_cases")
+    FAULT = ("capstone-exec: domain fault cause=28 pc=0x10234 address=0x55 entry=0x10000 "
+             "code=0x10000-0x20000 last=0x4f")
+
+    def run_text(self, n, extra=""):
+        return f"case={n} arm=buggy\ncap=16 touched=17 extent=1 crossed=1 damage=0\n{extra}"
+
+    def test_fault_at_a_prefixed_or_bare_probe_is_reached_and_attributed(self):
+        for name in ("ffh_read_probe", "write_probe", "wsh_write_probe_u8"):
+            o = self.rv.observe("3", self.run_text(3, self.FAULT), {"kind": "signal", "value": 11}, FakeSymbols(name))
+            self.assertTrue(o.reached, name)
+            self.assertEqual(o.attribution, "probe", name)
+
+    def test_fault_at_a_declared_site_is_function(self):
+        o = self.rv.observe("3", self.run_text(3, self.FAULT), {}, FakeSymbols("ff2_case_run"), ("ff2_case_run",))
+        self.assertEqual((o.reached, o.attribution), (True, "function"))
+
+    def test_fault_elsewhere_is_neither_reached_nor_attributed(self):
+        o = self.rv.observe("3", self.run_text(3, self.FAULT), {}, FakeSymbols("memcpy"), ("ff2_case_run",))
+        self.assertFalse(o.reached)
+        self.assertIsNone(o.attribution)
+        verdict = v.judge(o, {"controls": {}})
+        self.assertEqual(verdict[:2], (v.NO_READING, "setup-fault"))
+
+    def test_reproduced_and_exit_0_is_a_completed_reach(self):
+        o = self.rv.observe("3", self.run_text(3, "VERDICT DEFECT-REPRODUCED x\n"), {"kind": "exit", "value": 0})
+        self.assertEqual((o.reached, o.completed), (True, True))
+
+    def test_exit_75_is_control_failed_not_a_silence(self):
+        o = self.rv.observe("3", self.run_text(3, "CONTROL-FAILED 785\n"), {"kind": "exit", "value": 75})
+        self.assertEqual(o.infra, "control-failed")
+
+    def test_wrong_case_number_is_infra(self):
+        o = self.rv.observe("4", self.run_text(3, "VERDICT DEFECT-REPRODUCED x\n"), {"kind": "exit", "value": 0})
+        self.assertEqual(o.infra, "infra")
+
+    def test_step_that_never_ended_is_infra(self):
+        o = self.rv.observe("3", self.run_text(3) + "[runner] TIMEOUT\n", {"kind": "none"})
+        self.assertEqual(o.infra, "infra")
+
+    def test_fixed_arm_must_print_fixed_and_exit_0(self):
+        ok = "case=3 arm=fixed\nVERDICT FIXED y\n"
+        self.assertTrue(self.rv.fixed_ok("3", ok, {"kind": "exit", "value": 0}))
+        self.assertFalse(self.rv.fixed_ok("3", ok, {"kind": "exit", "value": 1}))
+        self.assertFalse(self.rv.fixed_ok("3", "case=3 arm=fixed\nVERDICT DEFECT-REPRODUCED\n", {"kind": "exit", "value": 0}))
+
+
+class VirtualHosted(unittest.TestCase):
+    """run-virtual-cases.py --prebuilt: the nested corpora's port-built programs (wmem first)."""
+    rv = load(HERE / "run-virtual-cases.py", "run_virtual_cases_hosted")
+    FAULT = VirtualCases.FAULT
+    READY, DONE = "WM_DEFECT case={n} ready", "WM_DEFECT case={n} mode={mode} completed"
+    CTL = {"controls": {"c": "fault"}, "controls_for_missed": ["c"]}
+
+    def obs(self, text, result, symbol, differential=True, mode="0"):
+        o = self.rv.observe_hosted("13", mode, text, result, FakeSymbols(symbol), "wm_probe",
+                                   self.READY, self.DONE, differential)
+        o.controls = [v.Control("c", "fault", "")]
+        return o
+
+    def test_fault_at_the_cases_probe_after_ready_is_caught(self):
+        o = self.obs("WM_DEFECT case=13 ready\n" + self.FAULT, {"kind": "signal", "value": 11}, "wm_probe")
+        self.assertEqual(v.judge(o, self.CTL)[0], v.CAUGHT)
+
+    def test_planted_fault_off_the_probe_is_unattributed_not_caught(self):
+        o = self.obs("WM_DEFECT case=13 ready\n" + self.FAULT, {"kind": "signal", "value": 11}, "wmem_block_free")
+        self.assertEqual(v.judge(o, self.CTL)[:2], (v.NO_READING, "unattributed"))
+
+    def test_the_other_probe_function_is_not_this_cases(self):
+        o = self.obs("WM_DEFECT case=13 ready\n" + self.FAULT, {"kind": "signal", "value": 11}, "wm_write_probe")
+        self.assertEqual(v.judge(o, self.CTL)[:2], (v.NO_READING, "unattributed"))
+
+    def test_fault_before_ready_is_a_setup_fault(self):
+        o = self.obs(self.FAULT, {"kind": "signal", "value": 11}, "wm_probe")
+        self.assertEqual(v.judge(o, self.CTL)[:2], (v.NO_READING, "setup-fault"))
+
+    def test_differential_reproduced_and_finished_is_missed(self):
+        text = "WM_DEFECT case=13 ready\nWM_DEFECT case=13 mode=0 completed\nVERDICT DEFECT-REPRODUCED x\n"
+        o = self.obs(text, {"kind": "exit", "value": 0}, None)
+        self.assertEqual(v.judge(o, self.CTL)[0], v.MISSED)
+
+    def test_differential_without_reproduced_is_not_a_miss(self):
+        text = "WM_DEFECT case=13 ready\nWM_DEFECT case=13 mode=0 completed\nVERDICT INCONCLUSIVE\n"
+        o = self.obs(text, {"kind": "exit", "value": 1}, None)
+        self.assertEqual(v.judge(o, self.CTL)[:2], (v.NO_READING, "inconclusive"))
+
+    def test_protected_run_that_finished_is_missed_and_one_that_did_not_is_not(self):
+        done = "WM_DEFECT case=13 ready\nWM_DEFECT case=13 mode=1 completed\n"
+        self.assertEqual(v.judge(self.obs(done, {"kind": "exit", "value": 0}, None, False, "1"), self.CTL)[0], v.MISSED)
+        cut = "WM_DEFECT case=13 ready\n"
+        self.assertEqual(v.judge(self.obs(cut, {"kind": "exit", "value": 0}, None, False, "1"), self.CTL)[:2],
+                         (v.NO_READING, "inconclusive"))
+
+    def test_exit_75_is_control_failed(self):
+        o = self.obs("CONTROL-FAILED the virtual heap lent no payload\n", {"kind": "exit", "value": 75}, None)
+        self.assertEqual(o.infra, "control-failed")
+
+    def test_fixed_needs_finished_line_verdict_and_exit_0(self):
+        ok = "WM_DEFECT case=13 mode=1 completed\nVERDICT FIXED y\n"
+        self.assertTrue(self.rv.fixed_hosted("13", "1", ok, {"kind": "exit", "value": 0}, self.DONE))
+        self.assertFalse(self.rv.fixed_hosted("13", "0", ok, {"kind": "exit", "value": 0}, self.DONE))
+        self.assertFalse(self.rv.fixed_hosted("13", "1", ok, {"kind": "exit", "value": 1}, self.DONE))
+
+    def test_cache_check_refuses_the_wrong_configuration_and_sdk(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            sdk = t / "sdk"
+            sdk.mkdir()
+            (t / "CMakeCache.txt").write_text(f"WM_SUBLET:BOOL=ON\nWM_CHUNKS:BOOL=ON\nCAPSTONE_SDK:PATH={sdk}\n"
+                                              "PORT_PLATFORM:STRING=capstone-application\n")
+            want = self.rv.HOSTED["wmem-repros"]["cache"]
+            self.assertEqual(self.rv.cache_says(t, want["virtual-nested-pools"], sdk), "")
+            self.assertIn("WM_LIBC_SYSTEM", self.rv.cache_says(t, want["virtual-malloc"], sdk))
+            self.assertIn("CAPSTONE_SDK", self.rv.cache_says(t, want["virtual-nested-pools"], t))
+
+    def test_memcached_cache_lives_in_the_port_work_dir_and_names_its_ledger(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            sdk = t / "sdk"
+            (t / "work/port").mkdir(parents=True)
+            sdk.mkdir()
+            (t / "work/port/CMakeCache.txt").write_text(f"MCP_STOCK_MALLOC:BOOL=ON\nCAPSTONE_SDK:PATH={sdk}\n"
+                                                        "PORT_PLATFORM:STRING=capstone-application\n")
+            ad = self.rv.HOSTED["allocator-repros"]
+            self.assertEqual(self.rv.cache_says(t / ad["cache_dir"], ad["cache"]["virtual-malloc"], sdk), "")
+            self.assertIn("MCP_SUBLET", self.rv.cache_says(t / ad["cache_dir"], ad["cache"]["virtual-nested-pools"], sdk))
+            self.assertIn("no ", self.rv.cache_says(t, ad["cache"]["virtual-malloc"], sdk))
+
+    def test_declared_label_matches_its_exact_instruction_only(self):
+        # FAULT is pc=0x10234, code=0x10000; FakeSymbols' base decides the link pc
+        sym = FakeSymbols("probe")
+        sym.base = 0x10000
+        link = 0x10234 - 0x10000 + sym.base
+        text = "WM_DEFECT case=22 ready\n" + self.FAULT
+        o = self.rv.observe_hosted("22", "1", text, {"kind": "signal", "value": 11}, sym, None, self.READY,
+                                   self.DONE, False, ("wm_widen", "wm_widen_probe"), {"wm_widen_probe": link})
+        o.controls = [v.Control("c", "fault", "")]
+        self.assertEqual(v.judge(o, self.CTL)[0], v.CAUGHT)
+        off = self.rv.observe_hosted("22", "1", text, {"kind": "signal", "value": 11}, sym, None, self.READY,
+                                     self.DONE, False, ("wm_widen", "wm_widen_probe"), {"wm_widen_probe": link + 4})
+        off.controls = [v.Control("c", "fault", "")]
+        self.assertEqual(v.judge(off, self.CTL)[:2], (v.NO_READING, "unattributed"))
+
+    def test_undeclared_case_without_a_probe_is_refused(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / "23_x_y"
+            d.mkdir()
+            (d / "case.c").write_text("WM_CASE(23) { wmem_free(0, 0); }\n")
+            (d / "case.json").write_text("{}\n")
+            with self.assertRaises(SystemExit):
+                self.rv.wmem_probe(d)
+            (d / "case.json").write_text('{"fault_sites": ["wm_widen"]}\n')
+            self.assertIsNone(self.rv.wmem_probe(d))
+
+    def test_port_controls_run_unobserved(self):
+        w, m = self.rv.HOSTED["wmem-repros"], self.rv.HOSTED["allocator-repros"]
+        self.assertEqual(self.rv.port_control_argv(w, "virtual-malloc", "0", "91"), ["0", "91"])
+        self.assertEqual(self.rv.port_control_argv(w, "virtual-nested-pools", "1", "90"), ["1", "90"])
+        self.assertEqual(self.rv.port_control_argv(m, "virtual-nested-pools", "1", "90"), ["buggy", "90", "1"])
+
+    def test_control_evidence_is_a_line_not_a_character(self):
+        self.assertEqual(self.rv.evidence_line({"fault": "capstone-exec: domain fault cause=24"}, ""),
+                         "capstone-exec: domain fault cause=24")
+        self.assertEqual(self.rv.evidence_line({}, "a\nCONTROL x RETURNED\n"), "CONTROL x RETURNED")
+
+    def test_stem_matches_the_ports_program_name(self):
+        self.assertEqual(self.rv.stem(Path("13_0261fd7da6_http_range_cursor_past_chunk")),
+                         "13-http-range-cursor-past-chunk")

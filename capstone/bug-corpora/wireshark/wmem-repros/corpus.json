@@ -1,12 +1,12 @@
 {
   "program": "wireshark",
   "boundary": "wmem (block, block_fast)",
-  "title": "Dissector-side defects in consumers of Wireshark's wmem pools: thirteen temporal, nine spatial",
+  "title": "Dissector-side defects in consumers of Wireshark's wmem pools: fourteen temporal, nine spatial",
   "upstream": {
     "version": "4.6.8",
     "port": "capstone/ports/wireshark/wmem"
   },
-  "cases": 22,
+  "cases": 23,
   "case_schema": "case-json",
   "case_macro": "WM",
   "required_arms": [
@@ -15,7 +15,9 @@
     "cheribsd-revocation",
     "poisoncap-spatial",
     "poisoncap-protected",
-    "native-detect"
+    "native-detect",
+    "virtual-malloc",
+    "virtual-nested-pools"
   ],
   "arm_keys": {
     "sublet-chunks": [
@@ -27,7 +29,7 @@
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
     "true": 3,
-    "false": 19
+    "false": 20
   },
   "runners": [
     "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py",
@@ -53,6 +55,14 @@
   ],
   "advisories": [],
   "shape_table": true,
-  "note": "Cases 0-12 are temporal; cases 13-21 are SPATIAL, from the hunt recorded in docs/ref/wireshark-spatial-defect-triage.md. Cases 14 and 15 are the corpus's only rows LIVE at the v4.6.8 pin -- every other row, temporal and spatial alike, is a fix-reversal. Note for anyone reading the spatial rows: every arm of this harness narrows a wmem allocation to its request (wm_narrow(), ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15), so a spatial crossing faults on ALL arms and these rows do not discriminate the chunk port. Case 13's run established that by refuting its own prediction. Cases 18-21 added 2026-10-07, all SPATIAL and all nested. 18 (716a200295) is the row that FILLS a cell this inventory recorded as empty: a nested-spatial defect LIVE at the v4.6.8 pin, whose guard cannot fire because the user preference it tests defaults to 0. The leads came from bug-corpora/wireshark/LIVE-CANDIDATES.md and from the class-B candidates docs/ref/wireshark-spatial-defect-triage.md:226-229 named and left unbuilt. Two candidates from those lists were REJECTED rather than built: 1c090e9292 is a STACK buffer overflow, so it has no heap allocator boundary, and d7d1686a95 indexes a static value_string array, which likewise has no allocator. 0939cf989d is the same ETSI DCP defect as case 16 under a different hash.",
-  "inventory": "capstone/docs/ref/wireshark-wmem-defect-triage.md"
+  "note": "Cases 0-12 and 22 are temporal; cases 13-21 are SPATIAL, from the hunt recorded in docs/ref/wireshark-spatial-defect-triage.md. Cases 14 and 15 are the corpus's only rows LIVE at the v4.6.8 pin -- every other row, temporal and spatial alike, is a fix-reversal. Note for anyone reading the spatial rows: every arm of this harness narrows a wmem allocation to its request (wm_narrow(), ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15), so a spatial crossing faults on ALL arms and these rows do not discriminate the chunk port. Case 13's run established that by refuting its own prediction. Cases 18-21 added 2026-10-07, all SPATIAL and all nested. 18 (716a200295) is the row that FILLS a cell this inventory recorded as empty: a nested-spatial defect LIVE at the v4.6.8 pin, whose guard cannot fire because the user preference it tests defaults to 0. The leads came from bug-corpora/wireshark/LIVE-CANDIDATES.md and from the class-B candidates docs/ref/wireshark-spatial-defect-triage.md:226-229 named and left unbuilt. Two candidates from those lists were REJECTED rather than built: 1c090e9292 is a STACK buffer overflow, so it has no heap allocator boundary, and d7d1686a95 indexes a static value_string array, which likewise has no allocator. 0939cf989d is the same ETSI DCP defect as case 16 under a different hash. Case 22 added 2026-10-11 from the nested-shape hunt (docs/ref/nested-shape-hunt-2026-10.md): c702b44a01, a fix reversal, the corpus's first double free (S2) -- two USB HID OUTPUT fields share one usages array and the error path frees it twice into the file scope's BLOCK allocator, corrupting its in-band recycler list (S4). Its defective access is a call into the allocator, so its protected oracles name the allocator's handback (wm_widen_probe, wm_widen), declared in its fault_sites before any protected run.",
+  "inventory": "capstone/docs/ref/wireshark-wmem-defect-triage.md",
+  "arm_configurations": {
+    "virtual-malloc": "virtual-wmem-libc",
+    "virtual-nested-pools": "virtual-wmem-chunks"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
+  }
 }

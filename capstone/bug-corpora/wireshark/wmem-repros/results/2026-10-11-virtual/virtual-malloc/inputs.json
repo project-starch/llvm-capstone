@@ -1,0 +1,52 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "argv": {
+      "buggy": [
+        "0",
+        "N",
+        "buggy"
+      ],
+      "fixed": [
+        "0",
+        "N",
+        "fixed"
+      ]
+    },
+    "cache": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_C_FLAGS": "-isystem \"/tmp/capstone/virt-stack/llvm-build/lib/clang/22/include\"",
+      "WM_CHUNKS": "OFF",
+      "WM_LIBC_SYSTEM": "ON",
+      "WM_SUBLET": "OFF"
+    },
+    "controls": {
+      "chunk-free-91": "c31827449489c1127d314a15d3918ed20722a5a9776d7234ab49031db20fd2a7",
+      "jumbo-reset-90": "e90819b0f4d50d331cbf06427d1b80e6fd9b749f44c84e5e735067ad6a972358"
+    },
+    "prebuilt": "/tmp/capstone/a2/wvirt9b/libc",
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ]
+  },
+  "cases": 23,
+  "configuration": "virtual-wmem-libc",
+  "contract": "verdicts-v1",
+  "corpus": "wireshark/wmem-repros",
+  "platform": {
+    "compiler": "7977ad4b53d445e89114468b57371c4c9ecbb412b0b575db474fe169b85dcf16",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "c5e5872372b392de5325a2951e0ef57798cb9295d753b2b77db7223732c7a25f",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "5ba594e5877556bd019ecde8873e5e285396d55d5fcf480b394b88fed43e7e36",
+    "module": "d36fab7edce1a32b785a50c7fc954cc77f18624ecfdef4b552ff231af1839721",
+    "profile": "virtual",
+    "qemu": "172111865d9a5f6279f73fcc35642d75ad89920c0f7e370efa1ebba8eaf1f3ae",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "32697a60cc8471a8602c7382c3991661782453cc6129f543e4b8e00ecc8138a2"
+  },
+  "tally": {
+    "MISSED": 23
+  }
+}

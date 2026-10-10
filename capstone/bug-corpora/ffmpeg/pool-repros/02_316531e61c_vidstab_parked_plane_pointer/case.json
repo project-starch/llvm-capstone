@@ -92,7 +92,7 @@
     },
     "sublet-malloc": {
       "target": "the FFmpeg application port's poolstock arm: FFmpeg's own pools UNPORTED (FF_SUBLET_POOLS=0) on the Sublet heap, where every free revokes -- Sublet only as the system allocator",
-      "oracle": "the sequence completes. MEASURED 2026-10-04, ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/result-lines.txt (fixture 44, this case.c unchanged under the app's driver; matched fixed fixture 45 read FIXED): VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner. NOT CAUGHT. Recorded here 2026-10-09 as column 2 of the per-bug table; the fixture-to-case map is the results README's table (rows 0..3 = fixtures 40/41..46/47).",
+      "oracle": "the sequence completes. MEASURED 2026-10-04, ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/result-lines.txt (fixture 44, this case.c unchanged under the app's driver; matched fixed fixture 45 read FIXED): VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner. NOT CAUGHT. Recorded here 2026-10-09 as column 2 of the per-bug table; the fixture-to-case map is the results README's table (rows 0..3 = fixtures 40/41..46/47). RE-MEASURED 2026-10-10 with an in-boot Sublet-heap control, results/2026-10-10-poolstock-control/ (R5): the four cases complete again (fixed FIXED, buggy DEFECT-REPRODUCED) while app safety fixtures 4 and 5 -- a use after av_free of a direct heap object, which level0 lets complete -- FAULT temporal in the same boot, so the arm's heap is the Sublet heap.",
       "status": "measured",
       "verdict": "NOT CAUGHT",
       "measured": "2026-10-04"

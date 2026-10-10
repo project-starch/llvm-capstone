@@ -35,7 +35,7 @@
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x10419e). Adapter counters: WM_POISONCAP mode=0 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held.",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x10419e). Adapter counters: WM_POISONCAP mode=0 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction held. RE-MEASURED 2026-10-10, results/2026-10-10-poisoncap-supervised-13-21/ (R4): SIGPROT, bounds, AT wm_defect_probe -- resolved by the runner's own per-label supervisor, no longer by hand.",
       "note": "(Superseded: measured on 2026-10-09 on the second host -- see oracle. The note below was true of the first host.) UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending.",
       "prediction": "PREDICTED and UNMEASURABLE HERE: faults if mode 0 bounds each wmem chunk, completes if it bounds only the g_malloc'd block. Neither platform is on this host; the reading settles it.",
       "status": "measured",
@@ -45,7 +45,7 @@
       "mode": 1,
       "signal": 34,
       "si_code": 1,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x10419e). Adapter counters: WM_POISONCAP mode=1 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction -- mode 0's spatial behaviour decides it -- held: mode 0 faulted too.",
+      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT**: SIGPROT si_code 1 (PROT_CHERI_BOUNDS) at wm_defect_probe (pc 0x10419e). Adapter counters: WM_POISONCAP mode=1 sweeps=0 poison_bytes=0 epochs=0 released_chunks=0 region_releases=0 regions=7 unrepresentable=0 pointer_bytes=16. The prediction -- mode 0's spatial behaviour decides it -- held: mode 0 faulted too. RE-MEASURED 2026-10-10, results/2026-10-10-poisoncap-supervised-13-21/ (R4): SIGPROT, bounds, AT wm_defect_probe -- resolved by the runner's own per-label supervisor, no longer by hand.",
       "note": "(Superseded: measured on 2026-10-09 on the second host -- see oracle. The note below was true of the first host.) UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending.",
       "prediction": "PREDICTED and UNMEASURABLE HERE: mode 1 adds temporal protection and no lifetime ends here, so the spatial behaviour of mode 0 decides it.",
       "status": "measured",
@@ -83,6 +83,18 @@
       "verdict": "NOT CAUGHT",
       "measured": "2026-10-09",
       "preregistered": "f7adf03a1009"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, wmem stock on virtual mallocng (tools/arms.json virtual-wmem-libc; tools/run-virtual-cases.py --prebuilt, the fix differential `0 N buggy`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case printed `WM_DEFECT case=15 ready`, the last thing before its defective access; VERDICT DEFECT-REPRODUCED (the stale or crossing access reached other storage)) and completed with no fault",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, wmem's Sublet region and chunk layers over a payload the virtual heap lends linear (tools/arms.json virtual-wmem-chunks; tools/run-virtual-cases.py --prebuilt, `1 N`): a fault in the case's labelled probe function, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3fb6210ef4 in wm_probe; by probe: the fault is in wm_probe, the case's labelled probe, whose one data access is the defect's",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
     }
   },
   "status": "MEASURED 2026-10-05 under QEMU on BOTH builds (WM_CHUNKS=ON and OFF): cause 5 at the labelled READ probe, with the pc equal to the probe address the run resolved from the image. 12/12 arms on each build, runner exit 0, with case 11 in the same runs as the temporal regression control reading cause 24, and the suite's negative control reporting 12/12 oracles FAIL as they must. Bundles: results/20261005-qemu-spatial-5-{ON,OFF}/. This row is LIVE at the v4.6.8 pin. Both arms read the same because wm_narrow() narrows every wmem allocation on every arm, so this harness has no malloc-granular arm and the row does not discriminate the chunk port. PoisonCap and CheriBSD are unmeasurable here; native-detect is declined, not pending -- see the corpus README. N = 1 per cell. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on: completes, not caught. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 CAUGHT, mode 1 CAUGHT.",

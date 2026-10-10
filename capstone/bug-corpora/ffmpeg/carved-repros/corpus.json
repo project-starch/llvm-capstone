@@ -20,7 +20,9 @@
     "cheribsd-subobject",
     "cheribsd-carve-bounds",
     "native-detect",
-    "native-fix-differential"
+    "native-fix-differential",
+    "virtual-malloc",
+    "virtual-nested-pools"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -55,5 +57,13 @@
     "CVE-2011-3895 (case 11's fix says it fixes part of it)"
   ],
   "shape_table": true,
-  "note": "FFmpeg's nested spatial row, which had one case (plane-repros) before this corpus. Every arm measured 2026-10-09: native differential 12/12 two-sided; ASan, CheriBSD, PoisonCap (both modes), Capstone bounds, Capstone + Sublet and both compilers' field bounds 0/12 -- the crossing stays inside one allocation and is not a field; carve bounds 12/12 on Capstone and on CheriBSD, at the labelled probe, every fixed arm FIXED under the same narrowing. Case 11 (vorbis) is live at the n9.0.1 pin by source reading. The candidates and the rejected commits are in docs/ref/ffmpeg-spatial-defect-triage.md (the 2026-10-09 section). Case 12 (vf_thumbnail's high-bit-depth histogram, ac59fc542f) joined on 2026-10-10 from subobject-repros, where it had been filed as case 09 NOT NESTED although its region is a carve; its native arms are measured (results/2026-10-10-native-*) and every other arm was pre-registered before its run."
+  "note": "FFmpeg's nested spatial row, which had one case (plane-repros) before this corpus. Every arm measured 2026-10-09: native differential 12/12 two-sided; ASan, CheriBSD, PoisonCap (both modes), Capstone bounds, Capstone + Sublet and both compilers' field bounds 0/12 -- the crossing stays inside one allocation and is not a field; carve bounds 12/12 on Capstone and on CheriBSD, at the labelled probe, every fixed arm FIXED under the same narrowing. Case 11 (vorbis) is live at the n9.0.1 pin by source reading. The candidates and the rejected commits are in docs/ref/ffmpeg-spatial-defect-triage.md (the 2026-10-09 section). Case 12 (vf_thumbnail's high-bit-depth histogram, ac59fc542f) joined on 2026-10-10 from subobject-repros, where it had been filed as case 09 NOT NESTED although its region is a carve; its native arms are measured (results/2026-10-10-native-*) and every other arm was pre-registered before its run.",
+  "arm_configurations": {
+    "virtual-malloc": "virtual-mallocng",
+    "virtual-nested-pools": "virtual-ffmpeg-carve"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+  }
 }

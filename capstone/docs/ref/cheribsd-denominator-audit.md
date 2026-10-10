@@ -31,6 +31,12 @@ built. The blocker was **tried**, not assumed.
 **CPython (20), PostgreSQL (8) and SQLite (19) still carry none of any kind**, and none of them even
 declares the arm — adding it is a `required_arms` change, which the checker enforces two-sided.
 
+> **UPDATED 2026-10-10.** No longer true: CPython's two corpora (20 and 32 cases), PostgreSQL's three
+> (5, 5 and 9) and SQLite's engine-repros (33) now declare `cheribsd-revocation` and carry measured
+> readings; `three-columns-all-programs.md` lists the bundles. Only `sqlite/capi-repros` (19, a
+> host-ASan row corpus) still has no CheriBSD arm. The paper sentence quoted above was not re-checked
+> here.
+
 **The paper's own "57 counted cases" is itself now stale**: these corpora have grown past it
 (memcached 5 -> 11, tshark 12 -> 24, FFmpeg 4 -> 19 rows carrying the arm). That is a number for the
 paper's owner to revise, not this document, which reports the tree.

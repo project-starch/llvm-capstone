@@ -55,7 +55,7 @@
    "verdict_reason": "out-of-denominator"
   }
  },
- "status": "spatial and cheribsd-revocation measured 2026-10-06, both detected; sublet is out of the denominator -- its fault does not depend on the defect, shown by the negative control",
+ "status": "spatial and cheribsd-revocation measured 2026-10-06, both detected; sublet measured 2026-10-06, withdrawn 2026-10-08 on a control that itself crossed the threshold, and re-measured 2026-10-10 with the corrected 48-variant control: CAUGHT (results/README.md, 'one of the controls was wrong')",
  "note": "The 2026-10-05 spatial and sublet runs are WITHDRAWN and carry no verdict. Both recorded silent on an image that did not contain ltree. A domain cannot dlopen, so an extension reaches it only by being linked in (patch 0015, ports/postgres/app/toolchain/static_modules.c), and the MODULES list of ports/postgres/app/build-domain.sh named only dict_snowball and plpgsql; the guest share directory likewise held plpgsql.control alone. The trigger's first statement, CREATE EXTENSION ltree, therefore failed on the missing control file and the lquery cast never executed. A control failure, so both arms are out of their denominators until they are rerun. build-domain.sh now links ltree, pg_trgm and fuzzystrmatch and stages their control and version scripts; both arm images were rebuilt on 2026-10-06 and carry six modules.",
  "nested": true,
  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
