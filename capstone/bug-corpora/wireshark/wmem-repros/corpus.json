@@ -41,7 +41,8 @@
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-asan",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-native-differential",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-domain-regression",
-    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-poisoncap"
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-poisoncap",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual"
   ],
   "advisories": [],
   "shape_table": true,
@@ -50,5 +51,9 @@
   "arm_configurations": {
     "virtual-malloc": "virtual-wmem",
     "virtual-nested-pools": "virtual-wmem-pools"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
   }
 }
