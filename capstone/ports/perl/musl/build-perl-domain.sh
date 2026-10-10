@@ -27,6 +27,9 @@
 # which is what grants the adapter its region; the image this script leaves behind
 # only proves the link resolves). PERLD_SDK_CFLAGS adds C flags to the SDK's own
 # -O1 -- the corpus's unprotected arm is PERLD_SDK_CFLAGS=-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0.
+# PERLD_SUBLET=1 (virtual profile) builds Perl with its SV heads as Sublet lifetimes:
+# ../sublet/patches and -DPERL_CAPSTONE_SUBLET, each head a CDERIVE child of its arena,
+# revoked by CREVOKE when it is freed.
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../../tests/capstone-test-env.sh" >/dev/null
@@ -75,6 +78,14 @@ SV_HEAD_FLAGS=
 if [[ $SV_HEADS == 1 ]]; then
   PATCH_FILES+=("$SCRIPT_DIR"/../sv-heads/patches/$PERL_VERSION/*.patch)
   SV_HEAD_FLAGS=" -DPERL_SV_HEAD_ADAPTER"
+fi
+SUBLET=${PERLD_SUBLET:-0}
+case "$SUBLET" in 0|1) ;; *) echo "PERLD_SUBLET=$SUBLET? (0, 1)" >&2; exit 2 ;; esac
+if [[ $SUBLET == 1 ]]; then
+  [[ $PROFILE == virtual && $SV_HEADS == 0 ]] \
+    || { echo "PERLD_SUBLET=1 needs PERLD_PROFILE=virtual and no PERLD_SV_HEADS" >&2; exit 2; }
+  PATCH_FILES+=("$SCRIPT_DIR"/../sublet/patches/$PERL_VERSION/*.patch)
+  SV_HEAD_FLAGS=" -DPERL_CAPSTONE_SUBLET -I$RT/capstone/runtime/include"
 fi
 
 [[ -f "$MRT/hostcall.c" ]] || { echo "no runtime at $MRT (RUNTIME_REPO=$RT)" >&2; exit 2; }

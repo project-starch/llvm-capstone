@@ -1,0 +1,12 @@
+case	pin_report	frame0	frame1	frame2	fault_sites
+1189b87114	SEGV	Perl_newATTRSUB_x	Perl_yyparse	S_doeval_compile	Perl_newATTRSUB_x
+17535c984a	none				
+254b30e378	heap-use-after-free	memmove	PerlIOScalar_write	Perl_PerlIO_write	memmove,PerlIOScalar_write
+39b4841b25	heap-use-after-free	S_regcppop	S_regcp_restore	S_regmatch	S_regcppop,S_regcp_restore
+40727c420c	SEGV	Perl_SvREFCNT_dec_NN	S_free_codeblocks	Perl_regfree_internal	Perl_SvREFCNT_dec_NN,S_free_codeblocks
+9e298ab597	SEGV	Perl_SvREFCNT_dec	Perl_av_clear	Perl_leave_scope	Perl_SvREFCNT_dec,Perl_av_clear
+ad5fedb002	SEGV	Perl_pp_iter	Perl_runops_standard	S_run_body	Perl_pp_iter
+af11b0c528	none				
+b7b77ffc1e	SEGV	Perl_sv_setsv_flags	Perl_pp_sassign	Perl_runops_standard	Perl_sv_setsv_flags,Perl_pp_sassign
+d2cddbe1df	none				
+e4be969235	heap-use-after-free	memmove	Perl_sv_catpvn_flags	Perl_do_join	memmove,Perl_sv_catpvn_flags

@@ -1,0 +1,31 @@
+toke.c: pass a local copy of no_code, not the const global itself, by value.
+
+A const global aggregate that holds pointers, passed by value, faults in the
+virtual profile's code generation: the copy into the argument area is made by
+memcpy with operands moved through integer registers, so they arrive untagged
+(docs/ref/ISSUES.md C-77). In Perl 5.36.3 the one such call is the lexer's
+bareword path for a word starting with "::" (::is, ::ok in the core tests),
+which faulted in memcpy at compile time. A local copy, as yyl_keylookup
+already makes of the same constant, is passed correctly. Behaviour is
+unchanged.
+
+diff --git toke.c toke.c
+index ea99050..2fa8219 100644
+--- a/toke.c
++++ b/toke.c
+@@ -9009,8 +9009,13 @@ yyl_try(pTHX_ char *s)
+         s++;
+         OPERATOR(PERLY_COMMA);
+     case ':':
+-        if (s[1] == ':')
+-            return yyl_just_a_word(aTHX_ s, 0, 0, no_code);
++        if (s[1] == ':') {
++            /* capstone: pass a local copy. A const global aggregate that
++               holds pointers, passed by value, faults in the virtual profile's
++               codegen (docs/ref/ISSUES.md C-77). */
++            struct code c = no_code;
++            return yyl_just_a_word(aTHX_ s, 0, 0, c);
++        }
+         return yyl_colon(aTHX_ s + 1);
+ 
+     case '(':

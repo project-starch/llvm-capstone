@@ -1,0 +1,256 @@
+sv.c, sv.h, sv_inline.h, gv.h, pp.c, pp_ctl.c: every SV head a Sublet child
+lifetime of its arena, under PERL_CAPSTONE_SUBLET (5.36.3). Without the define
+the preprocessed source is unchanged.
+
+Upstream carves SV heads from 4080-byte arenas and keeps free ones on
+PL_sv_root, a list threaded through the freed heads. A stale SV* therefore
+reaches whatever value the head is handed out to next, and the memory never
+returns to malloc, so neither the system allocator nor ASan sees the free.
+
+Two instructions do the work. CDERIVE makes a child capability of a
+non-linear parent, bounded to a sub-range; CREVOKE(parent, child) ends a
+direct child and everything below it.
+
+- Perl_more_sv allocates the arena with a trailer: the child each head was
+  handed out as. The arena's first slot, which is not an SV, keeps the arena's
+  lifetime (a CDERIVE of the arena) in its sv_u.
+- uproot_SV, the one path to a new head (new_SV and Perl_more_sv), hands the
+  head out as a CDERIVE child of the arena's lifetime bounded to the head, and
+  records it in the trailer.
+- plant_SV finds the head's arena by address, revokes the recorded child
+  (CREVOKE) and works on the head through the arena's own pointer, which is
+  what the free list holds. An SVf_BREAK head is not revoked: upstream keeps
+  it off the free list because pointers to it are expected to outlive it.
+- The core reads freed heads by design (sv.h: "there are some parts of the
+  core that have pointers to already-freed SV heads"). SvIS_FREED, GvIO's type
+  test and the stash probes in pp_caller, the eval compiler and pp_anonconst
+  read the head through the arena's own pointer at the same address, never
+  through the possibly stale one. That reads what upstream reads there: the
+  freed flags, or the head's next value.
+
+Upstream's policy is unchanged: the same LIFO list, the same arena geometry
+and growth, so the same heads are handed out in the same order. One
+interpreter only (no MULTIPLICITY). Needs capstone/runtime/include on the
+include path (capstone/capability.h) and the virtual profile.
+
+diff --git gv.h gv.h
+index f3dbaab..3e985d1 100644
+--- a/gv.h
++++ b/gv.h
+@@ -113,6 +113,6 @@ Return the CV from the GV.
+      (gv)                                  \
+   && (                                      \
+-         SvTYPE((const SV*)(gv)) == SVt_PVGV \
+-      || SvTYPE((const SV*)(gv)) == SVt_PVLV  \
++         SvTYPE_MAYBE_FREED((const SV*)(gv)) == SVt_PVGV \
++      || SvTYPE_MAYBE_FREED((const SV*)(gv)) == SVt_PVLV  \
+      )                                         \
+   && GvGP(gv)                                   \
+diff --git pp.c pp.c
+index 571b636..d94271f 100644
+--- a/pp.c
++++ b/pp.c
+@@ -6924,5 +6924,5 @@ PP(pp_anonconst)
+     dSP;
+     dTOPss;
+-    SETs(sv_2mortal((SV *)newCONSTSUB(SvTYPE(CopSTASH(PL_curcop))==SVt_PVHV
++    SETs(sv_2mortal((SV *)newCONSTSUB(SvTYPE_MAYBE_FREED(CopSTASH(PL_curcop))==SVt_PVHV
+                                         ? CopSTASH(PL_curcop)
+                                         : NULL,
+diff --git pp_ctl.c pp_ctl.c
+index d5a6442..d63b7c4 100644
+--- a/pp_ctl.c
++++ b/pp_ctl.c
+@@ -1973,5 +1973,5 @@ PP(pp_caller)
+     CX_DEBUG(cx, "CALLER");
+     assert(CopSTASH(cx->blk_oldcop));
+-    stash_hek = SvTYPE(CopSTASH(cx->blk_oldcop)) == SVt_PVHV
++    stash_hek = SvTYPE_MAYBE_FREED(CopSTASH(cx->blk_oldcop)) == SVt_PVHV
+       ? HvNAME_HEK((HV*)CopSTASH(cx->blk_oldcop))
+       : NULL;
+@@ -3535,5 +3535,5 @@ S_doeval_compile(pTHX_ U8 gimme, CV* outside, U32 seq, HV *hh)
+         SAVEGENERICSV(PL_curstash);
+         PL_curstash = (HV *)CopSTASH(PL_curcop);
+-        if (SvTYPE(PL_curstash) != SVt_PVHV) PL_curstash = NULL;
++        if (SvTYPE_MAYBE_FREED(PL_curstash) != SVt_PVHV) PL_curstash = NULL;
+         else {
+             SvREFCNT_inc_simple_void(PL_curstash);
+diff --git sv.c sv.c
+index 669678a..a1297b4 100644
+--- a/sv.c
++++ b/sv.c
+@@ -249,4 +249,93 @@ Public API:
+  * case is for it to be reused. */
+ 
++#ifdef PERL_CAPSTONE_SUBLET
++#include <capstone/capability.h>
++
++/* Capstone Sublet: every SV head is a child lifetime of its arena, bounded to
++   the head (CDERIVE), and revoked when the head is freed (CREVOKE), so every
++   copy of a freed SV* is dead before the head is handed out again.
++
++   An arena is one Newx block: upstream's PERL_ARENA_SIZE of heads, then the
++   child each head was handed out as (NULL while free). The arena's own first
++   slot, which is not an SV, keeps the arena's lifetime in its sv_u. The free
++   list holds the arena's own pointers, as does everything below that works on
++   a head by address. */
++#define SV_ARENA_HEADS		(PERL_ARENA_SIZE / sizeof(SV) - 1)
++#define SV_ARENA_LIFE(sva)	((void *)(sva)->sv_u.svu_rv)
++#define SV_ARENA_ISSUED(sva)	((SV **)((char *)(sva) + PERL_ARENA_SIZE))
++
++static SV *sv_arena_last;	/* the arena found last; most lookups repeat it */
++
++/* The arena holding the head at sv's address, or NULL. sv is never read. */
++static SV *
++S_sv_arena_of(const SV *sv)
++{
++    SV *sva = sv_arena_last;
++    if (sva && PTR2UV(sv) - PTR2UV(sva + 1) < SV_ARENA_HEADS * sizeof(SV))
++        return sva;
++    for (sva = PL_sv_arenaroot; sva; sva = MUTABLE_SV(SvANY(sva)))
++        if (PTR2UV(sv) - PTR2UV(sva + 1) < SV_ARENA_HEADS * sizeof(SV))
++            return sv_arena_last = sva;
++    return NULL;
++}
++
++/* The arena's own pointer to the head at sv's address; sv itself for an SV
++   that no arena holds (the immortals). */
++SV *
++Perl_sv_arena_head(const SV *sv)
++{
++    SV *const sva = S_sv_arena_of(sv);
++    return sva ? sva + 1 + (PTR2UV(sv) - PTR2UV(sva + 1)) / sizeof(SV)
++               : (SV *)sv;
++}
++
++/* Hand out the free head sv, the arena's own pointer, as its child. */
++SV *
++Perl_sv_arena_issue(SV *sv)
++{
++    SV *const sva = S_sv_arena_of(sv);
++    void *const life = SV_ARENA_LIFE(sva);
++    SV *const child = (SV *)capstone_cap_derive(life,
++        PTR2UV(sv) - __builtin_capstone_cap_get_base(life), sizeof(SV));
++    SV_ARENA_ISSUED(sva)[sv - (sva + 1)] = child;
++    return child;
++}
++
++/* End the lifetime of the head at p's address and return the arena's own
++   pointer to it. An SVf_BREAK head is kept: upstream keeps it off the free
++   list because pointers to it are expected to outlive it. */
++static SV *
++S_sv_arena_retire(SV *p)
++{
++    SV *const sva = S_sv_arena_of(p);
++    SV *head;
++    SV **issued;
++    if (!sva)
++        return p;
++    head = sva + 1 + (PTR2UV(p) - PTR2UV(sva + 1)) / sizeof(SV);
++    issued = &SV_ARENA_ISSUED(sva)[head - (sva + 1)];
++    if (*issued && !(SvFLAGS(head) & SVf_BREAK)) {
++        capstone_cap_revoke_child(SV_ARENA_LIFE(sva), *issued);
++        *issued = NULL;
++    }
++    return head;
++}
++
++#define plant_SV(p0) \
++    STMT_START {					\
++        SV *const plant_p = S_sv_arena_retire(p0);		\
++        const U32 old_flags = SvFLAGS(plant_p);			\
++        MEM_LOG_DEL_SV(plant_p, __FILE__, __LINE__, FUNCTION__);  \
++        DEBUG_SV_SERIAL(plant_p);				\
++        FREE_SV_DEBUG_FILE(plant_p);				\
++        POISON_SV_HEAD(plant_p);				\
++        SvFLAGS(plant_p) = SVTYPEMASK;			\
++        if (!(old_flags & SVf_BREAK)) {		\
++            SvARENA_CHAIN_SET(plant_p, PL_sv_root);	\
++            PL_sv_root = (plant_p);				\
++        }						\
++        --PL_sv_count;					\
++    } STMT_END
++#else
+ #define plant_SV(p) \
+     STMT_START {					\
+@@ -263,4 +352,5 @@ Public API:
+         --PL_sv_count;					\
+     } STMT_END
++#endif
+ 
+ 
+@@ -272,6 +362,15 @@ Perl_more_sv(pTHX)
+     SV* sv;
+     char *chunk;                /* must use New here to match call to */
++#ifdef PERL_CAPSTONE_SUBLET
++    /* The heads, then the child each was handed out as (above plant_SV). */
++    Newxz(chunk, PERL_ARENA_SIZE + SV_ARENA_HEADS * sizeof(SV *), char);
++    sv_add_arena(chunk, PERL_ARENA_SIZE, 0);
++    ((SV *)chunk)->sv_u.svu_rv = (SV *)capstone_cap_derive(chunk,
++        __builtin_capstone_cap_get_cursor(chunk)
++            - __builtin_capstone_cap_get_base(chunk), PERL_ARENA_SIZE);
++#else
+     Newx(chunk,PERL_ARENA_SIZE,char);  /* Safefree() in sv_free_arenas() */
+     sv_add_arena(chunk, PERL_ARENA_SIZE, 0);
++#endif
+     uproot_SV(sv);
+     return sv;
+@@ -681,4 +780,7 @@ Perl_sv_free_arenas(pTHX)
+     PL_sv_arenaroot = 0;
+     PL_sv_root = 0;
++#ifdef PERL_CAPSTONE_SUBLET
++    sv_arena_last = NULL;
++#endif
+ }
+ 
+diff --git sv.h sv.h
+index 7b21e71..85b35e2 100644
+--- a/sv.h
++++ b/sv.h
+@@ -364,5 +364,19 @@ perform the upgrade if necessary.  See C<L</svtype>>.
+    SV heads, and rely on being able to tell that they are now free. So mark
+    them all by using a consistent macro.  */
++#ifdef PERL_CAPSTONE_SUBLET
++/* Capstone Sublet (sv.c): each head is a child lifetime of its arena, revoked
++   when the head is freed. A pointer that may be stale is therefore not read
++   through: the arena's own pointer to the same head is. */
++#  if defined(MULTIPLICITY)
++#    error "PERL_CAPSTONE_SUBLET supports one interpreter (no MULTIPLICITY)"
++#  endif
++PERL_CALLCONV SV *Perl_sv_arena_head(const SV *sv);
++#  define SvIS_FREED(sv) \
++    UNLIKELY((Perl_sv_arena_head((const SV *)(sv))->sv_flags == SVTYPEMASK))
++#  define SvTYPE_MAYBE_FREED(sv)	SvTYPE(Perl_sv_arena_head((const SV *)(sv)))
++#else
+ #define SvIS_FREED(sv)	UNLIKELY(((sv)->sv_flags == SVTYPEMASK))
++#  define SvTYPE_MAYBE_FREED(sv)	SvTYPE(sv)
++#endif
+ 
+ /* this is defined in this peculiar way to avoid compiler warnings.
+diff --git sv_inline.h sv_inline.h
+index 096d0d8..81fc419 100644
+--- a/sv_inline.h
++++ b/sv_inline.h
+@@ -57,4 +57,16 @@
+ #endif
+ 
++#ifdef PERL_CAPSTONE_SUBLET
++/* The free list holds the arena's own pointers; the head is handed out as a
++   child lifetime of its arena, bounded to it (sv.c). */
++PERL_CALLCONV SV *Perl_sv_arena_issue(SV *sv);
++#  define uproot_SV(p) \
++    STMT_START {                                        \
++        (p) = PL_sv_root;                               \
++        PL_sv_root = MUTABLE_SV(SvARENA_CHAIN(p));              \
++        ++PL_sv_count;                                  \
++        (p) = Perl_sv_arena_issue(p);                   \
++    } STMT_END
++#else
+ #define uproot_SV(p) \
+     STMT_START {                                        \
+@@ -63,4 +75,5 @@
+         ++PL_sv_count;                                  \
+     } STMT_END
++#endif
+ 
+ /* Perl_more_sv lives in sv.c, we don't want to inline it.
