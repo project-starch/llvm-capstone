@@ -153,40 +153,36 @@ With 0010 all three arms complete `scripts/smoke.rb` and `deep(500)`, and the
 `sublet` catches one case the control completes, and `sublet-gc` catches four,
 three of which revoke-on-free cannot see.
 
-## The Sublet heap (`MRBD_HEAP=sublet`)
+## Every GC object slot a Sublet lifetime (`MRBD_SUBLET=1`, virtual profile)
 
-mruby's `mrb_malloc` sits on the domain's `malloc`. `MRBD_HEAP=sublet` links
-the runtime's `sublet_heap.c` in place of the first-fit heap (`level0.c`): a buddy heap over a region the
-host grants, one bounded alias per block, every free revoked. Every body mruby
-allocates -- strings, arrays, hashes, the VM stack, ireps -- and its GC heap
-pages come from it; single GC object slots do not (a page is revoked only when
-the GC frees it whole). mruby itself is unchanged.
+Patch 0008 (4.0.0-rc2, `MRB_CAPSTONE_SUBLET`) makes every GC object slot a
+child lifetime of its heap page. Each page keeps a lifetime over its slots
+(`CDERIVE` of the page) and, per slot, the child it handed out; `mrb_obj_alloc`
+returns the object as a child bounded to its slot, and the sweep revokes that
+child (`CREVOKE`) once `obj_free` has freed the object, so a stale reference to
+a collected object faults instead of reaching the slot's next occupant. The GC
+works on its own pointers, derived from the page; where it is asked about a
+pointer that may be dead (`mrb_object_dead_p`, and `obj_free`'s walk of a dying
+fiber's frames) it finds the slot by address. Without the define `gc.c`
+preprocesses as without the patch. 61 lines of code.
 
-4.0.0-rc2 on it (`results/2026-09-26/mrbtest-4.0.0-rc2-sublet-heap.txt`):
-mrbtest OK 1632, KO 0, Crash 0, the same skips as on level0. The run spends
-259,253 revocation nodes (split + mrev), four times silicon's 65,532 per boot;
-under QEMU's default pool, which is that budget, it stopped after 307 passing
-tests, and it completes with `CAPSTONE_REV_NODES=16777216`.
+It runs on the virtual profile: build with `MRBD_SDK` naming a virtual SDK, and
+`malloc` is that SDK's musl mallocng, which bounds and retires every object it
+hands out -- mruby's bodies and its heap pages -- while the patch covers the
+slots inside a page. mrbtest on both images, 2026-10-11: 1,710 tests, 1,700 OK,
+the same one failure (`File#path`, a file-I/O test the guest answers empty),
+9 skipped, no capability fault; the
+[release corpus](../../../bug-corpora/mruby/release-differential) reads 19
+caught without the patch and 22 with it, the three it adds being the GC-slot
+rows.
 
-## Every GC object slot under Sublet (`MRBD_HEAP=sublet-gc`)
-
-The third arm (4.0.0-rc2, patch 0008, `MRB_CAPSTONE_GC_SUBLET`; the design is
-`docs/design/mruby-gc-sublet-port-plan.md`): the GC carves its pages from a
-second grant it holds linearly, issues each object its own 80-byte alias
-(`sublet_take`) and revokes the slot when the sweep frees the object
-(`sublet_give`), so a stale reference to a collected object dies with it rather
-than reaching the slot's next occupant. No free slot is read: the page header
-and the free list are a sidecar. Without the define `gc.c` preprocesses
-identically to before.
-
-mrbtest (`results/2026-09-26/mrbtest-4.0.0-rc2-sublet-gc.txt`): OK 1632, KO 0,
-Crash 0, the same skips as on level0; the GC carved 65 pages, issued 109,608
-slots and revoked 82,122. Its first run faulted in `obj_free`, on a dying fiber's
-frame env that the same sweep had already revoked -- a GC check that reads a
-possibly dead object, which the design names and this call site had missed; it
-now goes through the GC's own alias. Deviations: an all-dead page is kept, and
-`mrb_gc_add_region` is refused. Runs need `MRBD_GC_REGION_BYTES` (the second
-grant) and a large `CAPSTONE_REV_NODES`.
+Until 2026-10-11 this port also carried two physical-domain arms on the Sublet
+heap (`runtime/sublet_heap.c`): `MRBD_HEAP=sublet`, every body and page on the
+buddy heap, and `MRBD_HEAP=sublet-gc`, the GC's pages carved from a second
+linear grant with every slot taken and given back through the region API (the
+old patch 0008, design `docs/design/mruby-gc-sublet-port-plan.md`). Their
+mrbtest runs and corpus readings stay in `results/2026-09-26` and the corpus's
+`results/20261006`.
 
 ## Build and run
 

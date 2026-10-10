@@ -18,7 +18,7 @@ python3 -m capstone_vm --state $S up --qemu $ROOT/qemu-build/qemu-system-riscv64
   --share $K/share --module /tmp/capstone/launch-cost/module/module/capstone.ko \
   --launcher /tmp/capstone/v0-removal-stack/guest/capstone-exec --cma-mib 1024 --process-cache-mib 768 \
   > $OUT/up-depth.log 2>&1 || { echo "up FAILED"; exit 1; }
-for arm in level0 sublet sublet-gc; do
+for arm in level0; do
   for d in 20 40 60 100 200 500; do
     o=$(timeout 180 python3 -m capstone_vm --state $S exec /mnt/host/mruby-$arm.dom /mnt/host/depth/d$d.rb 2>&1)
     echo "$arm d=$d rc=$? :: $(echo "$o" | grep -E 'DEEP|cause=|Segmentation' | head -2 | tr '\n' ' ')"
