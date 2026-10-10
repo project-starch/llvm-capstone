@@ -43,8 +43,8 @@
     "virtual-malloc": {
       "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3f90710d00 in fft_read_probe; by probe: the fault is at the labelled probe fft_read_probe",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+      "verdict_note": "cause=25 pc=0x3fa7e10d00 in fft_read_probe; by probe: the fault is at the labelled probe fft_read_probe",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
     }
   },
   "case": 3,
