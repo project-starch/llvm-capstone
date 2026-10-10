@@ -13,6 +13,10 @@ build copies it beside the file) and answers `mc_capstone_fixture <n>` by runnin
 worker that took the connection, which ends the process with the fixture's mark or faults. The
 oracle's and the marker's images are built without it.
 
+One fixture also reverses an upstream fix at run time: in slabs_mover.c, with mcapp_reverse_a836eab
+set (fixture 22 only), an item that is allocated but not yet linked is taken for cleared, as before
+a836eab, instead of MOVE_BUSY_FLOATING. Unset, the mover is upstream's.
+
 --- a/proto_text.c
 +++ b/proto_text.c
 @@ -19,6 +19,12 @@
@@ -40,3 +44,21 @@ oracle's and the marker's images are built without it.
      int ret = process_request(&pr, command, cmdlen);
      c->resp->noreply = pr.noreply;
      if (settings.verbose > 1) {
+--- a/slabs_mover.c
++++ b/slabs_mover.c
+@@ -322,6 +322,15 @@
+             /* See above comment. No ITEM_SLABBED or ITEM_LINKED. Mark
+              * busy and wait for item to complete its upload. */
+             status = MOVE_BUSY_FLOATING;
++#ifdef MC_CAPSTONE_SAFETY_FIXTURES
++            {
++                /* fixture 22 reverses a836eab: before it, this item fell through as MOVE_PASS
++                   and its page was cleared under its holder */
++                extern volatile int mcapp_reverse_a836eab;
++                if (mcapp_reverse_a836eab)
++                    status = MOVE_PASS;
++            }
++#endif
+         }
+     }
+ 

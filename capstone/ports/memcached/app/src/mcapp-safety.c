@@ -63,7 +63,15 @@
  *                     a new item of the same shape takes both back; reads the old chunk's data
  *                     through the old pointer. Added with the slabsublet arm, whose oracle never
  *                     frees a chunked item, so this is the only run of that release path.
+ *  22 mover_floating  upstream a836eab (2015, shipped 1.4.23-1.4.24) REVERSED: the page mover takes
+ *                     an item that is allocated but not yet linked (its upload in progress) for
+ *                     cleared, so the page is wiped and handed to another class under its holder.
+ *                     The holder then writes its next byte, and a live item of the other class reads
+ *                     it back. The reversal is patch 0005's run-time flag in slabs_mover.c.
+ *  23 mover_waits     the same sequence as shipped at the pin: the mover waits for the upload, so
+ *                     the page never moves while it is held.
  */
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,6 +79,9 @@
 #define MCAPP_MARK(n, v) (0x100000 * (n) + ((v) & 0xFFFFF))
 
 unsigned char mcapp_fix_global[64];
+
+/* Read by slabs_mover.c (patch 0005): set only by fixture 22, to reverse a836eab. */
+volatile int mcapp_reverse_a836eab;
 
 static unsigned long mcapp_cur(const volatile void *p) { return __builtin_capstone_cap_get_cursor((void *)p); }
 static unsigned long mcapp_end(const volatile void *p) { return __builtin_capstone_cap_get_end((void *)p); }
@@ -735,6 +746,94 @@ static int mcapp_fixture(int n)
         v = mcapp_fix_touch(after, 0);
         printf("MCAPP-FIX 21 returned after[0]=%02x (0x5b untouched, 0x00 overwritten)\n", v);
         return MCAPP_MARK(n, v);
+    }
+    case 22:
+    case 23: {
+        /* a836eab "fix memory corruption in slab page mover": an item with neither ITEM_SLABBED nor
+           ITEM_LINKED -- allocated by item_alloc, its value still being read from the client -- fell
+           through the mover's checks as MOVE_PASS, so the mover counted its chunk as clear, wiped the
+           page and gave it to another class while the uploading connection still held the item.
+           The fix is the MOVE_BUSY_FLOATING branch: wait until the upload links or frees the item.
+           22 runs with that branch reversed (mcapp_reverse_a836eab), 23 as shipped. The page move
+           is the real one: slabs_reassign signals the server's page-mover thread. */
+        const int len_a = 1500, len_b = 150000;
+        unsigned char *a;
+        item *ia = mcapp_item(n, "a", len_a, &a);   /* allocated, never linked: upload in progress */
+        if (!ia)
+            return MCAPP_MARK(n, 0xE0016);
+        unsigned src = ITEM_clsid(ia), dst = slabs_clsid((size_t)len_b + 200), perslab = 0;
+        slabs_available_chunks(src, NULL, &perslab);
+        printf("MCAPP-FIX %d src=%u perslab=%u pages=%d dst=%u\n", n, src, perslab, slabs_page_count(src), dst);
+        /* a must sit in the class's oldest page, the one the mover takes (slab_list[0]) */
+        if (slabs_page_count(src) != 1 || perslab < 2 || dst == src) {
+            printf("MCAPP-FIX %d triggering condition not created (class not fresh)\n", n);
+            return MCAPP_MARK(n, 0xE0016);
+        }
+        /* fill the rest of a's page and open a second one, so the class has a page to spare; then
+           free the fillers, so every chunk of a's page but a's own is on the free list */
+        item **fill = malloc(sizeof(item *) * perslab);
+        if (!fill)
+            return MCAPP_MARK(n, 0xE0016);
+        unsigned made = 0;
+        for (; made < perslab; made++) {
+            char key[32];
+            int nkey = snprintf(key, sizeof key, "mcapp-fill-%u", made);
+            if (!(fill[made] = item_alloc(key, (size_t)nkey, 0, 0, len_a + 2)))
+                break;
+        }
+        int pages = slabs_page_count(src);
+        for (unsigned i = 0; i < made; i++)
+            item_remove(fill[i]);
+        free(fill);
+        printf("MCAPP-FIX %d fillers=%u pages=%d\n", n, made, pages);
+        if (made != perslab || pages != 2) {
+            printf("MCAPP-FIX %d triggering condition not created (no second page)\n", n);
+            return MCAPP_MARK(n, 0xE0016);
+        }
+        mcapp_fill(a, 0xA0, 64);                    /* the upload has begun */
+        unsigned long a_addr = mcapp_cur(a);
+        mcapp_reverse_a836eab = (n == 22);
+        int r = (int)slabs_reassign(settings.slab_rebal, (int)src, (int)dst, 0);
+        printf("MCAPP-FIX %d reassign result=%d reversed=%d\n", n, r, mcapp_reverse_a836eab);
+        if (r != REASSIGN_OK)
+            return MCAPP_MARK(n, 0xE0016);
+        int moved = 0;
+        for (int w = 0; w < 300 && !moved; w++) {
+            usleep(10000);
+            moved = slabs_page_count(src) == 1;
+        }
+        printf("MCAPP-FIX %d page-moved=%d\n", n, moved);
+        if (!moved)
+            return MCAPP_MARK(n, 0x7);              /* the mover waited for the upload */
+        /* a's page now belongs to dst: allocate dst items until one covers a's address */
+        unsigned long chunk = slabs_size((int)dst);
+        item *ib = NULL;
+        for (int k = 0; k < 64 && !ib; k++) {
+            unsigned char *d;
+            char tag[16];
+            snprintf(tag, sizeof tag, "b%d", k);
+            item *it = mcapp_item(n, tag, len_b, &d);
+            if (!it)
+                break;
+            if (ITEM_clsid(it) != dst) {
+                printf("MCAPP-FIX %d item b%d is class %u, not %u\n", n, k, (unsigned)ITEM_clsid(it), dst);
+                break;
+            }
+            if (mcapp_cur(it) <= a_addr && a_addr < mcapp_cur(it) + chunk)
+                ib = it;
+        }
+        if (!ib) {
+            printf("MCAPP-FIX %d no item of class %u covers a's address\n", n, dst);
+            return MCAPP_MARK(n, 0xE0016);
+        }
+        unsigned long off = a_addr - mcapp_cur(ib);
+        printf("MCAPP-FIX %d new-owner class=%u covers a at offset %lu\n", n, dst, off);
+        mcapp_touching(n, a_addr);
+        mcapp_fix_poke(a, 0, 0xEE);                 /* the uploader writes its next byte */
+        v = mcapp_fix_touch((unsigned char *)ib, (long)off);
+        printf("MCAPP-FIX %d returned new-owner[%lu]=%02x (0xee = the write landed in the new owner)\n",
+               n, off, v);
+        return MCAPP_MARK(n, (1 << 8) | v);
     }
     default:
         printf("MCAPP-FIX %d unknown\n", n);
