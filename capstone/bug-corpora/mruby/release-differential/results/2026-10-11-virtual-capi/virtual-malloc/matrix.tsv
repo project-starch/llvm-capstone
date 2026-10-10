@@ -1,0 +1,24 @@
+case	arm	outcome	cause	function	reached	in_fault_sites	harness
+01_13e017c2f_opgetidx0-stale-regs	virtual-malloc	fault	25	mrb_vm_exec			
+02_39aecc143_openter-block-collected	virtual-malloc	fault	24	mrb_vm_exec			
+03_59552ecb8_sprintf-format-mutated	virtual-malloc	fault	25	mrb_str_format			
+04_606d9a6b2_merge-pair-collected	virtual-malloc	completed					["Hash scans that carry a pair into a set the hash no longer holds", "NOT_EQUAL", "\"the value only that entry holds\"", "\"the value on\\xd0n\\x9d\\x7f?\\x00\\
+05_628ccec60_task-values-unmarked	virtual-malloc	completed					["Task.current.name still answers \"main\" after GC", "NOT_EQUAL", "\"main\"", "\"17\""]
+06_84cc5aa60_khash-freed-buckets	virtual-malloc	fault	25	kh_get_set_val			
+07_eb7693857_vacated-slot-read	virtual-malloc	fault	24	mrb_vformat			
+08_fb4974528_hash-ext-walk-carries	virtual-malloc	completed					["Hash#key keeps the key it answers with across the comparison", "NOT_EQUAL", "\"the key only that entry holds\"", "\"the key only`p\\xd5\\x98?\\x00\\x00\\x00\\
+09_0cf969a2b_shaped-iv-reshaped	virtual-malloc	fault	25	mrb_iv_foreach			
+10_7c5915799_struct-member-storage	virtual-malloc	fault	25	mrb_struct_equal			
+11_cb51fce92_task-stack-envs	virtual-malloc	fault	25	gc_mark_children	yes	yes	CASE11 ready
+12_4663fef45_eql-delete-past-entries	virtual-malloc	fault	28	ar_get			
+13_4a386f80e_pack-uu-signed-overflow	virtual-malloc	fault	28	mrb_pack_pack			
+14_93eb74a59_case-splat-stale-count	virtual-malloc	fault	28	mrb_obj_ceqq			
+15_af6f23ddb_prepend-self-reference	virtual-malloc	fault	28	memcpy			
+16_ec89364c4_ary-fill-int-overflow	virtual-malloc	fault	28	ary_fill_exec			
+17_bef45e223_pat-values-stale-ptr-and-len	virtual-malloc	fault	25	mrb_hash_pat_values			
+18_03f242d09_mod-visibility-null-mt	virtual-malloc	fault	24	mrb_mod_visibility			
+19_77d1d928f_method-defined-null-mt	virtual-malloc	fault	24	mrb_mod_visibility			
+20_94993eede_visibility-unprepared-mt	virtual-malloc	fault	24	mrb_mod_visibility			
+21_ff047f5fe_method-defined-inherit-null-mt	virtual-malloc	fault	24	mrb_mod_visibility			
+22_d8911416c_alias-mid-as-irep	virtual-malloc	fault	24	mrb_proc_parameters			
+23_1737589f0_file-join-recursive-array	virtual-malloc	fault	28	mrb_obj_alloc			
