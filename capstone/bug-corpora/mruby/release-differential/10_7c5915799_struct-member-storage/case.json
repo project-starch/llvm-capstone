@@ -8,6 +8,10 @@
   "live_in_pin": true,
   "live_proof": "upstream fixed it in 7c5915799 (7c59157994d01510a8395d33b9f974d4888cdc94) (2026-08-12), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: heap-use-after-free (with MRB_HEAP_PAGE_SIZE=1: heap-use-after-free); the same case on master: no report",
   "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "fault_sites": [
+    "mrb_struct_equal"
+  ],
+  "fault_sites_why": "host ASan at the pin (probe/native-control.sh NC_ASAN=1 build, MRBD_NO_BOXING, gcc -O1 -g), 2026-10-11 on p13: heap-use-after-free at struct.c:616, READ of size 16. That run uses no Capstone arm; it was taken after the virtual arms of 2026-10-11 had run and before the bounds-only and CheriBSD reruns of the same day.",
   "arms": {
     "sysalloc-none": {
       "oracle": "completes, and the harness reports a wrong answer rather than a fault -- a differential, not a detection: [\"Struct#== and #eql? with a member that replaces the storage\", \"NOT_FALSE\", \"true\"]"

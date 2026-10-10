@@ -8,6 +8,10 @@
   "live_in_pin": true,
   "live_proof": "upstream fixed it in 13e017c2f (13e017c2f81d3a3b69e042c75994f4f5cf684e41) (2026-08-09), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: heap-use-after-free (with MRB_HEAP_PAGE_SIZE=1: heap-use-after-free); the same case on master: no report",
   "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "fault_sites": [
+    "mrb_vm_exec"
+  ],
+  "fault_sites_why": "host ASan at the pin (probe/native-control.sh NC_ASAN=1 build, MRBD_NO_BOXING, gcc -O1 -g), 2026-10-11 on p13: heap-use-after-free at vm.c:1734, READ of size 8. That run uses no Capstone arm; it was taken after the virtual arms of 2026-10-11 had run and before the bounds-only and CheriBSD reruns of the same day.",
   "arms": {
     "sysalloc-none": {
       "oracle": "capability fault, cause 24"
