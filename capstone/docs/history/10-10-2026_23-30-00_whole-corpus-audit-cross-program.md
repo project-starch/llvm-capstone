@@ -87,3 +87,12 @@ boot:
   (the pool keeps the buffer; nothing reaches free()).
 
 Images are the existing `domain-sublet-poolstock` build; their hashes go in the record.
+
+## Outcomes (written after each run)
+
+- **R1** (`memcached/allocator-repros/results/2026-10-10-cheribsd-fixed-buggy/`): as predicted, 18 of 18 arms.
+  - Case 08's buggy arm faults with SIGPROT, si_code 1, at `mc_case_body+0x1e8`. That is the declared
+    site: the defect's own scan, before the probe. Its fixed arm completes.
+  - Cases 00-07: fixed and buggy both complete.
+  - The revocation control faulted at its labelled load.
+  - memcached's nested spatial CHERI 1/4 stands, now with a control and an attributed site.
