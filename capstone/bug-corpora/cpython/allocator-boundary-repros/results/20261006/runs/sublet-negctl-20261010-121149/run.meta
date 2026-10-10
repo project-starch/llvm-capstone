@@ -1,0 +1,14 @@
+arm	sublet
+capacity	modL
+image	sublet-modL
+image_sha256	73157bf5833b4956f6e4b50acf80ca2989afc394c9b153663a7c545cec8fa05d
+rev_nodes	16777216
+started_utc	2026-10-10T12:11:49Z
+positive_control	EXP-OK cpython 552
+discipline	CPY-SUBLET mode=1
+case_timeout	900
+only	15,23
+ended_utc	2026-10-10T12:17:00Z
+cases	2
+negative_control	1
+negative_control_detections	0

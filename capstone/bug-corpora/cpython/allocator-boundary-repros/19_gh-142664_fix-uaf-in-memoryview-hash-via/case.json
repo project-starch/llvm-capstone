@@ -35,5 +35,7 @@
     "memcpy",
     "siphash13"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 8) at memcpy /usr/include/x86_64-linux-gnu/bits/string_fortified.h:29 | siphash13 Python/pyhash.c:382. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 8) at memcpy /usr/include/x86_64-linux-gnu/bits/string_fortified.h:29 | siphash13 Python/pyhash.c:382. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "control_probe": "probe-142664.py",
+  "control_probe_why": "trigger.py runs the whole upstream file, which faults at three sites on the physical sublet arm (gh-142664, gh-143195 and gh-92888's test; d3a500f411cb), so no whole-file control can be silent. probe-142664.py runs gh-142664's six tests alone and negative_control.py the same six with the re-entrant release removed; a fault counts by control only when the probe faults in the trigger's function at the trigger's offset and the control is silent."
 }
