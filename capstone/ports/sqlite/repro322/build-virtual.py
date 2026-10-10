@@ -157,8 +157,9 @@ def main():
         arm += '-no-lookaside'
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / 'obj').mkdir(exist_ok=True)
-    # Every arm compiles a COPY carrying the same source fixes the physical build applies after
-    # adapt-sqlite-322.sh (build-sqlite-row322.sh): today that is fts5-azarg-patch.py. Without it
+    # Every arm compiles a COPY carrying the same source fixes: fts5-azarg-patch.py, which the
+    # physical build also applies after adapt-sqlite-322.sh (build-sqlite-row322.sh), and
+    # fts3-doclist-null-patch.py, the same NULL-plus-offset class in fts3EvalDlPhraseNext. Without the first
     # FTS5's default-tokenizer path computes &azArg[1] with azArg == NULL, which is CINCOFFSET on a
     # NULL capability and traps (cause 24) at CREATE VIRTUAL TABLE -- before any FTS5 case reaches
     # its defect. The virtual arms ran without it until 2026-10-10 and every FTS5 row faulted there
@@ -173,6 +174,12 @@ def main():
         if fixed.returncode:
             sys.exit(f'fts5-azarg-patch.py failed: {fixed.stdout}{fixed.stderr}')
         print('  applied fts5-azarg-patch.py to the copy')
+    if 'pDL->aAll ? &pDL->aAll[pDL->nAll] : 0' not in source.read_text(errors='replace'):
+        fixed = subprocess.run([sys.executable, str(REPO / 'capstone/ports/sqlite/fts3-doclist-null-patch.py'),
+                                str(source)], capture_output=True, text=True)
+        if fixed.returncode:
+            sys.exit(f'fts3-doclist-null-patch.py failed: {fixed.stdout}{fixed.stderr}')
+        print('  applied fts3-doclist-null-patch.py to the copy')
     sublet_includes = []
     if a.sublet:
         patch = REPO / 'capstone/ports/sqlite/sublet/sublet-3220000-memsys5.patch'

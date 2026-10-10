@@ -2,7 +2,8 @@ Subject: [PATCH] memsys5 blocks and lookaside slots as Sublet lifetimes (CDERIVE
 Upstream: sqlite 3.22.0 amalgamation
 Upstream-SHA256: 7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2 (sqlite3.c)
 Applies-To: sqlite3-capstone.c, the copy ports/sqlite/repro322/build-virtual.py
-  stages (sqlite3.c with fts5-azarg-patch.py), with patch -F0 -p1
+  stages (sqlite3.c with fts5-azarg-patch.py and fts3-doclist-null-patch.py),
+  with patch -F0 -p1
 
 Every block memsys5 hands out is a child lifetime of its pool, bounded to
 the block; sqlite3_free revokes it, so every copy of the caller's pointer
@@ -18,16 +19,22 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
 # memsys5Init derives the heap's lifetime from the configured heap and the
 # pool below it; the heap pointer itself carries no MANAGE, so the pool
 # needs a parent that does. memsys5MallocUnsafe returns a child of the pool
-# covering the whole block, memsys5FreeUnsafe revokes it before the buddy
+# bounded to the request, memsys5FreeUnsafe revokes it before the buddy
 # code runs, and memsys5Shutdown revokes the pool. Split and merge are
 # unchanged: they only move indices, and memsys5 reaches every block, the
 # in-band free-list links included, through the pool.
 #
-# What it gives up: the bounds are the block, a power of two of 64-byte
-# atoms, not the request, because SQLite treats sqlite3MallocSize() as the
-# usable size (memsys5Size, and memsys5Realloc keeps a block that still
-# fits). An overrun inside that rounding is not caught. A block carries the
-# heap's data rights; issued from a static array, that includes execute.
+# The request bounds the caller. SQLite treats sqlite3MallocSize() as the
+# usable size, so memsys5 reports the request instead of the power-of-two
+# block: memsys5Roundup rounds to 8 bytes, as SQLite's default allocator
+# does, memsys5MallocUnsafe records the request in aReq and derives the
+# child to it, and memsys5Size returns it. Which block serves a request is
+# unchanged. aReq takes four bytes per atom from the configured heap, so
+# the pool has nByte/(szAtom+5) atoms instead of nByte/(szAtom+1).
+#
+# What it gives up: an overrun inside the 8-byte rounding is not caught. A
+# block carries the heap's data rights; issued from a static array, that
+# includes execute.
 #
 # setupLookaside derives the buffer's lifetime and a generation below it,
 # from a memsys5 block or a buffer the application supplied alike.
@@ -83,18 +90,42 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    
    /*
    ** Mutex to control access to the memory allocation subsystem.
-@@ -23178,8 +23192,8 @@
+@@ -23027,6 +23041,13 @@
+   */
+   u8 *aCtrl;
+ 
++  /*
++  ** Sublet: the request each checked-out block was issued for, rounded to
++  ** 8 bytes, by the block's first atom.  It bounds the caller's capability
++  ** and is what memsys5Size reports.
++  */
++  u32 *aReq;
++
+ } mem5;
+ 
+ /*
+@@ -23101,7 +23122,7 @@
+   assert( p!=0 );
+   i = (int)(((u8 *)p-mem5.zPool)/mem5.szAtom);
+   assert( i>=0 && i<mem5.nBlock );
+-  iSize = mem5.szAtom * (1 << (mem5.aCtrl[i]&CTRL_LOGSIZE));
++  iSize = (int)mem5.aReq[i];
+   return iSize;
+ }
+ 
+@@ -23178,8 +23199,9 @@
    memset(&mem5.zPool[i*mem5.szAtom], 0xAA, iFullSz);
  #endif
  
 -  /* Return a pointer to the allocated memory. */
 -  return (void*)&mem5.zPool[i*mem5.szAtom];
-+  /* Return the block as a child of the pool, bounded to the block. */
-+  return capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, iFullSz);
++  /* Return the block as a child of the pool, bounded to the request. */
++  mem5.aReq[i] = (u32)ROUND8(nByte);
++  return capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, mem5.aReq[i]);
  }
  
  /*
-@@ -23189,6 +23203,9 @@
+@@ -23189,6 +23211,9 @@
    u32 size, iLogsize;
    int iBlock;
  
@@ -104,18 +135,49 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    /* Set iBlock to the index of the block pointed to by pOld in 
    ** the array of mem5.szAtom byte blocks pointed to by mem5.zPool.
    */
-@@ -23374,7 +23391,9 @@
+@@ -23290,7 +23315,7 @@
+   int nOld;
+   void *p;
+   assert( pPrior!=0 );
+-  assert( (nBytes&(nBytes-1))==0 );  /* EV: R-46199-30249 */
++  assert( (nBytes&7)==0 );
+   assert( nBytes>=0 );
+   if( nBytes==0 ){
+     return 0;
+@@ -23315,12 +23340,14 @@
+ ** All allocations must be a power of two and must be expressed by a
+ ** 32-bit signed integer.  Hence the largest allocation is 0x40000000
+ ** or 1073741824 bytes.
++**
++** Sublet: the caller's capability is bounded to its request, so the size
++** reported back is the request rounded to 8 bytes, as sqlite3MemRoundup
++** does; memsys5MallocUnsafe still takes a power-of-two block for it.
+ */
+ static int memsys5Roundup(int n){
+-  int iFullSz;
+   if( n > 0x40000000 ) return 0;
+-  for(iFullSz=mem5.szAtom; iFullSz<n; iFullSz *= 2);
+-  return iFullSz;
++  return ROUND8(n);
+ }
+ 
+ /*
+@@ -23373,9 +23400,12 @@
+     mem5.szAtom = mem5.szAtom << 1;
    }
  
-   mem5.nBlock = (nByte / (mem5.szAtom+sizeof(u8)));
+-  mem5.nBlock = (nByte / (mem5.szAtom+sizeof(u8)));
 -  mem5.zPool = zByte;
++  mem5.nBlock = ((nByte-8) / (mem5.szAtom+sizeof(u8)+sizeof(u32)));
 +  mem5.pHeap = capstone_cap_derive(zByte,
 +      (uptr)zByte - __builtin_capstone_cap_get_base(zByte), nByte);
 +  mem5.zPool = capstone_cap_derive(mem5.pHeap, 0, nByte);
    mem5.aCtrl = (u8 *)&mem5.zPool[mem5.nBlock*mem5.szAtom];
++  mem5.aReq = (u32 *)&mem5.aCtrl[(mem5.nBlock+3)&~3];
  
    for(ii=0; ii<=LOGMAX; ii++){
-@@ -23406,6 +23425,10 @@
+     mem5.aiFreelist[ii] = -1;
+@@ -23406,6 +23436,10 @@
  static void memsys5Shutdown(void *NotUsed){
    UNUSED_PARAMETER(NotUsed);
    mem5.mutex = 0;
@@ -126,7 +188,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    return;
  }
  
-@@ -25412,6 +25435,20 @@
+@@ -25412,6 +25446,20 @@
  static int isLookaside(sqlite3 *db, void *p){
    return SQLITE_WITHIN(p, db->lookaside.pStart, db->lookaside.pEnd);
  }
@@ -147,7 +209,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  #else
  #define isLookaside(A,B) 0
  #endif
-@@ -25488,7 +25525,7 @@
+@@ -25488,7 +25536,7 @@
        return;
      }
      if( isLookaside(db, p) ){
@@ -156,7 +218,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  #ifdef SQLITE_DEBUG
        /* Trash all content in the buffer being freed */
        memset(p, 0xaa, db->lookaside.sz);
-@@ -25658,11 +25695,11 @@
+@@ -25658,11 +25706,11 @@
      }else if( (pBuf = db->lookaside.pFree)!=0 ){
        db->lookaside.pFree = pBuf->pNext;
        db->lookaside.anStat[0]++;
@@ -170,7 +232,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
      }else{
        db->lookaside.anStat[2]++;
      }
-@@ -144023,6 +144060,13 @@
+@@ -144023,6 +144071,13 @@
  ** If pStart is not NULL then it is sz*cnt bytes of memory to use for
  ** the lookaside memory.
  */
@@ -184,7 +246,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  static int setupLookaside(sqlite3 *db, void *pBuf, int sz, int cnt){
  #ifndef SQLITE_OMIT_LOOKASIDE
    void *pStart;
-@@ -144030,6 +144074,7 @@
+@@ -144030,6 +144085,7 @@
    if( sqlite3LookasideUsed(db,0)>0 ){
      return SQLITE_BUSY;
    }
@@ -192,7 +254,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    /* Free any existing lookaside buffer for this handle before
    ** allocating a new one so we don't have to have space for 
    ** both at the same time.
-@@ -144072,6 +144117,10 @@
+@@ -144072,6 +144128,10 @@
      db->lookaside.pEnd = p;
      db->lookaside.bDisable = 0;
      db->lookaside.bMalloced = pBuf==0 ?1:0;
@@ -203,7 +265,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    }else{
      db->lookaside.pStart = db;
      db->lookaside.pEnd = db;
-@@ -144599,6 +144648,7 @@
+@@ -144599,6 +144659,7 @@
    db->magic = SQLITE_MAGIC_CLOSED;
    sqlite3_mutex_free(db->mutex);
    assert( sqlite3LookasideUsed(db,0)==0 );
