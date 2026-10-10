@@ -170,6 +170,22 @@ On p13, Sublet-lifetime QEMU `af37cc32`, the real server and its page-mover thre
 
 All as registered. Both gates still fail only fixture 18 (its target-offset defect).
 
+**FINDING 2026-10-11: `c0e5a99` as fixtures 24/25 did NOT catch on the lifetimes arm, against the
+pre-registered prediction.** After four setup corrections (header's physical class is `orig_clsid`
+not the accounting `slabs_clsid`; fillers must be sized to land in the header class; each
+`slabs_reassign` must be retried while the shared mover thread reports RUNNING), the triggering
+condition is fully built: the chunked item's header page moves with `c0e5a99` reversed, then its
+data chunk's page moves. On BOTH arms the second page move completed with no fault (mark
+`1800021`), where the prediction was FAULT temporal on the lifetimes arm. The prediction stands as
+pushed (`bf11e06ca556`); this is the recorded finding. So the orphan data chunk's `head` -- a copy
+of the header capability, which patch 0006 should revoke when the header page's generation is
+revoked -- was NOT read as revoked during the chunk page's move. Candidate explanations, none yet
+confirmed by reading: the header page's generation revoke may not reach a capability copy stored in
+another page's chunk; or the mover may not read `ch->head` for this chunk on the move path taken; or
+the orphan chunk's header reference was overwritten before the second move. Unlike `a836eab`
+(fixtures 22/23, caught as predicted), this defect is NOT demonstrated protected. Next step is
+reading, not more board cycles: instrument whether `head` is tagged after the first move.
+
 **Buildable now: two** (`a836eab`, `c0e5a99`). Both are mover-driven, so they need the server (items,
 LRU, hash table, the mover thread), not the allocators component: in-process fixtures like 12-16,
 with the reversal behind its own define and predictions registered before the first boot.
