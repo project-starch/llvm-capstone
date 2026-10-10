@@ -12,23 +12,6 @@
   "fidelity": "model-consumer, real allocator; the reassembly table is reduced to a file-scope head holding the buffer pointer, and the tvb wrapper is elided",
   "distinguishing": "the stale access is a memcmp of the stored fragment against the new one; no reoccupation is asserted, so the unprotected arm compares against the old byte",
   "arms": {
-    "spatial": {
-      "oracle": "complete",
-      "status": "measured",
-      "verdict": "NOT CAUGHT",
-      "measured": "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port/matrix.tsv (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
-    },
-    "sublet": {
-      "oracle": "fault at the labelled read probe",
-      "cause": 24
-    },
-    "sublet-chunks": {
-      "oracle": "fault at the labelled read probe: the packet pool is BLOCK_FAST, which the chunk port leaves unchanged",
-      "cause": 24,
-      "status": "measured",
-      "verdict": "CAUGHT",
-      "measured": "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port/matrix.tsv (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
-    },
     "native-detect": {
       "status": "measured",
       "verdict": "NOT CAUGHT",
@@ -49,19 +32,14 @@
       "verdict": "TWO-SIDED",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-differential/: the buggy sequence reaches storage outside its object (VERDICT DEFECT-REPRODUCED, exit 0) and the fixed sequence -- this case's upstream fix, modelled in case.c under wm_fixed -- does not (VERDICT FIXED, exit 0). Hosted build, upstream wmem allocator (WM_CHUNKS=OFF), `program 0 N buggy|fixed` (runners/run-native.sh). Temporal: the next dissection reoccupies the freed storage, asserted to be the same address, and the stale read returns its marker. The arm did not exist before 2026-10-09: the cases had no fixed sequence."
     },
-    "sublet-malloc": {
-      "target": "Capstone domain, wmem AS RELEASED (WM_VARIANT=reference: none of the port's patches) on Sublet regions, mode 1: every g_malloc a region, every g_free a revoke -- Sublet only as the system allocator",
-      "oracle": "complete: wmem as released keeps the stale object's block -- wm_next_packet is wmem_free_all on the BLOCK_FAST packet pool, which frees every block but the first and reinitialises that one (wmem_block_fast_free_all), and the object is far smaller than a block, so it sits in the kept first block; nothing reaches g_free, so the Sublet system allocator revokes nothing. MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (image c8a93f26181c3890); the positive control 90 faulted in mode 1 and completed in mode 0 of the same build options.",
-      "prediction": "complete",
-      "status": "measured",
-      "control": "controls/sublet-malloc/90_ctl_jumbo_freed_by_reset must fault in the same build",
-      "predicted": "2026-10-09",
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-09",
-      "preregistered": "f7adf03a1009"
+    "virtual-malloc": {
+      "oracle": "virtual profile, wmem as released on virtual mallocng (tools/arms.json virtual-wmem): a fault at the labelled read or write probe, or the case completes and this arm did not see it"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc"
     }
   },
-  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe, as before; results/20260929-qemu-chunk-port ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 completes, mode 1 CAUGHT.",
+  "status": "measured natively (native-detect, native-fix-differential) and on stock CheriBSD (cheribsd-revocation); the virtual arms (virtual-malloc, virtual-nested-pools) are not run yet. The Capstone domain arms (spatial, sublet, sublet-chunks, sublet-malloc) and PoisonCap left the case on 2026-10-11 with their builds; their bundles stay in results/.",
   "nested": true,
   "nested_why": "wmem's BLOCK_FAST allocator carved the object out of a block g_malloc handed out -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED."
 }

@@ -14,22 +14,6 @@
   "live_proof": "read from the PINNED source, keyed on the identifier: v4.6.8:epan/dissectors/packet-rtps.c contains the pre-fix guard `rtps_max_batch_samples_dissected > 0 &&` 1 time and the fixed `(unsigned)sample_info_max` 0 times. Two-sided. LIVE AT THE PIN.",
   "distinguishing": "THE ROW THAT FILLS AN EMPTY CELL: the inventory recorded the nested-spatial cell as having no LIVE upstream defect, and this one is live at v4.6.8. It is also the only row in this corpus whose defect is a guard that CANNOT FIRE in the shipped configuration rather than a guard that is absent or miscomputed -- the preference's default of 0 short-circuits it. The fix's own comment says so: guarding on sample_info_max 'keeps the 0 case bounded too'.",
   "arms": {
-    "spatial": {
-      "oracle": "fault at the labelled write probe",
-      "status": "measured",
-      "prediction": "PREDICTED: faults. Every arm of this harness narrows a wmem allocation to its request via wm_narrow(), so a spatial crossing faults on ALL arms and this row does not discriminate the chunk port -- the corpus.json note states that for the corpus as a whole. NOT YET MEASURED for this case: it needs a Capstone domain build, which the four 2026-10-07 additions have not had.",
-      "cause": 7,
-      "note": "ORACLE COMPLETED 2026-10-09, AFTER THE FIRST RUN, FROM THE SOURCE. The pre-registered text (kept in `prediction`) said only 'faults', naming neither probe nor cause, so the runner fell back to its defaults -- the READ probe and the temporal causes 24/25 -- and scored the first run FAIL although the domain faulted where the case is built to. The probe is fixed by case.c, which calls wm_write_probe at line 68; the cause by the access: a bounds violation on a store raises 7 (established by cases 16-17 on 2026-10-05). Neither was read off the result. MEASURED 2026-10-09, results/20261009-qemu-capstone-18-21/: cause 7 at pc=0x101901508, equal to the write probe address the boot published; runner exit 0 with controls 11 (temporal) and 13 (spatial) as recorded, negative control 12/12.",
-      "verdict": "CAUGHT"
-    },
-    "sublet": {
-      "oracle": "fault at the labelled write probe",
-      "status": "measured",
-      "prediction": "PREDICTED: faults, identically to the spatial arm, and for the same reason -- wm_narrow() bounds every allocation on every arm. Revocation has nothing to fire on: nothing is freed in a spatial row. NOT YET MEASURED.",
-      "cause": 7,
-      "note": "ORACLE COMPLETED 2026-10-09, AFTER THE FIRST RUN, FROM THE SOURCE. The pre-registered text (kept in `prediction`) said only 'faults', naming neither probe nor cause, so the runner fell back to its defaults -- the READ probe and the temporal causes 24/25 -- and scored the first run FAIL although the domain faulted where the case is built to. The probe is fixed by case.c, which calls wm_write_probe at line 68; the cause by the access: a bounds violation on a store raises 7 (established by cases 16-17 on 2026-10-05). Neither was read off the result. Judged on the WM_CHUNKS=OFF build. MEASURED 2026-10-09, results/20261009-qemu-capstone-18-21/: cause 7 at pc=0x101901508, equal to the write probe address the boot published; runner exit 0 with controls 11 (temporal) and 13 (spatial) as recorded, negative control 12/12.",
-      "verdict": "CAUGHT"
-    },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
@@ -49,27 +33,12 @@
       "verdict": "TWO-SIDED",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-differential/: the buggy sequence reaches storage outside its object (VERDICT DEFECT-REPRODUCED, exit 0) and the fixed sequence -- this case's upstream fix, modelled in case.c under wm_fixed -- does not (VERDICT FIXED, exit 0). Hosted build, upstream wmem allocator (WM_CHUNKS=OFF), `program 0 N buggy|fixed` (runners/run-native.sh). Spatial: the access address lies outside [object, object+size) in the buggy sequence and inside it, or is not made, in the fixed one. Previously 'not written'."
     },
-    "sublet-malloc": {
-      "target": "Capstone domain, wmem AS RELEASED (WM_VARIANT=reference: none of the port's patches) on Sublet regions, mode 1: every g_malloc a region, every g_free a revoke -- Sublet only as the system allocator",
-      "oracle": "complete: the crossing leaves its wmem chunk but stays inside the block wmem carved it from, one g_malloc; without the port nothing narrows below that region (the same mechanism as the stock CheriBSD reading of this case, which completes). MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (image 4508542c578a6c43); the positive control 90 faulted in mode 1 and completed in mode 0 of the same build options.",
-      "prediction": "complete",
-      "status": "measured",
-      "control": "controls/sublet-malloc/90_ctl_jumbo_freed_by_reset must fault in the same build",
-      "predicted": "2026-10-09",
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-09",
-      "preregistered": "f7adf03a1009"
+    "virtual-malloc": {
+      "oracle": "virtual profile, wmem as released on virtual mallocng (tools/arms.json virtual-wmem): a fault at the labelled read or write probe, or the case completes and this arm did not see it"
     },
-    "sublet-chunks": {
-      "oracle": "fault at the labelled write probe: the chunk port bounds every chunk, as the region-granular hooks do, and the crossing leaves its chunk MEASURED 2026-10-09, results/2026-10-09-sublet-chunks-18-21/: cause 7 at the labelled write probe (pc 0x1019024a8, image ea1e7d0d5e12d2c2).",
-      "prediction": "fault at the labelled write probe",
-      "status": "measured",
-      "predicted": "2026-10-09",
-      "cause": 7,
-      "verdict": "CAUGHT",
-      "measured": "2026-10-09",
-      "preregistered": "f7adf03a1009"
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc"
     }
   },
-  "status": "built 2026-10-07 and MEASURED on stock CheriBSD the same day (revocation on, 25 of 25 arms, control firing): completes, not caught. The case's own CHECK assertions must hold for it to exit 0, so the crossing was created rather than merely described. The Capstone, PoisonCap and native arms are declared: these four have not had a domain build. N = 1 per cell. Capstone measured 2026-10-09 (results/20261009-qemu-capstone-18-21/): spatial CAUGHT, sublet CAUGHT. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 CAUGHT, mode 1 CAUGHT."
+  "status": "measured natively (native-detect, native-fix-differential) and on stock CheriBSD (cheribsd-revocation); the virtual arms (virtual-malloc, virtual-nested-pools) are not run yet. The Capstone domain arms (spatial, sublet, sublet-chunks, sublet-malloc) and PoisonCap left the case on 2026-10-11 with their builds; their bundles stay in results/."
 }

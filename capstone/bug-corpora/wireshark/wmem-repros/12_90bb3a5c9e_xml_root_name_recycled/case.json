@@ -10,24 +10,8 @@
   "shape": "stale pointer after an individual recycler free",
   "allocator_layer": "block",
   "fidelity": "model-consumer, real allocator; the ASan report's own alloc and free stacks describe the address being recycled by a packet-pool object, not the root name's lifecycle, which is taken from the fix",
-  "distinguishing": "the only case whose lifetime ends by an individual free rather than a pool reset, and the corpus's recorded non-detection under the region-granular port: Sublet lent whole regions and a chunk inside a live block had no epoch of its own, so that arm completes. The chunk port (WM_CHUNKS=ON, the default since a34caaedb1bc) gives the chunk a region of its own and catches it. Introduced and fixed within one release, by a change that turned an owned copy into an alias without removing the free",
+  "distinguishing": "the only case whose lifetime ends by an individual free rather than a pool reset: the chunk goes back to a free list inside a live block, so neither the system allocator nor a reset sees it end; patch 0001 revokes the object at wmem_free. Introduced and fixed within one release, by a change that turned an owned copy into an alias without removing the free",
   "arms": {
-    "spatial": {
-      "oracle": "complete",
-      "status": "measured",
-      "verdict": "NOT CAUGHT",
-      "measured": "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port/matrix.tsv (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
-    },
-    "sublet": {
-      "oracle": "complete: the individual recycler free ends no epoch, a recorded non-detection, not a pass"
-    },
-    "sublet-chunks": {
-      "oracle": "fault at the labelled read probe: under the chunk port (WM_CHUNKS=ON) the chunk is a region of its own, its individual free revokes it, and its reissue at the same address is a new region, so the registry's stale name faults",
-      "cause": 24,
-      "status": "measured",
-      "verdict": "CAUGHT",
-      "measured": "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port/matrix.tsv (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
-    },
     "native-detect": {
       "status": "measured",
       "verdict": "NOT CAUGHT",
@@ -48,19 +32,14 @@
       "verdict": "TWO-SIDED",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-differential/: the buggy sequence reaches storage outside its object (VERDICT DEFECT-REPRODUCED, exit 0) and the fixed sequence -- this case's upstream fix, modelled in case.c under wm_fixed -- does not (VERDICT FIXED, exit 0). Hosted build, upstream wmem allocator (WM_CHUNKS=OFF), `program 0 N buggy|fixed` (runners/run-native.sh). Temporal: the next dissection reoccupies the freed storage, asserted to be the same address, and the stale read returns its marker. The arm did not exist before 2026-10-09: the cases had no fixed sequence."
     },
-    "sublet-malloc": {
-      "target": "Capstone domain, wmem AS RELEASED (WM_VARIANT=reference: none of the port's patches) on Sublet regions, mode 1: every g_malloc a region, every g_free a revoke -- Sublet only as the system allocator",
-      "oracle": "complete: the explicit wmem_free returns the name to the epan scope's BLOCK allocator's free list inside a live block; nothing reaches g_free. MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (image 6526f51779e63ccf); the positive control 90 faulted in mode 1 and completed in mode 0 of the same build options.",
-      "prediction": "complete",
-      "status": "measured",
-      "control": "controls/sublet-malloc/90_ctl_jumbo_freed_by_reset must fault in the same build",
-      "predicted": "2026-10-09",
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-09",
-      "preregistered": "f7adf03a1009"
+    "virtual-malloc": {
+      "oracle": "virtual profile, wmem as released on virtual mallocng (tools/arms.json virtual-wmem): a fault at the labelled read or write probe, or the case completes and this arm did not see it"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc"
     }
   },
-  "status": "run 2026-09-21 under QEMU: spatial completes; sublet completes, the recorded non-detection; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe with released_chunks=1, the chunk poisoned at its individual free; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe x3, and the WM_CHUNKS=OFF build still completes x3; results/20260929-qemu-chunk-port ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 completes, mode 1 CAUGHT.",
+  "status": "measured natively (native-detect, native-fix-differential) and on stock CheriBSD (cheribsd-revocation); the virtual arms (virtual-malloc, virtual-nested-pools) are not run yet. The Capstone domain arms (spatial, sublet, sublet-chunks, sublet-malloc) and PoisonCap left the case on 2026-10-11 with their builds; their bundles stay in results/.",
   "nested": true,
   "nested_why": "wmem's BLOCK allocator carved the object out of a block g_malloc handed out -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED."
 }

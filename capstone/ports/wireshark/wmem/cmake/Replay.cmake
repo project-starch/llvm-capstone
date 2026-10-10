@@ -1,115 +1,39 @@
 add_subdirectory("${CAPSTONE_REPO_ROOT}/capstone/runtime" "${CMAKE_BINARY_DIR}/runtime")
-set(WM_SHARED src/shared/scopes.c src/shared/freestanding.c)
-# The backing policy is the one part that differs per platform: Capstone
-# regions with Sublet handles, or a native bump.
-set(WM_BACKING src/shared/backing.c)
-# The chunk port (patches/...-0002): every chunk of the block allocator is a
-# region of its own, so a chunk free is a revoke. It needs the Sublet backing.
-set(WM_CHUNKS_HOSTED src/native/chunks.c)
-# WM_CHUNKS=OFF builds the region-granular hooks alone from the same tree: every hunk of 0002 is
-# guarded by WMEM_PORT_CHUNKS, so the patch is applied and inert. With WM_P2_CONTROL the fixtures'
-# check that a stale unprotected read sees the old byte is compiled in anyway -- the positive
-# control for that check, which must FAIL when the headers are still in the chunk.
-option(WM_CHUNKS "the chunk port (patches/...-0002)" ON)
-option(WM_P2_CONTROL "compile the old-byte check without the chunk port" OFF)
-# WM_P1_ABLATE keeps the port and stubs out the ONE give a chunk free performs (chunks.c,
-# wm_chunk_retire): the matched arm that attributes a chunk-free fault to that revoke alone. Valid
-# only for fixtures that never reissue the freed chunk (4 and 13); anything that does would take a
-# slot still holding a lent handle.
-option(WM_P1_ABLATE "the port with a chunk free's revoke stubbed out" OFF)
-# WM_VARIANT=reference builds the defect corpus's domain programs against wmem AS RELEASED: none
-# of the port's patches, so no hook fires, no reset ends an epoch and no chunk is a region. What is
-# left is Sublet as the SYSTEM allocator -- every g_malloc a region, every g_free a revoke -- under
-# a stock wmem: the corpus's `sublet-malloc` arm. The replay and security programs stay ported.
-set(WM_VARIANT "ported" CACHE STRING "wmem source the corpus's domain programs build against")
-set_property(CACHE WM_VARIANT PROPERTY STRINGS ported reference)
-if(NOT WM_VARIANT MATCHES "^(ported|reference)$")
-  message(FATAL_ERROR "WM_VARIANT must be ported or reference, not ${WM_VARIANT}")
-endif()
-function(wm_executable name variant)
-  set(workload ${ARGN})
-  set(source "${CMAKE_BINARY_DIR}/source-${variant}")
-  wm_upstream_units(upstream ${variant})
-  if(PORT_HOSTED)
-    set(platform src/native/main.c src/native/regions.c ${WM_BACKING} ${WM_CHUNKS_HOSTED})
-  else()
-    set(platform src/capstone-domain/entry.c src/allocators/sublet/regions.c
-      src/allocators/sublet/chunks.c
-      "${CAPSTONE_REPO_ROOT}/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c"
-      "${CAPSTONE_REPO_ROOT}/capstone/my_first_domain/start.S"
-      "${CAPSTONE_REPO_ROOT}/capstone/tests/runtime-qemu/gct-section-end.S"
-      src/shared/backing.c)
-  endif()
-  add_executable(${name} ${platform} ${workload} ${WM_SHARED} ${upstream})
-  add_dependencies(${name} source-${variant})
-  # The shim directory shadows glib.h and the ws_* headers the upstream units include.
-  target_include_directories(${name} PRIVATE src/shared/shim src/shared "${source}/wsutil/wmem")
-  target_compile_definitions(${name} PRIVATE WMEM_PORT_HOOKS)
-  if(WM_CHUNKS)
-    target_compile_definitions(${name} PRIVATE WMEM_PORT_CHUNKS)
-  endif()
-  if(WM_P2_CONTROL)
-    target_compile_definitions(${name} PRIVATE WM_P2_CONTROL)
-  endif()
-  if(WM_P1_ABLATE)
-    target_compile_definitions(${name} PRIVATE WM_ABLATE_RETIRE_GIVE)
-  endif()
-  target_compile_options(${name} PRIVATE -Wall -Wextra -ffunction-sections -fdata-sections)
-  target_link_libraries(${name} PRIVATE Capstone::Runtime)
-  if(NOT PORT_HOSTED)
-    target_compile_definitions(${name} PRIVATE WM_DOMAIN)
-    set(link_script "${CAPSTONE_REPO_ROOT}/capstone/my_first_domain/link.ld")
-    target_link_options(${name} PRIVATE --gc-sections -T "${link_script}")
-    set_target_properties(${name} PROPERTIES SUFFIX .dom LINK_DEPENDS "${link_script}")
-  endif()
-endfunction()
-if(NOT PORT_HOSTED)
-  enable_language(ASM)
-endif()
-wm_source(ported)
-wm_executable(replay ported src/shared/replay.c)
-if(PORT_HOSTED)
-  wm_upstream_units(upstream_ported ported)
-  add_library(wireshark-wmem STATIC src/native/regions.c ${WM_BACKING} ${WM_CHUNKS_HOSTED} ${WM_SHARED} ${upstream_ported})
-  add_dependencies(wireshark-wmem source-ported)
-  target_include_directories(wireshark-wmem PUBLIC src/shared/shim src/shared
-    "${CMAKE_BINARY_DIR}/source-ported/wsutil/wmem")
-  target_compile_definitions(wireshark-wmem PUBLIC WMEM_PORT_HOOKS)
-  # WM_LIBC_SYSTEM: g_malloc/g_free are the host's malloc/free (src/shared/backing.c), so the
-  # unported arms -- ASan natively, libc revocation on stock CheriBSD -- see wmem's system
-  # requests as a stock build makes them. Hosted only, and not with the chunk port, which owns
-  # the backing.
-  option(WM_LIBC_SYSTEM "hosted: g_malloc and g_free are the host's malloc and free" OFF)
-  if(WM_LIBC_SYSTEM AND WM_CHUNKS)
-    message(FATAL_ERROR "WM_LIBC_SYSTEM needs WM_CHUNKS=OFF: the chunk port owns the backing")
-  endif()
-  if(WM_LIBC_SYSTEM)
-    target_compile_definitions(wireshark-wmem PUBLIC WM_LIBC_SYSTEM)
-  endif()
-  if(WM_CHUNKS)
-    target_compile_definitions(wireshark-wmem PUBLIC WMEM_PORT_CHUNKS)
-  endif()
-  if(PORT_PLATFORM STREQUAL "cheribsd")
-    # The corpus arms run under a supervisor that reports the child's fault
-    # from outside it and resolves the labelled probe from the child's map.
-    add_executable(supervise
-      "${CAPSTONE_REPO_ROOT}/capstone/bug-corpora/cpython/pymalloc-repros/observe/supervise.c")
-    target_compile_definitions(supervise PRIVATE PROBE_SYMBOL="wm_defect_probe")
-    target_link_libraries(supervise PRIVATE util)
-  endif()
-  target_link_libraries(wireshark-wmem PUBLIC Capstone::Runtime)
-  add_library(Wireshark::Wmem ALIAS wireshark-wmem)
-  add_executable(allocator-example examples/wmem.c)
-  target_link_libraries(allocator-example PRIVATE Wireshark::Wmem)
-  include("${PORT_SUPPORT_ROOT}/cmake/Client.cmake")
-  port_add_client(Wireshark::Wmem)
-  wm_source(reference)
-  wm_executable(replay-reference reference src/shared/replay.c)
+# wmem as released everywhere, except the capstone-application build with
+# WM_SUBLET, which applies patch 0001. Native also prepares the patched source,
+# for the source-preparation test; nothing native compiles it.
+if(WM_SUBLET)
+  set(WM_VARIANT sublet)
 else()
-  wm_executable(wmem-security ported security-tests/shared/lifetimes.c)
-  if(WM_VARIANT STREQUAL "reference")
-    wm_source(reference)
-  endif()
+  set(WM_VARIANT reference)
+endif()
+wm_source(${WM_VARIANT})
+if(PORT_PLATFORM STREQUAL "native")
+  wm_source(sublet)
+endif()
+wm_upstream_units(wm_units ${WM_VARIANT})
+add_library(wireshark-wmem STATIC ${wm_units}
+  src/shared/system.c src/shared/compat.c src/shared/scopes.c)
+add_dependencies(wireshark-wmem source-${WM_VARIANT})
+# The shim directory shadows glib.h and the ws_* headers the upstream units include.
+target_include_directories(wireshark-wmem PUBLIC src/shared/shim src/shared
+  "${CMAKE_BINARY_DIR}/source-${WM_VARIANT}/wsutil/wmem")
+target_compile_options(wireshark-wmem PRIVATE -Wall -Wextra -ffunction-sections -fdata-sections)
+target_link_libraries(wireshark-wmem PUBLIC Capstone::Runtime)
+add_library(Wireshark::Wmem ALIAS wireshark-wmem)
+add_executable(replay src/shared/main.c src/shared/replay.c)
+target_link_libraries(replay PRIVATE Wireshark::Wmem)
+add_executable(allocator-example examples/wmem.c)
+target_link_libraries(allocator-example PRIVATE Wireshark::Wmem)
+include("${PORT_SUPPORT_ROOT}/cmake/Client.cmake")
+port_add_client(Wireshark::Wmem)
+if(PORT_PLATFORM STREQUAL "cheribsd")
+  # The corpus arms run under a supervisor that reports the child's fault
+  # from outside it and resolves the labelled probe from the child's map.
+  add_executable(supervise
+    "${CAPSTONE_REPO_ROOT}/capstone/bug-corpora/cpython/pymalloc-repros/observe/supervise.c")
+  target_compile_definitions(supervise PRIVATE PROBE_SYMBOL="wm_defect_probe")
+  target_link_libraries(supervise PRIVATE util)
 endif()
 # The defect corpus: one program per NN_*/case.c, named as the contract names
 # run artifacts. Case material lives in bug-corpora, not inside the port.
@@ -144,15 +68,9 @@ if(wm_case_count GREATER 0)
   foreach(i RANGE 0 ${wm_last})
     list(GET wm_dirs ${i} wm_dir)
     list(GET wm_stems ${i} wm_stem)
-    if(PORT_HOSTED)
-      add_executable("${wm_stem}" "${wm_dir}/case.c" "${WM_CORPUS_DIR}/shared/driver.c")
-      target_include_directories("${wm_stem}" PRIVATE "${WM_CORPUS_DIR}/shared")
-      target_compile_definitions("${wm_stem}" PRIVATE WM_CORPUS_HOSTED)
-      target_link_libraries("${wm_stem}" PRIVATE Wireshark::Wmem)
-    else()
-      wm_executable("${wm_stem}" ${WM_VARIANT} "${wm_dir}/case.c" "${WM_CORPUS_DIR}/shared/driver.c")
-      target_include_directories("${wm_stem}" PRIVATE "${WM_CORPUS_DIR}/shared")
-    endif()
+    add_executable("${wm_stem}" "${wm_dir}/case.c" "${WM_CORPUS_DIR}/shared/driver.c")
+    target_include_directories("${wm_stem}" PRIVATE "${WM_CORPUS_DIR}/shared")
+    target_link_libraries("${wm_stem}" PRIVATE Wireshark::Wmem)
   endforeach()
   message(STATUS "wmem defect corpus: ${wm_case_count} cases")
 endif()

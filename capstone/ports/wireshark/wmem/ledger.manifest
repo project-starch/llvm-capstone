@@ -1,18 +1,17 @@
-# Path, bucket, purpose. An inventory of what the adaptation cost beside the allocator, for I1.
-# The per-chunk port's allocator change is patches/...-0002 and IS a measured effort claim: it is
-# counted by capstone/tests/port-effort.py against its sibling .classes file, not here.
-patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch allocator object bounds, block epochs, chunk releases and stale-pointer refusal in the four allocators
+# wmem adaptation inventory: path, bucket, purpose.
+# The allocator patch is wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch.
+patches/wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch allocator block and block_fast objects as child lifetimes of their blocks (CDERIVE/CREVOKE)
 src/shared/shim/glib.h compat the GLib surface wmem uses, mapped onto port services
 src/shared/shim/wsutil/ws_assert.h compat scope assertions kept active
-patches/wireshark-4.6.8-0002-wmem-block-chunks-under-sublet.patch allocator the classified per-chunk port of the block allocator, counted by port-effort.py
-src/shared/wmem-port-hooks.h glue object narrowing for the patched allocators
-src/shared/chunks.h glue the chunk authority interface the patched block allocator calls
-src/allocators/sublet/chunks.c allocator per-chunk regions under a block's senior handle: carve, take, give, one revoke per reset and per close
-src/native/chunks.c glue the same interface with no capabilities, so the native replay checks the header move against upstream
-src/shared/backing.c allocator one region per system request, size-exact reuse, epoch and widen services; linear blocks, the header area and the probe for the chunk port
-src/shared/scopes.c allocator the dissection-loop pool lifecycle modelled on upstream's scope layer
-src/shared/freestanding.c compat environment and string services the domain lacks
-src/allocators/sublet/regions.c allocator retained authority and revocation, and the linear regions the chunk port carves
+src/shared/system.c compat g_malloc, g_free and g_realloc as the process's malloc, counted
+src/shared/compat.c compat no allocator override from the environment; the core's hashing seed
+src/shared/scopes.c test the dissection-loop pool lifecycle modelled on upstream's scope layer
+src/shared/main.c test the replay driver
 src/shared/replay.c test event validation and synthetic payload checks across all four allocators
-security-tests/shared/lifetimes.c test live, stale, bounds and refusal controls with labelled access sites
-src/linux-guest/domain-loader.c test prints the chunk port's counts from the report page, or says they are absent
+examples/wmem.c test the link example the shared CheriBSD harness runs
+src/shared/port.h test the replay's trace format and the port's services
+src/shared/scopes.h test the scope layer's interface
+src/shared/shim/config.h compat the configuration header the upstream units include
+src/shared/shim/ws_attributes.h compat attribute macros the upstream units use
+src/shared/shim/ws_posix_compat.h compat an empty stand-in for a header the upstream units include
+src/shared/shim/ws_symbol_export.h compat export macros the upstream units use

@@ -8,32 +8,11 @@
   "object": "the Range header value copied into file scope, 6 bytes for the value used here",
   "lifetime_ender": "NONE -- the object is alive for the whole case. This is the corpus's only spatial row: no lifetime ends, the cursor simply leaves the chunk. The field is required by the schema and is answered honestly rather than left to imply a reuse that does not happen.",
   "shape": "cursor advanced past its chunk by a fixed skip, read inside the same block",
-  "allocator_layer": "block -- wmem file scope (WMEM_ALLOCATOR_BLOCK). Note that in the corpus harness the bound that fires is wm_narrow()'s per-allocation shrink, not the chunk adapter's.",
+  "allocator_layer": "block -- wmem file scope (WMEM_ALLOCATOR_BLOCK)",
   "fidelity": "model-consumer, real allocator. wmem_strdup is written as its own alloc+copy because the corpus seam includes wmem_core only; the skip is upstream's literal 8; the parse that follows is reduced to its first read, which is the byte the cursor lands on.",
-  "distinguishing": "RETRACTED AND REPLACED 2026-10-05 by the run. The case was filed claiming that sublet completes and sublet-chunks faults, i.e. that it discriminates the chunk port. It does not, and cannot in this harness: src/shared/wmem-port-hooks.h:11-15 narrows EVERY wmem allocation to its request under WM_DOMAIN, so both builds bound the 6-byte object to 6 bytes and both fault with cause 5. Measured on both: WM_CHUNKS=ON and WM_CHUNKS=OFF each fault at the labelled read probe with the pc equal to the resolved probe address. What the case DOES establish is still worth having: it is the corpus's only row that faults on BOUNDS (cause 5) rather than on revoked authority (cause 24), and the first upstream SPATIAL defect reduced anywhere in this tree. The 'a nested allocator hides the extent from malloc' contrast needs an arm with genuinely malloc-granular bounds, which this harness has none of; it lives in the tshark APP port, whose measured fx12 length ladder is level0 41908912, shrink 8388560, sublet 1048528, chunks 64.",
-  "note": "File scope, not the packet pool, which is why upstream's own defect is here: wmem_file_scope() is a BLOCK allocator. Under THIS harness the scope choice turns out not to change the reading, because wm_narrow() bounds every wmem allocation whatever the scope; it matters for the tshark APP port, where the chunk adapter covers BLOCK and leaves BLOCK_FAST alone. docs/ref/wireshark-spatial-defect-triage.md records the two LIVE spatial defects that sit in BLOCK_FAST for exactly that reason.",
+  "distinguishing": "the corpus's first SPATIAL row, and the first upstream spatial defect reduced in this tree: no lifetime ends, the cursor leaves its 6-byte chunk inside the same block. Only a bound at the chunk can see it, so it separates the arm that bounds wmem's objects (virtual-nested-pools) from the ones that bound only what the system allocator hands out.",
+  "note": "File scope, not the packet pool, which is why upstream's own defect is here: wmem_file_scope() is a BLOCK allocator. docs/ref/wireshark-spatial-defect-triage.md records the two LIVE spatial defects that sit in BLOCK_FAST.",
   "arms": {
-    "spatial": {
-      "oracle": "fault at the labelled read probe",
-      "cause": 5,
-      "note": "MEASURED, and it REFUTES the prediction this arm first carried (\"the sequence completes: bounds are malloc-granular\"). This port narrows EVERY wmem allocation to its request -- src/shared/wmem-port-hooks.h:11-15, wm_narrow(), unconditional under WM_DOMAIN -- so no arm of this harness has malloc-granular bounds and a spatial overread faults on all of them.",
-      "status": "measured",
-      "verdict": "CAUGHT",
-      "measured": "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-case13-ON/matrix.tsv (+5-ON/OFF, 18-21 bundle) (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
-    },
-    "sublet": {
-      "oracle": "fault at the labelled read probe",
-      "cause": 5,
-      "note": "MEASURED on the WM_CHUNKS=OFF build, which oracle_arm() judges against this arm. Also refutes its first prediction of completion, and for the same reason as the spatial arm: wm_narrow() is what bounds the object, not the chunk port."
-    },
-    "sublet-chunks": {
-      "oracle": "fault at the labelled read probe",
-      "cause": 5,
-      "note": "MEASURED on the WM_CHUNKS=ON build. The chunk port narrows the chunk a second time at chunks.c:78, but the bound that the overread crosses is already wm_narrow()'s, so this arm is not the discriminator here -- see 'distinguishing'.",
-      "status": "measured",
-      "verdict": "CAUGHT",
-      "measured": "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-ON/matrix.tsv (cited by the 2026-10-10 audit, which traced this cell to the record; until then the arm carried oracle text only)"
-    },
     "cheribsd-revocation": {
       "oracle": "MEASURED 2026-10-10, results/2026-10-10-cheribsd-libc/: **NOT CAUGHT** on stock wmem with the system allocator as CheriBSD's libc (WM_LIBC_SYSTEM, WM_CHUNKS=OFF), revocation on: the crossing stayed inside one g_malloc'd block and completed; fixed arm VERDICT FIXED. In the same boot control 90 (a jumbo g_free'd by the reset) was HELD by the quarantine and the revocation control faulted at its labelled load. The 2026-10-07 reading of this arm ran the hosted bump arena with the chunk port compiled in, where nothing reached free().",
       "target": "stock CheriBSD purecap with libc revocation on",
@@ -56,19 +35,14 @@
       "verdict": "TWO-SIDED",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-differential/: the buggy sequence reaches storage outside its object (VERDICT DEFECT-REPRODUCED, exit 0) and the fixed sequence -- this case's upstream fix, modelled in case.c under wm_fixed -- does not (VERDICT FIXED, exit 0). Hosted build, upstream wmem allocator (WM_CHUNKS=OFF), `program 0 N buggy|fixed` (runners/run-native.sh). Spatial: the access address lies outside [object, object+size) in the buggy sequence and inside it, or is not made, in the fixed one. The arm did not exist before 2026-10-09: the cases had no fixed sequence."
     },
-    "sublet-malloc": {
-      "target": "Capstone domain, wmem AS RELEASED (WM_VARIANT=reference: none of the port's patches) on Sublet regions, mode 1: every g_malloc a region, every g_free a revoke -- Sublet only as the system allocator",
-      "oracle": "complete: the crossing leaves its wmem chunk but stays inside the block wmem carved it from, one g_malloc; without the port nothing narrows below that region (the same mechanism as the stock CheriBSD reading of this case, which completes). MEASURED 2026-10-09, results/2026-10-09-sublet-malloc/: the sequence COMPLETES, NOT CAUGHT (image 875507e6d274eddf); the positive control 90 faulted in mode 1 and completed in mode 0 of the same build options.",
-      "prediction": "complete",
-      "status": "measured",
-      "control": "controls/sublet-malloc/90_ctl_jumbo_freed_by_reset must fault in the same build",
-      "predicted": "2026-10-09",
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-09",
-      "preregistered": "f7adf03a1009"
+    "virtual-malloc": {
+      "oracle": "virtual profile, wmem as released on virtual mallocng (tools/arms.json virtual-wmem): a fault at the labelled read or write probe, or the case completes and this arm did not see it"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc"
     }
   },
-  "status": "MEASURED 2026-10-05 under QEMU, both builds, case 13 only, modes spatial and sublet. WM_CHUNKS=ON: both arms fault, cause 5, at the labelled read probe, pc 0x10190222c equal to the resolved probe address. WM_CHUNKS=OFF: both arms fault, cause 5, pc 0x1019013f8 likewise. N=1 per cell. The run REFUTED the completion predictions both arms were filed with; the oracles above are the corrected, measured ones and 'distinguishing' records the withdrawal. poisoncap-* and cheribsd-revocation remain predictions -- neither platform is on this host. native-detect remains not written and still needs its own positive control before a silent ASan arm means anything. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on: completes, not caught. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. Native fix differential measured 2026-10-09: two-sided. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 CAUGHT, mode 1 CAUGHT.",
+  "status": "measured natively (native-detect, native-fix-differential) and on stock CheriBSD (cheribsd-revocation); the virtual arms (virtual-malloc, virtual-nested-pools) are not run yet. The Capstone domain arms (spatial, sublet, sublet-chunks, sublet-malloc) and PoisonCap left the case on 2026-10-11 with their builds; their bundles stay in results/.",
   "nested": true,
   "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
 }

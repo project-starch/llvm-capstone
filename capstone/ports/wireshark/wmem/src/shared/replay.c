@@ -1,8 +1,5 @@
 #include "port.h"
 #include "wmem_core.h"
-#if defined(WM_DOMAIN) && defined(WMEM_PORT_CHUNKS)
-#include "chunks.h"
-#endif
 #include <string.h>
 struct object {
   unsigned char *p;
@@ -49,14 +46,11 @@ void wm_replay(const struct wm_header *in, struct wm_header *out) {
         if (pools[a])
           check_pool(a);
       ++out->completed;
-      wm_backing_stats(out);
-#if defined(WM_DOMAIN) && defined(WMEM_PORT_CHUNKS)
-      wm_chunk_report(out);
-#endif
+      wm_system_stats(out);
       return;
     }
     if (e->allocator >= WM_ALLOCATORS || e->object >= WM_OBJECTS ||
-        e->size > WM_PAYLOAD_BYTES)
+        e->size > WM_OBJECT_BYTES)
       wm_fail(304);
     unsigned a = e->allocator;
     struct object *o = &objects[e->object];

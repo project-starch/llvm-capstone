@@ -1,11 +1,11 @@
 # Wireshark 4.6.8: wmem allocators
 
-Ports Wireshark's memory manager `wmem` — its core and all four allocators — into
-native and Capstone-domain replays. The domain executes allocator calls with
-checked synthetic payloads; it dissects no packets and runs no dissector. The
-pin is the 4.6.8 release archive, verified by SHA256 in `upstream.json`; both
-block allocators are blob-identical from 4.4.0 through 4.6.8, and the only
-later change in the development line is a one-word comment.
+Wireshark's memory manager `wmem` -- its core and all four allocators -- built
+outside Wireshark, with a replay of allocator traces, a scope model of the
+dissection loop, a link example and the build seam the
+[wmem defect corpus](../../../bug-corpora/wireshark/wmem-repros) uses. The pin
+is the 4.6.8 release archive, verified by SHA-256 in `upstream.json`; both
+block allocators are blob-identical from 4.4.0 through 4.6.8.
 
 Why this allocator: in a default Wireshark run, five pools are backed by a
 nested allocator that retains its blocks across a reset and reissues their
@@ -14,233 +14,89 @@ block and rewinds; the file and epan scopes (`block`) keep every block and
 rebuild their free lists. Upstream finds the resulting stale-pointer defects
 only by substituting a per-object allocator (`WIRESHARK_DEBUG_WMEM_OVERRIDE`)
 so that Valgrind or ASan can see them. This port keeps the production
-allocators and gives them authority instead.
+allocators and makes their objects lifetimes instead.
 
-## Ownership and lifetime boundary
+## Targets
 
-`wmem_alloc(NULL, n)` is wmem's only request to the system allocator: whole
-blocks, jumbo objects and its own descriptors. Every such request becomes one
-**region** with its own revocation handle (`src/shared/backing.c`); released
-regions of the same size are reissued before fresh payload is carved, as a
-system allocator would reissue a freed block. Objects handed to callers are
-narrowed to their request in both arms.
+| preset | what it builds |
+|---|---|
+| `capstone-application` | the replay, the example and the corpus cases as Capstone processes on the virtual profile (`CAPSTONE_SDK`); `-DWM_SUBLET=ON` adds the Sublet protection |
+| `cheribsd` | the same for stock CheriBSD purecap ([host/cheribsd](host/cheribsd)), with the supervisor the corpus's CheriBSD arm runs under |
+| `native` | the same, wmem as released, and the tests |
 
-The allocator hooks (`patches/…-0001-wmem-authority-hooks.patch`, every hunk
-guarded by `WMEM_PORT_HOOKS`) do three things:
+Every target builds the `Wireshark::Wmem` library: the six upstream units
+(`wmem_core.c`, `wmem_user_cb.c` and the four allocators), the GLib shim in
+`src/shared/shim/`, and the scope model in `src/shared/scopes.c`. `g_malloc`,
+`g_free` and `g_realloc` are the process's `malloc`, `free` and `realloc`
+(`src/shared/system.c`), as a stock build gets them from GLib: libc natively and
+on CheriBSD, virtual mallocng on Capstone.
 
-* **narrow** each returned object to its request (`wm_narrow`);
-* **widen** an object pointer the allocator is handed back — for `free` and
-  `realloc` — to block-wide authority, after first reading through the
-  pointer's own authority (`wm_widen`), so a stale pointer given back to the
-  allocator faults at the allocator's probe rather than corrupting its lists;
-* **start a new epoch** for every block a reset retains (`wm_epoch`):
-  `block_fast` renews its first block, `block` renews each retained block and
-  rebuilds its block list from the renewed aliases.
+## The patch
 
-Both arms run the same allocator and backing layout:
+`cmake/prepare-source.py` verifies the archive, extracts the wmem subtree and
+prepares one of two variants: `reference`, wmem as released, and `sublet`, with
+`patches/wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch` applied. Only
+`capstone-application` with `WM_SUBLET=ON` builds `sublet`.
 
-- `spatial`: objects are request-bounded; a reset does not revoke old aliases.
-- `sublet`: additionally, a reset, a jumbo release, a returned block, a pool
-  destruction and every `strict`/`simple` free revoke the authority of the
-  storage they end.
+Patch 0001 uses the two instructions directly. `CDERIVE` makes a child
+capability of a non-linear parent, bounded to a sub-range and carrying MANAGE
+over its own children; `CREVOKE(parent, child)` ends a direct child and
+everything below it, and faults when the child is not a live direct child.
 
-**Superseded by the chunk port** (`patches/…-0002`, below): the paragraph that
-follows describes the region-granular hooks alone, and is kept because a
-`WM_CHUNKS=OFF` build still builds that way.
+* Every block `block` and `block_fast` take from the system allocator, jumbo
+  blocks included, carries two lifetimes in its header: `life`, derived from the
+  malloc'd object, and the `generation` below it (`wmem_allocator.h`).
+* Each allocator's consumer functions stay upstream's and work on the
+  allocator's own pointers. Three wrappers are registered in their place: alloc
+  derives the caller's pointer from the generation of the block that holds the
+  chunk, bounded to the request; free revokes it and hands upstream's free the
+  allocator's pointer at the same address; realloc does both. The block is found
+  by address in the allocator's block lists.
+* Freeing a block revokes the system allocator's lifetime of it, and every object
+  lies below. A reset that keeps a block -- `block` keeps all of them,
+  `block_fast` its first -- revokes the block's generation and derives a new one.
+* `block_fast`'s free stays a no-op: an object lives until the reset, or until
+  realloc replaces it.
+* `block` keeps its free-list links inside free chunks, with the whole block's
+  bounds. A chunk handed out is cleared of them over the caller's range, and so
+  is the range a realloc grows into.
 
-What is deliberately **not** revoked: an individual `wmem_free` in the `block`
-allocator returns the chunk to a free list inside a live block. Sublet lends
-whole regions, and a chunk has no region of its own, so this free ends no
-epoch (fixture 4). The same holds for the no-op `free` of `block_fast`.
+`simple` and `strict` are untouched: every object of theirs is its own
+malloc'd object, which the system allocator bounds and retires itself.
 
-### The chunk port (`patches/…-0002`, every Sublet build)
-
-The hooks give a block one region, so a chunk freed inside a live block keeps
-its authority until the block is reset. The chunk port closes that: the block
-is held **linear**, a senior handle is taken on it before its first split, and
-every chunk is carved from it as a region of its own. A chunk free is one
-revoke; a reset is still one revoke per retained block, on the senior handle,
-whatever the block was split into; a gc or destroy is the same revoke before
-the block goes back.
-
-Carving a chunk takes its range away from any authority over the whole block,
-and upstream keeps its chunk headers and free-list links in exactly those
-ranges (`WMEM_GET_FREE` is `WMEM_CHUNK_TO_DATA`). So they move beside the
-block, into records with upstream's field names, found by address through an
-index. The header bytes stay reserved in the block, so a block's layout is
-upstream's, and the native replay still matches unmodified upstream, regions
-and peak included. Placement is not the same once upstream would have merged
-two free chunks and the port does not: no run compares addresses, and the
-replay's checksum, being a function of the trace, cannot see them.
-
-Given up, because the discipline forbids it: free chunks never rejoin. A join
-needs a handle taken before the split that separated them, and for an
-allocator that carves from the front that handle also covers the live chunks
-between them (micropython's port states the same rule). So there is no merge on
-free and no growth in place; a shrinking `realloc` re-issues the front under a
-new handle, which revokes the caller's other copies, as `realloc` permits.
-
-`block_fast` is unchanged: its `free` is a no-op and its `realloc` never frees,
-so there is no per-chunk lifetime for a region to end, and `wm_narrow` plus
-`wm_epoch` already cover it.
-
-What the port costs, by `capstone/tests/port-effort.py` against
-`patches/…-0002….patch.classes`, and why each result is what it is, is in
-`PREREGISTRATION-chunk-port.md` and `CHUNK-PORT-FINDINGS.md`.
-
-The scope layer — file and epan scopes, and the per-dissection packet pool
-recycled through a one-entry cache — is modelled in `src/shared/scopes.c` on
-`epan/wmem_scopes.c` and the `epan_dissect_t` pool handling in `epan/epan.c`
-at the pin. It is not extracted: those files pull in the whole of `epan/`.
-
-## Source and layout
-
-The shared `../../common` support provides verified downloads, external build
-guards, cross toolchains, run staging and serialized QEMU execution. Only the
-`wsutil/wmem` subtree is extracted from the archive. Six upstream translation
-units are compiled unmodified except for the guarded hook patch: `wmem_core.c`,
-`wmem_user_cb.c` and the four allocators. `src/shared/shim/` shadows `glib.h`
-and the `ws_*` headers those units include, mapping the handful of GLib calls
-they make onto the port's services; upstream's scope assertions stay active.
-
-`src/native/`, `src/capstone-domain/` and `src/linux-guest/` identify execution
-environments. `src/allocators/sublet/` implements the authority operations;
-`src/shared/` holds backing policy, the scope layer, replay and the shims.
-
-Two source variants are prepared: `reference` applies no patch and backs the
-`replay-reference` executable; `ported` applies the hook patch. Preparation
-rejects checksum mismatches, reversed patches and fuzzy matching.
+The caller's pointer covers its request and nothing else, neither the chunk
+header nor the block header that holds the lifetimes, so a live pointer cannot
+reach its block's generation. The cost of finding the block by address is a
+walk of the allocator's block list on every alloc, free and realloc.
 
 ## Build
 
-Source `capstone/tests/capstone-test-env.sh` from the repository root. Cross
-builds use the prepared `CAPSTONE_LLVM_BUILD_DIR`, `CAPSTONE_BUILDROOT_DIR`,
-`CAPSTONE_QEMU_BINARY` and `PORT_MUSL_ROOT`. QEMU runners need `pexpect`
-(`requirements-dev.txt`).
-
-From this component directory:
+From the repository root, after sourcing `capstone/tests/capstone-test-env.sh`:
 
 ```sh
-cmake --preset native
-cmake --build --preset native
-ctest --preset native
-cmake --preset capstone-domain
-cmake --build --preset capstone-domain
-cmake --preset linux-guest
-cmake --build --preset linux-guest
+cmake --preset native -S capstone/ports/wireshark/wmem
+cmake --build /tmp/capstone/wireshark-wmem/build/native
+ctest --test-dir /tmp/capstone/wireshark-wmem/build/native --output-on-failure
+cmake --preset capstone-application -S capstone/ports/wireshark/wmem \
+  -DCAPSTONE_SDK=<virtual SDK> [-DWM_SUBLET=ON] [-DWM_CORPUS_DIR=<corpus>]
+cmake --build /tmp/capstone/wireshark-wmem/build/capstone-application
 ```
 
-Builds default to `/tmp/capstone/wireshark-wmem/build/`. Override with `-B` or
-an untracked `CMakeUserPresets.json`.
+The native suite checks the shared trace adapters (`port-support`), replays a
+directed trace of 1,661 events across all four allocators -- allocation,
+resize, individual free, reset, collection and destruction, jumbo objects
+included -- against its expected counts, rejects ten malformed traces, verifies
+that the patch series applies strictly and only once, and runs the link example.
+The protected variant is exercised on the virtual platform by the corpus's
+`virtual-nested-pools` arm.
 
-## Replay and verification
+## History
 
-```sh
-/tmp/capstone/wireshark-wmem/build/native/bin/replay <trace.bin> <report.bin>
-python3 host/run-qemu.py <trace.bin> /tmp/wmem-spatial --protection spatial
-python3 host/run-qemu.py <trace.bin> /tmp/wmem-sublet --protection sublet
-python3 security-tests/qemu/run.py /tmp/wmem-security
-python3 host/summarize.py <trace.bin> /tmp/wmem-spatial /tmp/wmem-sublet /tmp/wmem-security results/<date>-qemu
-```
-
-Native tests drive all four allocators through allocation, resize, individual
-free, reset, collection and destruction — including jumbo objects larger than
-a block — and require the hooked build to report byte-identically to the
-unhooked reference. Malformed traces (truncation, a missing end, an unknown
-pool, a live object reused, an object the pool does not hold) are rejected.
-The `port-support` test covers the `wireshark.wmem` trace adapter and the
-launcher's validate-before-guest contract.
-
-The paired security fixtures (`security-tests/shared/lifetimes.c`) cover live
-controls with storage reuse asserted, packet-pool reset with a stale read and
-a stale interior write, the recycler's reset and its individual free, request
-bounds, the strict allocator's free, 2,000 reset epochs, pool destruction, a
-jumbo object, the file scope's collection, a returned second block, and a
-stale pointer handed back to the allocator. A fault verdict requires its stage
-marker, the expected cause and the exact PC of the labelled access; a
-completion requires status 0. Failed attempts are retained, never retried
-silently.
-
-## Evidence
-
-`results/20260921-qemu/` holds the compact record: `summary.json` (both replay
-reports, all 26 verdicts, run manifests with input, emulator, compiler and
-image hashes, and the hash of every source file), `SHA256SUMS`, and
-`raw-artifacts.json`, which points at the local archive of every attempt,
-including the two that failed before the passing campaign (a runner host
-without `pexpect`; a replay image the loader module refused).
-
-Measured 2026-09-21 under QEMU, revocation node pool 65,536 (the emulator's
-compiled `CAP_REV_TREE_SIZE`). The directed trace of 1,661 events — 1,000
-allocations, 100 frees, 280 resizes, 80 resets, 40 collections, 80 pool
-destructions across all four allocators, 44 regions created and 34 live at
-peak — completed with status 0 in both modes, with reports identical to each
-other and to the independent accounting in `host/summarize.py`.
-
-| # | fixture | spatial | sublet |
-|---|---|---|---|
-| 0 | live controls; storage reuse after reset asserted for both allocators | completed | completed |
-| 1 | packet-pool reset, stale read | completed, old byte read | fault 24 at the read |
-| 2 | reset, storage reissued, stale interior write | completed, new object corrupted | fault 24 at the write |
-| 3 | recycler reset retains and reinitializes its block, stale read | completed, reads the free-list node | fault 24 at the read |
-| 4 | recycler individual free, stale read — documented limit | completed | completed |
-| 5 | one byte past the request | fault 5 (bounds) | fault 5 (bounds) |
-| 6 | strict allocator free, stale read | completed | fault 24 |
-| 7 | 2,000 reset epochs on one retained block, stale read | completed | fault 24 |
-| 8 | pool destroyed, stale read | completed | fault 24 |
-| 9 | jumbo object released by the reset | completed | fault 24 |
-| 10 | file scope left; collection returns the block | completed | fault 24 |
-| 11 | packet pool's second block returned by the reset | completed | fault 24 |
-| 12 | stale pointer handed back to the allocator | completed (not attempted) | fault 24 at the allocator's probe |
-
-Every fault landed on the labelled instruction: the read, write and
-allocator-probe sites resolved to three distinct PCs, so the oracle
-distinguishes them rather than accepting any fault. Cause 24 is revoked
-authority; cause 5 is a bounds violation and is the positive control that
-faults are observed at all. Fixture 4 completing in `sublet` mode is the
-recorded non-detection, not a pass by accident: the recycler's individual
-free ends no epoch. Fixtures 3 and 4 completing in `spatial` mode return the
-recycler's own free-list node, which it writes into the freed chunk — the
-unprotected reader sees allocator metadata, silently.
-
-## CheriBSD arm
-
-The same sources build for CheriBSD purecap through the shared toolchain
-(`cmake --preset cheribsd`, or `host/cheribsd/build.sh`), with `CHERI_SDK`
-and `CHERI_SYSROOT` naming the CheriBSD SDK. The build is the port's native
-backing policy under a purecap libc. Objects are not narrowed and nothing is
-invalidated; what this arm measures is the guest's own temporal safety,
-libc's quarantine and revoker sweep, against an allocator that never hands
-the storage back to libc.
-
-Measured 2026-09-21 on the thirteen corpus cases, guest libc revocation on:
-the plain build completed every case (0 / 13 caught). Records:
-`bug-corpora/wireshark/wmem-repros/results/20260921-cheribsd/`. The plain
-arm's zero and Sublet's twelve rest on different reasons — libc sees no event
-at all; Sublet sees the reset but not the chunk — and the corpus README says
-which is which. The same run's two PoisonCap arms stay in those records; the
-PoisonCap backend was removed on 2026-10-10.
-
-## Geometry and limits
-
-The domain backs allocations from a 384 MiB payload with 4,096 region slots
-and 8,192 replay objects; a long replay with many distinct request sizes can
-exhaust either, because regions are reissued only at their exact size and
-never returned to the payload. This bounded backing policy is not a libc port.
-
-A domain image without a `.capstone_domreq` declaration is sized by the loader
-module's default: an image of 1,330,288 loadable bytes loaded, one of
-2,901,776 was refused (loader exit 5, no message on the console because the
-module's log is suppressed). The replay image is kept well under that.
-
-The `simple` allocator's objects are bounded to their request but each is its
-own region, as upstream intends it to be a per-object allocator. The `strict`
-allocator's canaries and fills are kept; its `free` revokes the object's
-region in the `sublet` arm, which is the per-object behaviour upstream reaches
-for when it wants to see this class at all.
-
-These are allocator-component QEMU results. They do not establish protection
-of a running Wireshark, dissector correctness on Capstone, FPGA behaviour,
-memory overhead of the complete application, or timing overhead. The reported
-defects live in `bug-corpora/wireshark/wmem-repros/`: thirteen cases built by
-this port with `-DWM_CORPUS_DIR`, twelve caught and one recorded non-detection.
+Until 2026-10-11 this component also carried guarded authority hooks (patch
+0001), a per-chunk port of the block allocator over linear Sublet regions
+(patch 0002, `src/allocators/sublet`, with its pre-registrations and findings),
+a freestanding Capstone domain target with its region backing, security
+fixtures and linux-guest loader, and the QEMU runners for them. `CDERIVE` and
+`CREVOKE` made the region backing and the chunk port unnecessary, and the
+domain target is not part of the virtual platform. Their recorded results stay
+in `results/`.

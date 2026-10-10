@@ -15,7 +15,7 @@
 | our own silicon defects | `capstone/tests/fpga-repros/` | 30 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 107 open, 77 resolved | the registry, not reproduced cases |
 
-Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 5 components have them: `apr/pools`, `ffmpeg/buffer-pool`, `memcached/allocators`, `whisper/ggml-context`, `wireshark/wmem`.
+Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 4 components have them: `apr/pools`, `ffmpeg/buffer-pool`, `memcached/allocators`, `whisper/ggml-context`.
 
 ## Every corpus
 
@@ -77,7 +77,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/sqlite` | full-application | 3.53.3, 3.22.0 | capstone-domain, silicon, native | `capi-repros`, `engine-repros` | 52 |
 | `capstone/ports/whisper/ggml-context` | allocator-component | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | 0 |
 | `capstone/ports/wireshark/app` | full-application | 4.6.8 | capstone-domain | `plain-heap-repros` | 12 |
-| `capstone/ports/wireshark/wmem` | allocator-component | 4.6.8 | capstone-domain, cheribsd-purecap, native | `wmem-repros` | 22 |
+| `capstone/ports/wireshark/wmem` | allocator-component | 4.6.8 | capstone-virtual, cheribsd-purecap, native | `wmem-repros` | 22 |
 
 ## Gaps, as the declarations state them
 

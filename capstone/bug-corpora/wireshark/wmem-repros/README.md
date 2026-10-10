@@ -3,8 +3,8 @@
 Upstream use-after-free defects in Wireshark's dissection loop, reduced to
 programs that run against Wireshark's **own** memory manager: `wmem`'s core
 and its four allocators from the pinned 4.6.8 release, compiled unmodified but
-for the guarded authority hooks the port applies. The consumers are reduced,
-the allocator is not.
+for the Sublet patch the port applies in its protected build. The consumers are
+reduced, the allocator is not.
 
 > **Looking for more cases?** [`../LIVE-CANDIDATES.md`](../LIVE-CANDIDATES.md) lists **92
 > defects live at the 4.6.8 pin**, checked by content rather than by ancestry, with the two
@@ -59,20 +59,11 @@ the next packet's own first allocation is checked to land on the same address
 before the ready marker. Where a report shows only the stale read, the case
 performs only that, and the unprotected arm returns the old bytes.
 
-Case 12 is the corpus's recorded **non-detection**. Its lifetime ends by an
-individual `wmem_free` into the block allocator's recycler, not by a pool
-reset; Sublet lends whole regions, a chunk inside a live block has no epoch of
-its own, and the protected arm is expected — and checked — to complete. It is
-kept because hiding it would misstate what the mechanism covers.
-
-**Since the chunk port (2026-09-29), case 12 is caught too.**
-
-- The port's default build (`WM_CHUNKS=ON`, `a34caaedb1bc`) gives every chunk of the block
-  allocator a region of its own, so the individual free is a revoke. Case 12 then faults at its
-  read probe.
-- The region-granular build (`WM_CHUNKS=OFF`) still completes it. The two builds have separate
-  oracles, `sublet-chunks` and `sublet`, and the runner picks one from the build.
-- Result: [`results/20260929-qemu-chunk-port/`](results/20260929-qemu-chunk-port/README.md).
+Case 12 is the one row whose lifetime ends by an individual `wmem_free` into
+the block allocator's free list, inside a live 8 MiB block, rather than by a
+pool reset. Nothing reaches the system allocator and no reset happens, so only
+a mechanism that acts on wmem's own objects can see it: the port's patch 0001
+revokes the object at that free.
 
 Every `case.json` says how liveness at the 4.6.8 pin was established, and
 each `PROVENANCE.md` quotes the pre-fix code from the fix's parent by line.
@@ -96,18 +87,25 @@ reduction class are visibly siblings rather than accidentally similar.
 
 | arm | target | what it establishes |
 |---|---|---|
-| `spatial` | Capstone domain | the sequence completes without protection |
-| `sublet` | Capstone domain | fault at the labelled probe the oracle names |
-| `cheribsd` | CheriBSD purecap, libc revocation ON, plain build | whether the system allocator sees these defects |
-| `native-detect` | host | declared, not written |
+| `native-detect` | host, AddressSanitizer, wmem on libc malloc | whether a sanitizer sees these defects ([`runners/run-asan.sh`](runners/run-asan.sh)) |
+| `native-fix-differential` | host | the buggy sequence reaches storage outside its object and the upstream fix's does not ([`runners/run-native.sh`](runners/run-native.sh)) |
+| `cheribsd-revocation` | CheriBSD purecap, libc revocation on, wmem as released on libc malloc | whether the system allocator sees these defects |
+| `virtual-malloc` | virtual Capstone, wmem as released on virtual mallocng (`tools/arms.json` `virtual-wmem`) | the same question on Capstone: mallocng bounds and retires the blocks wmem takes, not the objects carved from them |
+| `virtual-nested-pools` | the same with the port's patch 0001 (`virtual-wmem-pools`) | every object of `block` and `block_fast` is a child lifetime of its block (`CDERIVE`), bounded to the request and revoked by free, realloc and the pool's reset (`CREVOKE`) |
 
-The two Capstone arms run the same program; the loader picks the arm at run
-time. Every protected oracle names an **instruction**: the run publishes the probe addresses
-and the fault must land on the one the case's oracle names — the read probe,
-the write probe, or the allocator's own probe when the stale pointer is handed
-back to `wmem`.
+The two virtual arms run the same cases from two builds of the port, `WM_SUBLET` off and on.
+A fault counts as the defect's only at the labelled read or write probe, resolved from the
+image's own symbols; a silence counts as MISSED only when the arm's controls
+([`controls/`](controls/README.md)) behaved in the same invocation.
 
-## What the four systems do, measured 2026-09-21
+## History: the Capstone domain arms, 2026-09-21 to 2026-10-09
+
+The `spatial`, `sublet`, `sublet-chunks` and `sublet-malloc` arms ran the cases as freestanding
+Capstone domains, with the port's authority hooks (which narrowed every wmem object to its request
+on every arm) and, from 2026-09-29, its chunk port. They left on 2026-10-11 with the domain target;
+the records below stay as they were measured, and their bundles stay in `results/`.
+
+### What the four systems do, measured 2026-09-21
 
 This section is the 2026-09-21 record. Its PoisonCap arm was removed on 2026-10-10 and
 stays here, and in `results/`, as history.
@@ -200,24 +198,26 @@ trade, the missing primitive, and what a per-chunk port would cost.
 The port builds the cases; case material does not live inside a port. Pass the
 corpus root and the port builds one program per case:
 
-    cmake --preset capstone-domain -DWM_CORPUS_DIR=<repo>/capstone/bug-corpora/wireshark/wmem-repros
-    cmake --preset native          -DWM_CORPUS_DIR=<repo>/capstone/bug-corpora/wireshark/wmem-repros
+    cmake --preset capstone-application -S <repo>/capstone/ports/wireshark/wmem -B <out> \
+        -DCAPSTONE_SDK=<virtual SDK> -DWM_CORPUS_DIR=<repo>/capstone/bug-corpora/wireshark/wmem-repros \
+        [-DWM_SUBLET=ON]
+    cmake --preset native -S <repo>/capstone/ports/wireshark/wmem -B <out> \
+        -DWM_CORPUS_DIR=<repo>/capstone/bug-corpora/wireshark/wmem-repros
 
-Programs are named as the contract names run artifacts, `02-mdb-address-column`,
-with `.dom` for the domain. The hosted build runs the unprotected sequence
-natively (`<program> 0 <case>`) and refuses any other mode or case with exit 75.
+Programs are named as the contract names run artifacts, `02-mdb-address-column`.
+Each runs its sequence as `<program> 0 <case>` and refuses any other mode or case
+with exit 75; `<program> 0 <case> buggy|fixed` is the native fix differential.
+Build the controls the same way from `controls/`, then run each virtual arm on a
+VM started with `capstone_vm --profile virtual`:
 
-    /tmp/capstone/venv/bin/python3 shared/run-defects.py OUT --domain-build BUILD_DOMAIN --linux-build BUILD_LINUX
-    /tmp/capstone/venv/bin/python3 shared/run-defects.py OUT-nc ... --negative-control
-    python3 shared/summarize-run.py OUT results/<stamp>
+    shared/run-defects.py OUT --state VM --arm virtual-malloc \
+        --hosted-build CASES-OFF --controls-hosted-build CONTROLS-OFF --llvm-bin BIN --raw LOGS
+    shared/run-defects.py OUT --state VM --arm virtual-nested-pools \
+        --hosted-build CASES-ON --controls-hosted-build CONTROLS-ON --llvm-bin BIN --raw LOGS
 
-The runner needs the same environment the port documents (`CAPSTONE_QEMU_BINARY`,
-`CAPSTONE_LLVM_BUILD_DIR`, `CAPSTONE_BUILDROOT_DIR`, the venv with `pexpect`).
-A run that produced no `serial.log` did not run; check before believing a
-domain result. `--negative-control` corrupts the input record so the program
-refuses it before any case runs; every arm must then FAIL, and the flag makes
-the exit status 0 only if every one did. `../../tools/check-corpus.py --self-test`
-enforces the contract and first proves it can reject four corruptions.
+The runner refuses a build whose `WM_SUBLET` or SDK does not match the arm.
+`../../tools/check-corpus.py --self-test` enforces the contract and first proves
+it can reject four corruptions.
 
 ## Vetted upstream candidates NOT built here (2026-10-08)
 

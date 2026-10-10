@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """Run delegated tshark stages or compare complete output with native tshark.
 
-Two checks carried over from the pre-v2 runner (host/run-qemu.sh before #128), which judged them and
-whose loss made the chunks arm's registered T3 and T5 uncheckable:
+Two checks carried over from the pre-v2 runner (host/run-qemu.sh before #128):
 
 - The revocation-node budget per guest boot. A full run on the sublet heap spends about 12,600
   nodes (split + mrev on its TSAPP-HEAP line), and a boot that ran out died on QEMU's pool
-  assertion (2026-09-25). So a boot holds at most 4 full sublet runs, and at most
-  TSAPP_CHUNKS_RUNS_PER_BOOT (default 1) chunks runs: the chunk port spends nodes too, by an amount
-  a measured run sets (wmem/PREREGISTRATION-tshark-step2.md, T5). The guest outlives this process,
-  so the count is kept per guest boot (its boot_id) in the VM's state directory, and a request that
-  would pass the limit is refused before anything runs.
+  assertion (2026-09-25). So a boot holds at most 4 full sublet runs. The guest outlives this
+  process, so the count is kept per guest boot (its boot_id) in the VM's state directory, and a
+  request that would pass the limit is refused before anything runs.
 - stderr against the native MINIMAL build (TSAPP_MINIMAL, default $TS_WORK/native-min-pa/run/tshark:
   the same whitelist, patches and generated dissectors.c), because patch 0002's registration
   notices go to stderr and stock tshark writes none. The guest's stderr, less its TSAPP-HEAP line
@@ -32,7 +29,7 @@ sys.path.insert(0, str(HERE.parents[2] / 'common/application'))
 from verification import VM
 
 # Full (M5) runs a guest boot may hold, per heap arm; None: not limited.
-RUNS_PER_BOOT = {'sublet': 4, 'chunks': int(os.environ.get('TSAPP_CHUNKS_RUNS_PER_BOOT', '1'))}
+RUNS_PER_BOOT = {'sublet': 4}
 REPORT_PREFIXES = (b'capstone-domain: ', b'capstone-exec: ')
 
 
@@ -59,9 +56,8 @@ def claim_runs(state, heap, planned):
         used = record['runs'] if record.get('boot_id') == boot else 0
     if used + planned > limit:
         sys.exit(f'refused: {planned} full {heap} run(s) would make {used + planned} on guest boot '
-                 f'{boot}, over the limit of {limit} (the revocation-node budget; '
-                 + ('TSAPP_CHUNKS_RUNS_PER_BOOT' if heap == 'chunks' else 'fixed for the sublet arm')
-                 + '). Restart the VM for a fresh boot.')
+                 f'{boot}, over the limit of {limit} (the revocation-node budget). '
+                 'Restart the VM for a fresh boot.')
     # Charged before the runs: a run that fails has still spent its nodes.
     ledger.write_text(json.dumps({'boot_id': boot, 'runs': used + planned}))
     return f'guest boot {boot}: {heap} full runs {used} + {planned} of {limit}'
@@ -87,8 +83,8 @@ def main():
         parser.error('oracle needs capture names')
     work = Path(os.environ.get('TS_WORK', '/tmp/capstone/tshark-app'))
     heap = os.environ.get('TSAPP_HEAP', 'level0')
-    if heap not in ('level0', 'shrink', 'sublet', 'chunks'):
-        parser.error('TSAPP_HEAP must be level0, shrink, sublet or chunks')
+    if heap not in ('level0', 'shrink', 'sublet'):
+        parser.error('TSAPP_HEAP must be level0, shrink or sublet')
     images = Path(os.environ.get('TSAPP_DOMAIN_DIR', work / ('domain' + ('-' + heap if heap != 'level0' else ''))))
     stock = Path(os.environ.get('TSAPP_STOCK', work / 'native-stock/run/tshark'))
     minimal = os.environ.get('TSAPP_MINIMAL', str(work / 'native-min-pa/run/tshark'))

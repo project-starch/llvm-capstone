@@ -90,13 +90,15 @@ def verdict(arm):
 
 # The three columns per bug. Column 2 is Sublet ONLY as the system allocator; on a plain corpus that
 # is the `sublet` arm itself, on a nested one the arm that leaves the nested allocator stock.
-COL2 = {"pool-repros": "sublet-malloc", "wmem-repros": "sublet-malloc", "allocator-repros": "sublet-malloc"}
+COL2 = {"pool-repros": "sublet-malloc", "wmem-repros": "virtual-malloc", "allocator-repros": "sublet-malloc"}
 # Column 3 is the Sublet port of the INNERMOST allocator that made the object the access belongs to; a
 # plain case runs in the program's full configuration. Where code carves the object out of a block that
 # allocator handed out -- a codec's carve, av_frame_get_buffer's planes, memcached's ITEM_key/ITEM_suffix
 # inside a slab item -- that carve is the innermost allocator, and its port is the case's `sublet-carve`
 # arm (memcached 06/07: the slab port plus the key/suffix carve). One rule, so the two corpora agree.
-COL3 = {"pool-repros": "sublet-port", "wmem-repros": "sublet-chunks", "allocator-repros": "sublet",
+# wmem is measured on the virtual profile, as pymalloc, PostgreSQL and SQLite below: column 2 is
+# `virtual-malloc`, column 3 wmem's patch 0001, `virtual-nested-pools`.
+COL3 = {"pool-repros": "sublet-port", "wmem-repros": "virtual-nested-pools", "allocator-repros": "sublet",
         "carved-repros": "sublet-carve", "plane-repros": "sublet-carve"}
 
 
@@ -178,9 +180,10 @@ for p in TARGETS:
                  nested=bool(d.get("nested")),
                  asan=verdict(a.get("native-detect")),
                  cheri=verdict(a.get("cheribsd-revocation")),
-                 cap=verdict(a.get("spatial")),
-                 sub=verdict(protected(a, "sublet", "sublet-chunks") if corpus != "pool-repros"
-                             else protected(a, "sublet", "sublet-port")),
+                 cap=verdict(a.get("virtual-malloc" if corpus == "wmem-repros" else "spatial")),
+                 sub=verdict(a.get("virtual-nested-pools") if corpus == "wmem-repros"
+                             else protected(a, "sublet", "sublet-port") if corpus == "pool-repros"
+                             else protected(a, "sublet", "sublet-chunks")),
                  fcap=verdict(a.get("capstone-subobject")), fcheri=verdict(a.get("cheribsd-subobject")),
                  kcap=verdict(a.get("capstone-carve-bounds")), kcheri=verdict(a.get("cheribsd-carve-bounds")),
                  scarve=verdict(a.get("sublet-carve")),

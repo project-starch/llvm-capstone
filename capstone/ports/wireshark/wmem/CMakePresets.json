@@ -16,17 +16,12 @@
       "inherits": "base"
     },
     {
-      "name": "capstone-domain",
+      "name": "capstone-application",
       "inherits": "base",
-      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/capstone-domain.cmake",
+      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/capstone-application.cmake",
       "cacheVariables": {
-        "PORT_HEADER_PROVIDER": "musl"
+        "BUILD_TESTING": false
       }
-    },
-    {
-      "name": "linux-guest",
-      "inherits": "base",
-      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/linux-guest.cmake"
     },
     {
       "name": "cheribsd",
@@ -45,13 +40,8 @@
       "jobs": 4
     },
     {
-      "name": "capstone-domain",
-      "configurePreset": "capstone-domain",
-      "jobs": 4
-    },
-    {
-      "name": "linux-guest",
-      "configurePreset": "linux-guest",
+      "name": "capstone-application",
+      "configurePreset": "capstone-application",
       "jobs": 4
     },
     {

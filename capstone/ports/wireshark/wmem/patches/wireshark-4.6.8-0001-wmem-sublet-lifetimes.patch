@@ -1,0 +1,392 @@
+Subject: [PATCH 1/1] wmem objects as Sublet lifetimes (CDERIVE/CREVOKE)
+Upstream: wireshark 4.6.8
+Upstream-Archive: https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz
+Upstream-SHA256: c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0
+Build-Variants: sublet (capstone-application, WM_SUBLET=ON)
+Depends-On: none
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Every object the two nested allocators hand out, block and block_fast, is a
+child lifetime of its block, bounded to the request; freeing or reallocating
+it, or the reset that ends its pool, revokes it, so every copy of the
+caller's pointer dies with it. simple and strict are untouched: every object
+of theirs is its own malloc'd object, which the system allocator bounds and
+retires itself.
+
+# Two instructions do the work. CDERIVE makes a child capability of a
+# non-linear parent, bounded to a sub-range and carrying MANAGE over its own
+# children; CREVOKE(parent, child) ends a direct child and everything below
+# it, and faults when the child is not a live direct child.
+#
+# Every block carries two lifetimes in its header: life, derived from the
+# malloc'd object, and the generation below it (wmem_allocator.h). Each
+# allocator's consumer functions stay upstream's and work on the allocator's
+# own pointers; three wrappers registered in their place hand out and take
+# back the callers': alloc derives the caller's pointer from the generation
+# of the block that holds the chunk, free revokes it and passes upstream's
+# free the allocator's pointer at the same address, and realloc does both.
+# The block is found by address in the allocator's block lists, so the
+# caller's pointer covers its request only: not the chunk header, not the
+# block header and its lifetimes. block_fast's free stays a no-op.
+#
+# Freeing a block revokes the system allocator's lifetime of it, and every
+# object lies below. A reset that keeps a block (block's free_all keeps
+# them all, block_fast's keeps the first) revokes its generation and derives
+# a new one. A pointer found in no block faults on a load through it, as a
+# stale one does once its block went back to the system allocator.
+#
+# block keeps its free-list links inside free chunks, and they carry the
+# whole block's bounds. A chunk handed out is cleared of them over the
+# caller's range, and so is the range a realloc grows into. block_fast keeps
+# nothing in its chunks.
+--- a/wsutil/wmem/wmem_allocator.h
++++ b/wsutil/wmem/wmem_allocator.h
+@@ -16,6 +16,8 @@
+ #include <glib.h>
+ #include <string.h>
+ 
++#include <capstone/capability.h>
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif /* __cplusplus */
+@@ -44,6 +46,75 @@
+     bool                         in_scope;
+ };
+ 
++/*
++ * Sublet lifetimes.  Every block the block and block_fast allocators take
++ * from the system allocator carries two lifetimes in its header: life,
++ * derived from the malloc'd object, and the generation below it.  Every
++ * object is handed out as a child of its block's generation (CDERIVE),
++ * bounded to the request; freeing or reallocating it revokes that child
++ * (CREVOKE).  Freeing the block revokes the system allocator's lifetime of
++ * it, and every object lies below; a reset that keeps the block revokes its
++ * generation and derives a new one.
++ */
++typedef struct _wmem_sublet_block_t {
++    void *life;
++    void *generation;
++} wmem_sublet_block_t;
++
++/* The block is the malloc'd object block, size bytes. */
++static inline void
++wmem_sublet_block_init(wmem_sublet_block_t *s, void *block, size_t size)
++{
++    s->life = capstone_cap_derive(block, 0, size);
++    s->generation = capstone_cap_derive(s->life, 0, size);
++}
++
++static inline void
++wmem_sublet_block_renew(wmem_sublet_block_t *s, size_t size)
++{
++    capstone_cap_revoke_child(s->life, s->generation);
++    s->generation = capstone_cap_derive(s->life, 0, size);
++}
++
++/* Whether ptr's address lies in the block. */
++static inline bool
++wmem_sublet_block_holds(const wmem_sublet_block_t *s, const void *ptr)
++{
++    unsigned long at = __builtin_capstone_cap_get_cursor((void *)ptr);
++
++    return at >= __builtin_capstone_cap_get_base(s->life) &&
++           at < __builtin_capstone_cap_get_end(s->life);
++}
++
++/* The caller's pointer to [ptr, ptr + size), a child of the generation: it
++ * reaches neither the chunk header nor the block header. */
++static inline void *
++wmem_sublet_issue(const wmem_sublet_block_t *s, void *ptr, size_t size)
++{
++    return capstone_cap_derive(s->generation,
++            __builtin_capstone_cap_get_cursor(ptr) -
++            __builtin_capstone_cap_get_base(s->generation), size);
++}
++
++/* End the caller's object (CREVOKE), which faults unless ptr is a live
++ * object of this block, and return the allocator's pointer at its address. */
++static inline void *
++wmem_sublet_release(const wmem_sublet_block_t *s, void *block, void *ptr)
++{
++    capstone_cap_revoke_child(s->generation, ptr);
++    return (uint8_t *)block + (__builtin_capstone_cap_get_cursor(ptr) -
++            __builtin_capstone_cap_get_base(block));
++}
++
++/* A pointer in no block of the allocator: a stale one faults on this load,
++ * since its block went back to the system allocator. */
++static inline void
++wmem_sublet_refuse(const void *ptr)
++{
++    (void)*(const volatile uint8_t *)ptr;
++    g_assert_not_reached();
++}
++
+ #ifdef __cplusplus
+ }
+ #endif /* __cplusplus */
+--- a/wsutil/wmem/wmem_allocator_block.c
++++ b/wsutil/wmem/wmem_allocator_block.c
+@@ -144,6 +144,7 @@
+ /* The header for an entire OS-level 'block' of memory */
+ typedef struct _wmem_block_hdr_t {
+     struct _wmem_block_hdr_t *prev, *next;
++    wmem_sublet_block_t sublet;     /* this block's object lifetimes */
+ } wmem_block_hdr_t;
+ 
+ /* The header for a single 'chunk' of memory as returned from alloc/realloc.
+@@ -763,6 +764,7 @@
+ 
+     /* allocate the new block and add it to the block list */
+     block = (wmem_block_hdr_t *)wmem_alloc(NULL, WMEM_BLOCK_SIZE);
++    wmem_sublet_block_init(&block->sublet, block, WMEM_BLOCK_SIZE);
+     wmem_block_add_to_block_list(allocator, block);
+ 
+     /* initialize it */
+@@ -782,6 +784,9 @@
+     block = (wmem_block_hdr_t *) wmem_alloc(NULL, size
+             + WMEM_BLOCK_HEADER_SIZE
+             + WMEM_CHUNK_HEADER_SIZE);
++    wmem_sublet_block_init(&block->sublet, block, size
++            + WMEM_BLOCK_HEADER_SIZE
++            + WMEM_CHUNK_HEADER_SIZE);
+ 
+     /* add it to the block list */
+     wmem_block_add_to_block_list(allocator, block);
+@@ -825,6 +830,9 @@
+     block = (wmem_block_hdr_t *) wmem_realloc(NULL, block, size
+             + WMEM_BLOCK_HEADER_SIZE
+             + WMEM_CHUNK_HEADER_SIZE);
++    wmem_sublet_block_init(&block->sublet, block, size
++            + WMEM_BLOCK_HEADER_SIZE
++            + WMEM_CHUNK_HEADER_SIZE);
+ 
+     if (block->next) {
+         block->next->prev = block;
+@@ -1023,6 +1031,7 @@
+         }
+         else {
+             wmem_block_init_block(allocator, cur);
++            wmem_sublet_block_renew(&cur->sublet, WMEM_BLOCK_SIZE);
+             cur = cur->next;
+         }
+     }
+@@ -1089,6 +1098,76 @@
+     wmem_free(NULL, private_data);
+ }
+ 
++/* SUBLET: the consumer functions above work on the allocator's own pointers;
++ * these hand out and take back the callers'. */
++
++static wmem_block_hdr_t *
++wmem_block_sublet_find(wmem_block_allocator_t *allocator, const void *ptr)
++{
++    wmem_block_hdr_t *cur;
++
++    for (cur = allocator->block_list; cur; cur = cur->next) {
++        if (wmem_sublet_block_holds(&cur->sublet, ptr)) {
++            return cur;
++        }
++    }
++    wmem_sublet_refuse(ptr);
++    return NULL;
++}
++
++static void *
++wmem_block_sublet_issue(wmem_block_allocator_t *allocator, void *ptr,
++                        const size_t size)
++{
++    return wmem_sublet_issue(&wmem_block_sublet_find(allocator, ptr)->sublet,
++                             ptr, size);
++}
++
++static void *
++wmem_block_sublet_release(wmem_block_allocator_t *allocator, void *ptr)
++{
++    wmem_block_hdr_t *block = wmem_block_sublet_find(allocator, ptr);
++
++    return wmem_sublet_release(&block->sublet, block, ptr);
++}
++
++/* A free chunk holds its free-list links, pointers with the whole block's
++ * bounds; the caller's bytes are cleared of them before it gets the chunk. */
++static void *
++wmem_block_sublet_alloc(void *private_data, const size_t size)
++{
++    void *ptr = wmem_block_alloc(private_data, size);
++
++    memset(ptr, 0, size < sizeof(wmem_block_free_t) ? size : sizeof(wmem_block_free_t));
++    return wmem_block_sublet_issue((wmem_block_allocator_t*) private_data,
++                                   ptr, size);
++}
++
++static void
++wmem_block_sublet_free(void *private_data, void *ptr)
++{
++    wmem_block_free(private_data, wmem_block_sublet_release(
++                (wmem_block_allocator_t*) private_data, ptr));
++}
++
++static void *
++wmem_block_sublet_realloc(void *private_data, void *ptr, const size_t size)
++{
++    wmem_block_allocator_t *allocator = (wmem_block_allocator_t*) private_data;
++    size_t                  had;
++
++    /* The caller's object is bounded to its request; bytes past it, which a
++     * grow brings in, may hold free-list links and are cleared. */
++    had = __builtin_capstone_cap_get_end(ptr) -
++          __builtin_capstone_cap_get_base(ptr);
++    ptr = wmem_block_realloc(private_data,
++                             wmem_block_sublet_release(allocator, ptr), size);
++    if (size > had) {
++        memset((uint8_t *)ptr + had, 0, size - had);
++    }
++    return wmem_block_sublet_issue(allocator, ptr, size);
++}
++
+ void
+ wmem_block_allocator_init(wmem_allocator_t *allocator)
+ {
+@@ -1096,9 +1175,9 @@
+ 
+     block_allocator = wmem_new(NULL, wmem_block_allocator_t);
+ 
+-    allocator->walloc   = &wmem_block_alloc;
+-    allocator->wrealloc = &wmem_block_realloc;
+-    allocator->wfree    = &wmem_block_free;
++    allocator->walloc   = &wmem_block_sublet_alloc;
++    allocator->wrealloc = &wmem_block_sublet_realloc;
++    allocator->wfree    = &wmem_block_sublet_free;
+ 
+     allocator->free_all = &wmem_block_free_all;
+     allocator->gc       = &wmem_block_gc;
+--- a/wsutil/wmem/wmem_allocator_block_fast.c
++++ b/wsutil/wmem/wmem_allocator_block_fast.c
+@@ -46,6 +46,7 @@
+     struct _wmem_block_fast_hdr *next;
+ 
+     int32_t pos;
++    wmem_sublet_block_t sublet;     /* this block's object lifetimes */
+ } wmem_block_fast_hdr_t;
+ #define WMEM_BLOCK_HEADER_SIZE WMEM_ALIGN_SIZE(sizeof(wmem_block_fast_hdr_t))
+ 
+@@ -57,6 +58,7 @@
+ #define JUMBO_MAGIC 0xFFFFFFFF
+ typedef struct _wmem_block_fast_jumbo {
+     struct _wmem_block_fast_jumbo *prev, *next;
++    wmem_sublet_block_t sublet;     /* the jumbo object's lifetime */
+ } wmem_block_fast_jumbo_t;
+ #define WMEM_JUMBO_HEADER_SIZE WMEM_ALIGN_SIZE(sizeof(wmem_block_fast_jumbo_t))
+ 
+@@ -73,6 +75,7 @@
+ 
+     /* allocate/initialize the new block and add it to the block list */
+     block = (wmem_block_fast_hdr_t *)wmem_alloc(NULL, WMEM_BLOCK_SIZE);
++    wmem_sublet_block_init(&block->sublet, block, WMEM_BLOCK_SIZE);
+ 
+     block->pos  = WMEM_BLOCK_HEADER_SIZE;
+     block->next = allocator->block_list;
+@@ -95,6 +98,8 @@
+         /* allocate/initialize a new block of the necessary size */
+         block = (wmem_block_fast_jumbo_t *)wmem_alloc(NULL,
+                 size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
++        wmem_sublet_block_init(&block->sublet, block,
++                size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
+ 
+         block->next = allocator->jumbo_list;
+         if (block->next) {
+@@ -146,6 +151,8 @@
+         block = ((wmem_block_fast_jumbo_t*)((uint8_t*)(chunk) - WMEM_JUMBO_HEADER_SIZE));
+         block =  (wmem_block_fast_jumbo_t*)wmem_realloc(NULL, block,
+                 size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
++        wmem_sublet_block_init(&block->sublet, block,
++                size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
+         if (block->prev) {
+             block->prev->next = block;
+         }
+@@ -186,6 +193,7 @@
+ 
+     if (cur) {
+          cur->pos = WMEM_BLOCK_HEADER_SIZE;
++         wmem_sublet_block_renew(&cur->sublet, WMEM_BLOCK_SIZE);
+          nxt = cur->next;
+          cur->next = NULL;
+          cur = nxt;
+@@ -226,6 +234,64 @@
+     wmem_free(NULL, private_data);
+ }
+ 
++/* SUBLET: the consumer functions above work on the allocator's own pointers;
++ * these hand out and take back the callers'.  free stays a no-op: an object
++ * lives until the reset, or until realloc replaces it. */
++
++static wmem_sublet_block_t *
++wmem_block_fast_sublet_find(wmem_block_fast_allocator_t *allocator,
++                            const void *ptr, void **block)
++{
++    wmem_block_fast_hdr_t   *cur;
++    wmem_block_fast_jumbo_t *cur_jum;
++
++    for (cur = allocator->block_list; cur; cur = cur->next) {
++        if (wmem_sublet_block_holds(&cur->sublet, ptr)) {
++            *block = cur;
++            return &cur->sublet;
++        }
++    }
++    for (cur_jum = allocator->jumbo_list; cur_jum; cur_jum = cur_jum->next) {
++        if (wmem_sublet_block_holds(&cur_jum->sublet, ptr)) {
++            *block = cur_jum;
++            return &cur_jum->sublet;
++        }
++    }
++    wmem_sublet_refuse(ptr);
++    return NULL;
++}
++
++static void *
++wmem_block_fast_sublet_issue(wmem_block_fast_allocator_t *allocator,
++                             void *ptr, const size_t size)
++{
++    void *block;
++
++    return wmem_sublet_issue(wmem_block_fast_sublet_find(allocator, ptr, &block),
++                             ptr, size);
++}
++
++static void *
++wmem_block_fast_sublet_alloc(void *private_data, const size_t size)
++{
++    return wmem_block_fast_sublet_issue(
++            (wmem_block_fast_allocator_t*) private_data,
++            wmem_block_fast_alloc(private_data, size), size);
++}
++
++static void *
++wmem_block_fast_sublet_realloc(void *private_data, void *ptr, const size_t size)
++{
++    wmem_block_fast_allocator_t *allocator = (wmem_block_fast_allocator_t*) private_data;
++    wmem_sublet_block_t         *sublet;
++    void                        *block;
++
++    sublet = wmem_block_fast_sublet_find(allocator, ptr, &block);
++    ptr = wmem_sublet_release(sublet, block, ptr);
++    return wmem_block_fast_sublet_issue(allocator,
++            wmem_block_fast_realloc(private_data, ptr, size), size);
++}
++
+ void
+ wmem_block_fast_allocator_init(wmem_allocator_t *allocator)
+ {
+@@ -233,8 +299,8 @@
+ 
+     block_allocator = wmem_new(NULL, wmem_block_fast_allocator_t);
+ 
+-    allocator->walloc   = &wmem_block_fast_alloc;
+-    allocator->wrealloc = &wmem_block_fast_realloc;
++    allocator->walloc   = &wmem_block_fast_sublet_alloc;
++    allocator->wrealloc = &wmem_block_fast_sublet_realloc;
+     allocator->wfree    = &wmem_block_fast_free;
+ 
+     allocator->free_all = &wmem_block_fast_free_all;
