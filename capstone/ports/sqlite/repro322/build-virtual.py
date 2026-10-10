@@ -44,6 +44,10 @@ WHAT IT CHANGES AGAINST THE PHYSICAL ARM, and why:
     patched somewhere near. The patch issues every block as a child lifetime
     of the pool (CDERIVE) and revokes it on free (CREVOKE); it includes
     <capstone/capability.h> from `capstone/runtime/include`.
+  * `--pagecache` adds the THIRD nested allocator on top of `--sublet`: the page
+    cache, whose pins are lifetimes (`sublet/sublet-3220000-pagecache.patch`).
+    A page is unpinned without being freed or reassigned, so that end is one no
+    malloc-level mechanism can see.
 
 -O0 for both the amalgamation and the case, as corpus322.sh uses: these are
 defects that turn on one specific access, and an optimiser that moves it moves
@@ -123,6 +127,11 @@ def main():
     p.add_argument('--memsys5', action='store_true', help='The nested arm')
     p.add_argument('--sublet', action='store_true',
                    help='The nested arm with memsys5 under its own Sublet port')
+    p.add_argument('--pagecache', action='store_true',
+                   help="--sublet plus SQLite's THIRD nested allocator, the page cache, on its "
+                        "own Sublet port: a page's data is a child lifetime of the pin, revoked "
+                        "when the last reference goes away. The page is neither freed nor "
+                        "reassigned there, so no malloc-level mechanism can see that end")
     p.add_argument('--no-lookaside', action='store_true',
                    help="With --sublet: turn SQLite's SECOND nested allocator off, so "
                         "the small allocations it would take go to memsys5, which this "
@@ -150,9 +159,12 @@ def main():
     if not cases:
         sys.exit('no cases selected')
 
+    if a.pagecache:
+        a.sublet = True
     if a.sublet:
         a.memsys5 = True
-    arm = ('memsys5-sublet' if a.sublet else 'memsys5' if a.memsys5 else 'platform')
+    arm = ('memsys5-sublet-pagecache' if a.pagecache else
+           'memsys5-sublet' if a.sublet else 'memsys5' if a.memsys5 else 'platform')
     if a.no_lookaside:
         arm += '-no-lookaside'
     a.out.mkdir(parents=True, exist_ok=True)
@@ -182,12 +194,16 @@ def main():
         print('  applied fts3-doclist-null-patch.py to the copy')
     sublet_includes = []
     if a.sublet:
-        patch = REPO / 'capstone/ports/sqlite/sublet/sublet-3220000-memsys5.patch'
-        done = subprocess.run(['patch', '-s', '-F0', '-p1', '-d', str(staged)],
-                              stdin=patch.open('rb'), capture_output=True, text=True)
-        if done.returncode:
-            sys.exit(f'the Sublet patch did not apply: {done.stdout}{done.stderr}')
-        print(f'  patched {source.name} with {patch.name}')
+        patches = ['sublet/sublet-3220000-memsys5.patch']
+        if a.pagecache:
+            patches.append('sublet/sublet-3220000-pagecache.patch')
+        for name in patches:
+            patch = REPO / 'capstone/ports/sqlite' / name
+            done = subprocess.run(['patch', '-s', '-F0', '-p1', '-d', str(staged)],
+                                  stdin=patch.open('rb'), capture_output=True, text=True)
+            if done.returncode:
+                sys.exit(f'{patch.name} did not apply: {done.stdout}{done.stderr}')
+            print(f'  patched {source.name} with {patch.name}')
         sublet_includes = [f'-I{REPO}/capstone/runtime/include']
     engine = {}
     for group in sorted({g for _, g, _ in cases.values()}):
