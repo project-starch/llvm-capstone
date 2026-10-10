@@ -158,6 +158,18 @@ The README's "page mover (7)" was recorded as a count; only `d67d187` was named.
 - Chunked items and the mover's support for them shipped together (1.4.29), so no release had a
   mover that mishandled chunks before `c0e5a99`'s window.
 
+**MEASURED 2026-10-11: `a836eab` as app safety fixtures 22 (reversed) and 23 (as shipped)**,
+pre-registered in `beebd18cd642`, fixture setup corrected in `8e87eddbc651` after a first run created
+no condition (a sat in the page's top chunk, beyond the dst class's last chunk; both arms 0xE0016).
+On p13, Sublet-lifetime QEMU `af37cc32`, the real server and its page-mover thread:
+
+| fixture | virtual (plain) | lifetimes (patch 0006) |
+|---|---|---|
+| 22 | RETURN `16001ee` -- the held item's write landed in a live class-32 item | FAULT temporal, cause 25, at the printed target |
+| 23 | RETURN `1700007` -- the mover waited, page not moved | RETURN `1700007` |
+
+All as registered. Both gates still fail only fixture 18 (its target-offset defect).
+
 **Buildable now: two** (`a836eab`, `c0e5a99`). Both are mover-driven, so they need the server (items,
 LRU, hash table, the mover thread), not the allocators component: in-process fixtures like 12-16,
 with the reversal behind its own define and predictions registered before the first boot.
