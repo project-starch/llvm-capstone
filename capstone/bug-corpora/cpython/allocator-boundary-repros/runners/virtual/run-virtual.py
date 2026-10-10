@@ -7,8 +7,8 @@
 This runner REPORTS; tools/verdicts.py decides. Each case is upstream's reproducer, trigger.py, run
 by the whole interpreter as a process under capstone-vexec on a persistent VM started with
 `capstone_vm up --profile virtual --exact-bounds`. The interpreter is the one heap CPython has,
-musl mallocng, with pymalloc stock (virtual-malloc) or on its lifetime port (virtual-nested-pools,
-CPY_SUBLET=1, run with CPY_SUBLET_MODE=1):
+musl mallocng, with pymalloc stock (virtual-malloc) or with patch 0014 (virtual-nested-pools,
+CPY_SUBLET=1), under which obmalloc hands out every block as a child lifetime and revokes it on free:
 
   reached     `ABR BEGIN`, printed by launch.py before it runs the trigger. It is not a marker at
               the defective access, so a quiet run is weaker evidence than a probe would be, and
@@ -19,8 +19,8 @@ CPY_SUBLET=1, run with CPY_SUBLET_MODE=1):
               ASan run (probe/asan-sites.py) recorded before any arm ran. A fault anywhere else is
               not a catch
 
-Before any case the image must run a JSON/GC workload and, on the pools arm, report
-`CPY-SUBLET mode=1`; then the configuration's controls run (controls/). The build's
+Before any case the image must run a JSON/GC workload; then the configuration's controls run
+(controls/), which is what shows the pools arm's protection is in force. The build's
 image/manifest.json says which arm it is: nested `none` or `cpython`, profile virtual.
 """
 import argparse
@@ -61,7 +61,7 @@ os.write(1, b"ABR RETURNED\\n")
 '''
 WORKLOAD = ('import json,gc; a=[{"n":n} for n in range(1000)]; '
             'assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")')
-CAPACITY = re.compile(r"MemoryError|cannot allocate|CPY-SUBLET-FAIL|out of memory")
+CAPACITY = re.compile(r"MemoryError|cannot allocate|out of memory")
 # The interpreter itself failing: a C function returned an error without setting one. It is not the
 # program running to its end, and the physical runner already read it as a failed run.
 BROKEN = re.compile(r"SystemError|returned NULL without setting an exception|"
@@ -88,7 +88,7 @@ def stage_stdlib(build, share):
     stamp.write_text(str(lib))
 
 
-def run_script(a, share, image, directory, script, tag, mode):
+def run_script(a, share, image, directory, script, tag):
     """Stage DIRECTORY's .py files and run SCRIPT there through launch.py."""
     stage = share / "abr" / tag
     shutil.rmtree(stage, ignore_errors=True)
@@ -96,7 +96,7 @@ def run_script(a, share, image, directory, script, tag, mode):
     for f in directory.glob("*.py"):
         shutil.copy(f, stage / f.name)
     (stage / "launch.py").write_text(LAUNCH)
-    env = ["-e", "PYTHONHOME=/mnt/host/cpy", "-e", "PYTHONDONTWRITEBYTECODE=1", *mode]
+    env = ["-e", "PYTHONHOME=/mnt/host/cpy", "-e", "PYTHONDONTWRITEBYTECODE=1"]
     return appvm.run_app(a.state, image, ["launch.py", script], a.raw / tag,
                          run_args=("--cwd", f"/mnt/host/abr/{tag}", *env), timeout=a.timeout)
 
@@ -162,24 +162,23 @@ def main():
     share = Path(json.loads((a.state / "config.json").read_text())["share"])
     a.raw.mkdir(parents=True, exist_ok=True)
     stage_stdlib(a.build, share)
-    mode = ["-e", "CPY_SUBLET_MODE=1"] if a.arm == "virtual-nested-pools" else []
     symbols = v.Symbols(a.llvm_bin, image)
 
     # The interpreter must work before anything it does means something.
     (share / "abr").mkdir(exist_ok=True)
     text, result = appvm.run_app(a.state, image, ["-S", "-c", WORKLOAD], a.raw / "workload",
-                                 run_args=("-e", "PYTHONHOME=/mnt/host/cpy", *mode), timeout=a.timeout)
-    qualified = "CPYTHON-OK 1000" in text and (not mode or "CPY-SUBLET mode=1" in text)
+                                 run_args=("-e", "PYTHONHOME=/mnt/host/cpy"), timeout=a.timeout)
+    qualified = "CPYTHON-OK 1000" in text
     print(f"  workload {'ok' if qualified else 'FAILED'}", flush=True)
     if not qualified:
-        print(f"CONTROL-FAILED the interpreter did not run the workload"
-              f"{' with CPY-SUBLET mode=1' if mode else ''}; see {a.raw / 'workload.out'}", file=sys.stderr)
+        print(f"CONTROL-FAILED the interpreter did not run the workload; see {a.raw / 'workload.out'}",
+              file=sys.stderr)
         return 75
 
     controls = []
     for name in spec["controls"]:
         script = "control_" + name.replace("-", "_") + ".py"
-        text, result = run_script(a, share, image, CORPUS / "controls", script, f"control-{name}", mode)
+        text, result = run_script(a, share, image, CORPUS / "controls", script, f"control-{name}")
         fault = v.domain_fault(result.get("fault") or "", symbols) or v.domain_fault(text, symbols)
         if f"CONTROL {name} mark" not in text:
             seen = "none"
@@ -196,7 +195,7 @@ def main():
         cases = [d for d in cases if d.name[:2] in set(a.only.split(","))]
     for d in cases:
         claims = json.loads((d / "case.json").read_text())
-        text, result = run_script(a, share, image, d, claims["trigger"], d.name, mode)
+        text, result = run_script(a, share, image, d, claims["trigger"], d.name)
         o = observe(text, result, symbols, set(claims.get("fault_sites", [])))
         o.image_sha256 = v.sha256(image)
         o.case, o.arm, o.controls = d.name, a.arm, list(controls)
@@ -208,7 +207,6 @@ def main():
         "configuration": config, "predicted": PREDICTED[a.arm],
         "build": {k: manifest.get(k) for k in ("application", "profile", "nested", "image_sha256",
                                                "runtime_revision", "runtime_dirty")},
-        "mode": "CPY_SUBLET_MODE=1" if mode else "stock",
         "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
     print(f"--- {a.arm} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0

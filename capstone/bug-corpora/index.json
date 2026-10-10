@@ -83,7 +83,8 @@
         "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20",
         "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control",
         "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd",
-        "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-virtual"
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-virtual",
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-sublet-isa"
       ],
       "advisories": [],
       "shape_table": true,
@@ -97,8 +98,8 @@
         "virtual-nested-pools": "virtual-pymalloc-pools"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+        "virtual-malloc": "results/2026-10-10-sublet-isa/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-10-sublet-isa/virtual-nested-pools"
       },
       "where": "capstone/bug-corpora/cpython/pymalloc-repros"
     },
