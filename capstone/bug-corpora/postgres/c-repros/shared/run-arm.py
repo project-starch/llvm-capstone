@@ -194,19 +194,30 @@ def main():
             text, result = runs[d.name]
             o = observe(number, text, result, v.Symbols(a.llvm_bin, image), claims.get("fault_sites", ()))
             o.case, o.arm, o.image_sha256 = d.name, a.arm, v.sha256(image)
-            if o.fault and o.reached and not o.attribution:
+            # The case's own negative control is read for EVERY case that faulted, not only for
+            # one the declared function did not already place. The two answer different
+            # questions -- where the fault is, and whether the arm would fault anyway -- and
+            # SCHEMA rule 5 wants the second one on record beside every verdict. It costs
+            # nothing extra: the control ran in this same boot.
+            if o.fault:
                 ctl = a.bindir / f"{d.name}-control.dom"
                 if f"{d.name}-control" in runs and ctl.is_file():
                     ctext, cresult = runs[f"{d.name}-control"]
                     seen, why = case_control(number, ctext, cresult, v.Symbols(a.llvm_bin, ctl))
-                    if seen == "held":
+                    o.notes = (o.notes + f" negative control: {seen} -- {why}.").strip()
+                    if seen == "held" and not o.attribution:
                         o.attribution = "control"
                         o.attribution_evidence = ("its own negative control, the same program below "
                                                   "the threshold, completed: " + why)
-                    else:
+                    elif seen == "broken":
+                        o.attribution_evidence += (
+                            "; and its negative control FAULTS too, so this fault does not depend "
+                            "on the defect")
+                        o.attribution = None
+                    elif not o.attribution:
                         o.attribution_evidence += f"; its negative control gives no attribution -- {why}"
                 else:
-                    o.attribution_evidence += "; this case has no negative control image in this build"
+                    o.notes = (o.notes + " negative control: none in this build.").strip()
         o.controls = list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
