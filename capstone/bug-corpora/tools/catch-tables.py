@@ -119,8 +119,9 @@ def col3_arm(corpus, arms):
 # nested None: a whole-program corpus whose cases cross different boundaries and are not split here.
 # Column 2 for a nested group is `sublet-malloc`, the same arm the three programs use; none of these
 # groups has measured it yet, so those cells are holes. Perl's `sysalloc-sublet` is that arm under
-# its own name (the Sublet heap, Perl's SV arenas stock); mruby has no such run. Column 3 is the
-# group's Sublet port: the APR ports' `sublet`, Perl's SV-head port, mruby's GC port. pymalloc,
+# its own name (the Sublet heap, Perl's SV arenas stock). Column 3 is the group's Sublet port: the
+# APR ports' `sublet`, Perl's SV-head port. mruby is measured on the virtual profile: column 2 is
+# `virtual-malloc`, column 3 its GC-slot patch 0008, `virtual-nested-pools`. pymalloc,
 # PostgreSQL and SQLite are measured on the virtual profile instead: column 2 is `virtual-malloc`,
 # column 3 the nested allocator's port on a block virtual mallocng lends. postgres/c-repros are
 # frontend programs with no nested allocator linked at all, so both columns are the protected
@@ -145,7 +146,7 @@ EXTRA_GROUPS = {
     ("cpython", "pymalloc-repros"): ("pymalloc", True, "virtual-malloc", "virtual-nested-pools"),
     ("httpd", "apr-pool-repros"): ("APR pools", True, "sublet-malloc", "sublet"),
     ("httpd", "bucket-repros"): ("APR buckets", True, "sublet-malloc", "sublet"),
-    ("mruby", "release-differential"): ("whole program", None, "sysalloc-sublet", "sublet-gc"),
+    ("mruby", "release-differential"): ("whole program", None, "virtual-malloc", "virtual-nested-pools"),
     ("perl", "release-differential"): ("whole program", None, "sysalloc-sublet", "sublet-svheads"),
     ("postgres", "c-repros"): ("direct malloc", False, "virtual-malloc", "virtual-malloc"),
     ("postgres", "mmgr-repros"): ("memory contexts", True, "virtual-malloc", "virtual-pg-pools"),

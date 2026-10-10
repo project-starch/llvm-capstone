@@ -709,16 +709,19 @@
       "required_arms": [
         "sysalloc-none",
         "sysalloc-bounds",
-        "sublet-gc",
-        "cheribsd-revocation"
+        "cheribsd-revocation",
+        "virtual-malloc",
+        "virtual-nested-pools"
       ],
       "evidence": [
         "capstone/bug-corpora/mruby/release-differential/results/20261006",
-        "capstone/bug-corpora/mruby/release-differential/results/20261006-cheribsd"
+        "capstone/bug-corpora/mruby/release-differential/results/20261006-cheribsd",
+        "capstone/bug-corpora/mruby/release-differential/results/2026-10-11-virtual"
       ],
       "runners": [
         "capstone/ports/mruby/app/build-mruby-domain.sh",
-        "capstone/ports/mruby/cheribsd/build.sh"
+        "capstone/ports/mruby/cheribsd/build.sh",
+        "capstone/bug-corpora/mruby/release-differential/probe/run-virtual.py"
       ],
       "expect_live_in_pin": {
         "true": 23
@@ -1503,6 +1506,7 @@
       },
       "targets": [
         "capstone-domain",
+        "capstone-virtual",
         "native"
       ],
       "workload": "mrbtest, and the upstream ao-render benchmark for the study",
@@ -1511,7 +1515,8 @@
         "capstone/experiments/study/results/mruby-gc-memory-20260927"
       ],
       "corpora": [
-        "capstone/bug-corpora/mruby/gc-slot-repros"
+        "capstone/bug-corpora/mruby/gc-slot-repros",
+        "capstone/bug-corpora/mruby/release-differential"
       ],
       "related": [
         "xlang/repro"

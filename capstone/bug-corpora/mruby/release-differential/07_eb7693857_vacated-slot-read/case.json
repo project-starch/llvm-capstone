@@ -15,17 +15,24 @@
     "sysalloc-bounds": {
       "oracle": "capability fault, cause 24"
     },
-    "sublet-gc": {
-      "oracle": "capability fault, cause 24",
-      "verdict": "CAUGHT",
-      "verdict_from": "results/20261006/matrix.tsv eb7693857 sublet-gc: fault c24"
-    },
     "cheribsd-revocation": {
       "oracle": "SIGPROT: the defence reports",
       "verdict": "CAUGHT",
       "verdict_from": "results/20261006-cheribsd/matrix.tsv eb7693857: SIGPROT rc=162"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, mruby 4.0.0-rc2 as ported on musl mallocng (exact bounds, lifetime retirement on free); its GC object slots are unbounded offsets in a malloc'd heap page: a capability fault (cause 24-30) is CAUGHT, a run that completes is MISSED",
+      "verdict": "CAUGHT",
+      "verdict_note": "capability fault, cause 24, in mrb_vformat",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc/matrix.tsv 07"
+    },
+    "virtual-nested-pools": {
+      "oracle": "the same with patch 0008 (MRBD_SUBLET=1): every GC object slot a CDERIVE child of its heap page, revoked by CREVOKE when the sweep frees it: as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "capability fault, cause 24, in mrb_vformat",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools/matrix.tsv 07"
     }
   },
-  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
+  "status": "sysalloc-none and sysalloc-bounds measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default; virtual-malloc and virtual-nested-pools measured 2026-10-11 on the virtual profile. The sublet-gc arm left the case with the Sublet heap and the GC-slot adapter on 2026-10-11; its readings stay in results/20261006.",
   "allocator_layer": "a hash_entry slot inside the entry array"
 }

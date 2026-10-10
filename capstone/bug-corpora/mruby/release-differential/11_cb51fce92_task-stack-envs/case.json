@@ -15,19 +15,25 @@
     "sysalloc-bounds": {
       "oracle": "capability fault, cause 2"
     },
-    "sublet-gc": {
-      "oracle": "capability fault, cause 2",
-      "verdict": "NO-READING",
-      "verdict_from": "results/20261006/matrix.tsv cb51fce92 sublet-gc: fault c2",
-      "verdict_note": "fault c2: not a capability fault"
-    },
     "cheribsd-revocation": {
       "oracle": "abort: the C runtime stops it (not a capability fault)",
       "verdict": "NO-READING",
       "verdict_from": "results/20261006-cheribsd/matrix.tsv cb51fce92: abort rc=134",
       "verdict_note": "abort (rc 134): no mechanism report"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, mruby 4.0.0-rc2 as ported on musl mallocng (exact bounds, lifetime retirement on free); its GC object slots are unbounded offsets in a malloc'd heap page: a capability fault (cause 24-30) is CAUGHT, a run that completes is MISSED",
+      "verdict": "NO-READING",
+      "verdict_note": "fault cause 12: not a capability fault",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc/matrix.tsv 11"
+    },
+    "virtual-nested-pools": {
+      "oracle": "the same with patch 0008 (MRBD_SUBLET=1): every GC object slot a CDERIVE child of its heap page, revoked by CREVOKE when the sweep frees it: as virtual-malloc",
+      "verdict": "NO-READING",
+      "verdict_note": "fault cause 12: not a capability fault",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools/matrix.tsv 11"
     }
   },
-  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
+  "status": "sysalloc-none and sysalloc-bounds measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default; virtual-malloc and virtual-nested-pools measured 2026-10-11 on the virtual profile. The sublet-gc arm left the case with the Sublet heap and the GC-slot adapter on 2026-10-11; its readings stay in results/20261006.",
   "allocator_layer": "the task's VM stack (system allocator)"
 }
