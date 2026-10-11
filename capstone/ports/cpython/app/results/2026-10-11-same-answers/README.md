@@ -251,12 +251,13 @@ per-test record is `outcomes-sharded.json`.
 ### Result
 
 **With the fixes, protected gives the same outcome as stock on every test that finished:
-2180 of the 2183 test ids native ran.** No boot faulted on either arm.
+2182 of the 2183 test ids native ran.** No boot faulted on either arm.
 
-- **Protected against stock:** 0 differences among the 2180.
+- **Protected against stock:** 0 differences among the 2182.
 - **Protected against native where stock equals native:** 0 differences.
-- **Not finished:** three threaded weakref tests per arm were still running when this section
-  was written, the same three on both arms (see the state at writing, below).
+- **Not finished:** one test, `test_weakref.MappingTestCase.test_threaded_weak_valued_consistency`,
+  on both arms. It was still running without a fault when this section was updated (see the
+  threaded weakref tests, below).
 - **Stock against native:** 21 differences among the finished tests, listed below. Protected
   has the same outcome as stock on each of them. They are the port's differences.
 
@@ -346,12 +347,12 @@ from the first run.
 | test_long | 42/0/0/2/0/0 | 42/0/0/2/0/0 | 42/0/0/2/0/0 |
 | test_json | 181/0/0/3/0/0 | 180/0/1/3/0/0 | 180/0/1/3/0/0 |
 | test_gc | 51/0/0/1/0/0 | 46/0/0/6/0/0 | 46/0/0/6/0/0 |
-| test_weakref | 135/0/0/2/0/0 | 131/0/0/3/0/3 | 131/0/0/3/0/3 |
+| test_weakref | 135/0/0/2/0/0 | 133/0/0/3/0/1 | 133/0/0/3/0/1 |
 | test_collections | 114/0/0/1/0/0 | 114/0/0/1/0/0 | 114/0/0/1/0/0 |
 | test_itertools | 139/0/0/5/0/0 | 137/1/1/5/0/0 | 137/1/1/5/0/0 |
 | test_sort | 21/0/0/0/0/0 | 21/0/0/0/0/0 | 21/0/0/0/0/0 |
 | test_re | 161/0/0/4/0/0 | 160/2/0/3/0/0 | 160/2/0/3/0/0 |
-| **total** | 2153/0/0/30/0/0 | 2131/4/3/42/0/3 | 2131/4/3/42/0/3 |
+| **total** | 2153/0/0/30/0/0 | 2133/4/3/42/0/1 | 2133/4/3/42/0/1 |
 
 ### Every difference among finished tests (stock = protected in every row)
 
@@ -386,19 +387,35 @@ the pure-Python decoder, and natively it passes. On both images it ends in
 `SystemError: error return without exception set`. Some C path returns NULL without an
 exception on the deep recursion. The sequential first run never reached this test.
 
-### State at writing: the three threaded weakref tests
+### The three threaded weakref tests
 
 `MappingTestCase.test_threaded_weak_valued_consistency`, `test_threaded_weak_valued_pop` and
 `test_threaded_weak_valued_setdefault` each run 100,000 dictionary operations while a second
 thread calls `gc.collect()` every 5 ms. Natively they take 1.8 s, 0.8 s and 0.2 s. On one
-emulated hart, each was still running after 46 min on both arms, with its QEMU at 100% CPU and
-no fault. Their outcome is recorded as not-finished, and the boot cap is 4 h.
+emulated hart they take hours, and the time varies from boot to boot. The boot cap of the
+planned shards is 4 h. At 13:21 UTC, consistency and pop were therefore started again on each
+arm in boots with a 24 h cap (`test_weakref-17L`, `test_weakref-19L`). Such a boot supplies an
+outcome only where the 4 h shard has none; otherwise it is recorded as a repeat.
+
+| test | stock | protected |
+|---|---|---|
+| setdefault | pass, shard 21, 51 min 10 s | pass, shard 21, 56 min 44 s |
+| pop | pass, shard 19, 3 h 5 min; repeat in 19L: pass, 4 h 17 min | 4 h shard hit the cap; pass in 19L, 4 h 50 min |
+| consistency | 4 h shard hit the cap; 17L still running | 4 h shard hit the cap; 17L still running |
+
+The times are regrtest's own ("passed in ..."). No fault was logged in any of these boots. A
+check at 13:20 UTC found QEMU at 100% CPU in the six 4 h boots, and a check at 18:20 UTC found
+it at 100% in both 17L boots.
 
 ### Deviations in this run
 
 1. **Sharded instead of sequential in one process.** Each shard is sequential in its own
    process. Cross-test interactions inside one interpreter are not the same as in a full
    sequential run, and the 58 parallel boots shared one host.
-2. **Shard 21b** re-ran 55 tests that were queued behind a long threaded test (above).
+2. **Shard 21b** re-ran 55 tests that were queued behind a long threaded test (above). The
+   4 h shard 21 later ran them too, with the same outcome on both arms (`repeats` in
+   `outcomes-sharded.json`).
 3. **Native was not rerun.** The oracle is the first run's matched native build. The fixed
    patches do not apply to it, because the native oracle is the unpatched release.
+4. **24 h-cap repeats of two threaded tests** (17L, 19L), because their 4 h shards hit the cap
+   or were expected to (above).

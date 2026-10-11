@@ -56,7 +56,7 @@
   "native_test_ids": 2183,
   "stock_test_ids": 2183,
   "protected_test_ids": 2183,
-  "checked": "native --list-cases with each shard's -m patterns: 2183 ids, each exactly once over the 29 planned shards"
+  "checked": "native --list-cases with each shard's -m patterns: 2183 ids, each exactly once over the 29 planned shards; 21b, 17L and 19L repeat subsets of shards 21, 17 and 19"
  },
  "shards": {
   "stock/test_dict-00": {
@@ -500,7 +500,7 @@
    "estimate_s": 3274,
    "exit": null,
    "regrtest_s": null,
-   "boot_s": null,
+   "boot_s": 14409,
    "module_result": "started, no result line",
    "tests": 1,
    "faults": 0,
@@ -528,14 +528,14 @@
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_pop"
    ],
    "estimate_s": 1367,
-   "exit": null,
-   "regrtest_s": null,
-   "boot_s": null,
-   "module_result": "started, no result line",
+   "exit": 0,
+   "regrtest_s": 11363,
+   "boot_s": 11456,
+   "module_result": "passed in 3 hour 5 min",
    "tests": 1,
    "faults": 0,
    "etree_probe_exit": 0,
-   "released": null
+   "released": true
   },
   "stock/test_weakref-20": {
    "module": "test_weakref",
@@ -568,14 +568,14 @@
     "test.test_weakref.MappingTestCase.test_weak_keyed_iters"
    ],
    "estimate_s": 1200,
-   "exit": null,
-   "regrtest_s": null,
-   "boot_s": null,
-   "module_result": "started, no result line",
+   "exit": 0,
+   "regrtest_s": 3260,
+   "boot_s": 3361,
+   "module_result": "passed in 51 min 10 sec",
    "tests": 1,
    "faults": 0,
    "etree_probe_exit": 0,
-   "released": null
+   "released": true
   },
   "stock/test_weakref-22": {
    "module": "test_weakref",
@@ -790,6 +790,36 @@
    "boot_s": 240,
    "module_result": "passed in 1 min 46 sec",
    "tests": 55,
+   "faults": 0,
+   "etree_probe_exit": 0,
+   "released": true
+  },
+  "stock/test_weakref-17L": {
+   "module": "test_weakref",
+   "match": [
+    "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency"
+   ],
+   "estimate_s": 0,
+   "exit": null,
+   "regrtest_s": null,
+   "boot_s": null,
+   "module_result": "started, no result line",
+   "tests": 0,
+   "faults": 0,
+   "etree_probe_exit": 0,
+   "released": null
+  },
+  "stock/test_weakref-19L": {
+   "module": "test_weakref",
+   "match": [
+    "test.test_weakref.MappingTestCase.test_threaded_weak_valued_pop"
+   ],
+   "estimate_s": 0,
+   "exit": 0,
+   "regrtest_s": 15560,
+   "boot_s": 15607,
+   "module_result": "passed in 4 hour 17 min",
+   "tests": 0,
    "faults": 0,
    "etree_probe_exit": 0,
    "released": true
@@ -1235,7 +1265,7 @@
    "estimate_s": 3274,
    "exit": null,
    "regrtest_s": null,
-   "boot_s": null,
+   "boot_s": 14413,
    "module_result": "started, no result line",
    "tests": 1,
    "faults": 0,
@@ -1265,7 +1295,7 @@
    "estimate_s": 1367,
    "exit": null,
    "regrtest_s": null,
-   "boot_s": null,
+   "boot_s": 14412,
    "module_result": "started, no result line",
    "tests": 1,
    "faults": 0,
@@ -1303,14 +1333,14 @@
     "test.test_weakref.MappingTestCase.test_weak_keyed_iters"
    ],
    "estimate_s": 1200,
-   "exit": null,
-   "regrtest_s": null,
-   "boot_s": null,
-   "module_result": "started, no result line",
+   "exit": 0,
+   "regrtest_s": 3603,
+   "boot_s": 3691,
+   "module_result": "passed in 56 min 44 sec",
    "tests": 1,
    "faults": 0,
    "etree_probe_exit": 0,
-   "released": null
+   "released": true
   },
   "protected/test_weakref-22": {
    "module": "test_weakref",
@@ -1528,9 +1558,158 @@
    "faults": 0,
    "etree_probe_exit": 0,
    "released": true
+  },
+  "protected/test_weakref-17L": {
+   "module": "test_weakref",
+   "match": [
+    "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency"
+   ],
+   "estimate_s": 0,
+   "exit": null,
+   "regrtest_s": null,
+   "boot_s": null,
+   "module_result": "started, no result line",
+   "tests": 0,
+   "faults": 0,
+   "etree_probe_exit": 0,
+   "released": null
+  },
+  "protected/test_weakref-19L": {
+   "module": "test_weakref",
+   "match": [
+    "test.test_weakref.MappingTestCase.test_threaded_weak_valued_pop"
+   ],
+   "estimate_s": 0,
+   "exit": 0,
+   "regrtest_s": 17529,
+   "boot_s": 17576,
+   "module_result": "passed in 4 hour 50 min",
+   "tests": 0,
+   "faults": 0,
+   "etree_probe_exit": 0,
+   "released": true
   }
  },
- "shard21_repeats": {},
+ "repeats": {
+  "stock": {
+   "test.test_weakref.MappingTestCase.test_weak_keyed_cascading_deletes": "pass",
+   "test.test_weakref.MappingTestCase.test_weak_keyed_iters": "pass",
+   "test.test_weakref.MappingTestCase.test_weak_keys": "pass",
+   "test.test_weakref.MappingTestCase.test_weak_values": "pass",
+   "test.test_weakref.ReferencesTestCase.test_basic_callback": "pass",
+   "test.test_weakref.ReferencesTestCase.test_basic_proxy": "pass",
+   "test.test_weakref.ReferencesTestCase.test_basic_ref": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callable_proxy": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_attribute": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_attribute_after_deletion": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_different_classes": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_gcs": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_in_cycle": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_in_cycle_resurrection": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_reachable_one_way": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callbacks_on_callback": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callbacks_protected": "pass",
+   "test.test_weakref.ReferencesTestCase.test_cfunction": "skipped",
+   "test.test_weakref.ReferencesTestCase.test_classes": "pass",
+   "test.test_weakref.ReferencesTestCase.test_constructor_kwargs": "pass",
+   "test.test_weakref.ReferencesTestCase.test_equality": "pass",
+   "test.test_weakref.ReferencesTestCase.test_gc_during_proxy_creation": "pass",
+   "test.test_weakref.ReferencesTestCase.test_gc_during_ref_creation": "pass",
+   "test.test_weakref.ReferencesTestCase.test_getweakrefcount": "pass",
+   "test.test_weakref.ReferencesTestCase.test_getweakrefs": "pass",
+   "test.test_weakref.ReferencesTestCase.test_hashing": "pass",
+   "test.test_weakref.ReferencesTestCase.test_init": "pass",
+   "test.test_weakref.ReferencesTestCase.test_multiple_callbacks": "pass",
+   "test.test_weakref.ReferencesTestCase.test_multiple_selfref_callbacks": "pass",
+   "test.test_weakref.ReferencesTestCase.test_newstyle_number_ops": "pass",
+   "test.test_weakref.ReferencesTestCase.test_no_memory_when_clearing": "pass",
+   "test.test_weakref.ReferencesTestCase.test_ordering": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_bad_next": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_bool": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_deletion": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_div": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_hash": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_index": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_iter": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_matmul": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_next": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_ref": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_repr": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_reuse": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_reversed": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_unicode": "pass",
+   "test.test_weakref.ReferencesTestCase.test_ref_created_during_del": "pass",
+   "test.test_weakref.ReferencesTestCase.test_ref_repr": "pass",
+   "test.test_weakref.ReferencesTestCase.test_ref_reuse": "pass",
+   "test.test_weakref.ReferencesTestCase.test_repr_failure_gh99184": "pass",
+   "test.test_weakref.ReferencesTestCase.test_set_callback_attribute": "pass",
+   "test.test_weakref.ReferencesTestCase.test_sf_bug_840829": "pass",
+   "test.test_weakref.ReferencesTestCase.test_shared_proxy_without_callback": "pass",
+   "test.test_weakref.ReferencesTestCase.test_shared_ref_without_callback": "pass",
+   "test.test_weakref.ReferencesTestCase.test_trashcan_16602": "pass",
+   "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency (4 h shard)": "not-finished",
+   "test.test_weakref.MappingTestCase.test_threaded_weak_valued_pop (24 h shard)": "pass"
+  },
+  "protected": {
+   "test.test_weakref.MappingTestCase.test_weak_keyed_cascading_deletes": "pass",
+   "test.test_weakref.MappingTestCase.test_weak_keyed_iters": "pass",
+   "test.test_weakref.MappingTestCase.test_weak_keys": "pass",
+   "test.test_weakref.MappingTestCase.test_weak_values": "pass",
+   "test.test_weakref.ReferencesTestCase.test_basic_callback": "pass",
+   "test.test_weakref.ReferencesTestCase.test_basic_proxy": "pass",
+   "test.test_weakref.ReferencesTestCase.test_basic_ref": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callable_proxy": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_attribute": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_attribute_after_deletion": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_different_classes": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_gcs": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_in_cycle": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_in_cycle_resurrection": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callback_reachable_one_way": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callbacks_on_callback": "pass",
+   "test.test_weakref.ReferencesTestCase.test_callbacks_protected": "pass",
+   "test.test_weakref.ReferencesTestCase.test_cfunction": "skipped",
+   "test.test_weakref.ReferencesTestCase.test_classes": "pass",
+   "test.test_weakref.ReferencesTestCase.test_constructor_kwargs": "pass",
+   "test.test_weakref.ReferencesTestCase.test_equality": "pass",
+   "test.test_weakref.ReferencesTestCase.test_gc_during_proxy_creation": "pass",
+   "test.test_weakref.ReferencesTestCase.test_gc_during_ref_creation": "pass",
+   "test.test_weakref.ReferencesTestCase.test_getweakrefcount": "pass",
+   "test.test_weakref.ReferencesTestCase.test_getweakrefs": "pass",
+   "test.test_weakref.ReferencesTestCase.test_hashing": "pass",
+   "test.test_weakref.ReferencesTestCase.test_init": "pass",
+   "test.test_weakref.ReferencesTestCase.test_multiple_callbacks": "pass",
+   "test.test_weakref.ReferencesTestCase.test_multiple_selfref_callbacks": "pass",
+   "test.test_weakref.ReferencesTestCase.test_newstyle_number_ops": "pass",
+   "test.test_weakref.ReferencesTestCase.test_no_memory_when_clearing": "pass",
+   "test.test_weakref.ReferencesTestCase.test_ordering": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_bad_next": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_bool": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_deletion": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_div": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_hash": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_index": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_iter": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_matmul": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_next": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_ref": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_repr": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_reuse": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_reversed": "pass",
+   "test.test_weakref.ReferencesTestCase.test_proxy_unicode": "pass",
+   "test.test_weakref.ReferencesTestCase.test_ref_created_during_del": "pass",
+   "test.test_weakref.ReferencesTestCase.test_ref_repr": "pass",
+   "test.test_weakref.ReferencesTestCase.test_ref_reuse": "pass",
+   "test.test_weakref.ReferencesTestCase.test_repr_failure_gh99184": "pass",
+   "test.test_weakref.ReferencesTestCase.test_set_callback_attribute": "pass",
+   "test.test_weakref.ReferencesTestCase.test_sf_bug_840829": "pass",
+   "test.test_weakref.ReferencesTestCase.test_shared_proxy_without_callback": "pass",
+   "test.test_weakref.ReferencesTestCase.test_shared_ref_without_callback": "pass",
+   "test.test_weakref.ReferencesTestCase.test_trashcan_16602": "pass",
+   "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency (4 h shard)": "not-finished",
+   "test.test_weakref.MappingTestCase.test_threaded_weak_valued_pop (4 h shard)": "not-finished"
+  }
+ },
  "arms": {
   "native": {
    "tests": {
@@ -14559,14 +14738,14 @@
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency": {
      "outcome": "not-finished",
-     "shard": "test_weakref-17"
+     "shard": "test_weakref-17L"
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_value_dict_copy": {
      "outcome": "pass",
      "shard": "test_weakref-18"
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_pop": {
-     "outcome": "not-finished",
+     "outcome": "pass",
      "shard": "test_weakref-19"
     },
     "test.test_weakref.MappingTestCase.test_make_weak_keyed_dict_repr": {
@@ -14674,7 +14853,7 @@
      "shard": "test_weakref-20"
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_setdefault": {
-     "outcome": "not-finished",
+     "outcome": "pass",
      "shard": "test_weakref-21"
     },
     "test.test_weakref.FinalizeTestCase.test_all_freed": {
@@ -23343,15 +23522,15 @@
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency": {
      "outcome": "not-finished",
-     "shard": "test_weakref-17"
+     "shard": "test_weakref-17L"
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_value_dict_copy": {
      "outcome": "pass",
      "shard": "test_weakref-18"
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_pop": {
-     "outcome": "not-finished",
-     "shard": "test_weakref-19"
+     "outcome": "pass",
+     "shard": "test_weakref-19L"
     },
     "test.test_weakref.MappingTestCase.test_make_weak_keyed_dict_repr": {
      "outcome": "pass",
@@ -23458,7 +23637,7 @@
      "shard": "test_weakref-20"
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_setdefault": {
-     "outcome": "not-finished",
+     "outcome": "pass",
      "shard": "test_weakref-21"
     },
     "test.test_weakref.FinalizeTestCase.test_all_freed": {
@@ -25851,18 +26030,6 @@
      "protected": "not-finished"
     },
     {
-     "test": "test.test_weakref.MappingTestCase.test_threaded_weak_valued_pop",
-     "native": "pass",
-     "stock": "not-finished",
-     "protected": "not-finished"
-    },
-    {
-     "test": "test.test_weakref.MappingTestCase.test_threaded_weak_valued_setdefault",
-     "native": "pass",
-     "stock": "not-finished",
-     "protected": "not-finished"
-    },
-    {
      "test": "test.test_weakref.ReferencesTestCase.test_cfunction",
      "native": "pass",
      "stock": "skipped",
@@ -26027,18 +26194,6 @@
     },
     {
      "test": "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency",
-     "native": "pass",
-     "stock": "not-finished",
-     "protected": "not-finished"
-    },
-    {
-     "test": "test.test_weakref.MappingTestCase.test_threaded_weak_valued_pop",
-     "native": "pass",
-     "stock": "not-finished",
-     "protected": "not-finished"
-    },
-    {
-     "test": "test.test_weakref.MappingTestCase.test_threaded_weak_valued_setdefault",
      "native": "pass",
      "stock": "not-finished",
      "protected": "not-finished"
