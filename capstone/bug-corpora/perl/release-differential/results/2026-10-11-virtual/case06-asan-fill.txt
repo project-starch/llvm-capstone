@@ -1,0 +1,6 @@
+# Case 06 (40727c420c) on the host ASan build at the pin, 2026-10-11, the only difference being the
+# byte ASan fills NEW allocations with. PERL5LIB = the corpus harness and library; trigger = cases/40727c420c.pl.
+# ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:exitcode=77[:malloc_fill_byte=0]
+fill	rc	asan_report	harness
+default (0xbe)	77	SEGV on unknown address, "high value address"	[FAIL] 5 of 29: 12,like,code in array 8,got=XAB-QC
+0	0	none	[FAIL] 5 of 29: 12,like,code in array 8,got=XAB-QC

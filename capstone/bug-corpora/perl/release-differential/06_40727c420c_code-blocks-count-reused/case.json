@@ -35,5 +35,6 @@
   "Perl_SvREFCNT_dec_NN",
   "S_free_codeblocks"
  ],
- "fault_sites_why": "Host ASan at the pin (results/20261006-host-differential, the run of 2026-10-06 before any virtual run): SEGV, frames #0-#1 Perl_SvREFCNT_dec_NN | S_free_codeblocks (sites.tsv; the interpreter's dispatch loops Perl_runops_standard and Perl_yyparse are not sites)."
+ "fault_sites_why": "Host ASan at the pin (results/20261006-host-differential, the run of 2026-10-06 before any virtual run): SEGV, frames #0-#1 Perl_SvREFCNT_dec_NN | S_free_codeblocks (sites.tsv; the interpreter's dispatch loops Perl_runops_standard and Perl_yyparse are not sites).",
+ "class_correction": "2026-10-11: not a temporal defect. One count serves as both the array's size and its used entries, so S_free_codeblocks walks entries whose src_regex was never written and dereferences garbage. Host ASan at the pin reports a SEGV on a high-value address with its default fill of new memory (0xbe) and nothing at all with malloc_fill_byte=0, where the test gives the same five wrong results as on Capstone and CheriBSD (results/2026-10-11-virtual/case06-asan-fill.txt). ASan flags every read of freed or out-of-bounds memory, so no ended lifetime is involved: no lifetime protection can catch it, and it is outside the temporal denominators."
 }
