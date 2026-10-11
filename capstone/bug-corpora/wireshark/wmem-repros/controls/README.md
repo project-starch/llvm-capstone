@@ -20,3 +20,8 @@ configuration's, in `tools/arms.json` (`virtual-wmem`, `virtual-wmem-pools`), an
 
 `01` is also the native-detect arm's positive control (`runners/run-asan.sh`): ASan must report
 heap-use-after-free on it, since the jumbo is the one stock wmem object that reaches `free()`.
+
+[`lifetime/`](lifetime/README.md) holds a different kind of control: the parent, sibling and successor
+controls of `docs/plans/2026-10-11-nested-lifetime-controls.md`, which show that patch 0001 leaves
+permitted accesses alone. They are built from that directory, not from this one, and the runner
+above does not run them.
