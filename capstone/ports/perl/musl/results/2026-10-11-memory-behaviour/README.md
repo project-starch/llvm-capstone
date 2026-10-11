@@ -113,8 +113,12 @@ all runs).
   peak.
 - **busybox `time` unit**: busybox prints "Maximum resident set size" as 4x `ru_maxrss` (it
   converts the value as if it counted 4 KiB pages). The printed value is exactly 4x the sampled
-  VmHWM in all 12 runs and in a probe boot; `results.json` keeps the printed value and the
-  corrected one.
+  VmHWM in all 12 runs and in a probe boot. The diagnostic boot (FFmpeg stock image) settles
+  which process each number belongs to: its all-process scan, keyed by `Name:`, read
+  `capstone-vexec` (parent: `time`) at VmHWM 7,248 kB and its spawner child at 116 kB, and
+  busybox then printed 28,992 = 4 x 7,248. So the sampled pid is the program, not the spawner,
+  and a busybox "Maximum resident set size" must be divided by 4. `results.json` keeps the
+  printed value and the corrected one.
 - **VmRSS** between samples is not seen; "VmRSS max after the launch drop" is the largest sample
   after VmRSS first falls by more than 25 % between two samples.
 - **What VmHWM covers**: the `capstone-vexec` process, i.e. the domain's memory plus the
