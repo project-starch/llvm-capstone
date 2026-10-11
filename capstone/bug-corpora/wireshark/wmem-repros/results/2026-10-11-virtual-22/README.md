@@ -1,5 +1,9 @@
 # wireshark/wmem-repros on virtual Capstone -- 2026-10-11
 
+Committed in `bcf6eff4c7b7` as `results/2026-10-11-virtual/` and moved here when dev was merged:
+dev had recorded its own bundles at that path the same day (the chunk port's arms,
+`virtual-wmem-libc` / `virtual-wmem-chunks`), and they keep it.
+
 The first run of the wmem port's patch 0001 (every object of `block` and `block_fast` a child
 lifetime of its block, `CDERIVE`/`CREVOKE`). Source: commit `0e22fc33d297`
 (`nested/wireshark-sublet`), built with the `capstone-application` preset against a virtual SDK,

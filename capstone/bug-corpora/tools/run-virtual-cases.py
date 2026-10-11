@@ -262,24 +262,22 @@ def wmem_probe(case_dir):
 
 
 HOSTED = {
-    # wireshark/wmem-repros on the wmem port (ports/wireshark/wmem, preset capstone-application).
-    #   virtual-malloc: stock wmem, g_malloc/g_free = virtual mallocng (WM_LIBC_SYSTEM), mode 0; the
-    #     buggy run is the fix differential (`0 N buggy`), whose temporal cases ASSERT the stale chunk
-    #     was reoccupied before reading it -- the build the CheriBSD libc arm ran.
-    #   virtual-nested-pools: the Sublet region and chunk layers over a payload the virtual heap lends
-    #     linear (WM_SUBLET, shared/driver-virtual.c), mode 1; the buggy run is the protected sequence
-    #     (`1 N`), as the physical sublet-chunks arm ran it, with no observation added.
-    # Both: the fixed run is the differential (`MODE N fixed`): VERDICT FIXED and exit 0.
+    # wireshark/wmem-repros on the wmem port (ports/wireshark/wmem, preset capstone-application),
+    # g_malloc/g_free being virtual mallocng in both arms.
+    #   virtual-malloc: wmem as released (WM_SUBLET=OFF); the buggy run is the fix differential
+    #     (`0 N buggy`), whose temporal cases ASSERT the stale chunk was reoccupied before reading it.
+    #   virtual-nested-pools: the port's patch 0001 (WM_SUBLET=ON), every block and block_fast object
+    #     a CDERIVE child of its block, revoked by CREVOKE; the buggy run is the plain sequence (`0 N`).
+    # Both: the fixed run is the differential (`0 N fixed`): VERDICT FIXED and exit 0.
     "wmem-repros": dict(
-        cache={"virtual-malloc": {"WM_LIBC_SYSTEM": "ON", "WM_CHUNKS": "OFF", "WM_SUBLET": "OFF"},
-               "virtual-nested-pools": {"WM_SUBLET": "ON", "WM_CHUNKS": "ON", "WM_LIBC_SYSTEM": "OFF"}},
-        mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
+        cache={"virtual-malloc": {"WM_SUBLET": "OFF"}, "virtual-nested-pools": {"WM_SUBLET": "ON"}},
+        mode={"virtual-malloc": "0", "virtual-nested-pools": "0"},
         buggy={"virtual-malloc": ["buggy"], "virtual-nested-pools": []},
         probe=wmem_probe,
         ready="WM_DEFECT case={n} ready",
         done="WM_DEFECT case={n} mode={mode} completed",
-        controls_dir="controls/virtual",
-        control_names={90: "jumbo-reset-90", 91: "chunk-free-91"},
+        controls_dir="controls",
+        control_names={0: "uaf-chunk", 1: "uaf-jumbo", 2: "bounds-chunk"},
     ),
     # memcached/allocator-repros on the allocators port (ports/memcached/allocators), built by the
     # corpus's own shared/build-cases.sh capstone-application, whose programs print the case.c
@@ -357,8 +355,8 @@ def cache_says(build, want, sdk):
 
 
 def label_addresses(llvm_bin, image, names):
-    """Link addresses of the named symbols, zero-size labels included (wm_widen_probe is a label
-    inside a static function, which Symbols.lookup would report as that function instead)."""
+    """Link addresses of the named symbols, zero-size labels included (a fault-site label inside a
+    static function, which Symbols.lookup would report as that function instead)."""
     if not names:
         return {}
     out = subprocess.run([str(Path(llvm_bin) / "llvm-nm"), "--defined-only", str(image)],
