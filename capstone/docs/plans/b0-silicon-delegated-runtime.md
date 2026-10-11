@@ -1585,6 +1585,50 @@ supervision overhead within 0.1 points of 776d9d859's +0.680 %.
 - r51 still reading 0xBAD: the fix is not in the build. Check the bitstream's provenance first.
 - B3e's refutations stand as written above.
 
+## Acceptance RESULT: caplifive_r51r52_0568f93a9.bit (2026-10-11 14:53-17:56): R-51 and R-52 FIXED ON SILICON
+Flashed on the lead's word (14:51-14:53). The console read back the new name after the power cycle; 776d9d859 stays
+registered. Every row below is against the pre-registration above, and against 776d9d859's own run of the same images.
+
+- **S-16 control set (bare, 14:53-15:09):** 18 of 18 arms complete. All 98 readings are identical to 776d9d859's (the
+  comparator reports two arms that do differ as different, and every arm carried 3-8 readings).
+- **R-43 list (15:11-17:07):**
+  - a1-a6, a8 and a9 match 776d9d859's result lines on every identity field:
+    - k800 retval 4 / instret 1089, and R1 end 160/191/160/0/0;
+    - speedtest1-ran 1320222911 and 1320264012;
+    - live-sweep sums 544 / 4352 / 17408;
+    - P1 hash 112006 38bb59fd, and the sublet counters exact.
+  - Timing is within 0.05 %: cell 5 +0.021 %, ratio 1.3516 against 1.3519.
+  - **a10 exactly as predicted:** mcause 25 (sw=255 0x99), mepc DBAS+0x4354, tval 0xac100000, refusal record LATCHED
+    (id 95, parity ok), rev_node bytes identical. Not the refuting cause 28 at mepc 0.
+  - The first attempt at 15:09 was refused by preflight: the new name was not in its bitstream table. It was rerun
+    with PREFLIGHT_DTS_NODES=65536, which the check verified against the firmware, and the name was added to the table
+    (dev 1e9a1abf866f).
+  - **a7 ladder: 17/17 retval == oracle, but instret differs on 2 of 17 rungs** against 36a641e0b's file:
+    coremark_matrix 31803 against 31560, and beebs_insertsort 971 against 962, cycles +7.4 % each.
+    - Attributed to the TOOLCHAIN, not the bitstream. run_ladder_perf_fpga.py rebuilds every rung at run time (16:16),
+      and libLLVMCapstoneCodeGen.so was rebuilt on 2026-10-07, after both references. The toolchain check flags it
+      STALE.
+    - A ladder rung has no post-yield region for R-51 to act on, and no FP instruction for R-52.
+    - The bare arm, built with the same clang for riscv64, is identical to 09-29 and 10-02.
+    - Not proven by a same-binary rerun on 776d9d859: those images are gone.
+- **C5u:** k800 4 twice and every hash 112006 38bb59fd. Quiet supervision overhead **+0.666 %** (776d9d859: +0.680 %),
+  quiet + fence +0.687 %, loud +13.824 %.
+- **R-51 (bare, matched pair, N=2):**
+  - **after the yield 0 / 0x1C / 0x1C, twice** (776d9d859: 0 / 0xBAD / 0);
+  - before the yield 0x1C / 0x1C, unchanged.
+  - The first before-arm attempt had no result: GDB timed out setting pc after load_image (infra). The retry read it.
+- **s10b** 8 / 1, and **s06agg** 64 with k800 4: unchanged.
+- **Boot C, the B-series (17:43-17:50, firmware 1f9cdf960640):**
+  - b0-stats and b0-stats2 OK; b0-hello byte-exact; b1-thread 124; b2-memcached retval 0.
+  - b3-setclock read `date before: 154` at an uptime of 155 s.
+  - **b3-oracle: transcript e0a254c47e7ee28c, 1,931,207 bytes, with the harness's stop_seconds=1.07** (776d9d859: inf).
+  - **b3-clock RETURNED** (it hung on 776d9d859), with arith **0 anomalies of 200,000** (776d9d859: 200,000 of
+    200,000) and hold-domain stop_seconds 0.37.
+  - Its retval 38 is the hold arms. All three read 12 of 12 changed, and the self-test read 12, not 1, so by B3e's
+    own rule they are VOID. Their uniform reading (the caller's FPRs at hold_wait's entry) is B3f's question below.
+- **Verdict:** R-51's and R-52's fixes hold on silicon as pre-registered, and every control is unchanged. The two
+  departures are attributed (a7) or under diagnosis (B3f); neither is a regression of a pre-registered reading.
+
 ## B3f pre-registered (2026-10-11, before the boot): where the FP-hold arms' loaded values go
 **The observation (boot C of the R-51 + R-52 acceptance, 17:43-17:50).** b3-clock-probe's three hold arms each read
 12 of 12 fs0..fs11 changed across `waitpid`.
@@ -1617,6 +1661,38 @@ What each reading would mean. The rest is reported as read.
   - v6 changing too would make it any FP state.
 - v4 holds: boot C's reading does not reproduce in this shape. It would then be specific to hold_wait's exact code,
   or to what ran before it in that boot.
+
+## B3f RESULT (2026-10-11 17:58-18:03, caplifive_r51r52_0568f93a9, firmware 0b9bfc81317b): FP state is lost across a BLOCKING switch
+- b0-stats and b0-stats2: retval 0. **v7, the control, reads exactly 1 of 12 changed (fs5)**, so the instrument is
+  valid on silicon.
+- **v0 (nothing), v1 (a function call), v2 (getppid), v3 (sched_yield): 0 of 12 changed each.** So it is not an
+  in-core fsd/fld ordering effect.
+- **v4 (waitpid on a sleeping child), v5 (plus 32 nops), v6 (values computed by fadd): 12 of 12 changed each**, fs0
+  reading 0. So it is not specific to loaded values, and not to back-to-back fsd/fld.
+- The registers come back as the FP state from BEFORE the loads: 0 here, DBL_MAX in boot C, the caller's.
+  - That is what the kernel produces when it skips the save at switch-out and restores an older copy. Linux 6.4's
+    __switch_to_aux saves only if the sstatus captured at the task's last trap entry shows SD and FS Dirty
+    (arch/riscv/include/asm/switch_to.h:49-57).
+  - The core's FS/SD update reads as upstream (csr_regfile.sv:2063-2077), and the FPGA monitor's return path writes no
+    mstatus (sbi_capstone.S:148-192). So which side drops it is UNRESOLVED.
+- On the same boot C, mc-harness's t0 survived a blocking waitpid on a BUSY child (the memcached domain), so the
+  probe's sleeping child, and with it an idle hart, is one difference.
+- QEMU loses nothing in any variant.
+
+## B3g pre-registered (2026-10-11, before the boot): idle, an extra syscall, or the timer
+The same probe (FPGA build f7e5551165ddbbaa), with four variants added. QEMU rehearsal: v0..v6 and v8..v11 read 0,
+v7 reads 1, rc 0.
+- v8: v4 with a child that SPINS 1 s, so the hart never idles.
+- v9: v4 with getppid between the loads and waitpid (mc-harness has kill() there).
+- v10: no child; the parent nanosleeps 1 s (blocks and idles).
+- v11: no child; the parent busy-loops 1 s with no syscall (timer interrupts only).
+- v0..v7 again, as the repeat of B3f. v7 must read exactly 1.
+
+What each reading would mean:
+- v8 holds and v10 loses: the hart going idle (WFI) is what loses the state.
+- v8 loses: any blocking switch does.
+- v11 loses: the timer-interrupt path (M-mode) clobbers FP state, with no switch at all.
+- v9 holds while v4 loses: the intervening syscall restores tracking. That would be a kernel/trap-entry effect.
 
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This

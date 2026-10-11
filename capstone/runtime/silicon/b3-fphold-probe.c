@@ -13,11 +13,16 @@
  *   4 waitpid on a child that sleeps 1 s (blocks; the original arm)
  *   5 as 4, but 32 nops between the save-fsds and the load-flds (the back-to-back fsd/fld of the same FPRs)
  *   6 as 4, but the twelve values are COMPUTED by fadd from one fld, not loaded (mc-harness's case)
+ *   8 as 4, but the child SPINS for 1 s instead of sleeping (the hart never idles)
+ *   9 as 4, with getppid between the loads and waitpid (mc-harness has kill() there)
+ *  10 no child: the parent itself nanosleeps 1 s (blocks and idles, no waitpid)
+ *  11 no child: the parent busy-loops 1 s with no syscall (timer interrupts only, nothing to switch to)
  *   7 the POSITIVE CONTROL: as 0, with fs5 doubled by fadd before the store. It must read exactly 1 of 12 changed;
  *     anything else means the instrument cannot be trusted, and sets bit 7.
  * Each variant prints `B3f v<n>: <k> of 12 changed` and the first changed value. Exit status is a bitmask, bit n =
  * variant n read something other than its expectation (0 changed; exactly 1 for variant 7). 0 = all as expected. */
 #include <sched.h>
+#include <time.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,6 +33,10 @@
  * step, store fs0..fs11 to out[]. The caller's fs0..fs11 are saved and restored around it. */
 long fphold(const uint64_t *in, uint64_t *out, long mode, long pid);
 long dummy_fn(long x) { return x + 1; }
+/* Integer-only helpers (no FP), so the callee-saved FPRs stay the ABI's: whatever they read after is not theirs. */
+static long mono_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000L + t.tv_nsec / 1000000L; }
+void nap1s(void) { struct timespec t = {1, 0}; nanosleep(&t, NULL); }
+void spin1s(void) { long end = mono_ms() + 1000; while (mono_ms() < end) { } }
 __asm__(
 ".text\n.globl fphold\n.type fphold, @function\nfphold:\n"
 "  addi sp, sp, -160\n  sd ra, 0(sp)\n  sd s0, 8(sp)\n  sd s1, 16(sp)\n  sd s2, 128(sp)\n"
@@ -50,7 +59,10 @@ __asm__(
 "  li t0, 1\n  bne s1, t0, 5f\n  li a0, 41\n  call dummy_fn\n  j 9f\n"
 "5:li t0, 2\n  bne s1, t0, 6f\n  call getppid\n  j 9f\n"
 "6:li t0, 3\n  bne s1, t0, 7f\n  call sched_yield\n  j 9f\n"
-"7:mv a0, s2\n  addi a1, sp, 120\n  li a2, 0\n  call waitpid\n"
+"7:li t0, 10\n  bne s1, t0, 70f\n  call nap1s\n  j 9f\n"
+"70:li t0, 11\n  bne s1, t0, 71f\n  call spin1s\n  j 9f\n"
+"71:li t0, 9\n  bne s1, t0, 72f\n  call getppid\n"
+"72:mv a0, s2\n  addi a1, sp, 120\n  li a2, 0\n  call waitpid\n"
 "9:fsd fs0, 0(s0)\n  fsd fs1, 8(s0)\n  fsd fs2, 16(s0)\n  fsd fs3, 24(s0)\n  fsd fs4, 32(s0)\n  fsd fs5, 40(s0)\n"
 "  fsd fs6, 48(s0)\n  fsd fs7, 56(s0)\n  fsd fs8, 64(s0)\n  fsd fs9, 72(s0)\n  fsd fs10, 80(s0)\n  fsd fs11, 88(s0)\n"
 "  fld fs0, 24(sp)\n  fld fs1, 32(sp)\n  fld fs2, 40(sp)\n  fld fs3, 48(sp)\n  fld fs4, 56(sp)\n  fld fs5, 64(sp)\n"
@@ -64,15 +76,19 @@ int main(void)
 {
 	int rc = 0;
 	setvbuf(stdout, NULL, _IONBF, 0);
-	for (long mode = 0; mode <= 7; mode++) {
+	for (long mode = 0; mode <= 11; mode++) {
 		uint64_t in[12], out[24], want[12];
 		/* Distinct, non-trivial patterns, and none equal to anything a caller register is likely to hold. */
 		for (int i = 0; i < 12; i++) in[i] = 0x4010000000000000ull + 0x0000010000000000ull * (uint64_t)(i + 1) + (uint64_t)mode;
 		memset(out, 0, sizeof out);
 		pid_t pid = 0;
-		if (mode == 4 || mode == 5 || mode == 6) {
+		if (mode == 4 || mode == 5 || mode == 6 || mode == 9) {
 			pid = fork();
 			if (pid == 0) { execl("/bin/sleep", "sleep", "1", (char *)NULL); _exit(127); }
+		}
+		if (mode == 8) {
+			pid = fork();
+			if (pid == 0) { spin1s(); _exit(0); }
 		}
 		fphold(in, out, mode, pid);
 		/* What should come back: the loaded values, or for mode 6 the fadd chain from in[0] (computed again here, in
