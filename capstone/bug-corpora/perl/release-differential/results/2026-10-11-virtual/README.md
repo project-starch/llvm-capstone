@@ -38,17 +38,22 @@ a1c6cb6b, launcher 3975314a (`inputs.json`). CheriBSD: image e7470361, 15.0-CURR
 
 | | cases | CheriBSD (use after reallocation) | Sublet (use after free) |
 |---|---:|---:|---:|
-| system allocator: 04, 06, 07, 10 | 4 | 4 | 3 |
+| system allocator: 04, 07, 10 | 3 | 3 | 3 |
 | nested allocator: 02, 05 | 2 | 0 | 2 |
 
 * **System allocator.** 03 is out: its trigger does not reproduce here (nor on any arm since
-  2026-10-06). Sublet catches 04, 07 and 10 with cause 25 at a host ASan site. 06 completes on
-  both virtual arms with no fault and the same five wrong results as on CheriBSD; the stale access
-  ASan reports (a freed `reg_code_block` array read in `S_free_codeblocks`) does not fault here,
-  and why is not localized. CheriBSD earns use-after-reallocation credit on all four: each
-  completes with revocation on while every free stays in the quarantine and none is reissued; for
-  06 the revocation-off run faults in `Perl_regfree_internal`, ASan's frame, so the quarantine is
-  what kept that stale read off a reallocated block.
+  2026-10-06). **06 is out: it is not a temporal defect** (correction, 2026-10-11, after the first
+  version of this file counted it). One count serves as both the array's size and its used
+  entries, so `S_free_codeblocks` walks entries whose `src_regex` was never written. Host ASan
+  reports a SEGV on a high-value address with its default fill of new memory and nothing at all
+  with `malloc_fill_byte=0`, where the test gives the same five wrong results as on both platforms
+  here ([case06-asan-fill.txt](case06-asan-fill.txt)); ASan flags every read of freed or
+  out-of-bounds memory, so no ended lifetime is involved. It completing on both Capstone images is
+  therefore not a miss, and CheriBSD's completion with revocation on is not use-after-reallocation
+  protection (its revocation-off fault is a dereference of an uninitialized pointer, which tag
+  integrity rejects). Sublet catches 04, 07 and 10 with cause 25 at a host ASan site. CheriBSD
+  earns use-after-reallocation credit on all three: each completes with revocation on while every
+  free stays in the quarantine and none is reissued.
 * **Nested allocator.** A case counts when the stock image reaches it and ends without a fault.
   02 (Perl's own panic) and 05 qualify, and the protected image faults on both with cause 25: on
   02 at `sv_setsv_flags`' first read of the freed SV the defect hands it, one step before Perl's
