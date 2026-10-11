@@ -11,6 +11,15 @@ The SQLite row of the pre-registration
 
 N = 3 per arm, one arm per boot, all boots in parallel.
 
+
+> **Correction, 2026-10-11, same day.** busybox `time -v` prints "Maximum resident set size" as
+> 4x `ru_maxrss` (it converts the value as if it counted 4 KiB pages). The Perl and FFmpeg row of
+> this measurement established it: in all twelve of its runs the printed value is exactly 4x the
+> sampled VmHWM of the launcher process, and a diagnostic boot read 7,248 kB where busybox printed
+> 28,992 (`perl/musl/results/2026-10-11-memory-behaviour/README.md`). The peak-RSS figures below
+> are therefore given as printed and divided by 4; `memory-behaviour.json` keeps the printed
+> values. The stock-versus-protected comparison is unchanged in direction and ratio.
+
 ## Outcome
 
 | Prediction | Verdict |
@@ -99,7 +108,7 @@ lookaside hits. The number of memsys5 hand-outs is not exposed, so the ratio can
 
 | method | stock | protected |
 |---|---|---|
-| busybox `time -v` maximum RSS (wait4 `ru_maxrss`) of the launcher process | 49,104 KiB (all 3) | 49,104 KiB (all 3) |
+| busybox `time -v` maximum RSS of the launcher process, printed (/4 = `ru_maxrss`) | 49,104 (12,276) KiB, all 3 | 49,104 (12,276) KiB, all 3 |
 | peak pinned domain pages (`CAPSTONE_VM_STATS peak`) | 2,918 pages = 11,672 KiB | 2,918 pages = 11,672 KiB |
 
 `ru_maxrss` is the kernel's RSS high-water mark (`hiwater_rss`) of the process at its exit, the
@@ -111,7 +120,7 @@ heap's size is the same, so the footprint is too.
 **The direct VmHWM sampler failed.** It read `/proc/<pid>/status` once a second for every
 `capstone-vexec` pid and kept the last line written. The launcher also runs a small spawner child,
 and the last line came from a pid with VmHWM 116 kB: not the launcher main process, which `time -v`
-puts at 49,104 KiB. The sampled values are kept in the JSON, labelled invalid, and are not used.
+puts at 49,104 KiB as printed, 12,276 KiB after the /4 correction. The sampled values are kept in the JSON, labelled invalid, and are not used.
 `time -v` is the peak-memory measurement.
 
 ## Repetitions

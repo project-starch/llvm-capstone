@@ -11,6 +11,15 @@ This is the PostgreSQL row of the pre-registration
 
 N = 3 per arm. Each arm ran in its own boot, and all boots ran in parallel.
 
+
+> **Correction, 2026-10-11, same day.** busybox `time -v` prints "Maximum resident set size" as
+> 4x `ru_maxrss` (it converts the value as if it counted 4 KiB pages). The Perl and FFmpeg row of
+> this measurement established it: in all twelve of its runs the printed value is exactly 4x the
+> sampled VmHWM of the launcher process, and a diagnostic boot read 7,248 kB where busybox printed
+> 28,992 (`perl/musl/results/2026-10-11-memory-behaviour/README.md`). The peak-RSS figures below
+> are therefore given as printed and divided by 4; `memory-behaviour.json` keeps the printed
+> values. The stock-versus-protected comparison is unchanged in direction and ratio.
+
 ## Outcome
 
 | Prediction | Verdict |
@@ -93,10 +102,10 @@ adds about 62,220. Protected also has 6 more arenas and 55 more peak pinned page
 
 | method | stock | protected |
 |---|---|---|
-| busybox `time -v` maximum RSS (wait4 `ru_maxrss`) | 126,416 / 126,416 / 126,400 KiB | 126,688 / 126,688 / 126,448 KiB |
+| busybox `time -v` maximum RSS, printed (/4 = `ru_maxrss`) | 126,416 / 126,416 / 126,400 (31,604 / 31,604 / 31,600) KiB | 126,688 / 126,688 / 126,448 (31,672 / 31,672 / 31,612) KiB |
 | peak pinned domain pages (`CAPSTONE_VM_STATS peak`) | 6,768 pages = 27,072 KiB (all 3) | 6,823 pages = 27,292 KiB (all 3) |
 
-Protected is higher by 32 to 288 KiB in `ru_maxrss`. In peak pinned pages it is higher by 220 KiB
+Protected is higher by 32 to 288 KiB as printed, 8 to 72 KiB in `ru_maxrss`. In peak pinned pages it is higher by 220 KiB
 in every repetition.
 
 `ru_maxrss` is the kernel's RSS high-water mark (`hiwater_rss`) taken at exit, the same counter as
@@ -125,7 +134,7 @@ are kept in the JSON, labelled invalid, and not used.
 
 | field | stock min-max | protected min-max |
 |---|---|---|
-| ru_maxrss (KiB) | 126,400-126,416 | 126,448-126,688 |
+| ru_maxrss (KiB), printed (/4) | 126,400-126,416 (31,600-31,604) | 126,448-126,688 (31,612-31,672) |
 | CAPSTONE_VM_STATS steps | 19,153-19,318 | 19,297-19,491 |
 | bytes_in | 2,131,522-2,131,526 | 2,131,604 (all) |
 | launcher elapsed_ns (s) | 41.46-43.56 | 42.25-44.42 |
