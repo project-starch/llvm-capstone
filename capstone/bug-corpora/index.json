@@ -809,6 +809,7 @@
       "case_macro": "PGCLIENT",
       "required_arms": [
         "spatial",
+        "sublet",
         "cheribsd-revocation",
         "virtual-malloc"
       ],
@@ -837,15 +838,18 @@
         "capstone/bug-corpora/postgres/c-repros/results/sublet-20261006-161014",
         "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023",
         "capstone/bug-corpora/postgres/c-repros/results/2026-10-10-virtual",
-        "capstone/bug-corpora/postgres/c-repros/results/20261010-150616-qemu/spatial"
+        "capstone/bug-corpora/postgres/c-repros/results/20261010-150616-qemu/spatial",
+        "capstone/bug-corpora/postgres/c-repros/results/20261011-034640-qemu/sublet"
       ],
       "arm_configurations": {
         "spatial": "app-level0",
-        "virtual-malloc": "virtual-mallocng"
+        "virtual-malloc": "virtual-mallocng",
+        "sublet": "app-sublet"
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-        "spatial": "results/20261010-150616-qemu/spatial"
+        "spatial": "results/20261010-150616-qemu/spatial",
+        "sublet": "results/20261011-034640-qemu/sublet"
       },
       "where": "capstone/bug-corpora/postgres/c-repros"
     },

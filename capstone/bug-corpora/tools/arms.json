@@ -240,6 +240,19 @@
         "uaf-malloc",
         "chunk-free-90"
       ]
+    },
+    "app-sublet": {
+      "target": "capstone-domain",
+      "summary": "an application domain whose SDK heap IS the Sublet heap (CAPSTONE_APPLICATION_HEAP=sublet, ports/musl-capstone/runtime/sublet_heap.c): a binary buddy allocator over one linear region, every block with its own revocation node. malloc checks a block out with sublet_take and SHRINKS the alias to the request, so the bounds are the object's and not the block's; free scrubs the object and revokes with sublet_give, after which every copy of the alias is dead. Distinct from app-level0-pg-nested-sublet, which is level0 malloc with PostgreSQL's contexts on Sublet pools: here it is malloc itself.",
+      "mechanism": "per-object bounds and revocation on free, in malloc",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc"
+      ]
     }
   }
 }

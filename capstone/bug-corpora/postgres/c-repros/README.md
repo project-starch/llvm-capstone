@@ -31,6 +31,19 @@ pools, which these programs never use. Its five catches -- at the same pcs as th
 were level0 bounds under a Sublet label. The run stays in `results/sublet-20261006-161014` as the
 record of what was measured; no verdict is taken from it.
 
+**The arm is back as of 2026-10-11, on a heap that is actually Sublet's.**
+`CAPSTONE_APPLICATION_HEAP` takes `sublet` as well as `level0`, and
+`ports/musl-capstone/runtime/sublet_heap.c` implements it: a binary buddy allocator over one
+linear region, each block with its own revocation node, the alias shrunk to the request so the
+bounds are the object's rather than the block's, and `free` scrubbing and revoking so every copy
+of the alias dies. Build the SDK with `-DCAPSTONE_APPLICATION_HEAP=sublet` and `malloc`, `free`
+and `realloc` come from `sublet_heap.c.obj` instead of `level0.c.obj`. `tools/arms.json` names
+that configuration `app-sublet`, and it declares what separates it from `app-level0`: `uaf-malloc`
+must FAULT here and must COMPLETE there. The runner checks both in the same boot before any case
+runs, and refuses a build whose `build.json` heap does not match the configuration, so the
+mistake of 2026-10-06 cannot be repeated silently. All five are CAUGHT, with the controls as
+declared: `results/20261011-034640-qemu/sublet`.
+
 ## Building and running
 
     # once per arm: an application SDK built with the arm's heap
