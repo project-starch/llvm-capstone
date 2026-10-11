@@ -15,14 +15,14 @@
     "spatial": {
       "oracle": "complete",
       "verdict": "MISSED",
-      "verdict_note": "reached (pg_mark() marker) and completed with no fault; run=02-live-parts-stale-alias-spatial-ysniqxnc",
-      "verdict_from": "results/2026-10-10-qemu/spatial"
+      "verdict_note": "reached (pg_mark() marker) and completed with no fault; run=02-live-parts-stale-alias-spatial-f6f_c4mx",
+      "verdict_from": "results/2026-10-11-qemu/spatial"
     },
     "sublet": {
       "oracle": "fault at the labelled read probe",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x101a1280c in pg_probe; by probe: pc equals the labelled probe 0x101a1280c",
-      "verdict_from": "results/2026-10-10-qemu/sublet"
+      "verdict_note": "cause=24 pc=0x101a12ebc in pg_probe; by probe: pc equals the labelled probe 0x101a12ebc",
+      "verdict_from": "results/2026-10-11-qemu/sublet"
     },
     "poisoncap-spatial": {
       "mode": 0,

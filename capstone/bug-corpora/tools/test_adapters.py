@@ -91,6 +91,108 @@ class CRepros(unittest.TestCase):
         self.assertEqual(self.run_arm.observe_control("uaf-malloc", "", {"fault": line}), "none")
 
 
+class MmgrCaseControlDiscovery(unittest.TestCase):
+    """A control program must never be discoverable as a case, and the reverse.
+
+    The two globs differ only by a suffix, and getting that wrong would let a control -- which is
+    built to COMPLETE -- be scored as a measurement of the arm.
+    """
+    run_defects = load(CORPORA / "postgres/mmgr-repros/shared/run-defects.py", "mmgr_run_defects")
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.bin = Path(self.tmp.name) / "bin"
+        self.bin.mkdir()
+        for name in ("00-tuplestore-double-free-spatial.dom",
+                     "00-tuplestore-double-free-spatial-control.dom",
+                     "01-vacuum-stale-spatial.dom",
+                     "01-vacuum-stale-spatial-control.dom",
+                     "00-tuplestore-double-free-sublet.dom",
+                     "00-tuplestore-double-free-sublet-control.dom"):
+            (self.bin / name).touch()
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_cases_exclude_controls(self):
+        found = self.run_defects.discover(Path(self.tmp.name), "spatial")
+        self.assertEqual(sorted(found), [0, 1])
+        self.assertTrue(all(not stem.endswith("-control") for stem, _ in found.values()))
+        self.assertTrue(all("-control.dom" not in path.name for _, path in found.values()))
+
+    def test_controls_exclude_cases(self):
+        found = self.run_defects.discover_case_controls(Path(self.tmp.name), "spatial")
+        self.assertEqual(sorted(found), [0, 1])
+        self.assertTrue(all(path.name.endswith("-spatial-control.dom")
+                            for _, path in found.values()))
+
+    def test_the_mode_is_respected(self):
+        self.assertEqual(sorted(self.run_defects.discover_case_controls(
+            Path(self.tmp.name), "sublet")), [0])
+
+
+class SqlThresholdProbe(unittest.TestCase):
+    """The probe generator must reproduce what was actually run.
+
+    The bisection that attributed case 03's fault is only reproducible if the inputs are. The
+    committed control is the generator's own output at 48 variants, so the two cannot drift.
+    """
+    gen = load(CORPORA / "postgres/sql-repros/shared/make-threshold-probe.py", "pg_probe_gen")
+    CORPUS = CORPORA / "postgres/sql-repros"
+
+    def test_48_variants_is_the_committed_control(self):
+        control = next(self.CORPUS.glob("03_*")) / "control.sql"
+        sent = [ln for ln in control.read_text().splitlines()
+                if ln.strip() and not ln.lstrip().startswith("--")]
+        self.assertEqual(self.gen.probe(48).splitlines(), sent)
+
+    def test_66_variants_is_the_committed_trigger(self):
+        trigger = next(self.CORPUS.glob("03_*")) / "trigger.sql"
+        sent = [ln for ln in trigger.read_text().splitlines()
+                if ln.strip() and not ln.lstrip().startswith("--")]
+        self.assertEqual(self.gen.probe(66).splitlines(), sent)
+
+    def test_the_count_is_the_number_of_variants(self):
+        self.assertNotIn("||", self.gen.probe(1))
+        for n in (2, 48, 63, 64, 66):
+            self.assertIn(f", {n - 1}))", self.gen.probe(n))
+
+    def test_a_level_needs_at_least_one_variant(self):
+        with self.assertRaises(ValueError):
+            self.gen.probe(0)
+
+
+class CReprosCaseControl(unittest.TestCase):
+    """A case's OWN negative control, which is what attributes its fault to its defect.
+
+    Distinct from controls.dom, which asks whether the configuration reports at all. The judge
+    takes `control` as an attribution, so a fault whose control completed is CAUGHT and a fault
+    whose control faulted too is not.
+    """
+    run_arm = load(CORPORA / "postgres/c-repros/shared/run-arm.py", "c_run_arm_ctl")
+    FAULT = ("capstone-exec: domain fault cause=7 pc=0x3f88044408 address=0x1 entry=0x2 "
+             "code=0x3f88000000-0x3f89000000 last=0x4f")
+
+    def test_a_control_that_completes_holds(self):
+        text = "case 0 BEGIN\ncase 0 RETURNED\n"
+        self.assertEqual(self.run_arm.case_control("0", text, {"kind": "exit", "value": 0})[0],
+                         "held")
+
+    def test_a_control_that_faults_is_broken(self):
+        seen, why = self.run_arm.case_control(
+            "0", "case 0 BEGIN\n", {"kind": "signal", "value": 11, "fault": self.FAULT},
+            FakeSymbols("memcpy"))
+        self.assertEqual(seen, "broken")
+        self.assertIn("faults too", why)
+
+    def test_a_control_that_never_ran_gives_nothing(self):
+        self.assertEqual(self.run_arm.case_control("0", "", {"kind": "exit", "value": 0})[0], "none")
+
+    def test_a_control_that_neither_returned_nor_faulted_gives_nothing(self):
+        self.assertEqual(
+            self.run_arm.case_control("0", "case 0 BEGIN\n", {"kind": "exit", "value": 0})[0],
+            "none")
+
+
 class SqlRepros(unittest.TestCase):
     run_arm = load(CORPORA / "postgres/sql-repros/shared/run-arm.py", "sql_run_arm")
     CORPUS = CORPORA / "postgres/sql-repros"
@@ -126,6 +228,23 @@ class SqlRepros(unittest.TestCase):
                                  self.ALL)
         verdict = v.judge(o, {"controls": {}, "controls_for_missed": []})
         self.assertEqual(verdict[:2], (v.NO_READING, "setup-fault"))
+
+    def test_statements_sends_no_comment_lines(self):
+        """A control file's header must not count as statements that ran.
+
+        `postgres --single` prints a prompt per input LINE, so case 03's control showed 23
+        prompts for its one CREATE EXTENSION and a fault inside that statement would have been
+        attributed to the trigger. Raised in review on PR #198; the runner now sends statements
+        only, so the prompt count is the statement count.
+        """
+        control = next(self.CORPUS.glob("03_*")) / "control.sql"
+        raw = control.read_text().splitlines()
+        sent = self.run_arm.statements(control).splitlines()
+        self.assertGreater(len(raw) - len(sent), 20)
+        self.assertTrue(all(ln.strip() and not ln.lstrip().startswith("--") for ln in sent))
+        self.assertEqual(sent, [ln for ln in raw
+                                if ln.strip() and not ln.lstrip().startswith("--")])
+        self.assertEqual(len(sent), 2)
 
     def test_control_counts_only_a_fault_in_its_own_probe(self):
         line = ("capstone-exec: domain fault cause=24 pc=0x3f88044408 address=0x1 entry=0x2 "

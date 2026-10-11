@@ -14,14 +14,14 @@
     "spatial": {
       "oracle": "complete",
       "verdict": "MISSED",
-      "verdict_note": "reached (pg_mark() marker) and completed with no fault; run=00-tuplestore-double-free-spatial-v26wh5nt",
-      "verdict_from": "results/2026-10-10-qemu/spatial"
+      "verdict_note": "reached (pg_mark() marker) and completed with no fault; run=00-tuplestore-double-free-spatial-hn_5vot8",
+      "verdict_from": "results/2026-10-11-qemu/spatial"
     },
     "sublet": {
       "oracle": "fault anywhere; the stale access is the second pfree, so there is no read probe",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x101a05cf0 in GetMemoryChunkMethodID; by function: GetMemoryChunkMethodID is the case's declared fault site",
-      "verdict_from": "results/2026-10-10-qemu/sublet"
+      "verdict_note": "cause=24 pc=0x101a05ee8 in GetMemoryChunkMethodID; by function: GetMemoryChunkMethodID is the case's declared fault site",
+      "verdict_from": "results/2026-10-11-qemu/sublet"
     },
     "poisoncap-spatial": {
       "mode": 0,

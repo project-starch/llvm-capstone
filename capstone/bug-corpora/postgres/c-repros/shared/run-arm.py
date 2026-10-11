@@ -39,7 +39,8 @@ import appvm  # noqa: E402
 import virtualvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
-HEAP = {"app-level0": "level0", "virtual-mallocng": "virtual-mallocng"}
+HEAP = {"app-level0": "level0", "app-sublet": "sublet",
+        "virtual-mallocng": "virtual-mallocng"}
 
 
 def observe(number, text, result, symbols=None, sites=()):
@@ -75,6 +76,23 @@ def observe(number, text, result, symbols=None, sites=()):
         return o
     o.completed = f"case {number} RETURNED" in text
     return o
+
+
+def case_control(number, text, result, symbols=None):
+    """Read a case's own negative control: ('held'|'broken'|'none', evidence).
+
+    It runs below the threshold the defect needs, so it must COMPLETE. A fault in it cannot be
+    that defect, which means the case's fault was not attributed by it and the row has to say so.
+    """
+    if f"case {number} BEGIN" not in text:
+        return "none", "the control image did not run"
+    fault = v.domain_fault(result.get("fault") or "", symbols) or v.domain_fault(text, symbols)
+    if fault:
+        return "broken", (f"it faults too, at cause {fault.cause} in "
+                          f"{fault.symbol or 'no known function'}")
+    if f"case {number} RETURNED" in text:
+        return "held", "it completed on this image, in this boot"
+    return "none", "it neither completed nor faulted"
 
 
 def observe_control(name, text, result):
@@ -132,6 +150,12 @@ def main():
     plan = [(f"control-{n}", controls_image, [n]) for n in spec["controls"] if controls_image.is_file()]
     plan += [(d.name, a.bindir / f"{d.name}.dom", [str(int(d.name[:2]))])
              for d in found if (a.bindir / f"{d.name}.dom").is_file()]
+    # Each case's OWN control, in the same boot and from the same build: the same program with
+    # one value on the safe side of the boundary the defect crosses (-DPGCLIENT_NEGATIVE_CONTROL).
+    # controls.dom above asks whether this configuration reports at all; this asks whether THIS
+    # fault depends on THIS defect, which is the judge's attribution by `control`.
+    plan += [(f"{d.name}-control", a.bindir / f"{d.name}-control.dom", [str(int(d.name[:2]))])
+             for d in found if (a.bindir / f"{d.name}-control.dom").is_file()]
 
     if a.virtual_kit:
         batch = virtualvm.Batch(raw / "stage")
@@ -171,6 +195,30 @@ def main():
             text, result = runs[d.name]
             o = observe(number, text, result, v.Symbols(a.llvm_bin, image), claims.get("fault_sites", ()))
             o.case, o.arm, o.image_sha256 = d.name, a.arm, v.sha256(image)
+            # The case's own negative control is read for EVERY case that faulted, not only for
+            # one the declared function did not already place. The two answer different
+            # questions -- where the fault is, and whether the arm would fault anyway -- and
+            # SCHEMA rule 5 wants the second one on record beside every verdict. It costs
+            # nothing extra: the control ran in this same boot.
+            if o.fault:
+                ctl = a.bindir / f"{d.name}-control.dom"
+                if f"{d.name}-control" in runs and ctl.is_file():
+                    ctext, cresult = runs[f"{d.name}-control"]
+                    seen, why = case_control(number, ctext, cresult, v.Symbols(a.llvm_bin, ctl))
+                    o.notes = (o.notes + f" negative control: {seen} -- {why}.").strip()
+                    if seen == "held" and not o.attribution:
+                        o.attribution = "control"
+                        o.attribution_evidence = ("its own negative control, the same program below "
+                                                  "the threshold, completed: " + why)
+                    elif seen == "broken":
+                        o.attribution_evidence += (
+                            "; and its negative control FAULTS too, so this fault does not depend "
+                            "on the defect")
+                        o.attribution = None
+                    elif not o.attribution:
+                        o.attribution_evidence += f"; its negative control gives no attribution -- {why}"
+                else:
+                    o.notes = (o.notes + " negative control: none in this build.").strip()
         o.controls = list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))

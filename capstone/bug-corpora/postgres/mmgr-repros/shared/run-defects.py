@@ -60,6 +60,21 @@ def discover(build, mode):
     return found
 
 
+def discover_case_controls(build, mode):
+    """Each case's OWN negative control, built as `NN-slug-<mode>-control.dom`.
+
+    A different question from the programs under controls/: those ask whether this configuration
+    reports at all, and this asks whether THIS fault depends on THIS defect -- the same case.c with
+    PG_NEGATIVE_CONTROL, which replaces the one invalid access with a valid one and leaves the
+    allocation traffic unchanged. discover() cannot pick these up: its glob ends at `-<mode>.dom`.
+    """
+    found = {}
+    for path in sorted((build / "bin").glob(f"[0-9][0-9]-*-{mode}-control.dom")):
+        stem = path.name[: -len(f"-{mode}-control.dom")]
+        found[int(stem[:2])] = (stem, path)
+    return found
+
+
 def dirs(root):
     """Case directories under root, dense from zero, with their case.json (controls have none)."""
     found = sorted(d for d in root.glob("[0-9][0-9]_*") if (d / "case.c").is_file())
@@ -73,8 +88,36 @@ def stem_of(d):
     return f"{d.name[:2]}-{d.name.split('_', 2)[2].replace('_', '-')}"
 
 
-def boot(out, stem, mode, image, which, linear_arena, env):
-    """One guest boot of one program. Returns (run dir, serial text, runner exit, hashes)."""
+def boot(out, stem, mode, image, which, linear_arena, env, attempts=3):
+    """One guest boot of one program, retried while the GUEST never reached the program.
+
+    Returns (run dir, serial text, runner exit, hashes) of the last attempt.
+
+    A boot that exits 75 without the program's first line in its serial did not measure
+    anything: the guest never got there. run-domain-smoke.py says so itself, printing
+    `__CAPSTONE_INFRA_FLAKE__ phase=boot-login`, and host/memory/collect.py in this same port
+    already treats that combination as retryable. Without the retry those boots land as
+    NO-READING:infra on whichever case happened to be slow, which reads as flakiness in the
+    cases rather than in the harness -- four runs here lost one to three boots each.
+
+    The condition is deliberately narrow. `PG: dom=` is the loader's first line, so a boot that
+    printed it is never retried, whatever happened afterwards: a fault, a hang or a crash in the
+    program is a measurement and belongs in the record.
+    """
+    for attempt in range(1, attempts + 1):
+        run, serial, rc, hashes = _boot_once(out, stem, mode, image, which, linear_arena, env)
+        if rc != 75 or "PG: dom=" in serial or attempt == attempts:
+            if attempt > 1:
+                print(f"     boot for {stem}-{mode} took {attempt} attempts "
+                      f"(the guest never reached the program on the earlier ones)", flush=True)
+            return run, serial, rc, hashes
+        print(f"     boot for {stem}-{mode} never reached the program (exit {rc}); "
+              f"retrying, attempt {attempt + 1} of {attempts}", flush=True)
+    raise AssertionError("unreachable")
+
+
+def _boot_once(out, stem, mode, image, which, linear_arena, env):
+    """One guest boot, no retry."""
     run, hashes = stage_run(out, f"{stem}-{mode}-", {
         "defects.dom": image,
         "loader.user": LINUX / "bin/domain-loader",
@@ -86,7 +129,15 @@ def boot(out, stem, mode, image, which, linear_arena, env):
                " && /tmp/pg-loader /mnt/host/defects.dom /mnt/host/selection.bin --tail")
     if linear_arena:
         command += " --linear-arena"
-    result = run_guest(run, command, "__CAPSTONE_PG_HOST_DONE__", env=env, timeout_multiplier=1)
+    # The guest phases after login are budgeted as 5, 10, 20 and 30 seconds TIMES this
+    # multiplier, and only the login phase reads an environment variable. At 1 a boot on a
+    # loaded host loses a phase and the run is cut mid-boot, which this corpus then records as
+    # NO-READING:infra -- scattered across whichever cases happened to be slow, so it reads like
+    # flakiness in the cases rather than in the budget. 2026-10-10: three runs here lost one to
+    # three boots each. The default stays 1 so no one else's run changes.
+    multiplier = int(env.get("PG_MMGR_TIMEOUT_MULTIPLIER", "1"))
+    result = run_guest(run, command, "__CAPSTONE_PG_HOST_DONE__", env=env,
+                       timeout_multiplier=multiplier)
     serial_path = run / "serial.log"
     serial = serial_path.read_text(errors="replace") if serial_path.exists() else ""
     return run, serial, result.returncode, hashes
@@ -295,7 +346,9 @@ def main():
         config = configurations[mode]
         spec = arms[config]
         built = {**{("case", n): x for n, x in discover(a.domain_build, mode).items()},
-                 **{("control", n): x for n, x in discover(a.controls_build, mode).items()}}
+                 **{("control", n): x for n, x in discover(a.controls_build, mode).items()},
+                 **{("case-control", n): x
+                    for n, x in discover_case_controls(a.domain_build, mode).items()}}
         for (kind, n), (stem, image) in built.items():
             SYMBOLS[str(image)] = v.Symbols(llvm / "bin", image)
 
@@ -329,6 +382,41 @@ def main():
                 o = observe(serial, n, rc, image, set(claims.get("fault_sites", [])))
                 o.case, o.arm, o.controls = d.name, mode, list(observed_controls)
                 o.notes = (o.notes + f" run={run.name}").strip()
+                # The case's own control is read for EVERY fault, not only for one the declared
+                # function or the labelled probe did not already place. Those say WHERE the fault
+                # is; the control says whether this arm would fault anyway on the same program
+                # with the one invalid access made valid. SCHEMA rule 5 wants the second beside
+                # every verdict, so it is recorded even when the fault was already attributed.
+                if o.fault:
+                    if ("case-control", n) not in built:
+                        o.notes = (o.notes + " negative control: none in this build.").strip()
+                    else:
+                        cstem, cimage = built[("case-control", n)]
+                        crun, cserial, crc, _ = boot(a.output, cstem + "-control", mode, cimage, n,
+                                                     mode == "sublet", env)
+                        co = observe(cserial, n, crc, cimage, set())
+                        if co.fault:
+                            seen, why = "broken", f"it faults too ({crun.name})"
+                        elif co.completed and co.reached:
+                            seen, why = "held", f"it completed on this build ({crun.name})"
+                        else:
+                            seen, why = "none", f"it neither completed nor faulted ({crun.name})"
+                        o.notes = (o.notes + f" negative control: {seen} -- {why}.").strip()
+                        print(f"     control for case={n} {mode:<8} {seen:<7} {why}", flush=True)
+                        if seen == "held" and not o.attribution:
+                            o.attribution = "control"
+                            o.attribution_evidence = (
+                                "its own negative control -- the same program with the one invalid "
+                                f"access made valid -- completed on this build ({crun.name})")
+                        elif seen == "broken":
+                            # Whichever function it landed in, the arm faults on the safe variant
+                            # too, so the fault is not evidence of the defect.
+                            o.attribution = None
+                            o.attribution_evidence += (
+                                "; and its negative control FAULTS too, so this fault does not "
+                                "depend on the defect")
+                        elif not o.attribution:
+                            o.attribution_evidence += f"; its negative control gives no attribution -- {why}"
             verdict = v.judge(o, spec)
             rows.append((o, verdict))
             differs = verdict[0] != PREDICTED[mode]
