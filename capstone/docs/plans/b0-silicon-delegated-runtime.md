@@ -1585,7 +1585,13 @@ supervision overhead within 0.1 points of 776d9d859's +0.680 %.
 - r51 still reading 0xBAD: the fix is not in the build. Check the bitstream's provenance first.
 - B3e's refutations stand as written above.
 
-## Acceptance RESULT: caplifive_r51r52_0568f93a9.bit (2026-10-11 14:53-17:56): R-51 and R-52 FIXED ON SILICON
+## Acceptance RESULT: caplifive_r51r52_0568f93a9.bit (2026-10-11 14:53-17:56): R-51 FIXED ON SILICON; R-52 NOT (retracted)
+**RETRACTED 2026-10-11, the same evening: "R-52 is fixed on silicon".** A pre-landing audit read boot C's own output:
+now() = tv_sec + tv_nsec/1e9 returned 0.09-1.99 while the same process's integer monotonic clock read 239.7-240.7 s (boot C, b3-clock-probe's hold arms: in[0] = now() read 0.2390064, 1.1527294, 0.092928; t0/t1 read 1.62747024/1.99347840).
+- The arith check behind "fixed" tests only finite and monotone, in a shape that issues both fcvt.d.l before the fdiv.d.
+- now() issues an fcvt.d.l while an fdiv.d is in flight, and loses the seconds term.
+- The harness's 1.07 s is void, because its t1 comes from the same now().
+- R-51's result stands. The sentences struck below are withdrawn.
 Flashed on the lead's word (14:51-14:53). The console read back the new name after the power cycle; 776d9d859 stays
 registered. Every row below is against the pre-registration above, and against 776d9d859's own run of the same images.
 
@@ -1621,13 +1627,15 @@ registered. Every row below is against the pre-registration above, and against 7
 - **Boot C, the B-series (17:43-17:50, firmware 1f9cdf960640):**
   - b0-stats and b0-stats2 OK; b0-hello byte-exact; b1-thread 124; b2-memcached retval 0.
   - b3-setclock read `date before: 154` at an uptime of 155 s.
-  - **b3-oracle: transcript e0a254c47e7ee28c, 1,931,207 bytes, with the harness's stop_seconds=1.07** (776d9d859: inf).
+  - **b3-oracle: transcript e0a254c47e7ee28c, 1,931,207 bytes**, ~~with the harness's stop_seconds=1.07 (776d9d859:
+    inf)~~ (void as an FP check: t1 comes from the same wrong now()).
   - **b3-clock RETURNED** (it hung on 776d9d859), with arith **0 anomalies of 200,000** (776d9d859: 200,000 of
     200,000) and hold-domain stop_seconds 0.37.
   - Its retval 38 is the hold arms. All three read 12 of 12 changed, and the self-test read 12, not 1, so by B3e's
     own rule they are VOID. Their uniform reading (the caller's FPRs at hold_wait's entry) is B3f's question below.
-- **Verdict:** R-51's and R-52's fixes hold on silicon as pre-registered, and every control is unchanged. The two
-  departures are attributed (a7) or under diagnosis (B3f); neither is a regression of a pre-registered reading.
+- **Verdict:** ~~R-51's and R-52's fixes hold on silicon as pre-registered~~ **R-51's fix holds on silicon as
+  pre-registered. R-52's arith reading matched its prediction, but native FP results are still wrong (the retraction
+  above).** Every control is unchanged. The departures are attributed (a7) or under diagnosis (B3f).
 
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
