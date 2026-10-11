@@ -75,14 +75,15 @@ There is no Perl-specific entry adapter, argument file, compiler wrapper or VM
 runner. The old `run-perl-domain.sh` interface has been removed. Use ordinary
 argv, `run --cwd DIR -e NAME=value`, or `capstone-exec` in the Linux guest shell.
 
-`PERLD_HEAP=level0` remains the default; `PERLD_HEAP=sublet` selects the common
-revoking heap with `PERLD_HEAP_LOG`. That changes the system allocator only. For
-per-head protection, `PERLD_SV_HEADS=1` builds the study variant of
+The physical profile's heap is level0. For per-head protection there,
+`PERLD_SV_HEADS=1` builds the study variant of
 [`../sv-heads`](../sv-heads/README.md), whose Sublet backend revokes every
 released SV head; `experiments/applications/build.py --nested perl` relinks it
 with its region grant. The image declares its additional heap grant;
 the launcher supplies it and the monitor reclaims it, including after SIGKILL.
-No caller-side `PERLD_HEAP_REGION_BYTES` is needed.
+`PERLD_HEAP=sublet` and `sublet-svheads` were removed on 2026-10-11 with the
+physical Sublet heap; their recorded results stay in the corpus's
+[`results/20261006`](../../../bug-corpora/perl/release-differential/results/20261006).
 
 On the virtual profile the SV heads are protected by the two Sublet instructions directly:
 `PERLD_SUBLET=1` applies [`../sublet/patches/5.36.3`](../sublet/patches/5.36.3) with

@@ -9,7 +9,7 @@
 #   workers   --marker only (M3): the images of host/build-marker.sh, which print "MC-WORKER <i> conn"
 #             per connection a worker sets up; per-worker counts equal native's, every worker present,
 #             the stderr otherwise compared as above, and a control that the gate fails on no markers.
-#   run-oracle.sh <results-dir> [--stop TERM|USR1] [--arm level0|shrink|sublet] [--runs N] [--marker]
+#   run-oracle.sh <results-dir> [--stop TERM|USR1] [--arm level0|shrink] [--runs N] [--marker]
 #             [--alternate STOCK-EXEC FIXED-EXEC] [--image DOM] [--server-opts "OPTS"] [--env NAME=VALUE]...
 #             (N domain runs, one boot)
 #   --image runs that domain image in place of the arm's; --server-opts appends OPTS to the server's

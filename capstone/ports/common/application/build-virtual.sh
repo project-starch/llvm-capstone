@@ -8,12 +8,6 @@ APP=$1
 OUT=$(realpath -m "$2")
 [[ ! -e "$OUT" ]] || { echo "use a fresh output directory: $OUT" >&2; exit 2; }
 case "$APP" in cpython|postgres|ffmpeg|tshark) ;; *) echo "unsupported application: $APP" >&2; exit 2;; esac
-# Specialized decoder pools keep their source recipe's link.
-# The generic relinker does not carry their extra allocator objects.
-if [[ $APP == ffmpeg && -n ${FFAPP_POOL:-} ]]; then
-  echo 'use the application source recipe directly for this inner allocator variant' >&2
-  exit 2
-fi
 mkdir -p "$OUT/source"
 export CAPSTONE_APPLICATION_PROFILE=virtual
 PORTS=$CAPSTONE_REPO_ROOT/capstone/ports

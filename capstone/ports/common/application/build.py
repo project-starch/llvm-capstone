@@ -69,10 +69,8 @@ def main():
     p.add_argument('--app', choices=['perl', 'mruby', 'cpython', 'postgres', 'sqlite', 'ffmpeg', 'tshark'], required=True)
     p.add_argument('--root', type=Path, required=True)
     p.add_argument('--toolchain', type=Path, required=True)
-    p.add_argument('--heap', choices=['level0', 'sublet'], default='level0')
     p.add_argument('--profile', choices=['physical', 'virtual'], default='physical')
     p.add_argument('--arena', type=int, default=64*1024*1024)
-    p.add_argument('--heap-log', type=int, default=26)
     p.add_argument('--stack-bytes', type=int, default=1 << 20, help='The main thread\'s stack')
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--input-revision', required=True, help='Port recipe revision; cached objects are identified separately by hashes')
@@ -118,8 +116,8 @@ def main():
         objects += [root / 'link/perl-sv-heads.o']
     if args.reuse_gap and args.app == 'postgres' and args.nested == 'none':
         objects += [root / 'link/spatial-reuse-gap.o']
-    if args.nested != 'none' and (args.heap != 'level0' or args.app != args.nested):
-        raise ValueError('nested discovery arms use level0 for their separate outer heap')
+    if args.nested != 'none' and args.app != args.nested:
+        raise ValueError('a nested discovery arm instruments its own program')
     if args.gc_gaps and args.app != 'mruby':
         raise ValueError('--gc-gaps is only for the instrumented mruby archives')
     if args.reuse_gap and args.app != 'postgres':
@@ -132,18 +130,17 @@ def main():
          '-DCAPSTONE_LLVM_BUILD_DIR=' + str(args.toolchain.resolve()),
          '-DPORT_HEADER_PROVIDER=musl', '-DPORT_C11_ATOMICS=ON',
          '-DPORT_MUSL_ROOT=' + str(musl), '-DCAPSTONE_MUSL_ARCHIVE=' + str(libc),
-         '-DCAPSTONE_APPLICATION_SDK=ON', '-DCAPSTONE_APPLICATION_HEAP=' + args.heap,
+         '-DCAPSTONE_APPLICATION_SDK=ON',
          '-DCAPSTONE_APPLICATION_VIRTUAL=' + ('ON' if args.profile == 'virtual' else 'OFF'),
-         '-DCAPSTONE_APPLICATION_HEAP_LOG=' + str(args.heap_log),
          '-DCAPSTONE_APPLICATION_DATA_BYTES=33554432',
          '-DCAPSTONE_APPLICATION_ARENA_BYTES=' + str(args.arena),
          '-DCAPSTONE_APPLICATION_STACK_BYTES=' + str(args.stack_bytes),
          '-DCMAKE_BUILD_TYPE=Release',
          '-DCMAKE_C_FLAGS_RELEASE=-O1' +
-         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
+         (' -DCAPSTONE_LEVEL0_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
     run(['cmake', '--build', sdk, '-j8'])
     probe = out / 'memory.o'
-    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
+    defines = (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
     if args.reuse_gap: defines += ['-DEXP_PG_REUSE_GAP']
     if args.allocations: defines += ['-DEXP_ALLOCATIONS', '-DEXP_CAPSTONE']
     if args.instrument:
@@ -176,11 +173,11 @@ def main():
                     gc_gaps=args.gc_gaps,
                     reuse_gap=args.reuse_gap,
                     allocations_sha256=sha(EXPERIMENTS / 'allocations.c') if args.allocations else None,
-                    heap='virtual' if args.profile == 'virtual' else args.heap,
+                    heap='virtual' if args.profile == 'virtual' else 'level0',
                     nested=args.nested, recipe_revision=input_revision,
                     runtime_revision=subprocess.check_output(['git', '-C', REPO, 'rev-parse', 'HEAD'], text=True).strip(),
                     runtime_dirty=bool(subprocess.check_output(['git', '-C', REPO, 'status', '--porcelain'])),
-                    arena_bytes=args.arena, heap_log=args.heap_log, stack_bytes=args.stack_bytes,
+                    arena_bytes=args.arena, stack_bytes=args.stack_bytes,
                     image_sha256=sha(image), compiler_sha256=sha(args.toolchain / 'bin/clang'),
                     runtime_archive_sha256=sha(sdk / 'libapplication-runtime.a'),
                     builtins_archive_sha256=sha(sdk / 'libcapstone-application-builtins.a'),

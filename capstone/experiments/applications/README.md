@@ -54,8 +54,7 @@ libraries. SQLite takes the existing amalgamation and VFS objects, with
 `--libc-root` to select an existing musl build. tshark reads the upstream
 ninja link command; its dependencies must already be built.
 
-`--heap sublet --heap-log N` selects the common Sublet malloc implementation.
-The separate `--nested mruby` and `--nested perl` modes select already-built
+The `--nested mruby` and `--nested perl` modes select already-built
 ports of GC slots and SV heads while leaving their system allocator as the
 first-fit heap (`level0.c`). CPython builds only with `--profile virtual`, where
 the system allocator is musl mallocng; `--nested cpython` is pymalloc's port on

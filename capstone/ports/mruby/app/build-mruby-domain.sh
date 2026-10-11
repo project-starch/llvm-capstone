@@ -15,9 +15,9 @@
 # MRBD_PIN picks the mruby: head (default, 2026-09-17, every known defect fixed)
 # or 4.0.0-rc2 (2026-03-12, the Sublet evaluation's pin: temporal defects on
 # mruby's own allocators, fixed later). Each pin has its own patches/<pin>/.
-# MRBD_HEAP picks the physical domain's malloc, which mruby's mrb_malloc sits on:
-# level0 (default; the first-fit heap). With MRBD_SDK naming a virtual-profile SDK,
-# malloc is the SDK's musl mallocng instead, and MRBD_HEAP selects nothing.
+# The physical domain's malloc, which mruby's mrb_malloc sits on, is level0 (the
+# first-fit heap). With MRBD_SDK naming a virtual-profile SDK it is the SDK's musl
+# mallocng instead.
 # MRBD_SUBLET=1 (4.0.0-rc2, virtual SDK only) makes every GC object slot a Sublet
 # child lifetime of its heap page (patches/4.0.0-rc2/0008, MRB_CAPSTONE_SUBLET):
 # handed out by CDERIVE, revoked by CREVOKE when the sweep frees it.
@@ -37,8 +37,7 @@ JOBS=${JOBS:-16}
 FROM=${MRBD_FROM:-all}
 BOXING=${MRBD_BOXING:-no}
 PIN=${MRBD_PIN:-head}
-HEAP=${MRBD_HEAP:-level0}
-case "$HEAP" in level0) ;; *) echo "MRBD_HEAP=$HEAP? (level0)" >&2; exit 2 ;; esac
+SDK_STAMP="level0 ${MRBD_SDK_CFLAGS:-}"
 if [[ ${MRBD_SUBLET:-0} == 1 ]]; then
   [[ -f "$SCRIPT_DIR/patches/$PIN/0008-gc-slots-as-sublet-lifetimes.patch" ]] \
     || { echo "MRBD_SUBLET=1 needs patches/$PIN/0008-gc-slots-as-sublet-lifetimes.patch" >&2; exit 2; }
@@ -99,11 +98,10 @@ if stage runtime; then
     EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${MRBD_SDK_CFLAGS}")
   fi
   bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
-    -DCAPSTONE_APPLICATION_HEAP="$HEAP" \
     -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
-  printf '%s\n' "$HEAP ${MRBD_SDK_CFLAGS:-}" > "$O/.heap"
+  printf '%s\n' "$SDK_STAMP" > "$O/.heap"
 fi
-[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP ${MRBD_SDK_CFLAGS:-}" && -x "$O/capstone-cc" ]] \
+[[ $(cat "$O/.heap" 2>/dev/null) == "$SDK_STAMP" && -x "$O/capstone-cc" ]] \
   || { echo "rebuild the application SDK (MRBD_FROM=runtime)" >&2; exit 2; }
 fi
 export CAPSTONE_SDK=$O

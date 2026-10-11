@@ -7,12 +7,14 @@
 #                                 ffmpeg is built from this, so a wrong patch cannot hide by
 #                                 appearing on both sides of the comparison
 #   prepare-source.sh --pool      the patched tree PLUS FFmpeg's pools under the buffer-pool
-#                                 port's lifetime hooks, for the pool arms of the DOMAIN build
-#                                 only: this port's patches, then buffer-pool's 0001 and 0002
-#                                 unchanged, then patches-pool/ (the app's rework), plus
-#                                 buffer-pool's trace.h and this port's no-op recorder and
-#                                 observer (src/pool/) copied into libavutil/. Keyed by all of
-#                                 them. The native builds never read this tree.
+#                                 port's lifetime hooks, for the memory study's FFmpeg build
+#                                 (experiments/study/build-ffmpeg-capstone-reuse.py) only: this
+#                                 port's patches, then buffer-pool's 0001 and 0002 unchanged,
+#                                 then patches-pool/ (the app's rework), plus buffer-pool's
+#                                 trace.h and this port's no-op recorder and observer (src/pool/)
+#                                 copied into libavutil/. Keyed by all of them. The domain and
+#                                 native builds never read this tree; the domain build's pool
+#                                 arms, which did, were removed on 2026-10-11.
 #
 # The tree is keyed by the patch set's hash, so editing a patch produces a fresh tree
 # instead of silently reusing one prepared from the old patches.

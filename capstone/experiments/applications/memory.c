@@ -11,18 +11,10 @@
 int __real_main(int, char **);
 ssize_t __real_write(int, const void *, size_t);
 
-#ifdef EXP_SUBLET
-size_t __capstone_sublet_live_bytes(void);
-size_t __capstone_sublet_peak_bytes(void);
-size_t __capstone_sublet_pool_bytes(void);
-size_t __capstone_sublet_table_bytes(void);
-void __capstone_sublet_heap_stats(unsigned long [9]);
-#else
 size_t __capstone_level0_in_use(void);
 size_t __capstone_level0_peak_in_use(void);
 size_t __capstone_level0_peak_end(void);
 size_t __capstone_level0_arena_bytes(void);
-#endif
 
 #ifdef EXP_ALLOCATIONS
 void exp_alloc_start(void);
@@ -60,27 +52,10 @@ static void report(const char *phase) {
   exp_alloc_report(phase);
 #endif
   char line[640];
-#ifdef EXP_SUBLET
-  unsigned long c[9];
-  __capstone_sublet_heap_stats(c);
-  int n = snprintf(line, sizeof line, "EXP-MEM phase=%s", phase);
-#define FIELD(name, value) do { \
-  n += snprintf(line+n, sizeof line-(size_t)n, " " name "=%lu", (unsigned long)(value)); \
-} while (0)
-  FIELD("live", __capstone_sublet_live_bytes());
-  FIELD("peak", __capstone_sublet_peak_bytes());
-  FIELD("pool", __capstone_sublet_pool_bytes());
-  FIELD("tables", __capstone_sublet_table_bytes());
-  FIELD("allocs", c[0]); FIELD("frees", c[1]); FIELD("merges", c[2]);
-  FIELD("split", c[4]); FIELD("mrev", c[5]); FIELD("revoke", c[7]); FIELD("init", c[8]);
-  line[n++] = '\n';
-#undef FIELD
-#else
   int n = snprintf(line, sizeof line,
       "EXP-MEM phase=%s live=%zu peak=%zu end=%zu pool=%zu\n", phase,
       __capstone_level0_in_use(), __capstone_level0_peak_in_use(),
       __capstone_level0_peak_end(), __capstone_level0_arena_bytes());
-#endif
   if (n > 0 && (size_t)n < sizeof line)
     __real_write(2, line, (size_t)n);
 }

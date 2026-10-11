@@ -99,5 +99,4 @@ Recorded in [`results/20260930-sqlite-322-app.json`](results/20260930-sqlite-322
 - **More than one thread.** This base has none.
 - **Not run yet:**
   - the sqllogictest corpus with this build;
-  - `speedtest1` above size 1, and testsets other than `main`;
-  - the Sublet heap, which has no `malloc_usable_size` yet.
+  - `speedtest1` above size 1, and testsets other than `main`.

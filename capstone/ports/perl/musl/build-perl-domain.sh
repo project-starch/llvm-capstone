@@ -18,8 +18,8 @@
 # (its Makefile's miniperl rule), so no target binary is ever executed. That is the
 # same host/target split the PostgreSQL port uses for its build tools.
 #
-# Knobs: PERLD_FROM=musl|runtime|perl starts at that stage. PERLD_HEAP=level0
-# (default) or sublet picks the domain's malloc, as the mruby port's does.
+# Knobs: PERLD_FROM=musl|runtime|perl starts at that stage. The domain's malloc is
+# level0 on the physical profile and musl mallocng on the virtual one.
 # PERL_MIRROR=<dir with the tarballs> and PERL_CROSS_MIRROR=<a perl-cross clone>
 # avoid the network. PERLD_SV_HEADS=1 builds the study variant: SV heads come
 # from the lifetime adapter in ../sv-heads (its patch, -DPERL_SV_HEAD_ADAPTER,
@@ -42,27 +42,19 @@ VIRTUAL_BLOCKS=${PERLD_VIRTUAL_BLOCKS:-65536}
 VIRTUAL_ARENAS=${PERLD_VIRTUAL_ARENAS:-256}
 JOBS=${JOBS:-16}
 FROM=${PERLD_FROM:-all}
-HEAP=${PERLD_HEAP:-level0}
-HEAP_LOG=${PERLD_HEAP_LOG:-26}
 PROFILE=${PERLD_PROFILE:-physical}
 case "$PROFILE" in physical|virtual) ;; *) echo "PERLD_PROFILE=$PROFILE? (physical, virtual)" >&2; exit 2;; esac
 if [[ $PROFILE == virtual && -z ${PERLD_ROOT:-} ]]; then
   ROOT=$CAPSTONE_TMP_ROOT/perl-domain-virtual
 fi
-case "$HEAP" in level0|sublet|sublet-svheads) ;;
-  *) echo "PERLD_HEAP=$HEAP? (level0, sublet, sublet-svheads)" >&2; exit 2 ;; esac
-# sublet-svheads is CUMULATIVE and is this port's analogue of the mruby port's
-# sublet-gc: the Sublet heap for the system allocator AND the SV head arena through
-# the lifetime adapter, in one image. It implies PERLD_SV_HEADS=1.
-[[ $HEAP == sublet-svheads ]] && SV_HEADS_DEFAULT=1 || SV_HEADS_DEFAULT=0
-SV_HEADS=${PERLD_SV_HEADS:-$SV_HEADS_DEFAULT}
+[[ $PROFILE == virtual ]] && SDK_STAMP="mallocng ${PERLD_SDK_CFLAGS:-}" \
+  || SDK_STAMP="level0 ${PERLD_SDK_CFLAGS:-}"
+SV_HEADS=${PERLD_SV_HEADS:-0}
 case "$SV_HEADS" in 0|1) ;; *) echo "PERLD_SV_HEADS=$SV_HEADS? (0, 1)" >&2; exit 2 ;; esac
 if [[ $PROFILE == virtual && $SV_HEADS == 1 ]]; then
   echo "virtual SV-head arena integration is not qualified; use PERLD_SV_HEADS=0" >&2
   exit 2
 fi
-[[ $HEAP == sublet-svheads && $SV_HEADS == 0 ]] \
-  && { echo "PERLD_HEAP=sublet-svheads is the adapter arm; it cannot take PERLD_SV_HEADS=0" >&2; exit 2; }
 
 # The pin. 5.36.3 is the evaluation's release (docs/design/perl-sublet-port-evaluation.md):
 # the SV arena mechanism is the same in every release perl-cross supports, and 5.36
@@ -113,14 +105,12 @@ if [[ $PROFILE == virtual ]]; then
       -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
       -DCAPSTONE_APPLICATION_STACK_BYTES="${PERLD_STACK_BYTES:-1048576}" \
       -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" \
-      -DCAPSTONE_APPLICATION_HEAP="$HEAP" \
-      -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
       -DCAPSTONE_APPLICATION_VIRTUAL_BLOCKS="$VIRTUAL_BLOCKS" \
       -DCAPSTONE_APPLICATION_VIRTUAL_ARENAS="$VIRTUAL_ARENAS" "${VIRTUAL_EXTRA[@]}"
   fi
   ARCHIVE=$VROOT/libc/libc-capstone-virtual.a
   O=$VROOT/sdk
-  printf '%s\n' "$HEAP ${PERLD_SDK_CFLAGS:-}" > "$O/.heap"
+  printf '%s\n' "$SDK_STAMP" > "$O/.heap"
 else
   if stage musl; then
     OUT_DIR=$ROOT/musl-build bash "$MUSL_PORT/build-musl-capstone.sh" >/dev/null
@@ -133,15 +123,8 @@ log "musl $MUSL, archive $ARCHIVE"
 
 # ---- shared application SDK (also usable by other upstream build systems) ----
 if [[ $PROFILE == physical ]]; then
-SDK_HEAP=$HEAP
-[[ $HEAP == sublet-svheads ]] && SDK_HEAP=sublet
 if stage runtime; then
   EXTRA=()
-  if [[ $HEAP == sublet-svheads ]]; then
-    # One grant, split by regions.c below: the Sublet heap takes region 0 and the
-    # SV head adapter region 1. Without the extra 32 MiB the split aborts.
-    EXTRA+=(-DCAPSTONE_APPLICATION_GRANT_BYTES="$(( (2 << HEAP_LOG) + (32 << 20) ))")
-  fi
   # PERLD_SDK_CFLAGS adds C flags to the SDK's own -O1, for an arm that differs from the
   # default only in how the system allocator bounds its objects. It must arrive as ONE cmake
   # argument: a flag list that is word-split becomes separate -D arguments, and cmake takes
@@ -153,13 +136,12 @@ if stage runtime; then
     EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${PERLD_SDK_CFLAGS}")
   fi
   bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
-    -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
     -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
     -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
-  printf '%s\n' "$HEAP ${PERLD_SDK_CFLAGS:-}" > "$O/.heap"
+  printf '%s\n' "$SDK_STAMP" > "$O/.heap"
 fi
 fi
-[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP ${PERLD_SDK_CFLAGS:-}" && -x "$O/capstone-cc" ]] \
+[[ $(cat "$O/.heap" 2>/dev/null) == "$SDK_STAMP" && -x "$O/capstone-cc" ]] \
   || { echo "rebuild the application SDK (PERLD_FROM=runtime)" >&2; exit 2; }
 export CAPSTONE_SDK=$O
 export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
@@ -281,19 +263,7 @@ PY
     mkdir -p "$ROOT/link"
     "$O/capstone-cc" -O1 -I"$RT/capstone/runtime/include" \
       -c "$SCRIPT_DIR/../sv-heads/capstone.c" -o "$ROOT/link/perl-sv-heads.o"
-    LINK_OBJS=("$ROOT/link/perl-sv-heads.o")
-    if [[ $HEAP == sublet-svheads ]]; then
-      # The cumulative arm has TWO consumers of the grant, so the single pool is
-      # split: PORT_HEAP_REGION_BYTES to the Sublet heap as region 0, the rest to
-      # the adapter as region 1. The default wrapper in regions.c returns 0 for
-      # index 0, which a Sublet outer heap cannot survive -- the same split the
-      # mruby port uses for sublet-gc.
-      "$O/capstone-cc" -O1 -I"$RT/capstone/runtime/include" -DEXP_HEAP_AND_POOL \
-        -DPORT_HEAP_REGION_BYTES="$((2 << HEAP_LOG))UL" -DPORT_INNER_REGION_BYTES=33554432UL \
-        -c "$RT/capstone/ports/common/application/regions.c" -o "$ROOT/link/regions.o"
-      LINK_OBJS+=("$ROOT/link/regions.o" "-Wl,--wrap=__capstone_region")
-    fi
-    MAKE_VARS=("LIBS=${LINK_OBJS[*]}")
+    MAKE_VARS=("LIBS=$ROOT/link/perl-sv-heads.o")
   fi
   # The upstream Makefile cannot see the external SDK archive dependencies.
   # Relink on each requested Perl build; compiled upstream objects remain reusable.

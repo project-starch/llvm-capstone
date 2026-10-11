@@ -1397,7 +1397,7 @@
       "related": [
         "capstone/ports/ffmpeg/buffer-pool"
       ],
-      "note": "Its pool fixtures run the buffer-pool port's Sublet leases inside the whole decoder; the pool corpus's cases belong to that component, not to this one.",
+      "note": "Its pool arms, which ran the buffer-pool port's Sublet leases inside the whole decoder, were removed on 2026-10-11 with the physical Sublet heap; the pool corpus's cases belong to that component, not to this one.",
       "corpora": [
         "capstone/bug-corpora/ffmpeg/plain-heap-repros",
         "capstone/bug-corpora/ffmpeg/plane-repros",

@@ -11,10 +11,7 @@ add_executable(application-contract-unbounded contract.c)
 capstone_configure_application(application-contract-unbounded
   DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144)
 target_compile_definitions(application-contract-unbounded PRIVATE CAPSTONE_LEVEL0_OBJECT_BOUNDS=0)
-add_executable(application-contract-sublet contract.c)
-capstone_configure_application(application-contract-sublet
-  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 HEAP sublet HEAP_LOG 20 GRANT_BYTES 2097152)
-foreach(target application-contract-unbounded application-contract-sublet)
+foreach(target application-contract application-contract-unbounded)
   target_link_options(${target} PRIVATE "-Map=$<TARGET_FILE:${target}>.map")
 endforeach()
 add_executable(delegate-bench delegate-bench.c)
@@ -44,11 +41,6 @@ capstone_configure_application(level0-realloc-probe
 target_compile_definitions(level0-realloc-probe PRIVATE CAPSTONE_LEVEL0_STATS=1)
 capstone_configure_application(pthread-probe
   DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 8388608 CONTEXT_BYTES 131072 CONTEXTS 15)
-# The same probe on the Sublet heap, for its lock (heap-stress).
-add_executable(thread-probe-sublet thread-probe.c thread-probe-asm.S)
-capstone_configure_application(thread-probe-sublet
-  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 CONTEXT_BYTES 1048576 CONTEXTS 7
-  HEAP sublet HEAP_LOG 22)
 # a 16 KiB exchange region on purpose: the datagram rule is exercised below
 # the kernel's own limits
 add_executable(socket-contract socket-contract.c)
