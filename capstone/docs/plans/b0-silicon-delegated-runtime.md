@@ -1585,6 +1585,39 @@ supervision overhead within 0.1 points of 776d9d859's +0.680 %.
 - r51 still reading 0xBAD: the fix is not in the build. Check the bitstream's provenance first.
 - B3e's refutations stand as written above.
 
+## B3f pre-registered (2026-10-11, before the boot): where the FP-hold arms' loaded values go
+**The observation (boot C of the R-51 + R-52 acceptance, 17:43-17:50).** b3-clock-probe's three hold arms each read
+12 of 12 fs0..fs11 changed across `waitpid`.
+- The values are uniform: fs0 = 0x7fefffffffffffff (main's isfinite bound) and fs1..fs3 = 0. Those are the CALLER's
+  registers at hold_wait's entry, not the twelve values hold_wait loaded with `fld`.
+- The self-test, which should read exactly 1 changed, read 12. So by B3e's own rule the hold arms are VOID.
+- Against a general FP-context loss: mc-harness kept t0 (an fadd result) in fs0 across kill + waitpid on the same
+  boot, and read 1.07 s.
+
+**The probe.** b3-fphold-probe.c (FPGA build 63d87a507fe6da9d) runs hold_wait's pattern: save fs0..fs11, load
+twelve values with `fld`, do one thing, store fs0..fs11, restore. Each variant changes ONE step:
+- v0: nothing between the load and the store.
+- v1: a plain function call.
+- v2: getppid (a trap that does not block).
+- v3: sched_yield.
+- v4: waitpid on a child that sleeps 1 s (the original arm).
+- v5: v4 with 32 nops between the save-fsds and the load-flds.
+- v6: v4 with the twelve values computed by fadd from one fld (mc-harness's case).
+- v7, the positive control: v0 with fs5 doubled. It must read exactly 1 changed, or the run is void.
+- QEMU rehearsal (2026-10-11): v0..v6 read 0 of 12, v7 reads 1 of 12 (fs5), rc 0.
+
+**The board run.** Bitstream caplifive_r51r52_0568f93a9.bit. Rungs b0-stats (control), then `b3-fphold`.
+
+What each reading would mean. The rest is reported as read.
+- v7 not exactly 1: the instrument is void on silicon, and nothing below holds.
+- v0 already changed: the loss is in-core, around an fsd then fld of the same FPRs (the S-18 family), with no call
+  involved. v5 then says whether distance matters.
+- v0..v2 hold and v4 changes: the loss is at the blocking context switch (FP state not saved, e.g. FS not Dirty).
+  - v6 holding then would make it specific to load-produced values.
+  - v6 changing too would make it any FP state.
+- v4 holds: boot C's reading does not reproduce in this shape. It would then be specific to hold_wait's exact code,
+  or to what ran before it in that boot.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
