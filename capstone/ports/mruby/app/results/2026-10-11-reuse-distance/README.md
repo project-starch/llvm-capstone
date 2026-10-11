@@ -145,12 +145,69 @@ Natively, the same tree's hooked build runs width 16 in 0.59 s and width 64 in 5
   Measured: `bm_ao_render.rb 16`, 16x16, `NSUBSAMPLES` and `NAO_SAMPLES` unchanged. Width 64 is
   15,096,713 slot hand-outs (native hooked build) against 916,101 at width 16; a first pair of
   width-64 boots did not finish within its 1-hour boot timeout, and the width-16 probe's rate
-  (486 s for 916,101 hand-outs) extrapolates to about 2.2 h per width-64 boot. Width 64 is running
-  with a 4-hour timeout; if it completes it is added as an addendum, not in place of this row.
+  (486 s for 916,101 hand-outs) extrapolates to about 2.2 h per width-64 boot. Width 64 was run
+  with a 4-hour timeout and completed; it is reported in the addendum below, not in place of this
+  row.
 - Repetitions: three per arm, not one, because the first two per arm varied.
 - The benchmark runs directly, not under the memory-behaviour run's `mstats.rb` wrapper (which adds
   `ObjectSpace.count_objects` and a `GC.start`).
 - Images were built from 16d2171a3edc with the hooks; they are not the memory-behaviour images.
+
+## Addendum: the registered 64 x 64 size (2 repetitions per arm)
+
+Added after the 16 x 16 row was committed. The same two interpreters (`45fc3b81...` stock,
+`8487ecb1...` protected) ran `bm_ao_render.rb` with no argument, the registered 64x64 size
+(`NSUBSAMPLES` 2, `NAO_SAMPLES` 8), one boot per repetition with a 4-hour boot timeout, two
+repetitions per arm (boots started 10:37:59Z and 11:15:46Z UTC, the last ended 14:24:45Z). The
+gate is the one above without the width argument (`gate.sh` `8485de8e...`; the runner before its
+`--ao-width` option). Result: `reuse-w64.json`, same shared format (repetition 1 as `buckets`, both
+under `repetitions`).
+
+All four boots completed: exit status 0, `error=0`, no other stderr, and every PPM (12,301 bytes)
+has sha256 `7e75fdb7...f910`, equal to the native hooked build of the same tree at 64x64 (which also
+hands out 15,096,713 slots).
+
+| counter | stock rep 1 / 2 | protected rep 1 / 2 |
+|---|---|---|
+| attempts = issues | 15,096,713 (both) | 15,096,713 (both) |
+| releases | 15,095,315 (both) | 15,095,315 (both) |
+| reuses | 15,053,956 / 15,052,980 | 15,053,831 / 15,048,601 |
+| distinct start addresses | 42,757 / 43,733 | 42,882 / 48,112 |
+| median bucket | 10 / 10 | 10 / 10 |
+| AO run in the guest | 9,136 / 11,327 s | 9,394 / 10,815 s |
+
+| bucket k (distance) | stock rep 1 / 2 | protected rep 1 / 2 | ranges overlap |
+|---|---|---|---|
+| 1-16 (1-65,535) | identical in all four boots: 11,098; 22,196; 44,392; 88,784; 177,568; 355,136; 706,448; 1,402,108; 2,798,869; 5,115,316; 3,727,011; 26,675; 5,368; 35,016; 73,745; 108,871 | same | yes |
+| 17 (65,536-131,071) | 294,065 / 294,351 | 298,475 / 292,251 | yes |
+| 18 (131,072-262,143) | 2,669 / 627 | 1,015 / 1,832 | yes |
+| 19 (262,144-524,287) | 4,189 / 5,987 | 1,793 / 2,339 | **no** |
+| 20 (524,288-1,048,575) | 9,212 / 3,374 | 13,572 / 7,123 | yes |
+| 21 (1,048,576-2,097,151) | 11,163 / 15,189 | 10,897 / 15,367 | yes |
+| 22 (2,097,152-4,194,303) | 12,381 / 14,960 | 13,427 / 14,132 | yes |
+| 23 (4,194,304-8,388,607) | 17,268 / 15,246 | 14,627 / 11,396 | **no** |
+| 24 (8,388,608-16,777,215) | 4,408 / 4,645 | 1,424 / 5,560 | yes |
+
+Buckets 25-32 are 0 in every boot. Buckets 1-16 hold 14,698,601 reuses, 97.6 % of each boot's.
+
+Reading against the predictions, at the registered size:
+
+- **Prediction 1** ("where repetitions vary, the arms vary alike, overlapping ranges per bucket"):
+  **does not hold strictly**: in 2 of the 24 non-empty buckets (19 and 23) the two-repetition
+  ranges of the arms do not overlap. Both lie in the part that varies between repetitions of one
+  arm (buckets 17-24), and with two repetitions per arm a range is just the two values. The share
+  of reuses whose bucket differs between arms is 0.066 % (repetition 1 against 1) and
+  0.066-0.098 % over all four pairs, against 0.066 % between the two stock repetitions and 0.105 %
+  between the two protected ones. The largest difference between the arms' cumulative fractions is
+  0.00064, against 0.00032 (stock) and 0.00040 (protected) between repetitions.
+- **Median bucket** equal: 10 in all four boots.
+- **Sanity**: output equal across arms and to native; observer error 0.
+
+Consistency check: `nodes_allocated_total` over the run is 40,042,161 (stock) and 55,139,111
+(protected) in both repetitions; the difference, 15,096,950, is 237 more than the slot hand-outs.
+
+Wall times (several other guests on the host): boots 9,142 / 11,333 s (stock) and 9,400 / 10,821 s
+(protected), against 5.97 s natively.
 
 ## Method limits
 
@@ -162,6 +219,7 @@ Natively, the same tree's hooked build runs width 16 in 0.59 s and width 64 in 5
 
 ## Files
 
-- `reuse.json`: the shared-format result.
+- `reuse.json`: the shared-format result (16 x 16).
+- `reuse-w64.json`: the same at the registered 64 x 64, 2 repetitions per arm (addendum).
 - Hooks, build wrapper and runner: `capstone/experiments/study/reuse-hooks/mruby/`; collector:
   `capstone/experiments/study/reuse-hooks/cpython/collect-reuse.py`.
