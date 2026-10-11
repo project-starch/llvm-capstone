@@ -1776,6 +1776,51 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
+### S-19 — callee-saved FP registers that a native process loads in user mode read back as its PRE-LOAD FP state after a blocking wait of >= 10 ms or ~1 s of execution, on caplifive_r51r52_0568f93a9; thousands of traps do not lose them `OPEN — observed 2026-10-11 (boots C, f, g, h; UNGATED, PREFLIGHT=0); origin not established (core, FPGA kernel build or monitor); QEMU does not show it`
+
+**What was seen.** b3-fphold-probe.c (runtime/silicon). Its asm `fphold` saves the caller's fs0..fs11, loads 12
+known values with fld (or an fadd chain), does ONE thing, stores fs0..fs11 to out[], then restores.
+- **12 of 12 read back as the pre-load state:**
+  - waitpid on a sleeping or a spinning child: v4-v6 N=3, v8 N=2;
+  - an extra getppid before the waitpid: v9 N=2;
+  - a 1 s or a 10 ms nanosleep: v10 N=2, v15 N=1;
+  - a ~1 s busy loop calling clock_gettime: v11 N=2;
+  - a ~1 s pure integer loop with no calls: v12 N=1.
+- **0 of 12:** nothing, a function call, one getppid, sched_yield (v0-v3 N=3); 2000 getppid (v13 N=1); 2000
+  clock_gettime, each an M-mode rdtime emulation on this board (v14 N=1).
+- The positive control v7 (fs5 doubled, no call) reads exactly 1 of 12, N=3.
+- The pre-load state read 0 in boots f-h, where the caller's FPRs are 0. In boot C, from the earlier
+  b3-clock-probe, it read fs0 = 0x7fefffffffffffff, the caller's earlier live value.
+- QEMU runs of the same source read 0 changed in every variant. But that control also differs in kernel (HZ 250 vs
+  100), firmware and binary, so "silicon" is not isolated.
+
+**Not established.**
+- Whether a context switch is the trigger: none was counted.
+- Whether the pre-load state is a restored older copy or a zeroed register (boots f-h cannot tell them apart).
+- If it is a restored copy, whether the save is skipped or the restore is wrong.
+- Whether it is the core, the kernel build or the monitor.
+- A HYPOTHESIS only: Linux 6.4 saves FP state at switch-out only if the trap-entry sstatus shows SD and FS Dirty
+  (arch/riscv/include/asm/switch_to.h:49-58), and a skipped save would restore an older copy.
+- Reading the sources found no path that leaves FS un-dirtied or SD clear: csr_regfile.sv:2063-2077 at 0568f93a9,
+  the kernel's entry.S and switch_to.h, and the FPGA monitor's trap paths (sbi_capstone.S:148-217).
+- mc-harness's t0 surviving a waitpid is NOT counter-evidence. Its fs0 is 0 before t0, and its t1 comes from a now()
+  that is itself wrong on this bitstream (R-52 not fixed on silicon, dev 23213fb4a701).
+- Separate from R-52's wrong-result signature: here no FP arithmetic runs in the lossy window.
+
+**What would settle it.**
+- An RTL directed test: FS=Clean, then fld or fadd.d, then read sstatus FS and SD; plus a U-mode ecall arm.
+- On the board, in one boot:
+  - getrusage ru_nvcsw/ru_nivcsw around each window;
+  - a signal-frame read of the FPRs (save_fp_state checks FS only);
+  - fork after the load;
+  - a distinct caller FP pattern;
+  - all 12 values printed.
+- A kernel one-liner counting FS==Dirty && !SD in __switch_to_aux.
+
+**Impact.** A native hard-float value held in a register across a blocking call, or across about a second, is not
+reliable on this bitstream. Delegated domains (soft-float) and the paper's native-on-board numbers (no FP) are
+unaffected.
+
 ### R-52 (was S-18) — in a NATIVE Linux process on silicon, the value read back after fcvt.d.l / fdiv.d / fadd.d is the destination register's EARLIER value, not the result `ROOT-CAUSED IN RTL AND FIXED IN SIMULATION 2026-10-05 (capstone-ariane branch s18-fpr-clobber 546807884; SYNTHESIS APPROVED BY THE LEAD 2026-10-10 as part of next-bitstream-r51-r52 0568f93a9; a regression of the 2026-04-24 issue-stage commit, in every bitstream since): the issue stage never marked a floating-point destination as clobbered, so every FP consumer read its operand stale; rv64ud 11 of 12 FAIL -> 12 of 12 PASS; in the next bitstream 0568f93a9` -- observed observed 2026-10-05 on caplifive_supcall_776d9d859 (boot B3c, 200,000 of 200,000 evaluations, N = 1 boot); origin not established (write-back lost or a stale read; RTL, FPGA build or kernel FP state); delegated domains are soft-float and do not use the FPU`
 
 > **ROOT CAUSE AND FIX (the RTL lane, 2026-10-05).** Reproduced bit-exactly in the Verilator testharness with

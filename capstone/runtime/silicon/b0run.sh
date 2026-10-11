@@ -135,6 +135,12 @@ case "$rung" in
     echo "B3c memcached job $(cat /tmp/b3c-job.json 2>/dev/null)"
     echo "RESULT $rung retval=$prc"
     ;;
+  b3-fphold)
+    # B3f: where FP registers loaded with fld lose their values (b3-fphold-probe.c). Native, no module needed.
+    # retval = the probe's bitmask: bit n = variant n read other than expected (0 changed; exactly 1 for variant 7).
+    /test-domains/b3-fphold-probe; prc=$?
+    echo "RESULT $rung retval=$prc"
+    ;;
   b3-oracle)
     # B3: memcached's oracle on silicon. The port's harness (ports/memcached/app/host/mc-harness) starts the domain
     # under capstone-job, runs its scripted 8-connection session and stops it with SIGTERM. Only the transcript's
