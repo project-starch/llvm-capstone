@@ -8,6 +8,10 @@ arms are compared with native CPython 3.13.7 built from the same tarball.
 
 ## Result
 
+This section is the first run, as pre-registered. F1-F3 were then fixed and every module
+rerun, sharded: see "Rerun after the fixes, sharded" below, where protected equals stock on
+every finished test.
+
 **The prediction is not met. Both Capstone arms die with a domain fault before the list ends,
 and neither exits as native does (139 against 0).**
 
@@ -235,3 +239,166 @@ completed.
   folded subtests. It also holds module statuses and counts for all six runs (native matched
   and default, both boots of both Capstone arms), the repeat comparisons, every difference
   with the number compared, and the stage hashes.
+
+## Rerun after the fixes, sharded (2026-10-11, second run)
+
+At the project lead's request, F1, F2 and F3 were fixed in the port. Both images were rebuilt
+from one snapshot, and all 15 registered modules were rerun on both arms. To shorten the wall
+time, the run was split into shards: one boot per module, with the slow modules split further
+by TestCase class. That is a deviation from "sequential in one process", recorded below. The
+per-test record is `outcomes-sharded.json`.
+
+### Result
+
+**With the fixes, protected gives the same outcome as stock on every test that finished:
+2180 of the 2183 test ids native ran.** No boot faulted on either arm.
+
+- **Protected against stock:** 0 differences among the 2180.
+- **Protected against native where stock equals native:** 0 differences.
+- **Not finished:** three threaded weakref tests per arm were still running when this section
+  was written, the same three on both arms (see the state at writing, below).
+- **Stock against native:** 21 differences among the finished tests, listed below. Protected
+  has the same outcome as stock on each of them. They are the port's differences.
+
+### The fixes
+
+Each fix is separate and touches one patch file. All 16 patches apply to the 3.13.7 tarball
+with `--fuzz=0` and no offsets, with 0014 (protected) and without it (stock).
+
+| finding | file | change |
+|---|---|---|
+| F1 | `patches/cpython-3.13.7-0014-pymalloc-sublet-lifetimes.patch` | `pymalloc_alloc` returns NULL before `block_issue` when `allocate_from_new_pool` found no arena, as upstream returns its NULL, so `_PyObject_Malloc` falls back and reports `MemoryError`. `block_issue` has one other caller, `pymalloc_realloc`, which passes `arena_inside(ao, p)` for a live block and never NULL. |
+| F2 | `patches/cpython-3.13.7-0008-gc-links-as-pointers.patch` | `_PyGCHead_SET_PREV` with a NULL `prev` stores the flag bits alone (upstream's `0 \| flags`) instead of offsetting NULL. `_PyGCHead_PREV` returns NULL for a word with no address part instead of stripping flags from it. That word is the end of the trashcan's `delete_later` chain, which `_PyTrash_thread_destroy_chain` reads back. |
+| F3 | new `patches/cpython-3.13.7-0017-elementtree-join-flag-keeps-pointer.patch` | `JOIN_OBJ` and `JOIN_SET` in `Modules/_elementtree.c` become inline functions that subtract or add the flag on the pointer itself, so the result keeps the pointer's capability. They do arithmetic only when the flag is set or is being set, so NULL (`element_gc_traverse` after a clear) passes through. |
+
+Patch sha256: 0008 bed188e9199787e5..., 0014 6c2c170ef57e4988..., 0017 1115042c431f9296...
+The originals were 0008 675e023473daaaa6... and 0014 84ca683d3977ecca....
+
+**Native checks** (x86_64, gcc 15.2.0, the matched configure options):
+- **F3:** the tarball plus 0017 passes `test_xml_etree` and `test_xml_etree_c` with 428 run and
+  12 skipped, the same counts as the unpatched native build.
+- **F2:** the tarball plus every patch except 0014, built with
+  `CFLAGS=-D_Py_GC_WORD_AS_POINTER` (the pointer representation that 0008 selects on Capstone,
+  confirmed in `sysconfig` `CFLAGS`), passes `test_gc`, `test_json`, `test_weakref`,
+  `test_xml_etree`, `test_xml_etree_c`, `test_dict`, `test_list` and `test_set`: 1603 run,
+  18 skipped. That includes `test_trashcan`, `test_trashcan_threads` and both
+  `test_endless_recursion`. On x86 an offset NULL does not fault, so this checks that the fix
+  keeps behaviour, not that it removes the fault.
+- **F1:** 0014 uses Capstone instructions and does not build natively. It is checked on the
+  image only.
+
+**On the images:**
+- **F3:** each boot ran `ET.Element('a')` with text and tail set and printed
+  `ETREE-OK b'<a>x</a>y'`, with exit 0, in all 60 boots.
+- **F2:** `test_json…test_endless_recursion` (C and Py), `test_gc…test_trashcan` and
+  `test_trashcan_threads` pass on both arms.
+- **F1:** protected's `test_codecs` raises `MemoryError` as stock's does (ERROR), and the shard
+  runs to its end.
+
+### What ran
+
+- **Snapshot.** `git archive 9bc6f9adf1c9` plus the three patch files, committed on the build
+  host as 44dc50b1. `git status` afterwards showed only the build's own `__pycache__`.
+- **Images.** `CPY_TEST_CAPI=1 [CPY_SUBLET=1] build-virtual.sh cpython <fresh dir>`, built in
+  233 s each, in parallel.
+  - *stock* `cpython.dom`: 5f761dfe44a3bebffc81f4f0726945550919698070fd7860727d9d03742fd867,
+    with 15 patches (0017 added) and `nested: none`.
+  - *protected* `cpython.dom`: 675f609db6ceca12d3aa4409855d17806d79bf0dab48cb8d8ee5e007484cbd14,
+    with 16 patches and `nested: cpython`.
+
+  The compiler, runtime and builtins archive hashes and the stack and arena sizes are as in
+  the first run. The platform files and the staging are as in the first run, the stage hashes
+  are in `outcomes-sharded.json`, and the guest command is the same with `-m PATTERN ...`
+  added.
+- **Shards.** 29 planned per arm. Each class's estimate is its native junit time multiplied by
+  the module's guest/native ratio from the first run (1800 where the first run had no ratio),
+  plus 0.5 s per test. Classes are packed into shards of at most 1200 s estimated. Tests whose
+  class exceeded that went out one test per unit, and doctests were kept together per module.
+- **Coverage.** Each shard's `-m` patterns were run through the native interpreter's
+  `--list-cases`. The union is the 2183 native test ids, each exactly once. On both arms the
+  parsed logs hold all 2183 ids with the native multiplicities.
+- **Boots.** 58 boots, one per arm and shard, each with its own lock and work dir, launched
+  detached at 11:56 UTC on one host next to 4 other QEMU processes. The 52 that hold no
+  threaded weakref test finished by about 12:36 UTC. The longest took 2371 s
+  (`protected/test_long-10`); the shortest regular shard took 345 s. Running 58 VMs at once
+  made each about 3 times slower than a lone VM: `test_dict` took 270 s against 91 s in the
+  first run.
+- **Shard 21b.** In shard `test_weakref-21`, the threaded test
+  `test_threaded_weak_valued_setdefault` runs first and was still running after 40 min, with
+  about 55 tests queued behind it. Those 55 (`ReferencesTestCase.*` and four MappingTestCase
+  tests) were therefore started again as `test_weakref-21b` on each arm, and finished in
+  240-254 s. Their outcomes come from 21b. Only the setdefault test is taken from shard 21.
+
+### Per module, sharded run
+
+Cells are pass/failure/error/skipped/process-died/not-finished. Native is the matched build
+from the first run.
+
+| module | native | stock | protected |
+|---|---|---|---|
+| test_dict | 114/0/0/0/0/0 | 113/0/0/1/0/0 | 113/0/0/1/0/0 |
+| test_list | 65/0/0/0/0/0 | 64/0/0/1/0/0 | 64/0/0/1/0/0 |
+| test_set | 623/0/0/0/0/0 | 623/0/0/0/0/0 | 623/0/0/0/0/0 |
+| test_tuple | 36/0/0/0/0/0 | 36/0/0/0/0/0 | 36/0/0/0/0/0 |
+| test_bytes | 292/0/0/5/0/0 | 290/0/0/7/0/0 | 290/0/0/7/0/0 |
+| test_str | 130/0/0/6/0/0 | 126/1/1/8/0/0 | 126/1/1/8/0/0 |
+| test_float | 49/0/0/1/0/0 | 48/0/0/2/0/0 | 48/0/0/2/0/0 |
+| test_long | 42/0/0/2/0/0 | 42/0/0/2/0/0 | 42/0/0/2/0/0 |
+| test_json | 181/0/0/3/0/0 | 180/0/1/3/0/0 | 180/0/1/3/0/0 |
+| test_gc | 51/0/0/1/0/0 | 46/0/0/6/0/0 | 46/0/0/6/0/0 |
+| test_weakref | 135/0/0/2/0/0 | 131/0/0/3/0/3 | 131/0/0/3/0/3 |
+| test_collections | 114/0/0/1/0/0 | 114/0/0/1/0/0 | 114/0/0/1/0/0 |
+| test_itertools | 139/0/0/5/0/0 | 137/1/1/5/0/0 | 137/1/1/5/0/0 |
+| test_sort | 21/0/0/0/0/0 | 21/0/0/0/0/0 | 21/0/0/0/0/0 |
+| test_re | 161/0/0/4/0/0 | 160/2/0/3/0/0 | 160/2/0/3/0/0 |
+| **total** | 2153/0/0/30/0/0 | 2131/4/3/42/0/3 | 2131/4/3/42/0/3 |
+
+### Every difference among finished tests (stock = protected in every row)
+
+| test | native | stock and protected | reason |
+|---|---|---|---|
+| test_bytes.ByteArrayTest.test_obsolete_write_lock | pass | skipped | No module named '_testcapi' |
+| test_bytes.BytesTest.test_from_format | pass | skipped | No module named '_ctypes' |
+| test_dict.DictTest.test_repr_deep | pass | skipped | requires _testcapi |
+| test_list.ListTest.test_repr_deep | pass | skipped | requires _testcapi |
+| test_float.IEEEFormatTestCase.test_serialized_float_rounding | pass | skipped | needs _testcapi |
+| test_str.StrTest.test_formatting_c_limits | pass | skipped | No module named '_testcapi' |
+| test_str.StrTest.test_formatting_huge_precision_c_limits | pass | skipped | need _testcapi module |
+| test_gc.GCCallbackTests.test_collect_garbage | pass | skipped | requires _testcapi.with_tp_del |
+| test_gc.GCTests.test_garbage_at_shutdown | pass | skipped | requires _testcapi |
+| test_gc.GCTests.test_legacy_finalizer | pass | skipped | requires _testcapi.with_tp_del |
+| test_gc.GCTests.test_legacy_finalizer_newclass | pass | skipped | requires _testcapi.with_tp_del |
+| test_gc.GCTests.test_trash_weakref_clear | pass | skipped | requires ContainerNoGC extension type |
+| test_weakref.ReferencesTestCase.test_cfunction | pass | skipped | No module named '_testcapi' |
+| test_re.ReTests.test_regression_gh94675 | pass | skipped | test requires multiprocessing |
+| test_re.ReTests.test_locale_caching | skipped (needs en_US.iso88591) | failure | the guest's `setlocale` accepts the name, so the test runs, and `re.L` case folding of b'\xc5'/b'\xe5' does not match; upstream marks the same as a "musl libc issue" (bpo-46390) and skips it only on Emscripten/WASI |
+| test_re.ReTests.test_locale_compiled | skipped (same) | failure | same |
+| test_str.StrTest.test_codecs | pass | error | `MemoryError` building a string of 1,112,064 code points |
+| test_str.StrTest.test_raiseMemError | pass | failure | `sys.getsizeof` 8 bytes over the test's 64-bit struct sizes (4 subtests) |
+| test_itertools.SizeofTest.test_product_sizeof | pass | failure | 144 != 136: object size with 16-byte pointers |
+| test_itertools.TestBasicOps.test_tee_del_backward | pass | error | `MemoryError` |
+| test_json.test_recursion.TestPyRecursion.test_highly_nested_objects_decoding | pass | error | `SystemError: error return without exception set` (new, see F4) |
+
+**F4, both arms, not investigated (a port difference, not a protection difference).**
+The test expects `RecursionError` from
+`json.loads('{"a":' * 100000 + '1' + '}' * 100000)` under `support.infinite_recursion()`, with
+the pure-Python decoder, and natively it passes. On both images it ends in
+`SystemError: error return without exception set`. Some C path returns NULL without an
+exception on the deep recursion. The sequential first run never reached this test.
+
+### State at writing: the three threaded weakref tests
+
+`MappingTestCase.test_threaded_weak_valued_consistency`, `test_threaded_weak_valued_pop` and
+`test_threaded_weak_valued_setdefault` each run 100,000 dictionary operations while a second
+thread calls `gc.collect()` every 5 ms. Natively they take 1.8 s, 0.8 s and 0.2 s. On one
+emulated hart, each was still running after 46 min on both arms, with its QEMU at 100% CPU and
+no fault. Their outcome is recorded as not-finished, and the boot cap is 4 h.
+
+### Deviations in this run
+
+1. **Sharded instead of sequential in one process.** Each shard is sequential in its own
+   process. Cross-test interactions inside one interpreter are not the same as in a full
+   sequential run, and the 58 parallel boots shared one host.
+2. **Shard 21b** re-ran 55 tests that were queued behind a long threaded test (above).
+3. **Native was not rerun.** The oracle is the first run's matched native build. The fixed
+   patches do not apply to it, because the native oracle is the unpatched release.
