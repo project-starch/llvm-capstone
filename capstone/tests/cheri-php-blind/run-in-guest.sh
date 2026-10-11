@@ -47,6 +47,9 @@ run_one() {  # $1=arm $2=row
   last=$(printf '%s\n' "$out" | sed -n 's/^\[\(.*\)\]$/\1/p' | tail -1)
   [ -n "$last" ] || last=NONE
   echo "ROW $2 arm=$1 cfg=$CFG rc=$rc last=$last out=[$(printf '%s' "$out" | tr '\n\t' ';;' | cut -c1-160)]"
+  # Measurement lines are emitted verbatim, one per line, because the 160-char
+  # summary above silently dropped all but the first of them.
+  printf '%s\n' "$out" | sed -n "s/^PROBE/MEAS $2 arm=$1 cfg=$CFG PROBE/p"
 }
 while IFS='	' read -r row models ncases klass es ep note; do
   case "$row" in ''|\#*) continue;; esac

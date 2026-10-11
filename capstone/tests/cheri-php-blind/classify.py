@@ -79,6 +79,16 @@ def verdict(res):
     return "MISS", ""
 
 
+def verdict_for(res, klass):
+    """Sanity and probe rows are not defects: running to completion is the
+    CORRECT outcome for them, and labelling that MISS reads like a missed
+    detection in a table whose whole point is counting misses."""
+    v, why = verdict(res)
+    if klass in ("sanity", "probe") and v == "MISS":
+        return "RAN-CLEAN", why
+    return v, why
+
+
 def main():
     if len(sys.argv) < 3:
         print("usage: classify.py <serial.log> <rows.tsv>", file=sys.stderr)
@@ -127,7 +137,7 @@ def main():
     for row, models, ncases, klass, es, ep, note in rows:
         for arm in ARMS:
             res = {c: got.get((row, arm, c)) for c in CFGS}
-            v, why = verdict(res)
+            v, why = verdict_for(res, klass)
             pred = es if arm == "stockalloc" else ep
             cells = []
             for c in CFGS:
@@ -141,7 +151,7 @@ def main():
                 if not (v == pred or base == pred.split("(")[0]):
                     flag = "<< UNEXPECTED"
                     surprises.append((row, arm, pred, v))
-            elif pred == "DONE" and v != "MISS":
+            elif pred == "DONE" and v not in ("MISS", "RAN-CLEAN"):
                 flag = "<< UNEXPECTED"
                 surprises.append((row, arm, pred, v))
             print("{:<24} {:<11} {:<16} {:<16} {:<16} {:<22} {:<16} {}".format(

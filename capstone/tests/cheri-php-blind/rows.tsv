@@ -17,7 +17,7 @@ a1_uaf_read	cache-hidden UAF, read	23	temporal	MISS	BLOCKED-SWEEP	plain stale re
 a2_uaf_write	cache-hidden UAF, write	23	temporal	MISS	BLOCKED-SWEEP	plain stale store
 a3_uaf_recycled	same-bucket recycle 1B->8B	23	temporal	MISS	MISS	stale-but-allocated; no free() in EITHER arm
 a4_uaf_zval_member	freed struct's pointer member	23	temporal	MISS	BLOCKED-SWEEP	capability loaded from freed memory
-a5_double_efree	double efree	-	control	LATE-or-ABORT	BLOCKED-ABORT	stock surfaces only at shutdown drain
+a5_double_efree	double efree	-	control	LATE@SHUT	BLOCKED-ABORT	stock surfaces only at shutdown drain; PRE-REG said 'LATE-or-ABORT', not a taxonomy label
 a6_uaf_after_shutdown	use after the cache drain	-	control	BLOCKED-SWEEP	BLOCKED-SWEEP	REVOCATION CONTROL inside the stock arm
 b1_oob_read_slack	REAL_SIZE slack over-read	6	spatial	MISS	BLOCKED-SYNC	CWE-125 shape
 b2_oob_write_slack	REAL_SIZE slack over-write	1	spatial	MISS	BLOCKED-SYNC	CWE-787 shape (CRASH-008)
@@ -25,3 +25,5 @@ b3_oob_read_past_block	past the malloc'd block	-	control	BLOCKED-SYNC	BLOCKED-SY
 c1_stack_after_return	stack use-after-return	1	stack	MISS	MISS	CWE-562 (CRASH-100); where CHERI is expected to do WORSE than ASAN
 b4_header_underflow	read into zend_mem_header	-	supplementary	MISS	MISS	not one of the 31; blindness is two-sided
 z0_sanity	defect-free allocator exercise	-	sanity	DONE	DONE	must run clean or all rows are void
+z1_bounds_probe	measures malloc bounds precision	-	probe	DONE	DONE	evidence: how far past a request does malloc's capability reach
+z2_libc_uaf	plain libc malloc/free/use	-	control	BLOCKED-SWEEP	BLOCKED-SWEEP	ABSOLUTE CONTROL: does revocation fire on this vehicle at all

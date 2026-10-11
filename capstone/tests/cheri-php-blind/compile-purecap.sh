@@ -10,8 +10,22 @@
 set -uo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-CHERI_SDK=${CHERI_SDK:-$HOME/cheri/output/sdk}
-SYSROOT=${SYSROOT:-$CHERI_SDK/sysroot-riscv64-purecap}
+CHERI_ROOT=${CHERI_ROOT:-$HOME/cheri}
+CHERI_SDK=${CHERI_SDK:-$CHERI_ROOT/output/sdk}
+# THE ROOTFS IS THE SYSROOT. provision-cheri-vehicle.sh deliberately does not
+# build CheriBSD world -- it downloads the published distribution sets -- so
+# there is no $CHERI_SDK/sysroot-riscv64-purecap. The downloaded rootfs doubles
+# as the sysroot, which is why that script's trim step keeps libgcc.a and
+# libcompiler_rt.a ("Deleting libgcc.a broke every link with 'unable to find
+# library -lgcc'; the rootfs doubles as our sysroot"). Prefer a cheribuild-made
+# sysroot if one exists, else fall back to the rootfs.
+if [ -n "${SYSROOT:-}" ]; then
+  :
+elif [ -d "$CHERI_SDK/sysroot-riscv64-purecap" ]; then
+  SYSROOT="$CHERI_SDK/sysroot-riscv64-purecap"
+else
+  SYSROOT="${ROOTFS:-$CHERI_ROOT/rootfs-purecap}"
+fi
 CC="$CHERI_SDK/bin/clang"
 OUT=${OUT:-$HOME/cheri/rootfs-purecap/root/cheri-php-blind}
 

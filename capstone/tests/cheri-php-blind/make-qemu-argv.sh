@@ -43,14 +43,34 @@ KERNEL="$ROOTFS/boot/kernel/kernel"
 [ -f "$KERNEL" ] || die "no kernel at $KERNEL"
 [ -f "$IMG" ]    || die "no disk image at $IMG"
 
+# -cpu rv64,sstc=false IS REQUIRED with this kernel/QEMU pair, and neither
+# provision-cheri-vehicle.sh nor `cheribuild run-riscv64-purecap` passes it.
+#
+# CheriBSD 26.07's kernel uses the Sstc extension (the stimecmp CSR, 0x14D).
+# QEMU 7.2.0 implements Sstc and advertises it, but S-mode access to stimecmp
+# requires M-mode firmware to set menvcfg.STCE, and the bbl purecap firmware
+# does not. So the kernel detects Sstc, writes stimecmp, and takes an illegal
+# instruction inside DELAY()/cpu_idleclock():
+#
+#   --- exception 2, tval = 0x14d51073
+#   panic: ... KDB: enter: panic
+#
+# which reads as a hang at boot. Turning Sstc off makes QEMU stop advertising
+# it, and the kernel falls back to the SBI timer and boots. This is version skew
+# -- the published kernel is newer than this QEMU fork -- not a misconfiguration
+# of the vehicle. CHERI is unaffected: the purecap kernel and purecap userland
+# both run normally, which is verified in-guest by cheri_status.
+QEMU_CPU=${QEMU_CPU:-rv64,sstc=false}
+
 printf '%s\n' "$QEMU" \
-  -M virt -m "$QEMU_MEM" -nographic -bios "$FW" \
+  -M virt -m "$QEMU_MEM" -cpu "$QEMU_CPU" -nographic -bios "$FW" \
   -kernel "$KERNEL" \
   -drive "if=none,file=$IMG,id=drv,format=raw" \
   -device virtio-blk-device,drive=drv \
   -append "vfs.root.mountfrom=ufs:/dev/vtbd0" > "$OUT"
 
 echo "[*] qemu:     $QEMU"
+echo "[*] cpu:      $QEMU_CPU"
 echo "[*] firmware: $FW"
 echo "[*] kernel:   $KERNEL"
 echo "[*] image:    $IMG ($(du -h "$IMG" | cut -f1))"

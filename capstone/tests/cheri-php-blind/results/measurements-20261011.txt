@@ -1,0 +1,189 @@
+===PHP-BLIND-BEGIN cfg=spatial===
+KNOB runtime_revocation_default=0
+KNOB runtime_revocation_every_free_default=0
+STATUS REVOKE_ENABLED=0 
+ROW a1_uaf_read arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME a1_uaf_read;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];STALE-READ [the quick brown fox jumped ok!!];[USE-END];[SHUT-BEGIN];[SHUT-END]]
+ROW a1_uaf_read arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME a1_uaf_read;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];STALE-READ [the quick brown fox jumped ok!!];[USE-END];[SHUT-BEGIN];[SHUT-END]]
+ROW a2_uaf_write arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME a2_uaf_write;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];STALE-WRITE byte0=Z;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW a2_uaf_write arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME a2_uaf_write;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];STALE-WRITE byte0=Z;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW a3_uaf_recycled arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME a3_uaf_recycled;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SAME-BLOCK=1;STALE-SEES [S] via the freed pointer;[USE-END];[SHUT-BEGIN];[]
+ROW a3_uaf_recycled arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME a3_uaf_recycled;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SAME-BLOCK=1;STALE-SEES [S] via the freed pointer;[USE-END];[SHUT-BEGIN];[]
+ROW a4_uaf_zval_member arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME a4_uaf_zval_member;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];STALE-REFCOUNT=1;STALE-MEMBER-DEREF [hello world];[USE-END];[SHUT-BEGIN]
+ROW a4_uaf_zval_member arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME a4_uaf_zval_member;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];STALE-REFCOUNT=1;STALE-MEMBER-DEREF [hello world];[USE-END];[SHUT-BEGIN]
+ROW a5_double_efree arm=stockalloc cfg=spatial rc=162 last=SHUT-BEGIN out=[ROWNAME a5_double_efree;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];LINK-TAGS-BEFORE pNext=0 pLast=0;LINK-TAGS-AFTER-1ST pNext=0 pLast=0;DOUBL]
+ROW a5_double_efree arm=patched cfg=spatial rc=162 last=USE-BEGIN out=[ROWNAME a5_double_efree;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];LINK-TAGS-BEFORE pNext=0 pLast=0;LINK-TAGS-AFTER-1ST pNext=0 pLast=0]
+ROW a6_uaf_after_shutdown arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME a6_uaf_after_shutdown;LAYOUT hdr=48 cache=1 rs(26)=32;[SHUT-BEGIN];[SHUT-END];[USE-BEGIN];POST-FREE-READ byte0=r;[USE-END];[DONE]]
+ROW a6_uaf_after_shutdown arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME a6_uaf_after_shutdown;LAYOUT hdr=48 cache=0 rs(26)=26;[SHUT-BEGIN];[SHUT-END];[USE-BEGIN];POST-FREE-READ byte0=r;[USE-END];[DONE]]
+ROW b1_oob_read_slack arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME b1_oob_read_slack;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=32 reading [26..31];  s[26]=00;  s[27]=00;  s[2]
+ROW b1_oob_read_slack arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME b1_oob_read_slack;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=26 reading [26..31];  s[26]=00;  s[27]=00;  s[2]
+ROW b2_oob_write_slack arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME b2_oob_write_slack;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=32 writing [26..31];OVERWRITE-RETURNED;[USE-EN]
+ROW b2_oob_write_slack arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME b2_oob_write_slack;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=26 writing [26..31];OVERWRITE-RETURNED;[USE-EN]
+ROW b3_oob_read_past_block arm=stockalloc cfg=spatial rc=162 last=USE-BEGIN out=[ROWNAME b3_oob_read_past_block;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];PAST-BLOCK n=26 this_arm_real=32 reading s[32]]
+ROW b3_oob_read_past_block arm=patched cfg=spatial rc=162 last=USE-BEGIN out=[ROWNAME b3_oob_read_past_block;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];PAST-BLOCK n=26 this_arm_real=26 reading s[32]]
+ROW c1_stack_after_return arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME c1_stack_after_return;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];DANGLING-NONNULL=1;STACK-AFTER-RETURN byte0=30 (expect reuse, not 'S]
+ROW c1_stack_after_return arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME c1_stack_after_return;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];DANGLING-NONNULL=1;STACK-AFTER-RETURN byte0=30 (expect reuse, not 'S]
+ROW b4_header_underflow arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME b4_header_underflow;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];UNDERFLOW reading s[-1] and s[-8] (inside zend_mem_header);  s[-1]=00 ]
+ROW b4_header_underflow arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME b4_header_underflow;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];UNDERFLOW reading s[-1] and s[-8] (inside zend_mem_header);  s[-1]=00 ]
+ROW z0_sanity arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME z0_sanity;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SANITY-OK;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW z0_sanity arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME z0_sanity;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SANITY-OK;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW z1_bounds_probe arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME z1_bounds_probe;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];PROBE hdr=48;PROBE n=1 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=108]
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE hdr=48
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=1 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=7 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=8 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=9 rs=16 want=64 rawbase=1084289024 rawlen=64 dbase=1084289152 daddr=1084289200 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=17 rs=24 want=72 rawbase=1084293120 rawlen=80 dbase=1084293200 daddr=1084293248 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=26 rs=32 want=80 rawbase=1084293120 rawlen=80 dbase=1084293280 daddr=1084293328 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=31 rs=32 want=80 rawbase=1084293120 rawlen=80 dbase=1084293280 daddr=1084293328 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=32 rs=32 want=80 rawbase=1084293120 rawlen=80 dbase=1084293280 daddr=1084293328 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=33 rs=40 want=88 rawbase=1084313600 rawlen=96 dbase=1084313696 daddr=1084313744 dlen=96
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=48 rs=48 want=96 rawbase=1084313600 rawlen=96 dbase=1084313792 daddr=1084313840 dlen=96
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=74 rs=80 want=128 rawbase=1084325888 rawlen=128 dbase=1084326016 daddr=1084326064 dlen=128
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=100 rs=104 want=152 rawbase=1084329984 rawlen=160 dbase=1084330144 daddr=1084330192 dlen=160
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE n=1000 rs=1000 want=1048 rawbase=1084350464 rawlen=1280 dbase=1084351744 daddr=1084351792 dlen=1280
+MEAS z1_bounds_probe arm=stockalloc cfg=spatial PROBE-DONE
+ROW z1_bounds_probe arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME z1_bounds_probe;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];PROBE hdr=48;PROBE n=1 rs=1 want=49 rawbase=1084289024 rawlen=64 dbase=108]
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE hdr=48
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=1 rs=1 want=49 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=7 rs=7 want=55 rawbase=1084289088 rawlen=64 dbase=1084289024 daddr=1084289072 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=8 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=9 rs=9 want=57 rawbase=1084289088 rawlen=64 dbase=1084289024 daddr=1084289072 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=17 rs=17 want=65 rawbase=1084293120 rawlen=80 dbase=1084293200 daddr=1084293248 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=26 rs=26 want=74 rawbase=1084293200 rawlen=80 dbase=1084293120 daddr=1084293168 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=31 rs=31 want=79 rawbase=1084293120 rawlen=80 dbase=1084293200 daddr=1084293248 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=32 rs=32 want=80 rawbase=1084293200 rawlen=80 dbase=1084293120 daddr=1084293168 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=33 rs=33 want=81 rawbase=1084313600 rawlen=96 dbase=1084313696 daddr=1084313744 dlen=96
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=48 rs=48 want=96 rawbase=1084313696 rawlen=96 dbase=1084313600 daddr=1084313648 dlen=96
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=74 rs=74 want=122 rawbase=1084325888 rawlen=128 dbase=1084326016 daddr=1084326064 dlen=128
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=100 rs=100 want=148 rawbase=1084329984 rawlen=160 dbase=1084330144 daddr=1084330192 dlen=160
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE n=1000 rs=1000 want=1048 rawbase=1084350464 rawlen=1280 dbase=1084351744 daddr=1084351792 dlen=1280
+MEAS z1_bounds_probe arm=patched cfg=spatial PROBE-DONE
+ROW z2_libc_uaf arm=stockalloc cfg=spatial rc=0 last=DONE out=[ROWNAME z2_libc_uaf;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];TAG-BEFORE-FREE=1;TAG-AFTER-FREE=1;LIBC-POST-FREE-READ byte0=L;LIBC-UAF-SURVIV]
+ROW z2_libc_uaf arm=patched cfg=spatial rc=0 last=DONE out=[ROWNAME z2_libc_uaf;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];TAG-BEFORE-FREE=1;TAG-AFTER-FREE=1;LIBC-POST-FREE-READ byte0=L;LIBC-UAF-SURVIV]
+===PHP-BLIND-END cfg=spatial===
+===PHP-BLIND-BEGIN cfg=temporal===
+KNOB runtime_revocation_default=1
+KNOB runtime_revocation_every_free_default=0
+STATUS REVOKE_ENABLED=1 
+ROW a1_uaf_read arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME a1_uaf_read;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];STALE-READ [the quick brown fox jumped ok!!];[USE-END];[SHUT-BEGIN];[SHUT-END]]
+ROW a1_uaf_read arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME a1_uaf_read;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];STALE-READ [the quick brown fox jumped ok!!];[USE-END];[SHUT-BEGIN];[SHUT-END]]
+ROW a2_uaf_write arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME a2_uaf_write;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];STALE-WRITE byte0=Z;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW a2_uaf_write arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME a2_uaf_write;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];STALE-WRITE byte0=Z;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW a3_uaf_recycled arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME a3_uaf_recycled;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SAME-BLOCK=1;STALE-SEES [S] via the freed pointer;[USE-END];[SHUT-BEGIN];[]
+ROW a3_uaf_recycled arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME a3_uaf_recycled;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SAME-BLOCK=0;STALE-SEES [A] via the freed pointer;[USE-END];[SHUT-BEGIN];[]
+ROW a4_uaf_zval_member arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME a4_uaf_zval_member;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];STALE-REFCOUNT=1;STALE-MEMBER-DEREF [hello world];[USE-END];[SHUT-BEGIN]
+ROW a4_uaf_zval_member arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME a4_uaf_zval_member;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];STALE-REFCOUNT=1;STALE-MEMBER-DEREF [hello world];[USE-END];[SHUT-BEGIN]
+ROW a5_double_efree arm=stockalloc cfg=temporal rc=162 last=SHUT-BEGIN out=[ROWNAME a5_double_efree;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];LINK-TAGS-BEFORE pNext=0 pLast=0;LINK-TAGS-AFTER-1ST pNext=0 pLast=0;DOUBL]
+ROW a5_double_efree arm=patched cfg=temporal rc=162 last=USE-BEGIN out=[ROWNAME a5_double_efree;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];LINK-TAGS-BEFORE pNext=0 pLast=0;LINK-TAGS-AFTER-1ST pNext=0 pLast=0]
+ROW a6_uaf_after_shutdown arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME a6_uaf_after_shutdown;LAYOUT hdr=48 cache=1 rs(26)=32;[SHUT-BEGIN];[SHUT-END];[USE-BEGIN];POST-FREE-READ byte0=r;[USE-END];[DONE]]
+ROW a6_uaf_after_shutdown arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME a6_uaf_after_shutdown;LAYOUT hdr=48 cache=0 rs(26)=26;[SHUT-BEGIN];[SHUT-END];[USE-BEGIN];POST-FREE-READ byte0=r;[USE-END];[DONE]]
+ROW b1_oob_read_slack arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME b1_oob_read_slack;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=32 reading [26..31];  s[26]=00;  s[27]=00;  s[2]
+ROW b1_oob_read_slack arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME b1_oob_read_slack;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=26 reading [26..31];  s[26]=00;  s[27]=00;  s[2]
+ROW b2_oob_write_slack arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME b2_oob_write_slack;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=32 writing [26..31];OVERWRITE-RETURNED;[USE-EN]
+ROW b2_oob_write_slack arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME b2_oob_write_slack;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=26 writing [26..31];OVERWRITE-RETURNED;[USE-EN]
+ROW b3_oob_read_past_block arm=stockalloc cfg=temporal rc=162 last=USE-BEGIN out=[ROWNAME b3_oob_read_past_block;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];PAST-BLOCK n=26 this_arm_real=32 reading s[32]]
+ROW b3_oob_read_past_block arm=patched cfg=temporal rc=162 last=USE-BEGIN out=[ROWNAME b3_oob_read_past_block;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];PAST-BLOCK n=26 this_arm_real=26 reading s[32]]
+ROW c1_stack_after_return arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME c1_stack_after_return;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];DANGLING-NONNULL=1;STACK-AFTER-RETURN byte0=30 (expect reuse, not 'S]
+ROW c1_stack_after_return arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME c1_stack_after_return;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];DANGLING-NONNULL=1;STACK-AFTER-RETURN byte0=30 (expect reuse, not 'S]
+ROW b4_header_underflow arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME b4_header_underflow;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];UNDERFLOW reading s[-1] and s[-8] (inside zend_mem_header);  s[-1]=00 ]
+ROW b4_header_underflow arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME b4_header_underflow;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];UNDERFLOW reading s[-1] and s[-8] (inside zend_mem_header);  s[-1]=00 ]
+ROW z0_sanity arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME z0_sanity;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SANITY-OK;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW z0_sanity arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME z0_sanity;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SANITY-OK;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW z1_bounds_probe arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME z1_bounds_probe;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];PROBE hdr=48;PROBE n=1 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=108]
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE hdr=48
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=1 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=7 rs=8 want=56 rawbase=1084289152 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=8 rs=8 want=56 rawbase=1084289216 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=9 rs=16 want=64 rawbase=1084289280 rawlen=64 dbase=1084289344 daddr=1084289392 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=17 rs=24 want=72 rawbase=1084293120 rawlen=80 dbase=1084293200 daddr=1084293248 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=26 rs=32 want=80 rawbase=1084293280 rawlen=80 dbase=1084293360 daddr=1084293408 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=31 rs=32 want=80 rawbase=1084293440 rawlen=80 dbase=1084293360 daddr=1084293408 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=32 rs=32 want=80 rawbase=1084293520 rawlen=80 dbase=1084293360 daddr=1084293408 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=33 rs=40 want=88 rawbase=1084313600 rawlen=96 dbase=1084313696 daddr=1084313744 dlen=96
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=48 rs=48 want=96 rawbase=1084313792 rawlen=96 dbase=1084313888 daddr=1084313936 dlen=96
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=74 rs=80 want=128 rawbase=1084325888 rawlen=128 dbase=1084326016 daddr=1084326064 dlen=128
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=100 rs=104 want=152 rawbase=1084329984 rawlen=160 dbase=1084330144 daddr=1084330192 dlen=160
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE n=1000 rs=1000 want=1048 rawbase=1084350464 rawlen=1280 dbase=1084351744 daddr=1084351792 dlen=1280
+MEAS z1_bounds_probe arm=stockalloc cfg=temporal PROBE-DONE
+ROW z1_bounds_probe arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME z1_bounds_probe;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];PROBE hdr=48;PROBE n=1 rs=1 want=49 rawbase=1084289024 rawlen=64 dbase=108]
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE hdr=48
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=1 rs=1 want=49 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=7 rs=7 want=55 rawbase=1084289152 rawlen=64 dbase=1084289216 daddr=1084289264 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=8 rs=8 want=56 rawbase=1084289280 rawlen=64 dbase=1084289344 daddr=1084289392 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=9 rs=9 want=57 rawbase=1084289408 rawlen=64 dbase=1084289472 daddr=1084289520 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=17 rs=17 want=65 rawbase=1084293120 rawlen=80 dbase=1084293200 daddr=1084293248 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=26 rs=26 want=74 rawbase=1084293280 rawlen=80 dbase=1084293360 daddr=1084293408 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=31 rs=31 want=79 rawbase=1084293440 rawlen=80 dbase=1084293520 daddr=1084293568 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=32 rs=32 want=80 rawbase=1084293600 rawlen=80 dbase=1084293680 daddr=1084293728 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=33 rs=33 want=81 rawbase=1084313600 rawlen=96 dbase=1084313696 daddr=1084313744 dlen=96
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=48 rs=48 want=96 rawbase=1084313792 rawlen=96 dbase=1084313888 daddr=1084313936 dlen=96
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=74 rs=74 want=122 rawbase=1084325888 rawlen=128 dbase=1084326016 daddr=1084326064 dlen=128
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=100 rs=100 want=148 rawbase=1084329984 rawlen=160 dbase=1084330144 daddr=1084330192 dlen=160
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE n=1000 rs=1000 want=1048 rawbase=1084350464 rawlen=1280 dbase=1084351744 daddr=1084351792 dlen=1280
+MEAS z1_bounds_probe arm=patched cfg=temporal PROBE-DONE
+ROW z2_libc_uaf arm=stockalloc cfg=temporal rc=0 last=DONE out=[ROWNAME z2_libc_uaf;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];TAG-BEFORE-FREE=1;TAG-AFTER-FREE=1;LIBC-POST-FREE-READ byte0=L;LIBC-UAF-SURVIV]
+ROW z2_libc_uaf arm=patched cfg=temporal rc=0 last=DONE out=[ROWNAME z2_libc_uaf;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];TAG-BEFORE-FREE=1;TAG-AFTER-FREE=1;LIBC-POST-FREE-READ byte0=L;LIBC-UAF-SURVIV]
+===PHP-BLIND-END cfg=temporal===
+===PHP-BLIND-BEGIN cfg=eager===
+KNOB runtime_revocation_default=1
+KNOB runtime_revocation_every_free_default=1
+STATUS REVOKE_ENABLED=1 
+ROW a1_uaf_read arm=stockalloc cfg=eager rc=0 last=DONE out=[ROWNAME a1_uaf_read;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];STALE-READ [the quick brown fox jumped ok!!];[USE-END];[SHUT-BEGIN];[SHUT-END]]
+ROW a1_uaf_read arm=patched cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME a1_uaf_read;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN]]
+ROW a2_uaf_write arm=stockalloc cfg=eager rc=0 last=DONE out=[ROWNAME a2_uaf_write;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];STALE-WRITE byte0=Z;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW a2_uaf_write arm=patched cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME a2_uaf_write;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN]]
+ROW a3_uaf_recycled arm=stockalloc cfg=eager rc=0 last=DONE out=[ROWNAME a3_uaf_recycled;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SAME-BLOCK=1;STALE-SEES [S] via the freed pointer;[USE-END];[SHUT-BEGIN];[]
+ROW a3_uaf_recycled arm=patched cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME a3_uaf_recycled;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SAME-BLOCK=0]
+ROW a4_uaf_zval_member arm=stockalloc cfg=eager rc=0 last=DONE out=[ROWNAME a4_uaf_zval_member;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];STALE-REFCOUNT=1;STALE-MEMBER-DEREF [hello world];[USE-END];[SHUT-BEGIN]
+ROW a4_uaf_zval_member arm=patched cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME a4_uaf_zval_member;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN]]
+ROW a5_double_efree arm=stockalloc cfg=eager rc=162 last=SHUT-BEGIN out=[ROWNAME a5_double_efree;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];LINK-TAGS-BEFORE pNext=0 pLast=0;LINK-TAGS-AFTER-1ST pNext=0 pLast=0;DOUBL]
+ROW a5_double_efree arm=patched cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME a5_double_efree;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];LINK-TAGS-BEFORE pNext=0 pLast=0]
+ROW a6_uaf_after_shutdown arm=stockalloc cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME a6_uaf_after_shutdown;LAYOUT hdr=48 cache=1 rs(26)=32;[SHUT-BEGIN];[SHUT-END];[USE-BEGIN]]
+ROW a6_uaf_after_shutdown arm=patched cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME a6_uaf_after_shutdown;LAYOUT hdr=48 cache=0 rs(26)=26;[SHUT-BEGIN];[SHUT-END];[USE-BEGIN]]
+ROW b1_oob_read_slack arm=stockalloc cfg=eager rc=0 last=DONE out=[ROWNAME b1_oob_read_slack;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=32 reading [26..31];  s[26]=00;  s[27]=00;  s[2]
+ROW b1_oob_read_slack arm=patched cfg=eager rc=0 last=DONE out=[ROWNAME b1_oob_read_slack;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=26 reading [26..31];  s[26]=00;  s[27]=00;  s[2]
+ROW b2_oob_write_slack arm=stockalloc cfg=eager rc=0 last=DONE out=[ROWNAME b2_oob_write_slack;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=32 writing [26..31];OVERWRITE-RETURNED;[USE-EN]
+ROW b2_oob_write_slack arm=patched cfg=eager rc=0 last=DONE out=[ROWNAME b2_oob_write_slack;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SLACK n=26 this_arm_real=26 writing [26..31];OVERWRITE-RETURNED;[USE-EN]
+ROW b3_oob_read_past_block arm=stockalloc cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME b3_oob_read_past_block;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];PAST-BLOCK n=26 this_arm_real=32 reading s[32]]
+ROW b3_oob_read_past_block arm=patched cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME b3_oob_read_past_block;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];PAST-BLOCK n=26 this_arm_real=26 reading s[32]]
+ROW c1_stack_after_return arm=stockalloc cfg=eager rc=0 last=DONE out=[ROWNAME c1_stack_after_return;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];DANGLING-NONNULL=1;STACK-AFTER-RETURN byte0=30 (expect reuse, not 'S]
+ROW c1_stack_after_return arm=patched cfg=eager rc=0 last=DONE out=[ROWNAME c1_stack_after_return;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];DANGLING-NONNULL=1;STACK-AFTER-RETURN byte0=30 (expect reuse, not 'S]
+ROW b4_header_underflow arm=stockalloc cfg=eager rc=0 last=DONE out=[ROWNAME b4_header_underflow;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];UNDERFLOW reading s[-1] and s[-8] (inside zend_mem_header);  s[-1]=00 ]
+ROW b4_header_underflow arm=patched cfg=eager rc=0 last=DONE out=[ROWNAME b4_header_underflow;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];UNDERFLOW reading s[-1] and s[-8] (inside zend_mem_header);  s[-1]=00 ]
+ROW z0_sanity arm=stockalloc cfg=eager rc=0 last=DONE out=[ROWNAME z0_sanity;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];SANITY-OK;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW z0_sanity arm=patched cfg=eager rc=0 last=DONE out=[ROWNAME z0_sanity;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];SANITY-OK;[USE-END];[SHUT-BEGIN];[SHUT-END];[DONE]]
+ROW z1_bounds_probe arm=stockalloc cfg=eager rc=0 last=DONE out=[ROWNAME z1_bounds_probe;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];PROBE hdr=48;PROBE n=1 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=108]
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE hdr=48
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=1 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=7 rs=8 want=56 rawbase=1084289152 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=8 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=9 rs=16 want=64 rawbase=1084289216 rawlen=64 dbase=1084289280 daddr=1084289328 dlen=64
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=17 rs=24 want=72 rawbase=1084293120 rawlen=80 dbase=1084293200 daddr=1084293248 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=26 rs=32 want=80 rawbase=1084293280 rawlen=80 dbase=1084293360 daddr=1084293408 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=31 rs=32 want=80 rawbase=1084293120 rawlen=80 dbase=1084293360 daddr=1084293408 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=32 rs=32 want=80 rawbase=1084293440 rawlen=80 dbase=1084293360 daddr=1084293408 dlen=80
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=33 rs=40 want=88 rawbase=1084313600 rawlen=96 dbase=1084313696 daddr=1084313744 dlen=96
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=48 rs=48 want=96 rawbase=1084313792 rawlen=96 dbase=1084313888 daddr=1084313936 dlen=96
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=74 rs=80 want=128 rawbase=1084325888 rawlen=128 dbase=1084326016 daddr=1084326064 dlen=128
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=100 rs=104 want=152 rawbase=1084329984 rawlen=160 dbase=1084330144 daddr=1084330192 dlen=160
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE n=1000 rs=1000 want=1048 rawbase=1084350464 rawlen=1280 dbase=1084351744 daddr=1084351792 dlen=1280
+MEAS z1_bounds_probe arm=stockalloc cfg=eager PROBE-DONE
+ROW z1_bounds_probe arm=patched cfg=eager rc=0 last=DONE out=[ROWNAME z1_bounds_probe;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];PROBE hdr=48;PROBE n=1 rs=1 want=49 rawbase=1084289024 rawlen=64 dbase=108]
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE hdr=48
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=1 rs=1 want=49 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=7 rs=7 want=55 rawbase=1084289024 rawlen=64 dbase=1084289152 daddr=1084289200 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=8 rs=8 want=56 rawbase=1084289024 rawlen=64 dbase=1084289088 daddr=1084289136 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=9 rs=9 want=57 rawbase=1084289024 rawlen=64 dbase=1084289152 daddr=1084289200 dlen=64
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=17 rs=17 want=65 rawbase=1084293120 rawlen=80 dbase=1084293200 daddr=1084293248 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=26 rs=26 want=74 rawbase=1084293120 rawlen=80 dbase=1084293280 daddr=1084293328 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=31 rs=31 want=79 rawbase=1084293120 rawlen=80 dbase=1084293200 daddr=1084293248 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=32 rs=32 want=80 rawbase=1084293120 rawlen=80 dbase=1084293280 daddr=1084293328 dlen=80
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=33 rs=33 want=81 rawbase=1084313600 rawlen=96 dbase=1084313696 daddr=1084313744 dlen=96
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=48 rs=48 want=96 rawbase=1084313600 rawlen=96 dbase=1084313792 daddr=1084313840 dlen=96
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=74 rs=74 want=122 rawbase=1084325888 rawlen=128 dbase=1084326016 daddr=1084326064 dlen=128
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=100 rs=100 want=148 rawbase=1084329984 rawlen=160 dbase=1084330144 daddr=1084330192 dlen=160
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE n=1000 rs=1000 want=1048 rawbase=1084350464 rawlen=1280 dbase=1084351744 daddr=1084351792 dlen=1280
+MEAS z1_bounds_probe arm=patched cfg=eager PROBE-DONE
+ROW z2_libc_uaf arm=stockalloc cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME z2_libc_uaf;LAYOUT hdr=48 cache=1 rs(1)=8 rs(26)=32 rs(32)=32;[USE-BEGIN];TAG-BEFORE-FREE=1;TAG-AFTER-FREE=0]
+ROW z2_libc_uaf arm=patched cfg=eager rc=162 last=USE-BEGIN out=[ROWNAME z2_libc_uaf;LAYOUT hdr=48 cache=0 rs(1)=1 rs(26)=26 rs(32)=32;[USE-BEGIN];TAG-BEFORE-FREE=1;TAG-AFTER-FREE=0]
+===PHP-BLIND-END cfg=eager===
