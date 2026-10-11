@@ -1776,7 +1776,7 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### S-19 — callee-saved FP registers that a native process loads in user mode read back as its PRE-LOAD FP state after a blocking wait of >= 10 ms or ~1 s of execution, on caplifive_r51r52_0568f93a9; thousands of traps do not lose them `OPEN — observed 2026-10-11 (boots C, f, g, h; UNGATED, PREFLIGHT=0); origin not established (core, FPGA kernel build or monitor); QEMU does not show it`
+### S-19 — callee-saved FP registers that a native process loads in user mode read back as its PRE-LOAD FP state after a blocking wait of >= 10 ms or ~1 s of execution, on caplifive_r51r52_0568f93a9; thousands of traps do not lose them `CANDIDATE ROOT CAUSE 2026-10-11: commit_stage.sv's dirty_fp_state precedence (FP instructions never set mstatus.FS Dirty), the bug upstream CVA6 fixed in #2936 (2700d14); sim confirmation and fix branch with the RTL lane. Board: B3i (a signal frame and a fork child read the stale copy with ZERO context switches). Was: OPEN, observed 2026-10-11 (boots C, f, g, h, i; UNGATED, PREFLIGHT=0); QEMU does not show it`
 
 **What was seen.** b3-fphold-probe.c (runtime/silicon). Its asm `fphold` saves the caller's fs0..fs11, loads 12
 known values with fld (or an fadd chain), does ONE thing, stores fs0..fs11 to out[], then restores.
@@ -1820,6 +1820,25 @@ known values with fld (or an fadd chain), does ONE thing, stores fs0..fs11 to ou
 **Impact.** A native hard-float value held in a register across a blocking call, or across about a second, is not
 reliable on this bitstream. Delegated domains (soft-float) and the paper's native-on-board numbers (no FP) are
 unaffected.
+
+
+> # 2026-10-11 — the kernel never sees FS Dirty; candidate root cause in commit_stage (B3i, firmware f542f78ce769)
+> - **The decisive reading.** A signal raised right after twelve flds, with ZERO context switches: the kernel's signal
+>   frame and the registers after sigreturn both read the stale copy (all 0). A fork child reads the same. Linux copies
+>   FP state into a frame or a child only if the trap-entry sstatus shows FS Dirty. So FS is not Dirty after fld, and
+>   every FP save (switch-out, signal, fork) is skipped.
+> - No register read the pre-load pattern or garbage. waitpid, a 10 ms sleep and a ~1 s loop read 0, each with at
+>   least one switch counted by getrusage.
+> - **Candidate root cause: commit_stage.sv:166-169** at 0568f93a9 (from upstream 513bb91f8, in the fork base and on
+>   every branch).
+>   - `dirty_fp_state_o |= commit_ack_o[i] & (FPU or FP-destination) | commit_instr_i[i].fu == ACCEL &&
+>     commit_instr_i[i].vfp;` groups as `((ack & ...) | (fu == ACCEL)) && vfp`, which is 0 without Ara.
+>   - Only FP CSR writes dirty FS (csr_regfile.sv:1208-1240), which is where boot C's one successful save came from
+>     (its loop's fsflags).
+> - **Upstream's fix:** openhwgroup/cva6 2700d14, "Indicate dirty in mstatus.FS correctly (#2936)", 2025-05-19: "fixes
+>   incorrect parenthesis, causing dirty_fp_state_o not to be set on floating point instructions such as fld".
+> - Separate from R-52, whose wrong now() results involve no save at all.
+> - Record: llvm-capstone docs/plans/b0-silicon-delegated-runtime.md, "B3i".
 
 ### R-52 (was S-18) — in a NATIVE Linux process on silicon, the value read back after fcvt.d.l / fdiv.d / fadd.d is the destination register's EARLIER value, not the result `ROOT-CAUSED IN RTL AND FIXED IN SIMULATION 2026-10-05 (capstone-ariane branch s18-fpr-clobber 546807884; SYNTHESIS APPROVED BY THE LEAD 2026-10-10 as part of next-bitstream-r51-r52 0568f93a9; a regression of the 2026-04-24 issue-stage commit, in every bitstream since): the issue stage never marked a floating-point destination as clobbered, so every FP consumer read its operand stale; rv64ud 11 of 12 FAIL -> 12 of 12 PASS; in the next bitstream 0568f93a9` -- observed observed 2026-10-05 on caplifive_supcall_776d9d859 (boot B3c, 200,000 of 200,000 evaluations, N = 1 boot); origin not established (write-back lost or a stale read; RTL, FPGA build or kernel FP state); delegated domains are soft-float and do not use the FPU`
 

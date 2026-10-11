@@ -5981,9 +5981,10 @@ boot, and each board image is named by hash.
   - ~~the harness's stop_seconds reads 1.07 (was inf)~~ Void: t1 comes from the same now().
   - ~~Native FP arithmetic on the board is now correct.~~ It is not. A native hard-float result on the board is still
     not evidence. (The paper's native-on-board numbers use no FP, as checked above.)
-  - Separately, ISSUES S-19 (unattributed): FP registers a native process loads read back as its pre-load state
-    after a blocking wait of >= 10 ms or ~1 s of execution. So even a correct native FP value held across a blocking
-    call is not evidence on this bitstream.
+  - Separately, ISSUES S-19: FP registers a native process loads read back as its pre-load state after a blocking
+    wait of >= 10 ms or ~1 s of execution. Candidate root cause: FP instructions never set mstatus.FS Dirty on this
+    core, so the kernel skips every FP save (upstream CVA6 fixed the same bug in #2936). So even a correct native FP
+    value held across a blocking call is not evidence on this bitstream.
 - **R-51 is fixed on silicon in the same bitstream:** a domain's PC capability is enforced after a RETURN yield (the
   matched pair reads 0 / 0x1C / 0x1C, against 0 / 0xBAD / 0). The memcached B-series and its oracle hash are unchanged
   on it, and so is the supervision overhead (+0.666 %).

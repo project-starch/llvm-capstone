@@ -141,6 +141,12 @@ case "$rung" in
     /test-domains/b3-fphold-probe; prc=$?
     echo "RESULT $rung retval=$prc"
     ;;
+  b3-fpstate)
+    # B3i (ISSUES S-19): what native FP state the kernel keeps (b3-fpstate-probe.c). Native, no module needed.
+    # retval 0 = every window read all-I (the control: all-I but fs5); the printed lines are the reading.
+    /test-domains/b3-fpstate-probe; prc=$?
+    echo "RESULT $rung retval=$prc"
+    ;;
   b3-oracle)
     # B3: memcached's oracle on silicon. The port's harness (ports/memcached/app/host/mc-harness) starts the domain
     # under capstone-job, runs its scripted 8-connection session and stops it with SIGTERM. Only the transcript's
