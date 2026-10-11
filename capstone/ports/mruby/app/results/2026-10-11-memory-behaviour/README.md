@@ -13,8 +13,9 @@ the time available: natively it takes 6.75 s (three runs, 6.74-6.78 s), and gues
 at 4 x 4 and 135 s at 8 x 8, about 1,300 times native, which puts 64 x 64 at about 2.4 h per
 boot. The numbers below are for the **same script with `IMAGE_WIDTH` = `IMAGE_HEIGHT` = 16** (its
 own `ARGV[0]`; `NSUBSAMPLES` 2 and `NAO_SAMPLES` 8 unchanged), 16 times fewer pixels, 0.42 s
-natively. The full-size runs (64 x 64) are still running on six further VMs; their result will be
-an addendum to this file. The GC smoke ran unchanged.
+natively. The full-size runs (64 x 64) finished later on six further VMs; they are the
+[addendum](#addendum-the-registered-64-x-64-ao-render) at the end, with their counters in
+`repetitions-ao-width64.json`. The GC smoke ran unchanged.
 
 ## What ran
 
@@ -150,13 +151,13 @@ doubles the lifetime table (48 vs 24 growths) and reclaims fewer lifetimes befor
 
 ## Method limits
 
-- The registered 64 x 64 AO render was replaced by 16 x 16 (above). The full-size runs are still
-  in progress; nothing here is from them.
-- A first attempt at the full-size runs (six boots under `driver/mm-run.py`, the same gate
-  without the width argument and without `CAPSTONE_VM_STATS`) had a 3,600 s boot timeout, which
-  the probe showed it could not meet; those six VMs were stopped after about 41 min with no
-  reading and are void. The current full-size runs use `driver/mm-run.py` with
-  `MM_TIMEOUT=14400` and `driver/launch.sh`.
+- The registered 64 x 64 AO render was replaced by 16 x 16 in the sections above; the 64 x 64
+  result is the addendum.
+- A first attempt at the full-size runs (six boots under the first version of `mm-run.py`, gate
+  sha256 `915316bf...`, without `CAPSTONE_VM_STATS`) had a 3,600 s boot timeout, which the probe
+  showed it could not meet; those six VMs were stopped after about 41 min with no reading and are
+  void. The full-size rerun used `driver/mm-run.py` (with `CAPSTONE_VM_STATS=1`) through
+  `driver/launch.sh` with `MM_TIMEOUT=14400`.
 - `--stats` is module-wide; each program ran alone in its VM, so the deltas are its own.
 - `VmHWM` counts what Linux maps for the launcher. Whether the module's node table is in it is not
   separated here; `node_bytes` is listed apart.
@@ -164,3 +165,76 @@ doubles the lifetime table (48 vs 24 growths) and reclaims fewer lifetimes befor
   not memory decisions, and the same sampler ran on both arms.
 - Boot wall time per repetition: 986-1,005 s stock, 1,017-1,032 s protected (launch to
   `VIRTUAL_STAGED_DONE`, both programs).
+
+## Addendum: the registered 64 x 64 AO render
+
+The six full-size boots (stock and protected, reps 1-3, in parallel) finished after the sections
+above were written: boot wall time 13,546-13,577 s stock and 13,987-14,031 s protected (launch to
+`VIRTUAL_STAGED_DONE`; `launch.sh` records 13,552-13,584 s and 13,993-14,037 s per job, all exit 0),
+under the 14,400 s timeout. Gate sha256 `65a4301322bf687a...`, the same for all six: the registered
+`bm_ao_render.rb` with no argument (64 x 64), then the same GC smoke, the same images
+(`7b5872bc...` stock, `321dc9b9...` protected), platform and readings as above. Every repetition's
+counters are in `repetitions-ao-width64.json` (same shape as the 16 x 16 file). The native
+reference is `driver/mm-native.sh mruby`, three runs.
+
+**Correction.** An earlier version of this file, and the first report of this row, said the
+full-size runs were relaunched without `CAPSTONE_VM_STATS`. That was wrong: `mm-run.py` on the
+build host had been replaced by the version that sets it before the relaunch (the staged
+`gate.sh` of every full-size boot carries `CAPSTONE_VM_STATS=1`, and every program's stderr has the
+launcher's exit line). Only the void first attempt lacked it. No number is missing for lack of it.
+
+**Output.** The 64 x 64 PPM is `7e75fdb7a194e1cd...` on stock 1-3, protected 1-3 and native 1-3;
+the smoke output is `791d0649...` on all nine. Every program exited 0.
+
+**Object counts and heap pages.** Identical in all three repetitions of both arms and in the three
+native runs, at every reading:
+
+| reading | `TOTAL` slots (heap pages) | `FREE` | `T_PROC` | `T_SCLASS` | `T_CLASS` | `T_ENV` | `T_MODULE` | `T_STRING` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| AO, before | 1,024 (1) | 296 | 484 | 93 | 77 | 14 | 10 | 23 |
+| AO, after | 2,048 (2) | 1,257 | 531 | 101 | 83 | 15 | 11 | 23 |
+| AO, after `GC.start` | 1,024 (1) | 233 | 531 | 101 | 83 | 15 | 11 | 23 |
+
+The other types are as at 16 x 16 (`T_ARRAY` 1, `T_DATA` 3, `T_EXCEPTION` 2, `T_HASH` 1,
+`T_ICLASS` 17, `T_ISTRUCT` 1, `T_OBJECT` 2). The 64 x 64 run holds one `T_STRING` fewer than the
+16 x 16 run at every reading, on every arm and natively alike. The smoke's readings are the same
+as in the 16 x 16 boots, value for value.
+
+**Lifetimes** (`--stats` deltas and the launcher's exit line agree; identical in all three
+repetitions of each arm):
+
+| counter | AO stock | AO protected | smoke stock | smoke protected |
+|---|---:|---:|---:|---:|
+| lifetimes allocated | 40,056,876 | 55,154,374 (+15,097,498, +37.7 %) | 131,762 | 253,213 |
+| reclaimed by collections | 40,042,994 | 55,137,386 | 123,040 | 74,698 |
+| released only at exit (allocated - reclaimed; live and retired 0 after exit) | 13,882 | 16,988 | 8,722 | 178,515 |
+| collections | 3,995 | 3,527 | 2 | 4 |
+| node table at exit (`node_capacity` / growths) | 17,408 / 4 | 25,600 / 6 | 99,328 / 24 | 197,632 / 48 |
+| pages pinned at exit / peak | 1,738 / 2,064 | 1,738 / 2,092 | 3,560 / 6,595 | 3,553 / 6,942 |
+| capability faults served | 16,622 | 17,430 | 5,759 | 6,106 |
+
+**Peak resident memory** (`VmHWM` of the launcher at the `done` reading, kB; identical in all
+three repetitions of each arm):
+
+| | stock | protected | protected - stock | native |
+|---|---:|---:|---:|---:|
+| AO 64 x 64 | 8,960 | 9,072 | +112 | 4,416 / 4,348 / 4,352 |
+| smoke | 27,000 | 28,436 | +1,436 | 9,244 / 9,244 / 9,252 |
+
+The AO peak pinned pages differ by +28 (112 KiB), as at 16 x 16.
+
+**Verdicts at the registered size** (the same as at 16 x 16):
+
+| prediction | verdict |
+|---|---|
+| Object counts per type equal | **holds**, every reading, every repetition, and equal to native |
+| Heap pages equal | **holds** at the readings (1 / 2 / 1); the peak is not exposed |
+| GC runs equal | **not measured** (no GC run count in this mruby) |
+| Heap memory higher on protected | **holds**: +112 kB (AO), +1,436 kB (smoke) |
+| Protected allocates more lifetimes | **holds**: +15,097,498 (AO), +121,451 (smoke) |
+| ... and reclaims them | **holds for AO** (99.97 % reclaimed by 3,527 collections; 16,988 released at exit); **partly for the smoke** (as above) |
+| Readings identical across repetitions | **yes** for counts, lifetime counters, pages and `VmHWM`; **no** for `steps` (2,002,252-2,028,787 stock, 2,065,041-2,082,652 protected), `rounds`, `bytes_in`/`bytes_out` and times |
+
+As at 16 x 16, the protected AO run needs fewer collections (3,527 vs 3,995) with its larger
+lifetime table. The 16 x 16 result is therefore not a different finding from the registered
+workload; it is the same shape, with every lifetime count about 16 times smaller.
