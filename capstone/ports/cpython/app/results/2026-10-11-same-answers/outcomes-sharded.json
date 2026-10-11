@@ -800,14 +800,14 @@
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency"
    ],
    "estimate_s": 0,
-   "exit": null,
-   "regrtest_s": null,
-   "boot_s": null,
-   "module_result": "started, no result line",
+   "exit": 0,
+   "regrtest_s": 30572,
+   "boot_s": 30628,
+   "module_result": "passed in 8 hour 27 min",
    "tests": 0,
    "faults": 0,
    "etree_probe_exit": 0,
-   "released": null
+   "released": true
   },
   "stock/test_weakref-19L": {
    "module": "test_weakref",
@@ -1565,14 +1565,14 @@
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency"
    ],
    "estimate_s": 0,
-   "exit": null,
-   "regrtest_s": null,
-   "boot_s": null,
-   "module_result": "started, no result line",
+   "exit": 0,
+   "regrtest_s": 31366,
+   "boot_s": 31411,
+   "module_result": "passed in 8 hour 40 min",
    "tests": 0,
    "faults": 0,
    "etree_probe_exit": 0,
-   "released": null
+   "released": true
   },
   "protected/test_weakref-19L": {
    "module": "test_weakref",
@@ -14737,7 +14737,7 @@
      "shard": "test_gc-16"
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency": {
-     "outcome": "not-finished",
+     "outcome": "pass",
      "shard": "test_weakref-17L"
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_value_dict_copy": {
@@ -23521,7 +23521,7 @@
      "shard": "test_gc-16"
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency": {
-     "outcome": "not-finished",
+     "outcome": "pass",
      "shard": "test_weakref-17L"
     },
     "test.test_weakref.MappingTestCase.test_threaded_weak_value_dict_copy": {
@@ -26024,12 +26024,6 @@
      "protected": "failure"
     },
     {
-     "test": "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency",
-     "native": "pass",
-     "stock": "not-finished",
-     "protected": "not-finished"
-    },
-    {
      "test": "test.test_weakref.ReferencesTestCase.test_cfunction",
      "native": "pass",
      "stock": "skipped",
@@ -26191,12 +26185,6 @@
      "native": "pass",
      "stock": "failure",
      "protected": "failure"
-    },
-    {
-     "test": "test.test_weakref.MappingTestCase.test_threaded_weak_valued_consistency",
-     "native": "pass",
-     "stock": "not-finished",
-     "protected": "not-finished"
     },
     {
      "test": "test.test_weakref.ReferencesTestCase.test_cfunction",

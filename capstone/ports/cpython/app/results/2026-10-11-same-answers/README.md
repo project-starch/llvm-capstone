@@ -250,15 +250,12 @@ per-test record is `outcomes-sharded.json`.
 
 ### Result
 
-**With the fixes, protected gives the same outcome as stock on every test that finished:
-2182 of the 2183 test ids native ran.** No boot faulted on either arm.
+**With the fixes, protected gives the same outcome as stock on all 2183 test ids native ran.
+Every test finished on both arms.** No boot faulted on either arm.
 
-- **Protected against stock:** 0 differences among the 2182.
+- **Protected against stock:** 0 differences among the 2183.
 - **Protected against native where stock equals native:** 0 differences.
-- **Not finished:** one test, `test_weakref.MappingTestCase.test_threaded_weak_valued_consistency`,
-  on both arms. It was still running without a fault when this section was updated (see the
-  threaded weakref tests, below).
-- **Stock against native:** 21 differences among the finished tests, listed below. Protected
+- **Stock against native:** 21 differences, listed below. Protected
   has the same outcome as stock on each of them. They are the port's differences.
 
 ### The fixes
@@ -347,14 +344,14 @@ from the first run.
 | test_long | 42/0/0/2/0/0 | 42/0/0/2/0/0 | 42/0/0/2/0/0 |
 | test_json | 181/0/0/3/0/0 | 180/0/1/3/0/0 | 180/0/1/3/0/0 |
 | test_gc | 51/0/0/1/0/0 | 46/0/0/6/0/0 | 46/0/0/6/0/0 |
-| test_weakref | 135/0/0/2/0/0 | 133/0/0/3/0/1 | 133/0/0/3/0/1 |
+| test_weakref | 135/0/0/2/0/0 | 134/0/0/3/0/0 | 134/0/0/3/0/0 |
 | test_collections | 114/0/0/1/0/0 | 114/0/0/1/0/0 | 114/0/0/1/0/0 |
 | test_itertools | 139/0/0/5/0/0 | 137/1/1/5/0/0 | 137/1/1/5/0/0 |
 | test_sort | 21/0/0/0/0/0 | 21/0/0/0/0/0 | 21/0/0/0/0/0 |
 | test_re | 161/0/0/4/0/0 | 160/2/0/3/0/0 | 160/2/0/3/0/0 |
-| **total** | 2153/0/0/30/0/0 | 2133/4/3/42/0/1 | 2133/4/3/42/0/1 |
+| **total** | 2153/0/0/30/0/0 | 2134/4/3/42/0/0 | 2134/4/3/42/0/0 |
 
-### Every difference among finished tests (stock = protected in every row)
+### Every difference from native (stock = protected in every row)
 
 | test | native | stock and protected | reason |
 |---|---|---|---|
@@ -401,11 +398,12 @@ outcome only where the 4 h shard has none; otherwise it is recorded as a repeat.
 |---|---|---|
 | setdefault | pass, shard 21, 51 min 10 s | pass, shard 21, 56 min 44 s |
 | pop | pass, shard 19, 3 h 5 min; repeat in 19L: pass, 4 h 17 min | 4 h shard hit the cap; pass in 19L, 4 h 50 min |
-| consistency | 4 h shard hit the cap; 17L still running | 4 h shard hit the cap; 17L still running |
+| consistency | 4 h shard hit the cap; pass in 17L, 8 h 27 min | 4 h shard hit the cap; pass in 17L, 8 h 40 min |
 
 The times are regrtest's own ("passed in ..."). No fault was logged in any of these boots. A
 check at 13:20 UTC found QEMU at 100% CPU in the six 4 h boots, and a check at 18:20 UTC found
-it at 100% in both 17L boots.
+it at 100% in both 17L boots. The 17L boots ended at 21:51 UTC (stock) and 22:04 UTC
+(protected), exit 0, both with `Ran 1 test` and `OK`.
 
 ### Deviations in this run
 
