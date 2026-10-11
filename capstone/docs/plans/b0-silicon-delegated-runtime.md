@@ -1498,6 +1498,15 @@ rungs are b0-stats, `b3-setclock`, `b3-oracle`, `b3-clock` and b0-stats2, with `
 - The control is 776d9d859's own B3c record: 200,000 anomalies, `stop_seconds=inf`, and the rung not returning.
 
 ## Acceptance of the R-51 + R-52 bitstream, pre-registered 2026-10-10 (before any build; hash to be pinned)
+**PINNED 2026-10-11, before the flash.**
+- The bitstream is `caplifive_r51r52_0568f93a9.bit`, sha256 16b5d8dad523f7e226feaf8aa594c1a77af95ab189d9e9857bde0da819fc158e,
+  11,443,722 B, sealed by the synth lane from capstone-ariane 0568f93a9. The pulled copy's hash matches.
+- Routed: WNS -8.368 ns, inside the predicted band. No LUTLP, no new startpoints on the failing set, and one routed
+  loop with the TIMING-23 arc identical to 776d9d859's.
+- Flagged: route_design took about 156 min, against 20-31 for the last three images, and crossed the synth machine's
+  3h30m mark. The lead chose to flash it anyway (2026-10-11). The fallback 776d9d859 stays registered on the console.
+- REFUSAL_RECORD=1 for this name: the R-43 scripts' name pattern was extended. refusal_record.py's name warning will
+  print on each R-43 boot, which is expected and does not block.
 The build is the RTL lane's to batch and hand to the synth lane. A combined branch exists as capstone-ariane
 `sup-r51-r52` d15a836fa: 776d9d859 plus ef8900e2d, f4e4d6051 and 546807884, and its core/ diff equals the two fix
 branches' hunks byte for byte. The flash is the lead's word.
