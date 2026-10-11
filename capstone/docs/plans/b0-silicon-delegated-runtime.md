@@ -1694,6 +1694,31 @@ What each reading would mean:
 - v11 loses: the timer-interrupt path (M-mode) clobbers FP state, with no switch at all.
 - v9 holds while v4 loses: the intervening syscall restores tracking. That would be a kernel/trap-entry effect.
 
+## B3g RESULT (2026-10-11 18:07-18:12, firmware 765727b08532): every ~1 s interval loses the state, blocking or not
+- **v0-v3 hold, v4-v6 lose (N=2), and v7 reads exactly 1.**
+- **v8 (spinning child), v9 (extra getppid), v10 (nanosleep, no child) and v11 (a busy loop with no syscall, timer only)
+  each lose 12 of 12.** fs0 reads 0, the pre-load state.
+- So it is not the idle hart, not waitpid, and not blocking as such. The state is lost somewhere within about a
+  second of user-mode execution, while the short variants keep it.
+- The B3f reading (an older saved copy restored) needs a switch-in without a save. That fits an involuntary
+  preemption during the busy loop just as well as a blocking switch.
+- mc-harness keeps t0 in fs0 from `fmv.d fs0, fa0` (0x3f8c) across kill and waitpid to the fsub at 0x4050, and read
+  1.07 s, so that state did survive once. The difference is UNRESOLVED.
+- The exit code reads 112 only because shell status is mod 256; the printed lines carry every variant.
+
+## B3h pre-registered (2026-10-11, before the boot): which event in the interval
+The same probe (FPGA build 48f5eb725abbbd49). QEMU rehearsal: everything 0 except v7, which reads 1.
+- v12: a pure integer loop of ~1 s with NO calls (timer interrupts and preemption only).
+- v13: 2000 getppid syscalls (many traps, little time).
+- v14: 2000 clock_gettime calls (on silicon rdtime has no CSR, so each is an M-mode emulation).
+- v15: a 10 ms nanosleep (a short block).
+
+What each reading would mean:
+- v12 loses: timer interrupts or preemption, with no syscall involved.
+- v13 loses and v2 holds: the number of S-mode traps matters.
+- v14 loses: the M-mode rdtime emulation path.
+- v15 loses: any block, however short.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,

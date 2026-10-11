@@ -17,6 +17,10 @@
  *   9 as 4, with getppid between the loads and waitpid (mc-harness has kill() there)
  *  10 no child: the parent itself nanosleeps 1 s (blocks and idles, no waitpid)
  *  11 no child: the parent busy-loops 1 s with no syscall (timer interrupts only, nothing to switch to)
+ *  12 no child: a pure integer loop of ~1 s with NO calls (timer interrupts and preemption only)
+ *  13 no child: 2000 getppid syscalls back to back (many traps, little time)
+ *  14 no child: 2000 clock_gettime calls (on silicon, rdtime has no CSR and is emulated in M-mode)
+ *  15 no child: nanosleep 10 ms (a short block)
  *   7 the POSITIVE CONTROL: as 0, with fs5 doubled by fadd before the store. It must read exactly 1 of 12 changed;
  *     anything else means the instrument cannot be trusted, and sets bit 7.
  * Each variant prints `B3f v<n>: <k> of 12 changed` and the first changed value. Exit status is a bitmask, bit n =
@@ -37,6 +41,9 @@ long dummy_fn(long x) { return x + 1; }
 static long mono_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000L + t.tv_nsec / 1000000L; }
 void nap1s(void) { struct timespec t = {1, 0}; nanosleep(&t, NULL); }
 void spin1s(void) { long end = mono_ms() + 1000; while (mono_ms() < end) { } }
+void many_getppid(void) { for (int i = 0; i < 2000; i++) getppid(); }
+void many_clock(void) { volatile long sink = 0; for (int i = 0; i < 2000; i++) sink += mono_ms(); }
+void nap10ms(void) { struct timespec t = {0, 10000000}; nanosleep(&t, NULL); }
 __asm__(
 ".text\n.globl fphold\n.type fphold, @function\nfphold:\n"
 "  addi sp, sp, -160\n  sd ra, 0(sp)\n  sd s0, 8(sp)\n  sd s1, 16(sp)\n  sd s2, 128(sp)\n"
@@ -59,7 +66,11 @@ __asm__(
 "  li t0, 1\n  bne s1, t0, 5f\n  li a0, 41\n  call dummy_fn\n  j 9f\n"
 "5:li t0, 2\n  bne s1, t0, 6f\n  call getppid\n  j 9f\n"
 "6:li t0, 3\n  bne s1, t0, 7f\n  call sched_yield\n  j 9f\n"
-"7:li t0, 10\n  bne s1, t0, 70f\n  call nap1s\n  j 9f\n"
+"7:li t0, 12\n  bne s1, t0, 73f\n  li t1, 6000000\n74:addi t1, t1, -1\n  bnez t1, 74b\n  j 9f\n"
+"73:li t0, 13\n  bne s1, t0, 75f\n  call many_getppid\n  j 9f\n"
+"75:li t0, 14\n  bne s1, t0, 76f\n  call many_clock\n  j 9f\n"
+"76:li t0, 15\n  bne s1, t0, 77f\n  call nap10ms\n  j 9f\n"
+"77:li t0, 10\n  bne s1, t0, 70f\n  call nap1s\n  j 9f\n"
 "70:li t0, 11\n  bne s1, t0, 71f\n  call spin1s\n  j 9f\n"
 "71:li t0, 9\n  bne s1, t0, 72f\n  call getppid\n"
 "72:mv a0, s2\n  addi a1, sp, 120\n  li a2, 0\n  call waitpid\n"
@@ -76,7 +87,7 @@ int main(void)
 {
 	int rc = 0;
 	setvbuf(stdout, NULL, _IONBF, 0);
-	for (long mode = 0; mode <= 11; mode++) {
+	for (long mode = 0; mode <= 15; mode++) {
 		uint64_t in[12], out[24], want[12];
 		/* Distinct, non-trivial patterns, and none equal to anything a caller register is likely to hold. */
 		for (int i = 0; i < 12; i++) in[i] = 0x4010000000000000ull + 0x0000010000000000ull * (uint64_t)(i + 1) + (uint64_t)mode;
