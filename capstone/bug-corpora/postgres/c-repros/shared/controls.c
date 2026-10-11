@@ -1,7 +1,7 @@
 /* The arm's controls, built with the same SDK as the cases and run before any of them.
  *
  * Not cases. Each says what the arm IS: tools/arms.json records what each must do on each
- * configuration (on level0 the read after free COMPLETES, on the Sublet heap it FAULTS; the write
+ * configuration (on level0 the read after free COMPLETES, on virtual mallocng it FAULTS; the write
  * one past an object faults on both), and tools/verdicts.py scores no silence from an arm whose
  * controls did otherwise. Both go through plain malloc, as the cases' objects do.
  *

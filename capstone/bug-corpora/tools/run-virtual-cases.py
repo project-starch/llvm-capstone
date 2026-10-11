@@ -28,8 +28,8 @@ free), and the judge scores no silence from a run whose controls did otherwise.
 
 WHAT THE ARM IS is read from the SDK and the kit, never from the label: the SDK's CMakeCache must
 say CAPSTONE_APPLICATION_VIRTUAL=ON (appvm.sdk_identity), the corpus.json must map the arm to a
-capstone-virtual configuration, and the run must be on a kit. A physical SDK or VM is refused --
-run-capstone-domain.py checks only the heap, and a virtual SDK would pass it as `spatial`.
+capstone-virtual configuration, and the run must be on a kit. A physical SDK or VM is refused, as
+run-capstone-domain.py refuses a virtual SDK.
 
 PREBUILT MODE (--prebuilt BUILD --prebuilt-controls BUILD), for the nested corpora: a case there is
 not a free-standing case.c but a program linked against its port's allocator library, built by the

@@ -3,7 +3,7 @@
   "arms": {
     "app-level0": {
       "target": "capstone-domain",
-      "summary": "an application domain whose SDK heap is level0 (CAPSTONE_APPLICATION_HEAP=level0): malloc bounds each object to its request; free revokes nothing; a nested allocator's chunks are unbounded inside the block it took",
+      "summary": "an application domain on a physical-profile SDK, whose heap is level0: malloc bounds each object to its request; free revokes nothing; a nested allocator's chunks are unbounded inside the block it took",
       "mechanism": "per-object bounds in malloc",
       "controls": {
         "bounds-malloc": "fault",

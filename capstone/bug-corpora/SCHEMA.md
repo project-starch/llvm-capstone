@@ -152,25 +152,27 @@ in whoever ran it. The checker does not yet enforce this: an unwritten arm
 short-circuits before its keys are examined, so a misspelt `not_run_reason`
 passes silently.
 
+A **retired** arm (the table says so) is accepted only as a record -- a
+`verdict` or `status: measured` -- and the checker refuses one declared as a
+run to come.
+
 | arm | target | oracle |
 |---|---|---|
 | `spatial` | Capstone domain | the sequence completes |
-| `sublet` | Capstone domain | fault at the labelled read probe, with `cause` |
+| `sublet` | Capstone domain | fault at the labelled read probe, with `cause`. Outside the APR corpora it named a configuration on the physical Sublet heap and was retired with the heap on 2026-10-11, its recorded verdicts kept; the APR corpora's `sublet` is the pools port's mode 1 |
 | `native-detect` | host | ASan, built `-O0`, run fixed then buggy by `tools/run-native-asan.py`. A silence is a reading only when the buggy arm printed `VERDICT DEFECT-REPRODUCED` and the same run's positive controls -- a read past, and a read after free of, a heap block the size of the corpus's arena or block -- were reported. Until 2026-10-09 this arm was 'declared, not written' as tautological; it is measured now, because an argument is not a reading |
 | `sysalloc-none` | Capstone domain | the whole-program run completes; the first-fit heap is built with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, so only tag integrity and the arena's bounds are left |
 | `sysalloc-bounds` | Capstone domain | the same, with the heap as applications get it since PR #170: each allocation bounded, no revocation. **The baseline a catch is measured against** |
-| `sysalloc-sublet` | Capstone domain | the Sublet heap: per-object bounds and a revoke on every free |
-| `sublet-gc` | Capstone domain | `sysalloc-sublet` plus the program's own Sublet port, so its nested allocator's objects are issued and revoked too |
-| `sublet-chunks` | Capstone domain | tshark's chunk allocator linked over the Sublet heap (`HEAP_LOG 24`, 40 MiB arena): the configuration the tshark application runs in |
+| `sysalloc-sublet` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. The Sublet heap: per-object bounds and a revoke on every free |
+| `sublet-chunks` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. tshark's chunk allocator linked over the Sublet heap (`HEAP_LOG 24`, 40 MiB arena): the configuration the tshark application runs in |
 | `capstone-subobject` | Capstone domain | the `spatial` arm with `-Xclang -fcapstone-subobject-bounds`: an ARRAY-typed field that is not the last member is narrowed to the field. The tool's `subobj` control must be CAUGHT in the same boot |
 | `cheribsd-subobject` | CheriBSD purecap | stock CheriBSD with `-Xclang -cheri-bounds=subobject-safe`: a pointer taken to a member is narrowed to it (size-0/1 trailing arrays excepted). The shared field-crossing control must die by `SIGPROT` in the same boot |
 | `capstone-carve-bounds` | Capstone domain | the carved corpus only: `-DFFC_CARVE_BOUNDS` makes `ffc_carve()` narrow each carved region to its own extent -- the remedy at the carving code. Fixed arms run under the same narrowing |
 | `cheribsd-carve-bounds` | CheriBSD purecap | the same with `cheri_bounds_set`; the run prints each carve's granted length, and a carve control must fault in the same boot |
-| `sublet-malloc` | Capstone domain | the nested corpora: Sublet ONLY as the system allocator, the program's nested allocator stock -- memcached's ledger in mode 2 (a chunk carries its page's bound, nothing revoked until a page or object is given back), FFmpeg's pools unported on the Sublet heap (`poolstock`). Column 2 of the per-bug table |
-| `sublet-full` | Capstone domain | a plain case built in the program's whole Sublet configuration: the Sublet heap plus the program's nested-allocator port linked and initialised (tshark's is `sublet-chunks`). The bug's path never enters the nested allocator, so this equals `sublet` by construction; the run confirms no interaction. Column 3 for plain cases |
-| `sublet-carve` | Capstone domain | the carved corpus: `-DFFC_SUBLET_CARVE` takes the block LINEAR from the Sublet heap and splits it into one region per carve, each issued as a bounded alias (a re-carve revokes the old aliases); a temporal carve control must fault in the same boot. Column 3 for carved cases |
-| `sublet-svheads` | Capstone domain | the same for Perl: `sysalloc-sublet` plus Perl's SV head arena |
-| `sublet-pymalloc` | Capstone domain | the same for CPython: `sysalloc-sublet` plus pymalloc's pools and arenas, via patch 0014. The difference between this arm and `sysalloc-sublet` is what sublets the nested allocator rather than only the allocation under it, which is the whole comparison a nested/non-nested corpus exists to make |
+| `sublet-malloc` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. The nested corpora: Sublet ONLY as the system allocator, the program's nested allocator stock -- memcached's ledger in mode 2 (a chunk carries its page's bound, nothing revoked until a page or object is given back), FFmpeg's pools unported on the Sublet heap (`poolstock`). Column 2 of the per-bug table |
+| `sublet-full` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. A plain case built in the program's whole Sublet configuration: the Sublet heap plus the program's nested-allocator port linked and initialised (tshark's is `sublet-chunks`). The bug's path never enters the nested allocator, so this equals `sublet` by construction; the run confirms no interaction. Column 3 for plain cases |
+| `sublet-carve` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. The carved corpus: `-DFFC_SUBLET_CARVE` takes the block LINEAR from the Sublet heap and splits it into one region per carve, each issued as a bounded alias (a re-carve revokes the old aliases); a temporal carve control must fault in the same boot. Column 3 for carved cases |
+| `sublet-svheads` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. `sysalloc-sublet` plus Perl's SV head arena through its Sublet port |
 | `virtual-malloc` | virtual Capstone (`capstone/runtime/virtual`) | the case on the virtual profile, its nested allocator stock: the application runs under `capstone-vexec` with musl mallocng compiled for Capstone and run locally, which bounds each object exactly and retires its lifetime on free. Configuration `virtual-mallocng` in `tools/arms.json`; not the physical Sublet heap |
 | `virtual-pg-pools` | virtual Capstone | `virtual-malloc` with PostgreSQL's memory contexts protected by the memory-context port's patch 0003: every chunk a child lifetime of its block (`CDERIVE`), revoked by `pfree`/`repalloc` (`CREVOKE`). The server is built with `build-virtual.sh postgres`, `PGSU_NESTED=sublet` (configuration `virtual-mallocng-pg-pools`); the replay with `PG_SUBLET=ON` (`virtual-mallocng-replay-pools`) |
 | `virtual-nested-pools` | virtual Capstone | `virtual-malloc` with the program's nested allocator on its own pool port (SQLite: memsys5 on `sublet-3220000-memsys5.patch`, every block a child lifetime of the pool over the same static arena, revoked by `sqlite3_free`, and the lookaside's slots likewise; wmem: the wmem port's patch 0001, every `block` and `block_fast` object a child lifetime of its block). The configuration in `tools/arms.json` names which |
@@ -179,8 +181,8 @@ passes silently.
 | `backing` | Capstone domain | FFmpeg pool corpora: revocation only at the pool's BACKING allocation (mode 1), so a buffer the pool never frees is never revoked. `n/a` where there is no block distinct from the object |
 | `host-asan` | host | the upstream function built with ASan at the pin: the oracle is the report (kind, access, region) it must produce. Liveness evidence and the row corpora's only arm, not a protection column |
 
-The four above are the glossary's system-allocator arms
-(`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the
+`sysalloc-none`, `sysalloc-bounds` and the retired `sysalloc-sublet` are the glossary's
+system-allocator arms (`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the
 same source and differ only in the heap the image links, so a difference between
 them is the heap's protection and nothing else -- which is the whole reason the
 unprotected one exists. It is not a C baseline: tag integrity is in the hardware
@@ -188,7 +190,7 @@ and cannot be switched off, so a defect that reads a pointer out of overwritten
 memory faults there too. The nearest C baseline is a host run, recorded per case
 in `live_proof`.
 
-The two protected arms name an instruction, not merely a fault. That is the
+The protected arms name an instruction, not merely a fault. That is the
 point: the process status alone cannot tell this corpus reproducing from an
 arbitrary crash, a bounds fault, a permission fault, a fault elsewhere, or the
 allocator refusing the request.

@@ -108,34 +108,16 @@ ARM_ORACLES = {
     "spatial": {"oracle"},
     "sublet": {"oracle"},
     "cheribsd-revocation": {"oracle"},
-    # The three system-allocator arms of docs/ref/runtime-terms-glossary.md
-    # section 6. They are one image each of the same source, differing only in
-    # the heap it links: the first-fit heap without per-object bounds, the same
-    # heap as applications get it today, and the Sublet heap. A port that also
-    # sublets its own allocator names that arm for the port (sublet-gc,
-    # sublet-svheads) -- the name says which nested allocator was sublet, because
-    # a program has more than one and only the named one is protected.
+    # The system-allocator arms of docs/ref/runtime-terms-glossary.md section 6:
+    # the first-fit heap without per-object bounds, and as applications get it today.
     "sysalloc-none": {"oracle"},
     "sysalloc-bounds": {"oracle"},
-    "sysalloc-sublet": {"oracle"},
-    "sublet-gc": {"oracle"},
-    "sublet-svheads": {"oracle"},
     # Bounds narrower than the allocation, the remedies for a crossing that stays inside one:
     # struct-field bounds from each compiler, and the carved corpus's narrowing at the carve.
     "capstone-subobject": {"oracle"},
     "cheribsd-subobject": {"oracle"},
     "capstone-carve-bounds": {"oracle"},
     "cheribsd-carve-bounds": {"oracle"},
-    # tshark's chunk allocator over the Sublet heap (the wireshark plain-heap corpus).
-    "sublet-chunks": {"oracle"},
-    # The three columns asked for per bug (docs/ref/spatial-vs-temporal-three-programs.md section 0):
-    # Sublet ONLY as the system allocator under the program's stock nested allocator; the whole
-    # program's Sublet configuration (heap + its nested allocator's port) on a plain case; and the
-    # Sublet port of a carving routine (regions split from a linear block, each its own alias).
-    "sublet-malloc": {"oracle"},
-    "sublet-full": {"oracle"},
-    "sublet-carve": {"oracle"},
-    "sublet-pymalloc": {"oracle"},
     # The virtual Capstone profile (capstone/runtime/virtual): local mallocng with capability
     # lifetimes, and PostgreSQL's contexts on Sublet context pools over it. tools/arms.json says
     # what each is; they are not the physical Sublet heap.
@@ -148,6 +130,18 @@ ARM_ORACLES = {
     "backing": set(),
     "host-asan": {"oracle"},
     "capstone-domain": {"oracle"},
+}
+# The physical Sublet heap's arms, retired with the heap on 2026-10-11 (SCHEMA.md). A case keeps
+# what they recorded -- a `verdict` or `status: measured` -- and may not declare one as a run to
+# come. `sublet` is not here: the APR corpora's `sublet` is the pools port's mode, which still runs;
+# the plain corpora's recorded `sublet` readings were the heap's.
+RETIRED = {
+    "sysalloc-sublet": {"oracle"},
+    "sublet-svheads": {"oracle"},
+    "sublet-chunks": {"oracle"},
+    "sublet-malloc": {"oracle"},
+    "sublet-full": {"oracle"},
+    "sublet-carve": {"oracle"},
 }
 WORDS = {"eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
          "thirteen": 13, "twenty": 20}
@@ -267,7 +261,7 @@ def check_cases(corpus, decl, dirs, problems):
     # corpus may mix .t and .pl, or .sql and anything else, without splitting.
     source_name = "case.c" if decl["case_schema"] == "case-json" else None
     live = {"true": 0, "false": 0, "not_asserted": 0}
-    arm_keys = dict(ARM_ORACLES)
+    arm_keys = {**ARM_ORACLES, **RETIRED}
     for name, keys in decl.get("arm_keys", {}).items():
         arm_keys[name] = set(keys)
     provenance = 0
@@ -361,6 +355,10 @@ def check_cases(corpus, decl, dirs, problems):
                 # output to look wrong.
                 if name not in arm_keys:
                     problems.append(f"{where}: arm {name!r} is not in SCHEMA.md")
+                    continue
+                if name in RETIRED and not ("verdict" in arm or arm.get("status") == "measured"):
+                    problems.append(f"{where}: arm {name!r} was retired on 2026-10-11; only a "
+                                    f"recorded reading may name it")
                     continue
                 if arm.get("status") == "not written":
                     continue
@@ -525,6 +523,8 @@ def self_test():
         # gate that spots it.
         ("a misspelled arm hidden behind 'not written'",
          lambda c: c["arms"].update(spatail={"status": "not written"})),
+        ("a retired arm declared as a run to come",
+         lambda c: c["arms"].update({"sysalloc-sublet": {"status": "not written"}})),
         # A duplicate leaves every table, so one naming nothing would silently drop a case.
         ("duplicate_of naming no sibling case", lambda c: c.update(duplicate_of="99_no_such_case")),
     )

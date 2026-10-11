@@ -38,7 +38,7 @@ static unsigned long addr(const void *p) { return (unsigned long)(uintptr_t)p; }
 
 #ifdef FFC_SUBLET_CARVE
 #include <sublet/sublet.h>
-/* musl-capstone/runtime/sublet_heap.c: the block stays LINEAR in *out, the heap keeps its handle. */
+/* runtime/virtual/heap.c: the block stays LINEAR in *out, the heap keeps its handle. */
 unsigned long __capstone_sublet_malloc_linear(size_t n, capstone_cap_slot *out);
 void __capstone_sublet_free_linear(unsigned long base);
 #define FFC_PIECES 32

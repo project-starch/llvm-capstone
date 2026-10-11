@@ -110,16 +110,17 @@ campaign.
 | Arm | System allocator | Nested allocator | Process revocation policy |
 |---|---|---|---|
 | `capstone` | Shared SDK first-fit heap (`level0.c`) | Original application implementation | Existing Capstone runtime |
-| `capstone-sublet`, profile `nested` | Same first-fit heap | Application's Sublet integration | Existing Capstone runtime |
-| `capstone-sublet`, profile `outer-malloc` | Sublet malloc | Original application implementation | Existing Capstone runtime |
+| `capstone-sublet` | Same first-fit heap | Application's Sublet integration | Existing Capstone runtime |
 | `cheribsd-revocation-on` | Default CheriBSD malloc | Original application implementation | Explicitly enabled |
 | `cheribsd-revocation-off` | Same binary and malloc | Same implementation | Explicitly disabled |
 
-Each plan has exactly four arms and exactly one profile. The nested profile
-addresses the nested-allocator paper question. The outer-malloc profile is
-a separate comparison continuing the earlier experiments. Neither means
-disabling the Capstone ISA. The first-fit heap is the SDK's arena allocator, not jemalloc;
-cross-platform differences include allocator policy and OS/runtime differences.
+Each plan has exactly four arms and addresses the nested-allocator paper
+question. No arm means disabling the Capstone ISA. The first-fit heap is the
+SDK's arena allocator, not jemalloc; cross-platform differences include
+allocator policy and OS/runtime differences. Until 2026-10-11 a plan also took
+a profile, and the `outer-malloc` profile's `capstone-sublet` arm ran the
+original application on the Sublet heap. That profile was removed with the
+heap; its recorded campaigns stay as they are.
 
 Until 2026-10-10 `study.py` also planned a `nested-poisoncap` comparison
 (`capstone`, `capstone-sublet`, `poisoncap-spatial`, `poisoncap-temporal`) from a
@@ -147,7 +148,7 @@ sources, build trees, local bindings and raw output belong under
 source capstone/tests/capstone-test-env.sh
 python3 capstone/experiments/study/study.py list
 python3 capstone/experiments/study/study.py plan \
-  --profile nested --suites sqlite-speedtest1 cpython-pyperformance mruby-upstream \
+  --suites sqlite-speedtest1 cpython-pyperformance mruby-upstream \
   --repeat 3 --seed 20260927 --out "$STUDY_ROOT/plan.json"
 ```
 
@@ -187,7 +188,6 @@ binding format is:
   "suite/case@variant": {
     "source": <exact source object from catalog>,
     "application_version": <matching application version>,
-    "profile": "nested" | "outer-malloc",
     "parameters": <exact parameters from plan>,
     "adaptation": <description of unchanged and adapted upstream behavior>,
     "oracle_reference": <preserved native reference stdout file>,

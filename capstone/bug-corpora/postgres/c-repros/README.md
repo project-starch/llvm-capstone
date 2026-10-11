@@ -33,7 +33,7 @@ record of what was measured; no verdict is taken from it.
 
 ## Building and running
 
-    # once per arm: an application SDK built with the arm's heap
+    # once per arm: an application SDK of the arm's profile (physical: level0)
     bash shared/build-domain.sh <SDK> <OUT>          # cases, controls.dom, build.json (the SDK's heap)
     python3 shared/run-arm.py --arm spatial --state <capstone-vm state> --bindir <OUT> \
         --llvm-bin <compiler>/bin

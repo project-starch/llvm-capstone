@@ -53,9 +53,9 @@ def write_new(path, value):
         stream.write('\n')
 
 
-def make_plan(catalog, profile, suites, repeats, seed, matrix=None, comparison='cheribsd'):
-    if profile not in ('nested', 'outer-malloc') or repeats < 1:
-        raise ValueError('explicit profile and positive repetitions required')
+def make_plan(catalog, suites, repeats, seed, matrix=None, comparison='cheribsd'):
+    if repeats < 1:
+        raise ValueError('positive repetitions required')
     if comparison not in COMPARISONS:
         raise ValueError('unknown comparison')
     selected_arms = COMPARISONS[comparison]
@@ -91,7 +91,7 @@ def make_plan(catalog, profile, suites, repeats, seed, matrix=None, comparison='
             for cell in block:
                 cell['id'] = identity(cell)[:20]
                 cells.append(cell)
-    result = dict(schema_version=1, profile=profile, seed=seed, repeats=repeats,
+    result = dict(schema_version=1, seed=seed, repeats=repeats,
                   catalog_sha256=identity(catalog), workloads=workloads, cells=cells)
     if comparison != 'cheribsd':
         result.update(schema_version=2, comparison=comparison)
@@ -115,8 +115,8 @@ def qualified_points(plan, key, binding):
         raise ValueError('benchmark source must be pinned before qualification')
     if binding['application_version'] != spec['application']['version']:
         raise ValueError('application version mismatch')
-    if binding['profile'] != plan['profile'] or set(binding['arms']) != set(ARMS):
-        raise ValueError('all four arms of the same profile are required')
+    if set(binding['arms']) != set(ARMS):
+        raise ValueError('all four arms are required')
     if binding['parameters'] != spec['parameters'] or not binding['adaptation']:
         raise ValueError('work parameters must match the plan; adaptation description required')
     if not re.fullmatch('[0-9a-f]{64}', binding['oracle_reference_sha256']):
@@ -149,9 +149,8 @@ def qualified_points(plan, key, binding):
             raise ValueError('point names another application')
         point.update(arm=arm, allocations=True, **oracle)
         if platform(arm) == 'capstone':
-            expected_heap = 'sublet' if arm == 'capstone-sublet' and plan['profile'] == 'outer-malloc' else 'level0'
-            expected_nested = suite['application'] if arm == 'capstone-sublet' and plan['profile'] == 'nested' else 'none'
-            if (build['heap'], build['nested']) != (expected_heap, expected_nested):
+            expected_nested = suite['application'] if arm == 'capstone-sublet' else 'none'
+            if (build['heap'], build['nested']) != ('level0', expected_nested):
                 raise ValueError('outer heap / internal allocator scope does not match the arm')
             point['image'] = item['binary']
         else:
@@ -188,7 +187,7 @@ def attempts(plan, paths):
             if row['point']['arm'] != known[key]['arm']:
                 raise ValueError('attempt arm disagrees with its planned cell')
             cell = known[key]
-            if any(meta[k] != cell[k] for k in ('workload', 'repetition')) or meta['profile'] != plan['profile']:
+            if any(meta[k] != cell[k] for k in ('workload', 'repetition')):
                 raise ValueError('attempt workload or repetition disagrees with its planned cell')
             previous = bindings.setdefault(cell['workload'], meta['binding_sha256'])
             if previous != meta['binding_sha256']:
@@ -217,7 +216,7 @@ def emit(plan, bindings, guest, rows, repeat=None):
         point = copy.deepcopy(qualified[cell['workload']][cell['arm']])
         point['id'] = 'study-' + cell['id']
         point['study'] = dict(plan_id=plan['plan_id'], cell_id=cell['id'],
-            workload=cell['workload'], repetition=cell['repetition'], profile=plan['profile'],
+            workload=cell['workload'], repetition=cell['repetition'],
             binding_sha256=identity(bindings[cell['workload']]))
         points.append(point)
     return points, blocked
@@ -251,7 +250,6 @@ def main():
     listing.add_argument('--catalog', type=Path, default=HERE/'catalog.json')
     planning = sub.add_parser('plan')
     planning.add_argument('--catalog', type=Path, default=HERE/'catalog.json')
-    planning.add_argument('--profile', choices=['nested', 'outer-malloc'], required=True)
     planning.add_argument('--comparison', choices=COMPARISONS, default='cheribsd')
     planning.add_argument('--suites', nargs='+', required=True)
     planning.add_argument('--repeat', type=int, default=3)
@@ -273,7 +271,7 @@ def main():
             print(f"{suite['id']}: {len(suite['cases'])} cases; {suite['adaptation_status']}; {suite['kind']}")
         return
     if args.command == 'plan':
-        plan = make_plan(read(args.catalog), args.profile, args.suites, args.repeat, args.seed,
+        plan = make_plan(read(args.catalog), args.suites, args.repeat, args.seed,
                          read(args.matrix) if args.matrix else None, args.comparison)
         write_new(args.out, plan)
         print(f"{len(plan['cells'])} planned attempts; plan {plan['plan_id']}")

@@ -1,5 +1,6 @@
 #!/bin/bash
-# Localise the revoking arms' control failure: one recursion depth per run, all three arms.
+# One recursion depth per run on the level0 arm. It localised the Sublet-heap arms' control failure
+# on 2026-10-06; those arms were removed with the heap on 2026-10-11.
 set -u
 # REPO is the llvm-capstone tree this runs from, KIT the scratch directory
 # holding the arm images and the staged share. Both default off this script's
@@ -9,7 +10,7 @@ REPO=${REPO:-$(cd "$HERE/../../../../.." && pwd)}
 KIT=${KIT:-${CAPSTONE_TMP_ROOT:-/tmp/capstone}/mruby-arms}
 W=$REPO; K=$KIT; RT=$W/capstone/runtime
 OUT=$K/results; mkdir -p $OUT
-export PYTHONPATH=$RT/host CAPSTONE_QEMU_LOCK=$K/qemu.lock CAPSTONE_REV_NODES=16777216
+export PYTHONPATH=$RT/host CAPSTONE_QEMU_LOCK=$K/qemu.lock
 ROOT=/tmp/capstone/step-one-ecall; S=$K/vm-depth
 python3 -m capstone_vm --state $S down >/dev/null 2>&1; rm -rf $S
 python3 -m capstone_vm --state $S up --qemu $ROOT/qemu-build/qemu-system-riscv64 \

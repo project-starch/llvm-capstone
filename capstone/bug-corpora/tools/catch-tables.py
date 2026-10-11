@@ -11,7 +11,10 @@ where a freed chunk HELD in quarantine (the stale pointer followed, the chunk ne
 as caught and is shown apart from a fault; (2) Sublet in malloc -- Sublet only as the system
 allocator, the program's nested allocator stock; (3) Sublet in nested -- the nested allocator's
 Sublet port (for a plain case, the program's whole configuration with that port live). Then one row
-per bug. --board-json also writes the rows, for the slides.
+per bug. --board-json also writes the rows, for the slides. Where a group's column 2 or 3 is a
+physical Sublet-heap arm (`sublet` on a plain corpus, `sublet-malloc`, `sublet-full`, `sublet-carve`,
+`sublet-chunks`, `sysalloc-sublet`, `sublet-svheads`), it reads that arm's RECORDED verdicts: the arms
+were retired with the heap on 2026-10-11. --board-virtual is the same rows on the virtual profile.
 
 --all adds the other six programs -- CPython, httpd, mruby, Perl, PostgreSQL, SQLite -- to the board,
 and only to the board: their corpora carry the three columns' arms but not the four-column set.
@@ -120,9 +123,10 @@ def col3_arm(corpus, arms):
 # --all: per group of the other six programs, (allocator layer, nested, column-2 arm, column-3 arm).
 # nested None: a whole-program corpus whose cases cross different boundaries and are not split here.
 # Column 2 for a nested group is `sublet-malloc`, the same arm the three programs use; none of these
-# groups has measured it yet, so those cells are holes. Perl's `sysalloc-sublet` is that arm under
-# its own name (the Sublet heap, Perl's SV arenas stock). Column 3 is the group's Sublet port: the
-# APR ports' `sublet`, Perl's SV-head port. mruby is measured on the virtual profile: column 2 is
+# groups measured it before it was retired with the Sublet heap (2026-10-11), so those cells stay
+# holes. Perl's `sysalloc-sublet` is that arm under its own name (the Sublet heap, Perl's SV arenas
+# stock; recorded, retired the same day). Column 3 is the group's Sublet port: the APR ports'
+# `sublet`, Perl's SV-head port. mruby is measured on the virtual profile: column 2 is
 # `virtual-malloc`, column 3 its GC-slot patch 0008, `virtual-nested-pools`. pymalloc,
 # PostgreSQL and SQLite are measured on the virtual profile instead: column 2 is `virtual-malloc`,
 # column 3 the nested allocator's port on a block virtual mallocng lends. postgres/c-repros are
