@@ -374,6 +374,10 @@ Cheap habits that catch all of the above:
   the table. Both retractions on 2026-08-19 were available to that question in advance: a
   tag-only detector obviously cannot see corrupt metadata, and a trap PC obviously names the
   faulting instruction rather than the one that produced its operand.
+  **A fix for WRONG VALUES is confirmed by checking the values against an independent reference,
+  never by an anomaly detector built around the old symptom.** "R-52 fixed on silicon" (2026-10-11)
+  rested on a finite-and-monotone count, while the same boot printed `now()` = 0.24 s beside a 240 s
+  integer clock. It was retracted the same evening (23213fb4a701).
 * **Never filter between a gate and its exit status.** A pipe replaces `$?` with the last stage's,
   so `gate | tail && commit` commits what the gate rejected. Redirect, never pipe. And invoke a
   gate by **ABSOLUTE PATH**: one that fails to START exits 127 and reads exactly like one that ran
