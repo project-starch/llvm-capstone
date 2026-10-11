@@ -21,6 +21,11 @@ pointer (whose capability it takes) and flag bits, _PyGCWord_SETBITS replaces
 bits and keeps the word's capability, _PyGCWord_PTR strips flags. A count in
 _gc_prev is a word no one dereferences; _PyGCHead_SET_PREV therefore takes the
 capability from the new pointer and only the flag bits from the old word.
+A NULL prev, which the trashcan stores at the end of its delete_later chain,
+has no capability to offset: the word is then the flag bits alone, and
+_PyGCHead_PREV returns NULL for a word with no address part. Offsetting the
+NULL faulted (cause 24) in _PyTrash_thread_deposit_object on the first deep
+deallocation (results/2026-10-11-same-answers, finding F2).
 Elsewhere the helpers expand to exactly the upstream expressions.
 
 _Py_GC_WORD_AS_POINTER selects the pointer representation on any platform.
@@ -91,7 +96,7 @@ keeps the object behind it on the 16-byte boundary a capability needs.
  } PyGC_Head;
  
  #define _PyGC_Head_UNUSED PyGC_Head
-@@ -172,22 +211,22 @@
+@@ -172,22 +211,29 @@
  // Lowest bit of _gc_next is used for flags only in GC.
  // But it is always 0 for normal code.
  static inline PyGC_Head* _PyGCHead_NEXT(PyGC_Head *gc) {
@@ -108,6 +113,11 @@ keeps the object behind it on the 16-byte boundary a capability needs.
  static inline PyGC_Head* _PyGCHead_PREV(PyGC_Head *gc) {
 -    uintptr_t prev = (gc->_gc_prev & _PyGC_PREV_MASK);
 -    return (PyGC_Head*)prev;
++    // A word whose address part is 0 holds no pointer (the end of the
++    // trashcan's delete_later chain): NULL, with no capability to strip.
++    if ((_PyGCWord_BITS(gc->_gc_prev) & _PyGC_PREV_MASK) == 0) {
++        return NULL;
++    }
 +    return (PyGC_Head*)_PyGCWord_PTR(gc->_gc_prev, ~_PyGC_PREV_MASK);
  }
  static inline void _PyGCHead_SET_PREV(PyGC_Head *gc, PyGC_Head *prev) {
@@ -116,13 +126,15 @@ keeps the object behind it on the 16-byte boundary a capability needs.
 -    gc->_gc_prev = ((gc->_gc_prev & ~_PyGC_PREV_MASK) | uprev);
 +    // The pointer, and so the capability, is prev's; only the flag bits are
 +    // carried over from the old word, which may hold a count, not a pointer.
++    // A NULL prev (_PyTrash_thread_deposit_object, first deposit) has no
++    // capability to offset: the word is then the flag bits alone, as upstream.
 +    assert(((uintptr_t)prev & ~_PyGC_PREV_MASK) == 0);
-+    gc->_gc_prev = _PyGCWord_MAKE(
-+        prev, _PyGCWord_BITS(gc->_gc_prev) & ~_PyGC_PREV_MASK);
++    uintptr_t flags = _PyGCWord_BITS(gc->_gc_prev) & ~_PyGC_PREV_MASK;
++    gc->_gc_prev = prev ? _PyGCWord_MAKE(prev, flags) : (_PyGCWord)flags;
  }
  
  static inline int _PyGC_FINALIZED(PyObject *op) {
-@@ -195,7 +234,7 @@
+@@ -195,7 +241,7 @@
      return _PyObject_HAS_GC_BITS(op, _PyGC_BITS_FINALIZED);
  #else
      PyGC_Head *gc = _Py_AS_GC(op);
@@ -131,7 +143,7 @@ keeps the object behind it on the 16-byte boundary a capability needs.
  #endif
  }
  static inline void _PyGC_SET_FINALIZED(PyObject *op) {
-@@ -203,7 +242,8 @@
+@@ -203,7 +249,8 @@
      _PyObject_SET_GC_BITS(op, _PyGC_BITS_FINALIZED);
  #else
      PyGC_Head *gc = _Py_AS_GC(op);
@@ -141,7 +153,7 @@ keeps the object behind it on the 16-byte boundary a capability needs.
  #endif
  }
  static inline void _PyGC_CLEAR_FINALIZED(PyObject *op) {
-@@ -211,7 +251,7 @@
+@@ -211,7 +258,7 @@
      _PyObject_CLEAR_GC_BITS(op, _PyGC_BITS_FINALIZED);
  #else
      PyGC_Head *gc = _Py_AS_GC(op);
