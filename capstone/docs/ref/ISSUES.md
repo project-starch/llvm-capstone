@@ -897,7 +897,7 @@ te by the RTL lane, 2026-09-24.
 > supervised-CALL change (the supervised domain's writable window holds only its own images, which the next escape
 > rewrites before any resume).
 
-### R-51 — after a RETURN, the resumed domain runs with an UNTAGGED PC on silicon: no PC-capability check (bounds, execute, revocation) until the next capability control-flow change; capstone-qemu keeps the PC capability, so emulator evidence of PC enforcement after a yield does not transfer `OPEN — found 2026-10-05 by reading the RTL at 776d9d859 (rtl-oracle; three quotes re-verified by the board lane) and capstone-qemu; CONFIRMED ON SILICON 2026-10-05 by a matched pair on 776d9d859 (below); FIX APPROVED FOR SYNTHESIS BY THE LEAD 2026-10-10 as part of next-bitstream-r51-r52 0568f93a9 (with R-52; lint at baseline, sweep 90/90 identical, testlist_sup 76/76 identical). Its consequence for trap entry is measured: after the fix a resumed domain's trap handler runs under the domain's code capability as at a first entry, and a vector of 0 (the monitor's bare domains) storms ILLEGAL_INSTR identically on both trees, so the R-43 list's a10 is predicted unchanged (branch r51-trap-after-yield c2e2ed44b)`
+### R-51 — after a RETURN, the resumed domain runs with an UNTAGGED PC on silicon: no PC-capability check (bounds, execute, revocation) until the next capability control-flow change; capstone-qemu keeps the PC capability, so emulator evidence of PC enforcement after a yield does not transfer `FIXED ON SILICON 2026-10-11 in caplifive_r51r52_0568f93a9 (flashed on the lead's word; the after-yield arm reads 0 / 0x1C / 0x1C twice, the before-yield arm 0x1C / 0x1C unchanged, a10 unchanged as predicted; see the 2026-10-11 box); was: OPEN — found 2026-10-05 by reading the RTL at 776d9d859 (rtl-oracle; three quotes re-verified by the board lane) and capstone-qemu; CONFIRMED ON SILICON 2026-10-05 by a matched pair on 776d9d859 (below); FIX APPROVED FOR SYNTHESIS BY THE LEAD 2026-10-10 as part of next-bitstream-r51-r52 0568f93a9 (with R-52; lint at baseline, sweep 90/90 identical, testlist_sup 76/76 identical). Its consequence for trap entry is measured: after the fix a resumed domain's trap handler runs under the domain's code capability as at a first entry, and a vector of 0 (the monitor's bare domains) storms ILLEGAL_INSTR identically on both trees, so the R-43 list's a10 is predicted unchanged (branch r51-trap-after-yield c2e2ed44b)`
 
 **What the RTL does.** All quotes below are at capstone-ariane 776d9d859.
 - RETURN faults unless its resume operand rs1 is an integer (`capstone_dyn_unit.anvil:329`, `rs1...!=NOT_CAP` raises
@@ -962,6 +962,22 @@ at the resume, as under QEMU. Adoption is the lead's decision.
 **For the lead.** Whether this is acceptable (the code region is still bounded by the domain's memory capability),
 whether RETURN should restore the domain's PC capability, and how any paper claim about code-capability enforcement
 for delegated applications should be worded. Those are the lead's decisions.
+
+
+> # 2026-10-11 — FIXED ON SILICON (caplifive_r51r52_0568f93a9, capstone-ariane 0568f93a9 = 776d9d859 + R-51 + R-52)
+> - **The matched pair (bare, r51-return-pcc):**
+>   - after the yield **0 / 0x1C / 0x1C, twice** (776d9d859: 0 / 0xBAD / 0), so the out-of-bounds integer jump after a
+>     RETURN yield now faults 28;
+>   - before the yield 0x1C / 0x1C, unchanged.
+> - **The acceptance controls are unchanged:**
+>   - the S-16 bare set, 18/18 with all 98 readings identical;
+>   - the R-43 list a1..a10, identity-exact, with a10 exactly as predicted (mcause 25 at DBAS+0x4354, refusal
+>     LATCHED);
+>   - C5u, quiet overhead +0.666 % (was +0.680 %);
+>   - s10b 8 / 1 and s06agg 64;
+>   - the memcached B-series: b2 retval 0, and oracle e0a254c47e7ee28c.
+> - The record is llvm-capstone docs/plans/b0-silicon-delegated-runtime.md, "Acceptance RESULT:
+>   caplifive_r51r52_0568f93a9.bit".
 
 ### R-46 — a commit-stage refetch keeps the PC-capability metadata, so a younger CJALR's target metadata can leak into the refetched code `OPEN — accepted for the R-43/R-45 bitstream by the project lead (2026-09-29); predates R-45, which makes it routine`
 

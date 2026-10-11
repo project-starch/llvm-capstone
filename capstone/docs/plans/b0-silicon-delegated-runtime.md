@@ -1471,6 +1471,164 @@ The two images both enter at 0x10000 (R-3), so they get two boots. Rungs in each
   - A wedge = the monitor's minted-slot path. Its apertures are read (BAKED_WEDGE_APERTURES).
   - The R-29 hazard is fixed on this bitstream, and the memcpy guard stays on anyway.
 
+## B3e pre-registered (2026-10-06, before any such bitstream exists): R-52's fix on silicon
+R-52 (was S-18) is the issue stage's FPR clobber predicate, negated since capstone-ariane 4891d379a (2026-04-24). Its
+fix is capstone-ariane 546807884 (branch s18-fpr-clobber, off sup-call 776d9d859). That commit is RTL-lane work,
+verified here at the source: one predicate un-negated, plus tests. It is not synthesized. Building it into a
+bitstream, and the reflash, are the lead's call.
+
+**If a bitstream carries 546807884**, the confirmation boot is B3c again with nothing changed but the firmware's
+bitstream. The images are memcached ba7e6921cf27f2b6, harness b433cd6ec88207a4 and probe 5aa140cf39647700. The
+rungs are b0-stats, `b3-setclock`, `b3-oracle`, `b3-clock` and b0-stats2, with `b3-clock` last. Predictions:
+- b0-stats and b0-stats2: retval 0. b3-setclock: `date before` < 2,592,063, then the clock is set.
+- **b3-oracle:** transcript e0a254c47e7ee28c, 1,931,207 bytes, as on 776d9d859; the domain is soft-float.
+  **The harness's `stop_seconds` is finite and positive** (QEMU reads 1.1 to 1.5). A value on the board under 60 s
+  is predicted, not pinned.
+- **b3-clock:**
+  - **arith reads 0 anomalies of 200,000.**
+  - The self-test reports exactly 1 of 12 changed registers (fs5).
+  - hold-native and hold-domain report 0 of 12.
+  - hold-domain's `stop_seconds` is finite.
+  - The probe returns rc 0, and the rung returns.
+- What would refute what:
+  - Any arith anomaly refutes "546807884 is the whole of R-52 on silicon".
+  - The rung still not returning, with arith at 0, makes the B3c hang a separate issue, no longer plausibly R-52's
+    stale reads.
+  - A changed oracle hash would mean the bitstream changed more than the FPU path.
+- The control is 776d9d859's own B3c record: 200,000 anomalies, `stop_seconds=inf`, and the rung not returning.
+
+## Acceptance of the R-51 + R-52 bitstream, pre-registered 2026-10-10 (before any build; hash to be pinned)
+**PINNED 2026-10-11, before the flash.**
+- The bitstream is `caplifive_r51r52_0568f93a9.bit`, sha256 16b5d8dad523f7e226feaf8aa594c1a77af95ab189d9e9857bde0da819fc158e,
+  11,443,722 B, sealed by the synth lane from capstone-ariane 0568f93a9. The pulled copy's hash matches.
+- Routed: WNS -8.368 ns, inside the predicted band. No LUTLP, no new startpoints on the failing set, and one routed
+  loop with the TIMING-23 arc identical to 776d9d859's.
+- Flagged: route_design took about 156 min, against 20-31 for the last three images, and crossed the synth machine's
+  3h30m mark. The lead chose to flash it anyway (2026-10-11). The fallback 776d9d859 stays registered on the console.
+- REFUSAL_RECORD=1 for this name: the R-43 scripts' name pattern was extended. refusal_record.py's name warning will
+  print on each R-43 boot, which is expected and does not block.
+The build is the RTL lane's to batch and hand to the synth lane. A combined branch exists as capstone-ariane
+`sup-r51-r52` d15a836fa: 776d9d859 plus ef8900e2d, f4e4d6051 and 546807884, and its core/ diff equals the two fix
+branches' hunks byte for byte. The flash is the lead's word.
+- These predictions are for a bitstream whose RTL is 776d9d859 plus those two fixes.
+- Anything else the RTL lane batches comes with its own predictions. Pin the bitstream's sha256 here before the
+  first boot.
+
+**Software reading of R-51 (checked 2026-10-10).**
+- Neither the FPGA monitor (caplifive-sbi 1f9aedd) nor the gp-captable glue reads or writes the PC word the switcher
+  parks at a RETURN. The monitor arms supervision with its own private save area (`sup_save_area`), and STEP treats the
+  domain's context as opaque. The glue keeps its own frames.
+- capstone-qemu has always restored the PC capability at RETURN (`swap_pc`). So B0-B3 have run in QEMU under exactly
+  the semantics R-51's fix brings to silicon.
+- Prediction: R-51's fix changes no B-series reading on the board.
+
+**Boot A, bare (sup-bare harness; folders under tests/rtl-smoke/):**
+- The S-16 control set: 18 of 18 complete, with accept776's readings.
+- r51-return-pcc, the three CAPPRINT readings: the shared word after the first return, the shared word after the
+  second, and mcause in the caller.
+  - **After the yield: 0 / 0x1C / 0x1C. On 776d9d859 the board read 0 / 0xBAD / 0.** The third reading changes too: the
+    domain now traps, and its trap writes the mcause the caller reads.
+  - Before the yield: 0x1C / 0x1C, unchanged.
+  - Pinned 2026-10-10 from the RTL lane's run on 0568f93a9 (sup-run20 .sup/batch). The committed trace reads x29 = 0, then
+    0x1c, then x5 = 0x1c in the after arm, and x29 = 0x1c, then x5 = 0x1c, in the before arm. The test header's "#3 = 0"
+    describes 776d9d859.
+- s10b-storebuf-primed traps on 8 of 8 legs, and s06agg reads 64, both unchanged. R-52's fix touches neither path.
+
+**Boot B, Linux (the shared monitor's acceptance):** the R-43 list a1..a10 unchanged, and C5u completing with a
+supervision overhead within 0.1 points of 776d9d859's +0.680 %.
+- **Exception: a10's trap reading may change, and that would be R-51's, not a regression.**
+  - The pre-synthesis audit (2026-10-10) found it: at a trap the frontend jumps to mtvec but keeps the PC metadata
+    (frontend.sv:436-437, :455). QEMU swaps to ctvec.
+  - So once a domain has yielded with RETURN, its trap handler runs under the domain's code capability, as it already
+    does at first entry. A handler outside that capability faults 28.
+  - a10 is R-35's stale probe, called several times. Its revocation fault (mcause 25, latched mepc DBAS+0x4354, on
+    776d9d859) comes in a later invocation, so after a yield.
+  - ~~Predicted: either mcause 25 as before, or a 28 at mtvec.~~ **Sharpened 2026-10-10 by the RTL lane's sim**
+    (r51-trap-after-yield.S on 776d9d859 and 0568f93a9):
+    - a10's seal slot 1 is zero, so mtvec = 0: monitor 2dcd3a5 fills it only under CAPSTONE_DOMAIN_TRAP_VECTOR, which no
+      build defines. With mtvec = 0, the handler fetch at address 0 raises ILLEGAL_INSTR at decode, before pc_cap_check
+      can apply, identically on both trees: 199,481 exceptions at pc 0 in each.
+    - The trap log filters ILLEGAL_INSTR, which is why 776d9d859's a10 kept 25 through the storm.
+    - **Predicted: k800 4, ENT1, and the trap log mcause 25 at DBAS+0x4354 with tval 0xac100000, all unchanged.** a10
+      still wedges by design.
+    - The only refuting reading is cause 28 with mepc 0. It needs the board's fetch at 0 to return a valid instruction.
+  - The same sim confirms the mechanism where a handler is real but outside the code capability. After the yield the fix
+    faults at the handler fetch in a loop, where 776d9d859 ran the handler. At first entry both trees loop alike. With
+    the handler inside, both are identical.
+  - The rule: a post-yield fault on the new bitstream reads what a first-entry fault reads on the board in the same
+    configuration.
+  - Supervised escapes are unaffected: the escape already parks a tagged word (commit_stage.sv:741-742).
+  - The RTL lane is asked for a sim arm that settles a10's outcome before the reflash, and for a diff of
+    testlist_sup.yaml between 776d9d859 and 0568f93a9.
+
+**Boot C, Linux, the B-series** (private image; process-ABI module; FPGA monitor 1f9aedd).
+- The rungs, in order: b0-stats, b0-hello, b1-thread, b2-memcached, b3-setclock, b3-oracle, b3-clock (last), b0-stats2.
+- b0-hello is byte-exact, and b1-thread returns 124.
+- **Images, staged 2026-10-10:** private image b844f0dbc6cf, firmware 1f9cdf960640 (monitor 1f9aedd). In it:
+  - b0-hello db4385ff32deddf6, B1a's control;
+  - b1-thread ac2369aa6a548926;
+  - memcached ba7e6921cf27f2b6, as b2-memcached.dom and b3-oracle.dom;
+  - harness b433cd6ec88207a4 and probe 5aa140cf39647700.
+- **Why b1-thread is not B1f's image.** B1f's 29b82435ce095d98 predates the carve alignment, and check-repr.py
+  finds it AT RISK at 7 of 255 bases. In a boot with several rungs the block need not land at B1f's 0xac100000, so R-11
+  could fault it and confound R-51's acceptance.
+  - ac2369aa6a548926 is the aligned build, OK at all 255 bases.
+  - In QEMU with fabrication off (2026-10-10, firmware d5c57ee765c9) it gave `B1: thread returned 124`, and b0-hello
+    its hello line.
+- b2-memcached returns retval 0. b3-oracle reads e0a254c47e7ee28c, 1,931,207 bytes, with job exit 0.
+- B3e's readings (section above): arith 0 of 200,000, the self-test 1 of 12, holds 0 and 0, the harness's
+  `stop_seconds` finite, and the b3-clock rung returning.
+
+**What would refute what.**
+- A B-series failure that QEMU does not show, and that appears only after a yield: the domain does depend on an
+  untagged resume PC. That would be a new finding about R-51's fix, not a pass.
+- r51 still reading 0xBAD: the fix is not in the build. Check the bitstream's provenance first.
+- B3e's refutations stand as written above.
+
+## Acceptance RESULT: caplifive_r51r52_0568f93a9.bit (2026-10-11 14:53-17:56): R-51 and R-52 FIXED ON SILICON
+Flashed on the lead's word (14:51-14:53). The console read back the new name after the power cycle; 776d9d859 stays
+registered. Every row below is against the pre-registration above, and against 776d9d859's own run of the same images.
+
+- **S-16 control set (bare, 14:53-15:09):** 18 of 18 arms complete. All 98 readings are identical to 776d9d859's (the
+  comparator reports two arms that do differ as different, and every arm carried 3-8 readings).
+- **R-43 list (15:11-17:07):**
+  - a1-a6, a8 and a9 match 776d9d859's result lines on every identity field:
+    - k800 retval 4 / instret 1089, and R1 end 160/191/160/0/0;
+    - speedtest1-ran 1320222911 and 1320264012;
+    - live-sweep sums 544 / 4352 / 17408;
+    - P1 hash 112006 38bb59fd, and the sublet counters exact.
+  - Timing is within 0.05 %: cell 5 +0.021 %, ratio 1.3516 against 1.3519.
+  - **a10 exactly as predicted:** mcause 25 (sw=255 0x99), mepc DBAS+0x4354, tval 0xac100000, refusal record LATCHED
+    (id 95, parity ok), rev_node bytes identical. Not the refuting cause 28 at mepc 0.
+  - The first attempt at 15:09 was refused by preflight: the new name was not in its bitstream table. It was rerun
+    with PREFLIGHT_DTS_NODES=65536, which the check verified against the firmware, and the name was added to the table
+    (dev 1e9a1abf866f).
+  - **a7 ladder: 17/17 retval == oracle, but instret differs on 2 of 17 rungs** against 36a641e0b's file:
+    coremark_matrix 31803 against 31560, and beebs_insertsort 971 against 962, cycles +7.4 % each.
+    - Attributed to the TOOLCHAIN, not the bitstream. run_ladder_perf_fpga.py rebuilds every rung at run time (16:16),
+      and libLLVMCapstoneCodeGen.so was rebuilt on 2026-10-07, after both references. The toolchain check flags it
+      STALE.
+    - A ladder rung has no post-yield region for R-51 to act on, and no FP instruction for R-52.
+    - The bare arm, built with the same clang for riscv64, is identical to 09-29 and 10-02.
+    - Not proven by a same-binary rerun on 776d9d859: those images are gone.
+- **C5u:** k800 4 twice and every hash 112006 38bb59fd. Quiet supervision overhead **+0.666 %** (776d9d859: +0.680 %),
+  quiet + fence +0.687 %, loud +13.824 %.
+- **R-51 (bare, matched pair, N=2):**
+  - **after the yield 0 / 0x1C / 0x1C, twice** (776d9d859: 0 / 0xBAD / 0);
+  - before the yield 0x1C / 0x1C, unchanged.
+  - The first before-arm attempt had no result: GDB timed out setting pc after load_image (infra). The retry read it.
+- **s10b** 8 / 1, and **s06agg** 64 with k800 4: unchanged.
+- **Boot C, the B-series (17:43-17:50, firmware 1f9cdf960640):**
+  - b0-stats and b0-stats2 OK; b0-hello byte-exact; b1-thread 124; b2-memcached retval 0.
+  - b3-setclock read `date before: 154` at an uptime of 155 s.
+  - **b3-oracle: transcript e0a254c47e7ee28c, 1,931,207 bytes, with the harness's stop_seconds=1.07** (776d9d859: inf).
+  - **b3-clock RETURNED** (it hung on 776d9d859), with arith **0 anomalies of 200,000** (776d9d859: 200,000 of
+    200,000) and hold-domain stop_seconds 0.37.
+  - Its retval 38 is the hold arms. All three read 12 of 12 changed, and the self-test read 12, not 1, so by B3e's
+    own rule they are VOID. Their uniform reading (the caller's FPRs at hold_wait's entry) is B3f's question below.
+- **Verdict:** R-51's and R-52's fixes hold on silicon as pre-registered, and every control is unchanged. The two
+  departures are attributed (a7) or under diagnosis (B3f); neither is a regression of a pre-registered reading.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,

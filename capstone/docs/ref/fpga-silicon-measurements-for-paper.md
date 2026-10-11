@@ -5971,3 +5971,10 @@ boot, and each board image is named by hash.
     - The only rv64gc board build found, sup-bare-2026-10-03-ladder, has no FP result instruction (one `frcsr`, an
       fcsr read) and is cited by neither paper.
   - Still unchecked: boots before 2026-09-11, sw52 among them.
+- **R-52 (was S-18) is fixed on silicon** in caplifive_r51r52_0568f93a9 (flashed 2026-10-11):
+  - the native probe reads **0 anomalies of 200,000** (776d9d859: 200,000 of 200,000);
+  - the harness's stop_seconds reads 1.07 (was inf).
+  - Native FP arithmetic on the board is now correct.
+- **R-51 is fixed on silicon in the same bitstream:** a domain's PC capability is enforced after a RETURN yield (the
+  matched pair reads 0 / 0x1C / 0x1C, against 0 / 0xBAD / 0). The memcached B-series and its oracle hash are unchanged
+  on it, and so is the supervision overhead (+0.666 %).
