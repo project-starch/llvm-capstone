@@ -1817,6 +1817,47 @@ What each board reading would mean:
 - S-19's narrowed wording (the B3h audit) holds, and is now superseded by this reading. The trigger is any FP save,
   not a switch.
 
+## B3j pre-registered (2026-10-12, before the boot): the R-52 residual's shape, against an FPU-free reference
+Probe b3-fpnow-probe.c (FPGA build 4e4e7604faca561b) computes sec + nsec / 1e9 in four exact asm orders:
+- A: now()'s order, the second fcvt.d.l issued while the fdiv.d is in flight;
+- B: the B3c arith loop's order, both fcvt.d.l before the fdiv.d;
+- C: A with 40 nops after the fdiv.d;
+- D: A with the seconds fcvt.d.l moved before the fdiv.d.
+Each shape runs 20,000 times on live CLOCK_MONOTONIC readings and 20,000 times on a fixed pair (239 s, 702477440 ns).
+Every result is checked by decoding the double's bits in INTEGER arithmetic: the whole seconds must equal tv_sec and
+the fraction be within 2 ns of tv_nsec.
+
+The checker's own control: it accepts the correct double for the fixed pair (0x406df67ab1f7df4a, computed on the host)
+and rejects the value the board's now() returned (0x3fce97c2ffc470de). If either fails, the run is void (rc 255).
+QEMU rehearsal (2026-10-12): the control passes, and every shape reads 0 of 20,000 wrong, live and fixed.
+
+Predicted on caplifive_r51r52_0568f93a9:
+- **A wrong**, most or all of 40,000. It is the shape the board's now() ran, so this is the silicon positive control.
+- **B 0 wrong**: the B3c arith loop read 0 anomalies of 200,000 in this order.
+- C and D are the questions:
+  - C at 0: the hazard is the overlap with the in-flight fdiv.
+  - D at 0: it is the fcvt.d.l issuing behind the fdiv.
+- Either reading, as read, goes to the RTL lane for the residual's directed arm.
+
+## B3j RESULT (2026-10-12 01:13-01:18, firmware 2ff2ac4567ff): the R-52 residual is an fadd reading the in-flight fdiv's result
+- b0-stats and b0-stats2: retval 0. **The checker's control passes** (correct accepted, wrong rejected).
+- **A (now()'s order): 40,000 of 40,000 wrong**, live and fixed alike, as predicted, so the instrument fires on
+  silicon.
+  - The first wrong value: sec 104, nsec 428831120 -> 0x3feb71f814fa0d22, which decodes to 0 s + 857662240 ns. That
+    is EXACTLY twice the fraction: `fadd.d fa0, fa0, fa5` computed fa0 + fa0, the in-flight fdiv's result for both
+    operands, where fa5 should be the younger fcvt.d.l of the seconds.
+  - The board's earlier now() values (0.24, 1.15, 0.09, 1.63, 1.99) are all twice a fraction in [0, 1).
+- **B (both fcvt.d.l before the fdiv.d): 0 wrong. D (the seconds fcvt.d.l moved before the fdiv.d): 0 wrong.**
+- **C (40 nops after the fdiv.d): 1 of 20,000 wrong**, live and fixed. That value was exactly 107.0 s, with the
+  fraction lost.
+  - With the fdiv long finished, this fits S-19 rather than the residual: a preemption between the fdiv and the fadd
+    restores a stale fa0. That is not measured.
+- **So the residual:** a short FP op (fcvt.d.l) issued while an fdiv.d is in flight, whose result the next op
+  consumes, delivers the fdiv's result to that consumer instead of its own.
+  - Removing the overlap (C) or the ordering (D) avoids it.
+  - Handed to the RTL lane for a directed arm in this exact order (N=1 boot; the shape is deterministic,
+    40,000 of 40,000).
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,

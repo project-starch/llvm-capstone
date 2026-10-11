@@ -147,6 +147,12 @@ case "$rung" in
     /test-domains/b3-fpstate-probe; prc=$?
     echo "RESULT $rung retval=$prc"
     ;;
+  b3-fpnow)
+    # B3j (the R-52 residual): sec + nsec/1e9 in four exact instruction orders, checked by an integer-only decode
+    # (b3-fpnow-probe.c). retval = bitmask of the shapes with any wrong result; 255 = the checker's own control failed.
+    /test-domains/b3-fpnow-probe; prc=$?
+    echo "RESULT $rung retval=$prc"
+    ;;
   b3-oracle)
     # B3: memcached's oracle on silicon. The port's harness (ports/memcached/app/host/mc-harness) starts the domain
     # under capstone-job, runs its scripted 8-connection session and stops it with SIGTERM. Only the transcript's
