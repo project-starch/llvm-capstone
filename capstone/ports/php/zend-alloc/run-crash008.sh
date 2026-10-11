@@ -55,7 +55,7 @@ run_arm() {   # $1 = arm name, $2 = dom, $3... = success markers
   # One domain per boot: a faulted domain poisons later create_dom in the same
   # guest session (HOW-TO-RUN-ON-QEMU.md:131-132). $CAPSTONE_QEMU_LOCK, because
   # every suite shares one rootfs.ext2.
-  flock "$CAPSTONE_QEMU_LOCK" python3 "$H/run-domain-smoke.py" \
+  capstone_with_qemu_lock python3 "$H/run-domain-smoke.py" \
     --share-dir "$share" --log-file "$log" \
     --guest-command "/mnt/host/capstone-test.user /mnt/host/$(basename "$dom")" \
     "${markers[@]}" >/dev/null 2>&1

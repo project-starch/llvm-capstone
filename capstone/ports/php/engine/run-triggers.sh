@@ -54,7 +54,7 @@ run_arm() {     # $1 = tag -> echoes "retval|cause|oob"
   local login=${CAPSTONE_QEMU_LOGIN_TIMEOUT:-300}
   for i in 1 2 3; do
     CAPSTONE_QEMU_LOGIN_TIMEOUT="$login" \
-    flock "$CAPSTONE_QEMU_LOCK" python3 "$H/run-domain-smoke.py" \
+    capstone_with_qemu_lock python3 "$H/run-domain-smoke.py" \
       --share-dir "$share" --log-file "$log" --timeout-multiplier "$TMO" \
       --guest-command "/mnt/host/capstone-test.user /mnt/host/trig_$tag.dom" \
       --success-marker "retval" >/dev/null 2>&1
