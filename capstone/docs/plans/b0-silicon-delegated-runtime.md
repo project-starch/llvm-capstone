@@ -1643,8 +1643,10 @@ registered. Every row below is against the pre-registration above, and against 7
 - The values are uniform: fs0 = 0x7fefffffffffffff (main's isfinite bound) and fs1..fs3 = 0. Those are the CALLER's
   registers at hold_wait's entry, not the twelve values hold_wait loaded with `fld`.
 - The self-test, which should read exactly 1 changed, read 12. So by B3e's own rule the hold arms are VOID.
-- Against a general FP-context loss: mc-harness kept t0 (an fadd result) in fs0 across kill + waitpid on the same
-  boot, and read 1.07 s.
+- ~~Against a general FP-context loss: mc-harness kept t0 (an fadd result) in fs0 across kill + waitpid on the same
+  boot, and read 1.07 s.~~ VOID (audit, 2026-10-11). t0 enters fs0 by fmv.d, the harness's fs0 is 0 before it, and
+  its t1 comes from a now() that is itself wrong on this bitstream (see the R-52 retraction). So 1.07 fits both
+  survival and reversion.
 
 **The probe.** b3-fphold-probe.c (FPGA build 63d87a507fe6da9d) runs hold_wait's pattern: save fs0..fs11, load
 twelve values with `fld`, do one thing, store fs0..fs11, restore. Each variant changes ONE step:
@@ -1670,21 +1672,23 @@ What each reading would mean. The rest is reported as read.
 - v4 holds: boot C's reading does not reproduce in this shape. It would then be specific to hold_wait's exact code,
   or to what ran before it in that boot.
 
-## B3f RESULT (2026-10-11 17:58-18:03, caplifive_r51r52_0568f93a9, firmware 0b9bfc81317b): FP state is lost across a BLOCKING switch
+## B3f RESULT (2026-10-11 17:58-18:03, caplifive_r51r52_0568f93a9, firmware 0b9bfc81317b): fs0..fs11 loaded in user mode read back as the pre-load state after a blocking wait
 - b0-stats and b0-stats2: retval 0. **v7, the control, reads exactly 1 of 12 changed (fs5)**, so the instrument is
   valid on silicon.
 - **v0 (nothing), v1 (a function call), v2 (getppid), v3 (sched_yield): 0 of 12 changed each.** So it is not an
   in-core fsd/fld ordering effect.
 - **v4 (waitpid on a sleeping child), v5 (plus 32 nops), v6 (values computed by fadd): 12 of 12 changed each**, fs0
   reading 0. So it is not specific to loaded values, and not to back-to-back fsd/fld.
-- The registers come back as the FP state from BEFORE the loads: 0 here, DBL_MAX in boot C, the caller's.
-  - That is what the kernel produces when it skips the save at switch-out and restores an older copy. Linux 6.4's
+- The registers read back as the process's pre-load FP state: 0 here and DBL_MAX in boot C. In boot C that is also the
+  caller's live value, so "restored older copy" and "the caller's values" are not separated; 0 is not separated from
+  "zeroed" either.
+  - A HYPOTHESIS, not measured: the kernel skips the save at switch-out and restores an older copy. Linux 6.4's
     __switch_to_aux saves only if the sstatus captured at the task's last trap entry shows SD and FS Dirty
-    (arch/riscv/include/asm/switch_to.h:49-57).
+    (arch/riscv/include/asm/switch_to.h:49-57). No run read regs->status, or counted a context switch.
   - The core's FS/SD update reads as upstream (csr_regfile.sv:2063-2077), and the FPGA monitor's return path writes no
     mstatus (sbi_capstone.S:148-192). So which side drops it is UNRESOLVED.
-- On the same boot C, mc-harness's t0 survived a blocking waitpid on a BUSY child (the memcached domain), so the
-  probe's sleeping child, and with it an idle hart, is one difference.
+- ~~On the same boot C, mc-harness's t0 survived a blocking waitpid on a BUSY child (the memcached domain)~~ VOID: see
+  the B3f pre-registration above.
 - QEMU loses nothing in any variant.
 
 ## B3g pre-registered (2026-10-11, before the boot): idle, an extra syscall, or the timer
@@ -1708,10 +1712,10 @@ What each reading would mean:
   each lose 12 of 12.** fs0 reads 0, the pre-load state.
 - So it is not the idle hart, not waitpid, and not blocking as such. The state is lost somewhere within about a
   second of user-mode execution, while the short variants keep it.
-- The B3f reading (an older saved copy restored) needs a switch-in without a save. That fits an involuntary
-  preemption during the busy loop just as well as a blocking switch.
-- mc-harness keeps t0 in fs0 from `fmv.d fs0, fa0` (0x3f8c) across kill and waitpid to the fsub at 0x4050, and read
-  1.07 s, so that state did survive once. The difference is UNRESOLVED.
+- If the reading is a restored older copy, it needs a switch-in without a save, and an involuntary preemption during
+  the busy loop would supply one. No switch was counted.
+- ~~mc-harness keeps t0 in fs0 ... so that state did survive once.~~ VOID as counter-evidence (audit): its fs0 is 0
+  before t0, and its t1 comes from the wrong now(), so 1.07 fits reversion as well as survival.
 - The exit code reads 112 only because shell status is mod 256; the printed lines carry every variant.
 
 ## B3h pre-registered (2026-10-11, before the boot): which event in the interval
@@ -1727,17 +1731,39 @@ What each reading would mean:
 - v14 loses: the M-mode rdtime emulation path.
 - v15 loses: any block, however short.
 
-## B3h RESULT (2026-10-11 18:15-18:20, firmware da8de46ecf75): a context switch loses the state, traps alone do not
+## B3h RESULT (2026-10-11 18:15-18:20, firmware da8de46ecf75): a blocking wait or a ~1 s interval loses the state; thousands of traps do not
 - **Lose 12 of 12:** v12 (a pure integer loop of ~1 s, no calls) and v15 (a 10 ms nanosleep).
 - **Hold 0 of 12:** v13 (2000 getppid back to back) and v14 (2000 clock_gettime, each an M-mode rdtime emulation on
   this board).
 - Repeats: v4-v6 lose (N=3), v8-v11 lose (N=2), v0-v3 hold (N=3), and v7 reads exactly 1 (N=3).
-- Reading: thousands of S-mode and M-mode traps do not lose the registers. Every variant that blocks, or runs long
-  enough to be preempted, does. That is a context switch, and the registers come back as an older copy (boot C:
-  fs0 = DBL_MAX, the caller's earlier value).
-- Not yet settled, and under audit before it goes into the registry:
-  - mc-harness's t0 survived a blocking waitpid on the same bitstream;
-  - in these boots an "older copy" and a "zeroed" register both read fs0 = 0.
+- Reading: thousands of S-mode and M-mode traps do not lose the registers. Every variant that blocks, or runs for
+  about a second, does. A context switch is the common candidate, but it was NOT measured.
+- **Audit (claim-auditor, 2026-10-11): the observation stands, the mechanism does not.**
+  - The narrowest wording the evidence supports: callee-saved FPRs that a native process loads in user mode read
+    back as its pre-load FP state after a blocking wait of >= 10 ms, or after about a second of user-mode
+    execution. They survive a call, 1 or 2000 getppid, 2000 rdtime emulations and sched_yield.
+  - N: v4-v6 N=3; v8-v11 N=2; v12, v13, v14, v15 N=1.
+  - The boots were UNGATED: PREFLIGHT=0, for the documented private-image reason. Only boot h's probe binary
+    survives (48f5eb72); f's and g's were overwritten as the source was extended.
+  - The QEMU control differs from the board in more than the CPU: kernel (HZ 250 vs 100), firmware and probe binary.
+    So "silicon", as opposed to the FPGA kernel build or the monitor, is not isolated.
+  - UNRESOLVED:
+    - whether a context switch is the trigger;
+    - whether the pre-load state is a restored copy or a zeroed register;
+    - whether the save is skipped or the restore is wrong;
+    - whether it is the core, the kernel build or the monitor.
+  - Reading the sources found no path that leaves FS un-dirtied or SD clear: the RTL csr_regfile, the kernel's
+    entry.S and switch_to.h, and the monitor's trap paths.
+- **The cheapest discriminators, from the audit:**
+  - An RTL directed test: set FS=Clean, then one fld (and an fadd.d), then read sstatus FS and SD back; plus a U-mode
+    ecall arm.
+  - On the board:
+    - count context switches with getrusage(ru_nvcsw/ru_nivcsw) around every window;
+    - read the FPRs from a signal frame (save_fp_state checks FS only, not SD);
+    - fork after the load;
+    - give the caller a distinct FP pattern;
+    - print all 12 values.
+  - A kernel one-liner counting FS==Dirty && !SD in __switch_to_aux.
 
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
