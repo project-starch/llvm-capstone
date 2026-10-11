@@ -1,0 +1,497 @@
+{
+ "program": "memcached 1.6.45",
+ "pre_registration": "16d2171a3edc",
+ "workload": "the protocol oracle unchanged (ports/memcached/app/host/mc-harness/mc-harness.c, sha256 1e569a8b63b4...: one connection through every command family and values 1 B-900 KB plus one too large, then 8 concurrent pipelining connections x 40 set/get/incr, then stats) against `memcached -l 127.0.0.1 -p 21299 -U 0 -m 64 -t 4` under capstone-job as uid 65534, stopped with TERM; three servers in turn per boot, one boot per arm; top-level counts are repetition 1",
+ "boundaries": {
+  "slabs": {
+   "stock": {
+    "buckets": {
+     "1": 13,
+     "2": 2,
+     "3": 1,
+     "4": 3,
+     "5": 1
+    },
+    "issues": 352,
+    "releases": 20,
+    "reuses": 20,
+    "distinct_starts": 332,
+    "attempts": 352,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 13,
+       "2": 2,
+       "3": 1,
+       "4": 3,
+       "5": 1
+      },
+      "issues": 352,
+      "releases": 20,
+      "reuses": 20,
+      "distinct_starts": 332,
+      "attempts": 352,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 13,
+       "2": 2,
+       "3": 1,
+       "4": 3,
+       "5": 1
+      },
+      "issues": 352,
+      "releases": 20,
+      "reuses": 20,
+      "distinct_starts": 332,
+      "attempts": 352,
+      "error": 0
+     },
+     {
+      "rep": 3,
+      "buckets": {
+       "1": 13,
+       "2": 2,
+       "3": 1,
+       "4": 3,
+       "5": 1
+      },
+      "issues": 352,
+      "releases": 20,
+      "reuses": 20,
+      "distinct_starts": 332,
+      "attempts": 352,
+      "error": 0
+     }
+    ]
+   },
+   "protected": {
+    "buckets": {
+     "1": 13,
+     "2": 2,
+     "3": 1,
+     "4": 3,
+     "5": 1
+    },
+    "issues": 352,
+    "releases": 20,
+    "reuses": 20,
+    "distinct_starts": 332,
+    "attempts": 352,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 13,
+       "2": 2,
+       "3": 1,
+       "4": 3,
+       "5": 1
+      },
+      "issues": 352,
+      "releases": 20,
+      "reuses": 20,
+      "distinct_starts": 332,
+      "attempts": 352,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 13,
+       "2": 2,
+       "3": 1,
+       "4": 3,
+       "5": 1
+      },
+      "issues": 352,
+      "releases": 20,
+      "reuses": 20,
+      "distinct_starts": 332,
+      "attempts": 352,
+      "error": 0
+     },
+     {
+      "rep": 3,
+      "buckets": {
+       "1": 13,
+       "2": 2,
+       "3": 1,
+       "4": 3,
+       "5": 1
+      },
+      "issues": 352,
+      "releases": 20,
+      "reuses": 20,
+      "distinct_starts": 332,
+      "attempts": 352,
+      "error": 0
+     }
+    ]
+   }
+  },
+  "cache": {
+   "stock": {
+    "buckets": {
+     "1": 79,
+     "2": 18,
+     "3": 12,
+     "4": 1,
+     "7": 1
+    },
+    "issues": 131,
+    "releases": 127,
+    "reuses": 111,
+    "distinct_starts": 20,
+    "attempts": 131,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 79,
+       "2": 18,
+       "3": 12,
+       "4": 1,
+       "7": 1
+      },
+      "issues": 131,
+      "releases": 127,
+      "reuses": 111,
+      "distinct_starts": 20,
+      "attempts": 131,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 81,
+       "2": 16,
+       "3": 12,
+       "4": 1,
+       "7": 1
+      },
+      "issues": 131,
+      "releases": 127,
+      "reuses": 111,
+      "distinct_starts": 20,
+      "attempts": 131,
+      "error": 0
+     },
+     {
+      "rep": 3,
+      "buckets": {
+       "1": 82,
+       "2": 15,
+       "3": 12,
+       "4": 1,
+       "7": 1
+      },
+      "issues": 131,
+      "releases": 127,
+      "reuses": 111,
+      "distinct_starts": 20,
+      "attempts": 131,
+      "error": 0
+     }
+    ]
+   },
+   "protected": {
+    "buckets": {
+     "1": 81,
+     "2": 15,
+     "3": 13,
+     "4": 1,
+     "7": 1
+    },
+    "issues": 131,
+    "releases": 127,
+    "reuses": 111,
+    "distinct_starts": 20,
+    "attempts": 131,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 81,
+       "2": 15,
+       "3": 13,
+       "4": 1,
+       "7": 1
+      },
+      "issues": 131,
+      "releases": 127,
+      "reuses": 111,
+      "distinct_starts": 20,
+      "attempts": 131,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 77,
+       "2": 21,
+       "3": 11,
+       "4": 1,
+       "7": 1
+      },
+      "issues": 131,
+      "releases": 127,
+      "reuses": 111,
+      "distinct_starts": 20,
+      "attempts": 131,
+      "error": 0
+     },
+     {
+      "rep": 3,
+      "buckets": {
+       "1": 79,
+       "2": 20,
+       "3": 10,
+       "4": 1,
+       "7": 1
+      },
+      "issues": 131,
+      "releases": 127,
+      "reuses": 111,
+      "distinct_starts": 20,
+      "attempts": 131,
+      "error": 0
+     }
+    ]
+   }
+  }
+ },
+ "summary": {
+  "slabs": {
+   "median_bucket": {
+    "stock": 1,
+    "protected": 1
+   },
+   "median_bucket_per_rep": {
+    "stock": [
+     1,
+     1,
+     1
+    ],
+    "protected": [
+     1,
+     1,
+     1
+    ]
+   },
+   "reusediff_rep1": 0.0,
+   "reusediff_all_pairs": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "reusediff_within_stock": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "reusediff_within_protected": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "equal_rep1": true,
+   "identical_across_reps": {
+    "stock": true,
+    "protected": true
+   },
+   "bucket_ranges": {
+    "stock": {
+     "1": [
+      13,
+      13
+     ],
+     "2": [
+      2,
+      2
+     ],
+     "3": [
+      1,
+      1
+     ],
+     "4": [
+      3,
+      3
+     ],
+     "5": [
+      1,
+      1
+     ]
+    },
+    "protected": {
+     "1": [
+      13,
+      13
+     ],
+     "2": [
+      2,
+      2
+     ],
+     "3": [
+      1,
+      1
+     ],
+     "4": [
+      3,
+      3
+     ],
+     "5": [
+      1,
+      1
+     ]
+    }
+   },
+   "ranges_overlap": true
+  },
+  "cache": {
+   "median_bucket": {
+    "stock": 1,
+    "protected": 1
+   },
+   "median_bucket_per_rep": {
+    "stock": [
+     1,
+     1,
+     1
+    ],
+    "protected": [
+     1,
+     1,
+     1
+    ]
+   },
+   "reusediff_rep1": 0.027027027027027042,
+   "reusediff_all_pairs": [
+    0.027027027027027042,
+    0.027027027027026994,
+    0.018018018018018014,
+    0.009009009009009,
+    0.045045045045045036,
+    0.03603603603603606,
+    0.009009009009009014,
+    0.05405405405405405,
+    0.04504504504504507
+   ],
+   "reusediff_within_stock": [
+    0.018018018018018042,
+    0.027027027027027056,
+    0.009009009009009014
+   ],
+   "reusediff_within_protected": [
+    0.054054054054054036,
+    0.04504504504504506,
+    0.018018018018017994
+   ],
+   "equal_rep1": false,
+   "identical_across_reps": {
+    "stock": false,
+    "protected": false
+   },
+   "bucket_ranges": {
+    "stock": {
+     "1": [
+      79,
+      82
+     ],
+     "2": [
+      15,
+      18
+     ],
+     "3": [
+      12,
+      12
+     ],
+     "4": [
+      1,
+      1
+     ],
+     "7": [
+      1,
+      1
+     ]
+    },
+    "protected": {
+     "1": [
+      77,
+      81
+     ],
+     "2": [
+      15,
+      21
+     ],
+     "3": [
+      10,
+      13
+     ],
+     "4": [
+      1,
+      1
+     ],
+     "7": [
+      1,
+      1
+     ]
+    }
+   },
+   "ranges_overlap": true
+  }
+ },
+ "sanity": {
+  "transcripts_equal_across_arms_and_reps": true,
+  "transcript_sha256": [
+   "ee1522c8e0eceec97a20b0372e888be774e019178e3a3c45cead03663d934651"
+  ]
+ },
+ "images": {
+  "stock": {
+   "sha256": "248b29be3658b74d25b96a716d5918a16f89420b2fdab0f5fc71c41316bc6ce1",
+   "bytes": 4137144,
+   "cderive": 0,
+   "crevoke": 0,
+   "cppflags": "-DEXP_REUSE_GAP"
+  },
+  "protected": {
+   "sha256": "a3b7459290215f71484bb90b195a4dea367897727318ef3b6cb4bb8a2df07c52",
+   "bytes": 4140584,
+   "cderive": 14,
+   "crevoke": 4,
+   "cppflags": "-DEXP_REUSE_GAP -DMC_CAPSTONE_SUBLET"
+  }
+ },
+ "platform": {
+  "sha256": {
+   "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+   "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+   "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+   "qemu-system-riscv64": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d"
+  },
+  "launcher_sha256": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "module_sha256": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "job_sha256": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+  "harness_sha256": "63cf044224711c16f2182e7786c1290e357b12853bf488eb786385bf94af5075",
+  "harts": 1,
+  "workers": 4,
+  "boot_wall_seconds": {
+   "stock": 53.5,
+   "protected": 54.1
+  }
+ }
+}
