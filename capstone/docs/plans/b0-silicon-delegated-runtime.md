@@ -1765,6 +1765,31 @@ What each reading would mean:
     - print all 12 values.
   - A kernel one-liner counting FS==Dirty && !SD in __switch_to_aux.
 
+## B3i pre-registered (2026-10-11, before the boot): the audit's discriminators for S-19, in one boot
+Probe b3-fpstate-probe.c (FPGA build 957a6ac11149f931). Each register is classified after its window:
+- I: held;
+- C: the loads themselves undone (the registers held a distinct pattern C just before the loads);
+- 0: an older kernel copy (main's FPRs are zero);
+- ?: anything else.
+getrusage's voluntary and involuntary switch counts are printed around every window. The windows are n (nothing),
+w (waitpid, sleeping child), l (a pure loop), z (a 10 ms nanosleep), s (a signal right after the loads, with the
+frame's FPRs read in the handler), f (a fork right after the loads, the child dumping its FPRs) and k (the
+control: fs5 doubled).
+
+QEMU rehearsal: every window reads all I, as do the signal frame and the fork child, and k reads I except fs5. The
+switch counter fires: w vol 1, l invol 1, z vol 1, f vol 1.
+
+What each board reading would mean:
+- **The switch hypothesis (the save skipped at switch-out because the trap-entry sstatus lacks FS Dirty or SD):**
+  n reads I with 0 switches; w, l and z read 0 with at least 1 switch. The DECISIVE arm is s:
+  - the signal frame reads 0 and the registers after sigreturn read 0, with NO switch: FS is not Dirty at trap entry
+    (save_fp_state checks FS only);
+  - the frame reads I while w, l and z still lose: FS is seen and the switch path differs, which points at SD.
+- f's child reading 0 is the same FS signal through arch_dup_task_struct.
+- C anywhere: the loads were undone by the hardware, not the kernel.
+- ? anywhere: zeroed or garbage, not an older copy.
+- k must read I except fs5, or the run is void.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
