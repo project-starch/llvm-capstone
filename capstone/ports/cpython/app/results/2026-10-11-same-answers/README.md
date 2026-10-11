@@ -1,0 +1,237 @@
+# CPython 3.13.7: protected vs stock vs native, 2026-10-11
+
+The CPython row of the pre-registration
+`capstone/docs/plans/2026-10-11-protected-same-answers.md` (pushed as 9bc6f9adf1c9). The
+prediction: `python -m test` run sequentially in one process gives the same outcome for each
+test on the protected image (`CPY_SUBLET=1`, patch 0014) as on the stock virtual image. Both
+arms are compared with native CPython 3.13.7 built from the same tarball.
+
+## Result
+
+**The prediction is not met. Both Capstone arms die with a domain fault before the list ends,
+and neither exits as native does (139 against 0).**
+
+- **protected** dies in module 6 of 15, at `test_str.StrTest.test_codecs`. On stock the same
+  test raises `MemoryError`: the test is recorded as an ERROR and the process continues. On
+  protected, pymalloc's failed allocation reaches patch 0014's `block_issue` as NULL and faults
+  (finding F1). This is the one per-test difference between protected and stock.
+- **stock** dies in module 9 of 15, at
+  `test_json.test_recursion.TestCRecursion.test_endless_recursion`. The fault is in patch 0008's
+  trashcan path (finding F2), and both images carry that patch. The protected arm never got that
+  far.
+- **Tests both arms ran:** protected ran 1149 tests, all of which stock ran too. 1148 have the
+  same outcome. The one that differs is `test_codecs`: an ERROR on stock, a process death on
+  protected.
+- **Protected against native where stock equals native:** 0 differences.
+- **Not compared:** 331 tests that stock ran were never reached on protected. Modules 10-15
+  (`test_gc`, `test_weakref`, `test_collections`, `test_itertools`, `test_sort`, `test_re`) ran
+  on neither arm.
+- **Repeats:** each Capstone arm was booted twice (see Deviations). The repeat gave the same
+  test ids, the same outcome for every test, and the same fault pc offset within the image.
+
+## Per module, first boot of each arm
+
+The cell format is pass/failure/error/skipped/process-died, counting test ids. A failing
+subtest is folded into its test. Native is the matched build; the default build is identical
+test for test.
+
+| module | native | stock | stock status | protected | protected status |
+|---|---|---|---|---|---|
+| test_dict | 114/0/0/0/0 | 113/0/0/1/0 | passed, 1 min 36 s | 113/0/0/1/0 | passed, 1 min 57 s |
+| test_list | 65/0/0/0/0 | 64/0/0/1/0 | passed, 2 min 7 s | 64/0/0/1/0 | passed, 2 min 27 s |
+| test_set | 623/0/0/0/0 | 623/0/0/0/0 | passed, 41 min 22 s | 623/0/0/0/0 | passed, 43 min 27 s |
+| test_tuple | 36/0/0/0/0 | 36/0/0/0/0 | passed, 2 min 52 s | 36/0/0/0/0 | passed, 3 min 23 s |
+| test_bytes | 292/0/0/5/0 | 290/0/0/7/0 | passed, 32 min 23 s | 290/0/0/7/0 | passed, 33 min 36 s |
+| test_str | 130/0/0/6/0 | 126/1/1/8/0 | failed (1 error, 4 failures), 16 min 44 s | 12/0/0/1/1 | **fault** in test_codecs |
+| test_float | 49/0/0/1/0 | 48/0/0/2/0 | passed, 2 min 23 s | not reached | |
+| test_long | 42/0/0/2/0 | 42/0/0/2/0 | passed, 22 min 13 s | not reached | |
+| test_json | 181/0/0/3/0 | 113/0/0/1/1 | **fault** in test_endless_recursion | not reached | |
+| test_gc | 51/0/0/1/0 | not reached | | not reached | |
+| test_weakref | 135/0/0/2/0 | not reached | | not reached | |
+| test_collections | 114/0/0/1/0 | not reached | | not reached | |
+| test_itertools | 139/0/0/5/0 | not reached | | not reached | |
+| test_sort | 21/0/0/0/0 | not reached | | not reached | |
+| test_re | 161/0/0/4/0 | not reached | | not reached | |
+| **total** | 2153/0/0/30/0 of 2183 | 1455/1/1/22/1 of 1480 | exit 139 | 1138/0/0/10/1 of 1149 | exit 139 |
+
+Native "pass" includes unittest's expected failures; none occurred.
+
+## Every per-test difference
+
+**Protected against stock**, over the 1149 tests both ran:
+
+| test | native | stock | protected |
+|---|---|---|---|
+| test_str.StrTest.test_codecs | pass | error (`MemoryError` at test_str.py:2320, building a string of 1,112,064 code points) | process died: domain fault cause=24 (F1) |
+
+**Stock against native**, over the 1480 tests both ran. These are the port's differences.
+Protected agrees with stock on each of them that it reached.
+
+| test | native | stock | protected | reason |
+|---|---|---|---|---|
+| test_bytes.ByteArrayTest.test_obsolete_write_lock | pass | skipped | skipped | No module named '_testcapi' |
+| test_bytes.BytesTest.test_from_format | pass | skipped | skipped | No module named '_ctypes' |
+| test_dict.DictTest.test_repr_deep | pass | skipped | skipped | requires _testcapi |
+| test_list.ListTest.test_repr_deep | pass | skipped | skipped | requires _testcapi |
+| test_str.StrTest.test_codecs | pass | error | process died | stock: `MemoryError`; protected: F1 |
+| test_str.StrTest.test_formatting_c_limits | pass | skipped | not reached | No module named '_testcapi' |
+| test_str.StrTest.test_formatting_huge_precision_c_limits | pass | skipped | not reached | need _testcapi module |
+| test_str.StrTest.test_raiseMemError | pass | failure | not reached | 4 subtests: `sys.getsizeof(char * 42)` is 8 bytes larger than the test's struct_size + data; e.g. 107 != 99 for 'a' |
+| test_float.IEEEFormatTestCase.test_serialized_float_rounding | pass | skipped | not reached | needs _testcapi |
+| test_json.test_recursion.TestCRecursion.test_endless_recursion | pass | process died | not reached | F2 |
+
+`_testcapi` and `_ctypes` are not built into the image. `--disable-test-modules` and the
+static build leave `_testcapi` out, and `CPY_TEST_CAPI=1` adds only `_testinternalcapi` and
+`_testlimitedcapi`. The `test_raiseMemError` size difference is the object layout with 16-byte
+pointers: the test hard-codes the 64-bit CPython struct sizes. Why `test_codecs` runs out of
+memory on Capstone was not established in this run. The image records `arena_bytes`
+67108864, and `runtime/virtual/vm.h` caps one mapping at 256 MiB; neither limit was shown to
+be the cause.
+
+## Findings
+
+**F1: protected faults where stock raises `MemoryError` (patch 0014).**
+`Objects/obmalloc.c` with 0014 applied ends `pymalloc_alloc` with
+`return block_issue(state, bp, nbytes);`. Upstream returns `bp` itself. On this path `bp`
+comes from `allocate_from_new_pool`, which returns NULL when `new_arena` fails. Upstream's
+NULL makes `_PyObject_Malloc` fall back to the system allocator, which then raises
+`MemoryError`. With 0014, `block_issue` computes `POOL_ADDR(bp)` with a `cincoffset` on the
+untagged NULL. QEMU logs `cincoffset with an UNTAGGED rs1 -- pc=... rs1=x10 val=0x0`, and the
+launcher reports `domain fault cause=24`. Both boots faulted at the same image offset 0x15c088
+(vaddr 0x16c088, in `_PyObject_Malloc`). The debug-linked `link/python.dom` of the same build
+symbolizes that offset to `block_issue` (obmalloc.c:1832), inlined into `pymalloc_alloc`
+(:2294). This is a correctness difference introduced by the protection, recorded and not
+patched.
+
+**F2: stock (and every image carrying patch 0008) faults in the trashcan.**
+`_PyTrash_thread_deposit_object` calls
+`_PyGCHead_SET_PREV(_Py_AS_GC(op), tstate->delete_later)`. With patch 0008 that becomes
+`_PyGCWord_MAKE(prev, bits)`, and the code is a `cincoffset` on `prev`. When nothing has been
+deferred yet, `delete_later` is NULL (untagged), and the first deposit faults (cause=24,
+`pycore_gc.h:228`, `object.c:2822`). Both stock boots faulted at image offset 0x15610c
+(vaddr 0x16610c, `_PyTrash_thread_deposit_object`), in `test_endless_recursion`, whose deep
+deallocation reaches the trashcan. The protected image carries the same patch but died earlier.
+
+**F3: `xml.etree.ElementTree.Element('a')` faults on both images (`_elementtree.c`).**
+`_set_joined_ptr` (`_elementtree.c:67`, called from `element_init` :455) applies `JOIN_OBJ` to
+`self->text`, which masks the pointer through `uintptr_t & ~1`. The compiled code loads the
+field with an integer `ld` and dereferences the masked integer, and `_Py_NoneStruct` is
+reached without a capability (cause=24). Each arm's boot runs a one-line probe before the
+suite, and the probe exits 139 on both arms in all four boots. The first timing boot used
+`--junit-xml`, which builds its report with ElementTree, and it faulted there before writing
+any result. That is why the Capstone arms are recorded from the `-v` log (Deviations).
+
+Nothing here was patched.
+
+## What ran
+
+- **Source.** `git archive` of 9bc6f9adf1c9 (`capstone/`, `compiler-rt/lib/builtins`),
+  committed on the build host as the snapshot e801018c. Both image manifests record
+  `recipe_revision`/`runtime_revision` e801018c and `runtime_dirty: true`. After the builds,
+  `git status --porcelain` in the snapshot listed exactly one untracked file:
+  `capstone/ports/cpython/app/__pycache__/survey-cpython-capstone.cpython-314.pyc`. The build
+  wrote it itself when the survey script was imported. `git diff HEAD` was empty. A fresh
+  `git archive 9bc6f9adf1c9` of `capstone/` and `compiler-rt/lib/builtins` compares equal to
+  the snapshot (`diff -r`, excluding `.git` and `__pycache__`). No source file differed.
+- **Tarball.** `Python-3.13.7.tgz` sha256
+  6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2, as `upstream.json` pins it.
+  The Capstone builds used the kit's `inputs/` copy. The native builds used a download of the
+  same file with the same hash, made before the kit was complete.
+- **Images.** Built as
+  `CPY_TEST_CAPI=1 [CPY_SUBLET=1] build-virtual.sh cpython <fresh dir>`, with `JOBS=24` and
+  `CPY_JOBS=16`, in 223 s each, in parallel. Both used the toolchain
+  `compiler_sha256` 4c6135feafae20c2..., runtime archive fc719e2acf7a922a..., and builtins
+  archive a72ed0bf31407f08....
+
+  | | stock | protected |
+  |---|---|---|
+  | `cpython.dom` sha256 | 6760ff8773f450b044fbdce3ab6432cde3988c5c51aff25142eb4b1af61fec13 | 36cececaab98fb19aee0b905331a768c63c1a19341addc24539c881639cbeeea |
+  | manifest `nested` | none | cpython |
+  | patches applied | 0001-0005, 0007-0013, 0015, 0016 (14) | the same plus 0014 (15) |
+  | `heap`, `profile`, `stack_bytes`, `arena_bytes` | virtual, virtual, 8388608, 67108864 | same |
+
+- **Platform.** One hart, exact bounds, `run-staged.py` from the snapshot, with the kit's
+  `kit-sublet`:
+
+  | file | sha256 |
+  |---|---|
+  | qemu-system-riscv64 (QEMU 8.1.1) | af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d |
+  | Image | e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b |
+  | fw_jump.elf | 44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116 |
+  | rootfs.ext2 | 62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845 |
+  | capstone-vexec | 3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4 |
+  | capstone_vm.ko | a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512 |
+
+- **Staging.** One staged disk per boot. It holds the launcher, the module, and
+  `/mnt/vm/<arm>/cpython.dom`, with `/mnt/vm/<arm>/lib/python3.13` beside it, as this port's
+  README requires so that posix_spawn children find the stdlib from `sys.executable`. The
+  stdlib is the build's own source `Lib/`, which compares equal to the tarball's `Lib/`. The
+  stage adds the build's `_sysconfigdata__linux_.py` and an empty `lib-dynload`, then compiles
+  everything with the native 3.13.7 (`compileall -f -d /mnt/vm/<arm>/lib/python3.13`). Five
+  deliberately malformed files under `test/` do not compile. The two arms' stdlib trees differ
+  only in `_sysconfigdata__linux_.py` (build paths and 0014's `-I` in `CONFIGURE_CPPFLAGS`)
+  and in the bytecode's embedded paths. Stage tree hashes and gate-script hashes are in
+  `outcomes.json` under `stage`. A smoke boot checked that
+  `sys.executable` is `/mnt/vm/stock/cpython.dom` and that a `-I` child it spawns finds
+  `sys.prefix` `/mnt/vm/stock`.
+- **Guest command**, as root, `HOME=TMPDIR=/tmp`, `CAPSTONE_EXEC_DIAGNOSTICS=1`, cwd `/tmp`:
+
+      PYTHONHOME=/mnt/vm/<arm> /mnt/vm/capstone-vexec /mnt/vm/<arm>/cpython.dom -m test -v \
+        test_dict test_list test_set test_tuple test_bytes test_str test_float test_long \
+        test_json test_gc test_weakref test_collections test_itertools test_sort test_re
+
+  The header reads "Run 15 tests sequentially in a single process". No `-u` was given, so
+  resource-gated tests skip on every arm alike. No `-j`, `-r` or `--rerun` was given. After
+  each boot, `capstone-vexec --stats` reported `live_domains`, `live_regions`, `live_bytes` and
+  `tag_pages` all 0. On the first boots, `nodes_high_water` was 33534 for stock and 1824725
+  for protected.
+- **Native.** Two builds of the same tarball on the x86_64 host (gcc 15.2.0, glibc 2.43):
+  - *matched*: `configure --disable-ipv6 --without-ensurepip --without-computed-gotos`;
+  - *default*: plain `configure`. This is what `prepare-cpython-capstone.sh` builds as its
+    build-python, a full in-tree interpreter that runs the list.
+
+  Both were built with `make -j32` and run from the build tree as
+  `./python -m test -v --junit-xml <file> <the 15 tests>` by an unprivileged user. Regrtest
+  took 17.6 s on the matched build and 17.4 s on the default build. The two agree test for
+  test. Native is the matched build.
+  The Capstone-specific options were left out of native: `--disable-test-modules`, static
+  modules, `-D_Py_FORK_EXEC_POSIX_SPAWN`, and the config.site answers. A first matched build
+  with `--disable-test-modules` skipped all of `test_bytes` ("No module named
+  '_testlimitedcapi'"), so native keeps its test modules.
+- **Outcomes.** The Capstone arms' outcomes are parsed from regrtest's `-v` lines on the serial
+  console. On both native logs, the same parser produces the 2183 test ids and outcomes of the
+  native `--junit-xml`, one for one.
+
+## Wall times
+
+| arm | regrtest in guest | boot total |
+|---|---|---|
+| native (matched / default) | 17.6 s / 17.4 s | |
+| stock, boot 1 / boot 2 | 7412 s / 7384 s (to the fault in module 9) | 7447 s / 7419 s |
+| protected, boot 1 / boot 2 | 5296 s / 5357 s (to the fault in module 6) | 5334 s / 5391 s |
+
+Per module, protected took 1.04-1.22 times as long as stock on the five modules both
+completed.
+
+## Deviations from the instructions
+
+1. **`CPY_TEST_CAPI=1` on both images.** Without `_testlimitedcapi`, regrtest skips all of
+   `test_bytes`, which would have made one of the 15 rows empty. The switch adds
+   `_testinternalcapi` and `_testlimitedcapi`, the same on both arms.
+2. **No `--junit-xml` on the Capstone arms**, because of F3. The `-v` log is the record.
+3. **Two boots for each Capstone arm (N = 2 rather than 1).** The timing boot measured `test_dict`
+   at 97 s against 0.25 s natively. `test_set` then took 41 min against 1.7 s natively, and the
+   extrapolation came close to the 6 h timeout of the first pair. A second pair with a 24 h
+   timeout was therefore started 48 min after the first, on separate locks and work dirs. Each
+   repeat matches its first boot test for test, so the table reports the first boots.
+4. **Two earlier timing boots of the stock image** on `test_dict` alone. One used
+   `--junit-xml` and faulted (F3). The other passed: 114 tests, 1 skipped, 97.3 s.
+5. **Arms in parallel boots**, each with its own lock file and work directory, plus
+   `compileall` over the `test` package as well as the stdlib.
+
+## Files
+
+- `outcomes.json`: per-test outcomes for native, stock and protected, with skip messages and
+  folded subtests. It also holds module statuses and counts for all six runs (native matched
+  and default, both boots of both Capstone arms), the repeat comparisons, every difference
+  with the number compared, and the stage hashes.
