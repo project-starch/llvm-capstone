@@ -1,0 +1,27 @@
+# The allocator-pattern rows, and which of the corpus's 31 ASAN-blind defects
+# each one models. "ASAN-blind" is defined mechanically: detected in
+# results-asan-default.json, missed in results-asan-stockalloc.json -- i.e.
+# visible only once PHP's own allocator is patched.
+#
+# Sub-class counts (differencing the two corpus result files):
+#   23 cache-hidden  CWE-416   efree() parks the block in AG(cache); free() is never called
+#    8 rounding-hidden         over-read/write into REAL_SIZE slack inside the malloc'd block
+#       of which CWE-125 x6, CWE-787 x1 (CRASH-008), CWE-562 x1 (CRASH-100, stack)
+#
+# expect_* columns are the PRE-REGISTERED prediction, recorded before the vehicle
+# existed. classify.py prints predicted vs measured so a surprise cannot be
+# quietly absorbed.
+#
+# cols: row  models  n_cases  class  expect_stock  expect_patched  note
+a1_uaf_read	cache-hidden UAF, read	23	temporal	MISS	BLOCKED-SWEEP	plain stale read
+a2_uaf_write	cache-hidden UAF, write	23	temporal	MISS	BLOCKED-SWEEP	plain stale store
+a3_uaf_recycled	same-bucket recycle 1B->8B	23	temporal	MISS	MISS	stale-but-allocated; no free() in EITHER arm
+a4_uaf_zval_member	freed struct's pointer member	23	temporal	MISS	BLOCKED-SWEEP	capability loaded from freed memory
+a5_double_efree	double efree	-	control	LATE-or-ABORT	BLOCKED-ABORT	stock surfaces only at shutdown drain
+a6_uaf_after_shutdown	use after the cache drain	-	control	BLOCKED-SWEEP	BLOCKED-SWEEP	REVOCATION CONTROL inside the stock arm
+b1_oob_read_slack	REAL_SIZE slack over-read	6	spatial	MISS	BLOCKED-SYNC	CWE-125 shape
+b2_oob_write_slack	REAL_SIZE slack over-write	1	spatial	MISS	BLOCKED-SYNC	CWE-787 shape (CRASH-008)
+b3_oob_read_past_block	past the malloc'd block	-	control	BLOCKED-SYNC	BLOCKED-SYNC	BOUNDS CONTROL; must fault in both arms
+c1_stack_after_return	stack use-after-return	1	stack	MISS	MISS	CWE-562 (CRASH-100); where CHERI is expected to do WORSE than ASAN
+b4_header_underflow	read into zend_mem_header	-	supplementary	MISS	MISS	not one of the 31; blindness is two-sided
+z0_sanity	defect-free allocator exercise	-	sanity	DONE	DONE	must run clean or all rows are void
