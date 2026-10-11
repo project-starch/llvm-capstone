@@ -1839,6 +1839,25 @@ Predicted on caplifive_r51r52_0568f93a9:
   - D at 0: it is the fcvt.d.l issuing behind the fdiv.
 - Either reading, as read, goes to the RTL lane for the residual's directed arm.
 
+## B3j RESULT (2026-10-12 01:13-01:18, firmware 2ff2ac4567ff): the R-52 residual is an fadd reading the in-flight fdiv's result
+- b0-stats and b0-stats2: retval 0. **The checker's control passes** (correct accepted, wrong rejected).
+- **A (now()'s order): 40,000 of 40,000 wrong**, live and fixed alike, as predicted, so the instrument fires on
+  silicon.
+  - The first wrong value: sec 104, nsec 428831120 -> 0x3feb71f814fa0d22, which decodes to 0 s + 857662240 ns. That
+    is EXACTLY twice the fraction: `fadd.d fa0, fa0, fa5` computed fa0 + fa0, the in-flight fdiv's result for both
+    operands, where fa5 should be the younger fcvt.d.l of the seconds.
+  - The board's earlier now() values (0.24, 1.15, 0.09, 1.63, 1.99) are all twice a fraction in [0, 1).
+- **B (both fcvt.d.l before the fdiv.d): 0 wrong. D (the seconds fcvt.d.l moved before the fdiv.d): 0 wrong.**
+- **C (40 nops after the fdiv.d): 1 of 20,000 wrong**, live and fixed. That value was exactly 107.0 s, with the
+  fraction lost.
+  - With the fdiv long finished, this fits S-19 rather than the residual: a preemption between the fdiv and the fadd
+    restores a stale fa0. That is not measured.
+- **So the residual:** a short FP op (fcvt.d.l) issued while an fdiv.d is in flight, whose result the next op
+  consumes, delivers the fdiv's result to that consumer instead of its own.
+  - Removing the overlap (C) or the ordering (D) avoids it.
+  - Handed to the RTL lane for a directed arm in this exact order (N=1 boot; the shape is deterministic,
+    40,000 of 40,000).
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
