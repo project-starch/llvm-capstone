@@ -1,0 +1,1328 @@
+{
+  "date": "2026-09-30",
+  "scope": "Subprocess-enabled CPython threading review, preserving unsupported-feature skips and failures",
+  "build": {
+    "image_sha256": "5a4cdaa9e52abfff065b707daac810a5d42b768832487098a9c449ddd96cdfee",
+    "compiler_sha256": "94a99e60a823f93518485487230fed4fd09f1742862e8e9c07b8adf0ae14d6c8",
+    "runtime_archive_sha256": "7a68b1c8722a5d324dc73d2c012898eb1e77b738c11d4030554e481130442ae2",
+    "builtins_archive_sha256": "5dabb2c966244165de6cdf5f36b272e73a4d3852c651b5941916efd3ce223ef9",
+    "arena_bytes": 67108864,
+    "heap": "level0",
+    "compiler_revision": "fd82fef2a70d",
+    "runtime_base": "14a59e446a4c49282dce120571c3da080ef3d3d8",
+    "source_changes": "Patch 0015, unsupported epoll disabled, real TLS and patch 0016 retained; level0 shrinking realloc releases and coalesces the unused tail.",
+    "patches": "0001-0005, 0007-0013, 0015-0016; plain pymalloc 0009, not Sublet 0014",
+    "patch_0015_source": "dae66593c6c2 (byte-identical)",
+    "patch_0015_sha256": "da8bcbae14fc9ee9cfb7ac8746788d798640e648738bea99b8e880b9fe0e8e64",
+    "runner_sha256": "d11a0878b3ae8861e4914d0787c82f95cea883b5a520ba4cab8b71abdd72a5e1",
+    "survey_objects_compiled": 250,
+    "configure": "_Py_FORK_EXEC_POSIX_SPAWN defined; _Py_THREAD_LOCAL_AS_GLOBAL absent; HAVE_EPOLL and HAVE_EPOLL_CREATE1 absent",
+    "stdlib": "Patched source Lib plus current target _sysconfigdata__linux_.py; prefix/bin/python image, prefix/lib/python3.13 with empty lib-dynload; PYTHONHOME set; children also find the prefix under -I/-E.",
+    "allocator_fix_revision": "7795986d956a"
+  },
+  "platform": {
+    "qemu_revision": "674cdab03c",
+    "monitor_revision": "4674ab6",
+    "compiler_revision": "fd82fef2a70d",
+    "compiler_sha256": "94a99e60a823f93518485487230fed4fd09f1742862e8e9c07b8adf0ae14d6c8",
+    "firmware_sha256": "ae41a8c6d22877f779750bcd4aba040b4ecf5015ce25fff6d47f773139cf05dc",
+    "module_sha256": "649f410893eeb40a825232452974ac3161bb667163457c42f628c325dd7e6d97",
+    "launcher_sha256": "4c1b0ad0d67af32eb62a5acdf0ff07969b86c582b26b21ecbf7bd4519a015ad7",
+    "guest_cma_mib": 1024,
+    "process_cache_mib": 768,
+    "application_contexts_besides_main": 15
+  },
+  "commands": {
+    "prepare": "CPY_ROOT=<private-root> CPY_BUILD_PYTHON=<native-3.13.7-python> bash prepare-cpython-capstone.sh; survey-cpython-capstone.sh --jobs 6",
+    "link": "common/application/build.py --app cpython --root <private-root> --toolchain <C-75-build> --arena 67108864 --input-revision <recipe-revision> --out <fresh-output>",
+    "suites": "One fresh domain interpreter per module: python host/run-thread-gate.py MODULE, timeout 1800 s per module",
+    "smoke": "python host/subprocess-smoke.py, timeout 180 s"
+  },
+  "suites": {
+    "test.test_threading": {
+      "modules": [
+        "test.test_threading"
+      ],
+      "ran": 212,
+      "skipped": [
+        {
+          "test": "test.test_threading.ConditionAsRLockTests.test_recursion_count",
+          "reason": "Condition does not expose _recursion_count()"
+        },
+        {
+          "test": "test.test_threading.EventTests.test_at_fork_reinit",
+          "reason": "platform doesn't support fork (no _at_fork_reinit method)"
+        },
+        {
+          "test": "test.test_threading.LockTests.test_at_fork_reinit",
+          "reason": "platform doesn't support fork (no _at_fork_reinit method)"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_fatal_error",
+          "reason": "No module named '_testcapi'"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_not_allowed [via Thread()]",
+          "reason": "No module named '_testinternalcapi'"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_not_allowed [via Thread.daemon setter]",
+          "reason": "No module named '_testinternalcapi'"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_threads_join",
+          "reason": "requires _testcapi"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_threads_join_2",
+          "reason": "requires _testcapi"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_threads_not_allowed",
+          "reason": "No module named '_testinternalcapi'"
+        },
+        {
+          "test": "test.test_threading.ThreadJoinOnShutdown.test_2_join_in_forked_process",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadJoinOnShutdown.test_3_join_in_forked_from_thread",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadJoinOnShutdown.test_4_daemon_threads",
+          "reason": "not enough memory: 2.7G minimum needed"
+        },
+        {
+          "test": "test.test_threading.ThreadJoinOnShutdown.test_clear_threads_states_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadJoinOnShutdown.test_reinit_tls_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_PyThreadState_SetAsyncExc",
+          "reason": "No module named '_ctypes'"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_dummy_thread_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_finalize_running_thread",
+          "reason": "No module named '_ctypes'"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_frame_tstate_tracing",
+          "reason": "No module named '_testcapi'"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_is_alive_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_join_from_multiple_threads",
+          "reason": "not enough memory: 1.4G minimum needed"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_main_thread_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_dummy_thread",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_foreign_thread",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_nonmain_thread",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_native_id_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_start_new_thread_failed",
+          "reason": "RLIMIT_NPROC had no effect; probably superuser"
+        }
+      ],
+      "errors": [],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": true,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    },
+    "test.test_thread": {
+      "modules": [
+        "test.test_thread"
+      ],
+      "ran": 35,
+      "skipped": [
+        {
+          "test": "test.test_thread.LockTests.test_at_fork_reinit",
+          "reason": "platform doesn't support fork (no _at_fork_reinit method)"
+        },
+        {
+          "test": "test.test_thread.TestForkInThread.test_forkinthread",
+          "reason": "requires working os.fork()"
+        }
+      ],
+      "errors": [],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": true,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    },
+    "test.test_threading_local": {
+      "modules": [
+        "test.test_threading_local"
+      ],
+      "ran": 22,
+      "skipped": [
+        {
+          "test": "test.test_threading_local.PyThreadingLocalTest.test_threading_local_clear_race",
+          "reason": "No module named '_testcapi'"
+        },
+        {
+          "test": "test.test_threading_local.ThreadLocalTest.test_threading_local_clear_race",
+          "reason": "No module named '_testcapi'"
+        }
+      ],
+      "errors": [],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": true,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    },
+    "test.test_queue": {
+      "modules": [
+        "test.test_queue"
+      ],
+      "ran": 162,
+      "skipped": [
+        {
+          "test": "test.test_queue.CSimpleQueueTest.test_many_threads",
+          "reason": "not enough memory: 4.9G minimum needed"
+        },
+        {
+          "test": "test.test_queue.CSimpleQueueTest.test_many_threads_nonblock",
+          "reason": "not enough memory: 4.9G minimum needed"
+        },
+        {
+          "test": "test.test_queue.CSimpleQueueTest.test_many_threads_timeout",
+          "reason": "not enough memory: 4.9G minimum needed"
+        },
+        {
+          "test": "test.test_queue.PySimpleQueueTest.test_many_threads",
+          "reason": "not enough memory: 4.9G minimum needed"
+        },
+        {
+          "test": "test.test_queue.PySimpleQueueTest.test_many_threads_nonblock",
+          "reason": "not enough memory: 4.9G minimum needed"
+        },
+        {
+          "test": "test.test_queue.PySimpleQueueTest.test_many_threads_timeout",
+          "reason": "not enough memory: 4.9G minimum needed"
+        }
+      ],
+      "errors": [],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": true,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    },
+    "test.test_concurrent_futures.test_thread_pool": {
+      "modules": [
+        "test.test_concurrent_futures.test_thread_pool"
+      ],
+      "ran": 17,
+      "skipped": [
+        {
+          "test": "test.test_concurrent_futures.test_thread_pool.ThreadPoolExecutorTest.test_hang_global_shutdown_lock",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_concurrent_futures.test_thread_pool.ThreadPoolExecutorTest.test_process_fork_from_a_threadpool",
+          "reason": "requires working os.fork()"
+        }
+      ],
+      "errors": [],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": true,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    }
+  },
+  "previous_26_subprocess_errors": [
+    {
+      "test": "test.test_threading.ThreadJoinOnShutdown.test_1_join_on_shutdown",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadJoinOnShutdown.test_2_join_in_forked_process",
+      "outcome": "skipped 'requires working os.fork()'"
+    },
+    {
+      "test": "test.test_threading.ThreadJoinOnShutdown.test_3_join_in_forked_from_thread",
+      "outcome": "skipped 'requires working os.fork()'"
+    },
+    {
+      "test": "test.test_threading.AtexitTests.test_atexit_after_shutdown",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.AtexitTests.test_atexit_called_once",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.AtexitTests.test_atexit_output",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_dummy_thread_after_fork",
+      "outcome": "skipped 'requires working os.fork()'"
+    },
+    {
+      "test": "test.test_threading.ThreadingExceptionTests.test_dummy_thread_on_interpreter_shutdown",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_finalization_shutdown",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_finalize_with_trace",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_import_from_another_thread",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_join_nondaemon_on_shutdown",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_locals_at_exit",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_main_thread_after_fork",
+      "outcome": "skipped 'requires working os.fork()'"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_dummy_thread",
+      "outcome": "skipped 'requires working os.fork()'"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_foreign_thread",
+      "outcome": "skipped 'requires working os.fork()'"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_nonmain_thread",
+      "outcome": "skipped 'requires working os.fork()'"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_main_thread_during_shutdown",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadingExceptionTests.test_print_exception",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_gh_102056",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_1",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_2",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadingExceptionTests.test_recursion_limit",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_start_new_thread_at_finalization",
+      "outcome": "ok"
+    },
+    {
+      "test": "test.test_threading.ThreadTests.test_start_new_thread_failed",
+      "outcome": "skipped 'RLIMIT_NPROC had no effect; probably superuser'"
+    },
+    {
+      "test": "test.test_threading.ThreadJoinOnShutdown.test_thread_from_thread",
+      "outcome": "ok"
+    }
+  ],
+  "subprocess_smoke": {
+    "result": {
+      "version": 1,
+      "kind": "exit",
+      "value": 0
+    },
+    "result_lines": [
+      "PASS run-capture rc=3 out='out\\n' err='err\\n'",
+      "PASS check_output ",
+      "PASS check_call-raises ",
+      "PASS communicate-stdin 'FROM A PIPE\\n'",
+      "PASS popen-cat-10k len=10000 rc=0",
+      "PASS env-cwd 'marker\\n/tmp\\n'",
+      "PASS enoent FileNotFoundError(2, 'No such file or directory')",
+      "PASS enoent-cwd FileNotFoundError",
+      "PASS pass_fds rc=0 read=b'kept\\n'",
+      "PASS close_fds read=b''",
+      "PASS restore_signals rc=-13 out=''",
+      "PASS inherit-ign rc=0 out='alive\\n'",
+      "PASS terminate rc=-15",
+      "PASS wait-timeout ",
+      "PASS run-timeout ",
+      "PASS new-session '3143\\n'",
+      "PASS process-group rc=0 out='skip'",
+      "PASS preexec-refused errno=38",
+      "PASS child-signals-parent got=[1] out='done\\n'",
+      "PASS os.popen ",
+      "PASS shell '42\\n'",
+      "SMOKE 21 / 21"
+    ],
+    "unserved_diagnostics": 0
+  },
+  "initial_failed_run": {
+    "modules": [
+      "test.test_threading"
+    ],
+    "ran": 212,
+    "skipped": [
+      {
+        "test": "test.test_threading.ConditionAsRLockTests.test_recursion_count",
+        "reason": "Condition does not expose _recursion_count()"
+      },
+      {
+        "test": "test.test_threading.EventTests.test_at_fork_reinit",
+        "reason": "platform doesn't support fork (no _at_fork_reinit method)"
+      },
+      {
+        "test": "test.test_threading.LockTests.test_at_fork_reinit",
+        "reason": "platform doesn't support fork (no _at_fork_reinit method)"
+      },
+      {
+        "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_fatal_error",
+        "reason": "No module named '_testcapi'"
+      },
+      {
+        "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_not_allowed [via Thread()]",
+        "reason": "No module named '_testinternalcapi'"
+      },
+      {
+        "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_not_allowed [via Thread.daemon setter]",
+        "reason": "No module named '_testinternalcapi'"
+      },
+      {
+        "test": "test.test_threading.SubinterpThreadingTests.test_threads_join",
+        "reason": "requires _testcapi"
+      },
+      {
+        "test": "test.test_threading.SubinterpThreadingTests.test_threads_join_2",
+        "reason": "requires _testcapi"
+      },
+      {
+        "test": "test.test_threading.SubinterpThreadingTests.test_threads_not_allowed",
+        "reason": "No module named '_testinternalcapi'"
+      },
+      {
+        "test": "test.test_threading.ThreadJoinOnShutdown.test_2_join_in_forked_process",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadJoinOnShutdown.test_3_join_in_forked_from_thread",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadJoinOnShutdown.test_4_daemon_threads",
+        "reason": "not enough memory: 2.7G minimum needed"
+      },
+      {
+        "test": "test.test_threading.ThreadJoinOnShutdown.test_clear_threads_states_after_fork",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadJoinOnShutdown.test_reinit_tls_after_fork",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_PyThreadState_SetAsyncExc",
+        "reason": "No module named '_ctypes'"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_dummy_thread_after_fork",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_finalize_running_thread",
+        "reason": "No module named '_ctypes'"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_frame_tstate_tracing",
+        "reason": "No module named '_testcapi'"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_is_alive_after_fork",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_join_from_multiple_threads",
+        "reason": "not enough memory: 1.4G minimum needed"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_main_thread_after_fork",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_dummy_thread",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_foreign_thread",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_nonmain_thread",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_native_id_after_fork",
+        "reason": "requires working os.fork()"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_start_new_thread_failed",
+        "reason": "RLIMIT_NPROC had no effect; probably superuser"
+      }
+    ],
+    "errors": [
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_gh_102056",
+        "exception": "MemoryError",
+        "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1813, in test_print_exception_gh_102056\n    assert_python_failure(\"-c\", script)\n    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 191, in assert_python_failure\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 163, in _assert_python\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 153, in run_python_until_end\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1222, in communicate\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 2148, in _communicate\nMemoryError\n"
+      },
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_1",
+        "exception": "MemoryError",
+        "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1751, in test_print_exception_stderr_is_none_1\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 180, in assert_python_ok\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 163, in _assert_python\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 148, in run_python_until_end\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1039, in __init__\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1925, in _execute_child\nMemoryError\n"
+      },
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_2",
+        "exception": "MemoryError",
+        "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1780, in test_print_exception_stderr_is_none_2\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 180, in assert_python_ok\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 163, in _assert_python\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 148, in run_python_until_end\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1039, in __init__\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1925, in _execute_child\nMemoryError\n"
+      },
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_recursion_limit",
+        "exception": "MemoryError",
+        "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1696, in test_recursion_limit\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1039, in __init__\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1925, in _execute_child\nMemoryError\n"
+      },
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_start_thread_again",
+        "exception": "RuntimeError: can't start new thread",
+        "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1649, in test_start_thread_again\n  File \"/mnt/host/py/lib/python3.13/threading.py\", line 975, in start\nRuntimeError: can't start new thread\n"
+      },
+      {
+        "test": "test.test_threading.TimerTests.test_init_immutable_default_args",
+        "exception": "RuntimeError: can't start new thread",
+        "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 2003, in test_init_immutable_default_args\n  File \"/mnt/host/py/lib/python3.13/threading.py\", line 975, in start\nRuntimeError: can't start new thread\n"
+      }
+    ],
+    "failures": [
+      {
+        "test": "test.test_threading.AtexitTests.test_atexit_called_once",
+        "exception": "AssertionError: b'capstone-domain: UNSERVED syscalls: 20\\n' is not false",
+        "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 2196, in test_atexit_called_once\n    self.assertFalse(err)\n    ~~~~~~~~~~~~~~~~^^^^^\nAssertionError: b'capstone-domain: UNSERVED syscalls: 20\\n' is not false\n"
+      }
+    ],
+    "unexpected_successes": [],
+    "success": false,
+    "process_result": {
+      "version": 1,
+      "kind": "exit",
+      "value": 1
+    },
+    "fork_control": "ENOSYS beside four live threads; all four joined",
+    "arena_bytes": 67108864,
+    "image_sha256": "2fd2c1a3b4f5029ee954e70dff1e6da1e6a126ce1dbdba6c7b1846949d748a69",
+    "epoll_advertised": true,
+    "classification": "Failed run retained. Atexit child stderr contained UNSERVED syscall 20; disabled unsupported epoll and rebuilt all CPython objects. Also had the memory/thread errors still present in the 128 MiB run."
+  },
+  "isolated_followup": {
+    "ThreadingExceptionTests.test_print_exception_gh_102056": {
+      "modules": [
+        "test.test_threading.ThreadingExceptionTests.test_print_exception_gh_102056"
+      ],
+      "ran": 1,
+      "skipped": [],
+      "errors": [
+        {
+          "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_gh_102056",
+          "exception": "MemoryError",
+          "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1813, in test_print_exception_gh_102056\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 191, in assert_python_failure\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 163, in _assert_python\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 153, in run_python_until_end\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1222, in communicate\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 2148, in _communicate\nMemoryError\n"
+        }
+      ],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": false,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 1
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    },
+    "ThreadingExceptionTests.test_print_exception_stderr_is_none_1": {
+      "modules": [
+        "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_1"
+      ],
+      "ran": 1,
+      "skipped": [],
+      "errors": [],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": true,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    },
+    "ThreadingExceptionTests.test_print_exception_stderr_is_none_2": {
+      "modules": [
+        "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_2"
+      ],
+      "ran": 1,
+      "skipped": [],
+      "errors": [],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": true,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    },
+    "ThreadingExceptionTests.test_recursion_limit": {
+      "modules": [
+        "test.test_threading.ThreadingExceptionTests.test_recursion_limit"
+      ],
+      "ran": 1,
+      "skipped": [],
+      "errors": [],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": true,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    },
+    "ThreadingExceptionTests.test_start_thread_again": {
+      "modules": [
+        "test.test_threading.ThreadingExceptionTests.test_start_thread_again"
+      ],
+      "ran": 1,
+      "skipped": [],
+      "errors": [],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": true,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    },
+    "TimerTests.test_init_immutable_default_args": {
+      "modules": [
+        "test.test_threading.TimerTests.test_init_immutable_default_args"
+      ],
+      "ran": 1,
+      "skipped": [],
+      "errors": [],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": true,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    }
+  },
+  "limitations": [
+    "Fork remains ENOSYS by design. Fork decorators are set before test modules are loaded; test_forkinthread is reported as skipped, not silently excluded.",
+    "Earlier 64/128/192 MiB failures are retained below. A larger arena alone did not qualify test_threading; the allocator fix was required.",
+    "Missing optional modules, insufficient-memory decorators and root-only rlimit behavior remain explicit skips in the recorded lists.",
+    "No asynchronous signal doorbell, sem_open shared file mappings, or broader subprocess contract qualification is claimed."
+  ],
+  "larger_arena_followup": {
+    "arena_bytes": 201326592,
+    "image_sha256": "010c114a6d4c8d16b5a9c645d17138cf454020aaf3e8a96646a142159a32f90d",
+    "result": {
+      "modules": [
+        "test.test_threading"
+      ],
+      "ran": 212,
+      "skipped": [
+        {
+          "test": "test.test_threading.ConditionAsRLockTests.test_recursion_count",
+          "reason": "Condition does not expose _recursion_count()"
+        },
+        {
+          "test": "test.test_threading.EventTests.test_at_fork_reinit",
+          "reason": "platform doesn't support fork (no _at_fork_reinit method)"
+        },
+        {
+          "test": "test.test_threading.LockTests.test_at_fork_reinit",
+          "reason": "platform doesn't support fork (no _at_fork_reinit method)"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_fatal_error",
+          "reason": "No module named '_testcapi'"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_not_allowed [via Thread()]",
+          "reason": "No module named '_testinternalcapi'"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_not_allowed [via Thread.daemon setter]",
+          "reason": "No module named '_testinternalcapi'"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_threads_join",
+          "reason": "requires _testcapi"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_threads_join_2",
+          "reason": "requires _testcapi"
+        },
+        {
+          "test": "test.test_threading.SubinterpThreadingTests.test_threads_not_allowed",
+          "reason": "No module named '_testinternalcapi'"
+        },
+        {
+          "test": "test.test_threading.ThreadJoinOnShutdown.test_2_join_in_forked_process",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadJoinOnShutdown.test_3_join_in_forked_from_thread",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadJoinOnShutdown.test_4_daemon_threads",
+          "reason": "not enough memory: 2.7G minimum needed"
+        },
+        {
+          "test": "test.test_threading.ThreadJoinOnShutdown.test_clear_threads_states_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadJoinOnShutdown.test_reinit_tls_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_PyThreadState_SetAsyncExc",
+          "reason": "No module named '_ctypes'"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_dummy_thread_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_finalize_running_thread",
+          "reason": "No module named '_ctypes'"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_frame_tstate_tracing",
+          "reason": "No module named '_testcapi'"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_is_alive_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_join_from_multiple_threads",
+          "reason": "not enough memory: 1.4G minimum needed"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_main_thread_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_dummy_thread",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_foreign_thread",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_nonmain_thread",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_native_id_after_fork",
+          "reason": "requires working os.fork()"
+        },
+        {
+          "test": "test.test_threading.ThreadTests.test_start_new_thread_failed",
+          "reason": "RLIMIT_NPROC had no effect; probably superuser"
+        }
+      ],
+      "errors": [
+        {
+          "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_gh_102056",
+          "exception": "MemoryError",
+          "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1813, in test_print_exception_gh_102056\n    assert_python_failure(\"-c\", script)\n    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 191, in assert_python_failure\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 163, in _assert_python\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 153, in run_python_until_end\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1222, in communicate\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 2148, in _communicate\nMemoryError\n"
+        },
+        {
+          "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_1",
+          "exception": "MemoryError",
+          "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1751, in test_print_exception_stderr_is_none_1\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 180, in assert_python_ok\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 163, in _assert_python\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 148, in run_python_until_end\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1039, in __init__\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1925, in _execute_child\nMemoryError\n"
+        },
+        {
+          "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_2",
+          "exception": "MemoryError",
+          "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1780, in test_print_exception_stderr_is_none_2\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 180, in assert_python_ok\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 163, in _assert_python\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 148, in run_python_until_end\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1039, in __init__\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1925, in _execute_child\nMemoryError\n"
+        },
+        {
+          "test": "test.test_threading.ThreadingExceptionTests.test_recursion_limit",
+          "exception": "MemoryError",
+          "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1696, in test_recursion_limit\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1039, in __init__\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1925, in _execute_child\nMemoryError\n"
+        },
+        {
+          "test": "test.test_threading.ThreadingExceptionTests.test_start_thread_again",
+          "exception": "RuntimeError: can't start new thread",
+          "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1649, in test_start_thread_again\n  File \"/mnt/host/py/lib/python3.13/threading.py\", line 975, in start\nRuntimeError: can't start new thread\n"
+        },
+        {
+          "test": "test.test_threading.TimerTests.test_init_immutable_default_args",
+          "exception": "RuntimeError: can't start new thread",
+          "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 2003, in test_init_immutable_default_args\n  File \"/mnt/host/py/lib/python3.13/threading.py\", line 975, in start\nRuntimeError: can't start new thread\n"
+        }
+      ],
+      "failures": [],
+      "unexpected_successes": [],
+      "success": false,
+      "process_result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 1
+      },
+      "fork_control": "ENOSYS beside four live threads; all four joined"
+    },
+    "scope": "Only the level0 arena changed from the 128 MiB build; this is an additional test_threading run, not a replacement for the full five-module run."
+  },
+  "raw_recursive_child": {
+    "result": {
+      "version": 1,
+      "kind": "signal",
+      "value": 2
+    },
+    "captured_bytes": 613603,
+    "classification": "Same child script run directly, outside subprocess.communicate, to distinguish child behavior from parent capture exhaustion.",
+    "signal_origin": {
+      "trigger": "CPython 3.13.7 Lib/test/test_threading.py:test_print_exception_gh_102056 starts a worker that calls _thread.interrupt_main() after one second.",
+      "python_delivery": "Modules/_threadmodule.c:thread_PyThread_interrupt_main defaults to SIGINT and calls PyErr_SetInterruptEx; the Python handler raises KeyboardInterrupt.",
+      "process_termination": "Modules/main.c:Py_RunMain sees unhandled_keyboard_interrupt and calls exit_sigint, which sets SIG_DFL and calls kill(getpid(), SIGINT).",
+      "oracle": "The upstream test uses assert_python_failure. Both the native control and the directly run domain child report signal 2.",
+      "scope": "The test triggers its own interrupt; this result does not qualify asynchronous delivery into a computing domain."
+    }
+  },
+  "before_realloc_fix": {
+    "build": {
+      "image_sha256": "6668d216c467bc9e6612b5d5fa185d9fd93250f35cf85f4dd2f1f8cc4486159e",
+      "compiler_sha256": "94a99e60a823f93518485487230fed4fd09f1742862e8e9c07b8adf0ae14d6c8",
+      "runtime_archive_sha256": "b2694320e6f1ce380337839ce59ce7962cd557f445859731afe03d9413cc9337",
+      "builtins_archive_sha256": "5dabb2c966244165de6cdf5f36b272e73a4d3852c651b5941916efd3ce223ef9",
+      "arena_bytes": 134217728,
+      "heap": "level0",
+      "compiler_revision": "fd82fef2a70d",
+      "runtime_base": "14a59e446a4c49282dce120571c3da080ef3d3d8",
+      "source_changes": "This review integrates patch 0015 and disables epoll; real TLS and pointer-preserving patch 0016 retained. Runtime core unchanged from the base.",
+      "patches": "0001-0005, 0007-0013, 0015-0016; plain pymalloc 0009, not Sublet 0014",
+      "patch_0015_source": "dae66593c6c2 (byte-identical)",
+      "patch_0015_sha256": "da8bcbae14fc9ee9cfb7ac8746788d798640e648738bea99b8e880b9fe0e8e64",
+      "runner_sha256": "d11a0878b3ae8861e4914d0787c82f95cea883b5a520ba4cab8b71abdd72a5e1",
+      "survey_objects_compiled": 250,
+      "configure": "_Py_FORK_EXEC_POSIX_SPAWN defined; _Py_THREAD_LOCAL_AS_GLOBAL absent; HAVE_EPOLL and HAVE_EPOLL_CREATE1 absent",
+      "stdlib": "Patched source Lib plus current target _sysconfigdata__linux_.py; prefix/bin/python image, prefix/lib/python3.13 with empty lib-dynload; PYTHONHOME set; children also find the prefix under -I/-E."
+    },
+    "suites": {
+      "test.test_threading": {
+        "modules": [
+          "test.test_threading"
+        ],
+        "ran": 212,
+        "skipped": [
+          {
+            "test": "test.test_threading.ConditionAsRLockTests.test_recursion_count",
+            "reason": "Condition does not expose _recursion_count()"
+          },
+          {
+            "test": "test.test_threading.EventTests.test_at_fork_reinit",
+            "reason": "platform doesn't support fork (no _at_fork_reinit method)"
+          },
+          {
+            "test": "test.test_threading.LockTests.test_at_fork_reinit",
+            "reason": "platform doesn't support fork (no _at_fork_reinit method)"
+          },
+          {
+            "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_fatal_error",
+            "reason": "No module named '_testcapi'"
+          },
+          {
+            "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_not_allowed [via Thread()]",
+            "reason": "No module named '_testinternalcapi'"
+          },
+          {
+            "test": "test.test_threading.SubinterpThreadingTests.test_daemon_threads_not_allowed [via Thread.daemon setter]",
+            "reason": "No module named '_testinternalcapi'"
+          },
+          {
+            "test": "test.test_threading.SubinterpThreadingTests.test_threads_join",
+            "reason": "requires _testcapi"
+          },
+          {
+            "test": "test.test_threading.SubinterpThreadingTests.test_threads_join_2",
+            "reason": "requires _testcapi"
+          },
+          {
+            "test": "test.test_threading.SubinterpThreadingTests.test_threads_not_allowed",
+            "reason": "No module named '_testinternalcapi'"
+          },
+          {
+            "test": "test.test_threading.ThreadJoinOnShutdown.test_2_join_in_forked_process",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadJoinOnShutdown.test_3_join_in_forked_from_thread",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadJoinOnShutdown.test_4_daemon_threads",
+            "reason": "not enough memory: 2.7G minimum needed"
+          },
+          {
+            "test": "test.test_threading.ThreadJoinOnShutdown.test_clear_threads_states_after_fork",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadJoinOnShutdown.test_reinit_tls_after_fork",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_PyThreadState_SetAsyncExc",
+            "reason": "No module named '_ctypes'"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_dummy_thread_after_fork",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_finalize_running_thread",
+            "reason": "No module named '_ctypes'"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_frame_tstate_tracing",
+            "reason": "No module named '_testcapi'"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_is_alive_after_fork",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_join_from_multiple_threads",
+            "reason": "not enough memory: 1.4G minimum needed"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_main_thread_after_fork",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_dummy_thread",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_foreign_thread",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_nonmain_thread",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_native_id_after_fork",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_threading.ThreadTests.test_start_new_thread_failed",
+            "reason": "RLIMIT_NPROC had no effect; probably superuser"
+          }
+        ],
+        "errors": [
+          {
+            "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_gh_102056",
+            "exception": "MemoryError",
+            "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1813, in test_print_exception_gh_102056\n    assert_python_failure(\"-c\", script)\n    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 191, in assert_python_failure\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 163, in _assert_python\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 153, in run_python_until_end\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1222, in communicate\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 2148, in _communicate\nMemoryError\n"
+          },
+          {
+            "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_1",
+            "exception": "MemoryError",
+            "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1751, in test_print_exception_stderr_is_none_1\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 180, in assert_python_ok\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 163, in _assert_python\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 148, in run_python_until_end\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1039, in __init__\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1925, in _execute_child\nMemoryError\n"
+          },
+          {
+            "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_2",
+            "exception": "MemoryError",
+            "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1780, in test_print_exception_stderr_is_none_2\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 180, in assert_python_ok\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 163, in _assert_python\n  File \"/mnt/host/py/lib/python3.13/test/support/script_helper.py\", line 148, in run_python_until_end\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1039, in __init__\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1925, in _execute_child\nMemoryError\n"
+          },
+          {
+            "test": "test.test_threading.ThreadingExceptionTests.test_recursion_limit",
+            "exception": "MemoryError",
+            "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1696, in test_recursion_limit\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1039, in __init__\n  File \"/mnt/host/py/lib/python3.13/subprocess.py\", line 1925, in _execute_child\nMemoryError\n"
+          },
+          {
+            "test": "test.test_threading.ThreadingExceptionTests.test_start_thread_again",
+            "exception": "RuntimeError: can't start new thread",
+            "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 1649, in test_start_thread_again\n  File \"/mnt/host/py/lib/python3.13/threading.py\", line 975, in start\nRuntimeError: can't start new thread\n"
+          },
+          {
+            "test": "test.test_threading.TimerTests.test_init_immutable_default_args",
+            "exception": "RuntimeError: can't start new thread",
+            "traceback": "Traceback (most recent call last):\n  File \"/mnt/host/py/lib/python3.13/test/test_threading.py\", line 2003, in test_init_immutable_default_args\n  File \"/mnt/host/py/lib/python3.13/threading.py\", line 975, in start\nRuntimeError: can't start new thread\n"
+          }
+        ],
+        "failures": [],
+        "unexpected_successes": [],
+        "success": false,
+        "process_result": {
+          "version": 1,
+          "kind": "exit",
+          "value": 1
+        },
+        "fork_control": "ENOSYS beside four live threads; all four joined"
+      },
+      "test.test_thread": {
+        "modules": [
+          "test.test_thread"
+        ],
+        "ran": 35,
+        "skipped": [
+          {
+            "test": "test.test_thread.LockTests.test_at_fork_reinit",
+            "reason": "platform doesn't support fork (no _at_fork_reinit method)"
+          },
+          {
+            "test": "test.test_thread.TestForkInThread.test_forkinthread",
+            "reason": "requires working os.fork()"
+          }
+        ],
+        "errors": [],
+        "failures": [],
+        "unexpected_successes": [],
+        "success": true,
+        "process_result": {
+          "version": 1,
+          "kind": "exit",
+          "value": 0
+        },
+        "fork_control": "ENOSYS beside four live threads; all four joined"
+      },
+      "test.test_threading_local": {
+        "modules": [
+          "test.test_threading_local"
+        ],
+        "ran": 22,
+        "skipped": [
+          {
+            "test": "test.test_threading_local.PyThreadingLocalTest.test_threading_local_clear_race",
+            "reason": "No module named '_testcapi'"
+          },
+          {
+            "test": "test.test_threading_local.ThreadLocalTest.test_threading_local_clear_race",
+            "reason": "No module named '_testcapi'"
+          }
+        ],
+        "errors": [],
+        "failures": [],
+        "unexpected_successes": [],
+        "success": true,
+        "process_result": {
+          "version": 1,
+          "kind": "exit",
+          "value": 0
+        },
+        "fork_control": "ENOSYS beside four live threads; all four joined"
+      },
+      "test.test_queue": {
+        "modules": [
+          "test.test_queue"
+        ],
+        "ran": 162,
+        "skipped": [
+          {
+            "test": "test.test_queue.CSimpleQueueTest.test_many_threads",
+            "reason": "not enough memory: 4.9G minimum needed"
+          },
+          {
+            "test": "test.test_queue.CSimpleQueueTest.test_many_threads_nonblock",
+            "reason": "not enough memory: 4.9G minimum needed"
+          },
+          {
+            "test": "test.test_queue.CSimpleQueueTest.test_many_threads_timeout",
+            "reason": "not enough memory: 4.9G minimum needed"
+          },
+          {
+            "test": "test.test_queue.PySimpleQueueTest.test_many_threads",
+            "reason": "not enough memory: 4.9G minimum needed"
+          },
+          {
+            "test": "test.test_queue.PySimpleQueueTest.test_many_threads_nonblock",
+            "reason": "not enough memory: 4.9G minimum needed"
+          },
+          {
+            "test": "test.test_queue.PySimpleQueueTest.test_many_threads_timeout",
+            "reason": "not enough memory: 4.9G minimum needed"
+          }
+        ],
+        "errors": [],
+        "failures": [],
+        "unexpected_successes": [],
+        "success": true,
+        "process_result": {
+          "version": 1,
+          "kind": "exit",
+          "value": 0
+        },
+        "fork_control": "ENOSYS beside four live threads; all four joined"
+      },
+      "test.test_concurrent_futures.test_thread_pool": {
+        "modules": [
+          "test.test_concurrent_futures.test_thread_pool"
+        ],
+        "ran": 17,
+        "skipped": [
+          {
+            "test": "test.test_concurrent_futures.test_thread_pool.ThreadPoolExecutorTest.test_hang_global_shutdown_lock",
+            "reason": "requires working os.fork()"
+          },
+          {
+            "test": "test.test_concurrent_futures.test_thread_pool.ThreadPoolExecutorTest.test_process_fork_from_a_threadpool",
+            "reason": "requires working os.fork()"
+          }
+        ],
+        "errors": [],
+        "failures": [],
+        "unexpected_successes": [],
+        "success": true,
+        "process_result": {
+          "version": 1,
+          "kind": "exit",
+          "value": 0
+        },
+        "fork_control": "ENOSYS beside four live threads; all four joined"
+      }
+    },
+    "previous_26_subprocess_errors": [
+      {
+        "test": "test.test_threading.ThreadJoinOnShutdown.test_1_join_on_shutdown",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadJoinOnShutdown.test_2_join_in_forked_process",
+        "outcome": "skipped 'requires working os.fork()'"
+      },
+      {
+        "test": "test.test_threading.ThreadJoinOnShutdown.test_3_join_in_forked_from_thread",
+        "outcome": "skipped 'requires working os.fork()'"
+      },
+      {
+        "test": "test.test_threading.AtexitTests.test_atexit_after_shutdown",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.AtexitTests.test_atexit_called_once",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.AtexitTests.test_atexit_output",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_dummy_thread_after_fork",
+        "outcome": "skipped 'requires working os.fork()'"
+      },
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_dummy_thread_on_interpreter_shutdown",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_finalization_shutdown",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_finalize_with_trace",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_import_from_another_thread",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_join_nondaemon_on_shutdown",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_locals_at_exit",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_main_thread_after_fork",
+        "outcome": "skipped 'requires working os.fork()'"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_dummy_thread",
+        "outcome": "skipped 'requires working os.fork()'"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_foreign_thread",
+        "outcome": "skipped 'requires working os.fork()'"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_main_thread_after_fork_from_nonmain_thread",
+        "outcome": "skipped 'requires working os.fork()'"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_main_thread_during_shutdown",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_print_exception",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_gh_102056",
+        "outcome": "ERROR"
+      },
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_1",
+        "outcome": "ERROR"
+      },
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_print_exception_stderr_is_none_2",
+        "outcome": "ERROR"
+      },
+      {
+        "test": "test.test_threading.ThreadingExceptionTests.test_recursion_limit",
+        "outcome": "ERROR"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_start_new_thread_at_finalization",
+        "outcome": "ok"
+      },
+      {
+        "test": "test.test_threading.ThreadTests.test_start_new_thread_failed",
+        "outcome": "skipped 'RLIMIT_NPROC had no effect; probably superuser'"
+      },
+      {
+        "test": "test.test_threading.ThreadJoinOnShutdown.test_thread_from_thread",
+        "outcome": "ok"
+      }
+    ],
+    "subprocess_smoke": {
+      "result": {
+        "version": 1,
+        "kind": "exit",
+        "value": 0
+      },
+      "result_lines": [
+        "PASS run-capture rc=3 out='out\\n' err='err\\n'",
+        "PASS check_output ",
+        "PASS check_call-raises ",
+        "PASS communicate-stdin 'FROM A PIPE\\n'",
+        "PASS popen-cat-10k len=10000 rc=0",
+        "PASS env-cwd 'marker\\n/tmp\\n'",
+        "PASS enoent FileNotFoundError(2, 'No such file or directory')",
+        "PASS enoent-cwd FileNotFoundError",
+        "PASS pass_fds rc=0 read=b'kept\\n'",
+        "PASS close_fds read=b''",
+        "PASS restore_signals rc=-13 out=''",
+        "PASS inherit-ign rc=0 out='alive\\n'",
+        "PASS terminate rc=-15",
+        "PASS wait-timeout ",
+        "PASS run-timeout ",
+        "PASS new-session '3134\\n'",
+        "PASS process-group rc=0 out='skip'",
+        "PASS preexec-refused errno=38",
+        "PASS child-signals-parent got=[1] out='done\\n'",
+        "PASS os.popen ",
+        "PASS shell '42\\n'",
+        "SMOKE 21 / 21"
+      ],
+      "unserved_diagnostics": 0
+    }
+  },
+  "allocator_control": "runtime/tests/application/results/20260930-level0-realloc-review.json: before failed at allocation 31; after 4096 retained short reads, capability payloads, regrowth and 900 KiB coalesced allocation pass natively and in the domain.",
+  "native_ctest": {
+    "passed": 45,
+    "total": 45,
+    "sanitizers": "ASan and UBSan"
+  },
+  "pthread_probe": {
+    "passed": 29,
+    "total": 29,
+    "image_sha256": "873a02a744f1150c3a497d112b91e967d2e03e5536c58a854dae61500cbcf2f4"
+  },
+  "scanner": {
+    "objects": 1629,
+    "uncovered_address_slots": 1,
+    "incomplete": 0,
+    "reviewed_uncovered": "SDK __capstone_init_fini_anchor_link is an integer by design",
+    "scope": "Store coverage, not a proof of capability tags or bounds"
+  },
+  "gate_success": true
+}

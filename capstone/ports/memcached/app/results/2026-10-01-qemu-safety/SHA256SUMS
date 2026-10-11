@@ -1,0 +1,8 @@
+# The booted safety images, as host/build-safety.sh built them into $MC_WORK/safety and as every
+# boot's share copy hashed (run-safety.py inputs.json). Verify from $MC_WORK with sha256sum -c.
+# Guest harness (mc-harness, built per run from host/mc-harness/mc-harness.c): c63e9def... in level0
+# and shrink repeat 1; 5457112b... in every other boot (the per-connection 'dead' flag, inert on the
+# --fixture path).
+c95d671ea278c7652d393857d7657f39b2bf4a822ea900f9f49bc0530036d7ad  safety/memcached-safety-level0.dom
+1e91bb87d6e07e6860ce7431a8a1819337c94e41ad97b59052612d3029b4de7c  safety/memcached-safety-shrink.dom
+5ec91350af84bb430bf558f3f8d77d03af0d165ad6b2f03ff33a0ae3d53bc331  safety/memcached-safety-sublet.dom

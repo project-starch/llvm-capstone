@@ -1,0 +1,27 @@
+.bail on
+CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, x REAL, b BLOB);
+BEGIN;
+INSERT INTO t(name, x, b) VALUES ('alpha', 1.5, x'00ff'), ('beta', -2.25, NULL),
+  ('gamma', 3.14159265358979, zeroblob(4)), ('delta', 1e300, x''), ('epsilon', -0.0, 'text');
+COMMIT;
+SELECT id, name, x, hex(b), typeof(x), typeof(b) FROM t ORDER BY id;
+SELECT sum(x) < 1e301, avg(x) > 0, round(3.14159265358979, 3), printf('%.6f|%e|%g', 1.0/3, 12345.678, 0.0001) FROM t;
+SELECT 7/2, 7/2.0, cast('12.5e3' AS REAL), cast(9.99 AS INTEGER), 1e308*10, -1e308*10, abs(-7.25);
+CREATE INDEX t_name ON t(name);
+SELECT name FROM t WHERE name > 'b' ORDER BY name;
+WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 1000)
+  SELECT count(*), sum(n), total(n * 0.5), group_concat(n % 7, '') FROM (SELECT n FROM c WHERE n <= 40);
+SELECT upper(name), length(name), substr(name, 2, 3), replace(name, 'a', '@'), instr(name, 'l') FROM t ORDER BY id;
+UPDATE t SET x = x * 2 WHERE name IN ('alpha', 'beta');
+DELETE FROM t WHERE name = 'delta';
+SELECT count(*), sum(x) FROM t;
+PRAGMA journal_mode;
+PRAGMA integrity_check;
+.tables
+.schema t
+BEGIN IMMEDIATE;
+INSERT INTO t(name) VALUES ('held');
+.system sh @HELPER@ @SQLITE3@ @DB@
+COMMIT;
+SELECT count(*) FROM t WHERE name IN ('held', 'other');
+SELECT sqlite_version();

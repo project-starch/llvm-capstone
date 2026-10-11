@@ -1,0 +1,16 @@
+{
+  "definition": "same arena start; logical free to next successful allocation; floor(log2 gap) bins; successful measured-unit memsys5 allocations denominator; setup prefix disclosed",
+  "observer_invariance": "Every SQLite phase ledger field except separately charged observer bytes equals the preceding normalized campaign in all 12 churn runs",
+  "plotter_sha256": "0515e6835dd84b7f258addb9b01bb5a2b5c489737509baa24e5a530f39c368d9",
+  "inputs_sha256": {
+    "inputs.json": "ac6af767662199378be8bc97c3a029282e7b32818dd83507c5e614dfcf29806f",
+    "run-cheri.py": "9c6c2dedd28a37556ac28021a6da60e8d2a382a26154e09eb72457835a01be8f",
+    "nodes4m/run-capstone.py": "c7765d99cf17d2ab85e0e6fbddd720390bf0ab8cc6b944029e4dcdbd174cf43b"
+  },
+  "measured_binaries_sha256": {
+    "capstone": "4a4a5e830760c3cc0eef67f16599b5aa2113a446ba3b776edc8270dc4a88c9eb",
+    "capstone-sublet": "b28467db84e8463abf6a2aec2e9f67a218b31c6681e6004f3990c0cdb54580d4",
+    "poisoncap-spatial": "59fa7a6e9f6c6e9e4e5bb04c7fb7c7088a49b6436661777e85692f86cd0f8c27",
+    "poisoncap-temporal": "304d3c654437abf7903907c21a02905e58941fd95fa2e7737bfc7b48b7cc4dad"
+  }
+}

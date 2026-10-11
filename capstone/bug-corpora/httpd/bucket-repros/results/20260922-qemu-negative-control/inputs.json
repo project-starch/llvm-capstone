@@ -1,0 +1,38 @@
+{
+  "arms": {
+    "00-spatial": {
+      "defects.dom": "258204d201405600be69c532f8dceba7d2248ad598d7ce8e8eef99c5cc318522",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "a83f6c7e00d689af5bf783efa925624379afd32f5208682e6515ef8b2ef4f7dc"
+    },
+    "00-sublet": {
+      "defects.dom": "258204d201405600be69c532f8dceba7d2248ad598d7ce8e8eef99c5cc318522",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "a83f6c7e00d689af5bf783efa925624379afd32f5208682e6515ef8b2ef4f7dc"
+    },
+    "04-spatial": {
+      "defects.dom": "35f1e357936321d72981b65fc73084fc105c260d93b7d1a9b96207afb9e32422",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "bdf286c61234ebf5b311555126f69e732c72b29497b99f2dda02accfd254d059"
+    },
+    "04-sublet": {
+      "defects.dom": "35f1e357936321d72981b65fc73084fc105c260d93b7d1a9b96207afb9e32422",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "bdf286c61234ebf5b311555126f69e732c72b29497b99f2dda02accfd254d059"
+    },
+    "06-spatial": {
+      "defects.dom": "9a05a083454aaaf5a09d02154eac36fe37f9fc0a05e7cc586b3ce4877c819a06",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "613e859b1012b707ee1e2f969c075b9d1cead912d70a0c71e88a4f202d5940c8"
+    },
+    "06-sublet": {
+      "defects.dom": "9a05a083454aaaf5a09d02154eac36fe37f9fc0a05e7cc586b3ce4877c819a06",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "613e859b1012b707ee1e2f969c075b9d1cead912d70a0c71e88a4f202d5940c8"
+    }
+  },
+  "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+  "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+  "arms_total": 6,
+  "arms_passed": 0
+}

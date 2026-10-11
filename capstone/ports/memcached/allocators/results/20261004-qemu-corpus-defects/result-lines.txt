@@ -1,0 +1,31 @@
+# memcached allocator-defect corpus, capstone-domain arms, QEMU, 2026-10-04
+# runner : bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py
+#          --modes spatial,sublet   (spatial = mode 0, sublet = mode 1)
+# NOTE   : the corpus gitignores its own results/ by policy, so this bundle lives in the
+#          port the corpus names (corpus.json upstream.port).
+
+## MAIN SUITE -- 10 of 10 arms as expected
+{"case": 0, "name": "rbuf-copied-after-cache-free", "fix": "7af02b0c87", "shape": "stale object pointer / cache.c reuse / read through the dead pointer", "mode": "spatial", "expected": "complete", "passed": true, "completed": 1, "runner_exit": 0}
+{"case": 0, "name": "rbuf-copied-after-cache-free", "fix": "7af02b0c87", "shape": "stale object pointer / cache.c reuse / read through the dead pointer", "mode": "sublet", "expected": "fault", "passed": true, "cause": 24, "pc": "0x1018cb928", "expected_pc": "0x1018cb928", "runner_exit": 1}
+{"case": 1, "name": "io-walk-reads-freed-link", "fix": "0ad4de66ae", "shape": "stale object pointer / cache.c reuse / list link read through the dead pointer", "mode": "spatial", "expected": "complete", "passed": true, "completed": 1, "runner_exit": 0}
+{"case": 1, "name": "io-walk-reads-freed-link", "fix": "0ad4de66ae", "shape": "stale object pointer / cache.c reuse / list link read through the dead pointer", "mode": "sublet", "expected": "fault", "passed": true, "cause": 24, "pc": "0x1018abca0", "expected_pc": "0x1018abca0", "runner_exit": 1}
+{"case": 2, "name": "tail-repair-frees-referenced-item", "fix": "59bd02ce29", "shape": "allocator-forced free of a referenced item / slabs reuse / read through the dead pointer", "mode": "spatial", "expected": "complete", "passed": true, "completed": 1, "runner_exit": 0}
+{"case": 2, "name": "tail-repair-frees-referenced-item", "fix": "59bd02ce29", "shape": "allocator-forced free of a referenced item / slabs reuse / read through the dead pointer", "mode": "sublet", "expected": "fault", "passed": true, "cause": 24, "pc": "0x1018aac68", "expected_pc": "0x1018aac68", "runner_exit": 1}
+{"case": 3, "name": "refcount-overflow-frees-linked-item", "fix": "a8c4a82787", "shape": "reference count overflow / item freed with holders remaining / slabs reuse / read through the dead pointer", "mode": "spatial", "expected": "complete", "passed": true, "completed": 1, "runner_exit": 0}
+{"case": 3, "name": "refcount-overflow-frees-linked-item", "fix": "a8c4a82787", "shape": "reference count overflow / item freed with holders remaining / slabs reuse / read through the dead pointer", "mode": "sublet", "expected": "fault", "passed": true, "cause": 24, "pc": "0x10186af14", "expected_pc": "0x10186af14", "runner_exit": 1}
+{"case": 4, "name": "unlocked-refcount-drift", "fix": "152ddb68f7", "shape": "unlocked refcount update / count drifts below the holders / slabs reuse / read through the dead pointer", "mode": "spatial", "expected": "complete", "passed": true, "completed": 1, "runner_exit": 0}
+{"case": 4, "name": "unlocked-refcount-drift", "fix": "152ddb68f7", "shape": "unlocked refcount update / count drifts below the holders / slabs reuse / read through the dead pointer", "mode": "sublet", "expected": "fault", "passed": true, "cause": 24, "pc": "0x10186ac84", "expected_pc": "0x10186ac84", "runner_exit": 1}
+
+## NEGATIVE CONTROL -- the input is corrupted so the domain refuses the case;
+## EVERY arm must be reported failing, or an oracle is vacuous. Runner exit 0 = all failed.
+## rows=10  passed=True:0  passed=False:10
+{"case": 0, "mode": "spatial", "expected": "complete", "passed": false, "runner_exit": 0}
+{"case": 0, "mode": "sublet", "expected": "fault", "passed": false, "runner_exit": 0}
+{"case": 1, "mode": "spatial", "expected": "complete", "passed": false, "runner_exit": 0}
+{"case": 1, "mode": "sublet", "expected": "fault", "passed": false, "runner_exit": 0}
+{"case": 2, "mode": "spatial", "expected": "complete", "passed": false, "runner_exit": 0}
+{"case": 2, "mode": "sublet", "expected": "fault", "passed": false, "runner_exit": 0}
+{"case": 3, "mode": "spatial", "expected": "complete", "passed": false, "runner_exit": 0}
+{"case": 3, "mode": "sublet", "expected": "fault", "passed": false, "runner_exit": 0}
+{"case": 4, "mode": "spatial", "expected": "complete", "passed": false, "runner_exit": 0}
+{"case": 4, "mode": "sublet", "expected": "fault", "passed": false, "runner_exit": 0}

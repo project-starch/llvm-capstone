@@ -1,5 +1,52 @@
 # S-11 — SEAL enforces neither its minimum size nor its base alignment
 
+> **2026-10-01 (evening): FIXED IN RTL on `capstone-ariane` branch `sup-call`, audited; RESIDENT since 2026-10-02 in `caplifive_supcall_36a641e0b.bit`, and CONFIRMED ON SILICON 2026-10-03: all seven `sup-sealsize` arms ran bare on the board exact to simulation -- 64, 1023 and the misaligned 1024 trap with 29; 1024, 2048, the aligned +16 and the cursor-at-+960 arm seal with every canary word intact (the board lane's `tests/rtl-smoke/sup-bare-2026-10-03-ladder/`).**
+> The lead delegated the decision ("audit and decide"); the fix is the one this folder asked for, plus one thing the
+> audit of it found. (a) Every comparison in `func SEAL` parenthesised on its own, and the `+1` dropped so that
+> `size = end - start` with the exclusive end (R-32's off-by-one): a region smaller than 1024 bytes or not 16-byte
+> aligned raises `ILLEGAL_OPERAND_VALUE` (29). Measured in simulation (`verif/tests/custom/capstone/sup-sealsize.S`):
+> 64 and 1023 bytes trap; 1024 and 2048 seal with every canary word intact; a 1024-byte region starting 8 bytes
+> into an aligned block traps (the alignment clause alone), the same at +16 seals. (b) The audit refuted the
+> fix's stated guarantee as it stood: a SEALED capability carries no bounds in a register, its effective base is
+> its CURSOR, so a 1024-byte region sealed with the cursor advanced to +960 would still put the switch's writes
+> past the region. SEAL therefore now sets the sealed cursor to the region's START (the spec says the cursor does
+> not apply to a sealed capability; QEMU's CALL uses the region's base) -- measured: that cursor arm reads as the
+> control. The cursor is NOT checked, deliberately: the resident monitor seals its interrupt-handler region with
+> the cursor at +88, which a cursor check would trap at boot. Every known sealer complies with the size and
+> alignment (the monitor's domain seals 1536 B page-aligned, its interrupt-handler seal exactly 1024 B aligned, the
+> runtime's contexts 1024 B, every directed test >= 2048 B). QEMU's minimum stays 528 with a different cause;
+> silicon is now the stricter side, and QEMU's `CAP_SEALED_SIZE_MIN` should be raised to 1024. Note for the two
+> branches carrying `seal-minsize-boundary.S` (`board/r35-directed-repro`, `s12-ldc-rolling-filter`): its 1022-byte
+> arm now expects the trap. Registry: R-32 (SEAL's half fixed) and R-48 (the SEALEDRET window, the cursor's other
+> half, unverified).
+
+
+> **2026-10-01: the precedence model is now read from the compiler itself, and two lines below are superseded.**
+> The Anvil grammar (`lib/parser.mly:87-91` in the pinned `corank/anvil:cva6` image, compiler commit `288373b5`)
+> declares `<` `>` `<=` `>=` at the LOWEST precedence, right-associative, below `&&`/`||` (line 90) and below
+> `==`/`!=` (line 91). That is the refined model of the 2026-08-23 history note, confirmed at its source, and
+> closes the "not yet confirmed against a precedence table" gap recorded further down. Consequences:
+> (1) **QEMU now raises** — the "QEMU never raises" line below is stale: `c128-qemu-merge` raises
+> `INSUF_CAP_PERMS` on an undersized or misaligned SEAL since 2026-09-26 (commit `6550f19489`; the parent's
+> pinned `674cdab03c` has it), with its minimum still **528** bytes against this RTL's intended 1024, and a
+> different cause code from the RTL's `ILLEGAL_OPERAND_VALUE`. (2) The **second instance** of the same fold, the
+> domain switcher's full-mode slot sizing (`capstone_dom_switcher.anvil`, the 2026-08-23 note), is **fixed** on
+> `capstone-ariane` branch `sup-call` (`d38887426`), confirmed by the switcher's own trace: ids 0-2 at 0/16/32,
+> 3-8 at 48..88 by 8, 9-56 at 96..848 by 16, 57-66 at 864..936 by 8. [Superseded the same evening by the top callout: fixed.] The SEAL instance here was at that hour deliberately NOT
+> fixed on that branch: the threshold (1024 vs QEMU's 528, plus the `+1` below) is a contract decision.
+> (3) What the dead check costs a CALL, measured in simulation (`verif/tests/custom/capstone/sup-sealsize.S` on
+> `sup-call`, retirement-trace readings): a **64-byte** seal is accepted (LCC type 4), and the CALL's 8-register
+> exchange then writes the caller's medeleg/mip/mie images at **+64/+72/+80**, past the capability's exclusive
+> end (the callee reads 0 / 0x80 / 0 where the canary held 0xC0C0…; +88 is untouched), while the callee's own
+> medeleg loads the canary pattern from beyond the seal. A 2048-byte control keeps every canary word. (4) A
+> deterministic census, `verif/sim/anvil-relational-lint.py` (same branch, with a self-test), flags any relational
+> sharing a parenthesis group with `&&`/`||`; on the resident sources it flags exactly `flu:215` and the switcher
+> line, nothing else. Supervised CALL's `cssupervise` checks the save area's size and alignment and the seal's
+> alignment itself; the seal's SIZE it cannot check (corrected 2026-10-01: a SEALED capability carries no end bound in a
+> register -- `ariane_pkg.sv` `decompress_cap_metadata` returns `bound_end = 0` for SEALED/SEALEDRET, that field
+> holds reg_id/async -- so the 1024-byte minimum the switch's walks rely on is SEAL's alone to enforce, i.e. this
+> very defect; until it was fixed that evening -- the top callout -- the resident monitor's 1536-byte seals and the runtime's 1024-byte seals were the guarantee).
+
 > **2026-09-10: CONFIRMED ON THE RTL BY A DIRECTED TEST.** `verif/tests/custom/capstone/seal-minsize-boundary.S` (`capstone-ariane` `f6ec6c198`), 670 cycles: a **1022-byte** region seals without raising, where the spec requires ≥ 1024. Its negative control — sealing a NON-LINEAR capability, which SEAL rejects on a different branch (`UNEXPECTED_CAP_TYPE`, mcause 27) — is the **only** exception in the whole run, so "no arm raised" cannot be the instrument failing to reach SEAL. Until now this folder rested on reading the generated Verilog; it now rests on the hardware.
 >
 > **AND THERE IS A SECOND DEFECT UNDERNEATH IT.** The Anvil computes `size = end - start + 1` (`flu:159`) — an INCLUSIVE formula under this RTL's EXCLUSIVE `end` — so even once the folded condition is repaired the check admits a region whose real size is **1023** bytes. **Fixing the fold without fixing the `+1` ships a check that is wrong on its first day.** The test's 1023-byte arm exists for exactly that and becomes the discriminator with no rewrite. Tracked as `R-32` in the registry.

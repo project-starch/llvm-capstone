@@ -51,7 +51,14 @@ typedef int        apr_os_proc_t;
 #define APR_ENOMEM     20002
 #define APR_ALIGN(size, boundary) \
     (((size) + ((boundary) - 1)) & ~((boundary) - 1))
-#define APR_ALIGN_DEFAULT(size) APR_ALIGN(size, 8)
+/* Upstream rounds every apr_palloc result and every header size to 8. The pools port sets this
+   to 16 (-DAPR_ALIGN_DEFAULT_BOUNDARY=16): a capability is 16 bytes and must be stored 16-aligned,
+   and a 24-byte apr_palloc followed by a cleanup_t -- two function-pointer capabilities -- would
+   otherwise trap on the store. The census keeps upstream's 8, so its numbers stay upstream's. */
+#ifndef APR_ALIGN_DEFAULT_BOUNDARY
+#define APR_ALIGN_DEFAULT_BOUNDARY 8
+#endif
+#define APR_ALIGN_DEFAULT(size) APR_ALIGN(size, APR_ALIGN_DEFAULT_BOUNDARY)
 
 /* ---- what apr_pools.c needs for the three services that share its file ----
  *

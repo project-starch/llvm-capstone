@@ -1,0 +1,1308 @@
+{
+  "control_attempts": 42,
+  "control_statuses": {
+    "pass": 36,
+    "signal": 6
+  },
+  "controls": 36,
+  "pair_checks": 108,
+  "equal": 108,
+  "checks": [
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        1,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        1,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        1,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        1,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        1,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        1,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        1,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        1,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        1,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        4,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        4,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        4,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        4,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        4,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        4,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        4,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        4,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        4,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        16,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        16,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        16,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        16,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        16,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        16,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        16,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        16,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        16,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        150,
+        1,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        150,
+        1,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        150,
+        1,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        150,
+        1,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        150,
+        1,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        150,
+        1,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        150,
+        1,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        150,
+        1,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        150,
+        1,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        600,
+        1,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        600,
+        1,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        600,
+        1,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        600,
+        1,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        600,
+        1,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        600,
+        1,
+        0
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        600,
+        1,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        600,
+        1,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        600,
+        1,
+        0
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        32,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        8,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        8,
+        256
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        8,
+        256
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        4096
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        4096
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        4096
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        4096
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        4096
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        4096
+      ],
+      "control_repetition": 1,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        4096
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        4096
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        8,
+        4096
+      ],
+      "control_repetition": 2,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        16,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        16,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        512,
+        16,
+        256
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        32,
+        4096
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        32,
+        4096
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "mruby",
+        128,
+        32,
+        4096
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        64,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 0,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        64,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 1,
+      "equal": true,
+      "differing": []
+    },
+    {
+      "workload": [
+        "ffmpeg",
+        30,
+        64,
+        0
+      ],
+      "control_repetition": 0,
+      "primary_repetition": 2,
+      "equal": true,
+      "differing": []
+    }
+  ]
+}

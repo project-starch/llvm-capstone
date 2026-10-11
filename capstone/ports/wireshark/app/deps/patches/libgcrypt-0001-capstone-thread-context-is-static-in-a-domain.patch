@@ -1,0 +1,21 @@
+CAPSTONE (tshark app port): libgcrypt keeps its per-thread FIPS context in a __thread variable
+and refuses to build without one. A __thread that is referenced cannot be lowered for capstone64
+(ISSUES C-47: "Cannot select: GlobalTLSAddress"), and configure's probe is compile-only, so it
+reports __thread present. A domain runs one thread, so under CAPSTONE_SINGLE_THREAD_DOMAIN the
+context is plain static storage: the same choice as the port's Wireshark patch 0004.
+
+--- a/src/fips.c
++++ b/src/fips.c
+@@ -74,7 +74,11 @@
+   unsigned int flags_reject_non_fips;
+ };
+ 
+-#ifdef HAVE_GCC_STORAGE_CLASS__THREAD
++#if defined(CAPSTONE_SINGLE_THREAD_DOMAIN)
++static struct gcry_thread_context the_tc = {
++  0, GCRY_FIPS_FLAG_REJECT_DEFAULT
++};
++#elif defined(HAVE_GCC_STORAGE_CLASS__THREAD)
+ static __thread struct gcry_thread_context the_tc = {
+   0, GCRY_FIPS_FLAG_REJECT_DEFAULT
+ };

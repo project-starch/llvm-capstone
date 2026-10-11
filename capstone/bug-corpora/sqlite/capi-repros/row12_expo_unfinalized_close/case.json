@@ -1,0 +1,21 @@
+{
+  "case": 12,
+  "upstream_fix": "expo#34990",
+  "title": "A host ignores SQLITE_BUSY from closing a connection with a live statement, clears its database handle, and later dereferences that NULL handle.",
+  "consumer": "expo-sqlite",
+  "class": "null-deref",
+  "verdict": "modeled",
+  "primitive": "H,R",
+  "live_in_pin": null,
+  "live_note": "The defect is in the binding, not in SQLite: this corpus pins no binding release, and the host arm builds the 3.53.3 amalgamation, so whether a row is live in a given binding version is not established here.",
+  "arms": {
+    "host-asan": {
+      "oracle": "null-deref",
+      "observed": "re-anchored (task-013): the real crash is a Java NullPointerException on close-while-busy \u2014 adjacent, not a C SQLite-pointer null-deref (see negative search)"
+    }
+  },
+  "capstone_column": {
+    "ledger_status": "model only"
+  },
+  "status": "host ASan arm recorded, oracle 'null-deref'; NOTE.md records why it is not reproduced"
+}

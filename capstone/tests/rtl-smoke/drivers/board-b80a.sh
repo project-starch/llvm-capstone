@@ -67,7 +67,11 @@ for p in sorted(glob.glob(L+'/overlay/test-domains/*')):
     d=open(p,'rb').read()
     if d[:4]!=b'\x7fELF': continue
     e=struct.unpack_from('<Q',d,0x18)[0]; n=p.split('/')[-1]
-    print(f"  entry {e:#012x}  {n}"); seen.setdefault(e,[]).append(n)
+    # Only DOMAINS can collide: R-3 hangs a second domain entered at a reused VA. Host programs (lpc,
+    # sqlite_host*.user) are Linux processes and two identical copies share an entry harmlessly;
+    # counting them refused a valid boot (p1o2-c6, 2026-09-29). Same scope as preflight C15 (*.dom).
+    dom = n.endswith('.dom'); print(f"  entry {e:#012x}  {n}{'' if dom else '  (host program, not checked)'}")
+    if dom: seen.setdefault(e,[]).append(n)
 dup={e:v for e,v in seen.items() if len(v)>1}
 print('entry-VA collisions:', 'none' if not dup else dup); sys.exit(1 if dup else 0)
 PY

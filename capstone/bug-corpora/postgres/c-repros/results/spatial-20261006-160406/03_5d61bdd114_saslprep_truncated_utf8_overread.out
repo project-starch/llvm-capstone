@@ -1,0 +1,5 @@
+case 3 BEGIN
+PG_DEFECT case=3 expect_fault_in=pg_utf8_string_len@0xc020f110
+PG_DEFECT case=3 mark
+capstone-vm: capstone-exec: domain fault cause=5 pc=0xc020f64c address=0xc02580d4 entry=0xc0200cc8 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=b2b69f3b57caed146449cd025b3e35be2e27be753a52b5e23c23a26c599d20bb image=/mnt/host/applications/03_5d61bdd114_saslprep_truncated_utf8_overread-b2b69f3b57caed146449cd025b3e35be2e27be753a52b5e23c23a26c599d20bb.dom
+capstone-vm: application terminated by signal 11

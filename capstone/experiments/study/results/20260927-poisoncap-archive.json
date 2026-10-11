@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "archive": "sublet-poisoncap-readiness-2026-09-27.tar.gz",
+  "location": "$HOME/capstone-artifacts",
+  "sha256": "8d8a5e46dffd600e5d092e9c764061667d5d2160ce02abf64316971a014a8194",
+  "contents": [
+    "Pinned extracted SQLite sources, generated amalgamations and three compiled variants",
+    "mruby instrumented build manifests, native reference, generated workload and four attempts",
+    "PoisonCap SQLite two attempts, platform hashes and running libc evidence",
+    "Tested planner, runner and guest source snapshots; 20 host test results",
+    "Commands, raw output and compiler diagnostics"
+  ],
+  "excluded": [
+    "Guest VM directories including SSH credentials",
+    "Large platform images, SDKs and prebuilt application object caches; identified by recorded hashes"
+  ],
+  "scope": "Readiness pilots and source audit; not a qualified Sublet/PoisonCap memory campaign"
+}

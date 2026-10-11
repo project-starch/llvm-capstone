@@ -1,0 +1,21 @@
+# mrbtest, MRBD_PIN=4.0.0-rc2 MRBD_HEAP=sublet-gc: the Sublet heap (pool 2^26, grant 134217728) and
+# every GC object slot issued and revoked on its own (patch 0008, MRB_CAPSTONE_GC_SUBLET; GC pages
+# from the second grant, 67108864). MRB_NO_BOXING, switch, -O2; compiler 7d01722aab88; runtime
+# 9704639b4a3a + b338c156c8d1 (the second grant); QEMU movc-merge d621df553f, br-snap,
+# CAPSTONE_REV_NODES=16777216.
+# The first run of this arm faulted after 271 passing tests: cause 24 in obj_free, a load through
+# a dying fiber's frame env that the same sweep had already revoked (heap_p + is_dead on a dead
+# object). 0008 now tests that env through the GC's own alias. Result after the fix:
+domain:
+  Total: 1648
+     OK: 1632
+     KO: 0
+  Crash: 0
+   Skip: 16
+capstone-domain: UNSERVED syscalls: 198x3
+LT-RESULT mruby.dom status=0 rounds=5540 PASS
+MRBD-GC pages=65 issued=109608 revoked=82122 split=66560 mrev=109673 delin=109608 revoke=82122
+MRBD-HEAP alloc=92055 free=92055 merge=83533 peak-live=10216 split=83535 mrev=175588 delin=92055 revoke=175588 init=83533
+skip list identical to MRBD_HEAP=level0's (mrbtest-4.0.0-rc2.txt)
+# MRBD-GC: 65 pages, 66,560 splits = 65 x 1024 slots; mrev = issued + 65 page handles; the
+# 27,486 issued and not revoked lived until mrb_close, whose free_heap frees them without a revoke.

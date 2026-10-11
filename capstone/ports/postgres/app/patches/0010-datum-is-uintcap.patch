@@ -1,0 +1,106 @@
+postgres.h and tupmacs.h: a Datum is __uintcap_t on Capstone (intcap plan, Phase D).
+
+A Datum carries pointers, and on Capstone a pointer is a capability. As uintptr_t, an
+8-byte integer, it lost the tag, and the first pointer read back from one faulted
+(create pg_proc, GetTableAmRoutine+0x38). __uintcap_t is an integer stored as a
+capability: pointers keep their tag, integers keep their value, and arithmetic runs on
+the value.
+
+SIZEOF_DATUM becomes the width of the value (8), not of the storage (16). Every
+"#if SIZEOF_DATUM == 8" in the tree means the value: 64-bit sort abbreviations, hashes,
+and byval int8/float8. tupmacs.h stores and fetches 8-byte byval attributes as the
+8-byte integers they are on disk. It used to do that as `case sizeof(Datum)`, which is
+16 here.
+
+nodes.h declares outDatum and readDatum with uintptr_t, to stay free of postgres.h;
+they take the same type as Datum now.
+
+--- a/src/include/access/tupmacs.h
++++ b/src/include/access/tupmacs.h
+@@ -62,8 +62,8 @@
+ 			case sizeof(int32):
+ 				return Int32GetDatum(*((const int32 *) T));
+ #if SIZEOF_DATUM == 8
+-			case sizeof(Datum):
+-				return *((const Datum *) T);
++			case 8:		/* capstone: an 8-byte integer, not a whole Datum */
++				return Int64GetDatum(*((const int64 *) T));
+ #endif
+ 			default:
+ 				elog(ERROR, "unsupported byval length: %d", attlen);
+@@ -194,8 +194,8 @@
+ 			*(int32 *) T = DatumGetInt32(newdatum);
+ 			break;
+ #if SIZEOF_DATUM == 8
+-		case sizeof(Datum):
+-			*(Datum *) T = newdatum;
++		case 8:		/* capstone: an 8-byte integer, not a whole Datum */
++			*(int64 *) T = DatumGetInt64(newdatum);
+ 			break;
+ #endif
+ 		default:
+--- a/src/include/nodes/nodes.h
++++ b/src/include/nodes/nodes.h
+@@ -192,7 +192,13 @@
+ extern void outToken(struct StringInfoData *str, const char *s);
+ extern void outBitmapset(struct StringInfoData *str,
+ 						 const struct Bitmapset *bms);
+-extern void outDatum(struct StringInfoData *str, uintptr_t value,
++/* capstone: the Datum these carry is __uintcap_t there (postgres.h). */
++#ifdef __SIZEOF_INTCAP__
++typedef __uintcap_t pg_node_datum_t;
++#else
++typedef uintptr_t pg_node_datum_t;
++#endif
++extern void outDatum(struct StringInfoData *str, pg_node_datum_t value,
+ 					 int typlen, bool typbyval);
+ extern char *nodeToString(const void *obj);
+ extern char *nodeToStringWithLocations(const void *obj);
+@@ -206,7 +212,7 @@
+ extern void *stringToNodeWithLocations(const char *str);
+ #endif
+ extern struct Bitmapset *readBitmapset(void);
+-extern uintptr_t readDatum(bool typbyval);
++extern pg_node_datum_t readDatum(bool typbyval);
+ extern bool *readBoolCols(int numCols);
+ extern int *readIntCols(int numCols);
+ extern Oid *readOidCols(int numCols);
+--- a/src/include/postgres.h
++++ b/src/include/postgres.h
+@@ -61,7 +61,18 @@
+  * convert between a Datum and the appropriate C type.
+  */
+ 
++/*
++ * capstone: a Datum carries pointers, and a pointer is a capability. As an
++ * uintptr_t (an 8-byte integer here) it lost its tag and the first pointer read
++ * back from one faulted (create pg_proc, GetTableAmRoutine). __uintcap_t is an
++ * integer stored as a capability: pointers keep their tag, integers keep their
++ * value, and arithmetic works on the value.
++ */
++#ifdef __SIZEOF_INTCAP__
++typedef __uintcap_t Datum;
++#else
+ typedef uintptr_t Datum;
++#endif
+ 
+ /*
+  * A NullableDatum is used in places where both a Datum and its nullness needs
+@@ -78,7 +89,17 @@
+ 	/* due to alignment padding this could be used for flags for free */
+ } NullableDatum;
+ 
++/*
++ * capstone: SIZEOF_DATUM is the width of the VALUE a Datum carries, which is
++ * what every "#if SIZEOF_DATUM == 8" asks about (the 64-bit sort abbreviations,
++ * hashes and byval int8/float8). sizeof(Datum) is 16 on Capstone: that is the
++ * width of its storage, and SIZEOF_DATUM stays 8.
++ */
++#ifdef __SIZEOF_INTCAP__
++#define SIZEOF_DATUM 8
++#else
+ #define SIZEOF_DATUM SIZEOF_VOID_P
++#endif
+ 
+ /*
+  * DatumGetBool

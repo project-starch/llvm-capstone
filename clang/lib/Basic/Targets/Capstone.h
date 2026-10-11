@@ -254,6 +254,10 @@ public:
   // already say, and this is how codegen is told the same thing.
   uint64_t getMaxAddressWidth() const override { return 64; }
 
+  // Every pointer is a capability, so __intcap_t/__uintcap_t exist here: 128
+  // bits wide, like a pointer, holding a 64-bit integer value (the address).
+  bool SupportsCapabilities() const override { return true; }
+
   bool setABI(const std::string &Name) override {
     // No lp64e: the RISCV copy installed a plain 64-bit-pointer datalayout for
     // it, which is incoherent with a target whose pointers are 128-bit

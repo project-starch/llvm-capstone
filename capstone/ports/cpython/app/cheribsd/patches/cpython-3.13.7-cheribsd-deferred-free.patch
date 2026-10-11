@@ -1,0 +1,82 @@
+--- a/Objects/obmalloc.c
++++ b/Objects/obmalloc.c
+@@ -11,6 +11,11 @@
+ 
+ #include <stdlib.h>               // malloc()
+ #include <stdbool.h>
++
++/* CheriBSD PoisonCap deferred free-list publication. */
++void pym_defer_free(void *, void *, void (*)(void *, void *));
++void pym_drain_deferred(void);
++int pym_can_resize_inplace(void);
+ #ifdef WITH_MIMALLOC
+ // Forward declarations of functions used in our mimalloc modifications
+ static void _PyMem_mi_page_clear_qsbr(mi_page_t *page);
+@@ -1589,6 +1594,8 @@
+         return;
+     }
+ #endif
++    /* Drain before counting leaks or destroying a callback owner. */
++    pym_drain_deferred();
+     if (has_own_state(interp) && interp->obmalloc != NULL) {
+         Py_ssize_t leaked = _PyInterpreterState_GetAllocatedBlocks(interp);
+         assert(has_own_state(interp) || leaked == 0);
+@@ -2530,20 +2537,23 @@
+ }
+ 
+ 
++static void
++pym_publish_free(void *owner, void *p)
++{
++    OMState *state = owner;
++    if (UNLIKELY(!pymalloc_free(state, NULL, p))) {
++        pym_user_raw_free(p);
++        raw_allocated_blocks--;
++    }
++}
++
+ void
+ _PyObject_Free(void *ctx, void *p)
+ {
+-    /* PyObject_Free(NULL) has no effect */
+-    if (p == NULL) {
+-        return;
+-    }
+-
+-    OMState *state = get_state();
+-    p = pym_release(p);
+-    if (UNLIKELY(!pymalloc_free(state, ctx, p))) {
+-        /* pymalloc didn't allocate this address */
+-        pym_user_raw_free(p);
+-        raw_allocated_blocks--;
++    if (p != NULL) {
++        /* Keep the pool's reference count occupied until revocation permits
++         * writing a free-list link into the retired payload. */
++        pym_defer_free(p, get_state(), pym_publish_free);
+     }
+ }
+ 
+@@ -2601,7 +2611,7 @@
+ 
+            The compromise here is to copy on shrink only if at least 25% of
+            size can be shaved off. */
+-        if (4 * nbytes > 3 * size) {
++        if (4 * nbytes > 3 * size && pym_can_resize_inplace()) {
+             /* It's the same, or shrinking and new/old > 3/4. */
+             *newptr_p = pym_resize(p, nbytes);
+             return 1;
+@@ -3296,11 +3306,13 @@
+ static void
+ free_obmalloc_arenas(PyInterpreterState *interp)
+ {
++    pym_drain_deferred();
+     OMState *state = interp->obmalloc;
+     for (uint i = 0; i < maxarenas; ++i) {
+         // free each obmalloc memory arena
+         struct arena_object *ao = &allarenas[i];
+-        pym_arena_free(NULL, pym_arena_pointer(ao->address), ARENA_SIZE);
++        if (ao->address != 0)
++            pym_arena_free(NULL, pym_arena_pointer(ao->address), ARENA_SIZE);
+     }
+     // free the array containing pointers to all arenas
+     PyMem_RawFree(allarenas);

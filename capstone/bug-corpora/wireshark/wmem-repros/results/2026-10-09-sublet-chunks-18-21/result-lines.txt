@@ -1,0 +1,7 @@
+# wmem-repros 18-21, sublet-chunks arm (the chunk port, WM_CHUNKS=ON), mode 1; pre-registered f7adf03a1009
+# capstone-qemu 6e5e136a070b0ee9; clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)
+# image sha256 (16) | runner line
+ea1e7d0d5e12d2c2 | OK   case=18 18-rtps-batch-sample-info-unguarded      sublet   cause=7 pc=0x1019024a8 expected=0x1019024a8 site=write
+b4c6c25bdb33b0c7 | OK   case=19 19-ntlmssp-blob-length-before-check      sublet   cause=5 pc=0x10190242c expected=0x10190242c site=read
+c600b730fd733d7f | OK   case=20 20-proto-undecoded-bitmap-unbounded      sublet   cause=7 pc=0x101902484 expected=0x101902484 site=write
+06ecdeef83dd05bd | OK   case=21 21-tcp-flags-str-sixteen-bytes           sublet   cause=7 pc=0x101902478 expected=0x101902478 site=write

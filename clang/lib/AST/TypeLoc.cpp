@@ -345,12 +345,14 @@ TypeSpecifierType BuiltinTypeLoc::getWrittenTypeSpec() const {
   case BuiltinType::ULong:
   case BuiltinType::ULongLong:
   case BuiltinType::UInt128:
+  case BuiltinType::UIntCap:
   case BuiltinType::SChar:
   case BuiltinType::Short:
   case BuiltinType::Int:
   case BuiltinType::Long:
   case BuiltinType::LongLong:
   case BuiltinType::Int128:
+  case BuiltinType::IntCap:
   case BuiltinType::Half:
   case BuiltinType::Float:
   case BuiltinType::Double:

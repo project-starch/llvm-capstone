@@ -1,0 +1,4 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> capstone-vm: capstone-exec: domain fault cause=7 pc=0xe0cbc10c address=0xe533fff0 entry=0xe0200e4c code=0xe0200000-0xe5320000 last=0x44 preparing=0x44 sha256=fcaa4a36beef67f12868e9455bce1a3cba5d63f4933f11e44ecbd3302723d754 image=/mnt/host/applications/postgres-fcaa4a36beef67f12868e9455bce1a3cba5d63f4933f11e44ecbd3302723d754.dom
+capstone-vm: application terminated by signal 11

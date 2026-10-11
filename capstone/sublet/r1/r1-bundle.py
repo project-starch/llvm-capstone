@@ -7,13 +7,39 @@ cycle intervals; the node-pool position of each repetition is the boot's cumulat
 before its invocation, from the harness's own `R1 end` lines (the controls and the readback host mint
 a handful more, not counted: stated in the manifest).
 """
-import sys, re, json, pathlib, hashlib, csv, statistics, datetime
+import sys, os, re, json, pathlib, hashlib, csv, statistics, datetime
 import pathlib as _pl, sys as _sys
 _sys.path.insert(0, str(_pl.Path(__file__).resolve().parents[2] / "tests" / "rtl-smoke"))
 from fpga_driver import transcript as T
 
 OUT = pathlib.Path(sys.argv[1]); LIST = pathlib.Path(sys.argv[2]); BOOTS = [pathlib.Path(b) for b in sys.argv[3:]]
-STUDY = "R1"; SEED = 20260914
+STUDY = os.environ.get("BUNDLE_STUDY", "R1"); SEED = 20260914
+TAG = os.environ.get("BUNDLE_TAG", "fpga-2026-09-15")
+
+def _provenance(boots):
+    """Read the bitstream label, monitor, buildroot and harness image from the DRIVER'S OWN log.
+
+    These were hardcoded to the 2026-09-15 vintage (`caplifive_r30r31_1bfff7776`, monitor `4274268`,
+    image `6a569a7e5e34178b`) and silently travelled into every later bundle, so the R1 release-cost
+    manifest claimed a bitstream and image its runs never touched while its own work-order named the
+    right ones. The driver verifies all of these before it boots and writes them to `$OUT/log`:
+        pieces: R1 harness <image16> (...), rr host <host16>, lpc <lpc16>
+        fw_payload <fw12> (monitor <mon>, buildroot <br>)
+    Deriving them is self-correcting; the env vars are an override for a log that lacks them."""
+    img = mon = brd = None
+    for bd in boots:
+        lg = bd / "log"
+        if not lg.exists(): continue
+        t = lg.read_text(errors="replace")
+        m = re.search(r"R1 harness ([0-9a-f]{16})", t);            img = img or (m.group(1) if m else None)
+        m = re.search(r"monitor ([0-9a-f]{7,40}), buildroot (\S+?)\)", t)
+        if m and not mon: mon, brd = m.group(1), m.group(2)
+    return (os.environ.get("BUNDLE_IMAGE", img or "unknown"),
+            os.environ.get("BUNDLE_MONITOR", mon or "unknown"),
+            os.environ.get("BUNDLE_MODULE", brd or "unknown"),
+            os.environ.get("BUNDLE_BITSTREAM", "unknown"))
+
+IMAGE16, MONITOR, MODULE, BITSTREAM = _provenance(BOOTS)
 
 inv = [l.split() for l in LIST.read_text().splitlines() if l.strip()]          # rep arm series pattern arena
 
@@ -80,10 +106,10 @@ for bd in BOOTS:
         for p in pts:
             case = f"{ser}/{pat}/{arm}/n{p['n']}-B{p['B']}-U{p['U']}-S{p['S']}-c{p['chain']}"
             records.append(dict(
-                study_id=STUDY, manifest_id=f"{STUDY}-fpga-2026-09-15", run_id=boot_id, target="fpga-caplifive_r30r31_1bfff7776",
+                study_id=STUDY, manifest_id=f"{STUDY}-{TAG}", run_id=boot_id, target=f"fpga-{BITSTREAM}",
                 evidence_type="fpga", arm={"S": "custom-sublet", "P": "custom-spatial"}[p["a"]], series=ser, case_id=case,
                 parameters=dict(pattern=pat, n=p["n"], B=p["B"], U=p["U"], S=p["S"], chain=p["chain"], arena=int(arena) if str(arena).isdigit() else arena,
-                                touch_unrelated=st.get("touch", 1), image="6a569a7e5e34178b", host="2c9e82d101b48160"),
+                                touch_unrelated=st.get("touch", 1), image=IMAGE16, host="2c9e82d101b48160"),
                 repetition=int(rep) if str(rep).isdigit() else rep, boot_id=boot_id,
                 status="completed" if p["ok"] == 1 and p["bad"] == 0 else "invalid-run",
                 reason="" if p["ok"] == 1 and p["bad"] == 0 else f"ok={p['ok']} bad={p['bad']}",
@@ -112,9 +138,9 @@ with open(OUT / "points.csv", "w", newline="") as f:
     for r in records:
         w.writerow([r["study_id"], r["run_id"], r["arm"], r["series"], r["case_id"], r["repetition"], r["status"], r["parameters"]["n"], r["parameters"]["B"],
                     r["parameters"]["U"], r["parameters"]["S"], r["parameters"]["chain"], r["parameters"]["pattern"]] + [r["metrics"][c] for c in cols[13:]])
-manifest = dict(study_id=STUDY, manifest_id=f"{STUDY}-fpga-2026-09-15", generated=datetime.datetime.now().isoformat(timespec="seconds"), seed=SEED,
-                target=dict(board="Genesys2 CVA6 Capstone", bitstream="caplifive_r30r31_1bfff7776", monitor="4274268", module="d04bd83", core_mhz=25, timebase_mhz=12.5),
-                harness=dict(source="capstone/sublet/r1/r1_slots_pools.c", image_sha256_16="6a569a7e5e34178b", opt="-O1", entry="0x410000", host="sqlite_host_rr.user 2c9e82d101b48160",
+manifest = dict(study_id=STUDY, manifest_id=f"{STUDY}-{TAG}", generated=datetime.datetime.now().isoformat(timespec="seconds"), seed=SEED,
+                target=dict(board="Genesys2 CVA6 Capstone", bitstream=BITSTREAM, monitor=MONITOR, module=MODULE, core_mhz=25, timebase_mhz=12.5),
+                harness=dict(source="capstone/sublet/r1/r1_slots_pools.c", image_sha256_16=IMAGE16, opt="-O1", entry="0x410000", host="sqlite_host_rr.user 2c9e82d101b48160",
                              protocol="sqlite_host --speedtest1 --arena <bytes> --tables 65536; one invocation = one fresh domain and one fresh arena grant"),
                 schedule=dict(rule="METHODS: a repetition is a fresh domain; five repetitions per point over at least three boots",
                               layout="90 invocations = 5 repetitions x 18 (arm x series x pattern), repetition-major, twelve per boot, eight boots",

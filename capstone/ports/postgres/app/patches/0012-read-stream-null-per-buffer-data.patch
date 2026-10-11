@@ -1,0 +1,26 @@
+read_stream.c: no pointer arithmetic on a NULL per-buffer-data pointer (intcap plan, Phase D).
+
+get_per_buffer_data() returns `(char *) stream->per_buffer_data + size * index` for
+every stream, and read_stream_look_ahead calls it even when the stream has no
+per-buffer data. Then the pointer is NULL and the size 0. On Capstone, arithmetic on
+a null capability is a cincoffset on an untagged value, which traps (cause 24) even
+when it adds 0. That was the next fault in --boot once buffer allocation worked, at
+read_stream_look_ahead. Return NULL when there is no per-buffer data.
+
+Applies after 0008, which touches the same file.
+
+--- a/src/backend/storage/aio/read_stream.c
++++ b/src/backend/storage/aio/read_stream.c
+@@ -160,6 +160,12 @@
+ static inline void *
+ get_per_buffer_data(ReadStream *stream, int16 buffer_index)
+ {
++	/*
++	 * capstone: a stream without per-buffer data has a NULL pointer here, and
++	 * arithmetic on a null capability traps (cause 24), even to add 0.
++	 */
++	if (stream->per_buffer_data == NULL)
++		return NULL;
+ 	return (char *) stream->per_buffer_data +
+ 		stream->per_buffer_data_size * buffer_index;
+ }

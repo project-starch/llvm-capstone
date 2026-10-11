@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "kind": "signal",
+  "value": 11,
+  "fault": "capstone-exec: domain fault cause=5 pc=0xc020f64c address=0xc02580d4 entry=0xc0200cc8 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=1ef0b6fb2b7f56557d7e9398e941afe8dbdefaf1d54153534924755d2026bde5 image=/mnt/host/applications/03_5d61bdd114_saslprep_truncated_utf8_overread-1ef0b6fb2b7f56557d7e9398e941afe8dbdefaf1d54153534924755d2026bde5.dom",
+  "image_sha256": "1ef0b6fb2b7f56557d7e9398e941afe8dbdefaf1d54153534924755d2026bde5"
+}

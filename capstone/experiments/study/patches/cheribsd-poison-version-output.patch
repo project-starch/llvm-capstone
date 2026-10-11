@@ -1,0 +1,11 @@
+--- a/sys/riscv/include/cheric.h
++++ b/sys/riscv/include/cheric.h
+@@ -65,7 +65,7 @@
+ 
+ #define	cheri_poison_set_version(x, v) ({				\
+ 	void *c;							\
+-	asm volatile("csetcappver %0, %1, %2" : : "C" (c), "C" (x), "r" (v)); \
++	asm volatile("csetcappver %0, %1, %2" : "=C" (c) : "C" (x), "r" (v)); \
+ 	c;								\
+ })
+ 

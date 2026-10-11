@@ -1,0 +1,25 @@
+# One line per hunk, per the rule in capstone/tests/port-effort.py: file:new_start, class, level,
+# and why. Classes are hierarchy, metadata, workaround; levels are allocator, application. The rule
+# was fixed before the first ported line, in PREREGISTRATION.md.
+#
+# The split. Upstream already keeps an AVBufferPool entry's bookkeeping -- BufferPoolEntry, with the
+# freelist link `next` -- in an allocation of its own, outside the payload. So nothing has to leave
+# handed-away memory, and the only metadata hunks are the two fields that hold the new authority:
+# the entry's slot and the pool's list of blocks, in records that were already beside the pool.
+# That is the corpus's precedent for such fields (SQLite's "the slot's capability lives in that
+# entry", nginx's "the handles outside the block"). Everything that takes a block, carves, hands out,
+# gives back or revokes is hierarchy.
+#
+# No hunk is a workaround. No hunk is at the application level: every line is inside libavutil's
+# pool implementation.
+
+libavutil/buffer_internal.h:24    hierarchy   allocator   the level below's interface arrives
+libavutil/buffer_internal.h:86    metadata    allocator   BufferPoolEntry, already outside the payload, holds the entry's region or handle
+libavutil/buffer_internal.h:113   metadata    allocator   AVBufferPool holds the list of blocks it took from the heap
+libavutil/buffer.c:294            hierarchy   allocator   a pool on the default allocators takes its storage from the heap as blocks; a custom allocator keeps upstream's path
+libavutil/buffer.c:312            hierarchy   allocator   a flush frees an entry's record, not its storage: the storage belongs to its block, which the pool's end revokes
+libavutil/buffer.c:327            hierarchy   allocator   the pool's end is one revoke per block, every entry with it, before the records are freed
+libavutil/buffer.c:364            hierarchy   allocator   a buffer's return is a revoke, before the freelist can reissue the entry
+libavutil/buffer.c:389            hierarchy   allocator   a new entry is carved from the pool's block and handed out under its own handle, zeroed where av_buffer_allocz would have
+libavutil/buffer.c:446            hierarchy   allocator   a reissue is a take: a new handle, a new alias
+libavutil/buffer.c:459            hierarchy   allocator   a reissue that fails gives the entry back, since it stays in the pool

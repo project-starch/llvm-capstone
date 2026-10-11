@@ -89,6 +89,13 @@ SELECT x FROM big
 ----
 500 values hashing to e17eb952bdb593962952cb0df4662677
 
+# PASS: an EMPTY valuesort result against an empty expected block. There is nothing to
+# sort; the record must still be compared and pass (it used to be counted as skipped for
+# size, because the sort asked for zero bytes and read the NULL as an allocation failure)
+query I valuesort
+SELECT c FROM t1 WHERE a > 100
+----
+
 # PASS: a statement that is SUPPOSED to fail
 statement error
 SELECT nosuchfunction(1)
@@ -136,6 +143,13 @@ SELECT a FROM t1 ORDER BY a
 1
 2
 3
+
+# FAIL 7: an empty valuesort result where one value is expected -- an empty result is
+# compared, never waved through
+query I valuesort
+SELECT c FROM t1 WHERE a > 100
+----
+10
 
 # SKIP 1: skipif our own engine -- must NOT be counted as a pass
 skipif sqlite

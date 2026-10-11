@@ -1,0 +1,11 @@
+native   24 fixed  VERDICT FIXED field-nulled=1
+native   24 buggy  VERDICT DEFECT-REPRODUCED same-address=1 read=5b (0x5b = the new owner's byte)
+native   25 fixed  VERDICT FIXED read-from-copy=a0
+native   25 buggy  VERDICT DEFECT-REPRODUCED same-address=1 read=5b (0x5b = the new owner's byte)
+asan     24 fixed  rc=0 no report
+asan     24 buggy  rc=1 ERROR: AddressSanitizer: heap-use-after-free
+asan     25 fixed  rc=0 no report
+asan     25 buggy  rc=1 ERROR: AddressSanitizer: heap-use-after-free
+# the 2026-10-03 control: the same reductions with the FIXTURES' incrementing fill (v0+i)
+native-fill 24 buggy  VERDICT DEFECT-REPRODUCED same-address=1 read=5b (0x5b = the new owner's byte)
+native-fill 25 buggy  VERDICT DEFECT-REPRODUCED same-address=1 read=7b (0x5b = the new owner's byte)

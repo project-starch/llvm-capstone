@@ -1,0 +1,11 @@
+{
+  "fixture": "/home/zephyr/arms/postgres/capstone/build/fixture-ltree",
+  "extensions": [
+    "ltree"
+  ],
+  "built_from_fixture": "/home/zephyr/arms/postgres/capstone/build/fixture-cluster",
+  "builder_image": "/tmp/capstone/pg-su-none/link/postgres.dom",
+  "builder_image_sha256": "03d00865499444ba7818600c11a331b90ac19c84f1b819ba6678de20bb185dfc",
+  "extension_files": "/tmp/capstone/pg-su-none/share/extension",
+  "reconstructed": "This record was written on 2026-10-10 from the surviving image, not by the make-fixture.py run of 2026-10-08, which predated the script recording it. The hash is of the image still on disk at the path the run named; nothing else ties them together, so a later rebuild of that path would make this unverifiable. Fixtures built from now on carry a record written by the run itself."
+}

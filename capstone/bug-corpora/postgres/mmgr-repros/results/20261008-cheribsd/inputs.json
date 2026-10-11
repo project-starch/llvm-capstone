@@ -1,0 +1,23 @@
+{
+ "arm": "cheribsd-revocation, stock CheriBSD riscv64-purecap, libc revocation at the platform default (on, asynchronous, batched)",
+ "what_this_is": "the filed reading of this arm. It was measured on 2026-10-05 and written into each case's cheribsd-revocation arm, but no bundle was ever filed, so the protection table had nothing to read and the column said 'not run' for all five. Re-run on 2026-10-08 with the quarantine probe beside it, so the verdict and its disposition come from one boot.",
+ "result": {
+  "completed_silently": 5,
+  "caught": 0,
+  "of": 5
+ },
+ "verdict": "five measured silences, and measured is the word: each case prints `PG_DEFECT case=N ready` before the defective sequence and `mode=0 completed` after it, so the pair is the proof that the defect executed rather than an inference from a clean exit.",
+ "disposition": {
+  "finding": "never-freed",
+  "numbers": "the sharpest in the tree: two to four allocations in the whole process and ZERO frees. quarantine.tsv has the rows.",
+  "why_that_settles_it": "nothing is ever handed back to the system allocator, so the quarantine is never offered the object at all. palloc chunks live inside memory context blocks and a context reset or delete returns them to aset's own free lists; the process keeps the blocks. A use-after-free between two palloc chunks never crosses a malloc boundary, which is what the 2026-10-05 reading already argued from the code -- this measures it.",
+  "what_zero_frees_does_NOT_show": "with no free at all, quarantined_after_free is zero for the trivial reason, so these rows cannot also show the quarantine is live. That comes from the two controls in the same boot: revocation-control faults at its labelled load with the probe loaded, and sweep-control churns 400,811 allocations for 22 sweeps.",
+  "how_measured": "ports/common/host/cheribsd/quarantine-probe.c, sha256 fa283f7686c36e1803910e006dc429577ee132fd6eea12ef49a89b6b97263554, LD_PRELOADed through the runner's per-case env."
+ },
+ "controls": {
+  "platform": "cheribsd-abi and cheribsd-bounds both PASS",
+  "revocation_can_fire": "revocation-control faulted at its labelled load, signal=34 code=2 (PROT_CHERI_TAG), addr equal to pc",
+  "the_sweep_counter_is_live": "sweep-control reports sweeps=22 against 0 in every case",
+  "the_driver_refuses_a_mismatched_invocation": "it takes the mode and the case number and compares the latter against its own. A first attempt passed no arguments and every program returned 75 -- an infrastructure failure, never a verdict, which is the convention working as intended."
+ }
+}

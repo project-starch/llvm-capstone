@@ -1,0 +1,86 @@
+{
+  "benchmark": "mruby 4.0.0-rc2 upstream AO width 8 and 16",
+  "workload_sha256": "51a87300b71f38e16a8681006ab989610bc2df35643d43a1575946480cd714cc",
+  "summary_sha256": {
+    "8": "78d13bb8b2a6cffaa67c156f8e816b84e3bc44d803cfda60c452b9f751f6d4b5",
+    "16": "1a10a6cb3f17fc2d54708621b4d5130e9e04bec69182aea91f96d865c72bd6ce"
+  },
+  "cells": {
+    "8": {
+      "capstone-spatial": {
+        "issues": 217070,
+        "gap_le_1023": 164546,
+        "peak_pages": 6,
+        "after_pages": 6,
+        "selected_peak_bytes": 541824,
+        "selected_after_bytes": 541824,
+        "binary_sha256": "2363a9542fb6434120c7e9c8111adbc19350c592228d5d9e44ffe4424b0e5eee"
+      },
+      "capstone-sublet": {
+        "issues": 217070,
+        "gap_le_1023": 163634,
+        "peak_pages": 6,
+        "after_pages": 6,
+        "selected_peak_bytes": 750720,
+        "selected_after_bytes": 750720,
+        "binary_sha256": "bdc3812cc50e2bed212cbe0261ecd0663f7e74cd6cd96e38788dcb5316234ec7"
+      },
+      "poisoncap-spatial": {
+        "issues": 217070,
+        "gap_le_1023": 163634,
+        "peak_pages": 6,
+        "after_pages": 6,
+        "selected_peak_bytes": 565248,
+        "selected_after_bytes": 565248,
+        "binary_sha256": "53a122ea8c95f0b9fcb3704e6cee0a62bcb8356bc72745d0363b87de2062620c"
+      },
+      "poisoncap-temporal": {
+        "issues": 217070,
+        "gap_le_1023": 2854,
+        "peak_pages": 9,
+        "after_pages": 9,
+        "selected_peak_bytes": 847872,
+        "selected_after_bytes": 847872,
+        "binary_sha256": "53a122ea8c95f0b9fcb3704e6cee0a62bcb8356bc72745d0363b87de2062620c"
+      }
+    },
+    "16": {
+      "capstone-spatial": {
+        "issues": 915981,
+        "gap_le_1023": 695026,
+        "peak_pages": 6,
+        "after_pages": 4,
+        "selected_peak_bytes": 541824,
+        "selected_after_bytes": 361216,
+        "binary_sha256": "2363a9542fb6434120c7e9c8111adbc19350c592228d5d9e44ffe4424b0e5eee"
+      },
+      "capstone-sublet": {
+        "issues": 915981,
+        "gap_le_1023": 691934,
+        "peak_pages": 6,
+        "after_pages": 6,
+        "selected_peak_bytes": 750720,
+        "selected_after_bytes": 750720,
+        "binary_sha256": "bdc3812cc50e2bed212cbe0261ecd0663f7e74cd6cd96e38788dcb5316234ec7"
+      },
+      "poisoncap-spatial": {
+        "issues": 915981,
+        "gap_le_1023": 691934,
+        "peak_pages": 6,
+        "after_pages": 6,
+        "selected_peak_bytes": 565248,
+        "selected_after_bytes": 565248,
+        "binary_sha256": "53a122ea8c95f0b9fcb3704e6cee0a62bcb8356bc72745d0363b87de2062620c"
+      },
+      "poisoncap-temporal": {
+        "issues": 915981,
+        "gap_le_1023": 17896,
+        "peak_pages": 9,
+        "after_pages": 9,
+        "selected_peak_bytes": 847872,
+        "selected_after_bytes": 847872,
+        "binary_sha256": "53a122ea8c95f0b9fcb3704e6cee0a62bcb8356bc72745d0363b87de2062620c"
+      }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+# pool-repros 0-2, backing arm: buffer-pool port security probes 36-38 in mode 1; pre-registered f7adf03a1009
+# capstone-qemu 6e5e136a070b0ee9
+ac4473aa27353f9e | probe 36 af-join-dedup-bound-stale-read mode=1 expected=completed passed=True exit=0
+ac4473aa27353f9e | probe 37 h264-refs-partial-clear-stale-read mode=1 expected=completed passed=True exit=0
+ac4473aa27353f9e | probe 38 vidstab-parked-plane-pointer-stale-write mode=1 expected=completed passed=True exit=0

@@ -1,0 +1,4 @@
+# The booted images, as the build scripts produced them into $MC_WORK and as every boot's share copy
+# hashed. Verify from $MC_WORK with sha256sum -c.
+a3a3d5b6b516ed8af54eca8d3af2a17284832a2df0c0fa32df3146eb4b0807eb  safety/memcached-safety-sublet.dom
+9f6467ff9f50fb7fc6b5ecf7c0c42bd452dea53d700d3c310385e28f8df29e4b  slabsublet/memcached-safety-slabsublet.dom

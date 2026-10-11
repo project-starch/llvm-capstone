@@ -1814,6 +1814,12 @@ static unsigned estimateFunctionSizeInBytes(const MachineFunction &MF,
         continue;
       }
 
+      // A live-source capability copy may become STC+LDC after this estimate.
+      if (capstoneIsLiveSourceCopyCandidate(MI, MF)) {
+        FnSize += 8;
+        continue;
+      }
+
       FnSize += TII.getInstSizeInBytes(MI);
     }
   }
@@ -1868,6 +1874,28 @@ void CapstoneFrameLowering::processFunctionBeforeFrameFinalized(
   // contains any RVV spills.
   ScavSlotsNum = std::max(ScavSlotsNum, getScavSlotsNumForRVV(MF));
 
+  // The live-source copy rule copies through a 16-byte slot of its OWN. It is
+  // registered as a scavenging slot only so that PEI places it where the
+  // scavenging slots go, next to fp/sp, in reach of a 12-bit offset. It is
+  // registered LAST: RegScavenger::spill takes the best-fitting free slot and,
+  // on a tie, the first registered, so the scavenger reaches this one only if
+  // it runs out of its own. Sharing the scavenger's slot was a miscompile: the
+  // scavenger keeps a spill live across several instructions, and a copy in
+  // between overwrote it. CapstoneLiveSourceCopy refuses to compile a function
+  // in which anything but itself touches this slot.
+  const bool NeedsCopySlot = capstoneNeedsLiveSourceCopySlot(MF);
+  if (NeedsCopySlot) {
+    if (!MFI.getSavePoints().empty())
+      reportFatalUsageError(Twine("capstone: ") + MF.getName() +
+                            " needs the live-source copy slot but was "
+                            "shrink-wrapped (-enable-shrink-wrap?)");
+    if (MF.getFunction().hasFnAttribute(Attribute::Naked))
+      reportFatalUsageError(Twine("capstone: naked function ") +
+                            MF.getName() +
+                            " copies a capability register whose source "
+                            "stays live, which needs a stack slot");
+  }
+
   for (unsigned I = 0; I < ScavSlotsNum; I++) {
     int FI = MFI.CreateSpillStackObject(RegInfo->getSpillSize(*RC),
                                         RegInfo->getSpillAlign(*RC));
@@ -1875,6 +1903,12 @@ void CapstoneFrameLowering::processFunctionBeforeFrameFinalized(
 
     if (IsLargeFunction && RVFI->getBranchRelaxationScratchFrameIndex() == -1)
       RVFI->setBranchRelaxationScratchFrameIndex(FI);
+  }
+  if (NeedsCopySlot) {
+    int FI = MFI.CreateSpillStackObject(RegInfo->getSpillSize(*RC),
+                                        RegInfo->getSpillAlign(*RC));
+    RS->addScavengingFrameIndex(FI);
+    RVFI->setLiveSourceCopyFrameIndex(FI);
   }
 
   unsigned Size = RVFI->getReservedSpillsSize();
@@ -2351,6 +2385,11 @@ bool CapstoneFrameLowering::restoreCalleeSavedRegisters(
 bool CapstoneFrameLowering::enableShrinkWrapping(const MachineFunction &MF) const {
   // Keep the conventional code flow when not optimizing.
   if (MF.getFunction().hasOptNone())
+    return false;
+
+  // A live-source capability copy goes through a stack slot, and a copy outside
+  // the save/restore region would use a slot whose frame is not allocated.
+  if (capstoneNeedsLiveSourceCopySlot(MF))
     return false;
 
   return true;

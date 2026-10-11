@@ -1,0 +1,48 @@
+CAPSTONE (tshark app port): three places where libgcrypt rebuilds a pointer from an integer.
+On capstone64 a pointer is a 16-byte capability and uintptr_t 8 bytes, so the rebuilt pointer
+is untagged and faults when used. Found by the port's cast census (deps/build-libgcrypt.sh).
+
+- chacha20.c and salsa20.c selftests align a context buffer by masking its address. They now add
+  an offset to the pointer, the way rijndael.c:1842 already does, which keeps the capability.
+- const-time.h sexp_null_cond selects NULL or W through uintptr_t arithmetic, in constant time.
+  In a capstone64 domain (CAPSTONE_SINGLE_THREAD_DOMAIN) it is a plain branch. That keeps W's
+  capability but gives up the constant-time property: a timing side channel on the selector,
+  which this port does not claim to protect.
+
+--- a/cipher/chacha20.c
++++ b/cipher/chacha20.c
+@@ -1457,7 +1457,7 @@
+   };
+ 
+   /* 16-byte alignment required for amd64 implementation. */
+-  ctx = (CHACHA20_context_t *)((uintptr_t)(ctxbuf + 15) & ~(uintptr_t)15);
++  ctx = (CHACHA20_context_t *)(ctxbuf + ((16 - ((uintptr_t)ctxbuf & 15)) & 15));
+ 
+   chacha20_setkey (ctx, key_1, sizeof key_1, NULL);
+   chacha20_setiv (ctx, nonce_1, sizeof nonce_1);
+--- a/cipher/salsa20.c
++++ b/cipher/salsa20.c
+@@ -523,7 +523,7 @@
+     { 0xE3, 0xBE, 0x8F, 0xDD, 0x8B, 0xEC, 0xA2, 0xE3};
+ 
+   /* 16-byte alignment required for amd64 implementation. */
+-  ctx = (SALSA20_context_t *)((uintptr_t)(ctxbuf + 15) & ~(uintptr_t)15);
++  ctx = (SALSA20_context_t *)(ctxbuf + ((16 - ((uintptr_t)ctxbuf & 15)) & 15));
+ 
+   salsa20_setkey (ctx, key_1, sizeof key_1, NULL);
+   salsa20_setiv  (ctx, nonce_1, sizeof nonce_1);
+--- a/src/const-time.h
++++ b/src/const-time.h
+@@ -166,8 +166,12 @@
+ static inline gcry_sexp_t
+ sexp_null_cond (gcry_sexp_t w, unsigned long op_enable)
+ {
++#if defined(CAPSTONE_SINGLE_THREAD_DOMAIN)
++  return op_enable ? NULL : w;
++#else
+   uintptr_t o = ct_uintptr_select((uintptr_t)NULL, (uintptr_t)w, op_enable);
+   return (gcry_sexp_t)(void *)o;
++#endif
+ }
+ 
+ /*

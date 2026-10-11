@@ -1,0 +1,31 @@
+--- a/libavcodec/mpegpicture.c
++++ b/libavcodec/mpegpicture.c
+@@ -67,7 +67,7 @@
+ static int av_cold mpv_pic_init(AVRefStructOpaque opaque, void *obj)
+ {
+     MPVPicture *pic = obj;
+-    int ret, init_progress = (uintptr_t)opaque.nc;
++    int ret, init_progress = *(const int *)opaque.c;
+ 
+     ret = ff_thread_progress_init(&pic->progress, init_progress);
+     if (ret < 0)
+@@ -87,11 +87,18 @@
+     av_frame_free(&pic->f);
+ }
+ 
++/* Capstone: pass a REAL pointer to the mode, not the int smuggled through void*.
++ * capstone64 clang miscompiles an integer-valued pointer inside a union passed BY VALUE
++ * (AVRefStructOpaque): it splits the 16-byte argument store and forms one half's address
++ * with an integer add on the frame pointer, which faults (untagged operand). A real
++ * pointer takes the capability-store path. Reproducer and issue: ports/ffmpeg/app/README. */
++static const int mpv_pic_progress_modes[2] = { 0, 1 };
++
+ av_cold AVRefStructPool *ff_mpv_alloc_pic_pool(int init_progress)
+ {
+     return av_refstruct_pool_alloc_ext(sizeof(MPVPicture),
+                                        AV_REFSTRUCT_POOL_FLAG_FREE_ON_INIT_ERROR,
+-                                       (void*)(uintptr_t)init_progress,
++                                       (void *)&mpv_pic_progress_modes[!!init_progress],
+                                        mpv_pic_init, mpv_pic_reset, mpv_pic_free, NULL);
+ }
+ 

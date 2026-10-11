@@ -1,6 +1,6 @@
 # A domain enters with NO trap vector: `create_domain` never writes the trap-vector context slot
 
-> **2026-09-07 (from the 2026-09-05 sweep):** **M-1 NOT EXERCISED in the 2026-09-05 sweep** (`caplifive_s12fix_5097eb166.bit`, boot sw13, control green, `tests/board-results/2026-09-05.tsv`): the deliberate fault this package relies on, `lcc` selector 1 on an untagged operand, is total now and returns 1017 instead of trapping, so whether a real domain fault still loops forever was not tested. Needs a rung with a guaranteed capability fault; the `INTERP_DOMAIN_MTVEC=1` fix in ISSUES.md M-1 is still unverified. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+> **2026-09-07 (from the 2026-09-05 sweep)** *[superseded 2026-09-25 by the section "Where M-1 stands" below; its "still unverified" is no longer true]*: **M-1 NOT EXERCISED in the 2026-09-05 sweep** (`caplifive_s12fix_5097eb166.bit`, boot sw13, control green, `tests/board-results/2026-09-05.tsv`): the deliberate fault this package relies on, `lcc` selector 1 on an untagged operand, is total now and returns 1017 instead of trapping, so whether a real domain fault still loops forever was not tested. Needs a rung with a guaranteed capability fault; the `INTERP_DOMAIN_MTVEC=1` fix in ISSUES.md M-1 is still unverified. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
 
 **Status: ROOT-CAUSED, and the firmware half is now CONFIRMED ON SILICON (2026-09-02). Writing
 `dom_seal[1]` moves the failure from "no vector at all, storm at address 0" to "the handler's own
@@ -13,6 +13,57 @@ Sibling issues, so a reader arriving with the wrong symptom is redirected immedi
 kills the board*. The historical `gp-free` domain wedge has the identical signature and is very
 likely the same defect. `../RTL-cap-mcause-off-by-one/` is unrelated except that it also concerns
 capability exception reporting.
+
+## Where M-1 stands (2026-09-25), in one picture
+
+A domain fault goes one of three ways, depending on which half of the fix the image carries:
+
+```
+                        a domain takes a capability fault
+                                       |
+         +-----------------------------+------------------------------+
+         |                             |                              |
+  (1) DEFAULT BUILD             (2) FIRMWARE HALF ONLY          (3) IN-DOMAIN VECTOR
+  slot 1 of the domain's        dom_seal[1] written by          glue built with
+  context never written         create_domain                   INTERP_DOMAIN_MTVEC=1
+         |                             |                              |
+  mtvec = 0                     mtvec = _cap_trap_entry         mtvec = .Ldomain_trap,
+         |                      (the MONITOR's handler)         set by the domain itself
+         v                             |                              |
+  fetch at address 0 with the          v                              v
+  DOMAIN's PC capability        the handler runs in the         the handler runs in the
+  -> faults again -> loops      DOMAIN's capability context     domain's own context, packs
+  forever in M-mode             (a trap does not switch         mcause into a shared word,
+  (commit pc = 0x2)             domains), faults at +8          and RETURNS to the host
+         |                      because sp is not a cap                |
+         v                             v                              v
+     WEDGE, output lost             WEDGE                    WORKS on silicon (sw69,
+                                                             2026-09-14) -- for a fault
+                                                             on FIRST entry
+```
+
+**What changed since this folder was last edited:**
+- **Path (3) is verified on silicon.** The glue fix this folder called "still unverified" worked on boot
+  sw69 (2026-09-14). The pair image `214b300efd169f03` took `UNEXPECTED_CAP_TYPE` at share3. Its
+  handler packed the cause into the arena's first word, and the host read back `0xF6C09D13` — the
+  pre-registered word, bit for bit (`docs/ref/fpga-silicon-measurements-for-paper.md`, "Boot sw69").
+- **Its limit (2026-09-16, the musl probes):** a fault on a domain's FIRST entry hands control back,
+  but a fault after a `domreturn` yield and a later re-entry still wedges (`docs/ref/ISSUES.md` M-1).
+- **Default builds are still on path (1), and it still costs results.** On 2026-09-24 both R-35 board
+  probes wedged after their fault, with the hardware trap latch holding the cause, `mepc` and `tval`,
+  and the commit pc stuck at `0x2`. That is this folder's `mepc = 2` signature. Neither image
+  (`35fb3fec3196841b`, `aed492ab985653f3`) contains a `csrw mtvec` (grep count 0, which is known to
+  fire: 1 on a one-instruction positive control). **The concrete cost:** the probe's output after the
+  fault is lost, so R-35's record cannot say which of two stale-probe ages trapped
+  (`../R35-revoked-reference-retains-authority/results/board-4ad0df694.result-lines.txt`).
+- **The RTL half is unchanged on every bitstream since.** `054cea69b → 4ad0df694 → 6cbdaeeb4` touch
+  only `ex_stage.sv`, `load_store_unit.sv`, `pmp_data_if.sv` and `cva6_icache.sv`. The trap path
+  (`commit_stage.sv`, `frontend.sv`, `csr_regfile.sv`) is untouched, so a trap still cannot initiate
+  a domain switch.
+
+**So the practical rule for probes is unchanged:** build with `INTERP_DOMAIN_MTVEC=1` where the glue
+supports it, or make the faulting access the LAST thing its boot does. The open question is still the
+lead's: whether measurement images should carry the vector by default (`docs/ref/ISSUES.md` M-1).
 
 ## The defect
 

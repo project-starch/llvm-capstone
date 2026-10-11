@@ -1,7 +1,22 @@
 # Paper bug inventory — every specimen, by taxonomy row
 
-*Single index of what we have, what is in flight, and what is still to build. Grouped by the
-taxonomy rows of `design/sharing-bug-taxonomy-and-novelty.md`. Updated 2026-08-14.*
+*What we have, what is in flight, and what is still to build, grouped by the taxonomy rows of
+`design/sharing-bug-taxonomy-and-novelty.md`, and read against the paper's tables. Updated
+2026-08-14; the taxonomy reading below is unchanged.*
+
+**This is no longer the single index, and its counts are not the authority.** The generated
+[bug-material index](../../bug-corpora/INDEX.md) is: it lists every corpus, its case count, the
+version each pins and whether those defects are live in that version, from each corpus's own
+`corpus.json`. It was written because this file **omits 58 of the 107 cases in the tree**: the
+six allocator-consumer corpora built in September 2026 appear here nowhere — pymalloc (CPython,
+20), memory contexts (PostgreSQL, 8), wmem (Wireshark, 13), slabs and the object cache
+(memcached, 5), pools and buckets (APR/httpd, 1 + 8), and FFmpeg's pools (3). The 49 it does
+cover are Corpus A, Corpus B, Corpus C and the two reuse-without-free specimens — and Corpus A,
+now `bug-corpora/sqlite/capi-repros/`, has itself grown from the 15 rows tabulated below to 19.
+
+What this file is for, and the index is not: which specimen answers which taxonomy row, which
+belongs in the paper, what is modelled rather than literal, and what is still worth building.
+Take a number from the index and an argument from here.
 
 ## How to read this
 

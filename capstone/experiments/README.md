@@ -5,8 +5,8 @@ paper's plan. Deliberately outside `ports/`, which holds the ports and their bui
 `bug-corpora/`, which holds one program's defects: an experiment links its own instrument or
 probes into a port's domain and records what it measured.
 
-    a1-sqlite-reuse/    A1: does level 0 see the objects in the custom allocator? SQLite's
-                        lookaside pool over memsys5, unprotected and under the Sublet port
+    a1-sqlite-reuse/    A1: does the allocator below see the objects in the nested allocator?
+                        SQLite's lookaside pool over memsys5, unprotected and under the Sublet port
 
 Each directory has a `run.sh` that builds through the port, runs its control first and prints a
 verdict against what the directory records; a control that fails exits 75 with no verdict, as in

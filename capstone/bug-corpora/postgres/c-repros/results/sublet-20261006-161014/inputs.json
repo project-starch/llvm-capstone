@@ -1,0 +1,23 @@
+{
+  "arm": "sublet",
+  "bindir": "/tmp/crepros-sublet",
+  "image_sha256": {
+    "00_CVE-2026-6477_pqfn_unbounded_result_copy": "ec8474926b1dcae7b3f875fae3254fdba15fae04ecf323552919236d9de71700",
+    "01_CVE-2026-19385_pgdump_transform_list_overread": "2add7053a77339fb486849282aedc2485786b27dba4031334f4ffd0208fb05e1",
+    "02_CVE-2026-16241_ecpg_bytea_negative_length": "963944b02018f07edad40ae6d0c4d47ba04c4dbefa58d1f26b6ded93c814742f",
+    "03_5d61bdd114_saslprep_truncated_utf8_overread": "1ef0b6fb2b7f56557d7e9398e941afe8dbdefaf1d54153534924755d2026bde5",
+    "04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer": "4262e9e801f26112d8eb9275153a71aa4cb4ab0a2dad38c10549c19d8983d680"
+  },
+  "runner_sha256": "7ca76962907c4863e344fd00f54cc30ba962be1bc845377e04aa57ec504ba5c9",
+  "started_utc": "20261006-161014",
+  "mechanism_gate": {
+    "case": "00",
+    "passed": true,
+    "kind": "a corpus case required to be detected"
+  },
+  "cases": 5,
+  "scored": 5,
+  "verdicts": {
+    "detected": 5
+  }
+}

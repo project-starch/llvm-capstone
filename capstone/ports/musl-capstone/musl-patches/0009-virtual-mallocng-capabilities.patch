@@ -1,0 +1,489 @@
+--- a/src/malloc/mallocng/aligned_alloc.c
++++ b/src/malloc/mallocng/aligned_alloc.c
+@@ -29,7 +29,10 @@
+ 	int idx = get_slot_index(p);
+ 	size_t stride = get_stride(g);
+ 	unsigned char *start = g->mem->storage + stride*idx;
+-	unsigned char *end = g->mem->storage + stride*(idx+1) - IB;
++#ifdef CAPSTONE_MUSL_MALLOC
++	start = __capstone_malloc_slot_start(&g->cap_slots[idx]);
++#endif
++	unsigned char *end = start + stride - IB;
+ 	size_t adj = -(uintptr_t)p & (align-1);
+ 
+ 	if (!adj) {
+@@ -39,22 +42,30 @@
+ 	p += adj;
+ 	uint32_t offset = (size_t)(p-g->mem->storage)/UNIT;
+ 	if (offset <= 0xffff) {
+-		*(uint16_t *)(p-2) = offset;
+-		p[-4] = 0;
++		*(uint16_t *)(cap_prefix(p)+2) = offset;
++		cap_prefix(p)[0] = 0;
+ 	} else {
+ 		// use a 32-bit offset if 16-bit doesn't fit. for this,
+ 		// 16-bit field must be zero, [-4] byte nonzero.
+-		*(uint16_t *)(p-2) = 0;
++		*(uint16_t *)(cap_prefix(p)+2) = 0;
+ 		*(uint32_t *)(p-8) = offset;
+-		p[-4] = 1;
++		cap_prefix(p)[0] = 1;
+ 	}
+-	p[-3] = idx;
++	cap_prefix(p)[1] = idx;
+ 	set_size(p, end, len);
+ 	// store offset to aligned enframing. this facilitates cycling
+ 	// offset and also iteration of heap for debugging/measurement.
+ 	// for extreme overalignment it won't fit but these are classless
+ 	// allocations anyway.
+-	*(uint16_t *)(start - 2) = (size_t)(p-start)/UNIT;
+-	start[-3] = 7<<5;
++#ifdef CAPSTONE_MUSL_MALLOC
++	*(uint16_t *)(g->cap_slots[idx].prefix+2) = (size_t)(p-start)/UNIT;
++	g->cap_slots[idx].prefix[1] = 7<<5;
++#else
++	*(uint16_t *)(cap_prefix(start)+2) = (size_t)(p-start)/UNIT;
++	cap_prefix(start)[1] = 7<<5;
++#endif
++#ifdef CAPSTONE_MUSL_MALLOC
++	__capstone_malloc_slot_key(&g->cap_slots[idx], p, len);
++#endif
+ 	return p;
+ }
+--- a/src/malloc/mallocng/donate.c
++++ b/src/malloc/mallocng/donate.c
+@@ -20,7 +20,11 @@
+ 		m->avail_mask = 0;
+ 		m->freed_mask = 1;
+ 		m->mem = (void *)a;
++#ifdef CAPSTONE_MUSL_MALLOC
++		m->mem->meta = (uintptr_t)m;
++#else
+ 		m->mem->meta = m;
++#endif
+ 		m->last_idx = 0;
+ 		m->freeable = 0;
+ 		m->sizeclass = sc;
+@@ -35,5 +39,9 @@
+ 
+ void __malloc_donate(char *start, char *end)
+ {
++#ifdef CAPSTONE_MUSL_MALLOC
++	(void)start; (void)end;
++#else
+ 	donate((void *)start, end-start);
++#endif
+ }
+--- a/src/malloc/mallocng/free.c
++++ b/src/malloc/mallocng/free.c
+@@ -24,10 +24,18 @@
+ 		mi.base = g->mem;
+ 		mi.len = g->maplen*4096UL;
+ 	} else {
++#ifdef CAPSTONE_MUSL_MALLOC
++		struct capstone_malloc_slot *parent = g->cap_parent;
++		struct meta *m = parent->group;
++		int idx = parent->index;
++		g->mem->meta = 0;
++		__capstone_malloc_nested_release(parent);
++#else
+ 		void *p = g->mem;
+ 		struct meta *m = get_meta(p);
+ 		int idx = get_slot_index(p);
+ 		g->mem->meta = 0;
++#endif
+ 		// not checking size/reserved here; it's intentionally invalid
+ 		mi = nontrivial_free(m, idx);
+ 	}
+@@ -101,18 +109,27 @@
+ void free(void *p)
+ {
+ 	if (!p) return;
++#ifdef CAPSTONE_MUSL_MALLOC
++	p = __capstone_malloc_prepare_free(p);
++#endif
+ 
+ 	struct meta *g = get_meta(p);
+ 	int idx = get_slot_index(p);
+ 	size_t stride = get_stride(g);
+ 	unsigned char *start = g->mem->storage + stride*idx;
++#ifdef CAPSTONE_MUSL_MALLOC
++	start = __capstone_malloc_slot_start(&g->cap_slots[idx]);
++#endif
+ 	unsigned char *end = start + stride - IB;
+ 	get_nominal_size(p, end);
+ 	uint32_t self = 1u<<idx, all = (2u<<g->last_idx)-1;
+-	((unsigned char *)p)[-3] = 255;
++	cap_prefix(p)[1] = 255;
+ 	// invalidate offset to group header, and cycle offset of
+ 	// used region within slot if current offset is zero.
+-	*(uint16_t *)((char *)p-2) = 0;
++	*(uint16_t *)(cap_prefix(p)+2) = 0;
++#ifdef CAPSTONE_MUSL_MALLOC
++	__capstone_malloc_slot_release(&g->cap_slots[idx]);
++#endif
+ 
+ 	// release any whole pages contained in the slot to be freed
+ 	// unless it's a single-slot group that will be unmapped.
+--- a/src/malloc/mallocng/glue.h
++++ b/src/malloc/mallocng/glue.h
+@@ -20,9 +20,18 @@
+ #define is_allzero __malloc_allzerop
+ #define dump_heap __dump_heap
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++#include <malloc_capstone.h>
++#define malloc __capstone_mallocng_malloc
++#define realloc __capstone_mallocng_realloc
++#define free __capstone_mallocng_free
++#define aligned_alloc __capstone_mallocng_aligned_alloc
++#define malloc_usable_size __capstone_mallocng_usable_size
++#else
+ #define malloc __libc_malloc_impl
+ #define realloc __libc_realloc
+ #define free __libc_free
++#endif
+ 
+ #define USE_MADV_FREE 0
+ 
+@@ -33,18 +42,26 @@
+ #define assert(x) do { if (!(x)) a_crash(); } while(0)
+ #endif
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++#define brk(p) ((uintptr_t)-1)
++#else
+ #define brk(p) ((uintptr_t)__syscall(SYS_brk, p))
++#endif
+ 
+ #define mmap __mmap
+ #define madvise __madvise
+ #define mremap __mremap
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++#define DISABLE_ALIGNED_ALLOC 0
++#else
+ #define DISABLE_ALIGNED_ALLOC (__malloc_replaced && !__aligned_alloc_replaced)
++#endif
+ 
+ static inline uint64_t get_random_secret()
+ {
+ 	uint64_t secret = (uintptr_t)&secret * 1103515245;
+-	for (size_t i=0; libc.auxv[i]; i+=2)
++	for (size_t i=0; libc.auxv && libc.auxv[i]; i+=2)
+ 		if (libc.auxv[i]==AT_RANDOM)
+ 			memcpy(&secret, (char *)libc.auxv[i+1]+8, sizeof secret);
+ 	return secret;
+--- a/src/malloc/mallocng/malloc.c
++++ b/src/malloc/mallocng/malloc.c
+@@ -246,7 +246,12 @@
+ 			}
+ 		}
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++		p = __capstone_malloc_group_map(m->cap_slots, &m->cap_tail,
++		                                needed, cnt == 1 ? needed-UNIT : size, cnt);
++#else
+ 		p = mmap(0, needed, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
++#endif
+ 		if (p==MAP_FAILED) {
+ 			free_meta(m);
+ 			return 0;
+@@ -266,17 +271,32 @@
+ 		struct meta *g = ctx.active[j];
+ 		p = enframe(g, idx, UNIT*size_classes[j]-IB, ctx.mmap_counter);
+ 		m->maplen = 0;
+-		p[-3] = (p[-3]&31) | (6<<5);
++		cap_prefix(p)[1] = (cap_prefix(p)[1]&31) | (6<<5);
+ 		for (int i=0; i<=cnt; i++)
+ 			p[UNIT+i*size-4] = 0;
++#ifdef CAPSTONE_MUSL_MALLOC
++		m->cap_parent = &g->cap_slots[idx];
++		p = __capstone_malloc_group_nested(m->cap_slots, &m->cap_tail,
++		                                  size, cnt, m->cap_parent);
++#endif
+ 		active_idx = cnt-1;
+ 	}
+ 	ctx.usage_by_class[sc] += cnt;
+ 	m->avail_mask = (2u<<active_idx)-1;
+ 	m->freed_mask = (2u<<(cnt-1))-1 - m->avail_mask;
+ 	m->mem = (void *)p;
++#ifdef CAPSTONE_MUSL_MALLOC
++	m->mem->meta = (uintptr_t)m;
++#else
+ 	m->mem->meta = m;
++#endif
+ 	m->mem->active_idx = active_idx;
++#ifdef CAPSTONE_MUSL_MALLOC
++	for (int i=0; i<cnt; i++) {
++		m->cap_slots[i].group = m;
++		m->cap_slots[i].index = i;
++	}
++#endif
+ 	m->last_idx = cnt-1;
+ 	m->freeable = 1;
+ 	m->sizeclass = sc;
+@@ -307,8 +327,12 @@
+ 
+ 	if (n >= MMAP_THRESHOLD) {
+ 		size_t needed = n + IB + UNIT;
++#ifdef CAPSTONE_MUSL_MALLOC
++		void *p = __capstone_malloc_map(needed);
++#else
+ 		void *p = mmap(0, needed, PROT_READ|PROT_WRITE,
+ 			MAP_PRIVATE|MAP_ANON, -1, 0);
++#endif
+ 		if (p==MAP_FAILED) return 0;
+ 		wrlock();
+ 		step_seq();
+@@ -318,8 +342,18 @@
+ 			munmap(p, needed);
+ 			return 0;
+ 		}
++#ifdef CAPSTONE_MUSL_MALLOC
++		p = __capstone_malloc_group_attach(g->cap_slots, &g->cap_tail, p,
++		                                  (needed+4095)&-4096UL);
++		g->cap_slots[0].group = g;
++		g->cap_slots[0].index = 0;
++#endif
+ 		g->mem = p;
++#ifdef CAPSTONE_MUSL_MALLOC
++		g->mem->meta = (uintptr_t)g;
++#else
+ 		g->mem->meta = g;
++#endif
+ 		g->last_idx = 0;
+ 		g->freeable = 1;
+ 		g->sizeclass = 63;
+@@ -385,3 +419,24 @@
+ 	return g->sizeclass >= 48 ||
+ 		get_stride(g) < UNIT*size_classes[g->sizeclass];
+ }
++
++#ifdef CAPSTONE_MUSL_MALLOC
++void __capstone_mallocng_restore(struct capstone_malloc_slot *s, void *raw)
++{
++	struct meta *g = s->group;
++	unsigned char *p = raw;
++	size_t offset = ((uintptr_t)p - (uintptr_t)g->mem->storage)/UNIT;
++	cap_prefix(p)[1] = s->index;
++	if (offset <= 0xffff) {
++		*(uint16_t *)(cap_prefix(p)+2) = offset;
++		cap_prefix(p)[0] = 0;
++	} else {
++		*(uint16_t *)(cap_prefix(p)+2) = 0;
++		*(uint32_t *)(p-8) = offset;
++		cap_prefix(p)[0] = 1;
++	}
++	unsigned char *end = __capstone_malloc_slot_start(s) + get_stride(g) - IB;
++	*end = 0;
++	set_size(p, end, s->nominal);
++}
++#endif
+--- a/src/malloc/mallocng/malloc_usable_size.c
++++ b/src/malloc/mallocng/malloc_usable_size.c
+@@ -8,6 +8,9 @@
+ 	int idx = get_slot_index(p);
+ 	size_t stride = get_stride(g);
+ 	unsigned char *start = g->mem->storage + stride*idx;
++#ifdef CAPSTONE_MUSL_MALLOC
++	start = __capstone_malloc_slot_start(&g->cap_slots[idx]);
++#endif
+ 	unsigned char *end = start + stride - IB;
+ 	return get_nominal_size(p, end);
+ }
+--- a/src/malloc/mallocng/meta.h
++++ b/src/malloc/mallocng/meta.h
+@@ -15,9 +15,17 @@
+ #define IB 4
+ 
+ struct group {
++#ifdef CAPSTONE_MUSL_MALLOC
++	uint64_t meta;
++#else
+ 	struct meta *meta;
++#endif
+ 	unsigned char active_idx:5;
+-	char pad[UNIT - sizeof(struct meta *) - 1];
++	#ifdef CAPSTONE_MUSL_MALLOC
++char pad[UNIT - sizeof(uint64_t) - 1];
++#else
++char pad[UNIT - sizeof(struct meta *) - 1];
++#endif
+ 	unsigned char storage[];
+ };
+ 
+@@ -29,7 +37,16 @@
+ 	uintptr_t freeable:1;
+ 	uintptr_t sizeclass:6;
+ 	uintptr_t maplen:8*sizeof(uintptr_t)-12;
++#ifdef CAPSTONE_MUSL_MALLOC
++	void *cap_tail;
++	struct capstone_malloc_slot *cap_parent;
++	struct capstone_malloc_slot cap_slots[32];
++#endif
+ };
++
++#ifdef CAPSTONE_MUSL_MALLOC
++_Static_assert(sizeof(struct meta) < 4000, "mallocng metadata must fit a page");
++#endif
+ 
+ struct meta_area {
+ 	uint64_t check;
+@@ -121,17 +138,37 @@
+ 	return m->avail_mask = mask & act;
+ }
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++static inline unsigned char *cap_prefix(const unsigned char *p)
++{
++	if (__builtin_capstone_cap_get_cursor((void *)p) ==
++	    __builtin_capstone_cap_get_base((void *)p)) {
++		struct capstone_malloc_slot *s = __capstone_malloc_find(p);
++		assert(s);
++		return s->prefix;
++	}
++	return (unsigned char *)p - 4;
++}
++#else
++#define cap_prefix(p) ((unsigned char *)(p) - 4)
++#endif
++
+ static inline int get_slot_index(const unsigned char *p)
+ {
+-	return p[-3] & 31;
++	return cap_prefix(p)[1] & 31;
+ }
+ 
+ static inline struct meta *get_meta(const unsigned char *p)
+ {
++#ifdef CAPSTONE_MUSL_MALLOC
++	struct capstone_malloc_slot *s = __capstone_malloc_find(p);
++	assert(s);
++	return s->group;
++#else
+ 	assert(!((uintptr_t)p & 15));
+-	int offset = *(const uint16_t *)(p - 2);
++	int offset = *(const uint16_t *)(cap_prefix(p)+2);
+ 	int index = get_slot_index(p);
+-	if (p[-4]) {
++	if (cap_prefix(p)[0]) {
+ 		assert(!offset);
+ 		offset = *(uint32_t *)(p - 8);
+ 		assert(offset > 0xffff);
+@@ -154,11 +191,12 @@
+ 		assert(offset <= meta->maplen*4096UL/UNIT - 1);
+ 	}
+ 	return (struct meta *)meta;
++#endif
+ }
+ 
+ static inline size_t get_nominal_size(const unsigned char *p, const unsigned char *end)
+ {
+-	size_t reserved = p[-3] >> 5;
++	size_t reserved = cap_prefix(p)[1] >> 5;
+ 	if (reserved >= 5) {
+ 		assert(reserved == 5);
+ 		reserved = *(const uint32_t *)(end-4);
+@@ -190,7 +228,7 @@
+ 		end[-5] = 0;
+ 		reserved = 5;
+ 	}
+-	p[-3] = (p[-3]&31) + (reserved<<5);
++	cap_prefix(p)[1] = (cap_prefix(p)[1]&31) + (reserved<<5);
+ }
+ 
+ static inline void *enframe(struct meta *g, int idx, size_t n, int ctr)
+@@ -198,11 +236,14 @@
+ 	size_t stride = get_stride(g);
+ 	size_t slack = (stride-IB-n)/UNIT;
+ 	unsigned char *p = g->mem->storage + stride*idx;
++#ifdef CAPSTONE_MUSL_MALLOC
++	p = __capstone_malloc_slot_take(&g->cap_slots[idx]);
++#endif
+ 	unsigned char *end = p+stride-IB;
+ 	// cycle offset within slot to increase interval to address
+ 	// reuse, facilitate trapping double-free.
+-	int off = (p[-3] ? *(uint16_t *)(p-2) + 1 : ctr) & 255;
+-	assert(!p[-4]);
++	int off = (cap_prefix(p)[1] ? *(uint16_t *)(cap_prefix(p)+2) + 1 : ctr) & 255;
++	assert(!cap_prefix(p)[0]);
+ 	if (off > slack) {
+ 		size_t m = slack;
+ 		m |= m>>1; m |= m>>2; m |= m>>4;
+@@ -213,16 +254,19 @@
+ 	if (off) {
+ 		// store offset in unused header at offset zero
+ 		// if enframing at non-zero offset.
+-		*(uint16_t *)(p-2) = off;
+-		p[-3] = 7<<5;
++		*(uint16_t *)(cap_prefix(p)+2) = off;
++		cap_prefix(p)[1] = 7<<5;
+ 		p += UNIT*off;
+ 		// for nonzero offset there is no permanent check
+ 		// byte, so make one.
+-		p[-4] = 0;
+-	}
+-	*(uint16_t *)(p-2) = (size_t)(p-g->mem->storage)/UNIT;
+-	p[-3] = idx;
++		cap_prefix(p)[0] = 0;
++	}
++	*(uint16_t *)(cap_prefix(p)+2) = (size_t)(p-g->mem->storage)/UNIT;
++	cap_prefix(p)[1] = idx;
+ 	set_size(p, end, n);
++#ifdef CAPSTONE_MUSL_MALLOC
++	__capstone_malloc_slot_key(&g->cap_slots[idx], p, n);
++#endif
+ 	return p;
+ }
+ 
+--- a/src/malloc/mallocng/realloc.c
++++ b/src/malloc/mallocng/realloc.c
+@@ -13,6 +13,9 @@
+ 	int idx = get_slot_index(p);
+ 	size_t stride = get_stride(g);
+ 	unsigned char *start = g->mem->storage + stride*idx;
++#ifdef CAPSTONE_MUSL_MALLOC
++	start = __capstone_malloc_slot_start(&g->cap_slots[idx]);
++#endif
+ 	unsigned char *end = start + stride - IB;
+ 	size_t old_size = get_nominal_size(p, end);
+ 	size_t avail_size = end-(unsigned char *)p;
+@@ -22,6 +25,9 @@
+ 	if (n <= avail_size && n<MMAP_THRESHOLD
+ 	    && size_to_class(n)+1 >= g->sizeclass) {
+ 		set_size(p, end, n);
++#ifdef CAPSTONE_MUSL_MALLOC
++		__capstone_malloc_slot_key(&g->cap_slots[idx], p, n);
++#endif
+ 		return p;
+ 	}
+ 
+@@ -31,14 +37,27 @@
+ 		size_t base = (unsigned char *)p-start;
+ 		size_t needed = (n + base + UNIT + IB + 4095) & -4096;
+ 		new = g->maplen*4096UL == needed ? g->mem :
++#ifdef CAPSTONE_MUSL_MALLOC
++			__capstone_malloc_group_remap(g->cap_slots, &g->cap_tail, g->mem,
++			                                g->maplen*4096UL, needed);
++#else
+ 			mremap(g->mem, g->maplen*4096UL, needed, MREMAP_MAYMOVE);
++#endif
+ 		if (new!=MAP_FAILED) {
+ 			g->mem = new;
+ 			g->maplen = needed/4096;
++#ifdef CAPSTONE_MUSL_MALLOC
++			p = __capstone_malloc_slot_start(&g->cap_slots[0]) + base;
++			end = __capstone_malloc_slot_start(&g->cap_slots[0]) + (needed - UNIT) - IB;
++#else
+ 			p = g->mem->storage + base;
+ 			end = g->mem->storage + (needed - UNIT) - IB;
++#endif
+ 			*end = 0;
+ 			set_size(p, end, n);
++#ifdef CAPSTONE_MUSL_MALLOC
++		__capstone_malloc_slot_key(&g->cap_slots[idx], p, n);
++#endif
+ 			return p;
+ 		}
+ 	}

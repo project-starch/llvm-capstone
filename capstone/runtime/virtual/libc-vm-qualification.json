@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-07",
+  "scope": "QEMU, one hart, trusted Linux module/runtime adapter, private anonymous mappings, same-mm virtual threads",
+  "application_result": "libc-vm-result.json",
+  "application_checks": 42,
+  "application_status": "PASS",
+  "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "controls": [
+    {
+      "name": "mutation-protect",
+      "mutation": "Replace protect_range mprotect call with a successful no-op.",
+      "status": "FAIL",
+      "detected": true,
+      "failed_checks": [
+        "vm",
+        "vm-ro-write",
+        "vm-none-read",
+        "vm-guard",
+        "fault_causes",
+        "vm_denial_sites",
+        "vm_contract",
+        "linux_pages_released",
+        "linux_demand_faults",
+        "unused_pages_not_populated",
+        "shared_heap_pages_released"
+      ],
+      "recycling_cases_enabled": false,
+      "sha256": {
+        "qemu": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+        "launcher": "0681f7ba6c731d6ff02992c237ab7d55b27a607f66a2a8aa1fa718eb07f1053a",
+        "module": "0f6347aececb1fd2aea6aa2f1d346aead1a756a1a78cf5e9e231d9cd4a409fb5",
+        "application": "1786f8dcc66f8af35d41a303508953e19729780ec99f7dc0f3ca781637514625",
+        "sqlite": "dad93642648e3cdbcbd76c2642796c41f0f8fd9af011097ae0234ae5c17204ef",
+        "mruby": "8ff240a9874eb11bef517d8e70289b3f067d7c1ac5b17a7f2939babe5f974620",
+        "Image": "ca9fc7d8ad08554295a3296706c35c135e51f123f910f69a41a624a287cc8356",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      }
+    },
+    {
+      "name": "mutation-lock",
+      "mutation": "Remove cap_vm_heap_lock and cap_vm_heap_unlock bodies.",
+      "status": "FAIL",
+      "detected": true,
+      "failed_checks": [
+        "heap-threads",
+        "fault_causes",
+        "vm_denial_sites",
+        "heap_threads",
+        "linux_pages_released",
+        "linux_demand_faults",
+        "shared_heap_pages_released"
+      ],
+      "recycling_cases_enabled": false,
+      "sha256": {
+        "qemu": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+        "launcher": "22ea2c1cfc7579877ab3340e2ee0a25efc2255ce2a62e28d46d7bdfdb7969e65",
+        "module": "0f6347aececb1fd2aea6aa2f1d346aead1a756a1a78cf5e9e231d9cd4a409fb5",
+        "application": "f830b2939afa216c1cf6989e3dfc49af49cfe0fd6477025e32f12ad5c87a976d",
+        "sqlite": "dad93642648e3cdbcbd76c2642796c41f0f8fd9af011097ae0234ae5c17204ef",
+        "mruby": "8ff240a9874eb11bef517d8e70289b3f067d7c1ac5b17a7f2939babe5f974620",
+        "Image": "ca9fc7d8ad08554295a3296706c35c135e51f123f910f69a41a624a287cc8356",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      }
+    }
+  ],
+  "limitations": [
+    "Whole-mapping munmap only; no partial unmap or fixed replacement.",
+    "No file-backed or cross-process shared tagged mappings, fork, swap or migration.",
+    "Executable child contexts supported; ordinary cross-mapping JIT call/return ABI deferred.",
+    "QEMU tags retain inherited extra bounds metadata; no RTL or universal proof claimed."
+  ],
+  "reproduction": {
+    "build": "Follow README Build and run; rebuild all applications for VM-service v2.",
+    "application": "run.py --qemu QEMU --images IMAGES --adapter ADAPTER --application CONTRACT --sqlite SQLITE --mruby MRUBY --perl PERL --perl-smoke capstone/ports/perl/musl/scripts/smoke.pl --legacy-application V1_CONTRACT --timeout 600 --record RESULT",
+    "controls": "Rebuild the launcher or contract SDK with the named one-function mutation; run.py with --skip-recycling and without optional Perl inputs. Each recorded mutation must return failure."
+  },
+  "instruction_gate": {
+    "passed": 33,
+    "total": 33,
+    "command": "source capstone/tests/capstone-test-env.sh; bash capstone/capstone-qemu/tests/virtual-capstone-runtime/run.sh",
+    "assembler": "System Clang 18.1.3 targeting ordinary RISC-V; capability instructions encoded by probe macros.",
+    "includes": [
+      "consuming LDC/STC fault retries",
+      "PCC bounds and revocation",
+      "capability and PTE permissions",
+      "immutable context roots",
+      "physical caller restoration",
+      "collector stale-register/memory clearing",
+      "wrong-fault-PC negative control"
+    ]
+  }
+}

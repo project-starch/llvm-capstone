@@ -1,0 +1,104 @@
+# phase 11 -- boot variance vs layout variance: a THIRD capability boot per layout (K=0..3, -DLADDER_PAD=K, spec -O) on caplifive_r35_4ad0df694.bit, 2026-09-24
+# boots: b1 = phase 10 (054cea69b), b2 = phase-10 refresh (4ad0df694), b3 = this file; baselines = the refresh's bare-metal halves (67/68 cycle-identical to phase 10)
+# pre-registration (written before launch):
+#   P11_PREREG boots 1,2 = phase10 (054cea69b) and R35 refresh; boot 3 = this run. Readings to split:
+#     janne K0..3 b1=1.994 1.906 2.031 1.991 b2=2.009 1.803 2.041 1.947; bs b1=1.456 1.468 1.422 1.377 b2=1.456 1.453 1.407 1.381; insertsort b1=2.160 2.139 2.147 2.185 b2=2.099 2.135 2.183 2.165
+#     LAYOUT-dominant => boot-3 lands within the b1..b2 span of the SAME K, and K ordering persists (bs K3 lowest, bs K0/K1 highest).
+#     BOOT-dominant => boot-3 per-K scatter is as wide as the across-K band; K ordering does not persist.
+# build determinism: K3 .dom sha256/16 equal to the refresh's -- ctrsanity aa8a86c830cb838c beebs_bs 6668cf8962336ec8 beebs_janne 013995caa52fa53b beebs_insertsort 62db726c5bd6dd3b
+## K=0 capability half (b3):
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    6312            5029          YES
+ctrsanity            43260934      43260934      700290          500030        YES
+beebs_cover          1993178309    1993178309    159401          76469         YES
+rv8_primes           99991         99991         6345286         3245855       YES
+rv8_sha512           1390718314    1390718314    543595          460950        YES
+beebs_aha_mont64     2185097489    2185097489    286441          256697        YES
+rv8_sha512s          2842840124    2842840124    118636          75477         YES
+beebs_prime          582955588     582955588     9724            2703          YES
+beebs_crc32          1703161001    1703161001    48257           29723         YES
+beebs_ns             1184999093    1184999093    102572          61299         YES
+beebs_cnt            2356896837    2356896837    114137          69387         YES
+beebs_bs             887447230     887447230     2108            820           YES
+coremark_matrix      14343         14343         53442           31560         YES
+matmult_int          774662735     774662735     19235           9722          YES
+beebs_janne          484656629     484656629     640             198           YES
+beebs_recursion      1579141629    1579141629    19247           3029          YES
+beebs_insertsort     271779359     271779359     2520            962           YES
+## K=1 capability half (b3):
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    7322            5029          YES
+ctrsanity            43260934      43260934      600314          500030        YES
+beebs_cover          1993178309    1993178309    159574          76469         YES
+rv8_primes           99991         99991         6332934         3245855       YES
+rv8_sha512           1390718314    1390718314    543678          460950        YES
+beebs_aha_mont64     2185097489    2185097489    286452          256697        YES
+rv8_sha512s          2842840124    2842840124    118687          75477         YES
+beebs_prime          582955588     582955588     9686            2703          YES
+beebs_crc32          1703161001    1703161001    48264           29723         YES
+beebs_ns             1184999093    1184999093    102605          61299         YES
+beebs_cnt            2356896837    2356896837    114024          69387         YES
+beebs_bs             887447230     887447230     2144            820           YES
+coremark_matrix      14343         14343         53378           31560         YES
+matmult_int          774662735     774662735     19122           9722          YES
+beebs_janne          484656629     484656629     658             198           YES
+beebs_recursion      1579141629    1579141629    18977           3029          YES
+beebs_insertsort     271779359     271779359     2582            962           YES
+## K=2 capability half (b3):
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    6266            5029          YES
+ctrsanity            43260934      43260934      600332          500030        YES
+beebs_cover          1993178309    1993178309    160380          76469         YES
+rv8_primes           99991         99991         6333779         3245855       YES
+rv8_sha512           1390718314    1390718314    543585          460950        YES
+beebs_aha_mont64     2185097489    2185097489    286476          256697        YES
+rv8_sha512s          2842840124    2842840124    118758          75477         YES
+beebs_prime          582955588     582955588     9728            2703          YES
+beebs_crc32          1703161001    1703161001    48305           29723         YES
+beebs_ns             1184999093    1184999093    102738          61299         YES
+beebs_cnt            2356896837    2356896837    114093          69387         YES
+beebs_bs             887447230     887447230     2078            820           YES
+coremark_matrix      14343         14343         53458           31560         YES
+matmult_int          774662735     774662735     19088           9722          YES
+beebs_janne          484656629     484656629     654             198           YES
+beebs_recursion      1579141629    1579141629    19072           3029          YES
+beebs_insertsort     271779359     271779359     2605            962           YES
+## K=3 capability half (b3):
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    6330            5029          YES
+ctrsanity            43260934      43260934      600339          500030        YES
+beebs_cover          1993178309    1993178309    159833          76469         YES
+rv8_primes           99991         99991         6337203         3245855       YES
+rv8_sha512           1390718314    1390718314    543696          460950        YES
+beebs_aha_mont64     2185097489    2185097489    286620          256697        YES
+rv8_sha512s          2842840124    2842840124    118628          75477         YES
+beebs_prime          582955588     582955588     9773            2703          YES
+beebs_crc32          1703161001    1703161001    48335           29723         YES
+beebs_ns             1184999093    1184999093    102671          61299         YES
+beebs_cnt            2356896837    2356896837    114056          69387         YES
+beebs_bs             887447230     887447230     2095            820           YES
+coremark_matrix      14343         14343         53833           31560         YES
+matmult_int          774662735     774662735     19057           9722          YES
+beebs_janne          484656629     484656629     638             198           YES
+beebs_recursion      1579141629    1579141629    19249           3029          YES
+beebs_insertsort     271779359     271779359     2627            962           YES
+## summary (ratio = cap cycles / bare-metal BEST cycles; 3 boots x 4 layouts = 12 readings per kernel):
+kernel             within-K boot spread (max over K)   across-K spread of per-K medians  verdict  all-12 median band
+ctrsanitys                                      0.5%                              16.7%  LAYOUT   1.047x 1.037-1.212 (16.9%)
+ctrsanity                                       0.0%                              16.7%  LAYOUT   1.000x 1.000-1.167 (16.7%)
+beebs_cover                                     0.1%                               1.0%  stable   0.990x 0.984-0.994 (1.0%)
+rv8_primes                                      0.0%                               0.2%  stable   1.008x 1.007-1.010 (0.2%)
+rv8_sha512                                      0.0%                               0.0%  stable   1.006x 1.006-1.007 (0.0%)
+beebs_aha_mont64                                0.0%                               0.1%  stable   1.010x 1.010-1.011 (0.1%)
+rv8_sha512s                                     0.1%                               0.1%  stable   1.014x 1.014-1.015 (0.1%)
+beebs_prime                                     0.4%                               0.6%  stable   1.048x 1.044-1.053 (0.9%)
+beebs_crc32                                     0.1%                               0.1%  stable   1.128x 1.127-1.129 (0.2%)
+beebs_ns                                        0.1%                               0.1%  stable   1.161x 1.160-1.162 (0.2%)
+beebs_cnt                                       0.1%                               0.1%  stable   1.200x 1.200-1.201 (0.1%)
+beebs_bs                                        1.6%                               5.9%  LAYOUT   1.428x 1.375-1.468 (6.8%)
+coremark_matrix                                 1.2%                               0.3%  BOOT     1.460x 1.457-1.474 (1.2%)
+matmult_int                                     0.5%                               1.0%  mixed    1.687x 1.681-1.700 (1.2%)
+beebs_janne                                    14.4%                               7.1%  BOOT     2.003x 1.803-2.063 (14.4%)
+beebs_recursion                                 0.3%                               1.4%  LAYOUT   1.972x 1.955-1.984 (1.5%)
+beebs_insertsort                                3.1%                               4.0%  mixed    2.154x 2.095-2.185 (4.3%)
+15 kernels, all-12-reading medians: min 0.990 max 2.154 median 1.161 geomean 1.299

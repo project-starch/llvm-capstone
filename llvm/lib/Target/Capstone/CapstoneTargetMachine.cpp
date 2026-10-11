@@ -138,6 +138,8 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstoneMoveMergePass(*PR);
   initializeCapstonePushPopOptPass(*PR);
   initializeCapstoneIndirectBranchTrackingPass(*PR);
+  initializeCapstoneLiveSourceCopyPass(*PR);
+  initializeCapstoneSetAddressExpandPass(*PR);
   initializeCapstoneLoadStoreOptPass(*PR);
   initializeCapstoneExpandAtomicPseudoPass(*PR);
   initializeCapstoneRedundantCopyEliminationPass(*PR);
@@ -161,6 +163,14 @@ CapstoneTargetMachine::CapstoneTargetMachine(const Target &T, const Triple &TT,
           getEffectiveCodeModel(CM, CodeModel::Small), OL),
       TLOF(std::make_unique<CapstoneELFTargetObjectFile>()) {
   initAsmInfo();
+
+  // No emulated TLS (C-47). A domain is one static image with no __emutls
+  // runtime, and native TLS needs none: every thread-local is local-exec
+  // (CapstoneTargetLowering::getCapabilityTLSAddr). The generic emutls pass
+  // cannot even build its control variables here -- their struct has integer
+  // fields where this target's pointers are capabilities, and it asserted -- so
+  // an -femulated-tls request is served by the native lowering instead.
+  this->Options.EmulatedTLS = false;
 
   // Capstone supports the MachineOutliner.
   setMachineOutliner(true);
@@ -605,8 +615,13 @@ void CapstonePassConfig::addPreEmitPass() {
   // basic block alignment. It must be done before Branch Relaxation to
   // prevent the adjusted offset exceeding the branch range.
   addPass(createCapstoneIndirectBranchTrackingPass());
+  // After every pass that can make a MOVC's source live again, before the one
+  // that needs final code size: each rewrite adds four bytes. At every -O.
+  addPass(createCapstoneLiveSourceCopyPass());
   addPass(&BranchRelaxationPassID);
   addPass(createCapstoneMakeCompressibleOptPass());
+  // Nothing after the rewrite may produce a live-source MOVC; prove it.
+  addPass(createCapstoneLiveSourceCopyPass(/*CheckOnly=*/true));
 }
 
 void CapstonePassConfig::addPreEmitPass2() {
@@ -653,6 +668,11 @@ void CapstonePassConfig::addPreRegAlloc() {
   addPass(createCapstoneInsertReadWriteCSRPass());
   addPass(createCapstoneInsertWriteVXRMPass());
   addPass(createCapstoneLandingPadSetupPass());
+
+  // __intcap arithmetic: the type dispatch behind llvm.capstone.cap.set.address.
+  // After the SSA-level MachineLICM/MachineCSE, before register allocation, at
+  // every optimization level.
+  addPass(createCapstoneSetAddressExpandPass());
 
   // S-07 instrument, off by default. Sited in the UNGATED region deliberately:
   // the silicon SQLite domain is built at -O0, and the opt-level-gated block

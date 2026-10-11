@@ -1,0 +1,82 @@
+# board-supmon-c5u: fw_payload sha256 d07761ded4ce..., bitstream caplifive_supcall_36a641e0b. Result lines only,
+# extracted by tag patterns, in order, from THIS boot's transcript (after the last OpenSBI banner).
+BT00:00000000
+BT01:00000001
+BT02:00000002
+BT03:00000003
+### TEST 1/6 START k800:/test-domains/k800.dom ###
+DBAS:81D60000
+SHA6:00000000
+RESULT k800 retval=4 cycles=4525
+### TEST 1/6 END k800:/test-domains/k800.dom rc=0 ###
+### TEST 2/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+DBAS:82400000
+SQ: A/dom-ok
+SQ: B/mkregion1
+SQ: C/mkregion2
+SQ: D/mapped
+SQ: E/share1
+SHA6:00000001
+SQ: F/share2
+SHA6:00000001
+SQ: G/enter
+ENT0:00000001
+SUPM:00000000
+ENT1:00000001
+ENT2:4EB10000
+SQ: H/return
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2551482753
+HEAP 2097152 DROPPED 0 RC 0
+### TEST 2/6 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 3/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+DBAS:82800000
+SQ: A/dom-ok
+SQ: B/mkregion1
+SQ: C/mkregion2
+SQ: D/mapped
+SQ: E/share1
+SHA6:00000002
+SQ: F/share2
+SHA6:00000002
+SQ: G/enter
+ENT0:00000002
+SUPM:00000001
+ENT1:00000002
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82831C04
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:828432CC
+# ... 821 event lines elided (213 MEPC readings in this block in total) ...
+SUPK:00000001
+MCAU:00000010
+MEPC:82857AF0
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82852500
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82949D38
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:828564B8
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82825F9C
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82851864
+SUPA:00000000
+# driver wedge read / verdict:
+[wedge] commit pc = 0x00000000800211b6   <-- map this onto the domain disassembly to name the faulting instruction
+/test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify WEDGED (no return)
+FIRST FAILURE: /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify did not return, and it WAS created and entered (`SQ: A/dom-ok` AND `SQ: G/enter` present, no monitor tag). Everything below that stage works on silicon; the fault is inside that step.

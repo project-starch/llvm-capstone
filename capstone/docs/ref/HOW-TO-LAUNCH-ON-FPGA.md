@@ -124,9 +124,10 @@ reflash is stale** and must be re-checked before it is relied on.
   `~/.config/capstone/fpga-board-url`) is still a leak. Ask the user out-of-band each
   time; in committed text write `<FPGA-CONSOLE-URL>`.
 - A local `.bit` is NOT needed — re-flash names the **server-side** bitstream. The resident one is
-  **`caplifive_r25r26r27_66c4e7517.bit`** (RTL `66c4e7517`; R-25, R-26 and R-27).
-  **CORRECTED 2026-09-10** — this named the 2026-08-04 `caplifive_fixed_forward.bit`, two reflashes
-  ago. The drivers gate via `FPGA_BITSTREAM` and **several still default to a stale name**, so SET IT
+  named in the LATEST entry of `docs/state/current-state.md`, the only place that is updated at every
+  flash. As of 2026-10-02 it is **`caplifive_supcall_36a641e0b.bit`** (capstone-ariane `36a641e0b`).
+  This line named a bitstream two or more flashes stale THREE times (`fixed_forward`, then
+  `r25r26r27_66c4e7517`, until 2026-10-02), so check current-state rather than trusting it. The drivers gate via `FPGA_BITSTREAM` and **several still default to a stale name**, so SET IT
   EXPLICITLY: a wrong default makes the resident-silicon guard hard-stop the boot. The board scripts
   for sw48-sw51 are the record that settles which bitstream is actually on the board.
 
@@ -584,12 +585,19 @@ the end of this section.**
   filename that was flashed, and confirmed to be a genuine match rather than the `None`-tolerating
   branch of the driver gate (zero `BITSTREAM IDENTITY UNVERIFIED` lines in the boot's log).
 
-**The step we cannot do: getting a `.bit` ONTO the console.** The client exposes no bitstream upload,
-and `flash_bitstream` names a file **already registered server-side**. The REST surface has
-file-management routes (`GET/DELETE/PATCH /api/images`, `/api/bitstreams`, `.../upload`) but
-`PROTOCOL.md` records them as "present too but not on the rtl-smoke path" — documented, never
-exercised from here. Every flash on our record named a file somebody else had registered. **Ask the
-lead to upload it, or for the exact name it is already registered under.**
+**Getting a `.bit` ONTO the console: `POST /api/bitstreams/upload` works.** `FpgaConsole` has no
+wrapper for it, and `flash_bitstream` names a file **already registered server-side**. The REST route
+has been used twice from here: for `caplifive_r42_6cbdaeeb4.bit` on 2026-09-25 and for
+`caplifive_r43_8f6a0af.bit` on 2026-09-29, each returning HTTP 201 and followed by a successful flash.
+The script that did both is committed as `tests/rtl-smoke/drivers/flash-bitstream.py <name> <local .bit>
+<sha256>`, and works as follows:
+- check the local sha256 against the synth lane's sealed hash first;
+- `GET /api/bitstreams` to see whether the name is already registered;
+- if not, POST multipart with `data={"name": NAME}, files={"file": (NAME, fh)}`, then GET again to confirm;
+- only then run the flash sequence below, on ONE `FpgaConsole`.
+
+A flash is still ask-first. (The paragraph that stood here until 2026-09-29 said the route had never been
+exercised, and so told a lane to ask the lead to upload.)
 
 **The sequence that worked** (2026-08-27, the only flash recorded end to end from this side):
 

@@ -1,0 +1,20 @@
+{
+  "program": "wireshark",
+  "role": "allocator-component",
+  "title": "All four wmem allocators with pool-reset epochs",
+  "upstream": {
+    "version": "4.6.8",
+    "pin_source": {
+      "file": "capstone/ports/wireshark/wmem/upstream.json",
+      "grep": "\"version\": \"4.6.8\""
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "cheribsd-purecap",
+    "native"
+  ],
+  "corpora": [
+    "capstone/bug-corpora/wireshark/wmem-repros"
+  ]
+}

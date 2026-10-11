@@ -168,7 +168,7 @@ Source: `history/21-07-2026_16-12-13_RESULTS-fpga-borrow-cost-cycle-accurate.md`
 > Build: `build-ladder-base-bare.sh`; run: `fpga_driver/run_base_bare_fpga.py`.
 > Trail: `history/28-07-2026_02-30-00_RESULTS-bare-metal-baseline-works-*.md`.
 
-## 2. Pervasive spatial safety costs 0 %–96 % in cycles (bare-metal baseline)
+## 2. Pervasive spatial safety costs 0 %–111 % in cycles across 15 kernels (bare-metal baseline, current bitstream)
 
 The draft claims spatial safety is pervasive ("every pointer is a bounded
 capability, always on"), demonstrates it is **correct**, and never prices it.
@@ -200,7 +200,115 @@ halves bracket the compute only, so domain entry/exit is excluded from both.
 The `capability` and `baseline` columns are **cycles**. The two bold columns are the
 overhead ratios (capability ÷ baseline) for cycles and for instructions respectively.
 
-### FINAL — uniform −O1, bare-metal baseline, one harness, one session (2026-07-28)
+### CURRENT — 15 kernels, one bitstream, one compiler, one baseline (2026-09-23)
+
+> **⭐ The layout-randomised table (phase 10, below) supersedes this one for per-kernel numbers:
+> medians of 4 layouts with bands. 15 kernels 0.990×–2.154×, median 1.160×, geomean 1.299×.**
+>
+> **⚠ READ PHASES 8–10 (below) BEFORE QUOTING A SINGLE ROW.** On this silicon, cycle ratios move
+> with code layout. The control's 16.7 % was one misaligned loop, and with loops aligned it reads
+> 1.000×. The same layout change moves `cover` 0.951× → 1.141× and `janne` +5.4 %. Instruction
+> ratios and the table's overall shape are robust; per-kernel cycle ratios are one draw of layout.
+
+**This is the table to cite, with that caveat.** Everything in it comes from `caplifive_m1_054cea69b` (WNS −8.307,
+monitor `2dcd3a5`), with each rung built from `ladder-rungs.spec` at its spec `-O` for **both** halves.
+The denominators come from the **bare-metal baseline**: one 81 s boot, every row at `15/15` passes
+tied at min instret. Every capability value is scored against its native oracle, and every baseline
+retval has to match it. Pairing is done by
+`tests/rtl-smoke/ladder-revival-2026-09-22/pair-halves.py`, which **refuses** to print a row unless
+the control passes three checks: an instruction ratio within 1 % of 1.000, a baseline CPI at the
+1.2000 July floor, and a baseline that is a floor (`clean ≥ 10`). All seven of its refusal paths
+were negative-tested on perturbed inputs. Fed the retired Linux baseline, it refuses on exactly the
+I-2 signature (`clean=1/15`). Where a rung ran in several boots, the table keeps the minimum cycle
+count; its instret was identical in every boot, and the largest cross-boot cycle spread was 25
+cycles. Raw lines are in the same folder.
+
+| kernel | cap cycles | base cycles | **cycles** | instr | CPI | dominated by | vs 2026-07-28 |
+|---|---:|---:|---:|---:|---:|---|---|
+| `beebs_cover` | 159,732 | 167,999 | **0.951×** | 0.999 | 0.951 | layout — report as *no measurable overhead* | 0.953× |
+| `rv8_primes` | 6,320,385 | 6,286,697 | **1.005×** | 1.000 | 1.005 | neither | July's −O0 row reproduces at 1.290×; −O1 removes the cost |
+| `rv8_sha512` | 543,646 | 540,073 | **1.007×** | 0.996 | 1.010 | neither | new |
+| `beebs_aha_mont64` | 286,485 | 283,612 | **1.010×** | 1.000 | 1.010 | neither | 1.023× |
+| `rv8_sha512s` | 118,603 | 117,035 | **1.013×** | 1.092 | 0.928 | extra instructions, offset by CPI | new |
+| `beebs_prime` | 9,684 | 9,283 | **1.043×** | 1.000 | 1.044 | neither | 1.054× |
+| `beebs_crc32` | 48,310 | 42,795 | **1.129×** | 0.959 | 1.177 | stalls | new |
+| `beebs_ns` | 102,661 | 88,451 | **1.161×** | 0.987 | 1.176 | stalls | new |
+| `beebs_cnt` | 114,106 | 94,736 | **1.204×** | 1.197 | 1.006 | extra instructions | 1.353× (capability codegen improved) |
+| `beebs_bs` | 2,054 | 1,470 | **1.397×** | 0.992 | 1.409 | stalls | 1.537× (capability codegen improved) |
+| `coremark_matrix` | 53,345 | 36,691 | **1.454×** | 1.229 | 1.183 | both | new |
+| `matmult_int` | 19,134 | 11,312 | **1.691×** | 1.337 | 1.265 | both | new |
+| `beebs_janne` | 593 | 323 | **1.836×** | 0.943 | 1.947 | stalls | new |
+| `beebs_recursion` | 19,226 | 9,696 | **1.983×** | 1.500 | 1.322 | both | 1.957× |
+| `beebs_insertsort` | 2,518 | 1,193 | **2.111×** | 1.183 | 1.784 | stalls | new |
+| *control* `ctrsanity` | 700,268 | 600,041 | **1.167×** | 1.000 | 1.167 | CPI only, identical code | **1.000×** — see below |
+
+**Summary, over the 15 kernels:** 0 %–111 % in cycles, median **1.161×**, geometric mean
+**1.285×**. On the six kernels that are comparable like-for-like with July, the geometric mean went
+from 1.269× to 1.223×: five fell, and `recursion` rose 1.3 %. **The range widened from 96 % to 111 % because
+eight kernels were added, not because any old row got worse.** The new maximum is `insertsort`, a
+kernel that could not be measured in July.
+
+**The control does not read 1.000×, and every row above shares its bitstream.** Its 16.7 % is pure
+CPI on byte-matched work. It is flat from 500k to 2M instructions and is 1.045× at 5k (next
+subsection but one). Two things bound it without explaining it:
+- `beebs_aha_mont64` runs half a `ctrsanity` of straight-line compute and reads 1.010×;
+- `rv8_primes` runs 3.2 M instructions and reads 1.005×.
+
+So it is not a flat per-instruction silicon tax on capability mode. **Phase 6 narrows it** (subsection "Phase 6 …"). On identical instructions, the control's loop
+costs 7 cycles/iteration when its loop starts at `…1ac` and 6 when it starts at `…1a8`, wherever it
+sits in the boot (phase 7 ruled out position). **Phase 8 settles it:** one alignment `nop` puts the control at **1.0005×**.
+The 16.7 % is loop alignment, and every row's capability cycles may carry the same layout term until
+re-measured with aligned loops. Whether some of it hides inside
+the stall-dominated rows is **open**. That question is phase 6 of
+`ladder-revival-2026-09-22.prereg.md` plus an RTL A/B in simulation; until it is answered, quote the
+control's reading beside the table.
+
+**Four rows retire FEWER instructions with capabilities than without, and all four are now
+explained.** Each difference reconciles **exactly** to the board's instret, from the disassembly of
+the measured capability images and the baseline kernel objects. It was audited adversarially on
+2026-09-23. Two of my first-draft attributions did not survive that audit and are corrected here.
+
+| kernel | cap / base instret | what the difference is |
+|---|---|---|
+| `beebs_crc32` | 29,723 / 31,000 | **Baseline codegen.** The RV64 baseline masks to low bits with a `slli`+`srli` pair; the capability target hoists the mask and uses one `and`. That is +1 per table entry (×256) and +1 per CRC byte (×1024), = 1,280. The capability half has 3 more straight-line instructions: it spills `ra`/`s0` inside its bracket. |
+| `beebs_ns` | 61,299 / 62,097 | **Baseline codegen.** The baseline strength-reduces with two induction pointers per loop level, costing +2 per *j*- and *i*-iteration and per repetition, = 774. The rest (24) is straight-line code. (My draft said per *k*-iteration; wrong.) |
+| `rv8_sha512` | 460,950 / 462,646 | **A net of per-loop differences** in both directions. Per rep, the capability half is +16 on the chain copy, +48 on w-init, +32 on rounds 0–15 and +8 on the fold, and −128 on rounds 16–79, where the baseline's loop is 96 against 94. That totals −26 × 64 reps. The residual 32 is the baseline's 13-register save/restore, which sits inside its call-wrapped bracket. |
+| `beebs_janne` | 198 / 210 | **The measurement bracket, not codegen.** The loops are 190 dynamic instructions on both sides. The capability half inlines the kernel between `volatile` CSR reads, and the compiler moved the pure-arithmetic FNV hash tail *after* the closing read: measured image, `csrr minstret` at `0x70470`, hash from `0x70478`. The baseline brackets an indirect call and counts call, return and the whole tail. Already noted for `janne` in `ctrsanitys_kernel.h`. |
+
+**The bracket asymmetry is a real bias in the instrument. Its sign varies by kernel.** The capability
+half brackets inlined code between CSR reads, and the baseline brackets a call. The straight-line
+instructions each side counts therefore differ, in a way that depends on the kernel:
+- it **understates** capability overhead for `janne`, `ns` and `sha512`;
+- it **overstates** it for `crc32` (+3) and for the control (a constant +8 at every length).
+
+For every kernel above ~2k instructions the effect is well below 1 %. For `janne` (~200 instructions)
+it is ~6 % of the instruction count, and **it favours the capability half**. The same holds to first
+order for cycles, since the baseline's cycle window wraps its instret window. The cycle bias is **not
+quantified**: that needs a capability-half *null* rung to pair with the baseline's
+`null: cycles=16 instret=7`, and none exists. It cannot explain `janne`'s cycle ratio: 593 vs 323 is
++270 cycles on 12 *fewer* instructions. So `janne`'s 1.836× is a real cost, measured by an instrument
+that slightly understates it.
+
+**Summary for citing:** none of the four sub-1.0 instruction ratios is a capability effect. Two are
+the RISC-V backend emitting slightly worse baseline code (`crc32`, `ns`). One is a net of small
+per-loop differences (`sha512`). One is the bracket (`janne`). Their costs are carried by their CPI
+ratios.
+
+**A claim this table now puts under pressure.** "Capability overhead is a property of DATA ACCESS,
+not of execution" (below) rested on `cover` and `mont64`, which touch no data and cost nothing.
+`rv8_sha512` does array work through globals in every one of its 80 rounds: four indexed loads from
+the 16-word rolling window `sha_w[16]`, a store back into it, and one read of `sha512_k[80]`
+(`silicon-ladder/rv8_sha512_kernel.h:98-106`). It also costs nothing (1.007×). The
+sentence may still hold in some narrower form, such as *irregular* or *pointer-chased* access, but
+that narrowing is the lead's to make, not this table's. It is flagged here and not rewritten.
+
+**The paper's `tab:spatialcost` is now stale.** It carries the July rows, including `rv8_primes`
+1.263× at −O0. Edits to the paper are ask-first; this subsection is the source for them.
+
+### HISTORICAL — uniform −O1, bare-metal baseline, one harness, one session (2026-07-28)
+
+> **Superseded by CURRENT above.** It was taken on a July bitstream with a July compiler. Keep it for
+> the record and for the vs-July column; do not cite it beside the current table.
 
 | benchmark | opt | capability | baseline | **cycles** | **instr** | **CPI ratio** |
 |---|---|---:|---:|---:|---:|---:|
@@ -253,11 +361,810 @@ data. Beside `cnt` (+31.9 % instructions, bulk array work) and `bs` (+44.6 % CPI
 dependency-chained loads), the table now separates the cost cleanly: **capability overhead
 is a property of DATA ACCESS, not of execution.**
 
-[*] **`rv8_primes` HANGS at −O1 on this silicon** and is measurable only at −O0 — a real
-limitation, reported rather than hidden. Everything else is −O1. (Its −O0 pair is
-internally consistent, so the ratio is valid; only cross-row `-O` comparison is affected.)
+[*] ~~**`rv8_primes` HANGS at −O1 on this silicon** and is measurable only at −O0~~ — **STALE,
+corrected 2026-09-23.** Its blocker **C-3** has read `GONE` since **2026-09-05**
+(`ISSUES-ARCHIVE.md:1801`, `rv8_primes` returning oracle 99991 at −O2 on silicon), and this footnote
+never followed. Re-measured at −O1 on `caplifive_m1_054cea69b` it returns its oracle and reads
+**1.005× cycles at a 1.000 instruction ratio**, against the 1.263× below taken at −O0 with a 1.130
+instruction ratio.
 
-### Rungs that do NOT appear in the table, and why (2026-07-28)
+**What that does and does not establish.** At −O1, on this bitstream, `rv8_primes` carries **no
+measurable capability overhead**. It does **not** establish that the published 1.263× was "an
+optimisation-level artefact": the two figures differ in **two** variables, the −O level *and* the
+bitstream/compiler, and **no −O0 measurement exists on current silicon**. An earlier version of this
+note made that attribution anyway; it is withdrawn as unearned. The −O0 row is retained below as its
+own row rather than explained away. (Its −O0 pair is internally consistent, so that ratio is valid;
+only cross-row `-O` comparison is affected.)
+
+**SETTLED 2026-09-23 (phase 5) — the attribution is now EARNED, by a measurement where only the −O
+level varies.** Both halves were rebuilt at `LADDER_OPT=-O0` and run on `caplifive_m1_054cea69b`
+(`ladder-revival-2026-09-22/phase5-rv8primes-O0.result-lines.txt`). Every pre-registered prediction
+held:
+
+| `rv8_primes` | capability | baseline | cycles | instr |
+|---|---:|---:|---:|---:|
+| −O0, July bitstream (published) | 17,283,292 / 8,773,753 | 13,679,903 / 7,764,899 | 1.263× | 1.1299 |
+| **−O0, this bitstream** | 17,876,546 / **8,773,753** | 13,861,379 / **7,764,899** | **1.290×** | **1.1299** |
+| −O1, this bitstream | 6,320,385 / 3,245,855 | 6,286,697 / 3,245,861 | 1.005× | 1.000 |
+
+- **Both halves retire exactly July's instruction counts at −O0.** The codegen has not moved, so the
+  cycle shift is the silicon's.
+- **The −O0 row reproduces:** 1.290× against 1.263× is +2.1 %, inside the pre-registered ±3 %.
+  The refutation (≈ 1.00×) did not fire.
+- So on one bitstream, **`rv8_primes` costs 1.290× at −O0 and 1.005× at −O1.** The overhead in
+  the published row is a −O0 codegen cost: 13 % more instructions, which the −O1 build removes.
+- The small silicon drift is capability-side-weighted: capability CPI +3.4 % since July, baseline
+  +1.3 %. That is the same direction as the control's capability-only rise, and much smaller. It is
+  recorded, not explained.
+- At −O0 `ctrsanity` is **not** a matched control (instruction ratio 1.333, because the capability
+  target emits more at −O0). As pre-registered it served only as the oracle and floor check (correct,
+  15/15, spread 0), and its ratio is not quoted.
+
+### ⚠ SUPERSEDED 2026-09-22 — all eight of these rungs now MEASURE on `caplifive_m1_054cea69b`
+
+The table below is a 2026-07-28 coverage bound and its blocker is retired. Re-run on the current
+bitstream, **all eight return their correct native oracle** — including the three whose entries name
+R-6, R-7 and R-9 rather than R-1. R-1's own probes (`rawhazard5/6/7`) read the reference model on
+every live slot. Evidence and method:
+`tests/rtl-smoke/ladder-revival-2026-09-22/` (pre-registration committed before the first boot).
+
+**These rows are RE-MEASURED on the current bitstream, and the earlier reason for withholding them is
+withdrawn.** An earlier version of this note reported a control discrepancy of 7.8 %, then 1.8 %, and
+blamed the baseline vehicle. Those were measured with the **retired** baseline
+(`run_ladder_base_fpga.py`), whose limitation is `ISSUES-ARCHIVE.md:4221` — *"I-2 — Linux baseline
+served interrupts inside the bracket `FIXED` … Fixed 2026-07-28 by removing the OS"* — with the exact
+`1/15 passes tied at min instret` signature observed. This table names its own instrument in its
+heading: **bare-metal baseline**. Both figures and their mechanisms are withdrawn.
+
+On the correct instrument the denominators **reproduce this table to the digit** — `ctrsanity`
+600,041/500,022, `beebs_prime` 9,283/2,704, `rv8_sha512` 540,073/462,646 — at `15/15 passes at min
+instret, spread 0`, two months and several bitstreams later.
+
+### All eight rows, re-measured (2026-09-23, `caplifive_m1_054cea69b`)
+
+| rung | published | re-measured | shift | instr ratio then → now |
+|---|---:|---:|---:|---|
+| `beebs_cover` | 0.953× | 0.951× | −0.3 % | 0.999 → 0.999 |
+| **`ctrsanity`** | 1.000× | **1.167×** | **+16.7 %** | 1.000 → 1.000 |
+| `beebs_aha_mont64` | 1.023× | 1.010× | −1.2 % | 1.000 → 1.000 |
+| `beebs_prime` | 1.054× | 1.043× | −1.0 % | 1.001 → 1.000 |
+| `rv8_primes` | 1.263× (−O0) | 1.290× at −O0 / 1.005× at −O1 | −O0: +2.1 % | 1.130 → 1.130 (−O0) |
+| `beebs_cnt` | 1.353× | 1.204× | −11.0 % | 1.319 → 1.197 |
+| `beebs_bs` | 1.537× | 1.397× | −9.1 % | 1.058 → 0.992 |
+| `beebs_recursion` | 1.957× | 1.983× | +1.3 % | 1.458 → 1.500 |
+
+**Four rows reproduce within ±1.3 %.** Two moved, and the paired halves say which side moved: in
+both cases the **baseline is byte-for-byte the July measurement** and the **capability half got
+cheaper**.
+
+| rung | baseline instret | baseline cycles | capability instret |
+|---|---|---|---|
+| `beebs_cnt` | 57,949 → 57,949 (unchanged) | 94,736 → 94,736 (unchanged) | 76,429 → 69,387 (**−9.2 %**) |
+| `beebs_bs` | 827 → 827 (unchanged) | 1,470 → 1,470 (unchanged) | 875 → 820 (**−6.3 %**) |
+
+A falling instruction *ratio* on its own is equally consistent with the baseline getting worse; the
+unchanged denominators above are what rule that out and make this an attribution rather than an
+assertion. **Capability codegen improved on these two kernels and the cycle ratio followed.**
+
+`rv8_primes` reproduces at −O0 (1.263× → 1.290×, identical instruction counts on both halves), and
+its −O1 cost is 1.005× on the same silicon. See the SETTLED block above.
+
+**Six rows reproducing or explaining themselves is a stronger certification of the pairing than a
+single control rung**, which matters because the control is the one row that does not.
+
+### `ctrsanity`'s +16.7 % is a SATURATING CPI step, and it is that kernel's, not this silicon's
+
+> **Heading SUPERSEDED by phase 6 below.** The step is not a length effect. The one fast rung differs
+> from the slow ones in its hot loop's start address (`…1a8` vs `…1ac`, identical instructions) **and**
+> in always running first in the boot at VA `0x10000`. Phase 7 ruled out position, so this is a layout
+> sensitivity of this silicon rather than a property of the kernel. "Saturating" was a fixed
+> ~250-cycle term being diluted. The table below is still correct as data.
+
+Its instruction ratio is 1.000 in both vintages and its baseline is byte-identical to July, so the
+capability half alone moved: **600,309 → 700,268 cycles for the same work.** The same kernel at three
+lengths, all in one boot (`ladder-revival-2026-09-22/phase4-control-length-series.result-lines.txt`):
+
+| length (instr) | cycle ratio | capability CPI | baseline CPI |
+|---:|---:|---:|---:|
+| 5,029 | 1.0457 | 1.2557 | 1.2027 |
+| 500,030 | **1.1670** | 1.4005 | 1.2000 |
+| 2,000,030 | **1.1668** | 1.4001 | 1.2000 |
+
+**The ratio is flat by 500k.** 500k → 2M moves it by **−0.02 %** across a 4× increase in work,
+while the baseline CPI sits at exactly 1.2000 throughout — so the denominator contributes nothing
+and the whole of the rise is capability-side.
+
+**Two regimes are measured; the transition between them is NOT.** Capability CPI reads 1.256 at 5k
+and 1.400 at both 500k and 2M. Nothing was sampled between 5k and 500k — a 100× gap — so these
+three points cannot distinguish a smooth ramp from a step at 50k from a bump-and-settle. Read them
+as *at 5k the overhead is 1.046×; by 500k it is 1.167× and unchanged at four times that length*.
+**Do not read a curve off this table.** One rung at `CTRSANITY_N = 10000` (~50 k instructions) would
+give the shape; until it is run, the climb is undescribed.
+
+That it is *this kernel's* property and not the bitstream's is what the eight rows above establish:
+`beebs_aha_mont64` runs 256,697 instructions — half a `ctrsanity` — and reads 1.010×.
+
+**What this does NOT say.** Nothing here explains the step. Three points characterise its shape and
+its saturation; they do not identify a mechanism, and the pre-registration forbade offering one
+afterwards from these points alone. **Quote the rows above; do not quote a cause.**
+
+### Phases 6–8 (2026-09-23): the control's 16.7 % is a loop-alignment artifact (aligned, it reads 1.0005×)
+
+Six lengths were run in one boot per half (`ladder-revival-2026-09-22/phase6-control-length-series.result-lines.txt`).
+The run is valid: every baseline CPI is 1.2000–1.2029, and the three lengths measured before
+reproduce to within 0.016 %.
+
+| length | cycle ratio | capability cycles − 1.4 × instret | capability loop starts at |
+|---:|---:|---:|---|
+| 5,029 | 1.0449 | −730 (runs at **1.2** CPI + 276) | `0x101a8` (8-byte aligned) |
+| 20,030 | **1.1768** | 249 | `0x201ac` |
+| 100,030 | 1.1687 | 249 | `0x301ac` |
+| 250,030 | 1.1675 | 251 | `0x401ac` |
+| 500,030 | 1.1671 | 270 | `0x501ac` |
+| 2,000,030 | 1.1668 | 270 | `0x601ac` |
+
+**The pre-registered onset model is REFUTED.** It predicted 1.1365 at 20k; the board read 1.1768, a
+miss of +0.040, and 100k also misses (+0.0078). A "first ~3.7k instructions free" prefix does not
+exist: at 20k **every** iteration pays. The other pre-registered labels do not describe the data
+either. 20k exceeds 1.172 (the "bump" threshold), but only because a fixed ~250 cycles is diluted less
+at short length; it is not a transient.
+
+**What the data do show exactly:**
+- **At every length ≥ 20k,** capability cycles = **1.4000 × instret + ~250**. That is **7 cycles per
+  5-instruction iteration**, against the baseline's 6, on byte-matched work.
+- **At 5k** the capability loop runs at the baseline's **6 cycles per iteration**.
+- **The boundary is a property of the binary, not of elapsed time.** `CTRSANITY_N` is a compile-time
+  constant: 1000 fits a 12-bit `li`, while 4000 and above need `lui`+`addiw`. That one extra
+  instruction moves the otherwise **instruction-identical** 20-byte loop (`srai/xor/addi/add/bne`,
+  registers renamed) from `…1a8` to `…1ac`.
+
+**And a confound.** The one fast rung, `ctrsanitys`, has also been **first in the boot** in every
+run so far. So it is always at entry VA `0x10000`, and every slow rung sits at `0x20000` or above.
+"Loop starts 8-byte aligned" and "first rung / lowest VA" are perfectly confounded in this data. It
+has **not** been shown that the 16.7 % tracks loop alignment rather than position; the two
+explanations are tied.
+
+**What this does NOT establish:**
+- **A mechanism.** Fetch-block counting does not separate the two addresses.
+- **That alignment alone is the variable.** Nearby code differs too: `blez a3` vs `blez a4`.
+- **Why the baseline does not show it.** Its RVC-compressed 14-byte loop runs at 6 cycles/iteration at
+  `…200`, `…294` and `…2de` alike.
+
+**Consequence for the CURRENT table, stated as a risk and not a correction:**
+- Every capability-half cycle count may carry a layout term of up to one cycle per hot-loop iteration,
+  depending on where its loop happens to land.
+- The July control reading 1.000× is consistent with its loop having landed aligned. This was not
+  checked; that image is gone.
+- It also fits the 2026-07-26 finding that four added instructions flipped a rung, and `cover`'s
+  0.951×.
+- Until the pair below is run, read per-kernel differences of a few percent as within layout noise.
+
+**Next, phase 7 (to be pre-registered before it runs):** break the confound with a 2×2. Two
+variables, each changed alone:
+- **alignment:** the same kernel and N built with the loop at `…1a8` and at `…1ac`, e.g. by
+  loop-alignment padding in one build only;
+- **position:** each built image placed both first and not-first in the boot.
+
+If the aligned build is fast wherever it sits, it is alignment; if whichever rung is first is fast, it
+is position. After that, run both images in RTL simulation (E2b, same RTL). The simulation trace, not
+these points, is where a mechanism can come from.
+
+**PHASE 7 RESULT (2026-09-23): boot position is RULED OUT.** The rungs were reordered, with no
+rebuild (`phase7-alignment-vs-position.result-lines.txt`): `ctrsanity20k` ran **first** at `0x10000`
+with its loop at `0x101ac`, and `ctrsanitys` ran **second** with its loop at `0x201a8`. Neither
+moved:
+
+| | first in boot | not first |
+|---|---|---|
+| loop at `…1a8` | fast (phase 6) | **fast (phase 7)**: 1.2 × instret + 248 |
+| loop at `…1ac` | **slow (phase 7)**: 1.4 × instret + 270 | slow (phase 6) |
+
+The reproduction control `ctrsanity` read 700,316 against 700,312. The pre-registered rule "neither
+moves ⇒ alignment" applies.
+
+**What that licenses, precisely:**
+- The 16.7 % tracks the hot loop's start address (`…1a8` vs `…1ac`), not its position in the boot.
+- The fast and slow builds still differ by one more thing: the extra `lui` ahead of the loop (and
+  `blez a3`/`a4`). A **same-N pair differing only in loop padding** is the clean final test of
+  alignment.
+- The mechanism still has to come from the RTL simulation trace of the two images (E2b).
+- Until then, "loop alignment" is the best-supported description, not an explanation.
+
+**PHASE 8 RESULT (2026-09-23): the control's 16.7 % is a LOOP-ALIGNMENT artifact.** The capability
+half was rebuilt with `-falign-loops=8`. Against the plain images measured in phase 7, the only change
+in `domain_main` is one `nop`, executed once, which moves the loop from `…1ac` to `…1b0`
+(`phase8-aligned-loop-pair.result-lines.txt`):
+
+| rung | loop at `…1ac` (plain) | loop at `…1b0` (+1 `nop`) | pre-registered |
+|---|---:|---:|---:|
+| **`ctrsanity` (control)** | 1.1671× | **1.0005×** (600,336 / 600,042) | ~1.000 |
+| `ctrsanity20k` | 1.1777× | **1.0113×** | ~1.010 |
+| `ctrsanitys` (loop at `…1a8`, unchanged) | 1.0402× | 1.0409× | unchanged |
+
+- **The run is valid.** Instret rose by exactly 1 (the `nop`), the `nop` is present in the images
+  that ran, the in-boot control moved 0.06 %, and every oracle is correct.
+- **The finding.** On this silicon, the control's 5-instruction loop costs **one extra cycle per
+  iteration when it starts at 4 mod 8**. Aligned, the control reads **1.000×, as it did in July**.
+  The CPI "rise" since July was the loop landing misaligned in today's build, not a capability cost
+  and not a silicon regression in the ordinary sense.
+- **What remains open.**
+  - The mechanism: E2b simulates the two `ctrsanity20k` images; a fetch/realign bubble on a
+    misaligned taken-branch target is the obvious candidate, **not yet shown**.
+  - Why the baseline's compressed loop is insensitive at three offsets.
+
+**CONSEQUENCE FOR THE CURRENT TABLE, and it is not small.** Every row's capability cycles include
+whatever this penalty its hot loops happened to incur, and loop placement is effectively random per
+build. A kernel whose hot loop landed at 4 mod 8 may carry one cycle per iteration of pure layout
+cost. The relative size of that cost is 1/(cycles per iteration), so it is larger for tighter loops:
+16.7 % for the control's 6-cycle loop. The baseline half's compressed loop was insensitive at three
+offsets, but that is **one loop**, so the sign of the net effect on other rows is not established
+either. It is most likely an overstatement of capability overhead, but not shown to be. **The per-kernel numbers above are
+therefore not yet separable from layout.** The fix is a re-measurement with loops aligned in BOTH
+halves (phase 9). Whether the paper then quotes the aligned table, the default one, or both is the
+lead's call; this subsection only establishes that the difference exists.
+
+**PHASE 9 RESULT (2026-09-23): aligning loops fixes the CONTROL but does NOT stabilise the table.
+Layout sensitivity is broader than loop entry, and it affects BOTH halves.** All 15 kernels and both
+controls were re-measured with `-falign-loops=8` in both halves
+(`phase9-aligned-full-table.result-lines.txt`). The run is valid:
+- the pairing gate passed and the control reads **1.0004×**, so pre-registered prediction 1 held;
+- all 17 baselines are 15/15, every oracle is correct, and the bitstream and flags are confirmed.
+
+| kernel | default layout (CURRENT) | loops aligned, both halves | shift |
+|---|---:|---:|---:|
+| `rv8_sha512` | 1.007× | 1.006× | −0.1 % |
+| `rv8_primes` | 1.005× | 1.007× | +0.2 % |
+| `rv8_sha512s` | 1.013× | 1.014× | +0.1 % |
+| `beebs_aha_mont64` | 1.010× | 1.015× | +0.5 % |
+| `beebs_prime` | 1.043× | 1.050× | +0.7 % |
+| `beebs_crc32` | 1.129× | 1.122× | −0.6 % |
+| `beebs_ns` | 1.161× | 1.139× | −1.9 % |
+| **`beebs_cover`** | **0.951×** | **1.141×** | **+20.0 %** (capability +12.2 %, baseline −6.5 %) |
+| `beebs_cnt` | 1.204× | 1.200× | −0.4 % |
+| `beebs_bs` | 1.397× | 1.439× | **+3.0 %** |
+| `coremark_matrix` | 1.454× | 1.460× | +0.4 % |
+| `matmult_int` | 1.691× | 1.683× | −0.5 % |
+| `beebs_janne` | 1.836× | 1.936× | **+5.4 %** |
+| `beebs_recursion` | 1.983× | 1.957× | −1.3 % |
+| `beebs_insertsort` | 2.111× | 2.069× | −2.0 % |
+| geometric mean | 1.285× | 1.303× | |
+
+**How the pre-registered predictions scored:**
+- **Prediction 2 ("no row rises > 2 %") is REFUTED for three rows:** `cover`, `janne` and `bs`.
+- **The expectation that rows would fall was wrong:** 12 of 15 move by less than ±2 %.
+- `-falign-loops=8` is not a layout neutraliser. It pads every loop, which moves all the code after
+  each pad, and in some kernels that moves branch targets or other hot code into a worse position.
+- Instruction counts barely move (`cover` 76,469 → 76,501), so the swings are cycles, i.e. layout.
+- `cover` is the extreme case. It is 180 switch dispatches per call with jump tables disabled, so it
+  is branch-dense. Its **baseline** moved 6.5 % under the same flag, so the "baseline is layout-
+  insensitive" hint from phase 6 does not generalise.
+
+**What this means for citing the table:**
+1. **Robust to layout:** the range's shape. Several kernels at ~1.00–1.05×, several at 1.1–1.5×, and
+   `janne`/`recursion`/`insertsort` near 2×. The instruction ratios are robust too, because they are
+   layout-independent.
+2. **Not robust:** any single kernel's cycle ratio to better than a few percent. For branch-dense
+   kernels it is not robust to better than ~20 %. `cover`'s "0.951×, report as no measurable
+   overhead" and its "1.141×" are both one draw of layout.
+3. **The honest measurement is a layout-RANDOMISED one.** For each kernel, build K layouts (e.g. a
+   variable pad ahead of the kernel in both halves) and report the median and the band. That is the
+   standard remedy for this well-known class of measurement bias, and it is a methods decision for the
+   lead before the paper quotes per-kernel cycle ratios.
+
+### LAYOUT-RANDOMISED TABLE, phase 10 (2026-09-23): 15 kernels × 4 layouts, both halves
+
+The lead chose the layout-randomised measurement.
+- **The knob.** `-DLADDER_PAD=K` emits a file-scope `.p2align 6` + K four-byte `nop`s at the top of
+  each rung's translation unit, in both halves. It shifts every function in that object by 4K bytes,
+  helpers included, and executes nothing.
+- **The run.** K = 0..3, each a full capability boot plus a full bare-metal sweep of 17 rungs (two
+  controls + 15 kernels), at spec `-O` (`phase10-layout-randomised.result-lines.txt`).
+- **Validity.** Checked at every K:
+  - the gate passed (control instruction ratio 1.00002, baseline CPI 1.2000, 15/15);
+  - all 68 baselines are 15/15, every oracle is correct, and all 8 sessions ran on
+    `caplifive_m1_054cea69b` with the matching flags.
+
+| kernel | K=0 | K=1 | K=2 | K=3 | **median** | band (min–max) | spread | instr |
+|---|---:|---:|---:|---:|---:|---|---:|---:|
+| `beebs_cover` | 0.984 | 0.991 | 0.994 | 0.990 | **0.990×** | 0.984–0.994 | 1.0 % | 0.999 |
+| `rv8_sha512` | 1.006 | 1.007 | 1.006 | 1.007 | **1.006×** | 1.006–1.007 | 0.1 % | 0.996 |
+| `rv8_primes` | 1.010 | 1.007 | 1.008 | 1.008 | **1.008×** | 1.007–1.010 | 0.3 % | 1.000 |
+| `beebs_aha_mont64` | 1.010 | 1.010 | 1.010 | 1.011 | **1.010×** | 1.010–1.011 | 0.1 % | 1.000 |
+| `rv8_sha512s` | 1.014 | 1.014 | 1.015 | 1.014 | **1.014×** | 1.014–1.015 | 0.1 % | 1.092 |
+| `beebs_prime` | 1.046 | 1.047 | 1.049 | 1.052 | **1.048×** | 1.046–1.052 | 0.6 % | 1.000 |
+| `beebs_crc32` | 1.129 | 1.127 | 1.129 | 1.129 | **1.129×** | 1.127–1.129 | 0.2 % | 0.959 |
+| `beebs_ns` | 1.160 | 1.160 | 1.162 | 1.161 | **1.160×** | 1.160–1.162 | 0.2 % | 0.987 |
+| `beebs_cnt` | 1.200 | 1.200 | 1.200 | 1.200 | **1.200×** | 1.200–1.200 | 0.0 % | 1.197 |
+| `beebs_bs` | 1.456 | 1.468 | 1.422 | 1.377 | **1.439×** | 1.377–1.468 | **6.6 %** | 0.992 |
+| `coremark_matrix` | 1.462 | 1.460 | 1.458 | 1.459 | **1.460×** | 1.458–1.462 | 0.3 % | 1.229 |
+| `matmult_int` | 1.691 | 1.684 | 1.689 | 1.687 | **1.688×** | 1.684–1.691 | 0.4 % | 1.337 |
+| `beebs_recursion` | 1.980 | 1.955 | 1.964 | 1.979 | **1.972×** | 1.955–1.980 | 1.3 % | 1.500 |
+| `beebs_janne` | 1.994 | 1.906 | 2.031 | 1.991 | **1.993×** | 1.906–2.031 | **6.6 %** | 0.943 |
+| `beebs_insertsort` | 2.160 | 2.139 | 2.147 | 2.185 | **2.154×** | 2.139–2.185 | **2.2 %** | 1.183 |
+| *control* `ctrsanity` | 1.167 | 1.000 | 1.000 | 1.000 | 1.000× | 1.000–1.167 | 16.7 % | 1.000 |
+| *control* `ctrsanitys` | 1.045 | 1.210 | 1.037 | 1.048 | 1.046× | 1.037–1.210 | 16.7 % | 1.002 |
+
+**Over the 15 kernels' medians:** 0 %–115 % (0.990×–2.154×), median **1.160×**, geometric mean
+**1.299×**.
+
+**What this establishes:**
+1. **12 of 15 kernels are layout-stable to within ±1.3 %.** Their CURRENT numbers were already good
+   to that precision. Instruction ratios do not move at all across layouts, as expected.
+2. **Three kernels carry a real layout band.** `bs` and `janne` each spread 6.6 %, `insertsort`
+   2.2 %. These three are the shortest-running kernels in the table, so a handful of cycles is a
+   visible fraction. Quote them with their band.
+3. **`cover` is ≈ 0.99× in all four layouts.** "No measurable overhead" is supported again, now as
+   a band rather than one draw. Its phase-9 reading of 1.141× came from what `-falign-loops=8` did
+   to it, not from layout in general.
+4. **Pre-registered prediction 3 is REFUTED.** It said a loop starting at 4 mod 8 costs a cycle per
+   iteration, so `ctrsanity` would be slow at K=0 and K=2.
+   - At K=2 its loop sits at `…1b4` (4 mod 8) and it is **fast**.
+   - What the two control kernels share is narrower: across `…1a8 / …1ac / …1b0 / …1b4 / …1b8`,
+     **only `…1ac` is slow**. `ctrsanitys` turns slow (1.210×) exactly at K=1, when its loop moves
+     to `…1ac`.
+   - For that loop the backward `bne` then sits in the **last 4 bytes of a 16-byte block**
+     (`…1bc`), and so does the loop's end at a 64-byte boundary. Several candidate mechanisms fit.
+     **None is claimed.** This is the specific pair E2b must simulate: `…1ac` against `…1b4`.
+
+     **E2b, RTL simulation (2026-09-24): REPRODUCED, and it is not a capability effect.** The board
+     loop (same five 4-byte instructions, 4000 iterations) was placed at the five board offsets
+     within a 64-byte line and timed by `mcycle` on the RTL of this bitstream (`capstone-ariane
+     054cea69b`, Verilator, `--sv_seed 1`; `ladder-revival-2026-09-22/sim-loopalign.result-lines.txt`,
+     test `sim-loopalign-ctrsanity.S`). Offset **44 (`…1ac`) runs 7.009 cycles/iteration; offsets 40,
+     48, 52, 56 run 6.008–6.009** -- the board's 7-vs-6 split, cycle for cycle, and **identically in
+     plain M-mode and after `capenter`**, so it is a property of the core's front end on 4-byte code,
+     not of capability execution.
+
+     **MECHANISM, established 2026-09-24 by waveform + a discriminating run + the RTL source.**
+     - **The unit is the 16-byte I-cache line, NOT 64 bytes.** This target's I-cache line is 128
+       bits (`capstone_cv64a6_imafdc_sv39_config_pkg.sv:46`, `CVA6ConfigIcacheLineWidth = 128`) and
+       fetch is 4 bytes/cycle. An earlier version of this paragraph said "last word of the 64-byte
+       line (and of its 16-byte fetch block)"; the 64 was the test's sweep window, and the fetch
+       width is 4 bytes. Corrected here.
+     - **What happens.** Each cycle the front end fetches PC+4 speculatively. When the loop's taken
+       backward `bne` occupies the **last word of its 16-byte line** (address mod 16 = 12), that
+       PC+4 fetch lands in the NEXT line, which a 20-byte loop never executes. So it misses. The
+       predicted-taken redirect asserts `kill_s2` (`frontend.sv:345`: `kill_s2 = kill_s1 |
+       bp_valid`), and the I-cache FSM's miss path, when killed, drops to `IDLE` **without
+       issuing the refill** (`cva6_icache.sv:294-295`; `mem_data_req_o` at `:301` is never
+       reached).
+       - The redirect is then accepted a cycle late, which is the **+1 cycle/iteration**.
+       - Because the refill is abandoned, **the line is never installed and the miss recurs on
+         every iteration**.
+       - On the hit path the killed fetch still lets the FSM accept the redirect in the same cycle
+         (`:275-286`), so there is no bubble.
+     - **Waveform** (`sim-loopalign-wave.S`): at offset 44 the fall-through fetch at `0x80000080`
+       shows `cl_hit=0000`, `kill_s2=1` and the FSM READ→IDLE every iteration (period 7 cycles). At
+       offset 52 the fall-through at `0x80000108` shows `cl_hit=0001` and the FSM stays in READ
+       (period 6).
+     - **Discriminator** (`sim-loopalign-warm.S`): executing the line after the loop ONCE before
+       it removes the penalty, 7.453 → **6.453** cycles/iteration against the fast control's 6.406.
+     - **It predicts all five board offsets by position mod 16.** The branch sits 16 bytes after
+       the loop start, so it has the start's phase: `…1a8`→8, `…1ac`→**12**, `…1b0`→0, `…1b4`→4,
+       `…1b8`→8. Only `…1ac` is slow.
+
+     **For the paper and for the hardware side:**
+     - **The control's 16.7 %** is a front-end performance defect of this core: a speculatively
+       fetched I-cache miss that a taken-branch redirect kills is never refilled. It is not a
+       capability cost. Any loop whose taken backward branch falls in the last word of a 16-byte
+       line pays one cycle per iteration, in either half of the ladder.
+     - **This is also the mechanism behind the ladder's layout bands (phase 10)**, and it is what
+       `-falign-loops` and the layout pad move in and out of.
+     - **Worth handing to the RTL owner**, since refilling (or not killing) a demand miss that is
+       already on the right path would remove it. That is a design change, not ours.
+5. **Pre-registered prediction 2 (K=0 reproduces CURRENT within 0.5 %) rested on a premise that held
+   for only 11 of 17 rungs.**
+   - The premise was checked at the desk on one rung. For 6 rungs the TU's `.text` does not start
+     64-byte aligned by default, so `.p2align 6` moves their code even at K=0.
+   - Among the 11 code-identical rungs, 9 reproduce within 0.5 %.
+   - `janne` (+7.3 %, 636 vs 593 cycles) and `insertsort` (+3.2 %) do not, on identical code. That
+     is boot-to-boot or entry-VA variation. `janne` has now read 593 / 603 / 636 in three boots.
+   - So sub-few-thousand-cycle kernels vary by a few percent across boots **as well as** across
+     layouts. Their bands above understate that, because each layout is one boot.
+
+**Recommendation to the lead:** cite the **median-of-layouts** column with its band. Which statistic
+to quote is the lead's call.
+- For the 12 stable kernels, the band is narrower than any claim the paper makes.
+- For `bs`, `janne` and `insertsort`, quote the band, or re-run each layout 3× to separate layout
+  variation from boot variation.
+- The **control belongs in the paper as the demonstration of the layout effect**, not as a certificate
+  of the pairing: 1.000× in three layouts, 1.167× in one.
+
+
+### Phase-10 REFRESH on the R-35 fix bitstream (2026-09-24): no false deny, no cost, and the short kernels' bands are partly BOOT variance
+
+This re-runs the same builds as phase 10 on `caplifive_r35_4ad0df694.bit`: 4 layouts × (capability
+boot + bare-metal sweep) (`phase10-r35-refresh.result-lines.txt`). The purpose was the R-35 fix's
+false-deny test, plus a re-measurement.
+
+- **No false deny.** All 68 capability rows are correct. Every retval and every instret is
+  identical to phase 10, and there were no traps. The control gate passed at all four K (instruction
+  ratio 1.00002, baseline CPI 1.2000, 15/15).
+- **No measurable cost.** Over the 15 kernels' medians the range is 0.990×–2.150×, the median
+  **1.161×** and the geometric mean **1.298×**. Phase 10 read 0.990×–2.154×, 1.160× and 1.299×.
+  - 12 of 15 kernel medians agree with phase 10 to within 0.003.
+  - The three that move more are the short kernels: `beebs_janne` 1.993 → 1.978, `beebs_bs`
+    1.439 → 1.430 and `beebs_insertsort` 2.154 → 2.150.
+  - The per-rung capability cycle ratio (new over old) has a median of 1.000 at every K (1.0000–1.0001).
+- **The three short kernels' bands are NOT purely layout.** The same layout, on the same image,
+  re-measured on another boot, moved as follows:
+  - `beebs_janne` at K=1: 1.906 → **1.803**, which widens its band from 6.6 % to **13.2 %**;
+  - `beebs_bs` at K=1: 1.468 → 1.453;
+  - `beebs_insertsort` at K=0: 2.160 → 2.099.
+
+  Part of what phase 10 read as a layout band is boot-to-boot variance. Phase 11 (3 boots per layout
+  for these three) is the experiment that separates the two. It has now run; see the next section.
+- **The bare-metal baseline did not move.** 67 of 68 BEST rows are cycle-identical to phase 10; the
+  exception is `beebs_bs` K=3, 1523 → 1524. The capability-side movement above is therefore not
+  a denominator artefact.
+
+### Phase 11 (2026-09-24): which bands are LAYOUT and which are BOOT — 3 boots × 4 layouts
+
+This adds a third capability boot per layout on `caplifive_r35_4ad0df694.bit`, with the same flags and
+the full 17-rung list, so every entry VA is unchanged (`phase11-boot-vs-layout.result-lines.txt`).
+
+- **The three boots per layout:** phase 10, the refresh above, and this run.
+- **Validity:**
+  - all 68 rows are correct, with instret identical at every K;
+  - the K=3 rung images are byte-identical to the refresh's, so the builds are deterministic;
+  - the refresh showed no bitstream effect, so mixing the two bitstreams is admissible.
+- **How the split is read:** the within-layout spread is the largest over K of one layout's 3 boots.
+  The across-layout spread is taken over the 4 per-layout medians.
+
+| kernel | within-layout (boot) | across-layout | reading | median of 12 | band of 12 |
+|---|---:|---:|---|---:|---|
+| `beebs_bs` | 1.6 % | **5.9 %** | **layout** | 1.428× | 1.375–1.468 (6.8 %) |
+| `beebs_janne` | **14.4 %** | 7.1 % | **boot** | 2.003× | 1.803–2.063 (14.4 %) |
+| `beebs_insertsort` | 3.1 % | 4.0 % | mixed | 2.154× | 2.095–2.185 (4.3 %) |
+| `beebs_recursion` | 0.3 % | 1.4 % | layout, small | 1.972× | 1.955–1.984 (1.5 %) |
+| `coremark_matrix` | 1.2 % | 0.3 % | boot, small | 1.460× | 1.457–1.474 (1.2 %) |
+| `matmult_int` | 0.5 % | 1.0 % | mixed, small | 1.687× | 1.681–1.700 (1.2 %) |
+| other 9 kernels | ≤ 0.4 % | ≤ 1.0 % | stable | unchanged | ≤ 1.0 % |
+
+- **Pre-registered prediction for `bs`: CONFIRMED.** Its layout band persists across boots, and K=3 is
+  the lowest on all three.
+- **`janne`'s band is boot variance.** One layout (K=1) alone reads 1.906, 1.803 and 2.063.
+  - `janne` runs ~640 capability cycles, so ±40 cycles is the whole effect.
+  - No layout choice would have removed it.
+- **The table's summary numbers are robust.** Over all 12 readings the 15 kernels' medians give
+  0.990×–2.154×, median **1.161×**, geometric mean **1.299×**, identical to phase 10.
+- **For the paper, quote:**
+  - `janne` as ≈2.0× with a 14 % band;
+  - `bs` as ≈1.43× with a 6.8 % layout band;
+  - `insertsort` as ≈2.15× with a 4.3 % band;
+  - every other kernel as its median.
+- **Not established: what the boot-to-boot mechanism is for `janne`.** The capability image and
+  instret are identical across boots, so the variance is in the machine's state, for example
+  cache or DRAM placement, not in the code.
+
+### R-42 acceptance, Boot A (2026-09-25): the I-cache fix removes the controls' layout penalty and nothing else
+
+This run repeats the same builds and flags as phase 10 and the R-35 refresh, both halves, on
+`caplifive_r42_6cbdaeeb4.bit` (`r42-acceptance-bootA.result-lines.txt`). The pre-registration was
+written before launch and is quoted in the file.
+
+| check (pre-registered) | result |
+|---|---|
+| capability `ctrsanity` K=0: 1.167× → ≈1.000× | **1.0004×** (700,312 → 600,293 cycles: 100,019 recovered on a 100k-iteration loop) |
+| K=1..3 stay at 1.000× | 1.0004–1.0005× |
+| every retval and instret unchanged; 68/68 correct | yes |
+| baseline unchanged, INCLUDING K=1, where `base_ctrsanity`'s `bne` sits at `0x8020029c` (mod 16 = 12) | CPI 1.2000 at every K. 12/17 baseline rows at K=1 are cycle-identical; the other 5 are at most 0.56 % faster |
+
+- **`ctrsanitys` recovered too, without being predicted.** Its slow layout, K=1 at 1.210×, reads
+  1.045×. The controls' 16.7 % layout band was entirely R-42, and it is now about 0.4 %.
+- **The baseline was immune for the reason predicted.** Its BEST-of-15 runs warm: the loop's exit
+  path fills the next I-cache line on the first pass. So the R-42 penalty only ever hit the one-shot,
+  cold capability run.
+- **The kernels did not move.** The 15 kernels' medians are 0.990×–2.160×, median **1.161×**,
+  geometric mean **1.300×** (R-35 refresh: 1.161× / 1.298×).
+  - Only the short, boot-variable kernels shifted: `janne` K=0 read 2.188×, and `insertsort` K=2
+    read 2.205×. Both are inside the phase-11 boot bands.
+- **Not tested by this boot:** R-35's regression and R-43's false deny. Those are the R1-harness
+  acceptance boots.
+
+### R-42 acceptance, R1-harness boots (2026-09-25): R-43 false denies stop both R1 harnesses
+
+These are five boots on `caplifive_r42_6cbdaeeb4.bit`, one harness image per boot, each with k800
+first (`r42-acceptance-r1boots.result-lines.txt`).
+
+| boot | image | result |
+|---|---|---|
+| B1 workload regression | `079b1f3a` q0 run | **PASS.** k800 = 4 twice, `speedtest1-ran=1320222911` and `R1 m1 end … alloc=160`, all identical to 054cea69b; no trap |
+| B5 R-43 control live16 | `f1aa05aa` | **PASS.** `live-sweep ok live=16 reads=32 sum=544`; no trap |
+| B2 R-35 regression | `35fb3fec` stale probe | **still traps** cause 25 at +0x4354, tval `0xac100000`, as on 4ad0df694 |
+| B3 R1 warm, campaign boot 1 | `1b7a04fe` | **TRAP cause 25 on invocation 1** (S nodes shared). mepc +0x4ff4 = `ld t0,0(a1)` in `run_series`, where a1 comes from `ldc a1,0x80(gp)`, a global's capability. tval is inside the domain's block |
+| B4 R1 cold, wide rep 1 | `46f99c7b` | **TRAP cause 25 on invocation 1.** mepc +0x51bc = `lwu t0,0x24(s10)` in `run_series`; tval is inside the domain's block |
+
+- **Attribution: R-43**, the R-35 fix's deny-on-miss. After enough fresh revocation ids evict a live
+  capability's entry, the access is denied.
+  - The RTL lane reproduced it in RTL simulation on 6cbdaeeb4 (`r43-evict-live.S`, capstone-ariane
+    93f509f54). A live alias is read correctly after 16 fresh ids but traps 25 after 512, even though
+    the rev-node unit reports it live.
+  - Both R1 series churn thousands of ids; the passing B1 churns 160.
+- **Consequence:**
+  - R1's slopes (22.91 / 15.92 warm, 28.15 cold) **cannot be re-measured on R-42**;
+  - no revocation-heavy workload, P1's Sublet cell included, runs on it until the R-43 fix is on a
+    bitstream;
+  - the numbers measured on 054cea69b stand as they were, with their recorded caveats.
+- **B6 and B7, the R-43 sweep at one VA: BOTH trap cause 25 in the MINTING phase, before the sweep**
+  (`r42-acceptance-r43sweep.result-lines.txt`).
+  - live128 traps at `ld t0,0(s10)` right after an `mrev`/`delin`; s10 is a globals capability that
+    the same code read successfully earlier.
+  - live512 traps at `ld t0,0(s8)`.
+  - live16 (B5) passes.
+  - live128 was predicted to fit, and that prediction was the RTL lane's and is RETRACTED: each alias
+    carries two live ids (leaf plus alias), so live128 is about 256 live ids against a 256-entry
+    cache.
+  - The false-deny threshold on this silicon is therefore **roughly 256 simultaneously live
+    revocation ids**. The fix, probe-on-miss, is on capstone-ariane branch `r43-query-on-miss`.
+
+### P1 -O2 pair on R-42 (2026-09-29): cell ⑤ measured; cell ⑥ stopped by R-43, as the section above predicted
+
+These are two boots on `caplifive_r42_6cbdaeeb4.bit`, one cell each, both with `--stats`, and both
+using the k800 control relinked at 0x20000. Result lines are in `p1-o2-r42.result-lines.txt`.
+
+The pre-registrations were pushed before the boots:
+- `lane/compiler-p1-prereg` at `10c0e4fe`: the images, the emulator records and the bitstream-independent
+  predictions;
+- `lane/board-p1-o2` at `c280ca25`: platform, invocation and the silicon readings.
+
+The images come from `~/capstone-artifacts/p1-O2-2026-09-30` and are verified -O2 builds, from the image
+and not from the name (see the retraction on `lane/compiler-p1-prereg`):
+- cell ⑤ `5f4b44257c933477`;
+- cell ⑥ `df484d98b489aeab`;
+- native `9a80c1cd2a576ed2`.
+
+The go/no-go ran each image under `CAPSTONE_MOVC_NULL_SCALAR=1`, QEMU's model of the RTL's MOVC nulling:
+- every result field was identical to the default-mode run;
+- the pre-D′ control fired, dropping lookasides from 25,010 to 0.
+
+**Cell ⑤, boot `sw8x-b80s-p1o2-c5`: every pre-registered reading met.**
+
+| reading | predicted | silicon |
+|---|---|---|
+| control, relinked k800 `589ceee3` | retval 4 at both ends | 4, 4 (cycles 4509, the stock image's on R-42) |
+| cell ⑤ | `112006 38bb59fd`, HEAP 2097152, no `sublet:` line, no trap | as predicted |
+| cell ⑤ lookaside | Successful 25,010, Slots Used 1 | 25,010, 1 (max 154) |
+| native -O2 | `112006 38bb59fd`, Successful 25,122 | as predicted |
+| `SPEEDTEST1-CYCLES`, cell ⑤ `--stats` | not predicted | **1,156,628,454** (CPI 3.497 on the emulator's 330,731,081) |
+| `BASELINE-WARM`, native | not predicted | **856,120,199** (CPI 3.557 on 240,714,705; INSTRS 253,515,542) |
+| ⑤ / native -O2 | not predicted | **1.3510** |
+
+Against the earlier -O2 pair, sw80a (1.3627) and sw8x-b80s-O2 (⑤ 1,166,594,074), cell ⑤ is 0.85 % faster
+and native is unchanged within 0.03 %. **That comparison is confounded three ways:**
+- a different image (`d61c8bf7`, built with an older toolchain; D′ does not touch cell ⑤);
+- a different bitstream (sw80a ran on `caplifive_r30r31_1bfff7776`; R-42 also carries m1's changes, R-35's deny-on-miss check and the I-cache fix);
+- a different host (the readback host `2af56927` then, the rr readback host `2c9e82d1` now).
+
+It is reported, not attributed. This is one run, not P1's five-run timing protocol.
+
+**Cell ⑥, boot `p1o2-c6`: trapped cause 25 inside `setupLookaside`.**
+
+The relinked control returned 4. The host created the arena (`ALEN:00200000`) and the tables
+(`ALEN:001AB800`), and entered the domain (`ENT1`). Then the domain trapped:
+- `sw=255` = 0x99, i.e. seen=1, **mcause 25**;
+- mepc 0x82416928 − DBAS 0x82400000 = offset 0x16928, which is **VA 0x26928**. The convention was
+  checked against R-35's +0x4354, which is the `lbu` at 0x414354;
+- tval 0x827ff530.
+
+The faulting sequence is the lookaside carve loop:
+
+    2690c  ldc   a5, 0x40(gp)       a capability from the globals table
+    2691c  cssplit t1, t0, s4        (0x0d42935b; objdump prints <unknown>) mints a revocation id
+    26920  stc   t0, 0(a6) ; 26924 stc t1, 0(a7)
+    26928  ld    t0, 0(a5)          <- cause 25       ; 2692c addi ; 26930 sd   (a counter increment)
+
+**Attribution: consistent with R-43's deny-on-miss, and not a real use-after-revoke.** This was audited
+adversarially before recording. Established:
+- **The refused capability is live by construction.** gp+0x40 is `sublet_stats.split`
+  (`capstone/runtime/include/sublet/sublet.h:14-23`, the header the build compiles, since
+  `build-sqlite-silicon.sh` puts `capstone/runtime/include` first; an earlier version of this line cited
+  the older `capstone/sublet/sublet.h`, whose code has the same shape). `sublet_split` is exactly the disassembled
+  `ldc; cssplit; stc; stc; split++`, and the `.bss` order `sqlite3Stat, vfsList, memsys5Grant,
+  sublet_stats.0…` matches the gp-table records. It is a static in the domain's own block, and no
+  software path revokes it: the image's 6 `revoke` and 8 `mrev` sites all act on handles loaded from
+  Sublet slots.
+- **tval is that global's address.** tval is the cursor of `a5`, which was loaded from gp+0x40, and it is
+  not in Sublet memory: this boot's arena and tables sit in CMA at `BASE:AC100000` and `BASE:AC300000`.
+  The auditor's layout arithmetic corroborates it to the byte. The entry glue carves globals down from
+  the top of the order-10 (0x400000) domain block, so the top is 0x82800000, and 0x82800000 − 0x9f0
+  (gp table) − 0xe0 (records 0–3) = **0x827ff530**.
+- **QEMU enforces revocation on every capability access** (cause 25 defined identically) and runs the
+  same image to completion. So by the software semantics nothing revoked this capability.
+- **`rev_node_head` = 313** (`sw=249/250`), so at most ~310 revocation ids were ever allocated. The trap
+  fell within the FIRST carve loop, roughly 150 of its ~1,200 iterations in: right at the ~256-id
+  threshold above.
+
+Not established: **which of the RTL's three cause-25 arms fired.** The arms are hit-dead, same-cycle
+invalidation, and miss (`load_store_unit.sv` @ 6cbdaeeb4 :1244, :1250, :1262), and the latched
+registers do not separate them. The miss arm, which is R-43, is inferred. The two dead arms need the
+rev-node unit to have written a live node dead, which would be a different hardware defect. This is
+N=1. The cheapest separating experiments are a repeat of the same boot, and an image variant that reads
+the global's node (`lcc`) just before `split++`. A node read re-installs a live id through the read tap
+(`r43-evict-live.S`), so the trap vanishing would name a miss. A redesigned R-43 bitstream would also
+settle it.
+
+**What this adds to the section above.** That section already stated the consequence: "no
+revocation-heavy workload, P1's Sublet cell included, runs on it until the R-43 fix is on a bitstream".
+The board pre-registration should have cited it and called this trap expected. Instead it listed cell ⑥'s
+outcome as unknown. What the boot adds:
+- the P1 image itself, trapping at a named site;
+- the link to D′: the carve runs only because D′ restored the lookaside. The pre-D′ -O2 images ran on
+  silicon with the lookaside OFF (sw80b, sw81);
+- a deterministic real-workload reproducer, which the RTL lane has added to the R-43 redesign's board
+  acceptance beside the directed live512.
+
+**P1 ⑥ waits for a bitstream with an R-43 fix.** The first fix, `0f5185a6d`, was refuted by synthesis
+(`cf874ab`). The ⑥ / ⑤ and ⑥ / native ratios at -O2 are not measurable on R-42.
+
+**The arm discriminator, boot `p1o2-c6probe`: INCONCLUSIVE, as pre-registered.** The RTL lane asked for
+this boot before spending a synthesis cycle on the R-43 redesign. The pre-registration is on
+`lane/board-p1-o2` at `dfb9ee90`, and its readings are the RTL lane's.
+
+The image `2d0efa02a6797376` is df484d98 plus an LCC validity query on the split counter's capability
+before every `split++`. With the probe define off, the same tree reproduces df484d98 byte-for-byte.
+The query is at all four inlined split sites, in the form
+`lcc live,p,0 ; and t3,live,zero ; cincoffset p,p,t3 ; ld/add/sd through p`. The `cincoffset` makes the
+load wait for the query, because R-45 means an independent load could be checked first.
+
+In QEMU all three arms are identical to the unprobed image's counters, with split=5568, where QEMU's LCC
+sel 0 always answers live.
+
+The pre-registered outcomes were:
+- VANISH: the miss arm;
+- cause 25 at a probed load: a dead node;
+- anything else: inconclusive.
+
+On silicon:
+- **cause 25** (`sw=255` 0x99) at mepc − DBAS = 0x18c7c, i.e. **VA 0x28c7c in `openDatabase`**:
+  `lw a0,0(s8)`, where `s8 = ldc 0x2a0(gp)` at the function's entry. That is a different static global
+  from the split counter;
+- tval 0x827fba70, inside the carved-globals region;
+- `rev_node_head` 466, against 313 unprobed;
+- none of the four probed loads (0x26878, 0x26940, 0x110278, 0x110544) trapped.
+
+**Reading: outcome 3, inconclusive.** With the probed global's node re-read before each access, the run
+allocated more ids before trapping, and the false deny moved to an unprobed live global. The miss arm
+predicts exactly that, since protecting one entry moves the eviction victim. But a defect that writes
+arbitrary live nodes dead would also land on "some live global", so the boot does not separate the arms.
+What it adds is a second live static global refused (the second distinct site of the day), under a
+larger live-id population. The RTL lane's redesigned bitstream, with this image's parent df484d98 in its
+board acceptance, answers the question directly.
+
+### R-43 v2 acceptance (`caplifive_r43_8f6a0af.bit`, capstone-ariane 8f6a0af98, 2026-09-29): every image R-43 stopped now completes
+
+The board was reflashed on 2026-09-29 to the R-43 redesign, which REPLAYS a revocation-cache miss through the
+exception path after probing the rev-node unit, instead of refusing it. It also closes R-45. The resident name
+`caplifive_r43_8f6a0af.bit` was read back from the board after the power cycle. The sealed `.bit` hash matched the
+synth lane's.
+
+The ten acceptance boots, pre-registered in `tests/fpga-repros/R43-revocation-cache-false-deny/`
+("Board acceptance"), all passed. k800 opened every boot with 4:
+
+| boot | image | on R-42 (`6cbdaeeb4`) | on v2 |
+|---|---|---|---|
+| a1 B1 workload | `079b1f3a` | passed | passes, identical (`R1 m1 end … alloc=160`) |
+| a2 R1 warm, 12 invocations | `1b7a04fe` | trapped 25 on invocation 1 | **60/60 points ok** |
+| a3 R1 cold, wide | `46f99c7b` | trapped 25 on invocation 1 | **12/12 points ok** |
+| a4 / a5 live16 / live128 | `f1aa05aa` / `8333c411` | passed / trapped 25 in the fixture | sum 544 / 4352 |
+| a6 live512 | `1186b02f` | trapped 25 **in its fixture's minting phase** (+0x33fc); the sweep never ran | **sum 17408**: the sweep ran on silicon for the first time |
+| a7 ladder K=0, 17 rungs | — | geomean cap/bare 1.2705 | 1.2671 (per-rung 0.997) |
+| a8 P1 cell ⑤ -O2 | `5f4b4425` | 1,156,628,454 cycles | 1,157,324,017 (+0.06 %) |
+| a9 P1 cell ⑥ -O2 | `df484d98` | trapped 25 at `setupLookaside` | **completes**: oracle `112006 38bb59fd`, lookasides 25,010, `sublet 5568/37970/32569/37970/5401` |
+| a10 R-35 stale probe, last | `35fb3fec` | cause 25 at +0x4354 | cause 25 at +0x4354; refusal record LATCHED, **probe-path** arm |
+
+**Readings.**
+- **R-43 is fixed for every workload it stopped.**
+  - a6's 512 live ids over 64 sets × 4 ways force at least 256 of its 1,024 reads to miss (pigeonhole), and all
+    resolved correctly. That is inferred from the geometry: no replay was observed.
+  - a9's verification hash is the strong evidence that replayed loads return correct data.
+- **Cost where nothing misses is unchanged against R-42.** The K=0 ladder moves only in `beebs_janne` −3.2 %,
+  `beebs_insertsort` −2.1 % and `beebs_bs` +1.0 %, the short boot-variable rungs. Cell ⑤ moves +0.06 %. The
+  replay cost itself has no R-42 comparison, because R-42 trapped on every workload that misses.
+- **P1 cell ⑥ on v2** (a9, N=1): cell ⑥ / cell ⑤ = **1.0730**, cell ⑥ / native -O2 = **1.4502**. The image predates
+  #119 and still completes. v2 numbers only.
+- **a3's cold ramp** (N=1, same image as 054cea69b's five repetitions): 10 of 12 points fall below 054cea69b's range,
+  by up to 6.7 % mid-ramp (nd 512-4,096), converging to −0.02 % at nd 16,384.
+  - The RTL lane's candidate mechanism: replay probes pre-warm node lines that a later revoke walk then hits. It
+    is a prediction and is not tested.
+  - a3 also used the relinked k800 where all five earlier reps used the stock one.
+- **a10's refusal record** reads LATCHED with arm `0100`, the probe path: the boot's first refusal since reset
+  came from a probe that resolved its id as not live, **not from a deny-on-miss**. That this first refusal is
+  the stale probe's own is likely but not proven (see Part A).
+  - Arm `0100` cannot separate a dead node from a stale generation or an invalidation during the resolve, and the
+    index here was reissued thousands of times. So "found its node dead" is NOT claimed.
+
+Result lines: the R-43 folder's `results/board-8f6a0af98.result-lines.txt`.
+
+**Corrections made before this record landed (the claim-audit of 2026-09-29):**
+- a6's R-42 control was first written as "trapped at the sweep lbu". The sweep never ran on R-42.
+- a1's post-workload reads of 204/208 were first called stretcher contamination. They were taken with the switches
+  at 16 and 0, a runner defect in the per-domain path, so no passing boot has a post-workload record read.
+- a10's record id was first given as 0x5f "parity ok" from cached bytes. It is read properly on m1v2-4 below.
+
+### Part A on R-43 v2 (2026-09-29): H1 calibration, M1 condition 3 including the stale WRITE, and the S1/S2 pilot
+
+Pre-registered before the first boot at `lane/board-r42-paper` 25f0b401,
+`tests/rtl-smoke/paper-r43v2-2026-09-29/README.md`, whose result lines sit beside it. It took 12 boots. The pilot's
+first three launches refused before any boot, because staged cells had been left over.
+
+**H1, three boots** (image `da9c54e5`, the R1 harness rebuilt with #119):
+
+| working set | cycles per dependent load, median (min..max), 9 traversals over 3 boots | E4 on 1bfff7776 (1 boot) |
+|---|---|---|
+| 4 KiB / 16 KiB | **9.000** (9.000..9.001) / 9.000 | 9.00 |
+| 64 KiB | **40.834** (40.769..40.890) | 40.8 |
+| 256 KiB / 1 MiB | **48.164** (48.159..48.167) / **48.174** (48.170..48.174) | 48.2 |
+
+- **Latency:** equal to E4 at E4's quoted precision (E4's 64 KiB traversals read 40.76-40.81, where v2's reach 40.89).
+  v2's revocation-cache check adds nothing measurable to a load that hits it.
+- **Timer:** `cyc_cyc` = 2 and `ret_ret` = 1 in all nine domains.
+- **Nodes regression:** `ok=1` at every n on all three boots.
+  - REVOKE medians are 145 / 193 / 724 / 2,881 / 11,274 for n = 1…256, against E4's single cold 1bfff7776 run of
+    126 / 182 / 731 / 2,838 / 11,714. That is +15 % at n = 1 and −3.8 % at n = 256.
+  - This is a change detector firing across bitstreams, not attributed.
+- **Linear family:** 7,1,7,7,7,1,7,1,0,1,0,1 on all three boots. R-21 (`tighten`/`shrinkto` copy a linear source)
+  is present on v2, N = 3.
+
+**M1 condition 3, six boots plus a10.** The boot's refusal record now names the arm of the boot's FIRST cause-25
+verdict since reset (`load_store_unit.sv:1466-1467` at 8f6a0af98), not necessarily the probed access's own:
+
+| arm | image | boots | reading |
+|---|---|---|---|
+| stale READ | `35fb3fec` | a10, m1v2-3, m1v2-4 | cause 25 at +0x4354 on all three, the stale `lbu s7,0(a0)`; the boot's record LATCHED, arm `0100` (probe path); id **0x5f (95)**, read fresh at verified apertures on m1v2-4 (void on m1v2-3, an instrument fault, below) |
+| live-alias read control | `aed492ab` | m1v2-2 | the dereference commits; the mint traps **26** at +0x4360; record **EMPTY** |
+| stale WRITE (0xA5 through the revoked alias) | `067cc96f` | m1v2-5, m1v2-6 | cause 25 at **+0x4370**, the store itself: `sb a2,0(a1)` of 0xA5, where a1 = `ldc 0(ldc 0x190(gp))` = `m1_ret_alias[0]`. The boot's record LATCHED, arm `0100`, id 0x60 (96) |
+| write control (the same store through the live alias) | `9b24aa31` | m1v2-1 | returns: `stale-write ok`, `readback via_live_alias=165 wrote=165` |
+
+**Reading.** On v2 a revoked reference is refused for a READ (3/3) and, **for the first time on any bitstream, for a
+WRITE** (2/2). Each trap is precise and at the stale access itself (mepc names the `lbu` and the `sb`; the `ldc` that
+loads the alias checks only the live global that addresses it). That the store did not commit is inferred from the
+precise exception. The wedge loses the domain's output, so no readback exists on the stale arm.
+- The WRITE pair is matched: the control (`9b24aa31`) differs from `067cc96f` by exactly `-DM1_STALE_TAKE_LIVE=1`,
+  checked two-sided, and completes with readback 165.
+- The READ control `aed492ab` is NOT matched to `35fb3fec`. It is four source commits older (a single-age
+  dereference through `oldest`, a cap table of 672 bytes against 688), so its EMPTY record does not show that the
+  stale-read run refuses nothing before its probe.
+- Each stale boot's record reads the probe-path arm. Because the record keeps the first cause-25 verdict since
+  reset, and a wrong-path access that is later flushed can occupy it, this is "the boot's first refusal was on
+  the probe path", not a proven attribute of the stale access.
+- The cheap settler: a returning build of the same source with the probe off, reading 204 after the same workload.
+
+**Not established:** generation wrap, stale references held in memory rather than in a register, and anything
+beyond N ≤ 3 per arm.
+
+**S1/S2 pilot, three boots.** These are nginx use-after-destroy cells rebuilt with #119 at new entry VAs. Each boot
+ran the five returning cells, then ONE touch cell:
+
+| cell | E1 on 1bfff7776 (2026-09-14) | v2 |
+|---|---|---|
+| s1 / s2 / s4 / s6 | C10000 / C20000 / C40001 / C600FB | the same, all three boots |
+| s10 (the reloaded stale pointer's type) | CA0180 | CA0180, all three boots (tagged type 1; the emulator reads CA0780) |
+| s3 (touch after destroy) | **returned** C30000 (read the fill) | **cause 25 at +0x6734**, the stale `lbu`; the boot's record: LATCHED, arm `0001` (hit-dead), id 260 |
+| s5 (read after the address is reused) | **returned** C5005B (read the new occupant) | **cause 25 at +0x6924**, the stale `lbu`; the boot's record: LATCHED, arm `0100` (probe path), id 260 |
+| s11 (type read, then touch) | **returned** CB0100 | **cause 25 at +0x6794**, the stale `lbu`; the boot's record: LATCHED, hit-dead, id 260 |
+
+**Reading.** The touch cells that were unsafe-success on 1bfff7776 **stop at the access** on v2, at the exact
+pre-registered instruction (`ldc a0,0(a0)` then the faulting `lbu a0,0(a0)`, inside `domain_main`, at 0x310000 plus
+the offset in each board image). The paper's `tab:safety` rows that say "stops at access" now have silicon
+evidence, on this bitstream, at N = 1 per cell. Limits:
+- This is a pilot, not the full E1 matrix (12-15 boots), which has not been run.
+- The E1 images were DIFFERENT builds. On 1bfff7776, s3 was `103998ef`, with its touch at +0x66cc. No image ran on
+  both bitstreams, so the flip belongs to the bitstream plus the rebuild together, not to the bitstream alone.
+- The per-cell arm and id are the boot's first refusal since reset. The reads between cells are void (the
+  per-domain path's defect), so they cannot be tied to the touch.
+- The boots ran in the order b3, b1, b2.
+
+**Instrument, stated so the id readings can be weighed.** The wedge dump's record reads were fixed mid-campaign. The
+campaign's runner carried the change as an uncommitted edit, and dev `ae1b13c2` commits that diff byte-for-byte
+(committed at 21:54, after m1v2-4..6 had run). Each byte is read fresh or reported unread, with the switch model
+reset first. From m1v2-4 onward,
+every record byte came back fresh, and a switch-trace check (`tests/rtl-smoke/paper-r43v2-2026-09-29/rr-aperture-check.py`,
+validated two-sided) confirms it was read at its labelled aperture. m1v2-2's and m1v2-3's bytes 205 and 208 were
+read at the wrong apertures by the first version of that fix. Their verdicts rest on 204 alone, which was read
+correctly.
+
+### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
 Eight rows are measured. Coverage is bounded by silicon failures, not by effort, and the
 bound is **not** a single cause — that is the honest statement and it differs from what
@@ -284,6 +1191,11 @@ Do not write "all remaining failures are the register-indexed-load defect" — i
 written once and R-9 falsified it the next day.
 
 ### Why the overheads are what they are
+
+> **The decomposition table below uses the JULY numbers.** The current decomposition for all 15
+> kernels is in the `instr` / `CPI` / `dominated by` columns of the CURRENT table at the top of §2.
+> The per-kernel explanations below still apply to the kernels they name, except `cnt` and `bs`,
+> whose capability instruction counts fell 9.2 % and 6.3 % since.
 
 `cycles_ratio = instr_ratio × CPI_ratio`, and **which factor dominates is the finding**:
 
@@ -940,10 +1852,19 @@ difference was presenting as a capability defect.
 | `select1.test` | 1031 | 1000 | identical, 0 failures |
 | `select2.test` | 1031 | 1000 | identical, 0 failures |
 | `select3.test` | 3351 | 3320 | identical, 0 failures |
-| `select4.test` | 3857 | 2617 | identical, 0 failures, 215 skipped for size |
+| `select4.test` | 3857 | 2617 | identical, 0 failures, 215 not compared: 184 for size and 31 empty results (correction below) |
 | `select5.test` | 1436 | 732 | identical, 0 failures (needs a 2 MiB arena — see below) |
 | `evidence/slt_lang_aggfunc.test` | 80 | 67 | identical, including 11 shared corpus artifacts |
 | **total** | **10,807** | **8,746** | **zero divergences** |
+
+**Correction (2026-09-30): 31 of select4's 215 skipped records were not large, they were empty.**
+Each was a `valuesort` query with no rows. The runner asked `sqlite3_malloc64(0)` for the sort,
+which returns NULL by definition, read that as an allocation failure, and counted the record as
+skipped for size. Both sides run the same runner, so the verdict stands (identical, zero
+divergences), but those 31 records were never compared. With the fixed runner (branch
+`slt-runner-empty-valuesort`) the native baseline at the same cap gives select4 2648 passing
+queries and 184 skipped for size, all rowsort; the other six files are unchanged. The
+negative-control fixture has two more arms since (23 records), one for each side of the fix.
 
 **7,393 of the query records state their expectation as an MD5 of the entire result set**, so
 this is agreement over hashed full result sets, not over scalars.
@@ -1853,7 +2774,7 @@ region/heap class, every image validated under QEMU on its own file before it wa
 | `select2.test` | 1031 | 31 | 1000 | identical, 0 failures | sw27 |
 | `select3.test` | 3351 | 31 | 3320 | identical, 0 failures (~5 min of execution) | sw28 |
 | `select5.test` | 1436 | 704 | 732 | identical, 0 failures (2 MiB heap, 1 MiB stack) | sw26 |
-| `select4.test` | 3857 | 1025 | 2617 + 215 skipped for size | identical, 0 failures (4 MiB region, ~78 min of execution) | sw29 |
+| `select4.test` | 3857 | 1025 | 2617 + 215 not compared (184 for size, 31 empty results; see the correction under the first SLT table) | identical, 0 failures (4 MiB region, ~78 min of execution) | sw29 |
 
 **What this establishes.** The two files with deliberate and known failures reproduce them exactly
 on silicon (2 + 4 and 1 + 10), so a clean row is a clean row and not a comparator that cannot fire.
@@ -3997,8 +4918,17 @@ disassembly, the counters' decomposition, the `--stats` block and this arm. **Wh
 first -O2 Sublet run on silicon with the lookaside on. Against ⑤ -O2 (sw80a, 1,167,116,810; its own
 lookaside state read in the next boot) it gives ⑥/⑤ = **1.1791** at -O2 on matched 2 MiB backing, and
 against native -O2 (856,450,080) 1.607 — labelled *bounded-prototype diagnostic, -O2, size 1, one
-setup function at -O0 as the C-32 workaround*; it becomes P1's number only when the bridge is fixed in
-the compiler (C-32's design choice, the lead's) and the pure -O2 image reads the same counters.
+setup function at -O0 as the C-32 workaround*. **Condition RE-WORDED by the lead's decision of 2026-09-25:**
+a pure -O2 ⑥ becomes P1's number once **the live site is removed, whether by the port or by the compiler**, as
+verified by all three of:
+- `movc-cfg-scan.py` over the image shows no `setupLookaside` site;
+- the board reads the same counters as the image's own emulator run (RETRACTED 2026-09-25: "these counters
+  (5568/37966/32565/37966/5401)" were arm C's, and arm C predates the 09-18 patch rewrite; see C-32);
+- `--stats` reads non-zero lookaside slots on silicon.
+The route chosen is D′, a port change that keeps the lookaside base as an integer (see C-32). The paper must
+disclose that one port function was changed. (The condition as first written: "only when the bridge is
+fixed in the compiler (C-32's design choice, the lead's) and the pure -O2 image reads the same
+counters".)
 
 Two readings the paper lane drew from the same numbers, recorded with their caveats. **The compound,
 full stack against native**, is what a reader multiplies: 1.2103 × 1.1024 = **1.334** at -O0 (directly
@@ -4384,7 +5314,13 @@ the registry: R-21 is not present on `caplifive_r30r31_1bfff7776` for `cincoffse
 note had already recorded that half gone at 5097eb166) nor for `scc` (not in that note), and **R-22 is not
 present at all** — the entry's source analysis describes an earlier revision, and which change fixed it
 is not read here (the RTL lane's to confirm from source). The scope, claim by claim, since R-21 makes five: `cincoffset` and `scc` measured conformant here;
-`tighten` and `shrinkto` NOT probed on silicon (open by the entry's source table); `init`'s DUPLICATION —
+`tighten` and `shrinkto` not probed on this bitstream. **They were probed later, on
+`caplifive_r42_6cbdaeeb4.bit` (2026-09-25, boot r42e3b, image `cbf8cb41eb56c477`), and both COPY:** arm 8
+(`tighten`, LINEAR) and arm 10 (`shrinkto`, LINEAR) read 0, so the linear source survives the operation
+and R-21 is PRESENT on R-42 for those two. Their NONLIN controls (arms 9, 11) read 1, and on the same boot
+arms 2, 3, 4 and 6 (`cincoffset`, `scc`, `ldc`, `stc`) read 7 again, as in the table above. (The first
+boot, r42e3, trapped cause 29 at the `tighten` because the harness encoded permission immediate 12, which
+is Q-13, not the linear source.) Result lines: `r42-e3-linear.result-lines.txt`; registry: R-21. `init`'s DUPLICATION —
 the worst of the five, a second live copy rather than a missing clear — was not re-probed here because it
 is R-25, fixed and confirmed on silicon 2026-09-09 (boot sw41 returned through the consumed-source store on
 the r25r26r27 bitstream, an ancestor of the deployed one). **Origin (the RTL lane, from the history):** one
@@ -4569,3 +5505,486 @@ at every rung, so the entire difference is the walk over corpses. The unspliced 
 ladder (57.6 cyc/node) characterises the testbench's fixed-delay memory model rather than the design,
 is not converged, and **must not be reconciled against the 25.45 cyc/node silicon figure** — different
 memory systems. For the cold per-node cost, use the silicon number.
+
+## M1 on silicon — node reclamation: four arms, twelve repetitions, and the one condition the hardware will not let us measure (boots 2026-09-17 … 2026-09-21)
+
+All numbers are cycles at an **unclosed 25 MHz clock** on `caplifive_m1_054cea69b.bit` (RTL `054cea69b`,
+WNS −8.307, 90,379/174,609 endpoints failing). Platform numbers, not design numbers.
+
+### What is established
+
+**Permitted reuse, demonstrated rather than inferred.** One boot performed **1,314,737 allocations
+against a 65,532-index pool without exhausting it** — 20.1× the pool. Reuse is not an inference: without
+it the first arm cannot finish. The pool does not reset between invocations within a boot (R-12).
+
+**Accounting reconciles, per snapshot and not merely at the end.** `minted − revoked = 31` — exactly the
+fixture's node count — on **every snapshot of every arm of every boot**, and `alloc == revoked` exactly
+on each completed arm.
+
+**Minting cost is flat and O(1) in cumulative allocations.** `take_cyc/n` over 159 snapshots per arm,
+each an average of 4,096 allocations, from allocation 4,096 to 651,264:
+
+| arm | take/n | sd | drift, first tenth → last tenth |
+|---|---|---|---|
+| `drop` | **72.029** | 0.013 | 72.024 → 72.028 |
+| `ring` | **72.006** | 0.005 | 72.004 → 72.007 |
+
+**Repeatability: three boots of one image agree to three decimal places.** Spread across repetitions,
+same image throughout:
+
+| arm | take/n spread | give/n spread |
+|---|---|---|
+| `drop` | **0.000** | **0.000** |
+| `ring` | **0.000** | **0.000** |
+| `pressure` | 0.001 | 0.007 |
+| `release` phase 1 | 0.001 | 0.068 |
+
+### The release cost is a property of GLOBAL PLACEMENT — do not quote it without its image
+
+`give_cyc/n` for the **identical** `pressure` arm, same capacity, same invocation position, on three
+images that differ only in where the globals land:
+
+| image | `m1_ret_alias` | give/n |
+|---|---|---|
+| `249cfda958f22f16` | `0x423170` | **71.052** |
+| `502f5ca1029904e6` | `0x4231b0` | **101.049** |
+| `29d9099326304ee5` | `0x423180` | **130.041** |
+
+Within an image the cost is the same whatever the arm and reproduces across boots to 0.000; **between
+images it moves 83 %**. A 16-byte shift moves every global by one 16-byte line, and one set in a
+32 KiB/8-way/16-byte-line D-cache. The plausible mechanism is cache-set conflict between the node table
+and the fixture's globals; **that mechanism is not established here, only the dependence on the image.**
+`take_cyc/n` is unmoved at 72.00 across all three and is the quantity that can be quoted.
+
+**Retracted 2026-09-19:** an earlier reading of this data as "give ≈ 71 when the obsolete reference is
+retained and ≈ 103 when dropped" does not survive the layout control and is withdrawn.
+
+**Filed as a defect with its own folder, 2026-09-22:**
+`capstone/tests/fpga-repros/RTL-give-cost-tracks-global-placement/`. It carries the matched pair (boot 7
+running boot 1's list on boot 2's image, `take_cyc` **bit-identical at 294,912** while `give_cyc` goes
+291,427 → 533,056), the raw transcripts, and the refutation of the set-conflict mechanism — the set
+indices rise 23, 24, 27 while the cost goes 71, 130, 101, which is **not monotone**, so nothing here
+licenses "cache-set conflict". Anything quoting these numbers should cite the folder, not this section.
+
+### Retain-pressure: the buffer never bought pool coverage
+
+**Retracted 2026-09-19.** The retain-pressure arm was reported as holding a stale reference to
+43,296/65,532 = 66 % of the pool. Retained references are **not** distinct indices: `give(i)` frees a
+node to a LIFO free list and the very next statement `take(i)` pops it back, so roughly **`M1_LIVE` = 16**
+indices recycle however large the buffer. Refuted by measurement already on file — the 20.1× pool
+turnover above is only possible if indices recycle. **`M1_LIVE`, not `M1_MAXRET`, sets coverage**, and
+the protocol's "fraction of distinct indices covered" rests on that correction.
+
+### Condition 3 is UNMEASURABLE on this silicon, and that is a hardware finding
+
+A revoked capability still **reads and writes** the storage its object gave up, at every age tested
+(2,706 / 1,353 / 0 reuses since), returning the **current occupant's live data** (`is_live_data=1` on
+every probe, checked against a witness the harness records as the arm runs), and a byte stored through
+it is visible through a **live** alias to the same storage. No trap; both `k800` controls pass.
+
+The emulator refuses the identical instruction in the identical image (`cause 24`, *"`x[rs1]` is not a
+capability"*). R-34 and R-24 are **excluded**: their fix `c77c65324` is in the flashed image, proven on
+the board by a cause comparison — emulator cause 24 at offset `0x42b4`, board `mcause` 24 at offset
+`0x42b4`, same instruction.
+
+**CORRECTED 2026-09-21 — "the LSU path does not check tags" is superseded, and the mechanism is now
+known.** The LSU path *does* check the tag: an untagged `rs1` raises cause 24 at
+`load_store_unit.sv:973-975`, and cause 24 was never observed, so the stale alias was still **tagged** on
+silicon. What fails is the **revocation** clause. `load_store_unit.sv:966-971` keeps a **single
+core-wide** tracked revnode id and re-adopts any access presenting a different id as VALID; with 16
+rotating slots nearly every access presents a different id, so cause 25 can never fire. Bounds (28) and
+permissions (27) survive because they are read from the capability's own metadata. The module is
+settled by cause **28** itself: the CPMP data check is gated `ld_st_priv_lvl_i != PRIV_LVL_M` and can
+emit only causes 5 and 7 (gate `pmp_data_if.sv:293`, causes `:297-298`), so 28 can only be the M-gated block's. Domains run
+at **M** — entering a domain does not change privilege (`priv_lvl_d` has six writers in
+`csr_regfile.sv`, none on a capability or domain-switch path; `capstone_dom_switcher.anvil` has zero
+`mstatus`/`priv`/`mpp` references).
+
+So the instrument that would show a stale reference being refused has no enforcement to observe.
+Condition 3 is **answered on the emulator with a positive control and unmeasurable on this bitstream** —
+not failed. Full report: `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`.
+
+### Condition 3 MEASURED on the R-35 fix bitstream (2026-09-24): the stale reference is refused, and live ones are not
+
+On `caplifive_r35_4ad0df694.bit` (RTL `4ad0df694`, identified by label and by behaviour), N=1 per arm, the
+same two images as before the reflash:
+
+| | on `054cea69b` | on `4ad0df694` |
+|---|---|---|
+| stale alias, image `35fb3fec3196841b` | reads the current occupant's data (`is_live_data=1`) | **traps, cause 25**, at the stale read (`+0x4354`), `tval` = leaf[0] |
+| live alias to the same leaf, image `aed492ab985653f3` | read commits; the later mint traps 26 | **identical** |
+| ~43k earlier live-alias accesses in each run | commit | commit |
+
+So Condition 3 is now **measured on silicon, and holds on this probe**: a revoked reference no longer reads
+another object's storage, and the live path is unchanged.
+
+**A second reading, on `caplifive_r42_6cbdaeeb4.bit` (2026-09-25, boot r42b2, the R-42 acceptance B2):** the
+same stale-probe image `35fb3fec3196841b` traps cause 25 at `+0x4354` with `tval 0xac100000`, identical to
+the reading on `4ad0df694` (`ladder-revival-2026-09-22/r42-acceptance-r1boots.result-lines.txt`). So the
+stale arm reads the same on two bitstreams, N=1 on each. The live-alias image `aed492ab985653f3` has
+not been run on R-42. The deny arm is no more observable on R-42 than it was on `4ad0df694`: R-42 keeps
+deny-on-miss (R-43), so this reading cannot tell recognised-as-revoked from denied-on-miss either.
+
+**On R-43 v2 the question is mostly answered.** See "Part A on R-43 v2" in the R-42/v2 part of this doc: the stale
+read is refused 3/3 and the stale WRITE 2/2. Each boot's refusal record reads the probe-path arm, not a
+deny-on-miss. The record keeps the first refusal since reset, so this is not proven to be the stale access's own.
+
+Limits the numbers must carry:
+- **Why** the access was denied is not observable. Cause 25 has three arms on this RTL, one of them
+  deny-on-miss, which is the expected route for an id reissued thousands of times. The silicon shows
+  *denied*, not *recognised as revoked*.
+- **Which** probe age trapped (k=0 or k=21648) is lost, because a fault still wedges the domain (M-1).
+- **Not reached on silicon:** the stale write (the read traps first; refused in simulation) and false-deny
+  rates under a large live-id population.
+
+Result lines: `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/results/board-4ad0df694.result-lines.txt`.
+**Do not compare `take_cyc`/`give_cyc` across this reflash:** loop layout effects (R-42) and global
+placement (`RTL-give-cost-tracks-global-placement/`) both move them.
+
+
+## R1 on silicon — release-to-reuse cost: proportional to affected NODES and to nothing else varied (boots sw8x-r1-b1…b8, 2026-09-21)
+
+Completes the campaign §7t opened with boot 1 of 8. Image `1b7a04fe237e1580` (entry `0x410000`),
+bitstream `caplifive_m1_054cea69b.bit`, monitor `2dcd3a5`. **90 invocations over 8 boots, 420 point
+records**, every one `ok=1 bad=0`; zero refused, zero wrong survivors; both `k800` controls `retval=4`
+in all 8 boots; no stalls, one boot banner each. A repetition is a **fresh domain**, so each is its own
+invocation. All 18 (arm, series, pattern) combinations were validated on the emulator before any boot.
+Bundle: `experiments/results/R1/2026-09-21-release-cost/` in the nested-allocators-paper repo.
+
+### The result
+
+| axis varied | held fixed | slope | R² | reading |
+|---|---|---|---|---|
+| **affected nodes** (shared) | bytes, depth, heap | **22.91 cycles/node** | 0.99966 | proportional |
+| **affected nodes** (combined) | bytes, depth, heap | **15.92 cycles/node** | 0.99967 | proportional |
+| released **bytes**, 4 KiB → 1 MiB | nodes at `nd=32` | 3.6e-05 /byte | 0.069 | **no dependence** |
+| unrelated **heap**, 0 → 4 MiB | the released set | 7.7e-06 /byte | 0.027 | **no dependence** |
+| delegation **depth**, chains 1/2/4/8 | **node count at 47** | −0.73 /level | 0.003 | **no dependence** |
+| **object** size, 16 B → 4 KiB | one released leaf | −0.0009 /byte | 0.080 | **no dependence** |
+| *fill* vs bytes — **POSITIVE CONTROL** | — | 1.8125 cycles/byte | **0.9999999993** | proportional |
+
+**The positive control is what makes the four nulls admissible.** On the *same records*, the same
+instrument resolves a byte-proportional quantity at R² ≈ 1.0. A flat revocation cost is therefore a
+property of revocation, not a blind axis. The driver pre-registered the alternative explicitly — *"`rv`
+flat in n if the RTL's revoke is O(1) (~100-200); a rise with n is the node-linear finding R1 asks
+about"* — and it rises.
+
+**The depth null is isolated, not joint.** R1 step 3 requires the affected node count be checked before
+a depth effect may be claimed; measured node count is **47 at every depth level**, so depth varies with
+nodes genuinely held fixed.
+
+**Bookkeeping is node-linear too and pattern-independent** — 28.54 cycles/node shared, 28.79 combined
+(R² 0.9987 / 0.9991) — which locates the shared-vs-combined difference (22.91 vs 15.92) in revocation
+rather than in the API work around it. The spatial arm has `rv = fl = in = 0` in all 210 of its records,
+by construction.
+
+**Repeatability**: across the five fresh-domain repetitions of each of 42 Sublet cases, median spread
+**7.8 %**, max 39.5 %. The large spreads are all at small `rv`; at `nd=512` independent boots agree to
+1.6 % and 0.4 %. Fitted intercepts are near zero (+43.5 shared, +5.8 combined), consistent with a fixed
+~50-100 cycle measurement overhead rather than variable per-node cost.
+
+### What this does NOT establish
+
+- **Every point is cache-resident.** `nd` reaches 512; the revocation node table's cache-resident
+  capacity is **2048 nodes**, and a node is exactly one 16-byte line (`CVA6ConfigDcacheLineWidth = 128`,
+  and the revnode stride is `{…, 4'd0}` = ×16 in `ex_stage.sv`). So **22.91 cycles/node is a warm
+  figure.** ~~It is a lower bound on the cold one, and crossing 2048 is a separate experiment.~~
+  **SUPERSEDED 2026-09-22 — that experiment ran.** The cold constant is **28.15 cycles/node**, +23 % on
+  22.91, and the approach to it is a ramp rather than a step. See *"R1's fit range"* at the end of this
+  document. The bound was right in direction and modest in size.
+- **The bitstream's timing does not close** (WNS −8.307, 90,379 failing endpoints). No cycle count here
+  separates a design property from an artefact of this build.
+- **R1 step 1's invalid-access companion is UNMEASURED on this bitstream, not passed.** It requires an
+  access through a released reference to trap, and **R-35** is a defect in exactly that check on exactly
+  this path. Measurable on the emulator, which enforces. Same standing as M1's condition 3. **Its
+  absence is not a safety result.**
+- Comparator arms outside Capstone's own two (custom-spatial, custom-sublet) were not run.
+
+
+## R1's fit range — the revocation constant COLD is 28.15 cycles/node, and the approach is a RAMP (5 boots, 2026-09-22)
+
+**Bundle** `experiments/results/R1/2026-09-22-cold-coefficient/`, manifest
+`R1-2026-09-22-cold-coefficient`, **60 records over 5 fresh boots**, bitstream
+**`caplifive_m1_054cea69b.bit`**, monitor `2dcd3a5`, harness image `46f99c7b5bf2556e`. Each boot ran one
+repetition of the whole 12-point `wide` series; controls read 4/4 on every boot and each boot has its
+own firmware hash, so these are five independent samples and not one run relabelled.
+
+This is **not a separate study**. It is R1's fit range: the same harness, the same metric, the series
+extended across the node table's cache-resident capacity. R1's release-cost series stops at `nd = 512`,
+entirely cache-resident, which is why its 22.91 was explicitly a warm figure.
+
+### The result
+
+`rv` is the revocation bracket; `nd` is nodes destroyed. Medians across the five repetitions:
+
+| `nd` | `rv` | `rv`/`nd` | step |
+|---:|---:|---:|---:|
+| 64 | 1,258 | **19.66** | — |
+| 256 | 5,339 | 20.86 | +1.20 |
+| 512 | 11,289 | 22.05 | +1.19 |
+| 1,024 | 24,190 | 23.62 | **+1.57** |
+| 1,536 | 36,565 | 23.81 | +0.18 |
+| 1,792 | 43,176 | 24.09 | +0.29 |
+| 2,048 | 51,390 | 25.09 | +1.00 |
+| 2,304 | 59,472 | 25.81 | +0.72 |
+| 3,072 | 82,560 | 26.88 | +1.06 |
+| 4,096 | 113,643 | 27.74 | +0.87 |
+| 8,192 | 230,544 | 28.14 | +0.40 |
+| 16,384 | 461,246 | **28.15** | +0.01 |
+
+Three things, and the third is the one that was not predicted:
+
+1. **The cold constant is 28.15 cycles/node**, against 19.66 at the warmest point — **1.43×**. Measured
+   against R1's published 22.91 it is **+23 %**.
+2. **It saturates.** 8,192 → 16,384 moves the constant by **0.034 %**, across a doubling that adds 8,192
+   nodes. There is no further cliff above the table's capacity.
+3. **The approach is a RAMP, not a STEP.** The largest single interval is +1.57 cycles/node at
+   `nd = 1,024`, which is **18.5 %** of the total 8.50 rise — and it occurs *below* the 2,048-node
+   capacity, not at it. A pure capacity effect predicts most of the rise concentrated at one boundary.
+   Whether this was a step or a ramp was **deliberately left unpredicted** in the pre-registration,
+   precisely because it is what separates pure capacity from capacity plus something else.
+
+### The pre-registered ~5× is REFUTED
+
+`drivers/lists/b3-cold-coefficient.README.md:33` predicted the deep-cold points would rise *"toward
+~5×"*, reasoned from the 9.00-vs-48.2-cycle dependent-load gap. The measured figure is **1.43×**. The
+prediction was wrong by a factor of about three and a half, in the direction of over-estimating the
+penalty.
+
+That reasoning treated every crossed node as an independent dependent load at full miss latency. The
+data says the walk recovers most of that — consistent with the nodes being crossed in index order, so
+the access stream is sequential rather than pointer-chased once the subtree is large.
+
+**This is a pre-registration working, not a retraction.** The ~5× was never written into a claim; it
+existed only in the pre-registration, which is where a number you are about to test belongs. The
+positive control held throughout: `bk` and `fl` rise across the identical records (2,187 → 475,545 and
+7,133 → 1,900,242), so a flat `rv` would have been a property of revocation and not a dead instrument.
+
+### What this does and does not license
+
+- **Quote 28.15 cycles/node for a revocation that exceeds the node table**, and 22.91 for one that fits
+  inside it. Quoting either without its range is what this section exists to prevent.
+- **It does not establish a wall-clock cost.** The bitstream's timing does not close (WNS −8.307), so
+  no MHz-normalised or wall-clock figure may be derived from any cycle count here.
+- **It does not separate the mechanism.** That the rise begins below the capacity boundary says a pure
+  cache-capacity account is incomplete; it does not say what the remainder is. Nothing here attributes
+  it, and the ramp is reported as measured rather than explained.
+
+## The SQLite 3.22.0 temporal-bug corpus, control arm, on R-43 v2 (boots r322-b1a/b1b/b2a, 2026-10-01)
+
+Folder: `tests/rtl-smoke/repro322-silicon-2026-10-01/` (pre-registration, images, result lines). The corpus is
+`ports/sqlite/repro322` (PR #171/#174): SQLite 3.22.0 driven to freed-then-used paths on UNPROTECTED Capstone
+(memsys5 and lookaside, nothing revoked). The cases were rebuilt in the silicon config, each at its own entry
+VA, and checked under QEMU with `CAPSTONE_GP_FABRICATE=0` and the board's own host first.
+
+| cell | row | silicon | against the emulator |
+|---|---|---|---|
+| SQLite 3.22.0 base domain | - | completes, all five markers, 3/3 boots | identical |
+| wschema, blobwrite, mem5design, blobclose, jsoneachstatic, jsoneachroot | 8, 20, 25, 5, #174 ×2 | return, `<tag> NOTRAP done` | domain output identical line for line |
+| backupattach | 15 | mcause 24 at `sqlite3BtreeUpdateMeta+0x48` | the same instruction |
+| detachtrig | 4 | mcause 24 at `sqlite3DropTriggerPtr+0x154` | the same instruction |
+
+- **SQLite 3.22.0 runs on silicon.** Until now it had passed only the silicon-config QEMU gate.
+- **The corpus's control-arm verdicts for these eight rows are not emulator artifacts.** Unprotected Capstone
+  runs six real temporal bugs to completion on the RTL, and the two faults are layout faults (an untagged
+  operand), not temporal enforcement. That is the baseline a Sublet arm would be measured against. No Sublet
+  arm has run.
+- **First boot void as a subject reading:** the corpus harness `delin`ed two non-linear capabilities, which
+  wedged on silicon (ISSUES S-02/S-15). It is fixed with the same compile-time guard
+  `sqlite_capstone_domain.c` uses, and the corpus's own QEMU image is byte-identical with and without it.
+- **N = 1 per cell.** Rows whose reachability is unproven (1, 3, 6, 11, 12, 13, 17, 22) were not run. Rows
+  10, 19 and 24 (extra translation units) are batch 2, not yet built.
+
+## M1 on R-43 v2 — all four conditions in the same boots, node turnover read off the refused capability, and a validity scan (boots m1v2s-1…5, m1tw-1…7, 2026-10-01/02)
+
+Bundles: nested-allocators-paper, branch `board/silicon-evidence`, at
+`experiments/results/M1/2026-10-01-v2-series/` and `.../2026-10-01-v2-turnover-witness/`. Each holds the
+pre-registration (`work-order.md`, audited before its boots), the result lines and the analysis.
+- Bitstream: `caplifive_r43_8f6a0af.bit` (capstone-ariane `8f6a0af98`, timing failing, WNS −9.595 ns).
+- Monitor `2dcd3a5`, buildroot `d04bd83`, host `2c9e82d1`.
+- Harness: `sublet/r1/r1_slots_pools.c` with two run-time probes, both off by default:
+  - `M1_PROBE_RT`: one stale or live access through a single instruction;
+  - `M1_LCC_SCAN`: a non-faulting `lcc` selector-0 validity query.
+- Lane: `lane/board-m1v2`.
+
+### The four conditions, measured together on the resident bitstream
+
+| condition | silicon reading |
+|---|---|
+| permitted reuse | drop and ring reach 10C (655,320 allocations) against the 65,532-index pool in every boot, with no exhaustion |
+| accounting | `minted − revoked = 31` on all 2,136 snapshots of 26 invocation-phases |
+| stale operations | after all four Design arms in the same boot, ONE stale access per boot is refused at the probe's own instruction with cause 25 (READ age 0, WRITE age 0, READ age 2), while the same instructions through live aliases succeed in every boot (reads return the live data; a write of 0xA5 reads back as 165; the write's live control is at slot 15, the stale write at slot 0) |
+| pressure | `stop=buffer alloc=43297` (the pre-registered clean null); release enters phase 2 at 43,290 and ends at 51,948 |
+
+### Node turnover, read directly
+
+- **The refusal record.** It latches the refused capability's OWN `{generation, index}`
+  (`load_store_unit.sv:1470-1472` at `8f6a0af98`). On m1v2s-4 it read generation **1,352** at index
+  head − 1, with serving_idx head − 16 (post hoc: seven invocations ran first). That is consistent with the claim-auditor's corrected model of the rev-node
+  allocator: each slot alternates between two nodes, so 32 indices are in play. On that model the refused
+  reference was minted on an index already reissued 1,352 times. The attributable reading is the
+  single-probe boot m1tw-4.
+- **The validity scan.** At every allocation it asks the rev-node unit whether the alias revoked one
+  statement earlier is still valid; its node has just been reissued. Over three boots (m1tw-1..3) that is
+  4,217,652 queries: **no stale reference ever read valid, every live one did.** The fixture alias read
+  invalid on all 263,607 queries. A 14-bit wrap would have read it valid twice per long arm.
+- **Two limits on the scan.**
+  - A validity query is not an access: per-access refusal is the cause-25 evidence.
+  - The emulator cannot check any of this, because its `lcc` selector 0 is a constant 1.
+- **Attributable refusals (m1tw-4 read, m1tw-5 write, each alone after k800).**
+  - Cause 25 at the probe's instruction, tval[9:0] 0x3c0 (slot 15).
+  - The record holds **generation 1,352 at index 136**, with head 137 and serving 121.
+  - The generation and the relations index = head − 1 and serving = head − 16 were predicted before the
+    boots. The head itself fixes B = 100.
+- **Retirement at generation 16,383, not a wrap, for the 32 indices one ring arm drives (m1tw-6).**
+  - The boot read head 169, serving 144 and refused (4,094, 153), i.e. B+69 / B+44 / B+53.
+  - A 14-bit wrap would read B+37 / B+12 / B+21: 32 lower on all three, the 32 retirements' replacement
+    bumps.
+  - B comes from m1tw-4. The boots ran 4 → 6 → 5 and m1tw-5 re-read head 137 after m1tw-6.
+  - m1tw-7 (a short ring arm that never reaches 16,384) controls the borrowed B directly: head 137, serving 120, refused (10,239, 121), exactly the shared-pre-history prediction, so ring
+    boots share m1tw-4's pre-history.
+  - Permanence of retirement is the RTL (`capstone_rev_node.anvil:59`, `:66-67`).
+
+### Cost: what the bridges attribute to v2
+
+On the identical `054cea69b` images (`1b7a04fe`, `249cfda9`), one boot each on v2:
+- **The give bracket reads about +4 cycles** on drop, pressure and release phase 1 (103.058 → 107.057,
+  71.052 → 75.066, 71.827 → 75.782).
+- **The take bracket is unchanged** on those arms (72.029 → 72.029).
+- **Phase 2 shows the cost MOVES rather than grows.** Its take+give over 8,672 operations is unchanged to
+  6 cycles in 1.56 M, while about 3.9 cycles per operation move from take to give.
+- So the +4 is quoted as **a reading of the give BRACKET**. Whether a give got slower, or cost moved into
+  the bracket, needs an outer per-iteration bracket.
+- Ring's +4.4 is unproven at N = 1, since ring give varies more than the band on v2.
+
+On the probe image `eb3ed1e3`, mint cost differs by INVOCATION, reproducibly to ≤ 0.01 over three boots:
+drop 96.0, ring 73.0, pressure 84.0, release 73.0. Arm and boot position are confounded. Not explained;
+it is with the RTL lane. **Quote a v2 mint cost with its image, arm and position.**
+
+**Provenance incident (m1v2s-3).** That boot's wrapper script was edited while it ran. Bash then
+re-executed a fragment without the bitstream settings, which hard-stopped BEFORE booting but overwrote
+the original run's log and driver.log. The result lines had been extracted before the overwrite, and
+the original boot.txt survives. The image identity for that boot is asserted from the schedule and
+the content.
+
+### What this does not establish
+
+- Anything in S-mode: R-44 is open.
+- Retirement for indices other than the 32 one ring arm drives.
+- Whether the give-bracket +4 is added cost or cost moved between brackets.
+- Wall-clock figures.
+
+
+## S1 on R-43 v2 — SQLite's lookaside and memsys5 use-after-free, refused on silicon (boots s1sql-b1a…b3a, 2026-10-02)
+
+**Bundle:** nested-allocators-paper, branch `board/silicon-evidence`, at
+`experiments/results/S1/2026-10-01-sqlite-a1-silicon/`. It holds the audited pre-registration, the
+verdict lines and the emulator repetitions. The board folder is
+`tests/rtl-smoke/s1-sqlite-silicon-2026-10-01/`: cells, `build-images.sh`, `SHA256SUMS` and the parser.
+
+**Images.** A1's six probes (`experiments/a1-sqlite-reuse/probes.c`) run in the MEASUREMENT harness
+(`speedtest1_measure.c`, `-DSPEEDTEST1_PROBE_RT=1`, the probe chosen at run time by `--s1-probe n`).
+That way one image earns its emulator pass record with the benchmark and still runs a probe that
+faults by design. The geometry is the P1 cells'.
+
+| arm | image | entry |
+|---|---|---|
+| memsys5, unprotected | `611df066a69668b7` | 0x810000 |
+| Sublet | `483f764c8d691b3c` | 0xc10000 |
+
+**Boots.** Each boot ran k800, the six memsys5 cells and three returning Sublet cells, then ONE
+Sublet fault cell last.
+
+| case | memsys5 | Sublet |
+|---|---|---|
+| lookaside slot read after `sqlite3_finalize` | reads the freed slot (3/3 boots) | **cause 25 at the probe's `lbu`**, record hit-dead (boot 1) |
+| 4,096 B memsys5 block read after `sqlite3_free` | reads the freed block (3/3) | **cause 25 at the probe's `lbu`**, record hit-dead (boot 2) |
+| another live block after a 4,096 B free / another slot after a finalize (adjacency intended, not observed) | read (3/3) | read (3/3) |
+| last byte of a 128 B block / the byte past it (spatial) | read / read past the block (3/3) | read (3/3) / **cause 28 (out of bound) at the probe's `lbu`**, record EMPTY (boot 3) |
+
+**Readings:**
+- **SQLite's two allocators, under the Sublet port, stop a use-after-free at the access on silicon**,
+  while the unprotected build reads freed memory there exactly as on the emulator.
+- **Not a blanket deny:** the sibling cells returned in the same boot, on the same image.
+- **The record.** In both lifetime boots the first cause-25 verdict since reset was hit-dead, a genuine
+  revocation verdict per the RTL. Like the id, it is NOT attributed to the probe: ten invocations ran
+  first.
+- **The emulator reads cause 24 for these stale reads**, because it untags a revoked capability; the
+  silicon reads 25.
+
+**Limits:**
+- The fault cells are N = 1.
+- Before-reuse only.
+- Survivors ran before the fault, not after it (M-1).
+- The memsys5 and Sublet builds are two builds.
+- Every other S1 Design case is still open.
+- Whether probe 1's freed name lies in a lookaside slot on the Sublet arm is unresolved, because the
+  port reorganises both allocators.
+
+**Parser defects, all disclosed in the bundle.**
+- One gated stop: the host's own monitor markers spliced a marker line mid-token. The parser now reads
+  through `transcript.strip_markers`, and that fix was load-bearing for boots 2 and 3.
+- An unsafe-success did not fail the gate. Found by the results audit and fixed.
+
+## memcached 1.6.45 serves its milestone exchange and passes its full oracle by hash on silicon as a delegated application (boots B2a, B3c, B1f, b0-strtod, b0-printf; 776d9d859, 2026-10-05)
+Plan: `docs/plans/b0-silicon-delegated-runtime.md` (B1, B1.0, B1.0b, B2). Every row was pre-registered before its
+boot, and each board image is named by hash.
+
+| milestone | image | firmware | board reading |
+|---|---|---|---|
+| printf (narrowed vfprintf) | b0-printf 0751dc622b9b78df | 8068f626e0d7 | 20 of 20 snprintf cases equal the host's, doubles included |
+| strtod/atof/sscanf %lf (narrowed floatscan) | b0-strtod e7d30ad72f104eed | b15d76e38a54 | 23 of 23 bit-exact against the host |
+| one pthread (a minted context) | B1e probe 29b82435ce095d98 | 69bd27fbb7c0 | created, stepped by the monitor with CSR events, joined with its value (124) |
+| **memcached** (memcached + libevent + musl + runtime, one gp-captable full-LTO image, 781 KB) | ba7e6921cf27f2b6 | 4279572eceda | `VERSION 1.6.45`, `STORED`, `VALUE k 0 1` / `x` / `END` over loopback; SIGTERM -> exit 0 |
+| **memcached, full oracle** (the port's scripted 8-connection session) | ba7e6921cf27f2b6 | 8a3c285be032 | transcript sha256 e0a254c47e7ee28c, 1,931,207 bytes: the native reference exactly; `STAT pointer_size 128`; job exit 0 (the board's wall clock set first, below) |
+
+- memcached ran with `-t 1 -m 8 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand`,
+  unprivileged under capstone-job. Each of its system calls is delegated to the Linux launcher. The domain is
+  supervised (quantum preemption with CSR events) and holds no PC-capability check after its first yield (ISSUES
+  R-51).
+- Silicon-only defects found on the way, none visible in capstone-qemu:
+  - **M-14**, monitor: the managed data capability's top rounded up over the descriptor area. Fixed by aligning
+    data_top.
+  - **R-11**, first hit: the cursorless SPLIT encoding shortened a carved global in a 32 MiB region. Worked around
+    by aligning the glue's carve.
+  - In each case a matched pair with one change showed the fix on the board: the monitor for M-14, the glue for
+    R-11. The R-11 change also moves the image's code by 160 bytes.
+- The heap is level0 (per-object bounds, no temporal safety). Spatial or temporal safety numbers for memcached on
+  silicon are not claimed here.
+- **The full oracle (B3) passes by hash** once the board's wall clock is set.
+  - The board's Linux boots at 1970 plus uptime: `date +%s` read 108 at 109 s of uptime.
+  - memcached maps a negative expiry to an absolute time 30 days after the epoch. With the clock unset it keeps two
+    such items, a 38-byte transcript difference. QEMU reproduces that byte for byte with its clock at `@400`.
+- Native hard-float arithmetic on the board's Linux is not reliable on 776d9d859 (ISSUES S-18). The delegated
+  application is soft-float and does not use the FPU, but a timing printed by a native program on the board (the
+  harness's `stop_seconds`) is not evidence.
+  - Checked for the speedtest1 ratios in this file: build-speedtest1-baseline.sh has built `rv64imac_zicsr` /
+    `lp64` since its first commit (abe7c46e3f54, 2026-09-11). The baseline the board images carry,
+    9a80c1cd2a576ed2, has no FP opcode in 217,577 instructions; the same scan counts 85 in a hard-float binary.
+  - So ratios measured with it are unaffected.
+  - The other native-on-board arms either paper cites were checked by the paper lane (2026-10-05) with an
+    FP-opcode counter whose controls fire. This lane re-counted the three committed ELFs.
+    - The ladder baselines (build-ladder-base-fpga.sh, -bare.sh) are rv64imac(_zicsr)/lp64. The committed native
+      ladder ELFs have no FP opcode: R01 and R02 `ladder_perf_ctl` in 493 instructions each, ARCHIVED R14 `lpc` in
+      551.
+    - The SLT native baseline is a host oracle and never runs on the board.
+    - The only rv64gc board build found, sup-bare-2026-10-03-ladder, has no FP result instruction (one `frcsr`, an
+      fcsr read) and is cited by neither paper.
+  - Still unchecked: boots before 2026-09-11, sw52 among them.
+- ~~**R-52 (was S-18) is fixed on silicon** in caplifive_r51r52_0568f93a9 (flashed 2026-10-11)~~ **RETRACTED
+  2026-10-11: native FP results are still WRONG on caplifive_r51r52_0568f93a9.**
+  - The evidence: now() = tv_sec + tv_nsec/1e9 returned 0.09-1.99 while the same process's integer monotonic clock read 239.7-240.7 s (boot C, b3-clock-probe's hold arms: in[0] = now() read 0.2390064, 1.1527294, 0.092928; t0/t1 read 1.62747024/1.99347840).
+  - What stands: the probe's arith loop reads 0 anomalies of 200,000 (776d9d859: 200,000 of 200,000). But that check
+    tests only finite and not-going-backwards, and its loop issues both fcvt.d.l BEFORE the fdiv.d.
+  - now() issues an fcvt.d.l while an fdiv.d is in flight and adds the two. The seconds term does not arrive, which
+    reads as an FP writeback or forwarding case that R-52's fix does not cover. That is with the RTL lane.
+  - ~~the harness's stop_seconds reads 1.07 (was inf)~~ Void: t1 comes from the same now().
+  - ~~Native FP arithmetic on the board is now correct.~~ It is not. A native hard-float result on the board is still
+    not evidence. (The paper's native-on-board numbers use no FP, as checked above.)
+  - Separately, ISSUES S-19: FP registers a native process loads read back as its pre-load state after a blocking
+    wait of >= 10 ms or ~1 s of execution. Candidate root cause: FP instructions never set mstatus.FS Dirty on this
+    core, so the kernel skips every FP save (upstream CVA6 fixed the same bug in #2936). So even a correct native FP
+    value held across a blocking call is not evidence on this bitstream.
+- **R-51 is fixed on silicon in the same bitstream:** a domain's PC capability is enforced after a RETURN yield (the
+  matched pair reads 0 / 0x1C / 0x1C, against 0 / 0xBAD / 0). The memcached B-series and its oracle hash are unchanged
+  on it, and so is the supervision overhead (+0.666 %).

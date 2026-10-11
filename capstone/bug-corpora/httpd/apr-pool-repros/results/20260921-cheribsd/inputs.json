@@ -1,0 +1,48 @@
+{
+  "runs": {
+    "on": {
+      "runtime_revocation": "on",
+      "guest_default_revocation": "preserved",
+      "abi_control": "CHERI_ABI pointer_bytes=16 runtime_revocation=1",
+      "binaries": {
+        "cheribsd-abi": "8025fedbff4164f856a21af35aa84eaf4b1b491b4477eb73815aef32e56105f1",
+        "cheribsd-bounds": "8025fedbff4164f856a21af35aa84eaf4b1b491b4477eb73815aef32e56105f1",
+        "revocation-control": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+        "00-watchdog-destroyed-pool-reused-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb"
+      },
+      "platform": {
+        "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+        "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+        "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+        "libc": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef",
+        "image": "3571a6d273515a5da067141b82d97a995e1b7388cdf6b1009953e701b3eb65ea"
+      },
+      "fixture_sha256": "748c243a431878ecd5fa4665bb227d64672b63ccc101ffe60c26205a39d89113"
+    },
+    "off": {
+      "runtime_revocation": "off",
+      "guest_default_revocation": "preserved",
+      "abi_control": "CHERI_ABI pointer_bytes=16 runtime_revocation=0",
+      "binaries": {
+        "cheribsd-abi": "8025fedbff4164f856a21af35aa84eaf4b1b491b4477eb73815aef32e56105f1",
+        "cheribsd-bounds": "8025fedbff4164f856a21af35aa84eaf4b1b491b4477eb73815aef32e56105f1",
+        "revocation-control": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+        "00-watchdog-destroyed-pool-reused-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb"
+      },
+      "platform": {
+        "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+        "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+        "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+        "libc": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef",
+        "image": "3571a6d273515a5da067141b82d97a995e1b7388cdf6b1009953e701b3eb65ea"
+      },
+      "fixture_sha256": "748c243a431878ecd5fa4665bb227d64672b63ccc101ffe60c26205a39d89113"
+    }
+  },
+  "negative_control": {
+    "runtime_revocation": "on",
+    "control_passed": true,
+    "oracles_fired": 1,
+    "arms": 1
+  }
+}

@@ -1,12 +1,12 @@
 /* row11 -- the LITERAL matched pair for
- * cve-repros/row11_go_double_finalize (LINEAR / double-free).
+ * capi-repros/row11_go_double_finalize (LINEAR / double-free).
  *
  * The SAME row11 program as before.c, real SQLite C API, one Capstone domain:
  *
  *     open :memory: -> prepare "SELECT 1" -> finalize(stmt) -> finalize(stmt)
  *
  * before.c double-finalizes a statement handle. On the host that is a double
- * free (ASan SEGV, see cve-repros/row11.../NOTE.md). Here SQLite's ENTIRE heap
+ * free (ASan SEGV, see capi-repros/row11.../NOTE.md). Here SQLite's ENTIRE heap
  * is the revoke-on-free linear allocator (revoke_on_free_alloc.h) installed via
  * SQLITE_CONFIG_MALLOC, exactly as in row3 fork B2. The statement handle SQLite
  * returns from sqlite3_prepare_v2 is a pointer into an rof_malloc allocation

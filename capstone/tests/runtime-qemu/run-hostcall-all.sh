@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Serial aggregate gate for the default HostCall proof wrappers. The
-# second-PENDING wrappers are targeted diagnostics and intentionally omitted.
+# Serial aggregate gate for the bare HostCall wire probes: an S-mode payload in
+# a nested domain and a helper that services it, no musl and no capstone-exec.
+# The second-PENDING wrappers are targeted diagnostics and intentionally
+# omitted. The probes that ran musl programs on the HostCall v0 application
+# runtime were removed or converted with it on 2026-09-30; the converted ones
+# run as delegated applications with run-delegated-probes.py, in a guest that
+# capstone_vm provisions.
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"

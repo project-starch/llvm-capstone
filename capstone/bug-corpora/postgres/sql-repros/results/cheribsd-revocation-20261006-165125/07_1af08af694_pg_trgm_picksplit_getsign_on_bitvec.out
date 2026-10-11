@@ -1,0 +1,4 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> 2026-10-06 17:08:01.046 UTC [12657] LOG:  checkpoint starting: shutdown immediate
+2026-10-06 17:08:01.821 UTC [12657] LOG:  checkpoint complete: wrote 104 buffers (0.6%); 0 WAL file(s) added, 0 removed, 1 recycled; write=0.657 s, sync=0.065 s, total=0.777 s; sync files=63, longest=0.006 s, average=0.001 s; distance=21299 kB, estimate=21299 kB; lsn=0/2A21770, redo lsn=0/2A21770

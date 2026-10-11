@@ -1,0 +1,44 @@
+# test-native.sh --suite, 2026-09-28: upstream's suite with the native ASan backend
+# unit test and workload gates:
+PASS mode=0 issues=12 releases=3 reuses=2
+PASS mode=1 issues=11 releases=4 reuses=0
+built /tmp/capstone/perl-svh-native-gate/perl-5.36.3/perl (the build itself ran miniperl under mode 1)
+PERL_REUSE_GAP attempts=49295 issues=49295 releases=47764 reuses=31356 distinct=17939 capacity=131072 error=0 bins=7072,
+PERL_REUSE_GAP attempts=49295 issues=49295 releases=47764 reuses=27260 distinct=22035 capacity=131072 error=0 bins=3,6,1
+records.pl 512 3 0: oracle in both modes, no ASan report
+positive control: S_glob_assign_glob's freed-head read reported in mode 1, runs in mode 0
+== mode 1
+Test Summary Report
+-------------------
+op/gv.t                                                            (Wstat: 256 (exited 1) Tests: 273 Failed: 0)
+  Non-zero exit status: 1
+  Parse errors: No plan found in TAP output
+../cpan/ExtUtils-MakeMaker/t/INSTALL_BASE.t                        (Wstat: 256 (exited 1) Tests: 37 Failed: 0)
+  Non-zero exit status: 1
+../lib/B/Deparse.t                                                 (Wstat: 256 (exited 1) Tests: 202 Failed: 0)
+  Non-zero exit status: 1
+  Parse errors: No plan found in TAP output
+../lib/perlbug.t                                                   (Wstat: 0 Tests: 25 Failed: 1)
+  Failed test:  21
+Files=2630, Tests=944857, 470 wallclock secs (160.36 usr 48.81 sys + 1501.50 cusr 513.17 csys = 2223.84 CPU)
+Result: FAIL
+make: *** [makefile:856: test_harness] Error 1
+ASan 1x Perl_pp_ftrowned pp_sys.c:3333
+ASan 1x S_glob_assign_glob sv.c:3821
+ASan 1x make_sv_object ext/B/B.xs:160
+== mode 0
+Test Summary Report
+-------------------
+../lib/perlbug.t                                                   (Wstat: 0 Tests: 25 Failed: 1)
+  Failed test:  21
+Files=2630, Tests=945038, 350 wallclock secs (165.06 usr 42.67 sys + 1530.54 cusr 526.08 csys = 2264.35 CPU)
+Result: FAIL
+make: *** [makefile:856: test_harness] Error 1
+== unpatched ASan baseline: the same archive and patches 0001-0007, no adapter, no define
+Test Summary Report
+-------------------
+../lib/perlbug.t                                                   (Wstat: 0 Tests: 25 Failed: 1)
+  Failed test:  21
+Files=2630, Tests=945123, 577 wallclock secs (185.14 usr 68.97 sys + 1724.22 cusr 767.23 csys = 2745.56 CPU)
+Result: FAIL
+make: *** [makefile:856: test_harness] Error 1

@@ -1,0 +1,188 @@
+{
+  "date": "2026-09-30",
+  "scope": "Release and coalesce the unused tail when level0 realloc shrinks a block",
+  "native_control": {
+    "allocator": "before tail splitting",
+    "arena_bytes": 1048576,
+    "result": "short-read allocation 31 failed",
+    "exit": 1
+  },
+  "native_fixed": {
+    "allocator": "with tail splitting",
+    "arena_bytes": 1048576,
+    "ctest_passed": 45,
+    "ctest_total": 45,
+    "build": "Debug -Wall -Wextra -fsanitize=address,undefined"
+  },
+  "guest": {
+    "result": {
+      "version": 1,
+      "kind": "exit",
+      "value": 0
+    },
+    "result_lines": [
+      "level0 realloc: 4096 short reads, capability payloads, regrowth and coalescing PASS"
+    ],
+    "probe_sha256": "300a2628a9369453c72017df4aec8640f9aed9e733f7df047d59647536cbf3cd",
+    "pthread_probe_sha256": "873a02a744f1150c3a497d112b91e967d2e03e5536c58a854dae61500cbcf2f4",
+    "pthread_modes": {
+      "modes": {
+        "join-values": {
+          "pass": true,
+          "reason": "",
+          "stdout": "join-values: 900 threads, records made 15, live 15\npthread-probe join-values: PASS\n"
+        },
+        "join-parked": {
+          "pass": true,
+          "reason": "",
+          "stdout": "join-parked: join returned after 50 ms\njoin-parked: join returned after 45 ms\njoin-parked: join returned after 44 ms\njoin-parked: join returned after 44 ms\njoin-parked: join returned after 44 ms\npthread-probe join-parked: PASS\n"
+        },
+        "detach-many": {
+          "pass": true,
+          "reason": "",
+          "stdout": "detach-many: 300 detached, records made 1, live 1\npthread-probe detach-many: PASS\n"
+        },
+        "reserve-waits": {
+          "pass": true,
+          "reason": "",
+          "stdout": "reserve-waits: create answered 0 after 48 ms\npthread-probe reserve-waits: PASS\n"
+        },
+        "main-exit": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe main-exit: PASS\n"
+        },
+        "tsd": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe tsd: PASS\n"
+        },
+        "cond": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe cond: PASS\n"
+        },
+        "clone-refused": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe clone-refused: PASS\n"
+        },
+        "thread-name": {
+          "pass": true,
+          "reason": "",
+          "stdout": "thread-name: main was 'capstone-exec'; naming another thread: No such file or directory\npthread-probe thread-name: PASS\n"
+        },
+        "affinity": {
+          "pass": true,
+          "reason": "",
+          "stdout": "affinity: 1 CPUs; another thread's set: No such process\npthread-probe affinity: PASS\n"
+        },
+        "pi-mutex": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pi-mutex: timed lock answered 110 after 30 ms\npi-mutex: far deadline answered 0 after 48 ms\npthread-probe pi-mutex: PASS\n"
+        },
+        "user-stack": {
+          "pass": true,
+          "reason": "",
+          "stdout": "user-stack: thread answered 1\npthread-probe user-stack: PASS\n"
+        },
+        "main-exit-more": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe main-exit-more: PASS\n"
+        },
+        "kill-thread": {
+          "pass": true,
+          "reason": "",
+          "stdout": "kill-thread: early=0 signals=1 handler=4194304 reader=4194304 read=-1 errno=4 PASS\npthread-probe kill-thread: PASS\n"
+        },
+        "kill-thread-early": {
+          "pass": true,
+          "reason": "",
+          "stdout": "kill-thread: early=1 signals=2 handler=4194304 reader=4194304 read=-1 errno=4 PASS\npthread-probe kill-thread-early: PASS\n"
+        },
+        "mask-routing": {
+          "pass": true,
+          "reason": "",
+          "stdout": "mask-routing: handler in 4194304, the unblocking thread 4194304\npthread-probe mask-routing: PASS\n"
+        },
+        "raise-thread": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe raise-thread: PASS\n"
+        },
+        "sigwait-thread": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe sigwait-thread: PASS\n"
+        },
+        "cancel-sem": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe cancel-sem: PASS\n"
+        },
+        "cancel-read": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe cancel-read: PASS\n"
+        },
+        "cancel-disabled": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe cancel-disabled: PASS\n"
+        },
+        "park-signal-thread": {
+          "pass": true,
+          "reason": "",
+          "stdout": "park-signal-thread: handler in 4194304, waiter 4194304, wait answered 0\npthread-probe park-signal-thread: PASS\n"
+        },
+        "cancel-installed-early": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe cancel-installed-early: PASS\n"
+        },
+        "sigreturn-mask": {
+          "pass": true,
+          "reason": "",
+          "stdout": "sigreturn-mask: handler ran 1, SIGUSR2 blocked after the wait 1, SIGUSR1 1\npthread-probe sigreturn-mask: PASS\n"
+        },
+        "setuid-threads": {
+          "pass": true,
+          "reason": "",
+          "stdout": "setuid-threads: answered -1 (errno 38) after 1 ms, the other thread spun 59280 times\npthread-probe setuid-threads: PASS\n"
+        },
+        "sigaction-race": {
+          "pass": true,
+          "reason": "",
+          "stdout": "sigaction-race: 13 and 22 runs of the two handlers for 600 signals\npthread-probe sigaction-race: PASS\n"
+        },
+        "main-exit-signal": {
+          "pass": true,
+          "reason": "",
+          "stdout": "pthread-probe main-exit-signal: PASS\n"
+        },
+        "abort-thread": {
+          "pass": true,
+          "reason": "",
+          "stdout": ""
+        },
+        "exit-thread": {
+          "pass": true,
+          "reason": "",
+          "stdout": ""
+        }
+      },
+      "passed": 29,
+      "total": 29
+    }
+  },
+  "assertions": [
+    "4096 buffers allocated at 32768 bytes and retained after shrinking to 64 bytes in a 1 MiB arena",
+    "Stored pointer remains tagged and dereferenceable after shrink and regrowth",
+    "Retained bytes survive realloc movement",
+    "Allocation counters return to baseline after free",
+    "Freed tails and neighbours coalesce to permit a 900 KiB allocation"
+  ],
+  "cpython_followup": "ports/cpython/interpreter/results/thread-review-2026-09-30.json records the failed large-arena runs and the rebuilt 64 MiB interpreter."
+}

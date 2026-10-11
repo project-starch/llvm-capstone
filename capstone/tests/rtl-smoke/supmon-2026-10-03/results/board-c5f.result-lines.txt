@@ -1,0 +1,74 @@
+# board-supmon-c5f: fw_payload sha256 bc9206e7ccb3..., bitstream caplifive_supcall_36a641e0b. Result lines only.
+# The commit-pc aperture during a stuck switch is STALE scoreboard slot 0 (fpga-repros/S16-...), not a faulting pc.
+BT00:00000000
+BT01:00000001
+BT02:00000002
+BT03:00000003
+### TEST 1/6 START k800:/test-domains/k800.dom ###
+RESULT k800 retval=4 cycles=4544
+### TEST 1/6 END k800:/test-domains/k800.dom rc=0 ###
+### TEST 2/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+SQ: A/dom-ok
+SQ: B/mkregion1
+SQ: C/mkregion2
+SQ: D/mapped
+SQ: E/share1
+SQ: F/share2
+SQ: G/enter
+ENT0:00000001
+SUPM:00000000
+ENT1:00000001
+ENT2:4EB10000
+SQ: H/return
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2551695601
+HEAP 2097152 DROPPED 0 RC 0
+### TEST 2/6 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 3/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+SQ: A/dom-ok
+SQ: B/mkregion1
+SQ: C/mkregion2
+SQ: D/mapped
+SQ: E/share1
+SQ: F/share2
+SQ: G/enter
+ENT0:00000002
+SUPM:00000001
+ENT1:00000002
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:8294A420
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82949DC4
+# ... 2177 event lines elided (552 MEPC readings in this block) ...
+SUPK:00000001
+MCAU:00000010
+MEPC:82946280
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82851DA8
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:828C6218
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:8287170C
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:8288F44C
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82883828
+SUPA:00000000
+# driver wedge read:
+[wedge] sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+[wedge] sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}    0x88 10001000
+[wedge] commit pc = 0x00000000828d56bc

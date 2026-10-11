@@ -1,0 +1,52 @@
+string.h: the embedded-string length gets six bits at 16-byte pointers, and the fields above it move up.
+
+RSTRING_EMBED_LEN_MAX is 4*sizeof(void*) - 5: 27 at 8-byte pointers, 59 at
+16-byte capabilities, which a 5-bit field cannot hold (mrb_init_string's static
+assert, "pointer size too big for embedded string"). Where a pointer is wider
+than 8 bytes the field is six bits, and the coderange and the encoding index are
+placed relative to it, one bit higher, in the flags word's free run; natively
+the layout is unchanged. The header's own comment names this as the way the
+field widens.
+
+The first version widened the length alone, which the CheriBSD purecap port
+(xlang/cheri/mruby-port) also did for an mruby that had no coderange field. Here
+its sixth bit is the coderange's first: in the domain, mrbtest failed four
+shared-buffer string tests, and `"#{"A" * 32}:"` came out as ":".
+
+diff --git i/include/mruby/string.h w/include/mruby/string.h
+index e84b79e9a..29fc0098f 100644
+--- i/include/mruby/string.h
++++ w/include/mruby/string.h
+@@ -66,19 +66,30 @@ struct RStringEmbed {
+    to 16: RSTRING_EMBED_LEN_MAX is 11 on 32-bit and 27 on 64-bit, both of which
+    five bits hold. */
+ #define MRB_STR_EMBED_LEN_SHIFT 4
++/* Capstone (and any target whose pointer is wider than 8 bytes): at 16-byte
++   pointers RSTRING_EMBED_LEN_MAX is 59, which needs six bits. The field widens
++   and the coderange and the encoding index move up one bit with it, into the
++   free run: they are placed relative to the length below, not at fixed bits.
++   Widening the length alone, as a first version of this patch did, put its top
++   bit on the coderange's first: every embedded string of 32 bytes or more then
++   read back with a wrong coderange, and `"#{"A" * 32}:"` came out as ":". */
++#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ > 8
++#define MRB_STR_EMBED_LEN_BITS 6
++#else
+ #define MRB_STR_EMBED_LEN_BITS 5
++#endif
+ #define MRB_STR_EMBED_LEN_MASK (((1 << MRB_STR_EMBED_LEN_BITS) - 1) << MRB_STR_EMBED_LEN_SHIFT)
+ 
+ /* Where in the flags word the coderange sits. Its four answers are exclusive,
+    so two bits spell every one of them and spell nothing else. */
+-#define MRB_STR_CODERANGE_SHIFT 9
++#define MRB_STR_CODERANGE_SHIFT (MRB_STR_EMBED_LEN_SHIFT + MRB_STR_EMBED_LEN_BITS)
+ #define MRB_STR_CODERANGE_BITS 2
+ #define MRB_STR_CODERANGE_MASK (((1 << MRB_STR_CODERANGE_BITS) - 1) << MRB_STR_CODERANGE_SHIFT)
+ 
+ /* Where in the flags word the encoding index sits. Two bits name four
+    encodings, which is more than the two a build carries now; widening them is
+    for whenever a third is carried. */
+-#define MRB_STR_ENCODING_SHIFT 11
++#define MRB_STR_ENCODING_SHIFT (MRB_STR_CODERANGE_SHIFT + MRB_STR_CODERANGE_BITS)
+ #define MRB_STR_ENCODING_BITS 2
+ #define MRB_STR_ENCODING_MASK (((1 << MRB_STR_ENCODING_BITS) - 1) << MRB_STR_ENCODING_SHIFT)
+ 

@@ -1,0 +1,222 @@
+# PRE-REGISTERED predictions for the safety fixtures (src/capstone-domain/ffapp_safety.c),
+# written 2026-09-23 BEFORE any fixture had run on any arm. A cell whose outcome differs is a
+# FINDING, never an edit to this file: if a prediction is wrong, the result says so and this
+# file keeps the prediction that was made.
+#
+# arm      fixture  outcome   detail
+#   RETURN <hex>   the image returned exactly this mark (fixture * 0x100000 + value)
+#   RETURN *       the image returned a mark with this fixture's prefix; the value is not
+#                  predictable (fixture 3 on level0 reads a byte of the neighbour's header)
+#   FAULT oob      a bounds fault, AFTER the fixture's touch line, whose address is the target
+#                  the fixture printed
+#   FAULT temporal a fault on a revoked (or, on capstone-qemu, reload-untagged) capability,
+#                  after the touch line. (The CLASSIFIER, not this prediction, was widened after
+#                  the first sublet boot to recognise capstone-qemu's "cincoffset with an UNTAGGED
+#                  rs1" line, and only when its value is the printed target; see safety-verdict.py.)
+#   FAULT any      any capability fault after the touch line
+# LEN lines check fixture 1's printed capability length of a 64-byte av_malloc:
+#   LEN arena      longer than 64 KiB (the pointer covers the rest of the arena)
+#   LEN 64         exactly 64
+
+level0   1  RETURN 100001
+level0   1  LEN    arena
+level0   2  RETURN 2000ee
+level0   3  RETURN *
+level0   4  RETURN 4000a0
+level0   5  RETURN 50015b
+level0   6  RETURN 6000a0
+level0   7  RETURN 700177
+level0   8  FAULT  oob
+level0   9  FAULT  oob
+# fixture 10 registered AFTER fixture 8's first run (level0 boot 1, 2026-09-23) showed the
+# global's capability covering .L_MergedGlobals rather than the global alone; BEFORE fixture 10
+# had ever been built or run. Predicted identical on every arm: it is the compiler's doing.
+level0  10  RETURN a0005b
+
+shrink   1  RETURN 100001
+shrink   1  LEN    64
+shrink   2  FAULT  oob
+shrink   3  FAULT  oob
+shrink   4  RETURN 4000a0
+shrink   5  RETURN 50015b
+shrink   6  RETURN 6000a0
+shrink   7  RETURN 700177
+shrink   8  FAULT  oob
+shrink   9  FAULT  oob
+shrink  10  RETURN a0005b
+
+# sublet: registered now, before the allocator exists, so the arm is judged against what was
+# expected of it rather than against what it turned out to do. Fixture 7's stale free is
+# predicted to FAULT inside free, because the allocator is to touch the object through the
+# pointer it is given before revoking anything (the nginx port's note: a stale free is caught
+# only by a free that dereferences it).
+sublet   1  RETURN 100001
+sublet   1  LEN    64
+sublet   2  FAULT  oob
+sublet   3  FAULT  oob
+sublet   4  FAULT  temporal
+sublet   5  FAULT  temporal
+sublet   6  FAULT  temporal
+sublet   7  FAULT  temporal
+sublet   8  FAULT  oob
+sublet   9  FAULT  oob
+sublet  10  RETURN a0005b
+
+# THE POOL ARMS (build-domain.sh FFAPP_HEAP=sublet FFAPP_POOL=0|2): FFmpeg's own pools under the
+# buffer-pool port's lifetime hooks. Registered 2026-09-24, BEFORE the pool arms were first
+# built, and committed and pushed before their first run. pool0 and pool2 differ only in the
+# pool mode (0 bounds only, 2 a Sublet lease per get, revoked on return).
+#   POOLFAIL <code>  the pool code refused what it was given (ff2_fail), after the touch line
+# Fixture 17 on pool2 is predicted to be REFUSED, not to fault: av_refstruct_unref copies the
+# stale pointer and ff2_ref_meta compares its capability bits against the current lease before
+# anything dereferences it (refstruct.c av_refstruct_unref -> get_refcount -> pool-allocator.c
+# by_authority -> ff2_fail(304)). On pool0 the bits still match, the unref is accepted, and it
+# drops the live owner's reference: a third get then aliases the live object.
+pool0   11  RETURN b00001
+pool0   11  LEN    64
+pool0   12  RETURN c000a0
+pool0   13  RETURN d0015b
+pool0   14  FAULT  oob
+pool0   15  RETURN f000a0
+pool0   16  FAULT  oob
+pool0   17  RETURN 1100177
+
+pool2   11  RETURN b00001
+pool2   11  LEN    64
+pool2   12  FAULT  temporal
+pool2   13  FAULT  temporal
+pool2   14  FAULT  oob
+pool2   15  FAULT  temporal
+pool2   16  FAULT  oob
+pool2   17  POOLFAIL 304
+
+# FIXTURE 16 ON THE HEAP ARMS: the stock-build control for the pool arms' "one byte below a
+# refstruct object faults". Stock refstruct allocates [RefCount | object] as one block and returns
+# a pointer past the header, so the byte below the object is inside the pointer's capability on
+# every heap arm (level0's arena, shrink's and sublet's per-object bounds alike cover the whole
+# block). Predicted to RETURN a header byte; on the pool arms, where patch 0002 moves the header
+# out of band, the same fixture faults. Registered 2026-09-24, before fixture 16 was first built
+# on a heap arm, and pushed before its first run.
+level0  16  RETURN *
+shrink  16  RETURN *
+sublet  16  RETURN *
+
+# poolsublet: the Sublet PORT of FFmpeg's own pools (ports/ffmpeg/sublet), FFAPP_POOL=sublet.
+# Registered with ports/ffmpeg/sublet/PREREGISTRATION.md, before its first ported line. 11-14 are
+# Phase A (AVBufferPool); 15-17 are Phase B (refstruct), which lands after Phase A.
+poolsublet   11  RETURN b00001
+poolsublet   11  LEN    64
+poolsublet   12  FAULT  temporal
+poolsublet   13  FAULT  temporal
+poolsublet   14  FAULT  oob
+poolsublet   15  FAULT  temporal
+poolsublet   16  FAULT  oob
+poolsublet   17  FAULT  temporal
+
+# poolstock: the matched control of poolsublet (FFAPP_POOL=stock): the same patched source, built
+# with FF_SUBLET_POOLS=0, so FFmpeg's pools run upstream's path on the Sublet heap. The two arms
+# differ in that macro alone. Registered 2026-09-29, after poolsublet's fixtures 11-14 had run and
+# before poolstock was first built; the values are PREREGISTRATION.md A1's statement that "on the
+# heap arms 12 and 13 complete, because a pool never calls free", made testable, and the values the
+# substitute's unprotected pool0 arm returned on 2026-09-24 for the same fixtures. 14 faults here
+# too: a stock pool's entry is its own av_malloc on the Sublet heap, bounded to 64 bytes.
+poolstock    11  RETURN b00001
+poolstock    11  LEN    64
+poolstock    12  RETURN c000a0
+poolstock    13  RETURN d0015b
+poolstock    14  FAULT  oob
+poolstock    15  RETURN f000a0
+poolstock    16  RETURN *
+poolstock    17  RETURN 1100177
+
+# Fixtures 20 and 21: what a pool's END costs, counted across FFmpeg's own uninit (v2, after the
+# 2026-09-29 claim audit showed the first measurement could not fire). Registered with
+# sublet/PREREGISTRATION.md's v2 addendum, before v2 was first built. The mark is
+# (the pool layer's file revokes across the 8 returns) << 8 | (the same across the pool's end):
+# 8 returns are 8 gives, and the end gives nothing back. poolstock has no pool layer: 0xE00F0.
+poolsublet   20  RETURN 1400800
+poolsublet   21  RETURN 1500800
+poolstock    20  RETURN 14e00f0
+poolstock    21  RETURN 15e00f0
+
+# TRACK B, af_join as FFmpeg's real code (fixtures 18 and 19; build with FFAPP_EXTRA_CONFIGURE=
+# "--enable-avfilter --enable-filter=join --enable-decoder=pcm_s16le_planar"). Registered with
+# app/results/2026-09-29-trackb-afjoin/PREDICTIONS.md before either image was first built.
+# 18 links af_join as shipped: the output frame holds a reference to input 1's buffer, so input 1's
+# next packet gets a different buffer (same-address 0) and the read sees input 1's first packet,
+# 0x5b: 0x1200000 + 0x05b. 19 links the one-token revert of the upstream fix: no reference is
+# taken, input 1's buffer goes back to its pool when the join frees its inputs, the next packet's
+# frame is handed that buffer (same-address 1), and the stale read sees the new packet's 0x77 --
+# unless the pool port revoked the buffer when it came back, and the read faults.
+poolstock    18  RETURN 120005b
+poolstock    19  RETURN 1300177
+poolsublet   18  RETURN 120005b
+poolsublet   19  FAULT  temporal
+
+# 30-33: configure-only DIAGNOSTICS for fixture 18's graph, which faulted inside
+# avfilter_graph_config on both pool arms (2026-09-29) while the same graph runs clean natively
+# under ASan. Not predictions of safety: each returns 0x1 (mark 0x..00001) if the graph configures.
+# Registered so the runner will run them; a fault in any of them localizes the negotiation fault.
+#
+# RETIRED 2026-10-04. The negotiation fault they existed to localize was resolved: fixtures 18 and 19
+# are AS PREDICTED in results/2026-09-29-trackb-afjoin (result-lines.txt section 3 onward). Only 30
+# ever produced a reading; 31, 32 and 33 appear in exactly one bundle, all three as
+# "ERROR no section in the log -- the image never started", and were never re-attempted. They are kept
+# as rows rather than deleted so the bundle that reports those ERRORs still resolves against this file,
+# but they are NOT owed a measurement: do not schedule boots for them. If the negotiation question ever
+# reopens, re-register them with a fresh date rather than reviving these.
+poolsublet   30  RETURN 1e00001
+poolsublet   31  RETURN 1f00001
+poolsublet   32  RETURN 2000001
+poolsublet   33  RETURN 2100001
+level0       30  RETURN 1e00001
+
+# TRACK B, vidstab as FFmpeg's real code (fixtures 22 and 23; build with FFAPP_EXTRA_CONFIGURE=
+# "--enable-avfilter --enable-gpl --enable-libvidstab --enable-filter=vidstabtransform
+# --enable-decoder=yuv4"). Registered with app/results/2026-09-29-trackb-vidstab/PREDICTIONS.md
+# before either image was first built. The mark is (same-address << 8) | the victim's first luma
+# byte. The victim takes frame 1's buffer back from the pool on both arms (same-address 1: the
+# port keeps the pool's LIFO order, as fixture 19 showed). 22 links vidstabtransform as shipped:
+# libvidstab copies frame 1 into storage of its own, and the victim keeps its 0x77. 23 links the
+# fix reverted: libvidstab keeps a shallow pointer to frame 1's plane and copies frame 2 into it,
+# so the victim reads frame 2's 0x5b -- unless the pool port revoked the plane when it came back,
+# and libvidstab's copy faults, at frame 1's plane, after the touch line.
+poolstock    22  RETURN 1600177
+poolstock    23  RETURN 170015b
+poolsublet   22  RETURN 1600177
+poolsublet   23  FAULT  temporal
+
+# FIXTURES 24 and 25: two UPSTREAM FFmpeg defects, both live at the 9.0.1 pin, transcribed into
+# the heap arms. Registered 2026-10-02 BEFORE either fixture was built or run on any arm, and
+# pushed before the first boot. Unlike 1-10 these are not shapes we invented: 24 is
+# bc46eab87c4f (released in n9.0.2, so absent from our pin) and 25 is 4b9c4b9cfb56.
+#
+# WHAT EACH PREDICTION RESTS ON, so a wrong one can be traced to the premise that failed:
+# - the heap is first fit with forward coalescing, so a free immediately followed by an
+#   av_malloc of the SAME size returns the same block. That is fixture 5's established
+#   behaviour on all three arms (its registered mark is 50015b, i.e. same-address=1 and the
+#   new owner's 0x5b), and 24 and 25 reuse the same ordering with nothing in between;
+# - so both marks are (same-address << 8) | the new owner's byte = (1 << 8) | 0x5b = 0x15b,
+#   which is 180015b for fixture 24 and 190015b for fixture 25;
+# - level0 has arena-wide bounds and free only marks free: the stale read completes;
+# - shrink narrows to the object but still does not revoke: the stale read completes, in the
+#   bounds of the block the NEW owner now holds;
+# - sublet revokes at free, so the stale alias is dead at the touch. The fault is temporal and
+#   not oob: both reads are INSIDE the object's own bounds, 24 at offset 0 and 25 at offset 32
+#   of a 64-byte object. A fault reported as oob would be a finding, not a pass.
+# - 25's stale pointer is INTERIOR (p + 32). The prediction is that this changes nothing on any
+#   arm, because revocation is per object and not per alias; if 25 and 24 ever differ, that
+#   difference is the finding.
+level0  24  RETURN 180015b
+shrink  24  RETURN 180015b
+sublet  24  FAULT  temporal
+level0  25  RETURN 190015b
+shrink  25  RETURN 190015b
+sublet  25  FAULT  temporal
+
+# 2026-10-10, pre-registered before the run (bug-corpus whole-corpus audit, R5): fixtures 4 and 5 on
+# poolstock, run in the same VM boot as pool-repros' four cases, as the in-boot control that the
+# poolstock arm's heap really is the Sublet heap. On sublet they FAULT temporal (rows above) and on
+# level0 they RETURN, so a level0 heap under a poolstock label would read RETURN here.
+poolstock    4  FAULT  temporal
+poolstock    5  FAULT  temporal

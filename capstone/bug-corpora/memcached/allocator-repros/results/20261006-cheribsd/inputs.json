@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-06",
+  "runner": "runners/cheribsd/run-defects.py",
+  "runtime_revocation": "on",
+  "guest_default_revocation": "preserved",
+  "modes": [0],
+  "cases": 8,
+  "caught": [],
+  "completed": [0, 1, 2, 3, 4, 5, 6, 7],
+  "controls": {
+    "cheribsd-abi": "PASS",
+    "cheribsd-bounds": "PASS",
+    "revocation-control": "PASS and FAULTED -- exit=162 signal=34 code=2 addr=0x101e42 pc=0x101e42 expect=0x101e42. addr == pc == the independently resolved expectation, so attribution is established, and the revoker is shown to sweep in this guest.",
+    "negative-control": "RAN 2026-10-06 on the same vehicle: all 8 case oracles FAIL while the three platform controls still PASS. So none of the 8 completions above is vacuous. The fixture header claims two events and the file carries one, so the program refuses the input before any cache is created (runners/cheribsd/run-defects.py:80-88)."
+  },
+  "platform": {
+    "image_sha256": "0cb16209c16c5edf9f81148eedf33f750af404f890af6d65d9bd43ecf61aa4f4",
+    "note": "stock CheriBSD purecap built on this host; kernel CHERI-PURECAP-QEMU from releng/26.07-88f39900c329 = pins.env's CHERIBSD_REV. The image hash is byte-identical to the one the ffmpeg readings of the same day used, so the two programs' columns are directly comparable."
+  },
+  "also_run": "a revocation-OFF arm exists for the same 8 cases; it is the companion differential and is not required for this reading",
+  "why_a_bundle_exists_now": "this corpus's .gitignore previously ignored results/ outright -- the ONLY corpus of 16 to do so, and the reason cheribsd-denominator-audit.md:22 recorded it as 'declared and claimed, no committed bundle'. The ignore came in with the initial port commit 2612d2d0318d, whose message gives no reason for it, and its sibling memcached/plain-heap-repros does commit a bundle. Narrowed to raw output only.",
+  "n_per_cell": 1
+}

@@ -1,0 +1,75 @@
+Subject: [PATCH 0001] Name the address width, and parse intptr_t by it
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+CPython uses SIZEOF_VOID_P for three things that coincide on every platform it
+supports: the storage size of a pointer, the width of an address, and the width
+of an integer that holds one. On capstone64 a pointer is a 16-byte capability
+and uintptr_t is the 8-byte address (configure: SIZEOF_VOID_P 16,
+SIZEOF_UINTPTR_T 8), so the three come apart.
+
+pyport.h gains _Py_SIZEOF_ADDRESS for the second and third meanings. It is
+SIZEOF_VOID_P wherever the two agree, so no existing platform changes.
+
+longobject.h is its first user. It picks the PyArg format unit for an intptr_t
+by comparing SIZEOF_VOID_P with int, long and long long and stops with #error
+when none matches -- and every file that includes Python.h includes it: 220 of
+the first survey's 234 failures. The unit parses integers stored in intptr_t
+variables (waitpid's pid and Windows handles in posixmodule.c), never pointers,
+so it is keyed on the address width.
+
+--- a/Include/pyport.h
++++ b/Include/pyport.h
+@@ -115,6 +115,21 @@
+  */
+ typedef uintptr_t       Py_uintptr_t;
+ typedef intptr_t        Py_intptr_t;
++
++/* _Py_SIZEOF_ADDRESS is the width of a pointer's ADDRESS: the width of
++ * uintptr_t, and so of the integer a pointer converts to. It equals
++ * SIZEOF_VOID_P except where a pointer is a capability. There sizeof(void *)
++ * is the capability's storage size (16 on capstone64), no integer type is that
++ * wide, and the round trip the comment above describes does NOT hold: the
++ * integer carries the address and loses the rest. Code that sizes storage for
++ * a pointer keeps SIZEOF_VOID_P; code that reasons about address values or
++ * about an integer holding one uses this.
++ */
++#if defined(SIZEOF_UINTPTR_T) && SIZEOF_UINTPTR_T < SIZEOF_VOID_P
++#  define _Py_SIZEOF_ADDRESS SIZEOF_UINTPTR_T
++#else
++#  define _Py_SIZEOF_ADDRESS SIZEOF_VOID_P
++#endif
+ 
+ /* Py_ssize_t is a signed integral type such that sizeof(Py_ssize_t) ==
+  * sizeof(size_t).  C99 doesn't define such a thing directly (size_t is an
+--- a/Include/longobject.h
++++ b/Include/longobject.h
+@@ -70,18 +70,20 @@
+ #error "sizeof(pid_t) is neither sizeof(int), sizeof(long) or sizeof(long long)"
+ #endif /* SIZEOF_PID_T */
+ 
+-#if SIZEOF_VOID_P == SIZEOF_INT
++/* Parses an intptr_t, which holds an address-width integer (a pid or a
++   Windows handle in posixmodule.c), never a pointer: _Py_SIZEOF_ADDRESS. */
++#if _Py_SIZEOF_ADDRESS == SIZEOF_INT
+ #  define _Py_PARSE_INTPTR "i"
+ #  define _Py_PARSE_UINTPTR "I"
+-#elif SIZEOF_VOID_P == SIZEOF_LONG
++#elif _Py_SIZEOF_ADDRESS == SIZEOF_LONG
+ #  define _Py_PARSE_INTPTR "l"
+ #  define _Py_PARSE_UINTPTR "k"
+-#elif defined(SIZEOF_LONG_LONG) && SIZEOF_VOID_P == SIZEOF_LONG_LONG
++#elif defined(SIZEOF_LONG_LONG) && _Py_SIZEOF_ADDRESS == SIZEOF_LONG_LONG
+ #  define _Py_PARSE_INTPTR "L"
+ #  define _Py_PARSE_UINTPTR "K"
+ #else
+-#  error "void* different in size from int, long and long long"
+-#endif /* SIZEOF_VOID_P */
++#  error "intptr_t different in size from int, long and long long"
++#endif /* _Py_SIZEOF_ADDRESS */
+ 
+ PyAPI_FUNC(double) PyLong_AsDouble(PyObject *);
+ PyAPI_FUNC(PyObject *) PyLong_FromVoidPtr(void *);

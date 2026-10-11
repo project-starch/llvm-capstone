@@ -1,0 +1,28 @@
+# wireshark/plain-heap-repros on stock CheriBSD purecap, libc revocation ON, 2026-10-07.
+# Both cases, produced by runners/run-cheribsd.sh. Result lines only.
+
+## platform controls, same boot
+CHERI_ABI pointer_bytes=16 runtime_revocation=1
+CHERI_ABI pointer_bytes=16 runtime_revocation=1
+CHERI_BOUNDARY_READY
+
+## suite: 6 of 6 arms
+BOOT CheriBSD allocator suite
+PASS cheribsd-abi
+PASS cheribsd-bounds
+PASS wsh-00-fixed
+PASS wsh-00-buggy
+PASS wsh-01-fixed
+PASS wsh-01-buggy
+
+## the buggy arms, both CAUGHT
+### case 0: 65471 bytes past g_malloc(8192)
+SUPERVISE base 0x100000 /tmp/allocator-tests/wsh-00-buggy/target
+SUPERVISE expect wsh_read_probe 0x1023b4
+SUPERVISE fault signal=34 code=1 addr=0x1023c4 pc=0x1023c4
+SUPERVISE exit signalled=34
+### case 1: index 3 of a 2-entry pointer array, i.e. 8 bytes past malloc(16)
+SUPERVISE base 0x100000 /tmp/allocator-tests/wsh-01-buggy/target
+SUPERVISE expect wsh_read_probe 0x102406
+SUPERVISE fault signal=34 code=1 addr=0x102416 pc=0x102416
+SUPERVISE exit signalled=34

@@ -1,0 +1,21 @@
+{
+  "case": 17,
+  "upstream_fix": "node-sqlite3#1449",
+  "title": "A malformed host bind request is submitted at an invalid parameter index and SQLite rejects it without a memory-safety violation.",
+  "consumer": "node-sqlite3",
+  "class": "stale-state",
+  "verdict": "out-of-scope",
+  "primitive": "\u2014",
+  "live_in_pin": null,
+  "live_note": "The defect is in the binding, not in SQLite: this corpus pins no binding release, and the host arm builds the 3.53.3 amalgamation, so whether a row is live in a given binding version is not established here.",
+  "arms": {
+    "host-asan": {
+      "oracle": "none",
+      "observed": "crash in Node/napi glue, memory-safe w.r.t. SQLite (SQLITE_RANGE)"
+    }
+  },
+  "capstone_column": {
+    "ledger_status": "out of scope"
+  },
+  "status": "no host fault; kept as a recorded row rather than dropped; NOTE.md records why it is not reproduced"
+}

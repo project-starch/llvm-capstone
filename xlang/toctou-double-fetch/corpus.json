@@ -1,0 +1,18 @@
+{
+  "program": "various (sandbox and host boundaries)",
+  "boundary": "a value read twice across a sharing boundary",
+  "title": "Row 6: TOCTOU / double-fetch, triaged and not built",
+  "cases": 0,
+  "case_schema": "xlang-row",
+  "case_glob": "[0-9]*",
+  "status": "triaged",
+  "live_in_pin_recorded": false,
+  "live_in_pin_note": "Nothing is built, so there is no case to place in a pin.",
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "inventory": "capstone/docs/ref/paper-bug-inventory.md",
+  "advisories": [],
+  "related": [
+    "capstone/bug-corpora"
+  ],
+  "note": "Eight specimens are triaged in this directory's README. The inventory also records four fabricated CVE ids that must never be cited."
+}

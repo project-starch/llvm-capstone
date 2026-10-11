@@ -1,8 +1,8 @@
 # A1 in a Capstone domain: the free-to-reuse gap of SQLite's allocators
 
-The question of A1 in the nested-allocators paper: does level 0 see the objects in the custom
-allocator? Here level 0 is memsys5, SQLite's own buddy allocator over a region the host lends,
-and the custom allocator is the lookaside pool above it. `memhook.c` records every
+The question of A1 in the nested-allocators paper: does the allocator below see the objects in the nested
+allocator? Here the allocator below is memsys5, SQLite's own buddy allocator over a region the host lends,
+and the nested allocator is the lookaside pool above it. `memhook.c` records every
 allocation and free at both levels from inside the domain and prints the paper's text format on
 the payload; `speedtest1`, SQLite's own benchmark, is the workload. Two arms: `memsys5`, the
 unprotected build, and `sublet`, the same domain with both allocators on the Sublet port
@@ -40,7 +40,7 @@ and `speedtest1_hook_report`, and the domain exports its two payload writers for
 ## The pass
 
 memsys5 is the configured heap (`SQLITE_CONFIG_HEAP`) over a region the host creates and lends
-(`sqlite_host.user --pool`), so there is no level below it and no libc line, as in the paper's
+(`sqlite_host.user --pool`), so there is no allocator below it and no libc line, as in the paper's
 memsys5 arm on x86. Under the port the pool is a linear region (`--arena`) and memsys5's tables
 sit in a second region (`--tables`) beside the instrument's table. Above 4 MiB a region comes
 from the kernel's CMA area; the port runner passes `cma=1G`. At `--size 100` the pool is 2^21

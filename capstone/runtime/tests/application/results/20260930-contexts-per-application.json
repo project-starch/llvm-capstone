@@ -1,0 +1,88 @@
+{
+ "date": "2026-09-30",
+ "stage": "T5: sixteen invocation descriptors per application, fifteen threads",
+ "platform": {
+  "capstone-qemu": "674cdab03c",
+  "capstone-sbi": "4674ab6",
+  "caplifive-opensbi": "cf344cf",
+  "caplifive-buildroot": "8fd1ea1",
+  "firmware_fw_jump_sha256": "ae41a8c6d22877f779750bcd4aba040b4ecf5015ce25fff6d47f773139cf05dc",
+  "preset_firmware_fw_jump_sha256": "c60924c003fbdd52997b4792f7b012697b7ab440a8c57f4718924a68853f0498",
+  "module_sha256": "649f410893eeb40a825232452974ac3161bb667163457c42f628c325dd7e6d97",
+  "launcher_sha256": "8068640d1855489b7612d2d4c0cec61d530960b6024c54b114f8400ad412882b",
+  "pthread_probe_sha256": "b3198ffa4e577cb0b7ff8f169f4b8deb61cada281b325921f02a236f033d6497"
+ },
+ "pthread_probe": {
+  "join-values": {
+   "pass": true,
+   "stdout": [
+    "join-values: 900 threads, records made 15, live 15",
+    "pthread-probe join-values: PASS"
+   ]
+  },
+  "detach-many": {
+   "pass": true,
+   "stdout": [
+    "detach-many: 300 detached, records made 1, live 1",
+    "pthread-probe detach-many: PASS"
+   ]
+  },
+  "reserve-waits": {
+   "pass": true,
+   "stdout": [
+    "reserve-waits: create answered 0 after 48 ms",
+    "pthread-probe reserve-waits: PASS"
+   ]
+  },
+  "tsd": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe tsd: PASS"
+   ]
+  },
+  "cond": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe cond: PASS"
+   ]
+  }
+ },
+ "pthread_probe_passed": "26/26",
+ "control": {
+  "platform": "firmware 295647f3 (8 descriptors) and module 6ab096ce",
+  "mode": "join-values",
+  "result": "round 0 thread 7: Resource temporarily unavailable (exit 1)"
+ },
+ "regression": {
+  "thread_probe": "34/34",
+  "context_probe": "35/35",
+  "explicit": {
+   "aba": "1/1",
+   "gen-exhaust gen-launch": "2/2 (preset firmware)",
+   "ctl-wfi": "1/1"
+  },
+  "signal_contract": "26/26",
+  "application_gate": "exit 0, 21 PASS lines",
+  "native_ctest": "41/41",
+  "many_rounds_ms": 9395
+ },
+ "libc_test": {
+  "PASS": 57,
+  "FAULT": 1,
+  "EXCLUDED": 13,
+  "FAIL": 3,
+  "NOBUILD": 3
+ },
+ "libc_test_regression_selection": {
+  "summary": {
+   "NOBUILD": 1,
+   "PASS": 12,
+   "FAIL": 2,
+   "FAULT": 1
+  },
+  "pthread_cond-smasher": [
+   "PASS",
+   "0.7s"
+  ]
+ }
+}

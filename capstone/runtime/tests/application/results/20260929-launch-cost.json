@@ -1,0 +1,257 @@
+{
+ "date": "2026-09-29",
+ "purpose": "launch cost: lazy image hash, copy only the file-backed image, zero only fresh blocks, one SSH connection per VM",
+ "platform": "monitor capstone-sbi a810177, capstone-qemu ac2837aa, kernel e833dfb1..., share with the libc-rounds images (perl.dom 18,979,832 B filesz 0xdda88a memsz 0x4e20e50; mruby.dom 3,901,080 B); before: one-ecall module + launcher from delegation-libc-rounds with stage counters; after: modcapstone with copy_len + launcher with lazy hash",
+ "method": "in the guest: time env CAPSTONE_DELEGATE_STATS=1 capstone-exec <image> <args>, twice per image (first run cold on the 9p share); launch ticks are rdtime deltas between launcher stages (image read, hash, spawner fork, device open, DOM_CREATE, regions incl. heap, seccomp); from the host: /usr/bin/time of capstone-vm exec true and run perl -e 1",
+ "before": {
+  "stages": [
+   {
+    "program": "perl.dom -e 1",
+    "launch_ticks": {
+     "image": 9199214,
+     "hash": 13737014,
+     "spawner": 91224,
+     "device": 86643,
+     "domain": 60522048,
+     "regions": 33482299,
+     "seccomp": 248408,
+     "total": 117366850
+    },
+    "rounds": 25,
+    "program_ticks": 5464587,
+    "wall_in_guest": "0m 15.15s"
+   },
+   {
+    "program": "perl.dom -e 1",
+    "launch_ticks": {
+     "image": 11143147,
+     "hash": 19969466,
+     "spawner": 62203,
+     "device": 45311,
+     "domain": 19231712,
+     "regions": 39569389,
+     "seccomp": 48490,
+     "total": 90069718
+    },
+    "rounds": 25,
+    "program_ticks": 5172166,
+    "wall_in_guest": "0m 12.03s"
+   },
+   {
+    "program": "mruby.dom -e 1",
+    "launch_ticks": {
+     "image": 1464363,
+     "hash": 5375425,
+     "spawner": 91217,
+     "device": 104094,
+     "domain": 25662603,
+     "regions": 1958566,
+     "seccomp": 20450,
+     "total": 34676718
+    },
+    "rounds": 2,
+    "program_ticks": 2111600,
+    "wall_in_guest": "0m 4.87s"
+   },
+   {
+    "program": "mruby.dom -e 1",
+    "launch_ticks": {
+     "image": 888696,
+     "hash": 2731404,
+     "spawner": 57305,
+     "device": 77158,
+     "domain": 30290928,
+     "regions": 2137018,
+     "seccomp": 26193,
+     "total": 36208702
+    },
+    "rounds": 2,
+    "program_ticks": 2670332,
+    "wall_in_guest": "0m 5.04s"
+   },
+   {
+    "program": "delegate-bench.dom 1",
+    "launch_ticks": {
+     "image": 750121,
+     "hash": 92842,
+     "spawner": 62467,
+     "device": 39597,
+     "domain": 2467839,
+     "regions": 40274,
+     "seccomp": 22028,
+     "total": 3475168
+    },
+    "rounds": 2,
+    "program_ticks": 140030,
+    "wall_in_guest": "0m 2.04s"
+   },
+   {
+    "program": "delegate-bench.dom 1",
+    "launch_ticks": {
+     "image": 689701,
+     "hash": 227055,
+     "spawner": 213656,
+     "device": 268449,
+     "domain": 7136153,
+     "regions": 149370,
+     "seccomp": 157299,
+     "total": 8841683
+    },
+    "rounds": 2,
+    "program_ticks": 474971,
+    "wall_in_guest": "0m 3.99s"
+   },
+   {
+    "program": "ssh-less baseline: /bin/true",
+    "wall_in_guest": "0m"
+   },
+   {
+    "program": "from host: capstone-vm exec true, three times:",
+    "host_seconds": [
+     0.46,
+     1.09,
+     0.8
+    ]
+   },
+   {
+    "program": "from host: capstone-vm run perl -e 1:",
+    "host_seconds": [
+     9.41
+    ]
+   }
+  ],
+  "host_exec_true_seconds": [
+   0.46,
+   1.09,
+   0.8
+  ],
+  "host_run_perl_seconds": 9.41
+ },
+ "after": {
+  "stages": [
+   {
+    "program": "perl.dom -e 1",
+    "launch_ticks": {
+     "image": 8562337,
+     "hash": 52,
+     "spawner": 50408,
+     "device": 25230,
+     "domain": 26177213,
+     "regions": 45009196,
+     "seccomp": 203919,
+     "total": 80028355
+    },
+    "rounds": 25,
+    "program_ticks": 5912169,
+    "wall_in_guest": "0m 10.18s"
+   },
+   {
+    "program": "perl.dom -e 1",
+    "launch_ticks": {
+     "image": 4611263,
+     "hash": 6,
+     "spawner": 82974,
+     "device": 50636,
+     "domain": 4992458,
+     "regions": 42466940,
+     "seccomp": 39611,
+     "total": 52243888
+    },
+    "rounds": 25,
+    "program_ticks": 5860419,
+    "wall_in_guest": "0m 6.92s"
+   },
+   {
+    "program": "mruby.dom -e 1",
+    "launch_ticks": {
+     "image": 741518,
+     "hash": 4,
+     "spawner": 70863,
+     "device": 87460,
+     "domain": 497277,
+     "regions": 1944627,
+     "seccomp": 13726,
+     "total": 3355475
+    },
+    "rounds": 2,
+    "program_ticks": 2962279,
+    "wall_in_guest": "0m 1.75s"
+   },
+   {
+    "program": "mruby.dom -e 1",
+    "launch_ticks": {
+     "image": 434197,
+     "hash": 3,
+     "spawner": 35713,
+     "device": 19767,
+     "domain": 500323,
+     "regions": 1880212,
+     "seccomp": 13397,
+     "total": 2883612
+    },
+    "rounds": 2,
+    "program_ticks": 3430051,
+    "wall_in_guest": "0m 2.29s"
+   },
+   {
+    "program": "delegate-bench.dom 1",
+    "launch_ticks": {
+     "image": 62276,
+     "hash": 8,
+     "spawner": 31997,
+     "device": 20988,
+     "domain": 54834,
+     "regions": 24167,
+     "seccomp": 13452,
+     "total": 207722
+    },
+    "rounds": 2,
+    "program_ticks": 106398,
+    "wall_in_guest": "0m 0.95s"
+   },
+   {
+    "program": "delegate-bench.dom 1",
+    "launch_ticks": {
+     "image": 51733,
+     "hash": 3,
+     "spawner": 29294,
+     "device": 16960,
+     "domain": 52413,
+     "regions": 23883,
+     "seccomp": 13379,
+     "total": 187665
+    },
+    "rounds": 2,
+    "program_ticks": 79047,
+    "wall_in_guest": "0m 1.08s"
+   },
+   {
+    "program": "ssh-less baseline: /bin/true",
+    "wall_in_guest": "0m"
+   },
+   {
+    "program": "from host: capstone-vm exec true, three times:",
+    "host_seconds": [
+     0.28,
+     0.08,
+     0.1
+    ]
+   },
+   {
+    "program": "from host: capstone-vm run perl -e 1:",
+    "host_seconds": [
+     4.96
+    ]
+   }
+  ],
+  "perl_t_base": "[18:39:35] perl t/base",
+  "host_exec_true_seconds": [
+   0.28,
+   0.08,
+   0.1
+  ],
+  "host_run_perl_seconds": 4.96
+ },
+ "before_t_base": "35.4 s (delegation-libc-rounds record, same host)",
+ "gates_after": "application gate 21 PASS lines, binfmt contract PASS, fault record carries the lazily computed sha256"
+}

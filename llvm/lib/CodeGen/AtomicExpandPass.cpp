@@ -1919,6 +1919,15 @@ bool AtomicExpandImpl::expandAtomicOpToLibcall(
   IRBuilder<> AllocaBuilder(&I->getFunction()->getEntryBlock().front());
 
   bool UseSizedLibcall = canUseSizedAtomicCall(Size, Alignment, DL);
+  // A sized call passes and returns the value as an integer. A pointer in a
+  // non-integral address space (a capability) is more than its bits: taken
+  // apart into integer registers it comes back untagged. Such values go
+  // through the generic call, which passes every value in memory.
+  Type *ValTy = ValueOperand ? ValueOperand->getType()
+                : CASExpected ? CASExpected->getType()
+                              : I->getType();
+  if (UseSizedLibcall && DL.isNonIntegralPointerType(ValTy))
+    UseSizedLibcall = false;
   Type *SizedIntTy = Type::getIntNTy(Ctx, Size * 8);
 
   const Align AllocaAlignment = DL.getPrefTypeAlign(SizedIntTy);
@@ -2014,7 +2023,12 @@ bool AtomicExpandImpl::expandAtomicOpToLibcall(
   // that property, we'd need to extend this mechanism to support AS-specific
   // families of atomic intrinsics.
   Value *PtrVal = PointerOperand;
-  PtrVal = Builder.CreateAddrSpaceCast(PtrVal, PointerType::getUnqual(Ctx));
+  // Not for a non-integral address space (a capability): cast to address
+  // space 0 it is passed as a bare address and comes out untagged. Such a
+  // target's libatomic is compiled for that address space and takes the
+  // pointer as it is.
+  if (!DL.isNonIntegralPointerType(PtrVal->getType()))
+    PtrVal = Builder.CreateAddrSpaceCast(PtrVal, PointerType::getUnqual(Ctx));
   Args.push_back(PtrVal);
 
   // 'expected' argument, if present.

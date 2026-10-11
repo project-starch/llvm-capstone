@@ -3,7 +3,7 @@ set -euo pipefail
 
 # row3 matched pair -- real SQLite, single domain, revoke at sqlite3_finalize.
 #
-# The SAME program as cve-repros/row3_diesel_colname_cached/before.c (open ->
+# The SAME program as capi-repros/row3_diesel_colname_cached/before.c (open ->
 # prepare "SELECT a AS colname" -> step -> column_name -> finalize -> read
 # name[0]), compiled into a real-SQLite Capstone domain. A thin wrapper carves an
 # independently revocable copy of the real column name out of a monitor-granted

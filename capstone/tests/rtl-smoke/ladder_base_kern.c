@@ -26,6 +26,20 @@
 #error "define LADDER_EXPORT to the exported wrapper name"
 #endif
 
+/* LADDER_PAD=K (opt-in, 2026-09-23, layout-randomised ladder, phase 10 of ladder-revival-2026-09-22):
+   a FILE-SCOPE block at the top of this translation unit's .text -- `.p2align 6` then K four-byte
+   nops (.4byte, so RVC cannot shrink them). Every function in the object (kernel, its non-inlined
+   helpers, the wrapper) shifts by 4*K bytes from a 64-byte-aligned start, independently of any other
+   rung's object, and NOTHING is executed. Phases 8-9 showed cycle ratios move with layout on this
+   silicon, so each kernel is measured at several K and reported as a median and band. Undefined =>
+   nothing emitted, byte-identical. (A first design padded inside the function behind a `j`; in the
+   baseline image every earlier rung's function grew too, so a rung's loop moved 16 bytes per K and
+   never changed residue -- caught at the desk, replaced by this.) */
+#ifdef LADDER_PAD
+#  define LADDER_PAD_STR2(x) #x
+#  define LADDER_PAD_STR(x) LADDER_PAD_STR2(x)
+__asm__(".pushsection .text\n .p2align 6\n .rept " LADDER_PAD_STR(LADDER_PAD) "\n .4byte 0x00000013\n .endr\n .popsection\n");
+#endif
 #include LADDER_KERNEL_HDR
 
 unsigned LADDER_EXPORT(void) { return LADDER_COMPUTE(); }

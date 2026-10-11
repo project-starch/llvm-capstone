@@ -1,0 +1,55 @@
+{
+  "runtime_revocation": "on",
+  "guest_default_revocation": "preserved",
+  "platform": {
+    "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+    "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+    "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+    "libc": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef",
+    "image": "3571a6d273515a5da067141b82d97a995e1b7388cdf6b1009953e701b3eb65ea"
+  },
+  "binaries": {
+    "cheribsd-abi": "fa084294fa91535a252576a5cf859d9ae564bfd1f0beaa8fea6e613ba84f9c0d",
+    "cheribsd-bounds": "fa084294fa91535a252576a5cf859d9ae564bfd1f0beaa8fea6e613ba84f9c0d",
+    "revocation-control": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "00-wrong-bucket-alloc-across-connections-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "01-buckets-outlive-backend-allocator-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "02-brigade-on-request-pool-past-eor-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "03-buckets-from-pool-that-dies-first-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "04-brigade-not-cleaned-before-reuse-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "05-read-from-destroyed-brigade-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "06-bucket-outlives-its-brigade-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "07-subrequest-pool-private-data-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb"
+  },
+  "platform_controls": [
+    {
+      "name": "cheribsd-abi",
+      "passed": true,
+      "marker": "CHERI_ABI pointer_bytes=16 runtime_revocation=1"
+    },
+    {
+      "name": "cheribsd-bounds",
+      "passed": true,
+      "marker": "CHERI_BOUNDARY_READY"
+    }
+  ],
+  "revocation_control": {
+    "name": "revocation-control",
+    "revocation": true,
+    "expected": "tag fault at apr_defect_read",
+    "ran": true,
+    "exit": 162,
+    "runner_oracle": true,
+    "expect": "0x101dd6",
+    "fault": {
+      "signal": 34,
+      "code": 2,
+      "addr": "0x101dd6",
+      "pc": "0x101dd6"
+    },
+    "faults_seen": 1,
+    "passed": true
+  },
+  "arms_total": 8,
+  "arms_passed": 8
+}

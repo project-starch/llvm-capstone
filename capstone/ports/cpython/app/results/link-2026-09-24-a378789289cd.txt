@@ -1,0 +1,29 @@
+# CPython 3.13.7 link, 2026-09-24. Output of link-cpython-capstone.py, exit 0, on dev's compiler (a378789289cd,
+# see the survey of the same date), with absolute host paths replaced by the variables that produced them.
+build tree     $CPY_ROOT/build
+linked         232 objects + 3 archives (0 of 250 survey objects absent)
+strict link    exit 0; 0 undefined symbols, 0 other errors
+
+undefined because a CPython object is absent: 0 symbols from 0 objects
+
+undefined because configure left the defining module out here: 0
+
+undefined compiler-rt builtins (their source did not compile): 0
+
+undefined, provided by NOTHING in this link (libc, runtime or unknown): 0
+
+image without the absent objects (a LOWER bound):
+  PT_LOAD memsz 62,751,648 bytes (59.84 MiB), filesz 11,863,115; the buddy allocator's block ends at 4 MiB, a larger domain needs the CMA-backed module (caplifive-buildroot domain/1-cma-large-domains)
+  .text                   7,241,948
+  .rodata                 3,281,398
+  .data                   1,136,256
+  .bss                   50,888,528
+  .init_array                     0
+  .fini_array                     0
+  .capstone_cap_init          1,408
+  .gct                      202,091
+  absent objects: 0 bytes native x 1.38 (capstone/native over the present ones) = ~0.0 MiB more, so ~59.8 MiB for the whole image (estimate)
+
+linked libc calls that need an UNSERVED syscall (check-domain-support.py, exit 1): 178 symbols, 105 syscalls
+  brk chdir chroot clock_getres clock_nanosleep clock_settime copy_file_range dup epoll_create1 epoll_ctl epoll_pwait eventfd2 execve execveat fadvise fallocate fchmodat fchownat flock fstatfs futex getcwd getgroups getitimer getpgid getpid getppid getpriority getrandom getresgid getresuid getrlimit getrusage getsid gettid kill linkat madvise membarrier memfd_create mkdirat mknodat mmap mprotect mremap msync munmap nanosleep pipe2 ppoll pread preadv preadv2 prlimit64 pselect6 pwrite pwritev pwritev2 readlinkat renameat2 rt_sigaction rt_sigpending rt_sigprocmask rt_sigqueueinfo rt_sigtimedwait sched_get_priority_max sched_get_priority_min sched_getaffinity sched_rr_get_interval sched_setaffinity sched_yield sendfile set_robust_list setgid setgroups sethostname setitimer setns setpgid setpriority setregid setresgid setresuid setreuid setrlimit setsid setuid sigaltstack splice statfs symlinkat sync sysinfo timerfd_create timerfd_gettime timerfd_settime times tkill truncate umask uname unshare utimensat wait4 waitid
+  full list: $CPY_ROOT/link/domain-support.txt

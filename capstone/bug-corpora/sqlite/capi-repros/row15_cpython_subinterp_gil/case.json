@@ -1,0 +1,21 @@
+{
+  "case": 15,
+  "upstream_fix": "cpython#101767",
+  "title": "The upstream issue concerns interpreter concurrency and GIL ownership, not an SQLite C-API pointer lifetime.",
+  "consumer": "CPython",
+  "class": "stale-state",
+  "verdict": "out-of-scope",
+  "primitive": "\u2014",
+  "live_in_pin": null,
+  "live_note": "The defect is in the binding, not in SQLite: this corpus pins no binding release, and the host arm builds the 3.53.3 amalgamation, so whether a row is live in a given binding version is not established here.",
+  "arms": {
+    "host-asan": {
+      "oracle": "none",
+      "observed": "subinterpreter/GIL \u2014 no SQLite pointer lifetime"
+    }
+  },
+  "capstone_column": {
+    "ledger_status": "out of scope"
+  },
+  "status": "no host fault; kept as a recorded row rather than dropped; NOTE.md records why it is not reproduced"
+}

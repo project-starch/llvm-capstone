@@ -1,0 +1,32 @@
+## m1v2-6: M1 stale WRITE, image 067cc96f89152287, repetition 2, stock k800, list m1-staletake.txt, on caplifive_r43_8f6a0af.bit, 21:17-21:31
+# fw_payload d77656b3a9d6
+RESULT k800 retval=4 cycles=4531 ran=53406 instret=1089
+DBAS:81A00000
+ENT1:00000001
+[wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x99 10011001
+[wedge] sw=204 REFUSAL {0,0,arm[3:0] one-hot,~v,v}                  0x11 00010001
+[wedge] sw=196 trap mepc[7:0]   (LATCHED)                           0x70 01110000
+[wedge] sw=197 trap mepc[15:8]  (LATCHED)                           0x43 01000011
+[wedge] sw=198 trap mepc[23:16] (LATCHED)                           0xa0 10100000
+[wedge] sw=199 trap mepc[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=200 trap mepc[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=201 trap mepc[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=202 trap mepc[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=203 trap mepc[63:56] (LATCHED)                           0x00 00000000
+[wedge] sw=210 trap tval[7:0]   (LATCHED)                           0x00 00000000
+[wedge] sw=211 trap tval[15:8]  (LATCHED)                           0x00 00000000
+[wedge] sw=213 trap tval[23:16] (LATCHED)                           0x10 00010000
+[wedge] sw=214 trap tval[31:24] (LATCHED)                           0xac 10101100
+[wedge] sw=215 trap tval[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=216 trap tval[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=217 trap tval[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=218 trap tval[63:56] (LATCHED)                           0x00 00000000
+[wedge] sw=208 REFUSAL {p_hi,p_lo,id[29:24]}                        0x00 00000000
+[wedge] sw=205 REFUSAL id[7:0]                                      0x60 01100000
+[wedge] sw=206 REFUSAL id[15:8]                                     0x00 00000000
+[wedge] sw=207 REFUSAL id[23:16]                                    0x00 00000000
+[wedge] sw=209 (no refusal field; S-07 map not applicable)          0x00 00000000
+[refusal] wedge (single running sample per aperture; VOID if contaminated): LATCHED -- arm = probe resolved DEAD, revnode id = 0x00000060 (96), parity ok (an even number of flips in one half would pas
+# rr-aperture-check rc 0, 0 'no fresh event' tags
+# (a missing 'stale-write ok' line is not evidence: the wedge loses the domain's output)
+# VERDICT: PASS -- identical to m1v2-5: the store is refused (cause 25 at +0x4370), LATCHED on the probe path, id 96. 2/2

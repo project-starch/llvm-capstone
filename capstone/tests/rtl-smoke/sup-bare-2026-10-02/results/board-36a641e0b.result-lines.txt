@@ -1,0 +1,72 @@
+# Supervised CALL on silicon: the RTL lane's directed tests, bare M-mode, on caplifive_supcall_36a641e0b.bit
+# (capstone-ariane 36a641e0b; identified on the board the same day by the csnodefree discriminator, 0xFFCD).
+# One board session per image, ONE RUN EACH: power cycle, `monitor reset halt`, JTAG load at 0x80000000, continue.
+# Readings are the tests' own CAPPRINT values, in order, recorded to memory and printed over the UART at the end.
+# Pre-registration: ../PREREG.md. Its mtime (19:14:36) precedes the first boot (19:24:17). It was mtime-attested,
+# NOT pushed before the run as the project rule asks. Cite a row by its image hash (images/SHA256SUMS).
+# Audited 2026-10-02 by a claim-auditor; its corrections are folded in below.
+
+== sup-quantum (image 254aa761a0a1ba87; 2026-10-02 19:24) -- PASS ==
+SUPTEST BEGIN Q / SB1 / SR 0x71 (113 readings) / SUPTEST END
+readings 1..106: (csupstatus 3, csupcause 0x8000000000000010) x 53, i.e. 53 quantum preemptions, each resumed
+readings 107..113: 0x1 (the RETURN), 0x190, 0x1234, 0x35, 0xA5, 0x888, 0x0
+  - 0x190 = 400: the stub's 400 `c.addi s4,1` net to exactly 400 across 53 resumes (the resume-plus4 mutant reads
+    otherwise). Residual: 400 is an aggregate, so an equal number of skipped and repeated instructions is not
+    excluded. A non-commutative accumulator would close that.
+  - 0x1234: the domain's live x1 survived every resume.
+  - 0x35 = 53 = s7, the monitor's resume count, which the monitor-side restore must preserve.
+  - mie 0x888: the monitor's mie came back.
+  - 0xA5 does NOT discriminate here: this stub never writes x30, and the domain inherits the monitor's x2..x31 at
+    first entry. For x30 restoration, cite sup-escape.
+  - mcause 0: no trap was taken.
+  - CORRECTION (audit): the board vector is BIT-IDENTICAL to the RTL lane's simulation of the same tree (all7,
+    36a641e0b, 113/113). The pre-registration's "simulation read N = 52" was a stale number from before the 3C fix,
+    and its "board N may differ" prediction is moot. Likely reason the counts match despite DDR versus the testbench's
+    12-cycle memory model: the quantum counts only domain cycles outside the exchange, and the stub runs from the
+    instruction cache. This is NOT verified.
+
+== sup-escape (image 784b8d64c920c1c2; 19:25) -- PASS on event delivery ==
+SUPTEST BEGIN E / SB1 / SR 0x43 (67 readings) / SUPTEST END
+reference trap: mcause 0x4, mtval 0x3001
+Then five arms of 13 readings each:
+  - status 0, then csupstatus 5 (fault), then the cause;
+  - epc - fault = 0, then tval, then lcc 4 (SEALED; lcc on a non-capability raises, so this discriminates);
+  - x30 0xA5, x7 0x707, x29 0x1D1D (the domain wrote 0xBAD5/0xBAD7/0xBAD9 first; the monitor got its own values back);
+  - mcause 0, mie 0x888, mepc 0, then csupstatus 4 (valid cleared by the read).
+  ecall    cause 0xB  tval 0x73
+  illegal  cause 0x2  tval 0xFFFFFFFF
+  csrw mepc under supervision (supervision CSR gate)   cause 0x2  tval 0x34101073
+  misaligned load (NONLIN capability)                  cause 0x4  tval 0x3001 = the reference trap's mtval
+  mret under supervision (decoder guard)               cause 0x2  tval 0x30200073
+  Bit-identical to the all7 simulation (67/67).
+  LIMIT (audit): this shows the fault EVENT delivered to the monitor (kind, cause, epc, tval, SEALED, registers). It does
+  NOT show that commit stripped the trap. The test header's "mepc 0 = the no-strip mutant's tell" is wrong at
+  36a641e0b, because mepc, mcause and mstatus are walked: the no-strip mutant reads the same 67 values. Settling it
+  needs the monitor to read the domain's saved mcause/mepc slots in the seal region (RTL lane, test fix).
+
+== call-retpc (image a05ca464c4f683cd; 19:26) -- correct values ==
+SUPTEST BEGIN R / SB1 / SR 0x8 / SUPTEST END
+#1..#8: 0x0, 0x12, 0x21, 0x0, 0x51, 0x0, 0x0, 0x0. Every arm read its correct value, and no arm resumed past the
+instruction after its CALL. The parked pc itself was not read. Bit-identical to the all7 simulation (8/8).
+  LIMIT: this discriminates only if the board's timing creates R-47's triggering condition (a jump or branch reaching
+  issue before the dyn unit responds). That was shown in simulation on the unfixed RTL; the old bitstream was not run
+  with this test. Read as "correct values on silicon", not "R-47 shown fixed on silicon". The same holds for
+  sup-quantum's loop CALL, which is followed by a c.j and resumed correctly 52 times.
+
+== What this establishes, and what it does not ==
+- Against a bitstream WITHOUT supervised-CALL hardware, sup-quantum and sup-escape discriminate by construction:
+  cssupervise and the 0xFC0..0xFC3 CSRs do not exist there.
+- Shown on silicon, one run each:
+  - quantum preemption with exactly-once resume (aggregate);
+  - fault-event delivery with the right cause, epc and tval for five fault classes;
+  - the monitor's registers back from its private save area, and the seal handed back SEALED;
+  - csrw mepc refused by the supervision CSR gate, and mret by the decoder guard.
+- Not shown:
+  - that the trap is stripped;
+  - repeatability;
+  - the MTIP escape, the guards, the hostile domain, and S-11's size and alignment refusal;
+  - anything through the OpenSBI monitor or Linux.
+  The delegated runtime on silicon still needs the runtime lane's FPGA monitor.
+- Instrument note (audit): the runner's GDB fallback does NOT work. Every gdb.txt shows `Unable to halt.
+  dmcontrol=0x80000001, dmstatus=0x00030c82` (allrunning): the halt request was not honoured while the core spun in the
+  capability-mode report loop. All three runs reported through the UART. A wedged run would have returned nothing.

@@ -1,0 +1,133 @@
+# Track B, af_join, as FFmpeg's real code, capstone-qemu, 2026-09-29. Result lines only, in the order run.
+# Predictions: PREDICTIONS.md (4a9e6ed46132) and its three addenda (150887238a68, ee6f030671e1, a2e729d7f93e).
+# Compiler 3979abd8 (clang sha256 1c1436586f99c53c...), emulator sha256 6e5e136a070b0ee9...
+
+## 1. First run (without 0004; images from working-tree build fixes later committed in 150887238a68 --
+##    the build at 4a9e6ed46132 failed its own gate): fixture 18 faults BEFORE its touch on both arms
+=== poolsublet rep 1 fixtures 18 19
+fx18: ERROR no section in the log -- the image never started
+fx19: ERROR no section in the log -- the image never started
+=== poolstock rep 1 fixtures 18 19
+fx18: DIFFERS  predicted: RETURN 120005b  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 102020ec0, rs1 = x19, imm = 20, value = 102406c00, value_hi = 2ef8b0c2c00]
+fx19: ERROR no section in the log -- the image never started
+=== poolsublet rep 2 fixtures 18 19
+fx18: DIFFERS  predicted: RETURN 120005b  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 102021b2c, rs1 = x19, imm = 20, value = 102406c00, value_hi = 2ef8b0c2c00]
+fx19: ERROR no section in the log -- the image never started
+=== poolstock rep 2 fixtures 18 19
+fx18: DIFFERS  predicted: RETURN 120005b  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 102020ec0, rs1 = x19, imm = 20, value = 102406c00, value_hi = 2ef8b0c2c00]
+fx19: ERROR no section in the log -- the image never started
+=== poolsublet rep 3 fixtures 18 19
+fx18: DIFFERS  predicted: RETURN 120005b  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 102021b2c, rs1 = x19, imm = 20, value = 102406c00, value_hi = 2ef8b0c2c00]
+fx19: ERROR no section in the log -- the image never started
+=== poolstock rep 3 fixtures 18 19
+fx18: DIFFERS  predicted: RETURN 120005b  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 102020ec0, rs1 = x19, imm = 20, value = 102406c00, value_hi = 2ef8b0c2c00]
+fx19: ERROR no section in the log -- the image never started
+=== DONE
+  poolsublet rep 1: a guest stall before any section, killed by hand after 3 minutes frozen (both cells).
+  Every other fx19 'no section': fixture 18 faulted first and ended the boot, so 19 never ran.
+  One more attempt, from a launch that was aborted and relaunched as a tracked task, is kept as its own log.
+
+## 2. Bisection in the domain (configure-only diagnostics, fixtures 30-33)
+poolsublet, one boot, 30 31 33 32:
+fx30: DIFFERS  predicted: RETURN 1e00001  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 10161ee0c, rs1 = x19, imm = 20, value = 102001900, value_hi = 1558a4c19
+fx31: ERROR no section in the log -- the image never started
+fx33: ERROR no section in the log -- the image never started
+fx32: ERROR no section in the log -- the image never started
+level0, fixture 30 (level0 never revokes):
+fx30: DIFFERS  predicted: RETURN 1e00001  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 101c1d2b0, rs1 = x19, imm = 20, value = 101c7f9b0, value_hi = 41cffc47e
+level0, fixture 30 with a first instrumented avfiltergraph.c (query-phase dumps only; fx30 image 6cf622fd...):
+  TAGDUMP after-query out: link in0:0->out in.cl=101c7fd40 tag=1 out.cl=101c7ffa0 tag=1 in.fmts=1 out.fmts=1
+  [CAPSTONE] Cap mem access requires capability: pc = 101c1d5c0, rs1 = x19, imm = 20, value = 101c7fd40, value_hi = 41cffc47e8
+level0, fixture 30 with an instrumented avfiltergraph.c linked ahead (tag of each link's channel-layouts pointer, by step):
+  TAGDUMP before-query in0: link in0:0->out in.cl=0 tag=9 out.cl=0 tag=9 in.fmts=9 out.fmts=9
+  TAGDUMP after-query in0: link in0:0->out in.cl=101c80080 tag=1 out.cl=0 tag=9 in.fmts=1 out.fmts=9
+  TAGDUMP before-query out: link in0:0->out in.cl=101c80080 tag=1 out.cl=0 tag=9 in.fmts=1 out.fmts=9
+  TAGDUMP after-query out: link in0:0->out in.cl=101c80080 tag=1 out.cl=101c802e0 tag=1 in.fmts=1 out.fmts=1
+  TAGDUMP before-can_merge[0] in0: link in0:0->out in.cl=101c80080 tag=1 out.cl=101c802e0 tag=1 in.fmts=1 out.fmts=1
+  TAGDUMP loaded[0] a=101c80080 tag=0 b=101c802e0 tag=0
+  [CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x101c1d8b4, tval = 0x0, badaddr = 0xaaaaaabf2241c4
+native, the same graph under AddressSanitizer: 'graph configured', 'out channels=3 FC[0]=5b', no ASan error (leak reports only: the driver frees nothing)
+the reduction (fieldat-repro.c), compiler 3979abd8: IR 'load ptr addrspace(200) ... align 1' through FF_FIELD_AT, 'align 16' direct; -O1 and -O3 emit 16 lbu + sd to a stack temporary + ldc
+
+## 3. Patch 0004 (FF_FIELD_AT keeps the pointee's alignment): the matched pair on level0
+fx30: AS PREDICTED  predicted: RETURN 1e00001  got: RETURN 1e00001
+
+## 4. Rerun with 0004: M1-M5 on both arms, fixtures 18/19 N=3 (fixture 19 still printed bounds of the output plane before its touch)
+=== STAGES poolsublet
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+=== STAGES poolstock
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+=== poolsublet rep 1 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: DIFFERS  predicted: FAULT temporal  got: FAULT-BEFORE-TOUCH other  [[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x10280cc70, tval = 0x0, badaddr = 0xaaaaaab14251c4]
+=== poolstock rep 1 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: RETURN 1300177  got: RETURN 1300177
+=== poolsublet rep 2 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: DIFFERS  predicted: FAULT temporal  got: FAULT-BEFORE-TOUCH other  [[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x10280cc70, tval = 0x0, badaddr = 0xaaaaaad94df1c4]
+=== poolstock rep 2 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: RETURN 1300177  got: RETURN 1300177
+=== poolsublet rep 3 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: DIFFERS  predicted: FAULT temporal  got: FAULT-BEFORE-TOUCH other  [[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x10280cc70, tval = 0x0, badaddr = 0xaaaaaab30871c4]
+=== poolstock rep 3 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: RETURN 1300177  got: RETURN 1300177
+=== DONE
+
+## 5. Fixture corrected to read nothing of the output plane before its touch (ee6f030671e1), N=3, both arms.
+##    12 of 12 as predicted, but 18 took the archive's af_join.o while 19 linked its object ahead: superseded by 6
+=== poolsublet rep 1 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x10280c014 rd=x10 rs1=x10 val=0x102c07e00 priv=3]
+=== poolstock rep 1 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: RETURN 1300177  got: RETURN 1300177
+=== poolsublet rep 2 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x10280c014 rd=x10 rs1=x10 val=0x102c07e00 priv=3]
+=== poolstock rep 2 18 19
+fx18: ERROR no section in the log -- the image never started
+fx19: ERROR no section in the log -- the image never started
+=== poolsublet rep 3 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x10280c014 rd=x10 rs1=x10 val=0x102c07e00 priv=3]
+=== poolstock rep 3 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: RETURN 1300177  got: RETURN 1300177
+retry of poolstock rep 2 (the guest stalled before any section; killed after 12 min frozen):
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: RETURN 1300177  got: RETURN 1300177
+
+## 6. Final (a2e729d7f93e): 18 links af_join's SHIPPED object ahead as 19 links the reverted one; both print out-refs. N=3, both arms
+=== poolsublet rep 1 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x10280c014 rd=x10 rs1=x10 val=0x102c07e00 priv=3]
+=== poolstock rep 1 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: RETURN 1300177  got: RETURN 1300177
+=== poolsublet rep 2 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x10280c014 rd=x10 rs1=x10 val=0x102c07e00 priv=3]
+=== poolstock rep 2 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: RETURN 1300177  got: RETURN 1300177
+=== poolsublet rep 3 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x10280c014 rd=x10 rs1=x10 val=0x102c07e00 priv=3]
+=== poolstock rep 3 18 19
+fx18: AS PREDICTED  predicted: RETURN 120005b  got: RETURN 120005b
+fx19: AS PREDICTED  predicted: RETURN 1300177  got: RETURN 1300177
+out-refs, every boot: fx18 out-refs=2, fx19 out-refs=1 (both arms, reps 1-3); same-address: fx18 0, fx19 1
+pair layout (llvm-nm, named symbols defined once): poolsublet 523 at the same address in fx18 and fx19, 1119 exactly 8 lower in fx19;
+  poolstock 510 and 1116; none else on either arm (the reverted activate is 8 bytes shorter). Section 5's pair had 4 other deltas.
+
+## 7. Totals, final images (section 6): 12 of 12 cells as predicted (fx18 x 2 arms x 3, fx19 x 2 arms x 3), and out-refs 2/1 in all 12
+af_join gate: make's own command, rerun, reproduces libavfilter's af_join.o byte for byte, and so does the out-of-tree route; the revert is one line (revert.diff)
+C-50 gate: 0 hits over fx18 and fx19 (first build) and every M5 image
+C-69 byte-copy scan (the claim audit's two lowering shapes, load and store): 0 in the final fx18 and fx19 images on both arms and in M5;
+  its controls fire: 10 load sites in the pre-0004 avfilter_graph_config, 1 in the load reduction, 1 in the store reduction

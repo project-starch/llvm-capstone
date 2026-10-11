@@ -1,0 +1,75 @@
+{
+  "plain": {
+    "platform": {
+      "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+      "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+      "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+      "libc": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef",
+      "image": "3571a6d273515a5da067141b82d97a995e1b7388cdf6b1009953e701b3eb65ea"
+    },
+    "runtime_revocation": "on",
+    "guest_default_revocation": "preserved",
+    "binaries": {
+      "cheribsd-abi": "aafa45d484be66bf447d283c314f49209c65e0631bd25321c694171235025ccd",
+      "cheribsd-bounds": "aafa45d484be66bf447d283c314f49209c65e0631bd25321c694171235025ccd",
+      "allocator-example": "197d65e4dff14222affa74ad7b0582bf38ca1e97788b85a5faaf77f973abeb7c",
+      "00-rpcrdma-write-offsets-global-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "01-cms-oid-global-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "02-mdb-address-column-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "03-cola-info-column-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "04-qnet6-col-set-str-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "05-usbll-address-struct-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "06-x509if-last-dn-static-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "07-mysql-auth-method-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "08-sip-cseq-method-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "09-geonw-proto-data-tvb-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "10-t38-reassembly-buffer-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "11-http-header-map-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf",
+      "12-xml-root-name-recycled-mode0": "cd7a8201a8c252dc4c967605d5e42080926653ffcd8856db526000d9b06af1bf"
+    },
+    "status": "complete"
+  },
+  "poisoncap": {
+    "platform": {
+      "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+      "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+      "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+      "libc": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef",
+      "image": "3571a6d273515a5da067141b82d97a995e1b7388cdf6b1009953e701b3eb65ea"
+    },
+    "runtime_revocation": "on",
+    "guest_default_revocation": "preserved",
+    "binaries": {
+      "cheribsd-abi": "e26af061d88dfd644a3fd1eb9bf64c6bc4d857e6d36d3227d895d1070bf486ac",
+      "cheribsd-bounds": "e26af061d88dfd644a3fd1eb9bf64c6bc4d857e6d36d3227d895d1070bf486ac",
+      "allocator-example": "fb6d8817d3ada2474b22def28b6fc87763e778ad6b394f504a38c8f59c5b33b5",
+      "00-rpcrdma-write-offsets-global-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "01-cms-oid-global-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "02-mdb-address-column-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "03-cola-info-column-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "04-qnet6-col-set-str-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "05-usbll-address-struct-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "06-x509if-last-dn-static-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "07-mysql-auth-method-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "08-sip-cseq-method-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "09-geonw-proto-data-tvb-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "10-t38-reassembly-buffer-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "11-http-header-map-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "12-xml-root-name-recycled-mode0": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "00-rpcrdma-write-offsets-global-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "01-cms-oid-global-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "02-mdb-address-column-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "03-cola-info-column-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "04-qnet6-col-set-str-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "05-usbll-address-struct-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "06-x509if-last-dn-static-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "07-mysql-auth-method-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "08-sip-cseq-method-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "09-geonw-proto-data-tvb-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "10-t38-reassembly-buffer-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "11-http-header-map-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6",
+      "12-xml-root-name-recycled-mode1": "611035dcd4e2b6feaa430f40c1ca2b18bf6cc61b012af2a8bbcea296d849c8e6"
+    },
+    "status": "complete"
+  }
+}

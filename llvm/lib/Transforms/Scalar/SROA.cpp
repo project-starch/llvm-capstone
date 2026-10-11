@@ -65,6 +65,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Type.h"
@@ -5218,6 +5219,143 @@ insertNewDbgInst(DIBuilder &DIB, DbgVariableRecord *Orig, AllocaInst *NewAddr,
 
 /// Walks the slices of an alloca and form partitions based on them,
 /// rewriting each of their uses.
+/// Capstone: does a value of type \p Ty hold a pointer wider than its index --
+/// a capability? Asked of an element type before its elements are walked, so
+/// an array of bytes costs one question however long it is.
+static bool typeHasCapability(const DataLayout &DL, Type *Ty) {
+  if (auto *PT = dyn_cast<PointerType>(Ty))
+    return DL.getPointerSizeInBits(PT->getAddressSpace()) >
+           DL.getIndexSizeInBits(PT->getAddressSpace());
+  if (auto *ST = dyn_cast<StructType>(Ty))
+    return llvm::any_of(ST->elements(),
+                        [&](Type *E) { return typeHasCapability(DL, E); });
+  if (auto *AT = dyn_cast<ArrayType>(Ty))
+    return typeHasCapability(DL, AT->getElementType());
+  if (auto *VT = dyn_cast<FixedVectorType>(Ty))
+    return typeHasCapability(DL, VT->getElementType());
+  return false;
+}
+
+/// Capstone: the byte offsets, within a value of type \p Ty placed at
+/// \p Base, of every pointer wider than its index -- a capability, whose tag
+/// lives outside its bytes and survives a copy only as one aligned
+/// capability-sized access. Returns false if there are more than \p Limit.
+/// Arrays and vectors are walked element by element only when their element
+/// type holds one, so every element walked adds an offset and \p Limit bounds
+/// the walk.
+static bool collectCapabilityOffsets(const DataLayout &DL, Type *Ty,
+                                     uint64_t Base,
+                                     SmallVectorImpl<uint64_t> &Offsets,
+                                     unsigned Limit) {
+  if (auto *PT = dyn_cast<PointerType>(Ty)) {
+    unsigned AS = PT->getAddressSpace();
+    if (DL.getPointerSizeInBits(AS) > DL.getIndexSizeInBits(AS)) {
+      if (Offsets.size() >= Limit)
+        return false;
+      Offsets.push_back(Base);
+    }
+    return true;
+  }
+  if (auto *ST = dyn_cast<StructType>(Ty)) {
+    const StructLayout *SL = DL.getStructLayout(ST);
+    for (unsigned I = 0, E = ST->getNumElements(); I != E; ++I)
+      if (!collectCapabilityOffsets(DL, ST->getElementType(I),
+                                    Base + SL->getElementOffset(I), Offsets,
+                                    Limit))
+        return false;
+    return true;
+  }
+  if (auto *AT = dyn_cast<ArrayType>(Ty)) {
+    if (!typeHasCapability(DL, AT->getElementType()))
+      return true;
+    uint64_t Stride = DL.getTypeAllocSize(AT->getElementType()).getFixedValue();
+    for (uint64_t I = 0, E = AT->getNumElements(); I != E; ++I)
+      if (!collectCapabilityOffsets(DL, AT->getElementType(), Base + I * Stride,
+                                    Offsets, Limit))
+        return false;
+    return true;
+  }
+  if (auto *VT = dyn_cast<FixedVectorType>(Ty)) {
+    if (!typeHasCapability(DL, VT->getElementType()))
+      return true;
+    uint64_t Stride = DL.getTypeAllocSize(VT->getElementType()).getFixedValue();
+    for (uint64_t I = 0, E = VT->getNumElements(); I != E; ++I)
+      if (!collectCapabilityOffsets(DL, VT->getElementType(), Base + I * Stride,
+                                    Offsets, Limit))
+        return false;
+    return true;
+  }
+  return true;
+}
+
+/// Capstone: may this alloca be split without breaking a capability? A
+/// capability keeps its tag only when it is copied as one aligned
+/// capability-sized access. A partition that holds a capability field but does
+/// not start on a capability boundary becomes a new alloca with the capability
+/// misaligned inside it, and its copies are lowered to narrower loads and
+/// stores that drop the tag; one that ends inside a field splits it. Measured
+/// on mruby: SROA split a `struct { uint32_t flags; union { proc pointer;
+/// function pointer } as; }` copied in, updated in `flags` and copied out into
+/// [0,4) and [4,32); the second became `alloca [28 x i8], align 4` and the
+/// method's proc pointer arrived untagged.
+///
+/// Asked before splitAlloca changes anything, so the partitions are predicted
+/// rather than read: splitAlloca makes every load and store that does not
+/// cover the whole alloca unsplittable, and partitions begin and end exactly
+/// at the offsets of unsplittable slices.
+static bool splitKeepsCapabilitiesWhole(const DataLayout &DL, AllocaInst &AI,
+                                        AllocaSlices &AS) {
+  // Only Capstone's wide pointers carry a tag. AMDGPU's buffer fat pointers
+  // are also wider than their index and have none, so they split as before.
+  if (!Triple(AI.getModule()->getTargetTriple()).isCapstone())
+    return true;
+  SmallVector<uint64_t, 16> Caps;
+  const unsigned Limit = 4096;
+  bool Enumerated =
+      collectCapabilityOffsets(DL, AI.getAllocatedType(), 0, Caps, Limit);
+  if (Enumerated && Caps.empty())
+    return true;
+  unsigned CapAS = 0;
+  bool Found = false;
+  for (unsigned A = 0; A < 256 && !Found; ++A)
+    if (DL.getPointerSizeInBits(A) > DL.getIndexSizeInBits(A))
+      CapAS = A, Found = true;
+  if (!Found)
+    return true;
+  uint64_t CapSize = DL.getPointerSize(CapAS);
+  uint64_t AllocaSize =
+      DL.getTypeAllocSize(AI.getAllocatedType()).getFixedValue();
+
+  SmallVector<uint64_t, 32> Bounds = {0, AllocaSize};
+  for (Slice &S : AS) {
+    Instruction *U = cast<Instruction>(S.getUse()->getUser());
+    bool LoadStore = isa<LoadInst>(U) || isa<StoreInst>(U);
+    if (!S.isSplittable() || LoadStore) {
+      Bounds.push_back(std::min(S.beginOffset(), AllocaSize));
+      Bounds.push_back(std::min(S.endOffset(), AllocaSize));
+    }
+  }
+  llvm::sort(Bounds);
+  Bounds.erase(llvm::unique(Bounds), Bounds.end());
+
+  for (unsigned I = 0; I + 1 < Bounds.size(); ++I) {
+    uint64_t B = Bounds[I], E = Bounds[I + 1];
+    if (!Enumerated) {
+      // Too many to list: every predicted partition must be capability-aligned.
+      if (B % CapSize || E % CapSize)
+        return false;
+      continue;
+    }
+    for (uint64_t O : Caps) {
+      if (O + CapSize <= B || O >= E)
+        continue;               // no overlap
+      if (B > O || E < O + CapSize || (O - B) % CapSize)
+        return false;           // starts or ends inside it, or misaligns it
+    }
+  }
+  return true;
+}
+
 bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
   if (AS.begin() == AS.end())
     return false;
@@ -5225,6 +5363,13 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
   unsigned NumPartitions = 0;
   bool Changed = false;
   const DataLayout &DL = AI.getModule()->getDataLayout();
+
+  // Capstone: a split that would break or misalign a capability is not made,
+  // and the alloca stays whole (see splitKeepsCapabilitiesWhole). Decided
+  // before anything is rewritten: pre-splitting replaces loads and stores and
+  // queues the originals for deletion, so leaving after it drops them.
+  if (!splitKeepsCapabilitiesWhole(DL, AI, AS))
+    return false;
 
   // First try to pre-split loads and stores.
   Changed |= presplitLoadsAndStores(AI, AS);

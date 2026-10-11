@@ -1,0 +1,8 @@
+# The images this run built and booted.
+71749aab5530ac1dc26f8ce125be4eb547fa615ef7b01bf290116b88904a5b69  ffapp_m5.dom
+f6de6c62dd67594f2125606f97b06ddb47210165e1f945394974a739c5b19901  ffapp_m5flip.dom
+432e59158840bb268f7893de95c6650d8fec01a1fa160880aa5cfa1b35533bc9  ffapp.user
+# compiler  0a458bdb802c1856cefd1a1c86435b9c90852665 (compiler lane's fixbuild;
+#           CapstoneISelLowering.cpp byte-identical to dev 4c407f9456d4, and its
+#           llvm/clang/lld/compiler-rt sources equal origin/dev's)
+# emulator  capstone-qemu deb7d75756

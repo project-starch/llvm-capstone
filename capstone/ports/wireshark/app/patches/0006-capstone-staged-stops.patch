@@ -1,0 +1,71 @@
+CAPSTONE (tshark app port): staged images for the domain port. With -DTSAPP_STOP_AT=<n> tshark prints
+"TSAPP-STAGE n" on stderr and exits with 100 + n at milestone n (1 main, 2 epan_init done, 3 capture
+opened, 4 first frame printed), so every boot of a staged image returns a result. 100 + n keeps the
+stages out of tshark's own exit codes; a volatile flag keeps the code after a stop in the image.
+Without the define the hooks compile to nothing.
+
+--- a/tshark.c	2026-09-24 19:47:16.580647817 +0800
++++ b/tshark.c	2026-09-24 21:51:13.426570888 +0800
+@@ -255,6 +255,30 @@
+     PROCESS_FILE_OUT_OF_MEMORY,
+     PROCESS_FILE_INTERRUPTED
+ } process_file_status_t;
++/* CAPSTONE (tshark app port): staged images. Built with -DTSAPP_STOP_AT=<n>, tshark stops at
++ * milestone n, prints "TSAPP-STAGE n" on stderr and exits with 100 + n, so every boot of a staged
++ * image returns a result, and the first stage that does not is the bisection point:
++ *   1 main entered, 2 epan_init done, 3 capture file opened, 4 first frame dissected and printed.
++ * 100 + n, not n: tshark's own exit codes are 1..18 and 256 (ws_exit_codes.h), and a failed cf_open
++ * exits with WS_EXIT_INVALID_FILE = 3 before stage 3, which a bare 3 could not be told apart from.
++ * The stop is behind a volatile flag, so the compiler cannot see that it is taken and keeps all
++ * the code after it: a staged image carries the same program as the full one. A plain exit() made
++ * everything after the stop dead: M1's tshark.o came out 7.7 KB against 207 KB, and the link's
++ * --gc-sections would then drop whatever that code alone reached.
++ * Without the define (the M5 image and every other build) the hooks compile to nothing. */
++#ifdef TSAPP_STOP_AT
++static volatile int tsapp_stop_armed = 1;
++#define TSAPP_STAGE(n) do {                                                     \
++        if ((n) == TSAPP_STOP_AT && tsapp_stop_armed) {                         \
++            fflush(stdout);                                                     \
++            fprintf(stderr, "TSAPP-STAGE %d\n", (n));                           \
++            exit(100 + (n));                                                    \
++        }                                                                       \
++    } while (0)
++#else
++#define TSAPP_STAGE(n) do { } while (0)
++#endif
++
+ static process_file_status_t process_cap_file(capture_file *, char *, int, bool, int, int64_t, int, wtap_compression_type);
+ 
+ typedef enum {
+@@ -1050,6 +1074,7 @@
+ {
+     char                *err_msg;
+     int                  opt;
++    TSAPP_STAGE(1);
+     static const struct ws_option long_options[] = {
+         {"help", ws_no_argument, NULL, 'h'},
+         {"version", ws_no_argument, NULL, 'v'},
+@@ -1371,6 +1396,7 @@
+         exit_status = WS_EXIT_INIT_FAILED;
+         goto clean_exit;
+     }
++    TSAPP_STAGE(2);
+ 
+     /* Register all tap listeners; we do this before we parse the arguments,
+        as the "-z" argument can specify a registered tap. */
+@@ -2597,6 +2623,7 @@
+             exit_status = WS_EXIT_INVALID_FILE;
+             goto clean_exit;
+         }
++        TSAPP_STAGE(3);
+ 
+         /* Start statistics taps; we do so after successfully opening the
+            capture file, so we know we have something to compute stats
+@@ -4572,6 +4599,7 @@
+         frame_data_destroy(&fdata);
+         rec->block = block;
+     }
++    TSAPP_STAGE(4);     /* the first frame, dissected and printed */
+     return passed ? PROCESS_PACKET_PASSED : PROCESS_PACKET_DIDNT_PASS;
+ }
+ 

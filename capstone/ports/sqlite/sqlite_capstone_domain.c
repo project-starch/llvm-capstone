@@ -1353,13 +1353,11 @@ static int run_sqlite_extended(sqlite3 *db) {
     for (int i = 0; i < 4; ++i) {
       sqlite3_reset(ins);
       sqlite3_bind_int(ins, 1, i + 1);
-      /* SQLITE_STATIC (not SQLITE_TRANSIENT): these labels are static storage.
-       * The build patches SQLITE_TRANSIENT to a function only inside the
-       * amalgamation, so the public sqlite3.h value (-1) is not recognized as
-       * the transient sentinel by the patched core -- a client passing
-       * SQLITE_TRANSIENT would have -1 stored as a destructor and later called.
-       * Tracked as a known limitation; SQLITE_STATIC is the correct binding for
-       * persistent buffers regardless. */
+      /* SQLITE_STATIC: these labels are static storage, so SQLite need not copy
+       * them. Until 2026-09-24 SQLITE_TRANSIENT could not be used here at all
+       * (gap 9): the build rewrote the sentinel inside the amalgamation only, so
+       * the -1 from sqlite3.h was stored as a destructor and later called. That
+       * rewrite is retired, and a TRANSIENT binding here now passes. */
       sqlite3_bind_text(ins, 2, labels[i], -1, SQLITE_STATIC);
       sqlite3_bind_double(ins, 3, (double)((i + 1) * 10));
       rc = sqlite3_step(ins);

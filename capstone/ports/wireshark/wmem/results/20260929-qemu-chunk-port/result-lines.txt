@@ -1,0 +1,196 @@
+# The per-chunk port of wmem's block allocator, capstone-qemu, 2026-09-29. Result lines only.
+# v1 = e5d20a1b27d3 (sections 1-4); v2 = 3abcdbca84f8 (sections 5-9), after the claim audit.
+# Predictions: ../../PREREGISTRATION-chunk-port.md (b9ecf27b20bd) and its v2 addendum (3abcdbca84f8).
+
+############################## v1 ##############################
+
+## 1. Security matrix WITH the port (26 cells; each attempt kept, --resume after guest stalls)
+mode=0 case=0  expected=completed PASS
+mode=0 case=1  expected=completed PASS
+mode=0 case=2  expected=completed PASS
+mode=0 case=3  expected=completed PASS
+mode=0 case=4  expected=completed PASS
+mode=0 case=5  expected=fault     PASS  cause=5 pc=0x101902f8c expected_pc=0x101902f8c
+mode=0 case=6  expected=completed PASS
+mode=0 case=7  expected=completed PASS
+mode=0 case=8  expected=completed PASS
+mode=0 case=9  expected=completed PASS
+mode=0 case=10 expected=completed PASS
+mode=0 case=11 expected=completed PASS
+mode=0 case=12 expected=completed PASS
+mode=1 case=0  expected=completed PASS
+mode=1 case=1  expected=fault     PASS  cause=24 pc=0x101902f8c expected_pc=0x101902f8c
+mode=1 case=2  expected=fault     PASS  cause=24 pc=0x101902fb8 expected_pc=0x101902fb8
+mode=1 case=3  expected=fault     PASS  cause=24 pc=0x101902f8c expected_pc=0x101902f8c
+mode=1 case=4  expected=fault     PASS  cause=24 pc=0x101902f8c expected_pc=0x101902f8c
+mode=1 case=5  expected=fault     PASS  cause=5 pc=0x101902f8c expected_pc=0x101902f8c
+mode=1 case=6  expected=fault     PASS  cause=24 pc=0x101902f8c expected_pc=0x101902f8c
+mode=1 case=7  expected=fault     PASS  cause=24 pc=0x101902f8c expected_pc=0x101902f8c
+mode=1 case=8  expected=fault     PASS  cause=24 pc=0x101902f8c expected_pc=0x101902f8c
+mode=1 case=9  expected=fault     PASS  cause=24 pc=0x101902f8c expected_pc=0x101902f8c
+mode=1 case=10 expected=fault     PASS  cause=24 pc=0x101902f8c expected_pc=0x101902f8c
+mode=1 case=11 expected=fault     PASS  cause=24 pc=0x101902f8c expected_pc=0x101902f8c
+mode=1 case=12 expected=fault     PASS  cause=24 pc=0x101901d10 expected_pc=0x101901d10
+totals: cells=26 passed=26
+attempts: 27 runs for 26 cells; the extra attempt is mode=0 case=2, a guest that stalled before login (no domain output, runner exit 75), retried under --resume
+
+## 2. The same matrix BEFORE the port (region-granular hooks only), re-run 2026-09-28 on this host
+mode=0 case=3  expected=completed PASS
+mode=0 case=4  expected=completed PASS
+mode=0 case=12 expected=completed PASS
+mode=1 case=3  expected=fault     PASS
+mode=1 case=4  expected=completed PASS
+mode=1 case=12 expected=fault     PASS
+totals: cells=26 passed=26  (case 4 in mode 1 was 'completed' -- the gap)
+
+## 3. Controls from the SAME tree with -DWM_CHUNKS=OFF -DWM_P2_CONTROL=ON (each must fail, and why)
+mode=0 case=3 runner verdict=FAIL | domain return=519 status=519 completed=0 | fault=none
+mode=0 case=4 runner verdict=FAIL | domain return=520 status=520 completed=0 | fault=none
+mode=1 case=4 runner verdict=FAIL | domain return=42060 status=0 completed=1 | fault=none
+status 519/520 = the old-byte check tripped: without the port the stale read sees allocator metadata;
+mode 1 case 4 completing with no fault = the original gap, reproduced by turning one macro off.
+
+## 4. Directed replay, 1661 events, WITH the port, against the recorded 2026-09-21 reports
+spatial  status=0 completed=1661/1661 checksum=15475871146958098728 regions=44/34 vs recorded: IDENTICAL
+spatial  WM-CHUNKS opens=20 resets=40 closes=20 reset_revokes=0 close_revokes=0 dropped=340 retires=80 splits=300 issues=300 revokes=0 inits=0
+sublet   status=0 completed=1661/1661 checksum=15475871146958098728 regions=44/34 vs recorded: IDENTICAL
+sublet   WM-CHUNKS opens=20 resets=40 closes=20 reset_revokes=40 close_revokes=20 dropped=340 retires=80 splits=300 issues=300 revokes=140 inits=60
+
+############################## v2 ##############################
+## 5. Security matrix, one runner invocation per cell (the runner stops at its first FAIL, and a
+##    lock wait shorter than another lane's boot had recorded cells with no guest output as FAIL)
+mode=0 case=0  expected=completed PASS  completed
+mode=0 case=1  expected=completed PASS  completed
+mode=0 case=2  expected=completed PASS  completed
+mode=0 case=3  expected=completed PASS  completed
+mode=0 case=4  expected=completed PASS  completed
+mode=0 case=5  expected=fault     PASS  fault cause=5 pc=0x101903504 expected_pc=0x101903504
+mode=0 case=6  expected=completed PASS  completed
+mode=0 case=7  expected=completed PASS  completed
+mode=0 case=8  expected=completed PASS  completed
+mode=0 case=9  expected=completed PASS  completed
+mode=0 case=10 expected=completed PASS  completed
+mode=0 case=11 expected=completed PASS  completed
+mode=0 case=12 expected=completed PASS  completed
+mode=0 case=13 expected=completed PASS  completed
+mode=0 case=14 expected=completed PASS  completed
+mode=0 case=15 expected=completed PASS  completed
+mode=0 case=16 expected=completed PASS  completed
+mode=0 case=17 expected=completed PASS  completed
+mode=1 case=0  expected=completed PASS  completed
+mode=1 case=1  expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=2  expected=fault     PASS  fault cause=24 pc=0x101903530 expected_pc=0x101903530
+mode=1 case=3  expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=4  expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504 attempts=2
+mode=1 case=5  expected=fault     PASS  fault cause=5 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=6  expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=7  expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=8  expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=9  expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=10 expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=11 expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=12 expected=fault     PASS  fault cause=24 pc=0x101901d90 expected_pc=0x101901d90
+mode=1 case=13 expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=14 expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=15 expected=fault     PASS  fault cause=24 pc=0x101903504 expected_pc=0x101903504
+mode=1 case=16 expected=fault     PASS  fault cause=24 pc=0x101901d90 expected_pc=0x101901d90
+mode=1 case=17 expected=completed PASS  completed
+
+## 5a. The first, aborted v2 matrix (01:39-01:45): every attempt, kept. The runner then stopped at its
+##     first FAIL and waited only 60 s for the lock; both were fixed, and the matrix re-run per cell (section 5)
+sec-ablate   mode-1-case-4-zd status=0 completed=1
+sec-off      mode-0-case-4-qy no serial log (runner_exit 1): the 60 s lock wait expired
+sec-p2ctl    mode-0-case-3-dm status=519 completed=0
+sec-port     mode-0-case-0-8e status=0 completed=1
+sec-port     mode-0-case-1-46 status=0 completed=1
+sec-port     mode-0-case-2-g2 status=0 completed=1
+sec-port     mode-0-case-3-je status=0 completed=1
+sec-port     mode-0-case-4-i3 status=0 completed=1
+sec-port     mode-0-case-5-vs fault cause=5 pc=0x101903504
+sec-port     mode-0-case-6-5d status=0 completed=1
+sec-port     mode-0-case-7-m_ status=0 completed=1
+sec-port     mode-0-case-8-k8 status=0 completed=1
+sec-port     mode-0-case-9-4t status=0 completed=1
+sec-port     mode-0-case-10-9 status=0 completed=1
+sec-port     mode-0-case-11-3 status=0 completed=1
+sec-port     mode-0-case-12-e status=0 completed=1
+sec-port     mode-0-case-13-_ no serial log (runner_exit 1): the 60 s lock wait expired
+sec-v1thr    mode-0-case-17-v status=528 completed=0
+
+## 6. v2 port, the chunk counts the new cases print (a cell that faults halts before it can print them)
+mode=0 case=13: WM-CHUNKS opens=1 resets=1 closes=1 reset_revokes=0 close_revokes=0 dropped=4 retires=1 splits=3 issues=3 revokes=0 inits=0 region_revokes=0 region_inits=0
+mode=0 case=14: WM-CHUNKS opens=1 resets=1 closes=1 reset_revokes=0 close_revokes=0 dropped=4 retires=1 splits=3 issues=3 revokes=0 inits=0 region_revokes=0 region_inits=0
+mode=0 case=15: WM-CHUNKS opens=1 resets=1 closes=1 reset_revokes=0 close_revokes=0 dropped=2 retires=0 splits=1 issues=1 revokes=0 inits=0 region_revokes=0 region_inits=0
+mode=0 case=16: WM-CHUNKS opens=1 resets=1 closes=1 reset_revokes=0 close_revokes=0 dropped=2 retires=1 splits=1 issues=1 revokes=0 inits=0 region_revokes=0 region_inits=0
+mode=0 case=17: WM-CHUNKS opens=1 resets=1 closes=1 reset_revokes=0 close_revokes=0 dropped=3 retires=1001 splits=2 issues=1002 revokes=0 inits=0 region_revokes=0 region_inits=0
+mode=1 case=17: WM-CHUNKS opens=1 resets=1 closes=1 reset_revokes=1 close_revokes=1 dropped=3 retires=1001 splits=2 issues=1002 revokes=1003 inits=2 region_revokes=9 region_inits=0
+
+## 7. control off: WM_CHUNKS=OFF: the hooks alone, same tree. Outcome, not the runner's verdict against the port's table
+mode=0 case=4  completed
+mode=0 case=13 completed
+mode=0 case=14 completed
+mode=0 case=15 completed
+mode=0 case=16 completed
+mode=0 case=17 completed
+mode=1 case=4  completed
+mode=1 case=13 completed
+mode=1 case=14 completed
+mode=1 case=15 fault cause=24 pc=0x1019024ac expected_pc=0x1019024ac
+mode=1 case=16 completed
+mode=1 case=17 completed
+
+## 7. control ablate: WM_P1_ABLATE: the port with wm_chunk_retire's one give stubbed out. Outcome, not the runner's verdict against the port's table
+mode=1 case=4  completed
+mode=1 case=13 completed
+
+## 7. control v1thr: v1's generated wmem_allocator_block.c swapped into the v2 build. Outcome, not the runner's verdict against the port's table
+mode=0 case=17 status=528
+mode=1 case=17 status=528
+
+## 7. control p2ctl: WM_CHUNKS=OFF with the old-byte checks compiled in. Outcome, not the runner's verdict against the port's table
+mode=0 case=3  status=519
+mode=0 case=4  status=520
+
+## 8. Directed replay, 1661 events, v2, against the recorded 2026-09-21 reports
+spatial  WM return=42060 status=0 completed=1661 allocs=1000  regions=44/34  16 of 16 report fields vs 2026-09-21: IDENTICAL
+spatial  WM-CHUNKS opens=20 resets=40 closes=20 reset_revokes=0 close_revokes=0 dropped=340 retires=80 splits=300 issues=300 revokes=0 inits=0 region_revokes=0 region_inits=0
+sublet  WM return=42060 status=0 completed=1661 allocs=1000  regions=44/34  16 of 16 report fields vs 2026-09-21: IDENTICAL
+sublet  WM-CHUNKS opens=20 resets=40 closes=20 reset_revokes=40 close_revokes=20 dropped=340 retires=80 splits=300 issues=300 revokes=140 inits=60 region_revokes=900 region_inits=0
+sublet: the chunk file's revokes 140 = reset_revokes 40 + close_revokes 20 + retires 80; the regions file's 900 are reported beside it
+attempts: one earlier sublet replay (qemu-2kdotqri) was cut off mid-run (after login, with domain output) when the first v2 run was stopped; kept, no report
+
+## 9. Native and build checks (v2)
+native ctest: 4/4 passed (the replay against unmodified upstream: completed=1661 checksum=15475871146958098728 regions=43 peak=34)
+split-overlap mutation (wm_chunk_split_off places the split-off chunk 32 bytes early):
+  ## mutation: wm_chunk_split_off places the split-off chunk 32 bytes early (data overlap)
+  712c712
+  <     wm_chunk_place(extra, chunk->addr + chunk->len);
+  ---
+  >     wm_chunk_place(extra, chunk->addr + chunk->len - 32); /* MUTATION: the new chunk overlaps the old one's last 32 bytes */
+  build rc=0
+  1/1 Test #2: replay ...........................***Failed    0.07 sec
+  subprocess.CalledProcessError: Command '['/tmp/capstone/wmemport/v2/native/bin/replay', '/tmp/capstone/wmemport/v2/native/tests/directed.bin', '/tmp/capstone/wmemport/v2/native/tests/ported.bin']' returned non-zero exit status 1.
+  0% tests passed, 1 tests failed out of 1
+  	  2 - replay (Failed)
+  ## restored
+  1/1 Test #2: replay ...........................   Passed    0.67 sec
+  100% tests passed, 0 tests failed out of 1
+  mutated replay rc=1
+  WM failure 301
+  restored replay rc=0; WM completed=1661 allocs=1000 checksum=15475871146958098728 regions=43 peak=34
+C-50 gate (scan-addi-sp.py), all ten v2 domain images: 0 hits
+  dom/wmem-security: 0 hit(s) in 6962 instructions
+  dom/replay: 0 hit(s) in 6039 instructions
+  dom-off/wmem-security: 0 hit(s) in 5251 instructions
+  dom-off/replay: 0 hit(s) in 4374 instructions
+  dom-p2ctl/wmem-security: 0 hit(s) in 5288 instructions
+  dom-p2ctl/replay: 0 hit(s) in 4374 instructions
+  dom-ablate/wmem-security: 0 hit(s) in 6926 instructions
+  dom-ablate/replay: 0 hit(s) in 6003 instructions
+  dom-v1thr/wmem-security: 0 hit(s) in 6964 instructions
+  dom-v1thr/replay: 0 hit(s) in 6039 instructions
+runner fix, both directions (the security runner, one cell each):
+  a held private lock, CAPSTONE_QEMU_LOCK_WAIT=2: rc=75  INFRA mode=0 case=0: QEMU lock wait expired, no guest ran
+  a missing emulator, the lock free:               rc=1   (no INFRA line: a launch failure is never infrastructure)
+comment-only change to patch 0002, after the matrix: the domain rebuilt from the corrected patch is byte-identical
+  wmem-security.dom 4a2fc629e9ce58cc..., replay.dom 3bf82ca72023c3b7..., the images the matrix ran

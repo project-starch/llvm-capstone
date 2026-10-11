@@ -157,6 +157,12 @@ public:
 
   bool isAsCheapAsAMove(const MachineInstr &MI) const override;
 
+  /// Capability arithmetic traps on an operand that holds no capability, so
+  /// LLVM's assumption that an instruction which neither loads nor stores may
+  /// run anywhere is wrong for it. Answered once here; MachineLICM, MachineCSE
+  /// and EarlyIfConversion ask. See the definition.
+  bool canTrap(const MachineInstr &MI) const override;
+
   std::optional<DestSourcePair>
   isCopyInstrImpl(const MachineInstr &MI) const override;
 

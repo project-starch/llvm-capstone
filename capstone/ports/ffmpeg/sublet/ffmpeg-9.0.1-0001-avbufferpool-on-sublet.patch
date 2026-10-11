@@ -1,0 +1,168 @@
+Subject: AVBufferPool takes its storage LINEAR from the Sublet heap, and a buffer's return is a revoke
+Upstream: ffmpeg 9.0.1
+Upstream-Archive: https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz
+Upstream-SHA256: cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635
+Build-Variants: the app port's FFAPP_POOL=sublet arm; inert elsewhere (every hunk is guarded by FF_SUBLET_POOLS)
+Depends-On: the app port's patches/*.patch (none touches these files)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+A pool on the default allocators takes blocks from the heap as linear regions and carves its
+entries from them, the way SQLite's lookaside takes its block from memsys5. A get takes the
+entry's handle and hands out an alias of exactly the pool's size; the buffer's last unref gives it
+back, one revoke, before FFmpeg's LIFO freelist can reissue the entry; the pool's end is the heap's
+free of each block, one revoke per block, which ends every entry carved from it; the entries'
+records are freed one by one, as upstream frees them. Upstream already
+keeps an entry's bookkeeping -- BufferPoolEntry, freelist link included -- in its own allocation,
+outside the payload, so nothing moves. A pool with a custom allocator keeps upstream's path. The
+level below is ffsublet.h, implemented by the app port. The classes of the hunks are in the
+sibling .classes file.
+--- a/libavutil/buffer_internal.h
++++ b/libavutil/buffer_internal.h
+@@ -24,6 +24,9 @@
+ 
+ #include "buffer.h"
+ #include "thread.h"
++#if FF_SUBLET_POOLS
++#include "ffsublet.h"
++#endif
+ 
+ /**
+  * The buffer was av_realloc()ed, so it is reallocatable.
+@@ -83,6 +86,11 @@
+      * of this BufferPoolEntry.
+      */
+     AVBuffer buffer;
++
++#if FF_SUBLET_POOLS
++    /* the entry's region while it is in the pool, its handle while it is out */
++    FFSubletEntry sublet;
++#endif
+ } BufferPoolEntry;
+ 
+ struct AVBufferPool {
+@@ -105,6 +113,11 @@
+     AVBufferRef* (*alloc)(size_t size);
+     AVBufferRef* (*alloc2)(void *opaque, size_t size);
+     void         (*pool_free)(void *opaque);
++
++#if FF_SUBLET_POOLS
++    /* the blocks this pool took from the heap; entry == 0 keeps upstream's path */
++    FFSubletPool sublet;
++#endif
+ };
+ 
+ #endif /* AVUTIL_BUFFER_INTERNAL_H */
+--- a/libavutil/buffer.c
++++ b/libavutil/buffer.c
+@@ -294,6 +294,13 @@
+     pool->size     = size;
+     pool->alloc    = alloc ? alloc : av_buffer_alloc;
+ 
++#if FF_SUBLET_POOLS
++    /* A pool on the default allocators takes its storage from the heap as blocks, and
++     * carves its entries from them. A custom allocator keeps upstream's path. */
++    if (pool->alloc == av_buffer_alloc || pool->alloc == av_buffer_allocz)
++        ff_sublet_pool_init(&pool->sublet, size ? size : 1);
++#endif
++
+     atomic_init(&pool->refcount, 1);
+ 
+     return pool;
+@@ -305,6 +312,10 @@
+         BufferPoolEntry *buf = pool->pool;
+         pool->pool = buf->next;
+ 
++#if FF_SUBLET_POOLS
++        /* a ported entry's storage belongs to its block, which the pool's end revokes */
++        if (!pool->sublet.entry)
++#endif
+         buf->free(buf->opaque, buf->data);
+         av_freep(&buf);
+     }
+@@ -316,6 +327,12 @@
+  */
+ static void buffer_pool_free(AVBufferPool *pool)
+ {
++#if FF_SUBLET_POOLS
++    /* One revoke per block the pool took from the heap: every entry carved from it dies. The
++     * records of the entries in the pool were freed by the flush before this, and any still out
++     * are freed here after it. */
++    ff_sublet_pool_destroy(&pool->sublet);
++#endif
+     buffer_pool_flush(pool);
+     ff_mutex_destroy(&pool->mutex);
+ 
+@@ -347,6 +364,13 @@
+     BufferPoolEntry *buf = opaque;
+     AVBufferPool *pool = buf->pool;
+ 
++#if FF_SUBLET_POOLS
++    /* One revoke: every alias of the buffer dies before the entry can be reissued. */
++    if (pool->sublet.entry) {
++        ff_sublet_entry_give(&buf->sublet);
++        buf->data = NULL;
++    }
++#endif
+     ff_mutex_lock(&pool->mutex);
+     buf->next = pool->pool;
+     pool->pool = buf;
+@@ -365,6 +389,33 @@
+ 
+     av_assert0(pool->alloc || pool->alloc2);
+ 
++#if FF_SUBLET_POOLS
++    if (pool->sublet.entry) {
++        /* The entry's storage is carved from a block the pool took from the heap, and handed
++         * out under the entry's own handle; av_buffer_allocz's zeroing is done here. */
++        buf = av_mallocz(sizeof(*buf));
++        if (!buf)
++            return NULL;
++        if (ff_sublet_entry_new(&pool->sublet, &buf->sublet) < 0) {
++            av_free(buf);
++            return NULL;
++        }
++        buf->pool = pool;
++        buf->data = ff_sublet_entry_take(&buf->sublet, pool->size);
++        if (pool->alloc == av_buffer_allocz)
++            memset(buf->data, 0, pool->size);
++        ret = av_buffer_create(buf->data, pool->size, pool_release_buffer, buf, 0);
++        if (!ret) {
++            /* a carved entry cannot be freed on its own: it goes to the pool, returned */
++            ff_sublet_entry_give(&buf->sublet);
++            buf->data = NULL;
++            buf->next  = pool->pool;
++            pool->pool = buf;
++        }
++        return ret;
++    }
++#endif
++
+     ret = pool->alloc2 ? pool->alloc2(pool->opaque, pool->size) :
+                          pool->alloc(pool->size);
+     if (!ret)
+@@ -395,6 +446,11 @@
+     ff_mutex_lock(&pool->mutex);
+     buf = pool->pool;
+     if (buf) {
++#if FF_SUBLET_POOLS
++        /* a reissue is a take: a new handle, a new alias */
++        if (pool->sublet.entry)
++            buf->data = ff_sublet_entry_take(&buf->sublet, pool->size);
++#endif
+         memset(&buf->buffer, 0, sizeof(buf->buffer));
+         ret = buffer_create(&buf->buffer, buf->data, pool->size,
+                             pool_release_buffer, buf, 0);
+@@ -403,6 +459,13 @@
+             buf->next = NULL;
+             buf->buffer.flags_internal |= BUFFER_FLAG_NO_FREE;
+         }
++#if FF_SUBLET_POOLS
++        else if (pool->sublet.entry) {
++            /* the entry stays in the pool, so it is returned again */
++            ff_sublet_entry_give(&buf->sublet);
++            buf->data = NULL;
++        }
++#endif
+     } else {
+         ret = pool_alloc_buffer(pool);
+     }

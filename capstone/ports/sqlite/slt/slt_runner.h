@@ -43,7 +43,9 @@
  * Measured over the subset: at 4096 values the cap costs 184 of 7,393 hash records
  * (2.5%), and every one of them is rowsort -- no nosort or valuesort record in the
  * subset exceeds it. The native baseline uses the SAME cap by default so that the two
- * sides compare like for like; raise it there to measure what the cap hides. */
+ * sides compare like for like; raise it there to measure what the cap hides. Until
+ * 2026-09-30 this bucket also held every EMPTY valuesort result (31 in select4, recorded
+ * then as 215 skipped): see the guard on the valuesort sort below. */
 #ifndef SLT_MAX_VALUES
 #define SLT_MAX_VALUES 4096u
 #endif
@@ -95,7 +97,8 @@ typedef struct {
   unsigned stmt_pass, stmt_fail;
   unsigned query_pass, query_fail;
   unsigned skip_big;       /* result set exceeded the cap -- NOT a pass       */
-  unsigned oom;            /* SQLITE_NOMEM -- a RESOURCE limit, NOT a mismatch */
+  unsigned oom;            /* SQLITE_NOMEM, or the runner's own allocation failed --
+                              a RESOURCE limit, NOT a mismatch */
   unsigned skip_cond;      /* skipif/onlyif excluded it -- NOT a pass         */
   unsigned parse_err;      /* unrecognised record -- NOT a pass               */
   unsigned reported;
@@ -111,39 +114,49 @@ typedef struct {
 typedef struct {
   char *txt; unsigned tlen, tcap;
   unsigned *off; unsigned n, ocap;
-  int overflow;
+  int overflow;   /* a cap was reached: skip_big */
+  int nomem;      /* the runner's own allocation failed: oom, never skip_big */
 } slt_vals;
+
+/* Every allocation the runner makes for itself goes through this, so a test can make them
+   fail (slt_native.c, check-negative-control.sh) and show that they land in oom. */
+#ifndef SLT_REALLOC
+#define SLT_REALLOC(p, n) sqlite3_realloc64((p), (n))
+#endif
 
 static void slt_vals_init(slt_vals *v) {
   v->txt = 0; v->tlen = 0; v->tcap = 0;
-  v->off = 0; v->n = 0; v->ocap = 0; v->overflow = 0;
+  v->off = 0; v->n = 0; v->ocap = 0; v->overflow = 0; v->nomem = 0;
 }
 static void slt_vals_free(slt_vals *v) {
   if (v->txt) sqlite3_free(v->txt);
   if (v->off) sqlite3_free(v->off);
   slt_vals_init(v);
 }
-/* Appends one NUL-terminated rendered value. Sets `overflow` and stops on any cap or
-   allocation failure, so the caller reports SKIPPED rather than a short comparison. */
+/* Appends one NUL-terminated rendered value. Stops at a cap (`overflow`, reported as
+   skip_big) or at an allocation failure (`nomem`, reported as oom), so the caller never
+   compares a short result. The two are kept apart because they mean different things: a cap
+   is a deliberate limit, a failed allocation is memory running out, and on a host with memory
+   to spare a nonzero oom is itself a finding. */
 static void slt_vals_push(slt_vals *v, const char *s, unsigned max_values) {
   unsigned len = 0;
   while (s[len]) len++;
-  if (v->overflow) return;
+  if (v->overflow || v->nomem) return;
   if (v->n >= max_values || v->tlen + len + 1u > SLT_MAX_VALUE_BYTES) {
     v->overflow = 1; return;
   }
   if (v->n == v->ocap) {
     unsigned nc = v->ocap ? v->ocap * 2u : 64u;
-    unsigned *no = (unsigned *)sqlite3_realloc64(v->off, (sqlite3_uint64)nc * sizeof(unsigned));
-    if (!no) { v->overflow = 1; return; }
+    unsigned *no = (unsigned *)SLT_REALLOC(v->off, (sqlite3_uint64)nc * sizeof(unsigned));
+    if (!no) { v->nomem = 1; return; }
     v->off = no; v->ocap = nc;
   }
   if (v->tlen + len + 1u > v->tcap) {
     unsigned nc = v->tcap ? v->tcap : 1024u;
     char *nt;
     while (nc < v->tlen + len + 1u) nc *= 2u;
-    nt = (char *)sqlite3_realloc64(v->txt, (sqlite3_uint64)nc);
-    if (!nt) { v->overflow = 1; return; }
+    nt = (char *)SLT_REALLOC(v->txt, (sqlite3_uint64)nc);
+    if (!nt) { v->nomem = 1; return; }
     v->txt = nt; v->tcap = nc;
   }
   v->off[v->n++] = v->tlen;
@@ -483,7 +496,7 @@ static unsigned slt_run(const char *input, unsigned long input_len,
 
       slt_vals_init(&v);
       SLT_VDBE_ARM();          /* this query only; see the hook definition above */
-      while ((rc = sqlite3_step(s2)) == SQLITE_ROW && !v.overflow) {
+      while ((rc = sqlite3_step(s2)) == SQLITE_ROW && !v.overflow && !v.nomem) {
         char cell[256];
         for (i = 0; i < ncol; i++) {
           slt_render(cell, (int)sizeof cell, s2, (int)i, types[i]);
@@ -493,6 +506,7 @@ static unsigned slt_run(const char *input, unsigned long input_len,
       SLT_VDBE_DISARM();
       sqlite3_finalize(s2);
 
+      if (v.nomem) { st->oom++; slt_vals_free(&v); continue; }
       if (v.overflow) {                    /* NOT a pass, and counted on its own */
         st->skip_big++;
         slt_vals_free(&v);
@@ -513,27 +527,30 @@ static unsigned slt_run(const char *input, unsigned long input_len,
       /* Sort, per the record's declared mode. */
       if (!strcmp(mode, "rowsort") && ncol && v.n >= ncol) {
         unsigned nrow = v.n / ncol, k;
-        unsigned *idx = (unsigned *)sqlite3_malloc64((sqlite3_uint64)nrow * sizeof(unsigned));
-        if (!idx) { st->skip_big++; slt_vals_free(&v); continue; }
+        unsigned *idx = (unsigned *)SLT_REALLOC(0, (sqlite3_uint64)nrow * sizeof(unsigned));
+        if (!idx) { st->oom++; slt_vals_free(&v); continue; }
         for (k = 0; k < nrow; k++) idx[k] = k;
         slt_heapsort(idx, nrow, &v, ncol, slt_cmp_row);
         /* Rewrite the offset array into sorted order, in place via a second pass. */
-        { unsigned *no = (unsigned *)sqlite3_malloc64((sqlite3_uint64)v.n * sizeof(unsigned));
-          if (!no) { sqlite3_free(idx); st->skip_big++; slt_vals_free(&v); continue; }
+        { unsigned *no = (unsigned *)SLT_REALLOC(0, (sqlite3_uint64)v.n * sizeof(unsigned));
+          if (!no) { sqlite3_free(idx); st->oom++; slt_vals_free(&v); continue; }
           for (k = 0; k < nrow; k++) {
             unsigned c;
             for (c = 0; c < ncol; c++) no[k * ncol + c] = v.off[idx[k] * ncol + c];
           }
           sqlite3_free(v.off); v.off = no; }
         sqlite3_free(idx);
-      } else if (!strcmp(mode, "valuesort")) {
+      } else if (!strcmp(mode, "valuesort") && v.n) {
+        /* An empty result has nothing to sort, as rowsort's guard says above. Without this
+           guard it asked for sqlite3_malloc64(0), which is NULL by definition, and every empty
+           valuesort result was counted as skipped for size instead of being compared. */
         unsigned k;
-        unsigned *idx = (unsigned *)sqlite3_malloc64((sqlite3_uint64)v.n * sizeof(unsigned));
-        if (!idx) { st->skip_big++; slt_vals_free(&v); continue; }
+        unsigned *idx = (unsigned *)SLT_REALLOC(0, (sqlite3_uint64)v.n * sizeof(unsigned));
+        if (!idx) { st->oom++; slt_vals_free(&v); continue; }
         for (k = 0; k < v.n; k++) idx[k] = k;
         slt_heapsort(idx, v.n, &v, 1u, slt_cmp_value);
-        { unsigned *no = (unsigned *)sqlite3_malloc64((sqlite3_uint64)(v.n ? v.n : 1u) * sizeof(unsigned));
-          if (!no) { sqlite3_free(idx); st->skip_big++; slt_vals_free(&v); continue; }
+        { unsigned *no = (unsigned *)SLT_REALLOC(0, (sqlite3_uint64)v.n * sizeof(unsigned));
+          if (!no) { sqlite3_free(idx); st->oom++; slt_vals_free(&v); continue; }
           for (k = 0; k < v.n; k++) no[k] = v.off[idx[k]];
           sqlite3_free(v.off); v.off = no; }
         sqlite3_free(idx);

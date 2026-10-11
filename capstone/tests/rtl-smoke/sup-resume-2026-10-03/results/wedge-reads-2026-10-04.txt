@@ -1,0 +1,20 @@
+# arm12-ldc-q64 (image 07de9fb7af896dd5), bare, caplifive_supcall_36a641e0b, post-run LED-path read (run_sup_bare_wedge.py)
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x0d 00001101
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x80 10000000
+commit pc 0x0000000080000498
+# armdep-d16-q64 (image d09491cd969f2650), bare, caplifive_supcall_36a641e0b, post-run LED-path read (run_sup_bare_wedge.py)
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+commit pc 0x0000000080000774
+# mswapfix-plain-noploop (image ffd6f6db241db2e1), bare, caplifive_supcall_36a641e0b, post-run LED-path read (run_sup_bare_wedge.py)
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x0d 00001101
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x80 10000000
+commit pc 0x0000000080000534
+# armdep-nt-d16-q64 (image 0986d3946ef9abca), bare, caplifive_supcall_36a641e0b, post-run LED-path read (run_sup_bare_wedge.py)
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+commit pc 0x000000008000071c

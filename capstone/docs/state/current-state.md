@@ -1,6 +1,1266 @@
 # Current Capstone state
 
+## 2026-10-10 — `fpga-testing-dev` rebuilt as one linear history (RTL lane)
+
+- capstone-ariane's default branch is now 44 commits above the fork `e1b3db6ba`, one per logical change, tip `5382266b8`;
+  its RTL is byte-identical to `776d9d859` (the current bitstream). Old tip `0bf09b1d6` = tag
+  `backup/fpga-testing-dev-2026-10-10`. Lane branches, the parent's submodule pointer and R-51/R-52's branches are
+  untouched. Method, table of hashes and the carried arms' readings:
+  `docs/history/10-10-2026_08-40-00_fpga-testing-dev-rebuilt-linear.md`.
+
+## 2026-10-08 — mallocng executes locally in virtual Capstone
+
+Branch `virtual-musl-local` replaces the virtual buddy heap with Capstone-compiled
+musl 1.2.5 mallocng. malloc/free and ownership operations execute in the
+application's virtual C context. Actual syscall/VM, node-pressure, fault and
+scheduling paths cross the existing trusted Linux adapter. Upstream allocation
+policy is retained; patch 0009 ports capability representation and lifetime
+hooks. The fixed allocator block/arena arrays are removed.
+
+ABI v5 requires QEMU's opt-in exact physical-shadow bounds profile, pinned at
+`24b1e95b1dac`. This is extra QEMU metadata, not a tag-bit-only or RTL design.
+The default physical processor profile and physical allocator selection retain
+their previous behavior. Linux core and firmware are unchanged.
+
+The [qualification](../../runtime/virtual/results/local-mallocng/README.md)
+records 19/19 allocator, 42/42 runtime, 10/10 pthread, 16/16 other normal-port
+and 73/73 memcached checks, plus 202 processor checks. It includes 200,000
+lifetimes, 70,000 live objects, exact-site spatial/temporal denials and a
+control detecting an inserted allocation-loop service. All eight application
+ports are relinked with the new SDK. The compiler and platform are reused;
+the two long sparse runtime cases and the CPython inner / FFmpeg-tshark safety
+corpora are not requalified here. The memcached fixture-17 setup now searches
+for actual reissue; its original temporal-fault prediction is unchanged.
+
+The withdrawn native-heap branches are not the integration target. Merge the
+node-growth stack, then QEMU [#19](https://github.com/project-starch/capstone-qemu/pull/19),
+then the matching local-mallocng runtime. Rebuild SDK and applications together.
+The [allocator contract](../../runtime/virtual/mallocng.md) explains the
+representation, metadata cost, VM remap transaction and remaining limits.
+
+## 2026-10-07 — growing virtual node tables
+
+The `review/virtual-node-growth` branch builds on `dev` at `08cf07d75ad2`
+and the application build repairs in `review/virtual-build-repairs`. Its QEMU
+pin includes the `b649187a989c` UNINIT diagnostic fix and a paged guest node
+store with a stable physical root,
+unchanged 31-bit IDs and 16-byte records, and chained collection requests.
+The trusted Linux module allocates base pages on demand and reuses IDs only
+after the existing complete stale-tag sweep. The SDK requests node capacity
+before heap allocation. Linux core, firmware, upstream musl and the legacy
+host-tree algorithm are unchanged. Applications should be relinked with the
+new SDK to use proactive growth.
+
+The [node gate](../../runtime/virtual/results/node-growth/nodes.json) passes
+15/15 checks: two rounds of 70,000 simultaneously live structural nodes,
+140,004 reclaimed IDs, stable capacity at 70,656 slots (1,142,784 metadata
+bytes), stale denial, bounded quota failures and teardown. Processor gates
+pass 69/69 virtual-runtime, 60/60 M1 and 69/69 U-access checks. The actual C
+node backend matches the forest model for 8,949 prefixes per binding
+(host, flat guest, paged guest), with 19 directed paging checks and mutation
+controls. The [pthread gate](../../runtime/virtual/results/node-growth/pthreads.json)
+passes 9/9.
+
+The [complete runtime gate](../../runtime/virtual/results/node-growth/runtime.json)
+passes 46/46, including both 200,000-allocation recycling cases, exact-site
+stale denial, spatial checks, SQLite persistence, mruby and Perl smoke. The
+sparse positive case uses 348 KiB of node metadata, reclaims 188,631 IDs and
+leaves unused payload pages unpopulated. All processor and runtime gates use
+the same QEMU executable. See the [qualification manifest](../../runtime/virtual/results/node-growth/qualification.json)
+for hashes, reused compiler/musl/platform inputs and application relink scope.
+The rebase also passes 87/87 native CTest checks under ASan/UBSan. An additional
+physical LINEAR/UNINIT corpus attempt fails at `create_dom` before its probes;
+the cause remains unresolved and physical compatibility is not requalified.
+
+This is one-hart QEMU evidence. The 65,536 allocator block-record limit is
+separate and unchanged. Node capacity is bounded by RAM, an optional module
+quota and the ID field; individual published pages are retained until exit.
+See the [runtime mechanism and reproduction commands](../../runtime/virtual/README.md).
+
+## 2026-10-05 — B0: a gp-captable delegated application runs byte-exact on silicon
+
+- **b0-hello passes on `caplifive_supcall_715bdd1fe.bit`, byte-exact under a `cmp` oracle, N=2** (boots 13 and
+  13b, preflight off for a documented reason).
+  - Four delegated rounds: HELLO, `ioctl` -> -25, `writev` -> 51, `exit_group`.
+  - Identity was verified by hash. fw e411395bde2c embeds Image d5ab7fad, whose initramfs carries b0run.sh
+    cc858ec4, b0-hello.dom cdd82e56, capstone-exec 1dca5b19 and module 0332e2d6.
+- **What runs:**
+  - a full-LTO gp-captable musl application, launched by capstone-exec through the process-ABI module;
+  - stepped by the FPGA monitor's supervised CALL under CSR events;
+  - with no fabricated gp;
+  - with its domain torn down at exit (census `live_domains 0`).
+- **Found on the way, all QEMU-silent:**
+  - **C-76:** capstone-c's `stc` spill of a `__rev` argument, moved to cnull by silicon's STC. It wedged every
+    process-ABI step.
+  - **A delegate-runtime copy loss** in R-29's family, worked around with 8-byte copies; an RTL fix for R-29 and S-10b is
+    FIXED ON SILICON (2026-10-05, caplifive_supcall_776d9d859.bit: b0-memcpy unguarded 94/96 -> 0/96, s06agg 66 -> 64; ISSUES R-29). The first attribution
+    (R-29's stale-refill mechanism) was retracted. The RTL lane then reproduced the actual path in simulation: a
+    granule copy of a plain-store pair still in the write buffer reads the high half as 0.
+  - **M-13:** a monitor-internal trap reads as cause 24 at `_cap_trap_entry`+4.
+  - **The board kernel cannot unload modules**, and a module built out of tree needs `-march=rv64g`.
+- Record: `docs/plans/b0-silicon-delegated-runtime.md`. The module's `vm_flags_set` port is on caplifive-buildroot
+  `capstone-bootstrap` (3f485c4).
+
+## 2026-10-04, evening — the S-16 fix bitstream on silicon: S-16 fixed, the R-43 list unchanged, and the real workload preempts 1,277 times at +0.69 %
+
+- **The resident bitstream is `caplifive_supcall_715bdd1fe.bit`.**
+  - capstone-ariane sup-call 715bdd1fe: R-49, R-50 and the S-17 apertures 219..222.
+  - Flashed 18:41-18:43 on the lead's direct word with `drivers/flash-bitstream.py`. The sha256 matched the sealed
+    hash, and the name was read back after the power cycle.
+  - Set `FPGA_BITSTREAM=caplifive_supcall_715bdd1fe.bit` for every board run. The previous resident,
+    caplifive_supcall_36a641e0b.bit, stays registered on the console.
+- **S-16 is fixed on silicon.** Audited wording and limits are in the S-16 entry in ISSUES and in its folder.
+  - Bare: 14 of 14 previously-hanging arms complete without a fence.
+  - **The FPGA monitor's supervised SQLite speedtest:** the C5u firmware, byte-identical and with no fence, completes
+    1,277 preemptions with the oracle hash at **+0.69 %** over the plain call (quantum 2,000,000). On 36a641e0b it
+    hung after 212. Preemptive supervision of a real workload now works on silicon.
+- **The R-43 acceptance list passes unchanged**, a1..a10 on the same images
+  (`tests/fpga-repros/R43-revocation-cache-false-deny/results/board-715bdd1fe.result-lines.txt`).
+  - Identity readings are exact: instret 17/17, hashes, Sublet counts, a10's trap and refusal record.
+  - Cycles are within noise.
+- **S-17 does not reproduce** (3 of 3), mechanism unknown. The new apertures are armed.
+- **The trap log's 0x83 residue on bare hangs is the JTAG load's debug-module `ebreak`** (mepc 0x35c). It means no
+  trap since the load.
+- **Next:** B0, the delegated hello-world, on this bitstream (branch `b0-silicon-runtime`). It already passes in QEMU
+  with no fabricated gp.
+
+## 2026-10-04 — the app ports' and corpora's last 24 registered cells measured, two retractions, and the ledgers closed
+
+- **What was asked:** audit the defect evidence for memcached/tshark/FFmpeg against the paper, then
+  finalize everything.
+- **The audit's answer: count was never the problem.** 22 upstream corpus cases across the three, **all
+  22 nested-allocator**, now **22/22 with a measured capability arm**; plus 59 app-port fixtures carrying
+  24 measured nested-discriminating cells. Only **1 of 22** is live at the pin, which matches the paper's
+  own wording ("previously fixed bugs"). The gap was **printed numbers without backing runs** — see
+  `/tmp/capstone/2026-10-04-paper-defect-evidence-audit.md` (not committed; the paper is the lead's).
+- **Measured, all as pre-registered** (predictions committed before every run):
+  - **FFmpeg pool corpus, fixtures 40-47, both app-port arms: 16/16 cells.**
+    `ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/`. `poolsublet` faults cause 24 at
+    `case.c:85 / :48 / :33 / :104`, each with non-zero `value_hi`; `poolstock` completes every defect
+    with DEFECT-REPRODUCED. **Case 3's `sublet-port` arm was the last unmeasured arm of the 22.**
+  - **FFmpeg case 3's component-port pair, probe slot 39: 2/2.**
+    `ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/`.
+  - **tshark `chunks` fixtures 2-9: 9/9** (fixture 1 as the in-boot control).
+    `ports/wireshark/app/results/20261004-qemu-chunks-2-9/`. Read as a consistency check: these are
+    plain-heap probes on a nested arm, not new nested evidence.
+  - **memcached corpus, 5 cases × spatial/sublet: 10/10, plus the suite-wide negative control** (exit 0 =
+    every oracle fired). `ports/memcached/allocators/results/20261004-qemu-corpus-defects/` — the
+    corpus's first committed bundle; it gitignores its own `results/` by policy.
+  - **ASan blindness to pooled reuse, 4 arms**, with upstream's own `e6255fb822` as the positive control
+    and arm C showing the `free_entry_cb` gate leaves the MPVPicture pool uncovered even on master.
+    `bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-asan-pool-blindness/`.
+- **New instrument: `ports/common/application/run-fixtures-9p.py`.** `capstone-vm` is the app ports' only
+  runner and needs ssh; no riscv64 dropbear exists here to give it. This stages images and the pinned
+  launcher/module over 9p, issues **the same guest command `capstone-vm` issues**, merges the launcher's
+  fault record into the result as `capstone-vm`'s host side does, and judges with the **committed**
+  oracles (`check-safety.py`'s `classify()`/`matches()`, or an external `--verdict` script). Negative-
+  tested: forced against a wrong row it reports DIFFERS and exits 1.
+- **TWO RETRACTIONS, both mine, both from generalising a partial enumeration:**
+  1. *"The app SDK gate refuses every toolchain on this host"* (`5208789e4b9e`). It does not: the
+     `llvm-capstone-cc` worktree's `build-release`, commit `7d01722aab88`, passes it end to end, and all
+     16 FFmpeg app images were built through the gate with it. I had globbed `*/llvm/cmake-build-*`;
+     `ffmpeg-live-defect-triage.md:281-284` already named the qualified compiler.
+  2. *"No replacement harness exists"* (`dedab28c4a2c`). One existed on disk and had run app-SDK
+     fixtures the previous day; the sibling bundle said so outright. Propagated into the four files that
+     still carried the first claim (`49c4903ca277`).
+  Rule captured as the `blocked-is-an-enumeration-claim` memory.
+- **Also corrected:** `dedab28c4a2c`'s `g_refpool` caveat named the **wrong bundles** — the affected one
+  is `bug-corpora/ffmpeg/pool-repros/results/20260929-qemu-sublet-port/`, which now carries it in-tree
+  rather than only in a commit message; and that port bundle's claim that the oracle's FAULT branch is
+  "structurally unreachable" (it is reachable — the host merges the fault record).
+- **Still open, deliberately:**
+  - **PostgreSQL's 8 spatial/sublet cells.** The paper prints Sublet catching 8 of 8 while all 8
+    `case.json` say the arm has **not** been run. Highest-value single measurement for the paper; out of
+    scope by the lead's decision (report only).
+  - **`INDEX.md` / `index.json` are stale on `dev`** from the board lane's fpga-repros and ISSUES
+    additions. Only this lane's own lines were applied; the lead asked that the two lanes squash and
+    merge one consolidated regeneration.
+  - PoisonCap and CheriBSD for memcached and FFmpeg: that platform is absent from this host.
+
+## 2026-10-04 — Supervised CALL under the FPGA monitor on silicon: a real workload preempts and resumes hundreds of times, then hits S-16 (localised, mechanism traced, an RTL fix needed); S-17 found beside it
+
+- **The FPGA monitor runs supervised CALL on silicon.**
+  - Where it lives: capstone-sbi `monitor/supcall-fpga`, behind the opt-in `CAPSTONE_SUPERVISOR_CSR_EVENTS`.
+  - The C5 boot hang was the monitor's 21.5 KiB of globals carved from an 8 KiB FPGA `dom_stack`. It is fixed in the
+    wrapper and gated in `build-fpga-fw.sh`.
+  - The merged monitor with supervision compiled out passed C3.
+  - Folder: `tests/rtl-smoke/supmon-2026-10-03/`.
+- **Silicon supervision forbids every M-level CSR inside a domain, by design.**
+  - The legacy my_first_domain-family glue saves and restores mcause/mtval, and every cycle bracket reads mcycle.
+  - `sup-static-audit.py` finds every such instruction (controls both ways).
+  - `patch-sup-glue.py` replaces exactly those words. The patched speedtest gives the oracle on a plain call at
+    -0.04 % cycles.
+  - The musl glue is clean.
+- **The real workload under supervision.**
+  - The SQLite speedtest resumed 212 times (C5u), then the switch hung.
+  - With a fence before every domcall, it resumed 552 times (C5f), then hung again, on the escape side.
+- **S-16 (`tests/fpga-repros/S16-supervised-switch-never-finishes/`).** A domain switch that starts while the
+  store buffer's commit queue is full never finishes.
+  - The switcher's walk-idx-7 write is never acknowledged; commit count 4, WAIT_STORE_READY.
+  - Reproduced bare within 16 resumes.
+  - 12 stores before the CALL complete; 18 and 24 hang.
+  - The RTL lane's simulation matches every silicon read: the store unit acknowledges the switcher's write on the
+    previous store's queue ready, so the write is pushed over the full commit queue's head. **The oldest committed
+    store is lost**, and the 4th later write starves.
+  - **Every switch kind is exposed (bare, 2026-10-04, the RTL lane's `sup-s16-stores.S`).**
+    - The armed CALL, a supervised RETURN right after a domain store, and an escape hang at walk idx 7.
+    - A PLAIN CALL hangs too, at idx 4, its exchange write.
+  - **A fence before the CALL covers only that CALL's own switch.** The RETURN and escape arms hang with it.
+  - **A fence before every CALL AND every RETURN completed all four twins that hung**, so runs without quantum
+    preemption have a software workaround.
+  - A quantum escape lands wherever the domain is. C5f's hang was on the escape side, and so is bare
+    `s16st-esc-n8-retfence`. **Preemptive supervision on this bitstream needs the RTL fix**; that lane has one
+    passing in simulation.
+  - **Withdrawn:** the memcached plan's "unsupervised contexts do not depend on S-16".
+- **About 22,000 bare supervised resumes without the swap sequence never hung.**
+- **S-17 (`tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`).**
+  - After a finished switch, an LDC right behind `ccsrrw sp <- cscratch` leaves the LSU not ready. A scalar `ld` there
+    completes 8,552 escapes.
+  - A plain CALL is affected too.
+  - The simulation hangs at the same LDC in a different state; open.
+- **Instrument added:** the bare runner `sup-resume-2026-10-03/run_sup_bare_wedge.py` reads the switcher and LSU
+  apertures (192-195, 224-229, 238-240) after a hang. The commit-pc aperture during a stuck switch is stale scoreboard
+  slot 0, shown by a positive control.
+- **Corrections along the way, recorded in the lane PREREGs:**
+  - the k800 entry path;
+  - "the hot loop never misses";
+  - "MSWAP is void" (my x26/s10 register clash);
+  - the S-17 prediction ldsync = 1;
+  - the C5f prediction "all supervised runs complete".
+- **Still open:**
+  - the RTL fix for S-16 and its bitstream. A reflash is the lead's call.
+  - S-17 on silicon.
+  - Supervised contexts on silicon (memcached Part 4b) stand behind S-16.
+
+## 2026-10-03 — Atomics through a capability address work on silicon: the first memcached prerequisite
+
+- **The question.** memcached.dom links 171 atomics: 80 `lr.w`, 80 `sc.w` (musl's `a_cas`), 9 `amoadd`, 2 `amoswap`. No
+  image proven on silicon contained any, and no RTL directed test ran one through a capability in capability mode.
+- **The test.** `tests/rtl-smoke/cap-atomics-2026-10-03/`, bare on `caplifive_supcall_36a641e0b.bit`, pre-registered
+  and pushed before the boot (49d7f98067c3). It has 22 architectural readings.
+- **PASS, all 22 exact**, cited by image hash:
+  - the control, call-retpc a05ca464, exact (N = 4 on this bitstream);
+  - amoadd/amoswap .d/.w, including the 32-bit wrap;
+  - lr/sc .w/.d success;
+  - SC failure with no reservation and on another granule;
+  - a musl `a_cas` loop in one attempt.
+- **Not covered:**
+  - AMO bounds or permission enforcement;
+  - the I4 tag residual (an AMO over a capability granule keeps its tag; the RTL lane's
+    `s06sec-amo-no-resurrect.S`);
+  - multi-hart contention.
+
+## 2026-10-04 — S-16 root-caused: the switcher's first SAVE write pushed into a FULL store-buffer commit queue; fixed in RTL with a second switch-path defect (R-49, R-50); the resident bitstream needs a `fence` before every CALL and every RETURN, and preemption needs the reflash
+
+- **The resume hang under the FPGA monitor (C5u/C5q, the board lane's S-16) is a store-path defect, not the adapter.**
+  The store unit acknowledges a switcher write on the room of the PREVIOUS store's queue, so with four committed
+  stores still queued the write lands over the commit queue's head: one committed store is lost and the queue
+  deadlocks four writes later, at walk id 7. The board lane's wedge reads (idx 7, WAIT_STORE_READY, commit count 4,
+  the write request valid and unacknowledged) and the simulation reproducer `sup-s16-stores.S` (N = 32 stores before
+  an armed CALL, memory delay 12 and 40) agree on every aperture. Fixed on capstone-ariane `sup-call` 192a5e624
+  (registry R-49). **Workaround on the resident bitstream** (the board lane, bare on silicon, narrowed 2026-10-04):
+  - A `fence` before every CALL covers that CALL's own switch only.
+  - A fence before every RETURN as well completed every non-preemptive twin that hung.
+  - A quantum escape stays exposed. See the S-16 entry above.
+- **A second defect, found on the way (R-50, 429c60b32):** the load unit's dom-switch flush exemption outlives the
+  switcher's read, so the first LDC after an escape, when dispatched in the swap-in CCSRRW's flush cycle, runs
+  un-killed and its stale completion pops the re-issued LDC unexecuted; the DYN unit waits forever. Deterministic in
+  `sup-mswap-noploop` on the resident logic; fixed by adding the entry's valid bit to the exemption. Not the silicon
+  S-17 (different aperture signature; S-17 stays open).
+- **Synthesized and sealed (2026-10-04 evening, the synth lane):** `sup-call` 715bdd1fe (the two fixes plus the
+  S-17/S-16 LED apertures 219..222) -- route clean in ~21 min, LUTLP-1 0, WNS −9.949 in band, one TIMING-23 loop
+  (arc relocated within the same cluster), census unchanged; TNS +49% with the LED apertures carrying the worst-path
+  shift (0.36 ns from WNS) but not the endpoint growth. Bitstream sha256
+  a7add4c019d3067627ba984634e96de564f023bcec50e2c29fd0f668c0a81311. The board lane's acceptance batch (17 bare images
+  plus the monitor without the fence) is staged; the reflash is the lead's word. Details in the plan's step-11 result.
+- **Verification so far:** matched pairs for both fixes; `sup-mswap-noploop/base/postread` 78 switches on the fixed
+  tree; lint gate at the committed baseline; 95-test sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep. Sim-only tracers (every retirement, write-back,
+  LSU queue event, load/store-unit transition, the switcher's busy edges, and the board's apertures emulated every
+  4000 cycles) in b576635be/d92093828. **Next:** the synthesis candidate is `sup-call` HEAD; synthesis and the
+  reflash are the lead's word; then the board's S-16 arms (armdep-nt, s16sd24) must complete without the fence, and
+  the FPGA monitor's supervised speedtest runs again.
+
+## 2026-10-03 — Supervised-CALL ladder complete on silicon: 12 images exact to simulation, the real timer escape, S-11's refusal; N = 3 on the key tests
+
+- **The rest of the RTL lane's ladder ran bare on the board** (`caplifive_supcall_36a641e0b.bit`), one session per image,
+  pre-registered and pushed before the boot (`tests/rtl-smoke/sup-bare-2026-10-03-ladder/`, 73093f0bd558).
+  - **Equal to simulation, every reading:** fullswitch (the 67-slot full exchange), arm, armclose, guards (84/84), and
+    all seven S-11 arms. Below 1024 B or off 16-byte alignment the seal is refused with cause 29; at 1024/2048 B
+    aligned it seals with every canary intact.
+  - **sup-mtip:** the real CLINT timer interrupt escapes a supervised domain (kind 1, cause 7) twice, with MTIP still
+    pending in the monitor, and the quantum escape follows. Exact except the reference spin count, a board timing
+    quantity (122 against simulation's 243).
+  - **sup-strip x5:** exploratory. It completes within its invariants. Its in-switch detector exists only in
+    simulation.
+  - **Repeats:** sup-escape v2, sup-quantum v2 (q16, q64) and call-retpc now stand at N = 3, identical every time;
+    74 preemptions at both quanta.
+- **Still open on silicon:**
+  - sup-hostile (it needs a register-preserving recorder);
+  - anything through the OpenSBI monitor or Linux. Next: the FPGA monitor's supervised_invoke, in the board lane.
+
+## 2026-10-03 — upstream memory defects for the three app ports: 4 measured on the arms, 18/18 cells as pre-registered, 3 retractions
+
+- **What was asked:** find memory defects (plain `malloc` **and** nested allocators) for memcached,
+  tshark and FFmpeg on the upstream trackers, run them through the emulator, check they are caught.
+- **Measured, all exactly as pre-registered** (predictions pushed before every build):
+  - **tshark** fixtures 14/15 — ZigBee ZCL Touchlink (CVE-2026-95391) and http2 `GRegex` — on
+    `level0`/`shrink`/`sublet`/`chunks`: **8/8 cells**. `ports/wireshark/app/results/2026-10-03-qemu-upstream-live-defects/`.
+  - **memcached** fixtures 17/18 — `204019d` realloc cursor and `e779381` logger write-after-free — on
+    all five arms: **10/10 cells**. `ports/memcached/app/results/2026-10-03-qemu-plain-heap-contrast/`.
+- **The memcached pair is the one that changes an argument.** Fixtures 12–16 end their objects inside
+  memcached's own allocators, so the runtime's `free` is never called and `sublet` is registered as the
+  negative control that must RETURN — that silence is the nested-allocator blindness claim. 17/18 end
+  theirs with the platform's `free`/`realloc`, and `sublet` faults. Same heap, same runtime, opposite
+  outcome: the variable is **where the lifetime ends**, which makes 12–16's silence attributable.
+- **Three retractions, all surfaced and recorded:**
+  1. **`ops_dispatch` (FFmpeg fixture 25) is NOT live at our pin** — backported as `716d2a47c5`. The
+     retracted method was *"Ancestry decides; the pinned tree proves"*: ancestry is insufficient for
+     cherry-picking release tags, and the "proof" was a grep for a line *shape* that matched a site
+     where the object is never freed. Replacement test, with both controls:
+     `git log <tag> --grep='cherry picked from commit <sha>'` plus reading the enclosing function.
+  2. **Neither tshark defect is reachable in the port's own binary** — http2's block is inside
+     `#ifdef HAVE_NGHTTP2` which the port undefines (and it is preference-gated upstream), and the
+     zbee dissector is not linked (0 symbols against 353). They are live in the **v4.6.8 source**;
+     "live in the version we compile" and the triage doc's "reachable and not latent" are withdrawn.
+  3. **Three attribution/control overstatements in the tshark bundle**: the load base was given as
+     `pc − symbol` (`0xa01f0014`) and is `0xa01f0000`; a symbol-delta argument was **vacuous** (an
+     algebraic identity); and "both controls fired in every boot" was false — fixture 5 ran in none of
+     the four decisive FAULT boots.
+- **Search yield, honestly:** Wireshark `v4.6.8..origin/master` is **4321** commits (I had searched 82
+  on the release branch) → 24 lifetime-worded → 5 live in source → **1** new usable. FFmpeg: all 10
+  remaining candidates read, **none usable**; its nested column is empty because the only nested-class
+  commit was backported, and the four "HW data freed early" pool commits are destruction-ordering on a
+  **VkSemaphore**, not pool storage. memcached: **0** fixed-upstream-after-the-pin, now verified
+  two-sided (`origin/next`, which memcached actually develops on, is one unrelated commit ahead).
+- **Instrument lesson worth carrying:** a lifetime-vocabulary grep over memcached's history returns 13
+  commits and is **not** a superset of the 9 the subsystem search found — intersection 2, and three of
+  the five built corpus cases would never have been found by wording. Treat such a filter as a sampler.
+- **Still open:** memcached's nested column needs port work (`--disable-proxy --disable-extstore`
+  everywhere, page mover not hooked); no native/ASan arm for the four new fixtures; the "revocation on
+  free" mechanism is inferred rather than counted in the faulting runs, and the missing control is named
+  in the tshark bundle.
+
+## 2026-10-02 — Supervised CALL RUNS ON SILICON: quantum preemption with exactly-once resume, and fault-event delivery (bare M-mode, one run each)
+
+- **The RTL lane's directed tests ran on the board** (`caplifive_supcall_36a641e0b.bit`), bare M-mode, JTAG-loaded at
+  `0x80000000` with no OpenSBI. The tests are byte-identical to capstone-ariane `36a641e0b`; only a harness header
+  differs. All three board reading vectors are **bit-identical to the RTL lane's simulation of the same tree**
+  (113/113, 67/67, 8/8):
+  - `sup-quantum`: 53 quantum preemptions, each resumed. The domain's 400 instructions net to **exactly 400**. The
+    domain's x1, the monitor's resume count and its mie survived, and no trap was taken.
+  - `sup-escape`: ecall, illegal, `csrw mepc` (CSR gate), `mret` (decoder guard) and a misaligned load each deliver a
+    fault EVENT to the monitor with the right cause, epc and tval. The seal comes back SEALED.
+    - It does NOT show the trap stripped: the no-strip mutant reads the same 67 values, because mepc, mcause and
+      mstatus are walked. **Settled by the v2 tests** (capstone-ariane 7564c0945, repaired by the RTL lane;
+      `tests/rtl-smoke/sup-bare-2026-10-02-v2/`, pre-registration committed before the boot): sup-escape v2 reads
+      the domain's saved mcause slot as 0 in all five arms, and equals simulation 72/72. **The trap is stripped on
+      silicon.** sup-quantum v2 (an acc := acc*7 + i ladder) is exact at both quanta. At q16 it equals simulation
+      155/155. At q64 the board took 74 preemptions against simulation's 73: a pre-registration miss on a timing
+      count, with every correctness reading exact.
+  - `call-retpc`: correct values. This is not a demonstration of R-47 fixed on silicon, because the board's timing
+    was not shown to create the trigger.
+  Folder: `tests/rtl-smoke/sup-bare-2026-10-02/` (self-contained harness, images, pre-registration, audited result
+  lines).
+- **These two tests discriminate** against any bitstream without the extension, where `cssupervise` and the event
+  CSRs do not exist. This is the first silicon evidence for the mechanism the delegated runtime needs.
+- **Not yet on silicon:**
+  - repeatability (one run each);
+  - the MTIP escape, the guards, the hostile domain, and S-11's refusal;
+  - anything through the OpenSBI monitor or Linux.
+  The delegated runtime on silicon still needs the runtime lane's FPGA monitor, built to the plan's contract.
+- **Instrument:** the runner's GDB halt fallback does not work on this board (`dmstatus` allrunning; the halt is not
+  honoured). The UART report is the only channel.
+
+## 2026-10-01 — Supervised CALL implemented in RTL (capstone-ariane `sup-call`), verified through step 7 in simulation; R-47 found and fixed; S-11 amended
+
+- **The supervised-CALL platform extension** (the primitive the delegated application runtime needs on silicon)
+  is implemented on `capstone-ariane` branch `sup-call` per `docs/plans/supervised-call-silicon.md` (revisions 1.1
+  and 1.2): `cssupervise`, the escape at commit, the SAVE/RESTORE walks around the existing 8-register exchange,
+  the quantum, the guards, the event CSRs (csupquantum 0x7C3, csupctl 0x7C4, csupstatus..csnodefree 0xFC0..0xFC4).
+  Steps 2-7 of the ladder read as pre-registered in simulation (five synchronous faults, exactly-once resume
+  under two quanta, a real timer interrupt escaping the domain twice, all ten guards, a hostile domain and a
+  foreign RETURN), with ten mutant positive controls, an adversarial after-audit whose four findings are fixed
+  with discriminating arms, and the 92-test neutrality sweep on the committed tree (91 identical, `revocation`'s
+  phantom mid-switch traps gone). Lint at baseline. Commits: d38887426, 1dbf379b1, 727ea6e93, 03b70667e on
+  `sup-call`, pushed, not landed on the submodule's shared branch. **Not synthesized, not on silicon**: synthesis
+  is the lead's call; the FPGA monitor build (`supervised_invoke` with the CSR-based events, csupctl.resume
+  before a resume, interrupts masked between cssupervise and CALL) is the runtime lane's.
+- **R-47 (new, fixed on `sup-call`, OPEN on every bitstream):** CALL parks the wrong return pc when a jump or
+  branch reaches issue before the dyn unit responds -- the caller resumes past that instruction, or
+  mid-instruction after a compressed one. Nothing resident is hit only because the monitor's and the runtime's
+  CALLs are followed by an `ldc` that holds issue. Registry entry on dev.
+- **S-11 amended on dev** (the Anvil relational-precedence fold, read from the compiler's own grammar): QEMU now
+  raises on an undersized SEAL (since 2026-09-26, minimum 528 B); the switcher's instance of the fold is fixed
+  on `sup-call` and the full-mode slot map measured; a 64-byte seal makes the switch write 24 bytes past the
+  capability's end (measured); `cssupervise` CANNOT check a seal's size (a SEALED capability carries no end
+  bound in a register), so the 1 KiB minimum is SEAL's alone -- the resident monitor's 1536-byte seals are the
+  guarantee until S-11 is fixed. A deterministic lint for the fold is on `sup-call`.
+- **Two more decisions on the lead's delegation, same bitstream, audited:** a CALL of another seal while armed
+  fails closed (trap, the arm persists across the trap and across every exception on a CALL head, as QEMU; one
+  predicate for the block and the trap, debug mode included); S-11 is fixed in RTL at 1024 B / 16-B aligned with
+  R-32's off-by-one corrected AND the sealed cursor set to the region's start -- the audit showed a SEALED
+  capability's base IS its cursor, so the size check alone bounded nothing (every known sealer complies; QEMU's
+  528 should be raised). Both tested with mutant controls; sweep4 on the final tree 91/92 identical to the unmodified RTL (revocation -3 phantom traps, as before) and 92/92 identical to the tree before the audit's changes. RETRACTED
+  with it: "a SEALED capability reads back untagged after STC/LDC in simulation" and "status 1 is unreachable" --
+  `sup-arm.S` had overwritten the seal with an integer before the store; repaired, the seal survives the round
+  trip and the dead-node status (1) is measured.
+- **Supervised CALL synthesized (2026-10-02):** `sup-call` 36a641e0b sealed by the synth lane, exit 0; routed loop arc
+  identical to the resident's, LUTLP-1 = 0, WNS -8.189 in band, FF +1,090 explained row by row, two ORDER-like
+  pre-registration misses with mechanisms (plan, step-9 result). Bitstream sha256 016219b2..., NOT flashed.
+- **Supervised CALL confirmed on silicon (2026-10-03, the board lane):** the whole plan ladder except the hostile domain
+  ran bare on the resident bitstream exact to simulation -- full switch, arm, the fail-closed arm, guards, all seven
+  seal-size arms (S-11 fixed on silicon), MTIP, strip x5, N=3 repeats of escape/quantum/call-retpc; folder
+  `tests/rtl-smoke/sup-bare-2026-10-03-ladder/`, plan step-10 result. Next: the FPGA monitor's `supervised_invoke`
+  against the plan's CSR contract (the board lane), then the first `capstone-exec` program.
+- **Resident bitstream: `caplifive_supcall_36a641e0b.bit`** (sha256 016219b2...5d045), flashed 2026-10-02 15:55 by the
+  board lane on the lead's direct confirmation, name read back after the power cycle; the previous resident was
+  `caplifive_r43_8f6a0af.bit` (the name the console reports). **ACCEPTED 2026-10-02 16:12-18:05: the R-43
+  acceptance list a1..a10 reads as pre-registered on every row, on the same images as 2026-09-29**
+  (`tests/fpga-repros/R43-revocation-cache-false-deny/results/board-36a641e0b.result-lines.txt`; audited, every number
+  re-derived from the primary logs). Highlights:
+  - live512 sums 17408 (R-43 holds), and P1 cell 6 completes with 112006 38bb59fd and the exact Sublet counts;
+  - the R-35 probe still traps 25 at +0x4354 with the refusal record LATCHED, id 95, probe-DEAD;
+  - the capability ladder's instret is identical on 17/17 rungs, and P1 moves -0.01..-0.05 %.
+  **Identity shown by behaviour, not only by the console label:** a one-instruction domain reading csnodefree (CSR
+  0xFC4, which exists only in 36a641e0b; on 8f6a0af98 the read is an illegal instruction) RETURNED 0xFFCD, inside the
+  pre-registered range. That is the first silicon execution of the census CSR. **Read the acceptance as "no observable
+  change on these ten workloads", NOT "inert until cssupervise"** (that wording was retracted before this landed).
+  Several changes run without cssupervise, every boot:
+  - commit drops exceptions while any domain switch is busy;
+  - every CALL parks its pc per R-47;
+  - every SEAL applies S-11's size/alignment check and sets cursor := start; the monitor's seals passed.
+  The supervised path itself, and any input that would trip S-11 or R-47, have not run on silicon. Set
+  `FPGA_BITSTREAM=caplifive_supcall_36a641e0b.bit` for every board run. Every Part A bundle so far (M1 v2, S1,
+  repro322) was measured on 8f6a0af98, before this flash.
+
 Minimal snapshot. Read first in every session.
+
+## 2026-09-29 — delegated signals
+
+On `delegation-signals`, synchronous delivery passes the 26-mode
+[signal contract](../../runtime/tests/application/results/20260929-signal-contract.json)
+and 25 native tests. The same launcher passes the application gate, six binfmt
+cases and Perl `t/base` (9 files, 493 assertions). The contract covers
+positive-PID waits, realtime queue capacity and payloads, jumps out of
+handlers, `sigtimedwait` output and inherited signal state. Asynchronous
+delivery into a computing domain remains the later bell; the other named
+deviations are in [the signal plan](../plans/delegation-signals.md).
+
+## 2026-09-29 — application ports require delegation
+
+The `delegation-ports` branch migrates all
+seven application recipes to the shared ABI-v2 SDK: Perl, mruby, CPython,
+PostgreSQL single-user, SQLite in-memory SQL, the configured FFmpeg decoder
+and offline tshark. The launcher rejects v1 images with exit 126. Private
+application entry points, HostCall launchers, argument side files and the
+PostgreSQL fake-root/named-input patches are removed. Standalone allocator
+and instruction probes are separate targets, not application compatibility.
+
+[Migration instructions and qualification](../../ports/common/application/README.md)
+link the [checked result lines](../../ports/common/application/results/20260929-delegation.json).
+New runs pass 108 mixed starts, six shell/exec checks, Perl 9/9 files with
+493 assertions, both mruby regular suites, and the selected native-matched
+workloads for the other ports. FFmpeg/tshark safety is 41/41. libc-test is
+46 PASS, 4 FAIL, 4 FAULT, 3 NOBUILD, 20 EXCLUDED; all 45 earlier passes remain.
+Two newly buildable TLS tests reach unsupported thread creation and fault.
+
+The qualified compiler is `compiler/sroa-keep-capability-whole` at
+`7d01722aab88`, not the compiler sources on the delegation-only branch.
+The mixed matrix uses 1024 MiB CMA and 768 MiB retained process storage.
+Protected PostgreSQL passes at 262,144 nodes (84,193 high water), after
+exhausting 65,536. The larger protected mruby GC stress exhausts both
+capacities; only its smaller smoke is qualified. FFmpeg uses the measured
+`-O1 -fno-omit-frame-pointer` workaround for C-70. Dynamic memory grants,
+asynchronous signal handlers and general threads remain outstanding.
+Historical memory/performance archives retain their original images and ABI.
+
+dev (through `2909060e`) is merged in. Its two HostCall-era arms are ported to
+v2 rather than kept as a second transport, and pass as registered from the
+merge tree: the FFmpeg pool corpus on the Sublet port (36/36, three rounds of
+both arms) and tshark's wmem `chunks` arm with its `sublet` control (safety
+13/13 each, all stages and capture verdicts). [Result lines](../../ports/common/application/results/20260929-dev-merge.json).
+
+## 2026-09-29 (evening) — R-43 FIXED ON SILICON: the replay design `8f6a0af98` is flashed and accepted a1..a10
+
+**Resident bitstream is `caplifive_r43_8f6a0af98.bit`** (RTL `8f6a0af98` = R-42 + R-43 second fix + R-45; sha256
+`61443441…5345`), flashed on the lead's word, name read back from the console. Every arm that trapped cause 25 on R-42
+now completes with its oracle: the R1 warm and cold harnesses, live128/512 (4352 / 17408), and **P1 cell 6 `-O2`**
+(112006 38bb59fd, 25,010 lookasides). The ladder and P1 cell 5 are unchanged within noise; the R-35 probe still traps
+25 at `+0x4354` and the new refusal record reads the boot's first cause-25 verdict as the probe path (arm 0100: not live — dead
+or a stale generation), not deny-on-miss, id 0x5f on two boots (fresh on the second); that it is the stale access's own verdict
+is consistent with the trap but not proven (the record is first-since-reset; the aed492ab control is a different fixture).
+Synthesis: loops the same as R-42, ORDER 0/500, WNS −9.595 (inside the null of −10.615). Simulation: the 8-variant batch
+as predicted, the 92-test sweep 0 differences, lint at baseline. The after-audit refuted four documented properties
+(recorded, none a defect); the `noclear` control was vacuous and is replaced by arm 6b (`capstone-ariane 5aa316e0d`).
+Open and NOT in this bitstream: R-44 (CPMP adopt), R-46 (refetch metadata, accepted), M-1's RTL half, and a
+timeout-DEAD residual of R-43 (fail-closed, wedged-rev-node-only). One N=1 note: the cold revoke ramp reads 2–7 %
+lower mid-range with a candidate mechanism (probe reads pre-warm the D-cache). Report:
+`tests/fpga-repros/R43-revocation-cache-false-deny/` (results/board-8f6a0af98.result-lines.txt); R-12's reclaimer
+now has its own folder (`R12-revnode-exhaustion-reclaimer/`).
+
+## 2026-09-29 (later) — R-43's first fix is REFUTED BY SYNTHESIS; R-45 is not implicated; redesign next
+
+`0f5185a6d` routed at WNS −24.495, against R-42's −10.615. All of the worst 500 paths run from the revocation
+lookup into the load/store request (R-42: 0 of 500). The combinational stall gate is the cause, even though
+the fix is correct in simulation. Not flashed; the board stays on R-42. The redesign must never gate the
+load request: replay the missed access through the existing registered exception path instead. Result
+lines: `tests/fpga-repros/R43-revocation-cache-false-deny/results/synth-0f5185a6d.result-lines.txt`. An
+early "3 new loops" reading was withdrawn: they are the same loop families, cut differently.
+
+## 2026-09-29 — delegated runtime review
+
+The `delegation-spawn` stack has reviewed syscall marshalling and process
+lifetime fixes, with [checked native and guest evidence](../../runtime/tests/application/results/20260929-delegation-review.json).
+Twenty-one ASan/UBSan native tests and 19 Python tests pass; the v1 application
+gate passes 108 starts, and fresh v2 libc-test has 45/77 PASS. Output tails,
+command pointers, vector offsets, private descriptors, spawn inheritance,
+wait/kill confinement and exec continuation are covered. Fault symbolization
+checks the sealed image SHA-256. See [applications](../../runtime/applications.md#review-verification-2026-09-29).
+The follow-up [binfmt qualification](../../runtime/tests/application/results/20260929-delegation-binfmt.json)
+passes Perl `t/base` 9/9 (493 assertions), direct shell execution with original
+argv[0], 108 application starts, and the same 45 libc-test passes. Buildroot
+`227fdfa` enables the QEMU kernel option; the VM setup mounts and registers the
+format with literal magic escapes. Complete process-group behavior, memory and
+signal delivery remain open. The 88-byte entry is not an io_uring SQE,
+and the historical rdtime sample is not an icount/cycle result.
+
+## 2026-09-29 — R-43 and R-45 fixed in RTL (capstone-ariane `r43-query-on-miss`, `0f5185a6d`); synthesis next
+
+- **R-43:** R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live, which
+  killed both R1 harness runs on the resident `caplifive_r42_6cbdaeeb4.bit`.
+  - Fix `bbd4d1478`: on a miss, probe the rev-node unit and resolve from the existing read tap.
+- **R-45:** a load/store right after REVOKE/DROP could be checked before the revocation took effect. It
+  predates R-43, which extended it.
+  - Fix `0f5185a6d`: flush younger instructions when a REVOKE/DROP commits (the lead chose to close it in
+    this bitstream).
+- **R-46** (filed, accepted for this bitstream by the lead): a commit refetch keeps the PC-capability
+  metadata. Harmless with one code capability per domain.
+- **Evidence:** verified in RTL simulation with seven deliberately broken builds, each failing as
+  predicted; R-35's fixture unchanged; 92-test sweep neutral; lint gate PASS. Details in
+  `tests/fpga-repros/R43-revocation-cache-false-deny/`.
+- **Not yet synthesized or on silicon.** Resident: `caplifive_r42_6cbdaeeb4.bit`, which has R-43.
+
+## Review baseline (2026-09-28)
+
+The runtime and application study are organized into dependency-ordered review
+branches: `domain-process-runtime`, `application-runtime-capacity`,
+`application-memory-tooling`, `application-nested-ports`,
+`perl-cheribsd-interpreter`, and `application-memory-results`. **All six are on
+dev as of 2026-09-28** — #108, #110, #111, #113 and #114 merged, and #112's
+content through merge commit `9881dc4781c8`, which GitHub records as closed
+rather than merged because its branch advanced afterwards.
+The runtime capacity branch also requires QEMU's `runtime-node-reuse` follow-up.
+The squashed runtime tree and reconstructed study tree match their measured
+predecessors exactly; only this review-status documentation changes afterward.
+Original development commits remain available for measurement provenance.
+
+The verified measurement baseline is five complete four-arm inner-reuse
+comparisons. Perl's CheriBSD interpreter smoke passes, but its inner lifetime
+adapters remain the next implementation milestone. Review publication supersedes
+the older instructions below to keep the study off a PR; it does not mark the
+broader memory study complete or add new guest measurements.
+
+## 2026-09-28 — CPython four-arm reuse and CheriBSD Perl bootstrap
+
+The [CPython archive](../../experiments/study/results/cpython-reuse-four-arm-20260928/README.md)
+validates 12/12 complete-interpreter JSON/GC processes, three per arm: six new
+CheriBSD runs and six archived Capstone runs. Both new CheriBSD modes enable
+outer libc revocation and use one fresh `-O1` binary and repaired kernel.
+A VM-object probe avoids recursive user faults under the revoker's VM-map lock;
+unsupported probes fail explicitly. The resident/PROT_NONE/zero-fill regression
+passes. General swap-pressure and concurrent-VM qualification remain outstanding.
+
+Deferred free-list publication retains pymalloc occupancy until revocation
+completes. The published 4,096-entry and 16 MiB/quarter thresholds are transferred
+without allocation-triggered sweeps. Every protected process records 18 capacity
+drains and one teardown drain, with an empty final queue. Sublet and its control
+have median observed reuse gaps [2,3]; PoisonCap has [4096,8191] versus its own
+control's [2,3]. Reuse shares are 63.48% in the Capstone pair and 55.77% versus
+65.13% in the CheriBSD pair. These are successful-handout, observed-reuse metrics,
+including startup/shutdown, not physical working-set or total-memory results.
+The [first figure](../../experiments/study/results/reuse-five-applications-20260928/README.md)
+now contains five applications and seven workloads.
+
+The [Perl CheriBSD recipe](../../ports/perl/cheribsd/README.md) freshly builds
+5.36.3 purecap with the existing seven interpreter patches and an explicit
+`d_nanosleep` configure answer. Its 17-section smoke matches native output under
+both libc policy switches. This is interpreter qualification only: SV-head/body
+lifetime adapters and the inner reuse observer are missing on both comparison
+sides. The outer Capstone Sublet malloc switch does not fill that gap. Keep the
+study off a PR (superseded 2026-09-28: the review stack is merged into dev); complete Perl's inner boundary before adding a
+sixth application.
+
+## 2026-09-28 — PostgreSQL four-arm inner reuse
+
+The [four-arm archive](../../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)
+validates 12/12 complete PostgreSQL 17.5 SQL processes: six new CheriBSD
+processes and six archived Capstone processes, three per arm. All match the
+native SQL oracle and have error-free inner histograms. The protected adapter
+now transfers the published SQLite quarantine thresholds, with full-queue
+revocation correction and no allocation-triggered sweep. Each protected
+process performs five capacity sweeps, zero percentage/managed-reset sweeps.
+Both CheriBSD modes use the same fresh `-O1` binary and corrected libc;
+application libc revocation is verified enabled. Guest setup services use a
+disabled default because the separate kernel lock panic can occur in SCP.
+
+The blocker was fixed metadata exhaustion, followed by recursive allocation
+of PostgreSQL error messages. Earlier parser attribution missed the PIE load
+bias and was incorrect. Both modes now provision 65,536 chunk and 8,192 block
+records, reporting occupancy and failing directly on exhaustion. The protected
+processes peak at 20,472–20,502 chunk records. The enlarged metadata must be
+charged in any later total-memory comparison.
+
+Sublet observes 80.89% same-start reuses versus its control's 83.29%; both
+median observed gaps lie in [4,7]. PoisonCap observes 36.20–36.27% versus
+83.28% in its control, with median observed gap in [8192,16383]. The
+[first-plot extension](../../experiments/study/results/reuse-four-applications-20260928/README.md)
+pools all three raw histograms per arm; slight protected-process variation
+is preserved in the archive. Four applications now have complete four-arm
+reuse evidence. CPython and Perl remain incomplete. The SQL is qualification
+work, not pgbench; no physical working-set or total-memory conclusion follows.
+
+## 2026-09-28 — CPython inner-reuse qualification, three arms
+
+The [archived observer campaign](../../experiments/study/results/cpython-reuse-three-arm-20260928/README.md)
+passes 9/9 complete CPython 3.13.7 `objects.py 8 3 0` processes: three
+Capstone spatial, three Capstone+Sublet and three CheriBSD PoisonCap-adapter
+spatial. The common runners reject missing or inconsistent 32-bin inner
+pymalloc histograms, and the raw archive validator reproduces every reported
+count. The Capstone pair uses 262,144 nodes; an earlier underprovisioned
+65,536-node attempt failed and is excluded. The protected PoisonCap
+interpreter still has no full application oracle, so this is not a four-arm
+comparison. The observer currently indexes successful new lifetimes, not all
+failed allocation attempts required for the fixed-follow-up metric.
+
+## 2026-09-28 — Published-threshold application measurements
+
+The [fresh campaign](../../experiments/study/results/published-policy-20260928/README.md)
+validates 48/48 complete mruby/FFmpeg processes with the published SQLite
+quarantine thresholds transferred to these allocators, the disclosed queue
+correction, and outer libc revocation enabled in both PoisonCap arms. The
+[policy audit](../../experiments/study/poisoncap-policy.md) distinguishes this
+transfer from an author-provided port. FFmpeg's eager reissue sweeps and
+mruby's slot-exhaustion sweeps are removed from the new comparison.
+Sublet's carved FFmpeg pool extent remains 1.00× its control; PoisonCap uses
+6.66× and 12.84× for Xvid and resize. mruby peak GC ratios are 1.39× for
+Sublet versus 1.67×/1.83× for PoisonCap; after AO16, Sublet's retained ratio
+is worse (2.08× versus 1.83×). These are selected allocator quantities,
+not total-memory or physical-working-set claims.
+
+Outer defaults exposed a libc asm-output constraint defect and incomplete
+retirement of stored poison capabilities. Both FFmpeg arms use the same
+corrected libc; a focused allocation test and all complete decoder oracles
+pass. SQLite additionally needs explicit nested poison-metadata retirement;
+all six repaired 17-unit outer-default processes pass. Their inner ledgers
+match the historical controls exactly. Paired with six archived Capstone runs,
+the new SQLite plot shows 1.00× versus 3.99× allocated-address coverage and a
+Sublet selected-allocator-peak countercost. The three new figures therefore
+validate 60 processes (54 fresh plus six archived). Historical SQLite figures
+still use outer revocation disabled and must retain that label. Review copies are under
+`/home/biecho/nested-allocators-paper/review/published-policy-2026-09-28/`.
+
+## 2026-09-28 — Three-application paper figures
+
+The [checked figure set](../../experiments/study/results/application-memory-paper-20260928/README.md)
+reanalyses SQLite, mruby and FFmpeg with common CDF axes, differences from
+each spatial control, selected-memory companions and all eight workloads in
+a supplement. All 96 reuse-process records reproduce exactly through the
+original raw-data validators; the 12 separate SQLite memory transcripts pass
+their SQL oracle and ledger checks. The five vector figures use paper width
+and embedded fonts; a captioned PDF, LaTeX snippets and derived CSVs accompany
+them. Five measurement-guard tests pass. No new application runs or total-memory
+claims are added; the complete four-arm application count remains three.
+
+## 2026-09-28 — FFmpeg adapted-FATE four-arm qualification
+
+The [checked four-arm campaign](../../experiments/study/results/ffmpeg-fate-four-arm-20260928/README.md)
+passes 24/24 complete FFmpeg 9.0.1 decoder processes over two adapted FATE
+inputs, with three exact-oracle repetitions per arm and input. The original
+published CheriBSD kernel's poison-probe panic was traced to a missing L2
+superpage case in RISC-V `pmap_extract_and_hold()`. A narrow patch fixes the
+lookup; both CheriBSD arms were rerun on the same patched kernel. All four
+arms have identical pool lease-gap bins for each input. The protected
+PoisonCap adapter peaks at 224.4 and 167.1 KiB of selected snapshot backing;
+these are not total-memory results. The CPython protected interpreter still
+hits its separate `share->excl` kernel panic with this patch. An isolated
+trap-PC diagnostic identifies RISC-V `fupoison` probing a nonresident user
+target while the revoker holds the VM-map read lock. A temporary bypass only
+changed the failure into a 120-second pre-workload timeout; it was removed and
+supplies no paper measurement. A subsequent fail-closed direct-map diagnostic
+reached a backed page with no PTE and stopped rather than treating possible
+stored poison as absent. That experimental kernel was also removed; the
+protected CPython arm and its memory plot remain unqualified. A later
+scratch kernel classified that specific vnode page and a swap page without
+capability tags as safe misses and reached `startup` without panic, but the
+protected interpreter still timed out before `baseline` at 120 seconds. An
+external-free-list/quarantine candidate passed its spatial control; a
+diagnostic protected run performed over 100 sweeps in 40 seconds, including
+84 on normal block issue, so that candidate was not admitted. Its source
+changes were removed from the branch. No CPython four-arm result is claimed.
+
+## 2026-09-28 — Cross-application reuse preview
+
+The [paper-width three-application CDF preview](../../experiments/study/results/cross-application-reuse-preview-20260928/README.md)
+derives from the qualified SQLite memsys5, mruby GC-slot and FFmpeg pool-lease
+four-arm campaigns. It checks three complete process repetitions per arm and
+uses all inner-boundary issues as the denominator. SQLite and mruby separate
+the protected PoisonCap reissue curves from their spatial controls; FFmpeg's
+four curves coincide. It is not a six-application paper result, physical
+working-set comparison or new measurement.
+
+## 2026-09-28 — PostgreSQL and FFmpeg application-memory follow-up
+
+The PostgreSQL 17.5 `-O1` Capstone original and memory-context Sublet images
+pass 6/6 complete 2,000-row single-user `work.sql` attempts with the exact
+22-row native SQL-output hash, across three fresh copies of the same cluster
+per arm in one Linux VM boot. The SDK images take arguments and environment
+directly from the shared runner. `dynamic_shared_memory_type=sysv` uses the
+existing domain System V segment service; POSIX and file-backed mmap DSM
+cannot run in this runtime. This is a functional two-arm qualification, not a
+four-arm memory ranking: the Sublet context region and node storage are not
+included in the reported outer-heap peak. The initial temporary cluster had
+been used before the campaign. A clean native 16-byte-MAXALIGN fixture builder
+now creates a pristine C-locale/GMT/System V cluster; its tree hash matches
+the shared runner's declared fixture, and the [archived 6/6 campaign](../../experiments/study/results/postgres-pristine-20260928/README.md)
+from that untouched source retains the exact 22-row native oracle. This still
+needs the full four-arm and inner-storage ledgers before a paper memory plot.
+
+The same persistent Capstone VM also passes 12/12 complete FFmpeg 9.0.1
+decoder attempts on two [adapted FATE MPEG-4 inputs](../../experiments/study/fate-mpeg4-inputs.json)
+at 20 and 150 frames, each with spatial and Sublet pool modes and three
+repetitions. Every run matches the native per-frame oracle. A separate fresh
+CheriBSD spatial guest passes 6/6 attempts across the same two inputs and
+three repetitions. For each input the three qualified arms have identical
+32-bin pool lease-gap histograms (262 issues/219 reuses, and 1,852/1,751),
+so these inputs show no Capstone-versus-spatial reuse difference. The
+protected PoisonCap arm hit the published kernel's `Poison probe missing page`
+panic; that interrupted campaign is excluded. A second fresh guest running the
+protected arm first hit the same panic; eagerly touching the 4 MiB pool
+before use and omitting its final explicit `munmap` did not resolve it. The
+generic CheriBSD runner now records `guest-panic` and aborts immediately when
+the serial console reports one; a repeat diagnostic detected this panic four
+seconds into the application attempt. The original FATE bitstreams were
+losslessly remuxed to Matroska for the configured decoder, so these are
+adapted application inputs, not official FATE scores.
+The [archived 18/18 three-arm qualification](../../experiments/study/results/ffmpeg-fate-qualification-20260928/README.md)
+preserves accepted raw runs and the excluded panic separately. At that point it
+could not be rendered as a four-arm FATE memory figure; the later patched-kernel
+campaign above supersedes that qualification for the four-arm input.
+
+## 2026-09-28 — CheriBSD CPython complete-interpreter spatial qualification
+
+A fresh CPython 3.13.7 purecap build with ordinary pymalloc links on
+CheriBSD and passes the JSON/GC `objects.py 8 3 0` workload. The complete
+interpreter now also links the existing PoisonCap pymalloc lifetime backend;
+its adapter mode-0 control passes 3/3 in a fresh guest. At matched `-O1`,
+Capstone spatial and real per-block Sublet modes pass 3/3 each in one Linux
+boot. The [archived nine-process qualification](../../experiments/study/results/cpython-objects-qualification-20260928/README.md)
+preserves exact oracle hashes and build evidence. Protected PoisonCap mode 1
+reaches Python startup but triggers the published kernel's `share->excl`
+VM-map lock panic, including when it runs first in a fresh guest. Both
+interrupted attempts are excluded. The reported outer heaps omit the inner
+pymalloc regions and Capstone node storage; no four-arm CPython memory plot
+is established.
+
+## 2026-09-28 — PostgreSQL complete-backend memory qualification
+
+The PostgreSQL 17.5 single-user backend now builds in Capstone spatial,
+Capstone with all four real Sublet memory-context hooks, CheriBSD purecap
+spatial, and a CheriBSD binary with the existing PoisonCap context backend.
+The pinned 2,000-row `work.sql` passes its 22-row native PostgreSQL oracle in
+the first three arms and in the PoisonCap binary's mode-0 control. The
+Capstone results were initially built at `-O2`; both Capstone modes have now
+also been rebuilt at the CheriBSD pair's `-O1` and passed the shared-runner
+oracle above. An earlier CheriBSD index-build SIGPROT came from a stale
+`src/port/qsort.o` predating the tag-preserving swap patch; the new builder
+forces that object to rebuild before linking.
+
+The earlier PostgreSQL PoisonCap adapter sweeps every free and is not a valid
+lower-bound memory comparator. The complete-backend variant instead poisons
+at free, retains an external chunk queue, and sweeps before reissue. Its
+protected `SELECT 1` qualification passes with 8,692 hands, 6,097 drops,
+1,619 sweeps and a 525,312-byte peak queue. A full `work.sql` mode-1
+diagnostic was stopped during its first INSERT after more than 53 minutes of
+guest CPU and 7,154 sweeps; it produced no completed SQL oracle and is excluded
+from the study. The current eager reissue policy needs batching or a different
+threshold before full-workload qualification. No four-arm PostgreSQL paper plot or total-memory
+ranking is established. The new build path and limits are in the
+[single-user port](../../ports/postgres/app/README.md).
+
+## 2026-09-27 — mruby GC-slot four-arm memory behavior
+
+The [full mruby 4.0.0-rc2 AO-render campaign](../../experiments/study/results/mruby-gc-memory-20260927/README.md)
+passes 24/24 independent native-PPM-matched processes at widths 8 and 16: three repetitions of
+Capstone spatial GC, real per-slot Sublet GC, PoisonCap spatial GC, and an
+explicit PoisonCap temporal GC adapter. Every arm issues 217,070 slots at
+width 8 and 915,981 at width 16. Sublet and PoisonCap spatial have identical
+32-bin release-gap histograms at both sizes. Within 1,023 subsequent issues,
+Sublet reissues 75.38%/75.54% of slots at widths 8/16, versus 1.31%/1.95%
+for the temporal PoisonCap adapter.
+PoisonCap temporal peaks at nine GC page groups versus six in its spatial
+control at both sizes; Sublet peaks at six versus six. The peak groups stay
+flat across 4.22× more slot issues, within this tested range. Sublet's per-page metadata and its
+retention of all-dead groups are countercosts, so this is a logical-reuse and
+selected GC-page result, not a total-memory ranking. The process-level
+CheriBSD jemalloc ledger excludes the mmap GC pages, and Capstone node
+storage is not charged. `study.py` now admits a pinned mruby four-arm binding
+for future planned runs; the reported campaign itself used the shared guest
+runners directly, before that binding was assembled.
+
+## 2026-09-27 — Normalized SQLite repeated-work memory
+
+The [complete FFmpeg 9.0.1 decoder lease-gap study](../../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
+now adds a second measured internal allocator boundary. All 36 four-arm
+1/4/16-stream runs pass the exact frame oracle, and all 32 pool lease-gap bins
+are identical across arms and three repetitions at each size. At 16 streams,
+the selective PoisonCap temporal adapter targets 116.155 MiB of cumulative
+payload spans with per-granule poison/clear and copy operations while snapshot
+backing peaks at 36,288 B and finishes at zero. These operation span counters
+are not time, DRAM traffic or total memory. Both platforms use the same prepared FFmpeg
+9.0.1 source and the shared pool observer; Capstone's application SDK reuses
+one Linux VM. The new allocator ledgers match the prior selective FFmpeg
+campaign. This result shows why SQLite's delayed-reuse behavior cannot be
+generalized to every nested allocator policy.
+
+The [complete-application reuse-gap follow-up](../../experiments/study/results/sqlite-reuse-gaps-20260927/README.md)
+adds 12/12 complete four-arm runs, all 6,528 native-matched SQL phases, and
+same-start release-to-reuse CDFs over 550,137 memsys5 allocations per run.
+Capstone original and Sublet are identical in every gap bin. The fraction
+reusing a start within 15 allocations is 73.116% in both Capstone arms,
+73.113% in CheriBSD original, and 0.052% in corrected PoisonCap. PoisonCap's
+overall same-start reuse is 86.358% versus 99.561% in its own original.
+Three repetitions per arm coincide. All 6,732 allocator phase rows match the
+prior campaign except for the extra 524,560 bytes of static observer storage.
+This is a full SQLite application result at its memsys5 boundary, not a
+physical-memory, runtime, or other-application claim.
+
+The [normalized SQLite campaign](../../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
+passes the four-arm build-comparability gate and all 12 repeated-work attempts
+(three per arm, one warmup plus 16 measured full `speedtest1 main --size 1`
+units per process). Every complete unit matches all 32 native SQL-result
+oracles. The CheriBSD original-layout control now removes PoisonCap's external
+allocator adaptation from the denominator. Both platform pairs have equal
+allocatable atom counts, matching SQLite feature switches, lookaside off and
+application/driver `-O0`; explicit platform patches and compiler differences remain.
+
+Sublet's cumulative allocated-address footprint stays at 1.00× its original
+baseline; corrected PoisonCap reaches 3.99× and then plateaus. Sublet returns
+all pool spans after each database close, but its selected allocator metadata
+is much larger. Selected peak H (rounded live + quarantine + specified tables)
+is **4.68× original for Sublet versus 4.27× for PoisonCap**. This is a reuse
+advantage with a metadata tradeoff, not a general total-memory win. Neither
+address footprint nor H is resident working set or complete platform memory.
+
+The fixed size-4 burst passes 3/3 in Sublet and both original-layout controls.
+Corrected PoisonCap fails its first qualification with SQLite OOM during phase
+190; two later repeats remain blocked. This is equal usable pool capacity,
+not equal total reservation. No four-arm post-burst recovery claim is made.
+
+The legacy SQLite path still needs 4,194,304 provisioned emulator nodes for
+these repeated runs, identically configured in both Capstone arms. Its
+65,536-node Sublet control faults; supervised-runtime node reclamation does
+not operate on this legacy path. These application-pool metrics exclude node
+storage and cannot establish hardware memory/scalability. New source/build
+and plotting tools reuse the port builders; no new VM manager is introduced.
+The earlier pilot below remains historical and build-unmatched.
+
+## 2026-09-27 — SQLite budget and selective FFmpeg memory controls
+
+The four-arm SQLite 3.22 pilot passes the same 32 SQL-result phases but **is
+not build-normalized**: Capstone uses the official amalgamation with its
+deployed omit/heap/VFS profile, while PoisonCap uses a ported fork with a
+different source ID and incompletely recorded compile argv. The pilot memory
+plots are exploratory. The [campaign contract](../plans/application-memory-campaign.md)
+now includes a build-comparability gate; compile-only probing confirms that
+the PoisonCap fork accepts Capstone's SQLite defines except the required
+`SQLITE_OS_OTHER` VFS switch, and the CheriBSD prototype links. Its first
+guest attempt panicked in the published kernel during `scp`, before SQLite
+started. No normalized four-arm benchmark has run yet.
+
+The [memory follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
+validates 21 full-SQLite budget attempts against native size-1/size-2 SQL
+oracles and 12 FFmpeg decoder attempts against the exact frame oracle. At
+SQLite size 1, the smallest successful budgets tried are 1.25 MiB Capstone
+spatial, 1.25 MiB Capstone + Sublet (2.05 MiB with tables), and 1.125 MiB
+PoisonCap spatial (1.39 MiB with tables). The corrected and pressure-reclaim
+PoisonCap temporal policies complete at 8 MiB heap (9.11 MiB with tables);
+the pressure policy panics at 7.5 MiB in the published kernel. These are
+successful selected capacities, not measured minima or total RSS. At size 2,
+both spatial arms pass with 2.5 MiB; Sublet faults in SQLite with 2.5/3 MiB
+and PoisonCap temporal panics with 16 MiB. The four-arm scaling cell is open.
+
+The fairer FFmpeg PoisonCap adapter copies only stateful `AVRefStructPool`
+entries and frees snapshots with their backing. All revised 1/4/16-stream
+runs match decoder output. Snapshot backing peaks at 36,288 B and ends at
+zero; final jemalloc allocated matches spatial at 1/4 streams and differs by
+13,632 B at 16. The original full-copy FFmpeg advantage was an adapter
+artifact, not a PoisonCap lower bound. The older result below remains a
+record of that adapter's behavior.
+
+
+## 2026-09-27 — Full SQLite nested-memory pilot and benchmark readiness
+
+The [FFmpeg whole-decoder pool pilot](../../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
+now connects the existing PoisonCap AVBufferPool/AVRefStructPool adapter to the
+actual configured 9.0.1 decoder. For 1, 4 and 16 independent 30-frame streams,
+all six new PoisonCap mode-0/2 runs and all eighteen existing Capstone
+pool-mode-0/2 repeats match the same frame oracle. The PoisonCap temporal arm
+retains a 315,072 B snapshot; within-platform jemalloc allocated rises by
+294,912–318,336 B over spatial. Capstone's reported outer-heap peak and pool
+payload used are equal between its two modes. The ledgers differ across
+platforms, and neither includes all kernel metadata. Two plots and per-phase
+records are retained; broader FATE coverage and PoisonCap repetitions remain.
+
+The [SQLite 3.22.0 memory pilot](../../experiments/study/results/sqlite-322-memory-20260927/README.md)
+now runs all 32 official `speedtest1 main --size 1` phases on Capstone spatial,
+Capstone + memsys5-only Sublet, PoisonCap spatial, and corrected PoisonCap
+temporal. All four arms match the independent native SQL-result oracle for
+4,301 rows, with lookaside disabled. Selected successful application-visible
+reservations are 1.25, 2.05, 1.53 and 9.11 MiB, respectively. These omit
+platform metadata and are not measured RSS or minimum viable capacities.
+The published PoisonCap full-queue path drained six times without revoking;
+the corrected path drained and revoked six times at 8 MiB. Its 4.5 and 7 MiB
+attempts panic in the published kernel. Figures, attempt statuses, phase data,
+and source/binary/raw-log hashes are preserved with the result; raw VM logs
+remain outside the repository.
+The owned persistent Capstone VM is restored. This pilot still uses the legacy
+SQLite domain host, which boots a guest per attempt; full application PoisonCap
+adapters for other ports remain future work.
+
+The `application-poisoncap-study` branch adds a [Sublet/PoisonCap memory
+study design](../plans/sublet-poisoncap-memory-study.md), a separately pinned
+SQLite 3.22.0 artifact catalog and matched-platform planning. Existing CheriBSD
+on/off results remain the secondary reference. Generalized PoisonCap execution
+qualification stays closed until the shared application runner observes the inner policy,
+allocator boundary and all quarantine/revocation paths; outer malloc policy
+cannot substitute for that evidence. Fourteen planner and six runner tests pass.
+
+[Upstream mruby lists](../../experiments/study/results/20260927-mruby-lists.json)
+passes 4/4 original arms at the full 300 × 10,000 work count with a native output
+oracle. Both Capstone arms recover from six allocation failures at a 64 MiB outer
+heap limit; these runs need matched backing budgets and GC-slot counters before
+memory comparison. No PoisonCap mruby application is claimed.
+
+The earlier published PoisonCap SQLite fork builds after supplying header prerequisites.
+[Both workload modes complete](../../experiments/study/results/20260927-poisoncap-sqlite.json)
+20 active main phases at size 1 using the preserved published libc and outer
+revocation off. The artifact comments out 12 phases; `--verify` does not check
+main results. Its full-quarantine drain bypasses the explicit revoker call, and
+revocation errors are unchecked. These findings require policy-path accounting
+and an independent result oracle, not a security benchmark. This is not a full
+32-phase reproduction or a Sublet/PoisonCap memory comparison. The pilot above
+supersedes that readiness limit.
+
+## 2026-09-27 — Four-configuration benchmark study foundation
+
+The `application-benchmark-study` branch adds a [pinned candidate catalog and
+matrix planner](../../experiments/study/README.md) for six application ports.
+Plans distinguish internal-allocator Sublet from outer-malloc Sublet, enumerate
+all four arms, lock work parameters, preserve unavailable/failing cells and
+resume without silently retrying failures. CheriBSD on/off uses explicit process
+switches and checks effective policy at every phase; guest defaults stay intact.
+
+Twelve planner tests and six runner tests pass. Five real FFmpeg/mruby policy
+smokes pass, including re-enabling revocation after an off process, in one guest.
+The original Capstone VM is restored and idle. These smokes reuse discovery
+workloads; no standard benchmark suite is yet qualified across four arms.
+The [rollout plan](../plans/application-benchmark-study.md) records recognized
+benchmarks, source pins, internal accounting requirements and application gaps.
+
+## 2026-09-27 — Address reuse and post-release application memory
+
+The `application-reuse-metrics` lane studies Cornucopia and Cornucopia Reloaded
+and checks twelve FFmpeg/mruby workloads against default CheriBSD purecap.
+All 72 paired attempts pass. The complete allocation and allocator phase
+samples match old-QEMU controls for all twelve Capstone workloads (108 equal
+control/repetition comparisons). The larger-capacity controls do not collect
+nodes during application execution; the temporary sweep does not create the
+reported differences in these workloads.
+
+Sixty-four FFmpeg streams use 178 distinct starts versus 2,982 (16.75 times fewer)
+with 46,720 allocation calls on both platforms. mruby's 512-record, 16-batch case
+uses 14,554 versus 44,552 (3.06 times fewer). Full post-release curves show both
+retention advantages and the large-retained-graph case where buddy occupancy is
+initially higher. No total-RSS, physical-fragmentation or timing win is inferred.
+An invalid 128-batch observer-overflow attempt and its interrupted repeat remain
+recorded separately. Four analysis guard tests pass. [Results and figures](../../experiments/applications/results/20260927-reuse/README.md)
+and [paper analysis and metric definitions](../../experiments/applications/memory-behavior.md)
+identify exact scope and the remaining port work.
+
+## 2026-09-27 — Node reuse within a running application
+
+The `runtime-node-reuse` follow-up fixes the six mruby failures below without
+raising the 65,536-node capacity or changing application binaries. Under node
+pressure, one-hart QEMU now saves the current application at its allocation
+instruction, enters the trusted monitor context, clears stale tags and recycles
+retired identities, then resumes the same process. Valid or pinned identities
+remain unavailable; genuine exhaustion still faults with cleanup headroom.
+Previously, the collector was invoked only when the process owner was released.
+
+All 27 original Capstone application repeats and nine extended runs now pass;
+the longest mruby run allocates 1,092,495 identities within the fixed pool.
+The regression completes
+200,000 allocation/free cycles per process, preserves live data and rejects an
+old reference after reuse. The full lifecycle gate again passes 1,008 mixed
+starts in one boot with stable retained resources. Four native runtime tests
+and twelve host CLI tests pass. [Checked results and extended workloads](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+identify the exact platform and keep the old failing control.
+
+This is a QEMU software tag sweep, not a new FPGA result or a hardware cost
+measurement. The earlier comparison and larger-node controls remain historical
+data; default CheriBSD was unchanged and was not rerun for this fix.
+
+## 2026-09-27 — Default CheriBSD application memory comparison
+
+The same FFmpeg 9.0.1 decoder and mruby 4.0.0-rc2 workloads now run on Capstone
+Sublet malloc and default CheriBSD purecap, with shared requested-byte and address
+reuse counters. No allocator-policy variants or forced drains are used. The
+primary matrix has 54 attempts: 27/27 CheriBSD pass; Capstone at 65,536 nodes has
+21 pass and six larger-mruby signals. All 12 mruby repeats pass at 262,144 nodes,
+recorded separately. All 39 Capstone launches return zero live domains, regions
+and bytes. Fifteen instrument/runner tests pass, including failed realloc,
+calloc overflow, observer-table exhaustion and false-pass rejection.
+
+Sixteen independent 30-frame streams perform 11,680 allocation calls on either
+platform. They use 178 distinct start addresses on Capstone versus 2,803 on
+CheriBSD (15.7 times fewer, identical across three repeats). Observed requested
+bytes return to zero on both. Capstone occupied blocks return to zero; CheriBSD's
+allocated ledger retains 8,590,776 bytes. Capstone separately reserves an 8 MiB
+logical pool from a 16 MiB grant plus 1,343,636 bytes of static allocator tables.
+Both observers add 1.5 MiB of static address-history storage. These findings do
+not establish lower total RSS, bounded in-process node use, or a general
+fragmentation advantage. Hardware timings are not measured.
+
+See the [comparison contract](../../experiments/applications/comparison.md).
+The paper's `eval/application-memory` branch contains five figures and all 66
+attempts under `experiments/application-exploration/results/2026-09-27-default-cheribsd/`.
+Only these two applications have matching default-CheriBSD measurements so far;
+the earlier six-application discovery below is a separate campaign.
+
+## 2026-09-27 — Application memory workload discovery
+
+The `application-memory-experiments` lane adds one Python build/link adapter and
+one persistent-VM runner with real workloads for Perl, CPython, mruby, SQLite,
+PostgreSQL single-user, the configured FFmpeg decode app, and prepared tshark
+PCAP inputs. Shared SDK atomic/integer helpers and the existing 128-file table
+adaptation let these cached application objects use the common launcher.
+
+The bounded discovery records 183 attempts: 147 pass, 21 signal, 3 PostgreSQL
+exits at unsupported FileFallocate, and 12 unavailable tshark attempts. All 171
+launched cases return with zero live domains, regions and bytes. A separately
+recorded 262,144-node configuration lets previously failing mruby cases complete
+but larger protected CPython cases still fault near the limit. Collection between
+processes is verified; continuous in-process node reuse is not established.
+
+Four native runtime tests, twelve host CLI tests, eleven runner false-pass tests,
+known-allocation calibration, 128-file capacity/reuse, and native output oracles
+pass. The [workload documentation](../../experiments/applications/README.md)
+gives protection scopes and accounting limits. Compact measurements and six plots
+live on nested-allocators-paper's `eval/application-memory` branch. These are QEMU
+memory/capacity observations, not CheriBSD comparisons or hardware timings.
+
+## 2026-09-26 — Persistent application processes, reclamation and shared SDK
+
+The `domain-process-runtime` lane implements the complete **one-hart QEMU**
+application lifecycle across the emulator, monitor, driver, Buildroot package,
+Linux launcher and host CLI. Boot once into Linux, then run application ABI v1
+images through `capstone-exec`. Faults produce real SIGSEGV; normal exit 139
+remains a normal exit. Protected continuations return control even after a
+corrupted stack/trap vector or a no-yield loop. Linux signals terminate the
+launcher, and final file/VMA release revokes and scrubs its resources for reuse.
+
+The installed-rootfs acceptance passes node exhaustion/recovery followed by
+**1,008 mixed starts in the same boot**. Live domains, regions and bytes return
+to zero. Cached storage stays at 138,559,488 bytes, live nodes at 67, retired nodes
+at zero and tag pages at 648. Cumulative node allocations rise from 65,923 to
+77,011 against a 65,536-node pool, demonstrating reuse after stale tags are
+removed. This is bounded retained storage, not physical pages returned to Linux.
+The test also covers ownership isolation, rollback, fork/dup/VMA lifetime,
+overlapping processes, blocked I/O cancellation and transferred Sublet heaps.
+See the [checked result](../../runtime/tests/application/results/20260926-qemu-rebased.json).
+
+Four native ASan/UBSan tests and twelve host Python tests pass. A fresh Buildroot
+rootfs installs the driver, launchers and Dropbear. The shared CMake application
+SDK provides a compiler driver for upstream Make/configure builds; Perl's private
+compiler wrapper, entry adapter and VM runner are removed. Fresh Perl 5.36.3 and
+SDK-linked mruby pass the common application gate. The current complete Perl
+`t/base` run through ordinary `prove` has eight passing files and one failing
+file: `base/term.t` test 2 needs a target subprocess, but clone syscall 220 is
+unserved. `prove` reports 9 files, 493 emitted assertions and exit 1. The
+[rebased-QEMU result](../../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt)
+uses the C-46-corrected compiler and Perl's capability-preserving regex-save
+patch. The [earlier controls](../../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt)
+isolate the compiler and regex fixes. The
+[earlier 6/9 result](../../ports/perl/musl/results/2026-09-26/base-tests.txt)
+used an older compiler and a VM CLI that recorded, but did not pass, QEMU
+environment settings. The CLI now passes the recorded settings on every boot;
+the common SDK rejects a compiler binary with the old linear direct-call bug.
+The full upstream Perl suite has not been run or claimed to pass.
+
+Legacy CoreMark, shared-region and the first three HostCall proofs pass on the
+new platform. The available legacy snapshot fails all three `null_blk` arms
+in `null_submit_bio` (bad address 0x6f) and the borrowed-region file-open-close
+proof at INIT (cause 29). Both signatures also reproduce with the old QEMU and
+original firmware/rootfs; these are unresolved baseline failures, not passing
+regression gates. The managed path uses its own reclamation protocol.
+
+Existing FPGA hardware does not implement the new supervised CALL extension.
+There is no new silicon result, full POSIX implementation or hostile-code audit.
+The pool has explicit limits (default 384 MiB); the module retains carved physical
+storage until reboot. The old and managed driver APIs are mutually exclusive
+within a module lifetime. Commands, architecture and remaining port limitations
+are in [applications](../../runtime/applications.md) and the
+[implementation plan](../plans/domain-process-runtime.md).
+
+## 2026-09-25 — R-42 FLASHED; ladder ACCEPTED, but R-43 false denies block revocation-heavy workloads (R1, P1 cell 6)
+
+**Resident bitstream is `caplifive_r42_6cbdaeeb4.bit`**, sha256 `0cd45bb0…8c05`.
+- **The reflash:** it was flashed at 04:16 and `nv_bitstream_name` was read back on the same session
+  after the power cycle.
+- **Acceptance Boot A, the ladder, PASSED every pre-registered check**
+  (`ladder-revival-2026-09-22/r42-acceptance-bootA.result-lines.txt`):
+  - `ctrsanity` K=0 1.167× → 1.000×, and `ctrsanitys` K=1 1.210× → 1.045×;
+  - 68/68 rows correct, with retval and instret unchanged;
+  - the baseline gate reads CPI 1.2000 at every K.
+- **The R1-harness acceptance boots, one image per boot**
+  (`ladder-revival-2026-09-22/r42-acceptance-r1boots.result-lines.txt`):
+  - PASSED: the workload regression (the q0 speedtest1 + m1 drop run, values identical to 054cea69b)
+    and the R-43 live16 control (sum 544);
+  - the R-35 stale probe still traps cause 25 at +0x4354 (regression check passed);
+  - **BOTH R1 release-cost harnesses TRAP cause 25 on their first invocation**, inside `run_series`,
+    on loads into the domain's own memory. B3's load is through a capability to a GLOBAL, read from
+    the cap table.
+  - These are **R-43 false denies of live capabilities**: deny-on-miss after id churn evicts the entry.
+    The RTL lane reproduced it in RTL simulation on 6cbdaeeb4 (`r43-evict-live.S`,
+    capstone-ariane 93f509f54).
+
+**The lead decided (2026-09-25) that R-42 is the platform of record for the remaining Sublet paper
+numbers. That is now BLOCKED by R-43:** no image that churns more than a few hundred revocation ids
+can run on R-42.
+- **Blocked:** R1 re-measurement, and P1's Sublet cell 6. P1 is held, with E2's own -O0 images ready
+  (`e6ee5255`/`ceeded25`, from `xfer/p1-r42-O0-2026-09-25`).
+- **Unblocks when:** the R-43 fix (query the rev-node unit on a miss instead of denying) is on a
+  bitstream.
+- **The -O2 arms** stay blocked on C-32 regardless.
+
+## 2026-09-25 — R-35 CLOSED (fixed on the M-mode LSU data path); R-43 and R-44 filed; R-42 reflash authorized
+
+**R-35 is closed**, decided by the RTL lane on the lead's delegation after an adversarial audit. It is scoped: the fix covers the M-mode LSU check. The same optimistic adopt **still exists at the CPMP**, which is all of S/U-mode enforcement and live in production. That is now **R-44**, deferred on a boot-kill risk (the hardcoded `cpmp(0..2)` ids have no rev-node traffic). The fix's own cost, false denies from deny-on-miss, is **R-43**, whose first test is a SQLite run on the fix bitstream. R-37/R-38's Stage 0 is in the flashed build (fixed in source, not verified on silicon).
+
+**R-42**: bitstream `caplifive_r42_6cbdaeeb4.bit` (sha256 `0cd45bb0…2b8c05`) is hash-verified on apollo and handed to the board lane. The reflash was authorized by the lead 2026-09-25, and the acceptance is pre-registered in `tests/fpga-repros/R42-icache-killed-miss-refill/`. It is a superset of the R-35 image, and its acceptance boot re-runs the R-35 stale probe as a regression check.
+
+**M-1**: unchanged in RTL. Default-built probes still wedge on a fault (both R-35 probes did, 2026-09-24), and that cost R-35's record one attribution. `tests/fpga-repros/RTL-domain-trap-vector-unset/` now has a one-picture summary.
+
+## 2026-09-24 — R-35's fix is on silicon, and the probe that exposed R-35 no longer reproduces it
+
+**ON SILICON (2026-09-24, caplifive_r35_4ad0df694.bit):** the probe that exposed R-35 no longer reproduces it. The same image that read the current occupant's live data through a revoked alias on 054cea69b (is_live_data=1) now traps with cause 25 on the stale read of leaf[0]. A live alias to the same leaf, at the same address, commits without a trap, as do ~43k earlier live accesses, and 17 of 17 ladder rungs return their pre-flash values. N=1 per arm. NOT shown on silicon: WHY the stale read was denied -- cause 25 cannot separate observed revocation from the cache's deny-on-miss, which is the expected route for an id reissued thousands of times; which probe age trapped (k=0 or k=21648); the stale write; and false-deny rates under SQLite. Result lines and limits: the R-35 folder's `results/board-4ad0df694.result-lines.txt`.
+
+**Next for R-35:** a SQLite workload on this image, which is the false-deny test at scale. If the lead wants the denial attributed, a k=43295-only variant paired with a long-idle live alias separates revocation from residency. **R-42** (I-cache killed-miss, performance): fix at capstone-ariane `6cbdaeeb4`, one commit on `4ad0df694`, validated in simulation and synthesized: no new loop, bitstream written (sha256 `0cd45bb0…2b8c05`), routed WNS −10.615 against the resident −8.341. Whether to flash it is the lead's call; see ISSUES.md R-42.
+
+## 2026-09-24 (earlier) — R-35's fix is synthesized and timing-clean at `4ad0df694`: a reflash candidate, not yet on silicon — **SUPERSEDED by the section above**
+
+**R-35 FIX IS SYNTHESIZED, TIMING-CLEAN, AND A REFLASH CANDIDATE (2026-09-24).** `capstone-ariane` **`4ad0df694`** routes at **WNS -8.341, 0.034 ns from the flashed base's -8.307**, with 51.70 % failing endpoints against base's 51.76 %. All five pre-registered synthesis predictions pass. Bitstream sha256 `8db73f8e20244438a2663fef070202e95dde29fe5b1d957b9804a7babf60382c`. *(Flashed since; see the section above.)* Full readings: the R-35 folder's `results/synth-4ad0df694.result-lines.txt`.
+
+**What fixed the timing, in two parts** — `f83fe9342`'s −27.665 had two causes. The rev-node's *combinational* write-request selector drove the cache's write decode; `a87a24a59` registers the fill taps. And the cache's footprint crowded a congested region; `4ad0df694` moves the tag array into distributed RAM. Paths that went *past* the cache recovered ~18.5 ns untouched, which measures the congestion rather than inferring it.
+
+**The correct revocation check turned out to be essentially free.** An earlier claim that it must cost about what Stage 0 cost — because the base was cheap *by being vacuous* — is refuted: Stage 0's 4.593 ns was its implementation, not the price of correctness.
+
+**Next:** put the `.bit` on the console's server-side BITSTREAM store (GUI Bitstream Manager or the board owner — our driver would file it as a boot image), verify its hash, flash (authorized by the lead), and run the folder's board probe. The board lane takes the window after, for its ladder refresh — which doubles as the false-deny test at scale.
+
+## 2026-09-23 — R-35 is fixed in simulation at `f83fe9342`; it is NOT yet deployable, and neither synthesized hash is — **SUPERSEDED 2026-09-24 by the section above**
+
+**Current fix: `capstone-ariane` commit `f83fe9342`, branch `r35-m1-revnode-cache`, pushed.** `f83fe9342` WAS SYNTHESIZED 2026-09-23 AND IS NOT DEPLOYABLE. Area: fixed -- 177,669 post-synth LUTs, -17,423 against the crossbar build with -111 FFs, i.e. the crossbar rewritten as a register file and nothing else. Slack: REFUTED -- routed WNS -27.665, the worst this design has produced, against a pre-registered prediction of roughly -12.9. The worst path is SHALLOWER than Stage 0's (94 vs 121 logic levels, less logic delay) but carries +15.45 ns of ROUTE delay: congestion, absent from every earlier build. Traced at pin level by the synthesis lane: D-cache read-port grant (fan-out 88) -> the rev-node's memory-channel write-request selector, a deep combinational Anvil mux (fan-out 70) -> the cache's WRITE decode. The fix hung a 256-entry write decode off that selector. The read mux is not on the path. Next: register the fill taps, so the decode sees flops.
+
+What follows was written before that result: It replaces the LSU's single core-wide revnode tracker with a tagged 4-way ×
+64-set positive validity cache, filled **only** by two passive taps on the rev-node unit's own
+node-memory traffic, so an access is allowed only if its exact 30-bit `(generation, index)` is resident
+and was last seen live. Acceptance fixture (`r35-rotate-stale.S`): exactly **7 traps**, the three
+revoked accesses trap 25, both live-alias controls still return data. Lint at the committed baseline.
+
+**Neither synthesized hash is a reflash candidate:**
+
+| hash | what it is | routed WNS | failing endpoints | routed LUTs |
+|---|---|---|---|---|
+| `054cea69b` | flashed base | −8.307 | 51.76 % | 168,757 |
+| `247b76896` | Stage 0 (tracker reorder) | **−12.900** | 57.25 % | 169,953 |
+| `079dc720a` | first cache | **−14.415** | 60.82 % | **192,642 = 94.53 %** |
+
+**The cheap-looking edit was the expensive one.** Stage 0 — 32 lines, zero new signal declarations —
+cost **4.593 ns**; the entire first cache cost 1.515 ns more. A before-audit localized Stage 0's cost to
+its **LSU** half — *audited, not measured: no build has separated the two halves Stage 0 changed* (the post-adopt value fed `cap_exception` combinationally); every CPMP consumer reads
+the registered value, so the CPMP half is flop-to-flop into 16 endpoints. Loops stayed at 1 on every
+build: these are path-depth costs, not new cycles. The first cache's LUTs came from describing a
+crossbar — a `_d`/`_q` pair rebuilt by dynamic index every cycle, about 90 LUTs per entry.
+
+**All of these costs were invisible to lint:** nine counters at exact baseline and `UNOPTFLAT` unmoved at
+40, on every hash.
+
+**The register-file rebuild (`6ee277cc3`) introduced an authority escape — R-35's own class — closed at
+`f83fe9342`.** An adversarial after-audit found it with a microtest built from verbatim extracts plus
+mutants as positive controls. **The acceptance fixture returned exactly 7 traps both before and after the
+fix**: it cannot see same-cycle coincidences. Do not treat a passing fixture as evidence about paths it
+does not reach.
+
+**Next:** synthesize `f83fe9342` against pre-registered area and slack predictions (see the plan). The
+reflash, and the board run after it, are the lead's call.
+
+**Do NOT:** flash `079dc720a` — at −14.4 ns and 60.82 % failing endpoints a flake would be
+indistinguishable from the fix not working. Do NOT revert the CPMP half of Stage 0 to compare the
+registered value as a timing "fix" — it admits a persistent false ALLOW (entry adopts Y while a
+broadcast names Y; the compare against the stale X misses; the entry vouches for a dead Y forever).
+
+## 2026-09-22 — R-35 registered, and Stage 0 of its fix is ready for synthesis — **SUPERSEDED 2026-09-23: Stage 0 was synthesized and is a 4.593 ns regression, and the "Stage 1+2 / Stage C refill" framing below was replaced by the positive cache. See above.**
+
+**R-35 — a REVOKED capability still reads and writes the storage its object gave up, and the access
+does not trap.** Root-caused at `054cea69b` to `load_store_unit.sv`'s single core-wide revnode
+tracker, whose adopt arm takes any unseen id as valid without asking the rev-node unit. Reproduced
+**two-sided in RTL simulation** with a single-variable arm pair, a witnessed revoke and the faulting
+unit attributed by a control that demonstrably fires — strictly better evidence than the board
+capture, which sits on a bitstream whose timing does not close. Folder:
+`capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`.
+
+**Now in the registry**, which stopped at R-34 before today: **R-35** (the defect), **R-37** (the
+trackers' invalidate/adopt mis-ordering), **R-38** (the CPMP tracker's pre-adopt compare, a permanent
+false deny), **R-39** (unguarded index-0 invalidation broadcasts, believed harmless on a stated
+invariant), **R-40** (no authorization check on genesis region ids 0-2 — **materially corrected**
+after an auditor refuted its first mechanism), **R-41** (the type guard's early return drops the CPMP
+entry it read; unproven). **R-36 is a stub**: the number was drafted 2026-09-21 and withdrawn before
+filing, and `history/` references it.
+
+**Stage 0 of the fix is implemented, validated and awaiting synthesis.**
+`capstone-ariane` branch **`r37-stage0-tracker-ordering`**, commit **`247b76896`**, pushed. It moves
+each tracker's invalidate **after** the adopt and compares the **post-adopt** value — the shape
+`commit_stage` has always had.
+
+* **Lint: identical to the committed baseline on all nine counters** — LATCH 52 / MULTIDRIVEN 3 /
+  ALWCOMBORDER 0 / COMBDLY 0 / UNOPTFLAT **40** / BLKSEQ 2 / UNDRIVEN 25 / UNUSEDSIGNAL 736 /
+  ANVIL_UNOPTFLAT 0, over 6,511 lint lines. Two files, 32 insertions, no new signal declarations.
+* **Full directed sweep, matched pair, seed pinned both sides: ZERO status changes and ZERO cycle
+  drift** (66 PASS / 26 TIMEOUT / 3 NOBUILD / 0 FAILED on each side; 92 comparable tests with
+  bit-identical cycle counts). The baseline arm reverted only the two files, in the same worktree.
+* **Both halves validated functionally.** The M-mode reproducer is bit-identical, and the CPMP half
+  was validated separately on `r12-recl-cpmp.S` — the only fixture that reaches the CPMP gate, since
+  that check is gated on privilege *not* being M and the M-mode fixture is structurally blind to it.
+  Pre-registered `0 1 1 0 1 0 1` / total 4, matched exactly.
+
+**IT STILL NEEDS SYNTHESIS, and "signal-neutral" was wrong.** Retargeting a compare from `_q` to `_d`
+swaps a flip-flop output for a **combinational** node inside two modules that are both in the standing
+`UNOPTFLAT` loop set, which no lint counter can see. Per the project rule about feeding a signal into
+a cone that already carries a loop, this goes to synthesis before a board or another lane.
+**`054cea69b` is NOT an ancestor of the submodule's working-tree HEAD**, so any hash handed on must
+name its line.
+
+**Stage 1+2 (the validation broadcast and registry-gated adopt) is NOT started, and its price went
+up.** A trap-path enumeration established that the LSU's plain-dereference working set is **~20 ids
+and rising**, so registry-capacity eviction can miss *any* id — including the monitor trap stack's,
+whose 30-store prologue would then nest silently. So **Stage C (refill) is mandatory rather than
+likely**, and it is either a hardware query with a stall (crosses the combinational ring) or a
+retryable cause 25 (an ABI commitment). That is a project decision, not a lane's.
+
+**Two instrument facts from today that outlive this work**, both now in the `rtl-sim` skill:
+`cva6.py`'s `--sv_seed` defaults to a **fresh random value**, so "zero cycle drift" is unassertable
+unless it is pinned on both sides; and `cva6.py` returns **0 for a TIMEOUT as well as a PASS**, so an
+exit-status tally cannot classify a sweep.
 
 ## 2026-09-18 — Whisper ggml context component
 

@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "artifact_revision": "731c5720d1a6321d436a8d7b85bf3aa2e4971fe0",
+  "archive_sha256": "c5e8b07d4f70ed8cc1ecf04193ceacc5266553a2cbd233e6fa51fb8f0d190b9c",
+  "sqlite_version": "3.22.0",
+  "source_sha256": {
+    "VERSION": "46058ff89ee6dab89b7f99a6a21b117815ecf0e1f3967e51802d462c95f332fb",
+    "src/mem5.c": "d8cb4c0e688350992c480b7956b5b6d47496700447ded6386e4c02e12d338df8",
+    "test/speedtest1.c": "49d0815e03640f10b7cabdce3366bdbe092c259fc9d32ea4294971afcaa8430b"
+  },
+  "policy": {
+    "driver_heap_bytes": 268435456,
+    "quarantine_capacity": 4096,
+    "threshold_minimum_held_bytes": 16777216,
+    "threshold_quarantine_fraction": "1/4 of total_alloc_size (live plus quarantine)",
+    "threshold_path": "quarantine_revoke then quarantine_flush",
+    "capacity_path": "quarantine_flush without calling quarantine_revoke",
+    "revoker_return_checked": false
+  },
+  "builds": [
+    {
+      "variant": "published",
+      "binary_sha256": "f161f092301f305f51436fc3a8656fd5d1cf1f0d3e2856ebe25bfe411e52a778"
+    },
+    {
+      "variant": "spatial",
+      "binary_sha256": "18cbb052c8bcd01eb58e4c027d7ab09cfc71478fa4574c55d9319f689a8bbb95"
+    },
+    {
+      "variant": "temporal",
+      "binary_sha256": "1338663b71ba0aef0788b88c7a4cb7726cb8a7e38c7466b140ddadbd4cfcf012"
+    }
+  ],
+  "build_notes": [
+    "First amalgamation compile failed on missing header prerequisites; force-including stdint.h, sys/types.h, sys/uio.h and signal.h built unchanged published sources.",
+    "Spatial and temporal workload-only binaries remove the retained-alias startup demonstration; spatial also undefines NESTED_TEMPORAL.",
+    "Compiler, target ABI, optimization, heap setup and benchmark bodies are otherwise identical.",
+    "Build success is not qualification for protected memory comparisons."
+  ],
+  "main_driver": {
+    "active_phase_ids": [
+      100,
+      110,
+      120,
+      130,
+      140,
+      142,
+      145,
+      160,
+      190,
+      210,
+      240,
+      250,
+      260,
+      280,
+      300,
+      320,
+      400,
+      410,
+      980,
+      990
+    ],
+    "commented_out_phase_ids": [
+      150,
+      161,
+      170,
+      180,
+      200,
+      230,
+      270,
+      290,
+      310,
+      500,
+      510,
+      520
+    ],
+    "verify_checks_main_results": false
+  }
+}

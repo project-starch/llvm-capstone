@@ -1,0 +1,113 @@
+# carved-repros on sublet-carve (pre-registered 40175e883ca3; fix ed9f91e69c5d), one VM boot
+# SDK heap sublet, runtime b73508e5005bd77e; clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)
+# cc args: -DFFC_SUBLET_CARVE -Icapstone/runtime/include
+  control clean  RETURNED   required RETURNED  ok  CONTROL clean RETURNED 1
+  control oob    CAUGHT     required CAUGHT    ok  cause=7 pc=0xc020f70c address=0xc4802018 in ctl_write_probe+0x58 (the labelled probe)
+  control uaf    CAUGHT     required CAUGHT    ok  cause=24 pc=0xc020f758 address=0x0 in ctl_read_probe+0x38 (the labelled probe)
+  control subobj RETURNED   required RETURNED  ok  CONTROL subobj RETURNED b0=0x5a
+  control carve-99 fixed=FIXED buggy=CAUGHT ok  cause=7 pc=0xc020fffc address=0xc4802010 in ffc_write_probe_u8+0x58 (the labelled probe)
+  control carve-98 fixed=FIXED buggy=CAUGHT ok  cause=24 pc=0xc020ffbc address=0x0 in ffc_write_probe_u8+0x58 (the labelled probe)
+  00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short         CAUGHT             ok  cause=7 pc=0xc0210370 address=0xc48205a0 in ffc_write_probe_u8+0x58 (the labelled probe)
+  01_699341d647_apedec_array_0000_writes_64_into_channel_1       CAUGHT             ok  cause=7 pc=0xc02103cc address=0xc48020a0 in ffc_write_probe_u32+0x58 (the labelled probe)
+  02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel      CAUGHT             ok  cause=5 pc=0xc02102bc address=0xc4802120 in ffc_read_probe_u32+0x38 (the labelled probe)
+  03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix    CAUGHT             ok  cause=5 pc=0xc02105f4 address=0xc48020a0 in ffc_read_probe_u32+0x38 (the labelled probe)
+  04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel        CAUGHT             ok  cause=7 pc=0xc02106dc address=0xc480202c in ffc_write_probe_u32+0x58 (the labelled probe)
+  05_9d3032b960_alsdec_opt_order_past_max_order                  CAUGHT             ok  cause=7 pc=0xc02106e0 address=0xc4802050 in ffc_write_probe_u32+0x58 (the labelled probe)
+  06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420                     CAUGHT             ok  cause=7 pc=0xc0210b00 address=0xc4802280 in ffc_write_probe_u8+0x58 (the labelled probe)
+  07_2563a33856_vp9_intra_pred_carved_for_old_bpp                CAUGHT             ok  cause=7 pc=0xc02108bc address=0xc4802080 in ffc_write_probe_u8+0x58 (the labelled probe)
+  08_b5ff61695f_swscale_v_line_at_pre_doubling_stride            CAUGHT             ok  cause=7 pc=0xc02106c8 address=0xc48020d0 in ffc_write_probe_u32+0x58 (the labelled probe)
+  09_043bcdcdb0_svq1enc_inter_block_runs_into_source             CAUGHT             ok  cause=7 pc=0xc0210584 address=0xc4802100 in ffc_write_probe_u8+0x58 (the labelled probe)
+  10_d2213b6493_rv34_b_block_carved_at_old_linesize              CAUGHT             ok  cause=7 pc=0xc02105b4 address=0xc4802400 in ffc_write_probe_u8+0x58 (the labelled probe)
+  11_68226ed9ec_vorbis_type1_residue_end_spans_channels          CAUGHT             ok  cause=5 pc=0xc0210650 address=0xc4802200 in ffc_read_probe_u32+0x38 (the labelled probe)
+ffmpeg/carved-repros on sublet-carve: 12 cases; {'CAUGHT': 12}; predicted CAUGHT; differing: none
+
+# image sha256 (16) per case
+00 d9c6c0c76a99c816 fixed=FIXED exit=0 buggy_exit=signal=11
+01 ba7f019640da36fd fixed=FIXED exit=0 buggy_exit=signal=11
+02 151d9065e30125e8 fixed=FIXED exit=0 buggy_exit=signal=11
+03 8ee1ad5b745cadd0 fixed=FIXED exit=0 buggy_exit=signal=11
+04 00eb8c5bead2a27f fixed=FIXED exit=0 buggy_exit=signal=11
+05 20e65feeb244f1cc fixed=FIXED exit=0 buggy_exit=signal=11
+06 a572f605305e301c fixed=FIXED exit=0 buggy_exit=signal=11
+07 7c1864836cf80bdc fixed=FIXED exit=0 buggy_exit=signal=11
+08 6e2a6ec4ca8772fb fixed=FIXED exit=0 buggy_exit=signal=11
+09 2fc3d697b9654def fixed=FIXED exit=0 buggy_exit=signal=11
+10 3ac680c8c4fca545 fixed=FIXED exit=0 buggy_exit=signal=11
+11 c52ab4cf67446e3e fixed=FIXED exit=0 buggy_exit=signal=11
+
+# the regions each FIXED run was issued (a faulting buggy run loses its buffered stdout)
+00 fixed: block linear bytes=35840 lent=65536
+00 fixed: carve ubuf off=1152 len=320 bounds=320 base_eq=1 region=[1152,1472)
+00 fixed: carve vbuf off=1472 len=320 bounds=320 base_eq=1 region=[1472,1792)
+01 fixed: block linear bytes=320 lent=512
+01 fixed: carve decoded[0] off=0 len=160 bounds=160 base_eq=1 region=[0,160)
+01 fixed: carve decoded[1] off=160 len=160 bounds=160 base_eq=1 region=[160,320)
+02 fixed: block linear bytes=576 lent=1024
+02 fixed: carve decoded[0] off=0 len=288 bounds=288 base_eq=1 region=[0,288)
+02 fixed: carve decoded[1] off=288 len=288 bounds=288 base_eq=1 region=[288,576)
+03 fixed: block linear bytes=320 lent=512
+03 fixed: carve channel[0] off=0 len=160 bounds=160 base_eq=1 region=[0,160)
+03 fixed: carve channel[1] off=160 len=160 bounds=160 base_eq=1 region=[160,320)
+04 fixed: block linear bytes=396 lent=512
+04 fixed: carve chan_data[0] off=0 len=132 bounds=132 base_eq=1 region=[0,512)
+04 fixed: carve chan_data[1] off=132 len=132 bounds=132 base_eq=1 region=[0,512)
+04 fixed: carve chan_data[2] off=264 len=132 bounds=132 base_eq=1 region=[0,512)
+05 fixed: block linear bytes=160 lent=256
+05 fixed: carve quant_cof[0] off=0 len=80 bounds=80 base_eq=1 region=[0,80)
+05 fixed: carve quant_cof[1] off=80 len=80 bounds=80 base_eq=1 region=[80,160)
+06 fixed: block linear bytes=1280 lent=2048
+06 fixed: carve intra_pred_data[0] off=0 len=128 bounds=128 base_eq=1 region=[0,128)
+06 fixed: carve intra_pred_data[1] off=128 len=128 bounds=128 base_eq=1 region=[128,256)
+06 fixed: carve intra_pred_data[2] off=256 len=128 bounds=128 base_eq=1 region=[256,384)
+06 fixed: carve above_y_nnz_ctx off=384 len=32 bounds=32 base_eq=1 region=[384,416)
+06 fixed: carve above_mode_ctx off=416 len=32 bounds=32 base_eq=1 region=[416,448)
+06 fixed: carve above_mv_ctx off=448 len=256 bounds=256 base_eq=1 region=[448,704)
+06 fixed: carve above_uv_nnz_ctx[0] off=704 len=32 bounds=32 base_eq=1 region=[704,736)
+06 fixed: carve above_uv_nnz_ctx[1] off=736 len=32 bounds=32 base_eq=1 region=[736,768)
+06 fixed: carve above_partition_ctx off=768 len=16 bounds=16 base_eq=1 region=[768,784)
+06 fixed: carve above_skip_ctx off=784 len=16 bounds=16 base_eq=1 region=[784,800)
+06 fixed: carve above_txfm_ctx off=800 len=16 bounds=16 base_eq=1 region=[800,816)
+06 fixed: carve above_segpred_ctx off=816 len=16 bounds=16 base_eq=1 region=[816,832)
+06 fixed: carve above_intra_ctx off=832 len=16 bounds=16 base_eq=1 region=[832,848)
+06 fixed: carve above_comp_ctx off=848 len=16 bounds=16 base_eq=1 region=[848,864)
+06 fixed: carve above_ref_ctx off=864 len=16 bounds=16 base_eq=1 region=[864,880)
+06 fixed: carve above_filter_ctx off=880 len=16 bounds=16 base_eq=1 region=[880,896)
+06 fixed: carve lflvl off=896 len=384 bounds=384 base_eq=1 region=[896,1280)
+07 fixed: block linear bytes=1664 lent=2048
+07 fixed: carve intra_pred_data[0] off=0 len=256 bounds=256 base_eq=1 region=[0,256)
+07 fixed: carve intra_pred_data[1] off=256 len=256 bounds=256 base_eq=1 region=[256,512)
+07 fixed: carve intra_pred_data[2] off=512 len=256 bounds=256 base_eq=1 region=[512,768)
+07 fixed: carve above_y_nnz_ctx off=768 len=32 bounds=32 base_eq=1 region=[768,800)
+07 fixed: carve above_mode_ctx off=800 len=32 bounds=32 base_eq=1 region=[800,832)
+07 fixed: carve above_mv_ctx off=832 len=256 bounds=256 base_eq=1 region=[832,1088)
+07 fixed: carve above_uv_nnz_ctx[0] off=1088 len=32 bounds=32 base_eq=1 region=[1088,1120)
+07 fixed: carve above_uv_nnz_ctx[1] off=1120 len=32 bounds=32 base_eq=1 region=[1120,1152)
+07 fixed: carve above_partition_ctx off=1152 len=16 bounds=16 base_eq=1 region=[1152,1168)
+07 fixed: carve above_skip_ctx off=1168 len=16 bounds=16 base_eq=1 region=[1168,1184)
+07 fixed: carve above_txfm_ctx off=1184 len=16 bounds=16 base_eq=1 region=[1184,1200)
+07 fixed: carve above_segpred_ctx off=1200 len=16 bounds=16 base_eq=1 region=[1200,1216)
+07 fixed: carve above_intra_ctx off=1216 len=16 bounds=16 base_eq=1 region=[1216,1232)
+07 fixed: carve above_comp_ctx off=1232 len=16 bounds=16 base_eq=1 region=[1232,1248)
+07 fixed: carve above_ref_ctx off=1248 len=16 bounds=16 base_eq=1 region=[1248,1264)
+07 fixed: carve above_filter_ctx off=1264 len=16 bounds=16 base_eq=1 region=[1264,1280)
+07 fixed: carve lflvl off=1280 len=384 bounds=384 base_eq=1 region=[1280,1664)
+08 fixed: block linear bytes=833 lent=1024
+08 fixed: carve chrUPixBuf off=0 len=416 bounds=416 base_eq=1 region=[0,416)
+08 fixed: carve chrVPixBuf off=416 len=416 bounds=416 base_eq=1 region=[416,832)
+09 fixed: block linear bytes=1536 lent=2048
+09 fixed: carve temp off=0 len=512 bounds=512 base_eq=1 region=[0,512)
+09 fixed: carve src off=512 len=256 bounds=256 base_eq=1 region=[512,768)
+10 fixed: block linear bytes=6144 lent=8192
+10 fixed: carve tmp_b_block_y[0] off=0 len=2048 bounds=2048 base_eq=1 region=[0,2048)
+10 fixed: carve tmp_b_block_y[1] off=2048 len=2048 bounds=2048 base_eq=1 region=[2048,4096)
+10 fixed: carve tmp_b_block_uv off=4096 len=2048 bounds=2048 base_eq=1 region=[4096,6144)
+11 fixed: block linear bytes=1024 lent=1024
+11 fixed: carve channel_residues[0] off=0 len=512 bounds=512 base_eq=1 region=[0,512)
+11 fixed: carve channel_residues[1] off=512 len=512 bounds=512 base_eq=1 region=[512,1024)
+co fixed: block linear bytes=64 lent=256
+co fixed: carve control off=0 len=16 bounds=16 base_eq=1 region=[0,16)
+co fixed: block linear bytes=64 lent=256
+co fixed: carve control off=0 len=16 bounds=16 base_eq=1 region=[0,16)
+
+# the first attempt (before ed9f91e69c5d) produced no reading: control carve-99 faulted in ffc_carve,
+# cause 24, on both arms -- offsetting the untagged block address -- and the runner exited 75.

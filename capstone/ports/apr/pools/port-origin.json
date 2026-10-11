@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/project-starch/llvm-capstone",
+  "original_directory": "capstone/ports/apr",
+  "scope": "The APR pool census -- fetch, shim, one freestanding compile, undefined-symbol classification -- grown into an allocator component port with a Capstone domain build and a Sublet adapter. The census scripts stay where they were and keep their numbers; the shim is shared, not copied.",
+  "files": {
+    "adapted/apr_shim.h": "adapted/apr_shim.h (unchanged location; one alignment knob added, default preserved)",
+    "build-apr-census.sh (the include-stripping sed)": "pools/patches/apr-1.7.4-0001-freestanding-includes.patch",
+    "fetch-apr.sh (archive cache)": "pools/upstream.json + cmake/APRSource.cmake, reading the same cached archive",
+    "../../bug-corpora/httpd/apr-pool-repros/shared/stubs.c": "pools/src/shared/services.c"
+  }
+}

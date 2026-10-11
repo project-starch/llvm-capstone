@@ -1,0 +1,88 @@
+{
+ "platform": "QEMU supervised CALL, one hart",
+ "boot_id": "e525c0a2-12d5-4e82-88c1-5854fabcca9b",
+ "mixed_starts": 1008,
+ "sublet": true,
+ "before": {
+  "version": 1,
+  "live_domains": 0,
+  "live_regions": 0,
+  "live_bytes": 0,
+  "cached_bytes": 138559488,
+  "poisoned_blocks": 0,
+  "nodes_high_water": 65285,
+  "nodes_live": 69,
+  "nodes_retired": 0,
+  "nodes_allocated_total": 65923,
+  "tag_pages": 649,
+  "node_capacity": 65536
+ },
+ "after": {
+  "version": 1,
+  "live_domains": 0,
+  "live_regions": 0,
+  "live_bytes": 0,
+  "cached_bytes": 138559488,
+  "poisoned_blocks": 0,
+  "nodes_high_water": 65285,
+  "nodes_live": 69,
+  "nodes_retired": 0,
+  "nodes_allocated_total": 77011,
+  "tag_pages": 649,
+  "node_capacity": 65536
+ },
+ "binaries": {
+  "qemu": "f9795d413ad1910a954dc918fcf469a2a13725a50d48d249dbe8a70cd741f85d",
+  "kernel": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+  "firmware": "11f7fb3eeb2f327237ff6da87334525314c851bd93a34a66e700d8cb5e3ae9ab",
+  "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f"
+ },
+ "environment": {
+  "CAPSTONE_GP_NONLIN": "1",
+  "CAPSTONE_REV_NODES": "65536"
+ },
+ "date": "2026-09-28",
+ "source_commits": {
+  "capstone-qemu": "6550f19489e08d2babccab06e89d43467f8e67b6",
+  "caplifive-buildroot": "99bd231",
+  "caplifive-opensbi": "3514060",
+  "capstone-sbi": "4701bdf"
+ },
+ "comparison": {
+  "previous_monitor": "2dc4d76 (same change on 1a39e37, without the upstream reclaim fill and M-6)",
+  "previous_firmware_sha256": "7416522d7c2425c6b71e4b5d4ad69c5cb2d2c3fd867e322b158b7f4a1a133154",
+  "previous_before": {
+   "version": 1,
+   "live_domains": 0,
+   "live_regions": 0,
+   "live_bytes": 0,
+   "cached_bytes": 138559488,
+   "poisoned_blocks": 0,
+   "nodes_high_water": 65285,
+   "nodes_live": 67,
+   "nodes_retired": 0,
+   "nodes_allocated_total": 65923,
+   "tag_pages": 648,
+   "node_capacity": 65536
+  },
+  "previous_after": {
+   "version": 1,
+   "live_domains": 0,
+   "live_regions": 0,
+   "live_bytes": 0,
+   "cached_bytes": 138559488,
+   "poisoned_blocks": 0,
+   "nodes_high_water": 65285,
+   "nodes_live": 67,
+   "nodes_retired": 0,
+   "nodes_allocated_total": 77011,
+   "tag_pages": 648,
+   "node_capacity": 65536
+  },
+  "same": "kernel, rootfs, QEMU, share, gate; gate output identical line for line"
+ },
+ "verification": {
+  "runtime_gate": "PASS: exhaustion/recovery, Sublet, cancellation, faults, 1008 mixed starts in one boot",
+  "note": "Rebased monitor: baseline nodes_live 69 and tag_pages 649 (previous 67 and 648), unchanged across the soak"
+ }
+}

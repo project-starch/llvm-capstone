@@ -1,0 +1,112 @@
+Subject: [PATCH 2/2] Connect node transitions to retained lifetime authority
+Upstream: APR 1.7.4
+Upstream-Archive: https://archive.apache.org/dist/apr/apr-1.7.4.tar.gz
+Upstream-SHA256: a4137dd82a185076fa50ba54232d920a17c6469c30b0876569e1c2a05ff311d9
+Build-Variants: native port, Capstone domain
+Depends-On: apr-1.7.4-0001-freestanding-includes.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+APR's allocator keeps freed nodes on its own size-bucketed lists and hands the
+same node straight back to the next request; under the default
+APR_ALLOCATOR_MAX_FREE_UNLIMITED it never calls free() at all. A hook on
+free() would therefore never fire on the path that matters. The two hooks sit
+on the free-list transitions instead: aprp_node_release where allocator_free
+files a node, after its header has been read and before its link is written,
+and aprp_node_issue at have_node, which every node passes through on its way
+to a pool whether it came off a list or fresh from the backing.
+
+Both return the alias upstream must use from then on. In the protected mode
+the adapter revokes the node's authority and mints a fresh alias at each
+transition, so a handle held across apr_pool_destroy is dead rather than
+rebound to whatever pool the node becomes next. malloc/free of a node become
+the payload backing; malloc/free of the allocator struct become the metadata
+heap, so an allocator never lives inside storage it hands out.
+
+Upstream keeps every decision: MIN_ALLOC, the buckets, LIFO order, which node
+apr_pool_create pops. Six non-debug call sites change; the APR_POOL_DEBUG
+implementation is a second allocator this port does not build and does not
+touch.
+
+--- a/memory/unix/apr_pools.c
++++ b/memory/unix/apr_pools.c
+@@ -1,4 +1,5 @@
+ #include "apr_shim.h"
++#include "port.h"
+ /* Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+@@ -172,7 +173,7 @@
+ 
+     *allocator = NULL;
+ 
+-    if ((new_allocator = malloc(SIZEOF_ALLOCATOR_T)) == NULL)
++    if ((new_allocator = aprp_meta_alloc(SIZEOF_ALLOCATOR_T)) == NULL)
+         return APR_ENOMEM;
+ 
+     memset(new_allocator, 0, SIZEOF_ALLOCATOR_T);
+@@ -196,12 +197,12 @@
+             munmap((char *)node - GUARDPAGE_SIZE,
+                    2 * GUARDPAGE_SIZE + ((node->index+1) << BOUNDARY_INDEX));
+ #else
+-            free(node);
++            aprp_node_discard(node);
+ #endif
+         }
+     }
+ 
+-    free(allocator);
++    aprp_meta_free(allocator);
+ }
+ 
+ #if APR_HAS_THREADS
+@@ -387,7 +388,7 @@
+     if ((node = mmap(NULL, size, PROT_READ|PROT_WRITE,
+                      MAP_PRIVATE|MAP_ANON, -1, 0)) == MAP_FAILED)
+ #else
+-    if ((node = malloc(size)) == NULL)
++    if ((node = aprp_node_backing(size)) == NULL)
+ #endif
+         return NULL;
+ 
+@@ -402,6 +403,10 @@
+     node->endp = (char *)node + size;
+ 
+ have_node:
++    /* Every node leaves here through the adapter: one popped off a free list
++     * as much as one fresh from the backing. In the protected mode this is
++     * where the free-list holder's alias dies and the pool's is minted. */
++    node = aprp_node_issue(node);
+     node->next = NULL;
+     node->first_avail = (char *)node + APR_MEMNODE_T_SIZE;
+ 
+@@ -430,6 +435,12 @@
+         next = node->next;
+         index = node->index;
+ 
++        /* The header has been read; now the authority every consumer held
++         * over this node is revoked and the free list gets a fresh alias to
++         * write its link through. Upstream never calls free() on this path,
++         * which is why the hook has to be HERE and not on free(). */
++        node = aprp_node_release(node);
++
+         APR_VALGRIND_NOACCESS((char *)node + APR_MEMNODE_T_SIZE,
+                               (node->index+1) << BOUNDARY_INDEX);
+ 
+@@ -477,7 +488,7 @@
+         munmap((char *)node - GUARDPAGE_SIZE,
+                2 * GUARDPAGE_SIZE + ((node->index+1) << BOUNDARY_INDEX));
+ #else
+-        free(node);
++        aprp_node_discard(node);
+ #endif
+     }
+ }
+@@ -1136,7 +1147,7 @@
+     if (!apr_pools_initialized)
+         return APR_ENOPOOL;
+     if ((pool_allocator = allocator) == NULL) {
+-        if ((pool_allocator = malloc(SIZEOF_ALLOCATOR_T)) == NULL) {
++        if ((pool_allocator = aprp_meta_alloc(SIZEOF_ALLOCATOR_T)) == NULL) {
+             if (abort_fn)
+                 abort_fn(APR_ENOMEM);
+ 

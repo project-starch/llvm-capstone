@@ -1,0 +1,44 @@
+{
+ "arm": "cheribsd-revocation",
+ "pin": "perl 5.36.3, source archive sha256 f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a, with this port's seven pointer-layout patches, no inner adapter (manifest: 'upstream; no Sublet/PoisonCap inner adapter')",
+ "binary_sha256": "450e6f5c17bfe9863ede0a686fc66cb4d355a9ab44a2e8edbc557ff7e27004a4",
+ "platform": "CheriBSD riscv64 purecap, the published-platform image whose loader accepts this binary",
+ "why_this_platform_and_not_the_other": "the stock image's rtld refuses the dynamically linked purecap perl before main with 'Traditional TLS not supported', and this SDK's clang cannot emit the alternative: -mtls-dialect=desc is 'unknown argument'. The binary needs exactly one TLS symbol, _ThreadRuneLocale from FreeBSD libc's ctype inlines, and gets R_RISCV_TLS_GOT_HI20 for it",
+ "why_not_the_static_image": "a static link is accepted by the kernel and then dies with SIGPROT. The cause is NOT Perl: a static purecap probe reads its own __thread int 7 back as 1074491920 and then faults at the first libc TLS access, so static TLS setup is broken on this platform for any program that touches it. An earlier attribution of this fault to perl_construct as a Perl defect is RETRACTED",
+ "revocation_knob": "selected PER PROCESS with _RUNTIME_REVOCATION_ENABLE=1 / _RUNTIME_REVOCATION_DISABLE=1, with the system-wide security.cheri.runtime_revocation_default left at 0",
+ "why_per_process": "FORCED, not chosen. With the system default at 1 this guest's own sshd runs under revocation, hits the PoisonCap fault and dies: even a 2.3 MB scp fails with 'Connection closed by remote host', while the identical copies succeed with the default at 0. The mruby arm made the same concession for the every_free knob",
+ "difference_from_the_mruby_arm": "mruby ran under the SYSTEM default (=1) on the stock image; this arm selects the same revocation per process. Both are CheriBSD revocation with its default settings, but the selection path differs and the platforms differ, so the two programs' CheriBSD columns are not interchangeable",
+ "knob_control": "every case ran TWICE, revocation off and on, and the pair is the control: 254b30e378 and 39b4841b25 are clean with it off and SIGPROT with it on, so the env var is provably live. Without that pair, '7 SIGPROT' would be indistinguishable from a knob that does nothing",
+ "controls": "the guest reports the sysctl before anything is scored; the interpreter must evaluate 6*7; the harness must load shim.pl from the staged library",
+ "transfers": "split and gzipped (perl 2.3 MB, library+cases 4.3 MB) because this guest's sshd drops a single 7.4 MB copy",
+ "result": {
+  "revocation_off": {
+   "SIGPROT": 5,
+   "clean": 5,
+   "perl_panic": 1
+  },
+  "revocation_on": {
+   "SIGPROT": 7,
+   "clean": 3,
+   "perl_panic": 1
+  }
+ },
+ "comparison_with_the_capstone_arms": {
+  "the_floor_is_identical": "sysalloc-sublet and cheribsd-revocation catch EXACTLY the same 7 cases -- not the same count, the same set, with no case unique to either. Protecting the system allocator spatially and temporally in a Capstone domain reproduces CheriBSD's revocation case for case, which makes that pair the floor this corpus measures the nested allocator against",
+  "the_nested_allocator_adds_one_on_top": "sublet-svheads is that same image plus the SV head arena and catches 8. The extra case is 17535c984a, and CheriBSD cannot reach it"
+ },
+ "is_the_extra_case_in_the_quarantine": {
+  "question": "17535c984a is clean on CheriBSD under default revocation. Is its SV head quarantined but not yet swept, or never in the quarantine at all?",
+  "answer": "never in the quarantine. Perl recycles the head on PL_sv_root and it never reaches free()",
+  "how_measured": "the shadow bitmap, one bit per 16-byte granule, set while that granule is quarantined. Membership is readable in O(1) without running a sweep (quarantine-probe.c, LD_PRELOADed, wrapping malloc and free)",
+  "numbers_under_default_revocation": {
+   "mallocs": 4072,
+   "frees": 2983,
+   "quarantined_after_free": 2983,
+   "reused_while_quarantined": 0
+  },
+  "why_that_settles_it": "all 2983 frees land in the quarantine, so the quarantine is fully active during the case. Zero mallocs return memory whose bit is still set. Had the head travelled free() -> malloc() it would either have been reissued while quarantined -- counted, and the count is 0 -- or swept first, which would have revoked the stale capability and faulted. Neither happened, so it never crossed the allocator boundary",
+  "probe_controls": "a freed block reads bit 1 and a live block reads 0 with revocation on; a freed block reads 0 with revocation off. So the bit tracks quarantine membership and not merely having been freed, and a zero from this probe is informative",
+  "every_free_was_tried_and_REJECTED": "running the case under _RUNTIME_REVOCATION_EVERY_FREE_ENABLE=1 does make it SIGPROT, and that is NOT evidence: with every-free, all 11 cases fault, including af11b0c528, which is an in-bounds read of a live object that no bounds and no revocation may legitimately catch. The configuration cannot distinguish, so its verdicts are not attributable and the earlier inference from it is withdrawn"
+ }
+}

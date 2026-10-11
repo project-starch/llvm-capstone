@@ -1,0 +1,52 @@
+{
+ "date": "2026-09-30",
+ "change": "musl patch 0005: fcntl keeps a lock command's argument a capability",
+ "platform": {
+  "qemu_sha256": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+  "firmware_fw_jump_sha256": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+  "module_sha256": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+  "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "note": "the platform of the delegation-v0-removal-stack checks (#144): step-one-ecall QEMU and firmware, launch-cost module, binfmt kernel",
+  "compiler": "dev 330014ea compiler sources",
+  "launcher_sha256": "546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94"
+ },
+ "images": {
+  "patched": {
+   "delegate_contract_sha256": "96173e044248ef58150d3fe18b1ba0c4303739a0a5a8ce8f8ad851a2c5d991d5",
+   "libc_sha256": "7d42620dcc77e72d7dd9945626df0e3b5ba9e5352c9e335f8eda7648cdb8cf44"
+  },
+  "control": {
+   "delegate_contract_sha256": "0b0dea2b3fc9e9ff5664d350f8d9571e9aad4e8a0fbe6d1b16acc6412542ce84",
+   "libc_sha256": "8bfa113e5fed1006191c9168208cfa24229c16abd8b55c9d177e10cfefecce19",
+   "note": "the same contract source linked against musl without patch 0005"
+  }
+ },
+ "binfmt_contract": {
+  "patched": {
+   "native-elf": "PASS",
+   "original-argv0": "PASS",
+   "io": "PASS",
+   "exec": "PASS",
+   "exec-closed": "PASS",
+   "exec-error": "PASS",
+   "lock": "PASS"
+  },
+  "control": {
+   "io, exec, exec-closed, exec-error": "PASS",
+   "lock": "status 255: capstone-exec: domain fault cause=24 address=0x0 last=0x2e preparing=0x2e (after ftruncate, before any fcntl round)"
+  }
+ },
+ "lock_mode": "the parent holds F_WRLCK on bytes 0-99; F_GETLK in the parent reports F_UNLCK (its own lock); a spawned second process sees F_WRLCK with the parent's pid, start 0, length 100, is refused byte 10 (EAGAIN/EACCES) and takes byte 100; the parent releases through F_SETLKW; a second child sees F_UNLCK and takes byte 10",
+ "libc_test": {
+  "summary": {
+   "PASS": 48,
+   "FAIL": 4,
+   "FAULT": 2,
+   "NOBUILD": 3,
+   "EXCLUDED": 20,
+   "total": 77
+  },
+  "against_unpatched": "all 77 verdicts equal to the delegation-v0-removal-stack run with the unpatched libc"
+ },
+ "not_run": "the application gate stops at its port images (perl.dom), which this kit does not stage; its 15 earlier lines passed"
+}

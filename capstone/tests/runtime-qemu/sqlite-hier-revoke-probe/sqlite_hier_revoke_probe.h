@@ -1,7 +1,7 @@
 #ifndef CAPSTONE_TESTS_RUNTIME_QEMU_SQLITE_HIER_REVOKE_PROBE_H
 #define CAPSTONE_TESTS_RUNTIME_QEMU_SQLITE_HIER_REVOKE_PROBE_H
 
-/* Stage-2 experiment for the use-after-close class (cve-repros rows 4/8/10/12,
+/* Stage-2 experiment for the use-after-close class (capi-repros rows 4/8/10/12,
  * HIERARCHICAL-REVOKE): does revoking a PARENT borrow cascade to a CHILD borrow?
  *
  *   parent (connection) == a region lent to the host as a revocable borrow

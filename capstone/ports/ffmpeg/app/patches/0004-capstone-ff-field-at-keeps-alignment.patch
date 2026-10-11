@@ -1,0 +1,19 @@
+--- a/libavutil/internal.h
++++ b/libavutil/internal.h
+@@ -76,7 +76,16 @@
+ /**
+  * Access a field in a structure by its offset.
+  */
++#ifdef __CAPSTONE__
++/* CAPSTONE: the cast from char * with a run-time offset gives the load or store alignment 1, and
++ * the backend then moves a capability-sized field byte by byte, which drops its tag (libavfilter's
++ * format negotiation read every list pointer untagged). The field is aligned for its type, so say
++ * so; the access is then one capability load or store. */
++#define FF_FIELD_AT(type, off, obj) \
++    (*(type *)__builtin_assume_aligned((char *)&(obj) + (off), _Alignof(type)))
++#else
+ #define FF_FIELD_AT(type, off, obj) (*(type *)((char *)&(obj) + (off)))
++#endif
+ 
+ /**
+  * Return NULL if CONFIG_SMALL is true, otherwise the argument

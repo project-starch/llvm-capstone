@@ -1,0 +1,139 @@
+pp_ctl.c: Preserve capabilities in saved regex state.
+
+rxres_save serializes RX_SAVED_COPY, RX_SUBBEG and the optional copied
+match buffer through UV slots. A UV is 64 bits here while a pointer is a
+128-bit capability, so rxres_restore recovers the address without its tag.
+The later SvREFCNT_dec(saved_copy) faults when lex.t releases a regexp.
+
+Use pointer-typed fields for the three pointers and retain UV slots only
+for numeric match offsets. This remains valid on ordinary pointer targets.
+
+--- a/pp_ctl.c
++++ b/pp_ctl.c
+@@ -375,0 +376,15 @@
++/* Keep saved regex pointers in pointer-typed slots. A UV cannot carry a
++ * capability tag when pointers are wider than integers. */
++typedef struct {
++    char *copied_subbeg;
++    UV nparens;
++#ifdef PERL_ANY_COW
++    SV *saved_copy;
++#endif
++    char *subbeg;
++    UV sublen;
++    UV suboffset;
++    UV subcoffset;
++    UV offsets[];
++} rxres_state;
++
+@@ -379 +394,2 @@
+-    UV *p = (UV*)*rsp;
++    rxres_state *p = (rxres_state *)*rsp;
++    UV *offsets;
+@@ -385,8 +401,6 @@
+-    if (!p || p[1] < RX_NPARENS(rx)) {
+-#ifdef PERL_ANY_COW
+-        i = 7 + (RX_NPARENS(rx)+1) * 2;
+-#else
+-        i = 6 + (RX_NPARENS(rx)+1) * 2;
+-#endif
+-        if (!p)
+-            Newx(p, i, UV);
++    if (!p || p->nparens < RX_NPARENS(rx)) {
++        const size_t bytes = sizeof(*p)
++                           + ((size_t)RX_NPARENS(rx) + 1) * 2 * sizeof(UV);
++        char *storage = (char *)p;
++        if (!storage)
++            Newx(storage, bytes, char);
+@@ -394,2 +408,3 @@
+-            Renew(p, i, UV);
+-        *rsp = (void*)p;
++            Renew(storage, bytes, char);
++        p = (rxres_state *)storage;
++        *rsp = p;
+@@ -398,2 +413 @@
+-    /* what (if anything) to free on croak */
+-    *p++ = PTR2UV(RX_MATCH_COPIED(rx) ? RX_SUBBEG(rx) : NULL);
++    p->copied_subbeg = RX_MATCH_COPIED(rx) ? RX_SUBBEG(rx) : NULL;
+@@ -401,2 +415 @@
+-    *p++ = RX_NPARENS(rx);
+-
++    p->nparens = RX_NPARENS(rx);
+@@ -404 +417 @@
+-    *p++ = PTR2UV(RX_SAVED_COPY(rx));
++    p->saved_copy = RX_SAVED_COPY(rx);
+@@ -407,5 +420,5 @@
+-
+-    *p++ = PTR2UV(RX_SUBBEG(rx));
+-    *p++ = (UV)RX_SUBLEN(rx);
+-    *p++ = (UV)RX_SUBOFFSET(rx);
+-    *p++ = (UV)RX_SUBCOFFSET(rx);
++    p->subbeg = RX_SUBBEG(rx);
++    p->sublen = (UV)RX_SUBLEN(rx);
++    p->suboffset = (UV)RX_SUBOFFSET(rx);
++    p->subcoffset = (UV)RX_SUBCOFFSET(rx);
++    offsets = p->offsets;
+@@ -413,2 +426,2 @@
+-        *p++ = (UV)RX_OFFS(rx)[i].start;
+-        *p++ = (UV)RX_OFFS(rx)[i].end;
++        *offsets++ = (UV)RX_OFFS(rx)[i].start;
++        *offsets++ = (UV)RX_OFFS(rx)[i].end;
+@@ -421 +434,2 @@
+-    UV *p = (UV*)*rsp;
++    rxres_state *p = (rxres_state *)*rsp;
++    UV *offsets = p->offsets;
+@@ -428,4 +442,3 @@
+-    RX_MATCH_COPIED_set(rx, *p);
+-    *p++ = 0;
+-    RX_NPARENS(rx) = *p++;
+-
++    RX_MATCH_COPIED_set(rx, p->copied_subbeg);
++    p->copied_subbeg = NULL;
++    RX_NPARENS(rx) = p->nparens;
+@@ -434,9 +447,8 @@
+-        SvREFCNT_dec (RX_SAVED_COPY(rx));
+-    RX_SAVED_COPY(rx) = INT2PTR(SV*,*p);
+-    *p++ = 0;
+-#endif
+-
+-    RX_SUBBEG(rx) = INT2PTR(char*,*p++);
+-    RX_SUBLEN(rx) = (I32)(*p++);
+-    RX_SUBOFFSET(rx) = (I32)*p++;
+-    RX_SUBCOFFSET(rx) = (I32)*p++;
++        SvREFCNT_dec(RX_SAVED_COPY(rx));
++    RX_SAVED_COPY(rx) = p->saved_copy;
++    p->saved_copy = NULL;
++#endif
++    RX_SUBBEG(rx) = p->subbeg;
++    RX_SUBLEN(rx) = (I32)p->sublen;
++    RX_SUBOFFSET(rx) = (I32)p->suboffset;
++    RX_SUBCOFFSET(rx) = (I32)p->subcoffset;
+@@ -444,2 +456,2 @@
+-        RX_OFFS(rx)[i].start = (I32)(*p++);
+-        RX_OFFS(rx)[i].end = (I32)(*p++);
++        RX_OFFS(rx)[i].start = (I32)(*offsets++);
++        RX_OFFS(rx)[i].end = (I32)(*offsets++);
+@@ -452 +464 @@
+-    UV * const p = (UV*)*rsp;
++    rxres_state *const p = (rxres_state *)*rsp;
+@@ -458 +470 @@
+-        void *tmp = INT2PTR(char*,*p);
++        char *tmp = p->copied_subbeg;
+@@ -460,4 +472,2 @@
+-#ifdef PERL_ANY_COW
+-        U32 i = 9 + p[1] * 2;
+-#else
+-        U32 i = 8 + p[1] * 2;
++        const size_t bytes = sizeof(*p)
++                           + ((size_t)p->nparens + 1) * 2 * sizeof(UV);
+@@ -465,2 +474,0 @@
+-#endif
+-
+@@ -468 +476 @@
+-        SvREFCNT_dec (INT2PTR(SV*,p[2]));
++        SvREFCNT_dec(p->saved_copy);
+@@ -471 +479 @@
+-        PoisonFree(p, i, sizeof(UV));
++        PoisonFree(p, bytes, char);
+@@ -473 +480,0 @@
+-

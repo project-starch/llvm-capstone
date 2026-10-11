@@ -54,9 +54,20 @@ if [[ ! -f "$PATCHED" ]]; then
   # OUT_DIR is ours (the silicon image's), not the amalgamation's: without the override the
   # fallback writes sqlite3-capstone.c next to the image and the check below fails anyway
   # ("still no .../sqlite-build/sqlite3-capstone.c"). Found 2026-09-07 after a reboot emptied /tmp.
-  OUT_DIR="$(dirname "$PATCHED")" bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
+  # env -u SQLITE_SUBLET_PATCH: this bootstrap wants the PLAIN amalgamation. The Sublet patch is
+  # applied below, to this build's own private copy (see :66). Without the -u the variable is
+  # inherited here, the inner build patches $PATCHED, and the copy below is patched a second time:
+  #   Reversed (or previously applied) patch detected!  ... 28 out of 28 hunks ignored
+  # and the build fails. It fires only when $PATCHED is MISSING -- a cold or cleared
+  # CAPSTONE_TMP_ROOT -- which is why a warm tree never showed it.
+  env -u SQLITE_SUBLET_PATCH OUT_DIR="$(dirname "$PATCHED")" \
+    bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
 fi
 [[ -f "$PATCHED" ]] || { echo "still no $PATCHED" >&2; exit 1; }
+if grep -q '^#include <sublet/sublet.h>$' "$PATCHED"; then
+  echo "patched amalgamation already contains Sublet; supply a clean source with PATCHED_SQLITE" >&2
+  exit 1
+fi
 
 # Stage the amalgamation's includes side by side so plain #include works.
 cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
@@ -72,9 +83,21 @@ cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 SUBLET_INC=()
 if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OBJ_DIR" < "$SQLITE_SUBLET_PATCH"
-  SUBLET_INC=(-I"$REPO_ROOT/capstone/sublet"
+  # capstone/runtime/include FIRST: the patch's `#include <sublet/sublet.h>` means the
+  # capstone_cap_slot header that lives there. It was missing from this list altogether, so a
+  # Sublet build here failed with "'sublet/sublet.h' file not found" -- a different symptom from
+  # build-sqlite-capstone.sh's, same cause. See that script's SUBLET_FLAGS comment.
+  SUBLET_INC=(-I"$REPO_ROOT/capstone/runtime/include"
+              -I"$REPO_ROOT/capstone/sublet"
               -I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
   echo "== Sublet port applied to this build's amalgamation ($(basename "$SQLITE_SUBLET_PATCH"))"
+fi
+
+# Optional measured-source overlay, applied after the allocator port so a
+# single benchmark can instrument its spatial and Sublet memsys5 variants.
+# The patch lives outside the fetched amalgamation and must match exactly.
+if [ -n "${SQLITE_STUDY_PATCH:-}" ]; then
+  patch -s -F0 -p1 -d "$OBJ_DIR" < "$SQLITE_STUDY_PATCH"
 fi
 
 # ...AND THE HEADER, which this line has always claimed to do and never did (found 2026-09-10 by the
@@ -84,7 +107,14 @@ fi
 # sqlite3-capstone.c is included first and defines SQLITE3_H at its :355, so the host header expands
 # to nothing. It is NOT inert for any TU that includes the VFS header WITHOUT the amalgamation ahead
 # of it: that compiles against another version's declarations and nothing warns.
-_amalg_h=$(ls -d "$CAPSTONE_TMP_ROOT"/sqlite-src/sqlite-amalgamation-*/sqlite3.h 2>/dev/null | head -1)
+if [[ -n "${SQLITE_AMALGAMATION_HEADER:-}" ]]; then
+  _amalg_h=$SQLITE_AMALGAMATION_HEADER
+  [[ -f "$_amalg_h" ]] || {
+    echo "SQLITE_AMALGAMATION_HEADER=$_amalg_h does not exist" >&2; exit 1;
+  }
+else
+  _amalg_h=$(ls -d "$CAPSTONE_TMP_ROOT"/sqlite-src/sqlite-amalgamation-*/sqlite3.h 2>/dev/null | head -1)
+fi
 if [[ -n "$_amalg_h" ]]; then
   cp -f "$_amalg_h" "$OBJ_DIR/sqlite3.h"
 else
@@ -772,6 +802,22 @@ PYRF
   # tokenizer rejects), but a reference in dead code still has to link.
   _speedtest1_builtins="divdf3"
   echo "== speedtest1 staged from $SQLITE_SPEEDTEST1_SRC ($(wc -l < "$OBJ_DIR/speedtest1.c") lines)"
+fi
+
+# SPEEDTEST1_PROBE_SRC=<file.c> with DOMAIN_EXTRA_DEFS containing -DSPEEDTEST1_PROBE_RT=1 -- S1's probes
+# on silicon: stage the probe source as speedtest1_probe.c, which speedtest1_measure.c #includes under
+# that define (one image, the probe chosen at run time by `--s1-probe <n>`). It cannot be its own object,
+# for the reason speedtest1.c cannot (above). Each half without the other is refused, rather than
+# building an image that looks valid: the define alone fails to compile on a missing include, and the
+# source alone would build the measurement image under a probe's name.
+if [[ -n "${SPEEDTEST1_PROBE_SRC:-}" ]]; then
+  [[ -f "$SPEEDTEST1_PROBE_SRC" ]] || { echo "SPEEDTEST1_PROBE_SRC=$SPEEDTEST1_PROBE_SRC does not exist" >&2; exit 1; }
+  [[ "${DOMAIN_EXTRA_DEFS:-}" == *-DSPEEDTEST1_PROBE_RT=1* ]] || {
+    echo "SPEEDTEST1_PROBE_SRC is set but DOMAIN_EXTRA_DEFS has no -DSPEEDTEST1_PROBE_RT=1" >&2; exit 1; }
+  cp -f "$SPEEDTEST1_PROBE_SRC" "$OBJ_DIR/speedtest1_probe.c"
+  echo "== S1 probes staged from $SPEEDTEST1_PROBE_SRC (run-time selector --s1-probe <n>)"
+else
+  rm -f "$OBJ_DIR/speedtest1_probe.c"   # a reused OUT_DIR must not carry an earlier probe into this image
 fi
 
 # FAILSTOP=<n> -- DIAGNOSTIC ONLY. Clamp inside fail(), which WEDGES (S-02 Site A,
@@ -2732,7 +2778,7 @@ COMMON=("${SUBLET_INC[@]}" -target capstone64-unknown-elf -Xclang -target-featur
         # sibling calls: -fno-optimize-sibling-calls retired 2026-09-05 -- C-28 (tail calls emitted as calls) is fixed; W-16 pair AGREE-PASS at -O2, and the coremark_matrix silicon rung built with sibling calls returned its oracle (board-results/2026-09-05.tsv B4)
         -ffreestanding -fno-builtin
         -include "$ADAPTED/capstone_sqlite_libc.h"
-        -I"$ADAPTED" -I"$SCRIPT_DIR" -I"$VFS_DIR" -I"$OBJ_DIR"
+        -I"$ADAPTED/stubinc" -I"$ADAPTED" -I"$SCRIPT_DIR" -I"$VFS_DIR" -I"$OBJ_DIR"
         -I"$(dirname "$PATCHED")" -I"$BUILTINS")
 
 echo "== compiling the single silicon TU (this is the first time SQLite sees the silicon ABI)"
@@ -2995,15 +3041,28 @@ if (( ${#_builtin_skipped[@]} )); then
   echo "   builtins with no own source file (expected: symbols inside comparedf2.c): ${_builtin_skipped[*]}"
 fi
 
+# DOMAIN_BASE_VA relocates the entry VA (default 0x10000), as build-ladder-domain.sh does. Without
+# it every SQLite image enters at 0x10000, so only one may be staged per boot (R-3: a second domain
+# at the same VA in one boot hangs), and a SQLite boot cannot carry a known-good control beside the
+# image under test. The default path runs the original single sed, so every recorded image is
+# byte-identical; a non-default base goes through placeholders for the reason given in
+# build-ladder-domain.sh (a global `s/0x10000/` would also rewrite a window whose text contains it).
+DOMAIN_BASE_VA=${DOMAIN_BASE_VA:-0x10000}
 # Two-pass link: pass 1 only to measure .text, pass 2 with the real globals offset.
 link() {  # $1 = globals offset literal, $2 = output
   local lds="$OBJ_DIR/link.ld"
-  sed "s/0x10000 + 0x1000/0x10000 + $1/" "$GPFREE/link-gpfree.ld" > "$lds"
+  if [[ "$DOMAIN_BASE_VA" == "0x10000" ]]; then
+    sed "s/0x10000 + 0x1000/0x10000 + $1/" "$GPFREE/link-gpfree.ld" > "$lds"
+  else
+    sed -e "s/0x10000 + 0x1000/@BASE@ + @WIN@/" \
+        -e "s/0x10000/@BASE@/g" \
+        -e "s/@WIN@/$1/" \
+        -e "s/@BASE@/$DOMAIN_BASE_VA/g" "$GPFREE/link-gpfree.ld" > "$lds"
+  fi
   # VERIFY, because a sed whose pattern stops matching is a SILENT no-op: the build would
-  # succeed and quietly link at the DEFAULT window. (No base-VA substitution here -- SQLite
-  # images have no DOMAIN_BASE_VA knob, which is why exactly one may be staged per boot.)
-  grep -q -- "0x10000 + $1" "$lds" || {
-    echo "build-sqlite-silicon.sh: linker-script substitution FAILED (wanted '0x10000 + $1')" >&2
+  # succeed and quietly link at the DEFAULT window or base.
+  grep -q -- "$DOMAIN_BASE_VA + $1" "$lds" || {
+    echo "build-sqlite-silicon.sh: linker-script substitution FAILED (wanted '$DOMAIN_BASE_VA + $1')" >&2
     echo "  the '0x10000 + 0x1000' pattern in $GPFREE/link-gpfree.ld has probably changed." >&2
     exit 1; }
   # INTERP_BUILD_LIMIT=<N> (diagnostic only) clamps how many carve iterations the glue

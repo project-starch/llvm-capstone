@@ -1,0 +1,63 @@
+{
+  "status": "PASS",
+  "purpose": "Expose post-copy-back epoll event races with a controlled interleaving",
+  "interleaving": "Both variants insert nanosleep({0, 1000000}) after dl_call(CAPSTONE_SYS_epoll_pwait, raw) and before event conversion. Only the mutated variant declares wire[1024] static.",
+  "shared_buffer_mutation": {
+    "status": "FAIL",
+    "tests": {
+      "unsupported_clone_refused": true,
+      "tls mutex cond tagged_join": true,
+      "timed_wait": true,
+      "independent_blocking_io": true,
+      "private_epoll_events": false,
+      "shared_tls_transport": false,
+      "64_joined_lifetimes": false,
+      "exit": false,
+      "cleanup": true
+    },
+    "harts": 1,
+    "virtual_vm_abi": 3,
+    "input_sha256": {
+      "launcher": "d800c57bdd8b9708d71e2f45f8d9f5af6ef47f949a34101ea82674b1faf6a206",
+      "module": "0f6347aececb1fd2aea6aa2f1d346aead1a756a1a78cf5e9e231d9cd4a409fb5",
+      "application": "218c0d7637d3c1cc22fafa11102f00db29f30bbe24ecab3bb05fa8007bd23e2f",
+      "qemu": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+      "source": "8f881d64bfc7273bdcf213ab24806bfed4c7d7ed7d6333956326ead43463836d",
+      "Image": "ca9fc7d8ad08554295a3296706c35c135e51f123f910f69a41a624a287cc8356",
+      "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+    },
+    "gate_sha256": "128f93709619e2bffac61fa3de62be632bb4720579dd17baab1396e2c540f211",
+    "runner_sha256": "0732dde661b50c7914ec5c4425cdfe1392dfd7392c980e14473d887007ffbcab"
+  },
+  "private_buffer_control": {
+    "status": "PASS",
+    "tests": {
+      "unsupported_clone_refused": true,
+      "tls mutex cond tagged_join": true,
+      "timed_wait": true,
+      "independent_blocking_io": true,
+      "private_epoll_events": true,
+      "shared_tls_transport": true,
+      "64_joined_lifetimes": true,
+      "exit": true,
+      "cleanup": true
+    },
+    "harts": 1,
+    "virtual_vm_abi": 3,
+    "input_sha256": {
+      "launcher": "d800c57bdd8b9708d71e2f45f8d9f5af6ef47f949a34101ea82674b1faf6a206",
+      "module": "0f6347aececb1fd2aea6aa2f1d346aead1a756a1a78cf5e9e231d9cd4a409fb5",
+      "application": "df1006d718bf1ad165a8c4e2314bcb271279cd2e093369d194eac2dbc3424107",
+      "qemu": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+      "source": "8f881d64bfc7273bdcf213ab24806bfed4c7d7ed7d6333956326ead43463836d",
+      "Image": "ca9fc7d8ad08554295a3296706c35c135e51f123f910f69a41a624a287cc8356",
+      "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+    },
+    "gate_sha256": "128f93709619e2bffac61fa3de62be632bb4720579dd17baab1396e2c540f211",
+    "runner_sha256": "0732dde661b50c7914ec5c4425cdfe1392dfd7392c980e14473d887007ffbcab"
+  },
+  "observed_shared_failure": "epoll_worker: out.data.u64 == in.data.u64 assertion fails; virtual process exits 139",
+  "note": "Uninstrumented old-buffer run passed; passing that run does not exclude the race."
+}

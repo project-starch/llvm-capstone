@@ -2,8 +2,26 @@
 #define PYMALLOC_PORT_H
 #include <stddef.h>
 #include <stdint.h>
+/* A capability lifetime adapter owns the arena, so backing.c does not. The
+ * domain and PoisonCap targets imply it here rather than only in CMake,
+ * because two builds compile this port's files outside CMake with just their
+ * own target macro: the interpreter's pymalloc arm
+ * (ports/cpython/app/prepare-cpython-capstone.sh) and its CheriBSD build
+ * (ports/cpython/app/cheribsd/build.sh). */
+#if !defined(PYMALLOC_CAPABILITY) && \
+    (defined(PYMALLOC_DOMAIN) || defined(PYMALLOC_POISONCAP))
+#define PYMALLOC_CAPABILITY 1
+#endif
+/* Capacity. Overridable from the build: an earlier campaign raised these by
+ * editing the source, so the raised values lived in one working tree only and
+ * the next build silently went back to the defaults. The defaults are
+ * unchanged; -D on the compiler line now takes effect. */
+#ifndef PYM_ARENA_BYTES
 #define PYM_ARENA_BYTES (64UL * 1024 * 1024)
+#endif
+#ifndef PYM_META_BYTES
 #define PYM_META_BYTES (16UL * 1024 * 1024)
+#endif
 #define PYM_FILE_BYTES (8UL * 1024 * 1024)
 #define PYM_MAX_OBJECTS 65536
 #define PYM_MAGIC UINT64_C(0x31594c50524d5950)
@@ -32,6 +50,9 @@ void pym_pool_reclass(void *, size_t, size_t);
 void *pym_block_pointer(void *, size_t);
 void *pym_issue(void *, size_t);
 void *pym_release(void *);
+void pym_defer_free(void *, void *, void (*)(void *, void *));
+void pym_drain_deferred(void);
+int pym_can_resize_inplace(void);
 void *pym_resize(void *, size_t);
 size_t pym_requested(void *);
 void pym_validate(void *);

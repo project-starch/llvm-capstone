@@ -1,0 +1,14 @@
+{
+  "repository_base": "7b364c678757cf7ea3d08e4f4f4a8b27ab5d3c25",
+  "working_tree_source_sha256": {
+    "capstone/experiments/study/prepare-sqlite-memory.py": "678ca4c1bef20db8be1fd783b2386522eda7567806cfbbcb37ca375dee5cb3e4",
+    "capstone/experiments/study/build-sqlite-memory.py": "aa291da2b8cd6ea5080ae3ed691de1ef21a1ae8cef3c893feb670568bb1d3160",
+    "capstone/experiments/study/plot-sqlite-normalized.py": "10fe90491a825de69f23d6c12192a1af6701d42a5fec108f94bb5b1a9165b006",
+    "capstone/experiments/study/check-build-comparability.py": "3e7f72c41cb3241de2a12f3edd18631d1a1c5b9f66d2d3a8310d2c013ed0e82a",
+    "capstone/ports/sqlite/build-sqlite-silicon.sh": "93f94d0248da2e4bde70dfe6a2939cbd6ddc261013c98e0ececde8f10644195e",
+    "capstone/ports/sqlite/build-sqlite-host.sh": "9b021dec91eb93f3c8b0e2ac96e5ea5ee0300093358d3fa13726dce5788e6fdd",
+    "capstone/ports/sqlite/speedtest1_measure.c": "23f86ac2f0148f6486b69604c0c84f30a31a70d690d2d3bf31cb97785d6f35d5",
+    "capstone/ports/common/host/cheribsd/guest.py": "c55432f7d58ba5a37c9a28040e259f759c956f68164e83252a4b829c809dc7e6",
+    "capstone/tests/runtime-qemu/run-domain-smoke.py": "8a09925ee7b955d3be7e28ad441a30bfb70b6f0ca25903af79e88faa70bb8ffd"
+  }
+}

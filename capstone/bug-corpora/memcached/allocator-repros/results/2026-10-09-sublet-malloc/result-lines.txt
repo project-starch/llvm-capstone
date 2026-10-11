@@ -1,0 +1,28 @@
+# memcached allocator-repros, sublet-malloc arm: the ledger's mode 2 (stock slabs/cache on Sublet as the
+# system allocator); pre-registered f7adf03a1009; capstone-qemu 6e5e136a070b0ee9; clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)
+# image sha256 (16) | runner line
+34c079e778270af4 | OK   case=0 rbuf-copied-after-cache-free       sublet-malloc
+110d91d5605fd1ac | OK   case=1 io-walk-reads-freed-link           sublet-malloc
+88e093706359cbc4 | OK   case=2 tail-repair-frees-referenced-item  sublet-malloc
+97da40cdb1541f17 | OK   case=3 refcount-overflow-frees-linked-item sublet-malloc
+d714de5b223834bf | OK   case=4 unlocked-refcount-drift            sublet-malloc
+59d41478f9698d66 | OK   case=5 item-data-one-past                 sublet-malloc
+47c8f937425920ad | OK   case=6 suffix-write-no-space              sublet-malloc
+da0eac83b369dfa3 | OK   case=7 unterminated-key-read              sublet-malloc
+e5950dd6b1168050 | FAIL case=8 ascii-all-spaces-scan-past-rbuf    sublet-malloc cause=5 pc=0x1018abbe0 halted
+
+# case 8, the fault line from its serial log (the runner's FAIL is its probe-pc rule: the fault is in
+# the defective scan, before the probe, exactly as the spatial and sublet arms recorded):
+[CAPSTONE] Cap mem access OOB: insn = 00050503, pc = 1018abbe0, pcc_base = 1018a0000, va = bbe0, rs1 = x10, cursor = e4a04000, imm = 0, addr = e4a04000, size = 1, bounds = (e4a00000, e4a04000)
+
+# same-image control: mode 1 (sublet) on cases 0, 2, 4 of these images:
+OK   case=0 rbuf-copied-after-cache-free       sublet   cause=24 pc=0x10188b560 expected=0x10188b560 halted
+OK   case=2 tail-repair-frees-referenced-item  sublet   cause=24 pc=0x10186a710 expected=0x10186a710 halted
+OK   case=4 unlocked-refcount-drift            sublet   cause=24 pc=0x10186a710 expected=0x10186a710 halted
+
+# negative test of the mode-2 page-bound check (expected end moved 16 bytes, one-off image, case 5):
+FAIL case=5 item-data-one-past                 sublet-malloc  report status=509 completed=0
+
+# same-image control, second run: mode 1 (sublet) on cases 1 and 3 of these images:
+OK   case=1 io-walk-reads-freed-link           sublet   cause=24 pc=0x10186b560 expected=0x10186b560 halted
+OK   case=3 refcount-overflow-frees-linked-item sublet   cause=24 pc=0x1018aa710 expected=0x1018aa710 halted

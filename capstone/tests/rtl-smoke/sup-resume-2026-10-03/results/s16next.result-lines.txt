@@ -1,0 +1,129 @@
+# session s16next, bitstream caplifive_supcall_36a641e0b.bit; SEQ (image, start/end, sha256 prefix):
+control-call-retpc START 05:42:22 a05ca464c4f683cd
+control-call-retpc END rc=0 05:43:04
+s16st-plain-n32-r1 START 05:43:12 63e457d23f97423d
+s16st-plain-n32-r1 END rc=2 05:45:52
+s16st-plain-n4-r3 START 05:46:00 e0e8bf50a3b8edf9
+s16st-plain-n4-r3 END rc=2 05:48:39
+s16st-plain-n24-r3 START 05:48:47 13f96258a0699778
+s16st-plain-n24-r3 END rc=2 05:51:27
+s16st-plain-n32-r3 START 05:51:35 64c1f390d7d21d3e
+s16st-plain-n32-r3 END rc=2 05:54:15
+s16st-esc-n8-retfence START 05:54:23 c3340e82e32c4076
+s16st-esc-n8-retfence END rc=2 05:57:02
+s16st-esc-n8 START 05:57:10 c710c07f8bf11c56
+s16st-esc-n8 END rc=2 05:59:50
+
+== control-call-retpc
+SUPTEST BEGIN R
+SV 0000000000000000
+SV 0000000000000012
+SV 0000000000000021
+SV 0000000000000000
+SV 0000000000000051
+SV 0000000000000000
+SV 0000000000000000
+SV 0000000000000000
+SUPTEST END
+== s16st-plain-n32-r1
+SUPTEST BEGIN 
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x06 00000110
+sw=228 {1,dom_switch_idx[6:0]} 0x84 10000100
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=238 {busy_seen,pc_loaded_seen,last_data_metadata_en,last_reg_is_set,last_reg_id[3:0]} 0xd4 11010100
+sw=239 {0,dom_switch_last_idx_log[6:0]} 0x04 00000100
+sw=240 {0,dom_switch_last_reg_id_log[6:0]} 0x04 00000100
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+sw=194 {000000,store_state} 0x03 00000011
+sw=195 {0000,load_state} 0x00 00000000
+commit pc 0x00000000800003de
+== s16st-plain-n4-r3
+SUPTEST BEGIN 
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x06 00000110
+sw=228 {1,dom_switch_idx[6:0]} 0x84 10000100
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=238 {busy_seen,pc_loaded_seen,last_data_metadata_en,last_reg_is_set,last_reg_id[3:0]} 0xd4 11010100
+sw=239 {0,dom_switch_last_idx_log[6:0]} 0x04 00000100
+sw=240 {0,dom_switch_last_reg_id_log[6:0]} 0x04 00000100
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+sw=194 {000000,store_state} 0x03 00000011
+sw=195 {0000,load_state} 0x00 00000000
+commit pc 0x000000008000036e
+== s16st-plain-n24-r3
+SUPTEST BEGIN 
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x06 00000110
+sw=228 {1,dom_switch_idx[6:0]} 0x84 10000100
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=238 {busy_seen,pc_loaded_seen,last_data_metadata_en,last_reg_is_set,last_reg_id[3:0]} 0xd4 11010100
+sw=239 {0,dom_switch_last_idx_log[6:0]} 0x04 00000100
+sw=240 {0,dom_switch_last_reg_id_log[6:0]} 0x04 00000100
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+sw=194 {000000,store_state} 0x03 00000011
+sw=195 {0000,load_state} 0x00 00000000
+commit pc 0x00000000800003be
+== s16st-plain-n32-r3
+SUPTEST BEGIN 
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x06 00000110
+sw=228 {1,dom_switch_idx[6:0]} 0x84 10000100
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=238 {busy_seen,pc_loaded_seen,last_data_metadata_en,last_reg_is_set,last_reg_id[3:0]} 0xd4 11010100
+sw=239 {0,dom_switch_last_idx_log[6:0]} 0x04 00000100
+sw=240 {0,dom_switch_last_reg_id_log[6:0]} 0x04 00000100
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+sw=194 {000000,store_state} 0x03 00000011
+sw=195 {0000,load_state} 0x00 00000000
+commit pc 0x00000000800003de
+== s16st-esc-n8-retfence
+SUPTEST BEGIN 
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x04 00000100
+sw=228 {1,dom_switch_idx[6:0]} 0x87 10000111
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=238 {busy_seen,pc_loaded_seen,last_data_metadata_en,last_reg_is_set,last_reg_id[3:0]} 0xc7 11000111
+sw=239 {0,dom_switch_last_idx_log[6:0]} 0x07 00000111
+sw=240 {0,dom_switch_last_reg_id_log[6:0]} 0x07 00000111
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+sw=194 {000000,store_state} 0x03 00000011
+sw=195 {0000,load_state} 0x00 00000000
+commit pc 0x0000000080000a34
+== s16st-esc-n8
+SUPTEST BEGIN 
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x04 00000100
+sw=228 {1,dom_switch_idx[6:0]} 0x87 10000111
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=238 {busy_seen,pc_loaded_seen,last_data_metadata_en,last_reg_is_set,last_reg_id[3:0]} 0xc7 11000111
+sw=239 {0,dom_switch_last_idx_log[6:0]} 0x07 00000111
+sw=240 {0,dom_switch_last_reg_id_log[6:0]} 0x07 00000111
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+sw=194 {000000,store_state} 0x03 00000011
+sw=195 {0000,load_state} 0x00 00000000
+commit pc 0x0000000080000a56

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# row14 -- the LITERAL matched pair for cve-repros/row14_cpython_uninit_connection
+# row14 -- the LITERAL matched pair for capi-repros/row14_cpython_uninit_connection
 # (UNINIT / use-before-init). Real SQLite, one domain. The connection handle `db`
 # is modelled as a genuine UNINIT capability (task-009: revoke a still-linear
 # lineage -> UNINIT). before.c reads `*(unsigned char *)c->db` before open; here

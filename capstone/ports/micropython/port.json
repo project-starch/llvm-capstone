@@ -1,0 +1,19 @@
+{
+  "program": "micropython",
+  "role": "full-application",
+  "title": "The MicroPython interpreter and its GC heap as one domain image",
+  "upstream": {
+    "version": "2e3304a",
+    "commit": "2e3304a",
+    "pin_source": {
+      "file": "capstone/ports/micropython/fetch-micropython.sh",
+      "grep": "MPY_COMMIT=${MPY_COMMIT:-2e3304a}"
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "silicon"
+  ],
+  "workload": "the registered upstream test selection",
+  "note": "Pinned to a commit; upstream release tags are not used by this port."
+}

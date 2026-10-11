@@ -1,0 +1,9 @@
+--- a/src/dirent/__dirent.h
++++ b/src/dirent/__dirent.h
+@@ -7,5 +7,5 @@
+ 	volatile int lock[1];
+ 	/* Any changes to this struct must preserve the property:
+ 	 * offsetof(struct __dirent, buf) % sizeof(off_t) == 0 */
+-	char buf[2048];
++	char buf[32768];
+ };

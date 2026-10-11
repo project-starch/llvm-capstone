@@ -1,0 +1,16 @@
+{
+  "images": {
+    "11-http-header-map": "cc9a5a5504bd1c7cf95eedba4bb374bdd4e282901cd743ea54f01cdd6e5da419",
+    "13-http-range-cursor-past-chunk": "84b9bef6b9ee377bdd2361c555cafb185434eee31974f302b3295d9a5e2450aa",
+    "18-rtps-batch-sample-info-unguarded": "79b4978473d9bc68bb71ae5fca0efd84989c054457d369c9f55bb788076ed852",
+    "19-ntlmssp-blob-length-before-check": "806c3ea6d9b389e5be35ae0419ec45005f3f84f883e44e204c0ad5ed1e7c537c",
+    "20-proto-undecoded-bitmap-unbounded": "36f7bceb97bed4484588afbeeefa21bf305fde62ded0ab848fcb46693eb5d44b",
+    "21-tcp-flags-str-sixteen-bytes": "d55e47c2f12c350cbe6b85af78ef6a28d334a5f55cf9713eeb0cc4ef0b0b5d76"
+  },
+  "domain_loader": "2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7",
+  "qemu": "6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2",
+  "clang": "c77785e878b183fc246ad535b6d509d2c56f33105cb0f3b9be77abd48e528df0",
+  "node_capacity": 65536,
+  "distinct_trace_inputs": 6,
+  "arms": 12
+}

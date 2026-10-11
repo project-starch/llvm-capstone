@@ -1,0 +1,44 @@
+--- a/libavfilter/framepool.c
++++ b/libavfilter/framepool.c
+@@ -28,6 +28,15 @@
+ #include "libavutil/mem.h"
+ #include "libavutil/pixfmt.h"
+ 
++/* Capstone: align by ADDING an offset to the pointer, so the capability tag survives.
++ * (uint8_t *)FFALIGN((uintptr_t)p, a) rebuilds a pointer from an integer, which is
++ * untagged and faults at the first dereference (patch 0002 does the same in frame.c).
++ * NULL stays NULL: arithmetic on a null capability traps. */
++static inline uint8_t *cap_align_ptr(uint8_t *p, size_t align)
++{
++    return p ? p + (FFALIGN((uintptr_t)p, align) - (uintptr_t)p) : p;
++}
++
+ static av_cold int frame_pool_video_init(int width, int height,
+                                          enum AVPixelFormat format,
+                                          int align, FFFramePool *pool)
+@@ -152,7 +161,7 @@
+             if (!frame->buf[i])
+                 goto fail;
+ 
+-            frame->data[i] = (uint8_t *)FFALIGN((uintptr_t)frame->buf[i]->data, pool->align);
++            frame->data[i] = cap_align_ptr(frame->buf[i]->data, pool->align);
+         }
+ 
+         if (desc->flags & AV_PIX_FMT_FLAG_PAL) {
+@@ -191,14 +200,14 @@
+             if (!frame->buf[i])
+                 goto fail;
+             frame->extended_data[i] = frame->data[i] =
+-                (uint8_t *)FFALIGN((uintptr_t)frame->buf[i]->data, pool->align);
++                cap_align_ptr(frame->buf[i]->data, pool->align);
+         }
+         for (int i = 0; i < frame->nb_extended_buf; i++) {
+             frame->extended_buf[i] = av_buffer_pool_get(pool->pools[0]);
+             if (!frame->extended_buf[i])
+                 goto fail;
+             frame->extended_data[i + AV_NUM_DATA_POINTERS] =
+-                (uint8_t *)FFALIGN((uintptr_t)frame->extended_buf[i]->data, pool->align);
++                cap_align_ptr(frame->extended_buf[i]->data, pool->align);
+         }
+ 
+         break;

@@ -1,0 +1,110 @@
+--- a/sqlite3.c
++++ b/sqlite3.c
+@@ -23147,6 +23147,37 @@
+ */
+ #define mem5 GLOBAL(struct Mem5Global, mem5)
+ 
++/* Integer block-index observer. No stored application capabilities. */
++#define STUDY_MAX_ATOMS 131072
++static unsigned char study_ever[STUDY_MAX_ATOMS/8];
++static unsigned char study_window[STUDY_MAX_ATOMS/8];
++static unsigned char study_starts[STUDY_MAX_ATOMS/8];
++static unsigned long study_ever_atoms, study_window_atoms;
++static unsigned long study_allocs, study_reused_starts, study_unit;
++static void study_cover(unsigned long first, unsigned long count){
++  unsigned long j;
++  if(first+count>STUDY_MAX_ATOMS) abort();
++  study_allocs++;
++  if(study_starts[first/8] & (1u<<(first%8))) study_reused_starts++;
++  study_starts[first/8] |= 1u<<(first%8);
++  for(j=first;j<first+count;j++){
++    unsigned char mask = 1u<<(j%8);
++    if(!(study_ever[j/8]&mask)) study_ever_atoms++;
++    if(!(study_window[j/8]&mask)) study_window_atoms++;
++    study_ever[j/8] |= mask;
++    study_window[j/8] |= mask;
++  }
++}
++
++static unsigned long study_live, study_peak, study_oom;
++SQLITE_API void sqlite3_study_snapshot(unsigned long *v){
++  v[0]=study_live;
++  v[1]=study_peak;
++  v[2]=study_oom;
++  v[3]=(unsigned long)mem5.nBlock;
++  v[4]=(unsigned long)mem5.szAtom;
++}
++
+ /*
+ ** Assuming mem5.zPool is divided up into an array of Mem5Link
+ ** structures, return a pointer to the idx-th such link.
+@@ -23238,7 +23269,7 @@
+   assert( nByte>0 );
+ 
+   /* No more than 1GiB per allocation */
+-  if( nByte > 0x40000000 ) return 0;
++  if( nByte > 0x40000000 ){ study_oom++; return 0; }
+ 
+ #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
+   /* Keep track of the maximum allocation request.  Even unfulfilled
+@@ -23260,6 +23291,7 @@
+   if( iBin>LOGMAX ){
+     testcase( sqlite3GlobalConfig.xLog!=0 );
+     sqlite3_log(SQLITE_NOMEM, "failed to allocate %u bytes", nByte);
++    study_oom++;
+     return 0;
+   }
+   i = mem5.aiFreelist[iBin];
+@@ -23273,6 +23305,9 @@
+     memsys5Link(i+newSize, iBin);
+   }
+   mem5.aCtrl[i] = iLogsize;
++  study_cover(i, iFullSz/mem5.szAtom);
++  study_live += (unsigned long)iFullSz;
++  if( study_peak<study_live ) study_peak=study_live;
+ 
+ #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
+   /* Update allocator performance statistics. */
+@@ -23314,6 +23349,7 @@
+ 
+   iLogsize = mem5.aCtrl[iBlock] & CTRL_LOGSIZE;
+   size = 1<<iLogsize;
++  study_live -= (unsigned long)size*mem5.szAtom;
+   assert( iBlock+size-1<(u32)mem5.nBlock );
+ 
+   mem5.aCtrl[iBlock] |= CTRL_FREE;
+@@ -23582,6 +23618,34 @@
+      0
+   };
+   return &memsys5Methods;
++}
++
++
++SQLITE_API void sqlite3_study_begin(unsigned long unit){
++  study_unit=unit;
++  memset(study_window,0,sizeof(study_window));
++  study_window_atoms=study_allocs=study_reused_starts=0;
++  study_peak=study_live;
++}
++SQLITE_API void sqlite3_study_sample(int phase){
++  unsigned long f=0, largest=0, blocks=0, m=(unsigned long)(mem5.nBlock + sizeof(mem5));
++  int k,j;
++  for(k=0;k<=LOGMAX;k++){
++    for(j=mem5.aiFreelist[k];j>=0;j=MEM5LINK(j)->next){
++      unsigned long bytes=((unsigned long)mem5.szAtom)<<k;
++      if(++blocks>(unsigned long)mem5.nBlock) abort();
++      f+=bytes;
++      if(bytes>largest) largest=bytes;
++    }
++  }
++  if(f+(unsigned long)study_live!=(unsigned long)mem5.nBlock*mem5.szAtom) abort();
++  printf("STUDY-LEDGER unit=%lu phase=%d live=%lu held=%lu peak_held=%lu quarantine=%lu metadata=%lu free=%lu largest_free=%lu pool=%lu ever=%lu window=%lu allocs=%lu reused_starts=%lu oom=%lu observer=%lu\n",
++    study_unit,phase,(unsigned long)study_live,(unsigned long)study_live,
++    (unsigned long)study_peak,(unsigned long)(study_live-study_live),m,f,largest,
++    (unsigned long)mem5.nBlock*mem5.szAtom,study_ever_atoms*mem5.szAtom,
++    study_window_atoms*mem5.szAtom,study_allocs,study_reused_starts,
++    (unsigned long)study_oom,(unsigned long)(sizeof(study_ever)+sizeof(study_window)+sizeof(study_starts)));
++  
+ }
+ 
+ #endif /* SQLITE_ENABLE_MEMSYS5 */

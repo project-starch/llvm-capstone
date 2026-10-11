@@ -31,6 +31,8 @@ from fpga_driver import config as C
 from fpga_driver.fpga_console import FpgaConsole, ActionTimeout
 from fpga_driver.safe_cleanup import release_board, hard_exit, install_release_on_signal
 from fpga_driver.preflight import require_preflight
+from fpga_driver.refusal_record import (REFUSAL_RECORD, RefusalSkip, rr_label, decode_lines,
+                                        bitstream_note)
 from fpga_driver.run_ladder_perf_fpga import cold_boot, nvbit, install_resilient_emit
 from fpga_driver.run_sqlite_baked_fpga import (
     IMG, IMG_NAME, BITSTREAM, assert_firmware_embeds_current_initramfs)
@@ -305,6 +307,38 @@ _selftest_probe_result()
 # The physical switch value the board is holding, as far as this process knows. None means
 # "unknown", which is the state at connect: the board keeps whatever the last run left.
 _SW_CURRENT = None
+
+
+def switch_echo(console):
+    """The switch value the BOARD last reported (its switch_state event), or None.
+
+    The driver tracks the switches it believes it set (_SW_CURRENT), and a read is only about the
+    aperture the board is actually showing. On 2026-10-02 (boot m1tw-4) the after-rep head read
+    printed "rev-node head = 169" while the board's own echo said the switches sat at 41/42 (GPR
+    data): a plausible number from the wrong aperture, equal by chance to the value another boot's
+    finding rested on. A read whose aperture the echo does not confirm is not a reading."""
+    try:
+        payload = console.latest(C.SWITCH_STATE_EVENT)
+    except Exception:
+        return None
+    states = payload.get("states") if isinstance(payload, dict) else None
+    if not isinstance(states, (list, tuple)) or not states:
+        return None
+    return sum((1 << i) for i, b in enumerate(states) if b)
+
+
+def _selftest_switch_echo():
+    class _Fake:
+        def __init__(self, payload): self.payload = payload
+        def latest(self, _event): return self.payload
+    assert switch_echo(_Fake({"states": [1, 0, 0, 1, 1, 1, 1, 1]})) == 249
+    assert switch_echo(_Fake({"states": [0, 1, 0, 1, 0, 1, 0, 0]})) == 42
+    assert switch_echo(_Fake({"states": [0] * 8})) == 0          # a real zero is a value
+    assert switch_echo(_Fake(None)) is None                        # no echo is not a value
+    assert switch_echo(_Fake({"states": []})) is None
+
+
+_selftest_switch_echo()
 
 
 def set_switch_value(console, target):
@@ -856,6 +890,9 @@ def main():
     # and no JTAG upload. The gate encodes C1-C14, every one a failure that already
     # cost board time, and until 2026-08-19 nothing called it from here.
     require_preflight()
+    _rr_note = bitstream_note()
+    if _rr_note:
+        print(_rr_note, flush=True)
     if not URL:
         raise SystemExit("FPGA_URL not set")
     # Verify the firmware against the domains THIS run will execute, not against the
@@ -2248,8 +2285,17 @@ def main():
             # for a workload that never revokes. It is a different quantity, not a broken one.
             try:
                 _hl = _read_sw(249, allow_cached=not _halt_reads, _force_emit=_halt_reads)
+                _el = switch_echo(console)
                 _hh = _read_sw(250, allow_cached=not _halt_reads, _force_emit=_halt_reads)
-                if _hl is None or _hh is None:
+                _eh = switch_echo(console)
+                if _el != 249 or _eh != 250:
+                    # The board did not confirm the aperture, so the bytes are from somewhere else
+                    # (or a stale cache). Never print them as a head: see switch_echo().
+                    _rev_head_prev[0] = None
+                    _line = (f"  [s07] after {label}: rev-node head VOID -- the board's switch echo "
+                             f"was {_el}/{_eh}, not 249/250; the bytes read (lo={_hl} hi={_hh}) are "
+                             f"not from the head aperture")
+                elif _hl is None or _hh is None:
                     _line = (f"  [s07] after {label}: rev-node head VOID "
                              f"(lo={_hl} hi={_hh}) -- no consumption datum for this rep")
                 elif ((_hh << 8) | _hl) == 0xFFFF:
@@ -2332,6 +2378,7 @@ def main():
                 tval_bytes = {}
                 traplog_v = None
                 s07a_bytes = {}
+                rr_bytes = {}
                 try:
                     for sw, label, kind in ((255, "TRAP LOG {seen,mcause[6:0]}", "trap"),
                                             (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,"
@@ -2515,12 +2562,37 @@ def main():
                                             (206, "s07 ldc0_paddr[19:12]", "s07a"),
                                             (207, "s07 stc_paddr[11:4]", "s07a"),
                                             (209, "s07 stc_paddr[19:12]", "s07a")):
-                        for bit in range(8):
-                            console.set_switch(bit, bool(sw & (1 << bit)))
-                        time.sleep(1.2)
-                        st = console.latest(C.LISTEN.get("led_state", "led_state"))
-                        bits = st.get("states") if isinstance(st, dict) else None
-                        v = sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
+                        # REFUSAL RECORD (fpga_driver/refusal_record.py): on a refusal-record
+                        # bitstream 204..208 carry the R-43 record, not the S-07 recorder, so
+                        # they get their own kind and no S-07 decode ever sees them.
+                        if REFUSAL_RECORD and 204 <= sw <= 209:
+                            kind = "rr"
+                            label = rr_label(sw, label)
+                        if kind == "rr":
+                            # FRESH OR NOTHING (2026-09-29, the audit of acceptance a10). The walk below
+                            # takes console.latest() after a sleep, and the console pushes led_state only
+                            # on change. On a10, 206, 207 and 208 produced NO event, so their bytes were the
+                            # previous aperture's cached payload, recorded as data. The record is static
+                            # while the core spins, so settled_halted_read's forced transition (mark,
+                            # park, target, wait for the event, let the stretcher decay) reads it fresh.
+                            # None means no fresh event, and the decoder reports that byte UNREAD.
+                            # RESET THE SWITCH MODEL FIRST. This loop sets the switches DIRECTLY
+                            # (console.set_switch) for every non-rr aperture, and set_switch_value's model
+                            # (_SW_CURRENT) never sees that. A stale model makes its bit walk land on the wrong
+                            # aperture: on m1v2-2 "208" was read with the switches at 210 and "205" at 207.
+                            # None forces set_switch_value's reset walk (bit 7 first) from a known 0.
+                            globals()["_SW_CURRENT"] = None
+                            v = settled_halted_read(console, C, sw)
+                            rr_bytes[sw] = v
+                            if v is None:
+                                label = label + " [no fresh event]"
+                        else:
+                            for bit in range(8):
+                                console.set_switch(bit, bool(sw & (1 << bit)))
+                            time.sleep(1.2)
+                            st = console.latest(C.LISTEN.get("led_state", "led_state"))
+                            bits = st.get("states") if isinstance(st, dict) else None
+                            v = sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
                         line = (f"  [wedge] sw={sw:3} {label:52} "
                                 f"{'UNREAD' if v is None else f'0x{v:02x} {v:08b}'}")
                         # STALENESS, decided here rather than per-domain: with the clear skipped
@@ -2640,6 +2712,11 @@ def main():
                     else:
                         print(f"  [wedge] trap mepc {_mnote}", flush=True)
 
+                    if REFUSAL_RECORD:
+                        for _l in decode_lines(rr_bytes, "wedge (single running sample per "
+                                                         "aperture; VOID if contaminated)"):
+                            print(_l, flush=True)
+                            transcript.append(_l + "\n")
                     # S-07 recorded granule addresses. Reported together because the ONLY
                     # thing that makes the tag-history byte readable is whether the recorded LDC
                     # granule is the subject's -- and whether it equals the recorded STC granule,
@@ -3491,6 +3568,8 @@ def main():
         # Without this, every 0x00 is an argued negative: "no displacement happened" and "the
         # detector does not work in this bitstream" are otherwise indistinguishable.
         try:
+            if REFUSAL_RECORD:
+                raise RefusalSkip()
             def _sw(_v):
                 for _b in range(8):
                     console.set_switch(_b, bool(_v & (1 << _b)))
@@ -3530,6 +3609,11 @@ def main():
                         "0x00 read this boot is an ARGUED negative and carries no verdict")):
                 print(_t, flush=True)
                 transcript.append(_t + "\n")
+        except RefusalSkip:
+            _t = ("  [s07] SELFTEST SKIPPED -- REFUSAL_RECORD=1: 204..208 carry the R-43 refusal "
+                  "record on this bitstream, so the S-07 trigger and its reads mean nothing here")
+            print(_t, flush=True)
+            transcript.append(_t + "\n")
         except Exception as exc:
             _t = (f"  [s07] SELFTEST could not be run ({type(exc).__name__}) -- treat this "
                   f"boot's zeros as argued, not controlled")
@@ -3569,8 +3653,16 @@ def main():
                 try:
                     console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
                     _hits = {}
-                    for _ap in (204, 208, 224):
+                    # Refusal record: the UART-safe apertures first ((v & 3) == 0: 204, 208, 224),
+                    # then 205/206/207, which take the console TX pin (sw[0]) or ARM the one-shot
+                    # trace dump (sw[1], outlives the switch value), and park at 0 at once. The
+                    # values read are unaffected either way (LEDs are their own pin); the order only
+                    # keeps an armed dump from being replayed by a later odd value. (RTL lane, 8f6a0af.)
+                    for _ap in ((204, 208, 224, 205, 206, 207) if REFUSAL_RECORD
+                                else (204, 208, 224)):
                         _hits[_ap] = settled_halted_read(console, C, _ap)
+                    if REFUSAL_RECORD:
+                        set_switch_value(console, 0)
                     # A KNOWN EXPECTED VALUE, not merely "an event arrived". The selftest ran
                     # immediately above and, when it passes, leaves 204 bit 6 (ldc_seen) SET --
                     # that is what "post-204 = 0x41" means. So the halted read of 204 has a
@@ -3593,7 +3685,15 @@ def main():
                                    f"ago. Contamination can only add bits, so this cannot be the "
                                    f"stretcher: the halted read is returning a wrong value and no "
                                    f"halted reading this boot can be trusted.")
+                    if REFUSAL_RECORD:
+                        _refmsg = ("  [s07] halted 204 vs selftest reference: N/A -- 204 carries "
+                                   "the refusal record on this bitstream")
                     print(_refmsg, flush=True)
+                    if REFUSAL_RECORD:
+                        for _l in decode_lines({_a: _hits.get(_a) for _a in (204, 205, 206, 207, 208)},
+                                               "post-run, core HALTED, settled reads"):
+                            print(_l, flush=True)
+                            transcript.append(_l + "\n")
                     transcript.append(_refmsg + "\n")
 
                     _n_fresh = sum(1 for _v in _hits.values() if _v is not None)
@@ -3601,13 +3701,13 @@ def main():
                         f"sw={_a}:" + ("VOID" if _v is None else f"0x{_v:02x}")
                         for _a, _v in _hits.items())
                     if _n_fresh == 0:
-                        _t = ("  [s07] HEALTHY-HALT CONTROL: no fresh led_state event on ANY of 3 "
+                        _t = ("  [s07] HEALTHY-HALT CONTROL: no fresh led_state event on ANY of the "
                               "apertures with the core halted and healthy -- " + _detail
                               + ".  The halted read is structurally impossible, not a wedge "
                                 "artifact. 'halt, settle, sample, resume' cannot be built and the "
                                 "LED path needs an RTL replacement.")
                     elif _n_fresh == len(_hits):
-                        _t = ("  [s07] HEALTHY-HALT CONTROL: fresh events on ALL 3 apertures while "
+                        _t = ("  [s07] HEALTHY-HALT CONTROL: fresh events on ALL the apertures while "
                               "halted -- " + _detail
                               + ".  The halted read WORKS on a healthy core, so boot 5's failure "
                                 "was the total-wedge state (or the removed cache fallback), NOT a "

@@ -117,6 +117,11 @@ cannot exercise."*
 
 **And it may touch a performance headline, not only a capacity limit.** The board lane measured P1 on
 silicon today: `give_cyc/n` grows **superlinearly** with table occupancy (221 → 1558 cycles, sd 7-12,
+⚠ **BOTH HALVES OF THIS PARENTHESIS ARE WRONG — corrected 2026-09-21, see §12.** The variable is
+per-domain minting, **not** table occupancy (`docs/history/15-09-2026_19-25-14_m1-revoke-cost-variable.md`
+refutes it by overlay). And `221 → 1558` appears nowhere but this line — the primary document gives
+**176.4 → 2114.7** for the same arm. The rise itself was real, on the **superseded** bitstream
+`1bfff7776`; on the resident `054cea69b` it is gone.⚠
 flat at 16 under `-icount`). A reclaimer that keeps the table smaller plausibly moves that curve. It
 could complicate P1 rather than improve it, which is worth knowing before the build rather than
 after.
@@ -588,3 +593,290 @@ M2's `studies.json` edit. Its bundle is now on the remote, which removes the exc
 unreachability but none of the constraint: `check_experiments.py:267-268` plus a live
 `appendices/a-evidence-status.tex` still make it a two-file change whose second file is manuscript
 (§3). Merging the branch into `main` is a merge and is not a lane's call either.
+
+
+## 12. RETRACTION (2026-09-21): the revoke-cost story in §8 and §11 was wrong in four ways
+
+*Filed after a claim-auditor refuted a new entry I was about to open as **R-36**, and after I
+verified each refutation myself. R-36 was never filed. Nothing here touches R-35, which stands.*
+
+**What I was about to claim:** that the RTL revoke walk never unlinks dead nodes, that this is why
+`give_cyc/n` grows superlinearly, and that implementing splicing would fix it.
+
+**1. The splice already exists and is in the resident bitstream.** `379248185` is an ancestor of
+`054cea69b` (`git merge-base --is-ancestor`, checked), and `docs/state/current-state.md:192,230`
+names `caplifive_m1_054cea69b.bit` as the resident splice-plus-reclaimer build. What I read was
+`capstone_rev_node.anvil` at `ed049abd8` — which is **`board/r35-directed-repro`**, a side branch,
+not the fix line. My quoted lines and the `// TODO: optimise` are accurate *for that branch* and
+false for the design and for the board. **I recorded the sha and never asked what the sha was.**
+
+**2. It duplicates R-12.** `ISSUES.md:3711` already carries *"2026-09-16 — THE REVOKE-WALK SPLICE:
+built, measured, synthesised. R-12's COST half, not its capacity half."*
+
+**3. The mechanism predicts the wrong SHAPE.** An unspliced walk at a constant 3 cycles per dead
+node is **linear**. I used it to explain a **superlinear** curve. The real knee was already
+localised by two independent readings: the d-cache holds 2,048 nodes, the 3.000 slope holds to
+1,024 and breaks at 2,048 (`ISSUES.md:3808-3810`), and `sublet/r1/r1_slots_pools.c:470-473` says
+*"the knee looks like node-table capacity"*. So the observed curve is a **linear walk multiplied by
+a memory-hierarchy cliff**, not one mechanism.
+
+**4. The variable was already retracted by this project.** `docs/history/15-09-2026_19-25-14_m1-revoke-cost-variable.md`
+is titled *"The independent variable is not table occupancy"* and refutes it with an overlay:
+invocation 9, with 18,684 nodes already consumed, traces invocation 1's curve to **0.06 %**.
+
+### And the answer to "so is there superlinearity at all?" — not on the current build
+
+`ISSUES.md:4278-4284`, deployed `1bfff7776` against reclaimer `054cea69b`:
+
+| | `1bfff7776` (superseded) | `054cea69b` (resident) |
+|---|---|---|
+| `take_cyc/n` | floor 66.7 → 130-218, knee at alloc ~1,792 | **72.1, FLAT to 200,000** |
+| `give_cyc/n` | grew ~12x | **103.2, FLAT to 200,000** |
+
+103.2 at alloc 1,250 and 103.2 at alloc 195,000. *"The 12x release growth is gone and the capacity
+knee is gone."* Splicing removes the walk term; reclamation stops the node table ever spanning
+enough cache lines for the knee to form.
+
+**The honest caveat that comes with it**, and it is where the remaining experimental value sits: a
+pre-registered falsifier said *"one curve flattens, the other does not; if both flatten or neither,
+my account is wrong"*. **Both flattened.** It is not counted as a refutation only because two other
+lanes had written the reason down in advance. And `ISSUES.md:4295` records that **the coefficient is
+BOUNDED, NOT MEASURED** (`c < 65,532/200,000 = 0.3277`), with a retirement effect that the 200,000
+pilot is already past unless index reuse spreads over sixteen or more.
+
+**So the open question is not "does splicing help".** It is *what is `c`, and does the flat curve
+survive past index retirement* — and that is a board question, not an emulator one (§13).
+
+## 13. These experiments must run on the BOARD. QEMU cannot measure them at all
+
+*The lead ruled the experiments board-only and asked for justification if I disagreed. I do not —
+and the reason is stronger than "the emulator is approximate".*
+
+**QEMU is structurally incapable of producing this measurement.** The entire revoke walk lives
+inside a single helper: `helper_csrevoke` (`target/riscv/op_helper.c:920`) calls
+`cap_rev_tree_revoke` once (`:937`, the only call site), and the loop over the chain is inside that
+C function. Under `-icount`, the guest is charged **one instruction for the whole walk**, whatever
+its length. So an `-icount` curve is flat by construction — flat whether the walk crossed 8 nodes
+or 8,000, and flat whether or not the emulator splices.
+
+That is exactly the trap this project already named: *"'QEMU NEVER DOES' IS AN ABSENCE OF THE
+FEATURE, NOT AN INDEPENDENT WITNESS"* (`ISSUES.md:5638`). A flat emulator curve here would have been
+recorded as agreement and would have meant nothing. **My earlier plan put E1 and E3 on QEMU. That
+was wrong and is withdrawn.**
+
+Three further reasons, each independently sufficient:
+
+* **the emulator's node accounting is not the silicon's.** `cap_rev_tree_update_refcount` has
+  exactly one occurrence in all of `target/riscv/` — its own definition (`cap_rev_tree.h:63`) — so
+  it is never called, `cap_rev_tree_release` never runs, and the free list is unreachable. The
+  header says so (`:29-30`, *"this emulator reuses no node"*); a comment in the `.c` (`:8-10`)
+  asserts the opposite and is reasoning from dead code. **Reclamation is the thing the current flat
+  curve is attributed to, and the emulator does not have it.**
+* **`drop` differs.** `helper_csdrop` (`op_helper.c:958-992`) never touches the revocation tree at
+  all, where the RTL's `drop_req` invalidates a node in memory without splicing. Dead-node
+  accumulation therefore has a shape on silicon that the emulator cannot exhibit.
+* **enforcement differs** — R-35.
+
+**What QEMU is still good for, stated so it is not over-corrected away:** it is an **oracle for
+structure, not for time.** Instrumenting `cap_rev_tree.c` gives ground truth for *how many* nodes
+exist, how many are dead, and how many a walk would cross. Pair it with the board's cycles and each
+instrument does what it can: QEMU supplies N, the board supplies cycles per N. Never let it supply
+a cycle count.
+
+### The plan, re-specified for the board
+
+The question is no longer "does splicing help" (§12: it is in the resident build and the curve is
+already flat). It is **what the flat result rests on, and where it ends.**
+
+| | varies | holds fixed | metric | why it is worth a boot |
+|---|---|---|---|---|
+| **B1** | allocations, out to and past index retirement | one domain, fixed live set | `give_cyc/n`, `take_cyc/n` | the flat curve is verified only to 200,000, and retirement falls at ~16,384/32,768/65,536/262,144 depending on how far reuse spreads. **Does 103.2 survive its first retirement?** |
+| **B2** | index-reuse spread (1 / 2 / 4 / 16 slots) | allocation count | first-retirement allocation; `give_cyc/n` at it | `c < 0.3277` is a **bound, not a measurement**; this is what turns it into one |
+| **B3** | dead nodes inside one revoked run | live nodes in that run | cycles per revoke | isolates the **linear** term on the build that has the splice — the coefficient the paper's `\targetNodeSlope` needs |
+| **B4** | — | real workload | revoke cycles as a fraction of runtime | speedtest1 and the PostgreSQL tpcb/readonly replay, for which the manuscript already reserves `\pgNodes` / `\pgRONodes` |
+
+B1 is the one that matters, because it attacks the result we would otherwise publish. B3 supplies
+the number the manuscript has a slot for. B2 converts a bound into a value. B4 is the "what does it
+cost in practice" line.
+
+## 14. RETRACTION (2026-09-21): domains DO run at M-mode — the gate is satisfied, the check is defective
+
+*This retracts a claim I recorded as confirmed and put to the lead three times as the basis for
+decision 1. Raised by `apollo-board`; all three legs verified here before retracting.*
+
+**What I asserted** (`…16-37-49…md:387`, `:471`, `:513`): *"a domain cannot satisfy that gate, so the
+check protects nothing about domain code"*, *"it does not extend the check to domain code, which
+cannot satisfy the gate at all"*, *"the gate still excludes domains"*.
+
+**It is false. Entering a domain does not change privilege at all.**
+
+* `priv_lvl_d` has exactly **six** writers in `core/csr_regfile.sv` — `:1048` hold, `:2144` trap
+  entry, `:2307` MRET (from `mstatus.mpp`), `:2330` SRET, `:2351` VS-RET, `:2365` DRET. **None is on
+  a capability or domain-switch path.**
+* `core/anvil_build/capstone_dom_switcher.anvil` contains **zero** occurrences of `mstatus`, `priv`
+  or `mpp`.
+* and the load/store privilege is `ld_st_priv_lvl_o = (mprv) ? mstatus_q.mpp : priv_lvl_o`
+  (`csr_regfile.sv:2273`) — with `mprv` clear it is simply the current privilege.
+
+So a domain entered from M-mode monitor code **runs at M**, and `ld_st_priv_lvl_i == PRIV_LVL_M`
+**holds**. The gate condition I verified at `load_store_unit.sv:966-969` is correct; the inference I
+endorsed from it was not. The source of the error is `docs/history/15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md`,
+whose `mret`s are labelled `call_into_smode` / `resume_smode` — the S-mode **host**, not a domain. I
+took its conclusion without checking its premise.
+
+**The measurement says the same thing independently.** R-35's bounds probe returned **mcause 28**,
+latched in hardware. CPMP cannot have produced it: its data check is gated `!= PRIV_LVL_M` and emits
+only `ST_ACCESS_FAULT`/`LD_ACCESS_FAULT` (7/5) — verified at `pmp/src/pmp_data_if.sv:292-294`. So 28
+can only have come from the M-gated `cap_violation_detection` block, which means **that block is the
+live path for domain data accesses**.
+
+### What this changes for the paper, and it is better news than what I gave the lead
+
+| | what I told the lead | what holds |
+|---|---|---|
+| why the four `tab:safety` rows fail | the check is **unreachable** from a domain | the check **runs** and its **revocation half is defective** |
+| nature of the gap | **structural** — no fix makes the rows hold | a **root-caused defect** with a written-up fix |
+| what silicon enforces | nothing for domain data | **bounds and permissions YES, revocation NO** |
+
+R-35 is now closed and root-caused to `load_store_unit.sv:966-971`: a single core-wide tracked
+revnode id that **re-adopts itself as VALID** whenever an access presents a different one. With 16
+rotating slots nearly every access presents a different one, so cause 25 can never fire. Bounds and
+permissions survive because they are read from the capability's own metadata — which is exactly the
+"**bounds but not revocation**" scope the board observed.
+
+**So my "structural gap" framing is withdrawn.** "R-34 is fixed must not read as the four rows now
+hold" was right for the wrong reason: the rows do not hold because revocation checking is broken,
+not because domains are locked out of the check. That is a defect with a known fix and a stated
+cost, which is a materially different input to decision 1 than an architectural impossibility.
+
+**Not mine to edit:** `15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md` is the RTL
+lane's and its conclusion changes, so it needs their sign-off. The correction is written up by the
+board lane in `docs/history/21-09-2026_r35-root-cause-is-cpmp-optimistic-adopt.md`.
+
+
+## 15. The node/line question is settled: one revnode is exactly one cache line
+
+I could not tell whether `ISSUES.md`'s two phrasings — *"the dcache holds exactly 2,048 **nodes**"*
+and *"the distinct-index set never approaches 2,048 **lines**"* — described the same boundary, and
+flagged that if the line were 64 B the knee in nodes would be 8,192 and any ladder centred on 2,048
+would be centred wrong. `apollo-board` answered from the board config; verified here:
+
+| | | |
+|---|---|---|
+| `capstone_cv64a6_imafdc_sv39_config_pkg.sv:48` | `CVA6ConfigDcacheByteSize = 32768` | 32 KiB |
+| `…:50` | `CVA6ConfigDcacheLineWidth = 128` | **16-byte line** |
+| `ex_stage.sv:1121-1122` | `CAP_REVNODE_MEM_BASE + {22'd0, node_query_addr, 4'd0}` | the `4'd0` is a shift of 4 ⇒ **16-byte revnode stride** |
+
+So 32768 / 16 = **2048 lines**, and 16 B per node against a 16 B line is **1 node : 1 line**. Both
+phrasings are correct and describe the same boundary. The ladder is centred correctly; 1,792 sits
+just inside it.
+
+**The 1:1 mapping buys something beyond re-centring, and it is worth stating because it removes an
+assumption from the experiment.** With several nodes per line, a walk of N nodes could touch as few
+as N/k distinct lines when ids happen to be dense, so the node axis and the line axis would differ
+by an unknown factor and the knee's position would depend on id density. At 1:1 **each node is its
+own line**, so N nodes touch N distinct lines always, whatever the density. The ladder therefore
+measures distinct-line count directly, with no locality to hide behind — and the deep-cold points
+(8,192 and 16,384) show the full dependent-load latency rather than an amortised one. Those two are
+also the only points at which the cold slope is measured over more than one segment, which is the
+specific defect in the number we have today.
+
+## 16. R1 on silicon: both target macros are now fillable, and E1 is retired
+
+*Measured by `apollo-board`, 90 invocations over 8 boots. **Recomputed here from `points.csv` on
+`board/r1-results-2026-09-21`, not taken from the summary.***
+
+**Everything reproduces.** 420 records, **0** not-completed, **0** bad survivors. And the fits:
+
+| | their figure | recomputed here |
+|---|---|---|
+| revoke vs affected nodes, shared | 22.91 cyc/node, R² 0.99966 | **22.91**, R² 0.99966 |
+| revoke vs affected nodes, combined | 15.92 cyc/node, R² 0.99967 | **15.92**, R² 0.99967 |
+| **fill vs bytes (POSITIVE CONTROL)** | 1.8125 cyc/byte, R² 0.9999999993 | **1.8123**, R² 0.99999995 |
+| revoke vs released bytes / unrelated heap / depth / object size | no dependence | slopes ~1e-4 or smaller, R² ≤ 0.003 |
+
+**A denominator check worth recording, because it is the trap this registry already named.** My first
+fit gave exactly **twice** their slope with **identical R²** — 45.82 against 22.91, 31.84 against
+15.92. The cause is the denominator: `nodes_minted = 2n` in every row, so each object mints **two**
+revocation nodes, and "cycles per **affected node**" divides by `nodes_minted`, not by the object
+count. Their figure is right and mine was the naive one. Matching R² with a factor-of-two slope is
+the signature of a denominator disagreement rather than a data disagreement — worth knowing as a
+diagnostic.
+
+**The positive control is what makes this publishable rather than merely reported.** On the *same
+records*, the same instrument resolves a byte-proportional quantity at R² ≈ 1.0. So four null axes
+are a property of revocation, not a blind instrument. The driver had pre-registered the alternative
+in as many words — *"rv flat in n if the RTL's revoke is O(1); a rise with n is the node-linear
+finding R1 asks about"* — and it rises.
+
+### Both placeholders can now be filled — with the fit range the appendix demands
+
+`appendices/b-target-results.tex:83-86` requires these two over *"at least three legal levels"* with
+*"fit range and error"* stated, and says *"neither is a universal architectural constant"*.
+
+* **`\targetNodeSlope`** — 22.91 (shared) / 15.92 (combined) cycles per affected node, **five
+  levels** (n = 1, 4, 16, 64, 256), R² 0.9997.
+* **`\targetByteSlope`** — 1.8123 cycles per byte, R² 0.99999995.
+
+**The fit range is not optional here and it is the whole of §B3's remaining purpose.** Every R1
+point is **cache-resident**: `nodes_minted` reaches **512 against a 2,048-node table — 25 %** — and
+at the 1:1 node-to-line mapping (§15) that is 512 lines of 2,048. So **22.91 is a WARM coefficient**,
+and a bare 22.91 in the manuscript would be a cache-resident number presented as the cost of
+revocation.
+
+### E1 is retired; B3's framing sharpens
+
+* **E1 (occupancy independence) is answered and can be dropped.** Unrelated heap from 0 to 4 MiB
+  moves revocation cost not at all — on **silicon**, with a positive control on the same records.
+  That was E1's entire purpose. At most it survives as corroboration.
+* **B3 is no longer "is splicing valuable".** R1 has fixed the **shape** as linear with R² 0.9997;
+  the only open quantity is **the coefficient in the cold regime**. The 8,192 and 16,384 points are
+  the ones that matter, because they are the only ones measuring the cold slope over more than one
+  segment.
+
+### Two limits the bundle records rather than leaves to inference
+
+The bitstream does not close timing; and **R1 step 1's invalid-access companion is UNMEASURED, not
+passed** — it needs an access through a released reference to trap, and R-35 is a defect in exactly
+that check. Its absence is not a safety result, and the bundle says so in those words. That is the
+right handling and it is the sentence a reviewer would otherwise construct for us.
+
+**One shape gap:** the bundle carries all seven entries including `work-order.md` — the first to do
+so — but no `SHA256SUMS`, which is the §11 finding still outstanding across every bundle on this
+remote.
+
+## 17. The §11 hash gap is closed on R1, and the warm number is OPTIMISTIC not conservative
+
+**Verified here, two-sided, on my own checkout of the bundle** — presence is not verification:
+
+* `sha256sum -c SHA256SUMS` over the extracted bundle → every one of 15 files `OK`, **rc 0**;
+* one byte appended to `summary.md` → `summary.md: FAILED`, `WARNING: 1 computed checksum did NOT
+  match`, **rc 1**; clean again once restored.
+
+Paths are relative to the bundle, so it still verifies after a move or a fresh clone. The
+denominator note is in `work-order.md` where it cannot be quoted without it.
+
+**`experiments/bundle-sha256.sh` now exists for the other 19 bundles, and the board lane
+deliberately did not run it over them.** Their reason is the right one and worth keeping as a
+principle: *a checksum asserts the files were as found when it was written, and that is only ours to
+assert for a bundle we produced.* Stamping another lane's bundle from here would be writing a
+provenance claim you cannot back — the hashes would be true and the assertion behind them false.
+
+### The direction of the warm/cold error, which is the sharper framing for the lead
+
+I had put the fit range as "22.91 is cache-resident, say so". The board lane's version is better and
+it is the one to use: the dependent-load figures are **9.00 warm against 48.2 cold, 5.36×**, so the
+cold coefficient could plausibly be **several times** 22.91.
+
+**Therefore publishing a bare 22.91 is not conservative — it is optimistic in our own favour.** It
+would understate revocation cost, which is the worse way to be wrong: a reviewer who finds it has
+found us flattering our own system, not being cautious about it. That is a different sentence to put
+to the lead than "please state the range".
+
+### One caution carried into B3
+
+**R1's nulls are warm too.** The heap null — revocation cost independent of unrelated heap — is a
+*structural* property (revocation does not touch unrelated memory) and should survive the cache
+boundary. But if B3 ever finds cost scaling with something R1 called flat, **the first thing to
+check is whether the boundary changed the answer, not whether R1 was wrong.** Both would look
+identical in the data.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# row11 -- the LITERAL matched pair for cve-repros/row11_go_double_finalize
+# row11 -- the LITERAL matched pair for capi-repros/row11_go_double_finalize
 # (LINEAR / double-free). Real SQLite, one domain, SQLite's WHOLE heap is the
 # revoke-on-free linear allocator (revoke_on_free_alloc.h), exactly as row3 B2.
 # The statement handle sqlite3_prepare_v2 returns is a pointer into an rof

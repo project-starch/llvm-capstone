@@ -1,0 +1,12 @@
+## m1v2-1: M1 write CONTROL (live alias), image 9b24aa311881ecda @0x410000 (lane/board-m1-write-control b977bc52, #119 compiler), stock k800, list m1-staletake.txt, on caplifive_r43_8f6a0af.bit
+# fw_payload f047a1c95d7b; pre-registered: returns; stale-write CONTROL / stale-write ok / readback via_live_alias=165 wrote=165; no trap; record EMPTY
+RESULT k800 retval=4 cycles=4488 ran=53406 instret=1089
+R1 m1 end arm=pressure stop=buffer alloc=43297 minted=43328 revoked=43297 retained=43296 released=0
+R1 m1 stale-take CONTROL: probing a LIVE alias, not a stale one
+R1 m1 stale-take go
+R1 m1 stale-write CONTROL: storing through a LIVE alias, not a stale one
+R1 m1 stale-write ok
+R1 m1 stale-write readback via_live_alias=165 wrote=165
+RESULT k800 retval=4 cycles=4532 ran=53406 instret=1089
+# speedtest1-ran 0x4EB1xxxx, released pool rc=1; no halt, one banner; record after the opening k800: sw=204 0x02 (EMPTY)
+# VERDICT: PASS -- the write path through a live alias works on silicon under the board geometry

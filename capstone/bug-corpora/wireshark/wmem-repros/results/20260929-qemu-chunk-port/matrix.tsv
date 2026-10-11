@@ -1,0 +1,63 @@
+run	case	fix	name	shape	mode	oracle_arm	expected	passed	cause	pc	expected_pc	site	delivered	completed	runner_exit
+chunk	0	3c8be14c82	00-rpcrdma-write-offsets-global	stale pointer held by a global across packets	spatial	spatial	complete	True						True	0
+chunk	0	3c8be14c82	00-rpcrdma-write-offsets-global	stale pointer held by a global across packets	sublet	sublet-chunks	fault	True	24	0x101902314	0x101902314	read	False		1
+chunk	1	c14d731e45	01-cms-oid-global	stale pointer held by a global across packets	spatial	spatial	complete	True						True	0
+chunk	1	c14d731e45	01-cms-oid-global	stale pointer held by a global across packets	sublet	sublet-chunks	fault	True	24	0x101902348	0x101902348	read	False		1
+chunk	2	99da8c2cdc	02-mdb-address-column	packet-scope object held by a column or address past the scope's end	spatial	spatial	complete	True						True	0
+chunk	2	99da8c2cdc	02-mdb-address-column	packet-scope object held by a column or address past the scope's end	sublet	sublet-chunks	fault	True	24	0x1019022a4	0x1019022a4	read	False		1
+chunk	3	6eab9f83ab	03-cola-info-column	packet-scope object held by a column or address past the scope's end	spatial	spatial	complete	True						True	0
+chunk	3	6eab9f83ab	03-cola-info-column	packet-scope object held by a column or address past the scope's end	sublet	sublet-chunks	fault	False	0	0		read	False		75
+chunk	4	b48759e4a4	04-qnet6-col-set-str	packet-scope object held by a column or address past the scope's end	spatial	spatial	complete	True						True	0
+chunk	4	b48759e4a4	04-qnet6-col-set-str	packet-scope object held by a column or address past the scope's end	sublet	sublet-chunks	fault	True	24	0x1019022a4	0x1019022a4	read	False		1
+chunk	5	5a109265a6	05-usbll-address-struct	packet-scope object held by a column or address past the scope's end	spatial	spatial	complete	True						True	0
+chunk	5	5a109265a6	05-usbll-address-struct	packet-scope object held by a column or address past the scope's end	sublet	sublet-chunks	fault	True	24	0x101902254	0x101902254	read	False		1
+chunk	6	a8b16d74e1	06-x509if-last-dn-static	stale pointer held by a global across packets	spatial	spatial	complete	True						True	0
+chunk	6	a8b16d74e1	06-x509if-last-dn-static	stale pointer held by a global across packets	sublet	sublet-chunks	fault	False	0	0		read	False		75
+chunk	7	fb504bc76c	07-mysql-auth-method	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	True						True	0
+chunk	7	fb504bc76c	07-mysql-auth-method	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	True	24	0x1019022f0	0x1019022f0	read	False		1
+chunk	8	31ab1a0a17	08-sip-cseq-method	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	True						True	0
+chunk	8	31ab1a0a17	08-sip-cseq-method	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	True	24	0x1019022f4	0x1019022f4	read	False		1
+chunk	9	693dc40936	09-geonw-proto-data-tvb	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	True						True	0
+chunk	9	693dc40936	09-geonw-proto-data-tvb	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	True	24	0x1019022bc	0x1019022bc	read	False		1
+chunk	10	6fd3af5e99	10-t38-reassembly-buffer	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	True						True	0
+chunk	10	6fd3af5e99	10-t38-reassembly-buffer	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	True	24	0x1019022a4	0x1019022a4	read	False		1
+chunk	11	3a5f82dfb5	11-http-header-map	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	True						True	0
+chunk	11	3a5f82dfb5	11-http-header-map	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	False	0	0		read	False		75
+chunk	12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	spatial	spatial	complete	True						True	0
+chunk	12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	sublet	sublet-chunks	fault	True	24	0x101902348	0x101902348	read	False		1
+chunk-retry	3	6eab9f83ab	03-cola-info-column	packet-scope object held by a column or address past the scope's end	sublet	sublet-chunks	fault	True	24	0x1019022a0	0x1019022a0	read	False		1
+chunk-retry	6	a8b16d74e1	06-x509if-last-dn-static	stale pointer held by a global across packets	sublet	sublet-chunks	fault	True	24	0x10190229c	0x10190229c	read	False		1
+chunk-retry	11	3a5f82dfb5	11-http-header-map	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	True	24	0x101902320	0x101902320	read	False		1
+chunk-c12-r2	12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	sublet	sublet-chunks	fault	True	24	0x101902348	0x101902348	read	False		1
+chunk-c12-r3	12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	sublet	sublet-chunks	fault	True	24	0x101902348	0x101902348	read	False		1
+off-c12-r1	12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	spatial	spatial	complete	True						True	0
+off-c12-r1	12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	sublet	sublet	complete	True							0
+off-c12-r2	12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	sublet	sublet	complete	True							0
+off-c12-r3	12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	sublet	sublet	complete	True							0
+chunk-nc	0	3c8be14c82	00-rpcrdma-write-offsets-global	stale pointer held by a global across packets	spatial	spatial	complete	False						False	1
+chunk-nc	0	3c8be14c82	00-rpcrdma-write-offsets-global	stale pointer held by a global across packets	sublet	sublet-chunks	fault	False	0	0		read	False		75
+chunk-nc	1	c14d731e45	01-cms-oid-global	stale pointer held by a global across packets	spatial	spatial	complete	False						False	1
+chunk-nc	1	c14d731e45	01-cms-oid-global	stale pointer held by a global across packets	sublet	sublet-chunks	fault	False	0	0		read	False		1
+chunk-nc	2	99da8c2cdc	02-mdb-address-column	packet-scope object held by a column or address past the scope's end	spatial	spatial	complete	False						False	1
+chunk-nc	2	99da8c2cdc	02-mdb-address-column	packet-scope object held by a column or address past the scope's end	sublet	sublet-chunks	fault	False	0	0		read	False		1
+chunk-nc	3	6eab9f83ab	03-cola-info-column	packet-scope object held by a column or address past the scope's end	spatial	spatial	complete	False						False	1
+chunk-nc	3	6eab9f83ab	03-cola-info-column	packet-scope object held by a column or address past the scope's end	sublet	sublet-chunks	fault	False	0	0		read	False		1
+chunk-nc	4	b48759e4a4	04-qnet6-col-set-str	packet-scope object held by a column or address past the scope's end	spatial	spatial	complete	False						False	1
+chunk-nc	4	b48759e4a4	04-qnet6-col-set-str	packet-scope object held by a column or address past the scope's end	sublet	sublet-chunks	fault	False	0	0		read	False		1
+chunk-nc	5	5a109265a6	05-usbll-address-struct	packet-scope object held by a column or address past the scope's end	spatial	spatial	complete	False						False	1
+chunk-nc	5	5a109265a6	05-usbll-address-struct	packet-scope object held by a column or address past the scope's end	sublet	sublet-chunks	fault	False	0	0		read	False		1
+chunk-nc	6	a8b16d74e1	06-x509if-last-dn-static	stale pointer held by a global across packets	spatial	spatial	complete	False						False	1
+chunk-nc	6	a8b16d74e1	06-x509if-last-dn-static	stale pointer held by a global across packets	sublet	sublet-chunks	fault	False	0	0		read	False		75
+chunk-nc	7	fb504bc76c	07-mysql-auth-method	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	False						False	1
+chunk-nc	7	fb504bc76c	07-mysql-auth-method	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	False	0	0		read	False		1
+chunk-nc	8	31ab1a0a17	08-sip-cseq-method	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	False						False	1
+chunk-nc	8	31ab1a0a17	08-sip-cseq-method	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	False	0	0		read	False		75
+chunk-nc	9	693dc40936	09-geonw-proto-data-tvb	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	False						False	1
+chunk-nc	9	693dc40936	09-geonw-proto-data-tvb	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	False	0	0		read	False		1
+chunk-nc	10	6fd3af5e99	10-t38-reassembly-buffer	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	False						False	1
+chunk-nc	10	6fd3af5e99	10-t38-reassembly-buffer	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	False	0	0		read	False		1
+chunk-nc	11	3a5f82dfb5	11-http-header-map	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	False						False	1
+chunk-nc	11	3a5f82dfb5	11-http-header-map	packet-scope object kept by file-scope state across packets	sublet	sublet-chunks	fault	False	0	0		read	False		1
+chunk-nc	12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	spatial	spatial	complete	False						False	1
+chunk-nc	12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	sublet	sublet-chunks	fault	False	0	0		read	False		1
+off-c0	0	3c8be14c82	00-rpcrdma-write-offsets-global	stale pointer held by a global across packets	sublet	sublet	fault	True	24	0x1019014a4	0x1019014a4	read	False		1

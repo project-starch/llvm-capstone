@@ -1,0 +1,32 @@
+{
+  "qemu_argv": [
+    "/tmp/capstone/poisoncap-work/sdk/bin/qemu-system-riscv64cheri",
+    "-M",
+    "virt",
+    "-m",
+    "8192",
+    "-smp",
+    "1",
+    "-nographic",
+    "-snapshot",
+    "-append",
+    "-s",
+    "-bios",
+    "/tmp/capstone/poisoncap-work/sdk/share/qemu/bbl-riscv64cheri-virt-fw_jump.bin",
+    "-kernel",
+    "/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap/boot/kernel/kernel",
+    "-drive",
+    "file=/tmp/capstone/poisoncap-work/published-platform/cheribsd-riscv64-purecap.img,format=raw,if=none,id=disk",
+    "-device",
+    "virtio-blk-device,drive=disk",
+    "-netdev",
+    "user,id=net,hostfwd=tcp:127.0.0.1:10479-:22",
+    "-device",
+    "virtio-net-device,netdev=net"
+  ],
+  "platform": {
+    "/tmp/capstone/poisoncap-work/sdk/bin/qemu-system-riscv64cheri": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+    "/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap/boot/kernel/kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+    "/tmp/capstone/poisoncap-work/published-platform/libc.so.7": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c"
+  }
+}

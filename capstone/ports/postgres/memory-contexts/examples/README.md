@@ -9,7 +9,7 @@ Start with the client files; `support/` contains the platform setup.
 
 | Client | Demonstrates | Lifetime rule |
 |---|---|---|
-| [allocset.c](allocset.c) | Growable buffers, `repalloc`, `palloc`, context switching | Individual free, or bulk reset/delete |
+| [allocset.c](allocset.c) | Growable buffers, `repalloc`, `palloc`, context switching | Individual free, or pool reset/delete |
 | [generation.c](generation.c) | FIFO-like batches of messages | Individual free; whole blocks become recyclable when empty |
 | [slab.c](slab.c) | Replacing jobs in a fixed-size table | Every allocation requests the configured object size |
 | [bump.c](bump.c) | Per-request scratch and a surviving scalar summary | Reset/delete only; no `pfree` or `repalloc` |

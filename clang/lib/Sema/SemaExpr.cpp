@@ -5335,6 +5335,19 @@ Sema::CreateBuiltinArraySubscriptExpr(Expr *Base, SourceLocation LLoc,
   if (!IndexExpr->getType()->isIntegerType() && !IndexExpr->isTypeDependent())
     return ExprError(Diag(LLoc, diag::err_typecheck_subscript_not_integer)
                      << IndexExpr->getSourceRange());
+  // Capstone: an __intcap index is its address, as in CHERI C. The element is
+  // chosen by the integer; a capability the index may carry plays no part.
+  if (IndexExpr->getType()->isIntCapType()) {
+    QualType AddrTy = IndexExpr->getType()->isSignedIntegerType()
+                          ? Context.getIntPtrType()
+                          : Context.getUIntPtrType();
+    Expr *Addr = ImpCastExprToType(IndexExpr, AddrTy, CK_IntegralCast).get();
+    if (IndexExpr == LHSExp)
+      LHSExp = Addr;
+    else
+      RHSExp = Addr;
+    IndexExpr = Addr;
+  }
 
   if ((IndexExpr->getType()->isSpecificBuiltinType(BuiltinType::Char_S) ||
        IndexExpr->getType()->isSpecificBuiltinType(BuiltinType::Char_U)) &&
@@ -15117,6 +15130,77 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
   if (!LHS.isUsable() || !RHS.isUsable())
     return ExprError();
 
+  // Capstone: two __intcap operands that both carry provenance leave the
+  // result's authority ambiguous; CodeGen takes the left one. An operand
+  // converted from an ordinary integer, or a literal, carries none.
+  if (Opc == BO_Add || Opc == BO_Mul || Opc == BO_And || Opc == BO_Or ||
+      Opc == BO_Xor) {
+    auto CarriesProvenance = [](const Expr *E) {
+      if (!E->getType()->isIntCapType())
+        return false;
+      E = E->IgnoreParens();
+      if (const auto *CE = dyn_cast<CastExpr>(E)) {
+        QualType From = CE->getSubExpr()->getType();
+        return From->isIntCapType() || From->isPointerType() ||
+               From->isArrayType() || From->isFunctionType();
+      }
+      return !isa<IntegerLiteral>(E) && !isa<CharacterLiteral>(E);
+    };
+    if (CarriesProvenance(LHSExpr) && CarriesProvenance(RHSExpr))
+      Diag(OpLoc, diag::warn_ambiguous_provenance_capability_binop)
+          << LHSExpr->getType() << RHSExpr->getType()
+          << LHSExpr->getSourceRange() << RHSExpr->getSourceRange();
+  }
+
+  // Capstone: pointer arithmetic with an __intcap operand uses the operand's
+  // address, as in CHERI C: p + ic is p advanced by ic's address, and the
+  // result's authority is p's. Converted here, the rest is ordinary pointer
+  // arithmetic.
+  if ((Opc == BO_Add || Opc == BO_Sub || Opc == BO_AddAssign ||
+       Opc == BO_SubAssign) &&
+      !LHSExpr->getType()->isAtomicType()) {
+    auto IsPtrLike = [](const Expr *E) {
+      return E->getType()->isAnyPointerType() || E->getType()->isArrayType();
+    };
+    auto ToAddress = [&](ExprResult &E) {
+      E = DefaultLvalueConversion(E.get());
+      if (E.isInvalid())
+        return;
+      QualType AddrTy = E.get()->getType()->isSignedIntegerType()
+                            ? Context.getIntPtrType()
+                            : Context.getUIntPtrType();
+      E = ImpCastExprToType(E.get(), AddrTy, CK_IntegralCast);
+    };
+    if (IsPtrLike(LHSExpr) && RHSExpr->getType()->isIntCapType()) {
+      ToAddress(RHS);
+      if (RHS.isInvalid())
+        return ExprError();
+      RHSExpr = RHS.get();
+    } else if (Opc == BO_Add && LHSExpr->getType()->isIntCapType() &&
+               IsPtrLike(RHSExpr)) {
+      ToAddress(LHS);
+      if (LHS.isInvalid())
+        return ExprError();
+      LHSExpr = LHS.get();
+    }
+  }
+
+  // Capstone: arithmetic, bitwise and shift operators on __intcap run on the
+  // address and put the result back into the capability of one operand
+  // (llvm.capstone.cap.set.address). Not yet: compound assignment to an
+  // _Atomic __intcap.
+  if (Opc != BO_Assign && Opc != BO_Comma && !BinaryOperator::isComparisonOp(Opc) &&
+      !BinaryOperator::isLogicalOp(Opc) &&
+      (LHSExpr->getType()->isIntCapType() || RHSExpr->getType()->isIntCapType()) &&
+      (LHSExpr->getType()->isPointerType() || RHSExpr->getType()->isPointerType() ||
+       (BinaryOperator::isCompoundAssignmentOp(Opc) &&
+        LHSExpr->getType()->isAtomicType())))
+    return ExprError(Diag(OpLoc, diag::err_capstone_intcap_arith)
+                     << BinaryOperator::getOpcodeStr(Opc)
+                     << (LHSExpr->getType()->isIntCapType() ? LHSExpr->getType()
+                                                            : RHSExpr->getType())
+                     << LHSExpr->getSourceRange() << RHSExpr->getSourceRange());
+
   if (getLangOpts().OpenCL) {
     QualType LHSTy = LHSExpr->getType();
     QualType RHSTy = RHSExpr->getType();
@@ -15784,6 +15868,14 @@ ExprResult Sema::CreateBuiltinUnaryOp(SourceLocation OpLoc,
   bool CanOverflow = false;
 
   bool ConvertHalfVec = false;
+  // Capstone: ++/-- on an _Atomic __intcap would need an atomic read-modify-
+  // write of a capability; refused for now (see CreateBuiltinBinOp).
+  if (UnaryOperator::isIncrementDecrementOp(Opc) &&
+      InputExpr->getType()->isIntCapType() &&
+      InputExpr->getType()->isAtomicType())
+    return ExprError(Diag(OpLoc, diag::err_capstone_intcap_arith)
+                     << UnaryOperator::getOpcodeStr(Opc) << InputExpr->getType()
+                     << InputExpr->getSourceRange());
   if (getLangOpts().OpenCL) {
     QualType Ty = InputExpr->getType();
     // The only legal unary operation for atomics is '&'.

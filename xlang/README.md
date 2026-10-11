@@ -18,6 +18,18 @@ corpus be built and run by someone without our stack.
 **Measured so far: see `RESULTS.md`** — one page covering all three columns,
 what is reproduced, how to re-run it, and what is still missing.
 
+**This is not the only corpus tree.** `capstone/bug-corpora/` holds the
+allocator-consumer corpora — pymalloc, memory contexts, wmem, slabs, pools,
+buckets, FFmpeg pools and the SQLite binding rows — and neither tree used to
+mention the other. Each corpus here now carries a `corpus.json` in the same
+form, so the generated
+[bug-material index](../capstone/bug-corpora/INDEX.md) lists both, and
+`capstone/bug-corpora/tools/check-corpus.py` checks both. What differs is
+kept rather than flattened: a row here is a distilled C shim pinned to its own
+vulnerable upstream commit, with its measured columns in `capstone/rows.tsv` and
+`cheri/rows.tsv`, and the checker validates those row tables instead of
+expecting a `case.json`.
+
 **Where things stand.** `repro/`: **all 15 rows reproduce.** Row 7 as originally
 specified does not exist; it was replaced on 2026-08-02 with RUSTSEC-2022-0070,
 a real Rust↔C use-after-free (see `repro/7/target.md`). `cheri/`: all 15 rows

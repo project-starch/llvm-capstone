@@ -1,0 +1,16 @@
+{
+  "program": "musl",
+  "role": "domain-libc",
+  "title": "musl as the domain libc, with the hostcall runtime and its own test suite",
+  "upstream": {
+    "version": "1.2.5",
+    "pin_source": {
+      "file": "capstone/ports/musl-capstone/fetch-musl.sh",
+      "grep": "MUSL_VERSION=${MUSL_VERSION:-1.2.5}"
+    }
+  },
+  "targets": [
+    "capstone-domain"
+  ],
+  "workload": "libc-test, plus the hostcall probes"
+}

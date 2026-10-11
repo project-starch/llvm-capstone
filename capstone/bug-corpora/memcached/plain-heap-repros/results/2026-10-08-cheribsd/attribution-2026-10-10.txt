@@ -1,0 +1,65 @@
+memcached/plain-heap-repros cases 06, 07, 08 on CheriBSD and PoisonCap: which probe contains the recorded fault pc
+==============================================================================================================
+
+ANSWER: in all four records the fault pc of 06, 07 and 08 lies INSIDE mch_read_probe, at mch_read_probe+0x10,
+and OUTSIDE mch_write_probe. These are read defects caught at the read probe. Positive control: the write
+defects 01 and 05 in the same runs fault inside mch_write_probe, so the method separates the two probes.
+
+Method: for each matched run, the case binary on disk was identified by sha256 against the summary's
+results[].inputs.target (the summary's "binaries" entry for a buggy arm is the supervise wrapper, not the
+case). The symbols come from the CHERI SDK's llvm-nm (<home>/cheri/output/sdk/bin/llvm-nm -S --defined-only).
+Loaded ranges = nm address + the "SUPERVISE base 0x100000" line in that arm's own stdout. The fault pc is the
+"SUPERVISE fault ... pc=" line in the same stdout.
+
+Why the records say "write probe": at the commits that produced these records, runners/run-cheribsd.sh compiled
+supervise with -DPROBE_SYMBOL='"mch_write_probe"' as a compile-time constant (4a288cdef72c line 43;
+575c878ede80 line 49), so every arm's "SUPERVISE expect" line names mch_write_probe whatever the case's access is.
+Since then HEAD 09cc4392bcc1 (landed 2026-10-10 18:27, while this audit ran) builds one supervisor per probe
+(line 54); its comment cites results/2026-10-08-cheribsd/attribution-2026-10-10.txt, which did NOT exist in the
+tree when this was checked.
+
+What each committed text claims:
+- memcached/plain-heap-repros/results/2026-10-08-cheribsd/README.md quotes "SUPERVISE expect mch_write_probe"
+  for 06/07/08; its commit 4a288cdef72c says "the fault lies in the probe's extent"; the 06 case.json oracle
+  for 2026-10-08 (case.json at HEAD 09cc4392bcc1, line 59) says "the fault lies inside the probe's extent" with expect mch_write_probe 0x102578.
+  WRONG for 06/07/08: each fault is 0x34 bytes past mch_write_probe's start, beyond its 0x24-byte extent,
+  and lies in mch_read_probe.
+- results/2026-10-09-cheribsd-subobject, -poisoncap-mode0 and -poisoncap-mode1 READMEs (and the case.json
+  oracles for those arms) say "fault pc ... OUTSIDE mch_write_probe [..)". That is TRUE but incomplete: none of
+  them names mch_read_probe as the function that contains the pc.
+- Corroboration already in the tree: the 06/07/08 case.json native ASan rows read "frames=0:mch_read_probe",
+  and the Capstone arms read "CAUGHT at mch_read_probe+0x38".
+
+---------------------------------------------------------------------------------------------------------------
+record: memcached/plain-heap-repros/results/2026-10-08-cheribsd
+run:    <scratch>/cheri-memcached-190515/run/summary.json (image 0cb16209, revocation on)
+        (184840, 183305 and cheri-out-memcached carry the same binaries and the same stdout, byte for byte)
+case  binary (sha256 = inputs.target)                                mch_write_probe       mch_read_probe        fault pc   in
+06    <scratch>/cheri-memcached-190515/bin/mch-06 373b07442a67b0be... [0x102578,0x10259c)  [0x10259c,0x1025b8)  0x1025ac   mch_read_probe+0x10
+07    <scratch>/cheri-memcached-190515/bin/mch-07 5d12bc8a3652b149... [0x102400,0x102424)  [0x102424,0x102440)  0x102434   mch_read_probe+0x10
+08    <scratch>/cheri-memcached-190515/bin/mch-08 2a31a8195f8d3937... [0x102424,0x102448)  [0x102448,0x102464)  0x102458   mch_read_probe+0x10
+control 01: fault 0x102480 in mch_write_probe [0x102468,0x10248c); control 05: fault 0x102424 in mch_write_probe [0x10240c,0x102430)
+
+record: memcached/plain-heap-repros/results/2026-10-09-cheribsd-subobject
+run:    /tmp/capstone/q1009-ap13/memcached-heap-cheribsd-subobject/run/summary.json (image 0cb16209, -cheri-bounds=subobject-safe)
+06    .../bin/mch-06 804e7bc51b9cd98d...                              [0x1025b8,0x1025dc)  [0x1025dc,0x1025f8)  0x1025ec   mch_read_probe+0x10
+07    .../bin/mch-07 4f9df8ebdc546898...                              [0x10243c,0x102460)  [0x102460,0x10247c)  0x102470   mch_read_probe+0x10
+08    .../bin/mch-08 88716076f7c1380d...                              [0x102460,0x102484)  [0x102484,0x1024a0)  0x102494   mch_read_probe+0x10
+control 01: fault 0x1024bc in mch_write_probe [0x1024a4,0x1024c8); control 05: fault 0x102460 in mch_write_probe [0x102448,0x10246c)
+
+record: memcached/plain-heap-repros/results/2026-10-09-poisoncap-mode0
+run:    /tmp/capstone/q1009-ap13/memcached-heap-poisoncap-0/run/summary.json (image c8df9e17, runtime_revocation=0)
+06    .../bin/mch-06 8be49df58670a155...                              [0x1024f8,0x10251c)  [0x10251c,0x102538)  0x10252c   mch_read_probe+0x10
+07    .../bin/mch-07 28ff668cbe7d6db7...                              [0x102380,0x1023a4)  [0x1023a4,0x1023c0)  0x1023b4   mch_read_probe+0x10
+08    .../bin/mch-08 9aa9ee7afc393f67...                              [0x1023a4,0x1023c8)  [0x1023c8,0x1023e4)  0x1023d8   mch_read_probe+0x10
+control 01: fault 0x102400 in mch_write_probe [0x1023e8,0x10240c); control 05: fault 0x1023a4 in mch_write_probe [0x10238c,0x1023b0)
+
+record: memcached/plain-heap-repros/results/2026-10-09-poisoncap-mode1
+run:    /tmp/capstone/q1009-ap13/memcached-heap-poisoncap-1/run/summary.json (image c8df9e17, runtime_revocation=1)
+        same three case binaries as mode 0 (identical sha256), same pcs
+06    .../bin/mch-06 8be49df58670a155...                              [0x1024f8,0x10251c)  [0x10251c,0x102538)  0x10252c   mch_read_probe+0x10
+07    .../bin/mch-07 28ff668cbe7d6db7...                              [0x102380,0x1023a4)  [0x1023a4,0x1023c0)  0x1023b4   mch_read_probe+0x10
+08    .../bin/mch-08 9aa9ee7afc393f67...                              [0x1023a4,0x1023c8)  [0x1023c8,0x1023e4)  0x1023d8   mch_read_probe+0x10
+control 01: fault 0x102400 in mch_write_probe [0x1023e8,0x10240c); control 05: fault 0x1023a4 in mch_write_probe [0x10238c,0x1023b0)
+
+All ranges are [start, end) at load base 0x100000; nm sizes are 0x24 (mch_write_probe) and 0x1c (mch_read_probe).

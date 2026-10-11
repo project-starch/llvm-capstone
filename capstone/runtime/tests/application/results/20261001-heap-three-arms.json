@@ -1,0 +1,101 @@
+{
+ "date": "2026-10-01",
+ "change": "run-heap.py qualifies three builds of contract.c: sublet (HEAP=sublet), level0 (HEAP=level0 as applications get it, each allocation bounded since #170) and control (HEAP=level0 built with -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0). Every fault case faults on sublet, the spatial ones (fault-bounds, fault-bounds-large, fault-realloc-shrink) fault on level0 too, and none faults on control. Two cases are new: fault-realloc-shrink and heap-realloc-shrink. Before this, the default level0 heap was in no gate.",
+ "why": "the threads stack (#148-#157) lets level0's realloc shrink a block in place and release the tail; #170 bounds each allocation. Together, an in-place shrink must hand back a pointer narrowed to the new size, or the released tail, which the next allocation may take, stays reachable through it. Neither change was tested with the other.",
+ "head": "delegated threads part 9 (delegation-threads-gates) with dev 658d68a3 (#169, #170) merged through the stack; the commit that adds this record",
+ "platform": {
+  "qemu_sha256": "1283cd3400d4bc5470f0ae9f557abb60f7316c86cdee4ce8cd97e7a1f36f8196",
+  "firmware_sha256": "ae41a8c6d22877f779750bcd4aba040b4ecf5015ce25fff6d47f773139cf05dc",
+  "module_sha256": "649f410893eeb40a825232452974ac3161bb667163457c42f628c325dd7e6d97",
+  "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "rootfs_sha256": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+  "launcher_sha256": "e604885a6e40f18c636496dcc0c46865fe5cf62a76ae9e3a2390cbc4bc4826fa",
+  "env": "CAPSTONE_GP_NONLIN=1 CAPSTONE_REV_NODES=65536",
+  "compiler": "compiler/cap-init-alias-dev e2a1010c (dev's compiler sources)",
+  "libc": "musl 1.2.5 with musl-patches 0001-0008 of this tree"
+ },
+ "images": {
+  "sublet": {
+   "sha256": "1bd3ea3b82eb7253b9d1521b6ffc9764d12c15334679f302369741400ce2f3ec",
+   "allocator": "sublet_heap.c.obj"
+  },
+  "level0": {
+   "sha256": "5f7b274f624eb577a6d9c70dd86f661d3ae84c51abe6849f31ae3ab3311370f8",
+   "allocator": "level0.c.obj"
+  },
+  "control": {
+   "sha256": "e2141a354ccc07a0e542f29187aca7934400940958fbe13fae8c8f7c76419f31",
+   "allocator": "level0.c.obj"
+  }
+ },
+ "verdicts": {
+  "sublet": {
+   "sequence": "PASS",
+   "fault-stale": "SIGSEGV, cause 24, at the probe in capstone_heap_fault_load",
+   "fault-reused": "SIGSEGV, cause 24, at the probe in capstone_heap_fault_load",
+   "fault-bounds": "SIGSEGV, cause 5, at the probe in capstone_heap_fault_load",
+   "fault-bounds-large": "SIGSEGV, cause 5, at the probe in capstone_heap_fault_load",
+   "fault-realloc-shrink": "SIGSEGV, cause 5, at the probe in capstone_heap_fault_load",
+   "fault-double-free": "SIGSEGV, cause 24, at the probe in sh_free",
+   "fault-double-free-reused": "SIGSEGV, cause 24, at the probe in sh_free",
+   "healthy": "completes",
+   "churn": "completes",
+   "heap-bounds": "completes",
+   "heap-neighbour": "completes",
+   "heap-companion": "completes",
+   "heap-realloc-shrink": "completes"
+  },
+  "level0": {
+   "sequence": "PASS",
+   "fault-stale": "survives, exit 90",
+   "fault-reused": "survives, exit 90",
+   "fault-bounds": "SIGSEGV, cause 5, at the probe in capstone_heap_fault_load",
+   "fault-bounds-large": "SIGSEGV, cause 5, at the probe in capstone_heap_fault_load",
+   "fault-realloc-shrink": "SIGSEGV, cause 5, at the probe in capstone_heap_fault_load",
+   "fault-double-free": "survives, exit 90",
+   "fault-double-free-reused": "survives, exit 90",
+   "healthy": "completes",
+   "churn": "completes",
+   "heap-bounds": "completes",
+   "heap-neighbour": "completes",
+   "heap-companion": "completes",
+   "heap-realloc-shrink": "completes"
+  },
+  "control": {
+   "sequence": "PASS",
+   "fault-stale": "survives, exit 90",
+   "fault-reused": "survives, exit 90",
+   "fault-bounds": "survives, exit 90",
+   "fault-bounds-large": "survives, exit 90",
+   "fault-realloc-shrink": "survives, exit 90",
+   "fault-double-free": "survives, exit 90",
+   "fault-double-free-reused": "survives, exit 90",
+   "healthy": "completes",
+   "churn": "completes",
+   "heap-bounds": "completes",
+   "heap-neighbour": "completes",
+   "heap-companion": "completes",
+   "heap-realloc-shrink": "completes"
+  }
+ },
+ "free_probe": "the Sublet heap's stale-pointer probe is the first act of sh_free, which free calls with the heap lock held (part 4 of the stack); the double-free faults stop there",
+ "positive_control": {
+  "what": "level0 rebuilt with L0_REALLOC_IN_PLACE returning the old pointer, so an in-place shrink keeps the bounds of the whole block; source restored afterwards and the real image rebuilt byte-identical (5f7b274f)",
+  "mutant_sha256": "acb8b348f5496c6e1de175529463de922c4dbce0cdb365ec62799e10522c643c",
+  "result": "run-heap.py stops at level0 fault-realloc-shrink: wrong supervisor verdict. The operation survives (exit 90, heap evidence survived=1); fault-bounds and fault-bounds-large still fault on the mutant"
+ },
+ "same_boot": {
+  "pthread probe": "29/29 PASS",
+  "thread probe": "34/34 PASS",
+  "context probe": "35/35 PASS",
+  "signal contract": "30/30 PASS",
+  "socket contract": "11/11 PASS",
+  "application gate": "25 PASS, 0 FAIL (Perl and mruby relinked against this runtime)"
+ },
+ "boot_id_unchanged": true,
+ "not_measured": [
+  "CPython and GLib threading gates on this head",
+  "libc-test on this head",
+  "silicon: QEMU keeps full precision for narrowed capabilities"
+ ]
+}

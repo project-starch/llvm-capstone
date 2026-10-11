@@ -1,0 +1,8 @@
+{
+  "archive": "/tmp/capstone/pg-study-o1-campaign/postgres-final-20260928.tar.gz",
+  "bytes": 18839911,
+  "sha256": "faf06f37d2b45e0dd25b7adeaec7fc28e9d60e1c9e876e47e173036e34d4dd8b",
+  "includes": "pristine 16-byte-MAXALIGN fixture, exact builder source, native oracle, all six raw Capstone application attempts, both measured images and build manifests, SQL workload",
+  "excludes": "VM state and guest credentials",
+  "repository_revision": "8c17feeb84ca0b197ca5df96b193c1d8e9e6d14a"
+}

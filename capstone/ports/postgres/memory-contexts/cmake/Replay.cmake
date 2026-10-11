@@ -1,4 +1,43 @@
 add_library(replay-options INTERFACE)
+option(PG_POISONCAP "PoisonCap lifetimes on CheriBSD" OFF)
+# The nested arm in the VIRTUAL address space. The freestanding replay-sublet
+# target has always compiled the memory-context adapter; this option puts the
+# same adapter in a Capstone PROCESS, where the arena is LENT by the system
+# allocator as one linear capability, so that the protected and unprotected
+# nested arms are the same program with one layer swapped.
+option(PG_SUBLET "Nested lifetimes in a Capstone process: the memory-context adapter, with the arena lent linear" OFF)
+if(PG_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
+  message(FATAL_ERROR "PG_SUBLET needs the capstone-application toolchain")
+endif()
+if(PG_POISONCAP AND NOT PORT_PLATFORM STREQUAL "cheribsd")
+  message(FATAL_ERROR "PG_POISONCAP requires the PoisonCap CheriBSD toolchain")
+endif()
+set(PG_CORPUS_DIR "" CACHE PATH "Corpus root: bug-corpora/postgres/mmgr-repros")
+# The corpus contract (bug-corpora/cpython/pymalloc-repros/SCHEMA.md) is one
+# directory per case, NN_<upstream-fix>_<slug>, holding a case.c that is a
+# complete translation unit. Both targets build from the same list, and the
+# target stem is what the contract calls a run artifact -- 03-live-parts-stale-
+# alias -- so an archived result tree stays readable away from the corpus.
+function(pg_corpus_cases dirs_out stems_out)
+  set(dirs "")
+  set(stems "")
+  if(PG_CORPUS_DIR)
+    file(GLOB found CONFIGURE_DEPENDS "${PG_CORPUS_DIR}/[0-9][0-9]_*")
+    foreach(dir ${found})
+      if(IS_DIRECTORY "${dir}" AND EXISTS "${dir}/case.c")
+        get_filename_component(name "${dir}" NAME)
+        string(REGEX REPLACE "^([0-9][0-9])_[^_]+_(.*)$" "\\1;\\2" parts "${name}")
+        list(GET parts 0 num)
+        list(GET parts 1 slug)
+        string(REPLACE "_" "-" slug "${slug}")
+        list(APPEND dirs "${dir}")
+        list(APPEND stems "${num}-${slug}")
+      endif()
+    endforeach()
+  endif()
+  set(${dirs_out} "${dirs}" PARENT_SCOPE)
+  set(${stems_out} "${stems}" PARENT_SCOPE)
+endfunction()
 target_link_libraries(replay-options INTERFACE Capstone::Runtime region-options)
 target_include_directories(replay-options INTERFACE
   "${PROJECT_SOURCE_DIR}/src/shared" "${PROJECT_SOURCE_DIR}/src/allocators/sublet"
@@ -47,16 +86,43 @@ function(pg_manager name mode)
 endfunction()
 
 if(PORT_HOSTED)
-  if(PORT_PLATFORM STREQUAL "cheribsd")
+  # Both hosted CAPABILITY platforms, because the reason is the pointer and not
+  # the operating system: upstream's aset.c asserts that an AllocFreeListLink
+  # fits in the minimum chunk, and a 16-byte pointer does not. Building
+  # capstone-application against the plain native manager fails that assertion
+  # at compile time (measured 2026-10-07), which is the assertion doing its job.
+  if(PORT_PLATFORM MATCHES "^(cheribsd|capstone-application)$")
     # The existing capability-layout variant has 16-byte chunks/free links.
     # Retain its ABI changes without enabling Sublet lifetime hooks.
-    pg_manager(manager-native spatial)
-    file(READ "${CMAKE_BINARY_DIR}/variants/spatial/include/pg_config.h" cheri_config)
+    if(PG_POISONCAP)
+      pg_manager(manager-native sublet)
+      target_sources(manager-native PRIVATE src/cheribsd/poisoncap.c)
+      target_compile_definitions(manager-native PUBLIC PG_POISONCAP)
+      target_include_directories(manager-native PUBLIC "${PROJECT_SOURCE_DIR}/src/cheribsd")
+      set(capability_variant sublet)
+    elseif(PG_SUBLET)
+      # The same source variant the domain's replay-sublet builds, with the
+      # adapter under it: the Sublet aset/generation/slab/bump, the context
+      # pools, and the refusal for the families the adapter does not cover.
+      pg_manager(manager-native sublet)
+      target_sources(manager-native PRIVATE
+        src/allocators/sublet/context-pools.c
+        src/allocators/sublet/unsupported-allocators.c)
+      target_compile_definitions(manager-native PUBLIC PG_DEFECTS_SUBLET PG_BORROW_LINEAR)
+      target_include_directories(manager-native PUBLIC
+        "${PROJECT_SOURCE_DIR}/src/allocators/sublet")
+      set(capability_variant sublet)
+    else()
+      pg_manager(manager-native spatial)
+      set(capability_variant spatial)
+    endif()
+    file(READ "${CMAKE_BINARY_DIR}/variants/${capability_variant}/include/pg_config.h"
+      capability_config)
     string(REPLACE "#define SIZEOF_VOID_P 8" "#define SIZEOF_VOID_P 16"
-      cheri_config "${cheri_config}")
-    file(WRITE "${CMAKE_BINARY_DIR}/cheribsd-include/pg_config.h" "${cheri_config}")
+      capability_config "${capability_config}")
+    file(WRITE "${CMAKE_BINARY_DIR}/capability-include/pg_config.h" "${capability_config}")
     target_include_directories(manager-native BEFORE PUBLIC
-      "${CMAKE_BINARY_DIR}/cheribsd-include")
+      "${CMAKE_BINARY_DIR}/capability-include")
   else()
     pg_manager(manager-native native)
   endif()
@@ -67,7 +133,16 @@ if(PORT_HOSTED)
   target_link_libraries(allocator-example PRIVATE PostgreSQL::MemoryContexts)
   include("${PORT_SUPPORT_ROOT}/cmake/Client.cmake")
   port_add_client(PostgreSQL::MemoryContexts)
-  if(PORT_PLATFORM STREQUAL "cheribsd")
+  # src/native/replay/main.c INTERPOSES malloc/free/realloc to count the
+  # manager's blocks. That works where libc's allocator is the only one, and it
+  # does not work on a platform whose runtime supplies malloc itself: on
+  # capstone-application the SDK's libapplication-runtime.a defines malloc in
+  # heap.c, and linking the interposer beside it is a duplicate symbol. The
+  # non-interposing entry is the right one for both such platforms, and its own
+  # header already gives the reason -- on an ABI that is not the recording
+  # host's, recorded backing counts are reference observations rather than
+  # required outcomes, so counting them here buys nothing.
+  if(PORT_PLATFORM MATCHES "^(cheribsd|capstone-application)$")
     set(hosted_entry src/cheribsd/main.c)
   else()
     set(hosted_entry src/native/replay/main.c)
@@ -80,6 +155,55 @@ if(PORT_HOSTED)
   target_link_options(contexts-native PRIVATE LINKER:--gc-sections)
   add_test(NAME contexts-native COMMAND contexts-native)
   set_tests_properties(contexts-native PROPERTIES LABELS native TIMEOUT 60)
+  # The corpus belongs to the PLATFORM, not to the protection mechanism: the
+  # same cases must build against the plain spatial CheriBSD manager as well,
+  # so that the arm running under the guest's OWN libc revocation can be
+  # measured rather than argued about.
+  # Built on every hosted platform that HAS a fault oracle: CheriBSD, where a
+  # supervisor reads signal and si_code from outside, and capstone-application,
+  # where the virtual launcher reports the fault and the runner resolves the
+  # probe from the image. Not on native, which has neither and uses `replay`.
+  if(PORT_PLATFORM MATCHES "^(cheribsd|capstone-application)$")
+    # One program per case, per the corpus contract in
+    # bug-corpora/cpython/pymalloc-repros/SCHEMA.md: a capability fault ends
+    # the run, so a case that provokes one cannot report results beside it.
+    # Programs are named as the contract names run artifacts -- 03-live-parts-
+    # stale-alias, not defect-3 -- so an archived result tree stays readable
+    # away from the corpus.
+    pg_corpus_cases(pg_dirs pg_stems)
+    list(LENGTH pg_dirs pg_case_count)
+    if(PG_CORPUS_DIR AND pg_case_count EQUAL 0)
+      message(FATAL_ERROR
+        "PG_CORPUS_DIR=${PG_CORPUS_DIR} holds no NN_*/case.c; a corpus that "
+        "builds nothing must not look like a corpus that passed")
+    endif()
+    math(EXPR pg_last "${pg_case_count} - 1")
+    foreach(i RANGE 0 ${pg_last})
+      if(pg_case_count GREATER 0)
+        list(GET pg_dirs ${i} pg_dir)
+        list(GET pg_stems ${i} pg_stem)
+        add_executable("${pg_stem}" "${pg_dir}/case.c" "${PG_CORPUS_DIR}/shared/driver.c")
+        target_include_directories("${pg_stem}" PRIVATE "${PG_CORPUS_DIR}/shared")
+        target_compile_definitions("${pg_stem}" PRIVATE PG_CORPUS_HOSTED)
+        target_link_libraries("${pg_stem}" PRIVATE PostgreSQL::MemoryContexts)
+      endif()
+    endforeach()
+    if(pg_case_count GREATER 0)
+      if(PG_POISONCAP)
+        message(STATUS "PostgreSQL defect corpus: ${pg_case_count} hosted cases (PoisonCap)")
+      else()
+        message(STATUS "PostgreSQL defect corpus: ${pg_case_count} hosted cases (plain CheriBSD)")
+      endif()
+    endif()
+    # The out-of-process observer is CheriBSD's; the virtual arm's observer is
+    # the launcher, and this host program would not link against a Capstone libc.
+    if(PORT_PLATFORM STREQUAL "cheribsd")
+      add_executable(supervise
+        "${CAPSTONE_REPO_ROOT}/capstone/bug-corpora/cpython/pymalloc-repros/observe/supervise.c")
+      target_compile_definitions(supervise PRIVATE PROBE_SYMBOL="pg_defect_probe")
+      target_link_libraries(supervise PRIVATE util)
+    endif()
+  endif()
 else()
   enable_language(ASM)
   target_include_directories(replay-options SYSTEM INTERFACE "${PROJECT_SOURCE_DIR}/src/capstone-domain/include")
@@ -117,19 +241,34 @@ else()
   # A seam, not a case: bug-corpora supplies the defect program, the port only
   # builds it the same way it builds its own fixtures. Case material must not
   # live inside a port (docs/design/repo-layout.md).
-  set(PG_CORPUS_SRC "" CACHE FILEPATH "Corpus-supplied domain defect program")
-  if(PG_CORPUS_SRC)
-    foreach(mode spatial sublet)
-      pg_domain(defects-${mode} "${PG_CORPUS_SRC}" src/capstone-domain/string.c)
-      target_link_libraries(defects-${mode} PRIVATE manager-${mode})
-      if(mode STREQUAL "sublet")
-        target_compile_definitions(defects-${mode} PRIVATE PG_DEFECTS_SUBLET)
-        target_sources(defects-${mode} PRIVATE src/allocators/sublet/context-pools.c
-          src/allocators/sublet/unsupported-allocators.c)
-      else()
-        target_sources(defects-${mode} PRIVATE src/allocators/spatial/backing-allocator.c)
-      endif()
+  pg_corpus_cases(pg_dirs pg_stems)
+  list(LENGTH pg_dirs pg_case_count)
+  if(PG_CORPUS_DIR AND pg_case_count EQUAL 0)
+    message(FATAL_ERROR
+      "PG_CORPUS_DIR=${PG_CORPUS_DIR} holds no NN_*/case.c; a corpus that "
+      "builds nothing must not look like a corpus that passed")
+  endif()
+  if(pg_case_count GREATER 0)
+    math(EXPR pg_last "${pg_case_count} - 1")
+    foreach(i RANGE 0 ${pg_last})
+      list(GET pg_dirs ${i} pg_dir)
+      list(GET pg_stems ${i} pg_stem)
+      foreach(mode spatial sublet)
+        set(pg_target "${pg_stem}-${mode}")
+        pg_domain("${pg_target}" "${pg_dir}/case.c" "${PG_CORPUS_DIR}/shared/driver.c"
+          src/capstone-domain/string.c)
+        target_include_directories("${pg_target}" PRIVATE "${PG_CORPUS_DIR}/shared")
+        target_link_libraries("${pg_target}" PRIVATE manager-${mode})
+        if(mode STREQUAL "sublet")
+          target_compile_definitions("${pg_target}" PRIVATE PG_DEFECTS_SUBLET)
+          target_sources("${pg_target}" PRIVATE src/allocators/sublet/context-pools.c
+            src/allocators/sublet/unsupported-allocators.c)
+        else()
+          target_sources("${pg_target}" PRIVATE src/allocators/spatial/backing-allocator.c)
+        endif()
+      endforeach()
     endforeach()
+    message(STATUS "PostgreSQL defect corpus: ${pg_case_count} domain cases x 2 arms")
   endif()
   foreach(mode spatial sublet)
     pg_domain(contexts-${mode} security-tests/capstone/contexts.c src/capstone-domain/string.c)

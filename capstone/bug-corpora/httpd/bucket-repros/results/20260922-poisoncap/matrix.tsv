@@ -1,0 +1,17 @@
+case	fix	name	mode	expected	passed	exit	fault_pc	expect_pc	fault_at_probe	completed	counters
+0	1c7a70c9d9	wrong_bucket_alloc_across_connections	0	completed	True	0		0x106e26		1	APRP_POISONCAP mode=0 sweeps=0 poison_bytes=0 node_invalidations=0 piece_invalidations=0 nodes=6 pointer_bytes=16
+0	1c7a70c9d9	wrong_bucket_alloc_across_connections	1	tag fault at apr_defect_read	True	162	0x106e26	0x106e26	True		
+1	d2a1cf5f8c	buckets_outlive_backend_allocator	0	completed	True	0		0x106b7c		1	APRP_POISONCAP mode=0 sweeps=0 poison_bytes=0 node_invalidations=0 piece_invalidations=0 nodes=4 pointer_bytes=16
+1	d2a1cf5f8c	buckets_outlive_backend_allocator	1	tag fault at apr_defect_read	True	162	0x106b7c	0x106b7c	True		
+2	106d0761c0	brigade_on_request_pool_past_eor	0	completed	True	0		0x105642		1	APRP_POISONCAP mode=0 sweeps=0 poison_bytes=0 node_invalidations=0 piece_invalidations=0 nodes=4 pointer_bytes=16
+2	106d0761c0	brigade_on_request_pool_past_eor	1	tag fault at apr_defect_read	True	162	0x105642	0x105642	True		
+3	d9c2352952	buckets_from_pool_that_dies_first	0	completed	True	0		0x105644		1	APRP_POISONCAP mode=0 sweeps=0 poison_bytes=0 node_invalidations=0 piece_invalidations=0 nodes=4 pointer_bytes=16
+3	d9c2352952	buckets_from_pool_that_dies_first	1	tag fault at apr_defect_read	True	162	0x105644	0x105644	True		
+4	c81adad105	brigade_not_cleaned_before_reuse	0	completed	True	0		0x106ea0		1	APRP_POISONCAP mode=0 sweeps=0 poison_bytes=0 node_invalidations=0 piece_invalidations=0 nodes=4 pointer_bytes=16
+4	c81adad105	brigade_not_cleaned_before_reuse	1	tag fault at apr_defect_read	True	162	0x106ea0	0x106ea0	True		
+5	60919177e8	read_from_destroyed_brigade	0	completed	True	0		0x105566		1	APRP_POISONCAP mode=0 sweeps=0 poison_bytes=0 node_invalidations=0 piece_invalidations=0 nodes=3 pointer_bytes=16
+5	60919177e8	read_from_destroyed_brigade	1	tag fault at apr_defect_read	True	162	0x105566	0x105566	True		
+6	4930450013	bucket_outlives_its_brigade	0	completed	True	0		0x106bb6		1	APRP_POISONCAP mode=0 sweeps=0 poison_bytes=0 node_invalidations=0 piece_invalidations=0 nodes=4 pointer_bytes=16
+6	4930450013	bucket_outlives_its_brigade	1	tag fault at apr_defect_read	True	162	0x106bb6	0x106bb6	True		
+7	edc450c8ac	subrequest_pool_private_data	0	completed	True	0		0x10563c		1	APRP_POISONCAP mode=0 sweeps=0 poison_bytes=0 node_invalidations=0 piece_invalidations=0 nodes=4 pointer_bytes=16
+7	edc450c8ac	subrequest_pool_private_data	1	tag fault at apr_defect_read	True	162	0x10563c	0x10563c	True		

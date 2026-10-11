@@ -1,0 +1,13 @@
+-- NEGATIVE CONTROL for trigger.sql.
+--
+-- The defect is an int16 length: a StartSel longer than PG_INT16_MAX (32767)
+-- overflows the stored length and generateHeadline() then writes with it. The
+-- trigger uses 32768, one past the ceiling. This control uses 32000, which
+-- fits, so nothing overflows and it must COMPLETE.
+--
+-- It exists because on the sublet arm this case and case 03 fault at the SAME
+-- instruction, low in .text, and case 03's control faults there too -- so on
+-- that arm the instruction is reached by large work that does not overflow
+-- anything. Until this control is run, a detected verdict here cannot be told
+-- apart from that. If it faults, this row must be withdrawn as case 03's was.
+SELECT ts_headline('english', 'foo barbar', to_tsquery('english', 'foo'), 'StartSel=' || repeat('x', 32000));

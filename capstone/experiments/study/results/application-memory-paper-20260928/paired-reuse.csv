@@ -1,0 +1,17 @@
+workload,protected,processes_per_arm,max_reuse_deficit_pp,first_max_gap_upper,min_signed_deficit_pp,endpoint_deficit_pp
+sqlite-main,capstone-sublet,3,0.0,,0.0,0.0
+sqlite-main,poisoncap-temporal,3,88.15785886061109,1023,13.203256643345199,13.203256643345199
+mruby-ao8,capstone-sublet,3,0.4201409683512338,1023,-0.051596259271207146,-0.051596259271207146
+mruby-ao8,poisoncap-temporal,3,87.42156907909892,2047,-0.8140231261805013,1.4622011332749736
+mruby-ao16,capstone-sublet,3,0.6993594845307882,16383,-0.35328243708111984,-0.35328243708111984
+mruby-ao16,poisoncap-temporal,3,88.53109398557395,2047,-3.11250997564359,0.34727794572158643
+ffmpeg-xvid,capstone-sublet,3,0.0,,0.0,0.0
+ffmpeg-xvid,poisoncap-temporal,3,0.0,,0.0,0.0
+ffmpeg-resize,capstone-sublet,3,0.0,,0.0,0.0
+ffmpeg-resize,poisoncap-temporal,3,0.0,,0.0,0.0
+ffmpeg-streams1,capstone-sublet,3,0.0,,0.0,0.0
+ffmpeg-streams1,poisoncap-temporal,3,0.0,,0.0,0.0
+ffmpeg-streams4,capstone-sublet,3,0.0,,0.0,0.0
+ffmpeg-streams4,poisoncap-temporal,3,0.0,,0.0,0.0
+ffmpeg-streams16,capstone-sublet,3,0.0,,0.0,0.0
+ffmpeg-streams16,poisoncap-temporal,3,0.0,,0.0,0.0

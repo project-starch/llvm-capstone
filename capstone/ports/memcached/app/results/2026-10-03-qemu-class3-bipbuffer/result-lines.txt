@@ -1,0 +1,67 @@
+# Fixture 19 -- CLASS 3, reuse-not-free -- on memcached's real bipbuffer. Five arms, QEMU, 2026-10-03.
+# Predictions pushed in 4a30b3f34dbc before the build. Fixture 18 ran in the SAME boot, AFTER 19.
+# arm          fx19 (class 3)     fx18 (class 1, same boot)
+level0       RETURN 130015b     RETURN 12001ee  (exit 238 = 0xee)
+shrink       RETURN 130015b     RETURN 12001ee  (exit 238 = 0xee)
+sublet       RETURN 130015b     FAULT cause=24  (exit 139 = 128+11)
+slabsublet0  RETURN 130015b     FAULT cause=24  (exit 139)
+slabsublet1  RETURN 130015b     FAULT cause=24  (exit 139)
+# fx19 exit status corroborates every RETURN: 91 = 0x5b = 130015b & 255.
+
+# CONDITION CREATED -- established by the GUARD, not by the printed flags
+# src/mcapp-safety.c:656-660 returns MCAPP_MARK(n, 0xE0019) (exit 25) unless the buffer recycled in
+# place, so exit=91 on every arm means the guard passed on real values.
+# WITHDRAWN: an earlier version of this file cited the fixture's printed "frees-performed=0" as
+#   evidence. It is a STRING LITERAL inside the printf format at :664, with no counter variable
+#   anywhere in the file -- it cannot read anything but 0. The printed polled-same/reissued-in-place
+#   are likewise tautological AT THE PRINT SITE, because the guard above already enforced them.
+# What establishes "no free on the path" is the disassembly: bipbuf_request/push/poll contain NO
+#   auipc and no external symbol reference at all, so they cannot call any function (positive
+#   control: bipbuf_new contains auipc -> <malloc>), and case 19's compiled range references no
+#   allocator symbol. Limit: the musl stdio scan is depth-1, so the claim is "no free on the
+#   fixture's own path", NOT "zero frees in the process".
+
+# WHAT THE CAPABILITY SHOWS (sublet; shrink and the slab arms have the SAME 0x1020 width -- there is
+# no "narrowest" arm, only level0 differs at the 64 MiB arena)
+fx19 record1 cursor=c86cc020 bounds=[c86cc000,c86cd020) len-from-cursor=4096
+fx19 record2 cursor=c86cc020 bounds=[c86cc000,c86cd020) len-from-cursor=4096
+# Identical cursor AND identical bounds: both records are sub-allocations inside ONE malloc
+# (bipbuf_new = malloc(sizeof(bipbuf_t) + size), flexible data[] at +0x20 after 16-byte alignment,
+# so len-from-cursor is the whole 4096-byte data area). Per-object bounds on the OUTER allocation
+# cannot separate the records -- which is what "nested allocator" means here. BUT the blindness is
+# TEMPORAL, not spatial: both records occupy the SAME bytes, so even per-record bounds could not
+# separate them. Nothing fires because no revocation event ever occurs.
+
+# IN-BOOT POSITIVE CONTROL -- this is the load-bearing part
+# On sublet, slabsublet0 and slabsublet1, fixture 18 FAULTED in the SAME BOOT, on the SAME arm,
+# immediately after 19 returned. Fixture 18 is the same stale-pointer-then-reuse shape whose
+# release DOES reach the runtime allocator. So fixture 19's RETURN is not a dead arm, a broken
+# image or a boot that never ran the fixture: the arm demonstrably faults, in that boot, on the
+# class whose lifetime ends at the allocator. The only difference is WHERE the lifetime ends.
+# Fixture 1 also ran first in all five boots and returned 100001.
+# MATCHED BY ACCESS TYPE in a second run over the same images: fixture 17 is a LOAD, like 19, and it
+#   FAULTS on sublet/slabsublet0/slabsublet1 at pc=c02478c4 = mcapp_fix_touch+0x14 -- the same helper
+#   and offset 19 uses -- while returning on level0/shrink. fixture 18 is a STORE. Mechanically the
+#   direction never mattered: cause 24 is raised by cscincoffset on an untagged operand
+#   (capstone-qemu target/riscv/op_helper.c:746-749) BEFORE either access, and the identical
+#   instruction word sits at +0x14 in both helpers. Matching it removes the question.
+# MATCHED PAIR inside this bundle: shrink and sublet have identical bounds width and differ ONLY in
+#   revocation. They split RETURN/FAULT on 17 and 18 and both RETURN on 19, so revocation is the
+#   discriminating variable -- localised by a pair rather than argued from a ladder.
+# fixture 19 is N=2: two independent runs over the same four images, 130015b on all five arms both times.
+
+# IMAGE HASHES for this run (the fixture-19 images differ from the 5d7e1fb64c1a run's by construction)
+level0  59313ed6a83f5657
+shrink  41e4754fbba20494
+sublet  f61c16a447dcd794
+slab    3700bc7b98b56de9   (ONE image; slabsublet0/1 are two CONFIGURATIONS of it, selected by
+#                            MC_SLAB_SUBLET_MODE, and for fixture 19 they produced byte-identical
+#                            output at the same address -- five boots, FOUR images.)
+# Fixture 18's faults therefore reproduce on a SECOND, different image -- N=2 across images for it.
+
+# WHAT MAKES THIS CLASS 3 RATHER THAN A USE-AFTER-FREE, read from the port's own source tree
+# bipbuf_new:      malloc(sizeof(bipbuf_t) + size)            -- ONE allocation, flexible data[]
+# bipbuf_request:  return (unsigned char *)me->data + me->a_end   -- a pointer INSIDE it
+# bipbuf_poll:     void *end = me->data + me->a_start; me->a_start += size;
+#                  ... me->a_start = me->a_end = 0;  return end;   -- CURSORS ONLY, no free
+# So the next request hands out the same bytes.

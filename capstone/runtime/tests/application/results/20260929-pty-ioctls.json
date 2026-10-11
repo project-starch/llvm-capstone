@@ -1,0 +1,29 @@
+{
+ "date": "2026-09-29",
+ "purpose": "terminal ioctl requests for the pseudo-terminal pair and the foreground process group, and the 32-bit request mask every _IOR request needed",
+ "platform": "monitor capstone-sbi a810177, capstone-qemu ac2837aa0e, modcapstone d60365e, launcher capstone-exec built from this commit (-Wall -Wextra -O2), musl 1.2.5 with musl-patches/; contract images and cpython.dom rebuilt from this tree; perl.dom and mruby.dom from delegation-signals",
+ "images": {
+  "application-contract.dom": "a5ea2a1e710fec9f46e97d0251455be32b1ff631ecb4f160c7bd43a6cba91015",
+  "cpython.dom": "958fe3fc1a2853b3948df9a77e5f1a2018afa4452a6e4c29a54b6111bc971bdb"
+ },
+ "launcher_sha256": "fb286b9409646fefcb6ee3738d6bd492bd4f267b246289d91c86a4b37b3d7ee7",
+ "native_ctest": {
+  "passed": 26,
+  "total": 26,
+  "new": "delegate-pty: TIOCSPTLCK, TIOCGPTN (also in the sign-extended form musl sends), TIOCGPGRP through the buffer entry; TIOCSTI and the integer entry for TIOCGPTN refused"
+ },
+ "application_gate": {
+  "pass_lines": 22,
+  "pty_mode": "PASS",
+  "exit": 0
+ },
+ "binfmt": "exec-closed: PASS exec-error: PASS",
+ "signal_contract": "26/26",
+ "cpython": {
+  "pty-smoke.py": "PASS: os.openpty, /dev/pts/0, isatty, bytes across the pair, tcgetpgrp on the slave ENOTTY (not the controlling terminal)",
+  "pty.openpty_setraw": "ok",
+  "rounds": 172
+ },
+ "finding": "before the mask, TIOCSPTLCK (0x40045431) crossed and TIOCGPTN (0x80045430) answered ENOSYS: musl's ioctl takes the request as int, so every request with bit 31 set arrived sign-extended and missed both the libc's size table and the launcher's allowlist; the kernel reads an unsigned int, and both sides now mask before looking the request up",
+ "method": "one guest boot on this launcher; contract pty mode through application-supervisor --mode pty; run.py --repeat 1; run-binfmt.py; run-signals.py; CPython with PYTHONHOME=/mnt/host/py"
+}

@@ -1,0 +1,214 @@
+{
+ "date": "2026-09-30",
+ "purpose": "runtime follow-ups from the CPython subprocess qualification: kill to the parent and ESRCH, pselect6/getpgid/getsid rows, the unserved report under CAPSTONE_DELEGATE_STATS, and musl's pselect mask kept a capability",
+ "platform": "monitor capstone-sbi a810177, capstone-qemu ac2837aa0e, modcapstone d60365e; launcher, contracts, libc (musl 1.2.5 with musl-patches/0001-0004) and the perl, mruby and cpython images all built from this commit; guest --cma-mib 1024 --process-cache-mib 768; stdlib as PYTHONHOME=/mnt/host/py",
+ "images": {
+  "application-contract.dom": "602230b3da1b00131315e0a32869f47be3ee3e0c179577ff489ecf787dcb0749",
+  "signal-contract.dom": "3ce8e76cb2503c7cf9eb745b4b4e563d087cf08c08f4b558400c36ab31c892c3",
+  "perl.dom": "1110ec204a242e473a8eb5c59956d53c079dcbf800aa2f978b8b97822355bf88",
+  "mruby.dom": "1f7cb803f01481c300801fbcaf614a67acd02ba8f6443f6f86a2e024aeaa6065",
+  "cpython.dom": "6b238cba886b5ee21bb223dd018154c3ebd4f21e67c1d5f08bbe06bd0f5afe3e"
+ },
+ "launcher_sha256": "6d8182af7655560b0f7227e7d669df1449fbb888bd2113e0107f6b98deddab08",
+ "native_ctest": "27/27, with the kill-group case extended (self, parent, pid 1 EPERM, vanished pid ESRCH, group refused) and the new pselect case",
+ "gate": [
+  "0",
+  "22"
+ ],
+ "binfmt": "exec-closed: PASS exec-error: PASS ",
+ "signal_contract": "27/27",
+ "perl_print": "delegate rounds=30 syscalls=27",
+ "child_stderr": "0",
+ "subprocess_smoke": "SMOKE 21 / 21",
+ "suites_pass1_pythonhome": {
+  "test_subprocess": {
+   "ran": 344,
+   "ok": 280,
+   "fail": 2,
+   "error": 32,
+   "skipped": 38,
+   "by_cause": {
+    "ERROR subprocess.py:_execute_child: OSError: [Errno 38] posix_spawn: preexec_fn, umask, user and group changes are not available": [
+     "test_close_fds_after_preexec",
+     "test_extra_groups",
+     "test_extra_groups_empty_list",
+     "test_extra_groups_invalid_gid_t_values",
+     "test_group",
+     "test_group",
+     "test_group",
+     "test_group",
+     "test_group",
+     "test_group",
+     "test_group",
+     "test_preexec",
+     "test_preexec_errpipe_does_not_double_close_pipes",
+     "test_preexec_exception",
+     "test_preexec_fork_failure",
+     "test_preexec_gc_module_failure",
+     "test_surrogates_error_message",
+     "test_umask",
+     "test_user",
+     "test_user",
+     "test_user",
+     "test_user",
+     "test_user",
+     "test_user",
+     "test_user"
+    ],
+    "ERROR threading.py:start: RuntimeError: can't start new thread": [
+     "test_double_close_on_error",
+     "test_threadsafe_wait",
+     "test_double_close_on_error",
+     "test_threadsafe_wait"
+    ],
+    "ERROR ?: SyntaxError: invalid syntax": [
+     "test_empty_env",
+     "test_empty_env"
+    ],
+    "ERROR subprocess.py:_execute_child: OSError: [Errno 24] No file descriptors available: '/mnt/host/cpython.dom'": [
+     "test_no_leaking",
+     "test_no_leaking"
+    ],
+    "FAIL ?: AssertionError: 1 != 0": [
+     "test_one_environment_variable",
+     "test_one_environment_variable"
+    ],
+    "ERROR ?: OSError: [Errno 38] posix_spawn: preexec_fn, umask, user and group changes are not available": [
+     "test_fork_exec"
+    ]
+   }
+  },
+  "test_faulthandler": {
+   "ran": 46,
+   "ok": 26,
+   "fail": 11,
+   "error": 0,
+   "skipped": 9,
+   "by_cause": {
+    "FAIL <string>:func\\n: AssertionError: Regex didn't match: '^Timeout \\\\(0:00:00.500000\\\\)!\\\\nThread 0x[0-9a-f]+ \\\\(most rec": [
+     "test_dump_traceback_later",
+     "test_dump_traceback_later_fd",
+     "test_dump_traceback_later_repeat",
+     "test_dump_traceback_later_twice"
+    ],
+    "FAIL <string>:func: AssertionError: 'Traceback (most recent call last):\\n  Fil[358 chars]read' != ''": [
+     "test_dump_traceback_later_cancel"
+    ],
+    "FAIL <string>:func: AssertionError: 'Traceback (most recent call last):\\n  Fil[360 chars]ad\\n' != ''": [
+     "test_dump_traceback_later_file"
+    ],
+    "FAIL threading.py:start\\n: AssertionError: Regex didn't match: '^Thread 0x[0-9a-f]+ \\\\(most recent call first\\\\):\\n(?:  File \".": [
+     "test_dump_traceback_threads"
+    ],
+    "FAIL threading.py:start: AssertionError: 'Traceback (most recent call last):\\n  Fil[410 chars]ad\\n' != ''": [
+     "test_dump_traceback_threads_file"
+    ],
+    "FAIL <string>:<module>\\n: AssertionError: Regex didn't match: '(?m)^Fatal Python error: faulthandler_fatal_error_thread: in ne": [
+     "test_fatal_error_c_thread"
+    ],
+    "FAIL ?: AssertionError: Regex didn't match: '(?m)^Fatal Python error: (?:Segmentation fault|Bus error|Illega": [
+     "test_read_null"
+    ],
+    "FAIL ?: AssertionError: Regex didn't match: '(?m)(?:^Fatal Python error: (?:Segmentation fault|Bus error)\\n\\": [
+     "test_stack_overflow"
+    ]
+   }
+  }
+ },
+ "suites_pass2_stdlib_beside_image": {
+  "test_signal": {
+   "ran": 57,
+   "ok": 38,
+   "fail": 2,
+   "error": 4,
+   "skipped": 13,
+   "by_cause": {
+    "ERROR socket.py:__init__: OSError: [Errno 38] Function not implemented": [
+     "test_invalid_socket",
+     "test_set_wakeup_fd_socket_result"
+    ],
+    "ERROR ?: ?": [
+     "test_pthread_kill_main_thread"
+    ],
+    "ERROR threading.py:join: RuntimeError: cannot join thread before it is started": [
+     "test_stress_modifying_handlers"
+    ],
+    "FAIL script_helper.py:fail: AssertionError: Process return code is -11": [
+     "test_pthread_kill"
+    ],
+    "FAIL threading.py:start: RuntimeError: can't start new thread": [
+     "test_sigwait_thread"
+    ]
+   }
+  },
+  "test_subprocess": {
+   "ran": 344,
+   "ok": 282,
+   "fail": 0,
+   "error": 32,
+   "skipped": 38,
+   "by_cause": {
+    "ERROR subprocess.py:_execute_child: OSError: [Errno 38] posix_spawn: preexec_fn, umask, user and group changes are not available": [
+     "test_close_fds_after_preexec",
+     "test_extra_groups",
+     "test_extra_groups_empty_list",
+     "test_extra_groups_invalid_gid_t_values",
+     "test_group",
+     "test_group",
+     "test_group",
+     "test_group",
+     "test_group",
+     "test_group",
+     "test_group",
+     "test_preexec",
+     "test_preexec_errpipe_does_not_double_close_pipes",
+     "test_preexec_exception",
+     "test_preexec_fork_failure",
+     "test_preexec_gc_module_failure",
+     "test_surrogates_error_message",
+     "test_umask",
+     "test_user",
+     "test_user",
+     "test_user",
+     "test_user",
+     "test_user",
+     "test_user",
+     "test_user"
+    ],
+    "ERROR threading.py:start: RuntimeError: can't start new thread": [
+     "test_double_close_on_error",
+     "test_threadsafe_wait",
+     "test_double_close_on_error",
+     "test_threadsafe_wait"
+    ],
+    "ERROR subprocess.py:_execute_child: OSError: [Errno 24] No file descriptors available: '/mnt/host/cpython.dom'": [
+     "test_no_leaking",
+     "test_no_leaking"
+    ],
+    "FAIL ?: AssertionError: 47 != 1": [
+     "test_executable_without_cwd",
+     "test_executable_without_cwd"
+    ],
+    "ERROR ?: OSError: [Errno 38] posix_spawn: preexec_fn, umask, user and group changes are not available": [
+     "test_fork_exec"
+    ]
+   }
+  }
+ },
+ "probes_pass2": [
+  "isolated ok /mnt/host",
+  "child rc 0 parent got [1] stderr ''",
+  "kill of a reaped pid: ESRCH"
+ ],
+ "libc_test": {
+  "summary": {
+   "PASS": 48,
+   "FAULT": 2,
+   "EXCLUDED": 20,
+   "FAIL": 4,
+   "NOBUILD": 3
+  },
+  "changed_vs_signals_run": {}
+ },
+ "method": "two guest boots on this launcher: pass 1 with PYTHONHOME=/mnt/host/py, pass 2 with lib/python3.13 beside the image and no PYTHONHOME (children started with -I, -E or an empty environment then find the stdlib); run.py --repeat 1; run-binfmt.py; run-signals.py (27 modes, pselect new); CPython -m unittest -v per module with a 30 min cap; run-libc-test-delegated.py with the SDK from this tree, which now passes CAPSTONE_DELEGATE_STATS to every run"
+}

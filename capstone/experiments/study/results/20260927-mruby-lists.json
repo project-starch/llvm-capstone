@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "benchmark": "mruby benchmark/bm_so_lists.rb",
+  "upstream_revision": "9d523e2f74f2e63ca02840937523de61398a617d",
+  "workload": {
+    "schema_version": 1,
+    "suite": "mruby-upstream",
+    "case": "bm_so_lists.rb",
+    "source_sha256": "aae949f940157b0d4227095a9f81c5d441c92bc3768d2546d943b0b30c5ab673",
+    "generated_sha256": "b19f3cc7950c0ee00e15d2dd7ddf1fe19cbd7d825df7191de3a82bd948e82033",
+    "parameters": {
+      "iterations": 300,
+      "list_size": 10000
+    },
+    "adaptation": "Unchanged work counts and body; per-iteration result check, two phase writes and final text output; no forced GC.",
+    "expected_stdout": "LISTS-OK 300 10000\n",
+    "expected_phases": [
+      "startup",
+      "before",
+      "after",
+      "exit"
+    ]
+  },
+  "reference": {
+    "implementation": "ruby 3.2.3 (2024-01-18 revision 52bb2ac0a6) [x86_64-linux-gnu]",
+    "stdout_sha256": "45e6d645c988574af6c4ae75476ade53b026e9a57f7878565bfdced378e901d8"
+  },
+  "attempts": [
+    {
+      "arm": "capstone",
+      "status": "pass",
+      "stdout_sha256": "45e6d645c988574af6c4ae75476ade53b026e9a57f7878565bfdced378e901d8",
+      "phases": [
+        "startup",
+        "before",
+        "after",
+        "exit"
+      ],
+      "observer_errors": 0,
+      "observed_allocation_failures": 6,
+      "scope": "functional benchmark readiness; outer allocation observer only",
+      "cleanup": {
+        "live_domains": 0,
+        "live_regions": 0,
+        "live_bytes": 0
+      },
+      "image_sha256": "4bd3a8a508e9992c2674990645eff1099412b5aeaa351e2e677f2413ce500e65",
+      "outer_arena_bytes": 67108864
+    },
+    {
+      "arm": "capstone-sublet",
+      "status": "pass",
+      "stdout_sha256": "45e6d645c988574af6c4ae75476ade53b026e9a57f7878565bfdced378e901d8",
+      "phases": [
+        "startup",
+        "before",
+        "after",
+        "exit"
+      ],
+      "observer_errors": 0,
+      "observed_allocation_failures": 6,
+      "scope": "functional benchmark readiness; outer allocation observer only",
+      "cleanup": {
+        "live_domains": 0,
+        "live_regions": 0,
+        "live_bytes": 0
+      },
+      "image_sha256": "ceafb8afca8c086dacd1a152714e37a45d7e084f9824d23a41f7e600a6825e6d",
+      "outer_arena_bytes": 67108864
+    },
+    {
+      "arm": "cheribsd-revocation-on",
+      "status": "pass",
+      "stdout_sha256": "45e6d645c988574af6c4ae75476ade53b026e9a57f7878565bfdced378e901d8",
+      "phases": [
+        "startup",
+        "before",
+        "after",
+        "exit"
+      ],
+      "observer_errors": 0,
+      "observed_allocation_failures": 0,
+      "scope": "functional benchmark readiness; outer allocation observer only",
+      "observed_revocation": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "image_sha256": "22d3911213ed71887d832e91f36da13ef0fcd2280b3137c1bb67ae7aad2c71e2"
+    },
+    {
+      "arm": "cheribsd-revocation-off",
+      "status": "pass",
+      "stdout_sha256": "45e6d645c988574af6c4ae75476ade53b026e9a57f7878565bfdced378e901d8",
+      "phases": [
+        "startup",
+        "before",
+        "after",
+        "exit"
+      ],
+      "observer_errors": 0,
+      "observed_allocation_failures": 0,
+      "scope": "functional benchmark readiness; outer allocation observer only",
+      "observed_revocation": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "image_sha256": "22d3911213ed71887d832e91f36da13ef0fcd2280b3137c1bb67ae7aad2c71e2"
+    }
+  ],
+  "totals": {
+    "attempted": 4,
+    "passed": 4,
+    "failed": 0
+  },
+  "limitations": [
+    "One attempt per original arm, one upstream workload, not a full suite or a confirmed memory advantage.",
+    "Six recoverable outer allocation failures on each Capstone arm at a 64 MiB arena; CheriBSD has different backing constraints. Match budgets before comparison.",
+    "Observer counts outer allocations, not internal GC slots; no PoisonCap mruby application integration.",
+    "QEMU times are diagnostic only; no new sweep-invariance control for this benchmark."
+  ]
+}

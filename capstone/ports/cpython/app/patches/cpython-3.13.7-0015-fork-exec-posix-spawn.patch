@@ -1,0 +1,282 @@
+Subject: [PATCH 0015] Let subprocess spawn its children through posix_spawn where there is no fork
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl), with -D_Py_FORK_EXEC_POSIX_SPAWN
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+subprocess.Popen creates every child through _posixsubprocess.fork_exec
+(Modules/_posixsubprocess.c): fork or vfork, then the child closes and
+duplicates descriptors, changes directory, resets signals, and execs one
+candidate after another, reporting a failure to the parent through a pipe.
+A Capstone domain is the user half of one Linux task with no clone, so fork
+returns ENOSYS and no subprocess works, although posix_spawn does: the
+launcher's spawner starts a real child, applies file actions and attributes
+in it and reports an exec failure synchronously.
+
+With _Py_FORK_EXEC_POSIX_SPAWN, fork_exec keeps its signature and its
+contract with subprocess.py and expresses the child steps of child_exec()
+as posix_spawn attributes and file actions: dup2 of the pipe ends onto 0, 1
+and 2 with the same care when one of them already is 0, 1 or 2; the working
+directory through posix_spawn_file_actions_addchdir_np; pass_fds kept by a
+dup2 onto itself, which clears FD_CLOEXEC as child_exec does by hand;
+close_fds as one close action per inheritable descriptor from 3 up that is
+not kept, read from /proc/self/fd (a descriptor with FD_CLOEXEC is gone at
+exec and needs none, and with PEP 446 that is nearly every descriptor);
+restore_signals as SETSIGDEF of SIGPIPE, SIGXFZ and SIGXFSZ; start_new_session
+as SETSID; process_group as SETPGROUP. The candidates of executable_list are
+tried in order with child_exec's first-error rule. An exec failure raises
+OSError in the parent, named after the program, where subprocess.py would
+have rebuilt the same exception from the child's report; the error pipe is
+never written and subprocess.py reads its end of file as before.
+
+Refused before anything starts, with ENOSYS: preexec_fn, umask, user, group
+and supplementary groups, none of which posix_spawn expresses. allow_vfork
+is ignored. It is opt-in: without the define nothing changes.
+
+--- a/Modules/_posixsubprocess.c
++++ b/Modules/_posixsubprocess.c
+@@ -7,6 +7,13 @@
+ #include "pycore_fileutils.h"
+ #include "pycore_pystate.h"
+ #include "pycore_signal.h"        // _Py_RestoreSignals()
++#ifdef _Py_FORK_EXEC_POSIX_SPAWN
++#  include <dirent.h>
++#  include <limits.h>
++#  include <spawn.h>
++#  include <sys/stat.h>
++extern char **environ;
++#endif
+ #if defined(HAVE_PIPE2) && !defined(_GNU_SOURCE)
+ #  define _GNU_SOURCE
+ #endif
+@@ -856,6 +863,155 @@
+ }
+ 
+ 
++#ifdef _Py_FORK_EXEC_POSIX_SPAWN
++/* A process that cannot fork: the child steps of child_exec(), expressed as
++ * posix_spawn attributes and file actions, run by whoever serves posix_spawn.
++ * Exec failure is synchronous, so nothing is written to errpipe_write; the
++ * caller raises. What posix_spawn cannot express (preexec_fn, umask, user and
++ * group changes) is refused before anything starts. */
++
++/* close_fds: every inheritable descriptor from 3 up that is not kept. A
++ * descriptor with FD_CLOEXEC is gone at exec anyway and needs no action;
++ * with PEP 446 that is nearly every descriptor a Python program holds. */
++static int
++spawn_close_open_fds(posix_spawn_file_actions_t *actions, int *fds_to_keep,
++                     Py_ssize_t fds_to_keep_len, int errpipe_write)
++{
++    DIR *dir = opendir("/proc/self/fd");
++    if (dir == NULL) {
++        return -1;
++    }
++    int self_fd = dirfd(dir), err = 0;
++    struct dirent *entry;
++    while (err == 0 && (entry = readdir(dir)) != NULL) {
++        char *end;
++        long fd = strtol(entry->d_name, &end, 10);
++        if (entry->d_name[0] == '\0' || *end != '\0' || fd < 3 || fd > INT_MAX ||
++            fd == self_fd || fd == errpipe_write ||
++            _is_fd_in_sorted_fd_sequence((int)fd, fds_to_keep, fds_to_keep_len)) {
++            continue;
++        }
++        int flags = fcntl((int)fd, F_GETFD);
++        if (flags < 0 || (flags & FD_CLOEXEC)) {
++            continue;
++        }
++        err = posix_spawn_file_actions_addclose(actions, (int)fd);
++    }
++    closedir(dir);
++    if (err) {
++        errno = err;
++        return -1;
++    }
++    return 0;
++}
++
++static pid_t
++spawn_exec(char *const exec_array[],
++           char *const argv[],
++           char *const envp[],
++           const char *cwd,
++           int p2cread, int c2pwrite, int errwrite, int errpipe_write,
++           int close_fds, int restore_signals,
++           int call_setsid, pid_t pgid_to_set,
++           int *fds_to_keep, Py_ssize_t fds_to_keep_len)
++{
++    posix_spawnattr_t attr;
++    posix_spawn_file_actions_t actions;
++    char *const no_args[] = {NULL};
++    int dups[3] = {-1, -1, -1}, ndups = 0;
++    short flags = 0;
++    int err, saved_err = 0, i;
++    pid_t pid = -1;
++
++    if ((err = posix_spawnattr_init(&attr)) != 0) {
++        errno = err;
++        return -1;
++    }
++    if ((err = posix_spawn_file_actions_init(&actions)) != 0) {
++        posix_spawnattr_destroy(&attr);
++        errno = err;
++        return -1;
++    }
++    /* The same care as child_exec() when a pipe end is 0, 1 or 2 (#12607):
++       move it up before the dup2 actions can overwrite it. */
++    if (c2pwrite == 0) {
++        if ((c2pwrite = fcntl(c2pwrite, F_DUPFD_CLOEXEC, 3)) < 0) goto fail_errno;
++        dups[ndups++] = c2pwrite;
++    }
++    while (errwrite == 0 || errwrite == 1) {
++        if ((errwrite = fcntl(errwrite, F_DUPFD_CLOEXEC, 3)) < 0) goto fail_errno;
++        dups[ndups++] = errwrite;
++    }
++    /* dup2 of a descriptor onto itself clears FD_CLOEXEC, as child_exec()
++       does by hand for a stream that is already in place (#10806). */
++    if (p2cread != -1 && (err = posix_spawn_file_actions_adddup2(&actions, p2cread, 0)) != 0) goto fail;
++    if (c2pwrite != -1 && (err = posix_spawn_file_actions_adddup2(&actions, c2pwrite, 1)) != 0) goto fail;
++    if (errwrite != -1 && (err = posix_spawn_file_actions_adddup2(&actions, errwrite, 2)) != 0) goto fail;
++    if (cwd != NULL && (err = posix_spawn_file_actions_addchdir_np(&actions, cwd)) != 0) goto fail;
++    for (i = 0; i < fds_to_keep_len; ++i) {
++        int fd = fds_to_keep[i];
++        if (fd == errpipe_write) {
++            continue;   /* close-on-exec, and nothing in the child writes it */
++        }
++        if ((err = posix_spawn_file_actions_adddup2(&actions, fd, fd)) != 0) goto fail;
++    }
++    if (close_fds && spawn_close_open_fds(&actions, fds_to_keep, fds_to_keep_len, errpipe_write) < 0) {
++        goto fail_errno;
++    }
++    if (restore_signals) {
++        /* what _Py_RestoreSignals() resets in the child */
++        sigset_t defaults;
++        sigemptyset(&defaults);
++#ifdef SIGPIPE
++        sigaddset(&defaults, SIGPIPE);
++#endif
++#ifdef SIGXFZ
++        sigaddset(&defaults, SIGXFZ);
++#endif
++#ifdef SIGXFSZ
++        sigaddset(&defaults, SIGXFSZ);
++#endif
++        if ((err = posix_spawnattr_setsigdefault(&attr, &defaults)) != 0) goto fail;
++        flags |= POSIX_SPAWN_SETSIGDEF;
++    }
++    if (call_setsid) {
++        flags |= POSIX_SPAWN_SETSID;
++    }
++    if (pgid_to_set >= 0) {
++        if ((err = posix_spawnattr_setpgroup(&attr, pgid_to_set)) != 0) goto fail;
++        flags |= POSIX_SPAWN_SETPGROUP;
++    }
++    if ((err = posix_spawnattr_setflags(&attr, flags)) != 0) goto fail;
++    /* The same candidates and the same first-error rule as child_exec(). */
++    for (i = 0; exec_array[i] != NULL; ++i) {
++        err = posix_spawn(&pid, exec_array[i], &actions, &attr,
++                          argv ? argv : no_args, envp ? envp : environ);
++        if (err == 0) {
++            break;
++        }
++        if (err != ENOENT && err != ENOTDIR && saved_err == 0) {
++            saved_err = err;
++        }
++    }
++    if (err != 0) {
++        err = saved_err ? saved_err : err;
++        goto fail;
++    }
++    posix_spawn_file_actions_destroy(&actions);
++    posix_spawnattr_destroy(&attr);
++    for (i = 0; i < ndups; ++i) close(dups[i]);
++    return pid;
++fail_errno:
++    err = errno;
++fail:
++    posix_spawn_file_actions_destroy(&actions);
++    posix_spawnattr_destroy(&attr);
++    for (i = 0; i < ndups; ++i) close(dups[i]);
++    errno = err;
++    return -1;
++}
++#endif /* _Py_FORK_EXEC_POSIX_SPAWN */
++
+ /* The main purpose of this wrapper function is to isolate vfork() from both
+  * subprocess_fork_exec() and child_exec(). A child process created via
+  * vfork() executes on the same stack as the parent process while the latter is
+@@ -1048,6 +1204,14 @@
+         PyErr_SetString(PyExc_ValueError, "errpipe_write must be >= 3");
+         return NULL;
+     }
++#ifdef _Py_FORK_EXEC_POSIX_SPAWN
++    if (preexec_fn != Py_None || child_umask >= 0 || gid_object != Py_None ||
++        uid_object != Py_None || extra_groups_packed != Py_None) {
++        PyErr_SetObject(PyExc_OSError, Py_BuildValue("(is)", ENOSYS,
++            "posix_spawn: preexec_fn, umask, user and group changes are not available"));
++        return NULL;
++    }
++#endif
+     if (_sanity_check_python_fd_sequence(py_fds_to_keep)) {
+         PyErr_SetString(PyExc_ValueError, "bad value(s) in fds_to_keep");
+         return NULL;
+@@ -1238,6 +1402,50 @@
+     }
+ #endif
+ 
++#ifdef _Py_FORK_EXEC_POSIX_SPAWN
++    (void)old_sigmask; (void)gid; (void)uid; (void)p2cwrite; (void)c2pread;
++    (void)errread; (void)errpipe_read; (void)do_fork_exec;
++    /* posix_spawn reports one error for the whole child; subprocess.py names
++       a chdir failure after the directory. Ask about the directory first. */
++    if (cwd != NULL) {
++        struct stat st;
++        int rc = stat(cwd, &st);
++        if (rc != 0 || !S_ISDIR(st.st_mode)) {
++            if (rc == 0) {
++                errno = ENOTDIR;
++            }
++            PyErr_SetFromErrnoWithFilenameObject(PyExc_OSError, cwd_obj);
++            goto cleanup;
++        }
++    }
++    pid = spawn_exec(exec_array, argv, envp, cwd,
++                     p2cread, c2pwrite, errwrite, errpipe_write,
++                     close_fds, restore_signals, call_setsid, pgid_to_set,
++                     c_fds_to_keep, fds_to_keep_len);
++    if (pid == (pid_t)-1) {
++        /* The exception subprocess.py builds from the child's report is named
++           after the program as the caller gave it: the one candidate when it
++           had a directory, the bare name when the candidates came from PATH. */
++        int err = errno;
++        const char *program = exec_array[0] ? exec_array[0] : "";
++        if (exec_array[0] != NULL && exec_array[1] != NULL) {
++            const char *slash = strrchr(program, '/');
++            if (slash != NULL) {
++                program = slash + 1;
++            }
++        }
++        PyObject *name = PyUnicode_DecodeFSDefault(program);
++        errno = err;
++        if (name != NULL) {
++            PyErr_SetFromErrnoWithFilenameObject(PyExc_OSError, name);
++            Py_DECREF(name);
++        }
++        else {
++            PyErr_SetFromErrno(PyExc_OSError);
++        }
++        goto cleanup;
++    }
++#else
+     pid = do_fork_exec(exec_array, argv, envp, cwd,
+                        p2cread, p2cwrite, c2pread, c2pwrite,
+                        errread, errwrite, errpipe_read, errpipe_write,
+@@ -1252,6 +1460,7 @@
+         /* Capture errno for the exception. */
+         saved_errno = errno;
+     }
++#endif
+ 
+ #ifdef VFORK_USABLE
+     if (old_sigmask) {

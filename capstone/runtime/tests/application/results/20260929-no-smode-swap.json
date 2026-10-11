@@ -1,0 +1,75 @@
+{
+ "date": "2026-09-29",
+ "purpose": "supervised_invoke uses __domcall instead of __domcallsaves: no CPMP/S-mode CSR swap around the supervised CALL",
+ "method": "as 20260929-step-one-ecall.json: delegate-bench.dom under CAPSTONE_DELEGATE_STATS=1, rdtime wall time without icount, same kernel, launcher, module (one-ecall) and host state; compared against the one-ecall platform of that record",
+ "platform": {
+  "monitor": "capstone-sbi a810177 via caplifive-opensbi 853197a; caplifive-buildroot c3507a5",
+  "fw_jump_sha256": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+  "capstone_ko_sha256": "ffe576224bb9b6a2158880bc7421ff924040a2bd4fb601206e04b5ddf8e2eef9",
+  "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+ },
+ "generated_asm_supervised_invoke": {
+  "before": {
+   "ccsrrw": 38,
+   "csr": 18
+  },
+  "after": {
+   "ccsrrw": 4,
+   "csr": 4
+  }
+ },
+ "delegate_bench": [
+  {
+   "calls": 10000,
+   "rounds": 10003,
+   "ticks": 5443448
+  },
+  {
+   "calls": 10000,
+   "rounds": 10003,
+   "ticks": 5269432
+  },
+  {
+   "calls": 10000,
+   "rounds": 10003,
+   "ticks": 5209849
+  },
+  {
+   "calls": 10000,
+   "rounds": 10003,
+   "ticks": 5192414
+  },
+  {
+   "calls": 10000,
+   "rounds": 10003,
+   "ticks": 5837421
+  },
+  {
+   "calls": 100000,
+   "rounds": 100003,
+   "ticks": 51946005
+  },
+  {
+   "calls": 100000,
+   "rounds": 100003,
+   "ticks": 51911647
+  }
+ ],
+ "ticks_per_round_median": {
+  "one_ecall_10000": 893.3,
+  "one_ecall_100000": 884.6,
+  "no_smode_swap_10000": 526.8,
+  "no_smode_swap_100000": 519.3
+ },
+ "fault_records": {
+  "fault-vector": "cause=24 pc=0xc0306318 address=0x0 entry=0xc030064c code=0xc0300000-0xc038f000",
+  "fault-privcsr": "cause=2 pc=0xc03062e8 address=0x30401073 entry=0xc030064c code=0xc0300000-0xc038f000",
+  "fault-debugcap": "cause=2 pc=0xc03062f4 address=0x0 entry=0xc030064c code=0xc0300000-0xc038f000",
+  "fault-capenter": "cause=2 pc=0xc0306300 address=0x0 entry=0xc030064c code=0xc0300000-0xc038f000"
+ },
+ "fault_records_note": "cause and address equal the one-ecall platform's; pc and entry differ by the load base 0xc0300000 vs 0xc0200000 of this boot, the offset into the image is identical",
+ "gates": {
+  "application_gate_run_py": "PASS (21 PASS lines)",
+  "run_binfmt_delegate_contract": "PASS (exec-closed, exec-error)"
+ }
+}

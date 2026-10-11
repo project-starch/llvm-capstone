@@ -1,0 +1,71 @@
+{
+  "date": "2026-09-30",
+  "scope": "Probe B domain phase T1: a transport per context (docs/plans/delegation-threads.md, Q2 first part), with the Probe A, signal-contract and application-gate regressions",
+  "platform": {
+    "qemu_source": "capstone-qemu qemu/context-slots-on-pin 674cdab03c",
+    "qemu_binary_sha256": "1283cd3400d4bc5470f0ae9f557abb60f7316c86cdee4ce8cd97e7a1f36f8196",
+    "monitor": "capstone-sbi monitor/context-slots dd812db (collects revocation nodes before a loan), in caplifive-opensbi wrapper/context-slots 3021c05 (caplifive-buildroot components/opensbi at cffac39)",
+    "firmware_sha256": "295647f3aacc8c585c4b4938c10a74c0cb676e2037f2faf7c882525d9c867a50",
+    "firmware_generation_preset_sha256": "759e85091df33bf9519f924dec83666ece7624a0d36fb01be62ba3f9b9a40152",
+    "module_sha256": "6ab096ce9bf8e480a0c2d04d190d1f489b41ee754b5e1b0679e6ac44d265c7bc",
+    "module_source": "caplifive-buildroot modcapstone/context-slots, driver unchanged since e3a43d4",
+    "launcher_sha256": "3c7a283b841ba5c82b56c24300047e0b3b0f10434dd439553ecc94ba1474b82f",
+    "kernel": "/tmp/capstone/delegation-binfmt-linux Image, as in the earlier records"
+  },
+  "images_sha256": {
+    "application-contract.dom": "199977b8c521e8a8692fc9ab40b399bf57c337b54303dd567cc7f80773b5c6f3",
+    "context-probe.dom": "a66496a9b949a18c24ea00a8cf178ae5206b798564faf717ce4155ab94722655",
+    "context-review.dom": "4c9e32a0536d06cfce75c4d943b3f5faaf7e14c6e8740e384cf5f5036f3824a5",
+    "delegate-bench.dom": "b4252275454dcf9aa4111a11fbd6218a66fa57ec8ef812c0b7d5ef2ac66fbb4e",
+    "delegate-contract.dom": "0d3eaa570dd3d18099942e4b050bc4418718953ecec81ee51c1e79161175f051",
+    "mruby.dom": "9593c22af7cf3b97222de68f6acacd49311d9546f3cffe973567b4f8e7b829aa",
+    "perl.dom": "74ada6ad48425fcb75c950abae682039266406e3a9531a8b297bc61a69fc5656",
+    "signal-contract.dom": "1b00886d5005e19221316a696ab0858bd6ec5b33496f95c2b0ad42c4b4fe30bb",
+    "thread-probe.dom": "21fbc313d2ea8e8d6afcd2bd9bb951c2f21ca61fca4e9dd032e4fda40e633e8d"
+  },
+  "images_note": "perl.dom and mruby.dom relinked on this runtime (ports/common/application/build.py, level0 heap, arena 64 MiB, heap log 26) from the objects /tmp/capstone/signals/perl5 and mruby4 were linked from, libc from /tmp/capstone/libc-rounds; the manifests say runtime_dirty because they were linked from the working tree that is this commit",
+  "thread_probe": {
+    "transport": "PASS",
+    "blocking": "PASS",
+    "reserve": "PASS",
+    "reuse": "PASS",
+    "concurrent": "PASS",
+    "signals-refused": "PASS",
+    "no-transport": "PASS",
+    "preempted": "PASS",
+    "many-rounds": "PASS",
+    "signal-first-only": "PASS",
+    "sigpipe-ignored": "PASS",
+    "sigpipe-child": "PASS",
+    "exec-child": "PASS",
+    "exit-child": "PASS",
+    "fault-child": "PASS"
+  },
+  "thread_probe_measurements": {
+    "many-rounds": "thread-probe many-rounds: 100000 rounds in 9113 ms; 10000-round blocks 909 to 916 ms",
+    "preempted": "thread-probe preempted: 1610 rounds meanwhile",
+    "signal-first-only": "thread-probe signal-first-only: 20 handlers in the first context, 0 in the other",
+    "exec-child": "thread-probe print-mask: SigBlk:\t0000000000000000"
+  },
+  "regression": {
+    "context_probe": "35/35 standard modes PASS (two-steppers under the one-stepper contract); explicit modes in boots of their own on the same launcher: aba (A7, CAPSTONE_TEST_NODE_QUERY=1) PASS, gen-exhaust and gen-launch (A9, generation-preset firmware 759e8509) PASS, ctl-wfi PASS",
+    "aba": "context-probe aba: A node 78 base 0xc02bf000; 130381 burns; handle 78, area 78, new seal node 78 base 0xc02bf000; ids 0x100000001, 0x100000002; first step kind 0 cause 0 pc 0 result 0x4558495445444558 value 1005",
+    "signal_contract": "26/26 PASS",
+    "application_gate": "exit 0, 21 PASS lines",
+    "native": "ctest in the native build of runtime/exec: 38/38 PASS, including application-image (contexts limit, page-sized exchange, the descriptor without contexts rejected) and delegate-service (a further context's host: own exchange, the owner's children and spawner, signal requests ENOSYS; every context request reaches the hook). The further-context refusal was shown to fire by removing it: delegate-service-test failed at the ENOSYS assertion."
+  },
+  "findings": {
+    "revocation_nodes": "Every STEP that starts a call takes a revocation node for the descriptor loan; nothing collected them unless supervised code ran short itself. On the previous monitor (c0dbd04, firmware 8ceee8ebebb0d7ec505461b6d27d9f7471f3f5d0c78030fc1d6762436eb0bb26) thread-probe many-rounds (100000 sched_yield rounds, one context) halted the monitor: 'domain halted by capability fault: cause = 30, pc = 0x80021232' (mrev in loan_begin); so did context-probe two-steppers. With dd812db the same 100000 rounds pass.",
+    "region_bounds": "The runtime had sized the exchange region by the region capability's bounds, which can be larger than requested when the driver reuses a cached block. After thread-probe and context-probe (CONTEXTS 7) had run, signal-contract retry-partial got EFAULT: the launcher refused write(7, 0x10, 0x7fff0) against exchange_bytes 0x40000. Transports are now cut by the image's declared sizes; retry-partial passes after the same sequence.",
+    "two_steppers": "With a transport per context a THREAD context has one stepper; the application's STEP is refused with EINVAL (it would hand the context's request to the wrong thread). The mode now checks the refusal."
+  },
+  "method": "Guest runs through capstone_vm with the pinned files above: run-threads.py (thread-probe.dom), run-context.py, run-signals.py and run.py in one boot; A7, A9 and ctl-wfi in boots of their own. The pre-fix evidence came from the same probes on firmware 8ceee8eb (monitor c0dbd04) and on a runtime that still sized its exchange region by capability bounds.",
+  "review": {
+    "what": "An independent review of the T1 change (2026-09-30) found five defects. Three are fixed and covered by thread-probe modes that failed before the fix and pass after it (same firmware; launcher 66614e27 and the runtime before the fix); one is fixed by review only; one is left for Q6.",
+    "signal-first-only": "A further context ran one of the first context's pending signal events (its round's dl_settle delivered from the process-wide list), after which the signal stayed blocked: before, '4 handlers in the first context, 1 in the other'; after, 20 and 0. Only a context with a handover block now takes, delivers or changes signal state.",
+    "exec-child": "Exec in place from a further context started the new image with every signal blocked: before, the exec'd program read 'SigBlk:\\tfffffffe7ffbfeff'; after, 0000000000000000 (the thread takes the application's logical mask just before execve).",
+    "sigpipe-child": "SIGPIPE from a write in a further context stayed pending on its fully blocked thread and the process lived on (write -1, errno 32); now the thread forwards a pending SIGPIPE or SIGXFSZ to the process, which died by signal 13. sigpipe-ignored checks EPIPE under SIG_IGN.",
+    "exit_fault_exec": "Exit, fault and exec in place now take one lock: an end that has begun wins, a failed exec gives the lock back (by review, no probe).",
+    "spawn_block": "posix_spawn and execve pack into one static 64 KiB block in the domain; two contexts spawning at once would mix requests. Left for Q6 with malloc and stdio, which a further context also still runs without locks."
+  }
+}

@@ -1,0 +1,29 @@
+string.h: the embedded-string length gets six bits at 16-byte pointers (4.0.0-rc2).
+
+RSTRING_EMBED_LEN_MAX is 4*sizeof(void*) - 5: 27 at 8-byte pointers, 59 at
+16-byte capabilities, which the 5-bit field cannot hold (mrb_init_string's
+static assert). At this version the string flags are the type and state bits
+0-5 and the length at 6-10, with nothing above, so the length takes bit 11
+where a pointer is wider than 8 bytes; natively the layout is unchanged. The
+head pin's 0001 also moves the coderange and encoding fields, which this
+version does not have.
+
+diff --git i/include/mruby/string.h w/include/mruby/string.h
+index b88259452..39823f4d1 100644
+--- i/include/mruby/string.h
++++ w/include/mruby/string.h
+@@ -48,7 +48,14 @@ struct RStringEmbed {
+ #define MRB_STR_TYPE_MASK 15
+ 
+ #define MRB_STR_EMBED_LEN_SHIFT 6
++/* Capstone: at 16-byte pointers RSTRING_EMBED_LEN_MAX is 59, which needs six
++   bits; bit 11 is free (the type and state flags are bits 0-5, and nothing is
++   above the length). */
++#if __SIZEOF_POINTER__ > 8
++#define MRB_STR_EMBED_LEN_BITS 6
++#else
+ #define MRB_STR_EMBED_LEN_BITS 5
++#endif
+ #define MRB_STR_EMBED_LEN_MASK (((1 << MRB_STR_EMBED_LEN_BITS) - 1) << MRB_STR_EMBED_LEN_SHIFT)
+ 
+ #define MRB_STR_BINARY    16

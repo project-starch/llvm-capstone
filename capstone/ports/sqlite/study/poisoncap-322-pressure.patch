@@ -1,0 +1,22 @@
+--- a/sqlite3.c
++++ b/sqlite3.c
+@@ -23490,0 +23491 @@
++static int study_pressure_reclaim(void);
+@@ -23494,0 +23496,6 @@
++    memsys5Enter();
++    p = memsys5MallocUnsafe(nBytes);
++    memsys5Leave();
++  }
++  /* Pressure control: reclaim quarantined blocks before reporting OOM. */
++  if( !p && nBytes>0 && study_pressure_reclaim() ){
+@@ -23578,0 +23586,10 @@
++
++static int study_pressure_reclaim(void){
++#ifdef NESTED_TEMPORAL
++  if( q_count ){
++    quarantine_revoke();
++    return 1;
++  }
++#endif
++  return 0;
++}

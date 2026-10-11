@@ -20,24 +20,24 @@ does not deliver it.
 
 ## Why the obvious port does not deliver it
 
-`aset.c` takes its blocks from the level below one at a time, whenever a
+`aset.c` takes its blocks from the allocator below one at a time, whenever a
 context runs out of room, interleaved with every other context doing the same.
 A handle from `mrev` is senior to one node, and `revoke` walks the junior run
-below it, so a handle the level below keeps for one block covers that block and
+below it, so a handle the allocator below keeps for one block covers that block and
 nothing else. A context with *k* blocks would then cost *k* revocations, and a
 reset's cost would grow with the blocks, which grows with the objects. H1
 would be false, and it would be false because of how the port was built rather
 than because of anything about the hardware.
 
-## The decision: the level below delegates per context, not per block
+## The decision: the allocator below delegates per context, not per block
 
-The level below gives each context a **sub-pool**: one region, and it keeps one
+The allocator below gives each context a **sub-pool**: one region, and it keeps one
 handle senior to it. Every block that context asks for is carved from its own
 sub-pool. A reset or a delete is then `sublet_give_to` on that one handle: one
 revocation, and every block and every chunk and every capability the program
 still holds into any of them dies with it.
 
-This is a change to the level below and not to the manager. `aset.c`'s policy
+This is a change to the allocator below and not to the manager. `aset.c`'s policy
 is untouched: the same block sizes, the same doubling, the same keeper block,
 the same free lists, the same chunks in the same order. What changes is where
 the bytes come from, and that is the level the port owns anyway. A7's condition
@@ -46,7 +46,7 @@ stays a count of what the manager needed.
 
 It is also the shape `sublet.h` describes in its own words: *a handle taken by
 the level below covers a whole sub-pool.* The hierarchy in the hardware follows
-the hierarchy in the program, and it is the level below that makes it possible,
+the hierarchy in the program, and it is the allocator below that makes it possible,
 by delegating once per context instead of once per block.
 
 A child context is a sub-pool of its own, under its own handle. A parent's
@@ -58,14 +58,14 @@ says: one per context. Not one for the tree.
 
 | Operation | What the port does |
 |---|---|
-| context create | the level below carves a sub-pool of 64 KiB, keeps a handle for it in its own table, and gives the context its header out of memory outside the sub-pool, because a revocation must not reach the header |
+| context create | the allocator below carves a sub-pool of 64 KiB, keeps a handle for it in its own table, and gives the context its header out of memory outside the sub-pool, because a revocation must not reach the header |
 | the keeper block | the first `sublet_carve` from the sub-pool, and its capability goes in the context's keeper field rather than being derived from the header's |
-| block from the level below | `sublet_carve` from the context's sub-pool slot: the block, linear, in the context's block slot. The sub-pool's handle is senior to it and stays with the level below |
+| block from the allocator below | `sublet_carve` from the context's sub-pool slot: the block, linear, in the context's block slot. The sub-pool's handle is senior to it and stays with the allocator below |
 | carve a chunk | `sublet_carve` from the block slot to the chunk's slot, front to back, which is the bump `aset.c` already does |
 | hand a chunk out | `sublet_take` on the chunk's slot: `mrev`, then `delin`, so the program gets a copyable alias and the slot keeps the handle |
 | free a chunk | `sublet_give` on the chunk's slot: the alias the program still holds dies, and the slot holds the chunk again, linear, for the next `sublet_take` |
 | reset | `sublet_give_to` on the sub-pool's handle, keeper included, then carve the keeper again: one revocation, and none at all for a sub-pool never carved |
-| delete | the same revocation, and then the level below takes the sub-pool back and returns the header |
+| delete | the same revocation, and then the allocator below takes the sub-pool back and returns the header |
 | realloc, same size class | nothing: the chunk's region and the capability handed out do not change |
 | realloc that moves | carve, copy with the tag-preserving `memcpy`, then `sublet_give` the old chunk |
 
@@ -81,7 +81,7 @@ freed, so its bytes are not readable, and the link cannot live there. It is
 also the place that forced the sixteen-byte chunk header on the unprotected
 build, for a different reason: a capability does not fit in an eight-byte slot.
 
-Both go to a **side table, one entry per chunk**, in memory the level below
+Both go to a **side table, one entry per chunk**, in memory the allocator below
 gives the port and the program never sees:
 
 | field | what it is |
@@ -171,7 +171,7 @@ sub-pool covers the header, then revoking it destroys the `AllocSetContext` the
 manager is executing on. If the sub-pool spares the keeper so that the header
 survives, then every object in the keeper block survives the reset with a live
 capability, and the reset no longer means what it says. Only one arrangement is
-both safe and one revocation: the header sits in the level below's own memory,
+both safe and one revocation: the header sits in the allocator below's own memory,
 outside anything the handle covers, and the sub-pool holds every block
 including the keeper. A reset revokes the sub-pool, keeper included, and the
 manager carves the keeper again immediately.
@@ -186,7 +186,7 @@ capability of its own rather than derived from the header's, which is a field:
 |---|---|
 | `AllocSetContext` | one field, the keeper's capability |
 | `KeeperBlock`, `IsKeeperBlock` | read the field instead of doing arithmetic |
-| create | the header from the level below, the keeper carved from the sub-pool, `endptr` from the block rather than from the header |
+| create | the header from the allocator below, the keeper carved from the sub-pool, `endptr` from the block rather than from the header |
 | reset | carve and initialise the keeper after the revoke, where it re-pointed a surviving block before |
 | delete | two returns rather than one free |
 | the `keepersize` assertion | a subtraction across two capabilities, and it exists only under `MEMORY_CONTEXT_CHECKING` |

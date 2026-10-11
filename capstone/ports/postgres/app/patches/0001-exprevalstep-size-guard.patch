@@ -1,0 +1,11 @@
+--- a/src/include/executor/execExpr.h	2026-09-24 19:56:47.503207365 +0800
++++ b/src/include/executor/execExpr.h	2026-09-24 19:56:47.537627529 +0800
+@@ -720,7 +720,7 @@
+ } ExprEvalStep;
+ 
+ /* Enforce the size rule given in the comment above */
+-StaticAssertDecl(sizeof(ExprEvalStep) <= 64,
++StaticAssertDecl(sizeof(ExprEvalStep) <= 128,
+ 				 "size of ExprEvalStep exceeds 64 bytes");
+ 
+ 

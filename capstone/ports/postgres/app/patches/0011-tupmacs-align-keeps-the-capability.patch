@@ -1,0 +1,42 @@
+tupmacs.h: att_align_* keep a pointer's capability (intcap plan, Phase D).
+
+att_align_nominal, att_align_datum and att_align_pointer return
+`(uintptr_t) (cur_offset)` for a char-aligned (or short-varlena) attribute and the
+aligned operand otherwise. They are used on byte pointers as well as offsets. On
+Capstone a uintptr_t is an 8-byte integer, so a data pointer aligned to "char" came
+back untagged: heap_fill_tuple's memcpy into it faulted (cause 24) in the first
+--boot run with the intcap Datum. With 0007, TYPEALIGN returns its operand's own
+type, so the cast is dropped and every arm has that type: a pointer stays a
+capability, and an offset stays an integer.
+
+Applies after 0010, which touches the same file.
+
+--- a/src/include/access/tupmacs.h
++++ b/src/include/access/tupmacs.h
+@@ -86,7 +86,7 @@
+ #define att_align_datum(cur_offset, attalign, attlen, attdatum) \
+ ( \
+ 	((attlen) == -1 && VARATT_IS_SHORT(DatumGetPointer(attdatum))) ? \
+-	(uintptr_t) (cur_offset) : \
++	(cur_offset) : /* capstone: keeps a pointer's capability */ \
+ 	att_align_nominal(cur_offset, attalign) \
+ )
+ 
+@@ -107,7 +107,7 @@
+ #define att_align_pointer(cur_offset, attalign, attlen, attptr) \
+ ( \
+ 	((attlen) == -1 && VARATT_NOT_PAD_BYTE(attptr)) ? \
+-	(uintptr_t) (cur_offset) : \
++	(cur_offset) : /* capstone: keeps a pointer's capability */ \
+ 	att_align_nominal(cur_offset, attalign) \
+ )
+ 
+@@ -129,7 +129,7 @@
+ #define att_align_nominal(cur_offset, attalign) \
+ ( \
+ 	((attalign) == TYPALIGN_INT) ? INTALIGN(cur_offset) : \
+-	 (((attalign) == TYPALIGN_CHAR) ? (uintptr_t) (cur_offset) : \
++	 (((attalign) == TYPALIGN_CHAR) ? (cur_offset) : \
+ 	  (((attalign) == TYPALIGN_DOUBLE) ? DOUBLEALIGN(cur_offset) : \
+ 	   ( \
+ 			AssertMacro((attalign) == TYPALIGN_SHORT), \

@@ -1,0 +1,210 @@
+{
+ "date": "2026-09-29",
+ "purpose": "two QEMU supervisor changes: (1) restore_state flushes the TLB only when satp/mstatus.MXR,SUM,MPRV,MPP/offsetmmu/CPMP differ, and skips the 4 KiB vreg copy without V; (2) the 5 ms quantum is a virtual-clock timer with an inline flag test per C-mode block instead of a clock-reading helper call per block",
+ "method": "as 20260929-no-smode-swap.json: delegate-bench.dom, CAPSTONE_DELEGATE_STATS=1, rdtime wall time without icount, monitor capstone-sbi a810177, driver caplifive-buildroot c3507a5, kernel e833dfb1..., launcher 991bc7dc...; the control is an unmodified build of capstone-qemu 22aec7ee with the same configure line (--target-list=riscv64-softmmu --enable-slirp --disable-docs); the alternating series booted guard-only and guard+timer three times each in turn",
+ "qemu": {
+  "control": "22aec7ee unmodified build",
+  "flush_guard": "1258ea61fd",
+  "flush_guard_plus_timer": "ac2837aa0e"
+ },
+ "polls_per_round_before": {
+  "note": "QMP info registers, supervisor polls delta over 100,000 calls on the flush-guard build",
+  "delta_polls": 77109478,
+  "rounds": 100000,
+  "per_round": 771
+ },
+ "polls_after": {
+  "polls": 0,
+  "preemptions": 0,
+  "note": "timer build, same benchmark"
+ },
+ "series": {
+  "control": [
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 5122642
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 5116661
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 5121982
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 5124031
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 5167308
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 50889278
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 50913273
+   }
+  ],
+  "flush_guard": [
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 3518846
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 3541780
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 3482080
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 3524445
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 3501436
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 34532189
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 34361941
+   }
+  ],
+  "flush_guard_plus_timer": [
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 3030889
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 3747775
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 2971004
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 2949734
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 11412780
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 33960789
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 33212469
+   }
+  ],
+  "alternating_guard": [
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 34425129
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 34406282
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 35838984
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 35126733
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 35925969
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 35332123
+   }
+  ],
+  "alternating_timer": [
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 25054197
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 26158788
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 26400285
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 26405942
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 26173314
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 25764923
+   }
+  ]
+ },
+ "ticks_per_round_median": {
+  "control_10000": 512.1,
+  "control_100000": 509.0,
+  "flush_guard_10000": 351.8,
+  "flush_guard_100000": 344.5,
+  "alternating_guard_100000": 352.3,
+  "alternating_timer_100000": 261.7
+ },
+ "gates": {
+  "flush_guard": "application gate PASS (21 PASS lines), binfmt contract PASS, fault records unchanged",
+  "timer": "application gate PASS (21 PASS lines) including the cancellation tests that preempt a spinning domain, binfmt contract PASS, fault records unchanged"
+ }
+}

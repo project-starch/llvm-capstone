@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "source_checks": 22,
+  "virtual_translation_units": {
+    "compiled": 1361,
+    "failed": 0
+  },
+  "physical_control": {
+    "compiled": 1355,
+    "expected_mallocng_failures": 6
+  },
+  "mutation_controls": {
+    "unit": {
+      "detected": true,
+      "failed_checks": [
+        "UNIT"
+      ]
+    },
+    "realloc": {
+      "detected": true,
+      "failed_checks": [
+        "realloc n <= avail_size"
+      ]
+    },
+    "group-count": {
+      "detected": true,
+      "failed_checks": [
+        "group size/count/mmap decisions"
+      ]
+    }
+  },
+  "scope": "Focused policy-source comparison, not runtime-equivalence proof"
+}

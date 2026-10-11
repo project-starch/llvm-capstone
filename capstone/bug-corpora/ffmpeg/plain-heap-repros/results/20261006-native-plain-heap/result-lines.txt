@@ -1,0 +1,28 @@
+00_d133b4a231_showcwt_kernel_scan_past_array case=0 arm=fixed
+00_d133b4a231_showcwt_kernel_scan_past_array cap=4 touched=3 extent=1 crossed=0 damage=0
+00_d133b4a231_showcwt_kernel_scan_past_array VERDICT FIXED the fix starts the scan at b - 1, so the first read is the array's last element
+00_d133b4a231_showcwt_kernel_scan_past_array case=0 arm=buggy
+00_d133b4a231_showcwt_kernel_scan_past_array cap=4 touched=4 extent=1 crossed=1 damage=0
+00_d133b4a231_showcwt_kernel_scan_past_array VERDICT DEFECT-REPRODUCED the backward kernel scan started at b, so it read tkernel[size] -- one element past av_malloc_array(size, 4)
+00_d133b4a231_showcwt_kernel_scan_past_array asan fixed_clean=1 buggy_reported=1
+01_bcbf3a5630_vf_scale_format_list_compaction case=1 arm=fixed
+01_bcbf3a5630_vf_scale_format_list_compaction cap=6 touched=5 extent=1 crossed=0 damage=0
+01_bcbf3a5630_vf_scale_format_list_compaction VERDICT FIXED the fix's j + 1 < nb_formats guard keeps every read inside the array
+01_bcbf3a5630_vf_scale_format_list_compaction case=1 arm=buggy
+01_bcbf3a5630_vf_scale_format_list_compaction cap=6 touched=6 extent=1 crossed=1 damage=0
+01_bcbf3a5630_vf_scale_format_list_compaction VERDICT DEFECT-REPRODUCED the shift loop's guard was j < nb_formats while its body read formats[j + 1], so it read one element past av_malloc_array -- the value is discarded, the crossing is not
+01_bcbf3a5630_vf_scale_format_list_compaction asan fixed_clean=1 buggy_reported=1
+02_56309e476a_vf_vif_mirror_below_base case=2 arm=fixed
+02_56309e476a_vf_vif_mirror_below_base cap=4 touched=2 extent=0 crossed=0 damage=0
+02_56309e476a_vf_vif_mirror_below_base VERDICT FIXED the fix's avpriv_mirror folds repeatedly, so every index lands in [0, w-1]
+02_56309e476a_vf_vif_mirror_below_base case=2 arm=buggy
+02_56309e476a_vf_vif_mirror_below_base cap=4 touched=-1 extent=1 crossed=1 damage=0
+02_56309e476a_vf_vif_mirror_below_base VERDICT DEFECT-REPRODUCED the hand-rolled mirror reflected a tap index of 2*w to -1 and never re-checked it, so the read landed one element BELOW av_calloc's base
+02_56309e476a_vf_vif_mirror_below_base asan fixed_clean=1 buggy_reported=1
+03_495b402f27_diracdec_edge_emu_buffer_undersized case=3 arm=fixed
+03_495b402f27_diracdec_edge_emu_buffer_undersized cap=2048 touched=2032 extent=0 crossed=0 damage=0
+03_495b402f27_diracdec_edge_emu_buffer_undersized VERDICT FIXED the fix allocates stride*4*MAX_BLOCKSIZE and respaces the carve to i*buffer_stride*MAX_BLOCKSIZE, so all four fit
+03_495b402f27_diracdec_edge_emu_buffer_undersized case=3 arm=buggy
+03_495b402f27_diracdec_edge_emu_buffer_undersized cap=512 touched=544 extent=33 crossed=1 damage=1
+03_495b402f27_diracdec_edge_emu_buffer_undersized VERDICT DEFECT-REPRODUCED the base was sized stride*MAX_BLOCKSIZE and then carved into FOUR sub-buffers spaced FFALIGN(width,16) apart, so sub-buffer 3's last row starts past the end of av_malloc_array
+03_495b402f27_diracdec_edge_emu_buffer_undersized asan fixed_clean=1 buggy_reported=1

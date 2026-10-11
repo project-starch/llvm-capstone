@@ -1,0 +1,30 @@
+# Supervised CALL v2 tests on silicon (capstone-ariane 7564c0945, test-only repairs after the v1 audit), bare M-mode,
+# on caplifive_supcall_36a641e0b.bit. One board session per image, ONE RUN EACH, 2026-10-02 21:07-21:09.
+# Pre-registered in ../PREREG.md and committed on the lane branch BEFORE the boot (6f34d3e61bef, 21:06:45). The
+# prediction: each board vector EQUALS the RTL lane's simulation vector (../expected-vectors.json).
+
+== sup-escape (image b45cd0aab8fe97ad; 21:08) -- AS PRE-REGISTERED: board == simulation, 72/72 ==
+saved-mcause slot after each escape (readings 15, 29, 43, 57, 71): 0, 0, 0, 0, 0 -- THE TRAP IS STRIPPED ON SILICON.
+The no-strip alternative (the RTL lane's mutant, relocated) reads 11, 2, 2, 4, 2 there and is NOT what the board read.
+Everything else matches simulation exactly, including scratch+1 = 0x80005401 as the reference trap's mtval and arm 3's
+tval.
+
+== sup-quantum, quantum 16 (image 57f1d4cd9e959232; 21:08) -- AS PRE-REGISTERED: board == simulation, 155/155 ==
+74 preemptions; tail 0x1 (RETURN), 0x1f64f7f55a20a182 (the acc := acc*7 + i ladder, exact), 0x1234, 0x4a, 0xA5, 0x888, 0x0.
+
+== sup-quantum, quantum 64 (image 2e4747f346eaad85; 21:07) -- PRE-REGISTRATION MISSED on the preemption count; every correctness reading holds ==
+board: 74 preemptions (155 readings). Simulation: 73 (153 readings). The board vector therefore does NOT equal the
+simulation vector, which the pre-registration predicted it would.
+tail: 0x1 (RETURN), 0x1f64f7f55a20a182 (ladder exact: exactly-once resume across 74 preemptions), 0x1234 (x1),
+0x4a (N = 74), 0xA5, 0x888 (mie), 0x0 (mcause: no trap).
+reading: the number of preemptions is a timing quantity (domain cycles per quantum against DDR versus the testbench's
+memory model). The v1 pre-registration said it might differ; this one wrongly predicted bit equality because v1's N
+had matched. The non-commutative ladder is the exactly-once reading, and it is exact. Not explained further.
+
+== What v2 adds to v1 ==
+- The strip is now SHOWN on silicon: a supervised domain's synchronous fault is taken by commit as an escape, not as a
+  trap. The domain's saved mcause slot stays 0 in all five fault classes, where the no-strip control writes the cause.
+- Exactly-once resume is shown with a non-commutative ladder, at two quanta (74 resumes at q16, 74 at q64), so no
+  skip-and-repeat pair can cancel.
+- Still not shown on silicon: repeatability (one run each); the MTIP escape, the guards, the hostile domain, and
+  S-11's refusal; anything through the OpenSBI monitor or Linux.

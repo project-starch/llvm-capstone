@@ -1,7 +1,7 @@
 #ifndef CAPSTONE_TESTS_RUNTIME_QEMU_SQLITE_HIER_CHILD_REVOKE_PROBE_H
 #define CAPSTONE_TESTS_RUNTIME_QEMU_SQLITE_HIER_CHILD_REVOKE_PROBE_H
 
-/* Stage-2 "after" for the use-after-close class (cve-repros rows 4/5/7/8/9/10/12,
+/* Stage-2 "after" for the use-after-close class (capi-repros rows 4/5/7/8/9/10/12,
  * HIERARCHICAL-REVOKE): a statement/value pointer that lives *inside* a SQLite
  * connection, dereferenced after sqlite3_close(connection). The proposal's H
  * primitive: closing the connection must invalidate every pointer beneath it.

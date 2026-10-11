@@ -1,0 +1,79 @@
+{
+  "cheribsd-kernel": {
+    "path": "$HOME/cheri/output/rootfs-riscv64-purecap/boot/kernel/kernel",
+    "sha256": "62be5d3f24dc2585875e8efe165e3b8acc9a1fd3936c623cd993c155255baa18",
+    "bytes": 52432520
+  },
+  "cheribsd-libc": {
+    "path": "$HOME/cheri/output/rootfs-riscv64-purecap/lib/libc.so.7",
+    "sha256": "193f132913c504153de92b5570dc30a1cafd62401ea8551deb62217408bdb287",
+    "bytes": 2142744
+  },
+  "cheribsd-libsys": {
+    "path": "$HOME/cheri/output/rootfs-riscv64-purecap/lib/libsys.so.7",
+    "sha256": "2d155e33e4bdfe292e692be2ab2cff7eb6984ffa60bc97b62f0d05c33cb6a462",
+    "bytes": 144024
+  },
+  "cheribsd-clang": {
+    "path": "$HOME/cheri/output/sdk/bin/clang",
+    "sha256": "4ab419933b59d04750cf20f9708165ccd88d266cf0c7bac95701e50bf6b84f5b",
+    "bytes": 163789880
+  },
+  "cheribsd-qemu": {
+    "path": "$HOME/cheri/output/sdk/bin/qemu-system-riscv64cheri",
+    "sha256": "dc34b3f2e265083dba29d37b4eabe7472923fa2dc819404660b226d5e5dc5460",
+    "bytes": 50009520
+  },
+  "capstone-qemu": {
+    "path": "$CAPSTONE_TMP_ROOT/node-reuse/qemu/qemu-system-riscv64",
+    "sha256": "ed89e9751c731267a68a499be5a8c1be3821c6790ea6c7b6c777d0cffcf3bd6e",
+    "bytes": 64128592
+  },
+  "capstone-compiler": {
+    "path": "$CAPSTONE_TMP_ROOT/domain-process-runtime/compiler-c46/bin/clang",
+    "sha256": "0e2bc4e53f8b76f8b5534b8f5866c221e02b6fbaa0b1a7785286ac9eaef2549c",
+    "bytes": 170946168
+  },
+  "capstone-kernel": {
+    "path": "$CAPSTONE_TMP_ROOT/br-snap/build/images/Image",
+    "sha256": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "bytes": 19847680
+  },
+  "capstone-monitor": {
+    "path": "$CAPSTONE_TMP_ROOT/domain-process-runtime/opensbi/platform/generic/firmware/fw_jump.elf",
+    "sha256": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+    "bytes": 1728432
+  },
+  "cheribsd-source-revision": "88f39900c32928d807dba245fba138808c666f34",
+  "capstone-compiler-libraries": {},
+  "ffmpeg-libapplication-runtime.a": {
+    "path": "$CAPSTONE_TMP_ROOT/application-cheri/default-memory/cap-ffmpeg/sdk/libapplication-runtime.a",
+    "sha256": "0f07e541c9842ed4c0a2a7c6597b697c9c03d7f948b37d8b8fc2a2cde679e477",
+    "bytes": 104032
+  },
+  "ffmpeg-libcapstone-application-builtins.a": {
+    "path": "$CAPSTONE_TMP_ROOT/application-cheri/default-memory/cap-ffmpeg/sdk/libcapstone-application-builtins.a",
+    "sha256": "cc45c5c5dc07bf8a8a1dbf94aee9f292f15ea246f05181b33dc0c9cd0888fbeb",
+    "bytes": 89292
+  },
+  "mruby-libapplication-runtime.a": {
+    "path": "$CAPSTONE_TMP_ROOT/application-cheri/default-memory/cap-mruby/sdk/libapplication-runtime.a",
+    "sha256": "6d2f37d2ea8985469a3bfc7403c5ad5824a6555cc695ced424cc6b0105fbb611",
+    "bytes": 104032
+  },
+  "mruby-libcapstone-application-builtins.a": {
+    "path": "$CAPSTONE_TMP_ROOT/application-cheri/default-memory/cap-mruby/sdk/libcapstone-application-builtins.a",
+    "sha256": "cc45c5c5dc07bf8a8a1dbf94aee9f292f15ea246f05181b33dc0c9cd0888fbeb",
+    "bytes": 89292
+  },
+  "cheribsd-libm": {
+    "path": "$HOME/cheri/output/rootfs-riscv64-purecap/lib/libm.so.5",
+    "sha256": "460731ba307e913cd54477c9145cf3f14cbda9abdb097cd39f6e919ef1132d44",
+    "bytes": 309392
+  },
+  "cheribsd-loader": {
+    "path": "$HOME/cheri/output/rootfs-riscv64-purecap/libexec/ld-elf.so.1",
+    "sha256": "ffff30eba516b6c2811b0884303ae501e0890523fd72f76f18009080eeb6d4bc",
+    "bytes": 718992
+  }
+}

@@ -1,0 +1,56 @@
+pthread_cond_t and cnd_t with 16-byte pointers
+
+musl's condition variable keeps three pointers and four ints in a union of
+12 ints, laid out for 4- and 8-byte pointers. With capabilities (16 bytes)
+_c_head (__p[1], bytes 16-31) lies over _c_clock (__i[4]), and _c_tail
+(__p[5], bytes 80-95) lies 32 bytes past the 48-byte object: every signal
+or broadcast on a private condition variable loads from the next object
+(C-65; cause 5 in a thread probe, cause 24 in the tshark deps, e2c9ad3). With
+16-byte pointers the object grows to 64 bytes, pointers first, ints after
+them; other pointer sizes are unchanged. The mutex, rwlock and barrier
+layouts put no pointer over an int at 16 bytes and are unchanged.
+
+diff -ru a/include/alltypes.h.in b/include/alltypes.h.in
+--- a/include/alltypes.h.in
++++ b/include/alltypes.h.in
+@@ -85,8 +85,8 @@
+ TYPEDEF struct { union { int __i[sizeof(long)==8?14:9]; volatile int __vi[sizeof(long)==8?14:9]; unsigned long __s[sizeof(long)==8?7:9]; } __u; } pthread_attr_t;
+ TYPEDEF struct { union { int __i[sizeof(long)==8?10:6]; volatile int __vi[sizeof(long)==8?10:6]; volatile void *volatile __p[sizeof(long)==8?5:6]; } __u; } pthread_mutex_t;
+ TYPEDEF struct { union { int __i[sizeof(long)==8?10:6]; volatile int __vi[sizeof(long)==8?10:6]; volatile void *volatile __p[sizeof(long)==8?5:6]; } __u; } mtx_t;
+-TYPEDEF struct { union { int __i[12]; volatile int __vi[12]; void *__p[12*sizeof(int)/sizeof(void*)]; } __u; } pthread_cond_t;
+-TYPEDEF struct { union { int __i[12]; volatile int __vi[12]; void *__p[12*sizeof(int)/sizeof(void*)]; } __u; } cnd_t;
++TYPEDEF struct { union { int __i[sizeof(void*)==16?16:12]; volatile int __vi[sizeof(void*)==16?16:12]; void *__p[(sizeof(void*)==16?16:12)*sizeof(int)/sizeof(void*)]; } __u; } pthread_cond_t;
++TYPEDEF struct { union { int __i[sizeof(void*)==16?16:12]; volatile int __vi[sizeof(void*)==16?16:12]; void *__p[(sizeof(void*)==16?16:12)*sizeof(int)/sizeof(void*)]; } __u; } cnd_t;
+ TYPEDEF struct { union { int __i[sizeof(long)==8?14:8]; volatile int __vi[sizeof(long)==8?14:8]; void *__p[sizeof(long)==8?7:8]; } __u; } pthread_rwlock_t;
+ TYPEDEF struct { union { int __i[sizeof(long)==8?8:5]; volatile int __vi[sizeof(long)==8?8:5]; void *__p[sizeof(long)==8?4:5]; } __u; } pthread_barrier_t;
+ 
+diff -ru a/src/internal/pthread_impl.h b/src/internal/pthread_impl.h
+--- a/src/internal/pthread_impl.h
++++ b/src/internal/pthread_impl.h
+@@ -89,6 +89,18 @@
+ #define _m_prev __u.__p[3]
+ #define _m_next __u.__p[4]
+ #define _m_count __u.__i[5]
++#if __SIZEOF_POINTER__ == 16
++/* 16-byte pointers (capabilities): the layout below would put _c_head over
++   _c_clock and _c_tail past the object, so the pointers come first and the
++   ints after them, in a 64-byte object. */
++#define _c_shared __u.__p[0]
++#define _c_head __u.__p[1]
++#define _c_tail __u.__p[2]
++#define _c_seq __u.__vi[12]
++#define _c_waiters __u.__vi[13]
++#define _c_clock __u.__i[14]
++#define _c_lock __u.__vi[15]
++#else
+ #define _c_shared __u.__p[0]
+ #define _c_seq __u.__vi[2]
+ #define _c_waiters __u.__vi[3]
+@@ -96,6 +108,7 @@
+ #define _c_lock __u.__vi[8]
+ #define _c_head __u.__p[1]
+ #define _c_tail __u.__p[5]
++#endif
+ #define _rw_lock __u.__vi[0]
+ #define _rw_waiters __u.__vi[1]
+ #define _rw_shared __u.__i[2]

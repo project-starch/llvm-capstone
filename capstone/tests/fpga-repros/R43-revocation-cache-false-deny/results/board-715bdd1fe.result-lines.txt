@@ -1,0 +1,38 @@
+# S-16 fix bitstream caplifive_supcall_715bdd1fe.bit (capstone-ariane sup-call 715bdd1fe: R-49, R-50, the S-17 LED
+# apertures 219..222; sha256 a7add4c019d30676...). Flashed by the board lane 2026-10-04 18:41-18:43 on the lead's
+# direct word; resident name read back after the power cycle. The R-43 acceptance list UNCHANGED: same images, same
+# order and kit as 2026-10-02 (board-36a641e0b.result-lines.txt), boots tagged s7a1..s7a10, 19:04-20:58. Reference
+# for every row: the 36a641e0b file. Cite a boot by its image hash.
+
+== a1 -- s7a1: B1 workload regression (R1 079b1f3a, stock k800) -- PASS ==
+RESULT k800 retval=4 instret=1089 twice; R1 m1 end arm=drop stop=target alloc=160 minted=191 revoked=160 retained=0
+released=0 (byte-identical to 36a641e0b); speedtest1-ran=1320222911 (identical); 0 refused; sw=204 0x02 EMPTY, sw=208 0x00.
+== a2 -- s7a2: B3 R1 warm, 12 invocations -- PASS ==
+60/60 R1 point lines ok=1 bad=0; 12 x released pool rc=1; 0 refused; REVOKE cost n=1/4/16 rv=92/194/851 (ref 92/194/848).
+== a3 -- s7a3: B4 R1 cold, wide rep 1 -- PASS ==
+12/12 points ok=1 bad=0; speedtest1-ran=1320264012 (identical); rv per point -4.76 .. +1.91 % vs 36a641e0b, mixed signs,
+largest on nd=64 (N=1).
+== a4 / a5 / a6 -- s7a4..s7a6: live16 / live128 / live512 (R-43's own test) -- PASS ==
+R1 m1 live-sweep ok live=16 sum=544, live=128 sum=4352, live=512 reads=1024 sum=17408 expect=17408; k800 retval=4 twice in
+each; a6 refusal record sw=204 0x02 EMPTY.
+== a7 -- ladder at K=0 (results-s7cap-K0.txt) -- PASS ==
+17/17 rungs retval == oracle; instret IDENTICAL on 17/17 to 36a641e0b; mcycle -0.38 .. +2.13 % (the shortest rung,
+beebs_insertsort, 54 cycles). Bare baseline identical, which it has been on every bitstream (carries no information).
+== a8 -- P1 cell 5 -O2 + native (board-b80s-s7-p1o2-c5) -- PASS ==
+Verification Hash 112006 38bb59fd (cell 5 and native); HEAP 2097152 DROPPED 0; lookasides 25010; SPEEDTEST1-CYCLES
+1,157,062,268 (-0.011 %); native warm 855,939,619 (-0.009 %); ratio 1.3518 (identical).
+== a9 -- P1 cell 6 -O2, the real workload (board-s7-p1o2-c6) -- PASS ==
+Verification Hash 112006 38bb59fd; HEAP 1344064 DROPPED 0; sublet: split=5568 mrev=37970 delin=32569 revoke=37970
+init=5401 (exact); SPEEDTEST1-CYCLES 1,241,702,268 (+0.042 %).
+== a10 -- s7a10: the R-35 stale probe, last (35fb3fec, wedges by design) -- PASS ==
+opening k800 retval=4; trap log sw=255 0x99 (mcause 25); mepc 0x81a04354 = DBAS 0x81A00000 + 0x4354; tval 0xac100000;
+refusal record sw=204 0x11 LATCHED, arm probe-DEAD, revnode id 95, parity ok; rev_node_head 132, serving_idx 116,
+sw=224 0x9f, sw=225 0x80 -- every byte as on 36a641e0b. R-35 is not reopened.
+
+== VERDICT ==
+All ten rows PASS as pre-registered; no HARD STOP, ENTRY-STALL, halt, refused line or extra banner. Identity-class
+readings (retvals, instret, hashes, Sublet counts, trap bytes, refusal record) are exact; cycle counts move within the
+noise band 36a641e0b's own file documents. With accept715 (all 18 bare S-16/S-17 arms complete,
+sup-resume-2026-10-03/results/accept715.result-lines.txt) the bitstream is ACCEPTED. A board-log-forensics agent
+re-derived every row from the primary logs; the a6, a9 and a10 readings were re-checked by hand.
+The LED apertures 219..222 are not read by this driver; the bare runner reads them on a hang (none hung).

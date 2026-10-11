@@ -1,0 +1,5 @@
+# pgcorpus_reach extension
+comment = 'C-level callers for 17.5 defects no SQL statement can reach'
+default_version = '1.0'
+module_pathname = '$libdir/pgcorpus_reach'
+relocatable = true

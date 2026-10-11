@@ -1,0 +1,948 @@
+{
+  "date": "2026-09-30",
+  "scope": "Application gate (Perl, mruby, process contract) and libc-test rebuilt and rerun after level0 shrinking realloc began releasing the unused tail.",
+  "runtime_revision": "8d1a09fb6d92cb11cfed56d3da8886a26026d7bf",
+  "allocator_revision": "7795986d956affd6a4ca31f1777533d8cb6dc2a8",
+  "level0_source_sha256": "833d4018f3b58ee9d4c32cce761cfdf53d98c947ea1a5e87df363be8c8484532",
+  "compiler_revision": "fd82fef2a70dc59f9e7faf170f524f58e4104924",
+  "compiler_sha256": "94a99e60a823f93518485487230fed4fd09f1742862e8e9c07b8adf0ae14d6c8",
+  "libc_test_revision": "7b95dfa5f5d5ca4d949221e0228ccc290bacc14e",
+  "platform_revisions": {
+    "qemu": "674cdab03c",
+    "monitor": "4674ab6"
+  },
+  "fresh_build": {
+    "sdk": "New CMake/Ninja build from runtime/application; level0, -O1, C11 atomics, 64 MiB arena, 32 MiB data, no dynamic grant.",
+    "contract": "New CMake/Ninja build of application-contract, C11 atomics enabled.",
+    "ports": "Fresh SDK builds and links via ports/common/application/build.py; existing port object inputs unchanged and checked by SHA-256.",
+    "runtime_archive_sha256": "7a68b1c8722a5d324dc73d2c012898eb1e77b738c11d4030554e481130442ae2",
+    "runtime_archive_matches_qualified_cpython": true,
+    "musl_archive_sha256": "a2b8ca72bd3c21cec0a77a9ae2713d9e7cfc127ef09d0fb43e81d996b5a2f035",
+    "guest_cma_mib": 1024,
+    "process_cache_mib": 384,
+    "changed_runtime_archive_members_vs_previous": [
+      "level0.c.obj#1"
+    ]
+  },
+  "applications": {
+    "perl": {
+      "image_sha256": "08391ad06c50d09b79ae8ca2d4515dcc380355abf11a312a4ec288823653a725",
+      "previous_image_sha256": "43defc40cdbafd15769d1ce2a3197fcfc0b3a3f982e9a1fd31bfaf6248e99109",
+      "runtime_archive_sha256": "7a68b1c8722a5d324dc73d2c012898eb1e77b738c11d4030554e481130442ae2",
+      "previous_runtime_archive_sha256": "b2ae50955df9cf0a10f55839a6e5af197aad22b0e5cb859fae7fe45a620394e4",
+      "arena_bytes": 67108864,
+      "input_count": 43,
+      "inputs_identical_to_previous": true,
+      "inputs": [
+        {
+          "path": "libc-capstone.a",
+          "sha256": "a2b8ca72bd3c21cec0a77a9ae2713d9e7cfc127ef09d0fb43e81d996b5a2f035"
+        },
+        {
+          "path": "src/perl-5.36.3/perlmain.o",
+          "sha256": "73a402df4bd105d159d549f8fe6678b6d8442246d165cc41e9b17efdd88af8d0"
+        },
+        {
+          "path": "src/perl-5.36.3/libperl.a",
+          "sha256": "1d752d1c12f7601e4942ccbfe589efa9ba1bee36c83e2867bb8cb1e6c340c014"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/B/B.a",
+          "sha256": "e129bfab155ce1f3ddc59b622e1fcfebb03add48f64011db011744f47162ed40"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Compress/Raw/Bzip2/Bzip2.a",
+          "sha256": "f2e8b32645303779b6b9ce331fbc6efc560e8ce8b5138af63c78299fc25ebe0c"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Compress/Raw/Zlib/Zlib.a",
+          "sha256": "3c393a0200476501734da7f5b07b6282ecdba568005602da5964b9806ee99407"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Cwd/Cwd.a",
+          "sha256": "cb6ac930b1a72364bbb1eb4f316b6a3bfbdd8a7fec93e724626d061a91d9a9d8"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Data/Dumper/Dumper.a",
+          "sha256": "3fb16b5791412e3fc69cac24cf06b5f77804f7aa2bfb0329517402d9d0ae644b"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Devel/PPPort/PPPort.a",
+          "sha256": "d0e7a97ce6b93d19dea993005f7713f3dde153cf314c6645e91dcf5f76cbba82"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Devel/Peek/Peek.a",
+          "sha256": "f508f370808eb4b777456cbaa8c187216d723147e8004b9c50d47a373336e35d"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Digest/MD5/MD5.a",
+          "sha256": "348f71c3bbbcd28059cba94d898ae79f54fa1bef72e3cac1ba8dffc27fb7182a"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Digest/SHA/SHA.a",
+          "sha256": "64dc8dd0df439b1b5a2e24607ad8b8aee3045ccfafdbf08c15a8afc0b572add3"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Encode/Encode.a",
+          "sha256": "fe7165713ccb01479fe3437c3b3ad172ac6467bd1de6b10eb2d4b28dd8eb6a13"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Fcntl/Fcntl.a",
+          "sha256": "b82902b35ec5a9e04cad98d002b658ffec069aa25acc9de7bfe49689b07954c6"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/File/DosGlob/DosGlob.a",
+          "sha256": "535f2b0ae595c9c383db55b6784c3184790a9d7d6ef57a6bba06f61a4774c403"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/File/Glob/Glob.a",
+          "sha256": "b31a9cd920db278689749fcf1ca54eafb5f7f005251d3c4628e5e62682bea1d7"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Filter/Util/Call/Call.a",
+          "sha256": "e4ff6783c16fa2bfa87b8e88037033d884f9e84c28286e1fdeb624329b390d5e"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Hash/Util/FieldHash/FieldHash.a",
+          "sha256": "b04362ed2a05f0c754ff93abe80e7654051e822059b6d0d3b7af642dd5c0c8c5"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Hash/Util/Util.a",
+          "sha256": "27ebdce5eb6873298abaad9f8126926a46680f3d0a15a0cbf29c1da51a273b2d"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/I18N/Langinfo/Langinfo.a",
+          "sha256": "a7deae8660b992b7089b2c5194d2039e66689af38b78c51ce04dbd0d4146962e"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/IO/IO.a",
+          "sha256": "b38666bc171e02f204b117dfa7e67c86f4f1b82f9850a9cf02ca619cb456a2e4"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/IPC/SysV/SysV.a",
+          "sha256": "c8eedfd199946557e95e251340c6a16b4570f14c54f051a8b48f5fe3f0dda05b"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/List/Util/Util.a",
+          "sha256": "3d03fab9085cf5ac417662fa54a626b8a6e93c8958741207edae3b1b81d6e9d8"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/MIME/Base64/Base64.a",
+          "sha256": "ffb4f1bbefb3ea2b1e7cec502fd02949f72a5dca810ba86037b9269dcbdc098e"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Math/BigInt/FastCalc/FastCalc.a",
+          "sha256": "8c13fe085a4d15243dcd18eda75e9ce3fec7ef511c5a7d2d01dbb9797af7250f"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Opcode/Opcode.a",
+          "sha256": "ec1346ceb7e254b7540ae4857b6b4abacf468d0d38433a7041d373a581cf3d4c"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/POSIX/POSIX.a",
+          "sha256": "b060784da9087773596519e73823effafc71a46474c13c765765720f5b8905a8"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/PerlIO/encoding/encoding.a",
+          "sha256": "26526cdeb8d8db2137960275b88b0fc2aa86a27b0819ba0d8af95af1ce629349"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/PerlIO/scalar/scalar.a",
+          "sha256": "338d9efc2de4059a658c7c3f099b371a5bed32d4469c59bf59032683bf2d6b4c"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/PerlIO/via/via.a",
+          "sha256": "41253425b11328f0d7ebfd3fea660047c9a2bd1b0db83ae30130100ed1860599"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/SDBM_File/SDBM_File.a",
+          "sha256": "34b38c7cc0d2d125e8a13cebacabb84ed187d01caf78f67beaddf260f99f6843"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Socket/Socket.a",
+          "sha256": "0fd6977032175834f56a045b17fdbb09fb229f48227ea168a509b04d1a90f2d3"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Storable/Storable.a",
+          "sha256": "cb7cfa1e568a3a359c262353107a413179022d6657f900c2041cbf75a9f93de5"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Sys/Hostname/Hostname.a",
+          "sha256": "d06980306a87627aaee5d446e594862e38e4a15601a5b412ddb97462897ba555"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Sys/Syslog/Syslog.a",
+          "sha256": "49c72a19dc9647775698bbb3aa61627bd4c04ebda6ee8819d6cdd3987ec6eab1"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Time/Piece/Piece.a",
+          "sha256": "659f020233183173abaea113350bba30c3eb637efab6af2a745b2893ec12a79a"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Unicode/Collate/Collate.a",
+          "sha256": "8f7cb87ea66766bf2ce99b5c014eb6afaeed95dbc060d5c1e06fbb42dfa50665"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/Unicode/Normalize/Normalize.a",
+          "sha256": "09fc030810e33ec5fdcb8c00dbd680ce0c06dd1cf177c946682bb3d3ef28ff9d"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/attributes/attributes.a",
+          "sha256": "03ee4d7f0db9e51379c2844cd83aa142dd4de9b47d82d16282ef2cb0a9d2230c"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/mro/mro.a",
+          "sha256": "f068a956adb672dfb22c6f7686c9db9436bfb4594e5a435e73a99d25678e381c"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/re/re.a",
+          "sha256": "47ee99c5fb78ecd77f453cbbfc5de9240725f11a3d887ac46f868981fed6d820"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/threads/shared/shared.a",
+          "sha256": "0c7228f7bbfea7da0e0bd2f9ebaac5e0b5077a8b79daffcb17a3466ca97b4149"
+        },
+        {
+          "path": "src/perl-5.36.3/lib/auto/threads/threads.a",
+          "sha256": "7f824adad679def6765409307a7634f9f79e63b5dc7cc77154d1f6a5567e433a"
+        }
+      ]
+    },
+    "mruby": {
+      "image_sha256": "d997799ae3147a9964aa83c7c50caa4d0afd4c352d264c0d65891b0234cf9425",
+      "previous_image_sha256": "ef2c7024f605d357926839dfa886248cbdd027a1a6716fd05b9afe9d5c0beded",
+      "runtime_archive_sha256": "7a68b1c8722a5d324dc73d2c012898eb1e77b738c11d4030554e481130442ae2",
+      "previous_runtime_archive_sha256": "b2ae50955df9cf0a10f55839a6e5af197aad22b0e5cb859fae7fe45a620394e4",
+      "arena_bytes": 67108864,
+      "input_count": 4,
+      "inputs_identical_to_previous": true,
+      "inputs": [
+        {
+          "path": "libc-capstone.a",
+          "sha256": "a2b8ca72bd3c21cec0a77a9ae2713d9e7cfc127ef09d0fb43e81d996b5a2f035"
+        },
+        {
+          "path": "src/mruby/build/capstone/mrbgems/mruby-bin-mruby/tools/mruby/mruby.o",
+          "sha256": "1eba8fe393b0f70a481c74c715a1d0869929c663606cb54686459f970c8ea5b2"
+        },
+        {
+          "path": "src/mruby/build/capstone/lib/libmruby.a",
+          "sha256": "c93b4906772d12df4b92215a791906310b46340d4186d0d523c2f8c8e0242c67"
+        },
+        {
+          "path": "runtime/spawn-shell.o",
+          "sha256": "041aca0a7b14d562ced3effdb89c49331627f54b310794db5679ed33f77affe9"
+        }
+      ]
+    }
+  },
+  "application_gate": {
+    "runner": "capstone/runtime/tests/application/run.py",
+    "repeat": 1,
+    "exit_status": 0,
+    "pass_lines": [
+      "application healthy: PASS (wait status=0)",
+      "application fault: PASS (wait status=11)",
+      "application fault-stack: PASS (wait status=11)",
+      "application fault-vector: PASS (wait status=11)",
+      "application exit139: PASS (wait status=35584)",
+      "application fault-mrev: PASS (wait status=11)",
+      "application fault-privcsr: PASS (wait status=11)",
+      "application fault-debugcap: PASS (wait status=11)",
+      "application fault-capenter: PASS (wait status=11)",
+      "application loop: PASS (wait status=15)",
+      "application loop: PASS (wait status=9)",
+      "application loop: PASS (wait status=2)",
+      "application healthy: PASS (wait status=0)",
+      "application sequence: PASS",
+      "process ownership, dup/fork/mmap lifetime, scrub, rollback: PASS",
+      "overlapping processes / host cancellation during cpu: PASS",
+      "overlapping processes / host cancellation during read: PASS",
+      "overlapping processes / host cancellation during write: PASS",
+      "SSH preserves exit 139 versus actual SIGSEGV, with the fault record: PASS",
+      "resource reuse after 13 mixed starts: PASS",
+      "real applications, SSH streams, unchanged boot ID: PASS"
+    ],
+    "report": {
+      "platform": "QEMU supervised CALL, one hart",
+      "boot_id": "1633e2ec-5339-4556-9de5-ca81970a0522",
+      "mixed_starts": 13,
+      "sublet": false,
+      "allocation_progress": {},
+      "before": {
+        "version": 1,
+        "live_domains": 0,
+        "live_regions": 0,
+        "live_bytes": 0,
+        "cached_bytes": 141459456,
+        "poisoned_blocks": 0,
+        "nodes_high_water": 401,
+        "nodes_live": 75,
+        "nodes_retired": 0,
+        "nodes_allocated_total": 1897,
+        "tag_pages": 653,
+        "node_capacity": 65536
+      },
+      "after": {
+        "version": 1,
+        "live_domains": 0,
+        "live_regions": 0,
+        "live_bytes": 0,
+        "cached_bytes": 141459456,
+        "poisoned_blocks": 0,
+        "nodes_high_water": 401,
+        "nodes_live": 75,
+        "nodes_retired": 0,
+        "nodes_allocated_total": 2308,
+        "tag_pages": 653,
+        "node_capacity": 65536
+      },
+      "binaries": {
+        "qemu": "1283cd3400d4bc5470f0ae9f557abb60f7316c86cdee4ce8cd97e7a1f36f8196",
+        "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "firmware": "ae41a8c6d22877f779750bcd4aba040b4ecf5015ce25fff6d47f773139cf05dc",
+        "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+        "launcher": "4c1b0ad0d67af32eb62a5acdf0ff07969b86c582b26b21ecbf7bd4519a015ad7",
+        "module": "649f410893eeb40a825232452974ac3161bb667163457c42f628c325dd7e6d97",
+        "job_helper": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168"
+      },
+      "environment": {
+        "CAPSTONE_GP_NONLIN": "1",
+        "CAPSTONE_REV_NODES": "65536"
+      }
+    }
+  },
+  "libc_functional": {
+    "runner": "capstone/ports/musl-capstone/libc-test/run-libc-test-delegated.py",
+    "timeout_seconds": 90.0,
+    "source_directory": "src/functional",
+    "summary": {
+      "PASS": 57,
+      "FAULT": 1,
+      "EXCLUDED": 13,
+      "FAIL": 3,
+      "NOBUILD": 3
+    },
+    "baseline": "Final C-75 threading run before 7795986d, lt-f4",
+    "baseline_report_sha256": "0fc73a7bb129b9e30c96e211f009d351124c8fe861f9838848691aa79c09f1f6",
+    "verdict_changes": [],
+    "lost_passes": [],
+    "results": {
+      "argv": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "8428294f5356cbe26c6a3bcfc62594ab735c45996833acbc3933eb2f7b7f2303",
+        "source_sha256": "be05bf2430b1be467dd41ff8543723ce9470330a10560f4250672421fd3a736b"
+      },
+      "basename": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "789c5b5db35f15d47f441dabe79ecbf7c2b4469d158b1780f679e75428730d69",
+        "source_sha256": "0d2212004b7851e0eea56b2ca103369d91c3f399a7a5906f20cde90e2417791e"
+      },
+      "clocale_mbfuncs": {
+        "verdict": "FAULT",
+        "previous_verdict": "FAULT",
+        "detail": "signal 11 capstone-exec: domain fault cause=5 pc=0xc05151b8 address=0xc84ff944 entry=0xc0500890 code=0xc0500000-0xc4550000 last=0xc0de0001 preparing=0xc0de0001 sha256=94ce54254dabcf5393cbc93a5c584c160f72919215c336c7ff9f65d9f48ac587 image=/mnt/host/lt-clocale_mbfuncs.dom 0.6s",
+        "image_sha256": "94ce54254dabcf5393cbc93a5c584c160f72919215c336c7ff9f65d9f48ac587",
+        "source_sha256": "726389a23bfceb466e9ea90ea125f3a652ab9eac60293db480b365bc3d64944c"
+      },
+      "clock_gettime": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "454289c9f23114e0c8e675aeb67b99a5cd8f6b69dc0afb9ec51a32131d756a05",
+        "source_sha256": "2e042cdcd00cdb9b32cf94eb6309484138c2799960617d7cdf382343f71d856d"
+      },
+      "crypt": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "2ee5b92bdfc1baf6988083a3feda396d4d704e7b2b5cb87722a2fefce10c75ed",
+        "source_sha256": "d25b9d533b304f9bbae0c8eae8212196e431fdbeb18e805aebf667741235aafe"
+      },
+      "dirname": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "7401c0f61accb7082b3f88db7639a33067e7ab85c2cd69f6c1126141f3c55661",
+        "source_sha256": "d5068ad577633aa072d247bdaf31ab92f222e75f6c66ae2cca03db7acfd8ce05"
+      },
+      "dlopen": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "dynamic loading",
+        "source_sha256": "c7a0ce9f0b8544144fcc785e9cfc505eaa85506b4856bd967287025a892b8462"
+      },
+      "dlopen_dso": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "dynamic loading",
+        "source_sha256": "3ea1bb48a6c4d517fe3a52e3ab14908303d303546ce958cd9435d0aea5aae4c9"
+      },
+      "env": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "9ec29eea3919c35cdd7a1c92af104b77dcc2256425337636dc4c879b395facd4",
+        "source_sha256": "ce70dd5c72e9f402863d343a3177d12465ae7695bdeb6e05a51f82f88a907d64"
+      },
+      "fcntl": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "processes: forks a child",
+        "source_sha256": "a0cb2d46a8377d995af334d9a21efc975d377f701d54b47fe44aa6e712287358"
+      },
+      "fdopen": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "ac34c9dd58286fdbdcbab68da86374be495cc9a25594851e7d544cc705210153",
+        "source_sha256": "2fea2615fc62e3b283dac70c7b54479d41795a5f939626cfe4d109b54c84f70e"
+      },
+      "fnmatch": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "1e3c9d46899502660d6000fd6e7237006e16f99176b9d93dba331f3be3c80ddc",
+        "source_sha256": "c91a6b7dce4cd09f52b0fb55ccb8408ef2d8194320732a2e58725929940809e3"
+      },
+      "fscanf": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "3656db0ee79de5aa8aae5a4bc9810ee75603fd5d945a4e3c705477a12e30d7af",
+        "source_sha256": "c82068858288b72d7bf3b82ac20f0773658a139d1b091b08bff1767baf8512e3"
+      },
+      "fwscanf": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "ceb48e0304c6ba5f2792f628008576166b5ec6c760ca13a97b0ee9df0d181fb6",
+        "source_sha256": "bb1f982692b2bc8285058b0d20711285a824345590fdaf27a4db9f03712a9755"
+      },
+      "iconv_open": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "bcba97226bcaca4ea5ca9aeee4e2d503b3cca692df3c29296d84641752d42431",
+        "source_sha256": "9040a11c1cd037af09dbd8b9a459fe97b6b5d0b11fac9d281a8f7e59d15b3386"
+      },
+      "inet_pton": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "8f750651fc8f3265d853a6493c38c391d80cf9a99c8639e4d269fa6f820e39b1",
+        "source_sha256": "59907245422d8f7d167658b03912b19eca793040ed7eac17ee0a30604ea6125b"
+      },
+      "ipc_msg": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "SysV IPC",
+        "source_sha256": "86caed98c76a29b31193997312b54acc081426495dc66a4670bd06578242606e"
+      },
+      "ipc_sem": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "SysV IPC",
+        "source_sha256": "2edf8722619a41dda6702f7f137d715c80619b6218b81695bbabc573fcda385e"
+      },
+      "ipc_shm": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "SysV IPC",
+        "source_sha256": "cb54251d88c869287b02d03164c902c78df71dd5bc69e4bdffc7cfc142cfa1bf"
+      },
+      "mbc": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "34b5cc2d95b96b5089e1716b67b9e59a08e4a2c4d5a81b996159d97da8d422ea",
+        "source_sha256": "7f6ad74c723f2910491b1ff456579466254942f7726853c235e1af4b58d5caa2"
+      },
+      "memstream": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "27c758628db41ddd384671a5eee3b333023314af9efb02fb34f850b956f1ce80",
+        "source_sha256": "99276afe20af32fad98bf10b3c8720b55b54017e2c8749041fd68e5d0c048d65"
+      },
+      "mntent": {
+        "verdict": "FAIL",
+        "previous_verdict": "FAIL",
+        "detail": "status=1 0.6s",
+        "image_sha256": "b3c89a59f326f2c7bcd7cff2f5fd4f6f0662481d0784f0177b9e6e8c8c1afc63",
+        "source_sha256": "e571778b35935c5c28dc9dedace603050fe9b231322244bee9156bced944b5c7"
+      },
+      "popen": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "4bf284eefd0b1e5b05594b9669954bd134d36b333d4a44cde8dfe99b65852cc4",
+        "source_sha256": "cd11975f2612f44f51e7c86fa0f086416e46ebddf0609d96c64fc0711fdc08a3"
+      },
+      "pthread_cancel-points": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "a38767309937659aa1019c0a71ecd4690a777186c81d2760d425d700cb26de03",
+        "source_sha256": "c3dab750cfd2f64d60bcc86b3edb14b47a552f89f50fba5b829632bf1c2413c0"
+      },
+      "pthread_cancel": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "asynchronous cancellation of a thread that makes no call: a signal reaches a context at its next call (the doorbell, delegation-signals.md)",
+        "source_sha256": "1cd812e5a9d99fc8cbaee1d9eaa03d205273dd10addf99c49f42b39f5b4aa08e"
+      },
+      "pthread_cond": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "5ad8bff062dd5eebc1c7beeb72c3d6ee9c16c00a77946f04544a296d54fdb650",
+        "source_sha256": "ff927892b30330e90560d5625b46b475bde13c49709a9a4a153bb4e53f49c0b9"
+      },
+      "pthread_mutex": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "97b3626d1734592219968d0eb89fe07fdf107d0d537cf3685f18133390a7348d",
+        "source_sha256": "f3c55b9b50098243d82e80a92a38d97d346c4cf71af1ff8d52c95e1892d3e1ac"
+      },
+      "pthread_mutex_pi": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "73e2035e774801cf83a4aa39e329b2a6a7be724d015047439e2d7974162c133f",
+        "source_sha256": "7bdbd63abce3377067d6cff6cbf1a0da44ddc1b9bb71e931b1e42897f277b5a0"
+      },
+      "pthread_robust": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "745e0ad1f12be924c3a8770e836860c4c29f4f420bd0661419be3f56fd83ea4a",
+        "source_sha256": "a01f5e85f830fc493e231bef6246a295731cdf197873ac430d2c0c81f3fbbcc1"
+      },
+      "pthread_tsd": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "e458ad4ca239d18209e998e4315bd198049f54e807b4225dc17c4caea07e9027",
+        "source_sha256": "d200d49851c7de60049af62ea6c4ef11d430a594920706618c6376aa5a5c47f6"
+      },
+      "qsort": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "b1eb161e65332512244847e44488070b27373c6acc95889ea71486fbb1de91c6",
+        "source_sha256": "f38f28778ec58be5beaa6755fdbb0c17e8151925ceec5ab83c0080975ae61e48"
+      },
+      "random": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "1abda818e67fb852c4a4aae3841ef92344bf5a7d7a95cc85d6f9279e7e33ae1f",
+        "source_sha256": "9f59f3b6069494d19001b75dc2989d6770c67eb3c6bed232f45c8219b8590ef8"
+      },
+      "search_hsearch": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "aeea4c44a60e550015c00009e4cd731c9525e343efc595605fb3ba3ccff24c6a",
+        "source_sha256": "1135c75d7ef2fe5003dc162d587812fe9b72debc665e032db026e285b1525e32"
+      },
+      "search_insque": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "083d6ee8262a4bb03d2f51bf8fd9db77363ece1b3c06f5df94b43df548860ebc",
+        "source_sha256": "955765757cae749700035e1d14158776bb60b6ac136218436c98c15a4a24411c"
+      },
+      "search_lsearch": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "8b78e21dbea915d7a9321c89e326fdec5f086fbdf8f367aa9c979b86b2b8c6a7",
+        "source_sha256": "7c4f8d15b7663500b21db8a8bda3035ca3953e18b86c8ed3b673b666b81f99ac"
+      },
+      "search_tsearch": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "aef0989d177cf0010ddd725ded3f0279cd05b6af26d9b09b157d2694d8ab1197",
+        "source_sha256": "8dad75a9530718f9ccb11c7615692f1b2a55dca4bff56b116f600f96d9616646"
+      },
+      "sem_init": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "b5178bc2921869433b5734d0fa4b00471a8e8a865fb266db42bb548e9724b9a1",
+        "source_sha256": "04e86db0d63d62fc394cf61d683b9d05a9052273913d5ea0c5f083c3cdfdcd26"
+      },
+      "sem_open": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "file-backed shared mapping: sem_open maps a /dev/shm file MAP_SHARED",
+        "source_sha256": "2d0d398e4125de62121ed2174f8dba93d94c780e3dc44920789c338a2eb037d3"
+      },
+      "setjmp": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "ad9a7c34ffd95409e77b6716958a4ddf774c7bd6d9c5b38be892c98870f6dd19",
+        "source_sha256": "de9320694b8a6bdb2d2145eb7650590184240578dc1a3656a923fb95c096cccf"
+      },
+      "snprintf": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "f08aca74df2060dccf29ec09d475bf7e89198247c803f58aad7dec8f5ede0f3a",
+        "source_sha256": "9c75c6961a1d154af62609a8a22ec98e2b8ab9b0146f8b2c61483cb4dd6a187d"
+      },
+      "socket": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "network",
+        "source_sha256": "0d4bf1f5a6030c378dddfa5efd24bdd10a8488bdde76cdddb06532c346b6eb2e"
+      },
+      "spawn": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "fb83a2a0c07938888db2d7de74204b6dc723a71b481eee0547c8a35097803dc8",
+        "source_sha256": "c03e1b90a6bf95ea126ed536afd7777efb894a85497fc184595d5ed3e959cb2c"
+      },
+      "sscanf": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "589ecac7b3520f2933e1ee75e2e7fb0d67495b8d42f21a3b84b7fd16961e96f5",
+        "source_sha256": "89135e466cc90e521fbe947fd9d08cb3cb9daf14b6304c87edab52ea4cae63d5"
+      },
+      "sscanf_long": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "c386bc0bb4db4ee6c69983a876b29a5f468e5b62468bd05eb06a5f3faaf240b2",
+        "source_sha256": "80e5b2271e111211ef5133ede862549474ee045721e0ce286b5273fac2b49fcf"
+      },
+      "stat": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "30c5c2e97d63acfa08169adf7769e57b2c991a993a762090fed007ff7778d87b",
+        "source_sha256": "1c95b10e9cc5c4f444c592f4f61c22e9da9b12c052e662b66c35e8834e63f862"
+      },
+      "strftime": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "fce5b1f754950ff91e6b3bb6b4ddd279551bbd338e8795a874c4f3c38171d14d",
+        "source_sha256": "a43f6f34638dd40a25b37d721efc914bff4d22d5f8eae4f6f7245984b48cd693"
+      },
+      "string": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "7d64492c894ddc90769b01d974e8409a39f5832dfda0595b0afab7f5a8f8b18b",
+        "source_sha256": "c804cf25cb526bb457820471ce1df87c7971877529e0624785a7a45214df3b56"
+      },
+      "string_memcpy": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "aad43ad849c48ecc7c6d84ece9ef0987ea5b778129dea716455bcbeb50c6230b",
+        "source_sha256": "0a87e04668321c423bb0b51d83aa098c4603e1ff45dd00901be39ab78074fa1e"
+      },
+      "string_memmem": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "77fe6238f71e4edd9cfc9c7d84c473e5ddd2c37bbec9ac149057fb191dbe8d9f",
+        "source_sha256": "b5da056eee27482fa9371354a3fe45695970b653c795fc6bdec4d207fb972f86"
+      },
+      "string_memset": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "89db97f45414fa95683495577020ad1718f5e3b42e844bdc1b10b452028767cb",
+        "source_sha256": "a67e942ae0dfd789b2beefe3e025bb637e9cc0db0a2a684646043f9d87e33164"
+      },
+      "string_strchr": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "f3da140ad8cb9d09547f8a9e695df230dadd8c0cf4d7a76dc814345149668078",
+        "source_sha256": "aba8056dafd2b56aab562f854d4221106bedb27eaafee7ac8150942f96eb52bf"
+      },
+      "string_strcspn": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "9b5a72862deebbd2d54c3ff5e0614b35d6fafef9f6f6b176a11d53eeb73a4fe7",
+        "source_sha256": "e1ecb338a60c021c0f6da29c006b1ee1b70bba9cef2c72cc20e0c2e7717bdd6a"
+      },
+      "string_strstr": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "bb220768bcb1e679137f47290c10c6757a554c8bfb43dd12df3254a870759099",
+        "source_sha256": "26bae147b913e78a531f1be98b60653f89aca3c2979209a79792691035769650"
+      },
+      "strptime": {
+        "verdict": "FAIL",
+        "previous_verdict": "FAIL",
+        "detail": "status=1 0.6s",
+        "image_sha256": "09e32ee5c0cc13a2abc4dae5d409819aad9dfe3256ab5448d73daee635d488df",
+        "source_sha256": "af24cbeb224b18937c7396ce38710df72f7e35ba896dc5603de2119d16cffe8c"
+      },
+      "strtod": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "00baec362a0485f1a8ee78a51b02f0e417cba78dd02ede7f82ecfd004943f00c",
+        "source_sha256": "68b1d17ffa5208b6085f13df463feef4b76ba8d6a378280c4cf6b4beeaa84bc9"
+      },
+      "strtod_long": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "fed2b6e03ebc991ce6c50b613736a33fa744d320ae385e8abe81afbd3239b4dd",
+        "source_sha256": "bc456a6c096a0a719c19e8b0711ffb131f3193cd6f8b7040c5fda7b538e0f2e3"
+      },
+      "strtod_simple": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "249af04548ad8da2c7a12f974953951d7af723cb9677da28f313c68855d09e71",
+        "source_sha256": "6082f3b00ebbc33767973121c43968802e4b67658ce903a3ec790e4e5f998581"
+      },
+      "strtof": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "dec14881b0c46f8e85ad0cdcb16f7f9e7a4c2f53e1911e8f33b4c7aa73089d5e",
+        "source_sha256": "7892491e285ddb0857a84c73df9580b634ca2b6616531523c39ba3a83d084f32"
+      },
+      "strtol": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "b2c5360204a9722043cb52461e67734b0a424fa5b748595d7410cb3af0b7c31a",
+        "source_sha256": "fdb61137c77a406cee78a0aaf383f5794d519e49a9b6c2bfba9a9452bdb9d1a8"
+      },
+      "strtold": {
+        "verdict": "FAIL",
+        "previous_verdict": "FAIL",
+        "detail": "status=1 0.6s",
+        "image_sha256": "01c7a969e6fcf7b2a80b18f93b551be4858919cb8c0f4b8283d6d7347edcc2bb",
+        "source_sha256": "759de4dc8da3c415f972327acbc266b681a89a3f6f2b1e02e3f4d867d08c6ff8"
+      },
+      "swprintf": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "767366004f787b1679eb800a5564bf91c8d3967b66ba3edf2eab58577fdabb79",
+        "source_sha256": "54f6f1daca5fd550eb005881f6aa6acfe5426b8c978fa33864482c9da59ff591"
+      },
+      "tgmath": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "f54e824a283e26e78025c40d29a2beb1386339468570999f204a1592f154c31a",
+        "source_sha256": "7fb2a0b49aef4f55464cf5dc8c438ff460f16f254d24bdbb3f09773265207f9f"
+      },
+      "time": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "6444e6c40aa61f84fae064b1d0d64b336198f7ed68272143fe154587cc86fd0b",
+        "source_sha256": "692ff88135501d14dd4aec2d8aeb18aa58a0dfbe8d13315b68d82fbe12ebb5b2"
+      },
+      "tls_align": {
+        "verdict": "NOBUILD",
+        "previous_verdict": "NOBUILD",
+        "detail": "error: undefined symbol: t",
+        "source_sha256": "533c12959f53f741eaf07d0e22476f19b772f4a906817da0724e6737f5c57cc3"
+      },
+      "tls_align_dlopen": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "dynamic loading",
+        "source_sha256": "4957ecb257e8c4582ce425d0ae1f21677bd8f37447b4951a8d1159f20a5f5b68"
+      },
+      "tls_align_dso": {
+        "verdict": "NOBUILD",
+        "previous_verdict": "NOBUILD",
+        "detail": "error: undefined symbol: main",
+        "source_sha256": "9ec8d7183da68df535f93cd4080b431a041629a02557e85bd0fd5e18d2e909c7"
+      },
+      "tls_init": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "09308643466d44242a3e29f5f6c6338bac6105f11ebd7447f365b6acb5b50a23",
+        "source_sha256": "13e3a2b4181277554082e48f5504d6107b6b173cba6752d874d9c5f5e9ffa887"
+      },
+      "tls_init_dlopen": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "dynamic loading",
+        "source_sha256": "2fe80011405bbe4ab58a300dca5012dc5c481a2570ddd942715a6b1d5cea9ab8"
+      },
+      "tls_init_dso": {
+        "verdict": "NOBUILD",
+        "previous_verdict": "NOBUILD",
+        "detail": "error: thread-local variable 'tls' is initialized with the address of a global or function; a cap",
+        "source_sha256": "fa06bd727e163535542cf0887d27d5e09bd2937ac23590118a0d807b892517a4"
+      },
+      "tls_local_exec": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "a7f204074002dfdba6dbcf898facac4b42bce5b7eec87a66e39bd13c5b234ac7",
+        "source_sha256": "93c13c54d8b26ccd580240d7a11b47a701f22ac227a731b9392d842a6e3fb81f"
+      },
+      "udiv": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "6d5289ad737fc0b99fc92efb1c9e9533d41bc6840f19bdca7c2b430013e034dc",
+        "source_sha256": "f8c55a0096489e1f65d0323e6b82a6a57b8319c76e067c1226d0ec7bf313f119"
+      },
+      "ungetc": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "9ec41a0d93e8f5bad1359a24ce7c14f8bf439d35a1df12e33d602c82016f1a8a",
+        "source_sha256": "dbc960a6930ed014e2cea97c212ad7f3b24a22ea5ebdfb277d568f303ecbf006"
+      },
+      "utime": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "b3af35a525bb3bb7c5b85d5371badcaabd7fb840cda4463a41030ad837798ed6",
+        "source_sha256": "5d61cd0fe8c71e5418f55a7f21a64d48a07ff3c8cbe90f364910f40dcd53216d"
+      },
+      "vfork": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "processes: vfork itself",
+        "source_sha256": "8d93cb5d4073a099197859bcdcf30afe72f9bf2266748c844dcecc24e05208d7"
+      },
+      "wcsstr": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "27574a4d12472ef1a4db3a1ff67260237012904143d3a0cf8f200be78cecab1a",
+        "source_sha256": "d4e4089e0ba33c964f7a2954ca2acf848b815a9254322002d14779d065534d94"
+      },
+      "wcstol": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "6f09c474de9150841d6b193694fcaf0d301b68ed7b781ab1f948cde8c6271924",
+        "source_sha256": "b57104027fae4287572e0aaad658caedfb9873be11915ff4616504693c8caa87"
+      },
+      "wordexp": {
+        "verdict": "EXCLUDED",
+        "previous_verdict": "EXCLUDED",
+        "detail": "processes: musl forks a shell",
+        "source_sha256": "e3e310de1a73bc30273ac5f4711492817a2f26a5750795c9a3f0be42645871c9"
+      }
+    },
+    "preexisting_source_adaptations": {
+      "search_lsearch": "Use a W-byte compound-literal key because lsearch copies one full W-byte table row; the upstream two-byte literal is too short.",
+      "string_memcpy": "Preserve the pointer during alignment: (char*)p + ((-(uintptr_t)p) & 63), instead of converting the aligned integer back to a pointer.",
+      "string_memset": "Preserve the pointer during alignment: (char*)p + ((-(uintptr_t)p) & 63), instead of converting the aligned integer back to a pointer.",
+      "string_strchr": "Preserve the pointer during alignment: (char*)p + ((-(uintptr_t)p) & 63), instead of converting the aligned integer back to a pointer."
+    }
+  },
+  "libc_regression_selection": {
+    "runner": "capstone/ports/musl-capstone/libc-test/run-libc-test-delegated.py",
+    "timeout_seconds": 60.0,
+    "source_directory": "src/regression (16 selected files exposed as src/functional to the runner)",
+    "summary": {
+      "NOBUILD": 1,
+      "PASS": 12,
+      "FAIL": 3
+    },
+    "baseline": "Final C-75 threading run before 7795986d, lt-regr-f4",
+    "baseline_report_sha256": "8a964349d6011578e1665bf59e4f019c03a3b3aec7df1c7bb3dce593a2fc0d01",
+    "verdict_changes": [],
+    "lost_passes": [],
+    "results": {
+      "flockfile-list": {
+        "verdict": "NOBUILD",
+        "previous_verdict": "NOBUILD",
+        "detail": "error: duplicate symbol: malloc",
+        "source_sha256": "b42cd72dbf2c9b47d9c352a9441804b04c243d03cc8fc1549a8dd84edd7455fb"
+      },
+      "pthread-robust-detach": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "614f4749b6a75a8637b8733a67447ff1acf4d5fc4e4d5d94d921b177cf2daab7",
+        "source_sha256": "6b19a8d6e669d4d6906b547f40f19f3af60659ad0235ccef249b40fdbbbc14fc"
+      },
+      "pthread_atfork-errno-clobber": {
+        "verdict": "FAIL",
+        "previous_verdict": "FAIL",
+        "detail": "status=0 0.6s UNSERVED clone",
+        "image_sha256": "d349ef97eddb73090f837f5a223029812e5f7feea45c74e7ff87c97e1960427d",
+        "source_sha256": "7f9b91d115013fa3f4d08bc2d785dc42f3183b2b15c7d3163da38bb2fadebb11"
+      },
+      "pthread_cancel-sem_wait": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "9558091bbd5588f74d5d836f6d6f2d919e74ef0b47d5e048d195aae17f2c78c1",
+        "source_sha256": "fcb44acdb0b80fcf99aa0c68880b094eab57d7846d48e4907c26113a93bcc2b1"
+      },
+      "pthread_cond-smasher": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "9fa3d49701efbba1c8995a31473bf9da5afe4ace921aeaab150eebcb34cab2e8",
+        "source_sha256": "ba0ee4385a7d4eac9c1b7b7160ded9f253fac04b6852d875acdb118da22709e0"
+      },
+      "pthread_cond_wait-cancel_ignored": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "a89e38ed33e63d8943bc676bb71e77760b632b705b4d70dd0b48adaff6764ef5",
+        "source_sha256": "c6e8b67c9869ea53b3ba0d1a0cc2b124ff2b2c8ec148288c0d520ac2a6eaa58a"
+      },
+      "pthread_condattr_setclock": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "2bbfc8c889e7b0f462ec2f16cdfc9b90cca3e207ff03c8e8e32ebcff8c417e53",
+        "source_sha256": "440484d752bd8ebf0410365a9bf51fa13a68b70f7fc1f63fe7d90b9dc9162782"
+      },
+      "pthread_create-oom": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "d61c646bdd449225f64055dfed85074e0130278f4a48d26c0842ccc499789a86",
+        "source_sha256": "3023db056b70e0d2f138b9cb3abe4d6595a57f7b4869e3e4bdefadcf415ca83f"
+      },
+      "pthread_exit-cancel": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "5a32889b156d5f38c7adf3a6ed76a639603b01f5eb1751c0aad84eb69872c1ce",
+        "source_sha256": "f2c2c6a2931ebb4ac7608dbdfe3cdca803c6a7cae3790c4e87d5ab01c8f229e8"
+      },
+      "pthread_exit-dtor": {
+        "verdict": "FAIL",
+        "previous_verdict": "FAIL",
+        "detail": "status=1 0.6s UNSERVED clone",
+        "image_sha256": "b5ce8a3209843527c763878efac2618d058a3c82f72ea33fdfdf1b921f8a146b",
+        "source_sha256": "079de9e8009ef1bfdfaae065ca8e1fdfbdb92ef3ccb72d3a3ccc5230496fe35b"
+      },
+      "pthread_once-deadlock": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "3f2511861a37e58d213fc8bfc1ac09e099385ba0dbae31a1c0f66d921ccb194c",
+        "source_sha256": "fe0240f3f6d1059ad6c9c99ab67c692c4688e2634e1dffe0bb742106e900a335"
+      },
+      "pthread_rwlock-ebusy": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "e2a1611f3f6cc56437b147578d63dc594cacc47cf7e8ae6fa2ce9041f1c3d3a4",
+        "source_sha256": "7de5dd564594166338d1fe2c51ab65629ec440e5b3fa349a978759101633aa5c"
+      },
+      "raise-race": {
+        "verdict": "FAIL",
+        "previous_verdict": "FAIL",
+        "detail": "status=1 1.1s UNSERVED clonex16 ...",
+        "image_sha256": "33a415fd52cbb8fb09e46e6f5cd8ba62991c478e362cb6dae55f706a213938c8",
+        "source_sha256": "447a714e14b4929ffd65c157bb07b5181c7066b82e6aa19ccc5fd5864802be73"
+      },
+      "sigaltstack": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "cc47ce4ca087d2f67e68d24acb6cf0158e4daf5c608cfa0536d26b816ea0151d",
+        "source_sha256": "18601ae861286c53018bfcc8222b901da1eea7bc0ee22db995627872aedbed9a"
+      },
+      "sigprocmask-internal": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "458d3cc8bc4f1721bea6122543e60f7cd02f7ffa581f97e78e798979a6f93247",
+        "source_sha256": "7fa8ff56229bb87b9fa2c49c2eebae080e2e7f169819296763ed13ede8b572c6"
+      },
+      "sigreturn": {
+        "verdict": "PASS",
+        "previous_verdict": "PASS",
+        "image_sha256": "750829beb8e44be06ee02ba7daf6bedba9771e32629cf26ed163f4b0177e24e7",
+        "source_sha256": "615c11891d77499465ed1917a5d800bb14f915a7d7df407a1c195c161586b2e4"
+      }
+    }
+  },
+  "artifacts": {
+    "application_contract": "b13665ddef2ec448707313ebfeea1d22c6bb6c7ffbc10cd21548a13920cbe762",
+    "application_supervisor": "ea290393180432810bd2fc8b5f4a63f9a24be8cba9fa88f9a444cb46451b1453",
+    "application_process_test": "d65beb33b6a67b702a383d51842ff6455414a3d55b42347503b1d5c5ad7f63d0"
+  },
+  "limits": [
+    "Application gate includes Perl argv and pipe/EOF output checks, mruby output checks, mixed starts and process recovery; it is not either interpreter's entire upstream suite.",
+    "Functional libc-test retains the previous clocale_mbfuncs fault, mntent/strptime/strtold failures, three build failures and thirteen exclusions. No result was reclassified to manufacture a pass.",
+    "Three regression tests still encounter unsupported fork; flockfile-list replaces malloc and cannot link against this SDK.",
+    "Only allocator shrink behavior changed from the earlier application images. Accesses past the new requested size after realloc are invalid and may now overwrite free-block metadata.",
+    "Other application ports and asynchronous signal delivery are outside this rerun.",
+    "The sparse composite source root cannot run the automatic toolchain drift check; the explicitly pinned compiler revision and binary hash match the previous qualification.",
+    "libc-test uses four pre-existing capability/bounds source adaptations, listed with the functional results; this is not a claim of unmodified upstream-source compatibility."
+  ],
+  "libc_common_sources": {
+    "src/common/fdfill.c": "af01ca5924ea127f3e1b29dd36192aa7921dd322244d4b7bac66aa683c3baa4f",
+    "src/common/memfill.c": "daac33444ee587ac2307038e65b01d7fa3fe39a2e6419482830aca7e3baf00f7",
+    "src/common/mtest.c": "45fe53589079766e0665dbaebc60d48050210d429d3097359355bfcd1edcb0d7",
+    "src/common/mtest.h": "e4568922ec2a0f323134c288d94abc913dae5631d64c29ca7842abd1a7034434",
+    "src/common/path.c": "abef95abe2bccd267bb3008d538f0cdc943a120c1ea215eb846cde50ab8bafcb",
+    "src/common/print.c": "efb1ccda4d9de7c83528838eb60357b6e4cf82da14dfaf79c3b68ea866da55d7",
+    "src/common/rand.c": "7c3ada9f1e3ab094d6bf71021c40f790f81b38f4e609bb69e69fcee1242142aa",
+    "src/common/runtest.c": "53a4d8b22f07651aac3f2fb436211c2cf12d33a0536bdee9e82c9d2b44f9dd22",
+    "src/common/setrlim.c": "ba0708a30386d0a4815ac141d8f5041d4eedb7c42e376231b48087733857a0d5",
+    "src/common/test.h": "ed618763ddd503dc076f103c4d03c6f03229900f78b7282cf03feb104b58f85d",
+    "src/common/utf8.c": "d8f014046c23c2076929b21fd8c812f6c0efbb710e4c4dd969bf529143a98ff9",
+    "src/common/vmfill.c": "9ab68e8151176c657685636e8d1d223ecd532440cd1e566fa5d7c6359f301ad4"
+  }
+}

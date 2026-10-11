@@ -71,13 +71,31 @@ static inline ulong cyc(void) { ulong v; __asm__ volatile("csrr %0, mcycle" : "=
 static inline ulong ret(void) { ulong v; __asm__ volatile("csrr %0, minstret" : "=r"(v)); return v; }
 
 /* ------------------------------------------------------------------ the fixture ----------- */
-#define MAXN 256
+/* 8192, raised from 256 on 2026-09-22 for the B3 ladder. This is the SAFE direction and the arena
+ * was not: storing a sublet_cap into arena-carved memory means a capability written to ordinary
+ * storage, and on this silicon such a capability can come back UNTAGGED (S-07) -- INIT then rejects
+ * it with ILLEGAL_OPERAND_VALUE, which is exactly the wedge B3's first two board attempts hit, at
+ * n=8192 and at n=32 alike. The emulator does not model tag loss, so it passed both.
+ * Globals ARE capability-storable, so leaf[] and alias[] belong here. The cost is the globals carve:
+ * declared dom_data goes 344,160 -> 598,112, and the largest carve KNOWN TO RUN on this board is
+ * 704,032 (image 249cfda958f22f16), with the wedge bracketed at 1,059,808. So this stays inside the
+ * proven range -- check that arithmetic again before raising it further. */
+#define MAXN 8192
 #define MAXDELEG 16
 static sublet_cap pool;                 /* the released region, linear between repetitions */
 static sublet_cap H;                    /* the handle senior to the pool: the shared death */
-static sublet_cap leaf[MAXN + 1];
+/* leaf[] and alias[] are POINTERS with static backing, not arrays. Every use is indexed
+ * (leaf[i], &leaf[i], alias[i]) -- checked, 25 and 40 sites, none takes sizeof or the whole-array
+ * address -- so the indirection is transparent to every existing series and none of their codegen
+ * or measured path changes. The `wide` series repoints them at arena-carved storage because MAXN
+ * cannot hold n up to 8192, and raising MAXN is the one thing that must not happen: it enlarges
+ * the globals carve, and the M1 wedge is bracketed between 704,032 and 1,059,808 bytes of exactly
+ * that carve. run_chase already carves its own arrays this way (:818-845); this follows it. */
+static sublet_cap leaf_backing[MAXN + 1];
+static void *alias_backing[MAXN + 1];
+static sublet_cap *leaf = leaf_backing;
+static void **alias = alias_backing;
 static sublet_cap deleg[MAXDELEG];      /* unary delegations (depth series), one chain per branch */
-static void *alias[MAXN + 1];           /* what the fixture's users hold */
 static sublet_cap unrel;                /* the unrelated region */
 static void *unrel_alias;
 static ulong pool_base, pool_bytes, unrel_bytes;
@@ -297,7 +315,26 @@ static void run_series(const char *series, const char *pattern, int arm_sublet, 
   static const ulong u_pts[5] = {0, 64 * 1024UL, 256 * 1024UL, 1024 * 1024UL, 4096 * 1024UL};
   static const unsigned d_chain[4] = {1, 2, 4, 8};       /* 15 delegations as 15x1, 7x2+1, 3x4+3, 1x8+7 */
   static const ulong s_pts[4] = {16, 64, 256, 4096};
-  unsigned npts = streq(series, "depth") || streq(series, "object") ? 4 : 5;
+  /* B3: the revoked-subtree size swept ACROSS the 2048-node cache boundary. nd = 2n, so these are
+   * nd = 64 .. 16,384 against a node table that holds exactly 2,048 (32 KiB D$ / 16 B line, and a
+   * node is 16 B, so one node is one line). R1's nodes series stops at nd = 512 -- entirely
+   * cache-resident -- which is why its 22.91 cycles/node is a lower bound and not the cost.
+   * Leaf is fixed at 128 B and B scales with n: R1 measured revoke cost independent of released
+   * bytes (R^2 = 0.069 over a 256x range), so letting B follow n costs nothing and buys clean
+   * power-of-two leaf sizes instead of 1365/1170/910 B. One full pass mints 41,280 nodes, 63% of
+   * the 65,532 pool, so it fits even if nothing is reclaimed. */
+  static const unsigned w_pts[12] = {32, 128, 256, 512, 768, 896, 1024, 1152, 1536, 2048, 4096, 8192};
+  /* `widelo` is the BISECTING ladder, and it exists because a wedge on this platform destroys the
+   * whole run's output: the harness writes its transcript into the shared readback region, but the
+   * host prints that region only after the domain RETURNS. B3's first board attempt wedged with
+   * ILLEGAL_OPERAND_VALUE and emitted not one line -- confirmed, `s=wide` appears zero times in the
+   * raw probe output, and the R1 lines that ARE in that file belong to an earlier boot.
+   * So the ladder must step ONE rung beyond proven territory at a time. R1's largest fixture on this
+   * board was n = 256; these are the three rungs at or below it plus the first one never built. */
+  static const unsigned wlo_pts[4] = {32, 128, 256, 512};
+  unsigned npts = streq(series, "depth") || streq(series, "object") ? 4
+                : streq(series, "wide") ? 12
+                : streq(series, "widelo") ? 4 : 5;
   for (k = 0; k < npts; k++) {
     memset(&pt, 0, sizeof pt);
     pt.series = series; pt.pattern = pattern; pt.arm_sublet = arm_sublet; pt.touch_unrel = touch_unrel;
@@ -307,6 +344,8 @@ static void run_series(const char *series, const char *pattern, int arm_sublet, 
     else if (streq(series, "heap")) pt.U = u_pts[k];
     else if (streq(series, "depth")) { pt.chain = d_chain[k]; pt.ndeleg = 15; }
     else if (streq(series, "object")) { pt.S = s_pts[k]; pt.n = 17; pt.B = 16 * 64UL + pt.S; pt.U = 0; pt.pattern = "individual"; }
+    else if (streq(series, "wide")) { pt.n = w_pts[k]; pt.B = (ulong)pt.n * 128UL; pt.U = 0; }
+    else if (streq(series, "widelo")) { pt.n = wlo_pts[k]; pt.B = (ulong)pt.n * 128UL; pt.U = 0; }
     else { out("R1 unknown series\n"); return; }
     /* fresh regions for the point: the pool and the unrelated region, carved from the root */
     if (arm_sublet) {
@@ -377,6 +416,13 @@ static void run_latency(unsigned reps) {
    arm 5 LDC of a NONLIN capability           -- control: the slot must still read 1
    arm 6 STC of a LINEAR register             -- the register after the store: spec 7; R-22 says 0
    arm 7 STC of a NONLIN register             -- control: must read 1
+   arm 8 TIGHTEN to RW, LINEAR source (rd != rs) -- spec 7; R-21-class 0. RW (0x6) keeps write, so the
+                                                    result is not delinearised and the arm has no rev-tree side effect
+   arm 9 TIGHTEN to RW, NONLIN source         -- control: must read 1
+   arm 10 SHRINKTO 64, LINEAR source (rd != rs) -- spec 7 if SHRINKTO moves like the ops above, 0 if it copies.
+                                                    QEMU's helper_csshrinkto copies (never clears rs1); the RTL's
+                                                    behaviour is what this arm reads (added 2026-09-23 for H1)
+   arm 11 SHRINKTO 64, NONLIN source          -- control: must read 1
    Operands come from the arena: fresh linear carves, and NONLIN aliases taken from them. */
 static ulong lcc_type_after_op(int op, sublet_cap *src, sublet_cap *dst, ulong arg) {
   ulong ty = 99;
@@ -386,21 +432,28 @@ static ulong lcc_type_after_op(int op, sublet_cap *src, sublet_cap *dst, ulong a
   case 3: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn r 0x5b, 0x1, 0x05, t1, t0, %3\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst), "r"(arg) : "t0", "t1", "memory"); break;           /* scc t1, t0, arg */
   case 4: case 5: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn s 0x5b, 0x4, t0, 0(%2)\n .insn i 0x5b, 0x3, t1, 0(%1)\n .insn r 0x5b, 0x1, 0x04, %0, t1, x1\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "t1", "memory"); break;                          /* ldc t0 <- src; park t0 in dst; ldc t1 <- src again: the slot's type after the first load */
   case 6: case 7: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn s 0x5b, 0x4, t0, 0(%2)\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "memory"); break;                                                              /* stc t0 -> dst; the register's type after the store */
+  /* TIGHTEN's rs2 FIELD is the permission IMMEDIATE, not a register. An "r" operand here encoded the
+   * allocated register's NUMBER (a2 = 12) as the immediate, which the RTL refuses with cause 29 (imm > 7)
+   * and QEMU clamps to NA -- so both models tested the wrong perm (E3, boot r42e3, 2026-09-25). `x6`
+   * puts the literal 6 = RW in the field. */
+  case 8: case 9: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn r 0x5b, 0x1, 0x02, t1, t0, x6\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "t1", "memory"); break;  /* tighten t1, t0, RW */
+  case 10: case 11: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn i 0x5b, 0x0, t1, t0, 64\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "t1", "memory"); break;              /* shrinkto t1, t0, 64 */
   }
   return ty;
 }
 static void run_linear(unsigned reps) {
-  static const char *what[8] = {"movc-LIN(instrument-control)", "cincoffset-NONLIN(conformance-control)", "cincoffset-LIN", "scc-LIN", "ldc-LIN(slot-after)", "ldc-NONLIN(slot-after,control)", "stc-LIN(reg-after)", "stc-NONLIN(reg-after,control)"};
-  static const ulong expect_spec[8] = {7, 1, 7, 7, 7, 1, 7, 1};
-  static const ulong expect_r21r22[8] = {7, 1, 0, 0, 0, 1, 0, 1};
+  static const char *what[12] = {"movc-LIN(instrument-control)", "cincoffset-NONLIN(conformance-control)", "cincoffset-LIN", "scc-LIN", "ldc-LIN(slot-after)", "ldc-NONLIN(slot-after,control)", "stc-LIN(reg-after)", "stc-NONLIN(reg-after,control)",
+                                 "tighten-LIN", "tighten-NONLIN(control)", "shrinkto-LIN", "shrinkto-NONLIN(control)"};
+  static const ulong expect_spec[12] = {7, 1, 7, 7, 7, 1, 7, 1, 7, 1, 7, 1};
+  static const ulong expect_r21r22[12] = {7, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1};
   unsigned r, arm;
   for (r = 1; r <= reps; r++) {
-    for (arm = 0; arm < 8; arm++) {
+    for (arm = 0; arm < 12; arm++) {
       sublet_cap src, dst, park; ulong ty, before;
       sublet_clear(&src); sublet_clear(&dst); sublet_clear(&park);
       carve_root(4096, &src);                                   /* a fresh LINEAR region in src */
       if (root_short) { out("R1 refused: arena s=linear"); kv("arm", arm); kv("need", root_short); out("\n"); return; }
-      if (arm == 1 || arm == 5 || arm == 7) {                    /* the NONLIN controls: an alias of it in src */
+      if (arm == 1 || arm == 5 || arm == 7 || arm == 9 || arm == 11) {   /* the NONLIN controls: an alias of it in src */
         void *a = sublet_take(&src); sublet_move(&src, &park); sublet_store(&src, a);
       }
       before = sublet_type(&src);
@@ -447,6 +500,21 @@ static void run_linear(unsigned reps) {
  * per-node figure is wrong by exactly that factor (apollo, 2026-09-16). */
 #ifndef M1_LIVE
 #define M1_LIVE 16
+#endif
+/* M1_LIVE indexes leaf[] and alias[], which are sized by MAXN and NOT by M1_LIVE, so a value above
+ * MAXN+1 overruns both -- silently, with capability-sized writes, in the fixture setup before any
+ * measurement starts. Found 2026-09-21 while costing an M1_LIVE sweep. This is a compile-time check and
+ * emits no code: every existing image rebuilds byte-identical with it present.
+ *
+ * It also fixes the CEILING on what that sweep can answer. M1_LIVE is what sets how many distinct
+ * revocation indices the fixture holds at once -- M1_MAXRET buys none, per the 2026-09-19 retraction --
+ * so the protocol's "fraction of distinct indices covered" is bounded by MAXN: 256 of 65,532, which is
+ * 0.39 %. Reaching a meaningful fraction needs MAXN raised, and that moves every image's hash and every
+ * global's placement, which the same day's layout finding showed changes the release cost by 83 %. So
+ * the sweep is cheap and uninformative as the harness stands, and informative only at the price of the
+ * comparison basis. Recorded here rather than discovered again from an overrun. */
+#if M1_LIVE > MAXN
+#error "M1_LIVE exceeds MAXN: leaf[] and alias[] are sized by MAXN and would be overrun"
 #endif
 /* M1_LEAF is the bytes per live object. It exists because M1_LIVE alone cannot separate slot count from
  * memory: the pool is M1_LIVE * M1_LEAF, so sweeping M1_LIVE moves both at once. What it is FOR changed
@@ -501,6 +569,15 @@ static void run_linear(unsigned reps) {
  * buffer is. Measured proof, already on file before this was written: one boot performed 1,314,737
  * allocations against a 65,532-index pool WITHOUT EXHAUSTING IT -- 20.1x the pool -- which is only
  * possible if indices recycle.
+ *
+ * CORRECTED 2026-10-01: about 2*M1_LIVE (32), not M1_LIVE. take(i) is mrev then delin. The mrev gives
+ * the NEW node to the handle and leaves the slot's old node on what becomes the alias. give(i) revokes
+ * that handle, which frees the ALIAS's node, and the next take pops it as the new HANDLE. So each slot
+ * alternates between two indices, and each index is reused once every two allocations of its slot.
+ * Read from capstone_dyn_unit.anvil (MREV) and capstone_rev_node.anvil at 8f6a0af98 by the
+ * claim-auditor, and consistent with the silicon's rev_node_head = B+37 and serving_idx = B+21 on
+ * m1v2-4/5/6. The halving applies to every per-index reuse count derived below; the conclusion about
+ * M1_MAXRET does not change.
  *
  * So: M1_MAXRET bounds how many stale references are HELD, which is worth having, and M1_LIVE bounds
  * how many distinct indices they NAME, which is what the protocol's "fraction of distinct indices"
@@ -629,13 +706,89 @@ static void run_linear(unsigned reps) {
 #ifndef M1_STALE_DEREF
 #define M1_STALE_DEREF 0
 #endif
+/* R-43 probe, off by default so every default image is byte-identical. The R-35 fix (capstone-ariane
+ * 4ad0df694) keeps a 4-way x 64-set cache of revnode ids seen LIVE and DENIES ON A MISS. Every other access
+ * this harness makes goes through an alias minted moments earlier, whose id was just installed, so no
+ * existing arm can show a false deny. This one can: after the fixture's setup (M1_LIVE aliases taken and
+ * touched, in order), it re-reads every live alias's first byte, twice, in the same order. The set is the
+ * id's low 6 bits, so at M1_LIVE=512 each set sees far more than 4 live ids and the early aliases' entries
+ * are evicted by later installs. Predicted under deny-on-miss: cause 25 at the first re-read (tval = that
+ * alias's leaf). At M1_LIVE=16 nothing is evicted and it must return. No output survives a trap (M-1),
+ * so the reading is the trap latch or this line. It returns from run_m1 immediately after, so the arm's
+ * loop never runs. */
+#ifndef M1_LIVE_SWEEP
+#define M1_LIVE_SWEEP 0
+#endif
 #ifndef M1_STALE_TAKE_LIVE
 #define M1_STALE_TAKE_LIVE 0
 #endif
 #ifndef M1_RELEASE_AT_BUFFER
 #define M1_RELEASE_AT_BUFFER 0
 #endif
-#if M1_STALE_DEREF
+/* M1_PROBE_RT puts BOTH halves of each condition-3 pair into ONE image and selects between them at RUN
+ * time: --probe read|write picks the access, --probe-live sends it through the slot's LIVE alias instead
+ * of the retained stale one, and --probe-age 0|1|2 picks the oldest, middle or newest retained alias.
+ * A stale probe and its control then differ by one argument and by nothing in the binary.
+ *
+ * Why it exists. The compile-time pairs could not be matched for the read: on 2026-09-29 the live-alias
+ * read control (aed492ab) was four source commits older than the stale read (35fb3fec), and the
+ * write pair (067cc96f / 9b24aa31) was matched only by building twice. A runtime switch also lets one
+ * boot run the control (which returns) before the stale probe (which wedges), so the pair shares the
+ * boot, the bitstream state and the layout.
+ *
+ * Both halves use the same instructions: a capability load from a global array, then one byte load
+ * or store through it. The stale half reads m1_ret_alias[k], and the live half reads alias[k % M1_LIVE].
+ * That is the same slot's current alias, over the same storage, because in the pressure arm
+ * m1_ret_alias[k] is retained at allocation k, from slot k % M1_LIVE.
+ *
+ * The ring arm is probed too, on slot 0, through m1_ring_alias -- see the probe for why.
+ *
+ * Age 2 (the newest) has had its node reclaimed exactly ONCE since it was retained: the next take
+ * popped it back, as the slot's new HANDLE, under the next generation. Age 0's node has been
+ * reclaimed about nret / (2 * M1_LIVE) times, because each slot alternates between two nodes (see the
+ * 2026-10-01 correction at M1_MAXRET). The printed reuses_since is (alloc - k) / M1_LIVE and counts the
+ * SLOT's reuses, so it is twice the node's. Off by default, so every existing image is byte-identical. */
+#ifndef M1_PROBE_RT
+#define M1_PROBE_RT 0
+#endif
+#if M1_PROBE_RT
+static unsigned m1_probe_op, m1_probe_live, m1_probe_age;   /* op: 0 none, 1 read, 2 write */
+#endif
+/* M1_LCC_SCAN: a NON-FAULTING validity scan, so one boot reads hundreds of thousands of stale
+ * references instead of one wedge. LCC with selector 0 (`.insn r 0x5b, 0x1, 0x04, rd, rs1, x0`)
+ * asks the rev-node unit whether the capability's own {generation, index} is live: it returns
+ * (node.valid AND node.generation == cap.generation) as a scalar and never raises for a TAGGED operand.
+ * At 8f6a0af98: capstone_dyn_unit.anvil:192-206 sends the full revnode_id and replies NO_EXCEPTION;
+ * capstone_rev_node.anvil:173-174 is the validity site. `--lcc-scan` turns it on at RUN time. Each
+ * allocation then queries:
+ *   - `old`, revoked one statement ago and whose index the LIFO list has just reissued under
+ *     generation + 1: it must read 0. This is node reuse with the stale reference refused, once per
+ *     allocation;
+ *   - the reissued alias itself: it must read 1. This is the positive control, from the same instruction;
+ *   - on slot 0 only, slot 0's FIXTURE alias, kept for the whole arm. Its index is allocated 16,384
+ *     times and then retired (anvil:59), so it must read 0 for ever. A 14-bit wrap would bring the
+ *     index back to that generation after 16,384 reclaims. Each slot alternates between two nodes, so
+ *     that is about allocation 524,257 in a 10C arm (the turnover bundle's lccsim.py), and the alias
+ *     would then read 1 twice. It bounds a RETURN to the old generation and does not by itself show
+ *     retirement: a wider generation counter would also read 0.
+ * THE EMULATOR CANNOT VALIDATE THIS. Its LCC selector 0 is a constant 1 (op_helper.c, "let's say it's
+ * always valid for now"), and it untags a revoked capability, so an LCC on one raises cause 24 there.
+ * The silicon keeps the tag. So the scan is off unless asked for, the emulator's pass record is earned
+ * without it, and the silicon reading carries its own controls: live must count every query, and old
+ * must count none. Off by default, so every image without the knob is byte-identical. */
+#ifndef M1_LCC_SCAN
+#define M1_LCC_SCAN 0
+#endif
+#if M1_LCC_SCAN
+static unsigned m1_lcc_on;
+static void *m1_first_alias;
+static inline unsigned long m1_lcc_valid(void *cap) {
+  unsigned long r;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x0" : "=&r"(r) : "r"(cap));   /* rd != rs1 */
+  return r;
+}
+#endif
+#if M1_STALE_DEREF || M1_PROBE_RT
 /* What each slot's storage was last written with, recorded as it happens so the probe can print the
  * value a LIVE read would give beside the value the STALE read gave. On 2026-09-19 that comparison had
  * to be done by hand afterwards -- the board returned byte=16 and the arithmetic said allocation 43,280
@@ -689,7 +842,19 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
   kv("rel_at_buffer", 1);   /* the release arm's phase 2 fires at buffer-full, NOT at 10C */
 #endif
   out("\n");
+#if M1_LIVE_SWEEP
+  { unsigned p, j; ulong sum = 0;
+    for (p = 0; p < 2u; p++)
+      for (j = 0; j < M1_LIVE; j++) sum += *(volatile unsigned char *)alias[j];
+    out("R1 m1 live-sweep ok"); kv("live", M1_LIVE); kv("reads", 2UL * M1_LIVE);
+    kv("sum", sum); kv("expect", 2UL * M1_LIVE * 0x11UL); out("\n");
+    return; }
+#endif
   i = 0; ini0 = sublet_stats.init;
+#if M1_LCC_SCAN
+  ulong lq = 0, lv_old = 0, lv_live = 0, lq_first = 0, lv_first = 0, lfirst_at = 0;
+  m1_first_alias = alias[0];
+#endif
   for (;;) {
     if (alloc >= target && !releasing) {
       if (streq(arm, "release")) {
@@ -708,7 +873,19 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
     else { if (nret >= M1_MAXRET) { alias[i] = sublet_take(&leaf[i]); alloc++; stop = "buffer"; break;   /* the instrument, not the table: nret == M1_MAXRET before alloc == target */ } m1_ret_alias[nret++] = old; oldest = m1_ret_alias[0]; }
     t = cyc(); alias[i] = sublet_take(&leaf[i]); tk += cyc() - t;   /* a new object in its place: one node minted */
     touch((volatile char *)alias[i], (ulong)M1_TOUCH, (unsigned char)alloc);
-#if M1_STALE_DEREF
+#if M1_LCC_SCAN
+    if (m1_lcc_on) {
+      lq++;
+      lv_old += m1_lcc_valid(old);
+      lv_live += m1_lcc_valid(alias[i]);
+      if (i == 0) {
+        ulong f = m1_lcc_valid(m1_first_alias);
+        lq_first++; lv_first += f;
+        if (f && !lfirst_at) lfirst_at = alloc + 1UL;
+      }
+    }
+#endif
+#if M1_STALE_DEREF || M1_PROBE_RT
     m1_last_touch[i] = (unsigned char)alloc;
 #endif
     alloc++; n++;
@@ -721,6 +898,36 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
   out("R1 m1 end arm="); out(arm); out(" stop="); out(stop); kv("alloc", alloc); kv("minted", minted() - m0);
   kv("revoked", sublet_stats.revoke); kv("retained", nret); kv("released", releasing); out("\n");
   nodes_minted_total += minted() - m0;
+#if M1_LCC_SCAN
+  if (m1_lcc_on) {
+    out("R1 m1 lcc arm="); out(arm); kv("queries", lq); kv("old_valid", lv_old); kv("live_valid", lv_live);
+    kv("first_queries", lq_first); kv("first_valid", lv_first); kv("first_valid_at", lfirst_at); out("\n");
+  }
+#endif
+#if M1_PROBE_RT
+  if (m1_probe_op && nret && (streq(arm, "pressure") || streq(arm, "ring"))) {
+    /* ring: m1_ring_alias[s] is slot s's PREVIOUS alias (one reclaim since), stored at k = alloc % M1_LIVE,
+     * which equals the slot because i and alloc advance together from 0. The probe takes slot 0. Over a
+     * 10C ring arm each slot's two nodes are each allocated about 20,500 times, past one retirement at
+     * 16,384. The wrap question is better answered by M1_LCC_SCAN, which reads it without a wedge. */
+    unsigned ring = streq(arm, "ring");
+    unsigned k = ring ? 0u : (m1_probe_age == 0 ? 0u : (m1_probe_age == 1 ? nret / 2u : nret - 1u));
+    unsigned s = k % M1_LIVE;
+    volatile char *live = (volatile char *)alias[s];
+    volatile char *p = m1_probe_live ? live : (volatile char *)(ring ? m1_ring_alias[s] : m1_ret_alias[k]);
+    out("R1 m1 probe go"); out(" arm="); out(arm); kv("op", m1_probe_op); kv("live", m1_probe_live); kv("age", m1_probe_age);
+    kv("k", k); kv("slot", s); kv("reuses_since", ring ? 1UL : (alloc - k) / M1_LIVE); out("\n");
+    if (m1_probe_op == 1) {
+      char v = *p;      /* the stale half is expected to fault HERE, so this probe must be last in its boot */
+      out("R1 m1 probe read ok"); kv("live", m1_probe_live); kv("byte", (ulong)(unsigned char)v);
+      kv("live_byte", (ulong)m1_last_touch[s]); kv("is_live_data", (unsigned char)v == m1_last_touch[s]); out("\n");
+    } else {
+      *p = (char)0xA5;  /* likewise */
+      out("R1 m1 probe write ok"); kv("live", m1_probe_live); kv("via_live_alias", (ulong)(unsigned char)*live);
+      kv("wrote", 0xA5u); out("\n");
+    }
+  }
+#endif
 #if M1_STALE_TAKE_LIVE
   oldest = alias[0];   /* the positive control: a LIVE alias through the identical path */
   out("R1 m1 stale-take CONTROL: probing a LIVE alias, not a stale one\n");
@@ -769,6 +976,16 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
      * which is a strictly worse claim than being able to read it. Runs after every read, because a
      * write that faults would otherwise cost the reads their transcript. */
     { volatile char *p = (volatile char *)m1_ret_alias[0];
+#if M1_STALE_TAKE_LIVE
+      /* THE CONTROL FOR THIS PROBE: the identical store and readback, through the LIVE alias to the
+       * same storage. Without it a refused stale write and a store path that faults for some other
+       * reason read alike. Until 2026-09-29 M1_STALE_TAKE_LIVE redirected only `oldest`, which the mint
+       * uses, so a TAKE_LIVE build still stored through m1_ret_alias[0] here and was no control for the
+       * write (found on the emulator: both builds faulted at this store). Off by default, so an image
+       * without the define is byte-identical. */
+      p = (volatile char *)alias[0];
+      out("R1 m1 stale-write CONTROL: storing through a LIVE alias, not a stale one\n");
+#endif
       *p = (char)0xA5;
       out("R1 m1 stale-write ok\n");
       out("R1 m1 stale-write readback"); kv("via_live_alias", (ulong)(unsigned char)*(volatile char *)alias[0]);
@@ -896,6 +1113,14 @@ void domain_main(unsigned *res, unsigned func) {
       else if (streq(tok[i], "--stale")) stale = 1;
       else if (streq(tok[i], "--cap") && i + 1 < nt) cap = atou(tok[++i]);
       else if (streq(tok[i], "--stale-take")) stale_take = 1;
+#if M1_LCC_SCAN
+      else if (streq(tok[i], "--lcc-scan")) m1_lcc_on = 1;
+#endif
+#if M1_PROBE_RT
+      else if (streq(tok[i], "--probe") && i + 1 < nt) { i++; m1_probe_op = streq(tok[i], "read") ? 1u : (streq(tok[i], "write") ? 2u : 0u); }
+      else if (streq(tok[i], "--probe-live")) m1_probe_live = 1;
+      else if (streq(tok[i], "--probe-age") && i + 1 < nt) m1_probe_age = (unsigned)atou(tok[++i]);
+#endif
     }
   }
   arm_sublet = streq(arm, "S");

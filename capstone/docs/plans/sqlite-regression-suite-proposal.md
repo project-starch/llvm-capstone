@@ -268,7 +268,7 @@ Every field of every summary is EQUAL between domain and native unless the row s
 | `select1.test` | 1031 | 1000 | **identical**, 0 failures |
 | `select2.test` | 1031 | 1000 | **identical**, 0 failures |
 | `select3.test` | 3351 | 3320 | **identical**, 0 failures |
-| `select4.test` | 3857 | 2617 | **identical**, 0 failures, 215 skipped for size |
+| `select4.test` | 3857 | 2617 | **identical**, 0 failures, 215 not compared: 184 for size, 31 empty results (2026-09-30 correction below) |
 | `evidence/slt_lang_aggfunc.test` | 80 | 67 | **identical**, including 11 shared corpus artifacts |
 | `select5.test` | — | — | **DOMAIN DIES — see below. Not attributed.** |
 
@@ -426,7 +426,11 @@ configuration, including MD5 hashes of full result sets, with zero divergences."
 * **The corpus is a subset** — 6 files of 622. `select5.test` is excluded by a live failure.
 * **The configuration omits 17 features**, floating point among them, so the R column type
   is unreachable and no float is ever compared.
-* **Result sets above 4096 values are not compared** — 215 records in select4, all rowsort.
+* **Result sets above 4096 values are not compared** — 184 records in select4, all rowsort.
+  (Recorded as 215 until 2026-09-30: the runner also counted every empty `valuesort` result as
+  skipped for size, 31 in select4, because it asked `sqlite3_malloc64(0)` for the sort and read
+  the NULL as an allocation failure. Fixed on branch `slt-runner-empty-valuesort`, which also
+  counts any failed allocation of the runner's own as `oom` instead.)
 * **`select4` needs a 1 MiB arena**; at the silicon 256 KiB it reports `oom=2772` and
   evaluates 1,085 records. select1, select2 and the negative control fit in 256 KiB.
 

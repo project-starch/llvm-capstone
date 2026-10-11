@@ -1,0 +1,8 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> 	 1: pgp_pub_decrypt_bytea	(typeid = 17, len = -1, typmod = -1, byval = f)
+	----
+	 1: pgp_pub_decrypt_bytea = "\x0a00"	(typeid = 17, len = -1, typmod = -1, byval = f)
+	----
+backend> 2026-10-06 17:09:33.951 UTC [12683] LOG:  checkpoint starting: shutdown immediate
+2026-10-06 17:09:34.319 UTC [12683] LOG:  checkpoint complete: wrote 48 buffers (0.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.336 s, sync=0.006 s, total=0.370 s; sync files=19, longest=0.001 s, average=0.001 s; distance=279 kB, estimate=279 kB; lsn=0/159A750, redo lsn=0/159A750

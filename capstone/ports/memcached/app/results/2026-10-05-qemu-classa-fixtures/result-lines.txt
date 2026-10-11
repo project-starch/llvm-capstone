@@ -1,0 +1,41 @@
+# Result lines, as ports/common/application/run-fixtures-9p.py printed them, judged by
+# the shared check-safety.py classify() and matches(). One boot per arm, five fixtures
+# per boot, N = 1 per cell.
+#
+# Images by HASH rather than by label, each matched against the built image before this
+# file was written:
+#   level0 9beb8bbfebdf04a1   shrink c8c1a1596787f908   sublet b5b340c630e0ea9d
+#
+# fx2 heap_neighbour and fx3 heap_one_past are the standing malloc-granular controls;
+# fx17 is the temporal control, and it is the one that discriminates the arms.
+# fx20 and fx21 are the new class-A probes, predicted in host/safety-expect.txt before
+# any image existed.
+
+level0   fx2   AS PREDICTED  RETURN 2000ee     
+level0   fx3   AS PREDICTED  RETURN 300040     
+level0   fx17  AS PREDICTED  RETURN 1100163    
+level0   fx20  AS PREDICTED  RETURN 1400040    
+level0   fx21  AS PREDICTED  RETURN 150005b    
+
+shrink   fx2   AS PREDICTED  FAULT oob           cause=7 addr=0xa048c3b0 insn=00c50023
+shrink   fx3   AS PREDICTED  FAULT oob           cause=5 addr=0xa048c380 insn=00054503
+shrink   fx17  AS PREDICTED  RETURN 1100163    
+shrink   fx20  AS PREDICTED  FAULT oob           cause=5 addr=0xa048c380 insn=00054503
+shrink   fx21  AS PREDICTED  FAULT oob           cause=7 addr=0xa048c380 insn=00c50023
+
+sublet   fx2   AS PREDICTED  FAULT oob           cause=7 addr=0xa8003700 insn=00c50023
+sublet   fx3   AS PREDICTED  FAULT oob           cause=5 addr=0xa8003640 insn=00054503
+sublet   fx17  AS PREDICTED  FAULT temporal      cause=24 addr=0x0 insn=-
+sublet   fx20  AS PREDICTED  FAULT oob           cause=5 addr=0xa8003640 insn=00054503
+sublet   fx21  AS PREDICTED  FAULT oob           cause=7 addr=0xa8003640 insn=00c50023
+
+# Negative control, same arm and the same image, with fx20's level0 row forced to
+# FAULT oob. The judge must REJECT it while its neighbours still pass, or a pass
+# above would be unproven:
+#   NEGATIVE CONTROL: fixture 20 row replaced by FAULT oob
+#   fx2: AS PREDICTED: RETURN 2000ee
+#   fx21: AS PREDICTED: RETURN 150005b
+#   fx20: DIFFERS: RETURN 1400040
+#   2/3 cells as predicted (runner exit 0, which is not the verdict)
+#   runner exit status 1 -- the gate blocks, which is what makes the 15/15 above
+#   a reading rather than an untested instrument.

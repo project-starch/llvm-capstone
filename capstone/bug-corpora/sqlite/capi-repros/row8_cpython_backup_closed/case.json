@@ -1,0 +1,21 @@
+{
+  "case": 8,
+  "upstream_fix": "cpython#85981",
+  "title": "Backup setup reads a source database handle from a host connection wrapper after that wrapper has been closed and freed.",
+  "consumer": "CPython",
+  "class": "use-after-close",
+  "verdict": "literal-traceable",
+  "primitive": "H",
+  "live_in_pin": null,
+  "live_note": "The defect is in the binding, not in SQLite: this corpus pins no binding release, and the host arm builds the 3.53.3 amalgamation, so whether a row is live in a given binding version is not established here.",
+  "arms": {
+    "host-asan": {
+      "oracle": "heap-use-after-free",
+      "observed": "null-deref (faithful crash class; essence fabricates UAF)"
+    }
+  },
+  "capstone_column": {
+    "ledger_status": "family (H)"
+  },
+  "status": "host ASan arm recorded, oracle 'heap-use-after-free'; NOTE.md records why it is not reproduced"
+}

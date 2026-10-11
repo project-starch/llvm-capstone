@@ -1,0 +1,6 @@
+case	arm	verdict	evidence
+01_12a6206864a0_to_char_tz_overflow	cheribsd-revocation	silent	ran to the prompt with no fault
+02_3ed3dbbf44_ts_headline_int16_overflow	cheribsd-revocation	detected	SIGPROT(34) -- a capability violation
+03_8c34261109_ltree_lquery_uint16_overflow	cheribsd-revocation	detected	SIGPROT(34) -- a capability violation
+04_3d160401b65e_oidvector_oob_read	cheribsd-revocation	silent	ran to the prompt with no fault
+06_e91dcfccaa_regexp_conv_buf_overrun	cheribsd-revocation	silent	ran to the prompt with no fault

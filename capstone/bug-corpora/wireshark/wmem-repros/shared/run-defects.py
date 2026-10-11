@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""Run the wmem defects as paired spatial/sublet domain arms.
+
+Each case is booted twice against the same program, which takes its arm from
+the loader at run time. The spatial arm is the port's unprotected baseline:
+objects are request-bounded, a packet-pool reset revokes nothing, so the stale
+access succeeds and the run must COMPLETE. The sublet arm ends the epoch of
+every object the reset retires, so the stale access must FAULT, and it must
+fault at the labelled probe the case's oracle names -- the read probe, the
+write probe, or the allocator's own probe when the stale pointer is handed
+back to wmem -- rather than merely somewhere.
+"""
+
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import struct
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "ports/common/host"))
+from port_support import digest, run_guest, stage_run, write_json
+
+MAGIC = 0x31304D454D575357
+MARKER_BASE = 0xCF16000000000000
+SITES = ("read", "write", "allocator")
+
+
+def discover(domain_build):
+    """The corpus contract builds ONE program per case, named NN-slug, and the
+    directory names are the authority. Discover them rather than keep a second
+    list that can drift out of step with the corpus."""
+    found = {}
+    for path in sorted((domain_build / "bin").glob("[0-9][0-9]-*.dom")):
+        found[int(path.name[:2])] = (path.name[:-4], path)
+    return found
+
+
+def oracle_arm(domain_build):
+    """Which case.json arm judges the protected mode: the build decides, never a flag. The
+    wmem port's chunk port (WM_CHUNKS, ON by default since it landed) revokes a chunk at its
+    individual free, which the region-granular hooks do not, so the two builds have different
+    oracles, and judging one build against the other's would read a new detection as a failure
+    or a lost one as a pass. A build from before the option existed is region-granular."""
+    cache = domain_build / "CMakeCache.txt"
+    if not cache.exists():
+        raise SystemExit(f"no {cache}: cannot tell which port this build is")
+    # WM_VARIANT=reference: wmem as released, no port at all -- Sublet only as the system
+    # allocator under it. Its own arm, whatever WM_CHUNKS says (nothing of 0002 is applied).
+    v = re.search(r"^WM_VARIANT:STRING=(\w+)$", cache.read_text(), re.M)
+    if v is not None and v.group(1) == "reference":
+        return "sublet-malloc"
+    m = re.search(r"^WM_CHUNKS:BOOL=(\w+)$", cache.read_text(), re.M)
+    if m is None:
+        return "sublet"
+    return "sublet-chunks" if m.group(1).upper() in ("ON", "1", "TRUE", "YES") else "sublet"
+
+
+def arm_name(mode):
+    """Which case.json arm judges this runtime mode. The unprotected mode is judged by the
+    `spatial` arm, which used to be assumed to complete; case 13 is a SPATIAL defect, so its
+    unprotected arm faults too, and assuming completion reported the correct reading as a
+    FAILURE."""
+    return ORACLE_ARM if mode == "sublet" else "spatial"
+
+
+def oracle_site(which, arm=None):
+    """Which labelled probe the case's protected oracle names, or None when the
+    oracle says the protected arm completes: a recorded non-detection, which
+    is checked as a completion rather than accepted as a fault anywhere."""
+    for d in CORPUS.glob(f"{which:02d}_*"):
+        arms = json.loads((d / "case.json").read_text())["arms"]
+        arm = arm or ORACLE_ARM
+        if arm not in arms:
+            raise SystemExit(f"case {which} has no {arm} oracle")
+        text = arms[arm]["oracle"]
+        if text.startswith("complete"):
+            return None
+        if "allocator" in text:
+            return 2
+        return 1 if "write probe" in text else 0
+    raise SystemExit(f"no case.json for case {which}")
+
+
+def oracle_causes(which, arm=None):
+    """Which fault causes the case's own protected arm declares acceptable.
+
+    This was hardcoded to (24, 25), the revoked-authority pair, which is right for a TEMPORAL
+    row and wrong for a spatial one: case 13 crosses a chunk BOUND and faults with cause 5, so
+    the hardcoded set would have reported the correct, predicted reading as a FAILURE. The arms
+    already carry a `cause` key, so the oracle is read from the case instead of assumed by the
+    runner. Absent, the temporal pair stays the default, so cases 0-12 are judged exactly as
+    before."""
+    for d in CORPUS.glob(f"{which:02d}_*"):
+        declared = (json.loads((d / "case.json").read_text())["arms"]
+                    .get(arm or ORACLE_ARM, {}).get("cause"))
+        if declared is None:
+            return (24, 25)
+        return (int(declared),)
+    raise SystemExit(f"no case.json for case {which}")
+
+
+def refuse_if_no_result(serial, which, mode, run, negative_control=False):
+    """A boot that produced nothing is an INFRASTRUCTURE failure, never a measurement.
+
+    The sibling memcached runner has had these two checks all along and this one did not,
+    which is why case 15's empty boot on 2026-10-05 was reported as a FAIL -- its serial
+    ended at "sh /mnt/host/run.sh" with no marker, no fault and no CONTROL-FAILED, and a
+    FAIL there reads exactly like the defect failing to reproduce. Returns the reason it
+    refused, or None when the boot said something; a caller that gets a reason must exit 75.
+
+    Kept a function rather than inline so it can be negative-tested without a QEMU boot.
+
+    UNDER --negative-control the corrupted record makes the guest-side loader refuse it before
+    any domain exists (domain-loader.c's length check, exit 3), so the case marker and a fault
+    are absent BY DESIGN. Without the clause below this guard refused every negative-control
+    boot with exit 75, and the control could not run at all from the day the guard landed
+    (fd75d7d89f64, 2026-10-05 19:32) -- an hour after its last passing run. Only that exit
+    counts, and only under the control: a normal run whose loader exits 3 is still refused."""
+    if not serial:
+        return f"NO SERIAL CAPTURE for case={which} mode={mode}: {run}"
+    if negative_control and re.search(r"^__EXIT_CODE__3\s*$", serial, re.M):
+        return None
+    if f"Print = Scalar(0x{MARKER_BASE | which:x})" not in serial and not re.search(
+        r"domain (?:halted by capability fault|capability fault delivered)", serial
+    ):
+        # Neither the case's own marker nor a fault: the boot says nothing about this
+        # case either way.
+        return f"BOOT PRODUCED NO RESULT for case={which} mode={mode}: {run}"
+    if "WM_DEFECT_DONE" not in serial and not re.search(
+        r"domain (?:halted by capability fault|capability fault delivered)", serial
+    ):
+        # The marker was reached, but the session ended before run.sh's end marker and with no
+        # fault: the guest command was cut (timeout, dead VM). A FAIL row here would read as the
+        # defect not reproducing. Exit 75, as for a boot that said nothing at all.
+        return f"SESSION ENDED BEFORE WM_DEFECT_DONE, with no fault, for case={which} mode={mode}: {run}"
+    return None
+
+
+def classify(serial, which, mode, runner_exit, report):
+    faults = re.findall(
+        r"domain (?:halted by capability fault|capability fault delivered): "
+        r"cause = (\d+), pc = (0x[0-9a-f]+)",
+        serial,
+    )
+    marker = f"Print = Scalar(0x{MARKER_BASE | which:x})"
+    judged_by = arm_name(mode)
+    site = oracle_site(which, judged_by)
+    row = {
+        "case": which,
+        "mode": mode,
+        "expected": "fault" if site is not None else "complete",
+        "oracle_arm": judged_by,
+        "runner_exit": runner_exit,
+    }
+    if site is not None:
+        following = serial.split(marker, 1)[-1] if marker in serial else ""
+        sites = re.findall(r"Print = Cap\(\d+, 0x[0-9a-f]+, (0x[0-9a-f]+),", following)
+        cause, pc = faults[-1] if faults else ("0", "0")
+        expected = sites[site] if len(sites) > site else None
+        row.update(
+            cause=int(cause), pc=pc, site=SITES[site], expected_pc=expected,
+            delivered="capability fault delivered" in serial,
+        )
+        row["passed"] = (
+            marker in serial
+            and len(faults) == 1
+            and int(cause) in oracle_causes(which, judged_by)
+            and expected is not None
+            and int(pc, 16) == int(expected, 16)
+        )
+        if row["delivered"]:
+            row["passed"] = row["passed"] and "__EXIT_CODE__139" in serial
+    else:
+        row["passed"] = (
+            runner_exit == 0
+            and not faults
+            and marker in serial
+            and report is not None
+            and report[0] == MAGIC
+            and report[3] == 0
+            and report[4] == 1
+        )
+    return row
+
+
+p = argparse.ArgumentParser(description=__doc__)
+p.add_argument("output", type=Path)
+p.add_argument("--domain-build", type=Path, required=True)
+p.add_argument("--linux-build", type=Path, required=True)
+p.add_argument("--cases", default=None)
+p.add_argument("--modes", default="spatial,sublet")
+p.add_argument("--corpus", type=Path, default=Path(__file__).resolve().parent.parent,
+               help="corpus root whose case.json oracles name the expected probe")
+p.add_argument(
+    "--negative-control", action="store_true",
+    help="corrupt the input record so the program refuses it before any case runs; "
+         "every selected arm must then FAIL, and the exit status is 0 only if every one did",
+)
+a = p.parse_args()
+CORPUS = a.corpus.resolve()
+ORACLE_ARM = oracle_arm(a.domain_build)
+programs = discover(a.domain_build)
+if not programs:
+    p.error(f"no NN-*.dom programs in {a.domain_build}/bin; a corpus that built nothing must not look like one that passed")
+cases = [int(c) for c in a.cases.split(",")] if a.cases else sorted(programs)
+a.output.mkdir(parents=True, exist_ok=True)
+print(f"Defect suite artifacts: {a.output}", flush=True)
+print(f"protected mode judged against the case.json arm: {ORACLE_ARM}", flush=True)
+verdicts = []
+status = 0
+for which in cases:
+    if which not in programs:
+        p.error(f"no program for case {which}")
+    for mode in a.modes.split(","):
+        if mode not in ("spatial", "sublet"):
+            p.error("invalid mode")
+        stem, image = programs[which]
+        run, hashes = stage_run(
+            a.output, f"{stem}-{mode}-",
+            {"defect.dom": image, "host.user": a.linux_build / "bin/domain-loader"},
+        )
+        share = run / "share"
+        # A count of 2 with one record fails the guest-side loader's length check
+        # (domain-loader.c, exit 3): no domain is created, so no case runs.
+        count = 2 if a.negative_control else 1
+        (share / "trace.bin").write_bytes(
+            struct.pack("<22Q", MAGIC, count, *([0] * 14), 0, 0, 0, 0, 0, which)
+        )
+        hashes["trace.bin"] = digest(share / "trace.bin")
+        (share / "run.sh").write_text(f"""#!/bin/sh
+set -e
+cp /mnt/host/defect.dom /tmp/wm.dom
+cp /mnt/host/host.user /tmp/wm-host
+cp /mnt/host/trace.bin /tmp/wm-trace.bin
+/tmp/wm-host /tmp/wm.dom /tmp/wm-trace.bin /tmp/wm-report.bin {int(mode == 'sublet')}
+cp /tmp/wm-report.bin /mnt/host/report.bin
+echo WM_DEFECT_DONE
+""")
+        write_json(
+            run / "manifest.json",
+            {
+                "sha256": hashes,
+                "qemu_sha256": digest(os.environ["CAPSTONE_QEMU_BINARY"]),
+                "compiler_sha256": digest(Path(os.environ["CAPSTONE_LLVM_BUILD_DIR"]) / "bin/clang"),
+                "node_capacity": int(os.environ.get("CAPSTONE_REV_NODES", "65536")),
+            },
+        )
+        env = dict(os.environ)
+        env.setdefault("CAPSTONE_QEMU_LOGIN_TIMEOUT", "60")
+        env.setdefault("CAPSTONE_GUEST_COMMAND_TIMEOUT", "60")
+        result = run_guest(run, "sh /mnt/host/run.sh", "WM_DEFECT_DONE", env=env, timeout_multiplier=1)
+        serial = (run / "serial.log").read_text(errors="replace") if (run / "serial.log").exists() else ""
+        refused = refuse_if_no_result(serial, which, mode, run, a.negative_control)
+        if refused:
+            print(refused, flush=True)
+            sys.exit(75)
+        report = struct.unpack("<16Q", (share / "report.bin").read_bytes()) if (share / "report.bin").exists() else None
+        row = classify(serial, which, mode, result.returncode, report)
+        row.update(name=stem, run=str(run))
+        verdicts.append(row)
+        write_json(run / "verdict.json", row)
+        write_json(a.output / "verdicts.json", verdicts)
+        extra = ""
+        if row["expected"] == "fault":
+            extra = f" cause={row['cause']} pc={row['pc']} expected={row['expected_pc']} site={row['site']}"
+        elif mode == "sublet":
+            extra = " (recorded non-detection: completion required)"
+        print(f"{'OK  ' if row['passed'] else 'FAIL'} case={which} {stem:40} {mode:8}{extra}", flush=True)
+        if not row["passed"]:
+            status = 1
+passed = sum(r["passed"] for r in verdicts)
+if a.negative_control:
+    print(f"\nnegative control: {len(verdicts) - passed}/{len(verdicts)} oracles reported FAIL as they must")
+    sys.exit(0 if passed == 0 else 1)
+print(f"\n{passed}/{len(verdicts)} arms passed")
+sys.exit(status)

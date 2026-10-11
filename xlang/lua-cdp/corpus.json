@@ -1,0 +1,24 @@
+{
+  "program": "Lua C-data-pointer bindings",
+  "boundary": "a C object borrowed by a Lua binding",
+  "title": "Corpus C: GC-ended and allocator-ended borrows in Lua bindings",
+  "cases": 13,
+  "case_schema": "xlang-row",
+  "case_table": "xlang/lua-cdp/capstone/rows.tsv",
+  "case_dir_column": "slug",
+  "case_doc": "CASE.md",
+  "status": "measured",
+  "live_in_pin_recorded": false,
+  "live_in_pin_note": "Each row is pinned to the binding version its upstream report names, not to a release this project ports.",
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "inventory": "capstone/docs/ref/paper-bug-inventory.md",
+  "evidence": [
+    "xlang/lua-cdp/capstone/rows.tsv",
+    "xlang/lua-cdp/cheri/rows.tsv"
+  ],
+  "advisories": [],
+  "related": [
+    "capstone/bug-corpora"
+  ],
+  "note": "7 of the 13 are GC-frees, which is the structural sub-case. Blocked specimens (C++/STL, LuaJIT) sit beside the rows and are not cases."
+}

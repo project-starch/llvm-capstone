@@ -1,0 +1,5 @@
+case	fix	name	mode	expected	passed	exit	fault_pc	expect_pc	fault_at_probe	completed	counters
+0	1c7a70c9d9	wrong_bucket_alloc_across_connections	0	completed	False	3		0x106e26			
+0	1c7a70c9d9	wrong_bucket_alloc_across_connections	1	tag fault at apr_defect_read	False	3		0x106e26	False		
+4	c81adad105	brigade_not_cleaned_before_reuse	0	completed	False	3		0x106ea0			
+4	c81adad105	brigade_not_cleaned_before_reuse	1	tag fault at apr_defect_read	False	3		0x106ea0	False		

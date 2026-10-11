@@ -1,0 +1,25 @@
+# The mruby interpreter (MRB_NO_BOXING, switch, -O2) on scripts from files, in the domain and
+# natively: smoke.rb's 13 checks run directly, then four of mruby's benchmark/ scripts
+# evaluated from their files, their output reduced to a count and a checksum.
+# QEMU: the shared build 408fd83945. Domain output is byte-identical to native, including
+# bm_mandel_term's 50-line picture (not listed).
+M1 hello
+M2 array 2000 4002000
+M3 hash 3000 2999
+M4 symbols foo,bar,literal_sym true
+M5 string 2390 ab0ab1ab2a
+M6 gc ok
+M7 fib 6765
+M8 deep 500
+M9 rescue ArgumentError
+M10 float 4.5 2.5 1180591620717411303424
+M11 file 50
+M12 dir true
+M13 pack [1, 2, 3] 03.14
+SMOKE_DONE
+BENCH bm_mandel_term bytes=0 lines=0 sum=0 ret=nil
+BENCH bm_so_lists bytes=0 lines=0 sum=0 ret=10000
+BENCH bm_hash_access bytes=0 lines=0 sum=0 ret=nil
+BENCH bm_so_mandelbrot bytes=45011 lines=12 sum=338186860 ret=nil
+DRIVER_DONE
+LT-RESULT mruby.dom status=0 rounds=4088 PASS

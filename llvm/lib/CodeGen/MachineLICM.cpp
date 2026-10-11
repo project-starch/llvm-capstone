@@ -181,6 +181,11 @@ namespace {
     // to hoist loads from this block.
     // Tri-state: 0 - false, 1 - true, 2 - unknown
     unsigned SpeculationState = SpeculateUnknown;
+    // The loop SpeculationState answers for. HoistOutOfLoop asks about one
+    // block for the outermost loop and then for each subloop in turn, and a
+    // block can run on every iteration of the outer loop without running on
+    // every iteration of the subloop.
+    MachineLoop *SpeculationLoop = nullptr;
 
   public:
     MachineLICMImpl(bool PreRegAlloc, Pass *LegacyPass,
@@ -753,8 +758,9 @@ void MachineLICMImpl::HoistPostRA(MachineInstr *MI, Register Def,
 /// may not be safe to hoist.
 bool MachineLICMImpl::IsGuaranteedToExecute(MachineBasicBlock *BB,
                                             MachineLoop *CurLoop) {
-  if (SpeculationState != SpeculateUnknown)
+  if (SpeculationState != SpeculateUnknown && SpeculationLoop == CurLoop)
     return SpeculationState == SpeculateFalse;
+  SpeculationLoop = CurLoop;
 
   if (BB != CurLoop->getHeader()) {
     // Check loop exiting blocks.
@@ -1113,6 +1119,15 @@ bool MachineLICMImpl::IsLICMCandidate(MachineInstr &I, MachineLoop *CurLoop) {
   if (I.mayLoad() && !mayLoadFromGOTOrConstantPool(I) &&
       !IsGuaranteedToExecute(I.getParent(), CurLoop)) {
     LLVM_DEBUG(dbgs() << "LICM: Load not guaranteed to execute.\n");
+    return false;
+  }
+
+  // An instruction that can trap on some operand values follows the rule for
+  // loads: in the preheader it would also run on the paths that never reach
+  // its block, which may be the ones on which its operand was never checked.
+  if (TII->canTrap(I) && !IsGuaranteedToExecute(I.getParent(), CurLoop)) {
+    LLVM_DEBUG(dbgs() << "LICM: Trapping instruction not guaranteed to "
+                         "execute.\n");
     return false;
   }
 

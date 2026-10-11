@@ -1,0 +1,466 @@
+{
+  "scope": "wireshark 4.6.8 wmem core and all four allocators; directed QEMU replay and paired lifetime fixtures; not packet dissection in a domain",
+  "trace_sha256": "f1d4feb337140268d3f3ec01bd22d119e900d4c0d159d3d109b00f1a1496e0c8",
+  "events": 1661,
+  "reports": {
+    "spatial": {
+      "magic": 3544417866786231127,
+      "count": 1661,
+      "mode": 0,
+      "status": 0,
+      "completed": 1661,
+      "news": 80,
+      "allocs": 1000,
+      "frees": 100,
+      "reallocs": 280,
+      "free_alls": 80,
+      "gcs": 40,
+      "destroys": 80,
+      "checksum": 15475871146958098728,
+      "live_allocators": 0,
+      "regions_created": 44,
+      "regions_peak": 34
+    },
+    "sublet": {
+      "magic": 3544417866786231127,
+      "count": 1661,
+      "mode": 1,
+      "status": 0,
+      "completed": 1661,
+      "news": 80,
+      "allocs": 1000,
+      "frees": 100,
+      "reallocs": 280,
+      "free_alls": 80,
+      "gcs": 40,
+      "destroys": 80,
+      "checksum": 15475871146958098728,
+      "live_allocators": 0,
+      "regions_created": 44,
+      "regions_peak": 34
+    }
+  },
+  "security": [
+    {
+      "mode": 0,
+      "case": 0,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 1,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 2,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 3,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 4,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 5,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 5,
+      "pc": "0x1019015e8",
+      "expected_pc": "0x1019015e8",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 6,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 7,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 8,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 9,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 10,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 11,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 12,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 0,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 1,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x1019015e8",
+      "expected_pc": "0x1019015e8",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 2,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x101901614",
+      "expected_pc": "0x101901614",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 3,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x1019015e8",
+      "expected_pc": "0x1019015e8",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 4,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 5,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 5,
+      "pc": "0x1019015e8",
+      "expected_pc": "0x1019015e8",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 6,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x1019015e8",
+      "expected_pc": "0x1019015e8",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 7,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x1019015e8",
+      "expected_pc": "0x1019015e8",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 8,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x1019015e8",
+      "expected_pc": "0x1019015e8",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 9,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x1019015e8",
+      "expected_pc": "0x1019015e8",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 10,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x1019015e8",
+      "expected_pc": "0x1019015e8",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 11,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x1019015e8",
+      "expected_pc": "0x1019015e8",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 12,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x101901e94",
+      "expected_pc": "0x101901e94",
+      "passed": true
+    }
+  ],
+  "replay_manifests": {
+    "spatial": [
+      {
+        "protection": "spatial",
+        "sha256": {
+          "trace.bin": "f1d4feb337140268d3f3ec01bd22d119e900d4c0d159d3d109b00f1a1496e0c8",
+          "replay.dom": "d81c6846221a944cdc712f50eaf4ef181898c8f6ba70aff52fee740b204a3807",
+          "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3"
+        },
+        "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+        "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+        "node_capacity": 65536
+      }
+    ],
+    "sublet": [
+      {
+        "protection": "sublet",
+        "sha256": {
+          "trace.bin": "f1d4feb337140268d3f3ec01bd22d119e900d4c0d159d3d109b00f1a1496e0c8",
+          "replay.dom": "d81c6846221a944cdc712f50eaf4ef181898c8f6ba70aff52fee740b204a3807",
+          "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3"
+        },
+        "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+        "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+        "node_capacity": 65536
+      }
+    ]
+  },
+  "security_manifests": [
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "1f52d3873e74a3872f51adfa23ac19aa10fac605c83f66b9fc2c3c47e0acf6e2"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "3fb680de495670d552a7f5630f9fd630ed33cd801b8404351d52ae26d4553531"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "43b598dbd7c55702799eece82f46b796f0392e977a5ea9ae5657406e6e016ccb"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "4f518aab9d3050329d49bab60bbe673c1ffb094775243ce765b35571a9176a85"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "909db506bafd327950fb88000dfdf162ca1d16b9314e30ce12955f219d3d1401"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "992d46d49f050b22e5ed07f35033507880700d82159f13355942894362dff3dc"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "a1f6737c08069b31d535370da6799033140bfc5db770241ef25d265da3b95804"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "aa4a079a8cb9609eb5f4a8c8db660422e06a19c9d49dd86ef7a32d0a9ecd70b4"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "af823f2d18cb4f6292e60a8720e3f9266ca52b8458f2fcaf28a87dc7c2e036fb"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "b9c10de1b704ec1126be7340d08d5e45d49b9c3990470e809be86a98f4afc7e6"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "c3772e9190b15a982fa47c8a686cd9af32ae664797760f9a0d273ae41d686cac"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "d9749ca9e9550df5426c984e12f059f9040d07ab1e4c73f7d814e23606e215e2"
+      }
+    },
+    {
+      "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+      "node_capacity": 65536,
+      "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+      "sha256": {
+        "host.user": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+        "security.dom": "70c13c45ecc6e8de59160372b82009e12ab0f9fde617835c8f32b21387d427ec",
+        "trace.bin": "ec1684148e7631eca8418f8bd9bd787b3574131a683e38f865a88f851fac9c47"
+      }
+    }
+  ],
+  "source_sha256": {
+    "CMakeLists.txt": "523172f112d886052d46b20008170c113f012b2ec93d83339c82efab0b1a04bd",
+    "CMakePresets.json": "3044a7fe816d7e801f0d08daa91a7acf2644987c2bfd55426d787c9e5f065fc5",
+    "cmake/Replay.cmake": "e6d3824aef7e2748498559a99312a5713b7a663ddb02399e8b4477ef4183ca63",
+    "cmake/Source.cmake": "e97754194821cdc90a35a64e8d802505756c219df39e55f7285f1550b73ccb2a",
+    "cmake/prepare-source.py": "634d6996db9cef9b071ad606fd80dec87ce642df78cfe4eb1708bdb69d615106",
+    "examples/wmem.c": "879eb5c5d0178fd6f995cff2536249507d53a5683bf399fa4e10877b582c2f36",
+    "host/run-qemu.py": "cd27c9e3d84cbc34f60f1aed09e0e6099cff71c4845c82a9d1cd8991e9f14b99",
+    "host/summarize.py": "8e90feb0bcfb91879f8a7e7fbadee753bc90d50636c113dbd66568b2f0d69401",
+    "ledger.manifest": "75f2b243cc2d8a520fb6999b34e2d9b8af0d5c6318f2595af29c8d082dc030db",
+    "patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch": "0d0a286d197fc6d4d0da9bfc59f54d0d3c4556315a3359a6d23efd40f4270b87",
+    "security-tests/qemu/run.py": "e6d2da30639d76e3a2e537f36a2b2b21a5df91467a3e74a3f9a66821c0723daf",
+    "security-tests/shared/lifetimes.c": "8d08f3adf97eec58085c50cac684303131f205013a2362f0c340058d40516d58",
+    "src/allocators/sublet/regions.c": "de9bd6cb4fff91c19505f8414f8dbfb1aa9ccb32ce1e9603abc460ecf4aa6a9f",
+    "src/capstone-domain/entry.c": "675ed41540464ea3a768561049cdafa8b449952e4de2d1c247360796883ef3c6",
+    "src/linux-guest/CMakeLists.txt": "e3dff14095ad3caef777d3b68450b0760f3852f80ee96e8332dc914281b3abfe",
+    "src/linux-guest/domain-loader.c": "fad281a5d2326f7b588bb26ba5b5fbaf42006d5d461d8fabdd54f741bae1a1ee",
+    "src/native/main.c": "31351838fcf0c3cba15aa7298d1e76ba082274caec642f9cc21083af0eac5438",
+    "src/native/regions.c": "8a56013fcef511967511880bef332168c1e30f7317073c1971053ff252d318da",
+    "src/shared/backing.c": "ed194e50e3a1ae09a61aaea4f460ac8a17f40ef9018a79dae405ef3c313da6f7",
+    "src/shared/freestanding.c": "d7e523976373b763235b4026d9eb565f754acc9a9da6be7eef7793557e53a719",
+    "src/shared/port.h": "33e8844017257bfa99c60937f302d2ae52dea54c165f4cc84df2dea4469b8673",
+    "src/shared/regions.h": "1b6daf2fc60f87a8432cb942a23626a4d28551ef0fa80ecbd3d712ece9e315be",
+    "src/shared/replay.c": "472e0fe6057cbfa2be9882586e2be136d4bd22debf6b5975209be66deec3cb11",
+    "src/shared/scopes.c": "c21097262ed2a4a140e8078d36bb61d94da487f7e923c3a7ead6adb65b2e6cda",
+    "src/shared/scopes.h": "a877070027784c5dbd70bc053a0535e282fc307172d329155405fb404add82cc",
+    "src/shared/shim/config.h": "c46bc46c171e4e4d5eb4974cc8a4f89366363a2f494d62eab8796214f64db1f1",
+    "src/shared/shim/glib.h": "90df94539ad87b9fbd617a88b09628dadf795cfde4d3778fd290af3e7156bf3e",
+    "src/shared/shim/ws_attributes.h": "9fb20b51ddfa66c15cb94174051d9ef4081da51fb2a614a40188fb968629fc64",
+    "src/shared/shim/ws_posix_compat.h": "f06c06cc6104b814052869fb707c150a1da302727c916357d99ab4eb0bb49038",
+    "src/shared/shim/ws_symbol_export.h": "878b38d0166b2ed7b82ff8583e37041d512c7110a4cc053897232499f1443a35",
+    "src/shared/shim/wsutil/ws_assert.h": "87e7cba07efe99bacebaf7f721795c4cd9b61a59ea6695a19f72914a164dccde",
+    "src/shared/wmem-port-hooks.h": "fb10fd68152e33b330194fde89ee5b14809da1f6d5ec82a374a34d06bbf9cde6",
+    "tests/native/test-replay.py": "9d91842c623dd0755e3875a48ae91cc692d6ab8c8ce69d5556cd539c0b55595e",
+    "tests/native/test-source.py": "772d2b3a38f908650b00d72378168133df7fe793fce9d2bb4009ff890cc68a4c",
+    "upstream.json": "24306529d41c6e563765916554a6b8e2541a866e8d0ff6362d238d3f80c76851"
+  },
+  "images_sha256": {
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "rootfs.ext2": "313ba2991985f78671634966508c38de7a02b283cd65c13cdbba582dcf75fe6a"
+  },
+  "limits": "Individual recycler frees are not revoked; regions reissued at exact size only; synthetic payloads; 384 MiB backing budget; no FPGA, timing, or complete-process memory claim"
+}

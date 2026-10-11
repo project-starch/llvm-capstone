@@ -1,0 +1,30 @@
+# R-43 second fix: arm 6b, the ALLOW-record clear control re-registered for the replay design. RTL lane, 2026-09-29.
+# RTL capstone-ariane 8f6a0af98 (unchanged); test r43-evict-live.S with arm 6b = commit 5aa316e0d on branch r43-arm6b
+# (the run used the same file with one comment differing, sha256 ce02046a... at run time vs d1946831... committed: the
+# assembled program is identical, comments do not reach the .o). Verilator testharness, cva6-build-rv container pinned
+# to CPUs 0-7,32-39, +define+S12_MEM_DELAY=12+R43_TRACE, --sv_seed 1, --iss_timeout 7200. Values are the CAPPRINT
+# registers read from the RETIREMENT trace; probe/verdict lines are R43_TRACE's. The noclear variant is the temporary
+# patch .r43-variant.py 'noclear' (assign rvc_ok_kill = 1'b0), applied and restored with a hash check (RESTORE VERIFIED).
+
+== WHY (the after-audit's finding A) ==
+Arm 6's pre-read of alias C HITS (C fresh and resident). The replay design sets the ALLOW record only from a live PROBE,
+so the record never holds C, and the noclear build is denied through probe -> DEAD exactly like the shipping build.
+Shipping trace of the original batch: C's pre-read "verdict LD id=00010616 hit=1 live=1 ok=0"; the arm-6 access
+"hit=0 live=0 ok=0 dead=0 replay=1"; then "probe-resolved pend=00010616 tap=00020616 live=1 -> DEAD". A control that
+cannot fire proves nothing. Arm 6b evicts C2 BEFORE its first read, so that read misses, probes, resolves live and
+sets the record to C2; then REVOKE (the broadcast must clear the record), CHURN 256 (its DEAD entry evicted, index
+reissued at generation+1), read.
+
+== READINGS (arm 6b appended after arm 9b; every earlier arm keeps its value) ==
+build      6b pre-read cause   6b value   6b cause   arm 6 cause   probes (ALLOW/DEAD)   replays (max/pc)   traps
+ship       0 (probe -> ALLOW)  0          25         25            10 (6/4)              9 (1)              8
+noclear    0 (probe -> ALLOW)  0          0 ALLOWED  25            9  (6/3)              8 (1)              7
+
+Every other CAPPRINT identical between the two builds: arms 2/2s/2d/2e allowed, 5/6/7/7r/9b cause 25, 8 and 9a allowed;
+0 marker leaks; 0 timeouts; the refusal record latched id 0x616 arm 0001 on both. The one-probe difference is arm 6b's
+own: under noclear the access matches the surviving ALLOW(C2) and never probes.
+
+== VERDICT ==
+The record's clear is load-bearing on the replay design, shown by a control that FIRES: noclear ALLOWS a revoked,
+reissued id (cause 0) where the shipping build refuses it (cause 25). Arm 6 discriminates nothing on this design
+(25 on both), as the audit predicted.

@@ -1,0 +1,27 @@
+# mrbtest, MRBD_PIN=4.0.0-rc2 (9d523e2f74f2) MRBD_BOXING=no MRBD_DISPATCH=switch MRBD_OPT=-O2, patches/4.0.0-rc2
+# compiler: llvm-capstone 7d01722aab88 (compiler/sroa-keep-capability-whole)
+# runtime: runtime/hostcall-mruby-io 9704639b4a3a (pipes hold 64 KiB); QEMU capstone-qemu-movc-merge d621df553f, br-snap
+# The first domain run, on the runtime before 9704639b4a3a (4096-byte pipes): OK 1631, Crash 1,
+# IO#read(n) with n > IO::BUF_SIZE (4097 bytes written into a pipe before reading; syswrite EAGAIN).
+native:
+  Total: 1648
+     OK: 1639
+     KO: 0
+  Crash: 0
+   Skip: 9
+domain:
+  Total: 1648
+     OK: 1632
+     KO: 0
+  Crash: 0
+   Skip: 16
+capstone-domain: UNSERVED syscalls: 198x3
+LT-RESULT mruby.dom status=0 rounds=5536 PASS
+skipped in the domain only:
+Skip: `cmd` => _popen() function is unimplemented on this machine (mrbgems: mruby-io)
+Skip: FileTest.pipe? => _popen() function is unimplemented on this machine (mrbgems: mruby-io)
+Skip: FileTest.socket? => no sockets in this environment (mrbgems: mruby-io)
+Skip: IO.popen => _popen() function is unimplemented on this machine (mrbgems: mruby-io)
+Skip: IO.popen with err option => _popen() function is unimplemented on this machine (mrbgems: mruby-io)
+Skip: IO.popen with in option => _popen() function is unimplemented on this machine (mrbgems: mruby-io)
+Skip: IO.popen with out option => _popen() function is unimplemented on this machine (mrbgems: mruby-io)

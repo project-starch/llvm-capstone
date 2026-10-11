@@ -1,0 +1,198 @@
+sv.h, sv.c: SV heads issued and released by an external lifetime adapter,
+under PERL_SV_HEAD_ADAPTER. Without the define the preprocessed source is
+unchanged.
+
+Upstream carves SV heads from 4080-byte arenas (Perl_more_sv, sv_add_arena)
+and keeps free ones on PL_sv_root, a list threaded through the freed head
+itself (plant_SV writes SvANY). A stale SV* therefore still reaches a head
+that the next new_SV hands to another value, and ASan cannot see it because
+the memory never returns to malloc. To revoke or poison a released head, no
+free-list link may live in it, and nothing may read it afterwards.
+
+- Perl_more_sv takes each head from perl_svh_new(sizeof(SV), heads per arena).
+  PL_sv_root is never set, so every new_SV reaches it, including the inline
+  S_new_SV that -DDEBUGGING extensions (ext/re) compile. Upstream's geometry is
+  passed along: an arena's first slot is its header, the rest are heads.
+- plant_SV gives the head back with perl_svh_del; an SVf_BREAK head is not
+  reusable, as upstream keeps it off the free list.
+- A freed head's flags are SVTYPEMASK, and the core reads them through
+  pointers that may be stale by design: SvIS_FREED (sv.h: "there are some
+  parts of the core that have pointers to already-freed SV heads"), and type
+  probes such as a COP's stash, PL_curstash, PL_last_in_gv restored by
+  SAVESPTR, or GvIO's own test. Both SvIS_FREED and SvTYPE ask the adapter
+  first, by address and current lease, and read the head only if it is live;
+  a released head reads as SVTYPEMASK, which is what upstream reads there.
+  SvTYPE's argument is still evaluated once.
+- S_visit walks the adapter's live heads, newest arena first and ascending
+  within one, over the arenas that existed on entry: upstream's order. A
+  released head is known from the record and never read.
+- sv_free_arenas has no head arenas to free. DEBUG_LEAKING_SCALARS, which walks
+  them, is refused at compile time; S_del_sv's -DD arena check is skipped.
+
+The adapter (capstone/ports/perl/sv-heads) keeps upstream's LIFO list and
+arena growth, so a spatial build reissues the same slots in the same order.
+A read of a released head that none of these paths covers faults under the
+protected arms; the native ASan backend reports it (see the README).
+
+diff --git i/sv.c w/sv.c
+index 669678a..1970938 100644
+--- i/sv.c
++++ w/sv.c
+@@ -249,4 +249,20 @@ Public API:
+  * case is for it to be reused. */
+ 
++#ifdef PERL_SV_HEAD_ADAPTER
++/* The head goes back to the adapter; no free-list link is written into it.
++   An SVf_BREAK head is not reusable, exactly as upstream keeps it off
++   PL_sv_root; the adapter neither reissues nor revokes it. */
++#define plant_SV(p) \
++    STMT_START {					\
++        const U32 old_flags = SvFLAGS(p);			\
++        MEM_LOG_DEL_SV(p, __FILE__, __LINE__, FUNCTION__);  \
++        DEBUG_SV_SERIAL(p);				\
++        FREE_SV_DEBUG_FILE(p);				\
++        POISON_SV_HEAD(p);				\
++        SvFLAGS(p) = SVTYPEMASK;			\
++        perl_svh_del(p, !(old_flags & SVf_BREAK));	\
++        --PL_sv_count;					\
++    } STMT_END
++#else
+ #define plant_SV(p) \
+     STMT_START {					\
+@@ -263,4 +279,5 @@ Public API:
+         --PL_sv_count;					\
+     } STMT_END
++#endif
+ 
+ 
+@@ -271,8 +288,18 @@ Perl_more_sv(pTHX)
+ {
+     SV* sv;
++#ifdef PERL_SV_HEAD_ADAPTER
++    /* PL_sv_root is never set, so every new_SV, the inline ones in other
++       translation units included, arrives here. The adapter keeps upstream's
++       geometry: an arena's first slot is its header, the rest are heads. */
++    sv = MUTABLE_SV(perl_svh_new(sizeof(SV), PERL_ARENA_SIZE / sizeof(SV) - 1));
++    if (!sv)
++        croak_no_mem();
++    ++PL_sv_count;
++#else
+     char *chunk;                /* must use New here to match call to */
+     Newx(chunk,PERL_ARENA_SIZE,char);  /* Safefree() in sv_free_arenas() */
+     sv_add_arena(chunk, PERL_ARENA_SIZE, 0);
+     uproot_SV(sv);
++#endif
+     return sv;
+ }
+@@ -295,4 +322,5 @@ S_del_sv(pTHX_ SV *p)
+     PERL_ARGS_ASSERT_DEL_SV;
+ 
++#ifndef PERL_SV_HEAD_ADAPTER
+     if (DEBUG_D_TEST) {
+         SV* sva;
+@@ -313,4 +341,5 @@ S_del_sv(pTHX_ SV *p)
+         }
+     }
++#endif
+     plant_SV(p);
+ }
+@@ -381,4 +410,25 @@ S_visit(pTHX_ SVFUNC_t f, const U32 flags, const U32 mask)
+     PERL_ARGS_ASSERT_VISIT;
+ 
++#ifdef PERL_SV_HEAD_ADAPTER
++    /* Only live heads, each through its current lease; a released head is
++       known from the adapter's record and is never read. The order is
++       upstream's: newest arena first, heads ascending within an arena, and
++       only the arenas that existed on entry. */
++    {
++        size_t cursor = 0;
++        const size_t limit = perl_svh_extent();
++        SV* sv;
++        PERL_UNUSED_VAR(sva);
++        while ((sv = MUTABLE_SV(perl_svh_next(&cursor, limit)))) {
++            if (SvTYPE(sv) != (svtype)SVTYPEMASK
++                    && (sv->sv_flags & mask) == flags
++                    && SvREFCNT(sv))
++            {
++                (*f)(aTHX_ sv);
++                ++visited;
++            }
++        }
++    }
++#else
+     for (sva = PL_sv_arenaroot; sva; sva = MUTABLE_SV(SvANY(sva))) {
+         const SV * const svend = &sva[SvREFCNT(sva)];
+@@ -394,4 +444,5 @@ S_visit(pTHX_ SVFUNC_t f, const U32 flags, const U32 mask)
+         }
+     }
++#endif
+     return visited;
+ }
+@@ -650,4 +701,9 @@ Perl_sv_free_arenas(pTHX)
+        contiguity of the fake ones with the corresponding real ones.) */
+ 
++#ifdef PERL_SV_HEAD_ADAPTER
++    /* There are no head arenas: the adapter's region is the process's. */
++    PERL_UNUSED_VAR(sva);
++    PERL_UNUSED_VAR(svanext);
++#else
+     for (sva = PL_sv_arenaroot; sva; sva = svanext) {
+         svanext = MUTABLE_SV(SvANY(sva));
+@@ -658,4 +714,5 @@ Perl_sv_free_arenas(pTHX)
+             Safefree(sva);
+     }
++#endif
+ 
+     {
+diff --git i/sv.h w/sv.h
+index 7b21e71..6c0b6a5 100644
+--- i/sv.h
++++ w/sv.h
+@@ -359,10 +359,47 @@ perform the upgrade if necessary.  See C<L</svtype>>.
+ 
+ #define SVTYPEMASK	0xff
++#ifdef PERL_SV_HEAD_ADAPTER
++/* A freed head's type is SVTYPEMASK, and the core reads it through pointers
++   that may be stale by design: a COP's stash, PL_curstash, PL_last_in_gv
++   restored by SAVESPTR, GvIO's own test. With released heads revoked or
++   poisoned, every type probe first asks the lifetime adapter (see
++   SvIS_FREED below) and reports SVTYPEMASK for a released head, which is
++   what upstream reads there. The argument is evaluated once, as in
++   upstream's macro. */
++int perl_svh_released(const void *head);
++PERL_STATIC_INLINE svtype
++S_svh_type(const struct STRUCT_SV *sv)
++{
++    return perl_svh_released(sv) ? (svtype)SVTYPEMASK
++                                 : (svtype)(sv->sv_flags & SVTYPEMASK);
++}
++#  define SvTYPE(sv)	S_svh_type((const struct STRUCT_SV *)(sv))
++#else
+ #define SvTYPE(sv)	((svtype)((sv)->sv_flags & SVTYPEMASK))
++#endif
+ 
+ /* Sadly there are some parts of the core that have pointers to already-freed
+    SV heads, and rely on being able to tell that they are now free. So mark
+    them all by using a consistent macro.  */
++#ifdef PERL_SV_HEAD_ADAPTER
++/* Study build (capstone/ports/perl/sv-heads). SV heads are issued and
++   released by an external lifetime adapter instead of being carved from
++   arenas and chained through their own bytes. A released head may already be
++   revoked (Capstone Sublet) or poisoned (PoisonCap), so a pointer that may
++   name one is first checked against the adapter's record, by address and
++   current lease, and the head is read only when it is still live.
++   SvTYPE above makes the same test for type probes. */
++#  ifdef DEBUG_LEAKING_SCALARS
++#    error "DEBUG_LEAKING_SCALARS walks the SV arenas, which PERL_SV_HEAD_ADAPTER replaces"
++#  endif
++void *perl_svh_new(size_t bytes, size_t per_page);
++void perl_svh_del(void *head, int reusable);
++size_t perl_svh_extent(void);
++void *perl_svh_next(size_t *cursor, size_t limit);
++#  define SvIS_FREED(sv)	UNLIKELY(perl_svh_released((const void *)(sv)) \
++                                 || ((sv)->sv_flags == SVTYPEMASK))
++#else
+ #define SvIS_FREED(sv)	UNLIKELY(((sv)->sv_flags == SVTYPEMASK))
++#endif
+ 
+ /* this is defined in this peculiar way to avoid compiler warnings.

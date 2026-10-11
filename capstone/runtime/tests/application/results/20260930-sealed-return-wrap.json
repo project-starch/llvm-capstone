@@ -1,0 +1,31 @@
+{
+  "date": "2026-09-30",
+  "scope": "Sealed-return and general capability bounds overflow follow-up with full context, signal and application gate regression",
+  "qemu_source": "capstone-qemu qemu/context-slots-on-pin 674cdab03c (tree 64554c8e22; the measured binary was built from the same tree when its commit was 7f3f45c8f8, before its message was amended)",
+  "qemu_binary_sha256": "1283cd3400d4bc5470f0ae9f557abb60f7316c86cdee4ce8cd97e7a1f36f8196",
+  "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "rootfs_sha256": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+  "firmware_sha256": "8ceee8ebebb0d7ec505461b6d27d9f7471f3f5d0c78030fc1d6762436eb0bb26",
+  "launcher_sha256": "46364b723e7a04dd9b3ac6a897c28f148d7c08d12cb7f1401fe86b04b707a1d9",
+  "module_sha256": "6ab096ce9bf8e480a0c2d04d190d1f489b41ee754b5e1b0679e6ac44d265c7bc",
+  "context_probe_image_sha256": "843ad0cd7c4d607f6d4f45e5f80381bfc336a06f1cd239589f505b8dcf6c3726",
+  "signal_contract_image_sha256": "92f77fdf1e22db28b2c2cf03fee336d2b8006ab7f2f8df6b2a1c24154037299a",
+  "application_contract_image_sha256": "9a19faf13c1d42ee43be1b127cb5a79b6f700886dd43ee288ba5675a36c7c329",
+  "unit_test": "meson test -C /tmp/capstone/threads/qemu-build test-capstone-bounds: 3/3 subtests passed",
+  "unit_test_control": "the same test compiled against the pre-fix expressions (cap.h of a53ac18e3d, plus a53ac18e3d's inline sealed-return window as a function) fails all three subtests; against 674cdab03c's cap.h all three pass",
+  "regression": {
+    "context_probe": "35/35 standard modes PASS; ctl-wfi 1/1 PASS in a second boot of the same files; total 36/36",
+    "signal_contract": "26/26 PASS",
+    "application_gate": "exit 0, 21 PASS lines"
+  },
+  "guest_modes": {
+    "ra-slot0": "PASS, cause 5 at ldc",
+    "ra-slot16": "PASS, cause 5 at ldc",
+    "ra-slot32": "PASS, cause 5 at ldc",
+    "ra-gp": "PASS, returned 42",
+    "offer-keep": "PASS",
+    "offer-replace": "PASS"
+  },
+  "guest_method": "Two capstone-vm boots with the pinned files: run-context.py (35 standard modes, including five concurrent holders and the foreign-owner case), run-signals.py and application/run.py in the first; run-context.py --only ctl-wfi in the second. The QEMU unit test directly checks addr=UINT64_MAX-15, size=16 in both bounds checks, which a guest load may also fault on later in the memory path.",
+  "prior_full_record": "20260929-context-probe-monitor.json: 36/36 on the earlier QEMU binary f5e33e6776"
+}

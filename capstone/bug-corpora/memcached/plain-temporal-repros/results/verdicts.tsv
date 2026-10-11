@@ -1,0 +1,4 @@
+case	arm	configuration	verdict	reason	evidence	bundle
+00_0d4901071c74_restart_line_freed_at_entry_but_not_cleared	virtual-malloc	virtual-mallocng	CAUGHT		cause=24 pc=0x3f8b510c7c in mct_read_probe; by probe: the fault is at the labelled probe mct_read_probe	results/2026-10-10-virtual/virtual-malloc
+01_e7793811f8c8_logger_write_to_watcher_freed_by_the_poll	virtual-malloc	virtual-mallocng	CAUGHT		cause=24 pc=0x3fb7c10c78 in mct_write_probe; by probe: the fault is at the labelled probe mct_write_probe	results/2026-10-10-virtual/virtual-malloc
+02_3bc58f6ea55a_logger_loop_condition_still_reads_the_freed_watcher	virtual-malloc	virtual-mallocng	CAUGHT		cause=24 pc=0x3f9ba90ce0 in mct_read_probe; by probe: the fault is at the labelled probe mct_read_probe	results/2026-10-10-virtual/virtual-malloc

@@ -11,6 +11,12 @@ is transferred by a **capability domain-call/return**, not by a trap. The three
 benchmark suites (CoreMark, BEEBS, RV8) use **none of this** — they are pure
 computation that returns a result via a memory marker.
 
+Applications (a musl program with `main`) do not use HostCall v0: they run on the delegated
+runtime (application ABI v2, `plans/delegation-abi.md`), where each Linux call crosses once
+into the launcher's task. The musl runtime's HostCall v0 mode was removed on 2026-09-30.
+HostCall v0 remains the transport of bare domains with their own helper: the S-mode wire
+probes and the FPGA gates.
+
 ---
 
 ## 1. What a "domain" is

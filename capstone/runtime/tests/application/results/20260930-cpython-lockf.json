@@ -1,0 +1,30 @@
+{
+ "date": "2026-09-30",
+ "change": "CPython on musl patch 0005: test_posix past test_lockf",
+ "platform": "as 20260930-fcntl-lock-pointer.json (the #144 platform, launcher 546da6eda295...)",
+ "images": {
+  "patched": {
+   "cpython_sha256": "5c544c9a3318e41f3a603bdf10234b5611dd0097f6402e836908c22ccd29b860",
+   "libc_sha256": "7d42620dcc77e72d7dd9945626df0e3b5ba9e5352c9e335f8eda7648cdb8cf44"
+  },
+  "control": {
+   "cpython_sha256": "0b55fd535043d4b8cd7dbef7056b17a2da0243f3658d752c480c3ed30d8d74d0",
+   "libc_sha256": "8bfa113e5fed1006191c9168208cfa24229c16abd8b55c9d177e10cfefecce19"
+  },
+  "note": "the cheap-rows CPython objects relinked twice by ports/common/application/build.py from the tree of #162 (on #160 and #161): the runtime is the same in both, the libc differs only by patch 0005"
+ },
+ "test_posix": {
+  "control": "faults at test_lockf after 30 ok: domain fault cause=24, the launcher reports SIGSEGV, no summary (as in 20260930-cheap-rows.json)",
+  "patched": "Ran 170 tests in 105.502s; FAILED (failures=1, errors=18, skipped=38); test_lockf ok",
+  "errors": {
+   "ENOSYS": "getresuid, getresgid, setresuid, setresgid (and their _exception tests), setgroups and initgroups (twice each), waitid, fexecve, preadv with flags",
+   "EOPNOTSUPP": "posix_fallocate (the file system), POSIX_SPAWN_RESETIDS (twice; the spawner refuses it)",
+   "CPython items": "_testcapi not built (pipe2_c_limits), makedev OverflowError on a negative argument; test_register_at_fork FAILS (no fork)"
+  },
+  "staging": "stdlib under /mnt/host/py (PYTHONHOME) and beside the image as lib/python3.13, so posix_spawn children run with -I find it; a first run without lib/ had 17 more failures (18 in all), the 17 posix_spawn tests whose child found no stdlib; each of them is ok in the run above"
+ },
+ "test_fcntl": {
+  "patched": "Ran 12 tests in 1.176s; FAILED (errors=3, skipped=3)",
+  "errors": "test_fcntl_64_bit: F_NOTIFY, not an admitted fcntl command on #144; test_lockf_exclusive and test_lockf_share: multiprocessing needs _multiprocessing, not built"
+ }
+}

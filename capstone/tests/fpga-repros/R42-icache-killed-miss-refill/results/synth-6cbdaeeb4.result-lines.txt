@@ -1,0 +1,36 @@
+# R-42 synthesis, capstone-ariane 6cbdaeeb4, run by the synth lane 2026-09-24 (sealed, exit 0, provenance
+# HEAD 6cbdaeeb43f1a713, 2h59m). Compared against 4ad0df694, the resident R-35 bitstream. Figures as
+# reported by the synth lane from the sealed artifact; the bitstream hash was re-verified on apollo.
+
+== THE QUESTION ONLY SYNTHESIS COULD ANSWER: does ready's new dependence on kill_s2 close a loop? ==
+check_timing combinational loops   6cbdaeeb4: 1      4ad0df694: 1
+loop identity (TIMING-23 arc)      ex_stage_i/lsu_i/state_q[3]_i_19 (I1->O) in BOTH -- the same loop,
+                                   so 1 -> 1 is not hiding a swap. No i_cva6_icache / kill_s2 / bp_valid
+                                   in the loop message.
+LUTLP-1 (drc_routed.rpt)           0     (control: CFGBVS-1 present in the same rule table)
+write_bitstream                    completed, 0 errors, 0 critical warnings; 241,250 nets fully routed
+-> NO NEW LOOP.
+
+== area -- neutral ==
+                    6cbdaeeb4        4ad0df694
+routed LUT          171,503 (+3)     171,500
+routed FF           93,812  (+2)     93,810
+LUTRAM              1,966            1,966
+i_cva6_icache       736 LUT / 136 FF 746 / 136
+i_frontend          2,247 / 725      2,247 / 725
+
+== timing -- the pre-registered prediction MISSED ==
+WNS                 -10.615          -8.341      (delta -2.274; predicted +-0.5)
+failing endpoints   55.23 %          51.70 %
+worst path          csr_regfile cpmp_q_reg -> issue_read_operands fu_data_q, the SAME class as
+                    4ad0df694's; 108 logic levels (115), logic 7.686 ns (8.398), route 42.524 (39.598)
+worst 500 paths through i_cva6_icache   0 of 500 in BOTH builds (control: i_wt_dcache on 500 of 500)
+failing endpoints by module   i_cva6_icache 294 -> 294 . i_frontend 385 -> 451 . i_wt_dcache 525 -> 1,601
+                              . issue_stage_i 16,584 -> 21,015
+# The loss is on paths the change does not touch, with less logic and more wire: consistent with
+# placement variance, which on this lineage reaches 3.74 ns for a functionally null change (the S2
+# null-duplication control, ISSUES.md). One build cannot separate variance from a real effect.
+# The +-0.5 ns band ignored that prior art; it was too narrow, not a refutation of the fix.
+
+== bitstream ==
+sha256 0cd45bb099a22b0636363ce7d955766803b6fd193dccc23f24478046032b8c05, 11,443,722 B

@@ -68,6 +68,15 @@ void speedtest1_probe(unsigned *res) {
     speedtest1_output_text("__CAPSTONE_SPEEDTEST1_UAF_NOTRAP__ memsys5 p[0]=");
     speedtest1_output_text(one);
     speedtest1_output_text("\n");
+    volatile int *link = (volatile int *)p;
+    int next = link[0];
+    int prev = link[1];
+    speedtest1_output_text("__MEM5_LINK__ next=");
+    speedtest1_output_uint((unsigned int)next);
+    speedtest1_output_text("\n");
+    speedtest1_output_text("__MEM5_LINK__ prev=");
+    speedtest1_output_uint((unsigned int)prev);
+    speedtest1_output_text("\n");
   } else if (SPEEDTEST1_PROBE == 3) {
     /* The grain of a free: two blocks, buddies in memsys5, one freed, the other read.
        Returns with the marker when the neighbour survives its sibling's revocation. */

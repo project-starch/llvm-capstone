@@ -1,0 +1,78 @@
+{
+  "arms": {
+    "0-0": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "748c243a431878ecd5fa4665bb227d64672b63ccc101ffe60c26205a39d89113"
+    },
+    "0-1": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "748c243a431878ecd5fa4665bb227d64672b63ccc101ffe60c26205a39d89113"
+    },
+    "1-0": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "d2695ccb17f87676a1af13f443bee22e346eebd38bfc96da424681cfb7a389ad"
+    },
+    "1-1": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "d2695ccb17f87676a1af13f443bee22e346eebd38bfc96da424681cfb7a389ad"
+    },
+    "2-0": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "556034d4f499ceab2f911b498cf08f42078249ca1f5f950820bf2651df024655"
+    },
+    "2-1": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "556034d4f499ceab2f911b498cf08f42078249ca1f5f950820bf2651df024655"
+    },
+    "3-0": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "f0a8c40bf5b824a20de1685665f57e473e5b4dc3277901f06a1b4cf6a40f4139"
+    },
+    "3-1": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "f0a8c40bf5b824a20de1685665f57e473e5b4dc3277901f06a1b4cf6a40f4139"
+    },
+    "4-0": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "63b28ade8c3692ff57f175b6fb92104257896ffd6e549f0c94df5eec50a55b7a"
+    },
+    "4-1": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "63b28ade8c3692ff57f175b6fb92104257896ffd6e549f0c94df5eec50a55b7a"
+    },
+    "5-0": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "1e8cfcf2fc55f49d0e388f1bf7b74db99a0ad165d547b9015f21c6c1edf7d205"
+    },
+    "5-1": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "1e8cfcf2fc55f49d0e388f1bf7b74db99a0ad165d547b9015f21c6c1edf7d205"
+    },
+    "6-0": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "c8b318310005fe2bb08434ca694f2da454594bc15733552da9958f815977130a"
+    },
+    "6-1": {
+      "defects.dom": "3ac123844c50ac6a8824ff2a68cf136e759504948acad94e3c3a4dab11ebe68f",
+      "host.user": "fbeca4d5b794ccd240961708739df11d3d852ee5ea2bb179af5d83dde57373ca",
+      "trace.bin": "c8b318310005fe2bb08434ca694f2da454594bc15733552da9958f815977130a"
+    }
+  },
+  "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+  "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+  "arms_total": 14,
+  "arms_passed": 14
+}

@@ -54,7 +54,9 @@ cheribsd|image)
       --kernel-config CHERI-PURECAP-QEMU-POISON --cheribsd/no-build-tests \
       --cheribsd/build-options "WITHOUT_MAN=1 WITHOUT_ZFS=1 WITHOUT_CDDL=1 WITHOUT_MAIL=1 WITHOUT_SENDMAIL=1 WITHOUT_EXAMPLES=1 WITHOUT_LOCALES=1 WITHOUT_NLS=1"
   else
-    "${PYTHON:-python3}" "$CHERIBUILD" disk-image-riscv64-purecap "${common[@]}"
+    # POISONCAP_IMAGE_ARGS: extra cheribuild options for the image, e.g. --disk-image/no-include-gdb
+    # on a host without makeinfo (the in-image gdb is not part of what the runs measure).
+    "${PYTHON:-python3}" "$CHERIBUILD" disk-image-riscv64-purecap "${common[@]}" ${POISONCAP_IMAGE_ARGS:-}
   fi
   ;;
 *) echo "Unknown stage: $STAGE" >&2; exit 2;;

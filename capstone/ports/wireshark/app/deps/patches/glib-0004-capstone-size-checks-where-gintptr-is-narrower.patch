@@ -1,0 +1,61 @@
+CAPSTONE (tshark app port): four static assertions assume gintptr is as wide as a pointer.
+Under __CAPSTONE__ the struct checks (GHashTableIter, GVariantBuilder, GVariantDict) become
+'large enough', and the gintptr==pointer checks go: patch 0001 makes gintptr an address by design.
+
+--- a/glib/ghash.c
++++ b/glib/ghash.c
+@@ -237,7 +237,13 @@
+   gintptr      version;
+ } RealIter;
+ 
++#ifdef __CAPSTONE__
++/* CAPSTONE: gintptr is 8 bytes and gpointer 16, so the two layouts pad differently. The public
++ * struct only has to hold the real one. */
++G_STATIC_ASSERT (sizeof (GHashTableIter) >= sizeof (RealIter));
++#else
+ G_STATIC_ASSERT (sizeof (GHashTableIter) == sizeof (RealIter));
++#endif
+ G_STATIC_ASSERT (G_ALIGNOF (GHashTableIter) >= G_ALIGNOF (RealIter));
+ 
+ /* Each table size has an associated prime modulo (the first prime
+--- a/glib/gvariant.c
++++ b/glib/gvariant.c
+@@ -3224,7 +3224,12 @@
+ 
+ /* Just to make sure that by adding a union to GVariantBuilder, we
+  * didn't accidentally change ABI. */
++#ifdef __CAPSTONE__
++/* CAPSTONE: a new target has no ABI to preserve, and its gpointer is wider than guintptr. */
++G_STATIC_ASSERT (sizeof (GVariantBuilder) >= sizeof (guintptr[16]));
++#else
+ G_STATIC_ASSERT (sizeof (GVariantBuilder) == sizeof (guintptr[16]));
++#endif
+ 
+ static gboolean
+ ensure_valid_builder (GVariantBuilder *builder)
+@@ -3911,7 +3916,11 @@
+ 
+ /* Just to make sure that by adding a union to GVariantDict, we didn't
+  * accidentally change ABI. */
++#ifdef __CAPSTONE__
++G_STATIC_ASSERT (sizeof (GVariantDict) >= sizeof (guintptr[16]));   /* as GVariantBuilder above */
++#else
+ G_STATIC_ASSERT (sizeof (GVariantDict) == sizeof (guintptr[16]));
++#endif
+ 
+ static gboolean
+ ensure_valid_dict (GVariantDict *dict)
+--- a/glib/glib-init.c
++++ b/glib/glib-init.c
+@@ -87,8 +87,11 @@
+ G_STATIC_ASSERT (sizeof (guint64) * CHAR_BIT == 64);
+ 
+ G_STATIC_ASSERT (sizeof (void *) == GLIB_SIZEOF_VOID_P);
++#ifndef __CAPSTONE__
++/* CAPSTONE: false by design there (patch 0001): gintptr holds an address, not a pointer. */
+ G_STATIC_ASSERT (sizeof (gintptr) == sizeof (void *));
+ G_STATIC_ASSERT (sizeof (guintptr) == sizeof (void *));
++#endif
+ 
+ G_STATIC_ASSERT (sizeof (short) == sizeof (gshort));
+ G_STATIC_ASSERT (G_MINSHORT == SHRT_MIN);

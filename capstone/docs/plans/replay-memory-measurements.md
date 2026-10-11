@@ -84,4 +84,4 @@ The next comparative arm needs a real nested-pool temporal adapter. Preserve
 pool lifecycle semantics and do not substitute libc allocation/free for pool
 reuse without recording the policy change. Require matching stale-lease
 controls before interpreting memory differences as the cost of equivalent
-protection. Enabling outer-heap revocation alone does not meet this gate.
+protection. Enabling system-allocator revocation alone does not meet this gate.

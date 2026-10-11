@@ -1,0 +1,177 @@
+# Result lines, as run-oracle.sh and run-safety.py printed them. Guest tools in every boot: capstone-exec
+# 63e8a39a (the launcher of PR #176), capstone-job 5a160efa. Server flags on both sides: -m 48 -o no_slab_reassign.
+
+## oracle, MC_SLAB_SUBLET_MODE=0, one boot, 3 runs
+domain memcached.dom 90d0da599a2ffd01
+null      PASS two native runs identical (1931207 bytes)
+positive  PASS perturbing the value changes the transcript
+positive  PASS perturbing the cas changes the transcript
+oracle1   PASS [shrink] domain transcript identical to native (1931207 bytes)
+identity1 PASS native 64, domain 128
+status1   PASS native 'stop=TERM exit=0', domain {"version":1,"kind":"exit","value":0}
+stderr1   PASS identical (0 bytes)
+stop: native stop=TERM exit=0 stop_seconds=0.89 domain stop=TERM exit=0 stop_seconds=4.37
+oracle2   PASS [shrink] domain transcript identical to native (1931207 bytes)
+identity2 PASS native 64, domain 128
+status2   PASS native 'stop=TERM exit=0', domain {"version":1,"kind":"exit","value":0}
+stderr2   PASS identical (0 bytes)
+stop: native stop=TERM exit=0 stop_seconds=0.89 domain stop=TERM exit=0 stop_seconds=4.37
+oracle3   PASS [shrink] domain transcript identical to native (1931207 bytes)
+identity3 PASS native 64, domain 128
+status3   PASS native 'stop=TERM exit=0', domain {"version":1,"kind":"exit","value":0}
+stderr3   PASS identical (0 bytes)
+stop: native stop=TERM exit=0 stop_seconds=0.89 domain stop=TERM exit=0 stop_seconds=4.42
+
+## oracle, MC_SLAB_SUBLET_MODE=1, one boot, 3 runs
+domain memcached.dom 90d0da599a2ffd01
+null      PASS two native runs identical (1931207 bytes)
+positive  PASS perturbing the value changes the transcript
+positive  PASS perturbing the cas changes the transcript
+oracle1   PASS [shrink] domain transcript identical to native (1931207 bytes)
+identity1 PASS native 64, domain 128
+status1   PASS native 'stop=TERM exit=0', domain {"version":1,"kind":"exit","value":0}
+stderr1   PASS identical (0 bytes)
+stop: native stop=TERM exit=0 stop_seconds=0.89 domain stop=TERM exit=0 stop_seconds=4.38
+oracle2   PASS [shrink] domain transcript identical to native (1931207 bytes)
+identity2 PASS native 64, domain 128
+status2   PASS native 'stop=TERM exit=0', domain {"version":1,"kind":"exit","value":0}
+stderr2   PASS identical (0 bytes)
+stop: native stop=TERM exit=0 stop_seconds=0.89 domain stop=TERM exit=0 stop_seconds=4.38
+oracle3   PASS [shrink] domain transcript identical to native (1931207 bytes)
+identity3 PASS native 64, domain 128
+status3   PASS native 'stop=TERM exit=0', domain {"version":1,"kind":"exit","value":0}
+stderr3   PASS identical (0 bytes)
+stop: native stop=TERM exit=0 stop_seconds=0.89 domain stop=TERM exit=0 stop_seconds=4.39
+
+## report run, MC_SLAB_SUBLET_MODE=1 MC_SLAB_SUBLET_REPORT=1 (stderr differs from native by this one line, as intended)
+oracle1   PASS [shrink] domain transcript identical to native (1931207 bytes)
+stderr1   FAIL native 0 bytes, domain 143 bytes
+MCAPP-SLAB-SUBLET mode=1 pages=9 chunk_releases=20 chunk_reuses=20 object_releases=127 object_reuses=111 backing_used=9699776 metadata=1305600
+
+## safety slabsublet0, repeat 1 (safety slabsublet0: image 2193cf9e70400fa9 harness 5457112b41823ad8)
+fx1: AS PREDICTED: RETURN 100001  (predicted RETURN 100001; LEN 64; exit 1, len=64)
+fx2: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx3: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx4: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx5: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx6: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx7: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx8: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+
+## safety slabsublet1, repeat 1 (safety slabsublet1: image 2193cf9e70400fa9 harness 5457112b41823ad8)
+fx1: AS PREDICTED: RETURN 100001  (predicted RETURN 100001; LEN 64; exit 1, len=64)
+fx2: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx3: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx4: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx5: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx6: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx7: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx8: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## safety slabsublet0, repeat 2 (safety slabsublet0: image 2193cf9e70400fa9 harness 5457112b41823ad8)
+fx1: AS PREDICTED: RETURN 100001  (predicted RETURN 100001; LEN 64; exit 1, len=64)
+fx2: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx3: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx4: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx5: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx6: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx7: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx8: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+
+## safety slabsublet1, repeat 2 (safety slabsublet1: image 2193cf9e70400fa9 harness 5457112b41823ad8)
+fx1: AS PREDICTED: RETURN 100001  (predicted RETURN 100001; LEN 64; exit 1, len=64)
+fx2: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx3: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx4: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx5: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx6: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx7: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx8: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## safety slabsublet0, repeat 3 (safety slabsublet0: image 2193cf9e70400fa9 harness 5457112b41823ad8)
+fx1: AS PREDICTED: RETURN 100001  (predicted RETURN 100001; LEN 64; exit 1, len=64)
+fx2: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx3: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx4: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx5: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx6: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx7: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx8: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+
+## safety slabsublet1, repeat 3 (safety slabsublet1: image 2193cf9e70400fa9 harness 5457112b41823ad8)
+fx1: AS PREDICTED: RETURN 100001  (predicted RETURN 100001; LEN 64; exit 1, len=64)
+fx2: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx3: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=64)
+fx4: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx5: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx6: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=64)
+fx7: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx8: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## guard, oracle image 90d0da59 with no MC_SLAB_SUBLET_MODE in the environment, one run
+server env: none
+mc-harness: server exited before listening
+harness rc=3
+oracle1   FAIL [slabsublet] the domain run left no transcript
+domain stderr: MCAPP-SLAB-SUBLET fail 903
+job: {"version":1,"kind":"exit","value":97}
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet0, repeat 1 (safety slabsublet0: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+fx11: AS PREDICTED: RETURN b0015b  (predicted RETURN b0015b; exit 91, len=None)
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet1, repeat 1 (safety slabsublet1: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx11: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet0, repeat 2 (safety slabsublet0: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+fx11: AS PREDICTED: RETURN b0015b  (predicted RETURN b0015b; exit 91, len=None)
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet1, repeat 2 (safety slabsublet1: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx11: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet0, repeat 3 (safety slabsublet0: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+fx11: AS PREDICTED: RETURN b0015b  (predicted RETURN b0015b; exit 91, len=None)
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet1, repeat 3 (safety slabsublet1: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx11: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## fixture 11's own lines, slabsublet0 repeat 1 (both modes print the same addresses)
+MCAPP-FIX 11 begin
+MCAPP-FIX 11 item a header-class=3 chunk-class=37 chunk-size=524208
+MCAPP-FIX 11 a-header cursor=cc0fff00 bounds=[cc0fff00,cc0fffd0) len-from-cursor=208
+MCAPP-FIX 11 a cursor=cc180042 bounds=[cc180000,cc200000) len-from-cursor=524222
+MCAPP-FIX 11 b cursor=cc180042 bounds=[cc180000,cc200000) len-from-cursor=524222
+MCAPP-FIX 11 same-address=1
+MCAPP-FIX 11 target=cc180042
+MCAPP-FIX 11 touch
+MCAPP-FIX 11 returned a[0]=5b (0x5b = the NEW item's chunk byte)
+MCAPP-FIX 11 mark=b0015b
+
+## hook count, slabsublet0 with MC_SLAB_SUBLET_REPORT=1, fixtures 10 and 11, one boot (image 286e2211)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+fx11: AS PREDICTED: RETURN b0015b  (predicted RETURN b0015b; exit 91, len=None)
+fx10 stderr: MCAPP-SLAB-SUBLET mode=0 pages=1 chunk_releases=1 chunk_reuses=1 object_releases=1 object_reuses=0 backing_used=1081456 metadata=857472
+fx11 stderr: MCAPP-SLAB-SUBLET mode=0 pages=2 chunk_releases=2 chunk_reuses=2 object_releases=1 object_reuses=0 backing_used=2130032 metadata=857984

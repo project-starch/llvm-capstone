@@ -1,0 +1,24 @@
+cv.h: PoisonPADLIST knows a 16-byte pointer (capstone).
+
+The DEBUGGING-only poison macro has arms for 8- and 4-byte pointers and an
+#error otherwise, which stops the build of ext/re -- the one extension that
+compiles with -DDEBUGGING. A 16-byte arm is added; the poison is an address
+pattern, and an integer turned into a pointer carries no capability, so a use of
+the poisoned field faults, which is what poisoning is for.
+
+--- a/cv.h	2023-11-28 19:57:24.000000000 +0800
++++ b/cv.h	2026-09-26 14:57:22.689454535 +0800
+@@ -79,6 +79,13 @@
+ #  elif PTRSIZE == 4
+ #    define PoisonPADLIST(sv) \
+         (((XPVCV*)MUTABLE_PTR(SvANY(sv)))->xcv_padlist_u.xcv_padlist = (PADLIST *)0xEFEFEFEF)
++#  elif PTRSIZE == 16
++/* capstone: a 16-byte pointer. The poison is an address pattern, and an integer
++   turned into a pointer here carries no capability, so any use of the poisoned
++   field faults -- which is what poisoning asks for. Only DEBUGGING builds reach
++   this, and only ext/re builds that way. */
++#    define PoisonPADLIST(sv) \
++        (((XPVCV*)MUTABLE_PTR(SvANY(sv)))->xcv_padlist_u.xcv_padlist = (PADLIST *)UINT64_C(0xEFEFEFEFEFEFEFEF))
+ #  else
+ #    error unknown pointer size
+ #  endif

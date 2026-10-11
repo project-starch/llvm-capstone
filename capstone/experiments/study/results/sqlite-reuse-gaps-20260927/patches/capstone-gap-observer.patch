@@ -1,0 +1,86 @@
+--- a/sqlite3.c
++++ b/sqlite3.c
+@@ -23048,10 +23048,12 @@
+ static unsigned char study_starts[STUDY_MAX_ATOMS/8];
+ static unsigned long study_ever_atoms, study_window_atoms;
+ static unsigned long study_allocs, study_reused_starts, study_unit;
++static void study_gap_allocate(unsigned long);
+ static void study_cover(unsigned long first, unsigned long count){
+   unsigned long j;
+   if(first+count>STUDY_MAX_ATOMS) abort();
+   study_allocs++;
++  study_gap_allocate(first);
+   if(study_starts[first/8] & (1u<<(first%8))) study_reused_starts++;
+   study_starts[first/8] |= 1u<<(first%8);
+   for(j=first;j<first+count;j++){
+@@ -23060,6 +23062,39 @@
+     if(!(study_window[j/8]&mask)) study_window_atoms++;
+     study_ever[j/8] |= mask;
+     study_window[j/8] |= mask;
++  }
++}
++
++/* Release-to-next-allocation gap at the same arena start, in allocation
++** events. The table contains integers only and survives workload units. */
++static unsigned int study_last_release[STUDY_MAX_ATOMS];
++static unsigned long study_all_allocs, study_gap_reuses;
++static unsigned long study_gap_bins[32];
++static void study_gap_release(unsigned long first){
++  if(first>=(unsigned long)mem5.nBlock || !study_all_allocs) abort();
++  study_last_release[first]=(unsigned int)study_all_allocs;
++}
++static void study_gap_allocate(unsigned long first){
++  unsigned long gap, bin=0;
++  if(study_all_allocs>=0xffffffffUL) abort();
++  study_all_allocs++;
++  if(study_last_release[first]){
++    gap=study_all_allocs-study_last_release[first];
++    if(!gap) abort();
++    while(gap>1){gap>>=1;bin++;}
++    if(bin>=32) abort();
++    study_gap_bins[bin]++;
++    study_gap_reuses++;
++    study_last_release[first]=0;
++  }
++}
++static void study_gap_emit(void){
++  unsigned long i;
++  study_printf("STUDY-GAP-TOTAL unit=%lu allocs=%lu reuses=%lu\n",
++    study_unit,study_all_allocs,study_gap_reuses);
++  for(i=0;i<32;i+=2){
++    study_printf("STUDY-GAP unit=%lu pair=%lu a=%lu b=%lu\n",
++      study_unit,i/2,study_gap_bins[i],study_gap_bins[i+1]);
+   }
+ }
+ 
+@@ -23312,6 +23347,7 @@
+ */
+ static void memsys5Free(void *pPrior){
+   assert( pPrior!=0 );
++  study_gap_release((unsigned long)(((u8 *)pPrior-mem5.zPool)/mem5.szAtom));
+   memsys5Enter();
+   memsys5FreeUnsafe(pPrior);
+   memsys5Leave();  
+@@ -23533,13 +23569,16 @@
+     }
+   }
+   if(f+(unsigned long)study_live!=(unsigned long)mem5.nBlock*mem5.szAtom) abort();
+-  study_printf("STUDY-LEDGER unit=%lu phase=%d live=%lu held=%lu peak_held=%lu quarantine=%lu metadata=%lu free=%lu largest_free=%lu pool=%lu ever=%lu window=%lu allocs=%lu reused_starts=%lu oom=%lu observer=%lu\n",
+-    study_unit,phase,(unsigned long)study_live,(unsigned long)study_live,
+-    (unsigned long)study_peak,(unsigned long)(study_live-study_live),m,f,largest,
+-    (unsigned long)mem5.nBlock*mem5.szAtom,study_ever_atoms*mem5.szAtom,
+-    study_window_atoms*mem5.szAtom,study_allocs,study_reused_starts,
+-    (unsigned long)study_oom,(unsigned long)(sizeof(study_ever)+sizeof(study_window)+sizeof(study_starts)));
++  study_printf("STUDY-LEDGER unit=%lu phase=%d live=%lu held=%lu peak_held=%lu",
++    study_unit,phase,(unsigned long)study_live,(unsigned long)study_live,(unsigned long)study_peak);
++  study_printf(" quarantine=%lu metadata=%lu free=%lu largest_free=%lu pool=%lu",
++    (unsigned long)(study_live-study_live),m,f,largest,(unsigned long)mem5.nBlock*mem5.szAtom);
++  study_printf(" ever=%lu window=%lu allocs=%lu reused_starts=%lu oom=%lu observer=%lu\n",
++    study_ever_atoms*mem5.szAtom,study_window_atoms*mem5.szAtom,study_allocs,
++    study_reused_starts,(unsigned long)study_oom,
++    (unsigned long)(sizeof(study_ever)+sizeof(study_window)+sizeof(study_starts)+sizeof(study_last_release)+sizeof(study_gap_bins)+sizeof(study_all_allocs)+sizeof(study_gap_reuses)));
+   
++  if(phase<0) study_gap_emit();
+ }
+ 
+ #endif /* SQLITE_ENABLE_MEMSYS5 */

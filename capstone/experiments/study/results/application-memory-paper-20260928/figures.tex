@@ -1,0 +1,36 @@
+% Use with graphicx; set this directory before including this file.
+\providecommand{\appMemoryFigureRoot}{.}
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{\appMemoryFigureRoot/01-reuse-and-control.pdf}
+  \caption{Policies differ: SQLite corrected queue; mruby slot exhaustion; FFmpeg eager reuse. Not common defaults. Reuse in complete applications: SQLite 3.22.0 speedtest1 main (17 units, size 1), mruby 4.0.0-rc2 AO (width 16), and FFmpeg 9.0.1 (adapted FATE resolution-change input). Top: cumulative same-start reissues divided by all issues, at log-bin upper edges; immediate reuse has gap one. Bottom: each spatial control minus its protected arm, in percentage points. Positive values mean less prompt reuse with protection. Three processes per arm have identical bins. Sublet preserves SQLite reuse and closely tracks mruby; all four FFmpeg curves coincide. These are allocation gaps, not elapsed time, physical working set or total memory. All eight inputs appear in Figure~\ref{fig:app-memory-05-all-workloads-reuse}.}
+  \label{fig:app-memory-01-reuse-and-control}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{\appMemoryFigureRoot/02-sqlite-memory.pdf}
+  \caption{PoisonCap: published thresholds with full-queue correction; outer libc revocation disabled. SQLite 3.22.0, repeated complete speedtest1 main workloads, size 1 and lookaside disabled. Allocator state persists across one warmup (shaded) and 16 measured units; each unit opens and closes a database. Both metrics are divided by their own platform's original-layout control at the same unit. Address coverage is a cumulative interval union. Selected bytes are the exact within-unit peak of live plus quarantined spans and allocator tables; platform node/kernel storage is excluded. Three repetitions coincide. Sublet avoids address expansion but has the higher selected peak-byte ratio. PoisonCap uses the corrected quarantine path.}
+  \label{fig:app-memory-02-sqlite-memory}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{\appMemoryFigureRoot/03-mruby-memory.pdf}
+  \caption{PoisonCap: custom free-slot-exhaustion policy; outer libc revocation enabled. mruby 4.0.0-rc2 executes the upstream AO body at widths 8 and 16 (upstream default: 64). The four arms issue 217,070 and 915,981 GC slots respectively. (a) Peak GC groups remain 6/6/6/9 over the two measured sizes. (b) Selected GC bytes relative to each arm's own spatial control, at the peak and after rendering. The counts include per-group metadata and observers; PoisonCap also includes mapping rounding. Sublet retains more groups than its control after AO 16. Baseline layouts differ, so these ratios do not rank full adaptation cost. Three repetitions coincide. Nodes and revocation storage are excluded.}
+  \label{fig:app-memory-03-mruby-memory}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{\appMemoryFigureRoot/04-ffmpeg-snapshots.pdf}
+  \caption{PoisonCap: custom eager-reuse policy; outer libc revocation disabled. FFmpeg 9.0.1: selected PoisonCap adapter snapshot backing in two adapted FATE inputs and repeated 30-frame streams. Bars show temporal-mode high-water bytes; spatial-mode peaks and final temporal-mode bytes are zero. Three processes per cell coincide. The snapshot peak stays at 35.4 KiB across 1, 4 and 16 repeated streams; it depends on the input and does not grow with completed frames in this range. All four application arms have identical reuse bins for each input. This component is neither total memory nor a universal PoisonCap lower bound; adapted FATE inputs are not official FATE scores.}
+  \label{fig:app-memory-04-ffmpeg-snapshots}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{\appMemoryFigureRoot/05-all-workloads-reuse.pdf}
+  \caption{Policies differ: SQLite corrected queue; mruby slot exhaustion; FFmpeg eager reuse. Not common defaults. All eight admitted workloads, using the same four styles, axes, bin edges and all-issues denominator as Figure~\ref{fig:app-memory-01-reuse-and-control}. Every curve represents three complete application processes with identical histograms (96 processes total). Work sizes and allocator boundaries remain separate. The main-panel selection is exploratory, not preregistered. The artifact retains counts, paired differences, input hashes, source-campaign methods and successful raw-log revalidation. A plateau is the observed reuse fraction, not an estimate of eventual reuse of every released object.}
+  \label{fig:app-memory-05-all-workloads-reuse}
+\end{figure*}

@@ -1,0 +1,29 @@
+# FFmpeg pool corpus, fixtures 40-47, on BOTH app-port arms, QEMU, 2026-10-04.
+# 46/47 are case 3's sublet-port arm, measured here for the first time; 40-45 are NEW rows
+# superseding results/../bug-corpora/.../20260929-qemu-sublet-port (the driver changed:
+# ffapp_corpus.c now creates g_refpool, or case 3 does not link).
+# runner: ports/common/application/run-fixtures-9p.py; judge: the corpus's own
+# runners/sublet-port-verdict.py, which attributes each fault to a case.c line.
+# ONE BOOT per arm; a domain fault SIGSEGVs the launcher, not the guest.
+
+## poolstock
+fx40: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED stale pointer reads the new owner's payload
+fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued
+fx42: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED a record past ref_count still names reissued storage
+fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list
+fx44: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner
+fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames
+fx46: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED the decoder's side table went back to the pool and was reissued
+fx47: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED SHORT_REF keeps the frame alive, so the tables stay with it
+
+## poolsublet
+fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued
+fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list
+fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames
+fx47: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED SHORT_REF keeps the frame alive, so the tables stay with it
+fx40: AS PREDICTED  predicted: FAULT 85,86,89  got: cause 24 at image 0x2164c, case.c:85, value_hi 13b89602540
+fx42: AS PREDICTED  predicted: FAULT 48,49,52  got: cause 24 at image 0x21314, case.c:48, value_hi a3890033c0
+fx44: AS PREDICTED  predicted: FAULT 33  got: cause 24 at image 0x21200, case.c:33, value_hi 14189502500
+fx46: AS PREDICTED  predicted: FAULT 104,105,108  got: cause 24 at image 0x213ec, case.c:104, value_hi 1198a902a20
+
+# poolstock 8/8 and poolsublet 8/8 AS PREDICTED; both external verdicts exit 0

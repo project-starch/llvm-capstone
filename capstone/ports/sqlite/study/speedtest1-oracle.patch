@@ -1,0 +1,143 @@
+--- a/speedtest1.c
++++ b/speedtest1.c
+@@ -49,6 +49,12 @@
+ #include <stdarg.h>
+ #include <string.h>
+ #include <ctype.h>
++#ifdef SQLITE_STUDY_CAPSTONE_MEMSYS5
++void sqlite3_study_snapshot(unsigned long *v);
++#endif
++#ifdef SQLITE_STUDY_MEMSYS5
++void sqlite3_study_report(int phase);
++#endif
+ #ifndef _WIN32
+ # include <unistd.h>
+ #else
+@@ -84,6 +90,33 @@
+   char zResult[3000];        /* Text of the current result */
+ } g;
+ 
++#ifdef SQLITE_STUDY_ORACLE
++/* FNV-1a over every SQL result cell, with row, column and NULL delimiters.
++ * Main does not use upstream --verify as a SQL-result oracle. */
++static unsigned long long study_hash;
++static unsigned long long study_rows;
++static int study_phase;
++static void study_byte(unsigned char c){
++  study_hash = (study_hash ^ c) * 1099511628211ULL;
++}
++static void study_cell(const char *z){
++  const unsigned char *p = (const unsigned char *)z;
++  if( !p ){ study_byte(0); return; }
++  study_byte(1);
++  while( *p ) study_byte(*p++);
++  study_byte(0);
++}
++static int study_exec_row(void *unused, int n, char **values, char **names){
++  int i;
++  (void)unused; (void)names;
++  study_byte(0xff);
++  study_byte((unsigned char)n);
++  for(i=0; i<n; i++) study_cell(values[i]);
++  study_rows++;
++  return 0;
++}
++#endif
++
+ /* Return " TEMP" or "", as appropriate for creating a table.
+ */
+ static const char *isTemp(int N){
+@@ -300,6 +333,11 @@
+   }
+   sqlite3_free(zName);
+   g.nResult = 0;
++#ifdef SQLITE_STUDY_ORACLE
++  study_hash = 14695981039346656037ULL;
++  study_rows = 0;
++  study_phase = iTestNum;
++#endif
+   g.iStart = speedtest1_timestamp();
+   g.x = 0xad131d0b;
+   g.y = 0x44f9eac8;
+@@ -316,6 +354,21 @@
+     sqlite3_finalize(g.pStmt);
+     g.pStmt = 0;
+   }
++#ifdef SQLITE_STUDY_ORACLE
++  if( !g.bSqlOnly ) printf("STUDY-ORACLE phase=%d rows=%llu hash=%016llx\n",
++                          study_phase, study_rows, study_hash);
++#endif
++#ifdef SQLITE_STUDY_MEMSYS5
++  if( !g.bSqlOnly ) sqlite3_study_report(study_phase);
++#endif
++#ifdef SQLITE_STUDY_CAPSTONE_MEMSYS5
++  if( !g.bSqlOnly ){
++    unsigned long v[5];
++    sqlite3_study_snapshot(v);
++    printf("STUDY-CAP phase=%d live=%lu peak=%lu oom=%lu blocks=%lu atom=%lu\n",
++           study_phase, v[0], v[1], v[2], v[3], v[4]);
++  }
++#endif
+ }
+ 
+ /* Report end of testing */
+@@ -364,7 +417,13 @@
+     printSql(zSql);
+   }else{
+     char *zErrMsg = 0;
+-    int rc = sqlite3_exec(g.db, zSql, 0, 0, &zErrMsg);
++    int rc = sqlite3_exec(g.db, zSql,
++#ifdef SQLITE_STUDY_ORACLE
++                          study_exec_row,
++#else
++                          0,
++#endif
++                          0, &zErrMsg);
+     if( zErrMsg ) fatal_error("SQL error: %s\n%s\n", zErrMsg, zSql);
+     if( rc!=SQLITE_OK ) fatal_error("exec error: %s\n", sqlite3_errmsg(g.db));
+   }
+@@ -398,10 +457,21 @@
+   if( g.bSqlOnly ) return;
+   assert( g.pStmt );
+   g.nResult = 0;
+-  while( sqlite3_step(g.pStmt)==SQLITE_ROW ){
++  for(;;){
++    int stepRc = sqlite3_step(g.pStmt);
++    if( stepRc==SQLITE_DONE ) break;
++    if( stepRc!=SQLITE_ROW ) fatal_error("step error: %s\n", sqlite3_errmsg(g.db));
+     n = sqlite3_column_count(g.pStmt);
++#ifdef SQLITE_STUDY_ORACLE
++    study_byte(0xff);
++    study_byte((unsigned char)n);
++    study_rows++;
++#endif
+     for(i=0; i<n; i++){
+       const char *z = (const char*)sqlite3_column_text(g.pStmt, i);
++#ifdef SQLITE_STUDY_ORACLE
++      study_cell(sqlite3_column_type(g.pStmt, i)==SQLITE_NULL ? 0 : z);
++#endif
+       if( z==0 ) z = "nil";
+       len = (int)strlen(z);
+       if( g.nResult+len<sizeof(g.zResult)-2 ){
+@@ -420,7 +490,8 @@
+   }else
+ #endif
+   {
+-    sqlite3_reset(g.pStmt);
++    int resetRc = sqlite3_reset(g.pStmt);
++    if( resetRc!=SQLITE_OK ) fatal_error("reset error: %s\n", sqlite3_errmsg(g.db));
+   }
+   speedtest1_shrink_memory();
+ }
+@@ -770,9 +841,11 @@
+   speedtest1_end_test();
+ 
+ 
++#ifndef SQLITE_STUDY_SKIP_VACUUM
+   speedtest1_begin_test(200, "VACUUM");
+   speedtest1_exec("VACUUM");
+   speedtest1_end_test();
++#endif
+ 
+ 
+   speedtest1_begin_test(210, "ALTER TABLE ADD COLUMN, and query");

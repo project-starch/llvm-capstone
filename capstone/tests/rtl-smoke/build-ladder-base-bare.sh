@@ -54,6 +54,11 @@ TBL="$OBJ_DIR/ladder_rungs_table.h"
 
 OBJS=()
 : > "$OUT_DIR/optlevels.txt"
+# BASE_EXTRA_CFLAGS: opt-in, empty by default (so default builds are unchanged). Added 2026-09-23
+# for the loop-alignment re-measurement (phase 9 of ladder-revival-2026-09-22): the capability
+# half takes DOMAIN_EXTRA_CFLAGS, and a code-layout flag must be applied to BOTH halves or the
+# ratio measures the flag. Recorded next to optlevels.txt so a one-sided build is visible.
+echo "${BASE_EXTRA_CFLAGS:-}" > "$OUT_DIR/extraflags.txt"
 for SPEC in "${RUNGS[@]}"; do
   # Field 5 (per-rung domain knobs) is deliberately DISCARDED here: DOMAIN_WINDOW
   # and LADDER_NO_RO_COPY are properties of the Capstone gp-captable glue, and the
@@ -75,6 +80,7 @@ for SPEC in "${RUNGS[@]}"; do
     -ffreestanding -fno-stack-protector -fno-jump-tables "$OPT" \
     -I"$LAD" -I"$SCRIPT_DIR" \
     -DLADDER_KERNEL_HDR="\"$HDR\"" -DLADDER_COMPUTE="$FN" -DLADDER_EXPORT="base_$R" \
+    ${BASE_EXTRA_CFLAGS:-} \
     -c "$SCRIPT_DIR/ladder_base_kern.c" -o "$OBJ_DIR/base_$R.o"
   OBJS+=("$OBJ_DIR/base_$R.o")
   echo "$R $OPT" >> "$OUT_DIR/optlevels.txt"

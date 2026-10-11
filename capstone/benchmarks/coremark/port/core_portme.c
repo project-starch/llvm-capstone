@@ -41,6 +41,25 @@ void portable_free(void *p) {
   (void)p;
 }
 
+#ifdef CAPSTONE_CORE_ICOUNT
+/* Opt-in cost measurement: ticks are QEMU's retired-instruction count (csrdicount, exact only
+ * under -icount shift=0), so "Total ticks" is the dynamic instruction count of the timed
+ * region. Default builds keep the constant clock below. */
+static inline CORE_TICKS capstone_icount(void) {
+  unsigned long v;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x48, %0, x0, x0" : "=r"(v) : : "memory");
+  return (CORE_TICKS)v;
+}
+
+void start_time(void) {
+  g_start_time = capstone_icount();
+  g_stop_time = g_start_time;
+}
+
+void stop_time(void) {
+  g_stop_time = capstone_icount();
+}
+#else
 void start_time(void) {
   g_start_time = 0;
   g_stop_time = 0;
@@ -49,6 +68,7 @@ void start_time(void) {
 void stop_time(void) {
   g_stop_time = 10000;
 }
+#endif
 
 CORE_TICKS get_time(void) {
   return g_stop_time - g_start_time;

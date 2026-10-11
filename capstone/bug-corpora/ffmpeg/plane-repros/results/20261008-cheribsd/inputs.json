@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-08",
+  "runner": "bug-corpora/ffmpeg/plane-repros/runners/run-cheribsd.sh over ports/common/host/cheribsd/run.py",
+  "runtime_revocation": "on",
+  "guest_default_revocation": "preserved",
+  "cases": 1,
+  "caught": [],
+  "not_caught": [
+    0
+  ],
+  "platform": "stock CheriBSD purecap built on this host (kernel CHERI-PURECAP-QEMU, releng/26.07-88f39900c329 = pins.env CHERIBSD_REV)",
+  "controls": {
+    "cheribsd-abi": "CHERI_ABI pointer_bytes=16 runtime_revocation=1 -- PASS",
+    "cheribsd-bounds": "CHERI_BOUNDARY_READY, SIGPROT exit 162 -- PASS"
+  },
+  "prediction": {
+    "written": "before the run, in runners/run-cheribsd.sh",
+    "predicted": "completes, NOT caught",
+    "measured": "completes, not caught",
+    "why": "the crossing leaves the alpha PLANE but stays inside the frame's single AVBuffer -- measured slack 1024 bytes against a logical 160 -- and CHERI bounds the allocation, not the plane. A FAULT here would have meant the reduction is not doing what it claims, not that CHERI improved."
+  },
+  "what_this_closes": "the LAST unmeasured cheribsd-revocation arm of the 54 cases across the paper's three programs; the other 53 were already measured. The three-program CheriBSD column is now 54/54 measured.",
+  "why_it_was_unrun": "this corpus links REAL libavutil (av_frame_get_buffer carves the planes), unlike its plain-heap siblings which link nothing, so a purecap libavutil had to exist first. One was cross-built out of tree with the CHERI SDK and verified by ELF flags (EF_RISCV_CAP_MODE, EF_RISCV_CHERIABI, EM_RISCV) rather than by the build command's intent.",
+  "instrument_fixes_required_first": [
+    "the read probe was __attribute__((noinline, used)) static in shared/corpus.h, so supervise could never resolve it by name and every arm would have read UNRESOLVED; it is now ffp_read_probe, defined once in shared/driver.c (nm: T ffp_read_probe)",
+    "the runner's purecap guard originally piped llvm-readobj into `grep -q`, which closes the pipe at the first match so readobj dies of SIGPIPE and, under `set -o pipefail`, the pipeline reports non-zero -- the guard rejected a library that IS purecap. The check now captures the output instead of piping into a gate."
+  ],
+  "guard_negative_tested": "pointing FFPURECAP at the NATIVE libavutil.a gives exit 75 and 'is not a purecap archive', so the purecap guard is proven two-sided rather than merely passing",
+  "n_per_cell": 1
+}

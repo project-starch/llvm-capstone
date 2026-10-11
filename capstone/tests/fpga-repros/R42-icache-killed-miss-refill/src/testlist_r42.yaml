@@ -1,0 +1,10 @@
+- test: r42-loopalign-ctrsanity
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r42-loopalign-ctrsanity.S
+- test: r42-loopalign-warm
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r42-loopalign-warm.S

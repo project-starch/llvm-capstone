@@ -1,0 +1,52 @@
+{
+  "_comment": "Pinned third-party sources for the tshark port. sha256 values are upstream's published digests, checked at download; see each build-<name>.sh.",
+  "zlib": {
+    "version": "1.3.2",
+    "url": "https://zlib.net/zlib-1.3.2.tar.xz",
+    "sha256": "d7a0654783a4da529d1bb793b7ad9c3318020af77667bcae35f95d0e42a792f3",
+    "sha256_source": "https://zlib.net/ (the release table), read 2026-09-24"
+  },
+  "pcre2": {
+    "version": "10.48",
+    "url": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.48/pcre2-10.48.tar.bz2",
+    "sha256": "b6c68fdf6f3ac31388b50aa89ff0fc49c00c987c16e7b5146491d12003f2c8ed",
+    "sha256_source": "GitHub release asset digest (api.github.com/repos/PCRE2Project/pcre2/releases/latest), read 2026-09-24"
+  },
+  "c-ares": {
+    "version": "1.34.8",
+    "url": "https://github.com/c-ares/c-ares/releases/download/v1.34.8/c-ares-1.34.8.tar.gz",
+    "sha256": "c222b6d681096f9444d2c4863d2c1174019e27cacca0a4a5c114d36dd7d7bf78",
+    "sha256_source": "GitHub release asset digest (api.github.com/repos/c-ares/c-ares/releases/latest), read 2026-09-24"
+  },
+  "googletest": {
+    "version": "1.18.0",
+    "url": "https://github.com/google/googletest/releases/download/v1.18.0/googletest-1.18.0.tar.gz",
+    "sha256": "6e3191c1455468b3fc35a417fb565c1c5071aee1b7e7f85e30cf48a98d37d8b5",
+    "sha256_source": "GitHub release asset digest (api.github.com/repos/google/googletest/releases/latest), read 2026-09-24",
+    "_use": "native only: c-ares's own test suite is C++ on googletest, and the host has none"
+  },
+  "libgpg-error": {
+    "version": "1.61",
+    "url": "https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.61.tar.bz2",
+    "sha256": "7a85413f2bc354f4f8aa832b718af122e48965e9e0eb9012ee659c13c6385c93",
+    "sha256_source": "https://gnupg.org/download/integrity_check.html, read 2026-09-24"
+  },
+  "libgcrypt": {
+    "version": "1.12.4",
+    "url": "https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.12.4.tar.bz2",
+    "sha256": "d77f68f48879510e79a2f65977ccc68981781ea0923e5bdffac2a193ea3d660e",
+    "sha256_source": "https://gnupg.org/download/integrity_check.html, read 2026-09-24"
+  },
+  "libxml2": {
+    "version": "2.15.4",
+    "url": "https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz",
+    "sha256": "98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821",
+    "sha256_source": "https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.sha256sum, read 2026-09-24"
+  },
+  "glib": {
+    "version": "2.80.5",
+    "url": "https://download.gnome.org/sources/glib/2.80/glib-2.80.5.tar.xz",
+    "sha256": "9f23a9de803c695bbfde7e37d6626b18b9a83869689dd79019bf3ae66c3e6771",
+    "sha256_source": "https://download.gnome.org/sources/glib/2.80/glib-2.80.5.sha256sum (verified at the M0 census, 2026-09-23)"
+  }
+}

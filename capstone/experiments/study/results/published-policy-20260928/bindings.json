@@ -1,0 +1,348 @@
+{
+  "mruby-poisoncap-ao/bm_ao_render.rb@width8": {
+    "comparison": "nested-poisoncap",
+    "source": {
+      "url": "https://github.com/mruby/mruby",
+      "revision": "9d523e2f74f2e63ca02840937523de61398a617d",
+      "release": "4.0.0-rc2",
+      "benchmark_sha256": "e44efffd6415b9ef875bd92272ad2bd984ab4bc0f078b6e73aa791fd9865180f"
+    },
+    "application_version": "4.0.0-rc2",
+    "profile": "nested",
+    "parameters": {
+      "width": 8
+    },
+    "adaptation": "Published SQLite quarantine thresholds transferred to mruby GC slots, with full-queue correction; outer libc revocation enabled in both PoisonCap arms",
+    "nested_allocator": "mruby-gc",
+    "oracle_reference": "/tmp/capstone/mruby-ao-repro/native8-original.ppm",
+    "oracle_reference_sha256": "28060a9790593ace825b7552ab5d1878cf3e95be3be08ee738f28cde4cee5d11",
+    "oracle": {
+      "expected_stdout_sha256": "28060a9790593ace825b7552ab5d1878cf3e95be3be08ee738f28cde4cee5d11",
+      "expected_stdout_bytes": 203,
+      "expected_phases": [
+        "startup",
+        "before",
+        "after",
+        "exit"
+      ]
+    },
+    "input_sha256": {
+      "script": "51a87300b71f38e16a8681006ab989610bc2df35643d43a1575946480cd714cc"
+    },
+    "platform_files": {
+      "capstone_qemu": {
+        "path": "/tmp/capstone/node-reuse/qemu/qemu-system-riscv64",
+        "sha256": "ed89e9751c731267a68a499be5a8c1be3821c6790ea6c7b6c777d0cffcf3bd6e"
+      },
+      "capstone_kernel": {
+        "path": "/tmp/capstone/br-snap/build/images/Image",
+        "sha256": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd"
+      },
+      "poisoncap_qemu": {
+        "path": "/tmp/capstone/poisoncap-work/sdk/bin/qemu-system-riscv64cheri",
+        "sha256": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9"
+      },
+      "poisoncap_kernel": {
+        "path": "/tmp/capstone/poisoncap-l2-probe/rootfs/boot/kernel/kernel",
+        "sha256": "ea6e8e06e818616fb7ccf4f2a07b7d6a6ab008b563700937c64de0f703c7d36a"
+      },
+      "poisoncap_libc": {
+        "path": "/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap/lib/libc.so.7",
+        "sha256": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef"
+      }
+    },
+    "arms": {
+      "capstone": {
+        "binary": "/tmp/capstone/domain-process-runtime/share/study-mruby/mruby-spatial-gaps-v3.dom",
+        "build_manifest": "/tmp/capstone/mruby-capstone-spatial-gaps-v3-build/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 541824,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "/tmp/capstone/published-policy-20260928-capstone-runs/ao8-capstone-spatial-r0-0/stderr",
+          "sha256": "63b10430026bab1a60f9bfe218e6a14a7f7dc628b5db421d1f240222fcd43b88"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/mnt/host/study-mruby/ao.rb",
+            "8"
+          ],
+          "files": {
+            "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb": "/mnt/host/study-mruby/ao.rb"
+          }
+        }
+      },
+      "capstone-sublet": {
+        "binary": "/tmp/capstone/domain-process-runtime/share/study-mruby/mruby-sublet-gaps-v3.dom",
+        "build_manifest": "/tmp/capstone/mruby-capstone-sublet-gaps-v3-build/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 750720,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "/tmp/capstone/published-policy-20260928-capstone-runs/ao8-capstone-sublet-r0-0/stderr",
+          "sha256": "1e42fbd7d76b8222d01a4e2d4fb0b22fa7af7c275a5ea8f300375d81eab9c4a2"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/mnt/host/study-mruby/ao.rb",
+            "8"
+          ],
+          "files": {
+            "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb": "/mnt/host/study-mruby/ao.rb"
+          }
+        }
+      },
+      "poisoncap-spatial": {
+        "binary": "/tmp/capstone/mruby-published-policy-20260928-build/mruby",
+        "build_manifest": "/tmp/capstone/mruby-published-policy-20260928-build/build-contract.json",
+        "inputs": {
+          "script": "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 565248,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "/tmp/capstone/mruby-published-policy-20260928-runs-v2/ao8-poisoncap-spatial-0-0/stderr",
+          "sha256": "3b309680286772e8b3fb4b510216913b40e0f9bf0984f9e94a93e7b41d46e576"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/tmp/mruby-gc",
+            "/tmp/ao.rb",
+            "8"
+          ],
+          "files": {
+            "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb": "/tmp/ao.rb",
+            "/tmp/capstone/mruby-published-policy-20260928-build/mruby": "/tmp/mruby-gc"
+          },
+          "nested_allocator": "mruby-gc",
+          "nested_policy": "published-sqlite-thresholds-corrected-v1",
+          "revocation": 1
+        }
+      },
+      "poisoncap-temporal": {
+        "binary": "/tmp/capstone/mruby-published-policy-20260928-build/mruby",
+        "build_manifest": "/tmp/capstone/mruby-published-policy-20260928-build/build-contract.json",
+        "inputs": {
+          "script": "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 942080,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "/tmp/capstone/mruby-published-policy-20260928-runs-v2/ao8-poisoncap-temporal-0-0/stderr",
+          "sha256": "6d06e2c62cee8ccd875dcc7905eacd8288789a8d01d67df09f4e0a18c556732a"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/tmp/mruby-gc",
+            "/tmp/ao.rb",
+            "8"
+          ],
+          "files": {
+            "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb": "/tmp/ao.rb",
+            "/tmp/capstone/mruby-published-policy-20260928-build/mruby": "/tmp/mruby-gc"
+          },
+          "nested_allocator": "mruby-gc",
+          "nested_policy": "published-sqlite-thresholds-corrected-v1",
+          "revocation": 1
+        }
+      }
+    }
+  },
+  "mruby-poisoncap-ao/bm_ao_render.rb@width16": {
+    "comparison": "nested-poisoncap",
+    "source": {
+      "url": "https://github.com/mruby/mruby",
+      "revision": "9d523e2f74f2e63ca02840937523de61398a617d",
+      "release": "4.0.0-rc2",
+      "benchmark_sha256": "e44efffd6415b9ef875bd92272ad2bd984ab4bc0f078b6e73aa791fd9865180f"
+    },
+    "application_version": "4.0.0-rc2",
+    "profile": "nested",
+    "parameters": {
+      "width": 16
+    },
+    "adaptation": "Published SQLite quarantine thresholds transferred to mruby GC slots, with full-queue correction; outer libc revocation enabled in both PoisonCap arms",
+    "nested_allocator": "mruby-gc",
+    "oracle_reference": "/tmp/capstone/mruby-ao-repro/native-original.ppm",
+    "oracle_reference_sha256": "cfd73bb1de97514b2adacbda3a377e5172aecbe48819f654071d1996359ca634",
+    "oracle": {
+      "expected_stdout_sha256": "cfd73bb1de97514b2adacbda3a377e5172aecbe48819f654071d1996359ca634",
+      "expected_stdout_bytes": 781,
+      "expected_phases": [
+        "startup",
+        "before",
+        "after",
+        "exit"
+      ]
+    },
+    "input_sha256": {
+      "script": "51a87300b71f38e16a8681006ab989610bc2df35643d43a1575946480cd714cc"
+    },
+    "platform_files": {
+      "capstone_qemu": {
+        "path": "/tmp/capstone/node-reuse/qemu/qemu-system-riscv64",
+        "sha256": "ed89e9751c731267a68a499be5a8c1be3821c6790ea6c7b6c777d0cffcf3bd6e"
+      },
+      "capstone_kernel": {
+        "path": "/tmp/capstone/br-snap/build/images/Image",
+        "sha256": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd"
+      },
+      "poisoncap_qemu": {
+        "path": "/tmp/capstone/poisoncap-work/sdk/bin/qemu-system-riscv64cheri",
+        "sha256": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9"
+      },
+      "poisoncap_kernel": {
+        "path": "/tmp/capstone/poisoncap-l2-probe/rootfs/boot/kernel/kernel",
+        "sha256": "ea6e8e06e818616fb7ccf4f2a07b7d6a6ab008b563700937c64de0f703c7d36a"
+      },
+      "poisoncap_libc": {
+        "path": "/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap/lib/libc.so.7",
+        "sha256": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef"
+      }
+    },
+    "arms": {
+      "capstone": {
+        "binary": "/tmp/capstone/domain-process-runtime/share/study-mruby/mruby-spatial-gaps-v3.dom",
+        "build_manifest": "/tmp/capstone/mruby-capstone-spatial-gaps-v3-build/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 541824,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "/tmp/capstone/published-policy-20260928-capstone-runs/ao16-capstone-spatial-r0-0/stderr",
+          "sha256": "e3902ac76092a0f3be6316c7343226a428de00bc49453019ff3a873043fa4f87"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/mnt/host/study-mruby/ao.rb",
+            "16"
+          ],
+          "files": {
+            "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb": "/mnt/host/study-mruby/ao.rb"
+          }
+        }
+      },
+      "capstone-sublet": {
+        "binary": "/tmp/capstone/domain-process-runtime/share/study-mruby/mruby-sublet-gaps-v3.dom",
+        "build_manifest": "/tmp/capstone/mruby-capstone-sublet-gaps-v3-build/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 750720,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "/tmp/capstone/published-policy-20260928-capstone-runs/ao16-capstone-sublet-r0-0/stderr",
+          "sha256": "2b2e39df232cb9389c298f8f78663c68658371c4c462063f340918e4690a49fb"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/mnt/host/study-mruby/ao.rb",
+            "16"
+          ],
+          "files": {
+            "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb": "/mnt/host/study-mruby/ao.rb"
+          }
+        }
+      },
+      "poisoncap-spatial": {
+        "binary": "/tmp/capstone/mruby-published-policy-20260928-build/mruby",
+        "build_manifest": "/tmp/capstone/mruby-published-policy-20260928-build/build-contract.json",
+        "inputs": {
+          "script": "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 565248,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "/tmp/capstone/mruby-published-policy-20260928-ao16-runs/ao16-poisoncap-spatial-0-0/stderr",
+          "sha256": "f3b8fe0e8b553c351c4c6e88151fc0f4679d8701b2e5e979d72e0db741a040dc"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/tmp/mruby-gc",
+            "/tmp/ao.rb",
+            "16"
+          ],
+          "files": {
+            "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb": "/tmp/ao.rb",
+            "/tmp/capstone/mruby-published-policy-20260928-build/mruby": "/tmp/mruby-gc"
+          },
+          "nested_allocator": "mruby-gc",
+          "nested_policy": "published-sqlite-thresholds-corrected-v1",
+          "revocation": 1
+        }
+      },
+      "poisoncap-temporal": {
+        "binary": "/tmp/capstone/mruby-published-policy-20260928-build/mruby",
+        "build_manifest": "/tmp/capstone/mruby-published-policy-20260928-build/build-contract.json",
+        "inputs": {
+          "script": "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 1036288,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "/tmp/capstone/mruby-published-policy-20260928-ao16-runs/ao16-poisoncap-temporal-0-0/stderr",
+          "sha256": "872224ced27e136c3f382131a920cece2cacfc7ccc70ddb6f30325f36327b78c"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/tmp/mruby-gc",
+            "/tmp/ao.rb",
+            "16"
+          ],
+          "files": {
+            "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb": "/tmp/ao.rb",
+            "/tmp/capstone/mruby-published-policy-20260928-build/mruby": "/tmp/mruby-gc"
+          },
+          "nested_allocator": "mruby-gc",
+          "nested_policy": "published-sqlite-thresholds-corrected-v1",
+          "revocation": 1
+        }
+      }
+    }
+  }
+}

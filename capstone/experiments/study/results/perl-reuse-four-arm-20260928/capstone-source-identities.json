@@ -1,0 +1,29 @@
+{
+  "build": "perl-sv-heads Capstone study image",
+  "compiler": "/home/biecho/llvm-capstone-intcap-type/llvm/cmake-build-release",
+  "compiler_revision": "5dacd7c9e69c (clang --version); contains C-46 and C-48",
+  "note": "Repository-relative sources of the measured image; object hashes are in capstone-build-manifest.json",
+  "perl_cross_revision": "c2d8f8b7027ed20cd982c9f2c091463510b89f33",
+  "perl_optimize": "-O1",
+  "perl_source_archive_sha256": "f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a",
+  "schema": 1,
+  "sources_sha256": {
+    "capstone/experiments/applications/build.py": "ab9f87e630f95b98b30ba036e55ff78d5900def08b3ad2c079b165ede8cf99ee",
+    "capstone/experiments/applications/memory.c": "e7032a2056b7227c7f284c6cfc99d3b1b9183dca9bc36becb13360b15656a984",
+    "capstone/experiments/applications/regions.c": "7e46aeb14acc831971eb9c7922aae8998b88e75daa82e44bc2fbd4ed68364a8a",
+    "capstone/experiments/study/reuse-gap-observer.h": "627b0fe3ac30d75b384b35f37e9436c329f9f506afc13b94fb3ab87fc2df1769",
+    "capstone/ports/perl/musl/build-perl-domain.sh": "5c0ce52981921610e3924bb3ea53309aca5b33f74fbb32dfe57527caa4234dbb",
+    "capstone/ports/perl/musl/patches/5.36.3/0001-body-size-fields-are-u16.patch": "258ac00b497270c8fe9257fd28cbf05a28d2dbff29f30911897f53aac0b4cef7",
+    "capstone/ports/perl/musl/patches/5.36.3/0002-poison-padlist-16-byte-pointer.patch": "707e503afd1413c6bd82022e54a9b4e7a9638d99dd1474740c4c379eb2be98db",
+    "capstone/ports/perl/musl/patches/5.36.3/0003-stash-cache-needs-a-pointer-sized-slot.patch": "ddc5f543e47ee7563c8c65d2adb4ceadf3ba811cf3647a4732712ea5d7777135",
+    "capstone/ports/perl/musl/patches/5.36.3/0004-ptrv-and-function-pointer-casts.patch": "97834a0e1edfa088c477c521d5b8c47bb2faf17eae81a7607219dac725f9ae0b",
+    "capstone/ports/perl/musl/patches/5.36.3/0005-multideref-counts-from-a-real-base.patch": "d77f8d3f22a1be3477a7987450037b98a1e04e3f6a66575ac26b643b996e7d7c",
+    "capstone/ports/perl/musl/patches/5.36.3/0006-openn-setup-clears-the-mode-buffer.patch": "b25fece2afc47c9f3009e49becf901d7bad526a52fb41b5538884b225adb977b",
+    "capstone/ports/perl/musl/patches/5.36.3/0007-rxres-preserves-capability-pointers.patch": "ac9c8251155242e47804e8b234fb3eeeb16c819574ba75bb99e904d766718662",
+    "capstone/ports/perl/sv-heads/capstone.c": "253d11d6572b98befc9e5ac5accfa40b76a870c6c442a1d0766defbbda275b56",
+    "capstone/ports/perl/sv-heads/patches/5.36.3/0001-sv-heads-through-a-lifetime-adapter.patch": "6e5c67023416689a9e3f75da103f94fc03c9faea9ec0598d3e0e375fc01959e6",
+    "capstone/ports/perl/sv-heads/sv-heads.h": "e63539a24e5e2fbeb1f9c9120af382e327765ecb1a9c0b2571b933edd80b9a10",
+    "capstone/runtime/include/capstone/capability.h": "3d8e700dc29a520de91c447a91f36191a41e8176a242cbc7f62d08dbc93bd99e",
+    "capstone/runtime/include/sublet/sublet.h": "aef9f1bc9f9818276ae505eb32cbf21730dd6b089711cef4fba6dc562143fcd5"
+  }
+}

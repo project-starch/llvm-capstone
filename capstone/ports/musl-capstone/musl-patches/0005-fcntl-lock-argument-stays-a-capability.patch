@@ -1,0 +1,29 @@
+fcntl keeps a lock command's argument a capability
+
+fcntl read its variadic argument as unsigned long and passed (void *)arg for
+F_GETLK, F_SETLK, F_SETLKW and the F_*OWN_EX commands. On capstone64 a long
+holds an address, not a capability, so the struct flock pointer reached the
+delegated runtime untagged, and its first read of the structure faulted
+(cause 24): CPython's test_posix at test_lockf, and SQLite's unix VFS at its
+first lock. fcntl reads the argument as syscall_arg_t, as musl's own
+syscall() does, which is a long where a pointer is one and a capability
+here. The integer commands pass the same value as before.
+
+--- a/src/fcntl/fcntl.c
++++ b/src/fcntl/fcntl.c
+@@ -6,12 +6,12 @@
+ 
+ int fcntl(int fd, int cmd, ...)
+ {
+-	unsigned long arg;
++	syscall_arg_t arg;
+ 	va_list ap;
+ 	va_start(ap, cmd);
+-	arg = va_arg(ap, unsigned long);
++	arg = va_arg(ap, syscall_arg_t);
+ 	va_end(ap);
+-	if (cmd == F_SETFL) arg |= O_LARGEFILE;
++	if (cmd == F_SETFL) arg = (syscall_arg_t)((unsigned long)arg | O_LARGEFILE);
+ 	if (cmd == F_SETLKW) return syscall_cp(SYS_fcntl, fd, cmd, (void *)arg);
+ 	if (cmd == F_GETOWN) {
+ 		struct f_owner_ex ex;

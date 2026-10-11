@@ -1,0 +1,17 @@
+{
+  "program": "nginx",
+  "role": "allocator-component",
+  "title": "nginx's pool allocator, replayed from recorded calls -- not the server",
+  "upstream": {
+    "version": "1.28.0",
+    "pin_source": {
+      "file": "capstone/ports/nginx/fetch-nginx.sh",
+      "grep": "NGX_VERSION=${NGX_VERSION:-1.28.0}"
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "native"
+  ],
+  "note": "No README of its own yet; the runner scripts carry the scope."
+}

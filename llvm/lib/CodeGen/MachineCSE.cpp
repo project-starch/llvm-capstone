@@ -799,9 +799,17 @@ bool MachineCSEImpl::PerformCSE(MachineDomTreeNode *Node) {
 // to exclude instrs created by PRE that won't be CSEed later.
 bool MachineCSEImpl::isPRECandidate(MachineInstr *MI,
                                     SmallSet<MCRegister, 8> &PhysRefs) {
+  // PRE duplicates MI into the nearest common dominator of two blocks that
+  // compute it, so the copy runs on every path through that dominator --
+  // including the paths that reach neither block. For a load, or for an
+  // instruction that can trap on its operands, those may be exactly the paths
+  // on which the operand was never checked: CPython tests `nkwargs > 0` before
+  // forming &kwnames->ob_item in two sibling loop preheaders, and PRE moved the
+  // capability increment above that test, where kwnames is NULL.
   if (!isCSECandidate(MI) ||
       MI->isNotDuplicable() ||
       MI->mayLoad() ||
+      TII->canTrap(*MI) ||
       TII->isAsCheapAsAMove(*MI) ||
       MI->getNumDefs() != 1 ||
       MI->getNumExplicitDefs() != 1)

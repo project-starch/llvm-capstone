@@ -1,0 +1,49 @@
+# board-supmon-c5q: fw_payload sha256 bdabef34243c..., bitstream caplifive_supcall_36a641e0b. Result lines only,
+# extracted by tag patterns, in order, from THIS boot's transcript (after the last OpenSBI banner).
+BT00:00000000
+BT01:00000001
+BT02:00000002
+BT03:00000003
+### TEST 1/5 START k800:/test-domains/k800.dom ###
+DBAS:81D60000
+SHA6:00000000
+RESULT k800 retval=4 cycles=4589
+### TEST 1/5 END k800:/test-domains/k800.dom rc=0 ###
+### TEST 2/5 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+DBAS:82400000
+SQ: A/dom-ok
+SQ: B/mkregion1
+SQ: C/mkregion2
+SQ: D/mapped
+SQ: E/share1
+SHA6:00000001
+SQ: F/share2
+SHA6:00000001
+SQ: G/enter
+ENT0:00000001
+SUPM:00000000
+ENT1:00000001
+ENT2:4EB10000
+SQ: H/return
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2550641195
+HEAP 2097152 DROPPED 0 RC 0
+### TEST 2/5 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 3/5 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+DBAS:82800000
+SQ: A/dom-ok
+SQ: B/mkregion1
+SQ: C/mkregion2
+SQ: D/mapped
+SQ: E/share1
+SHA6:00000002
+SQ: F/share2
+SHA6:00000002
+SQ: G/enter
+ENT0:00000002
+SUPM:00000001
+ENT1:00000002
+# driver wedge read / verdict:
+[wedge] commit pc = 0x0000000080021188   <-- map this onto the domain disassembly to name the faulting instruction
+/test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify WEDGED (no return)
+FIRST FAILURE: /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify did not return, and it WAS created and entered (`SQ: A/dom-ok` AND `SQ: G/enter` present, no monitor tag). Everything below that stage works on silicon; the fault is inside that step.

@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-07",
+  "runner": "runners/run-cheribsd.sh",
+  "runtime_revocation": "on",
+  "guest_default_revocation": "preserved",
+  "cases": 2,
+  "caught": [
+    1
+  ],
+  "not_caught": [
+    0
+  ],
+  "arms_total": 6,
+  "arms_passed": 6,
+  "runner_exit": 0,
+  "controls": {
+    "cheribsd-abi": "CHERI_ABI pointer_bytes=16 runtime_revocation=1 -- PASS",
+    "cheribsd-bounds": "CHERI_BOUNDARY_READY -- PASS"
+  },
+  "the_contrast": "both rows cross by ONE BYTE past a direct allocation, and they come out differently -- which is the whole finding. Case 0 requests 9 bytes, CheriBSD's malloc returns a 16-byte capability, offset 9 is inside the bounds and nothing can fault. Case 1 requests 64, which IS a size class, so there is no slack and the crossing leaves the usable allocation. Case 0's catch prediction was refuted on 2026-10-06; case 1's was confirmed here. The mechanism is therefore demonstrated at two points within one corpus rather than argued from one.",
+  "attribution": "case 1: supervise resolved `expect mch_write_probe 0x102440` from the ELF independently and the fault is at 0x102458, INSIDE the probe's extent -- the offset is the -O0 frame setup, and the range is the criterion, not equality with the symbol address.",
+  "platform": {
+    "image_sha256": "0cb16209c16c5edf9f81148eedf33f750af404f890af6d65d9bd43ecf61aa4f4",
+    "note": "byte-identical to the vehicle the ffmpeg, wireshark and memcached/allocator readings used"
+  },
+  "n_per_cell": 1
+}

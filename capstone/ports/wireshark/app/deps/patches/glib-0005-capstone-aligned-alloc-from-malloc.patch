@@ -1,0 +1,39 @@
+CAPSTONE (tshark app port): musl-capstone's heap has no aligned allocator, and GLib refuses to
+build without one. g_aligned_alloc over-allocates from malloc and aligns by pointer arithmetic;
+g_aligned_free frees malloc's pointer, kept just below the block.
+
+--- a/glib/gmem.c
++++ b/glib/gmem.c
+@@ -47,6 +47,8 @@
+ 
+ /* _aligned_malloc()'ed memory must be freed by _align_free() on MSVC */
+ # define aligned_free(x) _aligned_free (x)
++#elif defined(__CAPSTONE__)
++# define aligned_free(x) ((x) ? free (((gpointer *) (x))[-1]) : (void) 0)
+ #else
+ # define aligned_free(x) free (x)
+ #endif
+@@ -658,6 +660,23 @@
+   res = aligned_alloc (alignment, real_size);
+ #elif defined(HAVE_MEMALIGN)
+   res = memalign (alignment, real_size);
++#elif defined(__CAPSTONE__)
++  /* CAPSTONE: musl-capstone's heap (runtime/level0.c, sublet_heap.c) offers no aligned allocator.
++   * Over-allocate, align by pointer arithmetic (which keeps the capability), and keep malloc's
++   * own pointer in the slot just below the aligned block for g_aligned_free. The alignment is a
++   * power of two and a multiple of sizeof (void *), so that slot is aligned for a pointer. */
++  {
++    gchar *raw = malloc (real_size + alignment + sizeof (gpointer));
++    if (raw == NULL)
++      res = NULL;
++    else
++      {
++        gchar *p = raw + sizeof (gpointer);
++        p += (alignment - ((guintptr) p & (alignment - 1))) & (alignment - 1);
++        ((gpointer *) p)[-1] = raw;
++        res = p;
++      }
++  }
+ #else
+ # error "This platform does not have an aligned memory allocator."
+ #endif

@@ -410,6 +410,17 @@ void Sema::Initialize() {
       PushOnScopeChains(Context.getUInt128Decl(), TUScope);
   }
 
+  // Capstone: __intcap_t and __uintcap_t, the capability-carrying integers.
+  if (PP.getTargetInfo().SupportsCapabilities()) {
+    DeclarationName IntCap = &Context.Idents.get("__intcap_t");
+    if (IdResolver.begin(IntCap) == IdResolver.end())
+      PushOnScopeChains(Context.getIntCapDecl(), TUScope);
+
+    DeclarationName UIntCap = &Context.Idents.get("__uintcap_t");
+    if (IdResolver.begin(UIntCap) == IdResolver.end())
+      PushOnScopeChains(Context.getUIntCapDecl(), TUScope);
+  }
+
 
   // Initialize predefined Objective-C types:
   if (getLangOpts().ObjC) {

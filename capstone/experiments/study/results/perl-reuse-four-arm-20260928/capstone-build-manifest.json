@@ -1,0 +1,197 @@
+{
+  "application": "perl",
+  "allocations": false,
+  "gc_gaps": false,
+  "reuse_gap": false,
+  "allocations_sha256": null,
+  "heap": "level0",
+  "nested": "perl",
+  "recipe_revision": "52810789b553cf42c76cc0b662df598e5cd1df76",
+  "runtime_revision": "52810789b553cf42c76cc0b662df598e5cd1df76",
+  "runtime_dirty": true,
+  "arena_bytes": 67108864,
+  "heap_log": 26,
+  "image_sha256": "734ddd346771fef8751aa808b189fb9c13a4d8353d71b56b70094e2f29cdde29",
+  "compiler_sha256": "2790a0c1a41d06e88b59cc0a6ccb85a5335df001214b344cbbf16cf9f8f0c57c",
+  "runtime_archive_sha256": "908954c7577faac7333d052466bcc1d4d16668dd01ce381ddc7af822525efb1a",
+  "builtins_archive_sha256": "b78a60e743f26ae0818e5b95f9f380e03e42c9bbf5b71ce35b85f051f0919668",
+  "inputs": [
+    {
+      "path": "musl-build/libc-capstone.a",
+      "sha256": "5a4820c72d85293e1f7e1b126f213544b06bce1a2269ac612705e5565a199521"
+    },
+    {
+      "path": "src/perl-5.36.3/perlmain.o",
+      "sha256": "6e5cb4c7cf197a629c970394914bb4cc8fdfe7f1f197caef6c112b780502dacb"
+    },
+    {
+      "path": "src/perl-5.36.3/libperl.a",
+      "sha256": "fdfc22a5213776f9782b0fa4086015d45968c94382975484b018b5a0787e3801"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/B/B.a",
+      "sha256": "4b38722f6744536d3780a1efa9793844497d0bffbc5f065c02099cf97519da0a"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Compress/Raw/Bzip2/Bzip2.a",
+      "sha256": "23f1864c19f3948252290d3fdf32473379aedade08453b3506c81fa0dca26f20"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Compress/Raw/Zlib/Zlib.a",
+      "sha256": "5064756c7560341e0015ccf4b1f73d60a241f0b3d2bb1e1662e199aead05b1f7"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Cwd/Cwd.a",
+      "sha256": "554514a82bb6a095fa21240eca9712f2f01cacec323afb8dfb0ba91128da502e"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Data/Dumper/Dumper.a",
+      "sha256": "fde6a36b768766ef7886d1e601626bf8545a5d312cc64bd0e047e03ff4d92310"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Devel/PPPort/PPPort.a",
+      "sha256": "c0e4b128407d1efc6a5edfbe9c06e4be1ddbd7426d774df6e6d02896d84acaed"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Devel/Peek/Peek.a",
+      "sha256": "80fe12ed5567a3dcdf695744ee17c2fb6925feb562a4933238fd9e4c51967c99"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Digest/MD5/MD5.a",
+      "sha256": "cd170f2d1413b6296b3462fa3eaa541a2932824548d371141f38cc858f4f27c0"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Digest/SHA/SHA.a",
+      "sha256": "78713edad1de25904ed9c873471956467de245145f6a1d1abb7b7f085702c143"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Encode/Encode.a",
+      "sha256": "e05cecf3b1af6f6b125603cfd922459367c5552fc600786571f5dc093ba7a5b0"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Fcntl/Fcntl.a",
+      "sha256": "5191577ca76c49b61c05951075bd16e18e1acc887e65eb7bc62f175983deac36"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/File/DosGlob/DosGlob.a",
+      "sha256": "fe236078cd7e6592ed8d237f9dae385a24bced0aacb3e8529661f40763aa4e5e"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/File/Glob/Glob.a",
+      "sha256": "d662cd75c8c3eda81bd298d57e6b32ee94144cd34dc4177664a5775b217df88d"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Filter/Util/Call/Call.a",
+      "sha256": "71a40ce8e85dab30e39e40a704ac023a80727919ce899ca14eb78601f86cb0e1"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Hash/Util/FieldHash/FieldHash.a",
+      "sha256": "1ba4fe935e668c8f86c869597aba906f3b2f10719b4045fb55122cbdce42b83c"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Hash/Util/Util.a",
+      "sha256": "8ed6aa26549812dff6cd66c18d86b3466bf792011489eace010dc962ca076086"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/I18N/Langinfo/Langinfo.a",
+      "sha256": "84d13cfcc98883037f955ab6c87c951e3571541e250554712cc8bfbdb640b607"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/IO/IO.a",
+      "sha256": "6d9c830ef1f301d8d0918ccf42cc14eac34b1af8f1d504c7daf4258d5bb25a60"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/IPC/SysV/SysV.a",
+      "sha256": "e5d6b169d89aca06f46df741142e5eb02534711949d56ecc8640beb83c53f9a3"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/List/Util/Util.a",
+      "sha256": "6b72abd4869a0529980e62a68cae6fc930b1d723f5610a1941683924f60a3a71"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/MIME/Base64/Base64.a",
+      "sha256": "667454c576a54c497cefe223674b299df329f2b984e9ccf6f1a9e732c88b60e9"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Math/BigInt/FastCalc/FastCalc.a",
+      "sha256": "b0fa46a65d994f76c5a1019014a9feb247bf81dc8db91bddbe157d3a06ceee38"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Opcode/Opcode.a",
+      "sha256": "5088dd9ec843397f886a813ded0475d5327cf7ba2d7300f51f2f46c0aa3693d4"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/POSIX/POSIX.a",
+      "sha256": "8f5a123cc5c7b5ed693a3f91b1465e3d128161d82fb7f0aff4250c0d4e61698f"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/PerlIO/encoding/encoding.a",
+      "sha256": "0a86ccbc086b9095593640cd17c458c2798f729953436014d35c6ce951329641"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/PerlIO/scalar/scalar.a",
+      "sha256": "52ee44e8736c35da695b2ef8457ed5dab4cf3eae81a615ebf8f7e82ff1f16e96"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/PerlIO/via/via.a",
+      "sha256": "57df96987865e8eaf6548d2932aef2e3ef855471329366e7bf58a2e65d0d4763"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/SDBM_File/SDBM_File.a",
+      "sha256": "a471482a182dd552cf625e0a81c97226cc735de2f8bfce7bf37c2f7f4f0ea414"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Socket/Socket.a",
+      "sha256": "56e1d30e74b045c63746d6e874d2534ed909f2d34171b55a6dad9be795d10835"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Storable/Storable.a",
+      "sha256": "a78e02cfb6717c0b9b8c01ce3884fb58df371f75f523abd914a47d3e2107cee9"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Sys/Hostname/Hostname.a",
+      "sha256": "b9a9081eb2d09e1b660f9cbd299ef50216d257c85f438740f06149630c9d1156"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Sys/Syslog/Syslog.a",
+      "sha256": "47c6df7763b4c29cb2ae79d3b675fc04a31316565b76d3b709aed9c596e861c2"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Time/Piece/Piece.a",
+      "sha256": "e1d3c9497223116376a513876554bac73bc33d0ce3295120975c375ce355b04b"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Unicode/Collate/Collate.a",
+      "sha256": "fe8cc3da23713c8a25779cc2db460174c64b8eb635076740566ecb6249c659d0"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/Unicode/Normalize/Normalize.a",
+      "sha256": "84e0a7be952bad14a2ea600d8493b19db6a1e9e1f093666d858779fce2f46d16"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/attributes/attributes.a",
+      "sha256": "7b5fe3846c28c67aaa2229ef96c15d761c06abe1707ca636d1c00b516cb2093b"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/mro/mro.a",
+      "sha256": "e4e8b6bd256dfa470016044f1587d13059bf2a2dbd65e5dd1d0b8124af2ec264"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/re/re.a",
+      "sha256": "98b21a7fb9664483d94012441d3ee7831be977e0c790eab9d31f9759d396e1ea"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/threads/shared/shared.a",
+      "sha256": "1264225919acc5e19f87c031df392005cf706e01014e9624babbd11569d5ff44"
+    },
+    {
+      "path": "src/perl-5.36.3/lib/auto/threads/threads.a",
+      "sha256": "52e2a4f848414744ef0d8a1eb0bb790f3e09d7ddc409d82664b72321ae302643"
+    },
+    {
+      "path": "link/perl-sv-heads.o",
+      "sha256": "64c8c91ce08a1d3544d96d5baca41fa0407e02c0894b5413952d9ad4e6a74050"
+    }
+  ],
+  "instrument_sha256": "e7032a2056b7227c7f284c6cfc99d3b1b9183dca9bc36becb13360b15656a984"
+}

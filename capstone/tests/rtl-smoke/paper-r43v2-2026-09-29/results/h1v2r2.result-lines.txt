@@ -1,0 +1,43 @@
+## h1v2r2: H1 calibration + nodes regression + linear, rep 2 of 3, image da9c54e578845735 @0x410000, stock k800, on caplifive_r43_8f6a0af.bit
+# fw_payload 62dcd24c2ed0; list drivers/lists/h1-v2-calibration.txt; pre-registered at lane/board-r42-paper 25f0b401
+RESULT k800 retval=4 cycles=4529 ran=53406 instret=1089
+R1 lat B=4096 lines=64 loads=65536 rep=1 cyc=589831 per=9 sink=0
+R1 lat B=4096 lines=64 loads=65536 rep=2 cyc=589905 per=9 sink=0
+R1 lat B=4096 lines=64 loads=65536 rep=3 cyc=589831 per=9 sink=0
+R1 lat B=16384 lines=256 loads=65536 rep=1 cyc=589831 per=9 sink=0
+R1 lat B=16384 lines=256 loads=65536 rep=2 cyc=589831 per=9 sink=0
+R1 lat B=16384 lines=256 loads=65536 rep=3 cyc=589831 per=9 sink=0
+R1 lat B=65536 lines=1024 loads=65536 rep=1 cyc=2671824 per=40 sink=0
+R1 lat B=65536 lines=1024 loads=65536 rep=2 cyc=2676112 per=40 sink=0
+R1 lat B=65536 lines=1024 loads=65536 rep=3 cyc=2679757 per=40 sink=0
+R1 lat B=262144 lines=4096 loads=65536 rep=1 cyc=3156119 per=48 sink=0
+R1 lat B=262144 lines=4096 loads=65536 rep=2 cyc=3156507 per=48 sink=0
+R1 lat B=262144 lines=4096 loads=65536 rep=3 cyc=3156702 per=48 sink=0
+R1 lat B=1048576 lines=16384 loads=65536 rep=1 cyc=3156847 per=48 sink=0
+R1 lat B=1048576 lines=16384 loads=65536 rep=2 cyc=3157104 per=48 sink=0
+R1 lat B=1048576 lines=16384 loads=65536 rep=3 cyc=3157159 per=48 sink=0
+R1 end minted=0 split=5 mrev=5 revoke=0 init=0 out=1250 lines=18
+R1 calib cyc_cyc=2 cyc_cyc2=2 ret_ret=1
+R1 calib cyc_cyc=2 cyc_cyc2=2 ret_ret=1
+R1 calib cyc_cyc=2 cyc_cyc2=2 ret_ret=1
+R1 s=nodes p=shared a=S n=1 B=262144 U=262144 S=0 chain=0 rep=1 nd=2 bk=491 rv=144 fl=474840 in=98 re=901 tt=476474 ir=82003 ty=3 ini=1 fb=262144 inf=0 inr=0 td=512 bad=0 ok=1
+R1 s=nodes p=shared a=S n=4 B=262144 U=262144 S=0 chain=0 rep=1 nd=8 bk=461 rv=193 fl=474831 in=5 re=737 tt=476227 ir=82039 ty=3 ini=1 fb=262144 inf=0 inr=0 td=349 bad=0 ok=1
+R1 s=nodes p=shared a=S n=16 B=262144 U=262144 S=0 chain=0 rep=1 nd=32 bk=1090 rv=722 fl=474831 in=5 re=745 tt=477393 ir=82183 ty=3 ini=1 fb=262144 inf=0 inr=0 td=349 bad=0 ok=1
+R1 s=nodes p=shared a=S n=64 B=262144 U=262144 S=0 chain=0 rep=1 nd=128 bk=3786 rv=2881 fl=474813 in=5 re=859 tt=482344 ir=82759 ty=3 ini=1 fb=262144 inf=0 inr=0 td=402 bad=0 ok=1
+R1 s=nodes p=shared a=S n=256 B=262144 U=262144 S=0 chain=0 rep=1 nd=512 bk=15065 rv=11106 fl=474831 in=5 re=1051 tt=502058 ir=85063 ty=3 ini=1 fb=262144 inf=0 inr=0 td=433 bad=0 ok=1
+R1 end minted=687 split=346 mrev=356 revoke=10 init=5 out=1513 lines=13
+R1 lin arm=0 what=movc-LIN(instrument-control) rep=1 before=0 type=7 spec=7 r21r22=7 reads=spec
+R1 lin arm=1 what=cincoffset-NONLIN(conformance-control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=2 what=cincoffset-LIN rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=3 what=scc-LIN rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=4 what=ldc-LIN(slot-after) rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=5 what=ldc-NONLIN(slot-after,control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=6 what=stc-LIN(reg-after) rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=7 what=stc-NONLIN(reg-after,control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=8 what=tighten-LIN rep=1 before=0 type=0 spec=7 r21r22=0 reads=R21R22
+R1 lin arm=9 what=tighten-NONLIN(control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=10 what=shrinkto-LIN rep=1 before=0 type=0 spec=7 r21r22=0 reads=R21R22
+R1 lin arm=11 what=shrinkto-NONLIN(control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 end minted=0 split=12 mrev=5 revoke=0 init=0 out=1287 lines=15
+RESULT k800 retval=4 cycles=4531 ran=53406 instret=1089
+# 6 x speedtest1-ran, 6 x released pool rc=1; no halt, no stall, one banner

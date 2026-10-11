@@ -1,0 +1,43 @@
+# memcached/allocator-repros on stock CheriBSD purecap, libc revocation ON, 2026-10-06.
+# Result lines only; the guest capture and fixtures are not committed.
+
+## the measured run (revocation on)
+BOOT CheriBSD allocator suite
+PASS cheribsd-abi
+PASS cheribsd-bounds
+PASS revocation-control
+PASS 00-rbuf-copied-after-cache-free-mode0
+PASS 01-io-walk-reads-freed-link-mode0
+PASS 02-tail-repair-frees-referenced-item-mode0
+PASS 03-refcount-overflow-frees-linked-item-mode0
+PASS 04-unlocked-refcount-drift-mode0
+PASS 05-item-data-one-past-mode0
+PASS 06-suffix-write-no-space-mode0
+PASS 07-unterminated-key-read-mode0
+OK   revocation-control revocation=on exit=162 signal=34 code=2 addr=0x101e42 pc=0x101e42 expect=0x101e42
+OK   case=0  mode=0 revocation=on 7af02b0c87 exit=0 completed=1 object_reuses=1 chunk_reuses=0
+OK   case=1  mode=0 revocation=on 0ad4de66ae exit=0 completed=1 object_reuses=1 chunk_reuses=0
+OK   case=2  mode=0 revocation=on 59bd02ce29 exit=0 completed=1 object_reuses=0 chunk_reuses=1
+OK   case=3  mode=0 revocation=on a8c4a82787 exit=0 completed=1 object_reuses=0 chunk_reuses=1
+OK   case=4  mode=0 revocation=on 152ddb68f7 exit=0 completed=1 object_reuses=0 chunk_reuses=1
+OK   case=5  mode=0 revocation=on 2d61f18    exit=0 completed=1 object_reuses=0 chunk_reuses=0
+OK   case=6  mode=0 revocation=on 78eb770    exit=0 completed=1 object_reuses=0 chunk_reuses=0
+OK   case=7  mode=0 revocation=on ecdb011    exit=0 completed=1 object_reuses=0 chunk_reuses=0
+
+8/8 arms passed
+Artifacts: /tmp/capstone/mc-defects-cheribsd-on
+
+## the NEGATIVE CONTROL, same vehicle, same day: every case oracle must FAIL
+## (the fixture header claims two events and carries one, so no case is performed)
+BOOT CheriBSD allocator suite
+PASS cheribsd-abi
+PASS cheribsd-bounds
+PASS revocation-control
+FAIL 00-rbuf-copied-after-cache-free-mode0
+FAIL 01-io-walk-reads-freed-link-mode0
+FAIL 02-tail-repair-frees-referenced-item-mode0
+FAIL 03-refcount-overflow-frees-linked-item-mode0
+FAIL 04-unlocked-refcount-drift-mode0
+FAIL 05-item-data-one-past-mode0
+FAIL 06-suffix-write-no-space-mode0
+FAIL 07-unterminated-key-read-mode0

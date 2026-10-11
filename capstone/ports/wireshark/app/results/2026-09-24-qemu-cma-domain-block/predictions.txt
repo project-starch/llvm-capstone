@@ -1,0 +1,35 @@
+M-infra gate predictions, written before the first run (2026-09-24). Model: scratchpad slack/model.py.
+Modules: orig = d04bd83 (== shipped capstone.ko .text), cma = 7440cfc (PR #4 merged), fix = 7440cfc + split-slack check.
+Loader: /capstone-test.user; 2841 = 0xB19 = both touches landed.
+BOOT 1 (cma=1G):
+  orig small      -> retval 42
+  orig big128     -> refused cleanly ("Failed to allocate memory for domain"), no crash
+  cma  small      -> 42
+  cma  smalldecl  -> 2841 (512 KiB block, buddy)
+  cma  big128     -> 2841 (128 MiB block from CMA, paddr below 4 GiB)
+  fix  small      -> 42
+  fix  smalldecl  -> 2841
+  fix  big128     -> 2841
+  fix  edge64     -> 2841 (block doubled 64 -> 128 MiB; "does not survive the monitor's split" printed once)
+  cma  edge64     -> FAULT (64 MiB block, dom_data 66,977,792 < frame 67,079,584: short by 101,792) -- LAST
+BOOT 2 (no cma=):
+  fix  small      -> 42
+  fix  big128     -> refused cleanly ("Failed to allocate memory for domain (order 15)"), no crash
+ATTEMPT 1 (15:0x, /capstone-test.user as the loader): orig small -> 42 as predicted; orig big128 -> the module
+refused (no allocation), the loader printed "Created domain ID = 18446744073709551615" and CALLED domain -1, and the
+monitor took a capability OOB fault in its own code (pc 0x8002164c): boot over. A loader defect (capstone-test.c
+never checks for -1; ISSUES-ARCHIVE Q-01's shape), not a module outcome. Loader replaced by gateload.user, which
+stops on -1; predictions above unchanged ("refused cleanly" now means GATE REFUSED from gateload).
+ATTEMPT 2 (live module swap): orig small -> 42, orig big128 -> GATE REFUSED ("Failed to allocate memory for domain.")
+as predicted; then `rmmod capstone` (to swap in the next module) hung the guest: nothing after it for the
+command's whole budget. The swap is replaced by one PRIVATE rootfs copy per module (debugfs write of /capstone.ko,
+read back identical; the shared rootfs's module is byte-identical to orig.ko), one module per boot:
+  BOOT B  br-cma, cma=1G : small 42, smalldecl 2841, big128 2841, edge64 FAULT (last)
+  BOOT C  br-fix, cma=1G : small 42, smalldecl 2841, big128 2841, edge64 2841 (+ "does not survive" once)
+  BOOT D  br-fix, no cma : small 42, big128 GATE REFUSED
+Predictions unchanged.
+BOOT E (br-fix2 = fix + the audit's amendments: loop bounded at order 20, overflow refused, 1536UL; cma=1G):
+  small 42; smalldecl 2841; big128 2841; edge64 2841 WITH "does not survive ... order 14; doubling" visible
+  (dmesg is now cleared per run and printed whole); corruptwrap (domreq 0xffff...ffff) -> GATE REFUSED with
+  "overflows; refusing"; corrupthuge (domreq 2^40) -> GATE REFUSED with "past order 20; refusing"; a final
+  small -> 42 (the guest survived both refusals).

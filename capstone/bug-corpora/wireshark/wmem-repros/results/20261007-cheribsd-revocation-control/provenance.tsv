@@ -1,0 +1,58 @@
+# source: <scratch>/ws22-run/summary.json
+# matched-by: result-lines/inputs.json: 22 cases, 25 of 25 arms, revocation-control fault 0x101dc0 -- the only 25-program wmem run; the README's '21 of 21 arms, 18 cases' is the earlier same-day run the inputs.json says this one extended
+# platform qemu=16135483052dfdd6eb0a3fb060a79097eabcbb95fcac756b37ce83407657f0dc firmware=f0e1fe57b0f850756273135d82c4edcec7b354edfc36741cd327d6f2744832cb kernel=8ab453f46dc76cf27faf0fc159761f4e68f2cfb739ed9c0a22d440bab8914530 image=0cb16209c16c5edf9f81148eedf33f750af404f890af6d65d9bd43ecf61aa4f4
+# platform-libc=fdce2289224bb5193526ab2a1fde9a74860c764f2222e0cb2a77bfea039559a8
+# runtime_revocation=on
+# controls: cheribsd-abi=0 cheribsd-bounds=162 revocation-control=162
+# summary status=complete ran_all_cases=True failed_cases=0 (an oracle scored FAIL is data, see the README)
+# also-cited: <scratch>/ws-cheri-run/summary.json role=superseded 18-case subset (21 arms) the README text still describes image=0cb16209c16c runtime_revocation=on programs=21 controls: cheribsd-abi=0 cheribsd-bounds=162 revocation-control=162
+# note: binary_sha256 is the summary's "binaries" entry; for a supervised arm that is the supervise wrapper (or a shared replay driver), and the case binary or fixture is the per-program input hashed below (summary results[].inputs):
+# inputs revocation-control: target=f2b99b0a4bad1cfafd1257d65a7ded49db8c6f63d484daa572110a939185efa0
+# inputs 00-rpcrdma-write-offsets-global-mode0: 00-rpcrdma-write-offsets-global=ea03a09c36427421677e674d7fd0dadb240eee9ecc329e47baa101a2828fa6b1
+# inputs 01-cms-oid-global-mode0: 01-cms-oid-global=f86c4a25d6f56b26d5682fcbda513eba2c98540c781a50a2966dc6d46c3fa0c8
+# inputs 02-mdb-address-column-mode0: 02-mdb-address-column=53e48b5b9dbc61a5f55088f26d7fbef2138a27b4e0a0863aada01c6aa3a3a224
+# inputs 03-cola-info-column-mode0: 03-cola-info-column=76dcdefcf7ca0ada9437c83c773af24f452b39a75aa888cd8b93674cd65c5dc2
+# inputs 04-qnet6-col-set-str-mode0: 04-qnet6-col-set-str=4db109419ffbaa41b4ba0dbe7cc57b01acc225281f1ee7eab22f01c3acf11c96
+# inputs 05-usbll-address-struct-mode0: 05-usbll-address-struct=fdbdd0b351334d8912047551ad345a4fe478a0d4f81ea4aa79208c7f001690d8
+# inputs 06-x509if-last-dn-static-mode0: 06-x509if-last-dn-static=cb538ac3a6cb60e8504a6c02ce5c8d7497eea8015231099f14189d76845f7cdb
+# inputs 07-mysql-auth-method-mode0: 07-mysql-auth-method=c0c11618a7b1f7b9197c0d5ede45fed3515086259e1b2eb944e14b9aa80ec68a
+# inputs 08-sip-cseq-method-mode0: 08-sip-cseq-method=8a437641f8e915b53c4dc7e3877315c49f683c0256ad155f551c1e37983a97b3
+# inputs 09-geonw-proto-data-tvb-mode0: 09-geonw-proto-data-tvb=059a11eb9a297fe295d6a0957fc2f35ed29a76447f33992110ed1d7d150b7653
+# inputs 10-t38-reassembly-buffer-mode0: 10-t38-reassembly-buffer=72b018cb92572e3bb0fc58549a22475f737954ef6b0d7beee2f851c997fa5056
+# inputs 11-http-header-map-mode0: 11-http-header-map=ab87bc77f8e176f748eeae5f8aaccb205e1bfea47e5b9040dc8df87e22ed3a3a
+# inputs 12-xml-root-name-recycled-mode0: 12-xml-root-name-recycled=a640004869ef3c2c5a0713a5f829974cc5e6e09e505b704a16379ac374331a9c
+# inputs 13-http-range-cursor-past-chunk-mode0: 13-http-range-cursor-past-chunk=968f02e7eeff1e9f9dcf2fafb309414678d82d0216a93726acc68603f7b33943
+# inputs 14-solaredge-payload-six-past-mode0: 14-solaredge-payload-six-past=010c663ab935348c3a82a5843fc6f873d308a476561070a52acd638b60a5f10c
+# inputs 15-opcua-padding-below-chunk-mode0: 15-opcua-padding-below-chunk=8f35a1db7428977e0e06e0f1b4888f1f6f65838df0d89907f47b2ef51153e2f7
+# inputs 16-dcp-etsi-rs-parity-write-mode0: 16-dcp-etsi-rs-parity-write=1b2797a3e7e5dd50a33df726c2995f978f7e978a1b9fb617a21dc6f8f40559fc
+# inputs 17-dns-one-byte-write-mode0: 17-dns-one-byte-write=34e4fbc4cd48f96f6ae3fcbe7ce9ecb83b834417eb4fea46fc51b4ec8e389d4c
+# inputs 18-rtps-batch-sample-info-unguarded-mode0: 18-rtps-batch-sample-info-unguarded=a90409f5a4c47238f37629434556ec48fb41b009fd9ee324a357caa2b36d2017
+# inputs 19-ntlmssp-blob-length-before-check-mode0: 19-ntlmssp-blob-length-before-check=aec529b673f7ba0a470d9c8a22585f7301d143c4b301e48d9d09ce851205e538
+# inputs 20-proto-undecoded-bitmap-unbounded-mode0: 20-proto-undecoded-bitmap-unbounded=4bd7ad9e0d18aac0e13c093797d2df105d52c6cb0ce55919ad7056ce4782cde8
+# inputs 21-tcp-flags-str-sixteen-bytes-mode0: 21-tcp-flags-str-sixteen-bytes=f0828940e408288306309e3865fcae5cc3998f82cf8dd74486a3f8d431c043ad
+program	exit	expected_exit	passed	binary_sha256	stdout_sha256
+cheribsd-abi	0	0	true	d92e89323f08839328c8097a264d6e23786ace331fd3bb3e604e3627a213aeb2	9470e900152738b85544c73ceb0dd0f3fe53261bd3ce0d1460cae0d0201561c3
+cheribsd-bounds	162	162	true	d92e89323f08839328c8097a264d6e23786ace331fd3bb3e604e3627a213aeb2	904c72f88b254911f97105bb6cd1e232e373cf2d3da7dc149ab2d9c83b780a7f
+revocation-control	162	162	true	0c680eb0641bd5a8e813036be96f54fe732ca787bb06de4fd4b8aaf802d474a8	ef8eff7486a2e04cee35e7e652adf9c1883d924deb377dbd814c512e70ef2914
+00-rpcrdma-write-offsets-global-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	0bd6d88d628f0b397a1f2e02f87bf0b3cda92f6b4b98187b99a668e8b436e173
+01-cms-oid-global-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	d289169e427a7122adcb7187715006ba72edf0b89510703c171d00640f0c39f5
+02-mdb-address-column-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	565dd01cb9f4e0b70c1224a8b0bc3f5e1c38eeff93d0c9e4540480516d765167
+03-cola-info-column-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	1c015d6d2e1a3ee2137773891a93ed1c16eb3e0922854d5c4400228cb8139f77
+04-qnet6-col-set-str-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	754c4f28c92da4d140e766825b66c48e9d7f4abbf63076b3524c9a5db1aeb9aa
+05-usbll-address-struct-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	89769b09aee5f80292fe651d9780595c22ffd0ad685ab432b22883d8d4130f14
+06-x509if-last-dn-static-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	0fb1ad1e6e8a1fef315dda1ca16314c3b6e0e73f2191e6b147e4ad0fe4e7cefe
+07-mysql-auth-method-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	9311c4e9d2c62db1ae4491c57f53d7f483a0f5b118ec873afaf990e2ca8c039d
+08-sip-cseq-method-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	2830bbd4f8905bae97a1b033b4cde48dc9c391b9817130d52557808d08221e82
+09-geonw-proto-data-tvb-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	bc08de3d5f0fa15d64e6e70f5a8cabe84c3c873684d3bdd71e74aa1cae332c7e
+10-t38-reassembly-buffer-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	ef11718e1c518b0c7c0e95e57e82f753c3bb1d43035576802af3e191405255ab
+11-http-header-map-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	752d3a48a15f03efaec2bb746c8a92f989cfd82001e6b8678a87c00df9c5ec39
+12-xml-root-name-recycled-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	221edcefc2270f88e567653c744bbb0d44c05dc0d91161b546d52438be410cfc
+13-http-range-cursor-past-chunk-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	e127b0f941f8661c25fdc83cd53339a9834d60bb31c137ac34187373f6671115
+14-solaredge-payload-six-past-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	a4acca02e2b5b9ee54b0a51be867230bf0d88c5823e72a77275e96f21a87226b
+15-opcua-padding-below-chunk-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	4db7b0b997feff2fcc3db1cb490e2d5b49198c5e6b70b908ba9c0933ea6bd1f6
+16-dcp-etsi-rs-parity-write-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	f99151e2f71ed1773f1b55bcffdf725f1b9eff33efd04fcf6036c7bf49893adb
+17-dns-one-byte-write-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	47ee465f284636c7cb98cdcea1918eb07e7a16c9868608f95eba990e2fb9aa01
+18-rtps-batch-sample-info-unguarded-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	cf53ce12ddde519fcaec5ce30d20988232e0bbe1b0903f1f2c8df93d55c84075
+19-ntlmssp-blob-length-before-check-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	05476cb7cb6fb41e6bfce0d9dd8eb0755226ea6f7f5062e42ed4f87f6a1e3125
+20-proto-undecoded-bitmap-unbounded-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	5ad74b3087137817219b90fc39022b172aa6b5766e244d4a0fdacedb4be997a1
+21-tcp-flags-str-sixteen-bytes-mode0	0	0	true	b941a5a7c677f5295a3a25dcb8e7685f7f77701c6c03c644eb452214048995bd	eca40491b5e2cda2a94f739ce0800efe3c8c68eb4ef0cd8c2e9bd73d92531564

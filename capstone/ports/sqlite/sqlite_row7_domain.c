@@ -1,5 +1,5 @@
 /* row7 -- the LITERAL matched pair for
- * cve-repros/row7_cpython_cursor_dealloc (HIERARCHICAL-REVOKE).
+ * capi-repros/row7_cpython_cursor_dealloc (HIERARCHICAL-REVOKE).
  *
  * The SAME row7 program as before.c, real SQLite C API, one Capstone domain:
  *

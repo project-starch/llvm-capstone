@@ -1,4 +1,4 @@
-# Trimmed 15-row corpus -> on-disk cve-repros dir + oracle + predicted CHERI outcome.
+# Trimmed 15-row corpus -> on-disk capi-repros dir + oracle + predicted CHERI outcome.
 # The on-disk dirs still use the pre-trim 19-row numbering; this maps the paper's
 # 15-row security table onto them (old rows 15/17/18/19 dropped as out-of-scope;
 # old row 16 -> new row 15). See PROVENANCE-LEDGER.md and agentB-015 task.

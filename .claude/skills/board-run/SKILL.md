@@ -75,6 +75,18 @@ Each of these has cost real board time when skipped.
    `.capstone_gp_initdesc`, so lld orphan-places it, `globals_off` reads as ~0x3f0 and the
    monitor aborts with `capstone_error 0xB10B`. Use the DEFAULT `link-gpfree.ld` plus
    `DOMAIN_WINDOW`.
+6. **Under the silicon (gp-captable) ABI, list every `delin` outside `_start` and justify each
+   one.** The RTL's DELIN raises UNEXPECTED_CAPABILITY_TYPE on any non-LINEAR operand, a wedge, while
+   QEMU's helper returns early, so the emulator never shows it. String literals, cap-table globals
+   and monitor-shared regions all arrive NON-linear in the silicon build. This cost boots three
+   times: S-02, S-15, and the repro322 corpus's print helper (2026-10-01, every case wedged at its
+   first print). The known-good case is `sublet_take` de-linearising a linear grant. Anything else
+   needs a reason, or the `#ifdef CAPSTONE_GP_CAPTABLE_ABI` guard `sqlite_capstone_domain.c` uses:
+   ```bash
+   llvm-objdump -d --no-show-raw-insn <x>.dom | awk '/^[0-9a-f]+ </{fn=$2} /\tdelin\t/{print fn}' | sort | uniq -c
+   ```
+   Not a preflight gate on purpose: whether a `delin` is safe depends on its operand's type, which a
+   static scan cannot see, and images that run correctly on silicon have one in `sublet_take`.
 
 ## 1. Bake it in — never UART
 
@@ -107,6 +119,19 @@ rc=0 on both targets, and only the size differed (31,144 vs 31,504 bytes). Order
 (`Makefile:102-118`): module and domain targets FEED the rootfs, OpenSBI CONSUMES the Image.
 **Verify from the artifact, not the bake's exit status** — grep the built `.ko` and the cpio for a
 string that exists only in the new code, with a string present in both as the positive control.
+
+**A DIFFERENT module (not a rebuild of the stock one) is ONE per boot, and it fixes what the boot
+can run.** Four facts, each of which cost a B0.7 boot on 2026-10-04:
+- The board kernel cannot unload modules (`rmmod`: "Function not implemented").
+- Every driver runs `[ -e /dev/capstone ] || insmod /capstone.ko` before the first rung. So the
+  module under test must BE `/capstone.ko` in the image. Loading it from a rung is too late.
+- The process-ABI module serves ONE API per load. The first legacy ioctl, even an unrecognised one,
+  makes `PROCESS_ENABLE` EBUSY. So a classic `lpc` control cannot precede a `capstone-exec` rung.
+  Its DOM_CREATE struct also differs in size (`copy_len`), so lpc's create fails on that module.
+- A module built by hand (`make -C linux M=...`) skips `external.mk`'s FPGA `-march=rv64g`. Its
+  compressed call sites then make the kernel's relocation code take a misaligned load, which the
+  monitor cannot handle, and the board hangs inside `insmod` with MCAU 4. Before baking, count the
+  module's 2-byte instructions in `objdump -d`; the count must be 0.
 
 **Retire before you stage, every time — the image is DERIVED from the run, not accumulated:**
 
@@ -426,6 +451,12 @@ So after any reflash:
    second; keep them in step or a `git status` in the other will contradict the DTB.
 3. Verify the value is in the **built firmware's DTB**, not just the source.
 4. Also update `FPGA_BITSTREAM` — the drivers hard-stop on a mismatch, which is the gate working.
+5. **Identify the new silicon by BEHAVIOUR in the first session**: run an instruction or CSR that only the new
+   RTL has, pre-registered as "returns on the new bitstream, traps on the old one". `nv_bitstream_name` is the
+   server's memory of its last flash, not a readback from the FPGA. An acceptance list of unchanged workloads
+   reads identically on both bitstreams. On 2026-10-02, all ten R-43 rows passed and none could tell
+   `36a641e0b` from `8f6a0af98`. A one-instruction domain reading csnodefree (CSR 0xFC4) settled it: it
+   returned 0xFFCD, where the old RTL raises illegal instruction.
 
 Full recipe: `docs/ref/HOW-TO-LAUNCH-ON-FPGA.md`.
 
@@ -564,6 +595,15 @@ c.power(True);  time.sleep(15.0)     # FPGA keeps the old config until it reconf
                                      # Skip it and the DTM comes up IDCODE 0x00000001.
 rb = flash_state["nv_bitstream_name"]   # RE-READ. Never trust the call.
 ```
+
+**Re-read on the SAME `FpgaConsole`, or `close()` it first.** Every `FpgaConsole.connect()` takes
+the local flock on `/tmp/capstone/.board.lock`, and a second instance in the same process cannot
+get it while the first holds it (`BlockingIOError` → "another board session holds"). On 2026-09-24
+a reflash script opened a second connection for the readback: the flash had completed, but the
+verification died and the result was unverified until a separate read. It is the same class as
+`run-board-ladder.sh` deadlocking against its own driver (2026-09-22). And if the script ends with
+`os._exit()` (the socket thread otherwise keeps Python alive), `print(..., flush=True)` the readback
+first, or `os._exit` discards it on a pipe and only the exit code survives.
 
 **Reading the resident name is itself a trap, twice over.** `_current_state()` returns only the
 `state` field and **drops `nv_bitstream_name`**; and registering the event handler *after*

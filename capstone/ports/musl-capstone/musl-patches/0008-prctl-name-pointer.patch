@@ -1,0 +1,52 @@
+prctl and the thread-name calls keep the name a pointer
+
+prctl read its four variadic arguments as unsigned long, and
+pthread_setname_np and pthread_getname_np passed the name as (unsigned
+long)name. On capstone64 a long holds an address, not a capability, so the
+name reached the syscall untagged and the runtime's first read of it faulted
+(cause 24, pthread-probe thread-name). prctl reads its arguments as
+syscall_arg_t, as musl's own syscall() does, which is a long where a pointer
+is one and a capability here; the thread-name calls pass the name as the
+pointer it is. Found by pthread-probe, 2026-09-30.
+
+diff -ru a/src/linux/prctl.c b/src/linux/prctl.c
+--- a/src/linux/prctl.c
++++ b/src/linux/prctl.c
+@@ -4,11 +4,11 @@
+ 
+ int prctl(int op, ...)
+ {
+-	unsigned long x[4];
++	syscall_arg_t x[4];
+ 	int i;
+ 	va_list ap;
+ 	va_start(ap, op);
+-	for (i=0; i<4; i++) x[i] = va_arg(ap, unsigned long);
++	for (i=0; i<4; i++) x[i] = va_arg(ap, syscall_arg_t);
+ 	va_end(ap);
+ 	return syscall(SYS_prctl, op, x[0], x[1], x[2], x[3]);
+ }
+diff -ru a/src/thread/pthread_getname_np.c b/src/thread/pthread_getname_np.c
+--- a/src/thread/pthread_getname_np.c
++++ b/src/thread/pthread_getname_np.c
+@@ -13,7 +13,7 @@
+ 	if (len < 16) return ERANGE;
+ 
+ 	if (thread == pthread_self())
+-		return prctl(PR_GET_NAME, (unsigned long)name, 0UL, 0UL, 0UL) ? errno : 0;
++		return prctl(PR_GET_NAME, name, 0UL, 0UL, 0UL) ? errno : 0;
+ 
+ 	snprintf(f, sizeof f, "/proc/self/task/%d/comm", thread->tid);
+ 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs);
+diff -ru a/src/thread/pthread_setname_np.c b/src/thread/pthread_setname_np.c
+--- a/src/thread/pthread_setname_np.c
++++ b/src/thread/pthread_setname_np.c
+@@ -15,7 +15,7 @@
+ 	if ((len = strnlen(name, 16)) > 15) return ERANGE;
+ 
+ 	if (thread == pthread_self())
+-		return prctl(PR_SET_NAME, (unsigned long)name, 0UL, 0UL, 0UL) ? errno : 0;
++		return prctl(PR_SET_NAME, name, 0UL, 0UL, 0UL) ? errno : 0;
+ 
+ 	snprintf(f, sizeof f, "/proc/self/task/%d/comm", thread->tid);
+ 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs);

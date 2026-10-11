@@ -1,0 +1,26 @@
+{
+  "before": {
+    "sys/arm64/arm64/cheri_revoke_machdep.c": "2a3f8c149f9c097ae425096a27a045279fc96b19b1598e84efa9d528eed7b50e",
+    "sys/arm64/arm64/cheri_revoke_machdep_tests.c": "895b49374cf78cb378763bdfd7f9b166bed630061c30a9f455050b29bbd8e1e8",
+    "sys/riscv/riscv/cheri_revoke_machdep.c": "0e8b24556827daae9323f5a38e6d76c3fb1027a8b132890f0b81c386d06c6387",
+    "sys/riscv/riscv/cheri_revoke_machdep_tests.c": "d2adb2be655b2d65c95b6126b101a212c5ecc395e4bcef5c5f742c85617dd7a0",
+    "sys/vm/vm_fault.c": "8dbaeca340f3847cbb55378753a8681a3f1375199f096313c380b151211fe2d2",
+    "sys/vm/vm_map.h": "7e7f6ca8a1329f4936426295ae4337ef89cb8ffdaff119990276555cb5ed2779"
+  },
+  "after": {
+    "sys/arm64/arm64/cheri_revoke_machdep.c": "68dc9915b526f03013674172e832e0141aa1a6f5b8ecdc51fa22a4c2844c0301",
+    "sys/arm64/arm64/cheri_revoke_machdep_tests.c": "5c418925165560b88b4a56567c819ad7bb184b731525002f7d6e56eb26e17562",
+    "sys/riscv/riscv/cheri_revoke_machdep.c": "2b9ed4f0aa232af9bbcec6e40d34a5e13935441deb8fcbc97b13ef01983bd3dd",
+    "sys/riscv/riscv/cheri_revoke_machdep_tests.c": "2a5af7e393b7e1471e1e38b5d7633f49ff3ce15916068122214ec44752247332",
+    "sys/vm/vm_fault.c": "3b48e7932fd76b41b026387b34d9a2a6924c9f62eea304136aa0978e3dcbc0cb",
+    "sys/vm/vm_map.h": "43195338310108e1fdb80f759b48a7e413a1f2355d1c27332069c965745ab4d4"
+  },
+  "cheribsd_head": "214a1a2d939ec065a7ac5452413058e84c3faf61",
+  "patch_sha256": "59e73bcc5c5b57b8b2004f0efc7cb1e1f8897a34bd927b14f210411e3c5f870f",
+  "kernel_sha256": "70d27f472cce52356a77202228a5c7311fd96e895ffb160bac0495fd60522139",
+  "tested_architecture": "riscv64-purecap",
+  "limitations": [
+    "No swap-pressure stress campaign",
+    "Unsupported object types and partial pages stop with an unresolved-probe error; never silently skipped"
+  ]
+}

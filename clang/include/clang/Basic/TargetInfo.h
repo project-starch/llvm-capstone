@@ -507,6 +507,14 @@ public:
   /// pipeline for no gain.
   virtual uint64_t getMaxAddressWidth() const { return getMaxPointerWidth(); }
 
+  /// Whether pointers on this target are capabilities, and __intcap_t and
+  /// __uintcap_t exist. Only then is the __intcap keyword accepted.
+  virtual bool SupportsCapabilities() const { return false; }
+
+  /// The size and alignment of __intcap_t/__uintcap_t: a capability.
+  virtual unsigned getIntCapWidth() const { return getPointerWidth(LangAS::Default); }
+  virtual unsigned getIntCapAlign() const { return getPointerAlign(LangAS::Default); }
+
   /// Get integer value for null pointer.
   /// \param AddrSpace address space of pointee in source language.
   virtual uint64_t getNullPointerValue(LangAS AddrSpace) const { return 0; }

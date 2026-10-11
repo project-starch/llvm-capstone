@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "reviewed": "2026-09-27",
+  "applications": {
+    "sqlite": {
+      "version": "3.22.0",
+      "scope": "SQL application workloads; published-artifact reproduction anchor",
+      "nested": "memsys5 only; effective lookaside disable required"
+    },
+    "mruby": {
+      "version": "4.0.0-rc2",
+      "scope": "Complete interpreter on its upstream benchmark program",
+      "nested": "1,024-slot GC heap pages"
+    }
+  },
+  "suites": [
+    {
+      "id": "sqlite-poisoncap-speedtest1",
+      "application": "sqlite",
+      "title": "Published PoisonCap SQLite speedtest1",
+      "kind": "upstream-performance-with-published-adaptations",
+      "source": {
+        "url": "https://github.com/Yuecheng-CAM/Ajs38RO4Vz-p",
+        "revision": "731c5720d1a6321d436a8d7b85bf3aa2e4971fe0",
+        "sha256": "c5e8b07d4f70ed8cc1ecf04193ceacc5266553a2cbd233e6fa51fb8f0d190b9c",
+        "release": "SQLite 3.22.0",
+        "subdirectory": "sqlite"
+      },
+      "cases": [
+        "main"
+      ],
+      "adaptation_status": "four-arm-measured-legacy-runner",
+      "blockers": [
+        "Move the complete SQLite campaign from the legacy host to the shared persistent runner.",
+        "Resolve protected size-2 and low-budget guest failures before capacity claims."
+      ],
+      "documentation": "https://arxiv.org/html/2605.13210v1",
+      "case_readiness": {
+        "main": {
+          "status": "four-arm-repeated-memory-measured",
+          "evidence": "results/sqlite-normalized-memory-20260927/README.md"
+        }
+      }
+    },
+    {
+      "id": "mruby-poisoncap-ao",
+      "application": "mruby",
+      "title": "mruby upstream ambient-occlusion renderer",
+      "kind": "upstream-performance-with-stderr-phase-markers",
+      "source": {
+        "url": "https://github.com/mruby/mruby",
+        "revision": "9d523e2f74f2e63ca02840937523de61398a617d",
+        "release": "4.0.0-rc2",
+        "benchmark_sha256": "e44efffd6415b9ef875bd92272ad2bd984ab4bc0f078b6e73aa791fd9865180f"
+      },
+      "cases": [
+        "bm_ao_render.rb"
+      ],
+      "adaptation_status": "four-arm-measured-and-planner-qualified",
+      "blockers": [
+        "Larger AO sizes and complete platform storage are needed before a total-memory ranking."
+      ],
+      "work_units": {
+        "upstream_default_width": 64,
+        "width8": {
+          "output_bytes": 203,
+          "output_sha256": "28060a9790593ace825b7552ab5d1878cf3e95be3be08ee738f28cde4cee5d11"
+        },
+        "width16": {
+          "output_bytes": 781,
+          "output_sha256": "cfd73bb1de97514b2adacbda3a377e5172aecbe48819f654071d1996359ca634"
+        }
+      },
+      "case_readiness": {
+        "bm_ao_render.rb": {
+          "status": "four-arm-two-size-repeated-memory-measured",
+          "evidence": "results/mruby-gc-memory-20260927/README.md"
+        }
+      }
+    }
+  ]
+}

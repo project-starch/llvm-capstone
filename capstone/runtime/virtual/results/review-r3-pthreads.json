@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "tests": {
+    "unsupported_clone_refused": true,
+    "tls mutex cond tagged_join": true,
+    "timed_wait": true,
+    "independent_blocking_io": true,
+    "private_epoll_events": true,
+    "shared_tls_transport": true,
+    "64_joined_lifetimes": true,
+    "exit": true,
+    "cleanup": true
+  },
+  "harts": 1,
+  "virtual_vm_abi": 3,
+  "input_sha256": {
+    "launcher": "12a78e0385ec97e48cdc69e1025bac7ecd3d8fc753c6dfd52ca0bf38a4bf8990",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "application": "55216aea03b0f625833fcbd74d7a08111704bb2a50d17af0acaa07dd3abc2fc3",
+    "qemu": "dcb35a810990e9a58ae33c7e0999f25bbcbcb8a09ddbb23a8fdb885880ca4a97",
+    "source": "8f881d64bfc7273bdcf213ab24806bfed4c7d7ed7d6333956326ead43463836d",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "gate_sha256": "128f93709619e2bffac61fa3de62be632bb4720579dd17baab1396e2c540f211",
+  "runner_sha256": "0732dde661b50c7914ec5c4425cdfe1392dfd7392c980e14473d887007ffbcab",
+  "review_base": "a68c81be020b9d1672f195c3582d82480859e191"
+}

@@ -1,0 +1,5 @@
+case	fix	name	shape	mode	expected	passed	cause	pc	expected_pc	site	delivered	completed	runner_exit
+0	3c8be14c82	00-rpcrdma-write-offsets-global	stale pointer held by a global across packets	spatial	complete	False						False	1
+0	3c8be14c82	00-rpcrdma-write-offsets-global	stale pointer held by a global across packets	sublet	fault	False	0	0		read	False		1
+12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	spatial	complete	False						False	1
+12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	sublet	complete	False							1

@@ -25,6 +25,7 @@ on 2026-08-18. They are kept, not deleted, because several record measured resul
 
 | File | last touched |
 |------|------|
+| [capstone-heap-protection.md](capstone-heap-protection.md) — qualify libc malloc/free protection with Capstone and minimal changes (plan) | 2026-09-30 |
 | `backend-compiler-fixes.md` | 2026-06-22 |
 | `beebs-deferred-benchmarks.md` | 2026-07-20 |
 | `benchmark-bringup.md` | 2026-06-19 |
@@ -44,3 +45,5 @@ on 2026-08-18. They are kept, not deleted, because several record measured resul
 | `sqlite-row3-matched-repro-plan.md` | 2026-07-20 |
 | `sqlite-row3-option-b-held-cap-probe-plan.md` | 2026-07-20 |
 | `xlang-phase2-seam-TODO.md` | 2026-08-02 |
+| `cpython-interpreter-port.md` | 2026-09-23 |
+| `DECISIONS-WAITING-2026-09-23-cpython-port.md` | 2026-09-23 |

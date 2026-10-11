@@ -1,0 +1,7 @@
+case 4 BEGIN
+PG_NOTE remaining_len=0
+PG_NOTE data_past_end=1
+PG_DEFECT case=4 expect_fault_in=pgclient_consume_content@0xc020f9dc
+PG_DEFECT case=4 mark
+capstone-vm: capstone-exec: domain fault cause=5 pc=0xc020fac0 address=0xc0258138 entry=0xc0200cc8 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=c7de42e2c6a81dd6d501c56c1d8a5b7995698650f557ff6234d42d19e02161b7 image=/mnt/host/applications/04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer-c7de42e2c6a81dd6d501c56c1d8a5b7995698650f557ff6234d42d19e02161b7.dom
+capstone-vm: application terminated by signal 11

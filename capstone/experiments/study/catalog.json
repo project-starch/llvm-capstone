@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "reviewed": "2026-09-27",
+  "applications": {
+    "sqlite": {
+      "version": "3.53.3",
+      "scope": "SQL application workloads",
+      "nested": "memsys5/lookaside"
+    },
+    "cpython": {
+      "version": "3.13.7",
+      "scope": "Interpreter application workloads",
+      "nested": "pymalloc"
+    },
+    "mruby": {
+      "version": "4.0.0-rc2",
+      "scope": "Interpreter application workloads",
+      "nested": "GC slots"
+    },
+    "perl": {
+      "version": "5.36.3",
+      "scope": "Interpreter application workloads",
+      "nested": "not integrated"
+    },
+    "postgres": {
+      "version": "17.5",
+      "scope": "Single-user backend only",
+      "nested": "memory contexts"
+    },
+    "ffmpeg": {
+      "version": "9.0.1",
+      "scope": "Configured Matroska/MPEG-4 decoder only",
+      "nested": "AVBufferPool/AVRefStructPool"
+    }
+  },
+  "suites": [
+    {
+      "id": "sqlite-speedtest1",
+      "application": "sqlite",
+      "title": "SQLite speedtest1",
+      "kind": "upstream-performance",
+      "source": {
+        "url": "https://sqlite.org/src/tarball/sqlite.tar.gz?r=version-3.53.3",
+        "release": "3.53.3",
+        "sha3_256": "03a50b977011695ca53aa6fb27e381816f9abfcbfd9e6214371432c1ad531716"
+      },
+      "cases": [
+        "main",
+        "orm",
+        "cte",
+        "json",
+        "star",
+        "parsenumber",
+        "app"
+      ],
+      "adaptation_status": "not-qualified",
+      "blockers": [
+        "Migrate existing speedtest1 builds to the shared application runner; preserve its SQL oracle.",
+        "Build matching CheriBSD engine, allocator configuration and dataset."
+      ],
+      "documentation": "https://www.sqlite.org/cpu.html"
+    },
+    {
+      "id": "cpython-pyperformance",
+      "application": "cpython",
+      "title": "Python pyperformance",
+      "kind": "upstream-performance",
+      "source": {
+        "url": "https://github.com/python/pyperformance",
+        "revision": "2ab96f98f98274d07ebfdfd66e4f021723179706",
+        "release": "1.14.0"
+      },
+      "cases": [
+        "json_loads",
+        "json_dumps",
+        "pickle",
+        "richards",
+        "deltablue",
+        "regex_v8",
+        "nbody"
+      ],
+      "adaptation_status": "not-qualified",
+      "blockers": [
+        "Run upstream workload bodies with a fixed work count; the pyperf subprocess controller cannot run inside the current domain.",
+        "Qualify dependencies and output oracles; label a host-driven subset explicitly.",
+        "Build matching CheriBSD CPython and account separately for pymalloc arenas and object slots."
+      ],
+      "documentation": "https://pyperformance.readthedocs.io/benchmarks.html"
+    },
+    {
+      "id": "mruby-upstream",
+      "application": "mruby",
+      "title": "mruby upstream benchmark directory",
+      "kind": "upstream-performance",
+      "source": {
+        "url": "https://github.com/mruby/mruby",
+        "revision": "9d523e2f74f2e63ca02840937523de61398a617d",
+        "release": "4.0.0-rc2"
+      },
+      "cases": [
+        "bm_so_lists.rb",
+        "bm_so_mandelbrot.rb",
+        "bm_ao_render.rb"
+      ],
+      "adaptation_status": "ao-four-arm-nested-memory-measured",
+      "blockers": [
+        "Measure the nested GC boundary for lists and Mandelbrot, plus more AO work sizes.",
+        "Account for node, shadow and revocation storage before a total-memory ranking."
+      ],
+      "documentation": "https://github.com/mruby/mruby/tree/9d523e2f74f2e63ca02840937523de61398a617d/benchmark",
+      "case_readiness": {
+        "bm_so_lists.rb": {
+          "status": "four-arm-functional-pass",
+          "evidence": "results/20260927-mruby-lists.json",
+          "qualified_memory_comparison": false
+        },
+        "bm_ao_render.rb": {
+          "status": "four-arm-nested-memory-measured-at-widths-8-and-16",
+          "evidence": "results/mruby-gc-memory-20260927/README.md",
+          "qualified_memory_comparison": false
+        }
+      }
+    },
+    {
+      "id": "perl-core",
+      "application": "perl",
+      "title": "Perl core performance workloads",
+      "kind": "upstream-microbenchmarks",
+      "source": {
+        "url": "https://github.com/Perl/perl5",
+        "revision": "d456446ba5b8fba87f3f26fa700eb749c622e434",
+        "release": "v5.36.3"
+      },
+      "cases": [
+        "call::sub::args3_ret3str",
+        "call::sub::args3_ret3temp",
+        "regex-family"
+      ],
+      "adaptation_status": "not-qualified",
+      "blockers": [
+        "Porting/bench.pl drives Cachegrind; extract pinned workload definitions with a reviewed fixed-iteration adapter.",
+        "Expand regex-family into explicit upstream case IDs before qualification.",
+        "Qualify CheriBSD Perl; a whole-interpreter Sublet integration is not yet available."
+      ],
+      "documentation": "https://github.com/Perl/perl5/blob/d456446ba5b8fba87f3f26fa700eb749c622e434/Porting/bench.pl"
+    },
+    {
+      "id": "perl-spec2017",
+      "application": "perl",
+      "title": "SPEC CPU2017 perlbench",
+      "kind": "licensed-application",
+      "source": {
+        "url": "https://www.spec.org/cpu2017/Docs/benchmarks/500.perlbench_r.html",
+        "release": "CPU2017",
+        "access": "licensed",
+        "revision": null
+      },
+      "cases": [
+        "500.perlbench_r"
+      ],
+      "adaptation_status": "not-qualified",
+      "blockers": [
+        "Needs a locally supplied licensed source package and content hashes.",
+        "Uses its own modified interpreter; this is a separate port, not a benchmark of the existing Perl 5.36.3 binary.",
+        "Modified memory runs are not official SPEC scores."
+      ],
+      "documentation": "https://www.spec.org/cpu2017/Docs/benchmarks/500.perlbench_r.html"
+    },
+    {
+      "id": "postgres-pgbench",
+      "application": "postgres",
+      "title": "PostgreSQL pgbench",
+      "kind": "upstream-performance",
+      "source": {
+        "url": "https://github.com/postgres/postgres",
+        "revision": "d7ec59a63d745ba74fba0e280bbf85dc6d1caa3e",
+        "release": "REL_17_0"
+      },
+      "cases": [
+        "select-only",
+        "simple-update",
+        "tpcb-like"
+      ],
+      "adaptation_status": "not-qualified",
+      "blockers": [
+        "Current Capstone application is a single-user backend; full pgbench needs client/server, IPC, process and filesystem support.",
+        "A single-user execution of the SQL bodies must be a separately named derived workload.",
+        "Integrate memory-context Sublet support into the application, beyond allocator replay."
+      ],
+      "documentation": "https://www.postgresql.org/docs/17/pgbench.html"
+    },
+    {
+      "id": "ffmpeg-fate",
+      "application": "ffmpeg",
+      "title": "FFmpeg FATE decode corpus",
+      "kind": "upstream-correctness-corpus",
+      "source": {
+        "url": "https://github.com/FFmpeg/FFmpeg",
+        "revision": "bf1b838f2ab88b4f8fd83443325c782ea0e0f7fa",
+        "release": "n9.0.1"
+      },
+      "cases": [
+        "fate-xvid-idct",
+        "fate-mpeg4-resolution-change-down-up"
+      ],
+      "adaptation_status": "two-adapted-fate-cases-four-arm-nested-memory-measured",
+      "blockers": [
+        "Extend the two qualified adapted MPEG-4 inputs to a broader supported corpus; these are not official FATE scores or a performance suite.",
+        "Account for complete platform and allocator metadata before a total-memory ranking."
+      ],
+      "case_readiness": {
+        "fate-xvid-idct": {
+          "status": "adapted-four-arm-nested-memory-measured-20-frames",
+          "evidence": "results/ffmpeg-fate-four-arm-20260928/README.md",
+          "qualified_memory_comparison": false
+        },
+        "fate-mpeg4-resolution-change-down-up": {
+          "status": "adapted-four-arm-nested-memory-measured-150-frames",
+          "evidence": "results/ffmpeg-fate-four-arm-20260928/README.md",
+          "qualified_memory_comparison": false
+        }
+      },
+      "documentation": "https://www.ffmpeg.org/fate.html"
+    },
+    {
+      "id": "ffmpeg-pts",
+      "application": "ffmpeg",
+      "title": "Phoronix FFmpeg profile",
+      "kind": "external-performance",
+      "source": {
+        "url": "https://openbenchmarking.org/test/pts/ffmpeg",
+        "release": "pts/ffmpeg-8.1.0",
+        "revision": null
+      },
+      "cases": [
+        "encoding-profile"
+      ],
+      "adaptation_status": "not-qualified",
+      "blockers": [
+        "Pin the profile source, inputs and commands before qualification.",
+        "The configured MPEG-4 decoder does not provide the full ffmpeg CLI and required encoding libraries."
+      ],
+      "documentation": "https://openbenchmarking.org/test/pts/ffmpeg"
+    }
+  ],
+  "deferred": {
+    "tshark": "Application dependency build incomplete; later use pinned upstream captures and offline dissection workloads.",
+    "nginx, APR/httpd, memcached, Whisper": "Allocator components exist; they are not qualified application ports in this study.",
+    "MicroPython": "Excluded from this study per the requested CPython focus."
+  }
+}

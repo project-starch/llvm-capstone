@@ -7,10 +7,73 @@
 #include "libavutil/mem.h"
 #include "metadata-allocator.h"
 #include "payload-backend.h"
-static struct payload_block payload_blocks[2048];
+#ifdef FFPOOL_STUDY_GAPS
+#include <stdio.h>
+#endif
+#ifdef FFPOOL_APP_QUARANTINE
+/* Match this provision in both platforms. The published queue alone can hold
+ * 4096 unavailable entries; the old extraction's 2048 records cannot fit it. */
+#define PAYLOAD_BLOCKS 8192
+#else
+#define PAYLOAD_BLOCKS 2048
+#endif
+static struct payload_block payload_blocks[PAYLOAD_BLOCKS];
 static unsigned mode, nblocks;
 static uintptr_t payload_base;
 static size_t payload_capacity, payload_used;
+
+#ifdef FFPOOL_STUDY_GAPS
+/* An in-process observer over the real pool leases. It stores indices and
+ * allocation numbers, never aliases to released application payloads. */
+static uint64_t gap_issues, gap_reuses, gap_last_release[PAYLOAD_BLOCKS], gap_bins[32];
+static unsigned gap_index(const struct payload_block *b) {
+  ptrdiff_t i = b - payload_blocks;
+  if (i < 0 || i >= PAYLOAD_BLOCKS)
+    ff2_fail(307);
+  return (unsigned)i;
+}
+static void gap_issue(const struct payload_block *b) {
+  unsigned index = gap_index(b);
+  if (gap_issues == UINT64_MAX)
+    ff2_fail(308);
+  gap_issues++;
+  if (gap_last_release[index]) {
+    uint64_t distance = gap_issues - gap_last_release[index];
+    unsigned bucket = 0;
+    if (!distance)
+      ff2_fail(309);
+    while (distance > 1) { distance >>= 1; bucket++; }
+    if (bucket >= 32)
+      ff2_fail(310);
+    gap_bins[bucket]++;
+    gap_reuses++;
+    gap_last_release[index] = 0;
+  }
+}
+static void gap_release(const struct payload_block *b) {
+  if (!gap_issues)
+    ff2_fail(311);
+  gap_last_release[gap_index(b)] = gap_issues;
+}
+void ff2_reuse_report(void) {
+#if defined(FFPOOL_CHERI) || defined(FFPOOL_STUDY_GAPS_STDERR)
+#define GAP_PRINT(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define GAP_PRINT(...) printf(__VA_ARGS__)
+#endif
+  GAP_PRINT("FF2-GAP-TOTAL issues=%llu reuses=%llu observer=%llu\n",
+            (unsigned long long)gap_issues, (unsigned long long)gap_reuses,
+            (unsigned long long)(sizeof(gap_issues)+sizeof(gap_reuses)+
+                                 sizeof(gap_last_release)+sizeof(gap_bins)));
+  for (unsigned i = 0; i < 32; i += 2)
+    GAP_PRINT("FF2-GAP pair=%u a=%llu b=%llu\n", i/2,
+              (unsigned long long)gap_bins[i],
+              (unsigned long long)gap_bins[i+1]);
+#undef GAP_PRINT
+}
+#else
+void ff2_reuse_report(void) { }
+#endif
 
 void ff2_set_mode(unsigned value) {
   if (value > 2)
@@ -21,11 +84,25 @@ void ff2_pool_init_region(uintptr_t base, size_t capacity) {
   payload_base = base;
   payload_capacity = capacity;
 }
-static void *issue(struct payload_block *b) {
+static void *issue(struct payload_block *b, int observed) {
   void *p = ff2_payload_issue_pointer(b, mode);
   b->alias = p;
   b->idle = 0;
+#ifdef FFPOOL_STUDY_GAPS
+  b->observed_lease = observed;
+  if (observed) gap_issue(b);
+#else
+  (void)observed;
+#endif
   return p;
+}
+static int reusable(const struct payload_block *b) {
+#ifdef FFPOOL_POISONCAP
+  return ff2_poisoncap_reusable(b, mode);
+#else
+  (void)b;
+  return 1;
+#endif
 }
 static struct payload_block *by_address(uintptr_t address) {
   for (unsigned i = 0; i < nblocks; i++)
@@ -57,13 +134,14 @@ void *ff2_payload_alloc(size_t size) {
 #endif
   struct payload_block *b = NULL;
   for (unsigned i = 0; i < nblocks; i++)
-    if (!payload_blocks[i].alive && payload_blocks[i].rounded == rounded) {
+    if (!payload_blocks[i].alive && payload_blocks[i].rounded == rounded &&
+        reusable(&payload_blocks[i])) {
       b = &payload_blocks[i];
       break;
     }
   if (!b) {
     size_t padding = (-(size_t)(payload_base + payload_used)) & (alignment - 1);
-    if (nblocks == 2048 || padding > payload_capacity - payload_used ||
+    if (nblocks == PAYLOAD_BLOCKS || padding > payload_capacity - payload_used ||
         rounded > payload_capacity - payload_used - padding)
       return NULL;
     payload_used += padding;
@@ -77,24 +155,47 @@ void *ff2_payload_alloc(size_t size) {
   b->alive = 1;
   b->idle = 1;
   ff2_payload_prepare_backing(b, mode);
-  return issue(b);
+  return issue(b, 1);
 }
 void ff2_payload_return(void *p) {
   struct payload_block *b = by_authority(p);
   ff2_payload_return_lease(b, mode);
   b->idle = 1;
+#ifdef FFPOOL_STUDY_GAPS
+  if (b->observed_lease) gap_release(b);
+  b->observed_lease = 0;
+#endif
+}
+int ff2_payload_reusable(uintptr_t address) {
+  struct payload_block *b = by_address(address);
+  return b->idle && reusable(b);
+}
+static void *teardown(struct payload_block *b) {
+#ifdef FFPOOL_POISONCAP
+  ff2_poisoncap_teardown(b, mode);
+#endif
+  return issue(b, 0);
+}
+void *ff2_payload_teardown(uintptr_t address) {
+  struct payload_block *b = by_address(address);
+  if (!b->idle) ff2_fail(305);
+  return teardown(b);
 }
 void *ff2_payload_issue(uintptr_t address) {
   struct payload_block *b = by_address(address);
   if (!b->idle)
     ff2_fail(305);
-  return issue(b);
+  return issue(b, 1);
 }
 void ff2_payload_free(void *p) {
   if (!p)
     return;
   struct payload_block *b = by_authority(p);
   ff2_payload_free_backing(b, mode);
+#ifdef FFPOOL_STUDY_GAPS
+  if (b->observed_lease) gap_release(b);
+  b->observed_lease = 0;
+#endif
   b->alive = 0;
   b->idle = 1;
 }
@@ -121,7 +222,12 @@ void *ff2_ref_data(void *meta) {
   struct payload_block *b = by_meta(meta);
   /* Trusted free-entry callbacks may inspect persistent fields in an idle
    * entry. Give them fresh authority, never revive the application's alias. */
-  return b->idle ? issue(b) : b->alias;
+  /* The manager exposes an idle entry to its own callback or initializer. */
+  return b->idle ? teardown(b) : b->alias;
+}
+int ff2_ref_reusable(void *meta) {
+  struct payload_block *b = by_meta(meta);
+  return b->idle && reusable(b);
 }
 void *ff2_ref_issue(void *meta) {
   struct payload_block *b = by_meta(meta);
@@ -135,7 +241,8 @@ void ff2_ref_free(void *meta) {
   if (!meta)
     return;
   struct payload_block *b = by_meta(meta);
-  void *p = b->idle ? issue(b) : b->alias;
+  /* Reacquire solely for trusted teardown; this is not an application lease. */
+  void *p = b->idle ? teardown(b) : b->alias;
   ff2_payload_free(p);
   b->meta = NULL;
   av_free(meta);

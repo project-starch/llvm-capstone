@@ -1,0 +1,68 @@
+{
+ "date": "2026-09-30",
+ "change": "build_config.rb adds mruby-task (at 4.0.0-rc2 through hal-posix-task, at head through the gem itself, the port layer carrying the HAL)",
+ "why": "capstone/bug-corpora/mruby/gc-slot-repros names mruby-task as the reason four of its candidates cannot be reached: the reports that carry the reused-GC-slot signature exactly (mruby #6870, #6886, #6872, #6887, 'Assertion failed: ((obj)->tt != MRB_TT_FREE), function mrb_gc_mark') all go through mrb_task_mark_all, and the gem is in none of the port's gemboxes",
+ "what_the_gem_needs": "the POSIX task HAL (mrbgems/hal-posix-task/src/task_hal.c) drives its tick with sigaction(SIGALRM) plus setitimer(ITIMER_REAL), and sleeps with clock_gettime(CLOCK_MONOTONIC) and nanosleep. All four are delegated on #144, and none of them is a thread: that is why the gem builds for a domain now and did not before.",
+ "platform": {
+  "qemu_sha256": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+  "firmware_fw_jump_sha256": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+  "module_sha256": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+  "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "launcher_sha256": "546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94",
+  "note": "the platform of the delegation-v0-removal-stack checks (#144); guest --cma-mib 1024 --process-cache-mib 768",
+  "compiler": "lane/compiler-stack-20260929 68c75ed3",
+  "knobs": "MRBD_TESTS=1, MRBD_BOXING=no, MRBD_DISPATCH=switch, MRBD_OPT=-O2, MRBD_HEAP=level0"
+ },
+ "arms": {
+  "head": {
+   "native_mrbtest_sha256": "9d9dd510928ec112594f61bab2b742b70fd05c64acf405dcc95d7df62ec6506b",
+   "domain_mrbtest_sha256": "f73e4e338a6c5a610ef6fb002e59eac05e9d1a245f8bf7e099ef4d54c16bcc61",
+   "native": {
+    "total": 2936,
+    "ok": 2838,
+    "ko": 0,
+    "crash": 0,
+    "skip": 74
+   },
+   "domain": {
+    "total": 2936,
+    "ok": 2837,
+    "ko": 0,
+    "crash": 1,
+    "skip": 74
+   },
+   "domain_exit": 1,
+   "per_test": "one test differs from native, the same one this port's stdlib-io record reports: 'Process.kill passes the pid selectors on' crashes on Process.kill(0, 0). The launcher rule that refuses it is changed in the fd-rows runtime branch; with that launcher the same image has no crash."
+  },
+  "4.0.0-rc2": {
+   "native_mrbtest_sha256": "a54acd36f07f6828da97f2d8dd030e0015bd97307844a80fb6c8214192f44f2a",
+   "domain_mrbtest_sha256": "13ec2d2b2b6ab6733daa060152386a14d9c001b425910d8e072edf827680da42",
+   "native": {
+    "total": 1710,
+    "ok": 1701,
+    "ko": 0,
+    "crash": 0,
+    "skip": 9
+   },
+   "domain": {
+    "total": 1710,
+    "ok": 1701,
+    "ko": 0,
+    "crash": 0,
+    "skip": 9
+   },
+   "domain_exit": 0,
+   "per_test": "every test's status is the native one"
+  }
+ },
+ "task_scripts": "three task workloads (tasks allocating across Task.pass, a task holding a string across a yield, and a root-context Task.pass loop while background tasks run) complete in the domain with status 0 in both pins",
+ "reproduction_attempted": {
+  "defect": "mruby #6886, fixed upstream by 456a8687a 'gc.c: re-mark task stacks in final_marking_phase' (2026-06-12, after the pin)",
+  "live_at_the_pin": "yes, read in the pin's own source: mrb_task_mark_all is called from root_scan_phase (src/gc.c:1251-1253) and final_marking_phase (src/gc.c:1334-1356) does not call it",
+  "ground_truth_arm": "the pin's tree with mruby-task, MRB_DEBUG (so mrb_assert is live) and ASan, and WITHOUT MRB_GC_STRESS, because a full GC at every allocation closes the very window this defect needs",
+  "workloads": "three Ruby workloads written to the fix commit's own mechanism: objects allocated into task stack slots across Task.pass; the same with GC.generational_mode=false and GC.step_ratio=1 to hold the incremental window open; and old objects moved out of a container into a task slot during the mark phase",
+  "result": "none of them fires at the pin",
+  "positive_control": "an arm built with the root_scan_phase call to mrb_task_mark_all compiled out, so task stacks are never marked at all. The first workload faults there under ASan (SEGV in mrb_vm_exec at src/vm.c:2692) in three of four knob settings, so the instrument fires and that workload does put objects solely on task stacks across a collection. The other two workloads do not fault even in that arm, so they never put an object solely on a task stack and say nothing either way.",
+  "reading": "the workload reaches the gem but not the race: the defect needs a task stack slot written during the incremental mark phase with an object the root scan did not see, which a Ruby script does not place precisely. This is the conclusion the corpus already reached for the realloc-vmstack rows, and it points the same way: a C-level case that drives the collector's phases directly."
+ }
+}

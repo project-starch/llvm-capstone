@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "purpose": "Additional complete-decoder memory workloads from FFmpeg 9.0.1 FATE inputs; these are adapted inputs, not FATE scores",
+  "ffmpeg_release": "9.0.1",
+  "ffmpeg_source_archive_sha256": "cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635",
+  "adapter": {
+    "reason": "The measured decoder enables Matroska and MPEG-4, but not the raw M4V demuxer",
+    "command": "ffmpeg -nostdin -v error -r 25 -f m4v -i INPUT -map 0:v:0 -c:v copy -f matroska -y OUTPUT",
+    "decoded_oracle": "The independent native FFmpeg 9.0.1 application decoder produced identical per-frame MD5 lists from the original raw M4V and the Matroska copy"
+  },
+  "cases": [
+    {
+      "fate_id": "fate-xvid-idct",
+      "fate_input": "mpeg4/xvid_vlc_trac7411.h263",
+      "source_url": "rsync://fate-suite.ffmpeg.org/fate-suite/mpeg4/xvid_vlc_trac7411.h263",
+      "source_sha256": "aee58db19e76c334b126b2390aed661e6134995b7fdc614ea652222926153689",
+      "matroska_sha256": "ce65b9eeea56b1c9f7f9ebf9f9a7e77e4eef1ef7bfaf5f6b3b3951a2c9f16d7f",
+      "frames": 20,
+      "native_matroska_application_stdout_sha256": "df668c84d73336615121ee5fc045f5501d34e76d1d83acde32094da527a9072f"
+    },
+    {
+      "fate_id": "fate-mpeg4-resolution-change-down-up",
+      "fate_input": "mpeg4/resize_down-up.h263",
+      "source_url": "rsync://fate-suite.ffmpeg.org/fate-suite/mpeg4/resize_down-up.h263",
+      "source_sha256": "a1a40010f9865f9beadee8d63c36202d827d31c0058503a28081555cba0766e3",
+      "matroska_sha256": "18ebb5bed599aeff27e1800bb0cc9db614f27bd0f5dafa77ba1901fc8a39022f",
+      "frames": 150,
+      "native_matroska_application_stdout_sha256": "da5b8a4311a5190fe29496355751ece88f1f6b153a27e76ece751b55b45e961b"
+    }
+  ]
+}

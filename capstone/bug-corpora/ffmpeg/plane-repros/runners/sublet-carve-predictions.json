@@ -1,0 +1,4 @@
+{
+  "_about": "sublet-carve arm, pre-registered: the Sublet port of av_frame_get_buffer's carve (shared/sublet-frame.c) bounds each plane to upstream's ALLOCATED plane extent, padded_height rows. The case reads at offset 160 of the alpha plane, whose extent is 1024 bytes, so the read is inside what the port issued and completes.",
+  "00_b7946098b1_alphablend_row_past_plane": "DEFECT-REPRODUCED"
+}

@@ -1,0 +1,579 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "native_null",
+      "passed": true
+    },
+    {
+      "name": "oracle_detects_value",
+      "passed": true
+    },
+    {
+      "name": "oracle_detects_cas",
+      "passed": true
+    },
+    {
+      "name": "pthread_unsupported_clone_refused",
+      "passed": true
+    },
+    {
+      "name": "pthread_tls_mutex_cond_tagged_join",
+      "passed": true
+    },
+    {
+      "name": "pthread_timed_wait",
+      "passed": true
+    },
+    {
+      "name": "pthread_independent_blocking_io",
+      "passed": true
+    },
+    {
+      "name": "pthread_private_epoll_events",
+      "passed": true
+    },
+    {
+      "name": "pthread_shared_tls_transport",
+      "passed": true
+    },
+    {
+      "name": "pthread_64_joined_lifetimes",
+      "passed": true
+    },
+    {
+      "name": "normal1_harness",
+      "passed": true
+    },
+    {
+      "name": "normal1_protocol",
+      "passed": true
+    },
+    {
+      "name": "normal1_identity",
+      "passed": true
+    },
+    {
+      "name": "normal1_exit",
+      "passed": true
+    },
+    {
+      "name": "normal1_stderr",
+      "passed": true
+    },
+    {
+      "name": "normal2_harness",
+      "passed": true
+    },
+    {
+      "name": "normal2_protocol",
+      "passed": true
+    },
+    {
+      "name": "normal2_identity",
+      "passed": true
+    },
+    {
+      "name": "normal2_exit",
+      "passed": true
+    },
+    {
+      "name": "normal2_stderr",
+      "passed": true
+    },
+    {
+      "name": "usr1_harness",
+      "passed": true
+    },
+    {
+      "name": "usr1_protocol",
+      "passed": true
+    },
+    {
+      "name": "usr1_identity",
+      "passed": true
+    },
+    {
+      "name": "usr1_exit",
+      "passed": true
+    },
+    {
+      "name": "usr1_stderr",
+      "passed": true
+    },
+    {
+      "name": "marker_harness",
+      "passed": true
+    },
+    {
+      "name": "marker_protocol",
+      "passed": true
+    },
+    {
+      "name": "marker_identity",
+      "passed": true
+    },
+    {
+      "name": "marker_exit",
+      "passed": true
+    },
+    {
+      "name": "four_workers",
+      "passed": true
+    },
+    {
+      "name": "worker_gate_control",
+      "passed": true
+    },
+    {
+      "name": "marker_stderr",
+      "passed": true
+    },
+    {
+      "name": "fx1_harness",
+      "passed": true
+    },
+    {
+      "name": "fx1_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx2_harness",
+      "passed": true
+    },
+    {
+      "name": "fx2_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx3_harness",
+      "passed": true
+    },
+    {
+      "name": "fx3_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx4_harness",
+      "passed": true
+    },
+    {
+      "name": "fx4_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx5_harness",
+      "passed": true
+    },
+    {
+      "name": "fx5_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx6_harness",
+      "passed": true
+    },
+    {
+      "name": "fx6_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx7_harness",
+      "passed": true
+    },
+    {
+      "name": "fx7_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx8_harness",
+      "passed": true
+    },
+    {
+      "name": "fx8_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx9_harness",
+      "passed": true
+    },
+    {
+      "name": "fx9_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx10_harness",
+      "passed": true
+    },
+    {
+      "name": "fx10_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx12_harness",
+      "passed": true
+    },
+    {
+      "name": "fx12_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx13_harness",
+      "passed": true
+    },
+    {
+      "name": "fx13_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx14_harness",
+      "passed": true
+    },
+    {
+      "name": "fx14_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx15_harness",
+      "passed": true
+    },
+    {
+      "name": "fx15_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx16_harness",
+      "passed": true
+    },
+    {
+      "name": "fx16_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx17_harness",
+      "passed": true
+    },
+    {
+      "name": "fx17_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx18_harness",
+      "passed": true
+    },
+    {
+      "name": "fx18_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx19_harness",
+      "passed": true
+    },
+    {
+      "name": "fx19_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx20_harness",
+      "passed": true
+    },
+    {
+      "name": "fx20_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx21_harness",
+      "passed": true
+    },
+    {
+      "name": "fx21_prediction",
+      "passed": true
+    },
+    {
+      "name": "adapter_cleanup",
+      "passed": true
+    }
+  ],
+  "fixtures": [
+    {
+      "fixture": 1,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "100001",
+      "expected": [
+        [
+          "RETURN",
+          "100001"
+        ],
+        [
+          "LEN",
+          "64"
+        ]
+      ]
+    },
+    {
+      "fixture": 2,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 3,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 4,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 5,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 6,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 7,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 8,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 9,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "9000ee",
+      "expected": [
+        [
+          "RETURN",
+          "9000ee"
+        ]
+      ]
+    },
+    {
+      "fixture": 10,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "a0015b",
+      "expected": [
+        [
+          "RETURN",
+          "a0015b"
+        ]
+      ]
+    },
+    {
+      "fixture": 12,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "c00101",
+      "expected": [
+        [
+          "RETURN",
+          "c00101"
+        ]
+      ]
+    },
+    {
+      "fixture": 13,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "d00101",
+      "expected": [
+        [
+          "RETURN",
+          "d00101"
+        ]
+      ]
+    },
+    {
+      "fixture": 14,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "e0015c",
+      "expected": [
+        [
+          "RETURN",
+          "e0015c"
+        ]
+      ]
+    },
+    {
+      "fixture": 15,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "f0012e",
+      "expected": [
+        [
+          "RETURN",
+          "f0012e"
+        ]
+      ]
+    },
+    {
+      "fixture": 16,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "1000191",
+      "expected": [
+        [
+          "RETURN",
+          "1000191"
+        ]
+      ]
+    },
+    {
+      "fixture": 17,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 18,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 19,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "130015b",
+      "expected": [
+        [
+          "RETURN",
+          "130015b"
+        ]
+      ]
+    },
+    {
+      "fixture": 20,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 21,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    }
+  ],
+  "workers": 4,
+  "harts": 1,
+  "virtual_vm_abi": 5,
+  "native_reference_sha256": "be5d7ecfc8462930bd2c99ba76276777ca2109f930fe690b1a09f49f4863ae56",
+  "native_transcript_sha256": {
+    "null1": "ee1522c8e0eceec97a20b0372e888be774e019178e3a3c45cead03663d934651",
+    "null2": "ee1522c8e0eceec97a20b0372e888be774e019178e3a3c45cead03663d934651",
+    "value": "e3ee5a9a60c0f03a3396485437c74c994d477f8557233056ec2574c1bc07ae43",
+    "cas": "b430b123fb872f55018e6ce753c41f16a03e83b15cccb2b053f48ad0aa9c7fcf",
+    "usr1": "ee1522c8e0eceec97a20b0372e888be774e019178e3a3c45cead03663d934651",
+    "marker": "ee1522c8e0eceec97a20b0372e888be774e019178e3a3c45cead03663d934651"
+  },
+  "safety_prediction_arm": "sublet",
+  "known_gaps": [
+    "nested slab/cache lifetimes",
+    "bipbuffer logical reuse"
+  ],
+  "input_sha256": {
+    "launcher": "5240ec2c6b04c30b5d4c73710a0cfca0745e13b30cf4b11146785791474b457c",
+    "module": "2394a455036735288a119887d4eca24c1ae9c9ab2b679da5591ae5ba935932fd",
+    "job": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+    "pthread": "f28b7180e10f34fff19e0ab48e4849d174e08358ba25f845107a7408515ce8b8",
+    "memcached": "2b7f15aad3e0004b3088d0d794693ffb9e897c620b53854606f7b0ad85d88fc1",
+    "marker": "e6b673326234e7eb7a1f33e1d62350a7a07fcae598abbf1791696cf37345b18a",
+    "safety": "e122c93e0d064c75b5d23d664724a6cc94be7720ed99625de9b195dcf934c176",
+    "native": "aba43e50d8093576e8d5c3737a82fa5bc79fca32212de947223402e67c9f9da3",
+    "native_marker": "325d253b8fcaf75be1cbfebf0e35ff4732373f241c6f525f0bc0a10e8529a47f",
+    "qemu": "81abbe8d995f0e18ae26f3601b172f0da56cf8a76ca88c413e737b6b7c1187a6",
+    "harness_source": "1e569a8b63b49af1262db6456c271f24d8ee6ffc2ab58f29b0e445cff557532e",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "runner_sha256": "f76643d09534a7c0cfd78f5bac72590d59928aec20212807ad390fb8a5f20366",
+  "gate_sha256": "e6eab7607c3b0dd1a39603aabc508a88c233eb0fcfb7765e2d0d4cddd7187dd8",
+  "predictions_sha256": "a6f9f673ba39b43f8f3a94d230c381ccbf2beaa9844153689701c07e590cad32"
+}

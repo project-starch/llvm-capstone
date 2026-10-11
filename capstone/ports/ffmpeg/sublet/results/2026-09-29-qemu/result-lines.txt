@@ -1,0 +1,220 @@
+# The Sublet port of FFmpeg's own pools, capstone-qemu, 2026-09-29. Result lines only.
+# Predictions: ../../PREREGISTRATION.md (ce65f1da59ab); poolstock's in app/host/safety-expect.txt (3873e2cf09a6).
+# Compiler: llvm-capstone 3979abd8 (clang sha256 1c1436586f99c53c...); emulator sha256 6e5e136a070b0ee9...
+
+## 1. Phase A alone (0001), arm poolsublet (images replaced by the A+B build; hashes in SHA256SUMS)
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+after M1  : FFAPP-SUBLET-POOLS blocks=0 destroyed=0 entries=0 takes=0 gives=0 destroy-revokes=0 destroy-merges=0
+after M2  : FFAPP-SUBLET-POOLS blocks=0 destroyed=0 entries=0 takes=0 gives=0 destroy-revokes=0 destroy-merges=0
+after M3  : FFAPP-SUBLET-POOLS blocks=0 destroyed=0 entries=0 takes=0 gives=0 destroy-revokes=0 destroy-merges=0
+after M4  : FFAPP-SUBLET-POOLS blocks=3 destroyed=3 entries=3 takes=3 gives=3 destroy-revokes=6 destroy-merges=3
+after M5  : FFAPP-SUBLET-POOLS blocks=3 destroyed=3 entries=9 takes=90 gives=90 destroy-revokes=6 destroy-merges=3
+after FLIP: FFAPP-SUBLET-POOLS blocks=3 destroyed=3 entries=9 takes=90 gives=90 destroy-revokes=6 destroy-merges=3
+fixtures, N=3, one predicted fault per boot, last:
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x102008d6c rd=x10 rs1=x10 v
+fx13: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d6c rd=x10 rs1=x10 v
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101608d70, pcc_base = 101600000, va = 8
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x102008d6c rd=x10 rs1=x10 v
+fx13: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d6c rd=x10 rs1=x10 v
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101608d70, pcc_base = 101600000, va = 8
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x102008d6c rd=x10 rs1=x10 v
+fx13: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d6c rd=x10 rs1=x10 v
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101608d70, pcc_base = 101600000, va = 8
+
+## 2. Phase A+B (0001+0002), arm poolsublet
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+after M1  : FFAPP-SUBLET-POOLS blocks=0 destroyed=0 entries=0 takes=0 gives=0 destroy-revokes=0 destroy-merges=0
+after M2  : FFAPP-SUBLET-POOLS blocks=0 destroyed=0 entries=0 takes=0 gives=0 destroy-revokes=0 destroy-merges=0
+after M3  : FFAPP-SUBLET-POOLS blocks=0 destroyed=0 entries=0 takes=0 gives=0 destroy-revokes=0 destroy-merges=0
+after M4  : FFAPP-SUBLET-POOLS blocks=9 destroyed=9 entries=11 takes=19 gives=19 destroy-revokes=18 destroy-merges=9
+after M5  : FFAPP-SUBLET-POOLS blocks=11 destroyed=11 entries=33 takes=354 gives=354 destroy-revokes=18 destroy-merges=7
+after FLIP: FFAPP-SUBLET-POOLS blocks=11 destroyed=11 entries=33 takes=354 gives=354 destroy-revokes=18 destroy-merges=7
+fixtures, N=3:
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x102008d6c rd=x10 rs1=x10 v
+fx13: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d6c rd=x10 rs1=x10 v
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101608d70, pcc_base = 101600000, va = 8
+fx15: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d6c rd=x10 rs1=x10 v
+fx16: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 1016081d0, pcc_base = 101600000, va = 8
+fx17: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = 101609510, rs1 = x11, imm = 0
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x102008d6c rd=x10 rs1=x10 v
+fx13: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d6c rd=x10 rs1=x10 v
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101608d70, pcc_base = 101600000, va = 8
+fx15: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d6c rd=x10 rs1=x10 v
+fx16: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 1016081d0, pcc_base = 101600000, va = 8
+fx17: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = 101609510, rs1 = x11, imm = 0
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x102008d6c rd=x10 rs1=x10 v
+fx13: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d6c rd=x10 rs1=x10 v
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101608d70, pcc_base = 101600000, va = 8
+fx15: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d6c rd=x10 rs1=x10 v
+fx16: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 1016081d0, pcc_base = 101600000, va = 8
+fx17: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = 101609510, rs1 = x11, imm = 0
+
+## 3. The matched control, arm poolstock: the same patched source, FF_SUBLET_POOLS=0
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+FFAPP-SUBLET-POOLS lines in the poolstock stage log: 0 (absent, as built)
+fixtures, N=3, all seven in one boot with the one predicted fault (14) last:
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: RETURN c000a0  got: RETURN c000a0  len=64
+fx13: AS PREDICTED  predicted: RETURN d0015b  got: RETURN d0015b  len=64
+fx15: AS PREDICTED  predicted: RETURN f000a0  got: RETURN f000a0  len=64
+fx16: AS PREDICTED  predicted: RETURN *  got: RETURN 1000000  len=64
+fx17: AS PREDICTED  predicted: RETURN 1100177  got: RETURN 1100177  len=64
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 103a081d0, pcc_base = 103a00000, va = 8
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: RETURN c000a0  got: RETURN c000a0  len=64
+fx13: AS PREDICTED  predicted: RETURN d0015b  got: RETURN d0015b  len=64
+fx15: AS PREDICTED  predicted: RETURN f000a0  got: RETURN f000a0  len=64
+fx16: AS PREDICTED  predicted: RETURN *  got: RETURN 1000000  len=64
+fx17: AS PREDICTED  predicted: RETURN 1100177  got: RETURN 1100177  len=64
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 103a081d0, pcc_base = 103a00000, va = 8
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: RETURN c000a0  got: RETURN c000a0  len=64
+fx13: AS PREDICTED  predicted: RETURN d0015b  got: RETURN d0015b  len=64
+fx15: AS PREDICTED  predicted: RETURN f000a0  got: RETURN f000a0  len=64
+fx16: AS PREDICTED  predicted: RETURN *  got: RETURN 1000000  len=64
+fx17: AS PREDICTED  predicted: RETURN 1100177  got: RETURN 1100177  len=64
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 103a081d0, pcc_base = 103a00000, va = 8
+
+## 4. Totals
+phase A fixture verdicts: 12 AS PREDICTED of 12
+phase A+B fixture verdicts: 42 AS PREDICTED of 42 (poolsublet 21, poolstock 21)
+fault sites: fx12/13/15 cincoffset in ffapp_fix_touch (0x18d6c); fx17 lbu zero,0(a1) at 0x19510 in av_refstruct_unref,
+  the probe of rs_header inlined, before the index hash; fx14/16 OOB at the address each fixture printed
+C-50 gate (scan-addi-sp.py over ffapp_m5.dis): poolsublet 0 hit(s) in 364386 instructions; poolstock 0 hit(s) in 362831 instructions
+
+############################## v2 (e258f12ff365), after the claim audit ##############################
+## 5. Phase A+B v2, arm poolsublet
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+after M1  : FFAPP-SUBLET-POOLS blocks=0 destroyed=0 entries=0 takes=0 gives=0 ends=0 end-takes=0 file-revokes=0 destroy-merges=0
+            FFAPP-HEAP alloc=0 free=0 merge=0 peak-live=0 split=0 mrev=0 delin=0 revoke=0 init=0
+after M2  : FFAPP-SUBLET-POOLS blocks=0 destroyed=0 entries=0 takes=0 gives=0 ends=0 end-takes=0 file-revokes=0 destroy-merges=0
+            FFAPP-HEAP alloc=167 free=167 merge=137 peak-live=98 split=138 mrev=304 delin=167 revoke=304 init=137
+after M3  : FFAPP-SUBLET-POOLS blocks=0 destroyed=0 entries=0 takes=0 gives=0 ends=0 end-takes=0 file-revokes=0 destroy-merges=0
+            FFAPP-HEAP alloc=187 free=187 merge=146 peak-live=98 split=147 mrev=333 delin=187 revoke=333 init=146
+after M4  : FFAPP-SUBLET-POOLS blocks=9 destroyed=9 entries=11 takes=12 gives=11 ends=8 end-takes=1 file-revokes=11 destroy-merges=9
+            FFAPP-HEAP alloc=258 free=258 merge=209 peak-live=146 split=210 mrev=467 delin=249 revoke=467 init=218
+after M5  : FFAPP-SUBLET-POOLS blocks=11 destroyed=11 entries=33 takes=333 gives=330 ends=24 end-takes=3 file-revokes=330 destroy-merges=7
+            FFAPP-HEAP alloc=786 free=786 merge=270 peak-live=187 split=271 mrev=1056 delin=775 revoke=1056 init=281
+after FLIP: FFAPP-SUBLET-POOLS blocks=11 destroyed=11 entries=33 takes=333 gives=330 ends=24 end-takes=3 file-revokes=330 destroy-merges=7
+            FFAPP-HEAP alloc=786 free=786 merge=270 peak-live=187 split=271 mrev=1056 delin=775 revoke=1056 init=281
+fixtures, N=3 (11 20 21 12 in one boot, then each predicted fault alone):
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx20: AS PREDICTED  predicted: RETURN 1400800  got: RETURN 1400800
+fx21: AS PREDICTED  predicted: RETURN 1500800  got: RETURN 1500800
+fx12: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x102c08d54 rd=x10 rs1=x10 v
+fx13: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d54 rd=x10 rs1=x10 v
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101608d58, pcc_base = 101600000, va = 8
+fx15: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608e38 rd=x10 rs1=x10 v
+fx16: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 1016081d0, pcc_base = 101600000, va = 8
+fx17: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = 1016095dc, rs1 = x11, imm = 0
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx20: AS PREDICTED  predicted: RETURN 1400800  got: RETURN 1400800
+fx21: AS PREDICTED  predicted: RETURN 1500800  got: RETURN 1500800
+fx12: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x102c08d54 rd=x10 rs1=x10 v
+fx13: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d54 rd=x10 rs1=x10 v
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101608d58, pcc_base = 101600000, va = 8
+fx15: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608e38 rd=x10 rs1=x10 v
+fx16: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 1016081d0, pcc_base = 101600000, va = 8
+fx17: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = 1016095dc, rs1 = x11, imm = 0
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx20: AS PREDICTED  predicted: RETURN 1400800  got: RETURN 1400800
+fx21: AS PREDICTED  predicted: RETURN 1500800  got: RETURN 1500800
+fx12: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x102c08d54 rd=x10 rs1=x10 v
+fx13: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608d54 rd=x10 rs1=x10 v
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101608d58, pcc_base = 101600000, va = 8
+fx15: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101608e38 rd=x10 rs1=x10 v
+fx16: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 1016081d0, pcc_base = 101600000, va = 8
+fx17: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = 1016095dc, rs1 = x11, imm = 0
+
+## 6. The matched control v2, arm poolstock
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+after M1  : FFAPP-HEAP alloc=0 free=0 merge=0 peak-live=0 split=0 mrev=0 delin=0 revoke=0 init=0
+after M2  : FFAPP-HEAP alloc=161 free=161 merge=130 peak-live=92 split=131 mrev=291 delin=161 revoke=291 init=130
+after M3  : FFAPP-HEAP alloc=180 free=180 merge=133 peak-live=92 split=134 mrev=313 delin=180 revoke=313 init=133
+after M4  : FFAPP-HEAP alloc=229 free=229 merge=179 peak-live=123 split=180 mrev=408 delin=229 revoke=408 init=179
+after M5  : FFAPP-HEAP alloc=730 free=730 merge=265 peak-live=164 split=266 mrev=995 delin=730 revoke=995 init=265
+after FLIP: FFAPP-HEAP alloc=730 free=730 merge=265 peak-live=164 split=266 mrev=995 delin=730 revoke=995 init=265
+fixtures, N=3, nine in one boot with 14 last:
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: RETURN c000a0  got: RETURN c000a0  len=64
+fx13: AS PREDICTED  predicted: RETURN d0015b  got: RETURN d0015b  len=64
+fx15: AS PREDICTED  predicted: RETURN f000a0  got: RETURN f000a0  len=64
+fx16: AS PREDICTED  predicted: RETURN *  got: RETURN 1000000  len=64
+fx17: AS PREDICTED  predicted: RETURN 1100177  got: RETURN 1100177  len=64
+fx20: AS PREDICTED  predicted: RETURN 14e00f0  got: RETURN 14e00f0
+fx21: AS PREDICTED  predicted: RETURN 15e00f0  got: RETURN 15e00f0
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 1046081d0, pcc_base = 104600000, va = 8
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: RETURN c000a0  got: RETURN c000a0  len=64
+fx13: AS PREDICTED  predicted: RETURN d0015b  got: RETURN d0015b  len=64
+fx15: AS PREDICTED  predicted: RETURN f000a0  got: RETURN f000a0  len=64
+fx16: AS PREDICTED  predicted: RETURN *  got: RETURN 1000000  len=64
+fx17: AS PREDICTED  predicted: RETURN 1100177  got: RETURN 1100177  len=64
+fx20: AS PREDICTED  predicted: RETURN 14e00f0  got: RETURN 14e00f0
+fx21: AS PREDICTED  predicted: RETURN 15e00f0  got: RETURN 15e00f0
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 1046081d0, pcc_base = 104600000, va = 8
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: RETURN c000a0  got: RETURN c000a0  len=64
+fx13: AS PREDICTED  predicted: RETURN d0015b  got: RETURN d0015b  len=64
+fx15: AS PREDICTED  predicted: RETURN f000a0  got: RETURN f000a0  len=64
+fx16: AS PREDICTED  predicted: RETURN *  got: RETURN 1000000  len=64
+fx17: AS PREDICTED  predicted: RETURN 1100177  got: RETURN 1100177  len=64
+fx20: AS PREDICTED  predicted: RETURN 14e00f0  got: RETURN 14e00f0
+fx21: AS PREDICTED  predicted: RETURN 15e00f0  got: RETURN 15e00f0
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 1046081d0, pcc_base = 104600000, va = 8
+
+## 7. The pool's end, counted across FFmpeg's own uninit (fixtures 20 and 21; identical in all three repetitions)
+poolsublet  FFAPP-FIX 20 returns: file-revokes=8 gives=8 heap-revokes=0 | end: file-revokes=0 ends=8 heap-revokes=38 heap-merges=24
+poolsublet  FFAPP-FIX 21 returns: file-revokes=8 gives=8 heap-revokes=22 | end: file-revokes=0 ends=0 heap-revokes=46 heap-merges=33
+poolstock  FFAPP-FIX 20 returns: file-revokes=0 gives=0 heap-revokes=0 | end: file-revokes=0 ends=0 heap-revokes=30 heap-merges=21
+poolstock  FFAPP-FIX 21 returns: file-revokes=0 gives=0 heap-revokes=24 | end: file-revokes=0 ends=0 heap-revokes=54 heap-merges=37
+  accounting, end phase, heap revokes minus merges = heap frees:
+    fx20 refstruct   poolsublet 38-24 = 14 = 8 records + 2 blocks x (block, block record) + 2 (the pool object and its header)
+                     poolstock  30-21 =  9 = 8 objects, each with its in-band header + 1 (the pool object)
+    fx21 AVBufferPool poolsublet 46-33 = 13 = 8 records + 2 blocks x 2 + 1 (the pool)
+                     poolstock  54-37 = 17 = 8 x (record, data) + 1 (the pool)
+
+## 8. Totals and gates, v2
+fixture verdicts: 54 AS PREDICTED of 54 (poolsublet 27, poolstock 27)
+C-50 gate over ffapp_m5.dis: poolsublet 0 hit(s) in 364438 instructions; poolstock 0 hit(s) in 362831 instructions (v1's poolstock M5: the same 362831 instructions)

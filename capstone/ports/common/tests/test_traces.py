@@ -1,4 +1,4 @@
-"""Wire corruption, adapter boundaries and all four launcher integrations."""
+"""Wire corruption, adapter boundaries and every launcher integration."""
 
 from contextlib import redirect_stdout
 import hashlib
@@ -48,6 +48,12 @@ def pg(rows, *, parent=0, prefix=0):
     ) + b"".join(struct.pack("<IIIIQQQ", *r) for r in rows)
 
 
+def wmem(rows):
+    return struct.pack("<16Q", 0x31304D454D575357, len(rows), *([0] * 14)) + b"".join(
+        struct.pack("<6Q", *r) for r in rows
+    )
+
+
 def ff(rows):
     return struct.pack("<16Q", 0x4650465452433032, len(rows), *([0] * 14)) + b"".join(
         struct.pack("<16Q", *(tuple(r) + (0,) * (16 - len(r)))) for r in rows
@@ -76,6 +82,18 @@ FIXTURES = {
             (0, 0, 0, 0, 3, 1, 1),
         ],
         40,
+    ),
+    # A pool reset retires its objects; the pool itself outlives the reset.
+    "wireshark.wmem": (
+        wmem,
+        [
+            (1, 0, 0, 0, 3, 0),
+            (2, 0, 1, 16, 0, 42),
+            (5, 0, 0, 0, 0, 0),
+            (7, 0, 0, 0, 0, 0),
+            (8, 0, 0, 0, 0, 0),
+        ],
+        48,
     ),
     "ffmpeg.buffer-pool": (
         ff,
@@ -250,12 +268,13 @@ class Traces(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["trace"]["records"], 1)
 
-    def test_four_launchers_validate_staged_bytes_before_guest(self):
+    def test_launchers_validate_staged_bytes_before_guest(self):
         cases = [
             ("cpython/pymalloc", "cpython.pymalloc"),
             ("whisper/ggml-context", "whisper.ggml-context"),
             ("ffmpeg/buffer-pool", "ffmpeg.buffer-pool"),
             ("postgres/memory-contexts", "postgres.a11"),
+            ("wireshark/wmem", "wireshark.wmem"),
         ]
         for component, name in cases:
             with self.subTest(component=component):
@@ -284,7 +303,7 @@ class Traces(unittest.TestCase):
                         metadata["trace"]["sha256"], hashlib.sha256(data).hexdigest()
                     )
                     self.assertEqual(metadata["trace"]["format"], name)
-                    if name in ("cpython.pymalloc", "whisper.ggml-context"):
+                    if name in ("cpython.pymalloc", "whisper.ggml-context", "wireshark.wmem"):
                         words = 12 if name == "cpython.pymalloc" else 16
                         magic = struct.unpack_from("<Q", data)[0]
                         (run / "share/report.bin").write_bytes(

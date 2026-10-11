@@ -45,22 +45,22 @@ it cannot authorize a release without checking the current allocation capability
 
 Each arena retains a senior handle. Each pool is split into a persistent header
 and a body; the body is split into size-class blocks on demand. Free-list links
-remain in free blocks, as upstream expects. The adapter revokes a caller's lease
+remain in free blocks, as upstream expects. The adapter revokes a caller's alias
 before returning a fresh allocator alias for writing that free-list link. A pool
 changing size class reclaims its body, while its header remains accessible. Arena
 release reclaims the whole subtree. Adapter records reside in separate metadata.
 
-Both domain modes use the same layout and allocator code:
+Both domain arms use the same layout and allocator code:
 
 - `spatial`: request-bounded pointers; no per-object revocation. Reclassifying a
   pool or releasing an arena still revokes that backing subtree.
 - `sublet`: additionally revokes on individual free and every successful realloc,
-  including an in-place resize. Address reuse does not restore an old lease.
+  including an in-place resize. Address reuse does not restore an old alias.
 
 Moved realloc copies at most the previous requested length and preserves aligned
 capability payloads. Failed realloc leaves its old allocation valid. Zero-size
 requests retain CPython's non-NULL-on-success behavior. Large/raw requests use a
-bounded reusable backing allocator, with the same release validation and lease
+bounded reusable backing allocator, with the same release validation and alias
 discipline in the domain. This backing allocator is not a port of libc malloc.
 
 The fixed regions are 64 MiB payload (32 MiB small-object arenas, 32 MiB raw
@@ -140,7 +140,7 @@ pool reclassification, arena release, malformed traces, source integrity and
 patch order. With the recorder configured it also compares a real workload
 against the unadapted native reference.
 
-The QEMU security suite pairs spatial and Sublet modes across nine cases:
+The QEMU security suite pairs spatial and Sublet arms across nine cases:
 live siblings and capability-bearing realloc; read after free; write after reuse;
 stale free after reuse; in-place realloc; one-past-end access; raw-fallback reuse;
 pool size-class reassignment; and an alias retained across 2,000 reuses. A stale

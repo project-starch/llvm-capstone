@@ -1,0 +1,28 @@
+{
+  "case": 26,
+  "upstream_fix": "gh-142831",
+  "title": "Use-after-free in `json.encoder` mapping iteration via re-entrant key encoder",
+  "consumer": "Objects/obmalloc.c (the freed block's pool); see the C-model sibling",
+  "class": "temporal",
+  "trigger": "trigger.py",
+  "live_in_pin": true,
+  "live_proof": "measured on the pinned 3.13.7 ASan build with PYTHONMALLOC=malloc and ASAN_OPTIONS=detect_leaks=0: ASAN:heap-use-after-free in a 16-byte region. Running the trigger is the proof.",
+  "fidelity": "interpreter-trigger, real allocator. Upstream's own reproducer driven through the real CPython. The SAME defect also exists in ../pymalloc-repros as a C model consumer against the same allocator; that one locates the faulting instruction with a labelled probe and this one does not, so for attribution the C model is the stronger of the two. This one exists because the C models cannot be built for the cheribsd-revocation arm at all: shared/corpus.h's inline asm uses \"r\" constraints that cannot hold a 128-bit capability.",
+  "allocator_layer": "L1-pymalloc-pool",
+  "allocator_consumed": "yes",
+  "arms": {
+    "spatial": {
+      "oracle": "no bounds fault is admissible: pymalloc sub-allocates inside an arena, so the stale access stays within the bounds of the capability that covers it. The base arm does enforce revocation (CAPSTONE_REVOCATION_ENFORCE defaults to 1 and is independent of the sublet discipline), so the admissible outcomes are completion, or a revoked-capability fault (cause 24) once pymalloc has returned the block's emptied arena to the system allocator. Which of the two occurs is a property of arena occupancy rather than of the defect, so this arm does not separate these cases. A cause 5 or 7 fault would falsify this. A fault whose cause is anything other than 24 falsifies this too, including cause 2 (ILLEGAL_INST), which is an ordinary trap that no capability mechanism produced -- control reaching non-code, the way any CPU would trap it.",
+      "oracle_premise": "Corrected at review, 2026-10-10: the premise that this arm revokes is false. Its level0 heap only marks a freed block free (capstone/ports/musl-capstone/runtime/level0.c, l0_free), patch 0009 issues no revoke, and the runtime's only revoke sites release thread context areas, reached only through __clone; so nothing on this arm revokes heap memory. A cause 24 here is UNEXP_OP_TYPE, an access through an untagged base register: a pointer slot that later data overwrote (tag integrity), or an integer or NULL used as a pointer -- not revocation. The oracle above is kept as written; see results/20261006/README.md, 'Corrections made at review'."
+    },
+    "sublet": {
+      "oracle": "fault at the stale access: this arm issues and revokes pymalloc's own blocks"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completion while the block's arena stays live: pymalloc links the freed block onto its own pool free list, so the platform has no free to revoke. Once pymalloc returns an emptied arena to the system allocator (insert_to_freepool, when nf == ao->ntotalpools && ao->nextarena != NULL) the platform does have a free, and after a revocation sweep the stale access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). Both outcomes are admissible; which one occurs depends on arena occupancy and sweep timing rather than on the defect, so this arm does not separate these cases. A bounds fault (si_code=1) would falsify this."
+    }
+  },
+  "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial SILENT (spatial-20261006-141858); sublet DETECTED cause=24 (sublet-20261006-144133); cheribsd-revocation SILENT (cheri11)",
+  "sibling_issue": "../pymalloc-repros/03_gh-142831_json_encoder_list_item",
+  "layer_note": "measured: ASan reported a 16-byte region, at or under the 512 B SMALL_REQUEST_THRESHOLD, and the heap report does not survive PYTHONMALLOC=pymalloc"
+}

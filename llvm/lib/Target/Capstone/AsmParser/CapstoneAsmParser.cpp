@@ -3473,7 +3473,12 @@ bool CapstoneAsmParser::parseDirectiveAttribute() {
   return false;
 }
 
-bool isValidInsnFormat(StringRef Format, const MCSubtargetInfo &STI) {
+// `static`, because RISCVAsmParser.cpp defines a function with this exact
+// signature too -- the Capstone target began as a copy of RISCV. At external
+// linkage in both, a static link of any tool pulling in both parsers fails with
+// "multiple definition of 'isValidInsnFormat'" (C-59). It has one caller, in
+// this translation unit, and no header declares it.
+static bool isValidInsnFormat(StringRef Format, const MCSubtargetInfo &STI) {
   return StringSwitch<bool>(Format)
       .Cases("r", "r4", "i", "b", "sb", "u", "j", "uj", "s", true)
       .Cases("cr", "ci", "ciw", "css", "cl", "cs", "ca", "cb", "cj",

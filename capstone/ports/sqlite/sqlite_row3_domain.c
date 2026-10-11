@@ -1,4 +1,4 @@
-/* row3 matched pair -- the "after" for cve-repros/row3_diesel_colname_cached.
+/* row3 matched pair -- the "after" for capi-repros/row3_diesel_colname_cached.
  *
  * The SAME row3 program as before.c, running the real SQLite C API inside ONE
  * Capstone domain:

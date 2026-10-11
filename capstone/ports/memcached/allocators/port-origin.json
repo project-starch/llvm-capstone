@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/project-starch/llvm-capstone",
+  "original_directory": "capstone/ports/memcached",
+  "scope": "The memcached 1.6.45 allocator census -- fetch, inventory, level-below counts -- grown into an allocator component port of slabs.c and cache.c with a Capstone domain build and a Sublet adapter. The census scripts stay where they were and keep their numbers; the shims the census estimated are written beside them and shared, not copied.",
+  "files": {
+    "census-memcached.sh (the shim estimate)": "adapted/mc_slabs_shim.h, mc_slabs_libc.h, mc_cache_shim.h, mc_pthread_shim.h",
+    "fetch-memcached.sh (archive cache)": "allocators/upstream.json + cmake/MemcachedSource.cmake, reading the same cached archive",
+    "../apr/pools (the component layout, entries, loader, metadata heap)": "allocators/src, with the ledger shared between targets instead of duplicated per adapter"
+  }
+}

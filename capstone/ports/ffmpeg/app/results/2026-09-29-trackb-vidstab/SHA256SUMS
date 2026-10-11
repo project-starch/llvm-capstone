@@ -1,0 +1,10 @@
+# Paths name artifacts in the run's work directory, not files in this folder; sha256sum -c does not apply here.
+# The final images (patch 0005, heap fix), from the per-boot sidecars (tries 7, 9, 10; try 8 stalled); one hash per name per arm.
+1229260478f818d1ae7fe5cdc09454d087403cc6617131f652674e36ec7a5803  poolstock/ffapp.user
+653160f4c957a9ac8e260e5f2b6ea8e1bc4973d082e3c2af715047f07379bebb  poolstock/ffapp_fx22.dom
+6135ecd959cb9e63db348e92485781697ba5e27984b4d20d580f7d5e83ec2019  poolstock/ffapp_fx23.dom
+1229260478f818d1ae7fe5cdc09454d087403cc6617131f652674e36ec7a5803  poolsublet/ffapp.user
+2995a56be804d41249d7e21bafdfdadf9d34cf301a70bd3db2624a106cffb088  poolsublet/ffapp_fx22.dom
+46bf8dfbd1a32d5b5ebb96379d7f6f29046cac4b67c8577a068df918bda156f4  poolsublet/ffapp_fx23.dom
+# libvidstab 1.1.1, as fetched (deps/libvidstab.json):
+9001b6df73933555e56deac19a0f225aae152abbc0e97dc70034814a1943f3d4  vid.stab-1.1.1.tar.gz

@@ -1,0 +1,23 @@
+CAPSTONE (tshark app port): let GLib configure where no integer type is as wide as a pointer.
+capstone64 pointers are 16-byte capabilities; gintptr/guintptr become long (the address only).
+
+--- a/meson.build
++++ b/meson.build
+@@ -1792,6 +1792,17 @@
+   glibconfig_conf.set_quoted('guintptr_format', 'lu')
+   glibconfig_conf.set('glib_gpi_cast', '(glong)')
+   glibconfig_conf.set('glib_gpui_cast', '(gulong)')
++elif voidp_size == 16 and long_size == 8 and cc.get_define('__CAPSTONE__') != ''
++  # CAPSTONE (tshark app port): a capstone64 pointer is a 16-byte capability, and no integer type
++  # is that wide (the compiler has no __intcap_t). gintptr/guintptr are long, like uintptr_t: they
++  # hold a pointer's ADDRESS, never the pointer, and a pointer rebuilt from one is untagged. The
++  # port's cast census lists every such round trip, and patches the ones tshark reaches.
++  glibconfig_conf.set('glib_intptr_type_define', 'long')
++  glibconfig_conf.set_quoted('gintptr_modifier', 'l')
++  glibconfig_conf.set_quoted('gintptr_format', 'li')
++  glibconfig_conf.set_quoted('guintptr_format', 'lu')
++  glibconfig_conf.set('glib_gpi_cast', '(glong)')
++  glibconfig_conf.set('glib_gpui_cast', '(gulong)')
+ elif voidp_size == long_long_size
+   glibconfig_conf.set('glib_intptr_type_define', 'long long')
+   glibconfig_conf.set_quoted('gintptr_modifier', int64_m)

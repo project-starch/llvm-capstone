@@ -1,0 +1,9 @@
+# The images this boot ran (sublet arm, h264 + libavfilter compiled in).
+29732b630c85a4afa10bbccae43a5a07c3347eebdd4ebad1c4050349a3be3ec7  ffapp_m1.dom
+103ccb05f762ffc0d57d6a2550a3241742ca8a8fa17ec4676d48abc501527c43  ffapp_m5.dom
+abc902f6a637ab6e7f1938970380c57e743ff21b8125c4d951153a6b01559ec5  ffapp_m5flip.dom
+1229260478f818d1ae7fe5cdc09454d087403cc6617131f652674e36ec7a5803  ffapp.user
+# compiler  3979abd8e9a36a8feb7ff67c5b84377025b0b047
+# emulator  capstone-qemu deb7d75756
+# guest     tshark port's private rootfs, module MODULE-MD5 5696d0fe05f5fd5395a0935a0c7ff302
+#           (the CMA-capable module; the shared buildroot checkout is still d04bd83)

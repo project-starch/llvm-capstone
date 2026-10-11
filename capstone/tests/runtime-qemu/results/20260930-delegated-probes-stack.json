@@ -1,0 +1,116 @@
+{
+ "date": "2026-09-30",
+ "what": "The runtime-qemu probes as delegated applications, and the musl runtime without HostCall v0, on the delegation stack (#142) with dev 330014ea merged",
+ "tree": {
+  "branch": "delegation-v0-removal-stack",
+  "checked_commit": "55b21d73c0c9",
+  "base": "tshark-current-stack 27e27e765f38 + dev 330014ead628"
+ },
+ "compiler": {
+  "source_revision": "68c75ed3e1ad",
+  "note": "compiler sources identical to dev 330014ea's (git diff of llvm/ clang/ compiler-rt/ lld/ is empty)",
+  "clang_sha256": "b69603574ae422d3bd78c7aae679d613526d5ee0f0a20e4a7005ccae993adcae",
+  "llc_sha256": "d13163ab57115e40c26c14151c9c22a62f2cd08c7c57bd02d7865e85afd106c6"
+ },
+ "platform": {
+  "files": {
+   "qemu": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+   "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+   "firmware": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+   "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+   "launcher": "546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94",
+   "module": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+   "job_helper": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168"
+  },
+  "qemu_environment": {
+   "CAPSTONE_GP_NONLIN": "1",
+   "CAPSTONE_REV_NODES": "65536"
+  },
+  "note": "the delegation stack's platform: step-one-ecall QEMU and firmware, launch-cost module (caplifive-buildroot d60365e), binfmt kernel; the launcher built from this tree is byte-identical to the sockets lane's"
+ },
+ "delegated_probes": {
+  "switch_off": {
+   "init-fini": "PASS",
+   "exit-default": "PASS",
+   "exit-hook": "PASS",
+   "return-flush": "PASS",
+   "unserved-report": "PASS",
+   "large-read": "PASS",
+   "big-stdout": "PASS",
+   "mmap-shm": "PASS",
+   "mmap-shm-control": "PASS",
+   "tls-O0": "PASS",
+   "tls-O2": "PASS",
+   "cap-atomics-O0": "PASS",
+   "cap-atomics-O2": "PASS",
+   "subword-O0": "FAIL",
+   "subword-O2": "PASS",
+   "movc-rule": "PASS",
+   "movc-keep": "PASS",
+   "intcap": "PASS",
+   "arith-0": "PASS",
+   "tls-overrun": "PASS",
+   "intcap-uptr": "PASS",
+   "arith-1": "PASS",
+   "arith-2": "PASS"
+  },
+  "switch_on": {
+   "movc-rule": "PASS",
+   "movc-keep": "PASS",
+   "intcap": "PASS",
+   "intcap-uptr": "PASS"
+  },
+  "subword-O0_fault": "capstone-exec: domain fault cause=5 pc=0xc020d2b0 address=0xc42529d0 entry=0xc0200964 code=0xc0200000-0xc4260000 last=0x42 preparing=0x42 sha256=78ad471fe5c60fb18a8ea4132d7ace73be05ce6dae7522701e6dcb106a23b100",
+  "subword-O0_note": "lone_byte at link address 0x40629d0 + load base 0xc01f0000 = the fault address 0xc42529d0 (ISSUES C-74)"
+ },
+ "libc_test": {
+  "after": {
+   "PASS": 48,
+   "FAULT": 2,
+   "EXCLUDED": 20,
+   "FAIL": 4,
+   "NOBUILD": 3
+  },
+  "before_removal_sdk": {
+   "PASS": 48,
+   "FAULT": 2,
+   "EXCLUDED": 20,
+   "FAIL": 4,
+   "NOBUILD": 3
+  },
+  "differing_tests": {},
+  "note": "same guest, same compiler and musl archive; before = the SDK built from this branch's commit before the removal"
+ },
+ "application_gate": "run.py exit 0, 22 PASS lines",
+ "binfmt": "exec-closed PASS, exec-error PASS",
+ "signal_contract": "30/30 PASS",
+ "socket_contract": "11/11 PASS",
+ "native_launcher_tests": "ctest 61/61 (ASan/UBSan, build exit 0 first); the six spawner tests repeated 200 times each, 0 failures",
+ "hostcall_wire_probes": "run-hostcall-all.sh 12/12, rc 0, on the standard gate platform (br-snap-gates, the main QEMU); a first attempt stopped at boot (exit 75) before any probe ran, a retry of that probe passed, then all 12",
+ "start_musl_S": "parent's defines vs none: .text identical (sha256 d162d712b202c945...), only __capstone_dom_ret gone",
+ "sdk": {
+  "compiler_warnings": {
+   "before": 93,
+   "after": 35
+  },
+  "runtime_global_symbols": {
+   "before": 113,
+   "after": 112,
+   "gone": [
+    "__capstone_dom_ret"
+   ]
+  }
+ },
+ "check_domain_support": {
+  "sethostname program": "flagged, exit 1",
+  "delegate-bench": "clean",
+  "application-, delegate-, signal-contract": "musl's aio close hook (rt_sigqueueinfo)",
+  "socket-contract": "aio close hook, and oldmalloc's brk"
+ },
+ "bug_corpora": "check-ports CLEAN (18 components), check-corpus CLEAN (13 corpora, 107 cases), index regenerated",
+ "not_run": [
+  "the nightly",
+  "exposure.sh",
+  "silicon"
+ ]
+}

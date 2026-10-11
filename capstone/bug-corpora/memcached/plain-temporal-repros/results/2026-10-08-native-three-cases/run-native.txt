@@ -1,0 +1,3 @@
+00_0d4901071c74_restart_line_freed_at_entry_but_not_cleared plain=reproduced asan-buggy=heap-use-after-free asan-fixed=silent
+01_e7793811f8c8_logger_write_to_watcher_freed_by_the_poll plain=reproduced asan-buggy=heap-use-after-free asan-fixed=silent
+02_3bc58f6ea55a_logger_loop_condition_still_reads_the_freed_watcher plain=reproduced asan-buggy=heap-use-after-free asan-fixed=silent

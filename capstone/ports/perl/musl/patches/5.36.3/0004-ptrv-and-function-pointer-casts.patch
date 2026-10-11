@@ -1,0 +1,67 @@
+perl.h: a pointer wider than every integer gets a PTRV that holds its address, and the data/function casts stop going through one.
+
+Two defects on a target whose pointer is a 16-byte capability with an 8-byte
+address, both silent:
+
+PTRV picks the first of UV, unsigned long, and `unsigned` whose size equals
+PTRSIZE. At PTRSIZE 16 none matches and the fallthrough takes `unsigned`, so
+every PTR2UV, PTR2IV and PTR2nat truncates an address to 32 bits, with no
+warning. PTRV now takes UV where a pointer is wider than a UV: the widest
+integer that holds the address.
+
+DPTR2FPTR and FPTR2DPTR convert between data and function pointers through
+PTR2nat, which is legal ISO C and loses a capability's authority. The call
+through the recovered pointer traps: "cs.cjalr requires capability in rs1" in
+Perl_filter_read, which every `perl -e` reaches (measured 2026-09-26). Both
+become direct casts where a pointer is wider than a UV -- outside ISO C for the
+reason perl's own comment gives, and what every POSIX dlsym() caller relies on.
+39 sites use the pair.
+
+Neither condition can hold on a platform with an integer as wide as its
+pointers, so nothing changes there.
+
+This one is generated against perl.h AFTER perl-cross's own xconfig.patch,
+which the build script applies first (its `crosspatch` target): both touch
+perl.h, and applied the other way round each makes the other look
+already-applied.
+
+--- a/perl.h	2026-09-26 15:17:07.593919336 +0800
++++ b/perl.h	2026-09-26 15:17:07.602185620 +0800
+@@ -2189,6 +2189,17 @@
+ #elif PTRSIZE == LONGSIZE
+ #  define PTRV			unsigned long
+ #  define PTR2ul(p)		(unsigned long)(p)
++#elif PTRSIZE > UVSIZE
++/* capstone: a pointer wider than any integer -- a 16-byte capability whose
++   ADDRESS is 8 bytes. The fallthrough below picks `unsigned`, which truncates
++   every PTR2UV, PTR2IV and PTR2nat to 32 bits silently; PTRV is the widest
++   integer that holds the address instead. That is enough for the one-way uses
++   (printing, hashing, an address compared with another address) and it cannot be
++   enough for a round trip: an integer carries no authority, so a pointer that
++   goes through one comes back unusable. DPTR2FPTR and FPTR2DPTR below are the
++   round trips perl makes on this path, and they stop going through an integer. */
++#  define PTRV			UV
++#  define PTR2ul(p)		(unsigned long)(p)
+ #else
+ #  define PTRV			unsigned
+ #endif
+@@ -2225,8 +2236,19 @@
+  * The only feasible use is probably temporarily storing
+  * function pointers in a data pointer (such as a void pointer). */
+ 
++#if PTRSIZE > UVSIZE
++/* capstone: the two casts the comment above describes would pass the pointer
++   through an integer, which drops a capability's authority: the call through the
++   recovered function pointer traps ("cs.cjalr requires capability in rs1", in
++   Perl_filter_read, on every `perl -e` -- measured 2026-09-26). A direct cast
++   keeps it. Casting between object and function pointers is outside ISO C for
++   the reason the comment gives, and is what every POSIX dlsym() caller does. */
++#  define DPTR2FPTR(t,p) ((t)(p))	/* data pointer to function pointer */
++#  define FPTR2DPTR(t,p) ((t)(p))	/* function pointer to data pointer */
++#else
+ #define DPTR2FPTR(t,p) ((t)PTR2nat(p))	/* data pointer to function pointer */
+ #define FPTR2DPTR(t,p) ((t)PTR2nat(p))	/* function pointer to data pointer */
++#endif
+ 
+ #ifdef USE_LONG_DOUBLE
+ #  if LONG_DOUBLESIZE == DOUBLESIZE

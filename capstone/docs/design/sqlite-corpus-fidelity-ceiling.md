@@ -3,7 +3,7 @@
 *2026-07-10. Decision record for how faithful the SQLite defect corpus can be
 made, which rows can reach a LITERAL real-SQLite matched pair, which cannot and
 why, and what the two documented residuals (U, S) would need to fully resolve.
-Companion to `ports/sqlite/cve-repros/stage2-mapping.md` (the table) and
+Companion to `ports/sqlite/capi-repros/stage2-mapping.md` (the table) and
 `history/10-07-2026_16-30-00_faithful-matched-pairs-per-shape.md` (task-010, the
 5 literal reps).*
 
@@ -12,7 +12,7 @@ Companion to `ports/sqlite/cve-repros/stage2-mapping.md` (the table) and
 A matched pair is "same program, two outcomes." The two halves are scored apart:
 
 - **Host "before" (real SQLite + ASan).** A-lane, no QEMU.
-  `cve-repros/run-host-asan-repros.sh`. Two sets:
+  `capi-repros/run-host-asan-repros.sh`. Two sets:
   - essence `before.c`: **18/18** reproduce their `oracle`.
   - binding-faithful `before-faithful.c` (models the real binding's C glue):
     **6/6** reproduce their crash class. The faithful crash *class* can differ
@@ -132,7 +132,7 @@ either strengthens a row or surfaces an honest gap — both are wins for the tab
 
 ### Provenance sweep results — all 19 rows (2026-07-10)
 
-Every row now has a `cve-repros/row*/PROVENANCE.md` citing the exact upstream
+Every row now has a `capi-repros/row*/PROVENANCE.md` citing the exact upstream
 artifact (verbatim reproducer + fix where they exist). Outcome:
 
 | Tier | Rows | Meaning |

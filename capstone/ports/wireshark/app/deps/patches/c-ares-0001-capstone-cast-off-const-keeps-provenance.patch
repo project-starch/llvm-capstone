@@ -1,0 +1,54 @@
+CAPSTONE (tshark app port): c-ares casts away const by way of an integer, (void *)((size_t)p),
+in five places. On capstone64 a pointer is a 16-byte capability and size_t 8 bytes, so the
+round trip rebuilds the pointer from its address alone: untagged, and it faults when used. A
+plain (void *)p casts away const and keeps the capability. Found by the port's cast census
+(deps/build-c-ares.sh), which lists every such site; the address-hashing sites it also lists
+(ares_htable.c, ares_rand.c) are left alone.
+
+diff -ru src.orig/lib/ares_getnameinfo.c src/lib/ares_getnameinfo.c
+--- a/src/lib/ares_getnameinfo.c	2026-09-24 15:30:42.659807056 +0800
++++ b/src/lib/ares_getnameinfo.c	2026-09-24 15:30:42.671807056 +0800
+@@ -420,7 +420,7 @@
+     }
+   }
+   /* Cast off const */
+-  return (char *)((size_t)c1_begin);
++  return (char *)c1_begin;
+ }
+ 
+ ares_bool_t ares_is_onion_domain(const char *name)
+diff -ru src.orig/lib/ares_set_socket_functions.c src/lib/ares_set_socket_functions.c
+--- a/src/lib/ares_set_socket_functions.c	2026-09-24 15:30:42.658807056 +0800
++++ b/src/lib/ares_set_socket_functions.c	2026-09-24 15:30:42.671807056 +0800
+@@ -550,7 +550,7 @@
+   if (channel->legacy_sock_funcs != NULL &&
+       channel->legacy_sock_funcs->asendv != NULL) {
+     struct iovec vec;
+-    vec.iov_base = (void *)((size_t)buffer); /* Cast off const */
++    vec.iov_base = (void *)buffer; /* Cast off const */
+     vec.iov_len  = length;
+     return channel->legacy_sock_funcs->asendv(
+       sock, &vec, 1, channel->legacy_sock_funcs_cb_data);
+diff -ru src.orig/lib/record/ares_dns_record.c src/lib/record/ares_dns_record.c
+--- a/src/lib/record/ares_dns_record.c	2026-09-24 15:30:42.659807056 +0800
++++ b/src/lib/record/ares_dns_record.c	2026-09-24 15:30:42.671807056 +0800
+@@ -499,7 +499,7 @@
+   ares_dns_record_rr_get_const(const ares_dns_record_t *dnsrec,
+                                ares_dns_section_t sect, size_t idx)
+ {
+-  return ares_dns_record_rr_get((void *)((size_t)dnsrec), sect, idx);
++  return ares_dns_record_rr_get((void *)dnsrec, sect, idx);
+ }
+ 
+ const char *ares_dns_rr_get_name(const ares_dns_rr_t *rr)
+@@ -741,8 +741,8 @@
+                                               const size_t       **lenptr)
+ {
+   /* We're going to cast off the const */
+-  return ares_dns_rr_data_ptr((void *)((size_t)dns_rr), key,
+-                              (void *)((size_t)lenptr));
++  return ares_dns_rr_data_ptr((void *)dns_rr, key,
++                              (void *)lenptr);
+ }
+ 
+ const struct in_addr *ares_dns_rr_get_addr(const ares_dns_rr_t *dns_rr,

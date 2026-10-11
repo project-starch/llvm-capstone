@@ -1,0 +1,20 @@
+{
+  "program": "memcached",
+  "role": "allocator-component",
+  "title": "memcached's slab classes and per-thread object cache",
+  "upstream": {
+    "version": "1.6.45",
+    "pin_source": {
+      "file": "capstone/ports/memcached/allocators/upstream.json",
+      "grep": "\"version\": \"1.6.45\""
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "cheribsd-purecap",
+    "native"
+  ],
+  "corpora": [
+    "capstone/bug-corpora/memcached/allocator-repros"
+  ]
+}

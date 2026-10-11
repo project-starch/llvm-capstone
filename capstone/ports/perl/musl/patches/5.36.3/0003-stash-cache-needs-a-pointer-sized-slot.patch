@@ -1,0 +1,65 @@
+gv.c: the stash cache is not used where a pointer is wider than an IV.
+
+Perl_gv_stashsvpvn_cached stores a stash as PTR2IV(stash) in an SV's IV and
+reads it back with INT2PTR(HV*, SvIVX(sv)). On capstone64 an IV is 8 bytes and a
+pointer is a 16-byte capability, so the value that comes back is the stash's
+address without the authority to use it: `perl -e 'print 1'` faults on the first
+load through it, cause 24 at the head of S_mro_get_linear_isa_dfs (measured
+2026-09-26).
+
+The cache is transparent, so under PTRSIZE > IVSIZE it is simply not used --
+every lookup misses and gv_stashpvn_internal answers, and nothing is stored. The
+condition is the honest one rather than a capstone name: it is exactly when the
+round trip loses information.
+
+A capability-preserving cache has to keep the pointer in a pointer-sized field.
+The obvious candidate, an RV, is wrong here: this cache deliberately holds a
+non-owning pointer and is invalidated by hand (gp_free, hv_undef_flags), while
+freeing an RV decrements a reference the cache never took. That is follow-on
+work, and the cost of not caching is a hash lookup per stash name.
+
+--- a/gv.c	2023-11-28 19:57:24.000000000 +0800
++++ b/gv.c	2026-09-26 15:10:02.287239411 +0800
+@@ -1649,6 +1649,20 @@
+ 
+     PERL_ARGS_ASSERT_GV_STASHSVPVN_CACHED;
+ 
++#if PTRSIZE > IVSIZE
++    /* capstone: this cache keeps a stash as PTR2IV(stash) in an SV's IV and reads
++       it back with INT2PTR. Where a pointer is wider than an IV -- a 16-byte
++       capability against an 8-byte IV -- what comes back is the address without
++       the authority to use it, and the first load through it faults: cause 24 at
++       the head of S_mro_get_linear_isa_dfs, which is what `perl -e` reaches
++       first. The cache is transparent, so it is not used at all here; every
++       lookup misses and gv_stashpvn_internal answers. A capability-preserving
++       version has to keep the pointer in a pointer-sized field, and the obvious
++       candidate, an RV, is wrong for this cache: freeing the RV would decrement a
++       reference the cache never took, since it is invalidated by hand instead
++       (gp_free and hv_undef_flags clear it). That is follow-on work. */
++    if (flags & GV_CACHE_ONLY) return NULL;
++#else
+     he = (HE *)hv_common(
+         PL_stashcache, namesv, name, namelen,
+         (flags & SVf_UTF8) ? HVhek_UTF8 : 0, 0, NULL, 0
+@@ -1663,6 +1677,7 @@
+         return hv;
+     }
+     else if (flags & GV_CACHE_ONLY) return NULL;
++#endif
+ 
+     if (namesv) {
+         if (SvOK(namesv)) { /* prevent double uninit warning */
+@@ -1676,11 +1691,13 @@
+     }
+     stash = gv_stashpvn_internal(name, namelen, flags);
+ 
++#if PTRSIZE <= IVSIZE
+     if (stash && namelen) {
+         SV* const ref = newSViv(PTR2IV(stash));
+         (void)hv_store(PL_stashcache, name,
+             (flags & SVf_UTF8) ? -(I32)namelen : (I32)namelen, ref, 0);
+     }
++#endif
+ 
+     return stash;
+ }

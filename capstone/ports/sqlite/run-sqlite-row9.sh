@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# row9 -- the LITERAL matched pair for cve-repros/row9_ruby_finalize_after_dbfree
+# row9 -- the LITERAL matched pair for capi-repros/row9_ruby_finalize_after_dbfree
 # (HIERARCHICAL-REVOKE, Ruby binding). Real SQLite, one domain. The Database gets
 # its own MREV'd sub-arena; its statement is a SPLIT descendant. Tearing the
 # Database down REVOKEs the sub-arena's senior node, sweeping the connection AND

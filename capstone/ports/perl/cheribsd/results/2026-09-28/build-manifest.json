@@ -1,0 +1,24 @@
+{
+  "align_bytes": 16,
+  "application": "perl-5.36.3",
+  "application_cflags": "-O1",
+  "binary_sha256": "450e6f5c17bfe9863ede0a686fc66cb4d355a9ab44a2e8edbc557ff7e27004a4",
+  "compiler_sha256": "51b76edd1776d375c32cea00a86a3aec118c5fcf2207a0ae13f8bf9df417b2e4",
+  "compiler_target": "riscv64-unknown-freebsd13, l64pc128d",
+  "config_sha256": "cbe33969dadae41510132b49ff2d1a78899c3f85649ba5df78dd21e1bdba29c3",
+  "inputs_sha256": {
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0001-body-size-fields-are-u16.patch": "258ac00b497270c8fe9257fd28cbf05a28d2dbff29f30911897f53aac0b4cef7",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0002-poison-padlist-16-byte-pointer.patch": "707e503afd1413c6bd82022e54a9b4e7a9638d99dd1474740c4c379eb2be98db",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0003-stash-cache-needs-a-pointer-sized-slot.patch": "ddc5f543e47ee7563c8c65d2adb4ceadf3ba811cf3647a4732712ea5d7777135",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0004-ptrv-and-function-pointer-casts.patch": "97834a0e1edfa088c477c521d5b8c47bb2faf17eae81a7607219dac725f9ae0b",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0005-multideref-counts-from-a-real-base.patch": "d77f8d3f22a1be3477a7987450037b98a1e04e3f6a66575ac26b643b996e7d7c",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0006-openn-setup-clears-the-mode-buffer.patch": "b25fece2afc47c9f3009e49becf901d7bad526a52fb41b5538884b225adb977b",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0007-rxres-preserves-capability-pointers.patch": "ac9c8251155242e47804e8b234fb3eeeb16c819574ba75bb99e904d766718662",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/ports/perl/cheribsd/build.sh": "b74ae4df7cb5cf532711bf0a180f599d7b912d830efb197e84146a47b5125f53"
+  },
+  "nested_allocator": "upstream; no Sublet/PoisonCap inner adapter",
+  "perl_cross_revision": "c2d8f8b7027ed20cd982c9f2c091463510b89f33",
+  "pointer_bytes": 16,
+  "schema": 1,
+  "source_archive_sha256": "f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a"
+}

@@ -1,0 +1,74 @@
+{
+ "date": "2026-10-01",
+ "question": "#145 raised the supervisor's cancel deadline to 30 s and made run.py print each cancellation's time. The v1 gate's 'overlapping cpu' cancellations then read about 3.5 s at dev 330014ea + #140 + #145, and 0.25 s at the #144 integration point, with run.py and supervisor.c byte-identical between the two. Why?",
+ "answer": "Boot history, not code. The capstone-vm guest lives for a whole session, and the time depends on which of the gate's other legs ran earlier in the same boot. Two legs make the overlapped cancel fast when they run first: the signal contract (run-signals.py, to 0.25 s) and the socket contract (run-sockets.py, to 0.08 s). The #140 + #145 sessions ran v1 first; the #144 sessions ran it after seven legs that include signals.",
+ "retraction_history": [
+  "2026-09-30, gating the #144 point: the 0.25 s against 3.5 s was reported to the board as a change in #141-#144's overlapped-cancel path, 'the stack's, not the harness's', on the evidence that run.py and supervisor.c were cmp-identical. That check was right about code and blind to session composition.",
+  "2026-09-30, gating #158: dev + #158 read 3.5 s again, and a 2x2 of contract image x supervisor gave 3.5 s in both mixed cells. That did not fit a code cause.",
+  "2026-09-30, retracted the same day: the same images give 3.73-3.82 s with v1 first after boot and 0.25-0.26 s after the other legs, shown both ways on two trees. The board posted the correction on #144.",
+  "2026-10-01, this record: the leg-by-leg bisect below."
+ ],
+ "method": {
+  "gate": "runtime/tests/application/run.py --repeat 20, the v1 gate; its 'overlapping cpu / application loop' lines are the supervisor's three cancellations (SIGTERM, SIGKILL, SIGINT) of a looping domain while a second domain loops on the same hart",
+  "session": "one capstone-vm boot per composition: the named legs in order, then v1; nothing else in the boot",
+  "legs": "mruby (mruby-ctl, puts), binfmt (run-binfmt.py), contract (application-supervisor over application-contract.dom), process (application-process-test), signals (run-signals.py), sockets (run-sockets.py), tbase (Perl t/base through prove)",
+  "platform": "capstone-qemu ac2837aa (sha256 cf33d058e089...), capstone-sbi F2 firmware (fw_jump.elf c70e6450659a...), modcapstone d60365e (086e12a976b8...), launcher from the tree (c80922427dbb... for the bisect)",
+  "images_bisect": "dev 8c08aa1d (tree 824162ec), compiler dev 612b3ec5 (#147)"
+ },
+ "overlapped_cancel_seconds": [
+  {"before_v1": [], "reading": "3.50-3.82", "where": "every session that ran v1 first: dev 330014ea + #140 + #145 (3.50-3.56, load 38 and 22), dev + #158 in both mixed cells of the image x supervisor 2x2 (3.50-3.51), the #165 point (3.56-3.58), the #170 point (3.56-3.58), dev + #162 images (3.73-3.82)"},
+  {"before_v1": ["contract"], "reading": "3.50-3.53", "where": "dev + #158"},
+  {"before_v1": ["mruby", "binfmt", "contract"], "reading": "3.51-3.52", "where": "bisect"},
+  {"before_v1": ["process"], "reading": "3.51-3.64", "where": "bisect"},
+  {"before_v1": ["tbase"], "reading": "3.48-3.49", "where": "bisect"},
+  {"before_v1": ["signals"], "reading": "0.25", "where": "bisect"},
+  {"before_v1": ["sockets"], "reading": "0.08-0.09", "where": "bisect"},
+  {"before_v1": ["process", "signals"], "reading": "0.25-0.26", "where": "bisect"},
+  {"before_v1": ["sockets", "tbase"], "reading": "0.08-0.09", "where": "bisect"},
+  {"before_v1": ["mruby", "binfmt", "contract", "process", "signals", "sockets", "tbase"], "reading": "0.25-0.26", "where": "the #144 point (three v1 runs), dev + #162, dev + #158 images"}
+ ],
+ "single_cancellations": "the non-overlapped loop cancellations read 0.04-0.05 s in every session, whatever ran before",
+ "what_this_settles": [
+  "The difference is not code: the same images and launcher give both readings depending only on the boot's earlier legs.",
+  "Of the seven legs, signals and sockets each make it fast on their own; mruby, binfmt, contract, process and Perl t/base do not.",
+  "For #145's margin, the worst case is v1 first after boot: 3.8 s against the 30 s deadline."
+ ],
+ "not_established": [
+  "The mechanism: what the signal and socket contracts leave behind in the guest, launcher, kernel module or emulator that a later overlapped cancel benefits from.",
+  "Which case inside each contract does it.",
+  "Order effects: with both legs, signals then sockets, the reading is signals' 0.25 s, not sockets' 0.08 s; sockets then signals is in the addendum.",
+  "Each composition is one boot. The three cancellations in a boot agree closely, but boots were not repeated per composition."
+ ],
+ "next_experiment": "run on 2026-10-01, see the addendum: one boot per case: a single caught signal delivered to a throwaway domain, then v1; and sockets then signals, then v1",
+ "addendum_mechanism_probe": {
+  "status": "pre-registered 2026-10-01, before either boot; results to be added below this line",
+  "method": "as the bisect: one capstone-vm boot per composition, the named legs in order and then v1, nothing else in the boot; same images (dev 8c08aa1d, #147 compiler), launcher and platform",
+  "already_known": [
+   "A delivered signal that nobody catches is not enough. The contract leg runs application-supervisor, which sends SIGTERM, SIGKILL and SIGINT to looping domains with no handler installed (supervisor.c \"loop\"), and v1 read 3.50-3.53 s after it. Two v1 runs in one boot (dev 330014ea + #140 + #145) both read 3.50-3.56 s, though v1 runs the same supervisor.",
+   "Order is not neutral: the all-seven composition ran signals before sockets and read 0.25 s, signals' value, not sockets' 0.08 s."
+  ],
+  "boot_1": {
+   "composition": "run-signals.py --only self, then v1",
+   "what_it_runs": "one throwaway domain that installs a SIGUSR1 handler, raises SIGUSR1 once and checks the handler ran once (signal-contract.c, mode \"self\")",
+   "prediction": "if one caught signal is enough: 0.20-0.30 s. If not: 3.4-3.9 s, as every v1-first boot. A reading outside both bands is reported as unexplained, not fitted.",
+   "cannot_distinguish": "if it reads 3.5 s: whether the effect needs a signal delivered from outside while the domain runs, more than one signal, or another case of the contract. That is not settled by this run and is not chased further here."
+  },
+  "boot_2": {
+   "composition": "run-sockets.py, then run-signals.py, then v1",
+   "prediction": "if signals wins in either order: 0.20-0.30 s. If the first of the two sets it (signals first gave 0.25 s): 0.07-0.10 s. \"Sockets wins in either order\" is already refuted by the all-seven reading.",
+   "cannot_distinguish": "N = 1 boot, and the all-seven reading it is compared with had other legs around the pair (each inert alone, and sockets then tbase kept 0.08 s)."
+  },
+  "preregistered_in": "lane cancel-boot-history 7928cc7e0bcc, pushed before either boot",
+  "boot_1_result": "self 1/1 PASS, then v1: 3.51, 3.52, 3.51 s (SIGTERM, SIGKILL, SIGINT). Boot 565bb35a. Inside the \"not enough\" band.",
+  "boot_2_result": "sockets 11/11, signals 30/30, then v1: 0.09, 0.09, 0.08 s. Boot c3d5bdb7. Inside the \"first of the two sets it\" band.",
+  "what_the_probe_settles": [
+   "One caught signal, raised by the domain itself, is not enough, and neither are the contract leg's uncaught SIGTERM, SIGKILL and SIGINT sent from outside (3.50-3.53 s). A signal sent from outside to a domain that catches it was not tested. Which part of run-signals.py does is open; as pre-registered, that is not chased here.",
+   "Signals does not win in either order: after sockets then signals the reading is sockets' 0.08 s. With the all-seven reading (signals before sockets, 0.25 s), the first of the two to run sets it in both orders."
+  ],
+  "what_it_does_not_settle": [
+   "The order comparison is across compositions: the signals-first reading comes from the all-seven sessions, whose other legs are each inert alone; signals then sockets with nothing else was not run.",
+   "Each composition is one boot.",
+   "The mechanism. The launcher's signal state is per process (signals.c, \"static struct capstone_signal_state *active\"), so whatever persists between legs lives in the guest kernel, the module or the emulator. The readings fit a state that the first of the two contracts sets and the second does not change; that is a description, not a cause."
+  ]
+ }
+}

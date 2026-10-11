@@ -37,6 +37,18 @@ mapfile -t RUNGS < <(grep -vE '^\s*(#|$)' "$SPEC_FILE")
 
 OBJS=()
 : > "$OUT_DIR/optlevels.txt"
+# The controller's dispatch table is GENERATED from this same loop, not
+# hand-maintained beside it. It used to be a literal table in
+# ladder_base_ctl.c, whose own comment recorded that adding a rung to the
+# spec and not to the table "builds fine and then reports -- for every
+# column at run time -- which cost a board boot on 2026-07-27", and told
+# the reader to "add to both, always". That is the drift ladder-rungs.spec
+# exists to make impossible, re-introduced one file over. It recurred on
+# 2026-09-22: four rungs plus a newly added control silently reported --
+# for a whole board run, because they sat past the sixteenth table entry.
+# Generating it removes the class rather than the instance.
+INC="$OBJ_DIR/base_rungs.inc"
+: > "$INC"
 for SPEC in "${RUNGS[@]}"; do
   # Field 5 (per-rung domain knobs) is Capstone-glue-only -- discarded here, see
   # build-ladder-base-bare.sh for why it must stay discarded.
@@ -56,6 +68,8 @@ for SPEC in "${RUNGS[@]}"; do
     -DLADDER_KERNEL_HDR="\"$HDR\"" -DLADDER_COMPUTE="$FN" -DLADDER_EXPORT="base_$R" \
     -c "$SCRIPT_DIR/ladder_base_kern.c" -o "$OBJ_DIR/base_$R.o"
   OBJS+=("$OBJ_DIR/base_$R.o")
+  printf 'unsigned base_%s(void);\n' "$R" >> "$INC.decl"
+  printf '  { "%s", base_%s },\n' "$R" "$R" >> "$INC.tab"
   # See issue I-1: the runner cross-checks this against the capability half.
   echo "$R $OPT" >> "$OUT_DIR/optlevels.txt"
   # Native oracle beside the object. run_ladder_base_fpga.py hard-fails on a
@@ -68,8 +82,15 @@ done
 # _zicsr: the harness reads the counter CSRs directly (csrr cycle/time/instret).
 # Newer binutils split Zicsr out of the base ISA, so it must be named explicitly;
 # it adds no instructions to the kernels, which are already linked as objects.
+cat "$INC.decl" > "$INC"
+printf 'static const struct rung RUNGS[] = {\n' >> "$INC"
+cat "$INC.tab" >> "$INC"
+printf '};\n' >> "$INC"
+rm -f "$INC.decl" "$INC.tab"
+echo "  dispatch table: $(grep -c '^  { ' "$INC") rungs generated from the spec"
+
 "$GUEST_CC" -Os -static -no-pie -fno-pie -nostdlib -ffreestanding \
-  -fno-stack-protector -march=rv64imac_zicsr -mabi=lp64 \
+  -fno-stack-protector -march=rv64imac_zicsr -mabi=lp64 -I"$OBJ_DIR" \
   -o "$OUT_DIR/ladder_base_ctl" "$SCRIPT_DIR/ladder_base_ctl.c" "${OBJS[@]}"
 
 # Static gate: the baseline must contain NO capability instructions. If any leaked

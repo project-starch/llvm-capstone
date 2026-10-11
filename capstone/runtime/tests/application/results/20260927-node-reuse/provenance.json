@@ -1,0 +1,96 @@
+{
+  "date": "2026-09-27",
+  "scope": "One-hart QEMU supervised application execution; software stale-tag sweep",
+  "llvm_base": "65a70550cdb230fca233136a50af67791ccd4995",
+  "qemu_base": "6550f19489e08d2babccab06e89d43467f8e67b6",
+  "qemu_fixed": "22aec7ee0fe1edc4b7fc780316edee68829bea38",
+  "platform": {
+    "qemu": "ed89e9751c731267a68a499be5a8c1be3821c6790ea6c7b6c777d0cffcf3bd6e",
+    "kernel": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "firmware": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+    "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f"
+  },
+  "memory": "8G",
+  "environment": {
+    "CAPSTONE_REV_NODES": "65536",
+    "CAPSTONE_GP_NONLIN": "1"
+  },
+  "guest_launcher_sha256": "aecda8314bee20456d9a1667ce5b0b72ab5036f40eea2e67619e2c1b153e27c7",
+  "inputs_sha256": {
+    "/mnt/host/experiments/clip-1.mkv": "e576a16b71590a5c37210cc0e71e120cc18660dc3ef6434a130261d4e86f5085",
+    "/mnt/host/experiments/clip-5.mkv": "81fe4493e63e4e40941ddd65f1a49e775f6e97770f69250b80b44874afa2adb9",
+    "/mnt/host/experiments/clip-20.mkv": "93c70152c8c75593f2c466cd8755262807b10e7243b662e1722a973bc91d27c3",
+    "/mnt/host/experiments/records.rb": "f5ddecb27bc27fecbf5e9bb7e3ba0b3a8a0aa778594873352b699f6d040b1efb"
+  },
+  "images_sha256": {
+    "ffmpeg-alloc.dom": "94b04654cd1f128be47b30d267a390e8f0512bf634bb6cb15bacab05bec27bad",
+    "mruby-alloc.dom": "c13bd7fec0a257296b8310606b82a83e3bb7b73c57d72f0736147a0c48e7c22d"
+  },
+  "fixture_sha256": "dbd967d560fec3b05bef7c3684a2cee67e9fe960ac9e04199149bd24224f1bf7",
+  "supervisor_sha256": "b8a21563ad88e4e9922c5e79e307bb4044440822f613c22e5c73595afdedf646",
+  "comparison": {
+    "original_pass": 21,
+    "original_signal": 6,
+    "rerun_pass": 27,
+    "rerun_fail": 0,
+    "unchanged": [
+      "application binaries",
+      "workload inputs",
+      "output oracles",
+      "guest launcher",
+      "kernel",
+      "firmware",
+      "rootfs",
+      "node capacity"
+    ],
+    "original_qemu_sha256": "f9795d413ad1910a954dc918fcf469a2a13725a50d48d249dbe8a70cd741f85d"
+  },
+  "original_churn_control": {
+    "returncode": 1,
+    "before": {
+      "version": 1,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 44,
+      "nodes_live": 44,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 44,
+      "tag_pages": 4,
+      "node_capacity": 65536
+    },
+    "after": {
+      "version": 1,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 10559488,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 65285,
+      "nodes_live": 58,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 65285,
+      "tag_pages": 25,
+      "node_capacity": 65536
+    }
+  },
+  "lifecycle": {
+    "mixed_starts": 1008,
+    "all_pass": true
+  },
+  "native_tests": 4,
+  "host_python_tests": 12,
+  "extended": {
+    "pass_count": 9,
+    "fail_count": 0
+  },
+  "assertions": [
+    "unchanged boot ID across both campaigns and lifecycle gates",
+    "zero live domain/region/byte counts after all applications",
+    "zero retired nodes and poisoned blocks after all applications",
+    "zero observed requested bytes at application exit"
+  ],
+  "raw_archive": "See archive.json; captures and temporary guest credentials are kept separately"
+}

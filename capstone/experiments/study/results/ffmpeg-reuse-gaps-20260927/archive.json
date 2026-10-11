@@ -1,0 +1,8 @@
+{
+  "archive": "/tmp/capstone/ffmpeg-reuse-gap-20260927.tar.gz",
+  "bytes": 6867918,
+  "sha256": "4e6d48fd82260e4d8180231317d46c0f0fb89256b41d4ab2c40cc1961f08a1de",
+  "file_count": 608,
+  "includes": "all 36 raw decoder attempts, measured binaries and builds, pinned input, independent output oracles, FFmpeg library flags and archives, study source snapshot, excluded legacy qualification",
+  "excludes": "guest SSH keys and VM state"
+}

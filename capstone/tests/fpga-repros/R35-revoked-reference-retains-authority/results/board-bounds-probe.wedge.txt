@@ -1,0 +1,207 @@
+  [s07] probe generation: 1 (one-shot records)   sw=193 = 0x07  (193 is the discriminator: on gen 1 it is {5'b0,store_buf_commit_cnt}, so bit7 is hard zero and cannot forge the sentinel -- unlike 216, whose gen-1 value tval[47:40] reads 0xFF for any upper-half address and would decode as a saturated census)
+  [s07] PRE-RUN baseline: sw=208 0x00 00000000  no untagged load seen: ldc0_valid(=UNKNOWN SEMANTICS for this bitstream -- do not read as untagged)=0 src=0 (tag from L1 array (incl. replay after refill)) stc_valid=0 stc_ctag=0 gran_match=0 clobbered=0 selftest_seen=0
+===== k800:/test-domains/k800.dom =====
+echo '### TEST 1/3 START k800:/test-domains/k800.dom ###'; /test-domains/lpc k
+800 /test-domains/k800.dom; rc=$?; echo "### TEST 1/3 END k800:/test-domains/k80
+0.dom rc=$rc ###"; echo D''N_$rc
+### TEST 1/3 START k800:/test-domains/k800.dom ###
+ladder-perf: A/pre-create-dom
+DBAS:81960000
+DENT:00000000
+ladder-perf: k800 domain ID = 0
+ECSA:00000000
+EXTC:12345678
+FNCC:00000009
+ARG1:0000000C
+ARG4:00000000
+SHA0:00000000
+RGID:0000000C
+APRM:00000001
+AREV:00000002
+SHA1:00000007
+SHA2:00000000
+BASE:818DE000
+ALEN:00001000
+RCLM:00000000
+SHA3:00000002
+SHA4:00000001
+SHA5:00000000
+SHA6:00000000
+ECSZ:00000000
+ladder-perf: RESULT k800 retval=4 cycles=4560 ran=53406 instret=1089 phase=2
+### TEST 1/3 END k800:/test-domains/k800.dom rc=0 ###
+DN_0
+# 
+  [s07] after k800:/test-domains/k800.dom: sw=208 verdict 0x00 00000000  no untagged load seen: ldc0_valid(=UNKNOWN SEMANTICS for this bitstream -- do not read as untagged)=0 src=0 (tag from L1 array (incl. replay after refill)) stc_valid=0 stc_ctag=0 gran_match=0 clobbered=0 selftest_seen=0
+  [s07] after k800:/test-domains/k800.dom: sw=204 displacement 0x00 00000000  seen={stc:0,ldc:0} count=0
+  [s07] after k800:/test-domains/k800.dom: rev-node head VOID -- 0xFFFF is REVNODE_SENTINEL (capstone_rev_node.anvil:74), not a count, and is indistinguishable from an all-ones dead aperture. NO consumption datum for this rep, and NOT evidence of a full pool.
+===== /test-domains/r1_slots_pools.dom:--speedtest1 --arena 2097152 --tables 65536 --testset r1 --arm pressure --series m1 --pattern shared --cap 65532 --budget 900000 --stale-take =====
+echo '### TEST 2/3 START /test-domains/r1_slots_pools.dom:--speedtest1 --arena
+ 2097152 --tables 65536 --testset r1 --arm pressure --series m1 --pattern shared
+ --cap 65532 --budget 900000 --stale-take ###'; /test-domains/sqlite_host_rr.use
+r /test-domains/r1_slots_pools.dom --speedtest1 --arena 2097152 --tables 65536 -
+-testset r1 --arm pressure --series m1 --pattern shared --cap 65532 --budget 900
+000 --stale-take; rc=$?; echo "### TEST 2/3 END /test-domains/r1_slots_pools.dom
+:--speedtest1 --arena 2097152 --tables 65536 --testset r1 --arm pressure --serie
+s m1 --pattern shared --cap 65532 --budget 900000 --stale-take rc=$rc ###"; echo
+ D''N_$rc
+### TEST 2/3 START /test-domains/r1_slots_pools.dom:--speedtest1 --arena 2097152 --tables 65536 --testset r1 --arm pressure --series m1 --pattern shared --cap 65532 --budget 900000 --stale-take ###
+Ok, good file.
+Found 2 segments
+Loadable executable segment found.
+Entry address = 410000
+Virtual address = 410000
+File offset = 1000
+Segment size = 10fd0
+Domain requirement = 970992 (stack 262144)
+Globals offset = 0x10000
+Loadable size = 69584
+DBAS:81A00000
+DENT:00000000
+SQ: A/dom-ok
+SQ: id=1
+SQ: libc=273770602444
+SQ: self=183862370384
+SQ: B/mkregion1
+SQ: C/mkregion2
+SQ: D/mapped
+SQ: r1=15
+SQ: r2=16
+SQ: speedtest1=97
+SQ: E/share1ECSA:00000001
+EXTC:12345678
+FNCC:00000009
+ARG1:0000000F
+ARG4:00000000
+SHA0:00000001
+RGID:0000000F
+APRM:00000001
+AREV:00000002
+SHA1:0000000A
+SHA2:00000000
+BASE:AC040000
+ALEN:00010000
+RCLM:00000000
+SHA3:00000002
+SHA4:00000001
+SHA5:00000001
+SHA6:00000001
+ECSZ:00000000
+
+SQ: F/share2
+ECSA:00000001
+EXTC:12345678
+FNCC:00000009
+ARG1:00000010
+ARG4:00000000
+SHA0:00000001
+RGID:00000010
+APRM:00000001
+AREV:00000002
+SHA1:0000000B
+SHA2:00000000
+BASE:AC050000
+ALEN:00010000
+RCLM:00000000
+SHA3:00000002
+SHA4:00000001
+SHA5:00000001
+SHA6:00000001
+ECSZ:00000000
+SQ: F2/mkregion3
+SQ: r3=18
+ECSA:00000001
+EXTC:12345678
+FNCC:00000009
+ARG1:00000012
+ARG4:00000000
+SHA0:00000001
+RGID:00000012
+APRM:00000001
+AREV:00000001
+SHA1:FFFFFFFF
+SHA2:00000000
+BASE:AC100000
+ALEN:00200000
+RCLM:00000000
+SHA3:00000001
+SHA4:00000001
+SHA5:00000001
+SHA6:00000001
+ECSZ:00000000
+SQ: arena=2097152
+SQ: F3/mkregion4
+SQ: r4=19
+ECSA:00000001
+EXTC:12345678
+FNCC:00000009
+ARG1:00000013
+ARG4:00000000
+SHA0:00000001
+RGID:00000013
+APRM:00000001
+AREV:00000000
+SHA1:FFFFFFFF
+SHA2:00000000
+BASE:AC060000
+ALEN:00010000
+RCLM:00000000
+SHA3:00000000
+SHA4:00000001
+SHA5:00000001
+SHA6:00000001
+ECSZ:00000000
+SQ: tables=65536
+SQ: G/enter
+ENT0:00000001
+ENT1:00000001
+
+  [s07] after /test-domains/r1_slots_pools.dom:--speedtest1 --arena 2097152 --tables 65536 --testset r1 --arm pressure --series m1 --pattern shared --cap 65532 --budget 900000 --stale-take: sw=208 verdict 0x0c 00001100  INSTRUMENT FAULT: ldc0_valid(=UNKNOWN SEMANTICS for this bitstream -- do not read as untagged)=0 src=0 (tag from L1 array (incl. replay after refill)) stc_valid=0 stc_ctag=1 gran_match=1 clobbered=0 selftest_seen=0  <== gran_match set without both records; stc_ctag/clobbered set without stc_valid. The readout is wrong, NOT the core.
+  [s07] after /test-domains/r1_slots_pools.dom:--speedtest1 --arena 2097152 --tables 65536 --testset r1 --arm pressure --series m1 --pattern shared --cap 65532 --budget 900000 --stale-take: sw=204 displacement VOID (raw 0x0c, self-check ALSO faulted) -- 208 decoded as INSTRUMENT FAULT on the SAME readback, so this byte carries the same cross-aperture contamination. It is NOT data.
+  [s07] after /test-domains/r1_slots_pools.dom:--speedtest1 --arena 2097152 --tables 65536 --testset r1 --arm pressure --series m1 --pattern shared --cap 65532 --budget 900000 --stale-take: rev-node head = 0 (0x0000, 0.0% of 65535)   (first valid sample -- no rate yet)
+  [wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x9c 10011100
+  [wedge] sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x9f 10011111
+  [wedge] sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}    0x80 10000000
+  [wedge] sw=249 rev_node_head[7:0]                                   0x83 10000011
+  [wedge] sw=250 rev_node_head[15:8]                                  0x00 00000000
+  [wedge] sw=204 S-07 displacement {stc,ldc,count[5:0]}               0x00 00000000
+  [wedge] sw=251 rev_node_serving_idx[7:0]                            0x73 01110011
+  [wedge] sw=252 rev_node_serving_idx[15:8]                           0x00 00000000
+  [wedge] sw=253 rev_node_serving_idx[23:16]                          0x00 00000000
+  [wedge] sw=254 rev_node_serving_idx[31:24]                          0x00 00000000
+  [wedge] sw=230 commit pc[7:0]                                       0x02 00000010
+  [wedge] sw=231 commit pc[15:8]                                      0x00 00000000
+  [wedge] sw=232 commit pc[23:16]                                     0x00 00000000
+  [wedge] sw=233 commit pc[31:24]                                     0x00 00000000
+  [wedge] sw=234 commit pc[39:32]                                     0x00 00000000
+  [wedge] sw=235 commit pc[47:40]                                     0x00 00000000
+  [wedge] sw=236 commit pc[55:48]                                     0x00 00000000
+  [wedge] sw=237 commit pc[63:56]                                     0x00 00000000
+  [wedge] sw=196 trap mepc[7:0]   (LATCHED)                           0xf4 11110100
+  [wedge] sw=197 trap mepc[15:8]  (LATCHED)                           0x42 01000010
+  [wedge] sw=198 trap mepc[23:16] (LATCHED)                           0xa0 10100000
+  [wedge] sw=199 trap mepc[31:24] (LATCHED)                           0x81 10000001
+  [wedge] sw=200 trap mepc[39:32] (LATCHED)                           0x00 00000000
+  [wedge] sw=201 trap mepc[47:40] (LATCHED)                           0x00 00000000
+  [wedge] sw=202 trap mepc[55:48] (LATCHED)                           0x00 00000000
+  [wedge] sw=203 trap mepc[63:56] (LATCHED)                           0x00 00000000
+  [wedge] sw=210 trap tval[7:0]   (LATCHED)                           0x40 01000000
+  [wedge] sw=211 trap tval[15:8]  (LATCHED)                           0x00 00000000
+  [wedge] sw=213 trap tval[23:16] (LATCHED)                           0x10 00010000
+  [wedge] sw=214 trap tval[31:24] (LATCHED)                           0xac 10101100
+  [wedge] sw=215 trap tval[39:32] (LATCHED)                           0x00 00000000
+  [wedge] sw=216 trap tval[47:40] (LATCHED)                           0x00 00000000
+  [wedge] sw=217 trap tval[55:48] (LATCHED)                           0x00 00000000
+  [wedge] sw=218 trap tval[63:56] (LATCHED)                           0x00 00000000
+  [wedge] sw=208 S-07 tag history {ldc_v,src,stc_v,ctag,match,clob}   0x00 00000000
+  [wedge] sw=205 s07 ldc0_paddr[11:4]                                 0x00 00000000
+  [wedge] sw=206 s07 ldc0_paddr[19:12]                                0x00 00000000
+  [wedge] sw=207 s07 stc_paddr[11:4]                                  0x00 00000000
+  [wedge] sw=209 s07 stc_paddr[19:12]                                 0x00 00000000
+  [s07] SELFTEST pre-204  = 0x00
+  [s07] SELFTEST 220 flag = 0x00  (expect 0x01)
+  [s07] SELFTEST post-204 = 0x00  <== DID NOT MOVE AS EXPECTED
+  [s07] SELFTEST 208 bit0 = 0x00  <== NOT MARKED
+  [s07] SELFTEST FAIL -- the detector was NOT shown to fire, so every 0x00 read this boot is an ARGUED negative and carries no verdict
+  [s07] healthy-halt control SKIPPED -- this boot wedged, so a halt here is not a clean-core measurement
+  Q-03 hole events this boot: 0 -- hole path UNEXERCISED this boot

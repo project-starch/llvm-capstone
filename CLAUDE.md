@@ -14,6 +14,27 @@ source capstone/tests/capstone-test-env.sh
 
 New to the project? See `capstone/docs/ONBOARDING.md`.
 
+## Autonomy (granted by the project lead, 2026-10-02)
+
+**Act, then report.** The lead has granted this workspace's agents full autonomy, mirrored in the
+auto-mode rules of `~/.claude-kisp/settings.json`. None of these needs permission:
+- builds, tests and board runs;
+- reading any file or log;
+- commits, pushes of lane branches, and landing on `dev` as prescribed below;
+- messages to other lanes;
+- edits to this file, the skills and the docs.
+
+Only three things still wait for the lead's OWN word in the current conversation (a confirmation
+relayed by another lane does not count):
+- a bitstream **reflash**;
+- a **force-push or history rewrite of a shared branch**;
+- **paper** prose and framing (`capstone/paper/`, see Hard constraints).
+
+A RETRACTION is surfaced the moment it happens. Surfacing it is a report, not a pause.
+
+The content rules under Hard constraints are not permissions, and they stay absolute: no personal
+names, no FPGA token, never push the paper.
+
 ## Hard constraints
 
 - **Never mention any real person by name — anywhere.** No PI, supervisor,
@@ -54,6 +75,22 @@ New to the project? See `capstone/docs/ONBOARDING.md`.
   them into the change they belong to. Debug logs and session scratch stay in local files and are
   never committed at all. Rare exceptions: a retraction that must land immediately, and a fix that
   is genuinely one line.
+- **Shared branches receive only squashed, logically complete commits.** A shared branch is `dev`
+  here, and in every other repo the branch other lanes build on. Today that means `capstone-bootstrap`
+  in `caplifive-buildroot` and `caplifive-system`, and `c128-qemu-merge` in `capstone-qemu`; for any
+  other submodule, the branch the parent's pointer tracks.
+  - Work on your own branch, named for the lane or the task (no prefix scheme), and push it as often as you like.
+    That is what "push at stable points" means.
+  - Land on the shared branch once per logical change, as ONE commit:
+    `git checkout <shared> && git merge --squash <your-branch> && git commit -F <msgfile>`.
+    Interactive rebase is unavailable here.
+  - Never commit WIP, a fixup, a pre-registration or a follow-up correction directly to a shared
+    branch, and never merge a shared branch into itself — rebase.
+  - Pre-registrations keep their evidence: push them to the lane branch BEFORE the run, and cite that
+    commit's hash in the squashed commit. Lane branches are never deleted.
+  - Exceptions:
+    - an external collaborator's PR keeps its merge commit, because that is how authorship survives;
+    - a retraction of something ALREADY on a shared branch lands at once, as its own commit.
 - **Commit only your OWN paths: `git commit -o <paths> -F <msgfile>`.** `git add <files>` followed
   by a bare `git commit` commits the ENTIRE index, so a concurrent session's staged work rides
   along under your message. This happened twice on 2026-08-18 — an LLVM merge landed under a
@@ -67,6 +104,9 @@ New to the project? See `capstone/docs/ONBOARDING.md`.
   never by whom. So when other lanes may be active: before committing a shared file read `git diff`
   on the path and look for hunks you did not write, and afterwards read `git show`, **not**
   `git show --stat` — the stat shows a plausible file list and hides the foreign hunks inside it.
+  Read it BEFORE the push: never chain `git push` into the commit command. On 2026-10-05 a landing checked
+  only that dev's tree equalled the lane head, then pushed in the same command, and an unlanded lane section
+  reached dev under a message that does not describe it (2590f3afdf9c).
 - Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
 - Active plans live in `capstone/docs/plans/` (committed, portable across machines and agents).
 - Manager-facing summaries go under `/tmp/capstone/`, not into the repo.
@@ -99,6 +139,10 @@ is how another lane or the project lead sees a result at all. Work that exists o
 nobody can act on. (It also surfaces access problems early — a submodule with no write access is
 discovered only by attempting a push.)
 
+**"Push" here means push your LANE branch.** Landing on a shared branch is a separate step, done
+once per logical change and squashed (see "Shared branches receive only squashed, logically
+complete commits" under Hard constraints).
+
 **Push without asking at a stable point.** A stable point is any of:
 
 - a bug **root-caused, fixed, or explicitly ruled out**, with its evidence recorded;
@@ -118,6 +162,35 @@ Unchanged and absolute: `precommit-scan.sh` runs before every push, and **never 
 `capstone/paper`** (Overleaf owns that remote). Submodules push separately from the parent and may
 lack write access — push the submodule first, then the parent, so the parent never references
 commits that do not exist remotely.
+
+## Squash when landing — what lands is one complete change
+
+**The unit that lands on a shared branch is the smallest self-contained change that stands on its
+own**: it builds, it bisects, and its message explains all of it. Fixups, WIP and "address review"
+commits are working notes, not history — fold them into the change they belong to before the branch
+is pushed or merged.
+
+This is "No micro-commits" one level up, and it fails the same way: a squashed commit whose message
+describes only part of what it carries is the 2026-08-18 defect again, where the content was right
+and the message described something else.
+
+- **Squash when LANDING, never by rewriting.** The lane branch keeps its commits as pushed. The
+  squash is the `merge --squash` onto the shared branch. Rewriting pushed history is a force-push.
+  - On a shared branch it needs the lead and costs every other lane a re-sync.
+  - On your own lane branch it is allowed, but it destroys the trail, so prefer not to.
+  - Once it is on the remote it stays.
+- **Squash noise, SPLIT substance.** A branch carrying two logical changes lands as two commits, not
+  one that does both: a message can only honestly describe one of them, and bisect then stops
+  working at exactly the commit you need it to.
+- **Never squash away a RETRACTION of a claim that reached a shared branch.** That withdrawal lands
+  as its own commit. A claim made and withdrawn only on your lane branch does not need two commits
+  on the shared branch. Record the withdrawal in the squashed message instead, and cite the lane
+  commits: the lane branch keeps the trail, and the trail is the evidence that the claim was tested.
+- **Squash only your OWN commits.** The `-o` rule applies to history rewriting too: a rebase that
+  absorbs another lane's commit republishes their work under your message.
+
+This does not change how an external collaborator's PR lands: those keep their merge commits, which
+is how authorship survives.
 
 ## Silicon-defect handovers: one link per issue, and the folder IS the report
 
@@ -145,8 +218,8 @@ not a permission request; turning it into one wastes a turn and, on this project
 time.
 
 Ask only when:
-- proceeding under any assumption would be **unsafe or irreversible** — bitstream reflash,
-  force-push, destructive delete, anything outward-facing;
+- the action is a bitstream **reflash** or a **force-push / history rewrite of a shared branch**
+  that the lead has not confirmed in this conversation (see "Autonomy");
 - the answer is **genuinely the project lead's** (paper framing, authorial content, project
   direction);
 - **or you have RETRACTED a conclusion.** That one is worth surfacing every time. A session
@@ -164,9 +237,9 @@ A standing instruction stays standing. "Proceed", "don't ask", "keep going until
 covers the whole goal, not the next step of it — so it does not need renewing at each
 checkpoint, and re-asking reads as not having heard it.
 
-This section is about *checkpoints inside work already asked for*. It does NOT relax
-anything under "Hard constraints" — those are the project lead's rules, and an agent must
-not widen its own permissions by editing this file. In particular the paper rule stands as
+This section is about *checkpoints inside work already asked for*. It does NOT relax the
+content rules under "Hard constraints" (names, the FPGA token, the paper). Permissions are the
+lead's to set; the current grant is under "Autonomy". In particular the paper rule stands as
 written: if the scope of a given go-ahead is unclear, ask, and asking there is not the
 friction this section is about.
 
@@ -182,8 +255,8 @@ an instrument that has been producing unreadable results. If any of those is tru
 report the result when it lands.
 
 **Only these are serious enough to stop:**
-- an **irreversible or outward-facing** action needing approval — reflash, force-push,
-  destructive delete, anything a third party sees;
+- a **reflash** or a **shared-branch force-push** that the lead has not confirmed in this
+  conversation (see "Autonomy");
 - a question that is genuinely the **project lead's** — paper framing, project direction;
 - a **RETRACTION**, which must be surfaced;
 - **every** remaining experiment needs a resource that is provably unavailable — and *provably*
@@ -230,26 +303,35 @@ the loss.
   everywhere → this file. A fact about one investigation → `docs/`, not here.
 - **Prefer sharpening an existing rule** to adding a new one. This file earns its keep by being
   read; every addition taxes that.
-- **ASK BEFORE EDITING THIS FILE. Always, including additions invited by this very section.**
-  Propose the exact wording and wait for confirmation. This applies to EVERY change to
-  CLAUDE.md, not only to "Hard constraints": the file is the project lead's, and an agent that
-  edits it silently is choosing what every future agent reads. Hard constraints and your own
-  permissions are never yours to change at all.
+- **Edit this file when a lesson warrants it, then report the exact change in the same turn**:
+  the wording, what it replaces, and why. Every future agent reads this file, so the bar is the
+  one above: one rule, in the smallest scope, sharpening before adding. Since 2026-10-02 the lead
+  no longer requires confirmation first. Permissions and the content rules under "Hard
+  constraints" change only when the lead asks.
 - **Say what you considered and rejected**, so the lead can see the alternatives were weighed
   rather than a rule being reflexively appended.
 
 ## Search prior art before investigating, and read PAST the root cause
 
 Before spending board time or building an instrument, search the **issue registry, the per-bug
-repro folders including archived ones, and the commit history** — not only `docs/`. A
+repro folders including archived ones, the commit history, and the other ports' adapter headers
+and patch commentary** — not only `docs/`. A
 whole session went into re-deriving a fault whose exact shape was already recorded, in the folder
-of a bug believed to be fixed.
+of a bug believed to be fixed. **Search by the NAME of the construct you are about to change, not only
+by the symptom** — `grep -rn <signal, module or compare> docs/history/ docs/ref/ISSUES.md` — because a
+prior attempt on that exact line is filed under its own issue, not yours: on 2026-10-05 half a session
+validated a widened `store_buffer` compare that `docs/history/21-08-2026_…_s10b-is-not-synthesizable.md`
+had already shown to form a LUT loop in synthesis.
 
 **Read past the root-cause box.** A fixed issue's folder records what its fix did *not* cover:
 individual instances, residuals, and "what would settle it" lists. Reading only the headline root
 cause gave the wrong answer twice — "this is not that bug", because the documented *mechanism* did
 not match, while the folder's own unexplained instance matched exactly. **A mechanism that does
-not fit is not evidence of a different bug; check the residuals.**
+not fit is not evidence of a different bug; check the residuals.** The converse holds too: **a
+matching SHAPE is not a matching mechanism.** Before writing "this is <known issue>", check that its
+recorded mechanism predicts the VALUE you read. B0's stdout loss had R-29's shape but read 0 where
+R-29's stale-refill mechanism predicts the previous value, and the attribution was retracted
+(2026-10-05).
 
 ## A CLEAN result is not evidence until the check is known to fire
 
@@ -264,10 +346,22 @@ takes, each of which has produced a published claim that had to be retracted:
 * a check **keyed to one function, shape or packing** that silently misses another;
 * a **gate whose condition the mandated control always satisfies**, so it can never fire;
 * a run **parameterised by the wrong variable name**, printing a pass having checked nothing;
-* a tool that renders **"no data" as a zero result**, which reads like a finding;
+* a tool that renders **"no data" as a zero result**, or **a prediction as a reading**, which reads like a
+  finding (the bug-corpus table generator read an arm's oracle TEXT as its verdict until 2026-10-10);
+* a suite that **passes while covering a SUBSET**, because its case list is hardcoded and the
+  corpus has since grown — 4 of 25 cases measured, PASS printed, controls fired (2026-10-08);
+* a check satisfied by a **PREVIOUS run's artifacts**, because the output directory survives —
+  "controls fired" for a boot that never happened. Stamp a marker and require newer files.
 * **directed tests that come back clean without ever creating the triggering condition;**
 * a check that **fires correctly and still under-determines** — proven to work, and unable
-  to tell apart the two hypotheses actually on the table.
+  to tell apart the two hypotheses actually on the table;
+* a count taken over a **population that was filtered to exclude the very class being counted**.
+  This one is not about the check at all — the check works, and is pointed at the wrong input. On
+  2026-10-05 "0 spatial defects of 27" was published from a hunt whose own filter 1 read *"a
+  lifetime defect … **and not as an overflow**"*; re-running the three programs for the excluded
+  class found 19 (15 over tshark's full history, 4 in FFmpeg). **Before reporting an absence, read the search's OWN inclusion criteria and ask
+  what they threw away.** A filter that names a class as a disqualifier can never produce evidence
+  about that class.
 
 The incident log these were drawn from is in `docs/`; it is evidence, not rules.
 
@@ -280,6 +374,10 @@ Cheap habits that catch all of the above:
   the table. Both retractions on 2026-08-19 were available to that question in advance: a
   tag-only detector obviously cannot see corrupt metadata, and a trap PC obviously names the
   faulting instruction rather than the one that produced its operand.
+  **A fix for WRONG VALUES is confirmed by checking the values against an independent reference,
+  never by an anomaly detector built around the old symptom.** "R-52 fixed on silicon" (2026-10-11)
+  rested on a finite-and-monotone count, while the same boot printed `now()` = 0.24 s beside a 240 s
+  integer clock. It was retracted the same evening (23213fb4a701).
 * **Never filter between a gate and its exit status.** A pipe replaces `$?` with the last stage's,
   so `gate | tail && commit` commits what the gate rejected. Redirect, never pipe. And invoke a
   gate by **ABSOLUTE PATH**: one that fails to START exits 127 and reads exactly like one that ran
@@ -298,7 +396,12 @@ Cheap habits that catch all of the above:
   clearing only those two registers, which *was* the asymmetry being hypothesised; it clears six.
   The same day a `trans_id` read at `[2:0]`, taken from the field's position in the struct
   declaration, would have counted events on arbitrary capability cursor bits — the generated code
-  reads it at `[255 +: 3]`.
+  reads it at `[255 +: 3]`. **And check it is the right ARTIFACT, not just the right pattern: a hit
+  in the file a commit is believed to touch is not evidence about that commit.** A candidate was
+  dispositioned "`g_strdup` of a string literal" off the only `g_strdup` in `libpcap.c`, while
+  `git show --stat` gave a reported-length underflow across two files and no `g_strdup` at all —
+  in a session that had just retracted four rows for this exact shape (2026-10-05). A commit's
+  disposition comes from `git show` on that commit.
 * When a result is *surprisingly* clean, suspect the instrument before the subject.
 * **Cite a board result by its image hash, never by its label.** A `board-results` row's label can
   name a different program: the S-06 folder's "acceptance passed" for `s06agg` cited a row whose image
@@ -322,8 +425,10 @@ Before RTL is handed to synthesis, to another lane, or called ready:
 
 **Lint and audit are NECESSARY, NOT SUFFICIENT. Only synthesis proves synthesizability.**
 Both passed — twice, with positive and negative controls — on a change that then drove
-`synth_design` past 100 GB. Verilator models none of what actually breaks: retiming (enabled
-in `run.tcl`), congestion, or Vivado's own loop analysis. So **a hash is ready when synthesis
+`synth_design` past 100 GB. A second instance (2026-09-23) failed on area and slack instead:
+every lint counter at exact baseline, `UNOPTFLAT` unmoved, and the design came out far heavier
+and slower. Verilator models none of what actually breaks: retiming (enabled in `run.tcl`),
+congestion, or Vivado's own loop analysis. So **a hash is ready when synthesis
 has RUN, not when the checks pass.** Do not hand one to another lane, and never spend a
 reflash or a board session on one, before that.
 

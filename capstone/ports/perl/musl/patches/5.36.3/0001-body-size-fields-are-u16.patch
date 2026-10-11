@@ -1,0 +1,30 @@
+sv_inline.h: the SV body-size fields are U16, so a 16-byte-pointer body still fits.
+
+struct body_details describes every SV body's size in a U8. Where a pointer is
+16 bytes two bodies outgrow that: XPVIO is 256 bytes and truncates to 0, and
+regexp is 320 and truncates to 64. The arena would then carve slots smaller than
+the bodies they are for, silently. clang reports both
+(-Wconstant-conversion) and the build ignored the warnings. The three size
+fields become U16; every use is arithmetic on a size (sv_inline.h:315-317,
+461-469), so nothing else changes. Natively the values are unchanged and fit
+either width.
+
+--- a/sv_inline.h	2023-11-28 19:57:24.000000000 +0800
++++ b/sv_inline.h	2026-09-26 14:57:22.689303999 +0800
+@@ -122,9 +122,13 @@
+ typedef struct xpvhv_with_aux XPVHV_WITH_AUX;
+ 
+ struct body_details {
+-    U8 body_size;      /* Size to allocate  */
+-    U8 copy;           /* Size of structure to copy (may be shorter)  */
+-    U8 offset;         /* Size of unalloced ghost fields to first alloced field*/
++    /* capstone: U16, not U8. Where a pointer is 16 bytes these sizes outgrow a
++       byte -- XPVIO is 256 and truncated to 0, regexp 320 truncated to 64 -- and
++       the arena then hands out a slot smaller than the body it is for. The
++       compiler says so (-Wconstant-conversion) and the build ignored it. */
++    U16 body_size;     /* Size to allocate  */
++    U16 copy;          /* Size of structure to copy (may be shorter)  */
++    U16 offset;        /* Size of unalloced ghost fields to first alloced field*/
+     PERL_BITFIELD8 type : 4;        /* We have space for a sanity check. */
+     PERL_BITFIELD8 cant_upgrade : 1;/* Cannot upgrade this type */
+     PERL_BITFIELD8 zero_nv : 1;     /* zero the NV when upgrading from this */

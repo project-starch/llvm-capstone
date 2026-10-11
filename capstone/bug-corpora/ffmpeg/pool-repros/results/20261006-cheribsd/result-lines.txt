@@ -1,0 +1,32 @@
+# ffmpeg/pool-repros on stock CheriBSD purecap, libc revocation ON, 2026-10-06.
+# The reading that 18a16640682b claimed and never took. Result lines only.
+
+## platform controls, same boot
+CHERI_ABI pointer_bytes=16 runtime_revocation=1
+CHERI_ABI pointer_bytes=16 runtime_revocation=1
+CHERI_BOUNDARY_READY
+
+## THE REVOCATION CONTROL -- it FAULTED, which is what makes the completions below mean anything
+SUPERVISE base 0x100000 /tmp/allocator-tests/revocation-control/target
+SUPERVISE expect mc_defect_read 0x101dc0
+REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1
+SUPERVISE fault signal=34 code=2 addr=0x101dc0 pc=0x101dc0
+SUPERVISE exit signalled=34
+
+## the four corpus cases, mode 0, all COMPLETE
+### pool-0-36
+FF2 CHERI runtime_revoke=1 pointer_bytes=16
+FF2_PROBE case=36 ready
+FF2 status=0 events=1 metadata=1472 payload=128
+### pool-0-37
+FF2 CHERI runtime_revoke=1 pointer_bytes=16
+FF2_PROBE case=37 ready
+FF2 status=0 events=1 metadata=4800 payload=512
+### pool-0-38
+FF2 CHERI runtime_revoke=1 pointer_bytes=16
+FF2_PROBE case=38 ready
+FF2 status=0 events=1 metadata=1344 payload=128
+### pool-0-39
+FF2 CHERI runtime_revoke=1 pointer_bytes=16
+FF2_PROBE case=39 ready
+FF2 status=0 events=1 metadata=384 payload=320

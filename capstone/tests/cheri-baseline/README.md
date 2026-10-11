@@ -60,7 +60,7 @@ actually emitted (`-O1+` hoists/elides it).
 
 | File | Role |
 |---|---|
-| `rows.tsv` | maps the paper's 15-row table onto the on-disk `cve-repros` dirs (which still use the pre-trim 19-row numbering) + oracle + prediction. |
+| `rows.tsv` | maps the paper's 15-row table onto the on-disk `capi-repros` dirs (which still use the pre-trim 19-row numbering) + oracle + prediction. |
 | `mock-sqlite/` | minimal SQLite-lifecycle harness (`sqlite3.h` + `mock_sqlite3.c`) the shims link against; reproduces the alloc/free/callback/invalidation events, not SQL. |
 | `compile-purecap.sh` | builds the mock + one purecap ELF per row (shims verbatim, `-O0`), plus sanity probes (auto-probes the CHERI `-march`). |
 | `sanity_clean.c` | defect-free SQLite exercise; built 3 ways — `sanity_vanilla`/`sanity_clean` (real upstream/patched amalgamation, fault) and `sanity_mock` (the harness, clean). |

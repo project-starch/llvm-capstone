@@ -1,0 +1,40 @@
+## pilot-b3: S1/S2 pilot boot 3 on caplifive_r43_8f6a0af.bit, 21:35-21:52 (cells from pilot-cells.tsv, boot 3; driver: board-b78-w2h.sh with its E1 source pin and share layout adapted)
+# fw_payload a4f80f9b4aac; pre-registered at lane/board-r42-paper 25f0b401
+RESULT k800 retval=4 cycles=4499 ran=53406 instret=1089
+k800:/test-domains/k800.dom                                            -> no result line
+/test-domains/ngx-uaf-s1.dom:--arena-linear                            -> mark 0xC10000
+/test-domains/ngx-uaf-s2.dom:--arena-linear                            -> mark 0xC20000
+/test-domains/ngx-uaf-s4.dom:--arena-linear                            -> mark 0xC40001
+/test-domains/ngx-uaf-s6.dom:--arena-linear                            -> mark 0xC600FB
+/test-domains/ngx-uaf-s10.dom:--arena-linear                           -> mark 0xCA0180
+/test-domains/ngx-uaf-s11.dom:--arena-linear                           -> WEDGED trap-log 0x99
+DBAS:81AC0000
+[wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x99 10011001
+[wedge] sw=204 REFUSAL {0,0,arm[3:0] one-hot,~v,v}                  0x05 00000101
+[wedge] sw=196 trap mepc[7:0]   (LATCHED)                           0x94 10010100
+[wedge] sw=197 trap mepc[15:8]  (LATCHED)                           0x67 01100111
+[wedge] sw=198 trap mepc[23:16] (LATCHED)                           0xac 10101100
+[wedge] sw=199 trap mepc[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=200 trap mepc[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=201 trap mepc[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=202 trap mepc[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=203 trap mepc[63:56] (LATCHED)                           0x00 00000000
+[wedge] sw=210 trap tval[7:0]   (LATCHED)                           0x80 10000000
+[wedge] sw=211 trap tval[15:8]  (LATCHED)                           0x00 00000000
+[wedge] sw=213 trap tval[23:16] (LATCHED)                           0x60 01100000
+[wedge] sw=214 trap tval[31:24] (LATCHED)                           0xac 10101100
+[wedge] sw=215 trap tval[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=216 trap tval[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=217 trap tval[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=218 trap tval[63:56] (LATCHED)                           0x00 00000000
+[wedge] sw=208 REFUSAL {p_hi,p_lo,id[29:24]}                        0x00 00000000
+[wedge] sw=205 REFUSAL id[7:0]                                      0x04 00000100
+[wedge] sw=206 REFUSAL id[15:8]                                     0x01 00000001
+[wedge] sw=207 REFUSAL id[23:16]                                    0x00 00000000
+[wedge] sw=209 (no refusal field; S-07 map not applicable)          0x00 00000000
+[refusal] wedge (single running sample per aperture; VOID if contaminated): LATCHED -- arm = hit-dead, revnode id = 0x00000104 (260), parity ok (an even number of flips in one half would pass)  [204:0
+# returning cells: s1 C10000, s2 C20000, s4 C40001, s6 C600FB as pre-registered; s10 CA0180 as pre-registered (tagged type-1 reload; the emulator reads CA0780)
+# s11: cause 25 at mepc 0x81ac6794 - DBAS 0x81AC0000 = +0x6794, the pre-registered stale lbu touch in domain_main; tval 0xac600080
+#   on caplifive_r30r31_1bfff7776 (E1 r1b5) this cell RETURNED CB0100 (unsafe-success); on v2 it STOPS AT THE ACCESS
+# refusal record: 204 = 0x05 = LATCHED, arm 0001 = HIT-DEAD; id 0x0104 (260), parity consistent; every byte fresh and at its aperture (rr-aperture-check rc 0)
+# VERDICT: PASS

@@ -1,0 +1,7 @@
+# phase 7 -- alignment vs boot position, spec -O1, caplifive_m1_054cea69b, 2026-09-23
+# capability half, order ctrsanity20k (first, VA 0x10000, loop 0x101ac), ctrsanitys (0x201a8), ctrsanity (0x301ac):
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanity20k         722208455     722208455     28312           20030         YES
+ctrsanitys           3688591409    3688591409    6283            5029          YES
+ctrsanity            43260934      43260934      700316          500030        YES
+# baseline: phase-6 bare-metal -O1 build (phase6-control-length-series.result-lines.txt), not rebuilt

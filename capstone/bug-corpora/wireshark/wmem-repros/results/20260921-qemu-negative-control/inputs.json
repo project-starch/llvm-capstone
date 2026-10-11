@@ -1,0 +1,12 @@
+{
+  "images": {
+    "00-rpcrdma-write-offsets-global": "2b1df8d6b8c154f41812a3042f2f4969ae15bf5b9ca1a08de904838f7bcf78d2",
+    "12-xml-root-name-recycled": "cbf1653c67f644c41df1d3871274f0936745874f022f9ac51afd2a73d15d045a"
+  },
+  "domain_loader": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
+  "qemu": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+  "clang": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+  "node_capacity": 65536,
+  "distinct_trace_inputs": 2,
+  "arms": 4
+}

@@ -1,0 +1,66 @@
+{
+  "status": "PASS",
+  "allocator": "Capstone-compiled musl 1.2.5 mallocng; local calls with capability representation hooks",
+  "abi": 5,
+  "harts": 1,
+  "qemu_commit": "24b1e95b1dacff6a487b8ddd63bd360e4edd5b37",
+  "processor_checks": {
+    "M1": 60,
+    "virtual_runtime": 69,
+    "U_access": 69,
+    "exact_bounds_with_controls": 4
+  },
+  "records": [
+    "allocator.json",
+    "runtime.json",
+    "pthreads.json",
+    "ports.json",
+    "policy.json",
+    "memcached.json"
+  ],
+  "compiler": {
+    "reused": true,
+    "embedded_revision": "cda7e335ff9fadd4f2701f68b4878e3cb01cf4d5",
+    "full_fresh_build": false,
+    "toolchain_gate": "incomplete target coverage warning; no claim of a fresh complete toolchain"
+  },
+  "build_scope": {
+    "musl": "all 1361 C translation units compiled; six mallocng objects rebuilt after final hook cleanup",
+    "applications": "Existing virtual application objects relinked with the new SDK and Capstone libc; memcached fixture adaptation compiled separately",
+    "platform": "Existing Linux image and firmware reused; core and firmware unchanged"
+  },
+  "limits": [
+    "Exact bounds use additional QEMU physical-shadow metadata, not tag-bit-only encoding or RTL",
+    "One hart and private pinned anonymous mappings",
+    "Runtime gate omits its two long sparse recycling cases; the new allocator gate completes 200000 lifetimes and 70000 simultaneously live objects",
+    "CPython inner-adapter gate and FFmpeg/tshark safety corpora not requalified by this normal-port gate",
+    "Public mremap, partial munmap, file-backed mappings, swap/migration and protected fork remain outside this change"
+  ],
+  "memcached": "73/73 checks, including 20 fixtures on four workers. Fixture 17 waits for actual reissue without altering allocator policy; original temporal-fault prediction is unchanged. Native reference transcripts reused with matching binary/harness hashes.",
+  "source_sha256": {
+    "capstone/ports/memcached/app/host/run-virtual.py": "f76643d09534a7c0cfd78f5bac72590d59928aec20212807ad390fb8a5f20366",
+    "capstone/ports/memcached/app/src/mcapp-safety.c": "637d7d152b184a6862b3f14d67f94b5745395f71a202a072fc0c72cc5fe4daa3",
+    "capstone/ports/musl-capstone/arch-capstone64/malloc_capstone.h": "7f93238e25f08e3373467d95df4130cd197347d64b08604c0fc68e80e16ef368",
+    "capstone/ports/musl-capstone/check-mallocng-policy.py": "d05a7b5f439fa1193c6ba2d85337ffc770de0343f64dcff087636670413fcde9",
+    "capstone/ports/musl-capstone/musl-patches/0009-virtual-mallocng-capabilities.patch": "bfb5db9e26315aa8d08e5f90a9c408bc94f9e23418f0a2299e3111e98df2af73",
+    "capstone/ports/musl-capstone/prepare-musl-capstone.sh": "7d5eaf923e8b9fb7c3ca09f419f331d51a1a00a1822ae31fc50fc2ff8ebbf07c",
+    "capstone/ports/musl-capstone/survey-musl-capstone.py": "557db2503a14b347d5e712355afa494e3670f895d91169d38ea07710656c2b5b",
+    "capstone/runtime/application/CMakeLists.txt": "b1f566338fb6ff2b3751a1f0d3ebdcc437e7a2f1379d2fd54e94dd816593536e",
+    "capstone/runtime/cmake/Application.cmake": "44f0e2639743e8ef4eb309b4d4d7fc105867d6a4030f2c522701bdf0058fb350",
+    "capstone/runtime/virtual/contract.c": "c47d14d6d4bbed23f426864349883b1523a389424f2ba9283e651868174f2003",
+    "capstone/runtime/virtual/exec.c": "16356bb26d51849cacde1018cc39691b00403514e6f7d7c10b1c0ab0a57e24cb",
+    "capstone/runtime/virtual/heap.c": "4cc36cee876584394f20e93f25fc72ff53cd8a52a63c10d22e166c12e89e5caf",
+    "capstone/runtime/virtual/malloc-contract.c": "0a29ac29524b2efd4a480993da5bb1a3a15997184f8469f566ee6265425bcb41",
+    "capstone/runtime/virtual/module/capstone_vm.c": "b06dfa6209be05a51bb2b13a2e76742cb7dc7892f387b75e36fb0e1be5fbf569",
+    "capstone/runtime/virtual/pthread-contract.c": "6ce92d3c845bfb7c2b5cde776e967e33fb84c1c0670e7f24e045146178b71951",
+    "capstone/runtime/virtual/run-malloc.py": "93df90f1aadaae569282d78554d621558980a53011071f86d2d424382b9c1b05",
+    "capstone/runtime/virtual/run-pthreads.py": "d84d800382cb08283fcba8e94310ed12cd58ebc2988dda8dfd98469ee25a63aa",
+    "capstone/runtime/virtual/run-staged.py": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c",
+    "capstone/runtime/virtual/run.py": "54652ac074e89489e9343414817528171a1c19b5a3fa0194baacd75cf02d35b0",
+    "capstone/runtime/virtual/start.S": "46ae9c1ab0e2ca946eaa8f90e76c699778ba6096a3e201c53023bc37be94a00d",
+    "capstone/runtime/virtual/vm-abi.h": "1d8c439cc7ca475e41e71fb6056ffde477e741943ea4e735d94218a3a74f7ceb",
+    "capstone/runtime/virtual/vm.h": "4349856693738bd296a7ef8c624c9994655d99d359b539e929df847294199ce7",
+    "capstone/runtime/virtual/wire.h": "55debb3c71f3c92bb13a5287d38ebb1ca57ab18f90a6db518e2aa88b1d3f85b9"
+  },
+  "qemu_pr": "https://github.com/project-starch/capstone-qemu/pull/19"
+}

@@ -1,0 +1,60 @@
+Subject: Keep quarantined pool entries unavailable to application lease requests
+
+All backends use the same selection hooks; only the PoisonCap application
+backend can withhold entries. Destruction uses an explicit trusted hook and
+is excluded from the application lease observer.
+
+--- a/libavutil/buffer.c
++++ b/libavutil/buffer.c
+@@ -314,7 +314,7 @@
+         BufferPoolEntry *buf = pool->pool;
+         pool->pool = buf->next;
+ 
+-        buf->data = ff2_payload_issue(buf->ff2_address);
++        buf->data = ff2_payload_teardown(buf->ff2_address);
+         ff2_drop(FF2_BUFFER, pool, buf->data);
+         buf->free(buf->opaque, buf->data);
+         av_freep(&buf);
+@@ -437,14 +437,17 @@
+     BufferPoolEntry *buf;
+ 
+     ff_mutex_lock(&pool->mutex);
+-    buf = pool->pool;
++    BufferPoolEntry **available = &pool->pool;
++    while (*available && !ff2_payload_reusable((*available)->ff2_address))
++        available = &(*available)->next;
++    buf = *available;
+     if (buf) {
+         buf->data = ff2_payload_issue(buf->ff2_address);
+         memset(&buf->buffer, 0, sizeof(buf->buffer));
+         ret = buffer_create(&buf->buffer, buf->data, pool->size,
+                             pool_release_buffer, buf, 0);
+         if (ret) {
+-            pool->pool = buf->next;
++            *available = buf->next;
+             buf->next = NULL;
+             buf->buffer.flags_internal |= BUFFER_FLAG_NO_FREE;
+         } else {
+--- a/libavutil/refstruct.c
++++ b/libavutil/refstruct.c
+@@ -284,10 +284,17 @@
+ 
+     ff_mutex_lock(&pool->mutex);
+     ff_assert(!pool->uninited);
+-    if (pool->available_entries) {
+-        RefCount *ref = pool->available_entries;
++    RefCount *previous = NULL, *ref = pool->available_entries;
++    while (ref && !ff2_ref_reusable(ref)) {
++        previous = ref;
++        ref = ref->opaque.nc;
++    }
++    if (ref) {
+         ret = ff2_ref_issue(ref);
+-        pool->available_entries = ref->opaque.nc;
++        if (previous)
++            previous->opaque.nc = ref->opaque.nc;
++        else
++            pool->available_entries = ref->opaque.nc;
+         ref->opaque.nc = pool;
+         atomic_init(&ref->refcount, 1);
+     }

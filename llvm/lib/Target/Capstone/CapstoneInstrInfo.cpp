@@ -21,6 +21,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineCombinerPattern.h"
@@ -531,20 +532,18 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   // buys: the question "is this copy a capability?" used to be answered by a
   // heuristic on liveness, and answering it wrong dropped a tag silently.
   //
-  // MOVC is the right and only instruction here. From op_helper.c's
-  // helper_csmovc, it zeroes its source ONLY when the source is a TAGGED,
-  // non-copyable (linear) capability -- and a linear capability is one the ISA
-  // forbids copying at all, so a live-source copy of one is not a thing the
-  // register allocator may ask for. An untagged value or a NONLIN capability is
-  // copied without destroying anything.
+  // Emitted as MOVC, and in QEMU's model (op_helper.c, helper_csmovc) MOVC
+  // zeroes its source only when that source is a tagged linear capability,
+  // which the ISA forbids copying anyway.
   //
-  // ponytail: on silicon `movc` is reported to zero an untagged source
-  // unconditionally, where the model guards on the tag (R-18). An untagged value
-  // can sit in a capability register after an inttoptr, so that case is not
-  // impossible here -- it is just no longer reachable from an INTEGER copy,
-  // which is what R-18 was about. cincoffsetimm rd, rs, 0 would be the
-  // non-destructive alternative and it faults outright on an untagged source,
-  // which is worse.
+  // On silicon MOVC also writes cnull into an UNTAGGED source (C-32), and an
+  // untagged value does reach a capability register (inttoptr, an integer
+  // passed as a pointer). So this MOVC is provisional: CapstoneLiveSourceCopy
+  // rewrites each one whose source is still read afterwards as STC+LDC through
+  // a stack slot, which matches MOVC for every type but keeps an integer
+  // source. +movc-keeps-integer-source turns that off for a bitstream that
+  // fixes MOVC (Q-04 b). cincoffsetimm rd, rs, 0 is no alternative: it faults
+  // outright on an untagged source.
   if (Capstone::GPCRRegClass.contains(DstReg, SrcReg)) {
     BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstReg)
         .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc));
@@ -2052,6 +2051,52 @@ unsigned CapstoneInstrInfo::getInstBundleLength(const MachineInstr &MI) const {
     Size += getInstSizeInBytes(*I);
   }
   return Size;
+}
+
+// Capability instructions that LLVM treats as free of side effects but that
+// must not run on an operand that is not a tagged capability. Taken from the
+// QEMU model: CIncOffset(Imm), LCC, SHRINK and SEAL raise UNEXPECTED_OPERAND
+// (cause 24) on an untagged rs1; SCC, TIGHTEN and INIT assert that it is
+// tagged. The first four come from ordinary pointer code, the rest from the
+// capability intrinsics. SEAL and INIT are selected as their tied pseudos,
+// which is what the code-motion passes see. MOVC is absent: it moves an
+// untagged value without complaint.
+static bool trapsOnUntaggedOperand(unsigned Opcode) {
+  switch (Opcode) {
+  case Capstone::CIncOffset:
+  case Capstone::CIncOffsetImm:
+  case Capstone::LCC:
+  case Capstone::SHRINK:
+  case Capstone::SCC:
+  case Capstone::TIGHTEN:
+  case Capstone::SEAL:
+  case Capstone::PseudoSEAL:
+  case Capstone::INIT:
+  case Capstone::PseudoINIT:
+    return true;
+  default:
+    return false;
+  }
+}
+
+// LLVM assumes that an instruction which neither accesses memory nor has side
+// effects can run on any path, and pointer arithmetic is such an instruction
+// everywhere else. On Capstone it is not: CIncOffset of an untagged value -- a
+// NULL pointer, say -- traps instead of computing a harmless address. So any
+// pass that executes an instruction on a path where it did not run before is
+// speculating, and for these it must not.
+//
+// This used to be answered only to MachineLICM, through its shouldHoist hook,
+// with the dominance test re-derived by reachability because that hook gets no
+// dominator tree (C-58). MachineCSE's PRE then did the same thing by another
+// route: CPython tests `nkwargs > 0` before forming &kwnames->ob_item in two
+// sibling loop preheaders, PRE duplicated the CIncOffsetImm into their nearest
+// common dominator above the test, and every call without keyword arguments
+// trapped (C-66). The question now has one answer and every speculating pass
+// asks it; MachineLICM applies its own guaranteed-to-execute test, as for
+// loads.
+bool CapstoneInstrInfo::canTrap(const MachineInstr &MI) const {
+  return trapsOnUntaggedOperand(MI.getOpcode());
 }
 
 bool CapstoneInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {

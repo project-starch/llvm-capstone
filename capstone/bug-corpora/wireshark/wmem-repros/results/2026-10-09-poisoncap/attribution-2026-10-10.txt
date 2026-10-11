@@ -1,0 +1,38 @@
+wireshark/wmem-repros PoisonCap cases 16, 17, 18, 20, 21: is the recorded fault in wm_defect_write?
+=================================================================================================
+
+ANSWER: YES. In all five cases, in both PoisonCap modes, the fault pc is EXACTLY the wm_defect_write label
+(the labelled `sb` store), inside the function wm_write_probe. "wm_defect_probe+0x28" is the same address:
+wm_defect_probe sits at wm_probe+0x10, wm_write_probe starts right after wm_probe's 0x24 bytes, and
+wm_defect_write sits at wm_write_probe+0x14, so wm_defect_write = wm_defect_probe + 0x28 in every binary.
+The committed README's "NOT AT wm_defect_probe" is true but names only the READ label; these are write
+crossings caught AT the write label.
+Positive control: the read crossings 13, 14, 15 and 19 in the same boot fault AT wm_defect_probe, inside wm_probe,
+so the method does separate the two labels.
+
+Record:   wireshark/wmem-repros/results/2026-10-09-poisoncap/README.md (rows 16-18, 20, 21: "NOT AT wm_defect_probe")
+Run:      /tmp/capstone/q1009-ap13/wmem-poisoncap/guest/summary.json (image c8df9e17, runtime_revocation on, modes 0 and 1)
+Binaries: /tmp/capstone/q1009/wmem-poison/bin/<case>. The guest dir has no bin/; each candidate was accepted only
+          because its sha256 equals the summary's results[].inputs[<case>] hash for both the -mode0 and -mode1 rows
+          (the summary's "binaries" entry, 4ee34e7b..., is the shared supervise wrapper, and also matches
+          /tmp/capstone/q1009/wmem-poison/bin/supervise).
+Symbols:  the CHERI SDK's llvm-nm (<home>/cheri/output/sdk/bin/llvm-nm -S -n --defined-only). wm_defect_probe and
+          wm_defect_write are zero-size global asm labels (line numbers identical at 575c878ede80, the commit that landed the record, and at HEAD 09cc4392bcc1):
+          bug-corpora/wireshark/wmem-repros/shared/driver.c:60  ".globl wm_defect_probe ... lbu"  (load)
+          bug-corpora/wireshark/wmem-repros/shared/driver.c:72  ".globl wm_defect_write ... sb"   (store)
+Why "NOT AT": ports/wireshark/wmem/host/cheribsd/poisoncap/run.py:23 hardcodes PROBE = "wm_defect_probe", so
+          supervise expects the read label for every case.
+Load base 0x100000 from each arm's own "SUPERVISE base" line; pcs from its "SUPERVISE fault" line (si_code 1).
+
+case  binary sha256 (= inputs[case])   wm_defect_probe  wm_write_probe        wm_defect_write  fault pc (mode0 = mode1)  verdict
+16    c5e074c9eefaf082...              0x1041b6         [0x1041ca,0x1041ea)   0x1041de         0x1041de                  AT wm_defect_write
+17    fe24dc62d535a40c...              0x104178         [0x10418c,0x1041ac)   0x1041a0         0x1041a0                  AT wm_defect_write
+18    5b1661ccdfc7c6db...              0x104220         [0x104234,0x104254)   0x104248         0x104248                  AT wm_defect_write
+20    51075844d39cd0e0...              0x10420e         [0x104222,0x104242)   0x104236         0x104236                  AT wm_defect_write
+21    fdfb052a204fee5d...              0x104182         [0x104196,0x1041b6)   0x1041aa         0x1041aa                  AT wm_defect_write
+
+positive control (read crossings, same boot):
+13    3a72d0ca79cc8627...              0x10429c (in wm_probe [0x10428c,0x1042b0))                 fault 0x10429c  AT wm_defect_probe
+14    c592b9b2261e07d3...              0x104208 (in wm_probe [0x1041f8,0x10421c))                 fault 0x104208  AT wm_defect_probe
+15    be46f2192279dd9e...              0x10419e (in wm_probe [0x10418e,0x1041b2))                 fault 0x10419e  AT wm_defect_probe
+19    3f1910e94c6bc9b2...              0x104204 (in wm_probe [0x1041f4,0x104218))                 fault 0x104204  AT wm_defect_probe

@@ -1,0 +1,38 @@
+# phase 9 -- whole table, -falign-loops=8 in BOTH halves (DOMAIN_EXTRA_CFLAGS / BASE_EXTRA_CFLAGS), caplifive_m1_054cea69b, 2026-09-23
+# capability half (one boot):
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    6287            5029          YES
+ctrsanity            43260934      43260934      600311          500031        YES
+beebs_cover          1993178309    1993178309    179272          76501         YES
+rv8_primes           99991         99991         6337923         3250988       YES
+rv8_sha512           1390718314    1390718314    543720          461014        YES
+beebs_aha_mont64     2185097489    2185097489    287335          256793        YES
+rv8_sha512s          2842840124    2842840124    118791          75542         YES
+beebs_prime          582955588     582955588     9758            2704          YES
+beebs_crc32          1703161001    1703161001    48293           29723         YES
+beebs_ns             1184999093    1184999093    102587          61299         YES
+beebs_cnt            2356896837    2356896837    114461          69707         YES
+beebs_bs             887447230     887447230     2116            820           YES
+coremark_matrix      14343         14343         53322           31560         YES
+matmult_int          774662735     774662735     19172           9738          YES
+beebs_janne          484656629     484656629     635             198           YES
+beebs_recursion      1579141629    1579141629    18990           3032          YES
+beebs_insertsort     271779359     271779359     2566            972           YES
+# bare-metal baseline half (extraflags.txt = -falign-loops=8):
+ctrsanitys: BEST cycles=6041 instret=5022 (15/15 passes at min instret, spread=0) retval=3688591409
+ctrsanity: BEST cycles=600043 instret=500023 (15/15 passes at min instret, spread=0) retval=43260934
+beebs_cover: BEST cycles=157066 instret=76609 (15/15 passes at min instret, spread=0) retval=1993178309
+rv8_primes: BEST cycles=6296684 instret=3261260 (15/15 passes at min instret, spread=0) retval=99991
+rv8_sha512: BEST cycles=540266 instret=463031 (15/15 passes at min instret, spread=142) retval=1390718314
+beebs_aha_mont64: BEST cycles=283198 instret=256848 (15/15 passes at min instret, spread=20) retval=2185097489
+rv8_sha512s: BEST cycles=117100 instret=69428 (15/15 passes at min instret, spread=0) retval=2842840124
+beebs_prime: BEST cycles=9291 instret=2714 (15/15 passes at min instret, spread=0) retval=582955588
+beebs_crc32: BEST cycles=43053 instret=31258 (15/15 passes at min instret, spread=0) retval=1703161001
+beebs_ns: BEST cycles=90037 instret=63697 (15/15 passes at min instret, spread=0) retval=1184999093
+beebs_cnt: BEST cycles=95409 instret=58621 (15/15 passes at min instret, spread=0) retval=2356896837
+beebs_bs: BEST cycles=1470 instret=827 (15/15 passes at min instret, spread=0) retval=887447230
+coremark_matrix: BEST cycles=36523 instret=25673 (15/15 passes at min instret, spread=0) retval=14343
+matmult_int: BEST cycles=11394 instret=7427 (15/15 passes at min instret, spread=0) retval=774662735
+beebs_janne: BEST cycles=328 instret=210 (15/15 passes at min instret, spread=0) retval=484656629
+beebs_recursion: BEST cycles=9705 instret=2083 (15/15 passes at min instret, spread=0) retval=1579141629
+beebs_insertsort: BEST cycles=1240 instret=854 (15/15 passes at min instret, spread=0) retval=271779359

@@ -1,0 +1,32 @@
+# Baseline BEFORE the per-chunk port, re-run on this host 2026-09-28.
+# The control this port must flip is 'mode=1 case=4', which passes as 'completed' below.
+# compiler 3979abd8e9a3, capstone-qemu deb7d75756, wireshark 4.6.8.
+PASS mode=0 case=0
+PASS mode=0 case=1
+PASS mode=0 case=10
+PASS mode=0 case=11
+PASS mode=0 case=12
+PASS mode=0 case=2
+PASS mode=0 case=3
+PASS mode=0 case=4
+PASS mode=0 case=5
+PASS mode=0 case=6
+PASS mode=0 case=7
+PASS mode=0 case=8
+PASS mode=0 case=9
+PASS mode=1 case=0
+PASS mode=1 case=1
+PASS mode=1 case=10
+PASS mode=1 case=11
+PASS mode=1 case=12
+PASS mode=1 case=2
+PASS mode=1 case=3
+PASS mode=1 case=4
+PASS mode=1 case=5
+PASS mode=1 case=6
+PASS mode=1 case=7
+PASS mode=1 case=8
+PASS mode=1 case=9
+
+# totals
+cells=26 pass=26 fail=0

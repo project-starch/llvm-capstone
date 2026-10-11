@@ -1,0 +1,27 @@
+{
+ "arm": "cheribsd-revocation, stock CheriBSD riscv64-purecap, libc revocation at the platform default (on, asynchronous, batched)",
+ "what_this_is": "the FIRST stock-CheriBSD reading of this corpus. Its earlier CheriBSD arms were the poisoncap-* pair, which is our adapter for a competitor's platform and which arms.json excludes on purpose, so the cheribsd column read 'not run' for all twenty.",
+ "why_it_had_never_been_run": [
+  "shared/build-cases.sh had a target called `cheribsd` that invoked host/cheribsd/poisoncap/build.sh. The name said one thing and built another, so the arm looked measurable while the only CheriBSD images were of something else. That target is now `poisoncap` and `cheribsd` is the stock purecap build.",
+  "and it could not have compiled anyway: shared/corpus.h guarded its capability-operand probe on PYMALLOC_POISONCAP, a PLATFORM, where the thing that decides is the ABI. On any purecap target a pointer is a capability and an \"r\" operand fails with 'couldn't allocate input reg for constraint r'. The guard is now __CHERI_PURE_CAPABILITY__ as well; the Capstone domain target does not define it and keeps the integer form."
+ ],
+ "result": {
+  "completed_silently": 20,
+  "caught": 0,
+  "of": 20
+ },
+ "verdict": "twenty measured silences. Each case completes with status 0, the supervisor observes no fault, and the program's own report says completed=1 with a nonzero decisions mask, so the defect executed.",
+ "controls": {
+  "platform": "cheribsd-abi and cheribsd-bounds, the shared runner's own, both PASS",
+  "revocation_can_fire": "revocation-control faulted at its labelled load, signal=34 code=2 (PROT_CHERI_TAG), addr equal to pc, with the quarantine probe loaded. So revocation is live in this boot and the probe does not disable it.",
+  "the_supervisor_resolves_this_corpus_probe": "every case prints SUPERVISE expect pyc_defect_read 0x1061xx. The first attempt used memcached's supervisor, built with -DPROBE_SYMBOL=mc_defect_read, which printed 'expect mc_defect_read unavailable' -- a run whose oracle could never have fired. Recorded because that is the shape of an instrument that reads clean without checking anything."
+ },
+ "disposition": {
+  "finding": "never-freed",
+  "how_measured": "ports/common/host/cheribsd/quarantine-probe.c, sha256 fa283f7686c36e1803910e006dc429577ee132fd6eea12ef49a89b6b97263554, LD_PRELOADed through the runner's per-case env. quarantine.tsv has one row per case.",
+  "which_process": "the probe is in front of BOTH processes -- the supervisor forks the case and LD_PRELOAD is inherited -- so stderr carries two reports per case. The filed row is the CHILD's, the first of the two; the supervisor's is kept in result-lines.txt beside it so the two cannot be confused. They differ (4 allocs against 6), which is how the attribution is checkable rather than asserted.",
+  "numbers": "identical in all twenty: 4 allocations and 5 frees in the whole child process, every free quarantined, none reissued while quarantined, and no sweep completing.",
+  "why_that_settles_it": "four allocations is the process's own infrastructure. The port takes ONE arena from aligned_alloc -- the report says arenas=1, released=0 -- and pymalloc sub-allocates pools and objects inside it, so a freed object goes back to a pymalloc freelist and never reaches libc free. The quarantine is active during the case, every free entering it, and the object simply never arrives. Same answer as memcached's eight and reached the same way: by the SIZE of the frees column, not by the zero in reused_while_quarantined, which with sweeps=0 cannot distinguish the two silences on its own."
+ },
+ "what_this_does_not_show": "sweeps=0 means no revocation sweep completed during any case, so this run says nothing about what a sweep would have done. It does not need to: with the object never reaching free(), no sweep policy reaches it either."
+}

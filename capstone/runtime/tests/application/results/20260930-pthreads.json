@@ -1,0 +1,213 @@
+{
+ "date": "2026-09-30",
+ "stage": "T4: musl threads on minted contexts (Q4, B10, B11)",
+ "platform": {
+  "capstone-qemu": "674cdab03c",
+  "firmware_fw_jump_sha256": "295647f3aacc8c585c4b4938c10a74c0cb676e2037f2faf7c882525d9c867a50",
+  "module_sha256": "6ab096ce9bf8e480a0c2d04d190d1f489b41ee754b5e1b0679e6ac44d265c7bc",
+  "launcher_sha256": "06a6a889ae8d8b273bab577c945486d0247b1ee3077365c83305e2e57c01063c",
+  "seeded_launcher_sha256": "6a7f4dcb1ad743e22fc0843ddc0f40750fd58dbc4179850dd72be9fe6d9bdab2",
+  "pthread_probe_sha256": "65c716fdacaf023e9a263097721a60cb1a8bc03bde422fe2600261e5d6865c3c",
+  "musl_archive_sha256": "ac1800b224eeadf115814bcbaccdc6df2930b1382747ef2f26973891929cc385"
+ },
+ "pthread_probe": {
+  "join-values": {
+   "pass": true,
+   "stdout": [
+    "join-values: 420 threads, records made 7, live 7",
+    "pthread-probe join-values: PASS"
+   ]
+  },
+  "join-parked": {
+   "pass": true,
+   "stdout": [
+    "join-parked: join returned after 45 ms",
+    "join-parked: join returned after 41 ms",
+    "join-parked: join returned after 41 ms",
+    "join-parked: join returned after 41 ms",
+    "join-parked: join returned after 41 ms",
+    "pthread-probe join-parked: PASS"
+   ]
+  },
+  "detach-many": {
+   "pass": true,
+   "stdout": [
+    "detach-many: 300 detached, records made 1, live 1",
+    "pthread-probe detach-many: PASS"
+   ]
+  },
+  "reserve-waits": {
+   "pass": true,
+   "stdout": [
+    "reserve-waits: create answered 0 after 57 ms",
+    "pthread-probe reserve-waits: PASS"
+   ]
+  },
+  "main-exit": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe main-exit: PASS"
+   ]
+  },
+  "tsd": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe tsd: PASS"
+   ]
+  },
+  "cond": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe cond: PASS"
+   ]
+  },
+  "clone-refused": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe clone-refused: PASS"
+   ]
+  },
+  "pi-mutex": {
+   "pass": true,
+   "stdout": [
+    "pi-mutex: timed lock answered 110 after 30 ms",
+    "pi-mutex: far deadline answered 0 after 48 ms",
+    "pthread-probe pi-mutex: PASS"
+   ]
+  },
+  "user-stack": {
+   "pass": true,
+   "stdout": [
+    "user-stack: thread answered 1",
+    "pthread-probe user-stack: PASS"
+   ]
+  },
+  "main-exit-more": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe main-exit-more: PASS"
+   ]
+  },
+  "exit-thread": {
+   "pass": true,
+   "stdout": []
+  }
+ },
+ "controls": {
+  "runtime seed noclear: join-parked": {
+   "pass": false,
+   "reason": "timeout after 60.0s"
+  },
+  "runtime seed noreap: join-values": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='', stderr='round 7 thread 2: Resource temporarily unavailable'"
+  },
+  "runtime seed noreap: detach-many": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='', stderr='detached thread 27: Resource temporarily unavailable'"
+  },
+  "runtime seed mainexit: main-exit": {
+   "pass": false,
+   "reason": "got ('exit', 0), , stdout='', stderr=''"
+  },
+  "launcher without the wake: join-parked": {
+   "pass": false,
+   "reason": "timeout after 60.0s"
+  },
+  "launcher whose reservation does not wait: reserve-waits": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='reserve-waits: create answered 11 after 14 ms\\n', stderr='pthread-probe:238: e == 0 && waited >= 20'"
+  },
+  "PI deadline without saturation: pi-mutex": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='pi-mutex: timed lock answered 110 after 31 ms\\npi-mutex: far deadline answered 110 after 1 ms\\n', stderr='pthread-probe:424: e == 0'"
+  },
+  "musl without patch 0007 (numbered 0005 when measured): user-stack": {
+   "pass": false,
+   "reason": "got ('signal', 11), unexpected fault record, stdout='', stderr='capstone-vm: capstone-exec: domain fault cause=24 pc=0xc022b420 address=0x0 entry=0xc0200c60 code=0xc0200000-0xc0672000 last=0x87 prepar"
+  }
+ },
+ "start_cost": {
+  "program": "puts(\"hello\") through the SDK, 20 starts per round, guest /proc/uptime",
+  "rounds": [
+   "hello-c0 round 1: 20 starts, 14.85 -> 26.16 s",
+   "hello-c7 round 1: 20 starts, 26.17 -> 36.80 s",
+   "hello-c0 round 2: 20 starts, 36.81 -> 47.44 s",
+   "hello-c7 round 2: 20 starts, 47.45 -> 58.08 s",
+   "hello-c0 round 3: 20 starts, 58.09 -> 68.69 s",
+   "hello-c7 round 3: 20 starts, 68.70 -> 79.34 s"
+  ]
+ },
+ "regression": {
+  "thread_probe": "34/34",
+  "context_probe": "35/35",
+  "explicit": {
+   "aba": "1/1",
+   "gen-exhaust gen-launch": "2/2",
+   "ctl-wfi": "1/1"
+  },
+  "signal_contract": "26/26",
+  "application_gate": "exit 0, 21 PASS lines (perl and mruby relinked on this runtime)",
+  "native_ctest": "41/41",
+  "many_rounds": "100000 rounds in 9241 ms; 10000-round blocks 923 to 927 ms"
+ },
+ "libc_test": {
+  "summary": {
+   "PASS": 56,
+   "FAULT": 1,
+   "EXCLUDED": 12,
+   "FAIL": 3,
+   "NOBUILD": 5
+  },
+  "changed_since_20260929": {
+   "popen": [
+    "FAULT",
+    "PASS"
+   ],
+   "pthread_cancel-points": [
+    "EXCLUDED",
+    "NOBUILD"
+   ],
+   "pthread_cancel": [
+    "EXCLUDED",
+    "NOBUILD"
+   ],
+   "pthread_cond": [
+    "EXCLUDED",
+    "PASS"
+   ],
+   "pthread_mutex": [
+    "EXCLUDED",
+    "PASS"
+   ],
+   "pthread_mutex_pi": [
+    "EXCLUDED",
+    "PASS"
+   ],
+   "pthread_robust": [
+    "EXCLUDED",
+    "PASS"
+   ],
+   "pthread_tsd": [
+    "EXCLUDED",
+    "PASS"
+   ],
+   "sem_init": [
+    "EXCLUDED",
+    "PASS"
+   ],
+   "setjmp": [
+    "FAIL",
+    "PASS"
+   ],
+   "tls_init": [
+    "FAULT",
+    "PASS"
+   ],
+   "tls_local_exec": [
+    "FAULT",
+    "PASS"
+   ]
+  }
+ }
+}

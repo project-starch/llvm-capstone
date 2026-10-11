@@ -1,0 +1,21 @@
+{
+  "program": "httpd",
+  "role": "allocator-component",
+  "title": "APR's pools, with apr-util's bucket allocator carried on top",
+  "upstream": {
+    "version": "1.7.4",
+    "pin_source": {
+      "file": "capstone/ports/apr/pools/upstream.json",
+      "grep": "\"version\": \"1.7.4\""
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "cheribsd-purecap",
+    "native"
+  ],
+  "corpora": [
+    "capstone/bug-corpora/httpd/apr-pool-repros",
+    "capstone/bug-corpora/httpd/bucket-repros"
+  ]
+}

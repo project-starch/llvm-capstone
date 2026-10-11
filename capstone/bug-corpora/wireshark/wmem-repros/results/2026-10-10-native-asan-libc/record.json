@@ -1,0 +1,180 @@
+{
+  "corpus": "<repo>/capstone/bug-corpora/wireshark/wmem-repros",
+  "started": "2026-10-10T17:59:43+0800",
+  "build": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -g -O0; wmem and the port built with the same flags; WM_LIBC_SYSTEM=ON, WM_CHUNKS=OFF",
+  "asan_options": "detect_leaks=0:abort_on_error=0:halt_on_error=1:color=never",
+  "controls": [
+    {
+      "command": "/tmp/capstone/audit/wm-asan-control90/bin/90-jumbo-freed-by-reset 0 90 buggy",
+      "required": "heap-use-after-free",
+      "report": "heap-use-after-free",
+      "frame": "wm_probe <repo>/capstone/bug-corpora/wireshark/wmem-repros/controls/sublet-malloc/shared/driver.c:51",
+      "rc": 1,
+      "ok": true
+    },
+    {
+      "command": "/tmp/capstone/audit/wm-asan/bin/asan-control past 4096",
+      "required": "heap-buffer-overflow",
+      "report": "heap-buffer-overflow",
+      "frame": "touch <repo>/capstone/bug-corpora/tools/asan-control.c:14",
+      "rc": 1,
+      "ok": true
+    }
+  ],
+  "rows": [
+    {
+      "case": "00_3c8be14c82_rpcrdma_write_offsets_global",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "01_c14d731e45_cms_oid_global",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "02_99da8c2cdc_mdb_address_column",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "03_6eab9f83ab_cola_info_column",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "04_b48759e4a4_qnet6_col_set_str",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "05_5a109265a6_usbll_address_struct",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "06_a8b16d74e1_x509if_last_dn_static",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "07_fb504bc76c_mysql_auth_method",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "08_31ab1a0a17_sip_cseq_method",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "09_693dc40936_geonw_proto_data_tvb",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "10_6fd3af5e99_t38_reassembly_buffer",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "11_3a5f82dfb5_http_header_map",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "12_90bb3a5c9e_xml_root_name_recycled",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "13_0261fd7da6_http_range_cursor_past_chunk",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "14_1d8acb21ab_solaredge_payload_six_past",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "15_d24613c461_opcua_padding_below_chunk",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "16_e8ef9df09d_dcp_etsi_rs_parity_write",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "17_5a560f3f6a_dns_one_byte_write",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "18_716a200295_rtps_batch_sample_info_unguarded",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "19_4a4871a831_ntlmssp_blob_length_before_check",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "20_ed20250c13_proto_undecoded_bitmap_unbounded",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    },
+    {
+      "case": "21_69dac89280_tcp_flags_str_sixteen_bytes",
+      "outcome": "SILENT",
+      "detail": "the defect reproduced (VERDICT DEFECT-REPRODUCED) and ASan printed nothing",
+      "fixed_rc": 0,
+      "buggy_rc": 0
+    }
+  ]
+}

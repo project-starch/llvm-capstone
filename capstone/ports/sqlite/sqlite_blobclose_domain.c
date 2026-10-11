@@ -1,0 +1,139 @@
+/* sqlite_blobclose_domain.c -- CONTROL (unprotected) reproduction of upstream
+ * SQLite fix e464802d49: sqlite3_blob_close() uses a lookaside-allocated Incrblob
+ * after sqlite3_close_v2() has freed its connection and the lookaside pool.
+ * Public, already-fixed bug (fixed in 3.29.0); collected and reproduced for the
+ * Capstone/Sublet temporal-safety study.
+ *
+ * CONTROL arm: SQLite's own memsys5 heap, lookaside ON, nothing revoked. On
+ * unprotected Capstone the post-free access is NOT caught, so the domain RETURNS;
+ * the matching host ASan build is what shows the heap-use-after-free.
+ */
+#include "sqlite3.h"
+#include "sqlite_hostcall.h"
+
+#define CAPSTONE_DPI_REGION_SHARE 1U
+
+#ifndef SQLITE_HEAP_SIZE
+#define SQLITE_HEAP_SIZE (1024U * 1024U)
+#endif
+static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
+
+static volatile struct sqlite_hostcall_v0 *hostcall_metadata;
+static volatile char *hostcall_payload;
+static unsigned shared_region_count;
+
+static void output_text(const char *text) {
+  if (!hostcall_metadata || !hostcall_payload)
+    return;
+  /* Under the gp-captable (silicon) ABI both capabilities arrive NON-LINEAR (string literals from
+     cap-table storage, the payload through the cap-table too), and the RTL's DELIN raises
+     UNEXPECTED_CAPABILITY_TYPE on any non-linear operand, a wedge on this RTL, where QEMU's
+     helper returns early. Same fix as output_text in sqlite_capstone_domain.c (ISSUES S-02,
+     S-15). The QEMU corpus build defines no CAPSTONE_GP_CAPTABLE_ABI and is unchanged. */
+#ifdef CAPSTONE_GP_CAPTABLE_ABI
+  const char *src = text;
+  char *payload = (char *)hostcall_payload;
+#else
+  const char *src = (const char *)__builtin_capstone_cap_delin((void *)text);
+  char *payload = (char *)__builtin_capstone_cap_delin((void *)hostcall_payload);
+#endif
+  unsigned long offset = hostcall_metadata->length;
+  while (*src && offset + 1 < SQLITE_HC_REGION_SIZE)
+    payload[offset++] = *src++;
+  hostcall_metadata->length = offset;
+}
+
+static void output_uint(unsigned long v) {
+  char buf[21];
+  unsigned i = 21;
+  buf[--i] = '\0';
+  if (v == 0)
+    buf[--i] = '0';
+  while (v && i) {
+    buf[--i] = (char)('0' + (v % 10));
+    v /= 10;
+  }
+  output_text(&buf[i]);
+}
+
+static int fail(const char *stage, int rc) {
+  output_text("blobclose SQLITE ERROR stage=");
+  output_text(stage);
+  output_text(" rc=");
+  output_uint((unsigned long)(rc < 0 ? -rc : rc));
+  output_text("\n");
+  return rc ? rc : 1;
+}
+
+static int run_blobclose(void) {
+  /* memsys5 as the level-0 heap; lookaside stays ON by default, so the Incrblob
+   * that blob_open creates lands in the connection's lookaside pool. */
+  int rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
+                          (int)sizeof(sqlite_heap), 64);
+  if (rc != SQLITE_OK)
+    return fail("config-heap", rc);
+  rc = sqlite3_initialize();
+  if (rc != SQLITE_OK)
+    return fail("initialize", rc);
+
+  sqlite3 *db = 0;
+  sqlite3_blob *blob = 0;
+
+  /* ==========================================================================
+   * row7 style: after each call check rc and `return fail("<stage>", rc);`.
+   *
+   *   1) open an in-memory db                     -> &db
+   *   2) exec: CREATE TABLE t(x);
+   *            INSERT INTO t VALUES(zeroblob(16)); (a real blob row to open)
+   *   3) blob_open on main.t.x, rowid 1, flags 0  -> &blob (Incrblob -> lookaside)
+   *   4) close_v2(db)                             -> zombie close, pool alive
+   *   5) blob_close(blob)                         -> 3.22.0 buggy order = the UAF
+   * ==========================================================================
+   */
+  rc = sqlite3_open(":memory:", &db);
+  if (rc != SQLITE_OK)
+    return fail("open", rc);
+
+  rc = sqlite3_exec(db, "CREATE TABLE t(x);"
+		  "INSERT INTO t VALUES(zeroblob(16));",
+		  0, 0, 0);
+  if (rc != SQLITE_OK)
+    return fail("exec-setup", rc);
+
+  // Incrblob object lands in the connection lookaside pool
+  rc = sqlite3_blob_open(db, "main", "t", "x", 1, 0, &blob);
+  if (rc != SQLITE_OK)
+    return fail("blob-open", rc);
+
+  /* blob still open -> connection becomes a zombie, lookaside pool stays alive */
+  rc = sqlite3_close_v2(db);
+  if (rc != SQLITE_OK)
+    return fail("close-v2", rc);
+
+  /* 3.22.0 buggy order: this is the UAF on the lookaside Incrblob */
+  rc = sqlite3_blob_close(blob);
+  if (rc != SQLITE_OK)
+    return fail("blob-close", rc);
+
+  output_text("blobclose NOTRAP done\n");
+  return 0;
+}
+
+void domain_main(unsigned *res, unsigned func) {
+  if (func == CAPSTONE_DPI_REGION_SHARE) {
+    if (shared_region_count == 0)
+      hostcall_metadata = (volatile struct sqlite_hostcall_v0 *)res;
+    else if (shared_region_count == 1)
+      hostcall_payload = (volatile char *)res;
+    ++shared_region_count;
+    return;
+  }
+
+  if (hostcall_metadata)
+    hostcall_metadata->length = 0;
+
+  (void)run_blobclose();
+
+  if (res)
+    *res = SQLITE_HC_RET_DONE;
+}

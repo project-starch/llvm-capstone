@@ -1,0 +1,226 @@
+{
+ "date": "2026-09-29",
+ "purpose": "delegated signals: synchronous delivery through the launcher's trampoline, ring and handover block; Linux keeps dispositions, mask, pending set and restart decisions",
+ "platform": "monitor capstone-sbi a810177, capstone-qemu ac2837aa0e, modcapstone d60365e (launch-cost module), kernel e833dfb1..., launcher capstone-exec built from this commit with -Wall -Wextra -O2, musl 1.2.5 with musl-patches/, perl and mruby relinked with ports/common/application/build.py against this commit's runtime",
+ "images": {
+  "signal-contract.dom": "1bc87d20e3a32312b1e2dfb6362ba8f8373591a6a6f3e3535a5581ef22a06ad1",
+  "perl.dom": "4c2e7a0972d6613454c2bd516e7692ad84053e34239d2c2a7bfde83c61c74602",
+  "mruby.dom": "97203416800f71595127cce9bf139095e5274afd66a21c0a5b5b8a631087fddc"
+ },
+ "launcher_sha256": "dbf7b74669642a756efaa04e5bf458c3cbdf4b028566b16e002f284ad8fcbd9c",
+ "signal_contract": {
+  "modes": {
+   "self": {
+    "pass": true,
+    "reason": ""
+   },
+   "self-nodefer": {
+    "pass": true,
+    "reason": ""
+   },
+   "self-defer": {
+    "pass": true,
+    "reason": ""
+   },
+   "before-read": {
+    "pass": true,
+    "reason": ""
+   },
+   "during-read-restart": {
+    "pass": true,
+    "reason": ""
+   },
+   "during-read-eintr": {
+    "pass": true,
+    "reason": ""
+   },
+   "handler-write": {
+    "pass": true,
+    "reason": ""
+   },
+   "sigsuspend": {
+    "pass": true,
+    "reason": ""
+   },
+   "ppoll": {
+    "pass": true,
+    "reason": ""
+   },
+   "nest": {
+    "pass": true,
+    "reason": ""
+   },
+   "retry-partial": {
+    "pass": true,
+    "reason": ""
+   },
+   "wait-restart": {
+    "pass": true,
+    "reason": ""
+   },
+   "wait-eintr": {
+    "pass": true,
+    "reason": ""
+   },
+   "wait-pid": {
+    "pass": true,
+    "reason": ""
+   },
+   "spawn-interrupted": {
+    "pass": true,
+    "reason": ""
+   },
+   "resethand-die": {
+    "pass": true,
+    "reason": ""
+   },
+   "resethand-reinstall": {
+    "pass": true,
+    "reason": ""
+   },
+   "rt-queue": {
+    "pass": true,
+    "reason": ""
+   },
+   "rt-burst": {
+    "pass": true,
+    "reason": ""
+   },
+   "hint": {
+    "pass": true,
+    "reason": ""
+   },
+   "altstack": {
+    "pass": true,
+    "reason": ""
+   },
+   "jump-deep": {
+    "pass": true,
+    "reason": ""
+   },
+   "waitinfo": {
+    "pass": true,
+    "reason": ""
+   },
+   "inherit-start": {
+    "pass": true,
+    "reason": ""
+   },
+   "ign-inherit": {
+    "pass": true,
+    "reason": ""
+   },
+   "abort-caught": {
+    "pass": true,
+    "reason": ""
+   }
+  },
+  "passed": 26,
+  "total": 26
+ },
+ "native_ctest": {
+  "passed": 25,
+  "total": 25,
+  "includes": [
+   "signal-service-test: raise -> ring -> RETRY -> publish -> SIGDONE, procmask mirror, wait classification, coalescing",
+   "signal-overflow-test: 400 queued realtime payloads preserved through the ring, the spare full-ring record"
+  ]
+ },
+ "libc_test": {
+  "summary": {
+   "PASS": 48,
+   "FAULT": 2,
+   "EXCLUDED": 20,
+   "FAIL": 4,
+   "NOBUILD": 3
+  },
+  "changed_verdicts_vs_20260929_delegation_review": {
+   "popen": [
+    "FAULT",
+    "PASS"
+   ],
+   "setjmp": [
+    "FAIL",
+    "PASS"
+   ],
+   "tls_local_exec": [
+    "FAULT",
+    "FAIL"
+   ]
+  },
+  "not_pass": {
+   "clocale_mbfuncs": [
+    "FAULT",
+    "signal 11 capstone-exec: domain fault cause=5 pc=0xc1312768 address=0xc92ffd44 entry=0xc130052c code=0xc1300000-0xc5360000 last=0xc0de0001 preparing=0xc0de0001 sha256=430ea7a7202cdb57988082969f41dd139901293c48b5c0ef5f6799c2d38753e5 image=/mnt/host/lt-clocale_mbfuncs.dom 0.6s"
+   ],
+   "mntent": [
+    "FAIL",
+    "status=1 0.6s"
+   ],
+   "strptime": [
+    "FAIL",
+    "status=1 0.6s"
+   ],
+   "strtold": [
+    "FAIL",
+    "status=1 0.6s"
+   ],
+   "tls_align": [
+    "NOBUILD",
+    "error: undefined symbol: t"
+   ],
+   "tls_align_dso": [
+    "NOBUILD",
+    "error: undefined symbol: main"
+   ],
+   "tls_init": [
+    "FAULT",
+    "signal 11 capstone-exec: domain fault cause=24 pc=0xc1312248 address=0x0 entry=0xc130052c code=0xc1300000-0xc5350000 last=0x40 preparing=0x40 sha256=737fdb9fe7662c739fbafc5fb63b086c80f938b91c814b149976987e2bcb2c6c image=/mnt/host/lt-tls_init.dom 0.6s"
+   ],
+   "tls_init_dso": [
+    "NOBUILD",
+    "error: thread-local variable 'tls' is initialized with the address of a global or function; a cap"
+   ],
+   "tls_local_exec": [
+    "FAIL",
+    "status=1 0.6s"
+   ]
+  }
+ },
+ "regression": {
+  "perl_print": {
+   "rounds": 30,
+   "syscalls": 27,
+   "ticks": 1320330
+  },
+  "perl_time": {
+   "rounds": 30,
+   "syscalls": 27,
+   "ticks": 1148730
+  },
+  "mruby_puts": {
+   "rounds": 4,
+   "syscalls": 2,
+   "ticks": 1052333
+  },
+  "fault_vector": "signal 11 | cause=24 pc=0xc0213090 address=0x0",
+  "gate": {
+   "exit": 0,
+   "pass_lines": 21
+  },
+  "binfmt": "exec-closed: PASS exec-error: PASS",
+  "t_base": {
+   "files": 9,
+   "tests": 493,
+   "prove_wallclock_s": 23,
+   "result": "PASS",
+   "wall": "0m22.570s"
+  }
+ },
+ "method": "capstone-vm run in one guest boot per set; rounds and ticks are the launcher's counters under CAPSTONE_DELEGATE_STATS=1 (rdtime wall time at 10 MHz, no icount, host shared with other work); the contract is run-signals.py with a 30 s timeout per mode; libc-test is run-libc-test-delegated.py with the SDK built from this commit",
+ "notes": [
+  "a review of the first implementation added five modes (wait-pid, rt-burst, jump-deep, waitinfo, inherit-start) and fixed what they found: positive-PID waits poll so a handler runs while the child lives, every published event holds a domain slot until SIGDONE, the trampoline sets backpressure before the ring fills and keeps one spare record, longjmp acknowledges the handlers below its saved stack pointer, sigtimedwait output is translated before delivery, startup mirrors the inherited mask and ignored dispositions",
+  "the contract's nest and altstack modes as first written looped forever on Linux too (each handler raised the other unconditionally; the altstack mode re-entered its own setjmp); both now cross-raise once",
+  "Perl faulted at exit with the first implementation: rt_sigprocmask wrote sizeof(sigset_t) = 128 bytes of old mask where the kernel writes sigsetsize = 8; musl's sigaction hands over an unsigned long[1] around a SIGABRT installation; the abort-caught mode covers that path"
+ ]
+}

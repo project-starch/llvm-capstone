@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# ranlib for the capstone64 archives: this LLVM build has llvm-ar but no llvm-ranlib.
+exec "${CAPSTONE_LLVM_BIN:?}/llvm-ar" s "$@"

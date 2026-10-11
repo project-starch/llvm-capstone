@@ -1,0 +1,162 @@
+{
+  "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+  "kind": "interior",
+  "arm": "capstone-subobject",
+  "started": "2026-10-10T23:29:28+0800",
+  "predicted_buggy_outcome": "DEFECT-REPRODUCED",
+  "sdk": {
+    "path": "<scratch>/capsdk/sdk-level0-cap",
+    "heap": "level0",
+    "heap_log": "22",
+    "runtime_sha256": "afa624ec6387137c968b3b32ec8fdf29df28bb5356bcc47e6a33b71dc1a4dee1",
+    "sdk_json_sha256": "5a2012ec0d6a528ca43825b56c10ca3888a14e10fea3f8d6590e2e5ee4396b1d"
+  },
+  "compiler": "clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)",
+  "platform": {
+    "qemu": "32e7c9754f9afd516dd5b30016148bb8215df47de04e7adae4caad36cdc118af",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "launcher": "0752aa7c49c9adac999c396472bd3eefe0d6cbeaf19037114adcf086c91288fb",
+    "ssh_server": "385fcf915ad3aee1c14ed3d82cd5e1671ec83de6a6c909fa0d8cceb15126a990",
+    "module": "a88ed2159b43229a6592cdb494d9289ec947629e4fe25a763adf179480c04d8b",
+    "job_helper": "5a160efa2b1e7121f5438b20ca2ccdd4233d8a44c68a8323c4814db0d88008a7"
+  },
+  "platform_environment": {
+    "CAPSTONE_GP_NONLIN": "1",
+    "CAPSTONE_REV_NODES": "65536"
+  },
+  "tool_sha256": "749c8afb4399b653ffc9601ba1a1845dae726dda8672701f84257e95c6928bbb",
+  "cc_args": [
+    "-Xclang",
+    "-fcapstone-subobject-bounds",
+    "-std=c11",
+    "-Daligned_alloc(a,n)=malloc(n)",
+    "-isystem",
+    "~/dev/llvm-capstone-cc/build-release/lib/clang/22/include",
+    "-I<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/src/shared",
+    "-I/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported",
+    "-I<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/cmake/replay-config",
+    "-I<scratch>/wt-merge/capstone/runtime/include",
+    "/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported/libavutil/buffer.c",
+    "/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported/libavutil/refstruct.c",
+    "<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/src/shared/observe-pool-events.c",
+    "<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/src/shared/pool-allocator.c",
+    "<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c",
+    "<scratch>/wt-merge/capstone/ports/ffmpeg/buffer-pool/src/native/replay/payload-pointers.c"
+  ],
+  "controls": {
+    "clean": {
+      "outcome": "RETURNED",
+      "detail": "CONTROL clean RETURNED 1",
+      "required": "RETURNED"
+    },
+    "oob": {
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020e5b8 address=0xc0251958 in ctl_write_probe+0x58 (the labelled probe)",
+      "required": "CAUGHT"
+    },
+    "uaf": {
+      "outcome": "RETURNED",
+      "detail": "CONTROL uaf RETURNED observed=0xaa reissued=1",
+      "required": "RETURNED"
+    },
+    "subobj": {
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020e5b8 address=0xc0251948 in ctl_write_probe+0x58 (the labelled probe)",
+      "required": "CAUGHT"
+    }
+  },
+  "rows": [
+    {
+      "case": "00_8864fd0aec_cbs_h265_pic_timing_member",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020e7b0 address=0xc125e2f0 in ff2_case_run+0x250 (NOT the labelled probe) -- a fault site the case declared before the run (case.json fault_sites)",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": false,
+      "image_sha256": "9e9fb2a2c1243de491fb4d8a7d474d779064566016e2c1dc8052f03c65917fd7",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "01_68845e26f7_vulkan_hevc_refpicset_member",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020e820 address=0xc125e048 in ff2_case_run+0x2c0 (NOT the labelled probe) -- a fault site the case declared before the run (case.json fault_sites)",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": false,
+      "image_sha256": "0192c4457dbf0dde1b2e69fc388310bc5c4ba2c8d4a2b8df1c569a4037eb46e4",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "02_e058af88ab_vulkan_hevc_dpb_member",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020e8cc address=0xc125e008 in ff2_case_run+0x36c (NOT the labelled probe) -- a fault site the case declared before the run (case.json fault_sites)",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": false,
+      "image_sha256": "752de7aefac5bd1926a5a30658a8f52c7f6266a3e0a953ca9f695f96f049d244",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "03_89de2f0de1_aac_arith_last_member",
+      "outcome": "CAUGHT",
+      "detail": "cause=5 pc=0xc020e888 address=0xc125e180 in ff2_case_run+0x328 (NOT the labelled probe) -- a fault site the case declared before the run (case.json fault_sites)",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": false,
+      "image_sha256": "c469c6bf18f78e53b697b8d91f5a8aef955a0d40076af0f40d31c5b75e11825e",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "04_1a00ea51cb_rtsp_control_url_underflow",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED strlen(control_url)-1 wrapped to SIZE_MAX and the read landed one byte before control_url, on interleaved_max, inside one allocation",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "ee9215a334358e805e37548043636ab3178f419186e5fefff54dee0fe0a1ad7f",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "05_d29ff88422_vulkan_av1_tile_sizes",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020e5b8 address=0xc125e600 in write_probe+0x58 (the labelled probe)",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": false,
+      "image_sha256": "bd3659d49e79ebb485edd4c2dc397c2006ee40623a823e20b4dcfc279ea574ad",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "06_a809a784ec_vvc_entry_point_start_ctu",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED j was bounded by nothing, so the writes walked 8 words off the end of entry_point_start_ctu and overwrote the next member, inside one allocation",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "9b97adc96d7bd15128597f03370f47c8ddaf607f58f94465ad66e8042f088215",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "07_275e217b10_hlsenc_key_uri_strlcpy_size",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020211c address=0xc125e540 in memcpy+0xdc (NOT the labelled probe) -- a fault site the case declared before the run (case.json fault_sites)",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": false,
+      "image_sha256": "d7152600c3d9bbe976bf07fcd23368b76389ab2fb2ed0bb75bd7cde8e6594e76",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "08_fb862976df_cbs_h266_col_width_val",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020e5b8 address=0xc125e2a8 in write_probe+0x58 (the labelled probe)",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": false,
+      "image_sha256": "edd73c688a672c7b2b489f76a56d46a93ccc858580ed266627eb9cedda524d67",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "path": "$HOME/capstone-artifacts/application-benchmark-study-2026-09-27.tar.gz",
+  "bytes": 43741,
+  "sha256": "d7c0cc185f3b956a64c083901ef20a0d516d1f41b86528c85d775528aba01eb7",
+  "payload_files": 35,
+  "all_payload_hashes_verified_after_archive": true,
+  "excludes": [
+    "SSH keys and VM control credentials",
+    "VM boot console",
+    "base guest images and application binaries"
+  ],
+  "inherited_binaries": {
+    "path": "$HOME/capstone-artifacts/application-default-cheribsd-memory-2026-09-27.tar.gz",
+    "sha256": "f2a8c3e6f05ed664a25abfac1d77e76228b7fd4b9b5dd5649a07bb2ca9229e7c"
+  }
+}

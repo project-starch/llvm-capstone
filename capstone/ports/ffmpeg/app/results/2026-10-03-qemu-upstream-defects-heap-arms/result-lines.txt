@@ -1,0 +1,7 @@
+# arm fixture outcome detail
+level0 24 RETURN 180015b
+level0 25 RETURN 190017b
+shrink 24 RETURN 180015b
+shrink 25 RETURN 190017b
+sublet 24 FAULT cause=24 target=c4802000 val==target
+sublet 25 FAULT cause=24 target=c4802020 val==target

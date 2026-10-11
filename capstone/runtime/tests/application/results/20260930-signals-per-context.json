@@ -1,0 +1,403 @@
+{
+ "date": "2026-09-30",
+ "stage": "B8: signals per context, cancellation",
+ "platform": {
+  "capstone-qemu": "674cdab03c",
+  "firmware_fw_jump_sha256": "295647f3aacc8c585c4b4938c10a74c0cb676e2037f2faf7c882525d9c867a50",
+  "module_sha256": "6ab096ce9bf8e480a0c2d04d190d1f489b41ee754b5e1b0679e6ac44d265c7bc",
+  "launcher_sha256": "8dd8f3f18c3b30756fba41243116f62458dba85c4911eae8acc448c6aa26ef9d",
+  "pthread_probe_sha256": "4696efc559a4997610a0cb6b22cea400235c002267bc8ab3185053a26657a13a",
+  "thread_probe_sha256": "7ab35efa0a67a737eed52d3b7d5fcfbbf2275dd2062d6023102d3bba4f4d0390",
+  "musl_archive_sha256": "ac1800b224eeadf115814bcbaccdc6df2930b1382747ef2f26973891929cc385"
+ },
+ "pthread_probe": {
+  "join-values": {
+   "pass": true,
+   "stdout": [
+    "join-values: 420 threads, records made 7, live 7",
+    "pthread-probe join-values: PASS"
+   ]
+  },
+  "join-parked": {
+   "pass": true,
+   "stdout": [
+    "join-parked: join returned after 49 ms",
+    "join-parked: join returned after 45 ms",
+    "join-parked: join returned after 44 ms",
+    "join-parked: join returned after 44 ms"
+   ]
+  },
+  "detach-many": {
+   "pass": true,
+   "stdout": [
+    "detach-many: 300 detached, records made 1, live 1",
+    "pthread-probe detach-many: PASS"
+   ]
+  },
+  "reserve-waits": {
+   "pass": true,
+   "stdout": [
+    "reserve-waits: create answered 0 after 48 ms",
+    "pthread-probe reserve-waits: PASS"
+   ]
+  },
+  "main-exit": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe main-exit: PASS"
+   ]
+  },
+  "tsd": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe tsd: PASS"
+   ]
+  },
+  "cond": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe cond: PASS"
+   ]
+  },
+  "clone-refused": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe clone-refused: PASS"
+   ]
+  },
+  "pi-mutex": {
+   "pass": true,
+   "stdout": [
+    "pi-mutex: timed lock answered 110 after 30 ms",
+    "pi-mutex: far deadline answered 0 after 48 ms",
+    "pthread-probe pi-mutex: PASS"
+   ]
+  },
+  "user-stack": {
+   "pass": true,
+   "stdout": [
+    "user-stack: thread answered 1",
+    "pthread-probe user-stack: PASS"
+   ]
+  },
+  "main-exit-more": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe main-exit-more: PASS"
+   ]
+  },
+  "kill-thread": {
+   "pass": true,
+   "stdout": [
+    "kill-thread: handler in 4194304, reader 4194304, main 930, read -1 errno 4",
+    "pthread-probe kill-thread: PASS"
+   ]
+  },
+  "mask-routing": {
+   "pass": true,
+   "stdout": [
+    "mask-routing: handler in 4194304, the unblocking thread 4194304",
+    "pthread-probe mask-routing: PASS"
+   ]
+  },
+  "raise-thread": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe raise-thread: PASS"
+   ]
+  },
+  "sigwait-thread": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe sigwait-thread: PASS"
+   ]
+  },
+  "cancel-sem": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe cancel-sem: PASS"
+   ]
+  },
+  "cancel-read": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe cancel-read: PASS"
+   ]
+  },
+  "cancel-disabled": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe cancel-disabled: PASS"
+   ]
+  },
+  "park-signal-thread": {
+   "pass": true,
+   "stdout": [
+    "park-signal-thread: handler in 4194304, waiter 4194304, wait answered 0",
+    "pthread-probe park-signal-thread: PASS"
+   ]
+  },
+  "cancel-installed-early": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe cancel-installed-early: PASS"
+   ]
+  },
+  "sigreturn-mask": {
+   "pass": true,
+   "stdout": [
+    "sigreturn-mask: handler ran 1, SIGUSR2 blocked after the wait 1, SIGUSR1 1",
+    "pthread-probe sigreturn-mask: PASS"
+   ]
+  },
+  "setuid-threads": {
+   "pass": true,
+   "stdout": [
+    "setuid-threads: answered -1 (errno 38) after 0 ms",
+    "pthread-probe setuid-threads: PASS"
+   ]
+  },
+  "sigaction-race": {
+   "pass": true,
+   "stdout": [
+    "sigaction-race: 10 and 21 runs of the two handlers for 600 signals",
+    "pthread-probe sigaction-race: PASS"
+   ]
+  },
+  "main-exit-signal": {
+   "pass": true,
+   "stdout": [
+    "pthread-probe main-exit-signal: PASS"
+   ]
+  },
+  "abort-thread": {
+   "pass": true,
+   "stdout": []
+  },
+  "exit-thread": {
+   "pass": true,
+   "stdout": []
+  }
+ },
+ "thread_probe": {
+  "passed": 34,
+  "total": 34,
+  "signal_modes": {
+   "signals-own": [
+    "thread-probe signals-own: PASS"
+   ],
+   "signal-unblocked-context": [
+    "thread-probe signal-unblocked-context: 0 handlers in the first context, 20 in the other",
+    "thread-probe signal-unblocked-context: PASS"
+   ]
+  }
+ },
+ "controls": {
+  "b8seed-nocp-cancel-read": {
+   "pass": false,
+   "reason": "timeout after 45.0s"
+  },
+  "b8seed-nocp-cancel-sem": {
+   "pass": false,
+   "reason": "timeout after 45.0s"
+  },
+  "b8seed-nomask-main-exit-signal": {
+   "pass": true,
+   "reason": ""
+  },
+  "b8seed-nomask-mask-routing": {
+   "pass": true,
+   "reason": ""
+  },
+  "b8seed-notkill-cancel-sem": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='', stderr='pthread-probe:679: pthread_cancel(t) == 0'"
+  },
+  "b8seed-notkill-kill-thread": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='', stderr='pthread-probe:552: pthread_kill(t, SIGUSR1) == 0'"
+  },
+  "b8seed-notkill-raise-thread": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='', stderr='pthread-probe:613: ran_before_return && handler_tid == raised_in'"
+  },
+  "b8seed-notkill-sigwait-thread": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='', stderr='pthread-probe:640: pthread_kill(t, SIGUSR1) == 0'"
+  },
+  "b8seed2-nomask-signal-unblocked-context": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='thread-probe signal-unblocked-context: 0 handlers in the first context, 0 in the other\\n', stderr='thread-probe:455: handled_by[1] == 0 && handled_by[2] == 20'"
+  },
+  "b8seed2-noprocmask-main-exit-signal": {
+   "pass": false,
+   "reason": "got ('exit', 0), , stdout='', stderr=''"
+  },
+  "b8seed2-noprocmask-mask-routing": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='mask-routing: handler in 0, the unblocking thread 4194304\\n', stderr='pthread-probe:593: handler_runs == 1 && handler_tid == reader_tid'"
+  },
+  "b8seed3-domain-setuid-threads": {
+   "pass": true,
+   "reason": ""
+  },
+  "b8seed3-domain-sigreturn-mask": {
+   "pass": false,
+   "reason": "got ('exit', 1), , stdout='sigreturn-mask: handler ran 1, SIGUSR2 blocked after the wait 1, SIGUSR1 0\\n', stderr='pthread-probe:844: handler_runs == 1 && sigismember(&after, SIGUSR2) == 1 && sigismember(&after, SIGUSR1) "
+  },
+  "b8seed3-nosettle-cancel-installed-early": {
+   "pass": false,
+   "reason": "got ('signal', 11), , stdout='', stderr='capstone-vm: application terminated by signal 11'"
+  },
+  "b8seed-debug-muslsynccall-setuid-threads": {
+   "pass": false,
+   "reason": "musl's own __synccall: setuid-threads did not return within the run's 60 s timeout (signal 15); the runtime's answered at once (ENOSYS, unserved 146)"
+  }
+ },
+ "regression": {
+  "context_probe": "35/35",
+  "signal_contract": "26/26",
+  "application_gate": "exit 0, 21 PASS lines (perl and mruby relinked on this runtime)",
+  "native_ctest": "41/41",
+  "explicit": {
+   "aba": "1/1",
+   "gen-exhaust gen-launch": "2/2",
+   "ctl-wfi": "1/1"
+  },
+  "many_rounds_ms": [
+   9463,
+   9408,
+   9304,
+   9317
+  ],
+  "many_rounds_t4_ms": [
+   9189,
+   9241
+  ]
+ },
+ "libc_test": {
+  "summary": {
+   "PASS": 57,
+   "FAULT": 1,
+   "EXCLUDED": 13,
+   "FAIL": 3,
+   "NOBUILD": 3
+  },
+  "thread_group": {
+   "pthread_cancel-points": [
+    "PASS",
+    "0.7s"
+   ],
+   "pthread_cancel": [
+    "EXCLUDED",
+    "asynchronous cancellation of a thread that makes no call: a signal reaches a context at its next call (the doorbell, delegation-signals.md)"
+   ],
+   "pthread_cond": [
+    "PASS",
+    "0.7s"
+   ],
+   "pthread_mutex": [
+    "PASS",
+    "0.8s"
+   ],
+   "pthread_mutex_pi": [
+    "PASS",
+    "0.8s"
+   ],
+   "pthread_robust": [
+    "PASS",
+    "0.7s"
+   ],
+   "pthread_tsd": [
+    "PASS",
+    "0.6s"
+   ],
+   "sem_init": [
+    "PASS",
+    "0.6s"
+   ],
+   "sem_open": [
+    "EXCLUDED",
+    "file-backed shared mapping: sem_open maps a /dev/shm file MAP_SHARED"
+   ]
+  }
+ },
+ "libc_test_regression_selection": {
+  "summary": {
+   "NOBUILD": 1,
+   "PASS": 11,
+   "FAIL": 3,
+   "FAULT": 1
+  },
+  "results": {
+   "flockfile-list": [
+    "NOBUILD",
+    "error: duplicate symbol: malloc"
+   ],
+   "pthread-robust-detach": [
+    "PASS",
+    "1.5s"
+   ],
+   "pthread_atfork-errno-clobber": [
+    "FAIL",
+    "status=0 0.6s UNSERVED clone"
+   ],
+   "pthread_cancel-sem_wait": [
+    "PASS",
+    "0.7s"
+   ],
+   "pthread_cond-smasher": [
+    "FAIL",
+    "status=1 1.2s"
+   ],
+   "pthread_cond_wait-cancel_ignored": [
+    "PASS",
+    "0.6s"
+   ],
+   "pthread_condattr_setclock": [
+    "PASS",
+    "0.6s"
+   ],
+   "pthread_create-oom": [
+    "PASS",
+    "9.4s"
+   ],
+   "pthread_exit-cancel": [
+    "PASS",
+    "0.6s"
+   ],
+   "pthread_exit-dtor": [
+    "FAIL",
+    "status=1 0.6s UNSERVED clone"
+   ],
+   "pthread_once-deadlock": [
+    "PASS",
+    "0.6s"
+   ],
+   "pthread_rwlock-ebusy": [
+    "PASS",
+    "0.6s"
+   ],
+   "raise-race": [
+    "FAULT",
+    "signal 11 capstone-exec: domain fault cause=24 pc=0xc020e6e8 address=0x0 entry=0xc0200890 code=0xc0200000-0xc4250000 last=0x87 preparing=0x87 sha256=3f1464f16f338fbdc9a256d7b51fab8e886d24d304372578c414b9f72d829ec8 image=/mnt/host/lt-raise-race.dom 0.6s"
+   ],
+   "sigaltstack": [
+    "PASS",
+    "0.6s"
+   ],
+   "sigprocmask-internal": [
+    "PASS",
+    "0.6s"
+   ],
+   "sigreturn": [
+    "PASS",
+    "0.6s"
+   ]
+  }
+ },
+ "control_notes": [
+  "b8seed-nomask (attach without the context's mask) did not fire on mask-routing and main-exit-signal: musl's start() sets every new thread's mask with rt_sigprocmask, which applies it on the thread anyway. It fires on thread-probe signal-unblocked-context (b8seed2-nomask), whose contexts never set a mask; the musl-thread path fires under b8seed2-noprocmask (a further context's rt_sigprocmask not applied to its thread).",
+  "b8seed3-domain-setuid-threads passed against musl's own __synccall because that mode's computing thread read a clock in its loop, and every entry into the dispatcher takes signals; the mode now spins without any call, and b8seed-debug-muslsynccall-setuid-threads is that version's control."
+ ]
+}

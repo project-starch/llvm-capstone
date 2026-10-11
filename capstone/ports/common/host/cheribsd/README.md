@@ -1,6 +1,6 @@
 # CheriBSD allocator ports
 
-Four extracted allocator libraries share one CHERI-RISC-V purecap toolchain
+Six extracted allocator libraries share one CHERI-RISC-V purecap toolchain
 and one QEMU runner. Each component builds a replay and a small program that
 links the allocator directly, without a trace driver.
 
@@ -10,6 +10,9 @@ links the allocator directly, without a trace driver.
 | [PostgreSQL](../../../postgres/memory-contexts/README.md) | `PostgreSQL::MemoryContexts` | [contexts.c](../../../postgres/memory-contexts/examples/contexts.c) |
 | [CPython](../../../cpython/pymalloc/README.md) | `CPython::Pymalloc` | [pymalloc.c](../../../cpython/pymalloc/examples/pymalloc.c) |
 | [Whisper](../../../whisper/ggml-context/README.md) | `Whisper::GgmlContext` | [context.c](../../../whisper/ggml-context/examples/context.c) |
+| [Wireshark](../../../wireshark/wmem/README.md) | `Wireshark::Wmem` | [wmem.c](../../../wireshark/wmem/examples/wmem.c) |
+| [APR](../../../apr/pools/README.md) | `APR::Pools` | [pools.c](../../../apr/pools/examples/pools.c) |
+| [memcached](../../../memcached/allocators/README.md) | `Memcached::Allocators` | [allocators.c](../../../memcached/allocators/examples/allocators.c) |
 
 ## Build and run one component
 
@@ -32,7 +35,7 @@ bash "$PORT/host/cheribsd/run.sh" "$BUILD" /tmp/capstone/cpython-run-1 \
   --sdk "$CHERI_SDK" --rootfs "$CHERI_SYSROOT" --image "$CHERI_IMAGE"
 ```
 
-The same two script names exist in all four components. Alternatively, from
+The same two script names exist in all six components. Alternatively, from
 any component directory use `cmake --preset cheribsd` and
 `cmake --build --preset cheribsd`. Cross binaries run through the QEMU runner,
 not host CTest. The `cheribsd` preset disables host tests and recorder builds.
@@ -138,11 +141,13 @@ an ephemeral SSH private key and guest banners: keep them outside Git.
 | Target | Scope of this integration |
 |---|---|
 | FFmpeg CheriBSD | Existing bounded pool payload pointers; no per-return temporal invalidation by default |
-| PostgreSQL CheriBSD | Capability-compatible manager with 16-byte chunk/free-list layouts; ordinary libc backing allocation |
-| CPython CheriBSD | Capability-compatible pymalloc with retained arena/pool authority; inner pool frees remain ordinary allocator operations |
+| PostgreSQL CheriBSD | Capability-compatible manager with 16-byte chunk/free-list layouts; ordinary libc blocks |
+| CPython CheriBSD | Capability-compatible pymalloc with retained arena/pool authority; frees inside pymalloc's pools remain ordinary allocator operations |
 | ggml CheriBSD | Capability-compatible context extraction and backing ownership; reset does not revoke old aliases |
+| APR CheriBSD | Nodes from the platform's own malloc, as upstream; APR reuses a destroyed pool's node from its own free list without ever calling free(), so libc revocation is never asked |
+| memcached CheriBSD | Slab pages and cache objects from the platform's own malloc, as upstream; a freed chunk goes on its class's list and a freed object on cache.c's STAILQ without free(), so libc revocation is never asked |
 
-Running on CheriBSD does not automatically make inner frees temporally safe.
+Running on CheriBSD does not automatically make invisible releases temporally safe.
 The default suite explicitly disables libc revocation in test processes and verifies that state;
 `--runtime-revocation on` checks a separate installed runtime configuration.
 That switch does not add inner-lifetime hooks.
@@ -153,8 +158,9 @@ and helper processes also use that default. The report records this separate
 setting; test programs still receive their explicit `--runtime-revocation`
 policy. The console is continuously drained during SSH operations.
 The experimental PoisonCap workflows for
-[FFmpeg](../../../ffmpeg/buffer-pool/host/cheribsd/poisoncap/README.md) and
+[FFmpeg](../../../ffmpeg/buffer-pool/host/cheribsd/poisoncap/README.md),
 [CPython pymalloc](../../../cpython/pymalloc/host/cheribsd/poisoncap/README.md)
+and [memcached](../../../memcached/allocators/host/cheribsd/poisoncap/README.md)
 reuse a reconstructed platform and add explicit per-lease hooks.
 They have their own modes and measurements; the generic examples use the default
 CheriBSD adapter. No cross-system security or performance equivalence is

@@ -1,0 +1,119 @@
+# The C-50 control, preserved as DISASSEMBLY because the compiler that produced it will not
+# outlive these trees. Compiler 3979abd8e9a3, which PREDATES the C-50 fix 4c407f9456d4; at or past
+# that fix this shape is not emitted, so the control cannot be reproduced and its absence would
+# read as a pass.
+#
+# Matched pair: same compiler, same sources, ONE difference -- patch 0003.
+# libavcodec/mpegpicture.c, ff_mpv_alloc_pic_pool.
+#
+# Read the pair as: WITHOUT 0003 an INTEGER address is formed off the capability sp
+# (addi a2, sp, 0x8) and then stored through (sd zero, 0x0(a2)) -- that is C-50, cause 24.
+# WITH 0003 every stack address is formed with cincoffsetimm and stays a capability.
+
+=== WITHOUT patch 0003 -- the C-50 shape IS emitted (gate: 1 hit in 361737 insns)
+00000000000955bc <ff_mpv_alloc_pic_pool>:
+   955bc:      	cincoffsetimm	sp, sp, -0x30
+   955c0:      	stc	ra, 0x20(sp)
+   955c4:      	cincoffsetimm	a1, sp, 0x10
+   955c8:      	li	a2, 0x10
+   955cc:      	mv	a3, a1
+   955d0:      	add	a2, a3, a2
+   955d4:      	shrink	a1, a3, a2
+   955d8:      	addi	a2, sp, 0x8
+   955dc:      	sext.w	a0, a0
+   955e0:      	sd	a0, 0x0(a1)
+   955e4:      	sd	zero, 0x8(a1)
+   955e8:      	sd	zero, 0x0(a2)
+   955ec:      	sd	a0, 0x0(sp)
+
+00000000000955f0 <.Lpcrel_hi0>:
+   955f0:      	auipc	a1, 0x0
+
+00000000000955f4 <.Lpcrel_hi1>:
+   955f4:      	auipc	a3, 0x0
+
+00000000000955f8 <.Lpcrel_hi2>:
+   955f8:      	auipc	a4, 0x0
+
+00000000000955fc <.Lpcrel_hi3>:
+   955fc:      	auipc	a5, 0xb8
+   95600:      	cincoffsetimm	a2, sp, 0x0
+   95604:      	li	a0, 0x110
+   95608:      	addi	a1, a1, 0x60
+   9560c:      	addi	a6, a3, 0xcc
+   95610:      	addi	a7, a4, 0x198
+   95614:      	addi	t0, a5, -0x230
+   95618:      	cincoffset	a3, gp, a1
+   9561c:      	delin	a3
+   95620:      	cincoffset	a4, gp, a6
+   95624:      	delin	a4
+   95628:      	cincoffset	a5, gp, a7
+   9562c:      	delin	a5
+   95630:      	cincoffset	a7, gp, t0
+   95634:      	delin	a7
+   95638:      	lui	a1, 0x20
+   9563c:      	movc	a6, zero
+   95640:      	cjalr	ra, 0x0(a7)
+   95644:      	ldc	ra, 0x20(sp)
+   95648:      	cincoffsetimm	sp, sp, 0x30
+   9564c:      	cjalr	zero, 0x0(ra)
+
+
+=== WITH patch 0003 -- no integer stack address (gate: 0 hits in 1018765 insns)
+0000000000314a48 <ff_mpv_alloc_pic_pool>:
+  314a48:      	cincoffsetimm	sp, sp, -0x30
+  314a4c:      	stc	ra, 0x20(sp)
+
+0000000000314a50 <.Lpcrel_hi0>:
+  314a50:      	auipc	a1, 0x118
+  314a54:      	cincoffsetimm	a2, sp, 0x10
+  314a58:      	li	a3, 0x10
+  314a5c:      	mv	a4, a2
+  314a60:      	add	a3, a4, a3
+  314a64:      	shrink	a2, a4, a3
+  314a68:      	li	a3, 0x8
+  314a6c:      	addi	a1, a1, 0x508
+  314a70:      	cincoffset	a1, gp, a1
+  314a74:      	delin	a1
+  314a78:      	mv	a4, a1
+  314a7c:      	add	a3, a4, a3
+  314a80:      	shrink	a1, a4, a3
+  314a84:      	sext.w	a0, a0
+  314a88:      	snez	a0, a0
+  314a8c:      	slli	a0, a0, 0x2
+  314a90:      	cincoffset	a0, a1, a0
+  314a94:      	stc	a0, 0x0(a2)
+  314a98:      	stc	a0, 0x0(sp)
+
+0000000000314a9c <.Lpcrel_hi1>:
+  314a9c:      	auipc	a1, 0x0
+
+0000000000314aa0 <.Lpcrel_hi2>:
+  314aa0:      	auipc	a3, 0x0
+
+0000000000314aa4 <.Lpcrel_hi3>:
+  314aa4:      	auipc	a4, 0x0
+
+0000000000314aa8 <.Lpcrel_hi4>:
+  314aa8:      	auipc	a5, 0xba
+  314aac:      	cincoffsetimm	a2, sp, 0x0
+  314ab0:      	li	a0, 0x110
+  314ab4:      	addi	a1, a1, 0x60
+  314ab8:      	addi	a6, a3, 0xd0
+  314abc:      	addi	a7, a4, 0x19c
+  314ac0:      	addi	t0, a5, -0x1d4
+  314ac4:      	cincoffset	a3, gp, a1
+  314ac8:      	delin	a3
+  314acc:      	cincoffset	a4, gp, a6
+  314ad0:      	delin	a4
+  314ad4:      	cincoffset	a5, gp, a7
+  314ad8:      	delin	a5
+  314adc:      	cincoffset	a7, gp, t0
+  314ae0:      	delin	a7
+  314ae4:      	lui	a1, 0x20
+  314ae8:      	movc	a6, zero
+  314aec:      	cjalr	ra, 0x0(a7)
+  314af0:      	ldc	ra, 0x20(sp)
+  314af4:      	cincoffsetimm	sp, sp, 0x30
+  314af8:      	cjalr	zero, 0x0(ra)
+

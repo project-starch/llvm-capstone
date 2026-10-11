@@ -443,6 +443,10 @@ bool CapstoneMakeCompressibleOpt::runOnMachineFunction(MachineFunction &Fn) {
             .addImm(RegImm.Imm);
       } else {
         assert(RegImm.Imm == 0);
+        // This runs after CapstoneLiveSourceCopy, and the copy keeps its source
+        // live, so a capability copy here would be a MOVC the rule never saw.
+        assert(!Capstone::GPCRRegClass.contains(RegImm.Reg) &&
+               "MakeCompressible must not copy a capability register");
         TII.copyPhysReg(MBB, MI, MI.getDebugLoc(), NewReg, RegImm.Reg,
                         /*KillSrc*/ false);
       }

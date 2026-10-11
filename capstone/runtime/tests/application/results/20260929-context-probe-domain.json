@@ -1,0 +1,48 @@
+{
+  "date": "2026-09-29",
+  "purpose": "Probe A, domain half (docs/plans/delegation-threads.md): the domain mints a sealed context over a thread area from its context arena and enters it with a nested, unsupervised CALL from its supervised main context; checks the seal layout, the entry, exit and re-entry paths, and the revoke/remint cycle before any monitor, driver or QEMU change",
+  "platform": {
+    "note": "the delegation-signals platform, unchanged: the same binaries the signal contract record 20260929-signal-contract.json ran on",
+    "qemu": {"path": "/tmp/capstone/step-one-ecall/qemu-build/qemu-system-riscv64", "sha256": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873", "source": "capstone-qemu ac2837aa0e, tree identical to the pinned d6cca7f76b (65890ecbc2ce)"},
+    "firmware": {"sha256": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d", "monitor": "capstone-sbi a810177 via caplifive-opensbi 853197a"},
+    "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "rootfs_sha256": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+    "module": {"sha256": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf", "source": "modcapstone at caplifive-buildroot d60365e"},
+    "launcher": {"sha256": "db75eef22d7d3a0793ccab5c15d993276c68bb98d903940da019e6ae76c5a9be", "source": "capstone-exec built from this branch; the launcher is unchanged by this step"},
+    "vm": "one hart, 8 GiB, CMA 1024 MiB, process cache 384 MiB, CAPSTONE_GP_NONLIN=1, CAPSTONE_REV_NODES=65536"
+  },
+  "baseline_before_changes": {
+    "branch_base": "delegation-signals c460e8c68fdc",
+    "signal_contract": "26/26 PASS",
+    "application_gate": "exit 0, 21 PASS lines",
+    "signal_contract_image_sha256": "1bc87d20e3a32312b1e2dfb6362ba8f8373591a6a6f3e3535a5581ef22a06ad1"
+  },
+  "images": {
+    "context-probe.dom": "47fcd2c98d5315737df96f635567427107a28e807744f06a82fb00aba413b3f4",
+    "signal-contract.dom": "e29866d166e625ccf23590cd5fc172c6a3221b045798646e4f217ff3db1489d2",
+    "application-contract.dom": "0237f7c589ce11ab83e00cdac7d4bbec10a4c96fadfad4050a279ca8650299bd",
+    "perl.dom": "4c2e7a0972d6613454c2bd516e7692ad84053e34239d2c2a7bfde83c61c74602",
+    "mruby.dom": "97203416800f71595127cce9bf139095e5274afd66a21c0a5b5b8a631087fddc"
+  },
+  "context_probe": {
+    "runner": "run-context.py with --host-image and --nm: a negative mode passes only on the expected cause at the expected symbol",
+    "modes": {
+      "nested-enter": "PASS: own sp inside the area's stack, own TLS block (the parent's __thread word unchanged), one global counter, capability-global initializer intact, constructors ran once",
+      "nested-preempt": "PASS: 40,000,000 LCG rounds in the child, result equal to the parent's own computation; the child ran 7088 ms, far beyond one 5 ms quantum",
+      "nested-reenter": "PASS: three further entries of the exited context each report EXITED; counter and return value unchanged",
+      "remint": "PASS: revoke the parent handle, mint into the same area, the new start function runs and returns 1007 on the new stack",
+      "revoked-call": "PASS: after the revoke the seal reloads untagged (ISSUES Q-11) and the CALL faults: cause=24 at __capstone_context_call_insn (image offset 0x10420)"
+    },
+    "passed": 5,
+    "total": 5
+  },
+  "regression_with_these_images": {
+    "signal_contract": "26/26 PASS",
+    "application_gate": "exit 0, 21 PASS lines"
+  },
+  "method": "capstone-vm, one boot per run; the regression rebuilt signal-contract.dom and application-contract.dom with this branch's runtime (start-musl.S, tls.c, context.c); perl.dom and mruby.dom are the delegation-signals images, not rebuilt, so the gate's real-application checks do not exercise this branch's runtime",
+  "notes": [
+    "a child entered by a nested CALL must not make a delegated call: its yield returns to the nested caller, not to the launcher; the probe's start functions compute and store only",
+    "on this platform CALL (helper_cscall) checks the seal's tag and type, not its revocation node; a revoked seal is refused only because a capability loaded from memory after its node was revoked comes back untagged (Q-11)"
+  ]
+}

@@ -1,0 +1,18 @@
+==== silicon-ladder FPGA BASELINE (plain RISC-V) ====
+counters = cycle+instret
+cold = first call (pays Linux demand-paging); warm = immediate repeat.
+The domain half has no paging, so WARM is the comparable column --
+but only where the kernel is idempotent (idem=YES).
+
+rung               oracle         cold_cyc   warm_cyc     delta   cold_ins   warm_ins  idem correct
+ctrsanity          43260934         788457     798158     -9701     537469     538935  YES  YES
+beebs_prime        582955588          9835       9694       141       2704       2704  YES  YES
+beebs_aha_mont64   2185097489           --         --        --         --         --  --   NO
+matmult_int        774662735         14463      12433      2030       7272       7272  YES  YES
+coremark_matrix    14343            101422      50577     50845      33384      28071  YES  YES
+beebs_crc32        1703161001        88719      57261     31458      37015      33752  no   YES
+beebs_insertsort   271779359          2483       1698       785        813        813  YES  YES
+beebs_janne        484656629           800        553       247        211        211  YES  YES
+rv8_sha512         1390718314           --         --        --         --         --  --   NO
+rv8_sha512s        2842840124           --         --        --         --         --  --   NO
+beebs_ns           1184999093           --         --        --         --         --  --   NO

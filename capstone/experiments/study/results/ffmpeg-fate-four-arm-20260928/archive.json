@@ -1,0 +1,12 @@
+{
+  "archive": "/tmp/capstone/ffmpeg-fate-four-arm-20260928.tar.gz",
+  "bytes": 10307275,
+  "sha256": "53a2b582ac8b5222604492c66814464411244a4a5e0742bb8122365fae42e89b",
+  "entries": 109,
+  "includes": "24 raw four-arm application processes, two adapted FATE inputs, measured binaries, build manifests, patched kernel and source patch",
+  "excludes": "guest SSH credentials and VM state",
+  "patched_kernel_sha256": "ea6e8e06e818616fb7ccf4f2a07b7d6a6ab008b563700937c64de0f703c7d36a",
+  "published_kernel_sha256": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+  "kernel_patch_sha256": "33430a846f54fab11e28bbb3ba3faa77a8999f72291b6437f64eba1efe8fb09e",
+  "previous_qualification_archive_sha256": "ac6e794e5d63f082d0b014588c78ebd780792a5d7f63497bee1fcb404f834080"
+}

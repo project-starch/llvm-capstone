@@ -1,0 +1,4 @@
+# memcached 06/07: the slab Sublet port (mode 1) + MC_CARVE_BOUNDS, judged by the sublet-carve arm
+# pre-registered a28d6c33fd97; images: 06 f1c726b057ce7417, 07 1a2d6c930044a201
+OK   case=6 suffix-write-no-space              sublet-carve cause=7 pc=0x10186a79c expected=0x10186a79c halted
+OK   case=7 unterminated-key-read              sublet-carve cause=5 pc=0x10186a710 expected=0x10186a710 halted

@@ -1,0 +1,1202 @@
+{
+  "schema": 1,
+  "workload": "FFmpeg 9.0.1 MPEG-4 decoder, 30 frames per stream",
+  "cells": {
+    "b1-m0": {
+      "batches": 1,
+      "mode": 0,
+      "oracle_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+      "capstone": [
+        {
+          "stdout_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+          "stderr_sha256": "b0918194c090cc515315f4382e5598c342761b0e7fa2baf46dc286a2037448d6",
+          "outer_heap": {
+            "phase": "released-0",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 0,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 0,
+            "delin": 43,
+            "revoke": 0,
+            "init": 0,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+          "stderr_sha256": "b0918194c090cc515315f4382e5598c342761b0e7fa2baf46dc286a2037448d6",
+          "outer_heap": {
+            "phase": "released-0",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 0,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 0,
+            "delin": 43,
+            "revoke": 0,
+            "init": 0,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+          "stderr_sha256": "b0918194c090cc515315f4382e5598c342761b0e7fa2baf46dc286a2037448d6",
+          "outer_heap": {
+            "phase": "released-0",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 0,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 0,
+            "delin": 43,
+            "revoke": 0,
+            "init": 0,
+            "init_bytes": 0
+          }
+        }
+      ],
+      "poisoncap": {
+        "stdout_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+        "stderr_sha256": "268c22783fc146126f9b8812dff5a8efe5838a91b0dde2683c0f515b754b07f3",
+        "policy": {
+          "mode": 0,
+          "payload_reservation": 4194304
+        },
+        "phases": [
+          {
+            "phase": "before-0",
+            "payload_used": 0,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-0",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          }
+        ],
+        "jemalloc": {
+          "phase": "released-0",
+          "revocation": 0,
+          "heap_error": 0,
+          "shadow_error": 0,
+          "allocated": 678312,
+          "active": 782336,
+          "resident": 5611520,
+          "mapped": 9527296,
+          "maxrss_kib": 5348,
+          "enqueue": 0,
+          "dequeue": 0
+        },
+        "adapter": {
+          "sweeps": 0,
+          "poison_bytes": 0,
+          "clear_bytes": 0,
+          "snapshot_bytes": 0,
+          "copied_bytes": 0
+        }
+      }
+    },
+    "b1-m2": {
+      "batches": 1,
+      "mode": 2,
+      "oracle_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+      "capstone": [
+        {
+          "stdout_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+          "stderr_sha256": "e2efe1d6b325db18e3e09e5e7e1957e636917ab7300de6a9dc0de383293c2a91",
+          "outer_heap": {
+            "phase": "released-0",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 2,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 482,
+            "delin": 406,
+            "revoke": 406,
+            "init": 76,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+          "stderr_sha256": "e2efe1d6b325db18e3e09e5e7e1957e636917ab7300de6a9dc0de383293c2a91",
+          "outer_heap": {
+            "phase": "released-0",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 2,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 482,
+            "delin": 406,
+            "revoke": 406,
+            "init": 76,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+          "stderr_sha256": "e2efe1d6b325db18e3e09e5e7e1957e636917ab7300de6a9dc0de383293c2a91",
+          "outer_heap": {
+            "phase": "released-0",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 2,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 482,
+            "delin": 406,
+            "revoke": 406,
+            "init": 76,
+            "init_bytes": 0
+          }
+        }
+      ],
+      "poisoncap": {
+        "stdout_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+        "stderr_sha256": "2464032a366de64e7651f75326ea968bd6944deba419985b4f359bf547993cce",
+        "policy": {
+          "mode": 2,
+          "payload_reservation": 4194304
+        },
+        "phases": [
+          {
+            "phase": "before-0",
+            "payload_used": 0,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-0",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 45,
+            "poisoned": 3453120
+          }
+        ],
+        "jemalloc": {
+          "phase": "released-0",
+          "revocation": 0,
+          "heap_error": 0,
+          "shadow_error": 0,
+          "allocated": 973224,
+          "active": 1077248,
+          "resident": 5906432,
+          "mapped": 9822208,
+          "maxrss_kib": 5744,
+          "enqueue": 90,
+          "dequeue": 90
+        },
+        "adapter": {
+          "sweeps": 45,
+          "poison_bytes": 3453120,
+          "clear_bytes": 3138048,
+          "snapshot_bytes": 315072,
+          "copied_bytes": 6591168
+        }
+      }
+    },
+    "b4-m0": {
+      "batches": 4,
+      "mode": 0,
+      "oracle_sha256": "128d3c57a8571dbf0e8d2f2fdd19173e64b4fff7a294292100112865fb394c85",
+      "capstone": [
+        {
+          "stdout_sha256": "128d3c57a8571dbf0e8d2f2fdd19173e64b4fff7a294292100112865fb394c85",
+          "stderr_sha256": "43279588f6918d69b3963ae01814d82f0eedb71a28f5756b590d3fa5b6d33967",
+          "outer_heap": {
+            "phase": "released-3",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 0,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 0,
+            "delin": 43,
+            "revoke": 0,
+            "init": 0,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "128d3c57a8571dbf0e8d2f2fdd19173e64b4fff7a294292100112865fb394c85",
+          "stderr_sha256": "43279588f6918d69b3963ae01814d82f0eedb71a28f5756b590d3fa5b6d33967",
+          "outer_heap": {
+            "phase": "released-3",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 0,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 0,
+            "delin": 43,
+            "revoke": 0,
+            "init": 0,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "128d3c57a8571dbf0e8d2f2fdd19173e64b4fff7a294292100112865fb394c85",
+          "stderr_sha256": "43279588f6918d69b3963ae01814d82f0eedb71a28f5756b590d3fa5b6d33967",
+          "outer_heap": {
+            "phase": "released-3",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 0,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 0,
+            "delin": 43,
+            "revoke": 0,
+            "init": 0,
+            "init_bytes": 0
+          }
+        }
+      ],
+      "poisoncap": {
+        "stdout_sha256": "128d3c57a8571dbf0e8d2f2fdd19173e64b4fff7a294292100112865fb394c85",
+        "stderr_sha256": "ed0d6252e4a1dab0c1ed1a182ae0e396df93fa897d2ba5f12434471685672eba",
+        "policy": {
+          "mode": 0,
+          "payload_reservation": 4194304
+        },
+        "phases": [
+          {
+            "phase": "before-0",
+            "payload_used": 0,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-0",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-1",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-1",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-2",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-2",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-3",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-3",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          }
+        ],
+        "jemalloc": {
+          "phase": "released-3",
+          "revocation": 0,
+          "heap_error": 0,
+          "shadow_error": 0,
+          "allocated": 776616,
+          "active": 880640,
+          "resident": 5808128,
+          "mapped": 9723904,
+          "maxrss_kib": 5576,
+          "enqueue": 0,
+          "dequeue": 0
+        },
+        "adapter": {
+          "sweeps": 0,
+          "poison_bytes": 0,
+          "clear_bytes": 0,
+          "snapshot_bytes": 0,
+          "copied_bytes": 0
+        }
+      }
+    },
+    "b4-m2": {
+      "batches": 4,
+      "mode": 2,
+      "oracle_sha256": "128d3c57a8571dbf0e8d2f2fdd19173e64b4fff7a294292100112865fb394c85",
+      "capstone": [
+        {
+          "stdout_sha256": "128d3c57a8571dbf0e8d2f2fdd19173e64b4fff7a294292100112865fb394c85",
+          "stderr_sha256": "a7e19f5d762dd3d445c5c1b5bbd964ec3f4589f21da7f71b9b11dbb3473fa1c7",
+          "outer_heap": {
+            "phase": "released-3",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 2,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 1928,
+            "delin": 1624,
+            "revoke": 1624,
+            "init": 304,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "128d3c57a8571dbf0e8d2f2fdd19173e64b4fff7a294292100112865fb394c85",
+          "stderr_sha256": "a7e19f5d762dd3d445c5c1b5bbd964ec3f4589f21da7f71b9b11dbb3473fa1c7",
+          "outer_heap": {
+            "phase": "released-3",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 2,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 1928,
+            "delin": 1624,
+            "revoke": 1624,
+            "init": 304,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "128d3c57a8571dbf0e8d2f2fdd19173e64b4fff7a294292100112865fb394c85",
+          "stderr_sha256": "a7e19f5d762dd3d445c5c1b5bbd964ec3f4589f21da7f71b9b11dbb3473fa1c7",
+          "outer_heap": {
+            "phase": "released-3",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 2,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 1928,
+            "delin": 1624,
+            "revoke": 1624,
+            "init": 304,
+            "init_bytes": 0
+          }
+        }
+      ],
+      "poisoncap": {
+        "stdout_sha256": "128d3c57a8571dbf0e8d2f2fdd19173e64b4fff7a294292100112865fb394c85",
+        "stderr_sha256": "58d34e393f4ac559531bc58205159f4b9127bcc2d274b533cb9d02c355cb7bc6",
+        "policy": {
+          "mode": 2,
+          "payload_reservation": 4194304
+        },
+        "phases": [
+          {
+            "phase": "before-0",
+            "payload_used": 0,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-0",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 45,
+            "poisoned": 3453120
+          },
+          {
+            "phase": "before-1",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 45,
+            "poisoned": 3453120
+          },
+          {
+            "phase": "released-1",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 91,
+            "poisoned": 6906240
+          },
+          {
+            "phase": "before-2",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 91,
+            "poisoned": 6906240
+          },
+          {
+            "phase": "released-2",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 137,
+            "poisoned": 10359360
+          },
+          {
+            "phase": "before-3",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 137,
+            "poisoned": 10359360
+          },
+          {
+            "phase": "released-3",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 183,
+            "poisoned": 13812480
+          }
+        ],
+        "jemalloc": {
+          "phase": "released-3",
+          "revocation": 0,
+          "heap_error": 0,
+          "shadow_error": 0,
+          "allocated": 1071528,
+          "active": 1175552,
+          "resident": 6103040,
+          "mapped": 10018816,
+          "maxrss_kib": 5940,
+          "enqueue": 366,
+          "dequeue": 366
+        },
+        "adapter": {
+          "sweeps": 183,
+          "poison_bytes": 13812480,
+          "clear_bytes": 13497408,
+          "snapshot_bytes": 315072,
+          "copied_bytes": 27309888
+        }
+      }
+    },
+    "b16-m0": {
+      "batches": 16,
+      "mode": 0,
+      "oracle_sha256": "a6e4c18bffe317d10516891035205670877d7f2205f8e9a36bd9204d24eb8919",
+      "capstone": [
+        {
+          "stdout_sha256": "a6e4c18bffe317d10516891035205670877d7f2205f8e9a36bd9204d24eb8919",
+          "stderr_sha256": "4f2b270c768cd342e9abc970bd7db3f42ebb82bcdc15f485fe9afc7b3c71cd8a",
+          "outer_heap": {
+            "phase": "released-15",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 0,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 0,
+            "delin": 43,
+            "revoke": 0,
+            "init": 0,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "a6e4c18bffe317d10516891035205670877d7f2205f8e9a36bd9204d24eb8919",
+          "stderr_sha256": "4f2b270c768cd342e9abc970bd7db3f42ebb82bcdc15f485fe9afc7b3c71cd8a",
+          "outer_heap": {
+            "phase": "released-15",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 0,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 0,
+            "delin": 43,
+            "revoke": 0,
+            "init": 0,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "a6e4c18bffe317d10516891035205670877d7f2205f8e9a36bd9204d24eb8919",
+          "stderr_sha256": "4f2b270c768cd342e9abc970bd7db3f42ebb82bcdc15f485fe9afc7b3c71cd8a",
+          "outer_heap": {
+            "phase": "released-15",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 0,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 0,
+            "delin": 43,
+            "revoke": 0,
+            "init": 0,
+            "init_bytes": 0
+          }
+        }
+      ],
+      "poisoncap": {
+        "stdout_sha256": "a6e4c18bffe317d10516891035205670877d7f2205f8e9a36bd9204d24eb8919",
+        "stderr_sha256": "fecd4f50d35faf89227aa7beb6d66291eec1236f0f6a4289c9fc6e792c026387",
+        "policy": {
+          "mode": 0,
+          "payload_reservation": 4194304
+        },
+        "phases": [
+          {
+            "phase": "before-0",
+            "payload_used": 0,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-0",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-1",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-1",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-2",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-2",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-3",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-3",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-4",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-4",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-5",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-5",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-6",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-6",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-7",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-7",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-8",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-8",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-9",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-9",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-10",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-10",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-11",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-11",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-12",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-12",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-13",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-13",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-14",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-14",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "before-15",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-15",
+            "payload_used": 315072,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          }
+        ],
+        "jemalloc": {
+          "phase": "released-15",
+          "revocation": 0,
+          "heap_error": 0,
+          "shadow_error": 0,
+          "allocated": 614656,
+          "active": 843776,
+          "resident": 6053888,
+          "mapped": 9969664,
+          "maxrss_kib": 5864,
+          "enqueue": 0,
+          "dequeue": 0
+        },
+        "adapter": {
+          "sweeps": 0,
+          "poison_bytes": 0,
+          "clear_bytes": 0,
+          "snapshot_bytes": 0,
+          "copied_bytes": 0
+        }
+      }
+    },
+    "b16-m2": {
+      "batches": 16,
+      "mode": 2,
+      "oracle_sha256": "a6e4c18bffe317d10516891035205670877d7f2205f8e9a36bd9204d24eb8919",
+      "capstone": [
+        {
+          "stdout_sha256": "a6e4c18bffe317d10516891035205670877d7f2205f8e9a36bd9204d24eb8919",
+          "stderr_sha256": "59ff6bca9c38206308a2e95a9c212e9ab686526a5e7555b0baeb0772cc1f02c6",
+          "outer_heap": {
+            "phase": "released-15",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 2,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 7712,
+            "delin": 6496,
+            "revoke": 6496,
+            "init": 1216,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "a6e4c18bffe317d10516891035205670877d7f2205f8e9a36bd9204d24eb8919",
+          "stderr_sha256": "59ff6bca9c38206308a2e95a9c212e9ab686526a5e7555b0baeb0772cc1f02c6",
+          "outer_heap": {
+            "phase": "released-15",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 2,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 7712,
+            "delin": 6496,
+            "revoke": 6496,
+            "init": 1216,
+            "init_bytes": 0
+          }
+        },
+        {
+          "stdout_sha256": "a6e4c18bffe317d10516891035205670877d7f2205f8e9a36bd9204d24eb8919",
+          "stderr_sha256": "59ff6bca9c38206308a2e95a9c212e9ab686526a5e7555b0baeb0772cc1f02c6",
+          "outer_heap": {
+            "phase": "released-15",
+            "live": 0,
+            "peak": 416720,
+            "end": 422576,
+            "pool": 16777216
+          },
+          "pool": {
+            "mode": 2,
+            "payload": 315072,
+            "split": 43,
+            "mrev": 7712,
+            "delin": 6496,
+            "revoke": 6496,
+            "init": 1216,
+            "init_bytes": 0
+          }
+        }
+      ],
+      "poisoncap": {
+        "stdout_sha256": "a6e4c18bffe317d10516891035205670877d7f2205f8e9a36bd9204d24eb8919",
+        "stderr_sha256": "4ff5d7dd2abf426da25cdaa942861d53f6cbe46c14afa1d2c3b2f2e1091ce25f",
+        "policy": {
+          "mode": 2,
+          "payload_reservation": 4194304
+        },
+        "phases": [
+          {
+            "phase": "before-0",
+            "payload_used": 0,
+            "snapshots": 0,
+            "sweeps": 0,
+            "poisoned": 0
+          },
+          {
+            "phase": "released-0",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 45,
+            "poisoned": 3453120
+          },
+          {
+            "phase": "before-1",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 45,
+            "poisoned": 3453120
+          },
+          {
+            "phase": "released-1",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 91,
+            "poisoned": 6906240
+          },
+          {
+            "phase": "before-2",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 91,
+            "poisoned": 6906240
+          },
+          {
+            "phase": "released-2",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 137,
+            "poisoned": 10359360
+          },
+          {
+            "phase": "before-3",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 137,
+            "poisoned": 10359360
+          },
+          {
+            "phase": "released-3",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 183,
+            "poisoned": 13812480
+          },
+          {
+            "phase": "before-4",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 183,
+            "poisoned": 13812480
+          },
+          {
+            "phase": "released-4",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 229,
+            "poisoned": 17265600
+          },
+          {
+            "phase": "before-5",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 229,
+            "poisoned": 17265600
+          },
+          {
+            "phase": "released-5",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 275,
+            "poisoned": 20718720
+          },
+          {
+            "phase": "before-6",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 275,
+            "poisoned": 20718720
+          },
+          {
+            "phase": "released-6",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 321,
+            "poisoned": 24171840
+          },
+          {
+            "phase": "before-7",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 321,
+            "poisoned": 24171840
+          },
+          {
+            "phase": "released-7",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 367,
+            "poisoned": 27624960
+          },
+          {
+            "phase": "before-8",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 367,
+            "poisoned": 27624960
+          },
+          {
+            "phase": "released-8",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 413,
+            "poisoned": 31078080
+          },
+          {
+            "phase": "before-9",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 413,
+            "poisoned": 31078080
+          },
+          {
+            "phase": "released-9",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 459,
+            "poisoned": 34531200
+          },
+          {
+            "phase": "before-10",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 459,
+            "poisoned": 34531200
+          },
+          {
+            "phase": "released-10",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 505,
+            "poisoned": 37984320
+          },
+          {
+            "phase": "before-11",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 505,
+            "poisoned": 37984320
+          },
+          {
+            "phase": "released-11",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 551,
+            "poisoned": 41437440
+          },
+          {
+            "phase": "before-12",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 551,
+            "poisoned": 41437440
+          },
+          {
+            "phase": "released-12",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 597,
+            "poisoned": 44890560
+          },
+          {
+            "phase": "before-13",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 597,
+            "poisoned": 44890560
+          },
+          {
+            "phase": "released-13",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 643,
+            "poisoned": 48343680
+          },
+          {
+            "phase": "before-14",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 643,
+            "poisoned": 48343680
+          },
+          {
+            "phase": "released-14",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 689,
+            "poisoned": 51796800
+          },
+          {
+            "phase": "before-15",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 689,
+            "poisoned": 51796800
+          },
+          {
+            "phase": "released-15",
+            "payload_used": 315072,
+            "snapshots": 315072,
+            "sweeps": 735,
+            "poisoned": 55249920
+          }
+        ],
+        "jemalloc": {
+          "phase": "released-15",
+          "revocation": 0,
+          "heap_error": 0,
+          "shadow_error": 0,
+          "allocated": 932992,
+          "active": 1159168,
+          "resident": 6103040,
+          "mapped": 10014720,
+          "maxrss_kib": 6232,
+          "enqueue": 1470,
+          "dequeue": 1470
+        },
+        "adapter": {
+          "sweeps": 735,
+          "poison_bytes": 55249920,
+          "clear_bytes": 54934848,
+          "snapshot_bytes": 315072,
+          "copied_bytes": 110184768
+        }
+      }
+    }
+  },
+  "capstone_binary_sha256": "9a02cb4d5e3137a9ad294555f5300ed30aac806e42d1755dd3ddeb52829722d1",
+  "poisoncap_binary_sha256": "3beda057ad88f6894200add19ab3a601e73b9480f835d7ddbeac883936ad233b",
+  "input_sha256": "e576a16b71590a5c37210cc0e71e120cc18660dc3ef6434a130261d4e86f5085",
+  "source_sha256": {
+    "poisoncap_decoder_entry": "5ede1d4b15be7ee4381d8a47bde626755cf4c5dce038dc005f851928b4ff3a9b",
+    "poisoncap_pool_backend": "2e2d62533b560662a7f0c8649ec455075b836e6232a505573b809c473f89ed9a",
+    "shared_builder": "ed763a6d310cc7fb0b0df75c77289bc8d934432fe6b48c8d5e4941adb1516644"
+  }
+}

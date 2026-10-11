@@ -1,0 +1,258 @@
+{
+ "date": "2026-09-30",
+ "purpose": "the plain shape rows: 32 syscalls that are integers, strings and flat buffers only, one row and one native case each; the spawner reaps a failed exec child with __WALL",
+ "platform": "monitor capstone-sbi a810177, capstone-qemu ac2837aa0e, modcapstone d60365e as in 20260930-runtime-rows.json; launcher, contracts and the perl, mruby and cpython images built from the working tree of 4881630ce72d (libc archive unchanged from that record, the delegated runtime is compiled per image); guest --cma-mib 1024 --process-cache-mib 768 on a private copy of the root filesystem; stdlib as PYTHONHOME=/mnt/host/py",
+ "images": {
+  "application-contract.dom": "19a98c9cf275dedaec285c18091ebced6534ee394dc076494b9ba5c62a8f1e6f",
+  "signal-contract.dom": "c40cc932b54af91067a5437ed4649583c4211d5e5a5b694266c1a66656e7ea62",
+  "perl.dom": "0dd5364f68acaa3f8d80391c05d51db336c2ebee27f2da606a4ddaad091b30d7",
+  "mruby.dom": "0f9a4b0f4319a4212b35ffbe95468efb871a0a549e09e7bb9304489e0f0f3bb9",
+  "cpython.dom": "162a3332345f7eac083a7589d6d64ef676e039e2e0a038368b68c8c605f57725"
+ },
+ "launcher_sha256": "4f48e89182371bbb52286f0ecd6fca446d2a609b245fee60caf9b0738b04fa49",
+ "native_ctest": "52/52 twice; the 25 delegate-row-* cases are new, and spawner passes with stdout on /dev/null (5/5, was 0/5 before the __WALL reap)",
+ "gate": [
+  "0",
+  "22"
+ ],
+ "binfmt": "exec-closed: PASS exec-error: PASS ",
+ "signal_contract": "signal contract: 27/27 PASS",
+ "perl_print": "delegate rounds=30 syscalls=27",
+ "mruby_puts": "delegate rounds=4 syscalls=2",
+ "rows_smoke_before": {
+  "passed": 4,
+  "of": 30,
+  "failed": [
+   "statvfs",
+   "fstatvfs",
+   "getrusage",
+   "sched_getaffinity",
+   "sched_setaffinity",
+   "truncate",
+   "link",
+   "fchmod",
+   "fchown",
+   "chown",
+   "mkfifo",
+   "posix_fallocate",
+   "sendfile",
+   "copy_file_range",
+   "posix_fadvise",
+   "memfd_create",
+   "clock_getres",
+   "getgroups",
+   "getpriority",
+   "setpriority",
+   "sched_getscheduler",
+   "sched_getparam",
+   "sched_get_priority_max",
+   "sched_rr_get_interval",
+   "fchdir",
+   "setpgid-own-group"
+  ]
+ },
+ "rows_smoke_after": {
+  "passed": 28,
+  "of": 28,
+  "failed": []
+ },
+ "subprocess_smoke": "SMOKE 21 / 21",
+ "suites_before": {
+  "test_os": {
+   "ran": 366,
+   "unittest_summary": {
+    "failures": 6,
+    "errors": 60,
+    "skipped": 71,
+    "ok": 229
+   },
+   "verdict_lines_note": "ok/fail/error/skipped below count the per-test lines; a test whose line was interleaved with output is missing from them, unittest_summary is the suite's own count",
+   "ok": 228,
+   "fail": 6,
+   "error": 58,
+   "skipped": 71,
+   "by_cause": {
+    "ERROR: OSError: [Errno 38] Function not implemented": [
+     "test_chown_gid",
+     "test_eventfd_initval",
+     "test_eventfd_select",
+     "test_eventfd_semaphore",
+     "test_invalid_offset",
+     "test_keywords",
+     "test_memfd_create",
+     "test_nowait",
+     "test_offset_overflow",
+     "test_pipe_spawnl",
+     "test_process_cpu_count",
+     "test_process_cpu_count_affinity",
+     "test_send_at_certain_offset",
+     "test_send_whole_file",
+     "test_set_get_priority",
+     "test_spawnl",
+     "test_spawnle",
+     "test_spawnlp",
+     "test_spawnlpe",
+     "test_spawnv",
+     "test_spawnve",
+     "test_spawnve_bytes",
+     "test_spawnve_invalid_env",
+     "test_spawnvp",
+     "test_spawnvpe",
+     "test_spawnvpe_invalid_env",
+     "test_timerfd_TFD_TIMER_ABSTIME",
+     "test_timerfd_initval",
+     "test_timerfd_interval",
+     "test_timerfd_negative",
+     "test_timerfd_non_blocking",
+     "test_timerfd_ns_TFD_TIMER_ABSTIME",
+     "test_timerfd_ns_initval",
+     "test_timerfd_ns_interval",
+     "test_timerfd_ns_poll",
+     "test_timerfd_ns_select",
+     "test_timerfd_poll",
+     "test_timerfd_select",
+     "test_waitpid",
+     "test_waitstatus_to_exitcode",
+     "test_waitstatus_to_exitcode_kill",
+     "test_walk_named_pipe",
+     "test_walk_named_pipe",
+     "test_walk_named_pipe",
+     "test_walk_named_pipe",
+     "test_walk_named_pipe2",
+     "test_walk_named_pipe2",
+     "test_walk_named_pipe2",
+     "test_walk_named_pipe2"
+    ],
+    "ERROR: OSError: [Errno 38] Function not implemented: '@test_128_tmp\u00e6'": [
+     "test_chown_uid_gid_arguments_must_be_index",
+     "test_chown_with_root",
+     "test_statvfs_attributes",
+     "test_statvfs_result_pickle"
+    ],
+    "FAIL: AssertionError: 38 != 9": [
+     "test_fchdir",
+     "test_fchmod",
+     "test_fchown",
+     "test_fstatvfs"
+    ],
+    "ERROR: OSError: [Errno 38] Function not implemented: '@test_128_tmp\u00e6' -> '@test_128_tmp\u00e62'": [
+     "test_link"
+    ],
+    "ERROR: OSError: [Errno 38] Function not implemented: b'@test_128_tmp\\xc3\\xa6' -> b'@test_128_tmp\\xc3\\xa62'": [
+     "test_link_bytes"
+    ],
+    "ERROR: OSError: [Errno 38] Function not implemented: '@test_128_tmp\u00e6\u00f1' -> '@test_128_tmp\u00e6\u00f12'": [
+     "test_unicode_name"
+    ],
+    "ERROR: OSError: [Errno 38] Function not implemented: '@test_128_tmp-\\udcff/@test_128_tmp-\\udcff'": [
+     "test_statvfs"
+    ],
+    "ERROR: subprocess.CalledProcessError: Command '['/mnt/host/cpython.dom', '-c', 'import os,sys;os.setregid(-1,-1);sys.": [
+     "test_setregid_neg1"
+    ],
+    "ERROR: subprocess.CalledProcessError: Command '['/mnt/host/cpython.dom', '-c', 'import os,sys;os.setreuid(-1,-1);sys.": [
+     "test_setreuid_neg1"
+    ],
+    "ERROR: OSError: [Errno 38] Function not implemented: '/root/@test_128_tmp\u00e6/file.txt' -> '/root/@test_128_tmp\u00e6/link_fi": [
+     "test_attributes"
+    ],
+    "FAIL: OSError: [Errno 38] Function not implemented": [
+     "test_fork"
+    ],
+    "FAIL: AssertionError: <built-in function pathconf> didn't raise an OSError with a bad file descriptor": [
+     "test_fpathconf"
+    ]
+   }
+  },
+  "test_posix": {
+   "ran": null,
+   "unittest_summary": null,
+   "verdict_lines_note": "ok/fail/error/skipped below count the per-test lines; a test whose line was interleaved with output is missing from them, unittest_summary is the suite's own count",
+   "ok": 22,
+   "fail": 0,
+   "error": 13,
+   "skipped": 8,
+   "by_cause": {}
+  }
+ },
+ "suites_after": {
+  "test_os": {
+   "ran": 366,
+   "unittest_summary": {
+    "failures": 2,
+    "errors": 38,
+    "skipped": 70,
+    "ok": 256
+   },
+   "verdict_lines_note": "ok/fail/error/skipped below count the per-test lines; a test whose line was interleaved with output is missing from them, unittest_summary is the suite's own count",
+   "ok": 255,
+   "fail": 2,
+   "error": 36,
+   "skipped": 70,
+   "by_cause": {
+    "ERROR: OSError: [Errno 38] Function not implemented": [
+     "test_eventfd_initval",
+     "test_eventfd_select",
+     "test_eventfd_semaphore",
+     "test_invalid_offset",
+     "test_keywords",
+     "test_nowait",
+     "test_offset_overflow",
+     "test_pipe_spawnl",
+     "test_send_at_certain_offset",
+     "test_send_whole_file",
+     "test_spawnl",
+     "test_spawnle",
+     "test_spawnlp",
+     "test_spawnlpe",
+     "test_spawnv",
+     "test_spawnve",
+     "test_spawnve_bytes",
+     "test_spawnve_invalid_env",
+     "test_spawnvp",
+     "test_spawnvpe",
+     "test_spawnvpe_invalid_env",
+     "test_timerfd_TFD_TIMER_ABSTIME",
+     "test_timerfd_initval",
+     "test_timerfd_interval",
+     "test_timerfd_negative",
+     "test_timerfd_non_blocking",
+     "test_timerfd_ns_TFD_TIMER_ABSTIME",
+     "test_timerfd_ns_initval",
+     "test_timerfd_ns_interval",
+     "test_timerfd_ns_poll",
+     "test_timerfd_ns_select",
+     "test_timerfd_poll",
+     "test_timerfd_select",
+     "test_waitpid",
+     "test_waitstatus_to_exitcode",
+     "test_waitstatus_to_exitcode_kill"
+    ],
+    "ERROR: subprocess.CalledProcessError: Command '['/mnt/host/cpython.dom', '-c', 'import os,sys;os.setregid(-1,-1);sys.": [
+     "test_setregid_neg1"
+    ],
+    "ERROR: subprocess.CalledProcessError: Command '['/mnt/host/cpython.dom', '-c', 'import os,sys;os.setreuid(-1,-1);sys.": [
+     "test_setreuid_neg1"
+    ],
+    "FAIL: OSError: [Errno 38] Function not implemented": [
+     "test_fork"
+    ],
+    "FAIL: AssertionError: <built-in function pathconf> didn't raise an OSError with a bad file descriptor": [
+     "test_fpathconf"
+    ]
+   }
+  },
+  "test_posix": {
+   "ran": null,
+   "unittest_summary": null,
+   "verdict_lines_note": "ok/fail/error/skipped below count the per-test lines; a test whose line was interleaved with output is missing from them, unittest_summary is the suite's own count",
+   "ok": 29,
+   "fail": 0,
+   "error": 8,
+   "skipped": 8,
+   "by_cause": {}
+  }
+ },
+ "rows_smoke_note": "the before-run's smoke had 30 checks; sched_getscheduler and sched_getparam were removed with their rows (musl answers ENOSYS itself), so the after-run has 28; both after-runs (before and after that removal) agree test for test in test_os and test_posix",
+ "test_posix_note": "both runs stop at test_lockf with the same domain fault (cause 24, same pc, last delegated call lseek, no fcntl round issued): musl's fcntl() reads its vararg as unsigned long and rebuilds the struct flock pointer from it; not a row, a musl patch of the 0004 class"
+}

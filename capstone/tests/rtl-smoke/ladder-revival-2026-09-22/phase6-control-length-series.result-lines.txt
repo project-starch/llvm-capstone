@@ -1,0 +1,17 @@
+# phase 6 -- ctrsanity length series, spec -O1 both halves, caplifive_m1_054cea69b, 2026-09-23
+# capability half (run_ladder_perf_fpga.py, one boot, distinct VAs 0x10000..0x60000):
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    6311            5029          YES
+ctrsanity20k         722208455     722208455     28291           20030         YES
+ctrsanity100k        1282746120    1282746120    140291          100030        YES
+ctrsanity250k        369250457     369250457     350293          250030        YES
+ctrsanity            43260934      43260934      700312          500030        YES
+ctrsanity4           2999801679    2999801679    2800312         2000030       YES
+# bare-metal baseline half (run_base_bare_fpga.py):
+ctrsanity: BEST cycles=600042 instret=500022 (15/15 passes at min instret, spread=0) retval=43260934
+ctrsanity4: BEST cycles=2400042 instret=2000022 (15/15 passes at min instret, spread=0) retval=2999801679
+ctrsanitys: BEST cycles=6040 instret=5021 (15/15 passes at min instret, spread=0) retval=3688591409
+ctrsanity20k: BEST cycles=24041 instret=20022 (15/15 passes at min instret, spread=0) retval=722208455
+ctrsanity100k: BEST cycles=120042 instret=100022 (15/15 passes at min instret, spread=0) retval=1282746120
+ctrsanity250k: BEST cycles=300041 instret=250022 (15/15 passes at min instret, spread=0) retval=369250457
+# capability loop start (measured images): ctrsanitys 0x101a8; ctrsanity20k/100k/250k/ctrsanity/ctrsanity4 0x...1ac

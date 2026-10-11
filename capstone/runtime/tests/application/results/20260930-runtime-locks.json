@@ -1,0 +1,100 @@
+{
+  "date": "2026-09-30",
+  "scope": "Probe B domain phase T3: runtime locks (Q6) and each context's thread identity (Q2, second part), with the full regression",
+  "platform": {
+    "qemu_binary_sha256": "1283cd3400d4bc5470f0ae9f557abb60f7316c86cdee4ce8cd97e7a1f36f8196",
+    "firmware_sha256": "295647f3aacc8c585c4b4938c10a74c0cb676e2037f2faf7c882525d9c867a50",
+    "module_sha256": "6ab096ce9bf8e480a0c2d04d190d1f489b41ee754b5e1b0679e6ac44d265c7bc",
+    "launcher_sha256": "74911a9c1758b22db5783fc26c3ea05e1bb0b336b9ae0690488ed2057cb976e8",
+    "note": "platform and launcher unchanged since T2 (20260930-park-domain.json)"
+  },
+  "images_sha256": {
+    "application-contract.dom": "0c36ace0c868feb7586caf07190dcfd48dc9145843cf54100fe3cd7097e48739",
+    "context-probe.dom": "7a2569ab80f758dd895a1c575601d6154dc2b03a43e5efa5cb527d3eb68e4ce3",
+    "context-review.dom": "4c9e32a0536d06cfce75c4d943b3f5faaf7e14c6e8740e384cf5f5036f3824a5",
+    "delegate-bench.dom": "64e3eae47fd059eec4de794349e011b6ba92f72c369dfc6fccbdfb2e4e825d06",
+    "delegate-contract.dom": "4082d212f3b6160dd1dd3ac46f8dabfa78ea42070c32bbc6038f23f802bd2d85",
+    "mruby.dom": "324eeee33fd386b4265fade357420a85ae4bb255ed3863128bd2c3768fcfff38",
+    "perl.dom": "f3f0a7381d4e5ee219f74dabbc98e735701363eb9dd5099e7c002be39a3f7693",
+    "signal-contract.dom": "46f0b74fd664b547dad07dba05056e3c414b508dfa9f8505688d114c98b1036b",
+    "thread-probe-atomics.dom": "aa1688f4958d1f7b6c439fe3f95b3f81333f730d9a083e4f59aac292a442fd79",
+    "thread-probe-b14.dom": "7228fcac813314baa14334f273cd4339d260c1b3644200f2d2c2a7c4bf29fafa",
+    "thread-probe.dom": "ac4cefbfeeec541547ef9ce4a561e1bfb35be7b0b40d0f9da3c94cac2463f51b",
+    "thread-probe-headprobe.dom": "f0ab10e047c7716f2f99999032213e574ff3289aa1a042ece5e53f02de7fb900",
+    "thread-probe-heap.dom": "f82e156511deaf84a46b22df781529ea03e850b7803b2c8ad6af4790a0b59b58",
+    "thread-probe-stdio.dom": "cbe14ab55361cf63a65a6fb3a88451f3f525f22536f1381c85377a17cf9b659c",
+    "thread-probe-sublet.dom": "b8272ea6d898ec9cdc334a057680becd1c944d1a0268519bd8c5baf20eba0e37",
+    "thread-probe-tid30.dom": "bfd5451bd6d7c06069d271d425f575068797de698ec3fcf7aca9f2a4b89446f7",
+    "thread-probe-sublet.dom (heap-stress on the Sublet heap, seeds3 boot)": "b8272ea6d898ec9cdc334a057680becd1c944d1a0268519bd8c5baf20eba0e37"
+  },
+  "thread_probe": {
+    "transport": "PASS",
+    "blocking": "PASS",
+    "reserve": "PASS",
+    "reuse": "PASS",
+    "concurrent": "PASS",
+    "signals-refused": "PASS",
+    "no-transport": "PASS",
+    "preempted": "PASS",
+    "many-rounds": "PASS",
+    "signal-first-only": "PASS",
+    "sigpipe-ignored": "PASS",
+    "sigpipe-child": "PASS",
+    "exec-child": "PASS",
+    "futex-basic": "PASS",
+    "futex-wake": "PASS",
+    "futex-requeue": "PASS",
+    "b6": "PASS",
+    "b6-control": "PASS",
+    "b12": "PASS",
+    "b6-count": "PASS",
+    "park-signal": "PASS",
+    "park-signal-eintr": "PASS",
+    "park-signal-timed": "PASS",
+    "tid-identity": "PASS",
+    "stdio-lines": "PASS",
+    "heap-stress": "PASS",
+    "b9": "PASS",
+    "b14": "PASS",
+    "stdio-nested": "PASS",
+    "spawn-concurrent": "PASS",
+    "mmap-concurrent": "PASS",
+    "nested-create": "PASS",
+    "exit-child": "PASS",
+    "fault-child": "PASS",
+    "heap-stress on thread-probe-sublet.dom": "PASS: thread-probe heap-stress: 8 contexts, 1500 rounds each, 0 errors"
+  },
+  "t3_measurements": {
+    "tid-identity": "thread-probe tid-identity: 247 4194304 4194305 4194306",
+    "stdio-lines": "thread-probe stdio-lines: 12000 lines, 0 malformed or out of order",
+    "stdio-nested": "thread-probe stdio-nested: puts from a minted context",
+    "heap-stress": "thread-probe heap-stress: 8 contexts, 1500 rounds each, 0 errors",
+    "b9": "thread-probe b9: counter 40000 of 40000; exchange: 0 and 0 bad, 0 cells not returned exactly once; cursor 40000 of 40000; the lock found taken 16 times",
+    "b14": "thread-probe b14: handler ran 1 time(s), at lock depth 0, after the last release, by that release",
+    "spawn-concurrent": "thread-probe spawn-concurrent: 24 spawns, 0 wrong",
+    "mmap-concurrent": "thread-probe mmap-concurrent: 8 contexts, 200 mappings each, 0 errors",
+    "nested-create": "thread-probe nested-create: creator 2 returned 31"
+  },
+  "controls": {
+    "b14": "deliver without the depth rule: FAIL: thread-probe b14: handler ran 0 time(s), at lock depth 1, while a lock was held",
+    "heap-stress": "level0 without its lock: FAIL: got ('signal', 11), unexpected fault record, stdout='', stderr='apstone-vm: capstone-exec: domain fault cause=24 pc=0xc02287a0 address=0x0 entry=0xc0200c40 code=0xc0200000-0xc0303000 last=0x0 preparing=0x0 sha256=f82e156511deaf84a46b22df781529ea03e850b7803b2c8ad6af4790a0b59b58 image=/mnt/host/thread",
+    "b9": "the generic atomics without their spin lock: FAIL: thread-probe b9: counter 40000 of 40000; exchange: 2 and 1 bad, 6 cells not returned exactly once; cursor 34779 of 40000; the lock found taken 0 times",
+    "stdio-lines": "every minted context with thread identity 0: FAIL: thread-probe stdio-lines: 21873 lines, 21130 malformed or out of order",
+    "method": "each seeded runtime built into its own thread-probe image; b14, heap and b9 seeds in one boot with the unseeded b9 as its last run (PASS), the stdio seed in a second boot with the unseeded stdio-lines after it (PASS). The first stdio test (320 short lines) did not fire against the seed, so it was made heavier (12000 lines) before this control.",
+    "stdio-nested": "minted identities from 0x40000000 (musl's MAYBE_WAITERS bit): FAIL: timeout after 180.0s"
+  },
+  "round_cost": {
+    "t2_probe_on_this_runtime": "thread-probe many-rounds: 100000 rounds in 9134 ms; 10000-round blocks 911 to 919 ms",
+    "t3_probe_on_this_runtime": "thread-probe many-rounds: 100000 rounds in 9239 ms; 10000-round blocks 917 to 981 ms",
+    "note": "one boot, same launcher and runtime (the committed one); only the probe image differs. The runs on the T1 and T2 runtimes took 9069 to 9152 ms. An earlier T3 image, from before the review's fixes, took 9863 ms against 9138 ms for T2's image on that runtime; the final images do not reproduce the gap, which is not explained."
+  },
+  "native": "ctest in the native build of runtime/exec: 41/41 PASS, with mapping-test rebuilt against the runtime-lock stubs",
+  "regression": {
+    "context_probe": "35/35 PASS; aba (A7), gen-exhaust and gen-launch (A9, preset firmware), ctl-wfi PASS in boots of their own on the same launcher",
+    "signal_contract": "26/26 PASS",
+    "application_gate": "exit 0, 21 PASS lines, perl and mruby relinked on this runtime"
+  },
+  "review": {
+    "what": "An independent review of T3 (2026-09-30) found: minted identities from 0x40000000 carried musl's MAYBE_WAITERS bit (a minted context would wait for itself in every nested FILE lock; recursive mutexes broken), which the first probes missed because none retook a lock; builds outside capstone_configure_application compiling runtime files one by one without lock.c (the native mapping test failed to build, and an old binary had been run); longjmp reaching the first context's signal state from a further context; a lock depth that could go negative. All fixed; stdio-nested, the Sublet image, spawn-concurrent, mmap-concurrent and nested-create added."
+  }
+}

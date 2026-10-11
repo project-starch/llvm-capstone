@@ -1,0 +1,31 @@
+# Every tshark boot of the sublet campaign (2026-09-25 09:10-10:03), by where it stopped. The wedge
+# detector's three controls (qemu-oracle-20260925-092159-fyvG, -093021-vNII, -093329-p6Xk) are left out.
+qemu-stages-sublet-20260925-091022-R5oa.log: setup: stopped with no watchdog output (guest wedged, or no watchdog yet)
+qemu-stages-sublet-20260925-092107-TeFY.log: ran
+qemu-oracle-sublet-20260925-092321-u4UV.log: ran
+qemu-oracle-sublet-20260925-092608-Q3j9.log: ran
+qemu-oracle-sublet-20260925-092951-Av17.log: ran
+qemu-safety-sublet-20260925-093107-l0Ee.log: ran
+qemu-safety-sublet-20260925-093308-C3bZ.log: ran
+qemu-safety-sublet-20260925-093339-VEhs.log: ran
+qemu-safety-sublet-20260925-093510-tA2E.log: ran
+qemu-safety-sublet-20260925-093541-mkIk.log: ran
+qemu-safety-sublet-20260925-093612-V7aZ.log: ran
+qemu-safety-sublet-20260925-093642-Fkqf.log: ran
+qemu-safety-sublet-20260925-093713-oiLY.log: ran
+qemu-safety-sublet-20260925-093914-l0bn.log: ran
+qemu-safety-sublet-20260925-093945-vqwM.log: ran
+qemu-safety-sublet-20260925-094016-6sPI.log: ran
+qemu-safety-sublet-20260925-094047-G6SO.log: ran
+qemu-safety-sublet-20260925-094117-nN9X.log: ran
+qemu-safety-sublet-20260925-094148-t65c.log: ran (after a slow setup: watchdog reported, copy completed)
+qemu-safety-sublet-20260925-094719-B65y.log: ran (after a slow setup: watchdog reported, copy completed)
+qemu-safety-sublet-20260925-095420-HNIL.log: boot: before init
+qemu-safety-sublet-20260925-095636-Y95B.log: ran
+qemu-safety-sublet-20260925-095707-mluY.log: ran
+qemu-safety-sublet-20260925-095738-jyvp.log: ran
+qemu-safety-sublet-20260925-095808-tKcT.log: ran
+qemu-safety-sublet-20260925-095839-qvtP.log: boot: between init and login
+qemu-safety-sublet-20260925-100055-ohTe.log: ran
+qemu-safety-sublet-20260925-100126-m50r.log: ran
+

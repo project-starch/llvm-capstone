@@ -1,0 +1,63 @@
+# Result lines, as ports/common/application/run-fixtures-9p.py printed them, judged by
+# the shared check-safety.py classify() and matches(). The FIVE not-nested temporal
+# fixtures -- memcached 17/18, tshark 14/15, FFmpeg 24 -- across every arm their ports
+# declare, with fx2/fx3 as the standing malloc-granular controls in every boot.
+# One boot per arm, N = 1 per cell. Predictions come from each port's own
+# host/safety-expect.txt, unchanged by this run.
+
+memcached  level0  fx2   AS PREDICTED  RETURN 2000ee     
+memcached  level0  fx3   AS PREDICTED  RETURN 300040     
+memcached  level0  fx17  AS PREDICTED  RETURN 1100163     <-- not-nested temporal
+memcached  level0  fx18  AS PREDICTED  RETURN 12001ee     <-- not-nested temporal
+
+memcached  shrink  fx2   AS PREDICTED  FAULT oob           cause=7
+memcached  shrink  fx3   AS PREDICTED  FAULT oob           cause=5
+memcached  shrink  fx17  AS PREDICTED  RETURN 1100163     <-- not-nested temporal
+memcached  shrink  fx18  AS PREDICTED  RETURN 12001ee     <-- not-nested temporal
+
+memcached  sublet  fx2   AS PREDICTED  FAULT oob           cause=7
+memcached  sublet  fx3   AS PREDICTED  FAULT oob           cause=5
+memcached  sublet  fx17  AS PREDICTED  FAULT temporal      cause=24 <-- not-nested temporal
+memcached  sublet  fx18  AS PREDICTED  FAULT temporal      cause=24 <-- not-nested temporal
+
+wireshark  level0  fx2   AS PREDICTED  RETURN 2000ee     
+wireshark  level0  fx3   AS PREDICTED  RETURN 300080     
+wireshark  level0  fx14  AS PREDICTED  RETURN e00163      <-- not-nested temporal
+wireshark  level0  fx15  AS PREDICTED  RETURN f0015b      <-- not-nested temporal
+
+wireshark  shrink  fx2   AS PREDICTED  FAULT oob           cause=7
+wireshark  shrink  fx3   AS PREDICTED  FAULT oob           cause=5
+wireshark  shrink  fx14  AS PREDICTED  RETURN e00163      <-- not-nested temporal
+wireshark  shrink  fx15  AS PREDICTED  RETURN f0015b      <-- not-nested temporal
+
+wireshark  sublet  fx2   AS PREDICTED  FAULT oob           cause=7
+wireshark  sublet  fx3   AS PREDICTED  FAULT oob           cause=5
+wireshark  sublet  fx14  AS PREDICTED  FAULT temporal      cause=24 <-- not-nested temporal
+wireshark  sublet  fx15  AS PREDICTED  FAULT temporal      cause=24 <-- not-nested temporal
+
+wireshark  chunks  fx2   AS PREDICTED  FAULT oob           cause=7
+wireshark  chunks  fx3   AS PREDICTED  FAULT oob           cause=5
+wireshark  chunks  fx14  AS PREDICTED  FAULT temporal      cause=24 <-- not-nested temporal
+wireshark  chunks  fx15  AS PREDICTED  FAULT temporal      cause=24 <-- not-nested temporal
+
+ffmpeg     level0  fx2   AS PREDICTED  RETURN 2000ee     
+ffmpeg     level0  fx3   AS PREDICTED  RETURN 300060     
+ffmpeg     level0  fx24  AS PREDICTED  RETURN 180015b     <-- not-nested temporal
+
+ffmpeg     shrink  fx2   AS PREDICTED  FAULT oob           cause=7
+ffmpeg     shrink  fx3   AS PREDICTED  FAULT oob           cause=5
+ffmpeg     shrink  fx24  AS PREDICTED  RETURN 180015b     <-- not-nested temporal
+
+ffmpeg     sublet  fx2   AS PREDICTED  FAULT oob           cause=7
+ffmpeg     sublet  fx3   AS PREDICTED  FAULT oob           cause=5
+ffmpeg     sublet  fx24  AS PREDICTED  FAULT temporal      cause=24 <-- not-nested temporal
+
+# The row this run exists to fill, read off the cells above:
+#   level0   caught 0 of 5   (RETURN, RETURN, RETURN, RETURN, RETURN)
+#   shrink   caught 0 of 5   (RETURN, RETURN, RETURN, RETURN, RETURN)
+#   sublet   caught 5 of 5   (FAULT, FAULT, FAULT, FAULT, FAULT)
+#   chunks   caught 2 of 2   (FAULT, FAULT)
+#
+# So Capstone WITHOUT extra protection catches 0 of 5, and WITH Sublet 5 of 5.
+# shrink returning on all five is the point: these objects are freed, but a bound
+# cannot see a dead object, so per-object bounds are no help on the temporal axis.

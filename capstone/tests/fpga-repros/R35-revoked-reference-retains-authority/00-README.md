@@ -1,9 +1,129 @@
 # R-35 — on silicon a REVOKED capability still reads AND writes the storage its object has given up, at every age, and the access does not trap
 
-**Status (2026-09-20): REPRODUCED ON THE BOARD, three times, with controls, and the provenance
-question is SETTLED — the flashed bitstream carries the R-34/R-24 fix, verified by a cause comparison
-on the board itself rather than by the build record. So neither of the two candidate issues explains
-this, and the defect is that the LSU path does not check the tag while the execute path does.**
+**CLOSED 2026-09-25 — FIXED ON THE M-MODE LSU DATA PATH.** Siblings, so a reader with a neighbouring
+symptom is redirected at once:
+- **R-44** — the SAME optimistic adopt, still present at the **CPMP** (S/U-mode enforcement, live in
+  production). A stale capability used from Linux or userspace is R-44, not this folder.
+- **R-43** (`../R43-revocation-cache-false-deny/`) — the cost of this fix: it **denies on a cache miss**,
+  so a live capability whose id was evicted is falsely refused. Confirmed on silicon 2026-09-25; its second
+  fix (replay) is FIXED ON SILICON 2026-09-29 (`caplifive_r43_8f6a0af98.bit`). R-45 and R-46 are nested there.
+- **R-37 / R-38** — the trackers' invalidate/adopt ORDER, fixed in the same flashed build ("Stage 0",
+  `247b76896`). Nested below.
+- **M-1** (`../RTL-domain-trap-vector-unset/`) — why a fault here wedges the domain and loses its output.
+
+Registry: `docs/ref/ISSUES.md` R-35, R-37, R-38, R-43, R-44.
+
+What closed it, and what did not:
+- Fix `capstone-ariane 4ad0df694`, flashed as `caplifive_r35_4ad0df694.bit` on 2026-09-24.
+- Two-sided in RTL simulation: the acceptance fixture goes from 4 to 7 traps, the build is shown to track
+  source, and the stale read, stale store and readback all trap 25.
+- On silicon the probe that exposed R-35 **no longer reproduces it**. See "The defect and the fix, in
+  pictures" below, and `results/board-4ad0df694.result-lines.txt` for the limits: N=1 per arm; which
+  cause-25 arm fired and which probe age trapped are not observable; the stale write was never reached.
+- That the oldest probe cannot have been allowed is a **source** argument. An allow needs an exact 30-bit
+  tag hit marked live, and the 14-bit generation retires at 16383 and never wraps.
+- Capability loads and stores (LDC/STC) never used this tracker: they are gated by the DYN unit's own
+  rev-node query.
+
+**2026-09-29 — the WHY is now readable on silicon.** On `caplifive_r43_8f6a0af98.bit` (R-43's second fix, which adds a
+refusal record) the same stale probe (image `35fb3fec`) still traps 25 at `+0x4354`, and the record reads LATCHED with arm =
+**probe path** (the probe's node read came back not live for this id — dead or, with the index reissued thousands of times,
+most likely a stale generation): the boot's first cause-25 verdict was on the probe path, NOT the cache's deny-on-miss, with
+id 0x5f (95) — fresh on the repetition m1v2-4, the same on a10. That it is the stale access's own verdict is consistent with the
+trap at `+0x4354` but not proven: the record latches the first verdict since reset, and the aed492ab live-alias control that read
+EMPTY is a different fixture (four source commits apart), so it does not scope this boot.
+**And the stale WRITE, which no earlier boot reached, is refused too:** on the same bitstream the write probe (`067cc96f`) traps 25
+at the `sb` through the revoked alias on 2 of 2 boots (`+0x4370`, record LATCHED on the probe arm, id 0x60), while the matched
+live-write control (`9b24aa31`, one define apart) completes with readback 165 — the board lane's record on dev (`7e721ae2`,
+`tests/rtl-smoke/paper-r43v2-2026-09-29/results/m1v2-{1,5,6}`). The "stale write was never reached" limit below is now dated. That closes the "not observable" item below
+(`../R43-revocation-cache-false-deny/results/board-8f6a0af98.result-lines.txt`, a10).
+
+The status paragraphs that follow are the dated history, newest first.
+
+
+**Status (2026-09-21): ROOT-CAUSED, in the board's own RTL, and the cause is NOT a missing tag check.**
+REPRODUCED ON THE BOARD four times with controls; provenance SETTLED (the flashed bitstream carries the
+R-34/R-24 fix, verified by a cause comparison on the board rather than by the build record). The defect
+is in `core/load_store_unit.sv:966-971` of RTL `054cea69b`: the revocation check is real, but it depends
+on a **single core-wide tracked revnode id**, and an access presenting a different id **re-adopts itself
+as valid**. See "ROOT CAUSE" below. Bounds and permissions survive because they are read from the
+capability's own metadata, which is why this path enforces bounds and not revocation.
+
+**R-35 FIX IS FLASHED AND THE PROBE NO LONGER REPRODUCES THE DEFECT (2026-09-24); it was synthesized and timing-clean before that.** `capstone-ariane` **`4ad0df694`** routes at **WNS -8.341, 0.034 ns from the flashed base's -8.307**, with 51.70 % failing endpoints against base's 51.76 %. All five pre-registered synthesis predictions pass. Bitstream sha256 `8db73f8e20244438a2663fef070202e95dde29fe5b1d957b9804a7babf60382c`. Full readings: `results/synth-4ad0df694.result-lines.txt`.
+
+**ON SILICON (2026-09-24, caplifive_r35_4ad0df694.bit):** the probe that exposed R-35 no longer reproduces it. The same image that read the current occupant's live data through a revoked alias on 054cea69b (is_live_data=1) now traps with cause 25 on the stale read of leaf[0]. A live alias to the same leaf, at the same address, commits without a trap, as do ~43k earlier live accesses, and 17 of 17 ladder rungs return their pre-flash values. N=1 per arm. NOT shown on silicon: WHY the stale read was denied -- cause 25 cannot separate observed revocation from the cache's deny-on-miss, which is the expected route for an id reissued thousands of times; which probe age trapped (k=0 or k=21648); the stale write; and false-deny rates under SQLite. Result lines and limits: `results/board-4ad0df694.result-lines.txt`.
+
+**SUPERSEDED STATUS (2026-09-23): the fix was `capstone-ariane` `f83fe9342`, branch `r35-m1-revnode-cache`.
+It is correct in simulation and is NOT a reflash candidate.** `f83fe9342` WAS SYNTHESIZED 2026-09-23 AND IS NOT DEPLOYABLE. Area: fixed -- 177,669 post-synth LUTs, -17,423 against the crossbar build with -111 FFs, i.e. the crossbar rewritten as a register file and nothing else. Slack: REFUTED -- routed WNS -27.665, the worst this design has produced, against a pre-registered prediction of roughly -12.9. The worst path is SHALLOWER than Stage 0's (94 vs 121 logic levels, less logic delay) but carries +15.45 ns of ROUTE delay: congestion, absent from every earlier build. Traced at pin level by the synthesis lane: D-cache read-port grant (fan-out 88) -> the rev-node's memory-channel write-request selector, a deep combinational Anvil mux (fan-out 70) -> the cache's WRITE decode. The fix hung a 256-entry write decode off that selector. The read mux is not on the path. Next: register the fill taps, so the decode sees flops. It
+keeps the positive-validity-cache design below but rebuilds its access structure as an ordinary
+register file — no `_d` array, narrow per-set write enables, a lookup that reads the registered array,
+and the same-cycle invalidation as one 16-bit comparator — which removes the crossbar that made
+`079dc720a` unimplementable. Geometry is deliberately unchanged at 4 ways × 64 sets. Acceptance fixture:
+**exactly 7 traps**, the three revoked accesses trapping 25 and both live-alias controls still returning
+`0x005b5b5b5b5b5b5b`. Lint at the committed baseline.
+
+**A worked example of a fixture blind to what it certifies.** The first register-file rebuild,
+`6ee277cc3`, introduced an authority escape of **this issue's own class**: its invalidate matched the
+array *before* the same cycle's install, so a read-tap install for an index being invalidated that cycle
+created a **live** entry for a node just written dead — and every later access through that id would
+have been allowed. `f83fe9342` closes it. **This fixture returned exactly 7 traps before and after that
+fix.** It cannot see it: all three cause-25 arms emit the same cause and `tval`, it never evicts, and it
+never presents a same-cycle install/invalidate coincidence. The escape was found by an adversarial audit
+that built a microtest from verbatim extracts of the committed logic, with mutants as positive controls.
+A passing run of this fixture is evidence about the rotation defect it was built for, not about
+coincidence paths.
+
+The paragraphs below record the two hashes that were synthesized and rejected, in order. Neither is a
+reflash candidate.
+
+**FIX VALIDATED IN SIMULATION (2026-09-22), NOT YET SYNTHESISED AND NOT ON SILICON.** *[superseded by the
+status above]*
+`capstone-ariane` **`079dc720a`** (branch `r35-m1-revnode-cache`) replaces the single core-wide tracker
+with a tagged 4-way x 64-set positive validity cache filled only by observing the rev-node unit's own
+node-memory traffic, so an access is allowed only if its exact 30-bit `(generation, index)` is resident
+and was last seen live. On the acceptance fixture the pair **inverts**: the three accesses that
+previously succeeded through the revoked capability now trap 25, both live-alias controls still return
+data, and the surviving read proves the store never reached memory. A matched-pair 95-test sweep shows
+**identical per-test trap counts on all 92 comparable tests**, with the build proved to track source by
+re-running the fixture on the reverted tree (4 traps against 7). Lint at exactly the committed baseline,
+`UNOPTFLAT` unchanged at 40. Full readings and the limitations — chiefly that **this revision denies on
+a cache miss**, which is safe but produces false denies the existing suite is too small to bound — are
+in `results/sim-m1-cache-validation.result-lines.txt`.
+
+**SYNTHESIS HAS NOW RUN AND THIS HASH DOES NOT FIT — 2026-09-23. NOT REFLASHABLE.**
+`079dc720a` post-synth is **195,092 LUTs / 103,030 FFs = 95.73 % of the device**; the cache alone costs
+**+22,968 LUTs and +8,356 FFs**. No build on this design has ever routed above 84.98 %, and this is
+21,755 LUTs beyond the only build that ever failed to route. The flop cost was as predicted (within
+2 %); the LUT cost is a **defect in the RTL, not the price of a cache** — the lookup reads the
+combinational `_d` array through a dynamic 64-way index while the update rebuilds all 8,192 bits every
+cycle with four dynamically-indexed write sites, so Vivado built a crossbar rather than a register
+file. The remedy was a rebuild of the cache's access structure — per-set write enables in `always_ff`
+and a lookup against `_q` — now done at `f83fe9342`. *(Corrected 2026-09-23: this sentence also proposed
+"a far smaller array". That is withdrawn. Under deny-on-miss a smaller cache converts misses into false
+denies, so what is size-independent is **authority escape**, not correctness; the zero-miss sweep result
+is evidence about 256 entries only.)* The post-synth occupancy also overstated the routing risk:
+`079dc720a` **did route**, at 192,642 LUTs = 94.53 %, so this design's routable ceiling is about nine
+points higher than the 84.98 % it had been calibrated on. **The fix is correct in simulation and not
+implementable as written.**
+
+**AND THE UNDERLYING STAGE 0 HASH IS A TIMING REGRESSION.** `247b76896` routed at **WNS -12.900 /
+TNS -654,920 / 99,635 failing endpoints** against its parent `054cea69b`'s **-8.307 / -312,530 /
+90,379** — i.e. **-4.593 ns and roughly double the TNS from a 32-line change with zero new signal
+declarations**. So neither hash in this folder is a reflash candidate.
+
+*(Corrected 2026-09-23 — this paragraph used to end "and the `_q` -> `_d` retarget needs rework at the
+CPMP site too, not just the LSU". **That is wrong, and acting on it would reintroduce an escape.**)* An
+audit localized the 4.593 ns to Stage 0's **LSU** half, whose post-adopt value fed `cap_exception`
+combinationally. Every CPMP consumer reads the **registered** value, so the CPMP half is flop-to-flop into
+16 endpoints and cannot account for +9,256 failing endpoints. *That is the audit's structural argument,
+not a measurement — Stage 0 changed both halves in one commit, and the one build that would separate them
+(`247b76896` with `pmp_data_if.sv` reverted) has not been run.* And reverting the CPMP half to compare `_q`
+**admits a persistent false ALLOW**: an entry holding X adopts Y while the same cycle's broadcast names Y,
+the compare against the stale X misses, and the entry vouches for a dead Y indefinitely. Leave the CPMP
+half as it is.
+
+**Every one of these costs was invisible to our pre-synthesis checks**: nine lint counters at exactly
+the committed baseline and `UNOPTFLAT` unmoved at 40, on both hashes.
 
 Sibling issues, so a reader who arrived with the wrong symptom is redirected now:
 `../R34-lsu-exception-lost-on-immediate-grant/` is the LSU dropping exceptions it generates, and its fix
@@ -13,6 +133,148 @@ causes aliasing the core's `DEBUG_REQUEST = 24`, which would route a trap into d
 same commit says it "move[s] the debug sentinel off 24, and put[s] the capability causes on the spec's
 base", so R-24 does not explain this either. **This folder is one issue: a capability check that does
 not fire on silicon.**
+
+## The defect and the fix, in pictures
+
+**The defect (RTL `054cea69b`).** The LSU's revocation check trusted ONE tracker register for the whole
+core, and any access through a capability it had not seen RE-ADOPTED that capability as valid:
+
+```
+           +-----------------------------------------------+
+  access   |  core-wide tracker:  id = ?     valid = ?     |
+  via cap  |                                               |
+  (id x) ->|  x != tracked id ?  ->  id := x, valid := 1   |  <- "never seen it, so it must be live"
+           |  valid == 0 ?       ->  cause 25 (revoked)    |     (load_store_unit.sv:966-971)
+           +-----------------------------------------------+
+  revocation broadcast for x: clears valid ONLY if the tracker holds x at that moment
+
+  Sixteen rotating slots, so consecutive accesses almost never share an id:
+
+   t0   access via A (id a)   tracker = a, valid = 1
+   t1   A's object revoked    tracker = a, valid = 0        A is dead
+   t2   access via B (id b)   tracker = b, valid = 1        the record of A's death is gone
+   t3   access via A again    a != b -> tracker = a, valid = 1
+                              -> ALLOWED: A reads and writes storage now owned by someone else
+```
+
+No local fix exists: the broadcast carries only a bare 16-bit index (the generation is masked off at the
+source), so the tracker cannot tell an old generation of a node from a new one.
+
+**The fix (RTL `4ad0df694`).** Authority now needs POSITIVE evidence of liveness. That evidence is taken
+from the only place that knows the truth, the rev-node unit's own node memory, by two passive taps:
+
+```
+                 rev-node unit  (ground truth: one node per (generation, index))
+                   |                                   |
+                   | node WRITES (create/revoke/...)   | node READS (other units' queries)
+                   v  tap 1, registered                v  tap 2, registered
+          +------------------------------------------------------------------+
+          |  revocation validity cache, 4 ways x 64 sets                      |
+          |  entry = { id[29:0] (generation+index), occupied, node-live }     |
+          |  install/refresh on a tap . mark dead on a node-dead write        |
+          |  tag array in distributed RAM (LUTRAM); occupied/live in flops    |
+          +------------------------------------------------------------------+
+                               ^  lookup by the capability's EXACT 30-bit id
+                               |
+       LSU access via cap -----+---->  hit, live        -> ALLOW
+                                       hit, dead        -> cause 25   (a genuine revocation)
+                                       dead THIS cycle  -> cause 25   (two-term same-cycle compare)
+                                       MISS             -> cause 25   (fail CLOSED: no evidence, no authority)
+```
+
+The two compares have **opposite widths on purpose**. The lookup is 30-bit, `{generation, index}`, so an
+old generation can never hit a new node. The invalidate is 16-bit, because that is all the broadcast
+carries. "Harmonising" them breaks one or the other; see the analytical notes below.
+
+**Scope of the fix.** This is the M-mode LSU check (`lsu_ctrl.fu` LOAD or STORE, which includes AMOs).
+It does NOT cover:
+- the **CPMP**, which enforces S/U mode and still adopts on sight (**R-44**);
+- the **PC** tracker in `commit_stage.sv` (latent, same adopt);
+- LDC/STC, which go through the DYN unit's authoritative query instead.
+
+**What it cost to make it deployable** — three builds, each refuted by synthesis, not by simulation:
+
+```
+   079dc720a  cache as _d/_q arrays   -> a crossbar, 95.7 % of the device           NOT deployable
+   f83fe9342  rebuilt as register file -> fill decode hung off the rev-node's
+                                          combinational selector + congestion,
+                                          WNS -27.665                                NOT deployable
+   4ad0df694  fill taps registered + tag array in LUTRAM
+                                       -> WNS -8.341 (base -8.307), 480 LUTRAM      FLASHED 2026-09-24
+```
+
+**What the silicon then showed** — the same two images on the old and the new bitstream:
+
+```
+                                     caplifive_m1_054cea69b.bit      caplifive_r35_4ad0df694.bit
+   stale alias   (image 35fb3fec)    reads the new owner's data      TRAPS, cause 25, at the stale read
+                                     (is_live_data=1)
+   live alias    (image aed492ab)    read commits; later mint        identical
+                                     traps cause 26
+   ~43k live-alias accesses          commit                          commit
+   17 ladder rungs                   reference values                the same values
+```
+
+Details and limits: `results/board-4ad0df694.result-lines.txt`.
+
+## Nested issues: what this fix did NOT cover, and what rode in the same build
+
+### R-44 — the same adopt, still live at the CPMP (S/U mode). OPEN, live in production.
+
+The LSU check above and the CPMP check are gated on **complementary** values of one signal, so the CPMP is
+100 % of S/U-mode capability enforcement — and it still adopts on sight, per entry:
+
+```
+                          capmode && priv == M                 capmode && priv != M
+                                 |                                     |
+                                 v                                     v
+   +------------------------------------------+   +--------------------------------------------------+
+   | LSU cap_violation_detection              |   | CPMP data check, pmp_data_if.sv                  |
+   | (load_store_unit.sv)                     |   |  per entry i: tracked id, valid bit              |
+   |  R-35 FIX: revocation cache, fail closed |   |  entry presents id != tracked ?                  |
+   +------------------------------------------+   |     -> tracked := id, valid := 1   <-- R-35's    |
+                                                  |        "assume live until proven otherwise"      |
+                                                  |  broadcast for tracked index -> valid := 0       |
+                                                  +--------------------------------------------------+
+   Linux and userspace run under the sticky capmode bit, so a stale capability used from S/U mode
+   is re-adopted exactly as R-35's harness was in M mode.
+```
+
+**Why it was deferred, not fixed here.** Copying the fail-closed cache to the CPMP predicts a **boot
+kill**: `cpmp(0..2)` carry hardcoded ids produced with zero rev-node traffic, so a deny-on-miss tracker
+would refuse the first S-mode instruction fetch. Reachability and fault-loop objections were raised and
+refuted; the boot-kill risk was not (measured in simulation by `r12-recl-cpmp.S` probe 4). A fix needs
+positive evidence for the CPMP entries (this fix's taps can feed a second consumer) plus an explicit seed
+for those three ids, synthesis before any board time, and a first S-mode boot as its acceptance. The PC
+tracker in `commit_stage.sv` adopts the same way and is latent (it needs a stale CODE capability, never
+constructed). Registry: `docs/ref/ISSUES.md` R-44.
+
+### R-37 / R-38 — invalidate and adopt in the wrong ORDER. "Stage 0", in the flashed build; unverified on silicon.
+
+Both trackers applied the invalidation broadcast against the wrong id in the cycle an adopt happened:
+
+```
+   same cycle: an ADOPT of id Y into a tracker holding X, and a BROADCAST naming one of them
+
+   LSU (R-37), before:   invalidate (vs X) ... then adopt Y, valid := 1
+                         broadcast names Y  -> nothing matched, the adopt wins -> Y tracked LIVE
+                                               though it was just killed        = false ALLOW (R-35's class)
+   CPMP (R-38), before:  adopt Y ... then invalidate comparing the PRE-adopt X
+                         broadcast names X  -> match, valid := 0 -> the entry now tracks Y, marked invalid,
+                                               and no broadcast for Y ever comes = permanent false DENY
+                         broadcast names Y  -> no match (X != Y)   = a live-looking entry for a dead Y
+                                                                    = false ALLOW (found by audit later)
+
+   Stage 0 (247b76896), both:  adopt first, THEN invalidate against the POST-adopt id (_d)
+```
+
+Cost: 4.593 ns of WNS in the build alone (`247b76896`: −12.900 vs −8.307), localized by audit to the LSU
+half, whose post-adopt value fed `cap_exception` combinationally — an audit argument, never separated by a
+build. The LSU half is now **moot**: this folder's fix replaced that tracker with the cache, which keeps
+the same-cycle property with a single 16-bit comparator against the accessed id. The CPMP half stays and
+**must not be reverted to `_q` as a timing measure** — that reinstates the false allow (see the analytical
+notes below on the two compare widths). Neither is verified on silicon; the flashed build carries both.
+Registry: `docs/ref/ISSUES.md` R-37, R-38.
 
 ## What was observed
 
@@ -103,6 +365,246 @@ issues. If so this is a new, and severe, gap: revocation does not deny access.
 **That question — was the flashed `caplifive_m1_054cea69b.bit` built from `054cea69b`, i.e. with
 `c77c65324` in? — is answered YES by the probe above.** An independent answer from the build record
 would be a useful cross-check on the provenance trail, but it is no longer what this folder waits on.
+
+## SCOPE, settled 2026-09-21: the LSU enforces BOUNDS but not REVOCATION
+
+The obvious next question was whether this path enforces anything. It does. A store one byte past the
+end of a **live, perfectly valid** alias — nothing revoked, nothing stale, the only thing under test
+being the bounds check on a good capability — **faults on the board**:
+
+    mcause  sw=255 = 0x9c -> seen=1, cause 28 (OUT_OF_BOUNDS)
+    mepc    0x81a042f4 - DBAS 0x81A00000 = offset 0x42f4   <- the store
+    tval    0xac100040 = arena base + 64                   <- exactly the byte past the 64-byte leaf
+
+**So the defect is specific, not general.** On the same path, in the same image: a **bounds** violation
+on a valid capability is caught and reported precisely, while an access through a revoked reference is
+not caught at all.
+
+**CORRECTED 2026-09-21: the revoked reference was NOT untagged, and the tag check is NOT what failed.**
+An earlier version of this section said it was. The tag reaches the check — `cap_rmetadata` →
+`operand_a_cap_regfile` → `cap_metadata_a` (`cva6.sv:249`, "S-06 fix: {tag, metadata}") →
+`decompress_cap_tagged` (`ariane_pkg.sv:762-781`), which returns `NOT_CAP` for a clear tag — and an
+untagged `rs1` raises **cause 24** at `load_store_unit.sv:973-975`. Cause 24 was never observed. The alias
+was still **tagged** on silicon, and the clause that was defeated is the **revocation** one. The
+emulator's "x[rs1] is not a capability" is a model divergence, not a description of the silicon.
+
+Cause 28 does more than narrow the scope: it **identifies the module**. See "ROOT CAUSE" below.
+
+The cause also **corroborates** the post-fix finding independently: `OUT_OF_BOUNDS` is enum 5, and
+5 + 23 = 28 on the spec base, where a pre-fix base 24 would have given 29. (It does not *prove* it on
+its own — 28 also aliases pre-fix `INSUFFICIENT_PERMISSION` — which is why the execute-path comparison
+above is the proof and this is support for it.)
+
+### A model/RTL divergence in cause CLASS, recorded separately because it is not this defect
+
+For the **same instruction at the same offset on the same address**, the two sides classify differently:
+
+| | cause |
+|---|---|
+| emulator | **7** — `STORE_AMO_ACCESS_FAULT`, a *standard* RISC-V code (`op_helper.c:1539`, deliberate) |
+| board | **28** — `CAP_OOB`, the *capability* enum |
+
+Both refuse the access, so neither is a safety gap, and this folder's defect does not depend on it. But
+software that classifies faults by `mcause` will classify this one differently under the emulator and on
+silicon, which is worth knowing before a corpus run is read either way.
+
+## ROOT CAUSE (2026-09-21) — `load_store_unit.sv:966-971`, a single core-wide revnode tracker that re-adopts
+
+**Which module, settled by the cause number rather than by argument.** Two blocks can check a data
+access and they are gated on **complementary values of one signal**:
+
+| block | gate | can emit |
+|---|---|---|
+| `load_store_unit.sv:948-996` `cap_violation_detection` | `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M` | 24, 25, 26, 27, **28** |
+| `pmp_data_if.sv:292-306` CPMP data check | `capmode_i && ld_st_priv_lvl_i != PRIV_LVL_M` | **5 / 7 only** |
+
+The bounds probe above returned **28**, latched in hardware (`cva6.sv:1116-1124`,
+`recent_nontrivial_mcause_log_q <= ex_commit.cause`). CPMP cannot emit 28. **So the M-gated LSU block is
+the live path for these accesses**, and CPMP is not involved — independently confirmed by the harness
+never touching CPMP at all (`grep -ci 'cpmp\|ccsr' sublet/r1/r1_slots_pools.c` → 0; CPMP entries are
+written only by the monitor, `csr_regfile.sv:1931` and `:2418-2559`).
+
+This also means the harness's accesses run at **M-mode**: entering a domain does not change privilege.
+`priv_lvl_d` has six writers in `csr_regfile.sv` — `:1048` hold, `:2155` trap entry, `:2318` MRET,
+`:2341` SRET, `:2362` VS-RET, `:2376` DRET — **none on a capability or domain-switch path**, and
+`capstone_dom_switcher.anvil` has zero `mstatus`/`priv`/`mpp` references.
+
+**The mechanism**, quoted from the board's own RTL:
+
+```systemverilog
+// load_store_unit.sv:966-971 @ 054cea69b
+// update revnode tracking when a new instruction arrives with a different revnode
+if (lsu_cap_type != NOT_CAP
+    && lsu_cap_a.metadata.revnode_id != lsu_revnode_id_d) begin
+  lsu_revnode_id_d    = lsu_cap_a.metadata.revnode_id;
+  lsu_revnode_valid_d = 1'b1;        // <-- an UNTRACKED revnode is assumed VALID
+end
+```
+
+`lsu_revnode_id_q` is a **single** 30-bit register for the whole core (`:209-210`), and the invalidation
+broadcast clears it only on an exact match (`:945-946`). The LSU's only revnode ports are those two
+broadcast inputs (`:198-199`) — **there is no query path**, so on a miss the block cannot ask and guesses
+VALID. The broadcast is applied *before* the adopt, so an adopt always wins its cycle.
+
+**Why this harness is the worst case by construction.** M1 keeps 16 slots rotating, so consecutive
+accesses almost always carry different revnode ids, the one-entry tracker is thrashed, and nearly every
+access re-validates itself. That is why the board saw it at **every** age — `k=0` (2,706 storage reuses
+later), `k=21648` and `k=43295` alike. The approved M1 specification predicted exactly this residual:
+*"the same stale capability installed into a different CPMP entry is re-adopted until the next broadcast
+of that index — a property of the tracker, not the reclaimer."*
+
+### The fix is architectural, and the obvious one-liner does not work
+
+Flipping `1'b1` to `1'b0` fails **closed**: every access whose revnode is not the tracked one would then
+raise cause 25, which under a 16-slot rotation is essentially every access. Correctness needs the LSU to
+**ask** whether an untracked revnode is valid. The rev-node unit already answers that question —
+`capstone_rev_node.anvil`'s `IDLE_STAGE` serves `ep.query_req` and replies `ep.query_res(node_in.valid)`
+— but **the LSU has no port to it**, and adding one puts a rev-node read latency stall on the access
+path in the common case. The alternative is a wider tracker with a miss path.
+
+Either way this is a structural change, not an edit. CLAUDE.md's rule about feeding a new signal into a
+cone that already carries a combinational loop applies directly, **only synthesis proves
+synthesizability**, and a bitstream is ~90 minutes plus a reflash. The change and any respin are the RTL
+lane's and the project lead's calls. **No RTL has been changed on the strength of this folder.**
+
+### Acceptance criteria for a fix — two traps, both of which make a CORRECT fix look broken
+
+Raised by the RTL lane on review, and both are properties of the code rather than opinions.
+
+**1. Cause 28 pre-empts cause 25.** The revnode test is the **last** arm of the priority chain —
+`:973` NOT_CAP → `:976` type → `:979`/`:982` permissions → `:985` bounds → `:989` revnode. So an access
+that is both revoked *and* out of bounds reports **28**, even with the tracker repaired. Pre-register
+cause 25 only for an access that is **in bounds and permitted**, or a working fix reads as a failure.
+
+**2. A single-capability test cannot see this bug at all.** With one capability no access ever presents
+a differing revnode id, so the adopt at `:967-971` never runs, the tracker stays correctly invalid, and
+**cause 25 fires** — the test passes and reports the defect absent. The ids must **rotate**. This is the
+"the synthetic test must CREATE the triggering condition, not merely contain the shape" trap that cost
+S-12 a day. `CAPCREATE` cannot supply the rotation — it hardcodes `revnode_id = 2`
+(`capstone_flu_unit.anvil:385` @ `054cea69b`) — so distinct ids need `SPLIT`.
+
+A two-sided simulation test is therefore: cause 25 **fires** on repaired RTL and **does not fire** on
+`054cea69b`, for an in-bounds permitted access through a revoked capability, with the ids rotating.
+
+### Two analytical notes for anyone reasoning about the trackers, added 2026-09-22 on the RTL lane's request
+
+**1. A DATA-DEPENDENCY argument is strong; a CYCLE-COUNT argument is not. Do not mix them up.**
+Several same-cycle races appear around these trackers, and they are not all the same kind of thing:
+
+* An **independent** coincidence — two causally unrelated events that happen to land in one cycle,
+  e.g. an invalidation broadcast for index *i* arriving while an access adopts index *i*. Nothing
+  orders them, so the only honest statement is that it *will* happen eventually. These are the races
+  worth fixing in RTL.
+* A **sequenced** coincidence — two events on one causal chain with a `>>` between them, e.g. the
+  reclaim pop's generation bump and the handing out of `(g+1, i)`. The Anvil `>>` across a `send` is
+  **ack-gated** (the successor event is conditioned on the write grant, visible in the generated SV),
+  so these cannot be reordered at all and the "race" is not a race.
+
+The practical rule: *"these probably will not coincide"* is a cycle-count argument and is worth
+little — it degrades silently when frequencies, latencies or a `S12_MEM_DELAY` change. *"these cannot
+be reordered, because B's enable is derived from A's acknowledgement"* is a data-dependency argument
+and holds under any timing. **When deferring a race, say which of the two you have.**
+
+**2. The two broadcast compares have OPPOSITE widths, and each has a worked example of getting it
+wrong.** The invalidation compare must be **16-bit** (a bare index) and any future validation compare
+must be **30-bit** (`{generation, index}`). Anyone "harmonising" them breaks one or the other, so both
+are commented at both ends. The two traps, both real and both found the hard way:
+
+* **A field that is 30 bits WIDE but carries a bare INDEX.** `node_wr_req[29:0]` looks like a
+  composed id and is not: `send_revnode_update` masks the generation off at source, and its own
+  comment says *"the generation lives in the node, never in a link or an address."* A 30-bit compare
+  fed from that field would test `(0, i)` against a tracker holding `(g+1, i)`, **never match at any
+  generation ≥ 1**, and so silently stop working after the first reclaim. The width being right is
+  exactly what makes it look safe. This caught a peer lane mid-review, on this wire, an hour after
+  they had written the opposite-widths rule themselves.
+* **A payload whose generation already reads `g+1` on the write that means DEAD.** The reclaim pop
+  stores `{… generation = g+1; free = 1'd0}` while `valid` is still 0 — and *that write is the
+  invalidation broadcast*. So an unconditional compose would put `(g+1, i)` on the **invalidation**
+  path, and a 30-bit compare there would fail to clear a tracker holding the stale `(g, i)` — the one
+  tracker you most want cleared. The compose must therefore be **gated on the `valid` bit**, the same
+  bit that already decides whether to fire at all.
+
+**A note on the enumeration, because the tempting version of it is wrong.** It is natural to justify
+the mask by counting broadcast call sites — but the count is easy to get wrong (13 syntactic, 16 after
+inlining, and an earlier version of this folder said 14). The property worth relying on is structural
+instead: there is exactly **one** `send mem_ch.write_req` in the whole rev-node unit, and it masks the
+id, so **every** broadcast is a bare index by construction rather than by enumeration.
+
+### Related instances, none of which is this defect
+
+- `commit_stage.sv:239` — the same optimistic re-adopt for the **PC** capability.
+- `pmp_data_if.sv:82-102` — the same shape per CPMP entry; a real latent defect, already on file as
+  ISSUES.md:4079 under R-12 A5, but **not** what was measured here.
+- Found while auditing, both worth their own items. **Both were stated too loosely in the first
+  version of this paragraph and are corrected here (2026-09-22); the second was simply wrong.**
+  - `pmp_data_if.sv:88-101` runs the adopt **first** and the invalidate **last**, comparing the
+    **pre-adopt `_q`**. That makes the same-cycle race fail in *opposite directions* depending on
+    which id the broadcast names, which is why one sentence could not describe it:
+    - broadcast names the **newly adopted** id: `_q` still holds the old id, no match, validity is
+      **not** cleared -> a live-looking entry for an id that was just invalidated (**false ALLOW**,
+      the CPMP instance of finding 4);
+    - broadcast names the **displaced** id: `_q` matches, validity **is** cleared -- but the entry
+      now tracks the *new* id, which is left marked invalid with no further broadcast for it ever
+      arriving (**false DENY**, permanent; finding 5).
+  - **The "reinstall into a fault loop" claim is RETRACTED.** `swap_cpmp` skips a region that is
+    already loaded -- `if(region_cpmp[region_id] != -1) continue;`
+    (`sbi_capstone.c:1911`) -- so a second fault for the same region does **not** reinstall. It falls
+    through to `region_id >= region_n` and takes the one-shot terminal path: `print_regions()`,
+    `CAPSTONE_TAG_CPMX`/`CAPSTONE_NO_CPMP_REGION` over UART, then `fault_return_from_domain`, which does
+    not return (`:1925-1941`). So the symptom is **a single domain kill with a diagnostic report**,
+    not a loop.
+  - And **re-adoption does happen**, so "can never re-adopt" is too strong. The round-robin eject
+    sets `region_cpmp[ejected_region_id] = -1` (`:1958`), so a later install lands in an entry whose
+    tracked id differs and the adopt fires normally. The narrow true statement is: *an invalidated
+    entry cannot re-adopt **the same** capability into **the same** entry with **no intervening
+    occupant**.*
+  - Recorded because this paragraph was cited as independent corroboration for a scope decision
+    while being itself unverified -- a circular citation. Verify a citation in its own tree.
+
+### REPRODUCED IN SIMULATION, 2026-09-22 — two-sided, by the RTL lane
+
+**Produced by the RTL lane; VERIFIED here against the transcript they left in `results/`, reading
+`sim-rotate-stale.result-lines.txt` line by line rather than taking the summary.** On
+`054cea69b` RTL at `S12_MEM_DELAY=12`, every pre-registered value matched:
+
+| arm | rotation between revoke and access | reading |
+|---|---|---|
+| **A** — positive control | none | value 0, **cause 25 — the check FIRES** |
+| **B** — the defect | an access through a different revnode intervenes | sentinel returned, **cause 0** |
+| **C** — stale store | as B | **cause 0, the store LANDS** |
+
+Checked against the transcript rather than the summary: `SPLIT` yields genuinely distinct ids
+(`Reg[10]` revnode **2**, `Reg[16]` revnode **3**, and the unit logs `mrev_req on parent 2` then
+`parent 3`, so the rotation is real); Arm A's cause reads `Reg[20] = 0x19` = **25**; Arm B returns
+`0x00a5a5a5a5a5a5a5`, sentinel **A** — the revoked region's own data — through a reference whose node
+`LCC` has just reported invalid; Arm C reads back `0xa5`. Sources and transcript are in `src/` and
+`results/`.
+
+Arms A and B differ in **exactly one thing**: whether an access carrying a different revnode id
+intervenes. That is the matched pair this folder's earlier attempts could not build.
+
+The revoke is **witnessed in-run** rather than assumed: `LCC` reads alias A as valid `1` before the
+revoke and `0` after, while its sibling B stays `1` — the sibling surviving is the depth arithmetic
+confirming itself, and it independently confirms that `REVOKE` on an `MREV` handle does invalidate the
+original capability's own node.
+
+**Why this is stronger than the board evidence above.** Simulation carries no timing artefact, which is
+precisely what the bitstream caveat at the end of this folder says the board measurements cannot shed.
+The board shows the defect on silicon; the simulation shows it on a clean instrument with a control
+that fires.
+
+The rotation came from `SPLIT`, not two `CAPCREATE`s — `CAPCREATE` hardcodes `revnode_id = 2`
+(`capstone_flu_unit.anvil:385` @ `054cea69b`), so two created regions share one node and cannot
+displace each other. That is the same trap recorded below.
+
+### Directed reproducer
+
+`capstone-ariane/verif/tests/custom/capstone/r35-stale-deref.S` (`board/r35-directed-repro`) does **not**
+yet reproduce this, and its header records exactly why: it never executes CAPENTER, so `capmode_i` is 0
+and the block is inert (exit 16), and `CAPCREATE` hardcodes `revnode_id = 2`
+(`capstone_flu_unit.anvil:385` @ `054cea69b`), so its two regions shared one revnode and neither could displace the
+other. A working version needs CAPENTER, two genuinely distinct revnodes via SPLIT, and must sit on the
+**m1-reclaimer** line — `054cea69b` is not an ancestor of that branch.
 
 ## Reproduce
 

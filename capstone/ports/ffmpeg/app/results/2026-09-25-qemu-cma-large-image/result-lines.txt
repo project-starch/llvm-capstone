@@ -1,0 +1,27 @@
+# Phase 0: an image past the old 4 MiB order ceiling, loaded from a CMA block.
+# run-qemu.sh's own verdicts, sublet arm, h264 + libavfilter compiled in.
+run-qemu: 6 runs, block 8 MiB, region 0 MiB, cma=112M
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+
+# the guest's own lines: the CMA reservation and the module's sizing of each domain
+      5 code size = 6266832, tot_size = 800000
+      1 code size = 6266848, tot_size = 800000
+      1 Reserved 112 MiB
+
+# build gates at FFAPP_ORDER_CEILING_MB=8
+M1 image /tmp/capstone/ffmpeg-sizeprobe2/domain-sublet/ffapp_m1.dom  code_len=6266832  allocation=8388608  FITS
+M2 image /tmp/capstone/ffmpeg-sizeprobe2/domain-sublet/ffapp_m2.dom  code_len=6266832  allocation=8388608  FITS
+M3 image /tmp/capstone/ffmpeg-sizeprobe2/domain-sublet/ffapp_m3.dom  code_len=6266832  allocation=8388608  FITS
+M4 image /tmp/capstone/ffmpeg-sizeprobe2/domain-sublet/ffapp_m4.dom  code_len=6266832  allocation=8388608  FITS
+M5 image /tmp/capstone/ffmpeg-sizeprobe2/domain-sublet/ffapp_m5.dom  code_len=6266832  allocation=8388608  FITS
+M6 image /tmp/capstone/ffmpeg-sizeprobe2/domain-sublet/ffapp_m6.dom  code_len=6266832  allocation=8388608  FITS
+0 hit(s) in 1018765 instructions
+budget and layout gates: 20 images FIT, none has .capstone_gp_initdesc
+control fired: FFmpeg's libc calls reach __capstone_hostcall and nothing else is missing

@@ -18,7 +18,8 @@ using namespace llvm;
 yaml::CapstoneMachineFunctionInfo::CapstoneMachineFunctionInfo(
     const llvm::CapstoneMachineFunctionInfo &MFI)
     : VarArgsFrameIndex(MFI.getVarArgsFrameIndex()),
-      VarArgsSaveSize(MFI.getVarArgsSaveSize()) {}
+      VarArgsSaveSize(MFI.getVarArgsSaveSize()),
+      LiveSourceCopyFrameIndex(MFI.getLiveSourceCopyFrameIndex()) {}
 
 MachineFunctionInfo *CapstoneMachineFunctionInfo::clone(
     BumpPtrAllocator &Allocator, MachineFunction &DestMF,
@@ -136,6 +137,7 @@ void CapstoneMachineFunctionInfo::initializeBaseYamlFields(
     const yaml::CapstoneMachineFunctionInfo &YamlMFI) {
   VarArgsFrameIndex = YamlMFI.VarArgsFrameIndex;
   VarArgsSaveSize = YamlMFI.VarArgsSaveSize;
+  LiveSourceCopyFrameIndex = YamlMFI.LiveSourceCopyFrameIndex;
 }
 
 void CapstoneMachineFunctionInfo::addSExt32Register(Register Reg) {

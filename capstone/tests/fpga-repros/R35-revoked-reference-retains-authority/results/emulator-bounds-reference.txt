@@ -1,0 +1,1 @@
+domain halted by capability fault: cause = 7, pc = 0x101a042f4, tval = 0xf0300040, badaddr = 0xf0300040

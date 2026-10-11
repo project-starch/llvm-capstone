@@ -1,5 +1,14 @@
 # R-29 — a plain 8-byte store adjacent to a 128-bit `ldc` of the same granule loses the high half
 
+> **Status 2026-10-05: FIXED ON SILICON.** `caplifive_supcall_776d9d859.bit` (capstone-ariane `sup-call` 776d9d859) carries a
+> stall-only fix: a 16-byte read whose granule has a plain store in flight -- in the store buffer or the write buffer -- waits
+> in the dcache read controller until that store has drained (ISSUES R-29, the dated block of 2026-10-05, has the design, the
+> simulation record and the synthesis numbers). This folder's rung `s06agg` (frozen `249118220f8cf37a`, the k800 control first)
+> reads **64 = clean** on it (board-supmon 3cdddc4727ec; 66 on 66c4e7517), and the delegated runtime's memcpy arm went from
+> 94/96 miscopies to 0/96 on the same image. The mechanism statement below is history: both of its faces -- the stale refill on
+> a MISS and the word-wise forwarding on a HIT -- are one hazard, the un-ordered read behind a store still in flight, and the
+> store-buffer account it refutes was true of the HIT arm at zero distance (the trace of 2026-10-05).
+>
 > **Status 2026-09-10: OPEN, mechanism SEPARATED BY WAVEFORM.** Reproduced on silicon and in RTL
 > simulation on every revision we can build, including the one that flew before the current flash.
 > The failing wide load **misses** and is served from the refill leg, so its high half comes from a
@@ -220,3 +229,16 @@ The rung image is **frozen and checksummed on purpose**: this platform has a per
 (`../R16-entry-stall/`), so a rebuilt image is a fresh draw that may simply never run. The board mode
 runs the known-good control `k800` first — a boot whose control fails carries no verdict about
 anything.
+
+## 2026-10-05 -- a second shape of the same defect, on the fixed bitstream, reproduced in simulation
+
+On caplifive_supcall_715bdd1fe.bit the delegated runtime's `{offset, len}` pair (two plain `sd`, low then high) copied
+by an LTO-inlined `ldc`/`stc` granule loop ~17 instructions later arrived with the HIGH word 0 and the low word intact,
+deterministically. This is the HIT shape: a plain store to the granule is still in the write buffer at the wide load.
+Two faces (single-store arms): a fresh plain store to the LOW word zeroes the wide load's high half (its forwarded
+entry carries `.user = 0` on the lanes the high half rides); a fresh plain store to the HIGH word is not seen by the
+wide load at all (the stale line value is read). The low word is correct in both. Simulation on the
+resident tree reproduces it with no other store in flight and clears it with a `fence` between the pair and the copy
+(capstone-ariane `r29-wbuf-busy-hit.S`, eleven arms, readings in the registry's R-29 entry). The W-04 remark above that
+"the memcpy loop does not have this shape" is false under full LTO, where the inlined memcpy forms the shape across the
+call. Software workaround: a `fence` between a granule's plain stores and a wide load of it (B0 uses 8-byte copies).

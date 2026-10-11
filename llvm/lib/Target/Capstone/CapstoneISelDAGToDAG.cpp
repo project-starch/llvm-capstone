@@ -44,7 +44,9 @@ static cl::opt<bool> UsePseudoMovImm(
 // handing out the broad gp-derived (whole-segment) bounds. Gated so the
 // "before" (segment-granular) behaviour can be measured by passing
 // -capstone-shrink-globals=false.
-static cl::opt<bool> CapstoneShrinkGlobals(
+// Not static: thread-locals are narrowed under the same flag, in
+// CapstoneTargetLowering::getCapabilityTLSAddr.
+cl::opt<bool> CapstoneShrinkGlobals(
     "capstone-shrink-globals", cl::Hidden,
     cl::desc("Narrow capabilities for global data objects to their size "
              "(emit SHRINK at materialization)"),
@@ -84,6 +86,13 @@ cl::opt<bool> CapstoneGpFree(
     cl::desc("Lower intra-domain calls/returns to plain jal/jalr within PCC and "
              "avoid the gp root for direct calls / global addressing "
              "(silicon domain ABI); default off"),
+    cl::init(false));
+
+// Virtual application startup supplies a readable, image-wide gp. Unlike a
+// per-global cap table it can address anonymous constants in that image.
+static cl::opt<bool> CapstoneImageGp(
+    "capstone-image-gp", cl::Hidden,
+    cl::desc("Use the gp-free ABI with a readable image-wide gp authority"),
     cl::init(false));
 
 // gp-captable: the silicon-correct global-addressing half of the gp-free domain
@@ -190,6 +199,9 @@ int getGpCaptableIndex(const GlobalValue *GV) {
 // non-indexable symbol refs. So every gp-free ABI decision is active under either
 // flag; this is the single predicate the call/ret/spill/global sites consult.
 bool capstoneGpFreeAbiActive() { return CapstoneGpFree || CapstoneGpCaptable; }
+bool capstoneImageGpAbiActive() {
+  return CapstoneImageGp && CapstoneGpFree && !CapstoneGpCaptable;
+}
 
 #define GET_DAGISEL_BODY CapstoneDAGToDAGISel
 #include "CapstoneGenDAGISel.inc"
@@ -1630,7 +1642,9 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   if (CapstoneGpCaptable) {
     bool IsCodeSymbol = false;
     if (auto *GA = dyn_cast<GlobalAddressSDNode>(Symbol))
-      IsCodeSymbol = isa<Function>(GA->getGlobal());
+      // An alias of a function is a code symbol as well (C-75: the initializer
+      // now stores alias slots, and a function alias went through gp here).
+      IsCodeSymbol = isa_and_nonnull<Function>(GA->getGlobal()->getAliaseeObject());
     else if (isa<BlockAddressSDNode>(Symbol) || isa<ExternalSymbolSDNode>(Symbol))
       IsCodeSymbol = true;
 
@@ -3354,6 +3368,20 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       return selectShrink(Node);
     case Intrinsic::capstone_cap_scc:
       return selectSCC(Node);
+    case Intrinsic::capstone_cap_set_address:
+      // The address of null is how clang converts an integer into an __intcap.
+      // There is no type to dispatch on: the result is the untagged bridge.
+      if (isNullConstant(Node->getOperand(1))) {
+        ReplaceNode(Node, CurDAG->getMachineNode(Capstone::PseudoBRIDGE_CAP,
+                                                 SDLoc(Node), MVT::c128,
+                                                 Node->getOperand(2)));
+        return;
+      }
+      ReplaceNode(Node, CurDAG->getMachineNode(Capstone::PseudoSetAddr,
+                                               SDLoc(Node), MVT::c128,
+                                               Node->getOperand(1),
+                                               Node->getOperand(2)));
+      return;
     case Intrinsic::capstone_cap_init:
       return selectInit(Node);
     case Intrinsic::capstone_cap_tighten:

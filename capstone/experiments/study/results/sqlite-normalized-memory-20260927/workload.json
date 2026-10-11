@@ -1,0 +1,39 @@
+{
+  "testset": "main",
+  "churn_sizes": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "burst_sizes": [
+    1,
+    1,
+    1,
+    1,
+    4,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "fresh_database_each_unit": true,
+  "reset_allocator_between_units": false
+}

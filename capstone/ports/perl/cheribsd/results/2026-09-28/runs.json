@@ -1,0 +1,16 @@
+[
+  {
+    "command": "env _RUNTIME_REVOCATION_DISABLE=1 LD_PRELOAD=/tmp/libc-fixed.so.7 /tmp/perl /tmp/perl-files/smoke.pl /tmp/perl-files",
+    "exit": 0,
+    "stdout": "P1 hello\nP2 array 2000 4002000\nP3 hash 3000 2999\nP4 string 2390 ab0ab1ab2a\nP5 churn ok\nP6 fib 6765\nP7 deep 500\nP8 eval caught msg\nP9 num 4.50 2.5 1.18059162071741e+21\nP10 sort apple banana fig pear\nP11 regex The quick | The slow brown fox | 2\nP12 closure 5\nP13 ref ARRAY REF 2\nP14 method Counter 3\nP15 file 50 last-ok\nP16 dir 1\nP17 pack 1,2,3 03.14\nSMOKE_DONE\n",
+    "stderr": "",
+    "oracle_match": true
+  },
+  {
+    "command": "env _RUNTIME_REVOCATION_ENABLE=1 LD_PRELOAD=/tmp/libc-fixed.so.7 /tmp/perl /tmp/perl-files/smoke.pl /tmp/perl-files",
+    "exit": 0,
+    "stdout": "P1 hello\nP2 array 2000 4002000\nP3 hash 3000 2999\nP4 string 2390 ab0ab1ab2a\nP5 churn ok\nP6 fib 6765\nP7 deep 500\nP8 eval caught msg\nP9 num 4.50 2.5 1.18059162071741e+21\nP10 sort apple banana fig pear\nP11 regex The quick | The slow brown fox | 2\nP12 closure 5\nP13 ref ARRAY REF 2\nP14 method Counter 3\nP15 file 50 last-ok\nP16 dir 1\nP17 pack 1,2,3 03.14\nSMOKE_DONE\n",
+    "stderr": "",
+    "oracle_match": true
+  }
+]

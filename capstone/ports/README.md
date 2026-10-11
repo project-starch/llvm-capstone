@@ -1,5 +1,12 @@
 # Application and allocator ports
 
+Complete Linux application ports now use the
+[delegated ABI-v2 build and runner](common/application/README.md): Perl, mruby,
+CPython, PostgreSQL single-user, SQLite, FFmpeg and offline tshark. Old application
+images must be rebuilt. The component/allocator and silicon targets described
+below are separate from these application entry points.
+
+
 Start here to choose a component and find its build entry point. A port may
 execute an application, replay one allocator, or only establish that a library
 compiles. Those scopes are different; a directory's existence is not evidence
@@ -19,17 +26,54 @@ and validation workflow linked from that guide.
 | SQLite | In-memory SQL workloads and memsys5/lookaside lifetime experiments | [SQLite](sqlite/README.md), [Sublet](sqlite/sublet/README.md); existing shell drivers |
 | MicroPython | Freestanding interpreter and GC test workloads | [MicroPython](micropython/README.md); existing shell drivers |
 | nginx | Pool allocator replay, pool/block lifetime and stale-access probes; not a web server | [Domain runner](nginx/run-nginx-domain.sh), [Sublet runner](nginx/run-nginx-subpool.sh); existing shell drivers |
-| APR | Freestanding pool-library compilation and adaptation census | [Census](apr/census-apr.sh); no end-to-end domain workload established here |
+| APR | Pool allocator in a Capstone domain with a Sublet adapter, and apr-util's bucket allocator carried on top of it (`-DAPRP_BUCKETS=ON`); a stock CheriBSD build against the platform's own malloc and a PoisonCap build; for the httpd/APR pool and bucket defect corpora; not httpd, not threaded pools | [pools](apr/pools/README.md); shared CMake layout. The [census](apr/README.md) that preceded it stays beside it |
+| memcached | The slab allocator and the per-thread object cache of 1.6.45 in a Capstone domain with a Sublet adapter, and a stock CheriBSD build against the platform's own malloc, for the memcached defect corpus; not the server, not its threads, not the page mover | [allocators](memcached/allocators/README.md); shared CMake layout. The [census](memcached/README.md) that preceded it stays beside it |
 | musl | Domain libc, host-call services and functional tests; incomplete OS/thread support | [musl](musl-capstone/README.md); existing shell drivers |
 | FFmpeg | AVBufferPool/AVRefStructPool replay from native decoder recordings; not domain video decoding | [Buffer pools](ffmpeg/buffer-pool/README.md); shared CMake layout |
 | PostgreSQL | Memory-context replay and memory profiles; not a database server | [PostgreSQL](postgres/README.md), [CMake component](postgres/memory-contexts/CMakeLists.txt); shared CMake layout plus older shell drivers |
 | CPython | Real pymalloc replay from native interpreter recordings; not a domain interpreter | [pymalloc](cpython/pymalloc/README.md); shared CMake layout |
 | Whisper / ggml | Context allocator and buffer-epoch replay; not domain speech recognition | [ggml contexts](whisper/ggml-context/README.md); shared CMake layout |
+| Wireshark / wmem | All four wmem allocators with pool-reset epochs and lifetime fixtures; not domain packet dissection | [wmem](wireshark/wmem/README.md); shared CMake layout |
 
-This integration branch includes the pending Whisper port and PostgreSQL/runtime
-PRs. Consult the selected revision's `upstream.json` or fetch script for the
-source pin, and the component's result bundle for the revision actually tested.
-Historical results keep their original source and binary identities.
+Every component carries a `port.json` stating what it is — `full-application`,
+`allocator-component`, `platform-build`, `domain-libc` or `census` — the upstream
+version it pins, and the text in its own recipe that decides that pin.
+`capstone/bug-corpora/tools/check-ports.py` reads that line and refuses a
+declaration the recipe no longer supports, so the version is machine-readable
+without becoming a second source of truth. The generated
+[bug-material index](../bug-corpora/INDEX.md) joins those versions to the
+corpora, which is the shortest answer to "which defects does this release have".
+A component's result bundle still names the revision actually tested, and
+historical results keep their original source and binary identities.
+
+**[INDEX.md](INDEX.md) is the generated list of every component** by role, with its
+pinned version, the targets it runs on, its workload and its corpora. Read it before
+this table: it cannot go stale, and the table above can.
+
+## Naming
+
+**A component is named for what it is:** `app/` for the complete application,
+`<boundary>/` for one allocator (`pools`, `pymalloc`, `buffer-pool`, `wmem`,
+`memory-contexts`), `cheribsd/` for the same release built for another platform.
+`role` in each `port.json` states the same thing, so nothing depends on reading a path.
+
+Three components were renamed to that rule on 2026-09-28 — `cpython/interpreter`,
+`mruby/musl` and `postgres/single-user` are now each `app/` — and four are deferred with
+their reasons. **[renames.json](renames.json) is the path history**, rendered in
+[INDEX.md](INDEX.md#path-history) and checked by `check-ports.py`.
+
+The rename does not touch the evidence. An archived `build-manifest.json` records which
+directory a measured binary was actually built from, so it keeps quoting the old path and
+is never rewritten; `docs/history/` is append-only for the same reason. Eight archived
+files quote a renamed path today, the ledger lists each one, and the checker fails if one
+of them stops quoting it — so the record and its resolution table cannot drift apart.
+
+What is deferred is deferred for a measured reason, not for taste. `perl/musl` has
+another lane working in it. `sqlite`, `micropython` and `nginx` are flat trees, so the
+move would add a directory level that every script inside resolves its own paths
+against — and for `sqlite`, 99 files quote the path and 23 of them are evidence. Neither
+can be claimed to work from a worktree that cannot run the nightly or the board gates
+that drive those scripts.
 
 ## Shared layout for component ports
 
@@ -59,7 +103,7 @@ ports/<project>/<component>/
 
 This is the common convention, not a claim that every historical component
 already has every directory. Execution environment belongs under `src/`;
-`spatial` and `sublet` are protection modes, not separate platforms. A native
+`spatial` and `sublet` are arms, not separate platforms. A native
 execution does not acquire revocation merely by selecting a mode number.
 
 [common/](common/README.md) owns downloads, build-location guards, toolchains,

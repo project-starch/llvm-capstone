@@ -1,0 +1,185 @@
+{
+  "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+  "kind": "interior",
+  "arm": "spatial",
+  "started": "2026-10-10T18:09:23+0800",
+  "predicted_buggy_outcome": "DEFECT-REPRODUCED",
+  "sdk": {
+    "path": "<scratch>/capsdk/sdk-level0",
+    "heap": "level0",
+    "heap_log": "22",
+    "runtime_sha256": "3c72f36acd5bf9a423e5864d469a382dc388bd7596f26ec80b3d41168222690c",
+    "sdk_json_sha256": "76ef401c3df791e3187b3ebcda7f5fd78f4c916c479f64d2722db330b0901a52"
+  },
+  "compiler": "clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)",
+  "platform": {
+    "qemu": "32e7c9754f9afd516dd5b30016148bb8215df47de04e7adae4caad36cdc118af",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "launcher": "0752aa7c49c9adac999c396472bd3eefe0d6cbeaf19037114adcf086c91288fb",
+    "ssh_server": "385fcf915ad3aee1c14ed3d82cd5e1671ec83de6a6c909fa0d8cceb15126a990",
+    "module": "a88ed2159b43229a6592cdb494d9289ec947629e4fe25a763adf179480c04d8b",
+    "job_helper": "5a160efa2b1e7121f5438b20ca2ccdd4233d8a44c68a8323c4814db0d88008a7"
+  },
+  "platform_environment": {
+    "CAPSTONE_GP_NONLIN": "1",
+    "CAPSTONE_REV_NODES": "65536"
+  },
+  "tool_sha256": "f7b00cf3bc4c53a9919d816eade8656706f42f24b84a8d91baaee433ba211661",
+  "cc_args": [],
+  "controls": {
+    "clean": {
+      "outcome": "RETURNED",
+      "detail": "CONTROL clean RETURNED 1",
+      "required": "RETURNED"
+    },
+    "oob": {
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020e5b8 address=0xc0251948 in ctl_write_probe+0x58 (the labelled probe)",
+      "required": "CAUGHT"
+    },
+    "uaf": {
+      "outcome": "RETURNED",
+      "detail": "CONTROL uaf RETURNED observed=0xaa reissued=1",
+      "required": "RETURNED"
+    },
+    "subobj": {
+      "outcome": "RETURNED",
+      "detail": "CONTROL subobj RETURNED b0=0x5a",
+      "required": "RETURNED"
+    }
+  },
+  "rows": [
+    {
+      "case": "00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED U's edge emulation wrote 9 + field_based rows into a 9-row block, so its tenth row was V's first, which V's emulation then overwrote",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "218dcf0e7af839c4ba76cb79f80477d00e55eb4e455c87cea540ebc3e7ded04c",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "01_699341d647_apedec_array_0000_writes_64_into_channel_1",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED decode_array_0000 wrote 64 outputs into a 40-sample channel, so 24 of them landed in decoded[1]",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "f24c47c9814c2df9713eb303411287c94d71b5c92869dbb1e393eaa99bd63f2f",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED the delay line read 128 samples from a 72-sample channel, 56 of them from decoded[1]",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "043f687bf96208284f538a152056dabbf4663f4935e900ba1cc6e002346e2fa7",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED the RA loop reconstructed 24 samples of a 16-sample block, so it decremented the first of channel 1's carry-over samples",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "82dda23057777b2891b2756e02852ae1bf5f467dd77850d8e650501f9d9a0c1f",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED channel 0's dependency list ran one slot past its one-slot carve, and channel 1's entry then replaced its terminator",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "1218288e3ac8f2b8212aa8c32771758a45a788ed507a696c39f21f05b0c9c81d",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "05_9d3032b960_alsdec_opt_order_past_max_order",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED opt_order 31 wrote 11 coefficients past channel 0's 20-word slice, into channel 1's",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "21dcf6ad2d463ede7d12c6cf474741915c504e4e098e1d078fe60b8f9203e205",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED the 4:4:4 clear wrote 16 bytes per superblock column into an 8-byte above_uv_nnz_ctx[0], running into above_uv_nnz_ctx[1]",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "23ff3451395779f4f84b3e1073d464db5abc93b14a16d6d114bd48571dd810e7",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "07_2563a33856_vp9_intra_pred_carved_for_old_bpp",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED a thread at 10-bit backed up 256 luma bytes into an intra_pred_data[0] carved for 8-bit, 128 bytes, running into intra_pred_data[1]",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "9617849e63fca3a5a2a7475f2a1c78d2ff394d8c7bd903d5c79c72a2c7fb2e73",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "08_b5ff61695f_swscale_v_line_at_pre_doubling_stride",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED U's 256 bytes of int32 samples ran past V's offset of 208 bytes, and V then overwrote U's tail",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "bd7d6bb27067281d4efe9f62e28459d2234ca0f4256bc459f192d2ba5785aa67",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "09_043bcdcdb0_svq1enc_inter_block_runs_into_source",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED the 16x16 inter prediction at temp + 16 with a 16-byte stride ended past temp's 16 rows, overwriting src's first row",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "e0bfbc0b2d1a4f607c99529f9fc50ac2cc21601c72445db74f6d66e44849591e",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "10_d2213b6493_rv34_b_block_carved_at_old_linesize",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED after the linesize doubled, direction 0's prediction ran from tmp_b_block_y[0] into tmp_b_block_y[1], which direction 1 then overwrote",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "f97b1849a5458a47b28004930269a7dcd63aadd215da21583baf0165bacacb28",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "11_68226ed9ec_vorbis_type1_residue_end_spans_channels",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED a type-1 residue ending at 2 * vlen added channel 0's codevectors into channel 1's slice of channel_residues",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "7fd7189dcd314f1f9e79de85dbc0ae14691d07de201e75acdbef51289dadf716",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    },
+    {
+      "case": "12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice",
+      "outcome": "DEFECT-REPRODUCED",
+      "detail": "VERDICT DEFECT-REPRODUCED a 10-bit sample indexed the 256-entry plane histogram unshifted, so the bump landed 767 entries past its carved sub-slice, in thread 1's slice",
+      "predicted": "DEFECT-REPRODUCED",
+      "as_predicted": true,
+      "image_sha256": "83c8eb854d08bca0bcaa2774af7152d063c9f68e8ffaa0b3daa3ed7e65811480",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "exit=0"
+    }
+  ]
+}

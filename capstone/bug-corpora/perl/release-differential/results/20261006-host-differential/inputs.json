@@ -1,0 +1,13 @@
+{
+ "pin": "perl 5.36.3 (tag v5.36.3, 2023-11-28), source archive sha256 f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a",
+ "reference": "perl master at v5.45.3-85-gdb19522155",
+ "both_built_with": "clang, ./Configure -des -Dcc=clang -Doptimize='-O1 -g -fsanitize=address -fno-omit-frame-pointer' -Accflags='-fsanitize=address -fno-omit-frame-pointer' -Aldflags=-fsanitize=address -Uusedl (the master build adds -Dusedevel, which its odd version number requires)",
+ "run_as": "PERL5LIB=<minimal lib>:<harness> ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:exitcode=77 ./perl -I<build>/lib <trigger>",
+ "instrument_controls": [
+  "ASan is live in both binaries: 39 __asan_* symbols, and ASAN_OPTIONS=verbosity=1 prints its runtime banner",
+  "an independent C program with an argv-dependent index that is read back (so the store cannot be folded away) is reported as heap-buffer-overflow by this same clang; the first version of that control was optimised away and reported nothing, which is why it is written this way"
+ ],
+ "why_both_directions": "the fix dates do not settle liveness. Four of the eleven fixes are DATED BEFORE the v5.36.3 tag and are still absent from it, having landed on blead without a backport. Each case states the ancestry actually checked with git merge-base --is-ancestor.",
+ "result": "11 of 11 report at the pin; 0 of 11 report on master, where all 11 harness verdicts are PASS",
+ "asan_blind_spot": "only 3 of the 11 produce a heap-use-after-free, and all three are in malloc/realloc/calloc memory. Five are SEGV on an address ASan has no allocation record for, two are caught by Perl's own refcount bookkeeping, and one is wrong bytes with no report at all -- the memory in those eight never crosses the malloc boundary."
+}

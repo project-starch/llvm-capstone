@@ -1,0 +1,11 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> 2026-10-10 10:45:35.938 GMT [132] ERROR:  extension "ltree" already exists
+2026-10-10 10:45:35.938 GMT [132] STATEMENT:  CREATE EXTENSION ltree;
+	
+backend> 	 1: marker	(typeid = 25, len = -1, typmod = -1, byval = f)
+	----
+	 1: marker = "PREFLIGHT-OK-ltree"	(typeid = 25, len = -1, typmod = -1, byval = f)
+	----
+backend> 2026-10-10 10:45:37.455 GMT [132] LOG:  checkpoint starting: shutdown immediate
+2026-10-10 10:45:38.201 GMT [132] LOG:  checkpoint complete: wrote 4 buffers (0.8%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.201 s, sync=0.063 s, total=0.766 s; sync files=3, longest=0.028 s, average=0.020 s; distance=0 kB, estimate=0 kB; lsn=0/1609850, redo lsn=0/1609850

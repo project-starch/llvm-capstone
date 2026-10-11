@@ -1,0 +1,24 @@
+Delegate IO.popen through posix_spawn file actions; retain the native POSIX HAL.
+
+--- a/mrbgems/mruby-io/ports/posix/io_hal.c
++++ b/mrbgems/mruby-io/ports/posix/io_hal.c
+@@ -516,6 +516,11 @@
+                           int stdin_fd, int stdout_fd, int stderr_fd,
+                           int *pid)
+ {
++#ifdef MRB_CAPSTONE_DELEGATE
++  int capstone_mruby_spawn(const char *, int, int, int, int *);
++  (void)mrb;
++  return capstone_mruby_spawn(cmd, stdin_fd, stdout_fd, stderr_fd, pid);
++#else
+   pid_t child_pid;
+   (void)mrb;
+ 
+@@ -569,6 +574,7 @@
+   /* Parent process */
+   *pid = (int)child_pid;
+   return 0;
++#endif
+ }
+ 
+ int

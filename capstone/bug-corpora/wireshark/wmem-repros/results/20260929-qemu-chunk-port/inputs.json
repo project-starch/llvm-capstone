@@ -1,0 +1,136 @@
+{
+  "chunk": {
+    "what": "chunk build, all cases, both modes (cases 3, 6 and 11 sublet: boot stalls, retried below)",
+    "images": {
+      "00-rpcrdma-write-offsets-global": "879a35a0cc7355d945034695c2eab004842b71f334084da87a97feac5128a9b1",
+      "01-cms-oid-global": "806939d4ae1da36791571e0fc0bb688ac789ff41bb037fcbe51497961d2f0a0b",
+      "02-mdb-address-column": "8a139aaaa01d7191656e7c21666f591f20baec4abf289a48dccc7fb4eaf0688d",
+      "03-cola-info-column": "f699d440cc3ec6e2ae2bdc0160a3a04e40523f58670612be4088a77a2acdc422",
+      "04-qnet6-col-set-str": "c2655993ff47cf00c43e9bc31e5a074ec8b291ab7ebfeffc08c01fd7ba150238",
+      "05-usbll-address-struct": "377b0dbc6c30ccd62084b094110194281d6df0f2030630fc318ebb05892c6cbb",
+      "06-x509if-last-dn-static": "849d9375fb170d18af6b6a3ac3892667be125148e7f4c9ba21405c90c8ff80dc",
+      "07-mysql-auth-method": "4ee2db088a9bf0af06fc70f97e30427672ba868afcf035ce14c6e3d96c3c2c2b",
+      "08-sip-cseq-method": "b97c4924da5eeab0a4e520e541ff9f4be250773e804ff4fb21c8376aed1caa8a",
+      "09-geonw-proto-data-tvb": "7c99fc53b9f379de5ecb9c124e4020f4b74038e9131ee0a479cd71667ed76f62",
+      "10-t38-reassembly-buffer": "34a5a67ffedd737a640a7a04b311de4bb9025b2c520d147367236c16ff25591e",
+      "11-http-header-map": "0f90746a5a6c59a069c57112480a8deb2321f76e272083fd3f11cbdd94e1630a",
+      "12-xml-root-name-recycled": "d0e410425da602813a4d2f314eb80ac32e4c06a265276ab2f5c4b7c09aac4b63"
+    },
+    "domain_loader": "2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7",
+    "qemu": "6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2",
+    "clang": "1c1436586f99c53c1a2087bf872f83b7563d9a6776ee78d2e1546419e83c1c0f",
+    "node_capacity": 65536,
+    "distinct_trace_inputs": 13,
+    "arms": 26
+  },
+  "chunk-retry": {
+    "what": "chunk build, cases 3, 6, 11 sublet: retry of the three stalled boots",
+    "images": {
+      "03-cola-info-column": "f699d440cc3ec6e2ae2bdc0160a3a04e40523f58670612be4088a77a2acdc422",
+      "06-x509if-last-dn-static": "849d9375fb170d18af6b6a3ac3892667be125148e7f4c9ba21405c90c8ff80dc",
+      "11-http-header-map": "0f90746a5a6c59a069c57112480a8deb2321f76e272083fd3f11cbdd94e1630a"
+    },
+    "domain_loader": "2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7",
+    "qemu": "6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2",
+    "clang": "1c1436586f99c53c1a2087bf872f83b7563d9a6776ee78d2e1546419e83c1c0f",
+    "node_capacity": 65536,
+    "distinct_trace_inputs": 3,
+    "arms": 3
+  },
+  "chunk-c12-r2": {
+    "what": "chunk build, case 12 sublet, rep 2",
+    "images": {
+      "12-xml-root-name-recycled": "d0e410425da602813a4d2f314eb80ac32e4c06a265276ab2f5c4b7c09aac4b63"
+    },
+    "domain_loader": "2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7",
+    "qemu": "6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2",
+    "clang": "1c1436586f99c53c1a2087bf872f83b7563d9a6776ee78d2e1546419e83c1c0f",
+    "node_capacity": 65536,
+    "distinct_trace_inputs": 1,
+    "arms": 1
+  },
+  "chunk-c12-r3": {
+    "what": "chunk build, case 12 sublet, rep 3",
+    "images": {
+      "12-xml-root-name-recycled": "d0e410425da602813a4d2f314eb80ac32e4c06a265276ab2f5c4b7c09aac4b63"
+    },
+    "domain_loader": "2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7",
+    "qemu": "6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2",
+    "clang": "1c1436586f99c53c1a2087bf872f83b7563d9a6776ee78d2e1546419e83c1c0f",
+    "node_capacity": 65536,
+    "distinct_trace_inputs": 1,
+    "arms": 1
+  },
+  "off-c12-r1": {
+    "what": "control build (WM_CHUNKS=OFF), case 12, both modes",
+    "images": {
+      "12-xml-root-name-recycled": "0359e21e4f2ec0538a82efeb029e6ab764eed9a8431ad1908cc83a7b15973475"
+    },
+    "domain_loader": "2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7",
+    "qemu": "6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2",
+    "clang": "1c1436586f99c53c1a2087bf872f83b7563d9a6776ee78d2e1546419e83c1c0f",
+    "node_capacity": 65536,
+    "distinct_trace_inputs": 1,
+    "arms": 2
+  },
+  "off-c12-r2": {
+    "what": "control build, case 12 sublet, rep 2",
+    "images": {
+      "12-xml-root-name-recycled": "0359e21e4f2ec0538a82efeb029e6ab764eed9a8431ad1908cc83a7b15973475"
+    },
+    "domain_loader": "2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7",
+    "qemu": "6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2",
+    "clang": "1c1436586f99c53c1a2087bf872f83b7563d9a6776ee78d2e1546419e83c1c0f",
+    "node_capacity": 65536,
+    "distinct_trace_inputs": 1,
+    "arms": 1
+  },
+  "off-c12-r3": {
+    "what": "control build, case 12 sublet, rep 3",
+    "images": {
+      "12-xml-root-name-recycled": "0359e21e4f2ec0538a82efeb029e6ab764eed9a8431ad1908cc83a7b15973475"
+    },
+    "domain_loader": "2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7",
+    "qemu": "6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2",
+    "clang": "1c1436586f99c53c1a2087bf872f83b7563d9a6776ee78d2e1546419e83c1c0f",
+    "node_capacity": 65536,
+    "distinct_trace_inputs": 1,
+    "arms": 1
+  },
+  "chunk-nc": {
+    "what": "chunk build, --negative-control: every arm must FAIL",
+    "images": {
+      "00-rpcrdma-write-offsets-global": "879a35a0cc7355d945034695c2eab004842b71f334084da87a97feac5128a9b1",
+      "01-cms-oid-global": "806939d4ae1da36791571e0fc0bb688ac789ff41bb037fcbe51497961d2f0a0b",
+      "02-mdb-address-column": "8a139aaaa01d7191656e7c21666f591f20baec4abf289a48dccc7fb4eaf0688d",
+      "03-cola-info-column": "f699d440cc3ec6e2ae2bdc0160a3a04e40523f58670612be4088a77a2acdc422",
+      "04-qnet6-col-set-str": "c2655993ff47cf00c43e9bc31e5a074ec8b291ab7ebfeffc08c01fd7ba150238",
+      "05-usbll-address-struct": "377b0dbc6c30ccd62084b094110194281d6df0f2030630fc318ebb05892c6cbb",
+      "06-x509if-last-dn-static": "849d9375fb170d18af6b6a3ac3892667be125148e7f4c9ba21405c90c8ff80dc",
+      "07-mysql-auth-method": "4ee2db088a9bf0af06fc70f97e30427672ba868afcf035ce14c6e3d96c3c2c2b",
+      "08-sip-cseq-method": "b97c4924da5eeab0a4e520e541ff9f4be250773e804ff4fb21c8376aed1caa8a",
+      "09-geonw-proto-data-tvb": "7c99fc53b9f379de5ecb9c124e4020f4b74038e9131ee0a479cd71667ed76f62",
+      "10-t38-reassembly-buffer": "34a5a67ffedd737a640a7a04b311de4bb9025b2c520d147367236c16ff25591e",
+      "11-http-header-map": "0f90746a5a6c59a069c57112480a8deb2321f76e272083fd3f11cbdd94e1630a",
+      "12-xml-root-name-recycled": "d0e410425da602813a4d2f314eb80ac32e4c06a265276ab2f5c4b7c09aac4b63"
+    },
+    "domain_loader": "2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7",
+    "qemu": "6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2",
+    "clang": "1c1436586f99c53c1a2087bf872f83b7563d9a6776ee78d2e1546419e83c1c0f",
+    "node_capacity": 65536,
+    "distinct_trace_inputs": 13,
+    "arms": 26
+  },
+  "off-c0": {
+    "what": "control build (WM_CHUNKS=OFF), case 0 sublet: the positive control, run after the claim audit, that the region-granular protection is live on that build",
+    "images": {
+      "00-rpcrdma-write-offsets-global": "e670528405af2ced60e700663e1faab9b966208e15ff4621383bb158fdd2f2f1"
+    },
+    "domain_loader": "2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7",
+    "qemu": "6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2",
+    "clang": "1c1436586f99c53c1a2087bf872f83b7563d9a6776ee78d2e1546419e83c1c0f",
+    "node_capacity": 65536,
+    "distinct_trace_inputs": 1,
+    "arms": 1
+  }
+}

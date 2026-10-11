@@ -1,0 +1,273 @@
+# PRE-REGISTERED predictions for the memcached safety fixtures (src/mcapp-safety.c), written
+# 2026-10-01 BEFORE any fixture had run on any arm, and committed and pushed before the first boot.
+# A cell whose outcome differs is a FINDING, never an edit to this file: if a prediction is wrong,
+# the result says so and this file keeps the prediction that was made.
+#
+# The format and the judge are the shared ones (ports/common/application/check-safety.py, through
+# host/run-safety.py):
+#   RETURN <hex>   the process exited with this fixture's mark (fixture * 0x100000 + value), printed
+#                  once and equal in its low byte to the exit status capstone-job recorded
+#   RETURN *       a mark with this fixture's prefix; the value is not predictable
+#   FAULT oob      a domain SIGSEGV whose fault record's pc matches a QEMU bounds diagnostic, AFTER
+#                  the fixture's touch line, at the target it printed
+#   FAULT temporal the same with a revoked or untagged capability
+#   LEN arena      fixture 1's first pointer reaches more than 64 KiB past its cursor
+#   LEN 64         exactly 64
+#
+# Every fixture runs on a WORKER context of a running memcached (the hidden command of patch 0005),
+# not on main as in the tshark and FFmpeg ports; that is the first thing these fixtures test.
+#
+# WHAT EACH PREDICTION RESTS ON:
+# - 1-8 are tshark's fixtures 1-8 (ports/wireshark/app/src/tsapp-safety.c) with malloc for g_malloc,
+#   and the predictions are tshark's on the same three heaps (its host/safety-expect.txt), which the
+#   shared classifier has judged on the delegated runtime (common/application/README.md: tshark's
+#   sublet control 13/13). The heap is the same runtime level0.c / sublet_heap.c.
+#   - level0 (CAPSTONE_LEVEL0_OBJECT_BOUNDS=0): a pointer covers the rest of the arena; first fit;
+#     free writes only headers, so a freed payload keeps its bytes (4), and a block freed and asked
+#     for again at the same size comes back at the same address (5, 6).
+#   - shrink: each pointer narrowed to the bytes asked for; otherwise level0 (no temporal safety).
+#   - sublet: narrowed; free scrubs and revokes every alias, and free reads one byte through the
+#     pointer it is given, so 4, 5 and 6 (6 inside free) fault as temporal at the printed address.
+#   - The new risk here: memcached's other threads (LRU maintainer, crawler, workers) share the heap.
+#     A malloc between a fixture's free and its next step could take the block, changing 4-6's
+#     values on level0 and shrink. The server is idle but for the fixture's own connection.
+# - 7 and 8 are controls that do not depend on the heap: FAULT oob on every arm.
+# - 9 and 10 are memcached's slab items. Without -L or a memory file, memory_allocate is malloc
+#   (slabs.c:613-618), so a slab page is one 1 MiB malloc and every item carved from it carries the
+#   PAGE's capability, on every arm: level0 narrows nothing, shrink and sublet narrow the page, not
+#   the item. A fresh class's page is pushed onto a LIFO free list in address order
+#   (split_slab_page_into_freelist, do_slabs_free: slabs.c:354, 501), so two item_allocs of one class
+#   on a fresh server are neighbours in that page. item_remove of an unlinked item at refcount 1
+#   frees it to the head of its class's list (items.c:540-548, slabs.c:438), and the next item_alloc
+#   of that class takes it back. The slab never calls free, so no arm revokes anything.
+#   So 9 writes into its neighbour, and 10 reads the new item's byte at the same address, on all arms.
+#   That is the gap an in-app Sublet port of the slabs (the plan's stretch S1) would close.
+
+level0   1  RETURN 100001
+level0   1  LEN    arena
+level0   2  RETURN 2000ee
+level0   3  RETURN *
+level0   4  RETURN 4000a0
+level0   5  RETURN 50015b
+level0   6  RETURN 600177
+level0   7  FAULT  oob
+level0   8  FAULT  oob
+level0   9  RETURN 9000ee
+level0  10  RETURN a0015b
+
+shrink   1  RETURN 100001
+shrink   1  LEN    64
+shrink   2  FAULT  oob
+shrink   3  FAULT  oob
+shrink   4  RETURN 4000a0
+shrink   5  RETURN 50015b
+shrink   6  RETURN 600177
+shrink   7  FAULT  oob
+shrink   8  FAULT  oob
+shrink   9  RETURN 9000ee
+shrink  10  RETURN a0015b
+
+sublet   1  RETURN 100001
+sublet   1  LEN    64
+sublet   2  FAULT  oob
+sublet   3  FAULT  oob
+sublet   4  FAULT  temporal
+sublet   5  FAULT  temporal
+sublet   6  FAULT  temporal
+sublet   7  FAULT  oob
+sublet   8  FAULT  oob
+sublet   9  RETURN 9000ee
+sublet  10  RETURN a0015b
+
+# THE SLABSUBLET ARMS (host/build-slab-sublet.sh; run-safety.py --arm slabsublet0|slabsublet1),
+# registered 2026-10-01 after the three heap arms had run, BEFORE any slabsublet image had booted,
+# and pushed before its first run. Both arms are one image: patch 0006 puts the allocators component
+# port's lifetime hooks into slabs.c and cache.c, on the Sublet runtime heap (HEAP_LOG 27, which lends
+# the 64 MiB payload). MC_SLAB_SUBLET_MODE picks the mode at run time:
+#   slabsublet0  spatial: a slab page is carved into one Sublet region per chunk at carve time, and
+#                every item pointer is an alias bounded to its chunk; nothing is revoked;
+#   slabsublet1  sublet: as 0, and each release (do_slabs_free) and issue (do_slabs_alloc) revokes
+#                the chunk's aliases and mints a fresh one.
+# WHAT EACH PREDICTION RESTS ON:
+# - 1-8 do not touch the slabs: the heap under them is the sublet arm's sublet_heap.c, so they
+#   are the sublet arm's verdicts.
+# - 9 writes through item a's pointer 208 bytes below, into item b. On these arms a's alias is bounded
+#   to its own 208-byte chunk (leases.c mcp_page_carve: one region per chunk, sublet_take), so the
+#   poke faults oob at the printed target on BOTH arms. That is the positive control that the hooks
+#   are live: on every other arm the same fixture returns 9000ee.
+# - 10 removes item a (item_remove -> item_free -> slabs_free -> do_slabs_free: mcp_chunk_release)
+#   and allocates b of the same class, which takes a's chunk back (do_slabs_alloc: mcp_chunk_issue),
+#   then reads a[0] through the OLD pointer.
+#   - slabsublet0: the release and the issue renew nothing, so the old alias still names the chunk:
+#     RETURN a0015b, the same address and the new item's byte, as on the other arms.
+#   - slabsublet1: the release revoked every alias of the chunk and the issue did it again, so the
+#     old pointer reloads untagged (ISSUES Q-11) and the read faults temporal at the printed address.
+# - 11 (registered 2026-10-01 after the first slabsublet boots, before any boot of it): fixture 10 for
+#   a CHUNKED item. The oracle never frees a chunked item (an audit of the first boots found the
+#   chunked release hooks compiled in but never run), so this fixture is their first run. The header
+#   goes back to its class's list and the 512 KiB chunk to the largest class's, both LIFO, so the next
+#   item of the same shape takes both back (same-address=1). slabsublet0: RETURN b0015b. slabsublet1:
+#   do_slabs_free_chunked released the chunk (a revoke), the next do_item_alloc_chunk issued it (again),
+#   so the old data pointer faults temporal at the printed address.
+# - A fault in mcs_init (an adapter refusal, exit 97) or a RETURN with a value other than predicted is
+#   a finding, never an edit here.
+
+slabsublet0   1  RETURN 100001
+slabsublet0   1  LEN    64
+slabsublet0   2  FAULT  oob
+slabsublet0   3  FAULT  oob
+slabsublet0   4  FAULT  temporal
+slabsublet0   5  FAULT  temporal
+slabsublet0   6  FAULT  temporal
+slabsublet0   7  FAULT  oob
+slabsublet0   8  FAULT  oob
+slabsublet0   9  FAULT  oob
+slabsublet0  10  RETURN a0015b
+slabsublet0  11  RETURN b0015b
+
+slabsublet1   1  RETURN 100001
+slabsublet1   1  LEN    64
+slabsublet1   2  FAULT  oob
+slabsublet1   3  FAULT  oob
+slabsublet1   4  FAULT  temporal
+slabsublet1   5  FAULT  temporal
+slabsublet1   6  FAULT  temporal
+slabsublet1   7  FAULT  oob
+slabsublet1   8  FAULT  oob
+slabsublet1   9  FAULT  oob
+slabsublet1  10  FAULT  temporal
+slabsublet1  11  FAULT  temporal
+
+# FIXTURES 12-16: the five cases of bug-corpora/memcached/allocator-repros, performed in-process
+# inside the running server, registered 2026-10-02 BEFORE any of them had booted and pushed before
+# their first run. Each fixture performs its own premature free through memcached's real allocator;
+# none goes through the upstream consumer path, and none needs a defect to be live in 1.6.45.
+#   12 case 00  cache.c object: a read buffer returned to its cache and THEN copied out of
+#   13 case 01  cache.c object: a pending-IO list walked while the body frees and reissues the entry
+#   14 case 02  slabs chunk: tail repair assigns refcount = 1 over a holder's reference, then unlinks
+#   15 case 03  slabs chunk: CVE-2018-1000127's unsigned-short refcount wrap past the holders
+#   16 case 04  slabs chunk: an unlocked decrement loses a concurrent get, so the next release frees
+#
+# WHAT EACH PREDICTION RESTS ON:
+# - EVERY ONE of these reads index 0 of its OWN unit (12: byte 0 of a 16384-byte object; 14-16: byte 0
+#   of the item payload inside a chunk of class slabs_clsid(sizeof(item)+64)), so none is an overflow
+#   and the verdict can only be RETURN or FAULT temporal -- never oob. Derived per fixture from the
+#   bounds each one prints, not copied from fixture 10.
+# - The marks encode (reuse << 8) | value. For 12 and 13 the value is the case's own `damage` flag
+#   (12: the copied bytes differ from the command, because the free list's link was written over
+#   them; 13: the walk returned 1 of 3 IOs, because the reissued object was zeroed by its new owner),
+#   since byte 0 of a freed cache object is part of a pointer and is not predictable. For 14-16 it is
+#   the byte the NEW item wrote at that address (0x5c, 0x2e, 0x91 -- each case's own OTHER value).
+# - `sublet` is the NEGATIVE CONTROL and must RETURN all five. Neither allocator calls free on these
+#   paths: cache_free pushes the object onto a STAILQ and do_slabs_free pushes the chunk onto its
+#   class's slots list, so the runtime Sublet heap never revokes and the stale alias still names live
+#   storage. Both lists are LIFO, so the next allocation returns the same unit (reuse = 1).
+# - `slabsublet0` must RETURN the same marks: it bounds each unit to itself but renews nothing.
+# - `slabsublet1` must FAULT temporal at the printed address on all five: mcs_object_release and
+#   mcs_chunk_release revoke the unit, and the reissue revokes it again, so the holder's alias reloads
+#   untagged.
+# - A RETURN whose value differs from the prediction, or a fault that is oob rather than temporal, is
+#   a finding about the port or about the reduction -- never an edit here.
+
+sublet       12  RETURN c00101
+sublet       13  RETURN d00101
+sublet       14  RETURN e0015c
+sublet       15  RETURN f0012e
+sublet       16  RETURN 1000191
+
+slabsublet0  12  RETURN c00101
+slabsublet0  13  RETURN d00101
+slabsublet0  14  RETURN e0015c
+slabsublet0  15  RETURN f0012e
+slabsublet0  16  RETURN 1000191
+
+slabsublet1  12  FAULT  temporal
+slabsublet1  13  FAULT  temporal
+slabsublet1  14  FAULT  temporal
+slabsublet1  15  FAULT  temporal
+slabsublet1  16  FAULT  temporal
+
+# ---------------------------------------------------------------------------------------------
+# Fixtures 17 and 18, registered 2026-10-03 BEFORE either was built or run on any arm.
+# Two memcached defects from upstream's own history, both PLAIN MALLOC -- which is the point.
+#   17  commit 204019d (a 2006 contributed patch): realloc moves the connection read buffer and
+#       only the base pointer is updated, so the parser's interior cursor c->rcurr still points
+#       into the released block. Same OBJECT as fixture 12, DIFFERENT allocator seam.
+#   18  e779381 logger: the close routine clears the global slot and frees the watcher; the
+#       caller keeps its own pointer and WRITES w->failed_flush through it. The corpus's only
+#       write-after-free; the watcher is calloc'd, not an item and not a slab chunk.
+# Both are HISTORICAL -- the upstream fix is reversed -- as cases 0, 1, 3 and 4 are. memcached's
+# origin/master IS our pin (0 commits after it, and origin/next carries one unrelated commit),
+# verified two-sided, so no memcached case can be live-in-pin except case 02.
+#
+# WHY THESE TWO MATTER TO THE ARM MATRIX, and it is the opposite of 12-16:
+# 12-16 end their objects INSIDE memcached's own allocators -- cache_free pushes onto a STAILQ,
+# do_slabs_free onto a class's slots list -- so the runtime's free is never called, `sublet`
+# cannot revoke, and it is the NEGATIVE CONTROL that must RETURN. 17 and 18 end their objects with
+# the platform's own free/realloc, so the release DOES reach the runtime heap. `sublet` must
+# therefore FAULT on these. Without that contrast, sublet's silence on 12-16 is just a silence;
+# with it, the silence is attributable to the nested allocator rather than to a broken arm.
+#
+# Values DERIVED, not copied: mcapp_fill writes v0 + i and the new owner's v0 is 0x5b, so 17 reads
+# 0x5b + 8 = 0x63 through its interior cursor at offset 8. 18 pokes 0xEE at offset 32 through the
+# dead pointer and reads it back through the NEW owner's live pointer, so its value is 0xee.
+# Reuse is predicted 1 for both, and each fixture ERRORS (0xE0017 / 0xE0018) rather than returning
+# a mark if the storage was not reissued -- a condition not created must not read as a result.
+level0       17  RETURN 1100163
+shrink       17  RETURN 1100163
+sublet       17  FAULT  temporal
+slabsublet0  17  FAULT  temporal
+slabsublet1  17  FAULT  temporal
+level0       18  RETURN 12001ee
+shrink       18  RETURN 12001ee
+sublet       18  FAULT  temporal
+slabsublet0  18  FAULT  temporal
+slabsublet1  18  FAULT  temporal
+
+# ---------------------------------------------------------------------------------------------
+# Fixture 19, registered 2026-10-03 BEFORE it was built or run on any arm.
+# CLASS 3 -- REUSE-NOT-FREE -- on memcached's real bipbuffer (the logger's per-watcher output
+# buffer, logger.h:197,215; it also carries items.c's lru_bump_entry records, each holding an item
+# pointer, which is why the port aligns data[] to 16 in patch 0003).
+#
+# This fixture performs NO free of any kind. bipbuf_new is one malloc(sizeof(bipbuf_t) + size) with
+# a flexible data[]; bipbuf_request returns me->data + offset; bipbuf_poll only advances cursors and
+# resets a_start = a_end = 0, so the next request hands out the SAME bytes. The consumer's polled
+# pointer was never freed, stays tagged, stays in bounds of the one malloc, and now names another
+# record. Only the data's identity changed.
+#
+# PREDICTION: EVERY arm RETURNS 130015b, INCLUDING sublet, slabsublet0 and slabsublet1. The revoking
+# arms are blind to this because the runtime heap never sees a free and there is nothing to revoke.
+# Registering a predicted BLINDNESS is the point: it is the measurement that motivates hooking the
+# bipbuffer as a nested allocator, and a fault on any arm here would be the finding instead.
+#
+# THE INSTRUMENT IS KNOWN TO FIRE: fixture 18 is the same stale-pointer-then-reuse shape on the same
+# five arms, and it FAULTS on all three revoking arms because its release reaches the allocator. So
+# a clean RETURN here is a statement about the bipbuffer, not about an arm that never worked.
+# Value derived: mcapp_fill writes v0 + i and the second record's v0 is 0x5b, read at offset 0.
+# reissued is predicted 1, and the fixture exits 0xE0019 rather than a mark if the buffer did not
+# recycle in place -- a condition not created must not read as a result.
+level0       19  RETURN 130015b
+shrink       19  RETURN 130015b
+sublet       19  RETURN 130015b
+slabsublet0  19  RETURN 130015b
+slabsublet1  19  RETURN 130015b
+
+# --- fixtures 20 and 21: upstream SPATIAL defects on the PLAIN heap (class A), added 2026-10-05.
+# PRE-REGISTERED before any image was built. These are the baseline the nested spatial rows need:
+# the access leaves a plain malloc/calloc, so MALLOC-GRANULAR bounds see it. level0 therefore
+# RETURNS (no bounds at all) and every bounded arm FAULTS oob -- the same pattern fx2/fx3 already
+# read, which is why fx2/fx3 are run in the same pass as the standing control. If level0 FAULTS,
+# the fixture is not class A and the row is wrong, not the port.
+#   20  ddee3e2  the authfile scan reads one byte past calloc(1, sb.st_size)
+#   21  d5d9ff0  do_item_cachedump writes the END terminator one byte past malloc(memlimit)
+level0       20  RETURN *
+level0       21  RETURN *
+shrink       20  FAULT  oob
+shrink       21  FAULT  oob
+sublet       20  FAULT  oob
+sublet       21  FAULT  oob
+slabsublet0  20  FAULT  oob
+slabsublet0  21  FAULT  oob
+slabsublet1  20  FAULT  oob
+slabsublet1  21  FAULT  oob

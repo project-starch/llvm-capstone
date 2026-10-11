@@ -1,0 +1,55 @@
+diff --git i/sys/riscv/riscv/pmap.c w/sys/riscv/riscv/pmap.c
+index 72882fc24..e2622ddc0 100644
+--- i/sys/riscv/riscv/pmap.c
++++ w/sys/riscv/riscv/pmap.c
+@@ -1197,29 +1197,43 @@ pmap_extract(pmap_t pmap, vm_offset_t va)
+ vm_page_t
+ pmap_extract_and_hold(pmap_t pmap, vm_offset_t va, vm_prot_t prot)
+ {
+-	pt_entry_t *l3p, l3;
++	pd_entry_t *l2p, l2;
++	pt_entry_t *l3p, pte;
++	vm_paddr_t pa;
+ 	vm_page_t m;
+ 	bool use;
+ 
+ 	m = NULL;
+ 	PMAP_LOCK(pmap);
+-	l3p = pmap_l3(pmap, va);
+-	if (l3p != NULL && (l3 = pmap_load(l3p)) != 0) {
++	l2p = pmap_l2(pmap, va);
++	if (l2p != NULL && ((l2 = pmap_load(l2p)) & PTE_V) != 0) {
++		if ((l2 & PTE_RWX) != 0) {
++			/* An L2 leaf maps a superpage; hold its constituent page. */
++			pte = l2;
++			pa = L2PTE_TO_PHYS(l2) | (va & L2_OFFSET & ~PAGE_MASK);
++		} else {
++			l3p = pmap_l2_to_l3(l2p, va);
++			pte = pmap_load(l3p);
++			pa = PTE_TO_PHYS(pte);
++		}
++		if ((pte & PTE_V) == 0 || (pte & PTE_RWX) == 0)
++			goto out;
+ 		use = true;
+-		if ((prot & VM_PROT_WRITE) != 0 && (l3 & PTE_W) == 0)
++		if ((prot & VM_PROT_WRITE) != 0 && (pte & PTE_W) == 0)
+ 			use = false;
+ #if __has_feature(capabilities)
+-		if ((prot & VM_PROT_READ_CAP) != 0 && (l3 & PTE_CR) == 0)
++		if ((prot & VM_PROT_READ_CAP) != 0 && (pte & PTE_CR) == 0)
+ 			use = false;
+-		if ((prot & VM_PROT_WRITE_CAP) != 0 && (l3 & PTE_CW) == 0)
++		if ((prot & VM_PROT_WRITE_CAP) != 0 && (pte & PTE_CW) == 0)
+ 			use = false;
+ #endif
+ 		if (use) {
+-			m = PTE_TO_VM_PAGE(l3);
++			m = PHYS_TO_VM_PAGE(pa);
+ 			if (!vm_page_wire_mapped(m))
+ 				m = NULL;
+ 		}
+ 	}
++out:
+ 	PMAP_UNLOCK(pmap);
+ 	return (m);
+ }

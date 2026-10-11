@@ -1,0 +1,29 @@
+# memcached/plain-heap-repros on sublet-full (pre-registered aeba7ddefb4d), one VM boot
+# the program's Sublet configuration: Sublet heap + the slab/cache Sublet port in mode 1 (tools/full-config/memcached.c, the allocators port's leases.c/metadata.c/authority.c; SDK HEAP_LOG 27)
+# SDK heap sublet log 27, runtime e5427101c0a73b9c; clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)
+# constructor line, every run (checked by the runner; first case shown): FULLCONFIG memcached slabs=sublet-port live mode=1 pages=1 chunk_releases=1
+  control clean  RETURNED   required RETURNED  ok  CONTROL clean RETURNED 1
+  control oob    CAUGHT     required CAUGHT    ok  cause=7 pc=0xc020f70c address=0xc8002018 in ctl_write_probe+0x58 (the labelled probe)
+  control uaf    CAUGHT     required CAUGHT    ok  cause=24 pc=0xc020f758 address=0x0 in ctl_read_probe+0x38 (the labelled probe)
+  control subobj RETURNED   required RETURNED  ok  CONTROL subobj RETURNED b0=0x5a
+  00_ddee3e2_authfile_scan_past_calloc                           CAUGHT             ok  cause=7 pc=0xc0210304 address=0xc8002009 in mch_write_probe+0x58 (the labelled probe)
+  01_d5d9ff0_cachedump_end_marker_off_by_one                     CAUGHT             ok  cause=7 pc=0xc0210410 address=0xc8002040 in mch_write_probe+0x58 (the labelled probe)
+  02_391f2e4762bf_freesuffix_realloc_sized_in_bytes              CAUGHT             ok  cause=7 pc=0xc0210ab8 address=0xc8002110 in mch_write_probe+0x58 (the labelled probe)
+  03_16a809e2a062_cache_create_freelist_sized_by_object          CAUGHT             ok  cause=7 pc=0xc02102d8 address=0xc8002040 in mch_write_probe+0x58 (the labelled probe)
+  04_40aff8b0f113_stats_end_marker_past_exact_buffer             CAUGHT             ok  cause=7 pc=0xc0210288 address=0xc8002040 in mch_write_probe+0x58 (the labelled probe)
+  05_49f3b0ca9b57_out_string_crlf_copied_with_its_nul            CAUGHT             ok  cause=7 pc=0xc02103e4 address=0xc8002010 in mch_write_probe+0x58 (the labelled probe)
+  06_212c3820c7bb_key_hash_filter_tag_length_underflow           CAUGHT             ok  cause=5 pc=0xc021059c address=0xc8002010 in mch_read_probe+0x38 (the labelled probe)
+  07_0f605245cf3f_bin_delete_logs_unterminated_key               CAUGHT             ok  cause=5 pc=0xc02104c4 address=0xc8002010 in mch_read_probe+0x38 (the labelled probe)
+  08_fa51ad8452d5_slab_list_shuffle_reads_one_past               CAUGHT             ok  cause=5 pc=0xc021050c address=0xc8002020 in mch_read_probe+0x38 (the labelled probe)
+memcached/plain-heap-repros on sublet-full: 9 cases; {'CAUGHT': 9}; predicted CAUGHT; differing: none
+
+# image sha256 (16) per case
+00 81fbe05656e1048a CAUGHT fixed=FIXED exit=0
+01 1757fa39c32cf267 CAUGHT fixed=FIXED exit=0
+02 60fc6e3407d15f54 CAUGHT fixed=FIXED exit=0
+03 ae5837ae38213866 CAUGHT fixed=FIXED exit=0
+04 153679635dc4b10c CAUGHT fixed=FIXED exit=0
+05 70780555d99947fc CAUGHT fixed=FIXED exit=0
+06 cc5550d1c10f2ffb CAUGHT fixed=FIXED exit=0
+07 3da51bc0ced60523 CAUGHT fixed=FIXED exit=0
+08 85967b00d296acd4 CAUGHT fixed=FIXED exit=0

@@ -669,6 +669,33 @@ const Type *Type::getUnqualifiedDesugaredType() const {
   }
 }
 
+bool Type::isIntCapType() const {
+  if (const auto *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() == BuiltinType::IntCap ||
+           BT->getKind() == BuiltinType::UIntCap;
+  if (const auto *ET = dyn_cast<EnumType>(CanonicalType)) {
+    QualType Ty = ET->getOriginalDecl()->getIntegerType();
+    return !Ty.isNull() && Ty->isIntCapType();
+  }
+  if (const auto *AT = dyn_cast<AtomicType>(CanonicalType))
+    return AT->getValueType()->isIntCapType();
+  return false;
+}
+
+bool Type::isCHERICapabilityType(const ASTContext &Context,
+                                 bool IncludeIntCap) const {
+  if (!Context.getTargetInfo().SupportsCapabilities())
+    return false;
+  if (isIntCapType())
+    return IncludeIntCap;
+  if (isPointerType() || isReferenceType() || isBlockPointerType() ||
+      isObjCObjectPointerType() || isNullPtrType())
+    return true;
+  if (const auto *AT = dyn_cast<AtomicType>(CanonicalType))
+    return AT->getValueType()->isCHERICapabilityType(Context, IncludeIntCap);
+  return false;
+}
+
 bool Type::isClassType() const {
   if (const auto *RT = getAsCanonical<RecordType>())
     return RT->getOriginalDecl()->isClass();
@@ -3382,6 +3409,8 @@ StringRef BuiltinType::getName(const PrintingPolicy &Policy) const {
     return "long long";
   case Int128:
     return "__int128";
+  case IntCap:
+    return "__intcap";
   case UChar:
     return "unsigned char";
   case UShort:
@@ -3394,6 +3423,8 @@ StringRef BuiltinType::getName(const PrintingPolicy &Policy) const {
     return "unsigned long long";
   case UInt128:
     return "unsigned __int128";
+  case UIntCap:
+    return "unsigned __intcap";
   case Half:
     return Policy.Half ? "half" : "__fp16";
   case BFloat16:

@@ -46,7 +46,9 @@ def git(repo, *args):
 
 def numstat(repo, base):
     out = {}
-    for l in git(repo, "diff", "--numstat", base, "--", *SCOPES).splitlines():
+    # Counts are part of the manifest format. A user's histogram/patience
+    # preference can pair repeated lines differently without any source change.
+    for l in git(repo, "diff", "--diff-algorithm=myers", "--numstat", base, "--", *SCOPES).splitlines():
         a, d, path = l.split("\t", 2)
         if OWN.search(path):
             continue
@@ -55,7 +57,7 @@ def numstat(repo, base):
 
 
 def marker_for(repo, base, path):
-    diff = git(repo, "diff", "-U0", base, "--", path)
+    diff = git(repo, "diff", "--diff-algorithm=myers", "-U0", base, "--", path)
     cands = []
     for l in diff.splitlines():
         if l.startswith("+") and not l.startswith("+++"):

@@ -1,0 +1,12 @@
+# boot r322-b1a, 2026-10-01 15:42-16:01, caplifive_r43_8f6a0af.bit, REFUSAL_RECORD=1
+# fw_payload 1f36949bb5bdf128 (monitor 2dcd3a5, buildroot d04bd83), host sqlite_host.user 2c9e82d101b48160
+# images: the FIRST build (v1: repro322_common.h with its two unguarded delins), kept in ~/capstone-artifacts/r322-silicon-v1
+control: RESULT k800 retval=4                        (k800.dom b2d60e525f807ea4)
+base322 148b1c999e05397e @0x410000: returned
+    row name=alpha value=11 / row name=beta value=22 / row name=gamma value=33
+    __CAPSTONE_SQLITE_EXTENDED_PASSED__ / __CAPSTONE_SQLITE_MEMORY_PASSED__
+wschema a0e0e1dc29e91c0c @0x810000: WEDGED, created and entered (SQ: A/dom-ok ... SQ: G/enter), no output
+    trap log {seen,mcause[6:0]} 0x9a -> mcause 26 = UNEXPECTED_CAPABLITY_TYPE at 8f6a0af98 (riscv_pkg.sv:360)
+    trap mepc 0x830e2af0, trap tval 0x833b5ddb; refusal record EMPTY [204:02 205:00 206:00 207:00 208:00]
+    mepc - 0x83000000 (the 4 MiB-aligned domain block) = image offset 0xe2af0 = VA 0x8f2af0 = out_text+0x48: delin a0
+blobwrite, mem5design, blobclose, jsonstatic, jsonroot, backupattach: not run (the wedge ends the boot)

@@ -1,0 +1,26 @@
+{
+  "arm": "sublet",
+  "image": "/tmp/capstone/pg-su-sublet/link/postgres.dom",
+  "image_sha256": "e4f772e51fbbe04d9e07c8343841912be2b8f3b485893d48d5c34577194bc84c",
+  "runner_sha256": "2a1a040633e87dc39e91e9b205e7034d00076cf5f603455c73b8fc4bd7acb5ab",
+  "fixture": "/home/zephyr/arms/postgres/capstone/build/fixture-cluster",
+  "extensions_staged_from": "/tmp/capstone/pg-su-sublet/share/extension",
+  "started_utc": "20261006-181930",
+  "extensions_wanted": [
+    "pgcorpus_reach"
+  ],
+  "extensions_available": [
+    "pgcorpus_reach"
+  ],
+  "mechanism_gate": {
+    "case": "02",
+    "passed": true,
+    "kind": "a corpus case required to be detected"
+  },
+  "cases": 2,
+  "scored": 2,
+  "verdicts": {
+    "detected": 1,
+    "silent": 1
+  }
+}

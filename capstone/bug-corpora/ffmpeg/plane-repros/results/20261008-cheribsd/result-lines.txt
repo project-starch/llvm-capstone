@@ -1,0 +1,7 @@
+BOOT CheriBSD allocator suite
+PASS cheribsd-abi
+PASS cheribsd-bounds
+PASS ffp-00-fixed
+PASS ffp-00-buggy
+cheribsd-abi stdout: CHERI_ABI pointer_bytes=16 runtime_revocation=1
+suite exit: 0

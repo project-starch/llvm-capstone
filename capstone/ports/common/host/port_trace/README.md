@@ -1,6 +1,6 @@
 # Shared allocator trace tooling
 
-`port_trace` reads the four existing allocator trace formats through one host
+`port_trace` reads the five existing allocator trace formats through one host
 API. It does not change their bytes, execute allocator operations or reinterpret
 an allocator's ownership rules. Python 3.11+ and the standard library suffice.
 
@@ -24,9 +24,10 @@ read-only, and no build or guest is needed.
 | Format ID | Wire version | Header / record bytes | Semantics retained by the adapter |
 |---|---|---|---|
 | `ffmpeg.buffer-pool` | 2 | 128 / 128 | Calls, nested callbacks, distinct lease/backing identities and measured outcomes |
-| `postgres.a11` | 1 | 80 / 40 | Context kinds/hierarchy, bulk reset/delete, old/new realloc identities and process-prefix references |
+| `postgres.a11` | 1 | 80 / 40 | Context kinds/hierarchy, pool reset/delete, old/new realloc identities and process-prefix references |
 | `cpython.pymalloc` | 1 | 96 / 32 | alloc/calloc/realloc/free; a replay-table ID can persist through realloc |
 | `whisper.ggml-context` | 1 | 128 / 48 | Separate descriptor/buffer identities, buffer ownership and allocation epochs |
+| `wireshark.wmem` | 1 | 128 / 48 | Pool identities; a reset or destroy retires every object of one pool, an individual free only its own |
 
 The wire definitions remain in each port's C headers. The Python adapters
 implement their current versions explicitly; an incompatible future layout
@@ -87,7 +88,7 @@ an unknown historical recording revision.
 
 ## Port integration and results
 
-The four normal QEMU replay launchers validate the staged input before guest
+The five normal QEMU replay launchers validate the staged input before guest
 execution and retain `trace.json` beside the existing run manifest. Failed
 validation retains the input and a `capstone.trace-error/v1` sidecar; the VM
 is not started. Dedicated PostgreSQL lifetime fixtures do not interpret their
@@ -113,7 +114,7 @@ after capture ends, so its imports do not perturb the recorded workload.
 2. Add an adapter under `formats/`, register it explicitly, and assign a unique
    format ID and distinguishable wire magic/version.
 3. Preserve domain-specific identities and operations. Do not turn borrowed
-   descriptor release, pool return or bulk context deletion into generic free.
+   descriptor release, pool return or context deletion into generic free.
 4. Test valid bytes and corruption: truncation, unknown operations/versions,
    premature/missing footer and inappropriate replay inputs. Check a real
    recorder artifact against an independent native replay or reference reader.

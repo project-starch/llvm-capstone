@@ -1,0 +1,87 @@
+# ffmpeg/plain-heap-repros on stock CheriBSD purecap, libc revocation ON, 2026-10-06.
+# Result lines only; the serial capture is not committed (it carries host/account banners).
+
+## platform controls, same boot
+CHERI_ABI pointer_bytes=16 runtime_revocation=1
+CHERI_ABI pointer_bytes=16 runtime_revocation=1
+CHERI_BOUNDARY_READY
+
+## capability lengths, measured in-guest for THIS corpus's request sizes
+CAPBOUNDS request=16 length=16 slack=0 base=0x40a0f000 addr_eq_base=1
+CAPBOUNDS request=24 length=32 slack=8 base=0x40a1a000 addr_eq_base=1
+CAPBOUNDS request=512 length=512 slack=0 base=0x40a1b000 addr_eq_base=1
+CAPBOUNDS request=2048 length=2048 slack=0 base=0x40a1d000 addr_eq_base=1
+CAPBOUNDS DONE
+
+## per case
+### ffh-00-fixed
+case=0 arm=fixed
+cap=4 touched=3 extent=1 crossed=0 damage=0
+VERDICT FIXED the fix starts the scan at b - 1, so the first read is the array's last element
+### ffh-00-buggy
+SUPERVISE base 0x100000 /tmp/allocator-tests/ffh-00-buggy/target
+SUPERVISE expect ffh_read_probe 0x1020ba
+SUPERVISE fault signal=34 code=1 addr=0x1020ba pc=0x1020ba
+SUPERVISE exit signalled=34
+### ffh-01-fixed
+case=1 arm=fixed
+cap=6 touched=5 extent=1 crossed=0 damage=0
+VERDICT FIXED the fix's j + 1 < nb_formats guard keeps every read inside the array
+### ffh-01-buggy
+SUPERVISE base 0x100000 /tmp/allocator-tests/ffh-01-buggy/target
+SUPERVISE expect ffh_read_probe_u8 0x102168
+case=1 arm=buggy
+cap=6 touched=6 extent=1 crossed=1 damage=0
+VERDICT DEFECT-REPRODUCED the shift loop's guard was j < nb_formats while its body read formats[j + 1], so it read one element past av_malloc_array -- the value is discarded, the crossing is not
+SUPERVISE exit status=0
+### ffh-02-fixed
+case=2 arm=fixed
+cap=4 touched=2 extent=0 crossed=0 damage=0
+VERDICT FIXED the fix's avpriv_mirror folds repeatedly, so every index lands in [0, w-1]
+### ffh-02-buggy
+SUPERVISE base 0x100000 /tmp/allocator-tests/ffh-02-buggy/target
+SUPERVISE expect ffh_read_probe 0x1020de
+SUPERVISE fault signal=34 code=1 addr=0x1020de pc=0x1020de
+SUPERVISE exit signalled=34
+### ffh-03-fixed
+case=3 arm=fixed
+cap=2048 touched=2032 extent=0 crossed=0 damage=0
+VERDICT FIXED the fix allocates stride*4*MAX_BLOCKSIZE and respaces the carve to i*buffer_stride*MAX_BLOCKSIZE, so all four fit
+### ffh-03-buggy
+SUPERVISE base 0x100000 /tmp/allocator-tests/ffh-03-buggy/target
+SUPERVISE expect ffh_write_probe_u8 0x102120
+SUPERVISE fault signal=34 code=1 addr=0x102120 pc=0x102120
+SUPERVISE exit signalled=34
+
+## REPRODUCED 2026-10-06 by the committed runner (runners/run-cheribsd.sh), built -O0
+## The capability lengths come out IDENTICAL. The fault addresses do NOT equal the symbol
+## address any more, and that is the -O0 frame setup, not a loss of attribution: the fault
+## lies INSIDE the probe function's extent, which is what attribution means.
+##   ffh_read_probe spans [0x10213a, 0x102156) (size 0x1c); the fault is at 0x10214a.
+BOOT CheriBSD allocator suite
+PASS cheribsd-abi
+PASS cheribsd-bounds
+PASS cap-bounds
+PASS ffh-00-fixed
+PASS ffh-00-buggy
+PASS ffh-01-fixed
+FAIL ffh-01-buggy
+PASS ffh-02-fixed
+PASS ffh-02-buggy
+PASS ffh-03-fixed
+PASS ffh-03-buggy
+SUPERVISE expect ffh_read_probe 0x10213a
+SUPERVISE fault signal=34 code=1 addr=0x10214a pc=0x10214a
+SUPERVISE exit signalled=34
+SUPERVISE expect ffh_read_probe_u8 0x102266
+SUPERVISE exit status=0
+SUPERVISE expect ffh_read_probe 0x1022f4
+SUPERVISE fault signal=34 code=1 addr=0x102304 pc=0x102304
+SUPERVISE exit signalled=34
+SUPERVISE expect ffh_write_probe_u8 0x102270
+SUPERVISE fault signal=34 code=1 addr=0x102288 pc=0x102288
+SUPERVISE exit signalled=34
+CAPBOUNDS request=16 length=16 slack=0 base=0x40a0f000 addr_eq_base=1
+CAPBOUNDS request=24 length=32 slack=8 base=0x40a1a000 addr_eq_base=1
+CAPBOUNDS request=512 length=512 slack=0 base=0x40a1b000 addr_eq_base=1
+CAPBOUNDS request=2048 length=2048 slack=0 base=0x40a1d000 addr_eq_base=1

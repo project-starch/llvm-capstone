@@ -1,0 +1,38 @@
+{
+  "capstone": {
+    "config_sha256": "f06d50f5be1aa53c2db3cdd5d615f0811f4828bda21e19fac49b298bae1b4549",
+    "flags": [
+      "CC_IDENT=clang version 22.0.0git (https://github.com/project-starch/llvm-capstone f7b50f081ca4804a578f75a89e13340497de9261)",
+      "CC=/tmp/capstone/application-cheri/cap-cc",
+      "CFLAGS=  -O1 -std=c17 -fomit-frame-pointer -Wall -Wdisabled-optimization -Wpointer-arith -Wredundant-decls -Wwrite-strings -Wtype-limits -Wundef -Wempty-body -Wimplicit-fallthrough -Wmissing-prototypes -Wstrict-prototypes -Wunterminated-string-initialization -Wno-parentheses -Wno-switch -Wno-format-zero-length -Wno-pointer-sign -Wno-unused-const-variable -Wno-bool-operation -Wno-char-subscripts -Wno-implicit-const-int-float-conversion -Wno-microsoft-enum-forward-reference -O3 -fno-math-errno -fno-signed-zeros -mstack-alignment=16 -Qunused-arguments -Werror=implicit-function-declaration -Werror=missing-prototypes -Werror=return-type",
+      "ASFLAGS=  -O1 -Qunused-arguments",
+      "CC_C=-c",
+      "CC_E=-E -P -o $@",
+      "CC_O=-o $@",
+      "LDFLAGS=  -Wl,--as-needed -Wl,-z,noexecstack -Wl,-rpath-link=:libswresample:libswscale:libavfilter:libavdevice:libavformat:libavcodec:libavutil -Qunused-arguments",
+      "CCDEP=",
+      "CCDEP_FLAGS=",
+      "CC_DEPFLAGS=-MMD -MF $(@:.o=.d) -MT $@",
+      "CFLAGS-ffplay=",
+      "CFLAGS_HEADERS= -Wno-deprecated-declarations -Wno-unused-variable"
+    ]
+  },
+  "poisoncap": {
+    "config_sha256": "8cae1b7fa81cb1a0f600a05b91048975af10f8f026a9f7903a1b31dad4d9bba6",
+    "flags": [
+      "CC_IDENT=clang version 17.0.0 (https://github.com/CTSRD-CHERI/llvm-project.git b34041a38135b9594e3a8ec203af4a0713b4ceda)",
+      "CC=/tmp/capstone/application-cheri/poison-cc",
+      "CFLAGS=  -O1 -std=c17 -fomit-frame-pointer -Wall -Wdisabled-optimization -Wpointer-arith -Wredundant-decls -Wwrite-strings -Wtype-limits -Wundef -Wempty-body -Wimplicit-fallthrough -Wmissing-prototypes -Wstrict-prototypes -Wno-parentheses -Wno-switch -Wno-format-zero-length -Wno-pointer-sign -Wno-unused-const-variable -Wno-bool-operation -Wno-char-subscripts -Wno-implicit-const-int-float-conversion -Wno-microsoft-enum-forward-reference -O3 -fno-math-errno -fno-signed-zeros -mstack-alignment=16 -Qunused-arguments -Werror=implicit-function-declaration -Werror=missing-prototypes -Werror=return-type",
+      "ASFLAGS=  -O1 -Qunused-arguments",
+      "CC_C=-c",
+      "CC_E=-E -P -o $@",
+      "CC_O=-o $@",
+      "LDFLAGS=  -Wl,--as-needed -Wl,-z,noexecstack -Wl,-rpath-link=:libswresample:libswscale:libavfilter:libavdevice:libavformat:libavcodec:libavutil -Qunused-arguments",
+      "CCDEP=",
+      "CCDEP_FLAGS=",
+      "CC_DEPFLAGS=-MMD -MF $(@:.o=.d) -MT $@",
+      "CFLAGS-ffplay=",
+      "CFLAGS_HEADERS= -Wno-deprecated-declarations -Wno-unused-variable"
+    ]
+  }
+}

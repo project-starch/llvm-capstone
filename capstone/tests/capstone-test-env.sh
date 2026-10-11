@@ -79,6 +79,19 @@ mkdir -p "$CAPSTONE_TMP_ROOT"
 export CAPSTONE_QEMU_LOCK=${CAPSTONE_QEMU_LOCK:-$HOME/.capstone-locks/qemu.lock}
 mkdir -p "$(dirname -- "$CAPSTONE_QEMU_LOCK")"
 
+# capstone_with_qemu_lock <cmd...>: run cmd holding the QEMU lock, or run it as it is when the
+# caller already holds it (CAPSTONE_QEMU_LOCK_HELD=1). A runner that takes the lock itself
+# while its caller holds it waits on its own parent: under the nightly, which holds the lock
+# for its whole QEMU stage, such a test sat in flock until its -w timeout (found 2026-09-23,
+# 27 minutes into hostcall-all). CAPSTONE_QEMU_LOCK_WAIT bounds the wait (default 3600 s).
+capstone_with_qemu_lock() {
+  if [ "${CAPSTONE_QEMU_LOCK_HELD:-0}" = 1 ]; then
+    "$@"
+  else
+    CAPSTONE_QEMU_LOCK_HELD=1 flock -w "${CAPSTONE_QEMU_LOCK_WAIT:-3600}" "$CAPSTONE_QEMU_LOCK" "$@"
+  fi
+}
+
 # Is the toolchain BINARY as new as the compiler SOURCE? Once per process tree (the export
 # stops nested scripts repeating the 0.5 s ninja dry run). A stale build dir is a WARNING here,
 # not a failure -- sourcing must keep working -- but every producer script inherits the warning

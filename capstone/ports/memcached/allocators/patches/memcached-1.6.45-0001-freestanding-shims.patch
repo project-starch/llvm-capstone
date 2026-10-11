@@ -1,0 +1,130 @@
+Subject: [PATCH 1/2] Compile the slab and cache allocators against freestanding shims
+Upstream: memcached 1.6.45
+Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
+Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd
+Build-Variants: native port, Capstone domain
+Depends-On: none
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+slabs.c includes memcached.h -- 1114 lines, the whole server's header -- and
+eleven system headers; cache.c four more, and cache.h <pthread.h>. Replace
+them with the shims under ports/memcached/adapted/: mc_slabs_shim.h carries
+what slabs.c reads from memcached.h (the item and item_chunk structs, the
+ITEM_* flags, the settings fields, ADD_STAT, the empty DTrace probes), each
+cited to its upstream line; mc_slabs_libc.h what the patched allocator still
+asks of a libc; mc_cache_shim.h the same for cache.c. The mutexes are no-ops
+in a freestanding build and the host's <pthread.h> in a hosted one: the port
+is single-threaded either way, and says so.
+
+Two regions are gated on MC_PORT, which the shim defines: do_slabs_stats and
+slabs_stats, which format through the server's per-thread stats aggregate,
+and alloc_large_chunk, the huge-page preallocation that reads /proc/meminfo;
+it returns NULL, which takes upstream's own fallback in slabs_init. The
+allocator itself is untouched -- every chunk size, every push and pop is
+upstream's. This patch removes 17 lines and adds 22, 6 hunks in
+slabs.c, 1 in cache.c and 1 in cache.h.
+
+--- a/slabs.c
++++ b/slabs.c
+@@ -5,18 +5,9 @@
+  * "item" structure plus space for a small key and value. They increase by
+  * a multiplier factor from there, up to half the maximum slab size.
+  */
+-#include "memcached.h"
+-#include <sys/mman.h>
+-#include <sys/stat.h>
+-#include <sys/socket.h>
+-#include <sys/resource.h>
+-#include <fcntl.h>
+-#include <netinet/in.h>
+-#include <stdlib.h>
+-#include <stdio.h>
+-#include <string.h>
+-#include <assert.h>
+-#include <pthread.h>
++#include "mc_slabs_shim.h"
++#include "mc_slabs_libc.h"
++#include "slabs.h"
+ 
+ //#define DEBUG_SLAB_MOVER
+ /* powers-of-N allocation structures */
+@@ -99,6 +90,16 @@
+ // TODO: could this work with the restartable memory?
+ // Docs say hugepages only work with private shm allocs.
+ /* Function split out for better error path handling */
++#ifdef MC_PORT
++/* Huge-page preallocation reads /proc/meminfo and asks the host for aligned
++ * memory; a freestanding build has neither, and the port never asks for
++ * prealloc. NULL takes upstream's own fallback in slabs_init. */
++static void * alloc_large_chunk(const size_t limit)
++{
++    (void)limit;
++    return NULL;
++}
++#else
+ static void * alloc_large_chunk(const size_t limit)
+ {
+     void *ptr = NULL;
+@@ -156,6 +157,7 @@
+ #endif
+     return ptr;
+ }
++#endif /* MC_PORT */
+ 
+ unsigned int slabs_fixup(char *chunk, const int border) {
+     slabclass_t *p;
+@@ -555,6 +557,9 @@
+     return ret;
+ }
+ 
++#ifndef MC_PORT
++/* The stats formatter needs the server's per-thread stats aggregate and its
++ * APPEND_* macros; a freestanding build carries neither. */
+ /*@null@*/
+ static void do_slabs_stats(ADD_STAT add_stats, void *c) {
+     int i, total;
+@@ -609,6 +614,7 @@
+     APPEND_STAT("total_malloced", "%llu", (unsigned long long)mem_malloced);
+     add_stats(NULL, 0, NULL, 0, c);
+ }
++#endif /* MC_PORT */
+ 
+ static void *memory_allocate(size_t size) {
+     void *ret;
+@@ -671,11 +677,13 @@
+     pthread_mutex_unlock(&slabs_lock);
+ }
+ 
++#ifndef MC_PORT
+ void slabs_stats(ADD_STAT add_stats, void *c) {
+     pthread_mutex_lock(&slabs_lock);
+     do_slabs_stats(add_stats, c);
+     pthread_mutex_unlock(&slabs_lock);
+ }
++#endif /* MC_PORT */
+ 
+ static bool do_slabs_adjust_mem_limit(size_t new_mem_limit) {
+     /* Cannot adjust memory limit at runtime if prealloc'ed */
+--- a/cache.c
++++ b/cache.c
+@@ -1,8 +1,5 @@
+ /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+-#include <stdlib.h>
+-#include <string.h>
+-#include <inttypes.h>
+-#include <assert.h>
++#include "mc_cache_shim.h"
+ 
+ #ifndef NDEBUG
+ #include <signal.h>
+--- a/cache.h
++++ b/cache.h
+@@ -1,7 +1,7 @@
+ /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+ #ifndef CACHE_H
+ #define CACHE_H
+-#include <pthread.h>
++#include "mc_cache_shim.h"
+ #include "queue.h"
+ 
+ #ifndef NDEBUG

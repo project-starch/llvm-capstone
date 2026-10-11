@@ -1,0 +1,423 @@
+Subject: [PATCH 0008] Keep the GC list links as pointers where a pointer is a capability
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+PyGC_Head links every tracked object into its generation's list through two
+words, _gc_next and _gc_prev, declared uintptr_t, with flag bits in the low
+bits of the address and, during a collection, a reference count in the upper
+bits of _gc_prev. Where a pointer is a capability an integer holds only its
+address: the link was lost at the store, the pointer read back from it was
+untagged, and the first list operation that followed one (gc_list_remove, in
+every untrack) would trap. That is before any collection, so no interpreter
+can start without this.
+
+In capability builds the words become char *, and every operation on them
+goes through four helpers in pycore_gc.h that are pointer arithmetic on the
+address: _PyGCWord_BITS reads the bits, _PyGCWord_MAKE builds a word from a
+pointer (whose capability it takes) and flag bits, _PyGCWord_SETBITS replaces
+bits and keeps the word's capability, _PyGCWord_PTR strips flags. A count in
+_gc_prev is a word no one dereferences; _PyGCHead_SET_PREV therefore takes the
+capability from the new pointer and only the flag bits from the old word.
+Elsewhere the helpers expand to exactly the upstream expressions.
+
+_Py_GC_WORD_AS_POINTER selects the pointer representation on any platform.
+Measured on x86-64 with it defined: test_gc, test_weakref, test_finalization
+and 17 more suites pass (patches 0001-0009, 4952 tests). The check fires: with
+_PyGCWord_PTR made to keep the flag bits, the build's own _freeze_module
+segfaults.
+
+PyGC_Head grows from 16 to 32 bytes on capstone64, two capabilities, and
+keeps the object behind it on the 16-byte boundary a capability needs.
+
+--- a/Include/internal/pycore_gc.h
++++ b/Include/internal/pycore_gc.h
+@@ -10,15 +10,54 @@
+ 
+ #include "pycore_freelist.h"   // _PyFreeListState
+ 
++/* A GC word holds a pointer to another GC head with flag bits in the low bits
++ * of its address, or, during a collection, a count in the upper bits.
++ *
++ * Upstream stores it as uintptr_t. Where a pointer is a capability (capstone64:
++ * uintptr_t is the 8-byte address of a 16-byte capability) an integer cannot
++ * hold the pointer at all: what is stored is the address, and the pointer read
++ * back from it is untagged and traps when used. There the word is a char *
++ * instead, and every flag or count operation is pointer arithmetic on its
++ * address, which keeps the capability. _Py_GC_WORD_AS_POINTER selects that
++ * representation on any platform, so the capability path can be tested where
++ * the tests run.
++ *
++ * The helpers:
++ *   _PyGCWord_BITS(w)           the address bits, for tests and counts
++ *   _PyGCWord_MAKE(p, bits)     a word pointing at p, with bits (flags that are
++ *                               clear in p's address) set; the capability is p's
++ *   _PyGCWord_SETBITS(w, m, v)  w with the bits in mask m replaced by v; the
++ *                               capability stays w's
++ *   _PyGCWord_PTR(w, m)         the pointer in w, with the flag bits m cleared
++ */
++#if _Py_SIZEOF_ADDRESS < SIZEOF_VOID_P && !defined(_Py_GC_WORD_AS_POINTER)
++#  define _Py_GC_WORD_AS_POINTER 1
++#endif
++#ifdef _Py_GC_WORD_AS_POINTER
++typedef char *_PyGCWord;
++#  define _PyGCWord_BITS(w) ((uintptr_t)(w))
++#  define _PyGCWord_MAKE(p, bits) ((char *)(p) + (bits))
++#  define _PyGCWord_SETBITS(w, m, v) \
++    ((w) + (Py_ssize_t)((uintptr_t)(v) - ((uintptr_t)(w) & (uintptr_t)(m))))
++#  define _PyGCWord_PTR(w, m) ((void *)((w) - ((uintptr_t)(w) & (uintptr_t)(m))))
++#else
++typedef uintptr_t _PyGCWord;
++#  define _PyGCWord_BITS(w) ((uintptr_t)(w))
++#  define _PyGCWord_MAKE(p, bits) ((uintptr_t)(p) | (uintptr_t)(bits))
++#  define _PyGCWord_SETBITS(w, m, v) \
++    (((w) & ~(uintptr_t)(m)) | (uintptr_t)(v))
++#  define _PyGCWord_PTR(w, m) ((void *)((w) & ~(uintptr_t)(m)))
++#endif
++
+ /* GC information is stored BEFORE the object structure. */
+ typedef struct {
+     // Pointer to next object in the list.
+     // 0 means the object is not tracked
+-    uintptr_t _gc_next;
++    _PyGCWord _gc_next;
+ 
+     // Pointer to previous object in the list.
+     // Lowest two bits are used for flags documented later.
+-    uintptr_t _gc_prev;
++    _PyGCWord _gc_prev;
+ } PyGC_Head;
+ 
+ #define _PyGC_Head_UNUSED PyGC_Head
+@@ -172,22 +211,22 @@
+ // Lowest bit of _gc_next is used for flags only in GC.
+ // But it is always 0 for normal code.
+ static inline PyGC_Head* _PyGCHead_NEXT(PyGC_Head *gc) {
+-    uintptr_t next = gc->_gc_next;
+-    return (PyGC_Head*)next;
++    return (PyGC_Head*)_PyGCWord_PTR(gc->_gc_next, 0);
+ }
+ static inline void _PyGCHead_SET_NEXT(PyGC_Head *gc, PyGC_Head *next) {
+-    gc->_gc_next = (uintptr_t)next;
++    gc->_gc_next = _PyGCWord_MAKE(next, 0);
+ }
+ 
+ // Lowest two bits of _gc_prev is used for _PyGC_PREV_MASK_* flags.
+ static inline PyGC_Head* _PyGCHead_PREV(PyGC_Head *gc) {
+-    uintptr_t prev = (gc->_gc_prev & _PyGC_PREV_MASK);
+-    return (PyGC_Head*)prev;
++    return (PyGC_Head*)_PyGCWord_PTR(gc->_gc_prev, ~_PyGC_PREV_MASK);
+ }
+ static inline void _PyGCHead_SET_PREV(PyGC_Head *gc, PyGC_Head *prev) {
+-    uintptr_t uprev = (uintptr_t)prev;
+-    assert((uprev & ~_PyGC_PREV_MASK) == 0);
+-    gc->_gc_prev = ((gc->_gc_prev & ~_PyGC_PREV_MASK) | uprev);
++    // The pointer, and so the capability, is prev's; only the flag bits are
++    // carried over from the old word, which may hold a count, not a pointer.
++    assert(((uintptr_t)prev & ~_PyGC_PREV_MASK) == 0);
++    gc->_gc_prev = _PyGCWord_MAKE(
++        prev, _PyGCWord_BITS(gc->_gc_prev) & ~_PyGC_PREV_MASK);
+ }
+ 
+ static inline int _PyGC_FINALIZED(PyObject *op) {
+@@ -195,7 +234,7 @@
+     return _PyObject_HAS_GC_BITS(op, _PyGC_BITS_FINALIZED);
+ #else
+     PyGC_Head *gc = _Py_AS_GC(op);
+-    return ((gc->_gc_prev & _PyGC_PREV_MASK_FINALIZED) != 0);
++    return ((_PyGCWord_BITS(gc->_gc_prev) & _PyGC_PREV_MASK_FINALIZED) != 0);
+ #endif
+ }
+ static inline void _PyGC_SET_FINALIZED(PyObject *op) {
+@@ -203,7 +242,8 @@
+     _PyObject_SET_GC_BITS(op, _PyGC_BITS_FINALIZED);
+ #else
+     PyGC_Head *gc = _Py_AS_GC(op);
+-    gc->_gc_prev |= _PyGC_PREV_MASK_FINALIZED;
++    gc->_gc_prev = _PyGCWord_SETBITS(gc->_gc_prev, _PyGC_PREV_MASK_FINALIZED,
++                                     _PyGC_PREV_MASK_FINALIZED);
+ #endif
+ }
+ static inline void _PyGC_CLEAR_FINALIZED(PyObject *op) {
+@@ -211,7 +251,7 @@
+     _PyObject_CLEAR_GC_BITS(op, _PyGC_BITS_FINALIZED);
+ #else
+     PyGC_Head *gc = _Py_AS_GC(op);
+-    gc->_gc_prev &= ~_PyGC_PREV_MASK_FINALIZED;
++    gc->_gc_prev = _PyGCWord_SETBITS(gc->_gc_prev, _PyGC_PREV_MASK_FINALIZED, 0);
+ #endif
+ }
+ 
+--- a/Include/internal/pycore_object.h
++++ b/Include/internal/pycore_object.h
+@@ -378,17 +378,17 @@
+ #else
+     PyGC_Head *gc = _Py_AS_GC(op);
+     _PyObject_ASSERT_FROM(op,
+-                          (gc->_gc_prev & _PyGC_PREV_MASK_COLLECTING) == 0,
++                          (_PyGCWord_BITS(gc->_gc_prev) & _PyGC_PREV_MASK_COLLECTING) == 0,
+                           "object is in generation which is garbage collected",
+                           filename, lineno, __func__);
+ 
+     PyInterpreterState *interp = _PyInterpreterState_GET();
+     PyGC_Head *generation0 = interp->gc.generation0;
+-    PyGC_Head *last = (PyGC_Head*)(generation0->_gc_prev);
++    PyGC_Head *last = (PyGC_Head*)_PyGCWord_PTR(generation0->_gc_prev, 0);
+     _PyGCHead_SET_NEXT(last, gc);
+     _PyGCHead_SET_PREV(gc, last);
+     _PyGCHead_SET_NEXT(gc, generation0);
+-    generation0->_gc_prev = (uintptr_t)gc;
++    generation0->_gc_prev = _PyGCWord_MAKE(gc, 0);
+ #endif
+ }
+ 
+@@ -422,7 +422,7 @@
+     _PyGCHead_SET_NEXT(prev, next);
+     _PyGCHead_SET_PREV(next, prev);
+     gc->_gc_next = 0;
+-    gc->_gc_prev &= _PyGC_PREV_MASK_FINALIZED;
++    gc->_gc_prev = _PyGCWord_SETBITS(gc->_gc_prev, ~(uintptr_t)_PyGC_PREV_MASK_FINALIZED, 0);
+ #endif
+ }
+ 
+--- a/Python/gc.c
++++ b/Python/gc.c
+@@ -56,34 +56,35 @@
+ static inline int
+ gc_is_collecting(PyGC_Head *g)
+ {
+-    return (g->_gc_prev & PREV_MASK_COLLECTING) != 0;
++    return (_PyGCWord_BITS(g->_gc_prev) & PREV_MASK_COLLECTING) != 0;
+ }
+ 
+ static inline void
+ gc_clear_collecting(PyGC_Head *g)
+ {
+-    g->_gc_prev &= ~PREV_MASK_COLLECTING;
++    g->_gc_prev = _PyGCWord_SETBITS(g->_gc_prev, PREV_MASK_COLLECTING, 0);
+ }
+ 
+ static inline Py_ssize_t
+ gc_get_refs(PyGC_Head *g)
+ {
+-    return (Py_ssize_t)(g->_gc_prev >> _PyGC_PREV_SHIFT);
++    return (Py_ssize_t)(_PyGCWord_BITS(g->_gc_prev) >> _PyGC_PREV_SHIFT);
+ }
+ 
+ static inline void
+ gc_set_refs(PyGC_Head *g, Py_ssize_t refs)
+ {
+-    g->_gc_prev = (g->_gc_prev & ~_PyGC_PREV_MASK)
+-        | ((uintptr_t)(refs) << _PyGC_PREV_SHIFT);
++    g->_gc_prev = _PyGCWord_SETBITS(g->_gc_prev, _PyGC_PREV_MASK,
++                                    (uintptr_t)(refs) << _PyGC_PREV_SHIFT);
+ }
+ 
+ static inline void
+ gc_reset_refs(PyGC_Head *g, Py_ssize_t refs)
+ {
+-    g->_gc_prev = (g->_gc_prev & _PyGC_PREV_MASK_FINALIZED)
+-        | PREV_MASK_COLLECTING
+-        | ((uintptr_t)(refs) << _PyGC_PREV_SHIFT);
++    g->_gc_prev = _PyGCWord_SETBITS(g->_gc_prev,
++                                    ~(uintptr_t)_PyGC_PREV_MASK_FINALIZED,
++                                    PREV_MASK_COLLECTING
++                                    | ((uintptr_t)(refs) << _PyGC_PREV_SHIFT));
+ }
+ 
+ static inline void
+@@ -112,8 +113,8 @@
+ {
+ #define INIT_HEAD(GEN) \
+     do { \
+-        GEN.head._gc_next = (uintptr_t)&GEN.head; \
+-        GEN.head._gc_prev = (uintptr_t)&GEN.head; \
++        GEN.head._gc_next = _PyGCWord_MAKE(&GEN.head, 0); \
++        GEN.head._gc_prev = _PyGCWord_MAKE(&GEN.head, 0); \
+     } while (0)
+ 
+     for (int i = 0; i < NUM_GENERATIONS; i++) {
+@@ -204,21 +205,21 @@
+ {
+     // List header must not have flags.
+     // We can assign pointer by simple cast.
+-    list->_gc_prev = (uintptr_t)list;
+-    list->_gc_next = (uintptr_t)list;
++    list->_gc_prev = _PyGCWord_MAKE(list, 0);
++    list->_gc_next = _PyGCWord_MAKE(list, 0);
+ }
+ 
+ static inline int
+ gc_list_is_empty(PyGC_Head *list)
+ {
+-    return (list->_gc_next == (uintptr_t)list);
++    return (_PyGCWord_BITS(list->_gc_next) == (uintptr_t)list);
+ }
+ 
+ /* Append `node` to `list`. */
+ static inline void
+ gc_list_append(PyGC_Head *node, PyGC_Head *list)
+ {
+-    PyGC_Head *last = (PyGC_Head *)list->_gc_prev;
++    PyGC_Head *last = (PyGC_Head *)_PyGCWord_PTR(list->_gc_prev, 0);
+ 
+     // last <-> node
+     _PyGCHead_SET_PREV(node, last);
+@@ -226,7 +227,7 @@
+ 
+     // node <-> list
+     _PyGCHead_SET_NEXT(node, list);
+-    list->_gc_prev = (uintptr_t)node;
++    list->_gc_prev = _PyGCWord_MAKE(node, 0);
+ }
+ 
+ /* Remove `node` from the gc list it's currently in. */
+@@ -257,10 +258,10 @@
+ 
+     /* Relink at end of new list. */
+     // list must not have flags.  So we can skip macros.
+-    PyGC_Head *to_prev = (PyGC_Head*)list->_gc_prev;
++    PyGC_Head *to_prev = (PyGC_Head*)_PyGCWord_PTR(list->_gc_prev, 0);
+     _PyGCHead_SET_PREV(node, to_prev);
+     _PyGCHead_SET_NEXT(to_prev, node);
+-    list->_gc_prev = (uintptr_t)node;
++    list->_gc_prev = _PyGCWord_MAKE(node, 0);
+     _PyGCHead_SET_NEXT(node, list);
+ }
+ 
+@@ -343,8 +344,8 @@
+ static void
+ validate_list(PyGC_Head *head, enum flagstates flags)
+ {
+-    assert((head->_gc_prev & PREV_MASK_COLLECTING) == 0);
+-    assert((head->_gc_next & NEXT_MASK_UNREACHABLE) == 0);
++    assert((_PyGCWord_BITS(head->_gc_prev) & PREV_MASK_COLLECTING) == 0);
++    assert((_PyGCWord_BITS(head->_gc_next) & NEXT_MASK_UNREACHABLE) == 0);
+     uintptr_t prev_value = 0, next_value = 0;
+     switch (flags) {
+         case collecting_clear_unreachable_clear:
+@@ -366,11 +367,11 @@
+     PyGC_Head *gc = GC_NEXT(head);
+     while (gc != head) {
+         PyGC_Head *trueprev = GC_PREV(gc);
+-        PyGC_Head *truenext = (PyGC_Head *)(gc->_gc_next  & ~NEXT_MASK_UNREACHABLE);
++        PyGC_Head *truenext = (PyGC_Head *)_PyGCWord_PTR(gc->_gc_next, NEXT_MASK_UNREACHABLE);
+         assert(truenext != NULL);
+         assert(trueprev == prev);
+-        assert((gc->_gc_prev & PREV_MASK_COLLECTING) == prev_value);
+-        assert((gc->_gc_next & NEXT_MASK_UNREACHABLE) == next_value);
++        assert((_PyGCWord_BITS(gc->_gc_prev) & PREV_MASK_COLLECTING) == prev_value);
++        assert((_PyGCWord_BITS(gc->_gc_next) & NEXT_MASK_UNREACHABLE) == next_value);
+         prev = gc;
+         gc = truenext;
+     }
+@@ -491,7 +492,7 @@
+     // an untracked object.
+     _PyObject_ASSERT(op, gc->_gc_next != 0);
+ 
+-    if (gc->_gc_next & NEXT_MASK_UNREACHABLE) {
++    if (_PyGCWord_BITS(gc->_gc_next) & NEXT_MASK_UNREACHABLE) {
+         /* This had gc_refs = 0 when move_unreachable got
+          * to it, but turns out it's reachable after all.
+          * Move it back to move_unreachable's 'young' list,
+@@ -501,11 +502,11 @@
+         // Manually unlink gc from unreachable list because the list functions
+         // don't work right in the presence of NEXT_MASK_UNREACHABLE flags.
+         PyGC_Head *prev = GC_PREV(gc);
+-        PyGC_Head *next = (PyGC_Head*)(gc->_gc_next & ~NEXT_MASK_UNREACHABLE);
++        PyGC_Head *next = (PyGC_Head*)_PyGCWord_PTR(gc->_gc_next, NEXT_MASK_UNREACHABLE);
+         _PyObject_ASSERT(FROM_GC(prev),
+-                         prev->_gc_next & NEXT_MASK_UNREACHABLE);
++                         _PyGCWord_BITS(prev->_gc_next) & NEXT_MASK_UNREACHABLE);
+         _PyObject_ASSERT(FROM_GC(next),
+-                         next->_gc_next & NEXT_MASK_UNREACHABLE);
++                         _PyGCWord_BITS(next->_gc_next) & NEXT_MASK_UNREACHABLE);
+         prev->_gc_next = gc->_gc_next;  // copy NEXT_MASK_UNREACHABLE
+         _PyGCHead_SET_PREV(next, prev);
+ 
+@@ -603,17 +604,18 @@
+             // But this may pollute the unreachable list head's 'next' pointer
+             // too. That's semantically senseless but expedient here - the
+             // damage is repaired when this function ends.
+-            last->_gc_next = (NEXT_MASK_UNREACHABLE | (uintptr_t)gc);
++            last->_gc_next = _PyGCWord_MAKE(gc, NEXT_MASK_UNREACHABLE);
+             _PyGCHead_SET_PREV(gc, last);
+-            gc->_gc_next = (NEXT_MASK_UNREACHABLE | (uintptr_t)unreachable);
+-            unreachable->_gc_prev = (uintptr_t)gc;
++            gc->_gc_next = _PyGCWord_MAKE(unreachable, NEXT_MASK_UNREACHABLE);
++            unreachable->_gc_prev = _PyGCWord_MAKE(gc, 0);
+         }
+-        gc = (PyGC_Head*)prev->_gc_next;
++        gc = (PyGC_Head*)_PyGCWord_PTR(prev->_gc_next, 0);
+     }
+     // young->_gc_prev must be last element remained in the list.
+-    young->_gc_prev = (uintptr_t)prev;
++    young->_gc_prev = _PyGCWord_MAKE(prev, 0);
+     // don't let the pollution of the list head's next pointer leak
+-    unreachable->_gc_next &= ~NEXT_MASK_UNREACHABLE;
++    unreachable->_gc_next = _PyGCWord_SETBITS(unreachable->_gc_next,
++                                              NEXT_MASK_UNREACHABLE, 0);
+ }
+ 
+ static void
+@@ -663,7 +665,7 @@
+     PyGC_Head *gc, *next;
+     _PyObject_ASSERT(
+         FROM_GC(unreachable),
+-        (unreachable->_gc_next & NEXT_MASK_UNREACHABLE) == 0);
++        (_PyGCWord_BITS(unreachable->_gc_next) & NEXT_MASK_UNREACHABLE) == 0);
+ 
+     /* March over unreachable.  Move objects with finalizers into
+      * `finalizers`.
+@@ -671,9 +673,9 @@
+     for (gc = GC_NEXT(unreachable); gc != unreachable; gc = next) {
+         PyObject *op = FROM_GC(gc);
+ 
+-        _PyObject_ASSERT(op, gc->_gc_next & NEXT_MASK_UNREACHABLE);
+-        gc->_gc_next &= ~NEXT_MASK_UNREACHABLE;
+-        next = (PyGC_Head*)gc->_gc_next;
++        _PyObject_ASSERT(op, _PyGCWord_BITS(gc->_gc_next) & NEXT_MASK_UNREACHABLE);
++        gc->_gc_next = _PyGCWord_SETBITS(gc->_gc_next, NEXT_MASK_UNREACHABLE, 0);
++        next = (PyGC_Head*)_PyGCWord_PTR(gc->_gc_next, 0);
+ 
+         if (has_legacy_finalizer(op)) {
+             gc_clear_collecting(gc);
+@@ -691,13 +693,14 @@
+         ((uintptr_t)unreachable & NEXT_MASK_UNREACHABLE) == 0);
+     _PyObject_ASSERT(
+         FROM_GC(unreachable),
+-        (unreachable->_gc_next & NEXT_MASK_UNREACHABLE) == 0);
++        (_PyGCWord_BITS(unreachable->_gc_next) & NEXT_MASK_UNREACHABLE) == 0);
+ 
+     PyGC_Head *gc, *next;
+     for (gc = GC_NEXT(unreachable); gc != unreachable; gc = next) {
+-        _PyObject_ASSERT((PyObject*)FROM_GC(gc), gc->_gc_next & NEXT_MASK_UNREACHABLE);
+-        gc->_gc_next &= ~NEXT_MASK_UNREACHABLE;
+-        next = (PyGC_Head*)gc->_gc_next;
++        _PyObject_ASSERT((PyObject*)FROM_GC(gc),
++                         _PyGCWord_BITS(gc->_gc_next) & NEXT_MASK_UNREACHABLE);
++        gc->_gc_next = _PyGCWord_SETBITS(gc->_gc_next, NEXT_MASK_UNREACHABLE, 0);
++        next = (PyGC_Head*)_PyGCWord_PTR(gc->_gc_next, 0);
+     }
+     validate_list(unreachable, collecting_set_unreachable_clear);
+ }
+@@ -871,7 +874,7 @@
+         PyObject *temp;
+         PyObject *callback;
+ 
+-        gc = (PyGC_Head*)wrcb_to_call._gc_next;
++        gc = (PyGC_Head*)_PyGCWord_PTR(wrcb_to_call._gc_next, 0);
+         op = FROM_GC(gc);
+         _PyObject_ASSERT(op, PyWeakref_Check(op));
+         wr = (PyWeakReference *)op;
+@@ -899,7 +902,7 @@
+          * ours).
+          */
+         Py_DECREF(op);
+-        if (wrcb_to_call._gc_next == (uintptr_t)gc) {
++        if (_PyGCWord_BITS(wrcb_to_call._gc_next) == (uintptr_t)gc) {
+             /* object is still alive -- move it */
+             gc_list_move(gc, old);
+         }

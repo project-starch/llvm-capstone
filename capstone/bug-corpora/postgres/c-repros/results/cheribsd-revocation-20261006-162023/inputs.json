@@ -1,0 +1,15 @@
+{
+  "arm": "cheribsd-revocation",
+  "kernel": "15.0-CURRENT",
+  "revocation_default": "1",
+  "revocation_every_free_default": "0",
+  "binaries": "/home/zephyr/work/pg-corpus/capstone/bug-corpora/postgres/c-repros/out-cheri",
+  "started_utc": "20261006-162023",
+  "positive_control": {
+    "case": "00_CVE-2026-6477_pqfn_unbounded_result_copy",
+    "exit": 162,
+    "kind": "a corpus case doing double duty: a 4096-byte write into an 8-byte malloc'd object, which must raise SIGPROT if bounds are enforced"
+  },
+  "cases": 5,
+  "scored": 5
+}
