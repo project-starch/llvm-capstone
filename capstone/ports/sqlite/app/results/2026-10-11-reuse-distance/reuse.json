@@ -1,0 +1,394 @@
+{
+ "program": "SQLite 3.22.0",
+ "pre_registration": "16d2171a3edc",
+ "workload": "speedtest1 --heap 8388608 64 --size 1 st.db (main, 8 MiB memsys5 heap)",
+ "boundaries": {
+  "memsys5": {
+   "stock": {
+    "buckets": {
+     "1": 714,
+     "2": 384,
+     "3": 402,
+     "4": 396,
+     "5": 231,
+     "6": 189,
+     "7": 98,
+     "8": 55,
+     "9": 72,
+     "10": 37,
+     "11": 2,
+     "12": 4
+    },
+    "issues": 3118,
+    "releases": 3118,
+    "reuses": 2584,
+    "distinct_starts": 534,
+    "attempts": 3118,
+    "error": 0
+   },
+   "protected": {
+    "buckets": {
+     "1": 913,
+     "2": 537,
+     "3": 438,
+     "4": 440,
+     "5": 232,
+     "6": 210,
+     "7": 103,
+     "8": 72,
+     "9": 52,
+     "10": 66,
+     "11": 12,
+     "12": 21
+    },
+    "issues": 3583,
+    "releases": 3583,
+    "reuses": 3096,
+    "distinct_starts": 487,
+    "attempts": 3583,
+    "error": 0
+   }
+  },
+  "lookaside": {
+   "stock": {
+    "buckets": {
+     "1": 6822,
+     "2": 9391,
+     "3": 4632,
+     "4": 1490,
+     "5": 742,
+     "6": 962,
+     "7": 82,
+     "8": 19,
+     "9": 36,
+     "10": 38,
+     "11": 165,
+     "12": 105,
+     "13": 64
+    },
+    "issues": 24630,
+    "releases": 24630,
+    "reuses": 24548,
+    "distinct_starts": 82,
+    "attempts": 24630,
+    "error": 0
+   },
+   "protected": {
+    "buckets": {
+     "1": 6822,
+     "2": 9391,
+     "3": 4632,
+     "4": 1490,
+     "5": 742,
+     "6": 962,
+     "7": 82,
+     "8": 19,
+     "9": 36,
+     "10": 38,
+     "11": 165,
+     "12": 105,
+     "13": 64
+    },
+    "issues": 24630,
+    "releases": 24630,
+    "reuses": 24548,
+    "distinct_starts": 82,
+    "attempts": 24630,
+    "error": 0
+   }
+  }
+ },
+ "observer_capacity": {
+  "memsys5": 131072,
+  "lookaside": 4096
+ },
+ "repetitions": {
+  "stock": [
+   {
+    "rep": 2,
+    "guest_wall_s": 30,
+    "boundaries": {
+     "memsys5": {
+      "buckets": {
+       "1": 714,
+       "2": 384,
+       "3": 402,
+       "4": 396,
+       "5": 231,
+       "6": 189,
+       "7": 98,
+       "8": 55,
+       "9": 72,
+       "10": 37,
+       "11": 2,
+       "12": 4
+      },
+      "issues": 3118,
+      "releases": 3118,
+      "reuses": 2584,
+      "distinct_starts": 534,
+      "attempts": 3118,
+      "error": 0
+     },
+     "lookaside": {
+      "buckets": {
+       "1": 6822,
+       "2": 9391,
+       "3": 4632,
+       "4": 1490,
+       "5": 742,
+       "6": 962,
+       "7": 82,
+       "8": 19,
+       "9": 36,
+       "10": 38,
+       "11": 165,
+       "12": 105,
+       "13": 64
+      },
+      "issues": 24630,
+      "releases": 24630,
+      "reuses": 24548,
+      "distinct_starts": 82,
+      "attempts": 24630,
+      "error": 0
+     }
+    }
+   },
+   {
+    "rep": 3,
+    "guest_wall_s": 29,
+    "boundaries": {
+     "memsys5": {
+      "buckets": {
+       "1": 714,
+       "2": 384,
+       "3": 402,
+       "4": 396,
+       "5": 231,
+       "6": 189,
+       "7": 98,
+       "8": 55,
+       "9": 72,
+       "10": 37,
+       "11": 2,
+       "12": 4
+      },
+      "issues": 3118,
+      "releases": 3118,
+      "reuses": 2584,
+      "distinct_starts": 534,
+      "attempts": 3118,
+      "error": 0
+     },
+     "lookaside": {
+      "buckets": {
+       "1": 6822,
+       "2": 9391,
+       "3": 4632,
+       "4": 1490,
+       "5": 742,
+       "6": 962,
+       "7": 82,
+       "8": 19,
+       "9": 36,
+       "10": 38,
+       "11": 165,
+       "12": 105,
+       "13": 64
+      },
+      "issues": 24630,
+      "releases": 24630,
+      "reuses": 24548,
+      "distinct_starts": 82,
+      "attempts": 24630,
+      "error": 0
+     }
+    }
+   }
+  ],
+  "protected": [
+   {
+    "rep": 2,
+    "guest_wall_s": 32,
+    "boundaries": {
+     "memsys5": {
+      "buckets": {
+       "1": 913,
+       "2": 537,
+       "3": 438,
+       "4": 440,
+       "5": 232,
+       "6": 210,
+       "7": 103,
+       "8": 72,
+       "9": 52,
+       "10": 66,
+       "11": 12,
+       "12": 21
+      },
+      "issues": 3583,
+      "releases": 3583,
+      "reuses": 3096,
+      "distinct_starts": 487,
+      "attempts": 3583,
+      "error": 0
+     },
+     "lookaside": {
+      "buckets": {
+       "1": 6822,
+       "2": 9391,
+       "3": 4632,
+       "4": 1490,
+       "5": 742,
+       "6": 962,
+       "7": 82,
+       "8": 19,
+       "9": 36,
+       "10": 38,
+       "11": 165,
+       "12": 105,
+       "13": 64
+      },
+      "issues": 24630,
+      "releases": 24630,
+      "reuses": 24548,
+      "distinct_starts": 82,
+      "attempts": 24630,
+      "error": 0
+     }
+    }
+   },
+   {
+    "rep": 3,
+    "guest_wall_s": 31,
+    "boundaries": {
+     "memsys5": {
+      "buckets": {
+       "1": 913,
+       "2": 537,
+       "3": 438,
+       "4": 440,
+       "5": 232,
+       "6": 210,
+       "7": 103,
+       "8": 72,
+       "9": 52,
+       "10": 66,
+       "11": 12,
+       "12": 21
+      },
+      "issues": 3583,
+      "releases": 3583,
+      "reuses": 3096,
+      "distinct_starts": 487,
+      "attempts": 3583,
+      "error": 0
+     },
+     "lookaside": {
+      "buckets": {
+       "1": 6822,
+       "2": 9391,
+       "3": 4632,
+       "4": 1490,
+       "5": 742,
+       "6": 962,
+       "7": 82,
+       "8": 19,
+       "9": 36,
+       "10": 38,
+       "11": 165,
+       "12": 105,
+       "13": 64
+      },
+      "issues": 24630,
+      "releases": 24630,
+      "reuses": 24548,
+      "distinct_starts": 82,
+      "attempts": 24630,
+      "error": 0
+     }
+    }
+   }
+  ]
+ },
+ "repetitions_identical_to_planned_boot": {
+  "stock": true,
+  "protected": true
+ },
+ "images": {
+  "stock": "147fdcd3074bbcb0e3224595f4821b7023c28103a068e9e244bbb06c7f9a27de",
+  "protected": "c6a1a0f85f7e38360a7dd9acef6206aff8d09345cdbe301579722a34534db4a5"
+ },
+ "engine_sources": {
+  "stock": "01d2f0fb2378d2cf1b351e83938921fd7d125cdc678d7dc63b49b0e865ec1a08",
+  "protected": "a0bd2e89f4c2bd72c2da1c500bc68bbcca5577cc010cd7ed50203d20c2bc743d"
+ },
+ "sanity": {
+  "stock": {
+   "exit": 0,
+   "domain_fault": false,
+   "completed": true,
+   "rmmod": 0,
+   "phases": 32,
+   "phases_equal_same_answers_native": true,
+   "guest_wall_s": 29,
+   "process_vm_stats": "arenas=9 pages=2405 peak=4454 nodes=30 steps=35159 faults=2066 collections=0 reclaimed=0 rounds=15275 bytes_in=1987050 bytes_out=773987 node_bytes=28672 node_capacity=1024 node_growths=0 launch_ns=1702590100 elapsed_ns=27588883400",
+   "launcher_stats_after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 30,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 30,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   }
+  },
+  "protected": {
+   "exit": 0,
+   "domain_fault": false,
+   "completed": true,
+   "rmmod": 0,
+   "phases": 32,
+   "phases_equal_same_answers_native": true,
+   "guest_wall_s": 29,
+   "process_vm_stats": "arenas=9 pages=2405 peak=4454 nodes=28247 steps=35225 faults=2066 collections=6 reclaimed=27923 rounds=15275 bytes_in=1987053 bytes_out=773987 node_bytes=94208 node_capacity=5120 node_growths=1 launch_ns=1690446900 elapsed_ns=27587565800",
+   "launcher_stats_after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 4862,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 28247,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 6,
+    "nodes_reclaimed": 27923
+   }
+  }
+ },
+ "platform": {
+  "qemu-system-riscv64": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "clang": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "gate.sh stock": "70c35aa432d079b5101871e3b97c67b4c19f9a805556ac6f12ee6dbca447862b",
+  "gate.sh protected": "10dc9a1c160079ef6958296dd4f00b5db948352d0ebc3a8d32898c2c0e064f51"
+ }
+}
