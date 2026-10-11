@@ -1719,6 +1719,18 @@ What each reading would mean:
 - v14 loses: the M-mode rdtime emulation path.
 - v15 loses: any block, however short.
 
+## B3h RESULT (2026-10-11 18:15-18:20, firmware da8de46ecf75): a context switch loses the state, traps alone do not
+- **Lose 12 of 12:** v12 (a pure integer loop of ~1 s, no calls) and v15 (a 10 ms nanosleep).
+- **Hold 0 of 12:** v13 (2000 getppid back to back) and v14 (2000 clock_gettime, each an M-mode rdtime emulation on
+  this board).
+- Repeats: v4-v6 lose (N=3), v8-v11 lose (N=2), v0-v3 hold (N=3), and v7 reads exactly 1 (N=3).
+- Reading: thousands of S-mode and M-mode traps do not lose the registers. Every variant that blocks, or runs long
+  enough to be preempted, does. That is a context switch, and the registers come back as an older copy (boot C:
+  fs0 = DBL_MAX, the caller's earlier value).
+- Not yet settled, and under audit before it goes into the registry:
+  - mc-harness's t0 survived a blocking waitpid on the same bitstream;
+  - in these boots an "older copy" and a "zeroed" register both read fs0 = 0.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
