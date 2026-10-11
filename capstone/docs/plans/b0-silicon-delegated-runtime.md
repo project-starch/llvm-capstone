@@ -1790,6 +1790,33 @@ What each board reading would mean:
 - ? anywhere: zeroed or garbage, not an older copy.
 - k must read I except fs5, or the run is void.
 
+## B3i RESULT (2026-10-11 18:53-18:58, firmware f542f78ce769): the kernel never sees FS Dirty; candidate root cause in commit_stage
+- b0-stats and b0-stats2: retval 0. k (the control): I except fs5, as designed.
+- n (nothing): IIIIIIIIIIII with 0 switches.
+- **w, l, z: 000000000000**, with switches vol 1, invol 7 and vol 1 respectively.
+- **s, the signal, with ZERO switches: the registers after sigreturn read 000000000000, and the signal frame read in the
+  handler reads 000000000000.**
+- **f: the registers read 000000000000 (vol 1), and the fork child reads 000000000000.**
+- No register ever read C (the loads are not undone) or ? (nothing is garbage). The lost state is the kernel's stored
+  copy, zeros here.
+- Reading:
+  - Linux copies the FP state into a signal frame, and into a fork child, only if the sstatus captured at trap entry
+    shows FS Dirty. Both read the stale copy, with no context switch at all.
+  - So FS is not Dirty after user-mode fld writes, and every FP save is skipped: at switch-out, signal and fork. Any
+    later restore loads a stale copy. A context switch is one way to get a restore, not the cause.
+- **Candidate root cause (source reading, plus upstream's own fix):** commit_stage.sv:166-169 at 0568f93a9.
+  - The expression is `dirty_fp_state_o |= commit_ack_o[i] & (FPU or FP-destination) | fu == ACCEL && vfp`, and in
+    SystemVerilog `&&` binds looser than `|`. So it is `(... | fu == ACCEL) && vfp`, which is 0 without Ara.
+  - No FP instruction sets FS Dirty; only FP CSR writes do (dirty_fp_state_csr, csr_regfile.sv:1208-1240). Boot C's
+    one successful save followed its arith loop's frflags/fsflags.
+  - Upstream CVA6 fixed exactly this in openhwgroup/cva6 2700d14, "Indicate dirty in mstatus.FS correctly (#2936)",
+    2025-05-19: "fixes incorrect parenthesis, causing dirty_fp_state_o not to be set on floating point instructions
+    such as fld". The expression came from upstream 513bb91f8 (2023-07-10), is in our fork base, and is on every branch.
+  - With the RTL lane: a sim confirmation (FS=Clean, fld, read sstatus) and a fix branch for the next bitstream.
+  - On that bitstream, B3i is the board confirmation: all I everywhere.
+- S-19's narrowed wording (the B3h audit) holds, and is now superseded by this reading. The trigger is any FP save,
+  not a switch.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
