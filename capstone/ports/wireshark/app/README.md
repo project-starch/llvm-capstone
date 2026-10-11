@@ -28,6 +28,11 @@ physical profile `TSAPP_HEAP=level0|shrink` selects the first-fit heap without o
 with per-object bounds, for both `host/build-domain.sh` and the runner. The Sublet
 heap arm (`TSAPP_HEAP=sublet`, `runtime/sublet_heap.c`, and patch 0007, which shrank
 wmem's blocks to fit its pool) was removed on 2026-10-11; its runs stay in `results/`.
+On the virtual profile, `TSAPP_SUBLET=1` builds tshark with wmem protected by the wmem port's
+patch 0001 (`host/cross-build.sh` applies it at fuzz 0 after this port's patches and puts
+`capstone/runtime/include` on the include path): every `block` and `block_fast` object is handed
+out as a Sublet child lifetime of its block and revoked by free, realloc and the reset that ends
+its pool. `build-virtual.sh tshark` records such an image as the nested build.
 
 `host/build-domain.sh` gates every image: no undefined weak symbol, and no constructor section
 outside the arrays the runtime walks. **Open:** the `sysalloc-none` (`TSAPP_HEAP=level0`) and `sysalloc-bounds`

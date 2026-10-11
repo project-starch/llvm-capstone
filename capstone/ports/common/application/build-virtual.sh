@@ -45,6 +45,7 @@ case "$APP" in
     done
     bash "$PORTS/wireshark/app/host/cross-build.sh"
     bash "$PORTS/wireshark/app/host/build-domain.sh"
+    [[ ${TSAPP_SUBLET:-0} != 1 ]] || NESTED=wireshark
     source "$PORTS/wireshark/app/deps/env.sh"
     LIBC_FLAGS=(--musl "$TS_MUSL" --libc "$TS_LIBC_ARCHIVE")
     ;;
