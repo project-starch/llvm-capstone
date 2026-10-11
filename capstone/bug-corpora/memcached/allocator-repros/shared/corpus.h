@@ -176,7 +176,9 @@ void mc_case_body(int fixed, struct mc_outcome *o);
               e->id == (number),                                               \
           700);                                                                \
     struct mc_outcome outcome = {0};                                           \
-    mc_case_body(0, &outcome);                                                 \
+    /* event value 1 runs the FIXED sequence (the CheriBSD fixed arm, added     \
+     * 2026-10-10); every older fixture carries 0 and runs the buggy one. */   \
+    mc_case_body(e->value == 1, &outcome);                                     \
     /* Only the spatial arm is expected to arrive here. */                     \
     out->completed = 1;                                                        \
     mcp_stats(out);                                                            \

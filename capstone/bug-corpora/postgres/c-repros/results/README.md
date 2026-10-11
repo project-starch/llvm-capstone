@@ -6,7 +6,7 @@ driving the real upstream function, measured on three arms on 2026-10-06.
 | arm | detected | scored |
 |---|---:|---:|
 | `spatial` (base Capstone) | **5** | 5 |
-| `sublet` (Capstone + Sublet) | **5** | 5 |
+| ~~`sublet`~~ (dropped: it was level0 under a Sublet label, see below) | -- | -- |
 | `cheribsd-revocation` (purecap) | **3** | 5 |
 
 **The two the purecap guest misses are the finding, and they were predicted
@@ -18,10 +18,13 @@ Capstone arms link, narrows a returned pointer to the bytes asked for, and
 both are reported there. A malloc-granular machine sees an overrun when it
 exceeds the ALLOCATOR'S ROUNDING, not when it exceeds the object.
 
-`sublet` matches `spatial` exactly, and that is the expected result rather
-than a missing measurement: these five have no application allocator for
-Sublet to protect, so its discipline has nothing extra to enforce. The two
-arms' images differ, so this is a measurement and not a relabelled copy.
+**The `sublet` row is withdrawn** (the corpus README, "The arm recorded as `sublet` on
+2026-10-06 was not the Sublet heap"). Its SDK kept the default level0 heap, so its five
+catches, at the same pcs as `spatial`, were level0 bounds under a Sublet label. The run
+stays in `sublet-20261006-161014` as the record of what was measured; no verdict is taken
+from it. This paragraph used to call it "a measurement and not a relabelled copy" -- the
+images did differ, but the configuration under test did not. The protected-allocator
+column for these programs is `virtual-malloc` (5 of 5, `2026-10-10-virtual/`).
 
 ## What produced these numbers
 

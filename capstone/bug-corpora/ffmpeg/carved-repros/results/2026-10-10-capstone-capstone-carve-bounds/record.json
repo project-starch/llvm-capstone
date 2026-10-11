@@ -1,0 +1,187 @@
+{
+  "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+  "kind": "interior",
+  "arm": "capstone-carve-bounds",
+  "started": "2026-10-10T18:12:50+0800",
+  "predicted_buggy_outcome": "CAUGHT",
+  "sdk": {
+    "path": "<scratch>/capsdk/sdk-level0",
+    "heap": "level0",
+    "heap_log": "22",
+    "runtime_sha256": "3c72f36acd5bf9a423e5864d469a382dc388bd7596f26ec80b3d41168222690c",
+    "sdk_json_sha256": "76ef401c3df791e3187b3ebcda7f5fd78f4c916c479f64d2722db330b0901a52"
+  },
+  "compiler": "clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 7d01722aab880f63a908263a39bf72aa8c8a7e7b)",
+  "platform": {
+    "qemu": "32e7c9754f9afd516dd5b30016148bb8215df47de04e7adae4caad36cdc118af",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "launcher": "0752aa7c49c9adac999c396472bd3eefe0d6cbeaf19037114adcf086c91288fb",
+    "ssh_server": "385fcf915ad3aee1c14ed3d82cd5e1671ec83de6a6c909fa0d8cceb15126a990",
+    "module": "a88ed2159b43229a6592cdb494d9289ec947629e4fe25a763adf179480c04d8b",
+    "job_helper": "5a160efa2b1e7121f5438b20ca2ccdd4233d8a44c68a8323c4814db0d88008a7"
+  },
+  "platform_environment": {
+    "CAPSTONE_GP_NONLIN": "1",
+    "CAPSTONE_REV_NODES": "65536"
+  },
+  "tool_sha256": "f7b00cf3bc4c53a9919d816eade8656706f42f24b84a8d91baaee433ba211661",
+  "cc_args": [
+    "-DFFC_CARVE_BOUNDS"
+  ],
+  "controls": {
+    "clean": {
+      "outcome": "RETURNED",
+      "detail": "CONTROL clean RETURNED 1",
+      "required": "RETURNED"
+    },
+    "oob": {
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020e5b8 address=0xc0251948 in ctl_write_probe+0x58 (the labelled probe)",
+      "required": "CAUGHT"
+    },
+    "uaf": {
+      "outcome": "RETURNED",
+      "detail": "CONTROL uaf RETURNED observed=0xaa reissued=1",
+      "required": "RETURNED"
+    },
+    "subobj": {
+      "outcome": "RETURNED",
+      "detail": "CONTROL subobj RETURNED b0=0x5a",
+      "required": "RETURNED"
+    }
+  },
+  "rows": [
+    {
+      "case": "00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020ed74 address=0xc0253160 in ffc_write_probe_u8+0x58 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "02289abcb39dec506ab2ede6a33b918f87551a4cd436bbac9b6d31b2474035b4",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "01_699341d647_apedec_array_0000_writes_64_into_channel_1",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020edcc address=0xc0252bf0 in ffc_write_probe_u32+0x58 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "90525d516e5492d06bb48171b48fe2d520fc451449112df64d3b41cff84393d0",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel",
+      "outcome": "CAUGHT",
+      "detail": "cause=5 pc=0xc020ecbc address=0xc0252bc0 in ffc_read_probe_u32+0x38 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "deb8de07537a1503d4145a71a2163c7047e03f612979536dc51098c532937a3f",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix",
+      "outcome": "CAUGHT",
+      "detail": "cause=5 pc=0xc020eff4 address=0xc0252e80 in ffc_read_probe_u32+0x38 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "32321c58c98b45e6018bf3cee0fd89ca3ed588474bfe95afdb23a0e1a599373a",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020f0d8 address=0xc025305c in ffc_write_probe_u32+0x58 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "3fea85c43053367df2d74a4aa931b61a1210b04ae12ef180ba9ce475279fa909",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "05_9d3032b960_alsdec_opt_order_past_max_order",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020f0e0 address=0xc0252ea0 in ffc_write_probe_u32+0x58 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "22c44363137138b0b688fbad320e91e2b1a29db38e7b3e9ea728c91ada22941d",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020f4fc address=0xc02536c0 in ffc_write_probe_u8+0x58 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "65f6addee34bddd1db8f1bb26c4aa5d156b55f9b582233421106ca10ab43b67e",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "07_2563a33856_vp9_intra_pred_carved_for_old_bpp",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020f2b8 address=0xc0253290 in ffc_write_probe_u8+0x58 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "6072c32f1fbba67b4dc2e0c0ea5ce00677a640a3f470963baaf7c5ba6b1b1731",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "08_b5ff61695f_swscale_v_line_at_pre_doubling_stride",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020f0c4 address=0xc0252f10 in ffc_write_probe_u32+0x58 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "7da5a5821155908dc98d997ccb0cf9e20d3a53041cb7937102e76f4ffa80020f",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "09_043bcdcdb0_svq1enc_inter_block_runs_into_source",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020ef80 address=0xc0252ed0 in ffc_write_probe_u8+0x58 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "6a8dbb85f70ccd9b87386ab7c370da115f421c8bb348e05d46d650cf903f8e6f",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "10_d2213b6493_rv34_b_block_carved_at_old_linesize",
+      "outcome": "CAUGHT",
+      "detail": "cause=7 pc=0xc020efb0 address=0xc0253220 in ffc_write_probe_u8+0x58 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "b33efa567bce0200de09a3830e14204a531a2f05666ad072778b60803c6eff6a",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "11_68226ed9ec_vorbis_type1_residue_end_spans_channels",
+      "outcome": "CAUGHT",
+      "detail": "cause=5 pc=0xc020f034 address=0xc0253500 in ffc_read_probe_u32+0x38 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "5dbeeeb5933c141102c8573ff956292c3a704e9a62aaae197183ddcabec5da41",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    },
+    {
+      "case": "12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice",
+      "outcome": "CAUGHT",
+      "detail": "cause=5 pc=0xc020ed8c address=0xc0253e8c in ffc_read_probe_u32+0x38 (the labelled probe)",
+      "predicted": "CAUGHT",
+      "as_predicted": true,
+      "image_sha256": "92d4c86b7d6da2ba80d52a27b57ccb0b83acda4bbaa7423cdcb7ec24726a81a4",
+      "fixed": "FIXED exit=0",
+      "buggy_exit": "signal=11"
+    }
+  ]
+}

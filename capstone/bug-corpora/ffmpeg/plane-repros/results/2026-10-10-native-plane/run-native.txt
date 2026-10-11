@@ -1,0 +1,5 @@
+compiler: cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+control past 1024: heap-buffer-overflow (required heap-buffer-overflow) ok
+control uaf 1024: heap-use-after-free (required heap-use-after-free) ok
+00_b7946098b1_alphablend_row_past_plane plain=reproduced asan=silent-as-expected plane_slack=1024
+exit=0

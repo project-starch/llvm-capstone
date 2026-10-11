@@ -14,7 +14,7 @@
 #ifndef WM_CHUNKS_H
 #define WM_CHUNKS_H
 #include "port.h"
-#ifdef WM_DOMAIN
+#ifdef WM_CAPABILITY
 #include <sublet/sublet.h>
 struct wm_chunk_auth {
   capstone_cap_slot slot; /* the chunk's region while free, its handle while out */

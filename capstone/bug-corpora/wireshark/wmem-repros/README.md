@@ -53,6 +53,7 @@ is one case with the other reports named as siblings.
 | 10 | `6fd3af5e99` | #19695 | packet-scope object kept by file-scope state across packets | not asserted |
 | 11 | `3a5f82dfb5` | #20702, #20703 | packet-scope object kept by file-scope state across packets | yes, asserted |
 | 12 | `90bb3a5c9e` | #20664 | stale pointer after an individual recycler free | yes, asserted |
+| 22 | `c702b44a01` | #16818 | double free into the block allocator's free list | no: the second free is itself the access |
 
 "Reoccupied before the read" is asserted only where the report evidences it:
 the next packet's own first allocation is checked to land on the same address
@@ -91,6 +92,7 @@ reduction class are visibly siblings rather than accidentally similar.
 | packet-scope object held by a column or address past the scope's end | a column or an address keeps the pointer; the scope is torn down at the end of dissection and the print step reads it in the same packet, before anything reoccupies the storage |
 | packet-scope object kept by file-scope state across packets | a conversation record, proto data or a reassembly table in file scope keeps the pointer, and a later packet reads it through that state |
 | stale pointer after an individual recycler free | the lifetime ends by wmem_free into the block allocator's free list, inside a live block; no pool reset is involved |
+| double free into the block allocator's free list | the same chunk is wmem_free'd twice into the block allocator; the second free is the defective access, and the recycler list written over freed chunks is corrupted (case 22, added 2026-10-11) |
 
 ## Arms
 
@@ -127,6 +129,7 @@ By shape, for the two mechanisms that catch anything:
 | packet-scope object held by a column or address past the scope's end | 2, 3, 4, 5 | 4 / 4 | 4 / 4 |
 | packet-scope object kept by file-scope state across packets | 7, 8, 9, 10, 11 | 5 / 5 | 5 / 5 |
 | stale pointer after an individual recycler free | 12 | **0 / 1** | **1 / 1** |
+| double free into the block allocator's free list | 22 | region build **0 / 1**; chunk port **1 / 1** (cause 24 at the allocator's handback probe) | **1 / 1** (SIGPROT in wm_widen) |
 | cursor advanced past its chunk by a fixed skip, read inside the same block | 13 | **1 / 1** (bounds, cause 5) | not run |
 | loop reads a fixed offset past its chunk into the next chunk of the same block | 14 | **1 / 1** (bounds, cause 5) | not run |
 | packet-controlled negative index reads below the chunk, inside the same block | 15 | **1 / 1** (bounds, cause 5) | not run |

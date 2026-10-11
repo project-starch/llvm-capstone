@@ -1,6 +1,8 @@
 # Wireshark 4.6.8: 92 defects whose fix was never backported, live at our pin
 
-**Read this if you are looking for cases to build.** The wmem corpus's 18 cases are 16
+**Read this if you are looking for cases to build.** *(Counts as of this file's writing; the corpora have
+grown since -- 22 wmem, 12 plain-heap and 10 plain-temporal cases on 2026-10-10, 4 of them live; each case's
+`live_in_pin` is the record, not this sentence.)* The wmem corpus's 18 cases were 16
 `live_in_pin: false` and 2 live; the plain-heap corpus's one case is not live either. That
 looked like the supply running out. It was the **choice of population**.
 

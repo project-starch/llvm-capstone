@@ -46,6 +46,8 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import verdicts  # noqa: E402
 REPO = HERE.parents[2]
 RUN = REPO / "capstone/ports/common/application/run.py"
 SDK_HEAP = {"spatial": "level0", "sublet": "sublet", "sublet-chunks": "sublet",
@@ -152,33 +154,9 @@ def predicted(kind, arm):
     return "CAUGHT" if arm in REVOKING else "DEFECT-REPRODUCED"
 
 
-class Symbols:
-    """Function symbols of one ELF image, and its load base, for pc attribution."""
-
-    def __init__(self, llvm_bin, image):
-        out = subprocess.run([str(llvm_bin / "llvm-nm"), "--print-size", "-n", "--defined-only",
-                              str(image)], capture_output=True, text=True, check=True).stdout
-        self.funcs = []
-        for line in out.splitlines():
-            parts = line.split()
-            if len(parts) == 4 and parts[2] in "tTwW":
-                self.funcs.append((int(parts[0], 16), int(parts[1], 16), parts[3]))
-        hdr = subprocess.run([str(llvm_bin / "llvm-readelf"), "-l", str(image)],
-                             capture_output=True, text=True, check=True).stdout
-        loads = [int(m.group(1), 16) for m in re.finditer(r"^\s*LOAD\s+\S+\s+(0x[0-9a-f]+)", hdr, re.M)]
-        if not loads or not self.funcs:
-            raise RuntimeError(f"{image}: no LOAD segment or no function symbols")
-        self.base = min(loads)
-
-    def lookup(self, runtime_pc, code_start):
-        pc = runtime_pc - code_start + self.base
-        for addr, size, name in self.funcs:
-            if addr <= pc < addr + max(size, 1):
-                return name, pc - addr
-        return None, None
-
-
-FAULT = re.compile(r"domain fault cause=(\d+) pc=(0x[0-9a-f]+) address=(0x[0-9a-f]+).*?code=(0x[0-9a-f]+)-")
+# pc attribution and the fault line are shared with every runner, in verdicts.py.
+Symbols = verdicts.Symbols
+FAULT = verdicts.FAULT_LINE
 
 
 def run_image(state, image, argv, out_base):
@@ -337,7 +315,10 @@ def main():
             return 75
 
     # ---- the Sublet carve's own controls: the bound AND the revocation, in this boot ----
-    probe_re = re.compile(r"_(read|write)_probe(_u8|_u32)?$")
+    # A prefixed probe (ffh_read_probe, wsh_write_probe_u8) or the subobject corpus's unprefixed one
+    # (write_probe). The prefix used to be required, so subobject 05 and 08 -- at write_probe+0x58 --
+    # printed "NOT the labelled probe".
+    probe_re = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
     if a.arm == "sublet-carve":
         for src, num in CARVE_CONTROLS[corpus.name]:
             img = bindir / f"control-{num}.dom"
@@ -386,10 +367,13 @@ def main():
             detail = f"fixed run read {fout}: {fdetail}; buggy run ({bout}: {bdetail}) is not scored"
         else:
             outcome, detail = bout, bdetail
+        site = outcome == "CAUGHT" and "(the labelled probe)" not in detail and at_declared_site(d, detail)
+        if site:
+            detail += " -- a fault site the case declared before the run (case.json fault_sites)"
         want_row = overrides.get(d.name, expect)
         row = dict(case=d.name, outcome=outcome, detail=detail, predicted=want_row,
                    as_predicted=outcome == want_row and (outcome != "CAUGHT" or "(the labelled probe)" in detail
-                                                         or subobject),
+                                                         or site),
                    image_sha256=sha256(img), fixed=f"{fout} exit={fres.get('value')}",
                    **({"full_config": FULLCONFIG.search(btext).group(0)} if a.arm == "sublet-full" else {}),
                    buggy_exit=f"{bres.get('kind')}={bres.get('value')}")
@@ -422,7 +406,30 @@ def main():
     diff = [r["case"] for r in rows if not r.get("as_predicted")]
     print(f"\n{corpus.parent.name}/{corpus.name} on {a.arm}: {len(rows)} cases; {tally}; "
           f"predicted {expect}; differing: {diff or 'none'}")
+    lost = infra_rows(rows)
+    if lost:
+        # A row that printed no verdict (a dead VM, a signal with no domain fault line) differs from
+        # its prediction for a reason that is not the mechanism. It used to make this run exit 1,
+        # "data"; it is infrastructure, so the run is not a reading.
+        print(f"INFRA: {len(lost)} row(s) produced no verdict ({', '.join(lost)}): not a reading",
+              file=sys.stderr)
+        return 75
     return 1 if diff else 0
+
+
+def at_declared_site(case_dir, detail):
+    """A fault outside the labelled probe counts only in a function the case declared BEFORE the run
+    (case.json `fault_sites`, justified in `fault_sites_why` from the source). Until 2026-10-10 the
+    capstone-subobject arm accepted a fault anywhere, which is how ff2_case_run+off and memcpy+0xdc
+    became catches with nothing but the fixed run tying them to the defect."""
+    sites = json.loads((case_dir / "case.json").read_text()).get("fault_sites") or []
+    m = re.search(r" in ([A-Za-z_][\w.$]*)\+0x", detail)
+    return bool(m and m.group(1) in sites)
+
+
+def infra_rows(rows):
+    """Cases whose run produced no verdict at all -- outcome OTHER -- which no prediction names."""
+    return [str(r["case"]) for r in rows if r.get("outcome") == "OTHER"]
 
 
 if __name__ == "__main__":

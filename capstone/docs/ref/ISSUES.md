@@ -897,7 +897,7 @@ te by the RTL lane, 2026-09-24.
 > supervised-CALL change (the supervised domain's writable window holds only its own images, which the next escape
 > rewrites before any resume).
 
-### R-51 — after a RETURN, the resumed domain runs with an UNTAGGED PC on silicon: no PC-capability check (bounds, execute, revocation) until the next capability control-flow change; capstone-qemu keeps the PC capability, so emulator evidence of PC enforcement after a yield does not transfer `OPEN — found 2026-10-05 by reading the RTL at 776d9d859 (rtl-oracle; three quotes re-verified by the board lane) and capstone-qemu; CONFIRMED ON SILICON 2026-10-05 by a matched pair on 776d9d859 (below); a security-model question for the lead`
+### R-51 — after a RETURN, the resumed domain runs with an UNTAGGED PC on silicon: no PC-capability check (bounds, execute, revocation) until the next capability control-flow change; capstone-qemu keeps the PC capability, so emulator evidence of PC enforcement after a yield does not transfer `FIXED ON SILICON 2026-10-11 in caplifive_r51r52_0568f93a9 (flashed on the lead's word; the after-yield arm reads 0 / 0x1C / 0x1C twice, the before-yield arm 0x1C / 0x1C unchanged, a10 unchanged as predicted; see the 2026-10-11 box); was: OPEN — found 2026-10-05 by reading the RTL at 776d9d859 (rtl-oracle; three quotes re-verified by the board lane) and capstone-qemu; CONFIRMED ON SILICON 2026-10-05 by a matched pair on 776d9d859 (below); FIX APPROVED FOR SYNTHESIS BY THE LEAD 2026-10-10 as part of next-bitstream-r51-r52 0568f93a9 (with R-52; lint at baseline, sweep 90/90 identical, testlist_sup 76/76 identical). Its consequence for trap entry is measured: after the fix a resumed domain's trap handler runs under the domain's code capability as at a first entry, and a vector of 0 (the monitor's bare domains) storms ILLEGAL_INSTR identically on both trees, so the R-43 list's a10 is predicted unchanged (branch r51-trap-after-yield c2e2ed44b)`
 
 **What the RTL does.** All quotes below are at capstone-ariane 776d9d859.
 - RETURN faults unless its resume operand rs1 is an integer (`capstone_dyn_unit.anvil:329`, `rs1...!=NOT_CAP` raises
@@ -962,6 +962,22 @@ at the resume, as under QEMU. Adoption is the lead's decision.
 **For the lead.** Whether this is acceptable (the code region is still bounded by the domain's memory capability),
 whether RETURN should restore the domain's PC capability, and how any paper claim about code-capability enforcement
 for delegated applications should be worded. Those are the lead's decisions.
+
+
+> # 2026-10-11 — FIXED ON SILICON (caplifive_r51r52_0568f93a9, capstone-ariane 0568f93a9 = 776d9d859 + R-51 + R-52)
+> - **The matched pair (bare, r51-return-pcc):**
+>   - after the yield **0 / 0x1C / 0x1C, twice** (776d9d859: 0 / 0xBAD / 0), so the out-of-bounds integer jump after a
+>     RETURN yield now faults 28;
+>   - before the yield 0x1C / 0x1C, unchanged.
+> - **The acceptance controls are unchanged:**
+>   - the S-16 bare set, 18/18 with all 98 readings identical;
+>   - the R-43 list a1..a10, identity-exact, with a10 exactly as predicted (mcause 25 at DBAS+0x4354, refusal
+>     LATCHED);
+>   - C5u, quiet overhead +0.666 % (was +0.680 %);
+>   - s10b 8 / 1 and s06agg 64;
+>   - the memcached B-series: b2 retval 0, and oracle e0a254c47e7ee28c.
+> - The record is llvm-capstone docs/plans/b0-silicon-delegated-runtime.md, "Acceptance RESULT:
+>   caplifive_r51r52_0568f93a9.bit".
 
 ### R-46 — a commit-stage refetch keeps the PC-capability metadata, so a younger CJALR's target metadata can leak into the refetched code `OPEN — accepted for the R-43/R-45 bitstream by the project lead (2026-09-29); predates R-45, which makes it routine`
 
@@ -1760,7 +1776,7 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### R-52 (was S-18) — in a NATIVE Linux process on silicon, the value read back after fcvt.d.l / fdiv.d / fadd.d is the destination register's EARLIER value, not the result `ROOT-CAUSED IN RTL AND FIXED IN SIMULATION 2026-10-05 (capstone-ariane branch s18-fpr-clobber 546807884, NOT synthesized; a regression of the 2026-04-24 issue-stage commit, in every bitstream since): the issue stage never marked a floating-point destination as clobbered, so every FP consumer read its operand stale; rv64ud 11 of 12 FAIL -> 12 of 12 PASS; awaiting the lead's next bitstream` -- observed observed 2026-10-05 on caplifive_supcall_776d9d859 (boot B3c, 200,000 of 200,000 evaluations, N = 1 boot); origin not established (write-back lost or a stale read; RTL, FPGA build or kernel FP state); delegated domains are soft-float and do not use the FPU`
+### R-52 (was S-18) — in a NATIVE Linux process on silicon, the value read back after fcvt.d.l / fdiv.d / fadd.d is the destination register's EARLIER value, not the result `ROOT-CAUSED IN RTL AND FIXED IN SIMULATION 2026-10-05 (capstone-ariane branch s18-fpr-clobber 546807884; SYNTHESIS APPROVED BY THE LEAD 2026-10-10 as part of next-bitstream-r51-r52 0568f93a9; a regression of the 2026-04-24 issue-stage commit, in every bitstream since): the issue stage never marked a floating-point destination as clobbered, so every FP consumer read its operand stale; rv64ud 11 of 12 FAIL -> 12 of 12 PASS; in the next bitstream 0568f93a9` -- observed observed 2026-10-05 on caplifive_supcall_776d9d859 (boot B3c, 200,000 of 200,000 evaluations, N = 1 boot); origin not established (write-back lost or a stale read; RTL, FPGA build or kernel FP state); delegated domains are soft-float and do not use the FPU`
 
 > **ROOT CAUSE AND FIX (the RTL lane, 2026-10-05).** Reproduced bit-exactly in the Verilator testharness with
 > `s18-fp-writeback.S` (sup list `s18-fp-capmode` / `s18-fp-nocap`): the loop body's `fmv.x.d` reads the fld's 1e9, on
@@ -1768,10 +1784,16 @@ one bitstream; the rung's 66 → 64 on the board is the acceptance.
 > sequences: `fdiv.d` and `fadd.d` results never reach the next consumer, `fcvt.d.l` reaches it only when the register's
 > previous writer had long completed, an `fsd` right behind an `fld` stores the old value, and every result does land in
 > order later (a fence + re-read sees the completed chain). **Mechanism:** `issue_read_operands.sv` builds the clobber vectors
-> the issue stage's RAW/WAW stalls and forwarding key on; the FPR line carried the GPR line's NEGATED predicate,
-> `fpr_clobber_vld[rd][i] = still_issued[i] && !(FpPresent && is_rd_fpr(op))`, so no in-flight instruction with an FP
-> destination ever marked its register, `rd_clobber_fpr` read NONE for every register, no FP consumer stalled or was
-> forwarded to, and it read the stale register file. **Origin:** the issue-stage commit of 2026-04-24 ("added missing
+> the issue stage's RAW/WAW stalls and forwarding key on; the FPR line was a verbatim copy of the GPR line,
+> `fpr_clobber_vld[rd][i] = still_issued[i] && !(FpPresent && is_rd_fpr(op))`, so every in-flight instruction with an
+> INTEGER destination marked FPR[rd] as clobbered (a live mirror of the integer side) and no instruction with an FP
+> destination ever marked its own: FP consumers stalled on spurious integer collisions and never on a real FP producer,
+> issued early, and read the stale register file. (CORRECTED 2026-10-10 after the board lane's pre-synthesis audit: the
+> earlier text here, and in 546807884's message, said `rd_clobber_fpr` read NONE for every register and that the FPR stall
+> and forwarding logic was therefore pruned in synthesis; it was a live mirror, nothing was prunable, and the fix flips one
+> polarity term per scoreboard entry. The root cause, the origin and the fix are unchanged. 546807884's "Tests:" paragraph
+> also lists expected values 0x40450fcd6e9ba4df / 0x41d9551f804e7d8d / 0x419d6f3487800000 / 0x4146706b5b6db6db that no run
+> and no header carry; the values below are the ones every run reads.) **Origin:** the issue-stage commit of 2026-04-24 ("added missing
 > handling of WAW stalls ... cleaned up issue stage code") changed that line from the positive `still_issued & (FpPresent &&
 > is_rd_fpr(op))`; its own diff shows both lines. Every bitstream built since carries it, and every hard-float native process
 > on silicon since April has computed with stale operands. Delegated domains are unaffected: the silicon build's assembler

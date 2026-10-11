@@ -267,7 +267,13 @@ fi
 # ---- link ---------------------------------------------------------------------------
 # What the backend's own link takes: every subdirectory's objfiles.txt (paths from the
 # source root), then the two server archives; the port runtime and musl are here.
-objs=$(find src/backend src/timezone -name objfiles.txt -exec cat {} + | tr ' ' '\n' | grep -v '^$' | sort -u)
+# LC_ALL=C on every sort -u here. Under en_US.UTF-8 the uutils sort that
+# Ubuntu 26.04 ships (0.8.0) compares contrib/ltree/_ltree_gist.o and
+# contrib/ltree/ltree_gist.o -- and the symbols _ltree_compress and
+# ltree_compress -- as equal, and -u silently drops one (GNU sort 9.4 keeps
+# both). Found 2026-10-10: the relink on such a host lacked ltree_gist.o and
+# ltree_op.o. Byte order is what a list of paths and symbols means anyway.
+objs=$(find src/backend src/timezone -name objfiles.txt -exec cat {} + | tr ' ' '\n' | grep -v '^$' | LC_ALL=C sort -u)
 [[ -n "$objs" ]] || { echo "no objfiles.txt under src/backend; make did not get far" >&2; exit 2; }
 # The modules, and the table toolchain/static_modules.c resolves them from: every
 # global function each one defines, under the name dlsym would be asked for.
@@ -280,7 +286,7 @@ for md in $MODULES; do
   for o in $mo; do [[ -f $o ]] || { echo "module $m: $o was not built (domain-modules.log)" >&2; exit 2; }; done
   echo "PGSU_MODULE($m)" >> "$TABLE"
   # shellcheck disable=SC2086
-  "$NM" --defined-only -g $mo | awk '$2 == "T" { print $3 }' | sort -u | while read -r sym; do
+  "$NM" --defined-only -g $mo | awk '$2 == "T" { print $3 }' | LC_ALL=C sort -u | while read -r sym; do
     case $sym in ${m}_Pg_magic_func) n=Pg_magic_func ;; ${m}__PG_init) n=_PG_init ;; *) n=$sym ;; esac
     echo "PGSU_SYMBOL($m, \"$n\", $sym)"
   done >> "$TABLE"
@@ -291,7 +297,7 @@ done
 # Publish the exact backend/module inputs for the common application relinker.
 # Keep one list so newly admitted contrib modules cannot disappear at relink.
 # shellcheck disable=SC2086
-printf '%s\n' $objs | sort -u > "$ROOT/link/backend-objects.txt"
+printf '%s\n' $objs | LC_ALL=C sort -u > "$ROOT/link/backend-objects.txt"
 "$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -O1 -I"$ROOT/link" -c "$SCRIPT_DIR/toolchain/static_modules.c" \
   -o "$ROOT/link/static_modules.o"
 log "modules linked in: $(grep -c PGSU_MODULE_END "$TABLE"), $(grep -c PGSU_SYMBOL "$TABLE") functions"

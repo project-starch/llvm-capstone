@@ -60,5 +60,18 @@ for d in "$R"/[0-9][0-9]_*/; do
     failed=$((failed + 1))
   fi
 done
-echo "built=$built failed=$failed  ($OUT)"
+# The arm's controls, from the same SDK (shared/controls.c), and what this build IS: the runner
+# reads the heap from here and refuses an arm whose configuration needs another one.
+if "$CC" "$OPT" "$S/controls.c" -o "$OUT/controls.dom" 2> "$OUT/controls.err"; then
+  echo "  controls.dom OK"
+else
+  echo "  controls.dom FAIL"; sed 's/^/      /' < "$OUT/controls.err" | head -8
+  failed=$((failed + 1))
+fi
+heap=$(sed -n 's/^CAPSTONE_APPLICATION_HEAP:STRING=//p' "$SDK/CMakeCache.txt")
+virtual=$(sed -n 's/^CAPSTONE_APPLICATION_VIRTUAL:BOOL=//p' "$SDK/CMakeCache.txt")
+printf '{"sdk": "%s", "heap": "%s", "virtual": "%s", "runtime_sha256": "%s", "opt": "%s"}\n' \
+  "$(cd "$SDK" && pwd)" "${heap:-unknown}" "${virtual:-OFF}" \
+  "$(sha256sum "$SDK/libapplication-runtime.a" 2>/dev/null | cut -d' ' -f1)" "$OPT" > "$OUT/build.json"
+echo "built=$built failed=$failed heap=${heap:-unknown}  ($OUT)"
 [[ $failed -eq 0 ]]

@@ -1,0 +1,6 @@
+case	arm	configuration	verdict	reason	evidence	bundle
+00_CVE-2026-6477_pqfn_unbounded_result_copy	virtual-malloc	virtual-mallocng	CAUGHT		cause=28 pc=0x3f8d001994 in memcpy; by function: memcpy is the case's declared fault site	results/2026-10-10-virtual/virtual-malloc
+01_CVE-2026-19385_pgdump_transform_list_overread	virtual-malloc	virtual-mallocng	CAUGHT		cause=28 pc=0x3fa2d108d4 in pgclient_case_run; by function: pgclient_case_run is the case's declared fault site	results/2026-10-10-virtual/virtual-malloc
+02_CVE-2026-16241_ecpg_bytea_negative_length	virtual-malloc	virtual-mallocng	CAUGHT		cause=28 pc=0x3f8fd91aac in ecpg_hex_decode; by function: ecpg_hex_decode is the case's declared fault site	results/2026-10-10-virtual/virtual-malloc
+03_5d61bdd114_saslprep_truncated_utf8_overread	virtual-malloc	virtual-mallocng	CAUGHT		cause=28 pc=0x3f83491c2c in pg_utf8_islegal; by function: pg_utf8_islegal is the case's declared fault site	results/2026-10-10-virtual/virtual-malloc
+04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer	virtual-malloc	virtual-mallocng	CAUGHT		cause=28 pc=0x3f9c412058 in pgclient_consume_content; by function: pgclient_consume_content is the case's declared fault site	results/2026-10-10-virtual/virtual-malloc

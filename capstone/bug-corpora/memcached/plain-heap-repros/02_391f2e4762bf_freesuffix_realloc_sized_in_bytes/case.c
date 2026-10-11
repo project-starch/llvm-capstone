@@ -39,11 +39,11 @@ MCH_CASE(2) {
   CHECK(re, 903);
 
   /* Upstream's next statement stores at index `total`, i.e. byte offset
-   * sizeof(char*) * total == 64 -- 48 bytes past the buggy arm's 16-byte
+   * sizeof(char*) * total == 64 (128 on purecap) -- 48 (112) bytes past the buggy arm's 16-byte
    * allocation. The probe touches the FIRST byte past instead: writing all 48
    * smashes the next chunk header and glibc aborts in free(), which is not a
    * verdict. The true distance is in defect_text. */
-  const unsigned long store_off = sizeof(char *) * total;   /* 64 */
+  const unsigned long store_off = sizeof(char *) * total;   /* 64; 128 on purecap */
   const unsigned long touched = (store_off >= grown) ? grown : store_off;
   o->cap = grown;
   o->touched = touched;

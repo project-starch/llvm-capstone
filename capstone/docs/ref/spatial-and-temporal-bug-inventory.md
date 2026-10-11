@@ -45,8 +45,9 @@ An access that leaves a bound. Built from upstream defects:
 | **total** | **14** | **18** | **32** | |
 
 > **SUPERSEDED COUNTS, 2026-10-09.** This table is the 2026-10-06 state. FFmpeg's nested spatial row
-> is now **13** -- `plane-repros/00` plus the twelve cases of `ffmpeg/carved-repros` (regions carved
-> out of one allocation) -- and the current per-program, per-arm table for all three programs is
+> is now **14** -- `plane-repros/00` plus the thirteen cases of `ffmpeg/carved-repros` (regions carved
+> out of one allocation; case 12 is the former `subobject-repros/09`, moved at the audit of
+> 2026-10-10) -- and the current per-program, per-arm table for all three programs is
 > `spatial-vs-temporal-three-programs.md` section 0.
 
 And the **synthetic baseline**, which carried the not-nested spatial row alone until

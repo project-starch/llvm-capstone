@@ -1,5 +1,12 @@
 # FFmpeg plain-heap spatial defects: the MALLOC BOUND itself, FFmpeg's not-nested row
 
+> **Audit, 2026-10-10.** Case 13 (`8af6c71d96f4`) is the release/9.0 backport of case 2's fix (`56309e476a`):
+> same subject and body, byte-identical diff, `git patch-id` `03b9184e7cc8` for both. One upstream defect, so case 13
+> carries `duplicate_of` and every table leaves it out: **24 distinct defects in 25 cases.** ASan's records covered
+> cases 0-3 only (the corpus had four when its runner first ran); `results/2026-10-10-native-plain-heap/` now covers
+> all 25, each report attributed to the labelled probe.
+
+
 The third corpus of its kind, after [`../../memcached/plain-heap-repros/`](../../memcached/plain-heap-repros/README.md)
 and [`../../wireshark/plain-heap-repros/`](../../wireshark/plain-heap-repros/README.md), and a sibling
 of [`../subobject-repros/`](../subobject-repros/README.md) and [`../pool-repros/`](../pool-repros/README.md)
@@ -7,7 +14,7 @@ rather than part of either. Those boundaries are *inside one allocation* and *st
 `AVBufferPool` handed out*. Every case here leaves a buffer FFmpeg obtained **directly** from
 `av_malloc_array` or `av_calloc`, with no inner layer.
 
-**Under this inventory's axis — *who allocated the object* — all four rows are NOT NESTED.** Nothing
+**Under this inventory's axis — *who allocated the object* — every row is NOT NESTED.** Nothing
 sub-allocated the crossed region.
 
 **All four are fix-reversals**, read from the pinned source two-sided. Liveness is **recorded, never
@@ -66,7 +73,7 @@ segfault)."* The value read from `formats[nb_formats]` is written to an element 
 alone* is the finding — a test keyed to consequences cannot see this defect at all, while a bounds
 check sees the read. That asymmetry is the point of the row.
 
-**Case 2 is the only row in the whole inventory that crosses BELOW an allocation's base.** That is not
+**Case 2 is the only defect in the whole inventory that crosses BELOW an allocation's base** (case 13 is the same defect: see below). That is not
 cosmetic. An upper-bound-only check passes it. And the mechanism that refuted
 `memcached/plain-heap-repros/00`'s catch prediction — CheriBSD's `malloc` bounding to the allocator's
 *usable size* rather than the request — cannot rescue it either, because no size class extends an
@@ -124,8 +131,8 @@ the symbol — their rows read *"attribution: not established"*. This corpus **d
 against a symbol resolved from the ELF independently of the run. The native readings were re-run
 after that change and came out byte-identical, so it is inert to everything except attribution.
 
-**Still declared predictions:** the Capstone and PoisonCap arms. This corpus has no capstone-domain
-runner, as is also true of the two sibling plain-heap corpora, and PoisonCap is unavailable on this
-host.
+**Still declared predictions** at the time of writing: the Capstone and PoisonCap arms. *(2026-10-10: every arm is
+measured since 2026-10-09 -- `results/2026-10-09-*` -- and ASan has a record for all 25 cases,
+`results/2026-10-10-native-plain-heap/`.)*
 
 **N = 1 per cell.**

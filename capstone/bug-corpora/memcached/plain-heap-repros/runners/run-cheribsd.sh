@@ -46,9 +46,15 @@ for dir in "$ROOT"/[0-9][0-9]_*/; do
   "$SDK/bin/clang" $CFLAGS -I"$ROOT/shared" "$dir/case.c" "$ROOT/shared/driver.c" \
     -o "$OUT/bin/mch-$n" || { echo "CONTROL-FAILED purecap build case $n" >&2; exit 75; }
 done
-"$SDK/bin/clang" $CFLAGS -DPROBE_SYMBOL='"mch_write_probe"' \
-  "$CAP/bug-corpora/cpython/pymalloc-repros/observe/supervise.c" -lutil \
-  -o "$OUT/bin/supervise" || { echo "CONTROL-FAILED supervise build" >&2; exit 75; }
+# One supervisor per labelled probe, chosen per case below from the probe its case.c calls. Until
+# 2026-10-10 a single supervisor was built for mch_write_probe, so the READ defects 06-08 printed
+# "SUPERVISE expect mch_write_probe" and their records said the fault lay in that probe's extent; it
+# lies in mch_read_probe (attributed with llvm-nm, results/2026-10-08-cheribsd/attribution-2026-10-10.txt).
+for sym in mch_write_probe mch_read_probe; do
+  "$SDK/bin/clang" $CFLAGS -DPROBE_SYMBOL="\"$sym\"" \
+    "$CAP/bug-corpora/cpython/pymalloc-repros/observe/supervise.c" -lutil \
+    -o "$OUT/bin/supervise-$sym" || { echo "CONTROL-FAILED supervise build ($sym)" >&2; exit 75; }
+done
 "$SDK/bin/clang" $CFLAGS "$CAP/ports/common/host/cheribsd/abi-probe.c" \
   -o "$OUT/bin/cheribsd-abi-probe" || { echo "CONTROL-FAILED abi-probe build" >&2; exit 75; }
 
@@ -75,13 +81,13 @@ SIGPROT = 34
 CASES = {
     0: (9,  '1 byte past calloc(1, 9), whose capability is 16 long -- ABSORBED', 'COMPLETE'),
     1: (64, '1 byte past malloc(64), and 64 is exactly a size class',            'FAULT'),
-    2: (64, '1 byte past a 64-byte realloc of the suffix freelist',              'FAULT'),
+    2: (16, '1 byte past the buggy 16-byte realloc of the suffix freelist (sized in bytes, not pointers)', 'FAULT'),
     3: (64, '1 byte past a 64-byte object-cache freelist array',                 'FAULT'),
     4: (64, '1 byte past a 64-byte stats buffer',                                'FAULT'),
     5: (16, '1 byte past a 16-byte connection write buffer',                     'FAULT'),
     6: (16, '1 byte past a 16-byte proxy key buffer',                            'FAULT'),
     7: (16, '1 byte past a 16-byte binary-protocol key',                         'FAULT'),
-    8: (16, '1 element (8 bytes) past a 16-byte slab page list',                 'FAULT'),
+    8: (32, '1 element past a 2-pointer slab page list (32 bytes on purecap, 16 on the host)', 'FAULT'),
 }
 # A case directory with no row here is one the run would be silent about. The
 # FFmpeg sibling had exactly that: a table of 4 while the corpus held 25.
@@ -93,19 +99,28 @@ if missing or extra:
     if extra:   msg.append('CASES names %s, which is not a case directory' % extra)
     sys.exit('CONTROL-FAILED cases.json: ' + '; '.join(msg))
 
+def probe_of(n):
+    src = next(CORPUS.glob('%02d_*' % n)) / 'case.c'
+    text = src.read_text()
+    reads, writes = 'read_probe(' in text, 'write_probe(' in text
+    if reads == writes:
+        sys.exit('CONTROL-FAILED cases.json: case %d calls %s labelled probe' % (n, 'both' if reads else 'no'))
+    return 'mch_read_probe' if reads else 'mch_write_probe'
+
 cases = []
 for p in sorted(BIN.glob('mch-[0-9][0-9]')):
     n = int(p.name.split('-')[1])
     request, what, expect = CASES[n]
+    supervise = BIN / ('supervise-' + probe_of(n))
     cases.append(dict(name='%s-fixed' % p.name, program=str(p), args=['fixed', str(n)],
                       timeout=300, expect_regex=r'VERDICT FIXED .*', exit=0))
     if expect == 'FAULT':
-        cases.append(dict(name='%s-buggy' % p.name, program=str(BIN/'supervise'),
+        cases.append(dict(name='%s-buggy' % p.name, program=str(supervise),
                           args=['./target','buggy',str(n)], inputs={'target': str(p)},
                           timeout=300, expect='SUPERVISE exit signalled=%d' % SIGPROT,
                           exit=128+SIGPROT))
     else:
-        cases.append(dict(name='%s-buggy' % p.name, program=str(BIN/'supervise'),
+        cases.append(dict(name='%s-buggy' % p.name, program=str(supervise),
                           args=['./target','buggy',str(n)], inputs={'target': str(p)},
                           timeout=300, expect='SUPERVISE exit status=0', exit=0))
 OUT.write_text(json.dumps(cases, indent=2) + '\n')
@@ -129,6 +144,13 @@ python3 "$CAP/ports/common/host/cheribsd/run.py" "$OUT/run" \
   --abi-probe "$OUT/bin/cheribsd-abi-probe" \
   --runtime-revocation "$REVOCATION" --cases "$OUT/cases.json" --continue-on-failure
 rc=$?
+# A boot that died partway is not a reading: --continue-on-failure keeps a failing CASE from
+# stopping the run, but only run.py's ran_all_cases says every selected case actually executed.
+# Without this, a guest that died after the controls read as "suite exit 1, which is data".
+python3 - "$OUT/run/summary.json" <<'RANALL' || { echo "INFRA: the boot did not run every case (ran_all_cases is not true): not a reading" >&2; exit 75; }
+import json, sys
+sys.exit(0 if json.load(open(sys.argv[1])).get("ran_all_cases") is True else 1)
+RANALL
 
 # The suite's status cannot distinguish "an oracle did not hold" -- which is DATA
 # -- from "the boot produced nothing". The platform controls decide that.

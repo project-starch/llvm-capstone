@@ -27,6 +27,14 @@
       }
     },
     {
+      "name": "capstone-application",
+      "inherits": "base",
+      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/capstone-application.cmake",
+      "cacheVariables": {
+        "BUILD_TESTING": false
+      }
+    },
+    {
       "name": "capstone-domain",
       "inherits": "base",
       "displayName": "Capstone spatial/Sublet manager and lifetime tests",
@@ -77,6 +85,11 @@
     {
       "name": "native",
       "configurePreset": "native",
+      "jobs": 4
+    },
+    {
+      "name": "capstone-application",
+      "configurePreset": "capstone-application",
       "jobs": 4
     },
     {

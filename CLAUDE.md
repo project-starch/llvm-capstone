@@ -346,7 +346,8 @@ takes, each of which has produced a published claim that had to be retracted:
 * a check **keyed to one function, shape or packing** that silently misses another;
 * a **gate whose condition the mandated control always satisfies**, so it can never fire;
 * a run **parameterised by the wrong variable name**, printing a pass having checked nothing;
-* a tool that renders **"no data" as a zero result**, which reads like a finding;
+* a tool that renders **"no data" as a zero result**, or **a prediction as a reading**, which reads like a
+  finding (the bug-corpus table generator read an arm's oracle TEXT as its verdict until 2026-10-10);
 * a suite that **passes while covering a SUBSET**, because its case list is hardcoded and the
   corpus has since grown — 4 of 25 cases measured, PASS printed, controls fired (2026-10-08);
 * a check satisfied by a **PREVIOUS run's artifacts**, because the output directory survives —

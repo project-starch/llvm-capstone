@@ -1,0 +1,9 @@
+{
+  "case": 90,
+  "title": "CONTROL: a slab chunk freed to its class stays inside its page, so the system allocator never sees it end; the Sublet ledger revokes it in mode 1",
+  "control_for": "the virtual-malloc and virtual-nested-pools arms of memcached/allocator-repros",
+  "arms": {
+    "virtual-malloc": {"oracle": "complete: slabs_free keeps the chunk on the class free list inside a page virtual mallocng sees as one object"},
+    "virtual-nested-pools": {"oracle": "fault at read_probe: the Sublet ledger revoked the chunk at slabs_free (mode 1)", "cause": 24}
+  }
+}

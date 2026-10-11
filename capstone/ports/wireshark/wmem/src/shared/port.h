@@ -34,3 +34,11 @@ void wm_backing_stats(struct wm_header *out);
 char *wm_getenv(const char *name);
 void wm_replay(const struct wm_header *in, struct wm_header *out);
 #endif
+/* The virtual Capstone profile caps one allocation at 256 MiB (runtime/virtual/vm.h, CAP_VM_MAX_BYTES),
+ * so its builds ask for a smaller payload with -DWM_VIRTUAL_PAYLOAD_BYTES (cmake/Replay.cmake). This sits
+ * after the guard so that no line above it moves: the Debug builds' line tables, and with them every
+ * image a record cites, stay byte-identical. */
+#ifdef WM_VIRTUAL_PAYLOAD_BYTES
+#undef WM_PAYLOAD_BYTES
+#define WM_PAYLOAD_BYTES WM_VIRTUAL_PAYLOAD_BYTES
+#endif

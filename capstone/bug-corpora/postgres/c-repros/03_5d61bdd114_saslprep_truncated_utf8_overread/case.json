@@ -18,23 +18,29 @@
       "evidence": "capability fault: capstone-exec: domain fault cause=5 pc=0xc020f64c address=0xc02580d4 entry=0xc0200cc8 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=b2b69f3b57caed146449cd025b3e35be2e27be753a52b5e23c23a26c599d20bb image=/mnt/host/applications/03_5d61bdd114_saslprep_truncated_utf8_overread-b2b69f3b57caed146449cd025b3e35be2e27be753a52b5e23c23a26c599d20bb.dom; case expected it in pg_utf8_string_len@0xc020f110",
       "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
     },
-    "sublet": {
-      "oracle": "the overrun of the malloc'd object is reported as a domain fault, or the case completes and this arm did not see it. level0 narrows a returned pointer to the bytes requested, not to a size class, so unlike the purecap guest the bound here is the object itself; the host's fault line carries the pc, and the expect_fault_in line the case prints before the defect is what attributes it.",
-      "verdict": "detected",
-      "evidence": "capability fault: capstone-exec: domain fault cause=5 pc=0xc020f64c address=0xc02580d4 entry=0xc0200cc8 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=1ef0b6fb2b7f56557d7e9398e941afe8dbdefaf1d54153534924755d2026bde5 image=/mnt/host/applications/03_5d61bdd114_saslprep_truncated_utf8_overread-1ef0b6fb2b7f56557d7e9398e941afe8dbdefaf1d54153534924755d2026bde5.dom; case expected it in pg_utf8_string_len@0xc020f110",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
-    },
     "cheribsd-revocation": {
       "oracle": "completes with no capability fault -- REACHED-SILENT (CheriBSD riscv64-purecap, static build, 2026-10-06). The PG_DEFECT marker printed, so the overread provably executed. The reason the arm is silent was MEASURED rather than inferred: a probe calling cheri_length_get() on this guest's malloc shows the bounds are rounded to a size class, not to the request -- malloc(4) returns a capability of length 16, so the object has 12 bytes of slack and a one-byte overread never leaves the capability. Requested/granted pairs measured: 1->16, 4->16, 8->16, 16->16, 24->32, 32->32, 100->112, 400->448, 4096->4096. This is a limit of the mechanism's granularity for small objects, and it is independent of nesting: the object here came straight from libc. The fault handler installed for this run did not fire at all, which is the same statement as REACHED-SILENT made from the other side: the arm had a handler ready to attribute a fault and there was no fault to attribute.",
-      "verdict": "silent",
+      "verdict": "MISSED",
       "evidence": "reached its marker and returned; the mechanism did not report",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict_from": "results/matrix.tsv cheribsd-revocation: silent"
     },
     "host-asan": {
       "oracle": "AddressSanitizer: heap-buffer-overflow, READ of size 1, \"0 bytes to the right of 4-byte region\", in pg_utf8_islegal (shared/upstream_saslprep.c:45, the `a = source[2]` arm) called from pg_utf8_string_len (:96) from case.c:38. The 4-byte region is the malloc'd password \"pw\\xE2\" with its terminator, so the overread is exactly one byte past the allocation -- pg_utf_mblen returned 3 for the 0xE2 at offset 2. Host build, 2026-10-06."
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile (tools/arms.json virtual-mallocng): a domain fault in the function the case names (expect_fault_in, or fault_sites), or the case returns after its mark and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f83491c2c in pg_utf8_islegal; by function: pg_utf8_islegal is the case's declared fault site",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
     }
   },
   "status": "measured on all three arms 2026-10-06: spatial=detected, sublet=detected, cheribsd-revocation=silent",
   "nested": false,
-  "nested_why": "The object comes straight from libc malloc. Nothing carves it out of a larger block, so it is not nested. libpq does have a nested allocator of its own, pqResultAlloc's PGresult blocks, but none of these five touches that storage."
+  "nested_why": "The object comes straight from libc malloc. Nothing carves it out of a larger block, so it is not nested. libpq does have a nested allocator of its own, pqResultAlloc's PGresult blocks, but none of these five touches that storage.",
+  "fault_sites": [
+    "pg_utf8_string_len",
+    "pg_utf8_islegal"
+  ],
+  "fault_sites_why": "pg_utf8_string_len hands the lead byte's DECLARED length to pg_utf8_islegal, which reads that many bytes (shared/upstream_saslprep.c:1-8, verbatim wchar.c; PROVENANCE.md, 'pg_utf8_islegal(p, l) then reads l bytes'), so the over-read happens inside pg_utf8_islegal. Declared 2026-10-10 after the virtual run resolved the fault there; the reason is the source above, which predates that run."
 }

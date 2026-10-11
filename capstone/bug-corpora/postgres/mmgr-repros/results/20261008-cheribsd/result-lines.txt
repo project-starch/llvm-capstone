@@ -1,0 +1,35 @@
+### mmgr-00
+PG_DEFECT case=0 ready
+PG_DEFECT case=0 mode=0 completed
+PROBE child mapped 2 0 0 0 0
+
+### mmgr-01
+PG_DEFECT case=1 ready
+PG_DEFECT case=1 mode=0 completed
+PROBE child mapped 2 0 0 0 0
+
+### mmgr-02
+PG_DEFECT case=2 ready
+PG_DEFECT case=2 mode=0 completed
+PROBE child mapped 2 0 0 0 0
+
+### mmgr-03
+PG_DEFECT case=3 ready
+PG_DEFECT case=3 mode=0 completed
+PROBE child mapped 4 0 0 0 0
+
+### mmgr-04
+PG_DEFECT case=4 ready
+PG_DEFECT case=4 mode=0 completed
+PROBE child mapped 4 0 0 0 0
+
+### revocation-control
+SUPERVISE base 0x100000 /tmp/allocator-tests/revocation-control/control
+SUPERVISE expect mc_defect_read 0x101e42
+REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1
+SUPERVISE fault signal=34 code=2 addr=0x101e42 pc=0x101e42
+SUPERVISE exit signalled=34
+
+### sweep-control
+churned
+

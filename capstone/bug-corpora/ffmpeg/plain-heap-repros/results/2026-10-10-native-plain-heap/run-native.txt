@@ -1,0 +1,177 @@
+compiler: cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+00_d133b4a231_showcwt_kernel_scan_past_array case=0 arm=fixed
+00_d133b4a231_showcwt_kernel_scan_past_array cap=4 touched=3 extent=1 crossed=0 damage=0
+00_d133b4a231_showcwt_kernel_scan_past_array VERDICT FIXED the fix starts the scan at b - 1, so the first read is the array's last element
+00_d133b4a231_showcwt_kernel_scan_past_array case=0 arm=buggy
+00_d133b4a231_showcwt_kernel_scan_past_array cap=4 touched=4 extent=1 crossed=1 damage=0
+00_d133b4a231_showcwt_kernel_scan_past_array VERDICT DEFECT-REPRODUCED the backward kernel scan started at b, so it read tkernel[size] -- one element past av_malloc_array(size, 4)
+00_d133b4a231_showcwt_kernel_scan_past_array asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe 1:ffh_case_run at_probe=1
+01_bcbf3a5630_vf_scale_format_list_compaction case=1 arm=fixed
+01_bcbf3a5630_vf_scale_format_list_compaction cap=6 touched=5 extent=1 crossed=0 damage=0
+01_bcbf3a5630_vf_scale_format_list_compaction VERDICT FIXED the fix's j + 1 < nb_formats guard keeps every read inside the array
+01_bcbf3a5630_vf_scale_format_list_compaction case=1 arm=buggy
+01_bcbf3a5630_vf_scale_format_list_compaction cap=6 touched=6 extent=1 crossed=1 damage=0
+01_bcbf3a5630_vf_scale_format_list_compaction VERDICT DEFECT-REPRODUCED the shift loop's guard was j < nb_formats while its body read formats[j + 1], so it read one element past av_malloc_array -- the value is discarded, the crossing is not
+01_bcbf3a5630_vf_scale_format_list_compaction asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe_u8 1:ffh_case_run at_probe=1
+02_56309e476a_vf_vif_mirror_below_base case=2 arm=fixed
+02_56309e476a_vf_vif_mirror_below_base cap=4 touched=2 extent=0 crossed=0 damage=0
+02_56309e476a_vf_vif_mirror_below_base VERDICT FIXED the fix's avpriv_mirror folds repeatedly, so every index lands in [0, w-1]
+02_56309e476a_vf_vif_mirror_below_base case=2 arm=buggy
+02_56309e476a_vf_vif_mirror_below_base cap=4 touched=-1 extent=1 crossed=1 damage=0
+02_56309e476a_vf_vif_mirror_below_base VERDICT DEFECT-REPRODUCED the hand-rolled mirror reflected a tap index of 2*w to -1 and never re-checked it, so the read landed one element BELOW av_calloc's base
+02_56309e476a_vf_vif_mirror_below_base asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe 1:ffh_case_run at_probe=1
+03_495b402f27_diracdec_edge_emu_buffer_undersized case=3 arm=fixed
+03_495b402f27_diracdec_edge_emu_buffer_undersized cap=2048 touched=2032 extent=0 crossed=0 damage=0
+03_495b402f27_diracdec_edge_emu_buffer_undersized VERDICT FIXED the fix allocates stride*4*MAX_BLOCKSIZE and respaces the carve to i*buffer_stride*MAX_BLOCKSIZE, so all four fit
+03_495b402f27_diracdec_edge_emu_buffer_undersized case=3 arm=buggy
+03_495b402f27_diracdec_edge_emu_buffer_undersized cap=512 touched=544 extent=33 crossed=1 damage=1
+03_495b402f27_diracdec_edge_emu_buffer_undersized VERDICT DEFECT-REPRODUCED the base was sized stride*MAX_BLOCKSIZE and then carved into FOUR sub-buffers spaced FFALIGN(width,16) apart, so sub-buffer 3's last row starts past the end of av_malloc_array
+03_495b402f27_diracdec_edge_emu_buffer_undersized asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+04_b3c7ebc1ed_swaprect_temp_sized_for_plane0 case=4 arm=fixed
+04_b3c7ebc1ed_swaprect_temp_sized_for_plane0 cap=18 touched=17 extent=1 crossed=0 damage=0
+04_b3c7ebc1ed_swaprect_temp_sized_for_plane0 VERDICT FIXED the fix sizes the scratch by the widest plane, so every row copy fits
+04_b3c7ebc1ed_swaprect_temp_sized_for_plane0 case=4 arm=buggy
+04_b3c7ebc1ed_swaprect_temp_sized_for_plane0 cap=17 touched=17 extent=1 crossed=1 damage=1
+04_b3c7ebc1ed_swaprect_temp_sized_for_plane0 VERDICT DEFECT-REPRODUCED the scratch row was sized w * pixsteps[0], the luma plane, while the chroma row of a semi-planar 4:2:0 format at odd width needs one byte more -- so the copy wrote past av_malloc_array
+04_b3c7ebc1ed_swaprect_temp_sized_for_plane0 asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+05_8553e6ef57_cbs_av1_t35_payload_unpadded case=5 arm=fixed
+05_8553e6ef57_cbs_av1_t35_payload_unpadded cap=88 touched=27 extent=64 crossed=0 damage=0
+05_8553e6ef57_cbs_av1_t35_payload_unpadded VERDICT FIXED the fix allocates payload_size + AV_INPUT_BUFFER_PADDING_SIZE and zeroes the padding, so the same read stays inside
+05_8553e6ef57_cbs_av1_t35_payload_unpadded case=5 arm=buggy
+05_8553e6ef57_cbs_av1_t35_payload_unpadded cap=24 touched=27 extent=64 crossed=1 damage=1
+05_8553e6ef57_cbs_av1_t35_payload_unpadded VERDICT DEFECT-REPRODUCED the T.35 payload was allocated at exactly payload_size, so a reader entitled to FFmpeg's 64-byte input padding read past av_buffer_alloc
+05_8553e6ef57_cbs_av1_t35_payload_unpadded asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe_u8 1:ffh_case_run at_probe=1
+06_041d4f010e_prores_raw_header_len_unchecked case=6 arm=fixed
+06_041d4f010e_prores_raw_header_len_unchecked cap=48 touched=-1 extent=20 crossed=0 damage=0
+06_041d4f010e_prores_raw_header_len_unchecked VERDICT FIXED the fix also requires bytestream2_get_bytes_left to cover header_len - 2, so an over-long header is rejected before any read
+06_041d4f010e_prores_raw_header_len_unchecked case=6 arm=buggy
+06_041d4f010e_prores_raw_header_len_unchecked cap=48 touched=67 extent=20 crossed=1 damage=1
+06_041d4f010e_prores_raw_header_len_unchecked VERDICT DEFECT-REPRODUCED the header-length guard checked only that header_len was at least 62, so a stream declaring more than the packet holds walked the parse past the buffer
+06_041d4f010e_prores_raw_header_len_unchecked asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe_u8 1:ffh_case_run at_probe=1
+07_8880a174d0_librist_read_ignores_caller_size case=7 arm=fixed
+07_8880a174d0_librist_read_ignores_caller_size cap=32 touched=31 extent=16 crossed=0 damage=0
+07_8880a174d0_librist_read_ignores_caller_size VERDICT FIXED the fix takes FFMIN of the payload length and the caller's size, so the copy fits
+07_8880a174d0_librist_read_ignores_caller_size case=7 arm=buggy
+07_8880a174d0_librist_read_ignores_caller_size cap=32 touched=32 extent=16 crossed=1 damage=1
+07_8880a174d0_librist_read_ignores_caller_size VERDICT DEFECT-REPRODUCED the read overwrote the caller's buffer size with the payload's length, so a payload larger than the buffer was copied past its end
+07_8880a174d0_librist_read_ignores_caller_size asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+08_b2df2f4f22_mpegenc_system_header_fixed_128 case=8 arm=fixed
+08_b2df2f4f22_mpegenc_system_header_fixed_128 cap=160 touched=159 extent=64 crossed=0 damage=0
+08_b2df2f4f22_mpegenc_system_header_fixed_128 VERDICT FIXED the fix passes buf_end - buf_ptr into the writer, so its capacity is the space actually left
+08_b2df2f4f22_mpegenc_system_header_fixed_128 case=8 arm=buggy
+08_b2df2f4f22_mpegenc_system_header_fixed_128 cap=160 touched=160 extent=64 crossed=1 damage=1
+08_b2df2f4f22_mpegenc_system_header_fixed_128 VERDICT DEFECT-REPRODUCED the system-header writer was initialised with a constant 128-byte capacity, so at a cursor with less than that remaining it wrote past the muxer's buffer
+08_b2df2f4f22_mpegenc_system_header_fixed_128 asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+09_16b2049d4d_cfhd_transform2_wider_than_plane case=9 arm=fixed
+09_16b2049d4d_cfhd_transform2_wider_than_plane cap=64 touched=-1 extent=16 crossed=0 damage=0
+09_16b2049d4d_cfhd_transform2_wider_than_plane VERDICT FIXED the fix also rejects lowpass_width * 2 greater than the plane's width, so the frame is refused before any write
+09_16b2049d4d_cfhd_transform2_wider_than_plane case=9 arm=buggy
+09_16b2049d4d_cfhd_transform2_wider_than_plane cap=64 touched=64 extent=16 crossed=1 damage=1
+09_16b2049d4d_cfhd_transform2_wider_than_plane VERDICT DEFECT-REPRODUCED the transform-2 guard checked the lowpass width but not its doubled output, so the inverse transform wrote lowpass_width * 2 bytes into a narrower plane
+09_16b2049d4d_cfhd_transform2_wider_than_plane asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+10_989444060d5f_lut3d_size2_computed_before_directive case=10 arm=fixed
+10_989444060d5f_lut3d_size2_computed_before_directive cap=64 touched=16 extent=-47 crossed=0 damage=0
+10_989444060d5f_lut3d_size2_computed_before_directive VERDICT FIXED the fix computes size2 after the directive, so the stride matches the allocation
+10_989444060d5f_lut3d_size2_computed_before_directive case=10 arm=buggy
+10_989444060d5f_lut3d_size2_computed_before_directive cap=64 touched=64 extent=1026 crossed=1 damage=1
+10_989444060d5f_lut3d_size2_computed_before_directive VERDICT DEFECT-REPRODUCED size2 was computed from the default LUT size before 3DLUTSIZE could lower it, so the write index belongs to a 33-cube while the array is a 4-cube
+10_989444060d5f_lut3d_size2_computed_before_directive asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+11_76645e096fab_exif_string_clone_drops_terminator case=11 arm=fixed
+11_76645e096fab_exif_string_clone_drops_terminator cap=17 touched=16 extent=1 crossed=0 damage=0
+11_76645e096fab_exif_string_clone_drops_terminator VERDICT FIXED the fix copies count+1, inheriting the terminator the source was allocated for
+11_76645e096fab_exif_string_clone_drops_terminator case=11 arm=buggy
+11_76645e096fab_exif_string_clone_drops_terminator cap=16 touched=16 extent=1 crossed=1 damage=1
+11_76645e096fab_exif_string_clone_drops_terminator VERDICT DEFECT-REPRODUCED the clone copied only the character count, so it carries no terminator and the first scan over it runs past the allocation
+11_76645e096fab_exif_string_clone_drops_terminator asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe_u8 1:ffh_case_run at_probe=1
+12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators case=12 arm=fixed
+12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators cap=18 touched=16 extent=-1 crossed=0 damage=0
+12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators VERDICT FIXED the fix widens each label slot by one, which covers the separator and the terminator
+12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators case=12 arm=buggy
+12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators cap=16 touched=16 extent=1 crossed=1 damage=1
+12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators VERDICT DEFECT-REPRODUCED the label buffer was sized for the labels but not for the two-byte separator joining them, so the last strcat runs past the allocation
+12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+13_8af6c71d96f4_vif_single_reflection_indexes_below_base case=13 arm=fixed
+13_8af6c71d96f4_vif_single_reflection_indexes_below_base cap=4 touched=1 extent=1 crossed=0 damage=0
+13_8af6c71d96f4_vif_single_reflection_indexes_below_base VERDICT FIXED the fix uses avpriv_mirror, which folds repeatedly into [0, w-1]
+13_8af6c71d96f4_vif_single_reflection_indexes_below_base case=13 arm=buggy
+13_8af6c71d96f4_vif_single_reflection_indexes_below_base cap=4 touched=-4 extent=4 crossed=1 damage=1
+13_8af6c71d96f4_vif_single_reflection_indexes_below_base VERDICT DEFECT-REPRODUCED the hand-rolled mirror reflects only once, so an index beyond w + filt_w/2 comes back negative and temp[jj] reads below the buffer's base
+13_8af6c71d96f4_vif_single_reflection_indexes_below_base asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe 1:ffh_case_run at_probe=1
+14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked case=14 arm=fixed
+14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked cap=8 touched=4 extent=-3 crossed=0 damage=0
+14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked VERDICT FIXED the fix masks the index, matching the sibling paths and the map's own assertion
+14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked case=14 arm=buggy
+14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked cap=8 touched=8 extent=293 crossed=1 damage=1
+14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked VERDICT DEFECT-REPRODUCED the 8-bit remap path indexed the map with the raw decoded sample while its two sibling paths mask it, so a sample above mask reads past the map
+14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe_u8 1:ffh_case_run at_probe=1
+15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size case=15 arm=fixed
+15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size cap=48 touched=0 extent=48 crossed=0 damage=0
+15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size VERDICT FIXED the fix rejects a tile whose geometry needs more than tile_size bytes
+15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size case=15 arm=buggy
+15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size cap=48 touched=48 extent=48 crossed=1 damage=1
+15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size VERDICT DEFECT-REPRODUCED the raw tile was copied by 3 * w * h while the buffer was allocated for the stream's tile_size, with nothing relating the two
+15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe_u8 1:ffh_case_run at_probe=1
+16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry case=16 arm=fixed
+16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry cap=32 touched=0 extent=16 crossed=0 damage=0
+16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry VERDICT FIXED the fix rejects a packet smaller than the three plane sizes together
+16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry case=16 arm=buggy
+16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry cap=32 touched=32 extent=16 crossed=1 damage=1
+16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry VERDICT DEFECT-REPRODUCED the three plane reads took their lengths from the declared geometry, whose sum exceeds the packet the data actually came in
+16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe_u8 1:ffh_case_run at_probe=1
+17_18761f9fb55c_rtpdec_av1_output_cursor_advanced_for_skipped_obu case=17 arm=fixed
+17_18761f9fb55c_rtpdec_av1_output_cursor_advanced_for_skipped_obu cap=16 touched=0 extent=16 crossed=0 damage=0
+17_18761f9fb55c_rtpdec_av1_output_cursor_advanced_for_skipped_obu VERDICT FIXED the fix advances buf_ptr, the input cursor, leaving the output offset where it belongs
+17_18761f9fb55c_rtpdec_av1_output_cursor_advanced_for_skipped_obu case=17 arm=buggy
+17_18761f9fb55c_rtpdec_av1_output_cursor_advanced_for_skipped_obu cap=16 touched=16 extent=16 crossed=1 damage=1
+17_18761f9fb55c_rtpdec_av1_output_cursor_advanced_for_skipped_obu VERDICT DEFECT-REPRODUCED skipping an OBU advanced the output cursor instead of the input one, so the next write lands past the packet by the skipped OBU's size
+17_18761f9fb55c_rtpdec_av1_output_cursor_advanced_for_skipped_obu asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+18_e8031e5b9ad2_showcwt_du_scroll_reads_row_past_plane case=18 arm=fixed
+18_e8031e5b9ad2_showcwt_du_scroll_reads_row_past_plane cap=32 touched=0 extent=8 crossed=0 damage=0
+18_e8031e5b9ad2_showcwt_du_scroll_reads_row_past_plane VERDICT FIXED the fix stops one row earlier, so the last source row is the final one
+18_e8031e5b9ad2_showcwt_du_scroll_reads_row_past_plane case=18 arm=buggy
+18_e8031e5b9ad2_showcwt_du_scroll_reads_row_past_plane cap=32 touched=32 extent=8 crossed=1 damage=1
+18_e8031e5b9ad2_showcwt_du_scroll_reads_row_past_plane VERDICT DEFECT-REPRODUCED the DU scroll copies each row from the one below, so with sono_size == h the last iteration sources row h of a plane holding exactly h rows
+18_e8031e5b9ad2_showcwt_du_scroll_reads_row_past_plane asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe_u8 1:ffh_case_run at_probe=1
+19_905a4324030e_showcwt_position_initialised_to_sono_size case=19 arm=fixed
+19_905a4324030e_showcwt_position_initialised_to_sono_size cap=32 touched=24 extent=8 crossed=0 damage=0
+19_905a4324030e_showcwt_position_initialised_to_sono_size VERDICT FIXED the fix initialises it to FFMAX(sono_size - 1, 0), the last valid row
+19_905a4324030e_showcwt_position_initialised_to_sono_size case=19 arm=buggy
+19_905a4324030e_showcwt_position_initialised_to_sono_size cap=32 touched=32 extent=8 crossed=1 damage=1
+19_905a4324030e_showcwt_position_initialised_to_sono_size VERDICT DEFECT-REPRODUCED the row cursor was initialised to the row COUNT, so the first write lands one whole row past the plane
+19_905a4324030e_showcwt_position_initialised_to_sono_size asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+20_bbdce45fda1e_diracdec_mctmp_rows_below_worst_case case=20 arm=fixed
+20_bbdce45fda1e_diracdec_mctmp_rows_below_worst_case cap=64 touched=0 extent=0 crossed=0 damage=0
+20_bbdce45fda1e_diracdec_mctmp_rows_below_worst_case VERDICT FIXED the fix allocates h + 5*MAX_BLOCKSIZE rows, covering the writer's worst case
+20_bbdce45fda1e_diracdec_mctmp_rows_below_worst_case case=20 arm=buggy
+20_bbdce45fda1e_diracdec_mctmp_rows_below_worst_case cap=16 touched=16 extent=48 crossed=1 damage=1
+20_bbdce45fda1e_diracdec_mctmp_rows_below_worst_case VERDICT DEFECT-REPRODUCED mctmp's height term is h + MAX_BLOCKSIZE while motion compensation writes rows up to blheight * ybsep + yblen, so the later rows land past the allocation
+20_bbdce45fda1e_diracdec_mctmp_rows_below_worst_case asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+21_3fbb9560821b_afir_crossfade_reads_beyond_input_frame case=21 arm=fixed
+21_3fbb9560821b_afir_crossfade_reads_beyond_input_frame cap=4 touched=0 extent=2 crossed=0 damage=0
+21_3fbb9560821b_afir_crossfade_reads_beyond_input_frame VERDICT FIXED the fix clamps the length to FFMIN(min_part_size, nb_samples - offset)
+21_3fbb9560821b_afir_crossfade_reads_beyond_input_frame case=21 arm=buggy
+21_3fbb9560821b_afir_crossfade_reads_beyond_input_frame cap=4 touched=4 extent=2 crossed=1 damage=1
+21_3fbb9560821b_afir_crossfade_reads_beyond_input_frame VERDICT DEFECT-REPRODUCED the crossfade copied a fixed min_part_size samples from the frame at offset, with nothing bounding it against the frame's own nb_samples
+21_3fbb9560821b_afir_crossfade_reads_beyond_input_frame asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe 1:ffh_case_run at_probe=1
+22_242ff799c75f_tdsc_cursor_advanced_by_a_stride_the_loop_already_added case=22 arm=fixed
+22_242ff799c75f_tdsc_cursor_advanced_by_a_stride_the_loop_already_added cap=512 touched=0 extent=372 crossed=0 damage=0
+22_242ff799c75f_tdsc_cursor_advanced_by_a_stride_the_loop_already_added VERDICT FIXED the fix deletes the trailing advance, leaving the loop's own stride
+22_242ff799c75f_tdsc_cursor_advanced_by_a_stride_the_loop_already_added case=22 arm=buggy
+22_242ff799c75f_tdsc_cursor_advanced_by_a_stride_the_loop_already_added cap=512 touched=512 extent=372 crossed=1 damage=1
+22_242ff799c75f_tdsc_cursor_advanced_by_a_stride_the_loop_already_added VERDICT DEFECT-REPRODUCED the inner loop already advanced dst by a full stride per row, and the trailing statement advanced it again, so the later rows are written past the cursor buffer
+22_242ff799c75f_tdsc_cursor_advanced_by_a_stride_the_loop_already_added asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+23_f45da79b2c33_exr_dwa_block_written_full_eight_by_eight case=23 arm=fixed
+23_f45da79b2c33_exr_dwa_block_written_full_eight_by_eight cap=16 touched=0 extent=24 crossed=0 damage=0
+23_f45da79b2c33_exr_dwa_block_written_full_eight_by_eight VERDICT FIXED the fix clamps the block to FFMIN(8, xsize - x) by FFMIN(8, ysize - y)
+23_f45da79b2c33_exr_dwa_block_written_full_eight_by_eight case=23 arm=buggy
+23_f45da79b2c33_exr_dwa_block_written_full_eight_by_eight cap=16 touched=16 extent=24 crossed=1 damage=1
+23_f45da79b2c33_exr_dwa_block_written_full_eight_by_eight VERDICT DEFECT-REPRODUCED the DWA block loop wrote a full 8x8 block regardless of how much of it lay inside the tile, so a tile whose dimensions are not multiples of 8 is written past
+23_f45da79b2c33_exr_dwa_block_written_full_eight_by_eight asan fixed_clean=1 buggy_reported=1 frames=0:ffh_write_probe_u8 1:ffh_case_run at_probe=1
+24_162f75b5e679_exr_pxr24_uint_branch_strides_by_the_data_window case=24 arm=fixed
+24_162f75b5e679_exr_pxr24_uint_branch_strides_by_the_data_window cap=16 touched=0 extent=48 crossed=0 damage=0
+24_162f75b5e679_exr_pxr24_uint_branch_strides_by_the_data_window VERDICT FIXED the fix uses td->xsize, as the sibling FLOAT and HALF branches already did
+24_162f75b5e679_exr_pxr24_uint_branch_strides_by_the_data_window case=24 arm=buggy
+24_162f75b5e679_exr_pxr24_uint_branch_strides_by_the_data_window cap=16 touched=16 extent=48 crossed=1 damage=1
+24_162f75b5e679_exr_pxr24_uint_branch_strides_by_the_data_window VERDICT DEFECT-REPRODUCED the UINT branch laid its four byte planes out by s->xdelta, the data-window width, while the buffer was sized by td->xsize, the tile width
+24_162f75b5e679_exr_pxr24_uint_branch_strides_by_the_data_window asan fixed_clean=1 buggy_reported=1 frames=0:ffh_read_probe_u8 1:ffh_case_run at_probe=1
+exit=0

@@ -16,10 +16,14 @@
       "oracle": "capability fault, cause 24"
     },
     "sublet-gc": {
-      "oracle": "capability fault, cause 24"
+      "oracle": "capability fault, cause 24",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/20261006/matrix.tsv ff047f5fe sublet-gc: fault c24"
     },
     "cheribsd-revocation": {
-      "oracle": "SIGPROT: the defence reports"
+      "oracle": "SIGPROT: the defence reports",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/20261006-cheribsd/matrix.tsv ff047f5fe: SIGPROT rc=162"
     }
   },
   "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default"

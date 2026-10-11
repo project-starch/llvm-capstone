@@ -15,6 +15,226 @@
 #ifndef REPRO322_COMMON_H
 #define REPRO322_COMMON_H
 
+#ifdef REPRO322_VIRTUAL
+/* THE VIRTUAL ARM. Same cases, same file, an ordinary program.
+ *
+ * The scaffolding above is a freestanding domain's: output goes through shared
+ * hostcall regions, the pool arrives as a granted region, and the entry point
+ * is domain_main(), which the physical monitor calls. None of that exists in
+ * the virtual address space, where a case is a Linux process under
+ * capstone-vexec with a Capstone musl. So this branch supplies the SAME five
+ * things over libc -- out_text, out_uint, repro_init, REPRO322_MAIN, FAILRC --
+ * and the cases are not touched.
+ *
+ * WHICH ALLOCATOR IS UNDER THE CASE, which is the whole point of the arm:
+ *
+ *   default            SQLite's own sqlite3MemMalloc, i.e. the platform's
+ *                      malloc. On this platform that is the virtual runtime's
+ *                      allocator: every SQLite allocation is its own object,
+ *                      bounded to the request, and freeing it revokes every
+ *                      copy of the alias. The system allocator therefore sees
+ *                      each engine lifetime individually.
+ *   REPRO322_VIRTUAL_MEMSYS5
+ *                      SQLITE_CONFIG_HEAP over one static array, so memsys5
+ *                      sub-allocates inside a single object exactly as the
+ *                      physical control arm does. The system allocator sees
+ *                      one allocation and no frees at all.
+ *   REPRO322_VIRTUAL_SUBLET
+ *                      memsys5 again, but under its own Sublet port
+ *                      (ports/sqlite/sublet/sublet-3220000-memsys5.patch):
+ *                      the pool is borrowed from the system allocator as ONE
+ *                      LINEAR capability, carved into blocks with a revocation
+ *                      node each, and every sqlite3_free revokes its block.
+ *                      The pool is not a static array here and cannot be: the
+ *                      discipline is that it arrives from the level below and
+ *                      never sits in a C variable.
+ *
+ * The three are the measurement: the same defect and the same binary modulo
+ * one configure call, with the nested allocator absent, present, and present
+ * and protected. Requires
+ * SQLITE_ENABLE_MEMSYS5 in the amalgamation; without it sqlite3_config returns
+ * SQLITE_ERROR and repro_init says so rather than running the case.
+ */
+#include "sqlite3.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static void out_text(const char *text) { fputs(text, stdout); }
+#ifdef REPRO322_VIRTUAL_SUBLET
+void sqlite3_sublet_stats(unsigned long *aOut);
+/* Printed after every case. `revoke` is the question: zero means nothing was
+ * ever handed back to memsys5, so the stale pointer this case follows points at
+ * memory no allocator was told was dead -- which no protection can catch, and
+ * which is why six temporal cases stay silent on all three arms. */
+#define REPRO322_STATS                                                   \
+  do {                                                                   \
+    unsigned long aStat[5] = {0, 0, 0, 0, 0};                            \
+    sqlite3_sublet_stats(aStat);                                         \
+    printf("SUBLET split=%lu mrev=%lu delin=%lu revoke=%lu init=%lu\n",  \
+           aStat[0], aStat[1], aStat[2], aStat[3], aStat[4]);            \
+  } while (0)
+#else
+#define REPRO322_STATS do { } while (0)
+#endif
+static void out_uint(unsigned long v) { printf("%lu", v); }
+static int run_case(void);
+
+#ifndef SQLITE_HEAP_SIZE
+#define SQLITE_HEAP_SIZE (1024U * 1024U)
+#endif
+#if defined(REPRO322_VIRTUAL_MEMSYS5) && !defined(REPRO322_VIRTUAL_SUBLET)
+static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
+#endif
+#ifdef REPRO322_VIRTUAL_SUBLET
+#include <capstone/capability.h>
+/* The heap's lend API: one linear block, the heap keeping the senior handle so
+ * that its own free can still reclaim everything derived from it. Declared
+ * here rather than included because it is the allocator's internal interface,
+ * not part of any libc header. */
+unsigned long __capstone_sublet_malloc_linear(size_t, capstone_cap_slot *);
+/* The port's hand-over, added by the patch: memsys5 stores the grant in its
+ * own slot and reaches its memory through Sublet's primitives from then on. */
+void sqlite3_sublet_grant(void *pLinear);
+/* The port's own counters: split, mrev, delin, REVOKE, init. The fourth is the
+ * one that answers whether anything died: a case that ends with revoke=0 freed
+ * nothing memsys5 could see, so no arm of any quality could have caught it. */
+void sqlite3_sublet_stats(unsigned long *aOut);
+/* memsys5's bookkeeping moves OUT OF BAND under the port -- aLink, aCap and
+ * aPar sit beside the pool, because a freed block is revoked memory and a free
+ * list cannot live in it. SQLITE_CONFIG_HEAP is therefore given THAT region,
+ * and the pool arrives separately as the grant. The sizing is the domain
+ * arm's, for `atoms` atoms of 64 bytes:
+ *     ((atoms+15)&~15)   aCtrl, one byte per atom
+ *   + atoms*8            aLink, the free-list links
+ *   + atoms*16           aCap,  one capability slot per atom
+ *   + (atoms+32)*16      aPar,  the handle taken before each split
+ *   + 64                 slack */
+#define REPRO322_SUBLET_TABLES(atoms) \
+  ((unsigned long)(((atoms)+15)&~15UL) + (unsigned long)(atoms)*8 \
+   + (unsigned long)(atoms)*16 + ((unsigned long)(atoms)+32)*16 + 64)
+#endif
+
+static int repro_init(void) {
+  int rc;
+#ifdef REPRO322_VIRTUAL_SUBLET
+  /* Order matters and getting it wrong looks like a clean run rather than a
+   * failure, so each step says so if it fails.
+   *
+   * The pool must be LINEAR, or memsys5's port reads an empty slot and faults
+   * inside its own primitives -- which would be the port failing, not a defect
+   * being caught. The grant must precede sqlite3_initialize, which is what
+   * runs memsys5Init and reads it. And CONFIG_HEAP must still be called, with
+   * the TABLES region: it is what installs memsys5 at all, and passing it the
+   * pool instead would make the side tables describe memory the allocator does
+   * not use. */
+  {
+    unsigned long atoms = (unsigned long)SQLITE_HEAP_SIZE / 64UL;
+    unsigned long bytes = REPRO322_SUBLET_TABLES(atoms);
+    void *tables = aligned_alloc(64, (bytes + 63) & ~63UL);
+    capstone_cap_slot pool;
+    if (!tables) {
+      out_text("CONTROL-FAILED sublet tables aligned_alloc failed\n");
+      return 1;
+    }
+    if (!__capstone_sublet_malloc_linear(SQLITE_HEAP_SIZE, &pool)) {
+      out_text("CONTROL-FAILED sublet the heap refused a linear block of ");
+      out_uint(SQLITE_HEAP_SIZE); out_text(" bytes\n");
+      return 1;
+    }
+    if (capstone_cap_type(&pool) != CAPSTONE_CAP_LINEAR) {
+      out_text("CONTROL-FAILED sublet the lent pool is not linear, type=");
+      out_uint(capstone_cap_type(&pool)); out_text("\n");
+      return 1;
+    }
+    if (capstone_cap_end(&pool) - capstone_cap_base(&pool) < SQLITE_HEAP_SIZE) {
+      out_text("CONTROL-FAILED sublet the lent pool is short: ");
+      out_uint(capstone_cap_end(&pool) - capstone_cap_base(&pool));
+      out_text(" of "); out_uint(SQLITE_HEAP_SIZE); out_text("\n");
+      return 1;
+    }
+#ifdef REPRO322_NO_LOOKASIDE
+    /* THE PROBE. SQLite has TWO nested allocators and this arm's patch
+     * (ports/sqlite/sublet/sublet-3220000-memsys5.patch, 16 hunks, zero
+     * mentions of the lookaside) covers one. The lookaside takes a
+     * connection's small allocations -- up to LOOKASIDE_SMALL -- and its free
+     * is `pBuf->pNext = db->lookaside.pFree`, a push onto a free list with no
+     * revoke and no per-object bound. Six temporal cases stay silent on this
+     * arm, four of them fts3 snippet/offsets/zterm buffers, which is exactly
+     * the small per-statement shape that lands there.
+     *
+     * Turning the lookaside off sends those allocations to memsys5, which IS
+     * under the discipline. If the six then fault, the silence was the
+     * unprotected layer and not memsys5. */
+    rc = sqlite3_config(SQLITE_CONFIG_LOOKASIDE, 0, 0);
+    out_text("repro lookaside=off rc="); out_uint((unsigned)(rc<0?-rc:rc));
+    out_text("\n");
+    if (rc != SQLITE_OK) {
+      out_text("CONTROL-FAILED sublet could not disable the lookaside\n");
+      return rc;
+    }
+#endif
+    out_text("repro allocator=memsys5-sublet pool_bytes=");
+    out_uint(SQLITE_HEAP_SIZE); out_text(" pool_base=");
+    out_uint(capstone_cap_base(&pool)); out_text(" tables_bytes=");
+    out_uint(bytes); out_text("\n");
+    sqlite3_sublet_grant(capstone_cap_load(&pool));
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, tables, (int)bytes, 64);
+    if (rc != SQLITE_OK) {
+      out_text("CONTROL-FAILED sublet config-heap rc="); out_uint((unsigned)rc);
+      out_text("\n");
+      return rc;
+    }
+  }
+#elif defined(REPRO322_VIRTUAL_MEMSYS5)
+  rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof sqlite_heap, 64);
+  if (rc != SQLITE_OK) {
+    /* Never fall through to the platform allocator here: that would silently
+     * turn the nested arm into the system-allocator arm and the two columns
+     * would stop differing for a reason nobody could see. */
+    out_text("CONTROL-FAILED config-heap rc="); out_uint((unsigned)rc);
+    out_text(" (build the amalgamation with SQLITE_ENABLE_MEMSYS5)\n");
+    return rc;
+  }
+  out_text("repro allocator=memsys5 heap_bytes="); out_uint(sizeof sqlite_heap);
+  out_text("\n");
+#else
+  out_text("repro allocator=platform\n");
+#endif
+  rc = sqlite3_initialize();
+  if (rc != SQLITE_OK) {
+    out_text("CONTROL-FAILED initialize rc="); out_uint((unsigned)rc); out_text("\n");
+    return rc;
+  }
+  return 0;
+}
+
+/* The tag on the command line is the fixture check the contract asks for: a
+ * program told to run another case refuses instead of running this one and
+ * reporting under the wrong name. BEGIN is printed before anything else, so
+ * its absence means the image did not run rather than that the case was
+ * silent, and RETURNED is printed only on the way out, so a fault is visible
+ * as the missing line as well as through the launcher's own record. */
+#define REPRO322_MAIN(TAG)                                               \
+  int main(int argc, char **argv) {                                      \
+    setvbuf(stdout, NULL, _IONBF, 0);                                    \
+    if (argc > 1 && strcmp(argv[1], (TAG))) {                            \
+      fprintf(stderr, "CONTROL-FAILED fixture is %s, run asked for %s\n", \
+              (TAG), argv[1]);                                           \
+      return 75;                                                         \
+    }                                                                    \
+    printf("%s BEGIN\n", (TAG));                                         \
+    (void)run_case();                                                    \
+    REPRO322_STATS;                                                      \
+    printf("%s RETURNED\n", (TAG));                                      \
+    return 0;                                                            \
+  }
+
+#define FAILRC(stage, rc) (out_text(stage), out_text(" rc="), \
+  out_uint((unsigned long)((rc) < 0 ? -(rc) : (rc))), out_text("\n"), (rc) ? (rc) : 1)
+
+#else /* the freestanding domain scaffolding */
+
 #include "sqlite3.h"
 #include "sqlite_hostcall.h"
 
@@ -155,5 +375,7 @@ static int repro_init(void) {
 
 /* helper: a fail() that prints "<stage> rc=<n>" and returns rc (nonzero) */
 #define FAILRC(stage, rc) (out_text(stage), out_text(" rc="), out_uint((unsigned long)((rc)<0?-(rc):(rc))), out_text("\n"), (rc)?(rc):1)
+
+#endif /* REPRO322_VIRTUAL */
 
 #endif

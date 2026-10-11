@@ -1,0 +1,39 @@
+# source: <scratch>/cheri-memcached-190515/run/summary.json
+# matched-by: all 20 PASS + 8 fault lines match; 183305 and cheri-out-memcached are ALSO identical in every summary field; 184840 and 190515 are identical in every summary field (53/26/20 programs: exit, expected_exit, passed, marker, stdout_sha256, binaries, platform), so the committed text cannot separate them; 190515 chosen on run-dir evidence: it is the only batch whose control stdout postdates its own .run-started marker (the freshness gate commit 4a288cdef72c introduced), while 184840's markers (19:04) postdate its records (18:49-19:02), i.e. 184840 was re-invoked without a new boot
+# platform qemu=16135483052dfdd6eb0a3fb060a79097eabcbb95fcac756b37ce83407657f0dc firmware=f0e1fe57b0f850756273135d82c4edcec7b354edfc36741cd327d6f2744832cb kernel=8ab453f46dc76cf27faf0fc159761f4e68f2cfb739ed9c0a22d440bab8914530 image=0cb16209c16c5edf9f81148eedf33f750af404f890af6d65d9bd43ecf61aa4f4
+# platform-libc=fdce2289224bb5193526ab2a1fde9a74860c764f2222e0cb2a77bfea039559a8
+# runtime_revocation=on
+# controls: cheribsd-abi=0 cheribsd-bounds=162
+# summary status=complete ran_all_cases=True failed_cases=0 (an oracle scored FAIL is data, see the README)
+# also-cited: <scratch>/cheri-memcached-184840/run/summary.json role=content-identical twin (records predate its .run-started marker) image=0cb16209c16c runtime_revocation=on programs=20 controls: cheribsd-abi=0 cheribsd-bounds=162
+# note: binary_sha256 is the summary's "binaries" entry; for a supervised arm that is the supervise wrapper (or a shared replay driver), and the case binary or fixture is the per-program input hashed below (summary results[].inputs):
+# inputs mch-00-buggy: target=282661ae078ee51b701af90274e51f5e8c706c00fed910d030ac096ec2e066f6
+# inputs mch-01-buggy: target=e314b02b8b23f95f79f4177e2d41f32d899646ffa73d46361236f77535367967
+# inputs mch-02-buggy: target=67c8385a526440e9dfbdeff235fbdefb8ca313b28ce512fe3d921ebc2e74f80e
+# inputs mch-03-buggy: target=f1c8aa1f7ff7f3d99b059938a82d9ac66638152d577eb39d73a396ef9ecd3c07
+# inputs mch-04-buggy: target=c7038357f567c3f4dab175d490d79a6e442f26b83d8431da5f7d26e65efbb6a9
+# inputs mch-05-buggy: target=13bdff3aa53cc24612427057c1262792a2651df31657c836e5d44c45b9542e95
+# inputs mch-06-buggy: target=373b07442a67b0bec66e35609fe859e3b479070f2b36c665db12edff483311fc
+# inputs mch-07-buggy: target=5d12bc8a3652b149c1cab12d6cdaddad0f276dd1668023280ac21775cddd0963
+# inputs mch-08-buggy: target=2a31a8195f8d39376d57043c93b96adbad76c82b818e404041ba81b48beed2c9
+program	exit	expected_exit	passed	binary_sha256	stdout_sha256
+cheribsd-abi	0	0	true	bc4faad5503df79cbe9f044acfc54b4b11de52c0a07a4921699feb34852e3e67	9470e900152738b85544c73ceb0dd0f3fe53261bd3ce0d1460cae0d0201561c3
+cheribsd-bounds	162	162	true	bc4faad5503df79cbe9f044acfc54b4b11de52c0a07a4921699feb34852e3e67	904c72f88b254911f97105bb6cd1e232e373cf2d3da7dc149ab2d9c83b780a7f
+mch-00-fixed	0	0	true	282661ae078ee51b701af90274e51f5e8c706c00fed910d030ac096ec2e066f6	e214e0ed97dbd06db873512466fd80b16a38c3d1043b434b18e73e54fb1772d9
+mch-00-buggy	0	0	true	d0e6e30a052f69bb300ea3c1f34b3dee5b35738a17e7e5928dacb5bd934d7294	2597bd7a24b339493147d66f59290f9cc272c8934220baa093fb983e2d601194
+mch-01-fixed	0	0	true	e314b02b8b23f95f79f4177e2d41f32d899646ffa73d46361236f77535367967	a0c77ce778d14db8aeab3fd53eba8c02ebad04d16211435d0d2de68e18a1ae84
+mch-01-buggy	162	162	true	d0e6e30a052f69bb300ea3c1f34b3dee5b35738a17e7e5928dacb5bd934d7294	18b188eb9d75d4ff7853705389a09129007fdc2a305af98b1cf9b58ebed1b3f5
+mch-02-fixed	0	0	true	67c8385a526440e9dfbdeff235fbdefb8ca313b28ce512fe3d921ebc2e74f80e	ff1c3f8e54638f2ba0bf213c62965bd6342d63e911b5862bf2dd1db1f91e9fdc
+mch-02-buggy	162	162	true	d0e6e30a052f69bb300ea3c1f34b3dee5b35738a17e7e5928dacb5bd934d7294	dc0aec5306046d0504f67cd114154bbceb9acc33dd56a35a69835133320b7bee
+mch-03-fixed	0	0	true	f1c8aa1f7ff7f3d99b059938a82d9ac66638152d577eb39d73a396ef9ecd3c07	ea413d9ed8a1c145127474835d6fafa9ca68eb9e0c63771c7b53e9a859ca4b42
+mch-03-buggy	162	162	true	d0e6e30a052f69bb300ea3c1f34b3dee5b35738a17e7e5928dacb5bd934d7294	3d2451efcc19f43f7adc28667de12d23ad4b4c42af129160ca2f77fb13927e44
+mch-04-fixed	0	0	true	c7038357f567c3f4dab175d490d79a6e442f26b83d8431da5f7d26e65efbb6a9	278ee75f35b280a6e8b39fa82901cafad19750aa65fd4fe445baccbf92c42b01
+mch-04-buggy	162	162	true	d0e6e30a052f69bb300ea3c1f34b3dee5b35738a17e7e5928dacb5bd934d7294	b83d45d00dca979462139e7ade96af49736314f1c74d73988521f7cecc71f143
+mch-05-fixed	0	0	true	13bdff3aa53cc24612427057c1262792a2651df31657c836e5d44c45b9542e95	f9b00688bf81275d9d5a5b08113e8473bbb99600a7c486a7472a61ebfcc0859e
+mch-05-buggy	162	162	true	d0e6e30a052f69bb300ea3c1f34b3dee5b35738a17e7e5928dacb5bd934d7294	3ba7ceb0e5e7eea82b0b6c921d290ad91743be0ae46750d7bc65a0f4a13938d7
+mch-06-fixed	0	0	true	373b07442a67b0bec66e35609fe859e3b479070f2b36c665db12edff483311fc	75a6df47fc334b0b2dafcb20c13673d1935900ea7133b44970fa1fbc6007d47b
+mch-06-buggy	162	162	true	d0e6e30a052f69bb300ea3c1f34b3dee5b35738a17e7e5928dacb5bd934d7294	7aa4d61071731dde483701647e441b1e8bc7e59ed1cd4f3719a7d476a846a224
+mch-07-fixed	0	0	true	5d12bc8a3652b149c1cab12d6cdaddad0f276dd1668023280ac21775cddd0963	6d40e033b23111ce8ab9899c88377fd9019e111f6862485a90431a9b0526affa
+mch-07-buggy	162	162	true	d0e6e30a052f69bb300ea3c1f34b3dee5b35738a17e7e5928dacb5bd934d7294	efd0fab529c7d3174c6a3e55c057b9e6d61a4c8ceda29bbdf1d69df97139f774
+mch-08-fixed	0	0	true	2a31a8195f8d39376d57043c93b96adbad76c82b818e404041ba81b48beed2c9	f990b3d12f4ad22d7b2db2deaa90f21a5273035f75617303684c227fd7e382e6
+mch-08-buggy	162	162	true	d0e6e30a052f69bb300ea3c1f34b3dee5b35738a17e7e5928dacb5bd934d7294	bc1fb85d18ae1e323012a3254f95c9d33ce13d1317212c894ccc1fedeafdecbf

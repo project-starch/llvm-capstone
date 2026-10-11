@@ -12,7 +12,9 @@
   "required_arms": [
     "spatial",
     "sublet",
-    "cheribsd-revocation"
+    "cheribsd-revocation",
+    "virtual-malloc",
+    "virtual-pg-pools"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -40,10 +42,21 @@
     "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261008-080000",
     "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261008-080219",
     "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043120",
-    "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043643"
+    "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043643",
+    "capstone/bug-corpora/postgres/sql-repros/results/2026-10-10-virtual"
   ],
   "runners": [
     "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",
     "capstone/bug-corpora/postgres/sql-repros/shared/run-cheribsd.sh"
-  ]
+  ],
+  "arm_configurations": {
+    "spatial": "app-level0",
+    "sublet": "app-level0-pg-nested-sublet",
+    "virtual-malloc": "virtual-mallocng",
+    "virtual-pg-pools": "virtual-mallocng-pg-pools"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+    "virtual-pg-pools": "results/2026-10-10-virtual/virtual-pg-pools"
+  }
 }

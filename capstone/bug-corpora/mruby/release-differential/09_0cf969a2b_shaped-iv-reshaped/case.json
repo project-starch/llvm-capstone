@@ -16,10 +16,14 @@
       "oracle": "completes and the harness reports PASS: the defect executes and is silent in every sense this arm can see"
     },
     "sublet-gc": {
-      "oracle": "capability fault, cause 24"
+      "oracle": "capability fault, cause 24",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/20261006/matrix.tsv 0cf969a2b sublet-gc: fault c24"
     },
     "cheribsd-revocation": {
-      "oracle": "completes and the harness reports PASS: the defect executes and nothing here sees it"
+      "oracle": "completes and the harness reports PASS: the defect executes and nothing here sees it",
+      "verdict": "MISSED",
+      "verdict_from": "results/20261006-cheribsd/matrix.tsv 0cf969a2b: completes rc=0"
     }
   },
   "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",

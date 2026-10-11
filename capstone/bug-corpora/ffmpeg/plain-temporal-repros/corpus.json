@@ -15,7 +15,8 @@
     "poisoncap-protected",
     "cheribsd-revocation",
     "native-detect",
-    "native-fix-differential"
+    "native-fix-differential",
+    "virtual-malloc"
   ],
   "arm_keys": {},
   "status": "measured",
@@ -37,5 +38,11 @@
     "capstone/bug-corpora/ffmpeg/plain-temporal-repros/results/2026-10-09-poisoncap-mode1"
   ],
   "advisories": [],
-  "shape_table": true
+  "shape_table": true,
+  "arm_configurations": {
+    "virtual-malloc": "virtual-mallocng"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+  }
 }

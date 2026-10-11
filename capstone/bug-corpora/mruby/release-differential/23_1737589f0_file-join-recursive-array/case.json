@@ -16,10 +16,15 @@
       "oracle": "the watchdog killed it at 25 s (it does not terminate)"
     },
     "sublet-gc": {
-      "oracle": "capability fault, cause 7"
+      "oracle": "capability fault, cause 7",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/20261006/matrix.tsv 1737589f0 sublet-gc: fault c7"
     },
     "cheribsd-revocation": {
-      "oracle": "the guest timeout killed it at 25 s (it does not terminate)"
+      "oracle": "the guest timeout killed it at 25 s (it does not terminate)",
+      "verdict": "NO-READING",
+      "verdict_from": "results/20261006-cheribsd/matrix.tsv 1737589f0: timeout rc=124",
+      "verdict_note": "timeout (rc 124): no mechanism report"
     }
   },
   "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default"

@@ -26,7 +26,9 @@
       "mode": 1,
       "oracle": "fault at the labelled read probe apr_defect_read, and nowhere else: exactly one fault, pc equal to the address the run's own marker published",
       "cause": 24,
-      "note": "the probe is the first read through the handle after apr_pool_destroy; the CHECK that the same node came back as the other pool runs before the marker, so the marker's presence is itself evidence that reuse happened"
+      "note": "the probe is the first read through the handle after apr_pool_destroy; the CHECK that the same node came back as the other pool runs before the marker, so the marker's presence is itself evidence that reuse happened",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/20260921-qemu/matrix.tsv case 0 mode sublet: passed=True cause=24 pc=0x101866a8c expected_pc=0x101866a8c"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -48,7 +50,9 @@
       "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor",
       "control": "revocation-control in the same boot, before the case: free a block, sweep, read through the old pointer at the same labelled clbu -- must fault with SIGPROT si_code=PROT_CHERI_TAG at pc == apr_defect_read; with --runtime-revocation off it must complete instead. The ABI control reports runtime_revocation from malloc_revoke_enabled()",
       "guest_default": "preserved -- the kernel default stays on; the common runner sets the per-process policy explicitly",
-      "note": "APR files a destroyed pool's node on its own free list and pops it back; under APR_ALLOCATOR_MAX_FREE_UNLIMITED it never calls free() on that path, so libc's quarantine never holds the node"
+      "note": "APR files a destroyed pool's node on its own free list and pops it back; under APR_ALLOCATOR_MAX_FREE_UNLIMITED it never calls free() on that path, so libc's quarantine never holds the node",
+      "verdict": "MISSED",
+      "verdict_from": "results/20260921-cheribsd/matrix.tsv case 0 revocation=on: completed, exit=0, same-boot control 'tag fault at apr_defect_read' passed"
     }
   },
   "status": "native pair 2026-09-20 and 2026-09-21 through the port, both arms as expected. Capstone domain 2026-09-21: spatial completes (nodes=3, node_reuses=1), sublet faults at apr_defect_read cause=24 at the published address; negative control fires; 31 of 32 repetitions returned a result, the one stall a pre-login boot flake (results/20260921-qemu/). Stock CheriBSD 2026-09-21: with revocation on and verified, the case completes while revocation-control faults at apr_defect_read (SIGPROT, PROT_CHERI_TAG); with revocation off both complete; negative control fires 1/1 with the control still faulting (results/20260921-cheribsd/). No poisoncap arm: no PoisonCap build of APR exists; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe, paired, 2026-09-22 (results/20260922-poisoncap)",

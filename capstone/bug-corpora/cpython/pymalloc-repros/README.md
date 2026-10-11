@@ -139,15 +139,16 @@ touching anything here:
 
 ## Running it
 
-One source, one set of twenty cases, two targets. Each target's build and run
+One source, one set of twenty cases, three targets. Each target's build and run
 commands, its oracle and its negative control are in its own manual:
 
 | target | arms | manual |
 |---|---|---|
 | Capstone domain | `spatial` / `sublet` | [`runners/capstone-domain/README.md`](runners/capstone-domain/README.md) |
+| virtual Capstone (the board's columns 2 and 3) | `virtual-malloc` / `virtual-nested-pools` | [`runners/virtual/README.md`](runners/virtual/README.md) |
 | CheriBSD purecap | mode `0` / `1`, or `spatial` / `protected` | [`runners/cheribsd/README.md`](runners/cheribsd/README.md) |
 
-Both build from the same `case.c` files; a case behaves identically on both.
+All build from the same `case.c` files.
 After touching anything here, run the checks:
 
     python3 ../../tools/check-corpus.py

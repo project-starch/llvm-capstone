@@ -12,10 +12,16 @@
   "fidelity": "model-consumer, real allocator",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "complete",
+      "verdict": "MISSED",
+      "verdict_note": "reached (pg_mark() marker) and completed with no fault; run=00-tuplestore-double-free-spatial-v26wh5nt",
+      "verdict_from": "results/2026-10-10-qemu/spatial"
     },
     "sublet": {
-      "oracle": "fault anywhere; the stale access is the second pfree, so there is no read probe"
+      "oracle": "fault anywhere; the stale access is the second pfree, so there is no read probe",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x101a05cf0 in GetMemoryChunkMethodID; by function: GetMemoryChunkMethodID is the case's declared fault site",
+      "verdict_from": "results/2026-10-10-qemu/sublet"
     },
     "poisoncap-spatial": {
       "mode": 0,
@@ -32,10 +38,28 @@
     },
     "cheribsd-revocation": {
       "oracle": "completes with no capability fault; the case's own PG_DEFECT probe prints twice, so the defective sequence provably executed -- REACHED-SILENT (2026-10-05, plain purecap, revocation=1 every_free=0). A use-after-free between two palloc chunks never crosses a malloc boundary, so there is nothing for a malloc-granular revoker to reclaim.",
-      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts with PG_POISONCAP off"
+      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts with PG_POISONCAP off",
+      "verdict": "MISSED",
+      "verdict_from": "results/20261008-cheribsd/result-lines.txt mmgr-00: PG_DEFECT case=0 ready, then mode=0 completed; quarantine.tsv row 0"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, the replay's managers stock on virtual mallocng (tools/arms.json virtual-mallocng-replay): a fault in pg_probe (case 0: its declared function), or the case completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the hosted driver's ready mark) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-pg-pools": {
+      "oracle": "virtual profile, the managers on the Sublet context pools with the arena lent linear (tools/arms.json virtual-mallocng-replay-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3f97a16d90 in GetMemoryChunkMethodID; by function: GetMemoryChunkMethodID is the case's declared fault site",
+      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
     }
   },
   "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU: mode 0 completes with tolerated_double_drops=1 and mode 1 faults in GetMemoryChunkMethodID, so the pair holds. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case.",
   "nested": true,
-  "nested_why": "The object comes from PostgreSQL's own memory manager -- a chunk aset.c or slab.c carved out of a block it took from malloc -- so the defect is nested by the allocator that served it."
+  "nested_why": "The object comes from PostgreSQL's own memory manager -- a chunk aset.c or slab.c carved out of a block it took from malloc -- so the defect is nested by the allocator that served it.",
+  "fault_sites": [
+    "GetMemoryChunkMethodID"
+  ],
+  "fault_sites_why": "The stale access is the second pfree, so there is no read probe: pfree dispatches on the chunk header through GetMemoryChunkMethodID, which reads the revoked chunk's header first. Recorded before this runner existed, in README 'What the four systems do' (2026-09-21): the Sublet arm and the PoisonCap arm both land in that function, established independently."
 }

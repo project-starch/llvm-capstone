@@ -1,0 +1,13 @@
+# source: /tmp/capstone/q1009-ap13/ffmpeg-plane-poisoncap-1-r4/run/summary.json
+# matched-by: malloc-only build (r4 ffp-00 imports no posix_memalign); ABI runtime_revocation=1; buggy exit 0 + VERDICT match
+# platform qemu=5a9a8ef9cade9d92cba39c34c0bfa636c82172f8b05c0324a05a1c6662034f33 firmware=f0e1fe57b0f850756273135d82c4edcec7b354edfc36741cd327d6f2744832cb kernel=7b4b2b5873f08c694cf223e1e9b566fc6e983ce658dad33f83adcbf2bc4b686c image=c8df9e17594b26143a9dd4565923f1e7d006657ee06db3325a8c154386b257d8
+# platform-libc=8071c62d364f388f8243f07e680ed9c87ee902dafb59447cebbfeaf553dc009b
+# runtime_revocation=on
+# controls: cheribsd-abi=0 cheribsd-bounds=162
+# summary status=complete ran_all_cases=True failed_cases=0 (an oracle scored FAIL is data, see the README)
+# also-cited: /tmp/capstone/q1009-ap13/ffmpeg-plane-poisoncap-1-r3/run/summary.json role=the attempt that "could not run": both ffp arms exit 75, as the README says image=c8df9e17594b runtime_revocation=on programs=4 controls: cheribsd-abi=0 cheribsd-bounds=162
+program	exit	expected_exit	passed	binary_sha256	stdout_sha256
+cheribsd-abi	0	0	true	3a40ff30f9e8b7fbe8ee88ffbdf28d434708b04df50530a20067a1b1e4bd34e7	9470e900152738b85544c73ceb0dd0f3fe53261bd3ce0d1460cae0d0201561c3
+cheribsd-bounds	162	162	true	3a40ff30f9e8b7fbe8ee88ffbdf28d434708b04df50530a20067a1b1e4bd34e7	904c72f88b254911f97105bb6cd1e232e373cf2d3da7dc149ab2d9c83b780a7f
+ffp-00-fixed	0	0	true	18d982d129910f7d66a94245c207a4365c14348b6d7bde2bdfc27d0b32392e10	273b93ce78d4cc428bda24153587ac0730949cf6eff0617b2e9c7fe97b275ea4
+ffp-00-buggy	0	0	true	18d982d129910f7d66a94245c207a4365c14348b6d7bde2bdfc27d0b32392e10	f46673d738a84d89cdbd69642a2ee970fcc543b37ca995947bcf6f8a10caa9c0

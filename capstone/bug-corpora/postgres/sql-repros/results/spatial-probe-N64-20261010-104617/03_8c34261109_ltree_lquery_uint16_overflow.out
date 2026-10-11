@@ -1,0 +1,7 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> 2026-10-10 10:47:43.744 GMT [154] ERROR:  extension "ltree" already exists
+2026-10-10 10:47:43.744 GMT [154] STATEMENT:  CREATE EXTENSION ltree;
+	
+backend> capstone-vm: capstone-exec: domain fault cause=7 pc=0xe02023a8 address=0xe1df49a0 entry=0xe0200de0 code=0xe0200000-0xe5250000 last=0x4f preparing=0x4f sha256=a5e1592ce215fe0350181525ff4f05c5f035b61d5c97c963accf5468dc4b8bcf image=/mnt/host/applications/postgres-a5e1592ce215fe0350181525ff4f05c5f035b61d5c97c963accf5468dc4b8bcf.dom
+capstone-vm: application terminated by signal 11

@@ -10,6 +10,20 @@
 #include "corpus.h"
 
 #ifdef PG_CORPUS_HOSTED
+#ifdef PG_BORROW_LINEAR
+/* The nested arm in a Capstone process: the memory-context adapter is under
+ * the manager and the arena is LENT by the system allocator as one linear
+ * capability. Declared rather than included -- the lend API is the
+ * allocator's internal interface, not a libc header. */
+#include <capstone/capability.h>
+#include "pg_subpool.h"
+unsigned long __capstone_sublet_malloc_linear(size_t, capstone_cap_slot *);
+/* The domain reads this from domain-runtime.h, which a process does not
+ * include; the size is the same 32 MiB either way. */
+#ifndef PG_REPLAY_ARENA_SIZE
+#define PG_REPLAY_ARENA_SIZE (32UL * 1024UL * 1024UL)
+#endif
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -113,7 +127,36 @@ int main(int argc, char **argv) {
     return 75;
   }
   unsigned mode = (unsigned)(argv[1][0] - '0');
-#ifdef PG_POISONCAP
+#if defined(PG_BORROW_LINEAR)
+  /* pg_subpool_arena takes the region in a REGISTER and stores it straight
+   * into its slot, because a linear capability that passes through a C
+   * variable of pointer type is one the compiler may copy. capstone_cap_load
+   * is that register move. It returns the capability's type, and anything but
+   * linear means nothing below can work, so the case refuses rather than
+   * running unprotected under a protected label. */
+  {
+    capstone_cap_slot lent;
+    unsigned long type;
+    if (!__capstone_sublet_malloc_linear(PG_REPLAY_ARENA_SIZE, &lent)) {
+      fprintf(stderr, "CONTROL-FAILED the heap refused a linear block of %lu "
+                      "bytes\n", (unsigned long)PG_REPLAY_ARENA_SIZE);
+      return 75;
+    }
+    type = pg_subpool_arena(capstone_cap_load(&lent), PG_REPLAY_ARENA_SIZE);
+    if (type != 0) {
+      fprintf(stderr, "CONTROL-FAILED the lent arena is type %lu, not linear\n",
+              type);
+      return 75;
+    }
+  }
+  /* Unlike the pool and slab adapters, this one has NO runtime mode: whether
+   * the memory contexts are protected is decided by which manager variant the
+   * image links, so mode 1 would name a switch that does not exist. The arm's
+   * control is therefore a different binary -- the unprotected nested run --
+   * and not the same binary under another argument. */
+  if (mode)
+    return 75;
+#elif defined(PG_POISONCAP)
   pg_poisoncap_init(mode);
 #else
   if (mode)

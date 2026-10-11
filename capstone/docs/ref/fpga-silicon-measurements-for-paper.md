@@ -5971,3 +5971,16 @@ boot, and each board image is named by hash.
     - The only rv64gc board build found, sup-bare-2026-10-03-ladder, has no FP result instruction (one `frcsr`, an
       fcsr read) and is cited by neither paper.
   - Still unchecked: boots before 2026-09-11, sw52 among them.
+- ~~**R-52 (was S-18) is fixed on silicon** in caplifive_r51r52_0568f93a9 (flashed 2026-10-11)~~ **RETRACTED
+  2026-10-11: native FP results are still WRONG on caplifive_r51r52_0568f93a9.**
+  - The evidence: now() = tv_sec + tv_nsec/1e9 returned 0.09-1.99 while the same process's integer monotonic clock read 239.7-240.7 s (boot C, b3-clock-probe's hold arms: in[0] = now() read 0.2390064, 1.1527294, 0.092928; t0/t1 read 1.62747024/1.99347840).
+  - What stands: the probe's arith loop reads 0 anomalies of 200,000 (776d9d859: 200,000 of 200,000). But that check
+    tests only finite and not-going-backwards, and its loop issues both fcvt.d.l BEFORE the fdiv.d.
+  - now() issues an fcvt.d.l while an fdiv.d is in flight and adds the two. The seconds term does not arrive, which
+    reads as an FP writeback or forwarding case that R-52's fix does not cover. That is with the RTL lane.
+  - ~~the harness's stop_seconds reads 1.07 (was inf)~~ Void: t1 comes from the same now().
+  - ~~Native FP arithmetic on the board is now correct.~~ It is not. A native hard-float result on the board is still
+    not evidence. (The paper's native-on-board numbers use no FP, as checked above.)
+- **R-51 is fixed on silicon in the same bitstream:** a domain's PC capability is enforced after a RETURN yield (the
+  matched pair reads 0 / 0x1C / 0x1C, against 0 / 0xBAD / 0). The memcached B-series and its oracle hash are unchanged
+  on it, and so is the supervision overhead (+0.666 %).

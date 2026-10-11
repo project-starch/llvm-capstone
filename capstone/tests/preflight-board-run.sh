@@ -83,7 +83,9 @@ if [[ -f "$FW" ]]; then
     # caplifive_supcall_*.bit (36a641e0b, and the 715bdd1fe fix build) is the same 65536-node lineage (csnodefree read
     # 0xFFCD on 36a641e0b; every firmware that booted on it carries 0x3c2d2000). It also matched neither pattern, so
     # it fell through to the warn below and this pairing went unchecked for every supervised-CALL run.
-    *65536*|*_r20*|*supcall*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
+    # caplifive_r51r52_0568f93a9.bit (2026-10-11) is 776d9d859 plus R-51 and R-52, which touch only ex_stage.sv and
+    # issue_read_operands.sv; the anvil sources are identical, so it keeps the supcall lineage's 65536-node pool.
+    *65536*|*_r20*|*supcall*|*r51r52*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
         && ok "DTS matches $BITSTREAM (0x3c2d2000)" \
         || bad "DTS/bitstream MISMATCH: $BITSTREAM needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
     # An unknown name BLOCKS (the lead, 2026-10-04). It used to warn, and _r20 and supcall both fell through that warn

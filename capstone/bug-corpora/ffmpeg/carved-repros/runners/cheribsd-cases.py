@@ -26,7 +26,8 @@ assert EXPECT in ("fault", "complete"), EXPECT
 PROBES = {0: 'ffc_write_probe_u8', 1: 'ffc_write_probe_u32', 2: 'ffc_read_probe_u32',
           3: 'ffc_read_probe_u32', 4: 'ffc_write_probe_u32', 5: 'ffc_write_probe_u32',
           6: 'ffc_write_probe_u8', 7: 'ffc_write_probe_u8', 8: 'ffc_write_probe_u32',
-          9: 'ffc_write_probe_u8', 10: 'ffc_write_probe_u8', 11: 'ffc_read_probe_u32'}
+          9: 'ffc_write_probe_u8', 10: 'ffc_write_probe_u8', 11: 'ffc_read_probe_u32',
+          12: 'ffc_read_probe_u32'}
 
 present = {int(d.name[:2]) for d in CORPUS.glob('[0-9][0-9]_*') if d.is_dir()}
 if present != set(PROBES):

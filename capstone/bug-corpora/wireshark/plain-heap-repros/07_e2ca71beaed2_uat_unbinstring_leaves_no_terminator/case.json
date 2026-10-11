@@ -17,7 +17,9 @@
     },
     "native-detect": {
       "oracle": "the buggy arm's access crosses the allocation and the case's damage flag is set; the fixed arm's bound keeps it inside. The arms differ by the upstream fix, not by protection. ASan reports heap-buffer-overflow at the labelled probe on the buggy arm and is silent on the fixed arm -- keyed on heap-buffer-overflow, never on the string AddressSanitizer.",
-      "status": "measured"
+      "status": "measured",
+      "verdict": "CAUGHT",
+      "measured": "2026-10-10, results/2026-10-10-native-plain-heap/run-native.txt: `07_e2ca71beaed2_uat_unbinstring_leaves_no_terminator plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent frames=0:wsh_read_probe 1:wsh_case_run at_probe=1`"
     },
     "spatial": {
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-capstone/: **CAUGHT** at wsh_read_probe+0x38 -- cause 5, a bounds violation on a load; pc=0xc020f1d0, address=0xc0252180.  Fixed run of the same image: VERDICT FIXED, exit 0. Arm: the level0 heap: malloc narrows the returned capability to exactly the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS), and free only marks the block free. controls in the same boot: one-past-the-end write CAUGHT (cause=7 pc=0xc020e5b8 address=0xc0251768), use-after-free read RETURNED, clean access RETURNED. Image 4b4225ebc7b069eb. Predicted before the run (pre-registration 60f1c5be25a5); the prediction held.",
@@ -62,7 +64,7 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "oracle": "MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **CAUGHT.** signal=34, si_code=1 (the BOUNDS code), fault at 0x10241a, with supervise resolving `expect wsh_read_probe 0x10240a` from the ELF independently of the run -- the fault lies inside the probe's extent, the offset being the -O0 frame setup, and the RANGE is the attribution criterion rather than equality with the symbol address. The crossing leaves the allocator's USABLE size, which is what malloc bounds the capability to, so there is no size-class slack for it to hide in. tools/size-class-audit.py predicted this reading from the measured request size alone, and the two agree.",
+      "oracle": "MEASURED 2026-10-08, results/2026-10-08-cheribsd/: **CAUGHT.** signal=34, si_code=1 (the BOUNDS code), fault at 0x10241a, with supervise resolving `expect wsh_read_probe 0x10240a` from the ELF independently of the run -- the fault lies inside the probe's extent, the offset being the -O0 frame setup, and the RANGE is the attribution criterion rather than equality with the symbol address. The crossing leaves the allocator's USABLE size, which is what malloc bounds the capability to, so there is no size-class slack for it to hide in. tools/size-class-audit.py predicted this reading from the request size measured on the x86-64 host build alone, and the two agree.",
       "status": "measured",
       "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation ON (--runtime-revocation on); both platform controls cheribsd-abi and cheribsd-bounds PASSED in the same boot."
     },
@@ -87,6 +89,12 @@
       "verdict": "CAUGHT",
       "measured": "2026-10-09",
       "preregistered": "aeba7ddefb4d"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f83e91274 in wsh_read_probe; by probe: the fault is at the labelled probe wsh_read_probe",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
     }
   },
   "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. sublet-chunks measured 2026-10-09 (results/2026-10-09-capstone-sublet-chunks/): CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): CAUGHT.",

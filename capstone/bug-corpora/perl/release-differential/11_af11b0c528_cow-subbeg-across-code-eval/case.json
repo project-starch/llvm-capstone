@@ -13,13 +13,19 @@
    "oracle": "no fault: completes, the workload's own oracle fails"
   },
   "sysalloc-sublet": {
-   "oracle": "no fault: completes, the workload's own oracle fails"
+   "oracle": "no fault: completes, the workload's own oracle fails",
+   "verdict": "MISSED",
+   "verdict_from": "results/20261006/matrix.tsv af11b0c528 sysalloc-sublet: silent (exit 0)"
   },
   "sublet-svheads": {
-   "oracle": "no fault: completes, the workload's own oracle fails"
+   "oracle": "no fault: completes, the workload's own oracle fails",
+   "verdict": "MISSED",
+   "verdict_from": "results/20261006/matrix.tsv af11b0c528 sublet-svheads: silent (exit 0)"
   },
   "cheribsd-revocation": {
-   "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
+   "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes",
+   "verdict": "MISSED",
+   "verdict_from": "results/20261006-cheribsd/matrix.tsv af11b0c528: revocation_on=clean, revocation_off=clean"
   }
  },
  "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",

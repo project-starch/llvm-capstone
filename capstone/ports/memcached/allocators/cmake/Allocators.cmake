@@ -18,7 +18,15 @@ endif()
 # places every unit and there is no region to carve. Everywhere else -- native,
 # the Capstone domain and PoisonCap -- the SAME ledger runs over one region and
 # only the authority layer beneath it differs.
-if(PORT_PLATFORM STREQUAL "cheribsd" AND NOT MCP_POISONCAP)
+# MCP_STOCK_MALLOC: the hosted build on the same stock ledger, so a native tool
+# (AddressSanitizer) sees what upstream memcached gives it -- each slab page and
+# each cache.c object its own malloc -- rather than one arena with no redzones
+# inside it. Off, the native build keeps the shared ledger over one region.
+option(MCP_STOCK_MALLOC "Hosted native build: pages and objects from the host malloc, as upstream" OFF)
+if(MCP_STOCK_MALLOC AND (NOT PORT_HOSTED OR PORT_PLATFORM STREQUAL "cheribsd"))
+  message(FATAL_ERROR "MCP_STOCK_MALLOC is for the hosted native build; stock CheriBSD already uses that ledger")
+endif()
+if((PORT_PLATFORM STREQUAL "cheribsd" AND NOT MCP_POISONCAP) OR MCP_STOCK_MALLOC)
   set(ledger src/cheribsd/malloc-leases.c)
 else()
   set(ledger src/shared/leases.c)
@@ -34,6 +42,20 @@ add_dependencies(mc-allocators memcached-source)
 # mcp_replay, so the corpus stays outside the port and the port keeps one way
 # in. Both the Capstone domain build and the hosted build read it.
 set(MCP_CORPUS_SRC "" CACHE FILEPATH "Corpus-supplied program that defines mcp_replay")
+# The nested arm in the VIRTUAL address space. The ledger is the same in every
+# arm; only the AUTHORITY layer beneath it differs, so this option swaps
+# src/native/authority.c -- which has nothing to revoke, and makes leases.c
+# refuse mode 1 -- for the Sublet one the freestanding domain uses, and the
+# payload region is then LENT by the system allocator as one linear
+# capability instead of coming from aligned_alloc. One option, one layer: the
+# protected and unprotected nested arms differ in that and nothing else.
+option(MCP_SUBLET "Nested lifetimes in a Capstone process: the Sublet authority, with the payload lent linear" OFF)
+if(MCP_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
+  message(FATAL_ERROR "MCP_SUBLET needs the capstone-application toolchain")
+endif()
+if(MCP_SUBLET AND MCP_STOCK_MALLOC)
+  message(FATAL_ERROR "MCP_SUBLET and MCP_STOCK_MALLOC are two different ledgers; choose one")
+endif()
 if(PORT_HOSTED)
   # The shim takes the host's <pthread.h> in a hosted build (see mc_pthread_shim.h).
   find_package(Threads REQUIRED)
@@ -72,6 +94,12 @@ if(PORT_HOSTED)
       # The probes use GNU inline asm with a "C" operand, as cheric.h does.
       set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
     endif()
+  elseif(MCP_STOCK_MALLOC)
+    # The ledger owns its backing, as on stock CheriBSD; the entry passes none.
+    target_compile_definitions(allocators-options INTERFACE MCP_ADAPTER_BACKING)
+  elseif(MCP_SUBLET)
+    target_compile_definitions(allocators-options INTERFACE MCP_BORROW_LINEAR)
+    target_sources(mc-allocators PRIVATE src/allocators/sublet/authority.c)
   else()
     target_sources(mc-allocators PRIVATE src/native/authority.c)
   endif()

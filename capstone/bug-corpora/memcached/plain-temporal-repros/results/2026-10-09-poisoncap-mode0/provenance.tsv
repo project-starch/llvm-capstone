@@ -1,0 +1,23 @@
+# source: /tmp/capstone/q1009-ap13/memcached-temporal-poisoncap-0/run/summary.json
+# matched-by: arm poisoncap-spatial; image c8df9e17, ABI runtime_revocation=0; 6 case exits, revocation-control exit 0 and 3 VERDICT lines match
+# platform qemu=5a9a8ef9cade9d92cba39c34c0bfa636c82172f8b05c0324a05a1c6662034f33 firmware=f0e1fe57b0f850756273135d82c4edcec7b354edfc36741cd327d6f2744832cb kernel=7b4b2b5873f08c694cf223e1e9b566fc6e983ce658dad33f83adcbf2bc4b686c image=c8df9e17594b26143a9dd4565923f1e7d006657ee06db3325a8c154386b257d8
+# platform-libc=8071c62d364f388f8243f07e680ed9c87ee902dafb59447cebbfeaf553dc009b
+# runtime_revocation=off
+# controls: cheribsd-abi=0 cheribsd-bounds=162 revocation-control=0
+# controls-not-as-expected: revocation-control exit=0 expected=162 passed=False
+# summary status=failed ran_all_cases=True failed_cases=4 (an oracle scored FAIL is data, see the README)
+# note: binary_sha256 is the summary's "binaries" entry; for a supervised arm that is the supervise wrapper (or a shared replay driver), and the case binary or fixture is the per-program input hashed below (summary results[].inputs):
+# inputs revocation-control: target=e320ecb01a08f90ba7914650b6f62a844d6b17c17c8f239399a51a3f1028377d
+# inputs mct-00-buggy: target=1438df4a6b4e24598aa3404bcf0ee91715149d98e7f94e9a7b1ae0d6c97c6b1f
+# inputs mct-01-buggy: target=67c4e713bfa7964447c091b734464610fad7abc0486a480230d00d7eac20b1b8
+# inputs mct-02-buggy: target=8ce1cb4501404fb603ca0a9ab93920f105c9b46f2dbded723e00501a69d1c379
+program	exit	expected_exit	passed	binary_sha256	stdout_sha256
+cheribsd-abi	0	0	true	3a40ff30f9e8b7fbe8ee88ffbdf28d434708b04df50530a20067a1b1e4bd34e7	ce49f4115bdac214f8f5b32ea5938d9ef1d94b8f89626f35be34218bba7a58aa
+cheribsd-bounds	162	162	true	3a40ff30f9e8b7fbe8ee88ffbdf28d434708b04df50530a20067a1b1e4bd34e7	e13ae4c02c4b2927748adfce96b611d60ad947067017ee19d09a2c93753b275f
+revocation-control	0	162	false	c6f679196d536c3da58f7c95fe08a2248bce5f88b27724f052ae6b07c14f827a	d4b626c0da77dbb3031840560ae6269cd4548b79e036a272ff497a4e582ab7da
+mct-00-fixed	0	0	true	1438df4a6b4e24598aa3404bcf0ee91715149d98e7f94e9a7b1ae0d6c97c6b1f	52b24e86fcade08857bf486f5d8388076070c283450ef6bd2bc6752e33da285d
+mct-00-buggy	0	1	false	e491e0ff23aa3fe4c59f1750bdb425a0ed79f1686149954bd8581b99937504c0	4d59883a3d0a9d4788a589cdd3b8aa0ed4df60d9b51f2f6c30d58dc8214274b4
+mct-01-fixed	0	0	true	67c4e713bfa7964447c091b734464610fad7abc0486a480230d00d7eac20b1b8	02782783a7223a3fec91a762acf9aeeb9ba61f0dc321233e15eb6755616d4578
+mct-01-buggy	0	1	false	f32374fba7bca556a3e72461677cc705dd555604303b152248a251e5c317df46	8378398aae90016b1088697d3ac555ed6670969b681c0be1df843a2003306e7a
+mct-02-fixed	0	0	true	8ce1cb4501404fb603ca0a9ab93920f105c9b46f2dbded723e00501a69d1c379	09f25ab87c82590ce16d5f911982d754aa25383ca3a8a61ff2f540dfcfec080e
+mct-02-buggy	0	1	false	e491e0ff23aa3fe4c59f1750bdb425a0ed79f1686149954bd8581b99937504c0	b00d8f4e7e37837a4ce2c0c79aac273206a7cf746fc9b28a8ab88aec49d56ed7

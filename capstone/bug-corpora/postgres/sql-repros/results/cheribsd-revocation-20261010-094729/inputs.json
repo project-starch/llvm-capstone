@@ -1,0 +1,20 @@
+{
+  "arm": "cheribsd-revocation",
+  "kernel": "15.0-CURRENT",
+  "revocation_default": "1",
+  "revocation_every_free_default": "0",
+  "pg_bin": "/usr/local/pgsql/bin",
+  "base_cluster": "/home/pg/data",
+  "started_utc": "20261010-094729",
+  "extensions_wanted": "fuzzystrmatch ltree pgcorpus_reach pg_trgm ",
+  "extensions_available": "fuzzystrmatch ltree pgcorpus_reach pg_trgm",
+  "mechanism_gate": {
+    "case": "02",
+    "verdict": "detected",
+    "passed": true,
+    "kind": "a corpus case required to be detected, which is weaker than a purpose-built control: it says the mechanism reported on something in this configuration, not that it would have reported on each silent case"
+  },
+  "only": "01,02,03,04,06",
+  "cases": 5,
+  "scored": 5
+}

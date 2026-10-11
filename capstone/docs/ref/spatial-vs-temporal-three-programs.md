@@ -2,7 +2,8 @@
 
 **Scope: the three programs the paper's target evaluation uses.** Other corpora in this tree
 (cpython, httpd, PostgreSQL, sqlite, mruby, the cross-language set) are deliberately out of scope
-here; `paper-bug-inventory.md` is the whole-tree inventory.
+here; the generated `capstone/bug-corpora/INDEX.md` is the whole-tree inventory, and
+`three-columns-all-programs.md` puts the other six programs on section 0's three columns.
 
 **Read this first if you came here grepping for "spatial".** `spatial` is also the name of a
 **measurement arm** — bounds-only Capstone, revocation disabled — and it appears in dozens of
@@ -10,12 +11,71 @@ here; `paper-bug-inventory.md` is the whole-tree inventory.
 failing to catch *temporal* bugs. It is not a count of spatial bugs, and it is not evidence that
 anything is broken. A grep for the word finds arms, not defects.
 
-## 0. Three columns per bug: CHERI, Sublet in malloc, Sublet in nested — all 130 cases (2026-10-09, night)
+## A. Audit of these tables (2026-10-10)
+
+Every cell the tables below are computed from -- 1,103 (case, arm) cells over the 130 cases -- was traced to
+the run record that produced it, by four independent read-only audits (FFmpeg nested, FFmpeg plain, tshark,
+memcached), each told to attack named gaps and to quote a record for every claim. The plan and the
+pre-registrations of every run the audit needed are `docs/history/10-10-2026_17-20-00_bug-corpus-audit-three-programs.md`
+(`bbc7db0bd3d5`) and carved case 12's own `case.json` (`26cdee4e4d8d`). The Capstone carved arms started
+before the plan was pushed, so their predictions were the readings already on `dev`. **Every pre-registered prediction held.**
+
+**No cell contradicted its record.** What the audit found instead:
+
+| finding | cells | fix |
+|---|---:|---|
+| The generator read an arm with no verdict by its oracle's opening words, so a PREDICTION ("fault at the labelled read probe") counted as a catch | 334 holes once strict | strict generator; 149 cells now cite the record the audit traced them to, the rest closed by the runs below |
+| ASan cells with no per-case record: plain-heap corpora run when they held 4, 1 and 1 cases | 40 | re-run, 46 cases two-sided, every report at the labelled probe (`results/2026-10-10-native-plain-heap`) |
+| ASan and CheriBSD arms that could read only one value: memcached's and wmem's hosted harnesses carved everything out of one arena (wmem also with the chunk port compiled in), so nothing reached a redzone or `free()` | 22 + 9 + 22 | upstream's own backing (`MCP_STOCK_MALLOC`, `WM_LIBC_SYSTEM`) with wmem's own control 90 in the same run; memcached 8 now reported by ASan; wmem on stock CheriBSD reads "missed (reused)" with each case's own reuse assertion holding |
+| A reduction defect: memcached allocator 08's fixed arm read one byte past its object | 1 | the fixed arm probes where its bounded scan stopped |
+| One defect counted twice: FFmpeg plain-heap 13 is the release/9.0 backport of case 02's fix (`git patch-id` equal) | 1 case | `duplicate_of`; every table leaves it out -- **129 distinct defects** |
+| A carve filed as a struct member: subobject 09 (vf_thumbnail) crosses a slice carved out of one `av_calloc`, which carved-repros files NESTED by the rule these tables use | 1 case | moved to carved-repros as case 12 and measured on every arm |
+| "Capstone bounds" on nested rows is the port's per-chunk bound, not malloc's (wmem `wm_narrow`, memcached mode 0) | 13 spatial | the column is relabelled in 0b; the stock allocators on a per-allocation bound are column 2 |
+| Unbacked Capstone cells: memcached allocator 06 and 07 on `spatial` and `sublet` (prose about a run, no record) | 4 | measured, as predicted (complete), negative control firing on all four |
+| Mechanism mis-attributed: memcached plain-heap 06-08 recorded in the write probe, wmem 16/17/18/20/21 "not the probe" | 22 arms | llvm-nm on each run's own binary: `mch_read_probe+0x10` and the `wm_defect_write` label; runners now resolve each case's own probe |
+| CheriBSD/PoisonCap records carried no binary or platform hash, and the bounds control only as a marker printed before its faulting read | 47 records | `provenance.tsv` from each run's surviving summary: every bounds control exited 162 |
+
+Not changed by the audit, and still true of the tables: the two races are serialised into one thread
+(0.1); the field-bounds arm on the plain-heap corpora produced images byte-identical to the spatial arm's,
+in all three programs (every one of their 46 field-bounds images hashes equal to a spatial image), so its "no false
+positive" there is vacuous rather than a test; the FFmpeg subobject harness gives a struct
+no allocation bound of its own on the `spatial`, `sublet`, CHERI and PoisonCap arms (the one bounded reading is
+the `sublet-full` arm, column 3, which puts `av_malloc` on the Sublet heap: 0/9); and several CheriBSD predictions were committed with their results rather than
+before them (plain-temporal's NOT-REISSUED, carved ASan, the pool `sublet-malloc` relabel). The tshark
+plain-heap cases 10 and 11 are caller-dependent -- their in-file callers take an emem `ep_alloc` chunk, other
+callers a direct allocation -- and stay plain with the callers recorded.
+
+**What moved in the published numbers:** 130 cases became 129 defects; spatial nested/plain went from
+26/56 to 27/54 (case 12 in, case 13 out); FFmpeg's carved row went from 12 to 13 cases and its struct row
+from 10 to 9; ASan on memcached's nested spatial row went from 0/4 to 1/4. Every reading of every other
+cell, and every headline -- 22/22 nested temporal caught only through each allocator's port or adapter,
+0/22 by CHERI's quarantine and by Sublet in malloc -- is unchanged, and now cites a record.
+
+## A2. Second audit and one new case (2026-10-10/11)
+
+The whole-corpus audit (`docs/history/10-10-2026_23-30-00_whole-corpus-audit-cross-program.md`, and the
+cross-program comparison `docs/ref/bug-corpora-cross-program-comparison.md`) changed these tables in
+three ways, each run pre-registered:
+- **Attribution, no verdict change:**
+  - memcached allocator 08's CHERI catch is at the defective scan (`mc_case_body+0x1e8`);
+  - the subobject arm no longer accepts a fault anywhere, and all seven catches stand at their sites;
+  - the supervised CheriBSD runs name their sites;
+  - wmem's PoisonCap runner resolves each case's label.
+- **A new case, wmem-repros 22** (`c702b44a01`, a fix reversal): the corpus's first double free (S2)
+  into a nested allocator, which corrupts wmem's in-band free list (S4).
+  - Missed by CHERI, Sublet in malloc, ASan, the region-granular port and PoisonCap mode 0.
+  - Caught by the chunk port at the allocator's handback, and by PoisonCap mode 1.
+  - The counts below include it: 130 defects, 49 temporal, 23 nested temporal.
+- **Virtual-Capstone columns** for the three programs, beside the physical ones: section 0c.
+
+
+## 0. Three columns per bug: CHERI, Sublet in malloc, Sublet in nested — all 130 defects (after the audits of 2026-10-10 and the case added on 2026-10-11)
 
 Generated by `capstone/bug-corpora/tools/catch-tables.py --board`, which reads only `case.json`
-and exits 1, naming each hole, while any of a bug's three cells is not a reading. Before the day's
-last runs it named 83 (the 82 plain cases' column 3 and the plane case); it names none now. A cell
-reads **caught / measured**.
+and exits 1, naming each hole, while any of a bug's three cells is not a reading. Since the audit
+(section A) a cell is a reading only if its arm says it was MEASURED and cites the record; a bare
+oracle is a prediction and counts as a hole. 130 defects: 131 cases, of which FFmpeg plain-heap 13
+is a backport of case 02's fix and is left out (`duplicate_of`). A cell reads **caught / measured**.
 
 1. **CHERI** — stock CheriBSD purecap, libc revocation on. A freed chunk **held in quarantine**
    (the stale pointer was followed, the chunk was never reissued; a revocation control faulted in
@@ -38,54 +98,56 @@ reads **caught / measured**.
    path, runs with its program's port linked and live (`sublet-full`, `tools/full-config/`): a
    non-interference check, every run required to print the port's `FULLCONFIG ... live` line.
 
-**Temporal (48)**
+**Temporal (49)**
 
 | program | allocator layer | axis | n | CHERI (quarantine = caught) | Sublet in malloc | Sublet in nested |
 |---|---|---|---:|---:|---:|---:|
 | FFmpeg | AVBufferPool | nested | 4 | 0 / 4 | 0 / 4 | 4 / 4 |
 | FFmpeg | direct malloc | plain | 13 | 13 / 13 (13 held) | 13 / 13 | 13 / 13 |
-| tshark | wmem | nested | 13 | 0 / 13 | 0 / 13 | 13 / 13 |
+| tshark | wmem | nested | 14 | 0 / 14 | 0 / 14 | 14 / 14 |
 | tshark | direct g_malloc | plain | 10 | 10 / 10 (10 held) | 10 / 10 | 10 / 10 |
 | memcached | slabs.c / cache.c | nested | 5 | 0 / 5 | 0 / 5 | 5 / 5 |
 | memcached | direct malloc | plain | 3 | 3 / 3 (3 held) | 3 / 3 | 3 / 3 |
-| **Total** |  | 22 n · 26 p | 48 | 26 / 48 (26 held) | 26 / 48 | 48 / 48 |
+| **Total** |  | 23 n · 26 p | 49 | 26 / 49 (26 held) | 26 / 49 | 49 / 49 |
 
-**Spatial (82)**
+**Spatial (81)**
 
 | program | allocator layer | axis | n | CHERI (quarantine = caught) | Sublet in malloc | Sublet in nested |
 |---|---|---|---:|---:|---:|---:|
-| FFmpeg | carved buffer | nested | 12 | 0 / 12 | 0 / 12 | 12 / 12 |
+| FFmpeg | carved buffer | nested | 13 | 0 / 13 | 0 / 13 | 13 / 13 |
 | FFmpeg | frame-pool plane | nested | 1 | 0 / 1 | 0 / 1 | 0 / 1 |
-| FFmpeg | direct malloc | plain | 25 | 22 / 25 | 25 / 25 | 25 / 25 |
-| FFmpeg | inside one struct | plain | 10 | 0 / 10 | 0 / 10 | 0 / 10 |
+| FFmpeg | direct malloc | plain | 24 | 21 / 24 | 24 / 24 | 24 / 24 |
+| FFmpeg | inside one struct | plain | 9 | 0 / 9 | 0 / 9 | 0 / 9 |
 | tshark | wmem | nested | 9 | 0 / 9 | 0 / 9 | 9 / 9 |
 | tshark | direct g_malloc | plain | 12 | 11 / 12 | 12 / 12 | 12 / 12 |
 | memcached | slabs.c / cache.c | nested | 4 | 1 / 4 | 1 / 4 | 4 / 4 |
 | memcached | direct malloc | plain | 9 | 8 / 9 | 9 / 9 | 9 / 9 |
-| **Total** |  | 26 n · 56 p | 82 | 42 / 82 | 47 / 82 | 71 / 82 |
+| **Total** |  | 27 n · 54 p | 81 | 41 / 81 | 46 / 81 | 71 / 81 |
 
 How the three columns read:
 
-- **Temporal, CHERI 26 of 48 — all 26 held, none faulted.** Every plain temporal case reaches
-  `free()` and the quarantine withholds the chunk; in the 22 nested sequences the object is reused
+- **Temporal, CHERI 26 of 49 — all 26 held, none faulted.** Every plain temporal case reaches
+  `free()` and the quarantine withholds the chunk; in the 23 nested sequences the object is reused
   inside its allocator and never reaches `free()`, so the quarantine never sees it.
-- **Temporal, Sublet in malloc 26 of 48 — the same split, with a revoke instead of a hold.** In each
-  of the 22 nested sequences the lifetime ends on an allocator free list: wmem's packet pool keeps
-  its first block on reset (13), memcached's chunks go back to their slab class and its objects to
+- **Temporal, Sublet in malloc 26 of 49 — the same split, with a revoke instead of a hold.** In each
+  of the 23 nested sequences the lifetime ends on an allocator free list: wmem's packet pool keeps
+  its first block on reset (12), wmem's BLOCK allocator takes an individual free (case 12) or the
+  same chunk freed twice (case 22, the double free added on 2026-10-11), memcached's chunks go back to their slab class and its objects to
   cache.c's list (5), FFmpeg's pool keeps its buffers (4). That is a property of these sequences,
   not of the programs: wmem does `g_free` every block after the first and every jumbo on reset
   (control 90 is that case), and cache.c frees above a configured limit (default 0, none).
-- **Temporal, Sublet in nested 48 of 48.** The port revokes on the allocator's own release, so the
-  22 fault; the 26 plain ones read as in column 2.
-- **Spatial, Sublet in malloc 47 of 82** is the Sublet heap's per-object bound: all 46 plain
-  cases and memcached 8 (its rbuf object is its own allocation); nothing inside a block.
-- **Spatial, Sublet in nested 71 of 82.** The chunk and slab ports bound each chunk (wmem 9/9, slab
-  5 and 8); the carve ports bound each carved region (carved 12/12, memcached 6 and 7). Those carve
+- **Temporal, Sublet in nested 49 of 49.** The port revokes on the allocator's own release, so the
+  23 fault -- case 22 at the allocator's own handback probe, where its second free hands back a revoked chunk;
+  the 26 plain ones read as in column 2.
+- **Spatial, Sublet in malloc 46 of 81** is the Sublet heap's per-object bound: all 45 plain
+  cases that leave their allocation, and memcached 8 (its rbuf object is its own allocation); nothing inside a block.
+- **Spatial, Sublet in nested 71 of 81.** The chunk and slab ports bound each chunk (wmem 9/9, slab
+  5 and 8); the carve ports bound each carved region (carved 13/13, memcached 6 and 7). Those carve
   catches are the port's BOUND -- the same shrink as carve bounds, which CHERI's carve bounds match
-  12/12 -- not a revocation: no buggy sequence re-carves, and the re-carve control alone shows the
-  revocation. Column 3's 12/12 against column 1's 0/12 compares a ported carve with an unported
+  13/13 -- not a revocation: no buggy sequence re-carves, and the re-carve control alone shows the
+  revocation. Column 3's 13/13 against column 1's 0/13 compares a ported carve with an unported
   platform, not Sublet with CHERI.
-- **Plain rows, columns 2 and 3 agree on all 82** (72 caught). That is the expected
+- **Plain rows, columns 2 and 3 agree on all 80** (71 caught). That is the expected
   non-interference: the port is off these bugs' path. For tshark and memcached the image carries
   the port's Sublet layer, driven by the constructor, not wmem or slabs.c themselves; the SDK's heap
   size differs from the `sublet` arm's too (each corpus's README says which).
@@ -110,15 +172,15 @@ and are NOT races: FFmpeg pool 03 (its PROVENANCE excludes the frame-threading r
 allocator's free list, not to `free()`, so a heap is never told its lifetime ended and no change to
 the heap alone can catch it; a race on an object straight from malloc would be caught by column 2,
 as all 26 plain temporal cases are. The fix is column 3: the allocator's Sublet port, which revokes
-on the allocator's own release -- all 22 nested lifetimes, the two races included. On the porting
+on the allocator's own release -- all 23 nested lifetimes, the two races included. On the porting
 deck these are the memcached rows where the `sublet` arm "returns": that arm is column 2. What is
 not measured: revocation racing a real access on another hart -- every reduction here is one
 thread.
 
 ### 0.2 What no column catches
 
-Eleven spatial cases: the 10 struct-member crossings, which no code carves -- only the compiler's
-field bounds narrow a member (7/10 on Capstone, 8/10 on CHERI, section 0b.1) -- and the frame plane,
+10 spatial cases: the 9 struct-member crossings, which no code carves -- only the compiler's
+field bounds narrow a member (7/9 on Capstone, 8/9 on CHERI, section 0b.1) -- and the frame plane,
 whose read stays inside the 1024 bytes FFmpeg allocates for the alpha plane: the Sublet port of the
 frame carve issues exactly that extent (measured, NOT CAUGHT; its bound and free controls fault),
 and only a bound tighter than FFmpeg's own allocation would catch it.
@@ -139,6 +201,7 @@ and only a bound tighter than FFmpeg's own allocation would catch it.
 | FFmpeg | carved-repros | 09_043bcdcdb0_svq1enc_inter_block_runs_into_source | spatial | yes | missed | missed | caught |
 | FFmpeg | carved-repros | 10_d2213b6493_rv34_b_block_carved_at_old_linesize | spatial | yes | missed | missed | caught |
 | FFmpeg | carved-repros | 11_68226ed9ec_vorbis_type1_residue_end_spans_channels | spatial | yes | missed | missed | caught |
+| FFmpeg | carved-repros | 12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice | spatial | yes | missed | missed | caught |
 | FFmpeg | plain-heap-repros | 00_d133b4a231_showcwt_kernel_scan_past_array | spatial | no | caught | caught | caught |
 | FFmpeg | plain-heap-repros | 01_bcbf3a5630_vf_scale_format_list_compaction | spatial | no | missed | caught | caught |
 | FFmpeg | plain-heap-repros | 02_56309e476a_vf_vif_mirror_below_base | spatial | no | caught | caught | caught |
@@ -152,7 +215,6 @@ and only a bound tighter than FFmpeg's own allocation would catch it.
 | FFmpeg | plain-heap-repros | 10_989444060d5f_lut3d_size2_computed_before_directive | spatial | no | caught | caught | caught |
 | FFmpeg | plain-heap-repros | 11_76645e096fab_exif_string_clone_drops_terminator | spatial | no | caught | caught | caught |
 | FFmpeg | plain-heap-repros | 12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators | spatial | no | caught | caught | caught |
-| FFmpeg | plain-heap-repros | 13_8af6c71d96f4_vif_single_reflection_indexes_below_base | spatial | no | caught | caught | caught |
 | FFmpeg | plain-heap-repros | 14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked | spatial | no | caught | caught | caught |
 | FFmpeg | plain-heap-repros | 15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size | spatial | no | caught | caught | caught |
 | FFmpeg | plain-heap-repros | 16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry | spatial | no | caught | caught | caught |
@@ -174,7 +236,6 @@ and only a bound tighter than FFmpeg's own allocation would catch it.
 | FFmpeg | subobject-repros | 06_a809a784ec_vvc_entry_point_start_ctu | spatial | no | missed | missed | missed |
 | FFmpeg | subobject-repros | 07_275e217b10_hlsenc_key_uri_strlcpy_size | spatial | no | missed | missed | missed |
 | FFmpeg | subobject-repros | 08_fb862976df_cbs_h266_col_width_val | spatial | no | missed | missed | missed |
-| FFmpeg | subobject-repros | 09_ac59fc542f_thumbnail_carved_histogram_slice | spatial | no | missed | missed | missed |
 | FFmpeg | plain-temporal-repros | 00_716d2a47c565_ops_dispatch_interior_alias_after_free | temporal | no | caught (held) | caught | caught |
 | FFmpeg | plain-temporal-repros | 01_c98810ab47fa_hw_base_encode_list_walk_reads_freed_link | temporal | no | caught (held) | caught | caught |
 | FFmpeg | plain-temporal-repros | 02_43de8b328b62_lzf_write_cursor_stale_after_realloc | temporal | no | caught (held) | caught | caught |
@@ -236,6 +297,7 @@ and only a bound tighter than FFmpeg's own allocation would catch it.
 | tshark | wmem-repros | 10_6fd3af5e99_t38_reassembly_buffer | temporal | yes | missed | missed | caught |
 | tshark | wmem-repros | 11_3a5f82dfb5_http_header_map | temporal | yes | missed | missed | caught |
 | tshark | wmem-repros | 12_90bb3a5c9e_xml_root_name_recycled | temporal | yes | missed | missed | caught |
+| tshark | wmem-repros | 22_c702b44a01_usbhid_output_usages_freed_twice | temporal | yes | missed | missed | caught |
 | memcached | allocator-repros | 05_2d61f18_item_data_one_past | spatial | yes | missed | missed | caught |
 | memcached | allocator-repros | 06_78eb770_suffix_write_no_space | spatial | yes | missed | missed | caught |
 | memcached | allocator-repros | 07_ecdb011_unterminated_key_read | spatial | yes | missed | missed | caught |
@@ -258,62 +320,60 @@ and only a bound tighter than FFmpeg's own allocation would catch it.
 | memcached | plain-temporal-repros | 01_e7793811f8c8_logger_write_to_watcher_freed_by_the_poll | temporal | no | caught (held) | caught | caught |
 | memcached | plain-temporal-repros | 02_3bc58f6ea55a_logger_loop_condition_still_reads_the_freed_watcher | temporal | no | caught (held) | caught | caught |
 
-The new arms' pre-registrations and records: `f7adf03a1009` (Sublet in malloc; results in each
-nested corpus's `results/2026-10-09-sublet-malloc/`), `40175e883ca3` + fix `ed9f91e69c5d` (carve port,
-`carved-repros/results/2026-10-09-sublet-carve/`), `aeba7ddefb4d` + fix `a28d6c33fd97` (full
-configuration, `results/2026-10-09-sublet-full/` in each plain corpus), `03c471feabcc` (frame carve,
-`plane-repros/results/2026-10-09-sublet-carve/`), `a28d6c33fd97` (slab port + carve,
-`allocator-repros/results/2026-10-09-sublet-carve/`). Every reading matched its prediction; five
-runs produced no reading first and are recorded as such. **Withdrawn the same night, before it
-reached dev:** a first version of this section counted FOUR races by matching the word in the case
-records; the corpora's own statements give two (an adversarial audit caught it).
-
-## 0b. Every arm, all 130 cases (2026-10-09, evening)
+## 0b. Every arm, all 130 defects (after the audits of 2026-10-10 and the case added on 2026-10-11)
 
 Generated by `capstone/bug-corpora/tools/catch-tables.py --markdown`, which reads only `case.json`:
-an arm's explicit `verdict`, or the opening words of its oracle after any `MEASURED …:` prefix, and
-exits 1 — printing each hole by name — while any cell is not a reading. It printed 178 holes before
-the day's last runs (that is the gate firing), and none now. A cell reads **caught / measured**.
+an arm's explicit `verdict`, or the opening words of a `MEASURED …:` oracle; since the audit a bare
+oracle is a prediction and a hole. It exits 1 — printing each hole by name — while any cell is not a
+reading; it printed 334 when made strict, and none now. A cell reads **caught / measured**.
 
 The columns are one mechanism each. **ASan**: the native build under AddressSanitizer, with
 positive controls reporting in the same run. **CheriBSD**: stock purecap, libc revocation on.
 **PoisonCap bounds / protected**: the rebuilt published PoisonCap platform in mode 0 (bounds, no
 revocation) and mode 1 (poison on free, then revocation) — for the nested corpora, through each
 allocator's PoisonCap adapter, as Sublet goes through each allocator's Sublet port. **Capstone
-bounds**: the level0 heap (malloc narrowed to the request). **Capstone + Sublet**: the Sublet
+bounds**: on plain rows the level0 heap (malloc narrowed to the request); on NESTED rows the
+allocator's port in mode 0 -- each chunk its own bound (wmem's `wm_narrow`, memcached's ledger), no
+revocation -- so those cells are a port's per-chunk bound, not malloc's (corrected at the audit: this
+sentence used to say level0 for every row). The stock allocators on a per-allocation bound are
+column 2 of section 0: wmem 0/9 and memcached nested spatial 1/4. **Capstone + Sublet**: the Sublet
 heap, and on the nested corpora the allocator's Sublet port.
 
-**Temporal (48)**
+**Temporal (49)**
 
 | program | allocator layer | axis | n | ASan | CheriBSD | PoisonCap mode 0 | PoisonCap mode 1 | Capstone bounds | Capstone + Sublet |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|
 | FFmpeg | AVBufferPool | nested | 4 | 0 / 4 | 0 / 4 | 0 / 4 | 4 / 4 | 0 / 4 | 4 / 4 |
 | FFmpeg | direct malloc | plain | 13 | 13 / 13 | 0 / 13 | 0 / 13 | 12 / 13 | 0 / 13 | 13 / 13 |
-| tshark | wmem | nested | 13 | 0 / 13 | 0 / 13 | 0 / 13 | 13 / 13 | 0 / 13 | 13 / 13 |
+| tshark | wmem | nested | 14 | 0 / 14 | 0 / 14 | 0 / 14 | 14 / 14 | 0 / 14 | 14 / 14 |
 | tshark | direct g_malloc | plain | 10 | 10 / 10 | 0 / 10 | 0 / 10 | 9 / 10 | 0 / 10 | 10 / 10 |
 | memcached | slabs.c / cache.c | nested | 5 | 0 / 5 | 0 / 5 | 0 / 5 | 5 / 5 | 0 / 5 | 5 / 5 |
 | memcached | direct malloc | plain | 3 | 3 / 3 | 0 / 3 | 0 / 3 | 3 / 3 | 0 / 3 | 3 / 3 |
-| **Total** |  | 22 n · 26 p | 48 | 26 / 48 | 0 / 48 | 0 / 48 | 46 / 48 | 0 / 48 | 48 / 48 |
+| **Total** |  | 23 n · 26 p | 49 | 26 / 49 | 0 / 49 | 0 / 49 | 47 / 49 | 0 / 49 | 49 / 49 |
 
-**Spatial (82)**
+**Spatial (81)**
 
 | program | allocator layer | axis | n | ASan | CheriBSD | PoisonCap mode 0 | PoisonCap mode 1 | Capstone bounds | Capstone + Sublet |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|
-| FFmpeg | carved buffer | nested | 12 | 0 / 12 | 0 / 12 | 0 / 12 | 0 / 12 | 0 / 12 | 0 / 12 |
+| FFmpeg | carved buffer | nested | 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 |
 | FFmpeg | frame-pool plane | nested | 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 |
-| FFmpeg | direct malloc | plain | 25 | 25 / 25 | 22 / 25 | 22 / 25 | 22 / 25 | 25 / 25 | 25 / 25 |
-| FFmpeg | inside one struct | plain | 10 | 0 / 10 | 0 / 10 | 0 / 10 | 0 / 10 | 0 / 10 | 0 / 10 |
+| FFmpeg | direct malloc | plain | 24 | 24 / 24 | 21 / 24 | 21 / 24 | 21 / 24 | 24 / 24 | 24 / 24 |
+| FFmpeg | inside one struct | plain | 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 |
 | tshark | wmem | nested | 9 | 0 / 9 | 0 / 9 | 9 / 9 | 9 / 9 | 9 / 9 | 9 / 9 |
 | tshark | direct g_malloc | plain | 12 | 12 / 12 | 11 / 12 | 11 / 12 | 11 / 12 | 12 / 12 | 12 / 12 |
-| memcached | slabs.c / cache.c | nested | 4 | 0 / 4 | 1 / 4 | 2 / 4 | 2 / 4 | 2 / 4 | 2 / 4 |
+| memcached | slabs.c / cache.c | nested | 4 | 1 / 4 | 1 / 4 | 2 / 4 | 2 / 4 | 2 / 4 | 2 / 4 |
 | memcached | direct malloc | plain | 9 | 9 / 9 | 8 / 9 | 8 / 9 | 8 / 9 | 9 / 9 | 9 / 9 |
-| **Total** |  | 26 n · 56 p | 82 | 46 / 82 | 42 / 82 | 52 / 82 | 52 / 82 | 57 / 82 | 57 / 82 |
+| **Total** |  | 27 n · 54 p | 81 | 46 / 81 | 41 / 81 | 51 / 81 | 51 / 81 | 56 / 81 | 56 / 81 |
 
 How each reads, and why it misses what it misses:
 
-- **ASan sees exactly the accesses that leave a malloc'd block**: plain spatial 46/56 (the 10
-  struct-member crossings stay inside one block), plain temporal 26/26, and 0 on every nested row,
-  because an arena, a pool or a carve is one block to ASan. Every silent row ran with controls that
+- **ASan sees exactly the accesses that leave a malloc'd block** (since the audit, on each program's own
+  backing: memcached's pages and cache.c objects each their own malloc, wmem's `g_malloc` the host's
+  `malloc` -- the earlier arms carved everything out of one arena and could read nothing but silence, and
+  memcached 8, a crossing past a cache.c object, now reports): plain spatial 45/54 (the 9
+  struct-member crossings stay inside one block), plain temporal 26/26, and 1/27 nested spatial with
+  0/23 nested temporal -- memcached 8 is the only nested crossing that leaves a malloc'd block, because
+  upstream mallocs each cache.c object on its own; an arena, a pool or a carve is one block to ASan. Every silent row ran with controls that
   reported a read past, and a read after free of, a block the size of that corpus's arena.
 - **CheriBSD and PoisonCap read the same on every plain spatial row** — the PoisonCap libc rounds
   requests to the same size classes (17 and 24 bytes to 32, measured in the same boot), so the same
@@ -324,12 +384,12 @@ How each reads, and why it misses what it misses:
   recorded as such; both keep a second same-size block live across the free (N = 2, no cause
   claimed).
 - **PoisonCap on the nested corpora needs each allocator's adapter**, exactly as Sublet needs each
-  port: with it, mode 1 catches all 22 nested temporal cases, and the wmem and slab adapters'
+  port: with it, mode 1 catches all 23 nested temporal cases (case 22 in wm_widen, the handback), and the wmem and slab adapters'
   per-chunk bounds catch nested spatial crossings that leave a chunk (wmem 13-21, slab 05 and 08)
   even in mode 0.
 - **Capstone bounds and Capstone + Sublet** are unchanged in kind: exact per-object bounds catch
   every plain spatial row, including the five CheriBSD slack misses; Sublet adds the temporal
-  column (48/48), and nothing spatial, because a spatial bug frees nothing.
+  column (49/49), and nothing spatial, because a spatial bug frees nothing.
 
 ### 0b.1 Inside one allocation: why the Sublet heap misses, and what catches it
 
@@ -342,19 +402,20 @@ identity unless its switch is defined, so every other arm builds unchanged).
 
 | inside one allocation | n | Capstone + Sublet | field bounds, Capstone | field bounds, CHERI | carve bounds, Capstone | carve bounds, CHERI | **Sublet carve** |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| struct member (FFmpeg subobject-repros) | 10 | 0 / 10 | 7 / 10 | 8 / 10 | — | — | — |
-| carved buffer (FFmpeg carved-repros) | 12 | 0 / 12 | 0 / 12 | 0 / 12 | 12 / 12 | 12 / 12 | 12 / 12 |
+| struct member (FFmpeg subobject-repros) | 9 | 0 / 9 | 7 / 9 | 8 / 9 | — | — | — |
+| carved buffer (FFmpeg carved-repros) | 13 | 0 / 13 | 0 / 13 | 0 / 13 | 13 / 13 | 13 / 13 | 13 / 13 |
 | slab item key / suffix (memcached allocator 06, 07) | 2 | 0 / 2 | 0 / 2 | 0 / 2 | 2 / 2 | 2 / 2 | 2 / 2 |
 | frame plane (FFmpeg plane-repros) | 1 | 0 / 1 | 0 / 1 | 0 / 1 | 1 / 1 | 1 / 1 | 0 / 1 |
 
-- **Field bounds catch member crossings and nothing else.** Struct members: 7/10 on Capstone, 8/10
+- **Field bounds catch member crossings and nothing else.** Struct members: 7/9 on Capstone, 8/9
   on CHERI. Still missed: 04 (a read one byte before a member — predicted caught on CHERI, refuted)
-  and 09 (an index inside one int array) on both; 06 on Capstone only, because C1 v1 does not
-  narrow a struct's last array member. On carved regions, slab items and the frame plane they catch
+  on both, and 06 on Capstone only, because C1 v1 does not narrow a struct's last array member.
+  (09, an index inside one int array, was a slice carved out of one `av_calloc`; since the audit it is
+  carved case 12, which carve bounds catch.) On carved regions, slab items and the frame plane they catch
   nothing: those are pointer arithmetic on a block, not fields.
 - **The Sublet carve** (column 3 for these rows; `sublet-carve`) is the carving code ported to Sublet: the
   block lent LINEAR by the Sublet heap and split into one Sublet region per carve, each issued as an
-  alias bounded to the carve. It catches the 12 carved crossings and, as the slab port plus the
+  alias bounded to the carve. It catches the 13 carved crossings and, as the slab port plus the
   key/suffix carve, memcached 6 and 7 -- **by the bound it sets, the mechanism of carve bounds**; no
   buggy sequence re-carves, and its revocation is shown by the re-carve control alone. It does NOT
   catch the frame plane: a faithful port of av_frame_get_buffer issues each plane its allocated
@@ -362,7 +423,7 @@ identity unless its switch is defined, so every other arm builds unchanged).
   it. The 160-byte `ffp_carve` above is tighter than FFmpeg's own allocation and faults legitimate
   padded reads; it is a remedy for this read, not a port. Struct members are not carved by any code,
   so only the compiler's field bounds reach them (dash).
-- **Carve bounds catch every carved crossing: 15 of 15 on both platforms**, at the labelled probe,
+- **Carve bounds catch every carved crossing: 16 of 16 on both platforms**, at the labelled probe,
   with exact granted bounds on CHERI. Where the runners execute the fixed arm (the carved and plane
   corpora) it ran under the same narrowing and stayed FIXED. memcached case 6's region is empty;
   CHERI takes a zero-length bound, and Capstone — whose shrink needs base < end — the byte before it.
@@ -372,7 +433,55 @@ The pre-registrations: `2852edcdd747` (carved corpus, PoisonCap), `49498f856e87`
 recorded in their cases: FFmpeg plain-temporal 12 and tshark plain-temporal 04 on PoisonCap mode 1, FFmpeg subobject 04 under
 CHERI field bounds, and wmem 13's PoisonCap rows (the wmem adapter bounds each chunk).
 
-### Earlier on 2026-10-09: the Capstone columns closing, 118 cases
+## 0c. The same three columns on virtual Capstone (2026-10-10/11)
+
+Generated by `capstone/bug-corpora/tools/catch-tables.py --board-virtual`. Column 1 is the physical CHERI
+column, unchanged. Columns 2 and 3 are the virtual profile (`capstone/runtime/virtual`, the exact-bounds
+QEMU): the program's allocator stock on virtual mallocng (`virtual-malloc`), and the nested allocator's
+Sublet port over a block the virtual heap lends linear (`virtual-nested-pools`). A plain case has no
+nested allocator, so its column 3 is the same run as column 2. Every cell comes from a derived
+`verdicts.py` bundle, with the configuration's controls in the same boot. `(+N ?)` cells are not
+readings: FFmpeg's pool and plane corpora have no virtual recipe yet (`build-virtual.sh` refuses the
+app's pool variants, and plane needs a virtual libavutil).
+
+**Temporal, virtual Capstone**
+
+| program | allocator layer | axis | n | CHERI (quarantine = caught) | virtual malloc | virtual nested |
+|---|---|---|---:|---:|---:|---:|
+| FFmpeg | AVBufferPool | nested | 4 | 0 / 4 | 0 / 0 (+4 ?) | 0 / 0 (+4 ?) |
+| FFmpeg | direct malloc | plain | 13 | 13 / 13 (13 held) | 13 / 13 | 13 / 13 |
+| tshark | wmem | nested | 14 | 0 / 14 | 0 / 14 | 14 / 14 |
+| tshark | direct g_malloc | plain | 10 | 10 / 10 (10 held) | 10 / 10 | 10 / 10 |
+| memcached | slabs.c / cache.c | nested | 5 | 0 / 5 | 0 / 5 | 5 / 5 |
+| memcached | direct malloc | plain | 3 | 3 / 3 (3 held) | 3 / 3 | 3 / 3 |
+| **Total** |  |  | 49 | 26 / 49 (26 held) | 26 / 45 (+4 ?) | 45 / 45 (+4 ?) |
+
+**Spatial, virtual Capstone**
+
+| program | allocator layer | axis | n | CHERI (quarantine = caught) | virtual malloc | virtual nested |
+|---|---|---|---:|---:|---:|---:|
+| FFmpeg | carved buffer | nested | 13 | 0 / 13 | 0 / 13 | 13 / 13 |
+| FFmpeg | frame-pool plane | nested | 1 | 0 / 1 | 0 / 0 (+1 ?) | 0 / 0 (+1 ?) |
+| FFmpeg | direct malloc | plain | 24 | 21 / 24 | 24 / 24 | 24 / 24 |
+| FFmpeg | inside one struct | plain | 9 | 0 / 9 | 0 / 9 | 0 / 9 |
+| tshark | wmem | nested | 9 | 0 / 9 | 0 / 9 | 9 / 9 |
+| tshark | direct g_malloc | plain | 12 | 11 / 12 | 12 / 12 | 12 / 12 |
+| memcached | slabs.c / cache.c | nested | 4 | 1 / 4 | 1 / 4 | 4 / 4 |
+| memcached | direct malloc | plain | 9 | 8 / 9 | 9 / 9 | 9 / 9 |
+| **Total** |  |  | 81 | 41 / 81 | 46 / 80 (+1 ?) | 71 / 80 (+1 ?) |
+
+virtual cells that are not a reading yet: 10
+
+The virtual columns agree cell for cell with the physical columns 2 and 3 wherever both exist:
+- wmem: 0/23, then 23/23;
+- memcached allocator: 1/9, then 9/9;
+- FFmpeg carved: 0/13, then 13/13;
+- every plain case: CAUGHT.
+
+The one place the platforms differ in kind is the bound. Virtual mallocng bounds each object exactly,
+so the five size-class slack cases CheriBSD misses are caught on both Capstone platforms.
+
+### Earlier on 2026-10-09: the Capstone columns closing, 118 cases (history; counts below predate the audit of 2026-10-10)
 
 
 Counted from `case.json` by one classifier that reads an arm's explicit `verdict`, or the opening
@@ -465,6 +574,10 @@ a Capstone domain on both arms with no fault anywhere.
 > was the state when this document was written and contradicted its own table below as soon as the
 > spatial hunt produced anything. The spatial corpus is now **32 built and measured cases**, so the
 > sentence had become false in the one place a reader looks first.
+
+> **HISTORY -- counts as of 2026-10-09, before the audit of 2026-10-10.** The current counts are in
+> section 0: 129 defects, spatial 27 nested / 54 plain, temporal 22 nested / 26 plain. FFmpeg
+> plain-heap 13 is a duplicate and subobject 09 moved to carved-repros as case 12 (section A).
 
 | | nested allocator | plain / system allocator | total |
 |---|---:|---:|---:|

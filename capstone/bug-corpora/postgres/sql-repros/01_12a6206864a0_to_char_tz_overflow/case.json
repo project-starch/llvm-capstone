@@ -19,18 +19,38 @@
     "sublet": {
       "oracle": "the mechanism reports: capability fault: capstone-exec: domain fault cause=7 pc=0xc0202214 address=0xc9dcf8f0 entry=0xc0200e4c code=0xc0200000-0xc52f0000 last=0x38 preparing=0x38 sha256=be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268 image=/mnt/host/applications/postgres-be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268.dom",
       "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
-      "verdict": "detected",
-      "evidence": "capability fault: capstone-exec: domain fault cause=7 pc=0xc0202214 address=0xc9dcf8f0 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x38 preparing=0x38 sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom"
+      "verdict": "CAUGHT",
+      "evidence": "capability fault: capstone-exec: domain fault cause=7 pc=0xc0202214 address=0xc9dcf8f0 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x38 preparing=0x38 sha256=1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8 image=/mnt/host/applications/postgres-1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8.dom",
+      "verdict_from": "results/matrix.tsv sublet: detected"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the defect is witnessed by PostgreSQL's own check or by the differential -- REACHED-SILENT (2026-10-04, probe run). Plain purecap rc=0, no fault. The cassert build's own MEMORY_CONTEXT_CHECKING fires: detected write past chunk end; bad chunk size; bad block offset; req size > alloc size; found inconsistent memory block. The overflow stays inside the palloc chunk, so CHERI is correct to stay silent -- but the defect provably executed.",
-      "verdict": "silent",
+      "verdict": "MISSED",
       "evidence": "ran to the prompt with no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
+      "verdict_from": "results/matrix.tsv cheribsd-revocation: silent"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the trigger statement ran (3 prompts, 0 setup line(s))) and completed with no fault",
+      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "virtual-pg-pools": {
+      "oracle": "virtual profile with PostgreSQL's contexts on Sublet context pools (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f9e001ae8 in __stpcpy; by function: __stpcpy is a declared fault site",
+      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
     }
   },
   "status": "measured on all three arms 2026-10-06: spatial=silent, sublet=detected, cheribsd-revocation=silent",
   "advisory": "CVE-2026-14669",
   "nested": true,
-  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it.",
+  "fault_sites": [
+    "DCH_to_char",
+    "strcpy",
+    "__stpcpy"
+  ],
+  "fault_sites_why": "The overflow is the copy of the time-zone name into the result buffer: DCH_to_char's case DCH_TZ does strcpy(s, tmtcTzn(in)) (src/backend/utils/adt/formatting.c:2900, 17.5) with no bound on s, and musl's strcpy is __stpcpy(dest, src) (src/string/strcpy.c), so the out-of-bounds write lands in __stpcpy. Declared 2026-10-10 after the virtual-pg-pools run resolved its fault there; the reason is the 17.5 source cited, which does not depend on that run."
 }

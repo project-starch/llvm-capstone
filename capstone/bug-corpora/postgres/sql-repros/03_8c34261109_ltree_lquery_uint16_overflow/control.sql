@@ -1,23 +1,54 @@
 -- NEGATIVE CONTROL for trigger.sql, and the reason it is needed.
 --
--- This arm faults inside ltree's own extension script, which is why the case
--- is run against a fixture that already carries the extension. On an arm
+-- The sublet arm faults inside ltree own extension script, which is why the
+-- case runs against a fixture that already carries the extension. On an arm
 -- already known to fault nearby, one detected verdict is not evidence by
 -- itself: the fault has to be shown to depend on the defect. This file is the
 -- same statement below the wrap, and it must COMPLETE on the same image and
--- the same fixture. If it faults too, the trigger's fault is not this defect
+-- the same fixture. If it faults too, the trigger fault is not this defect
 -- and the row must be withdrawn.
 --
--- The arithmetic. Each OR-variant contributes MAXALIGN(LVAR_HDRSIZE + len) to
--- a totallen that is a uint16, and the domain builds force MAXIMUM_ALIGNOF to
--- 16, so a 1000-character variant costs 1008 bytes:
+-- WHAT WRAPS, AND WHAT IT COSTS. The uint16 is the per-level totallen, in
+-- ltree_io.c:539-546:
 --
---   trigger.sql  66 variants x 1008 = 66528  >  65535   wraps
---   control.sql  64 variants x 1008 = 64512  <= 65535   does not wrap
+--   cur->totallen  = L'L_HDRSIZE                   -- 16
+--   cur->totallen += MAXALIGN(LVAR_HDRSIZE + len)  -- once per OR-variant
 --
--- 65 would also stay under, at 65520, but only by 15 bytes; 64 leaves a
--- margin wide enough that a different LVAR_HDRSIZE or alignment on some
--- future target cannot quietly push the control over the line and turn a
--- control failure into what looks like a confirmed detection.
+-- so a 1000-character variant costs MAXALIGN(MAXALIGN(7) + 1000), which is
+-- 1008 where MAXIMUM_ALIGNOF is 8 and 1024 where it is 16. The capstone
+-- domains set it to 16 -- a capability, not long or double, sets it -- and the
+-- purecap guest ltree behaves as 16 as well, so on all three arms:
+--
+--   wraps at   16 + 64 x 1024 = 65552  >  65535
+--   trigger    16 + 66 x 1024 = 67600  >  65535   crosses it
+--   this file  16 + 48 x 1024 = 49168 <=  65535   does not, by 16367
+--
+-- MEASURED, NOT COMPUTED. Each arm can be asked what a variant costs on it,
+-- in band, in one statement: the difference between
+--
+--   pg_column_size((repeat('x',1000) || '|' || repeat('x',1000))::lquery)
+--
+-- and the same with a third variant IS the per-variant cost. It is 1008 on
+-- the host ASan build (2048 -> 3056) and 1024 in the purecap guest
+-- (2080 -> 3104). The threshold was then bisected, one backend per input:
+-- the host oracle reports heap-buffer-overflow first at 65 variants and is
+-- clean at 64; the purecap guest raises SIGPROT first at 64 and is clean at
+-- 63. Both land exactly where the arithmetic above puts them. CREATE
+-- EXTENSION ltree alone exits 0 in the guest, so the extension script is not
+-- what faults there.
+--
+-- 2026-10-10: THIS FILE USED 64 VARIANTS AND WAS WRONG, by 17 bytes. 64
+-- variants wrap wherever MAXIMUM_ALIGNOF is 16, which is all three arms, so
+-- the control faulted on all three -- which reads exactly like a mechanism
+-- firing on something other than the defect, and case 03 was withdrawn on
+-- sublet on that reading. The arithmetic it was written from used
+-- MAXALIGN(len) + LVAR_HDRSIZE per variant, which is what LVAR_NEXT walks and
+-- not what the allocation accumulates; and it was sanity-checked against a
+-- host whose MAXIMUM_ALIGNOF is 8, where 64 variants really are safe.
+--
+-- 48 leaves a margin of more than fifteen variants, so a different
+-- LVAR_HDRSIZE or MAXIMUM_ALIGNOF on a future target cannot quietly push this
+-- file over the line and turn a control failure into what looks like a
+-- confirmed detection. That is the failure it just had.
 CREATE EXTENSION ltree;
-SELECT (repeat('x', 1000) || repeat('|' || repeat('x', 1000), 63))::lquery;
+SELECT (repeat('x', 1000) || repeat('|' || repeat('x', 1000), 47))::lquery;
