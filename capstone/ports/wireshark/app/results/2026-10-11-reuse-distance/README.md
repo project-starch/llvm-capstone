@@ -95,6 +95,42 @@ added as well, and it only labels the report.
 - **Wall time:** the instrumented builds took 1,393 s (stock) and 1,429 s (protected), in
   parallel. The boots took 499 s and 505 s.
 
+## Repeats, 2026-10-12
+
+Two more runs per arm, pre-registered in
+[`docs/plans/2026-10-12-nested-reuse-repeats.md`](../../../../../docs/plans/2026-10-12-nested-reuse-repeats.md)
+(82de1ec3, pushed before any run). In `reuse.json`, `buckets` and the counters beside it stay run 1
+(the plotted one), `repetitions` lists runs 1-3 per boundary and arm (each summed over the ten
+captures as before), and `repeats` records the setup and each new run's checks.
+
+- **Host and boots:** p12, four VMs in parallel (stock and protected, runs 2 and 3), each its own
+  boot with its own `CAPSTONE_QEMU_LOCK` and a fresh work directory; boots took 456 to 458 s.
+- **Images:** the 2026-10-11 images in the p12 build directories, unchanged: stock
+  `7c9c8946...b44e`, protected `0b549748...385b`, equal to the record's (checked on the host before
+  the boots, and against each image's manifest by the runner).
+- **Runner:** the same `run-reuse.py` (sha256 `28615a93...b3fb`, equal to `runner_sha256`), same
+  kit, captures and repo; only the work directory and the lock file differ. The gate script's
+  sha256 equals the record's `gate_sha256` in every run.
+- **Checks:** in every run, all ten captures exit 0, no domain fault, and each capture's stdout
+  sha256 equals run 1's (which matched native stock tshark, and the native minimal build for ntp).
+  The observer's `error` is 0 in all 80 new reports (2 boundaries x 10 captures x 4 runs).
+
+| boundary | arm | run | issues | releases | reuses | equal to run 1 |
+|---|---|---|---|---|---|---|
+| wmem-block | stock | 2 | 7,221 | 7,221 | 135 | yes |
+| wmem-block | stock | 3 | 7,221 | 7,221 | 135 | yes |
+| wmem-block | protected | 2 | 7,221 | 7,221 | 135 | yes |
+| wmem-block | protected | 3 | 7,221 | 7,221 | 135 | yes |
+| wmem-block-fast | stock | 2 | 10,966 | 10,966 | 4,850 | yes |
+| wmem-block-fast | stock | 3 | 10,966 | 10,966 | 4,850 | yes |
+| wmem-block-fast | protected | 2 | 10,966 | 10,966 | 4,850 | yes |
+| wmem-block-fast | protected | 3 | 10,966 | 10,966 | 4,850 | yes |
+
+**Verdict: as predicted.** Every new histogram equals run 1's bucket for bucket (the buckets
+listed above), every counter (issues, releases, reuses, distinct starts, attempts) equals run 1's,
+and stock equals protected in every run. This also holds per capture: each new run's REUSE-GAP
+fields for each of the ten captures equal run 1's.
+
 ## Also seen
 
 - **Hand-outs against the memory row's extra lifetimes:** wmem hand-outs per process (both

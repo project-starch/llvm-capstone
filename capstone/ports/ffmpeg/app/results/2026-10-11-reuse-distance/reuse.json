@@ -2,6 +2,7 @@
  "program": "FFmpeg 9.0.1",
  "pre_registration": "16d2171a3edc",
  "workload": "decoder application, capstone-vexec ffmpeg.dom input.mkv 1 (30 frames)",
+ "buckets_note": "3 runs per arm, each its own boot; 'buckets' and the counters beside it are run 1 (2026-10-11), 'repetitions' lists runs 1-3 in order; runs 2 and 3 are the repeats pre-registered in docs/plans/2026-10-12-nested-reuse-repeats.md (82de1ec3)",
  "boundaries": {
   "buffer-pool": {
    "stock": {
@@ -17,7 +18,54 @@
     "error": 0,
     "drops": 9,
     "fresh_reuses": 0,
-    "capacity": 16384
+    "capacity": 16384,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54
+      },
+      "issues": 90,
+      "releases": 90,
+      "reuses": 81,
+      "distinct_starts": 9,
+      "attempts": 90,
+      "error": 0,
+      "drops": 9,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     },
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54
+      },
+      "issues": 90,
+      "releases": 90,
+      "reuses": 81,
+      "distinct_starts": 9,
+      "attempts": 90,
+      "error": 0,
+      "drops": 9,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     },
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54
+      },
+      "issues": 90,
+      "releases": 90,
+      "reuses": 81,
+      "distinct_starts": 9,
+      "attempts": 90,
+      "error": 0,
+      "drops": 9,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     }
+    ]
    },
    "protected": {
     "buckets": {
@@ -32,23 +80,90 @@
     "error": 0,
     "drops": 9,
     "fresh_reuses": 0,
-    "capacity": 16384
+    "capacity": 16384,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54
+      },
+      "issues": 90,
+      "releases": 90,
+      "reuses": 81,
+      "distinct_starts": 9,
+      "attempts": 90,
+      "error": 0,
+      "drops": 9,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     },
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54
+      },
+      "issues": 90,
+      "releases": 90,
+      "reuses": 81,
+      "distinct_starts": 9,
+      "attempts": 90,
+      "error": 0,
+      "drops": 9,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     },
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54
+      },
+      "issues": 90,
+      "releases": 90,
+      "reuses": 81,
+      "distinct_starts": 9,
+      "attempts": 90,
+      "error": 0,
+      "drops": 9,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     }
+    ]
    },
    "summary": {
     "median_bucket": {
      "stock": [
+      2,
+      2,
       2
      ],
      "protected": [
+      2,
+      2,
       2
      ]
     },
     "reusediff_rep1": 0.0,
     "reusediff_all_cross_pairs": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
      0.0
     ],
-    "reusediff_within_stock": [],
-    "reusediff_within_protected": [],
+    "reusediff_within_stock": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "reusediff_within_protected": [
+     0.0,
+     0.0,
+     0.0
+    ],
     "identical_rep1": true,
     "per_bucket_ranges": {
      "1": {
@@ -92,7 +207,60 @@
     "error": 0,
     "drops": 24,
     "fresh_reuses": 0,
-    "capacity": 16384
+    "capacity": 16384,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54,
+       "3": 108,
+       "4": 27
+      },
+      "issues": 240,
+      "releases": 240,
+      "reuses": 216,
+      "distinct_starts": 24,
+      "attempts": 240,
+      "error": 0,
+      "drops": 24,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     },
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54,
+       "3": 108,
+       "4": 27
+      },
+      "issues": 240,
+      "releases": 240,
+      "reuses": 216,
+      "distinct_starts": 24,
+      "attempts": 240,
+      "error": 0,
+      "drops": 24,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     },
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54,
+       "3": 108,
+       "4": 27
+      },
+      "issues": 240,
+      "releases": 240,
+      "reuses": 216,
+      "distinct_starts": 24,
+      "attempts": 240,
+      "error": 0,
+      "drops": 24,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     }
+    ]
    },
    "protected": {
     "buckets": {
@@ -109,23 +277,96 @@
     "error": 0,
     "drops": 24,
     "fresh_reuses": 0,
-    "capacity": 16384
+    "capacity": 16384,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54,
+       "3": 108,
+       "4": 27
+      },
+      "issues": 240,
+      "releases": 240,
+      "reuses": 216,
+      "distinct_starts": 24,
+      "attempts": 240,
+      "error": 0,
+      "drops": 24,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     },
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54,
+       "3": 108,
+       "4": 27
+      },
+      "issues": 240,
+      "releases": 240,
+      "reuses": 216,
+      "distinct_starts": 24,
+      "attempts": 240,
+      "error": 0,
+      "drops": 24,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     },
+     {
+      "buckets": {
+       "1": 27,
+       "2": 54,
+       "3": 108,
+       "4": 27
+      },
+      "issues": 240,
+      "releases": 240,
+      "reuses": 216,
+      "distinct_starts": 24,
+      "attempts": 240,
+      "error": 0,
+      "drops": 24,
+      "fresh_reuses": 0,
+      "capacity": 16384
+     }
+    ]
    },
    "summary": {
     "median_bucket": {
      "stock": [
+      3,
+      3,
       3
      ],
      "protected": [
+      3,
+      3,
       3
      ]
     },
     "reusediff_rep1": 0.0,
     "reusediff_all_cross_pairs": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
      0.0
     ],
-    "reusediff_within_stock": [],
-    "reusediff_within_protected": [],
+    "reusediff_within_stock": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "reusediff_within_protected": [
+     0.0,
+     0.0,
+     0.0
+    ],
     "identical_rep1": true,
     "per_bucket_ranges": {
      "1": {
@@ -218,6 +459,50 @@
      "STAGE M5 frames=30 packets=30",
      "EXP-OK ffmpeg 1"
     ]
+   },
+   {
+    "exit": 0,
+    "guest_wall_s": 6.64,
+    "image_sha256_guest": "063fc55dd001131698190bc20418bd0133f969906564cd33f8ee7418184423a3",
+    "stdout_sha256_guest": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+    "cleanup_rmmod_rc": 0,
+    "stderr_other_lines": [
+     "MEMPHASE before-0",
+     "MEMPHASE released-0"
+    ],
+    "frames": 30,
+    "output_check": true,
+    "stdout_non_frame_lines": [
+     "STAGE M1 main",
+     "STAGE M2a open_input format=matroska,webm",
+     "STAGE M2 open streams=1 video=0 320x180",
+     "STAGE M3 first packet size=10574",
+     "STAGE M4 first frame",
+     "STAGE M5 frames=30 packets=30",
+     "EXP-OK ffmpeg 1"
+    ]
+   },
+   {
+    "exit": 0,
+    "guest_wall_s": 6.6,
+    "image_sha256_guest": "063fc55dd001131698190bc20418bd0133f969906564cd33f8ee7418184423a3",
+    "stdout_sha256_guest": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+    "cleanup_rmmod_rc": 0,
+    "stderr_other_lines": [
+     "MEMPHASE before-0",
+     "MEMPHASE released-0"
+    ],
+    "frames": 30,
+    "output_check": true,
+    "stdout_non_frame_lines": [
+     "STAGE M1 main",
+     "STAGE M2a open_input format=matroska,webm",
+     "STAGE M2 open streams=1 video=0 320x180",
+     "STAGE M3 first packet size=10574",
+     "STAGE M4 first frame",
+     "STAGE M5 frames=30 packets=30",
+     "EXP-OK ffmpeg 1"
+    ]
    }
   ],
   "protected": [
@@ -242,7 +527,80 @@
      "STAGE M5 frames=30 packets=30",
      "EXP-OK ffmpeg 1"
     ]
+   },
+   {
+    "exit": 0,
+    "guest_wall_s": 6.77,
+    "image_sha256_guest": "1996436b89fe7cb9924d12f6f84e58221aa5565213303a73f9a743b277728010",
+    "stdout_sha256_guest": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+    "cleanup_rmmod_rc": 0,
+    "stderr_other_lines": [
+     "MEMPHASE before-0",
+     "MEMPHASE released-0"
+    ],
+    "frames": 30,
+    "output_check": true,
+    "stdout_non_frame_lines": [
+     "STAGE M1 main",
+     "STAGE M2a open_input format=matroska,webm",
+     "STAGE M2 open streams=1 video=0 320x180",
+     "STAGE M3 first packet size=10574",
+     "STAGE M4 first frame",
+     "STAGE M5 frames=30 packets=30",
+     "EXP-OK ffmpeg 1"
+    ]
+   },
+   {
+    "exit": 0,
+    "guest_wall_s": 6.77,
+    "image_sha256_guest": "1996436b89fe7cb9924d12f6f84e58221aa5565213303a73f9a743b277728010",
+    "stdout_sha256_guest": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af",
+    "cleanup_rmmod_rc": 0,
+    "stderr_other_lines": [
+     "MEMPHASE before-0",
+     "MEMPHASE released-0"
+    ],
+    "frames": 30,
+    "output_check": true,
+    "stdout_non_frame_lines": [
+     "STAGE M1 main",
+     "STAGE M2a open_input format=matroska,webm",
+     "STAGE M2 open streams=1 video=0 320x180",
+     "STAGE M3 first packet size=10574",
+     "STAGE M4 first frame",
+     "STAGE M5 frames=30 packets=30",
+     "EXP-OK ffmpeg 1"
+    ]
    }
   ]
+ },
+ "repeats": {
+  "pre_registration": "82de1ec3",
+  "date": "2026-10-12",
+  "host": "p13",
+  "boots": {
+   "stock": [
+    "run 2",
+    "run 3"
+   ],
+   "protected": [
+    "run 2",
+    "run 3"
+   ],
+   "note": "four VMs in parallel, one boot each, own CAPSTONE_QEMU_LOCK; run 1 is the 2026-10-11 boot"
+  },
+  "runner": {
+   "derived_from": "ports/perl/musl/results/2026-10-11-reuse-distance/run.sh",
+   "changes": "run directory, fixed TAG, id list ffmpeg-{stock,protected}-{2,3} only",
+   "sha256": "984d5aa6a51af2b2af28260c75c0b3d287e16934d38d57abb2bfa06fdaf37639"
+  },
+  "parser": {
+   "derived_from": "ports/perl/musl/results/2026-10-11-reuse-distance/parse.py",
+   "changes": "RUNS = ffmpeg only, runs 1-3 per arm (run 1 read from the 2026-10-11 serial log)",
+   "sha256": "948cf4174c31a1e291188c8deec037c39bebc5dd4d39487d25d9413fde0beac0"
+  },
+  "image_sha256_equal_to_record": true,
+  "histograms_equal_to_run1_every_run": true,
+  "counters_equal_to_run1_every_run": true
  }
 }

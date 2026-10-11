@@ -8,7 +8,8 @@ and return). Workload: the decoder application on the run-of-record clip,
 `capstone-vexec ffmpeg.dom input.mkv 1` (30 frames), as in the memory-behaviour run. Arms:
 **stock** (FFmpeg's pools as released) and **protected** (`FFAPP_SUBLET=1`: buffer-pool patch
 0003 on top of 0001), both with the same observer hooks behind `EXP_REUSE_GAP`. N = 1 per arm
-(deterministic), both VMs in the same batch as the Perl row. Data: [`reuse.json`](reuse.json)
+(deterministic), both VMs in the same batch as the Perl row; two more runs per arm on 2026-10-12,
+see "Repeats, 2026-10-12". Data: [`reuse.json`](reuse.json)
 (bucket k = observer `bins[k-1]`, empty buckets omitted).
 
 ## Outcome
@@ -125,6 +126,43 @@ run-staged.py d6770b8b, clang 4c6135fe; full hashes in `reuse.json`).
 
 **Wall times**: `capstone-vexec` in the guest: stock 8.18 s, protected 8.09 s. Boots
 (run-staged.py start to end): 16 s each; the batch of 8 VMs 56 s. Not a performance comparison.
+
+## Repeats, 2026-10-12
+
+Two more runs per arm, pre-registered in
+[`docs/plans/2026-10-12-nested-reuse-repeats.md`](../../../../../docs/plans/2026-10-12-nested-reuse-repeats.md)
+(82de1ec3, pushed before any run). `reuse.json` now holds three runs per arm: `buckets` and the
+counters beside it stay run 1 (the plotted one), `repetitions` lists runs 1-3, `runs` has the
+three runs' checks, and `repeats` records the setup.
+
+- **Host and boots:** p13, four VMs in parallel (stock and protected, runs 2 and 3), each its own
+  boot through `run-staged.py --timeout 3600` with its own `CAPSTONE_QEMU_LOCK` and fresh `--work`;
+  each boot 13 s.
+- **Images:** the 2026-10-11 images, unchanged on p13; host and guest sha256 equal the record's
+  (stock 063fc55dd001..., protected 1996436b89fe...). Platform hashes equal the record's.
+- **Runner and parser:** the Perl row's `run.sh` and `parse.py`, with only the run directory, a
+  fixed tag and the id list changed (`run.sh`), and `RUNS` set to FFmpeg runs 1-3 (`parse.py`; run
+  1 is read from the 2026-10-11 serial log, and the parser's run-1 output equals the committed
+  record). Their sha256 are in `reuse.json`.
+- **Checks:** every run exits 0, 30 frames equal to native.out, stdout sha256 6175afea1c8c...,
+  `rmmod` 0, observer `error` 0 at both boundaries. Guest wall: stock 6.64 and 6.60 s, protected
+  6.77 and 6.77 s.
+
+| boundary | arm | run | issues | releases | reuses | buckets | equal to run 1 |
+|---|---|---|---|---|---|---|---|
+| buffer-pool | stock | 2 | 90 | 90 | 81 | k1 27, k2 54 | yes |
+| buffer-pool | stock | 3 | 90 | 90 | 81 | k1 27, k2 54 | yes |
+| buffer-pool | protected | 2 | 90 | 90 | 81 | k1 27, k2 54 | yes |
+| buffer-pool | protected | 3 | 90 | 90 | 81 | k1 27, k2 54 | yes |
+| refstruct-pool | stock | 2 | 240 | 240 | 216 | k1 27, k2 54, k3 108, k4 27 | yes |
+| refstruct-pool | stock | 3 | 240 | 240 | 216 | k1 27, k2 54, k3 108, k4 27 | yes |
+| refstruct-pool | protected | 2 | 240 | 240 | 216 | k1 27, k2 54, k3 108, k4 27 | yes |
+| refstruct-pool | protected | 3 | 240 | 240 | 216 | k1 27, k2 54, k3 108, k4 27 | yes |
+
+**Verdict: as predicted.** Every new histogram equals run 1's bucket for bucket, the counters
+(issues, releases, reuses, distinct starts, attempts, drops, `fresh_reuses`) equal run 1's, and
+stock equals protected in every run pair (`buckets_identical_every_pair` true at both boundaries).
+The REUSE-GAP lines of all six runs are identical character for character.
 
 ## Cross-reading with the memory-behaviour run (not registered)
 
