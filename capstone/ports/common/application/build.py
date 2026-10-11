@@ -78,7 +78,7 @@ def main():
     p.add_argument('--musl', type=Path, help='Explicit musl source directory')
     p.add_argument('--libc', type=Path, help='Explicit Capstone libc archive')
     p.add_argument('--include', type=Path, action='append', default=[])
-    p.add_argument('--nested', choices=['none', 'cpython', 'mruby', 'postgres', 'perl'], default='none')
+    p.add_argument('--nested', choices=['none', 'cpython', 'mruby', 'postgres', 'perl', 'ffmpeg'], default='none')
     p.add_argument('--gc-gaps', action='store_true', help='mruby GC-slot aggregate observer is present in the input archive')
     p.add_argument('--reuse-gap', action='store_true',
                    help='retain the PostgreSQL inner-chunk reuse report in the final image')
@@ -152,8 +152,9 @@ def main():
         extra += ['-O1', *defines, EXPERIMENTS / 'allocations.c',
                   '-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free']
     # CPython's protection is patch 0014 inside obmalloc, PostgreSQL's patch
-    # 0003 inside its memory contexts: no objects, no regions.
-    if args.nested not in ('none', 'cpython', 'postgres'):
+    # 0003 inside its memory contexts, FFmpeg's buffer-pool patch 0003 inside
+    # libavutil's pools: no objects, no regions.
+    if args.nested not in ('none', 'cpython', 'postgres', 'ffmpeg'):
         extra += ['-O1', '-Wl,--wrap=__capstone_region', *defines, '-I',
                   REPO / 'capstone/runtime/include', HERE / 'regions.c']
     if args.reuse_gap:

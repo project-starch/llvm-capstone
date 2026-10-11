@@ -40,6 +40,17 @@ case $HEAP in
   *) echo "FFAPP_HEAP must be level0 or shrink" >&2; exit 2 ;;
 esac
 FFEXTRA=()
+# FFAPP_SUBLET=1 (virtual profile only): FFmpeg's own pools protected by the buffer-pool port's
+# patch 0003, every AVBufferPool and AVRefStructPool entry handed out as a Sublet child lifetime
+# and revoked when it returns to its pool. The libraries are built from prepare-source.sh
+# --sublet, and capability.h's include path joins the configure key, so they rebuild.
+SUBLET=${FFAPP_SUBLET:-0}
+case $SUBLET in 0|1) ;; *) echo "FFAPP_SUBLET must be 0 or 1" >&2; exit 2 ;; esac
+if [[ $SUBLET == 1 ]]; then
+  [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]] \
+    || { echo "FFAPP_SUBLET=1 needs CAPSTONE_APPLICATION_PROFILE=virtual" >&2; exit 2; }
+  FFEXTRA+=(-I"$REPO_ROOT/capstone/runtime/include")
+fi
 OUT="$OUT$SFX"
 BASE="$WORK/domain"                  # the shared FFmpeg build and configure stubs
 RT="$OUT/runtime"
@@ -62,7 +73,11 @@ if [[ ! -f "$ARCHIVE" || $(cat "$WORK/musl-build/compiler.sha256" 2>/dev/null) !
   OUT_DIR=$WORK/musl-build bash "$MUSL_PORT/build-musl-capstone.sh"
   printf '%s\n' "$COMPILER_HASH" > "$WORK/musl-build/compiler.sha256"
 fi
-SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" | tail -1)
+if [[ $SUBLET == 1 ]]; then
+  SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" --sublet | tail -1)
+else
+  SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" | tail -1)
+fi
 
 TARGET=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -Xclang -target-feature -Xclang +a)

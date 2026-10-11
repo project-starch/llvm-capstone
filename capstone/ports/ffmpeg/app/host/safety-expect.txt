@@ -168,3 +168,35 @@ sublet  24  FAULT  temporal
 level0  25  RETURN 190015b
 shrink  25  RETURN 190015b
 sublet  25  FAULT  temporal
+
+# THE VIRTUAL POOL ARMS (build-virtual.sh ffmpeg, CAPSTONE_APPLICATION_PROFILE=virtual,
+# FFAPP_EXTRA_FIXTURES="11 12 13 14 15"). Registered 2026-10-11, BEFORE either arm was built,
+# and committed before the first boot.
+#   vstock  FFmpeg's pools as released on virtual musl mallocng (FFAPP_SUBLET unset)
+#   vpools  the same with FFAPP_SUBLET=1: buffer-pool patch 0003, every AVBufferPool and
+#           AVRefStructPool entry handed out as a child lifetime bounded to pool->size and
+#           revoked when it returns to its pool
+# WHAT EACH PREDICTION RESTS ON:
+# - av_buffer_alloc(64) is av_malloc(64), which is malloc(64) here (build-domain.sh turns the
+#   memalign paths off), and virtual mallocng bounds it to 64 bytes: fixture 14's p[64] faults
+#   oob on both arms, at the printed target.
+# - A buffer that returns to its pool is not freed: on vstock the stale pointer still reads it,
+#   its own byte (12, 15) or, once the pool hands the same entry out again, the new owner's
+#   0x5b (13: same-address=1, mark d0015b), as pool0 predicted on the physical heap.
+# - 0003 revokes the handed-out child at the return (pool_release_buffer, pool_return_entry),
+#   so on vpools 12, 13 and 15 fault temporal at the printed target. 13's new owner gets a
+#   fresh child of the same entry, so the stale read faults before reaching its byte.
+# - 11 reads in bounds of a live buffer and completes on both.
+# Left out: 16 is a refstruct object outside any pool, which 0003 does not touch. 17's stale
+# access is av_refstruct_unref reading the RefCount header in front of the object, not the
+# printed target, which these outcomes cannot express.
+vstock  11  RETURN b00001
+vstock  12  RETURN c000a0
+vstock  13  RETURN d0015b
+vstock  14  FAULT  oob
+vstock  15  RETURN f000a0
+vpools  11  RETURN b00001
+vpools  12  FAULT  temporal
+vpools  13  FAULT  temporal
+vpools  14  FAULT  oob
+vpools  15  FAULT  temporal

@@ -15,6 +15,11 @@
 #                                 copied into libavutil/. Keyed by all of them. The domain and
 #                                 native builds never read this tree; the domain build's pool
 #                                 arms, which did, were removed on 2026-10-11.
+#   prepare-source.sh --sublet    the patched tree PLUS FFmpeg's pools protected by the
+#                                 buffer-pool port's patch 0003 (build-domain.sh FFAPP_SUBLET=1):
+#                                 this port's patches, buffer-pool's 0001 (the event hooks 0003
+#                                 is written against) and 0003, and the same trace.h, recorder
+#                                 and observer as --pool. Keyed by all of them.
 #
 # The tree is keyed by the patch set's hash, so editing a patch produces a fresh tree
 # instead of silently reusing one prepared from the old patches.
@@ -49,17 +54,22 @@ if [ "${1:-}" = --pristine ]; then
   echo "$SRC"; exit 0
 fi
 
-if [ "${1:-}" = --pool ]; then
+if [ "${1:-}" = --pool ] || [ "${1:-}" = --sublet ]; then
   BP="$APP_DIR/../buffer-pool"
-  BP_PATCHES=("$BP"/patches/ffmpeg-9.0.1-0001-*.patch "$BP"/patches/ffmpeg-9.0.1-0002-*.patch)
-  POOL_FILES=("$APP_DIR"/patches/*.patch "${BP_PATCHES[@]}" "$APP_DIR"/patches-pool/*.patch
+  if [ "$1" = --pool ]; then
+    BP_PATCHES=("$BP"/patches/ffmpeg-9.0.1-0001-*.patch "$BP"/patches/ffmpeg-9.0.1-0002-*.patch
+                "$APP_DIR"/patches-pool/*.patch)
+  else
+    BP_PATCHES=("$BP"/patches/ffmpeg-9.0.1-0001-*.patch "$BP"/patches/ffmpeg-9.0.1-0003-*.patch)
+  fi
+  POOL_FILES=("$APP_DIR"/patches/*.patch "${BP_PATCHES[@]}"
               "$BP/src/shared/trace.h" "$APP_DIR/src/pool/ff2_record.c" "$APP_DIR/src/pool/ff2_observe.c")
   POOL_KEY=$(cat "${POOL_FILES[@]}" | sha256sum | cut -c1-12)
-  SRC="$WORK/src-$VERSION-pool-$POOL_KEY"
+  SRC="$WORK/src-$VERSION-${1#--}-$POOL_KEY"
   if [ ! -f "$SRC/.ffapp-prepared" ]; then
     rm -rf "$SRC" "$SRC.tmp"; mkdir -p "$SRC.tmp"
     tar xf "$TARBALL" -C "$SRC.tmp" --strip-components=1
-    for p in "$APP_DIR"/patches/*.patch "${BP_PATCHES[@]}" "$APP_DIR"/patches-pool/*.patch; do
+    for p in "$APP_DIR"/patches/*.patch "${BP_PATCHES[@]}"; do
       patch -d "$SRC.tmp" -p1 --batch --forward --fuzz=0 < "$p" >/dev/null \
         || { echo "prepare-source: $(basename "$p") does not apply at fuzz 0" >&2; exit 1; }
     done

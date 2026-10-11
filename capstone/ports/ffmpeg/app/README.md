@@ -99,6 +99,10 @@ All work products go under `$CAPSTONE_TMP_ROOT/ffmpeg-app/` (`FFAPP_WORK`). The 
 it as its first argument): `level0` (the default, arena-wide bounds) or `shrink` (per-object
 bounds). The `sublet` arm and its pool modes (`FFAPP_POOL=0|2`) were removed on 2026-10-11 with
 the physical Sublet heap; their recorded results stay in `results/`.
+On the virtual profile, `FFAPP_SUBLET=1` builds the libraries with FFmpeg's own pools protected by
+the buffer-pool port's patch 0003 (`prepare-source.sh --sublet`): every `AVBufferPool` and
+`AVRefStructPool` entry is handed out as a Sublet child lifetime and revoked when it returns to its
+pool. `build-virtual.sh ffmpeg` records such an image as the nested build.
 
 ## Layout
 
