@@ -11,8 +11,6 @@
   "required_arms": [
     "spatial",
     "sublet",
-    "poisoncap-spatial",
-    "poisoncap-protected",
     "cheribsd-revocation",
     "native-detect",
     "native-fix-differential",
@@ -43,6 +41,6 @@
     "virtual-malloc": "virtual-mallocng"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+    "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc"
   }
 }

@@ -278,7 +278,7 @@ HOSTED = {
                "virtual-nested-pools": {"MCP_SUBLET": "ON", "MCP_STOCK_MALLOC": "OFF"}},
         cache_dir="work/port",
         program="bin/defect-{nn}",
-        extra={"virtual-malloc": [], "virtual-nested-pools": ["1"]},
+        extra={"virtual-malloc": [], "virtual-nested-pools": []},
         mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
         controls_dir="controls/virtual",
         control_names={90: "chunk-free-90"},

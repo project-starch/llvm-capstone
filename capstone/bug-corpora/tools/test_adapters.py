@@ -522,7 +522,7 @@ class VirtualHosted(unittest.TestCase):
         w, m = self.rv.HOSTED["wmem-repros"], self.rv.HOSTED["allocator-repros"]
         self.assertEqual(self.rv.port_control_argv(w, "virtual-malloc", "0", "1"), ["0", "1"])
         self.assertEqual(self.rv.port_control_argv(w, "virtual-nested-pools", "0", "2"), ["0", "2"])
-        self.assertEqual(self.rv.port_control_argv(m, "virtual-nested-pools", "1", "90"), ["buggy", "90", "1"])
+        self.assertEqual(self.rv.port_control_argv(m, "virtual-nested-pools", "1", "90"), ["buggy", "90"])
 
     def test_control_evidence_is_a_line_not_a_character(self):
         self.assertEqual(self.rv.evidence_line({"fault": "capstone-exec: domain fault cause=24"}, ""),

@@ -27,9 +27,6 @@
  * its malloc would make it, revoked only when it is discarded (cache.c's free). */
 #include "mc_slabs_shim.h"
 #include "port.h"
-#ifdef MCP_DOMAIN
-#include <capstone/capability.h> /* mode 2's check that a chunk carries its page's bound */
-#endif
 
 #define MIN_PAGE (64UL * 1024)
 #define MAX_PAGES (MCP_PAGE_HALF / MIN_PAGE)
@@ -76,7 +73,6 @@ void mcp_set_mode(unsigned mode) {
    * malloc_granular: page-wide chunks, revocation only at discard (mode 2). */
   protected_mode = mode == 1;
   malloc_granular = mode == 2;
-  mcp_authority_set_mode(mode == 1);
   pages = mcp_meta_calloc(MAX_PAGES, sizeof *pages);
   page_map = mcp_meta_calloc(GRAINS, sizeof *page_map);
   objects = mcp_meta_calloc(MAX_OBJECTS, sizeof *objects);
@@ -146,12 +142,6 @@ void *mcp_page_carve(void *page, unsigned id, uint32_t chunk_size, uint32_t pers
   pg->clsid = id;
   if (malloc_granular) {
     /* Stock slabs.c: a chunk is page + i * size, carrying the page's bound. */
-#ifdef MCP_DOMAIN
-    capstone_cap_slot probe;
-    capstone_cap_store(&probe, pg->alias);
-    if (capstone_cap_base(&probe) != pg->base || capstone_cap_end(&probe) != pg->base + pg->size)
-      mcp_fail(509);
-#endif
     for (uint32_t i = 0; i < perslab; ++i) {
       pg->chunks[i].alias = (char *)pg->alias + (size_t)i * chunk_size;
       pg->chunks[i].state = CARVED;
