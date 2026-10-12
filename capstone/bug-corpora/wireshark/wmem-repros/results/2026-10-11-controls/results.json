@@ -1,0 +1,1991 @@
+{
+  "what": "wmem lifetime controls (parent, sibling, successor) of docs/plans/2026-10-11-nested-lifetime-controls.md, Wireshark 4.6.8 wmem BLOCK allocator, protected = patch 0001 (WM_SUBLET=ON), release = wmem as released",
+  "revision": {
+    "llvm_capstone_head": "53325bba0d5c9e6696a1da5c069276abfa5c9088",
+    "branch": "ports/nested-lifetime-controls",
+    "snapshot": "git archive HEAD capstone compiler-rt/lib/builtins, plus the uncommitted files below",
+    "uncommitted_files": {
+      "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/00_control_parent_block/case.c": "e0fd02b3c492c7e5382065fd12c0e23747acc13c2f5e08e2e53946a8befd8586",
+      "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/01_control_sibling_intact/case.c": "4ee14ecda77e517fb5721f767f68f7ac48df5609f79c8345c423fb6780d11091",
+      "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/02_control_successor_reuse/case.c": "8639cb913965ebd7a369ede8d439ecf360b569540da581e4e030e5c179459082",
+      "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/03_control_successor_stale/case.c": "457c74762100a4ca541e4da76a3e1a0aa70884c4d52b66de60d49b0ddf436f3b",
+      "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/lifetime.h": "75d56c941395ecdfb11cc39be36dbace77262fdff629ef79e49d4c2fbefa82a6",
+      "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/run-lifetime-controls.py": "995aa88370db55eb9e9abe40ab56a1c58d511e33e3ef40dbc12012d5c966f33a",
+      "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/shared": "symlink -> ../../shared"
+    },
+    "tracked_modifications": "none"
+  },
+  "platform": {
+    "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+    "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512"
+  },
+  "configuration": {
+    "protected": {
+      "WM_SUBLET": "ON",
+      "profile": "virtual",
+      "exact_bounds": true,
+      "harts": 1,
+      "allocator": "WMEM_ALLOCATOR_BLOCK",
+      "release": "wmem_free",
+      "build_type": "Release",
+      "sdk_json_sha256": "0d302f1b5730b55be368010c943674aa99708842b606eb9deb2ab8150073921c",
+      "sdk_cc_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+      "wmem_variant": "sublet (patch 0001)",
+      "patch_sha256": "5f2ef5f320edc27e85a3b005c11a257ffe925f56489a50bfbaf7b27f316b19e6"
+    },
+    "release": {
+      "WM_SUBLET": "OFF",
+      "profile": "virtual",
+      "exact_bounds": true,
+      "harts": 1,
+      "allocator": "WMEM_ALLOCATOR_BLOCK",
+      "release": "wmem_free",
+      "build_type": "Release",
+      "sdk_json_sha256": "0d302f1b5730b55be368010c943674aa99708842b606eb9deb2ab8150073921c",
+      "sdk_cc_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+      "wmem_variant": "reference",
+      "patch_sha256": "5f2ef5f320edc27e85a3b005c11a257ffe925f56489a50bfbaf7b27f316b19e6"
+    }
+  },
+  "probe_lines": {
+    "wm_defect_probe": "capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53",
+    "wm_defect_write": "capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:65",
+    "wm_ctl_load_insn": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/lifetime.h:124",
+    "wm_ctl_store_insn": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/lifetime.h:132"
+  },
+  "runner_sha256": "995aa88370db55eb9e9abe40ab56a1c58d511e33e3ef40dbc12012d5c966f33a",
+  "run_staged_sha256": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c",
+  "boots": [
+    {
+      "boot": "protected-1",
+      "started_utc": "2026-10-11T15:36:51Z",
+      "wall_seconds": 17.5,
+      "boot_completed": true,
+      "gate_sha256": "141a8f0feed4c835b655080e19817cc9e29095cde0108595019e35811a0f159e"
+    },
+    {
+      "boot": "protected-2",
+      "started_utc": "2026-10-11T15:37:38Z",
+      "wall_seconds": 19.2,
+      "boot_completed": true,
+      "gate_sha256": "141a8f0feed4c835b655080e19817cc9e29095cde0108595019e35811a0f159e"
+    },
+    {
+      "boot": "protected-3",
+      "started_utc": "2026-10-11T15:37:38Z",
+      "wall_seconds": 18.1,
+      "boot_completed": true,
+      "gate_sha256": "141a8f0feed4c835b655080e19817cc9e29095cde0108595019e35811a0f159e"
+    },
+    {
+      "boot": "release-1",
+      "started_utc": "2026-10-11T15:36:52Z",
+      "wall_seconds": 13.5,
+      "boot_completed": true,
+      "gate_sha256": "141a8f0feed4c835b655080e19817cc9e29095cde0108595019e35811a0f159e"
+    },
+    {
+      "boot": "release-2",
+      "started_utc": "2026-10-11T15:37:41Z",
+      "wall_seconds": 18.2,
+      "boot_completed": true,
+      "gate_sha256": "141a8f0feed4c835b655080e19817cc9e29095cde0108595019e35811a0f159e"
+    },
+    {
+      "boot": "release-3",
+      "started_utc": "2026-10-11T15:37:38Z",
+      "wall_seconds": 16.8,
+      "boot_completed": true,
+      "gate_sha256": "141a8f0feed4c835b655080e19817cc9e29095cde0108595019e35811a0f159e"
+    }
+  ],
+  "verdicts": {
+    "00-parent-block": {
+      "protected": "AS PREDICTED",
+      "release": "AS PREDICTED"
+    },
+    "01-sibling-intact": {
+      "protected": "AS PREDICTED",
+      "release": "AS PREDICTED"
+    },
+    "02-successor-reuse": {
+      "protected": "AS PREDICTED",
+      "release": "AS PREDICTED"
+    },
+    "03-successor-stale": {
+      "protected": "AS PREDICTED",
+      "release": "AS PREDICTED"
+    }
+  },
+  "controls": {
+    "00-parent-block": {
+      "protected": {
+        "image_sha256": "4445108a0c11e1b6c23bd6a8ab0ba9e4a30304c3866d78619a2b6e3dc6d0ae28",
+        "boots": [
+          {
+            "boot": "protected-1",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3faf4fe0a0",
+              "guard": "0x3faf4fe0f0",
+              "block": "0x3faf4fe050",
+              "generation": "0x3faf4fe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3faf4fe0a0",
+                "0x3faf4fe0e0"
+              ],
+              "guard": [
+                "0x3faf4fe0f0",
+                "0x3faf4fe130"
+              ],
+              "block": [
+                "0x3faf4fe050",
+                "0x3fafcfe050"
+              ],
+              "generation": [
+                "0x3faf4fe050",
+                "0x3fafcfe050"
+              ]
+            },
+            "accesses": [
+              "read A-chunk-header via=block addr=0x3faf4fe090 len=8 probe=wm_ctl_load_insn site=case.c:51 done",
+              "read A-free-links via=block addr=0x3faf4fe0a0 len=32 probe=pointer-load site=case.c:62 done",
+              "read A-former-range via=block addr=0x3faf4fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73 done",
+              "write A-former-range via=block addr=0x3faf4fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:77 done",
+              "read A-former-range via=block addr=0x3faf4fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:78 done",
+              "read A-former-range via=generation addr=0x3faf4fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:86 done",
+              "write A-former-range via=generation addr=0x3faf4fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:90 done",
+              "read A-former-range via=block addr=0x3faf4fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:91 done",
+              "read guard via=guard addr=0x3faf4fe0f0 len=64 probe=wm_ctl_load_insn site=case.c:98 done"
+            ],
+            "checks": [
+              "A-former-range-after-links bytes=32..63 mismatches=0 ok",
+              "A-former-range-written bytes=0..63 mismatches=0 ok",
+              "A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+              "A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+              "guard-intact bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "A_offset_in_block=0x50 chunk_header=16",
+              "released A via wmem_free",
+              "A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+              "A-free-links prev=0x3faf4fe090 next=0x3faf4fe090 chunk=0x3faf4fe090 ok: the recycler holds A's chunk alone"
+            ]
+          },
+          {
+            "boot": "protected-2",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f97bfe0a0",
+              "guard": "0x3f97bfe0f0",
+              "block": "0x3f97bfe050",
+              "generation": "0x3f97bfe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3f97bfe0a0",
+                "0x3f97bfe0e0"
+              ],
+              "guard": [
+                "0x3f97bfe0f0",
+                "0x3f97bfe130"
+              ],
+              "block": [
+                "0x3f97bfe050",
+                "0x3f983fe050"
+              ],
+              "generation": [
+                "0x3f97bfe050",
+                "0x3f983fe050"
+              ]
+            },
+            "accesses": [
+              "read A-chunk-header via=block addr=0x3f97bfe090 len=8 probe=wm_ctl_load_insn site=case.c:51 done",
+              "read A-free-links via=block addr=0x3f97bfe0a0 len=32 probe=pointer-load site=case.c:62 done",
+              "read A-former-range via=block addr=0x3f97bfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73 done",
+              "write A-former-range via=block addr=0x3f97bfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:77 done",
+              "read A-former-range via=block addr=0x3f97bfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:78 done",
+              "read A-former-range via=generation addr=0x3f97bfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:86 done",
+              "write A-former-range via=generation addr=0x3f97bfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:90 done",
+              "read A-former-range via=block addr=0x3f97bfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:91 done",
+              "read guard via=guard addr=0x3f97bfe0f0 len=64 probe=wm_ctl_load_insn site=case.c:98 done"
+            ],
+            "checks": [
+              "A-former-range-after-links bytes=32..63 mismatches=0 ok",
+              "A-former-range-written bytes=0..63 mismatches=0 ok",
+              "A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+              "A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+              "guard-intact bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "A_offset_in_block=0x50 chunk_header=16",
+              "released A via wmem_free",
+              "A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+              "A-free-links prev=0x3f97bfe090 next=0x3f97bfe090 chunk=0x3f97bfe090 ok: the recycler holds A's chunk alone"
+            ]
+          },
+          {
+            "boot": "protected-3",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3fb0dfe0a0",
+              "guard": "0x3fb0dfe0f0",
+              "block": "0x3fb0dfe050",
+              "generation": "0x3fb0dfe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3fb0dfe0a0",
+                "0x3fb0dfe0e0"
+              ],
+              "guard": [
+                "0x3fb0dfe0f0",
+                "0x3fb0dfe130"
+              ],
+              "block": [
+                "0x3fb0dfe050",
+                "0x3fb15fe050"
+              ],
+              "generation": [
+                "0x3fb0dfe050",
+                "0x3fb15fe050"
+              ]
+            },
+            "accesses": [
+              "read A-chunk-header via=block addr=0x3fb0dfe090 len=8 probe=wm_ctl_load_insn site=case.c:51 done",
+              "read A-free-links via=block addr=0x3fb0dfe0a0 len=32 probe=pointer-load site=case.c:62 done",
+              "read A-former-range via=block addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73 done",
+              "write A-former-range via=block addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:77 done",
+              "read A-former-range via=block addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:78 done",
+              "read A-former-range via=generation addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:86 done",
+              "write A-former-range via=generation addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:90 done",
+              "read A-former-range via=block addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:91 done",
+              "read guard via=guard addr=0x3fb0dfe0f0 len=64 probe=wm_ctl_load_insn site=case.c:98 done"
+            ],
+            "checks": [
+              "A-former-range-after-links bytes=32..63 mismatches=0 ok",
+              "A-former-range-written bytes=0..63 mismatches=0 ok",
+              "A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+              "A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+              "guard-intact bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "A_offset_in_block=0x50 chunk_header=16",
+              "released A via wmem_free",
+              "A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+              "A-free-links prev=0x3fb0dfe090 next=0x3fb0dfe090 chunk=0x3fb0dfe090 ok: the recycler holds A's chunk alone"
+            ]
+          }
+        ]
+      },
+      "release": {
+        "image_sha256": "a67fc4447d19dc39ff9aa441611df0231e87acce3bbe3ad0238f7cac9506d685",
+        "boots": [
+          {
+            "boot": "release-1",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3fbb9fe080",
+              "guard": "0x3fbb9fe0d0",
+              "block": "0x3fbb9fe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3fbb9fe050",
+                "0x3fbc1fe050"
+              ],
+              "guard": [
+                "0x3fbb9fe050",
+                "0x3fbc1fe050"
+              ],
+              "block": [
+                "0x3fbb9fe050",
+                "0x3fbc1fe050"
+              ]
+            },
+            "accesses": [
+              "read A-chunk-header via=block addr=0x3fbb9fe070 len=8 probe=wm_ctl_load_insn site=case.c:51 done",
+              "read A-free-links via=block addr=0x3fbb9fe080 len=32 probe=pointer-load site=case.c:62 done",
+              "read A-former-range via=block addr=0x3fbb9fe080 len=64 probe=wm_ctl_load_insn site=case.c:73 done",
+              "write A-former-range via=block addr=0x3fbb9fe080 len=64 probe=wm_ctl_store_insn site=case.c:77 done",
+              "read A-former-range via=block addr=0x3fbb9fe080 len=64 probe=wm_ctl_load_insn site=case.c:78 done",
+              "read guard via=guard addr=0x3fbb9fe0d0 len=64 probe=wm_ctl_load_insn site=case.c:98 done"
+            ],
+            "checks": [
+              "A-former-range-after-links bytes=32..63 mismatches=0 ok",
+              "A-former-range-written bytes=0..63 mismatches=0 ok",
+              "guard-intact bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=release",
+              "A_offset_in_block=0x30 chunk_header=16",
+              "released A via wmem_free",
+              "A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+              "A-free-links prev=0x3fbb9fe070 next=0x3fbb9fe070 chunk=0x3fbb9fe070 ok: the recycler holds A's chunk alone",
+              "generation absent: the release build has no patch 0001"
+            ]
+          },
+          {
+            "boot": "release-2",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f94afe080",
+              "guard": "0x3f94afe0d0",
+              "block": "0x3f94afe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3f94afe050",
+                "0x3f952fe050"
+              ],
+              "guard": [
+                "0x3f94afe050",
+                "0x3f952fe050"
+              ],
+              "block": [
+                "0x3f94afe050",
+                "0x3f952fe050"
+              ]
+            },
+            "accesses": [
+              "read A-chunk-header via=block addr=0x3f94afe070 len=8 probe=wm_ctl_load_insn site=case.c:51 done",
+              "read A-free-links via=block addr=0x3f94afe080 len=32 probe=pointer-load site=case.c:62 done",
+              "read A-former-range via=block addr=0x3f94afe080 len=64 probe=wm_ctl_load_insn site=case.c:73 done",
+              "write A-former-range via=block addr=0x3f94afe080 len=64 probe=wm_ctl_store_insn site=case.c:77 done",
+              "read A-former-range via=block addr=0x3f94afe080 len=64 probe=wm_ctl_load_insn site=case.c:78 done",
+              "read guard via=guard addr=0x3f94afe0d0 len=64 probe=wm_ctl_load_insn site=case.c:98 done"
+            ],
+            "checks": [
+              "A-former-range-after-links bytes=32..63 mismatches=0 ok",
+              "A-former-range-written bytes=0..63 mismatches=0 ok",
+              "guard-intact bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=release",
+              "A_offset_in_block=0x30 chunk_header=16",
+              "released A via wmem_free",
+              "A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+              "A-free-links prev=0x3f94afe070 next=0x3f94afe070 chunk=0x3f94afe070 ok: the recycler holds A's chunk alone",
+              "generation absent: the release build has no patch 0001"
+            ]
+          },
+          {
+            "boot": "release-3",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3fbdefe080",
+              "guard": "0x3fbdefe0d0",
+              "block": "0x3fbdefe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3fbdefe050",
+                "0x3fbe6fe050"
+              ],
+              "guard": [
+                "0x3fbdefe050",
+                "0x3fbe6fe050"
+              ],
+              "block": [
+                "0x3fbdefe050",
+                "0x3fbe6fe050"
+              ]
+            },
+            "accesses": [
+              "read A-chunk-header via=block addr=0x3fbdefe070 len=8 probe=wm_ctl_load_insn site=case.c:51 done",
+              "read A-free-links via=block addr=0x3fbdefe080 len=32 probe=pointer-load site=case.c:62 done",
+              "read A-former-range via=block addr=0x3fbdefe080 len=64 probe=wm_ctl_load_insn site=case.c:73 done",
+              "write A-former-range via=block addr=0x3fbdefe080 len=64 probe=wm_ctl_store_insn site=case.c:77 done",
+              "read A-former-range via=block addr=0x3fbdefe080 len=64 probe=wm_ctl_load_insn site=case.c:78 done",
+              "read guard via=guard addr=0x3fbdefe0d0 len=64 probe=wm_ctl_load_insn site=case.c:98 done"
+            ],
+            "checks": [
+              "A-former-range-after-links bytes=32..63 mismatches=0 ok",
+              "A-former-range-written bytes=0..63 mismatches=0 ok",
+              "guard-intact bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=release",
+              "A_offset_in_block=0x30 chunk_header=16",
+              "released A via wmem_free",
+              "A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+              "A-free-links prev=0x3fbdefe070 next=0x3fbdefe070 chunk=0x3fbdefe070 ok: the recycler holds A's chunk alone",
+              "generation absent: the release build has no patch 0001"
+            ]
+          }
+        ]
+      }
+    },
+    "01-sibling-intact": {
+      "protected": {
+        "image_sha256": "581c6f23d15fe13bccdde9d14ed2687c22398131cb7a8dca45fe2c8750f4515b",
+        "boots": [
+          {
+            "boot": "protected-1",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f88ffe0a0",
+              "B": "0x3f88ffe0f0",
+              "block": "0x3f88ffe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3f88ffe0a0",
+                "0x3f88ffe0e0"
+              ],
+              "B": [
+                "0x3f88ffe0f0",
+                "0x3f88ffe130"
+              ],
+              "block": [
+                "0x3f88ffe050",
+                "0x3f897fe050"
+              ]
+            },
+            "accesses": [
+              "read B via=B addr=0x3f88ffe0f0 len=64 probe=wm_ctl_load_insn site=case.c:33 done",
+              "write B via=B addr=0x3f88ffe0f0 len=64 probe=wm_ctl_store_insn site=case.c:35 done",
+              "read B via=B addr=0x3f88ffe0f0 len=64 probe=wm_ctl_load_insn site=case.c:36 done"
+            ],
+            "checks": [
+              "B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+              "B-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "released A via wmem_free"
+            ]
+          },
+          {
+            "boot": "protected-2",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f904fe0a0",
+              "B": "0x3f904fe0f0",
+              "block": "0x3f904fe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3f904fe0a0",
+                "0x3f904fe0e0"
+              ],
+              "B": [
+                "0x3f904fe0f0",
+                "0x3f904fe130"
+              ],
+              "block": [
+                "0x3f904fe050",
+                "0x3f90cfe050"
+              ]
+            },
+            "accesses": [
+              "read B via=B addr=0x3f904fe0f0 len=64 probe=wm_ctl_load_insn site=case.c:33 done",
+              "write B via=B addr=0x3f904fe0f0 len=64 probe=wm_ctl_store_insn site=case.c:35 done",
+              "read B via=B addr=0x3f904fe0f0 len=64 probe=wm_ctl_load_insn site=case.c:36 done"
+            ],
+            "checks": [
+              "B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+              "B-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "released A via wmem_free"
+            ]
+          },
+          {
+            "boot": "protected-3",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3fa6dfe0a0",
+              "B": "0x3fa6dfe0f0",
+              "block": "0x3fa6dfe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3fa6dfe0a0",
+                "0x3fa6dfe0e0"
+              ],
+              "B": [
+                "0x3fa6dfe0f0",
+                "0x3fa6dfe130"
+              ],
+              "block": [
+                "0x3fa6dfe050",
+                "0x3fa75fe050"
+              ]
+            },
+            "accesses": [
+              "read B via=B addr=0x3fa6dfe0f0 len=64 probe=wm_ctl_load_insn site=case.c:33 done",
+              "write B via=B addr=0x3fa6dfe0f0 len=64 probe=wm_ctl_store_insn site=case.c:35 done",
+              "read B via=B addr=0x3fa6dfe0f0 len=64 probe=wm_ctl_load_insn site=case.c:36 done"
+            ],
+            "checks": [
+              "B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+              "B-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "released A via wmem_free"
+            ]
+          }
+        ]
+      },
+      "release": {
+        "image_sha256": "06df3762ee44402acb1ff627db50122545dc70d1e1d419429f7d93977ef9eb08",
+        "boots": [
+          {
+            "boot": "release-1",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f87efe080",
+              "B": "0x3f87efe0d0",
+              "block": "0x3f87efe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3f87efe050",
+                "0x3f886fe050"
+              ],
+              "B": [
+                "0x3f87efe050",
+                "0x3f886fe050"
+              ],
+              "block": [
+                "0x3f87efe050",
+                "0x3f886fe050"
+              ]
+            },
+            "accesses": [
+              "read B via=B addr=0x3f87efe0d0 len=64 probe=wm_ctl_load_insn site=case.c:33 done",
+              "write B via=B addr=0x3f87efe0d0 len=64 probe=wm_ctl_store_insn site=case.c:35 done",
+              "read B via=B addr=0x3f87efe0d0 len=64 probe=wm_ctl_load_insn site=case.c:36 done"
+            ],
+            "checks": [
+              "B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+              "B-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=release",
+              "released A via wmem_free"
+            ]
+          },
+          {
+            "boot": "release-2",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f9adfe080",
+              "B": "0x3f9adfe0d0",
+              "block": "0x3f9adfe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3f9adfe050",
+                "0x3f9b5fe050"
+              ],
+              "B": [
+                "0x3f9adfe050",
+                "0x3f9b5fe050"
+              ],
+              "block": [
+                "0x3f9adfe050",
+                "0x3f9b5fe050"
+              ]
+            },
+            "accesses": [
+              "read B via=B addr=0x3f9adfe0d0 len=64 probe=wm_ctl_load_insn site=case.c:33 done",
+              "write B via=B addr=0x3f9adfe0d0 len=64 probe=wm_ctl_store_insn site=case.c:35 done",
+              "read B via=B addr=0x3f9adfe0d0 len=64 probe=wm_ctl_load_insn site=case.c:36 done"
+            ],
+            "checks": [
+              "B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+              "B-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=release",
+              "released A via wmem_free"
+            ]
+          },
+          {
+            "boot": "release-3",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3fa2afe080",
+              "B": "0x3fa2afe0d0",
+              "block": "0x3fa2afe050"
+            },
+            "bounds": {
+              "A": [
+                "0x3fa2afe050",
+                "0x3fa32fe050"
+              ],
+              "B": [
+                "0x3fa2afe050",
+                "0x3fa32fe050"
+              ],
+              "block": [
+                "0x3fa2afe050",
+                "0x3fa32fe050"
+              ]
+            },
+            "accesses": [
+              "read B via=B addr=0x3fa2afe0d0 len=64 probe=wm_ctl_load_insn site=case.c:33 done",
+              "write B via=B addr=0x3fa2afe0d0 len=64 probe=wm_ctl_store_insn site=case.c:35 done",
+              "read B via=B addr=0x3fa2afe0d0 len=64 probe=wm_ctl_load_insn site=case.c:36 done"
+            ],
+            "checks": [
+              "B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+              "B-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=release",
+              "released A via wmem_free"
+            ]
+          }
+        ]
+      }
+    },
+    "02-successor-reuse": {
+      "protected": {
+        "image_sha256": "2f7b0067d53f53a8d107269b718877f48efd78343b73c496b9b455b845d42a98",
+        "boots": [
+          {
+            "boot": "protected-1",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f8cefe0a0",
+              "guard": "0x3f8cefe0f0",
+              "block": "0x3f8cefe050",
+              "C": "0x3f8cefe0a0"
+            },
+            "bounds": {
+              "A": [
+                "0x3f8cefe0a0",
+                "0x3f8cefe0e0"
+              ],
+              "guard": [
+                "0x3f8cefe0f0",
+                "0x3f8cefe130"
+              ],
+              "block": [
+                "0x3f8cefe050",
+                "0x3f8d6fe050"
+              ],
+              "C": [
+                "0x3f8cefe0a0",
+                "0x3f8cefe0e0"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3f8cefe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3f8cefe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "released A via wmem_free",
+              "successor A=0x3f8cefe0a0 C=0x3f8cefe0a0 tries=1 equal=yes"
+            ]
+          },
+          {
+            "boot": "protected-2",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3fb2dfe0a0",
+              "guard": "0x3fb2dfe0f0",
+              "block": "0x3fb2dfe050",
+              "C": "0x3fb2dfe0a0"
+            },
+            "bounds": {
+              "A": [
+                "0x3fb2dfe0a0",
+                "0x3fb2dfe0e0"
+              ],
+              "guard": [
+                "0x3fb2dfe0f0",
+                "0x3fb2dfe130"
+              ],
+              "block": [
+                "0x3fb2dfe050",
+                "0x3fb35fe050"
+              ],
+              "C": [
+                "0x3fb2dfe0a0",
+                "0x3fb2dfe0e0"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3fb2dfe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3fb2dfe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "released A via wmem_free",
+              "successor A=0x3fb2dfe0a0 C=0x3fb2dfe0a0 tries=1 equal=yes"
+            ]
+          },
+          {
+            "boot": "protected-3",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f9effe0a0",
+              "guard": "0x3f9effe0f0",
+              "block": "0x3f9effe050",
+              "C": "0x3f9effe0a0"
+            },
+            "bounds": {
+              "A": [
+                "0x3f9effe0a0",
+                "0x3f9effe0e0"
+              ],
+              "guard": [
+                "0x3f9effe0f0",
+                "0x3f9effe130"
+              ],
+              "block": [
+                "0x3f9effe050",
+                "0x3f9f7fe050"
+              ],
+              "C": [
+                "0x3f9effe0a0",
+                "0x3f9effe0e0"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3f9effe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3f9effe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "released A via wmem_free",
+              "successor A=0x3f9effe0a0 C=0x3f9effe0a0 tries=1 equal=yes"
+            ]
+          }
+        ]
+      },
+      "release": {
+        "image_sha256": "17ee3aa1fa7575fab5df7ad93ec555bd5939061bc152fef46a4745ab87057bb9",
+        "boots": [
+          {
+            "boot": "release-1",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3fa5bfe080",
+              "guard": "0x3fa5bfe0d0",
+              "block": "0x3fa5bfe050",
+              "C": "0x3fa5bfe080"
+            },
+            "bounds": {
+              "A": [
+                "0x3fa5bfe050",
+                "0x3fa63fe050"
+              ],
+              "guard": [
+                "0x3fa5bfe050",
+                "0x3fa63fe050"
+              ],
+              "block": [
+                "0x3fa5bfe050",
+                "0x3fa63fe050"
+              ],
+              "C": [
+                "0x3fa5bfe050",
+                "0x3fa63fe050"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3fa5bfe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3fa5bfe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=release",
+              "released A via wmem_free",
+              "successor A=0x3fa5bfe080 C=0x3fa5bfe080 tries=1 equal=yes"
+            ]
+          },
+          {
+            "boot": "release-2",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f908fe080",
+              "guard": "0x3f908fe0d0",
+              "block": "0x3f908fe050",
+              "C": "0x3f908fe080"
+            },
+            "bounds": {
+              "A": [
+                "0x3f908fe050",
+                "0x3f910fe050"
+              ],
+              "guard": [
+                "0x3f908fe050",
+                "0x3f910fe050"
+              ],
+              "block": [
+                "0x3f908fe050",
+                "0x3f910fe050"
+              ],
+              "C": [
+                "0x3f908fe050",
+                "0x3f910fe050"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3f908fe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3f908fe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=release",
+              "released A via wmem_free",
+              "successor A=0x3f908fe080 C=0x3f908fe080 tries=1 equal=yes"
+            ]
+          },
+          {
+            "boot": "release-3",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f99bfe080",
+              "guard": "0x3f99bfe0d0",
+              "block": "0x3f99bfe050",
+              "C": "0x3f99bfe080"
+            },
+            "bounds": {
+              "A": [
+                "0x3f99bfe050",
+                "0x3f9a3fe050"
+              ],
+              "guard": [
+                "0x3f99bfe050",
+                "0x3f9a3fe050"
+              ],
+              "block": [
+                "0x3f99bfe050",
+                "0x3f9a3fe050"
+              ],
+              "C": [
+                "0x3f99bfe050",
+                "0x3f9a3fe050"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3f99bfe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3f99bfe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=release",
+              "released A via wmem_free",
+              "successor A=0x3f99bfe080 C=0x3f99bfe080 tries=1 equal=yes"
+            ]
+          }
+        ]
+      }
+    },
+    "03-successor-stale": {
+      "protected": {
+        "image_sha256": "24dc0ec4a7d9fa1e2ec82c10f30cf8ee1b9454de7d5d293b329b7580466a1278",
+        "boots": [
+          {
+            "boot": "protected-1",
+            "prediction": "AS PREDICTED",
+            "outcome": "fault cause=25 pc=0x3fbbe91e54 (link 0x21e54, wm_probe+20, label wm_defect_probe, capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53) address=0x3fbacfe0a0",
+            "addresses": {
+              "A": "0x3fbacfe0a0",
+              "guard": "0x3fbacfe0f0",
+              "block": "0x3fbacfe050",
+              "C": "0x3fbacfe0a0"
+            },
+            "bounds": {
+              "A": [
+                "0x3fbacfe0a0",
+                "0x3fbacfe0e0"
+              ],
+              "guard": [
+                "0x3fbacfe0f0",
+                "0x3fbacfe130"
+              ],
+              "block": [
+                "0x3fbacfe050",
+                "0x3fbb4fe050"
+              ],
+              "C": [
+                "0x3fbacfe0a0",
+                "0x3fbacfe0e0"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3fbacfe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3fbacfe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done",
+              "read stale-A via=A addr=0x3fbacfe0a0 len=64 probe=wm_defect_probe site=case.c:23 NOT DONE"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "released A via wmem_free",
+              "successor A=0x3fbacfe0a0 C=0x3fbacfe0a0 tries=1 equal=yes"
+            ]
+          },
+          {
+            "boot": "protected-2",
+            "prediction": "AS PREDICTED",
+            "outcome": "fault cause=25 pc=0x3f8bf91e54 (link 0x21e54, wm_probe+20, label wm_defect_probe, capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53) address=0x3f8adfe0a0",
+            "addresses": {
+              "A": "0x3f8adfe0a0",
+              "guard": "0x3f8adfe0f0",
+              "block": "0x3f8adfe050",
+              "C": "0x3f8adfe0a0"
+            },
+            "bounds": {
+              "A": [
+                "0x3f8adfe0a0",
+                "0x3f8adfe0e0"
+              ],
+              "guard": [
+                "0x3f8adfe0f0",
+                "0x3f8adfe130"
+              ],
+              "block": [
+                "0x3f8adfe050",
+                "0x3f8b5fe050"
+              ],
+              "C": [
+                "0x3f8adfe0a0",
+                "0x3f8adfe0e0"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3f8adfe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3f8adfe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done",
+              "read stale-A via=A addr=0x3f8adfe0a0 len=64 probe=wm_defect_probe site=case.c:23 NOT DONE"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "released A via wmem_free",
+              "successor A=0x3f8adfe0a0 C=0x3f8adfe0a0 tries=1 equal=yes"
+            ]
+          },
+          {
+            "boot": "protected-3",
+            "prediction": "AS PREDICTED",
+            "outcome": "fault cause=25 pc=0x3f83491e54 (link 0x21e54, wm_probe+20, label wm_defect_probe, capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53) address=0x3f822fe0a0",
+            "addresses": {
+              "A": "0x3f822fe0a0",
+              "guard": "0x3f822fe0f0",
+              "block": "0x3f822fe050",
+              "C": "0x3f822fe0a0"
+            },
+            "bounds": {
+              "A": [
+                "0x3f822fe0a0",
+                "0x3f822fe0e0"
+              ],
+              "guard": [
+                "0x3f822fe0f0",
+                "0x3f822fe130"
+              ],
+              "block": [
+                "0x3f822fe050",
+                "0x3f82afe050"
+              ],
+              "C": [
+                "0x3f822fe0a0",
+                "0x3f822fe0e0"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3f822fe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3f822fe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done",
+              "read stale-A via=A addr=0x3f822fe0a0 len=64 probe=wm_defect_probe site=case.c:23 NOT DONE"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok"
+            ],
+            "notes": [
+              "arm=protected",
+              "released A via wmem_free",
+              "successor A=0x3f822fe0a0 C=0x3f822fe0a0 tries=1 equal=yes"
+            ]
+          }
+        ]
+      },
+      "release": {
+        "image_sha256": "bca5caf1fcf598ad3d580b2b948236a698563c02e0c06dff60d4f1a3508eaa1d",
+        "boots": [
+          {
+            "boot": "release-1",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f8a7fe080",
+              "guard": "0x3f8a7fe0d0",
+              "block": "0x3f8a7fe050",
+              "C": "0x3f8a7fe080"
+            },
+            "bounds": {
+              "A": [
+                "0x3f8a7fe050",
+                "0x3f8affe050"
+              ],
+              "guard": [
+                "0x3f8a7fe050",
+                "0x3f8affe050"
+              ],
+              "block": [
+                "0x3f8a7fe050",
+                "0x3f8affe050"
+              ],
+              "C": [
+                "0x3f8a7fe050",
+                "0x3f8affe050"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3f8a7fe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3f8a7fe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done",
+              "read stale-A via=A addr=0x3f8a7fe080 len=64 probe=wm_defect_probe site=case.c:23 done"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok",
+              "stale-A-reads-C bytes=0..63 mismatches=0 ok",
+              "stale-A-reads-A bytes=0..63 mismatches=64",
+              "stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0"
+            ],
+            "notes": [
+              "arm=release",
+              "released A via wmem_free",
+              "successor A=0x3f8a7fe080 C=0x3f8a7fe080 tries=1 equal=yes",
+              "stale-A first_byte=0xc0 C_first_byte=0xc0"
+            ]
+          },
+          {
+            "boot": "release-2",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3fb8ffe080",
+              "guard": "0x3fb8ffe0d0",
+              "block": "0x3fb8ffe050",
+              "C": "0x3fb8ffe080"
+            },
+            "bounds": {
+              "A": [
+                "0x3fb8ffe050",
+                "0x3fb97fe050"
+              ],
+              "guard": [
+                "0x3fb8ffe050",
+                "0x3fb97fe050"
+              ],
+              "block": [
+                "0x3fb8ffe050",
+                "0x3fb97fe050"
+              ],
+              "C": [
+                "0x3fb8ffe050",
+                "0x3fb97fe050"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3fb8ffe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3fb8ffe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done",
+              "read stale-A via=A addr=0x3fb8ffe080 len=64 probe=wm_defect_probe site=case.c:23 done"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok",
+              "stale-A-reads-C bytes=0..63 mismatches=0 ok",
+              "stale-A-reads-A bytes=0..63 mismatches=64",
+              "stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0"
+            ],
+            "notes": [
+              "arm=release",
+              "released A via wmem_free",
+              "successor A=0x3fb8ffe080 C=0x3fb8ffe080 tries=1 equal=yes",
+              "stale-A first_byte=0xc0 C_first_byte=0xc0"
+            ]
+          },
+          {
+            "boot": "release-3",
+            "prediction": "AS PREDICTED",
+            "outcome": "completed",
+            "addresses": {
+              "A": "0x3f88ffe080",
+              "guard": "0x3f88ffe0d0",
+              "block": "0x3f88ffe050",
+              "C": "0x3f88ffe080"
+            },
+            "bounds": {
+              "A": [
+                "0x3f88ffe050",
+                "0x3f897fe050"
+              ],
+              "guard": [
+                "0x3f88ffe050",
+                "0x3f897fe050"
+              ],
+              "block": [
+                "0x3f88ffe050",
+                "0x3f897fe050"
+              ],
+              "C": [
+                "0x3f88ffe050",
+                "0x3f897fe050"
+              ]
+            },
+            "accesses": [
+              "write C via=C addr=0x3f88ffe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248 done",
+              "read C via=C addr=0x3f88ffe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249 done",
+              "read stale-A via=A addr=0x3f88ffe080 len=64 probe=wm_defect_probe site=case.c:23 done"
+            ],
+            "checks": [
+              "C-written bytes=0..63 mismatches=0 ok",
+              "stale-A-reads-C bytes=0..63 mismatches=0 ok",
+              "stale-A-reads-A bytes=0..63 mismatches=64",
+              "stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0"
+            ],
+            "notes": [
+              "arm=release",
+              "released A via wmem_free",
+              "successor A=0x3f88ffe080 C=0x3f88ffe080 tries=1 equal=yes",
+              "stale-A first_byte=0xc0 C_first_byte=0xc0"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "raw": {
+    "protected-1": {
+      "00-parent-block": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x22514",
+          "wm_defect_write": "0x22540"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3faf4fe0a0 base=0x3faf4fe0a0 end=0x3faf4fe0e0",
+          "WM_CTL ref guard addr=0x3faf4fe0f0 base=0x3faf4fe0f0 end=0x3faf4fe130",
+          "WM_CTL ref block addr=0x3faf4fe050 base=0x3faf4fe050 end=0x3fafcfe050",
+          "WM_CTL A_offset_in_block=0x50 chunk_header=16",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read A-chunk-header via=block addr=0x3faf4fe090 len=8 probe=wm_ctl_load_insn site=case.c:51",
+          "WM_CTL done read A-chunk-header",
+          "WM_CTL A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+          "WM_CTL access read A-free-links via=block addr=0x3faf4fe0a0 len=32 probe=pointer-load site=case.c:62",
+          "WM_CTL done read A-free-links",
+          "WM_CTL A-free-links prev=0x3faf4fe090 next=0x3faf4fe090 chunk=0x3faf4fe090 ok: the recycler holds A's chunk alone",
+          "WM_CTL access read A-former-range via=block addr=0x3faf4fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-after-links bytes=32..63 mismatches=0 ok",
+          "WM_CTL access write A-former-range via=block addr=0x3faf4fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:77",
+          "WM_CTL done write A-former-range",
+          "WM_CTL access read A-former-range via=block addr=0x3faf4fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:78",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL ref generation addr=0x3faf4fe050 base=0x3faf4fe050 end=0x3fafcfe050",
+          "WM_CTL access read A-former-range via=generation addr=0x3faf4fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:86",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+          "WM_CTL access write A-former-range via=generation addr=0x3faf4fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:90",
+          "WM_CTL done write A-former-range",
+          "WM_CTL access read A-former-range via=block addr=0x3faf4fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:91",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+          "WM_CTL access read guard via=guard addr=0x3faf4fe0f0 len=64 probe=wm_ctl_load_insn site=case.c:98",
+          "WM_CTL done read guard",
+          "WM_CTL check guard-intact bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=0 mode=0 completed"
+        ]
+      },
+      "01-sibling-intact": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x219d4",
+          "wm_defect_write": "0x21a00"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3f88ffe0a0 base=0x3f88ffe0a0 end=0x3f88ffe0e0",
+          "WM_CTL ref B addr=0x3f88ffe0f0 base=0x3f88ffe0f0 end=0x3f88ffe130",
+          "WM_CTL ref block addr=0x3f88ffe050 base=0x3f88ffe050 end=0x3f897fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read B via=B addr=0x3f88ffe0f0 len=64 probe=wm_ctl_load_insn site=case.c:33",
+          "WM_CTL done read B",
+          "WM_CTL check B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+          "WM_CTL access write B via=B addr=0x3f88ffe0f0 len=64 probe=wm_ctl_store_insn site=case.c:35",
+          "WM_CTL done write B",
+          "WM_CTL access read B via=B addr=0x3f88ffe0f0 len=64 probe=wm_ctl_load_insn site=case.c:36",
+          "WM_CTL done read B",
+          "WM_CTL check B-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=1 mode=0 completed"
+        ]
+      },
+      "02-successor-reuse": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21a88",
+          "wm_defect_write": "0x21ab4"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3f8cefe0a0 base=0x3f8cefe0a0 end=0x3f8cefe0e0",
+          "WM_CTL ref guard addr=0x3f8cefe0f0 base=0x3f8cefe0f0 end=0x3f8cefe130",
+          "WM_CTL ref block addr=0x3f8cefe050 base=0x3f8cefe050 end=0x3f8d6fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3f8cefe0a0",
+          "WM_CTL successor A=0x3f8cefe0a0 C=0x3f8cefe0a0 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3f8cefe0a0 base=0x3f8cefe0a0 end=0x3f8cefe0e0",
+          "WM_CTL access write C via=C addr=0x3f8cefe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3f8cefe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=2 mode=0 completed"
+        ]
+      },
+      "03-successor-stale": {
+        "rc": 139,
+        "fault": {
+          "cause": 25,
+          "pc": "0x3fbbe91e54",
+          "address": "0x3fbacfe0a0",
+          "code_start": "0x3fbbe80000",
+          "link_pc": "0x21e54",
+          "function": "wm_probe",
+          "offset": 20,
+          "label": "wm_defect_probe",
+          "probe_line": "capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53"
+        },
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21e54",
+          "wm_defect_write": "0x21e80"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3fbacfe0a0 base=0x3fbacfe0a0 end=0x3fbacfe0e0",
+          "WM_CTL ref guard addr=0x3fbacfe0f0 base=0x3fbacfe0f0 end=0x3fbacfe130",
+          "WM_CTL ref block addr=0x3fbacfe050 base=0x3fbacfe050 end=0x3fbb4fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3fbacfe0a0",
+          "WM_CTL successor A=0x3fbacfe0a0 C=0x3fbacfe0a0 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3fbacfe0a0 base=0x3fbacfe0a0 end=0x3fbacfe0e0",
+          "WM_CTL access write C via=C addr=0x3fbacfe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3fbacfe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL access read stale-A via=A addr=0x3fbacfe0a0 len=64 probe=wm_defect_probe site=case.c:23",
+          "WM_DEFECT case=3 ready",
+          "capstone-exec: domain fault cause=25 pc=0x3fbbe91e54 address=0x3fbacfe0a0 entry=0x3fbbe80890 code=0x3fbbe80000-0x3fbbf00000 last=0x42 preparing=0x42 sha256=24dc0ec4a7d9fa1e2ec82c10f30cf8ee1b9454de7d5d293b329b7580466a1278 image=/mnt/vm/03-successor-stale.dom",
+          "Segmentation fault"
+        ]
+      }
+    },
+    "protected-2": {
+      "00-parent-block": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x22514",
+          "wm_defect_write": "0x22540"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3f97bfe0a0 base=0x3f97bfe0a0 end=0x3f97bfe0e0",
+          "WM_CTL ref guard addr=0x3f97bfe0f0 base=0x3f97bfe0f0 end=0x3f97bfe130",
+          "WM_CTL ref block addr=0x3f97bfe050 base=0x3f97bfe050 end=0x3f983fe050",
+          "WM_CTL A_offset_in_block=0x50 chunk_header=16",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read A-chunk-header via=block addr=0x3f97bfe090 len=8 probe=wm_ctl_load_insn site=case.c:51",
+          "WM_CTL done read A-chunk-header",
+          "WM_CTL A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+          "WM_CTL access read A-free-links via=block addr=0x3f97bfe0a0 len=32 probe=pointer-load site=case.c:62",
+          "WM_CTL done read A-free-links",
+          "WM_CTL A-free-links prev=0x3f97bfe090 next=0x3f97bfe090 chunk=0x3f97bfe090 ok: the recycler holds A's chunk alone",
+          "WM_CTL access read A-former-range via=block addr=0x3f97bfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-after-links bytes=32..63 mismatches=0 ok",
+          "WM_CTL access write A-former-range via=block addr=0x3f97bfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:77",
+          "WM_CTL done write A-former-range",
+          "WM_CTL access read A-former-range via=block addr=0x3f97bfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:78",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL ref generation addr=0x3f97bfe050 base=0x3f97bfe050 end=0x3f983fe050",
+          "WM_CTL access read A-former-range via=generation addr=0x3f97bfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:86",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+          "WM_CTL access write A-former-range via=generation addr=0x3f97bfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:90",
+          "WM_CTL done write A-former-range",
+          "WM_CTL access read A-former-range via=block addr=0x3f97bfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:91",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+          "WM_CTL access read guard via=guard addr=0x3f97bfe0f0 len=64 probe=wm_ctl_load_insn site=case.c:98",
+          "WM_CTL done read guard",
+          "WM_CTL check guard-intact bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=0 mode=0 completed"
+        ]
+      },
+      "01-sibling-intact": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x219d4",
+          "wm_defect_write": "0x21a00"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3f904fe0a0 base=0x3f904fe0a0 end=0x3f904fe0e0",
+          "WM_CTL ref B addr=0x3f904fe0f0 base=0x3f904fe0f0 end=0x3f904fe130",
+          "WM_CTL ref block addr=0x3f904fe050 base=0x3f904fe050 end=0x3f90cfe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read B via=B addr=0x3f904fe0f0 len=64 probe=wm_ctl_load_insn site=case.c:33",
+          "WM_CTL done read B",
+          "WM_CTL check B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+          "WM_CTL access write B via=B addr=0x3f904fe0f0 len=64 probe=wm_ctl_store_insn site=case.c:35",
+          "WM_CTL done write B",
+          "WM_CTL access read B via=B addr=0x3f904fe0f0 len=64 probe=wm_ctl_load_insn site=case.c:36",
+          "WM_CTL done read B",
+          "WM_CTL check B-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=1 mode=0 completed"
+        ]
+      },
+      "02-successor-reuse": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21a88",
+          "wm_defect_write": "0x21ab4"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3fb2dfe0a0 base=0x3fb2dfe0a0 end=0x3fb2dfe0e0",
+          "WM_CTL ref guard addr=0x3fb2dfe0f0 base=0x3fb2dfe0f0 end=0x3fb2dfe130",
+          "WM_CTL ref block addr=0x3fb2dfe050 base=0x3fb2dfe050 end=0x3fb35fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3fb2dfe0a0",
+          "WM_CTL successor A=0x3fb2dfe0a0 C=0x3fb2dfe0a0 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3fb2dfe0a0 base=0x3fb2dfe0a0 end=0x3fb2dfe0e0",
+          "WM_CTL access write C via=C addr=0x3fb2dfe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3fb2dfe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=2 mode=0 completed"
+        ]
+      },
+      "03-successor-stale": {
+        "rc": 139,
+        "fault": {
+          "cause": 25,
+          "pc": "0x3f8bf91e54",
+          "address": "0x3f8adfe0a0",
+          "code_start": "0x3f8bf80000",
+          "link_pc": "0x21e54",
+          "function": "wm_probe",
+          "offset": 20,
+          "label": "wm_defect_probe",
+          "probe_line": "capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53"
+        },
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21e54",
+          "wm_defect_write": "0x21e80"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3f8adfe0a0 base=0x3f8adfe0a0 end=0x3f8adfe0e0",
+          "WM_CTL ref guard addr=0x3f8adfe0f0 base=0x3f8adfe0f0 end=0x3f8adfe130",
+          "WM_CTL ref block addr=0x3f8adfe050 base=0x3f8adfe050 end=0x3f8b5fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3f8adfe0a0",
+          "WM_CTL successor A=0x3f8adfe0a0 C=0x3f8adfe0a0 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3f8adfe0a0 base=0x3f8adfe0a0 end=0x3f8adfe0e0",
+          "WM_CTL access write C via=C addr=0x3f8adfe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3f8adfe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL access read stale-A via=A addr=0x3f8adfe0a0 len=64 probe=wm_defect_probe site=case.c:23",
+          "WM_DEFECT case=3 ready",
+          "capstone-exec: domain fault cause=25 pc=0x3f8bf91e54 address=0x3f8adfe0a0 entry=0x3f8bf80890 code=0x3f8bf80000-0x3f8c000000 last=0x42 preparing=0x42 sha256=24dc0ec4a7d9fa1e2ec82c10f30cf8ee1b9454de7d5d293b329b7580466a1278 image=/mnt/vm/03-successor-stale.dom",
+          "Segmentation fault"
+        ]
+      }
+    },
+    "protected-3": {
+      "00-parent-block": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x22514",
+          "wm_defect_write": "0x22540"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3fb0dfe0a0 base=0x3fb0dfe0a0 end=0x3fb0dfe0e0",
+          "WM_CTL ref guard addr=0x3fb0dfe0f0 base=0x3fb0dfe0f0 end=0x3fb0dfe130",
+          "WM_CTL ref block addr=0x3fb0dfe050 base=0x3fb0dfe050 end=0x3fb15fe050",
+          "WM_CTL A_offset_in_block=0x50 chunk_header=16",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read A-chunk-header via=block addr=0x3fb0dfe090 len=8 probe=wm_ctl_load_insn site=case.c:51",
+          "WM_CTL done read A-chunk-header",
+          "WM_CTL A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+          "WM_CTL access read A-free-links via=block addr=0x3fb0dfe0a0 len=32 probe=pointer-load site=case.c:62",
+          "WM_CTL done read A-free-links",
+          "WM_CTL A-free-links prev=0x3fb0dfe090 next=0x3fb0dfe090 chunk=0x3fb0dfe090 ok: the recycler holds A's chunk alone",
+          "WM_CTL access read A-former-range via=block addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-after-links bytes=32..63 mismatches=0 ok",
+          "WM_CTL access write A-former-range via=block addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:77",
+          "WM_CTL done write A-former-range",
+          "WM_CTL access read A-former-range via=block addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:78",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL ref generation addr=0x3fb0dfe050 base=0x3fb0dfe050 end=0x3fb15fe050",
+          "WM_CTL access read A-former-range via=generation addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:86",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+          "WM_CTL access write A-former-range via=generation addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:90",
+          "WM_CTL done write A-former-range",
+          "WM_CTL access read A-former-range via=block addr=0x3fb0dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:91",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+          "WM_CTL access read guard via=guard addr=0x3fb0dfe0f0 len=64 probe=wm_ctl_load_insn site=case.c:98",
+          "WM_CTL done read guard",
+          "WM_CTL check guard-intact bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=0 mode=0 completed"
+        ]
+      },
+      "01-sibling-intact": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x219d4",
+          "wm_defect_write": "0x21a00"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3fa6dfe0a0 base=0x3fa6dfe0a0 end=0x3fa6dfe0e0",
+          "WM_CTL ref B addr=0x3fa6dfe0f0 base=0x3fa6dfe0f0 end=0x3fa6dfe130",
+          "WM_CTL ref block addr=0x3fa6dfe050 base=0x3fa6dfe050 end=0x3fa75fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read B via=B addr=0x3fa6dfe0f0 len=64 probe=wm_ctl_load_insn site=case.c:33",
+          "WM_CTL done read B",
+          "WM_CTL check B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+          "WM_CTL access write B via=B addr=0x3fa6dfe0f0 len=64 probe=wm_ctl_store_insn site=case.c:35",
+          "WM_CTL done write B",
+          "WM_CTL access read B via=B addr=0x3fa6dfe0f0 len=64 probe=wm_ctl_load_insn site=case.c:36",
+          "WM_CTL done read B",
+          "WM_CTL check B-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=1 mode=0 completed"
+        ]
+      },
+      "02-successor-reuse": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21a88",
+          "wm_defect_write": "0x21ab4"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3f9effe0a0 base=0x3f9effe0a0 end=0x3f9effe0e0",
+          "WM_CTL ref guard addr=0x3f9effe0f0 base=0x3f9effe0f0 end=0x3f9effe130",
+          "WM_CTL ref block addr=0x3f9effe050 base=0x3f9effe050 end=0x3f9f7fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3f9effe0a0",
+          "WM_CTL successor A=0x3f9effe0a0 C=0x3f9effe0a0 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3f9effe0a0 base=0x3f9effe0a0 end=0x3f9effe0e0",
+          "WM_CTL access write C via=C addr=0x3f9effe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3f9effe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=2 mode=0 completed"
+        ]
+      },
+      "03-successor-stale": {
+        "rc": 139,
+        "fault": {
+          "cause": 25,
+          "pc": "0x3f83491e54",
+          "address": "0x3f822fe0a0",
+          "code_start": "0x3f83480000",
+          "link_pc": "0x21e54",
+          "function": "wm_probe",
+          "offset": 20,
+          "label": "wm_defect_probe",
+          "probe_line": "capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53"
+        },
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21e54",
+          "wm_defect_write": "0x21e80"
+        },
+        "lines": [
+          "WM_CTL arm=protected",
+          "WM_CTL ref A addr=0x3f822fe0a0 base=0x3f822fe0a0 end=0x3f822fe0e0",
+          "WM_CTL ref guard addr=0x3f822fe0f0 base=0x3f822fe0f0 end=0x3f822fe130",
+          "WM_CTL ref block addr=0x3f822fe050 base=0x3f822fe050 end=0x3f82afe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3f822fe0a0",
+          "WM_CTL successor A=0x3f822fe0a0 C=0x3f822fe0a0 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3f822fe0a0 base=0x3f822fe0a0 end=0x3f822fe0e0",
+          "WM_CTL access write C via=C addr=0x3f822fe0a0 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3f822fe0a0 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL access read stale-A via=A addr=0x3f822fe0a0 len=64 probe=wm_defect_probe site=case.c:23",
+          "WM_DEFECT case=3 ready",
+          "capstone-exec: domain fault cause=25 pc=0x3f83491e54 address=0x3f822fe0a0 entry=0x3f83480890 code=0x3f83480000-0x3f83500000 last=0x42 preparing=0x42 sha256=24dc0ec4a7d9fa1e2ec82c10f30cf8ee1b9454de7d5d293b329b7580466a1278 image=/mnt/vm/03-successor-stale.dom",
+          "Segmentation fault"
+        ]
+      }
+    },
+    "release-1": {
+      "00-parent-block": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21f5c",
+          "wm_defect_write": "0x21f88"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3fbb9fe080 base=0x3fbb9fe050 end=0x3fbc1fe050",
+          "WM_CTL ref guard addr=0x3fbb9fe0d0 base=0x3fbb9fe050 end=0x3fbc1fe050",
+          "WM_CTL ref block addr=0x3fbb9fe050 base=0x3fbb9fe050 end=0x3fbc1fe050",
+          "WM_CTL A_offset_in_block=0x30 chunk_header=16",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read A-chunk-header via=block addr=0x3fbb9fe070 len=8 probe=wm_ctl_load_insn site=case.c:51",
+          "WM_CTL done read A-chunk-header",
+          "WM_CTL A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+          "WM_CTL access read A-free-links via=block addr=0x3fbb9fe080 len=32 probe=pointer-load site=case.c:62",
+          "WM_CTL done read A-free-links",
+          "WM_CTL A-free-links prev=0x3fbb9fe070 next=0x3fbb9fe070 chunk=0x3fbb9fe070 ok: the recycler holds A's chunk alone",
+          "WM_CTL access read A-former-range via=block addr=0x3fbb9fe080 len=64 probe=wm_ctl_load_insn site=case.c:73",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-after-links bytes=32..63 mismatches=0 ok",
+          "WM_CTL access write A-former-range via=block addr=0x3fbb9fe080 len=64 probe=wm_ctl_store_insn site=case.c:77",
+          "WM_CTL done write A-former-range",
+          "WM_CTL access read A-former-range via=block addr=0x3fbb9fe080 len=64 probe=wm_ctl_load_insn site=case.c:78",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL generation absent: the release build has no patch 0001",
+          "WM_CTL access read guard via=guard addr=0x3fbb9fe0d0 len=64 probe=wm_ctl_load_insn site=case.c:98",
+          "WM_CTL done read guard",
+          "WM_CTL check guard-intact bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=0 mode=0 completed"
+        ]
+      },
+      "01-sibling-intact": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x219cc",
+          "wm_defect_write": "0x219f8"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3f87efe080 base=0x3f87efe050 end=0x3f886fe050",
+          "WM_CTL ref B addr=0x3f87efe0d0 base=0x3f87efe050 end=0x3f886fe050",
+          "WM_CTL ref block addr=0x3f87efe050 base=0x3f87efe050 end=0x3f886fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read B via=B addr=0x3f87efe0d0 len=64 probe=wm_ctl_load_insn site=case.c:33",
+          "WM_CTL done read B",
+          "WM_CTL check B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+          "WM_CTL access write B via=B addr=0x3f87efe0d0 len=64 probe=wm_ctl_store_insn site=case.c:35",
+          "WM_CTL done write B",
+          "WM_CTL access read B via=B addr=0x3f87efe0d0 len=64 probe=wm_ctl_load_insn site=case.c:36",
+          "WM_CTL done read B",
+          "WM_CTL check B-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=1 mode=0 completed"
+        ]
+      },
+      "02-successor-reuse": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21a8c",
+          "wm_defect_write": "0x21ab8"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3fa5bfe080 base=0x3fa5bfe050 end=0x3fa63fe050",
+          "WM_CTL ref guard addr=0x3fa5bfe0d0 base=0x3fa5bfe050 end=0x3fa63fe050",
+          "WM_CTL ref block addr=0x3fa5bfe050 base=0x3fa5bfe050 end=0x3fa63fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3fa5bfe080",
+          "WM_CTL successor A=0x3fa5bfe080 C=0x3fa5bfe080 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3fa5bfe080 base=0x3fa5bfe050 end=0x3fa63fe050",
+          "WM_CTL access write C via=C addr=0x3fa5bfe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3fa5bfe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=2 mode=0 completed"
+        ]
+      },
+      "03-successor-stale": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21e58",
+          "wm_defect_write": "0x21e84"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3f8a7fe080 base=0x3f8a7fe050 end=0x3f8affe050",
+          "WM_CTL ref guard addr=0x3f8a7fe0d0 base=0x3f8a7fe050 end=0x3f8affe050",
+          "WM_CTL ref block addr=0x3f8a7fe050 base=0x3f8a7fe050 end=0x3f8affe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3f8a7fe080",
+          "WM_CTL successor A=0x3f8a7fe080 C=0x3f8a7fe080 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3f8a7fe080 base=0x3f8a7fe050 end=0x3f8affe050",
+          "WM_CTL access write C via=C addr=0x3f8a7fe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3f8a7fe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL access read stale-A via=A addr=0x3f8a7fe080 len=64 probe=wm_defect_probe site=case.c:23",
+          "WM_DEFECT case=3 ready",
+          "WM_CTL done read stale-A",
+          "WM_CTL check stale-A-reads-C bytes=0..63 mismatches=0 ok",
+          "WM_CTL check stale-A-reads-A bytes=0..63 mismatches=64",
+          "WM_CTL check stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0",
+          "WM_CTL stale-A first_byte=0xc0 C_first_byte=0xc0",
+          "WM_DEFECT case=3 mode=0 completed"
+        ]
+      }
+    },
+    "release-2": {
+      "00-parent-block": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21f5c",
+          "wm_defect_write": "0x21f88"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3f94afe080 base=0x3f94afe050 end=0x3f952fe050",
+          "WM_CTL ref guard addr=0x3f94afe0d0 base=0x3f94afe050 end=0x3f952fe050",
+          "WM_CTL ref block addr=0x3f94afe050 base=0x3f94afe050 end=0x3f952fe050",
+          "WM_CTL A_offset_in_block=0x30 chunk_header=16",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read A-chunk-header via=block addr=0x3f94afe070 len=8 probe=wm_ctl_load_insn site=case.c:51",
+          "WM_CTL done read A-chunk-header",
+          "WM_CTL A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+          "WM_CTL access read A-free-links via=block addr=0x3f94afe080 len=32 probe=pointer-load site=case.c:62",
+          "WM_CTL done read A-free-links",
+          "WM_CTL A-free-links prev=0x3f94afe070 next=0x3f94afe070 chunk=0x3f94afe070 ok: the recycler holds A's chunk alone",
+          "WM_CTL access read A-former-range via=block addr=0x3f94afe080 len=64 probe=wm_ctl_load_insn site=case.c:73",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-after-links bytes=32..63 mismatches=0 ok",
+          "WM_CTL access write A-former-range via=block addr=0x3f94afe080 len=64 probe=wm_ctl_store_insn site=case.c:77",
+          "WM_CTL done write A-former-range",
+          "WM_CTL access read A-former-range via=block addr=0x3f94afe080 len=64 probe=wm_ctl_load_insn site=case.c:78",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL generation absent: the release build has no patch 0001",
+          "WM_CTL access read guard via=guard addr=0x3f94afe0d0 len=64 probe=wm_ctl_load_insn site=case.c:98",
+          "WM_CTL done read guard",
+          "WM_CTL check guard-intact bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=0 mode=0 completed"
+        ]
+      },
+      "01-sibling-intact": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x219cc",
+          "wm_defect_write": "0x219f8"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3f9adfe080 base=0x3f9adfe050 end=0x3f9b5fe050",
+          "WM_CTL ref B addr=0x3f9adfe0d0 base=0x3f9adfe050 end=0x3f9b5fe050",
+          "WM_CTL ref block addr=0x3f9adfe050 base=0x3f9adfe050 end=0x3f9b5fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read B via=B addr=0x3f9adfe0d0 len=64 probe=wm_ctl_load_insn site=case.c:33",
+          "WM_CTL done read B",
+          "WM_CTL check B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+          "WM_CTL access write B via=B addr=0x3f9adfe0d0 len=64 probe=wm_ctl_store_insn site=case.c:35",
+          "WM_CTL done write B",
+          "WM_CTL access read B via=B addr=0x3f9adfe0d0 len=64 probe=wm_ctl_load_insn site=case.c:36",
+          "WM_CTL done read B",
+          "WM_CTL check B-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=1 mode=0 completed"
+        ]
+      },
+      "02-successor-reuse": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21a8c",
+          "wm_defect_write": "0x21ab8"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3f908fe080 base=0x3f908fe050 end=0x3f910fe050",
+          "WM_CTL ref guard addr=0x3f908fe0d0 base=0x3f908fe050 end=0x3f910fe050",
+          "WM_CTL ref block addr=0x3f908fe050 base=0x3f908fe050 end=0x3f910fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3f908fe080",
+          "WM_CTL successor A=0x3f908fe080 C=0x3f908fe080 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3f908fe080 base=0x3f908fe050 end=0x3f910fe050",
+          "WM_CTL access write C via=C addr=0x3f908fe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3f908fe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=2 mode=0 completed"
+        ]
+      },
+      "03-successor-stale": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21e58",
+          "wm_defect_write": "0x21e84"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3fb8ffe080 base=0x3fb8ffe050 end=0x3fb97fe050",
+          "WM_CTL ref guard addr=0x3fb8ffe0d0 base=0x3fb8ffe050 end=0x3fb97fe050",
+          "WM_CTL ref block addr=0x3fb8ffe050 base=0x3fb8ffe050 end=0x3fb97fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3fb8ffe080",
+          "WM_CTL successor A=0x3fb8ffe080 C=0x3fb8ffe080 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3fb8ffe080 base=0x3fb8ffe050 end=0x3fb97fe050",
+          "WM_CTL access write C via=C addr=0x3fb8ffe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3fb8ffe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL access read stale-A via=A addr=0x3fb8ffe080 len=64 probe=wm_defect_probe site=case.c:23",
+          "WM_DEFECT case=3 ready",
+          "WM_CTL done read stale-A",
+          "WM_CTL check stale-A-reads-C bytes=0..63 mismatches=0 ok",
+          "WM_CTL check stale-A-reads-A bytes=0..63 mismatches=64",
+          "WM_CTL check stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0",
+          "WM_CTL stale-A first_byte=0xc0 C_first_byte=0xc0",
+          "WM_DEFECT case=3 mode=0 completed"
+        ]
+      }
+    },
+    "release-3": {
+      "00-parent-block": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21f5c",
+          "wm_defect_write": "0x21f88"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3fbdefe080 base=0x3fbdefe050 end=0x3fbe6fe050",
+          "WM_CTL ref guard addr=0x3fbdefe0d0 base=0x3fbdefe050 end=0x3fbe6fe050",
+          "WM_CTL ref block addr=0x3fbdefe050 base=0x3fbdefe050 end=0x3fbe6fe050",
+          "WM_CTL A_offset_in_block=0x30 chunk_header=16",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read A-chunk-header via=block addr=0x3fbdefe070 len=8 probe=wm_ctl_load_insn site=case.c:51",
+          "WM_CTL done read A-chunk-header",
+          "WM_CTL A-chunk-header used=0 jumbo=0 len=80 prev=0 ok: free, A's length",
+          "WM_CTL access read A-free-links via=block addr=0x3fbdefe080 len=32 probe=pointer-load site=case.c:62",
+          "WM_CTL done read A-free-links",
+          "WM_CTL A-free-links prev=0x3fbdefe070 next=0x3fbdefe070 chunk=0x3fbdefe070 ok: the recycler holds A's chunk alone",
+          "WM_CTL access read A-former-range via=block addr=0x3fbdefe080 len=64 probe=wm_ctl_load_insn site=case.c:73",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-after-links bytes=32..63 mismatches=0 ok",
+          "WM_CTL access write A-former-range via=block addr=0x3fbdefe080 len=64 probe=wm_ctl_store_insn site=case.c:77",
+          "WM_CTL done write A-former-range",
+          "WM_CTL access read A-former-range via=block addr=0x3fbdefe080 len=64 probe=wm_ctl_load_insn site=case.c:78",
+          "WM_CTL done read A-former-range",
+          "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL generation absent: the release build has no patch 0001",
+          "WM_CTL access read guard via=guard addr=0x3fbdefe0d0 len=64 probe=wm_ctl_load_insn site=case.c:98",
+          "WM_CTL done read guard",
+          "WM_CTL check guard-intact bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=0 mode=0 completed"
+        ]
+      },
+      "01-sibling-intact": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x219cc",
+          "wm_defect_write": "0x219f8"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3fa2afe080 base=0x3fa2afe050 end=0x3fa32fe050",
+          "WM_CTL ref B addr=0x3fa2afe0d0 base=0x3fa2afe050 end=0x3fa32fe050",
+          "WM_CTL ref block addr=0x3fa2afe050 base=0x3fa2afe050 end=0x3fa32fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL access read B via=B addr=0x3fa2afe0d0 len=64 probe=wm_ctl_load_insn site=case.c:33",
+          "WM_CTL done read B",
+          "WM_CTL check B-intact-after-A-released bytes=0..63 mismatches=0 ok",
+          "WM_CTL access write B via=B addr=0x3fa2afe0d0 len=64 probe=wm_ctl_store_insn site=case.c:35",
+          "WM_CTL done write B",
+          "WM_CTL access read B via=B addr=0x3fa2afe0d0 len=64 probe=wm_ctl_load_insn site=case.c:36",
+          "WM_CTL done read B",
+          "WM_CTL check B-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=1 mode=0 completed"
+        ]
+      },
+      "02-successor-reuse": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21a8c",
+          "wm_defect_write": "0x21ab8"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3f99bfe080 base=0x3f99bfe050 end=0x3f9a3fe050",
+          "WM_CTL ref guard addr=0x3f99bfe0d0 base=0x3f99bfe050 end=0x3f9a3fe050",
+          "WM_CTL ref block addr=0x3f99bfe050 base=0x3f99bfe050 end=0x3f9a3fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3f99bfe080",
+          "WM_CTL successor A=0x3f99bfe080 C=0x3f99bfe080 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3f99bfe080 base=0x3f99bfe050 end=0x3f9a3fe050",
+          "WM_CTL access write C via=C addr=0x3f99bfe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3f99bfe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_DEFECT case=2 mode=0 completed"
+        ]
+      },
+      "03-successor-stale": {
+        "rc": 0,
+        "fault": null,
+        "labels": {
+          "wm_ctl_load_insn": "0x20df0",
+          "wm_ctl_store_insn": "0x20e24",
+          "wm_defect_probe": "0x21e58",
+          "wm_defect_write": "0x21e84"
+        },
+        "lines": [
+          "WM_CTL arm=release",
+          "WM_CTL ref A addr=0x3f88ffe080 base=0x3f88ffe050 end=0x3f897fe050",
+          "WM_CTL ref guard addr=0x3f88ffe0d0 base=0x3f88ffe050 end=0x3f897fe050",
+          "WM_CTL ref block addr=0x3f88ffe050 base=0x3f88ffe050 end=0x3f897fe050",
+          "WM_CTL released A via wmem_free",
+          "WM_CTL alloc try=1 addr=0x3f88ffe080",
+          "WM_CTL successor A=0x3f88ffe080 C=0x3f88ffe080 tries=1 equal=yes",
+          "WM_CTL ref C addr=0x3f88ffe080 base=0x3f88ffe050 end=0x3f897fe050",
+          "WM_CTL access write C via=C addr=0x3f88ffe080 len=64 probe=wm_ctl_store_insn site=lifetime.h:248",
+          "WM_CTL done write C",
+          "WM_CTL access read C via=C addr=0x3f88ffe080 len=64 probe=wm_ctl_load_insn site=lifetime.h:249",
+          "WM_CTL done read C",
+          "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+          "WM_CTL access read stale-A via=A addr=0x3f88ffe080 len=64 probe=wm_defect_probe site=case.c:23",
+          "WM_DEFECT case=3 ready",
+          "WM_CTL done read stale-A",
+          "WM_CTL check stale-A-reads-C bytes=0..63 mismatches=0 ok",
+          "WM_CTL check stale-A-reads-A bytes=0..63 mismatches=64",
+          "WM_CTL check stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0",
+          "WM_CTL stale-A first_byte=0xc0 C_first_byte=0xc0",
+          "WM_DEFECT case=3 mode=0 completed"
+        ]
+      }
+    }
+  }
+}

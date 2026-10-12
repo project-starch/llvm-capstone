@@ -263,15 +263,14 @@ def wmem_probe(case_dir):
 
 HOSTED = {
     'wmem-repros': dict(
-        cache={"virtual-malloc": {"WM_LIBC_SYSTEM": "ON", "WM_CHUNKS": "OFF", "WM_SUBLET": "OFF"},
-               "virtual-nested-pools": {"WM_SUBLET": "ON", "WM_CHUNKS": "ON", "WM_LIBC_SYSTEM": "OFF"}},
-        mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
+        cache={"virtual-malloc": {"WM_SUBLET": "OFF"}, "virtual-nested-pools": {"WM_SUBLET": "ON"}},
+        mode={"virtual-malloc": "0", "virtual-nested-pools": "0"},
         buggy={"virtual-malloc": ["buggy"], "virtual-nested-pools": []},
         probe=wmem_probe,
         ready="WM_DEFECT case={n} ready",
         done="WM_DEFECT case={n} mode={mode} completed",
-        controls_dir="controls/virtual",
-        control_names={90: "jumbo-reset-90", 91: "chunk-free-91"},
+        controls_dir="controls",
+        control_names={0: "uaf-chunk", 1: "uaf-jumbo", 2: "bounds-chunk"},
     ),
     'allocator-repros': dict(
         format="case-line",

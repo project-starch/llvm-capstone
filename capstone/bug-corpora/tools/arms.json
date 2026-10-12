@@ -284,6 +284,36 @@
         "pool-return-90"
       ]
     },
+    "virtual-wmem": {
+      "target": "capstone-virtual",
+      "summary": "Wireshark's wmem (core and its four allocators, 4.6.8) with the corpus driver's scope model, built as a Capstone application (ports/wireshark/wmem, capstone-application preset, virtual SDK) and run as a process under capstone-vexec: wmem as released, its g_malloc virtual mallocng, which bounds and retires each block and jumbo it hands wmem but not the objects block and block_fast carve from a block",
+      "mechanism": "exact bounds and lifetime retirement of malloc blocks; none per wmem object",
+      "controls": {
+        "uaf-chunk": "complete",
+        "uaf-jumbo": "fault",
+        "bounds-chunk": "complete"
+      },
+      "controls_for_missed": [
+        "uaf-chunk",
+        "uaf-jumbo",
+        "bounds-chunk"
+      ]
+    },
+    "virtual-wmem-pools": {
+      "target": "capstone-virtual",
+      "summary": "the same with WM_SUBLET, which applies the port's patch 0001: every object of the block and block_fast allocators a child lifetime of its block (CDERIVE), bounded to the request, revoked by free, realloc and the reset that ends its pool (CREVOKE)",
+      "mechanism": "as virtual-wmem; per-object bounds and revocation inside block and block_fast",
+      "controls": {
+        "uaf-chunk": "fault",
+        "uaf-jumbo": "fault",
+        "bounds-chunk": "fault"
+      },
+      "controls_for_missed": [
+        "uaf-chunk",
+        "uaf-jumbo",
+        "bounds-chunk"
+      ]
+    },
     "virtual-cpython": {
       "target": "capstone-virtual",
       "summary": "the CPython 3.13.7 interpreter for the virtual profile (ports/common/application/build-virtual.sh cpython, CPY_TEST_CAPI=1) run as a process under capstone-vexec: its one heap is musl mallocng, which bounds and retires every object it hands out -- PyMem_Raw allocations, objects over 512 bytes, and the arenas pymalloc takes -- while pymalloc stock (patch 0009) carves its blocks inside those arenas unbounded",

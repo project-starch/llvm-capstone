@@ -12,56 +12,14 @@
   "fidelity": "model-consumer, real allocator: each wmem_array_new is reduced to its two allocations (the header, sized as wmem_array_t's members, and a one-element buffer); the descriptor is INPUT, OUTPUT, OUTPUT, then a malformed item, in that order. The defective access is the second wmem_free itself.",
   "distinguishing": "the corpus's first double free, and its first row whose defective access is a call INTO the allocator: a protected arm must stop at the allocator's handback (wm_widen_probe / wm_widen), not at wm_defect_probe. Natively the double free does not alias two allocations: re-adding a chunk already on BLOCK's circular recycler relinks it to itself, and the INPUT field's freed array drops off the list -- never reissued, where the fixed sequence reissues it at once. That lost chunk is what the native fix differential's DEFECT-REPRODUCED means here; the driver's generic wording ('reached storage outside its object') does not describe it.",
   "fault_sites": [
-    "wm_widen",
-    "wm_widen_probe"
+    "wmem_block_sublet_free",
+    "wmem_block_sublet_release"
   ],
-  "fault_sites_why": "Declared from source before any protected run (2026-10-11). PoisonCap: the build has the port's hooks without the chunk port, so wmem_block_free begins 'ptr = wm_widen(ptr)' (wireshark-4.6.8-0002 patch, the #else of WMEM_PORT_CHUNKS), and wm_widen (src/cheribsd/poisoncap.c:172-178) loads through the pointer first; the first free poisoned and swept the chunk (wm_release_chunk, :193-198), so the second free's handed-back capability faults there. Capstone (domain and virtual) names the same handback by its label, wm_widen_probe -- declared here too, matched to that label's own instruction, never to the static function around it (src/shared/backing.c, probe() under WM_CAPABILITY), which the chunk port's wm_chunk_of calls before anything else.",
-  "status": "MEASURED 2026-10-11 on every arm (R9, pre-registered 206cc3c26384, 11 of 11 as predicted): caught by the chunk port (Capstone, mode 1, at the allocator's handback probe) and by PoisonCap mode 1 (in wm_widen); missed by ASan, stock CheriBSD, the region-granular port, Sublet as the system allocator and virtual mallocng; the virtual nested arm catches it at wm_widen_probe. Native fix differential two-sided.",
+  "fault_sites_why": "The stale access is the second wmem_free, so there is no read probe. Under the wmem port's patch 0001 the first free revoked the chunk's child lifetime; the second free goes through wmem_block_sublet_free, which finds the block by address and calls wmem_block_sublet_release, whose CREVOKE of the already-revoked child faults (stale operand). The pc lies in wmem_block_sublet_release, or in wmem_block_sublet_free where the compiler inlines it. Declared from source on 2026-10-11, before the first run of this design; the chunk port's earlier declaration (wm_widen, wm_widen_probe) named functions patch 0001 removed.",
+  "status": "measured natively (native-detect, native-fix-differential) and on stock CheriBSD (cheribsd-revocation); on virtual Capstone (virtual-malloc, virtual-nested-pools; each arm's verdict_from names its bundle). The Capstone domain arms (spatial, sublet, sublet-chunks, sublet-malloc) and PoisonCap left the case on 2026-10-11 with their builds; their bundles stay in results/.",
   "nested": true,
   "nested_why": "wmem's BLOCK allocator carved the array header out of a block it took from g_malloc, so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED.",
   "arms": {
-    "spatial": {
-      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **NOT CAUGHT** -- region-granular build (WM_CHUNKS=OFF), mode 0: completes. Predicted before the run: complete: mode 0 on the region-granular build (WM_CHUNKS=OFF) revokes nothing; the handback's own load succeeds and the double free goes through",
-      "status": "measured",
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
-    },
-    "sublet": {
-      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **NOT CAUGHT** -- region-granular build, mode 1: completes -- a BLOCK chunk free ends no region; case 11 in the same session faulted, cause 24, at its read probe. Predicted before the run: complete: mode 1 on the region-granular build revokes whole regions only; a BLOCK chunk free inside a live block ends no region, so the handed-back pointer is still valid",
-      "status": "measured",
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
-    },
-    "sublet-chunks": {
-      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **CAUGHT** -- chunk-port build (WM_CHUNKS=ON), mode 1: cause 24 at the published allocator probe wm_widen_probe, pc equal to the expected -- wm_chunk_of probes the handed-back pointer, revoked at the first free. Mode 0 on the same build stops at wm_chunk_of's own '!chunk->used' check (WM return=260): the port's bookkeeping refuses a double free even with nothing revoked. Predicted before the run: fault at the labelled allocator probe (wm_widen_probe): under the chunk port (WM_CHUNKS=ON) mode 1 the first free revoked the chunk's region, and wm_chunk_of probes the handed-back pointer before anything else",
-      "cause": 24,
-      "status": "measured",
-      "verdict": "CAUGHT",
-      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
-    },
-    "sublet-malloc": {
-      "target": "Capstone domain, wmem AS RELEASED (WM_VARIANT=reference) on Sublet regions, mode 1: Sublet only as the system allocator",
-      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **NOT CAUGHT** -- reference build (wmem as released), mode 1: completes; control 90 of the same options faulted, cause 24, at its read probe. Predicted before the run: complete: both frees stay inside the file scope's BLOCK allocator; nothing reaches g_free",
-      "status": "measured",
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
-    },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **NOT CAUGHT** -- mode 0 completes. Predicted before the run: complete: mode 0 poisons nothing; wm_widen's load succeeds",
-      "status": "measured",
-      "verdict": "NOT CAUGHT",
-      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "signal": 34,
-      "si_code": 2,
-      "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **CAUGHT** -- SIGPROT si_code 2 at pc 0x104e6e = wm_widen (poisoncap.c:173, its load through the handed-back pointer), called from wmem_block_free (wmem_allocator_block.c:1272): a declared fault site; the first free had poisoned and swept the chunk (released_chunks=2). Predicted before the run: SIGPROT in wm_widen (a declared fault site): the first free poisoned and swept the chunk, so the second free's handed-back capability is revoked when wm_widen loads through it",
-      "status": "measured",
-      "verdict": "CAUGHT",
-      "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
-    },
     "native-detect": {
       "oracle": "MEASURED 2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384): **NOT CAUGHT** -- no ASan report on the buggy arm, which reproduced the defect; both ASan controls reported in the same run. Predicted before the run: no ASan report: both frees are wmem_block_free inside a block one malloc returned; ASan sees neither",
       "status": "measured",
@@ -82,16 +40,16 @@
       "measured": "2026-10-11, results/2026-10-11-case22/README.md (R9, pre-registered 206cc3c26384)"
     },
     "virtual-malloc": {
-      "oracle": "virtual profile, wmem stock on virtual mallocng (tools/arms.json virtual-wmem-libc; tools/run-virtual-cases.py --prebuilt, the fix differential `0 N buggy`): a fault in the case's labelled probe function or at a declared allocator label, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "oracle": "virtual profile, wmem as released on virtual mallocng (tools/arms.json virtual-wmem): a fault at the labelled probe or a declared fault site, or the case completes and this arm did not see it",
       "verdict": "MISSED",
-      "verdict_note": "reached (the case printed `WM_DEFECT case=22 ready`, the last thing before its defective access; VERDICT DEFECT-REPRODUCED (the stale or crossing access reached other storage)) and completed with no fault",
-      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
+      "verdict_note": "reached (the hosted driver's ready mark) and completed with no fault",
+      "verdict_from": "results/2026-10-11-virtual-23/virtual-malloc"
     },
     "virtual-nested-pools": {
-      "oracle": "virtual profile, wmem's Sublet region and chunk layers over a payload the virtual heap lends linear (tools/arms.json virtual-wmem-chunks; tools/run-virtual-cases.py --prebuilt, `1 N`): a fault in the case's labelled probe function or at a declared allocator label, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3f87d123bc in probe; by function: the fault is at wm_widen_probe, a site the case declared before the run (case.json fault_sites) -- the label's own instruction",
-      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3f94612cb4 in wmem_block_sublet_free; by function: wmem_block_sublet_free is the case's declared fault site",
+      "verdict_from": "results/2026-10-11-virtual-23/virtual-nested-pools"
     }
   }
 }

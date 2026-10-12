@@ -470,14 +470,14 @@ class VirtualHosted(unittest.TestCase):
             t = Path(t)
             sdk = t / "sdk"
             sdk.mkdir()
-            (t / "CMakeCache.txt").write_text(f"WM_SUBLET:BOOL=ON\nWM_CHUNKS:BOOL=ON\nCAPSTONE_SDK:PATH={sdk}\n"
+            (t / "CMakeCache.txt").write_text(f"WM_SUBLET:BOOL=ON\nCAPSTONE_SDK:PATH={sdk}\n"
                                               "PORT_PLATFORM:STRING=capstone-application\n")
             want = self.rv.HOSTED["wmem-repros"]["cache"]
             self.assertEqual(self.rv.cache_says(t, want["virtual-nested-pools"], sdk), "")
-            self.assertIn("WM_LIBC_SYSTEM", self.rv.cache_says(t, want["virtual-malloc"], sdk))
+            self.assertIn("WM_SUBLET", self.rv.cache_says(t, want["virtual-malloc"], sdk))
             self.assertIn("CAPSTONE_SDK", self.rv.cache_says(t, want["virtual-nested-pools"], t))
 
-    def test_memcached_cache_lives_in_the_port_work_dir_and_names_its_ledger(self):
+    def test_memcached_cache_lives_in_the_port_work_dir_and_names_its_variant(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:
             t = Path(t)
@@ -498,11 +498,11 @@ class VirtualHosted(unittest.TestCase):
         link = 0x10234 - 0x10000 + sym.base
         text = "WM_DEFECT case=22 ready\n" + self.FAULT
         o = self.rv.observe_hosted("22", "1", text, {"kind": "signal", "value": 11}, sym, None, self.READY,
-                                   self.DONE, False, ("wm_widen", "wm_widen_probe"), {"wm_widen_probe": link})
+                                   self.DONE, False, ("alloc_free", "alloc_handback_probe"), {"alloc_handback_probe": link})
         o.controls = [v.Control("c", "fault", "")]
         self.assertEqual(v.judge(o, self.CTL)[0], v.CAUGHT)
         off = self.rv.observe_hosted("22", "1", text, {"kind": "signal", "value": 11}, sym, None, self.READY,
-                                     self.DONE, False, ("wm_widen", "wm_widen_probe"), {"wm_widen_probe": link + 4})
+                                     self.DONE, False, ("alloc_free", "alloc_handback_probe"), {"alloc_handback_probe": link + 4})
         off.controls = [v.Control("c", "fault", "")]
         self.assertEqual(v.judge(off, self.CTL)[:2], (v.NO_READING, "unattributed"))
 
@@ -515,13 +515,13 @@ class VirtualHosted(unittest.TestCase):
             (d / "case.json").write_text("{}\n")
             with self.assertRaises(SystemExit):
                 self.rv.wmem_probe(d)
-            (d / "case.json").write_text('{"fault_sites": ["wm_widen"]}\n')
+            (d / "case.json").write_text('{"fault_sites": ["wmem_block_sublet_free"]}\n')
             self.assertIsNone(self.rv.wmem_probe(d))
 
     def test_port_controls_run_unobserved(self):
         w, m = self.rv.HOSTED["wmem-repros"], self.rv.HOSTED["allocator-repros"]
-        self.assertEqual(self.rv.port_control_argv(w, "virtual-malloc", "0", "91"), ["0", "91"])
-        self.assertEqual(self.rv.port_control_argv(w, "virtual-nested-pools", "1", "90"), ["1", "90"])
+        self.assertEqual(self.rv.port_control_argv(w, "virtual-malloc", "0", "1"), ["0", "1"])
+        self.assertEqual(self.rv.port_control_argv(w, "virtual-nested-pools", "0", "2"), ["0", "2"])
         self.assertEqual(self.rv.port_control_argv(m, "virtual-nested-pools", "1", "90"), ["buggy", "90", "1"])
 
     def test_control_evidence_is_a_line_not_a_character(self):
@@ -532,3 +532,4 @@ class VirtualHosted(unittest.TestCase):
     def test_stem_matches_the_ports_program_name(self):
         self.assertEqual(self.rv.stem(Path("13_0261fd7da6_http_range_cursor_past_chunk")),
                          "13-http-range-cursor-past-chunk")
+
