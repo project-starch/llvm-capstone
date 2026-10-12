@@ -643,7 +643,7 @@ static int mcapp_fixture(int n)
         }
         mcapp_fill(nu, 0x5B, 64);
         printf("MCAPP-FIX 18 same-address=%u slot-cleared=%u\n", same, watcher_slot[1] == NULL);
-        mcapp_touching(n, w_addr);
+        mcapp_touching(n, w_addr + 32);           /* exact address of the stale byte store */
         mcapp_fix_poke(w, 32, 0xEE);              /* w->failed_flush = true, into freed storage */
         v = mcapp_fix_touch(nu, 32);              /* read back through the NEW owner's pointer */
         printf("MCAPP-FIX 18 returned new[32]=%02x (0xee = the write landed in the new owner)\n", v);

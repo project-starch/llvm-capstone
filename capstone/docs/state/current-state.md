@@ -1,5 +1,20 @@
 # Current Capstone state
 
+## 2026-10-12 — Virtual allocator cleanup qualified on the migration branch
+
+`ports/nested-allocators-rebased` uses managed lifetimes in outer musl mallocng
+too. Its allocation policy is unchanged; linear heap loans and their final
+carved-corpus consumer are removed. Virtual build metadata names `mallocng`,
+physical heap selectors are rejected, and cache keys include the musl
+representation sources. The [qualification](../../runtime/virtual/results/managed-mallocng/README.md)
+records 19/19 allocator checks, 43/43 runtime checks, 16/16 normal port checks,
+paired FFmpeg 13/13 and PostgreSQL 5/5 corpus results with safe controls.
+memcached passes 81/81 outer-only checks and 82/83 with protected pools;
+fixture 24 remains unresolved. Recomputed CPython archived sharded outcomes
+agree for all 2,183 stock/protected tests. Full upstream campaigns and older
+measurements retain their original scope. These cleanup commits are on the
+migration branch, not claimed merged into `dev`.
+
 ## 2026-10-10 — CheriBSD PoisonCap removed (branch `nested/poisoncap-removal`)
 
 Our CheriBSD PoisonCap adapter is gone from every port except PostgreSQL, which goes with
