@@ -15,7 +15,7 @@
 | our own silicon defects | `capstone/tests/fpga-repros/` | 30 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 108 open, 77 resolved | the registry, not reproduced cases |
 
-Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 7 components have them: `apr/pools`, `cpython/pymalloc`, `ffmpeg/buffer-pool`, `memcached/allocators`, `postgres/memory-contexts`, `whisper/ggml-context`, `wireshark/wmem`.
+Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 6 components have them: `apr/pools`, `ffmpeg/buffer-pool`, `memcached/allocators`, `postgres/memory-contexts`, `whisper/ggml-context`, `wireshark/wmem`.
 
 ## Every corpus
 
@@ -57,8 +57,8 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | component | role | pinned version | targets | corpora | cases |
 |---|---|---|---|---|---:|
 | `capstone/ports/apr/pools` | allocator-component | 1.7.4 | capstone-domain, cheribsd-purecap, native | `apr-pool-repros`, `bucket-repros` | 9 |
-| `capstone/ports/cpython/app` | full-application | 3.13.7 | capstone-domain, cheribsd-purecap | `pymalloc-repros` | 20 |
-| `capstone/ports/cpython/pymalloc` | allocator-component | 3.13.7 | capstone-domain, cheribsd-purecap, native | `pymalloc-repros` | 20 |
+| `capstone/ports/cpython/app` | full-application | 3.13.7 | capstone-virtual, cheribsd-purecap | `pymalloc-repros`, `allocator-boundary-repros` | 52 |
+| `capstone/ports/cpython/pymalloc` | allocator-component | 3.13.7 | capstone-virtual, cheribsd-purecap, native | `pymalloc-repros` | 20 |
 | `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | `plain-heap-repros`, `plane-repros`, `subobject-repros` | 35 |
 | `capstone/ports/ffmpeg/buffer-pool` | allocator-component | 9.0.1 | capstone-domain, cheribsd-purecap, native | `pool-repros` | 4 |
 | `capstone/ports/memcached/allocators` | allocator-component | 1.6.45 | capstone-domain, cheribsd-purecap, native | `allocator-repros` | 9 |
@@ -107,7 +107,6 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/ports/micropython` is a complete application with no corpus.
 - `capstone/ports/postgres/app` is a complete application with no corpus.
 - `capstone/ports/sqlite/app` is a complete application with no corpus.
-- `capstone/bug-corpora/cpython/allocator-boundary-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/ffmpeg/carved-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/ffmpeg/plain-temporal-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/memcached/plain-temporal-repros` is not referenced by any port.json.

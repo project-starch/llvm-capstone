@@ -70,7 +70,7 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
-                 "citation_constraint", "fault_sites", "fault_sites_why", "duplicate_of"}
+                 "citation_constraint", "fault_sites", "fault_sites_why", "duplicate_of", "control_probe", "control_probe_why"}
 # `duplicate_of` names a sibling case directory that records the SAME upstream defect -- e.g. a
 # release-branch backport of the fix another case already carries (`git patch-id` equal). The case
 # stays in the corpus, so its numbering and every record that cites it stay valid, and
@@ -319,6 +319,17 @@ def check_cases(corpus, decl, dirs, problems):
                 problems.append(f"{where}: fault_sites without fault_sites_why")
         elif "fault_sites_why" in case:
             problems.append(f"{where}: fault_sites_why without fault_sites")
+
+        if "control_probe" in case:
+            probe = case["control_probe"]
+            if not (isinstance(probe, str) and probe and
+                    not Path(probe).is_absolute() and ".." not in Path(probe).parts and
+                    (path / probe).is_file()):
+                problems.append(f"{where}: control_probe must name a file inside the case directory")
+            if not isinstance(case.get("control_probe_why"), str) or not case["control_probe_why"].strip():
+                problems.append(f"{where}: control_probe without control_probe_why")
+        elif "control_probe_why" in case:
+            problems.append(f"{where}: control_probe_why without control_probe")
 
         # live_in_pin is the field the index reports per version, so its
         # absence must be a corpus-wide decision rather than a per-case

@@ -20,6 +20,7 @@ export CAPSTONE_APPLICATION_PROFILE=virtual
 PORTS=$CAPSTONE_REPO_ROOT/capstone/ports
 NESTED=none
 LIBC_FLAGS=()
+STACK=1048576
 case "$APP" in
   cpython)
     export CPY_ROOT=$OUT/source
@@ -29,6 +30,7 @@ case "$APP" in
     python3 "$PORTS/cpython/app/link-cpython-capstone.py" "$CPY_ROOT/build" \
       --native "$CPY_ROOT/build-python" --out "$CPY_ROOT/link"
     [[ ${CPY_SUBLET:-0} != 1 ]] || NESTED=cpython
+    STACK=8388608
     ;;
   postgres)
     export PG_SU_ROOT=$OUT/source
@@ -52,4 +54,4 @@ case "$APP" in
 esac
 python3 "$HERE/build.py" --app "$APP" --root "$OUT/source" \
   --profile virtual --nested "$NESTED" --toolchain "$CAPSTONE_LLVM_BUILD_DIR" \
-  --input-revision HEAD "${LIBC_FLAGS[@]}" --out "$OUT/image"
+  --input-revision HEAD --stack-bytes "$STACK" "${LIBC_FLAGS[@]}" --out "$OUT/image"

@@ -72,6 +72,7 @@ def main():
     p.add_argument('--heap', choices=['level0', 'sublet'], default='level0')
     p.add_argument('--profile', choices=['physical', 'virtual'], default='physical')
     p.add_argument('--arena', type=int, default=64*1024*1024)
+    p.add_argument('--stack-bytes', type=int, default=1 << 20, help='The main thread stack')
     p.add_argument('--heap-log', type=int, default=26)
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--input-revision', required=True, help='Port recipe revision; cached objects are identified separately by hashes')
@@ -79,7 +80,7 @@ def main():
     p.add_argument('--musl', type=Path, help='Explicit musl source directory')
     p.add_argument('--libc', type=Path, help='Explicit Capstone libc archive')
     p.add_argument('--include', type=Path, action='append', default=[])
-    p.add_argument('--nested', choices=['none', 'cpython', 'mruby', 'postgres', 'perl'], default='none')
+    p.add_argument('--nested', choices=['none', 'cpython', 'mruby', 'postgres', 'perl', 'ffmpeg', 'wireshark'], default='none')
     p.add_argument('--gc-gaps', action='store_true', help='mruby GC-slot aggregate observer is present in the input archive')
     p.add_argument('--reuse-gap', action='store_true',
                    help='retain the PostgreSQL inner-chunk reuse report in the final image')
@@ -90,6 +91,8 @@ def main():
         p.error('study observers require --instrument')
     if args.profile == 'virtual' and args.instrument:
         p.error('virtual migration does not qualify historical memory-study observers')
+    if 'cpython' in (args.app, args.nested) and args.profile != 'virtual':
+        p.error('CPython builds only for the virtual profile: its heap is musl mallocng')
     input_revision = subprocess.check_output(['git', '-C', REPO, 'rev-parse', args.input_revision+'^{commit}'], text=True).strip()
     root, out = args.root.resolve(), args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -110,8 +113,6 @@ def main():
     if args.musl: musl = args.musl.resolve()
     if args.libc: libc = args.libc.resolve()
     objects = inputs(args.app, root)
-    if args.nested == 'cpython':
-        objects += [root / 'runtime' / n for n in ('pym_backing.o', 'pym_block_lifetimes.o', 'pym_sublet_glue.o')]
     if args.nested == 'postgres':
         objects += [root / 'link/context-pools.o']
     if args.nested == 'perl':
@@ -119,7 +120,7 @@ def main():
         objects += [root / 'link/perl-sv-heads.o']
     if args.reuse_gap and args.app == 'postgres' and args.nested == 'none':
         objects += [root / 'link/spatial-reuse-gap.o']
-    if args.nested != 'none' and (args.heap != 'level0' or args.app != args.nested):
+    if args.nested != 'none' and (args.heap != 'level0' or args.nested not in (args.app, {'tshark': 'wireshark'}.get(args.app))):
         raise ValueError('nested discovery arms use level0 for their separate outer heap')
     if args.gc_gaps and args.app != 'mruby':
         raise ValueError('--gc-gaps is only for the instrumented mruby archives')
@@ -138,12 +139,13 @@ def main():
          '-DCAPSTONE_APPLICATION_HEAP_LOG=' + str(args.heap_log),
          '-DCAPSTONE_APPLICATION_DATA_BYTES=33554432',
          '-DCAPSTONE_APPLICATION_ARENA_BYTES=' + str(args.arena),
+         '-DCAPSTONE_APPLICATION_STACK_BYTES=' + str(args.stack_bytes),
          '-DCMAKE_BUILD_TYPE=Release',
          '-DCMAKE_C_FLAGS_RELEASE=-O1' +
-         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str((80 if args.nested == 'cpython' else 64 if args.nested == 'postgres' else 32) << 20 if args.nested != 'none' else 0)])
+         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'postgres': 64, 'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
     run(['cmake', '--build', sdk, '-j8'])
     probe = out / 'memory.o'
-    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_PYMALLOC'] if args.nested == 'cpython' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_PG_CONTEXT_SUBLET'] if args.nested == 'postgres' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
+    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_PG_CONTEXT_SUBLET'] if args.nested == 'postgres' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
     if args.reuse_gap: defines += ['-DEXP_PG_REUSE_GAP']
     if args.allocations: defines += ['-DEXP_ALLOCATIONS', '-DEXP_CAPSTONE']
     memory_includes = (['-I', REPO / 'capstone/ports/postgres/memory-contexts/src/allocators/sublet',
@@ -157,7 +159,7 @@ def main():
     if args.allocations:
         extra += ['-O1', *defines, EXPERIMENTS / 'allocations.c',
                   '-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free']
-    if args.nested != 'none':
+    if args.nested not in ('none', 'cpython'):
         extra += ['-O1', '-Wl,--wrap=__capstone_region', *defines, '-I',
                   REPO / 'capstone/runtime/include', HERE / 'regions.c']
     if args.reuse_gap:
@@ -169,7 +171,7 @@ def main():
         if args.app == 'ffmpeg': extra += ['-I', REPO / 'capstone/ports/ffmpeg/app/src/shared']
     if args.instrument:
         extra += ['-Wl,--wrap=main,--wrap=write', probe]
-    elif args.nested in ('cpython', 'postgres'):
+    elif args.nested in ('postgres',):
         extra += ['-O1', '-Wl,--wrap=main', *defines, HERE / 'initialize.c']
     run([sdk / 'capstone-cc', *extra, *objects, '-o', image])
     run([args.toolchain / 'bin/llvm-objcopy', '--strip-debug', image])

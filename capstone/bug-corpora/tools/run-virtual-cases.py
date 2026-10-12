@@ -28,8 +28,8 @@ free), and the judge scores no silence from a run whose controls did otherwise.
 
 WHAT THE ARM IS is read from the SDK and the kit, never from the label: the SDK's CMakeCache must
 say CAPSTONE_APPLICATION_VIRTUAL=ON (appvm.sdk_identity), the corpus.json must map the arm to a
-capstone-virtual configuration, and the run must be on a kit. A physical SDK or VM is refused --
-run-capstone-domain.py checks only the heap, and a virtual SDK would pass it as `spatial`.
+capstone-virtual configuration, and the run must be on a kit. A physical SDK or VM is refused, as
+run-capstone-domain.py refuses a virtual SDK.
 
 PREBUILT MODE (--prebuilt BUILD --prebuilt-controls BUILD), for the nested corpora: a case there is
 not a free-standing case.c but a program linked against its port's allocator library, built by the
@@ -262,15 +262,7 @@ def wmem_probe(case_dir):
 
 
 HOSTED = {
-    # wireshark/wmem-repros on the wmem port (ports/wireshark/wmem, preset capstone-application).
-    #   virtual-malloc: stock wmem, g_malloc/g_free = virtual mallocng (WM_LIBC_SYSTEM), mode 0; the
-    #     buggy run is the fix differential (`0 N buggy`), whose temporal cases ASSERT the stale chunk
-    #     was reoccupied before reading it -- the build the CheriBSD libc arm ran.
-    #   virtual-nested-pools: the Sublet region and chunk layers over a payload the virtual heap lends
-    #     linear (WM_SUBLET, shared/driver-virtual.c), mode 1; the buggy run is the protected sequence
-    #     (`1 N`), as the physical sublet-chunks arm ran it, with no observation added.
-    # Both: the fixed run is the differential (`MODE N fixed`): VERDICT FIXED and exit 0.
-    "wmem-repros": dict(
+    'wmem-repros': dict(
         cache={"virtual-malloc": {"WM_LIBC_SYSTEM": "ON", "WM_CHUNKS": "OFF", "WM_SUBLET": "OFF"},
                "virtual-nested-pools": {"WM_SUBLET": "ON", "WM_CHUNKS": "ON", "WM_LIBC_SYSTEM": "OFF"}},
         mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
@@ -281,14 +273,7 @@ HOSTED = {
         controls_dir="controls/virtual",
         control_names={90: "jumbo-reset-90", 91: "chunk-free-91"},
     ),
-    # memcached/allocator-repros on the allocators port (ports/memcached/allocators), built by the
-    # corpus's own shared/build-cases.sh capstone-application, whose programs print the case.c
-    # drivers' lines (`case=N arm=...`, VERDICT), so observe()/fixed_ok() read them.
-    #   virtual-malloc: the stock ledger, every slab page and cache.c object one virtual-mallocng
-    #     object (MCP_STOCK_MALLOC, as the ASan arm), `fixed|buggy N`.
-    #   virtual-nested-pools: the shared ledger on the Sublet authority over a payload the virtual
-    #     heap lends linear (MCP_SUBLET, shared/driver-virtual.c), mode 1: `fixed|buggy N 1`.
-    "allocator-repros": dict(
+    'allocator-repros': dict(
         format="case-line",
         cache={"virtual-malloc": {"MCP_STOCK_MALLOC": "ON", "MCP_SUBLET": "OFF"},
                "virtual-nested-pools": {"MCP_SUBLET": "ON", "MCP_STOCK_MALLOC": "OFF"}},
@@ -340,8 +325,8 @@ def cache_says(build, want, sdk):
 
 
 def label_addresses(llvm_bin, image, names):
-    """Link addresses of the named symbols, zero-size labels included (wm_widen_probe is a label
-    inside a static function, which Symbols.lookup would report as that function instead)."""
+    """Link addresses of the named symbols, zero-size labels included (a fault-site label inside a
+    static function, which Symbols.lookup would report as that function instead)."""
     if not names:
         return {}
     out = subprocess.run([str(Path(llvm_bin) / "llvm-nm"), "--defined-only", str(image)],
@@ -551,7 +536,7 @@ def run_hosted(a, corpus):
     record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", a.arm, rows, {
         "configuration": config,
         "build": {"sdk_identity": [heap, profile], "prebuilt": local_path(str(a.prebuilt)),
-                  "cache": {k: (m.group(1) if m else None) for k, m in opts.items()},
+                  "cache": {k: (local_path(m.group(1)) if m else None) for k, m in opts.items()},
                   "argv": {"fixed": run_argv("fixed", "N"), "buggy": run_argv("buggy", "N")},
                   "controls": {c: v.sha256(prog) for c, (_, prog) in port_controls.items()}},
         "platform": platform})
