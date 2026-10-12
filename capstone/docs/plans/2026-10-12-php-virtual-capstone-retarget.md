@@ -807,6 +807,170 @@ CRASH-008 (`time()`) → CRASH-084 (`environ`) → CRASH-112 (files, `/tmp`) →
 (`php://memory`, `stream_select`) → CRASH-092, CRASH-100 (loopback listener; both need a
 second process in the guest, and CRASH-100 additionally needs shrink-stack on).
 
+## The allocator seam — RESULT (2026-10-13): built, and the temporal axis separates three ways
+
+The design below was built as specified. What follows is what it measured, what it got wrong
+first, and the two things it found that were nobody's prediction.
+
+### THE RESULT: 17 of 17 on the temporal axis, and 9 of them need the seam
+
+18 cases, one image, three runtime columns. Bundles under
+`$CAPSTONE_TMP_ROOT/php-final/temporal/<arm>/`, each recording the image, the judge, the arm's
+mode and the platform by sha256.
+
+| column | mode | CAUGHT | MISSED | NO-READING |
+|---|---|---|---|---|
+| `php-virtual-seam-stock` | 0 | 1 | 16 | 1 |
+| `php-virtual-seam-block` | 4 | 8 | 9 | 1 |
+| `php-virtual-seam-object` | 6 | **17** | 0 | 1 |
+
+The denominator is **17**, not 18: CRASH-057 is out of it, and that is the corpus's own call
+rather than ours (below). So the object column is **17 of 17**.
+
+**Nine cases are caught by the per-object retire and MISSED by block-level revocation** —
+CRASH-010, 024, 042, 047, 065, 074, 080, 103, 151. Those are the frees `AG(cache)` absorbs:
+the block is never handed back, so mallocng has nothing to revoke, and only a retire at
+`_efree` sees them. That is the population the corpus describes as hidden from ASAN by the
+size-class cache, and it is the seam's contribution stated in the only way that can be
+checked — against a column that differs from it in the retire alone.
+
+**Seven are caught by block-level revocation too** — CRASH-003, 004, 025, 035, 067, 140, 160 —
+so those catches belong to the platform's allocator and the seam merely also sees them. Saying
+so costs nothing and is the difference between a result and a claim.
+
+**CRASH-022 is CAUGHT on all three columns, with no pair**, at `ext/standard/array.c:546`, the
+line ASAN names. Its freed block is reused and overwritten with scalar data, which clears the
+tag, so the stale capability load faults whether or not anything was revoked. The physical
+column reached the same conclusion for the same case; what keeps it from being "it faulted
+somewhere" is that the fault must land in the defect's own file.
+
+**CRASH-057 is out of the denominator, on evidence.** The pair has a premise — that stock,
+unsanitised PHP runs the script to completion, so a control that completes reproduces
+`crashes_on_pristine_build = False`. The corpus records **`SIGNAL:11`** for CRASH-057 on
+`results-pristine-default.json`, alone among these 24. A control that completed would therefore
+prove the port was *not* reproducing the defect, and one that faults says nothing about
+detection. `run-cases.py` reads that field rather than inferring it, and the judge's own
+`out-of-denominator` is the label.
+
+That is also the honest resolution of the case the physical column could not score. There, the
+control faulted inside the port's own hoisted unlink — a port artefact. Here the stock column
+reaches the request teardown, which the physical port never ran, and fails the way stock PHP
+does: it passes `payload_base + 480` to `_efree`, which the diagnostic names as
+`ZEND_CAP_INTERIOR`. Same case, same non-reading, different and better-understood reason.
+
+### Combined with Phase A: 23 of the 23 reachable cases
+
+| axis | cases | caught | how |
+|---|---|---|---|
+| spatial (hierarchical pair) | 6 | 6 | 5 at ASAN's own file and line, 1 by the audit arm |
+| temporal (the seam) | 17 | 17 | 9 by the per-object retire, 7 also by the block, 1 with no pair |
+| | **23** | **23** | |
+
+CRASH-057 is the 24th and is out of the denominator. The spatial axis was re-measured after the
+fix below and did not move: 6 of 6, the audit arm reporting the same numbers, both controls as
+declared.
+
+### The seam found a porting defect that the looser arrangement hid
+
+CRASH-035 failed on every column with `ZEND_CAP_FOREIGN`: PHP freed an address inside no block
+the seam owns. The cause was in this port's own SAPI, not in PHP — `ub_vspprintf` allocated its
+buffer with `malloc`, and `zend_error` hands that buffer straight to a zval
+(`Zend/zend.c:940`), which PHP later destroys with `efree`. Under the hierarchical allocator
+the mistake is invisible, because `_efree` reaches a level that did issue the pointer: it came
+from the same musl heap. The seam refuses instead of guessing, and the diagnostic named it in
+one run.
+
+**That is the fifth time this port's own substitute layer has been the thing under test rather
+than PHP** (a sink that discarded its bytes, an error path that discarded its format string, a
+missing `zend_register_default_classes`, a missing `zend_deactivate`, and now this). PHP's real
+`vspprintf` uses `emalloc`; `app/php_virtual_main.c` now matches it, and CRASH-035 became a
+reading on all three columns. `engine/rung_E_domain.c` has the same `malloc` and is left alone
+because it is the comparison column — but its CRASH-035 reading is worth re-examining on these
+grounds, which is recorded here rather than acted on.
+
+### The seam works, and PHP's `_efree` did not have to change
+
+`zend_alloc.c` is patched with **eight hunks, every one behind `#ifdef ZEND_CAP_SUBLET`**, and
+with the define absent it compiles to a **byte-identical object** (`.text` 6572 bytes, `cmp`
+clean) — with a positive control confirming the object *does* differ when the define is
+present, so the inertness check is not vacuous. `build-virtual.sh inert` is that gate. The
+physical column's results and Phase A's hierarchical results are therefore untouched by the
+file having been patched at all.
+
+The central claim held. `ZEND_MM` is undefined in this build, so `REMOVE_POINTER_FROM_LIST` is
+real and the intrusive list is live — verified against the macro expansions, not assumed. With
+the header outliving every payload issued from its block, PHP's own unlink-before-free ordering
+already repairs the list while everything it touches is alive. **Probe stage 4 links three
+blocks through their headers, retires the middle payload and performs the unlink: it passes.**
+So the physical port's hoisted, unconditional `REMOVE_POINTER_FROM_LIST` — the deviation that
+cost four false CAUGHT verdicts and still costs CRASH-057 a no-reading there — is not needed
+here, which is what the seam was for.
+
+### The first pair LIED, and the third column is the fix
+
+The plan specified two modes, `EXACT` and `REVOKE`, and a temporal pair of mode 0 against mode
+2. Run once: **both arms caught CRASH-003 at the same instruction**, `zend_execute.c:669`.
+
+The reason is a property of the profile, not of the case. `__capstone_sublet_free_linear`
+rotates the heap's own authority, which is senior to the loan, so **every alias to a block that
+reaches `ZEND_DO_FREE` dies whatever this layer does**. "No inner revocation" is therefore not
+"stock PHP lifetimes" here, and a catch in such a pair cannot be attributed to the seam rather
+than to mallocng underneath it. The loan's return became its own mode bit:
+
+| mode | column | what revokes |
+|---|---|---|
+| 0 | **stock** | nothing. The loan is deliberately LEAKED and the record left indexed, so a freed block stays readable exactly as on stock PHP. The honest-gap column |
+| 4 | **platform** | mallocng, per BLOCK, when PHP actually frees one. No per-object retire |
+| 6 | **seam** | both: the payload region at every `_efree`, cache-absorbed or not |
+
+Mode 4 is what makes a mode-6 catch attributable to the seam, and the probe proves the columns
+are distinct rather than nominal: on the platform arm a **cache-absorbed** free survives (stage
+8) while a **real** free faults (stage 9). Asking what the instrument could not distinguish
+*before* the claim, rather than after it, is the only reason this is a three-column table
+instead of a two-column overclaim.
+
+### The probe: ten stages, all behaving
+
+`zend-alloc/sublet/probe-seam.c` drives the real `zend-cap-*.c` through the same hooks the
+patched `zend_alloc.c` calls — a probe with its own copy of the logic would pass while the
+engine broke.
+
+| stage | tests | reading |
+|---|---|---|
+| 0 | split, write, retire, header still writable, re-issue, free | PASS |
+| 4 | three blocks linked through headers; retire the middle, then unlink it | PASS |
+| 6 | the stock column: the same stale use with nothing revoked | PASS (completes) |
+| 8 | the platform column on a **cache-absorbed** free | PASS (completes) |
+| 1 | write through a retired payload alias | FAULT, cause 24 |
+| 2 | read through a retired payload alias | FAULT, cause 24 |
+| 3 | the AG(cache) hand-back: re-issue, then use the OLD alias | FAULT, cause 24 |
+| 5 | realloc moves the payload; the old alias | FAULT |
+| 9 | the platform column on a **real** free | FAULT |
+| 7 | the bound: index 9 of a 9-byte request, rounded vs exact | survives, then FAULTS |
+
+Stage 3 is the one that matters most for PHP: the re-issued region has the **same address** as
+the dead alias, and the old alias stays dead anyway. That is the trap
+`docs/design/virtual-capstone/ownership.md` names — *"an allocator that merely reuses bytes
+inside one still-live outer allocation does not obtain inner temporal protection
+automatically"* — and `AG(cache)` reuse is exactly it.
+
+### Three gates replace the byte-identical-arms check
+
+A pair that is one image with a runtime mode cannot be checked by comparing images, so the
+plan's Verification 5 replacements are enforced by the runner, which refuses to write bundles
+otherwise: the image must contain the **revoke** encoding at all (it carries 8, plus 9 `mrev`);
+the three runs must report **distinct mode words**; and the object column must revoke
+**strictly more** than the block column, which must revoke none. Measured: modes 0/4/6,
+revokes 0/0/77. `app/test-run-cases.py` drives the whole runner offline over synthetic
+transcripts and shows both cross-arm gates *firing* — 23 checks, no emulator, about a second.
+
+### Revocation sanity, kept as an arm-level control
+
+A benign workload with revocation ON must complete, because four use-after-free cases once
+reported CAUGHT while all faulting at the same allocator line and only this control saw it.
+It completed on all three columns, and on the seam column with 77 revokes and 47 retires
+against 52 blocks — so the machinery is sound on a program with no lifetime error in it.
+
 ## The allocator seam — the one real design question
 
 PHP's allocator must keep giving per-`emalloc` **bounds** and per-`efree` **lifetimes**, and
@@ -1085,9 +1249,23 @@ stand after the judge or the arms change. Concretely:
 
 **Scoped out of this plan** (the natural follow-on): restructuring the 127-case corpus into
 dev's `NN_<upstream-fix>_<slug>/` layout with `PROVENANCE.md` per case. Without that, PHP's
-bundles exist and are re-judgeable but do not appear in the cross-program catch tables. I
-propose a thin `capstone/bug-corpora/php/engine-repros/corpus.json` naming the arms and the
-bundle locations, so the plumbing is in place and the restructuring is additive later.
+bundles exist and are re-judgeable but do not appear in the cross-program catch tables.
+
+**CORRECTION (2026-10-13): the "thin `corpus.json`" this plan proposed is not available, and
+it was not checked before proposing it.** `bug-corpora/tools/check-corpus.py` discovers corpora
+by `rglob("corpus.json")` and then validates each case against its declared schema. The
+closest schema to PHP's shape is `script-trigger` — a defect whose trigger is an interpreter
+script rather than a C reduction, which is exactly right — but it requires, per case,
+`case`, `upstream_fix`, `title`, `consumer`, `class`, `trigger`, `fidelity`, `arms` and
+`status`. So declaring the corpus *is* the restructuring: a declaration without the per-case
+provenance either fails the checker or means writing that provenance, and the checker is a
+shared gate that currently passes (28 corpora, 327 cases, 0 problems) and must keep passing.
+
+Dropping the idea rather than half-doing it. The verdict bundles are self-describing in the
+meantime — each records the image, the judge, the arm's mode and the platform by sha256, and
+`run-cases.py --from-record` re-judges them without booting — so nothing is lost but the
+cross-program table, which is the follow-on's job. The schema even has a `verdict_bundles` key
+waiting for it, and a `fault_sites` case field where `EXPECT_FILE` belongs.
 
 **Pre-registration is a process rule, not a tool** (root `CLAUDE.md` on dev): push the
 predicted verdict per cell to a lane branch *before* the run and cite that commit's hash in

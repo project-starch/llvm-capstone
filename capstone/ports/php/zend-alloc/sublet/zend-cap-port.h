@@ -146,6 +146,7 @@ void zend_cap_record_free(struct zend_cap_block *r);
 void zend_cap_index(struct zend_cap_block *r);
 void zend_cap_unindex(struct zend_cap_block *r);
 struct zend_cap_block *zend_cap_find(unsigned long key);
+struct zend_cap_block *zend_cap_find_containing(unsigned long addr);
 void zend_cap_backing_stats(unsigned long out[4]);   /* records live, peak, slabs, lookups */
 
 /* ---- the seam (zend-cap-blocks.c), called from the patched zend_alloc.c ---------------- */

@@ -1,3 +1,46 @@
+2026-10-13 — **The Sublet allocator seam is built and measured: 23 of the 23 reachable PHP cases
+are caught on virtual Capstone, and 9 of them need per-object revocation specifically.**
+
+PHP 5.0.0's own `zend_alloc.c`, patched with eight `#ifdef ZEND_CAP_SUBLET` hunks, over a block
+SPLIT into a 48-byte header and a payload region: the payload is revoked at every `_efree`,
+cache-absorbed or not, while the header outlives it. The patch is INERT without the define
+(byte-identical object, with a positive control proving the hunks are live with it), so the
+physical column and Phase A are untouched. PHP's `_efree` keeps its own ordering — the physical
+port's hoisted, unconditional `REMOVE_POINTER_FROM_LIST`, which cost four false CAUGHTs there,
+is not needed.
+
+| axis | cases | caught | how |
+|---|---|---|---|
+| spatial (hierarchical pair) | 6 | 6 | 5 at ASAN's own file and line, 1 by the audit arm |
+| temporal (the seam) | 17 | 17 | 9 by the per-object retire, 7 also by the block, 1 with no pair |
+
+THE TEMPORAL AXIS HAS THREE COLUMNS, not two, and the third was added because the first pair
+lied: mode 0 against mode 2 had BOTH arms catching CRASH-003 at the same instruction, because
+this platform's own `free()` revokes (`__capstone_sublet_free_linear` rotates authority senior
+to the loan). So "no inner revocation" is NOT "stock PHP lifetimes" here. The loan's return
+became its own mode bit — stock (0, nothing revoked, the loan leaked), block (4, mallocng
+revokes per block), object (6, plus the per-object retire) — and the 9 cases above are the ones
+block-level revocation MISSES because `AG(cache)` absorbed the free. Without that column a
+temporal catch cannot be attributed to the seam rather than to mallocng underneath it.
+
+CRASH-057 is out of the denominator on the corpus's own evidence: `results-pristine-default.json`
+records `SIGNAL:11` for it, alone among the 24, so the pair has no premise. That is also the
+honest resolution of the case the physical column could not score.
+
+Two things worth not rediscovering. The seam found a PORTING defect the looser arrangement hid:
+`ub_vspprintf` allocated with `malloc` while `zend_error` hands that buffer to a zval PHP later
+`efree`s (`Zend/zend.c:940`) — the fifth time this port's own substitute layer has been the
+thing under test rather than PHP. And `bug-corpora/tools/check-corpus.py` rglobs for
+`corpus.json` and validates per-case provenance, so the plan's "thin corpus.json" is not
+available: declaring the corpus IS the restructuring, and the checker is a shared gate that
+currently passes (28 corpora, 327 cases).
+
+Next, in order: the 7 OS-dependent cases, cheapest first (086 image size, 008 `time()`, 084
+`environ`, 112 files, 099 `php://memory`, then 092/100 which need a second process), and
+`-capstone-shrink-stack` back ON as its own variable — it is what makes CRASH-100
+(`stack-use-after-return`) catchable at all, and the 4 MiB domain ceiling that forced it off no
+longer exists.
+
 2026-10-12 — **The PHP port runs as an ordinary Linux process on virtual Capstone, and the spatial
 pair is 6 of 6 CAUGHT.** PHP 5.0.0's engine links against the Capstone musl SDK as a capability
 application: 47 objects, 34 Zend TUs plus 8 of `ext/standard`, with musl replacing the 29-header

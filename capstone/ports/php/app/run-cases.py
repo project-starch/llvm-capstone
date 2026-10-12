@@ -281,6 +281,29 @@ def observe(case, arm, image_sha, exits, chunks, sites, expect, control, audit=N
     return obs
 
 
+def read_pristine(path):
+    """Cases the corpus itself says stock, unsanitised PHP already crashes on.
+
+    THE PAIR HAS A PREMISE: that stock PHP runs the script to completion, so a control that
+    completes reproduces `crashes_on_pristine_build = False` and a fault in the other arm is
+    the defect being caught. For a case where stock PHP SIGSEGVs, that premise is false before
+    the experiment starts -- a control that completed would prove the port was NOT reproducing
+    the defect, and one that faults says nothing about detection.
+
+    The corpus records it per case, so it is read rather than inferred. CRASH-057 is the only
+    one of the 24 with SIGNAL:11 on results-pristine-default.json, and it is the case the
+    physical column also could not score, by a different route: there the control faulted inside
+    the port's own hoisted unlink. Here the stock column reaches the request teardown -- which
+    the physical port never ran -- and fails the way stock PHP does.
+    """
+    if not path or not Path(path).is_file():
+        return None
+    rows = json.loads(Path(path).read_text())
+    rows = rows if isinstance(rows, list) else rows.get("results", [])
+    return {r["id"] for r in rows if isinstance(r, dict)
+            and str(r.get("crashes_on_pristine_build", "")).lower() == "true"}
+
+
 def seam_counters(text):
     """(mode, revokes, retires) a run reported about itself, or (None, None, None)."""
     m, s = MODE_LINE.search(text or ""), SEAM_LINE.search(text or "")
@@ -289,7 +312,8 @@ def seam_counters(text):
             int(s.group(4)) if s else None)
 
 
-def observe_temporal(case, arm, image_sha, exits, chunks, sites, control, stock_completed):
+def observe_temporal(case, arm, image_sha, exits, chunks, sites, control,
+                     stock_completed, expect=None, pristine_crash=False):
     """One Observation on the temporal axis.
 
     Attribution here cannot be by site: a use-after-free faults wherever the program touches
@@ -301,6 +325,14 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control, stock_
     text = "\n".join(chunks.get(case, []))
     rc = exits.get(case)
     obs = verdicts.Observation(case=case, arm=arm, image_sha256=image_sha, controls=[control])
+
+    if pristine_crash:
+        # Out of the denominator, not a failure of anything: the corpus records stock PHP
+        # crashing on this case, so the matched pair has no premise to rest on.
+        obs.infra = "out-of-denominator"
+        obs.notes = ("the corpus records crashes_on_pristine_build=True for this case, so a "
+                     "control that completes would show the port NOT reproducing the defect")
+        return obs
 
     fail = SEAM_FAIL.search(text)
     if fail:
@@ -336,25 +368,53 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control, stock_
         m = re.search(r"code=(0x[0-9a-f]+)-", text)
         func, where = sites.locate(fault.pc, int(m.group(1), 16)) if m else ("", "")
         obs.notes = (obs.notes + "; " if obs.notes else "") + (f"{func} at {where}" if where else "")
+        at_site = bool(expect) and expect in (where or "")
         if any(f in (where or "") for f in SEAM_OWN_FILES):
             obs.attribution_evidence = (f"fault at {where} is inside the port's own allocator, "
                                         f"not in the program under test")
         elif stock_completed:
+            # THE PAIR, which is the attribution this axis is about: the same image, the same
+            # trigger, with nothing revoked, ran to completion. Preferred over the site even
+            # though ATTRIBUTIONS ranks `function` higher, because on the temporal axis the
+            # site says "the program touched a dead object here" while the pair says "and it
+            # only faults when revocation fires", which is the claim being made.
             obs.attribution = "control"
-            obs.attribution_evidence = (f"fault at {where or hex(fault.pc)} in "
-                                        f"{func or '?'}; the stock column (nothing revoked) ran "
-                                        f"this same image on this same trigger to completion")
+            obs.attribution_evidence = (f"fault at {where or hex(fault.pc)} in {func or '?'}; "
+                                        f"the stock column (nothing revoked) ran this same "
+                                        f"image on this same trigger to completion"
+                                        + (f"; and the site is {expect}, as declared"
+                                           if at_site else ""))
+        elif at_site:
+            # The stock column faulted too, so there is no pair -- but the fault is at the file
+            # ASAN itself names. The physical column reaches the same place on CRASH-022 and
+            # CRASH-102 and scores them CAUGHT (no pair), for a reason intrinsic to those cases:
+            # a freed block reused and overwritten with scalar data loses its tag, so the stale
+            # load faults whether or not revocation fired. What stops that from degenerating
+            # into "it faulted somewhere" is that the fault must land in the defect's OWN file.
+            obs.attribution = "function"
+            obs.attribution_evidence = (f"no pair: the stock column faulted too, but the fault "
+                                        f"is in {expect} ({func} at {where}), the file ASAN "
+                                        f"names -- CAUGHT with no pair, as the physical column "
+                                        f"scores CRASH-022")
         else:
-            obs.attribution_evidence = (f"fault at {where or hex(fault.pc)}, and the stock "
-                                        f"column did not complete this case either, so nothing "
-                                        f"ties the fault to the defect")
+            obs.attribution_evidence = (f"fault at {where or hex(fault.pc)}, the stock column "
+                                        f"did not complete this case either, and the site is "
+                                        f"not {expect or 'declared anywhere'}")
     elif rc not in (0, None):
         obs.infra = "infra"
         obs.notes = f"exit {rc} with no domain fault reported"
     return obs
 
 
-def run_temporal(args, cases, manifest, arms):
+def run_temporal(args, cases, manifest, arms, expect_file):
+    pristine = read_pristine(args.pristine)
+    if pristine is None:
+        print(f"    WARNING: no pristine results at {args.pristine}; cases stock PHP already "
+              f"crashes on cannot be told from port failures")
+    else:
+        inside = sorted(pristine & set(cases))
+        print(f"    the corpus records stock PHP crashing on {len(inside)} of these cases"
+              + (f": {' '.join(inside)} -- out of the pair's denominator" if inside else ""))
     """Three columns from one image. Returns the exit status."""
     sha = verdicts.sha256(args.seam)
     llvm_bin = os.environ["CAPSTONE_LLVM_BIN"]
@@ -440,8 +500,9 @@ def run_temporal(args, cases, manifest, arms):
                                             f"exit={rec['exits'].get(SANITY_RUN)}")
         rows = []
         for case in cases:
-            obs = observe_temporal(case, arm, sha, rec["exits"], rec["output"], sites, control,
-                                   case in stock_completed)
+            obs = observe_temporal(case, arm, sha, rec["exits"], rec["output"], sites,
+                                   control, case in stock_completed, expect_file.get(case),
+                                   case in (pristine or set()))
             if not rec["completed"]:
                 obs.infra = "infra"
                 obs.notes = (obs.notes + "; " if obs.notes else "") + \
@@ -472,6 +533,9 @@ def main():
                    help="spatial: the hierarchical bound pair (two images). temporal: the "
                         "Sublet seam's three runtime columns (one image)")
     p.add_argument("--seam", type=Path, help="php-seam.dom, for --axis temporal")
+    p.add_argument("--pristine", type=Path, default=Path("/corpus/results-pristine-default.json"),
+                   help="the corpus's pristine-build results; cases it records as crashing on "
+                        "stock PHP are out of the pair's denominator")
     p.add_argument("--audit", type=Path,
                    help="php-audit.dom (-DZEND_CAP_ESTRNDUP_AUDIT): the diagnostic arm that "
                         "attributes an over-read performed by a shared copy primitive")
@@ -509,7 +573,7 @@ def main():
               f"{len([c for c in reachable if axis.get(c, 'heap') == 'heap'])} spatial cases "
               f"(the hierarchical pair measures those)")
         return run_temporal(args, temporal, manifest,
-                            {a: arms_all[a] for a in TEMPORAL_ARMS})
+                            {a: arms_all[a] for a in TEMPORAL_ARMS}, expect_file)
 
     if not (args.control and args.fault):
         sys.exit("--axis spatial needs --control and --fault")

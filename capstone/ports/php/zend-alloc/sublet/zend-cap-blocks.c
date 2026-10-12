@@ -49,6 +49,23 @@ static unsigned long st_blocks, st_frees, st_issues, st_retires, st_revokes, st_
 
 void zend_cap_fail(int code, const char *what, unsigned long a, unsigned long b)
 {
+    /* For a pointer this layer did not issue, say WHAT it is: an interior pointer into a block
+     * we do own (the index model is wrong) or an address in no block at all (PHP is freeing
+     * memory emalloc never produced). Without this the message is the same in both cases and
+     * the next step is a guess. */
+    if (code == ZEND_CAP_FAIL_UNKNOWN && a) {
+        struct zend_cap_block *owner = zend_cap_find_containing(a);
+        fflush(stdout);
+        if (owner) {
+            fprintf(stderr, "ZEND_CAP_INTERIOR addr=0x%lx is inside the block at 0x%lx "
+                            "(+%lu of %lu, payload base 0x%lx, last size %lu)\n",
+                    a, owner->base, a - owner->base, owner->bytes, owner->key, owner->size);
+        } else {
+            fprintf(stderr, "ZEND_CAP_FOREIGN addr=0x%lx is inside no block this layer owns: "
+                            "PHP freed memory that did not come from emalloc\n", a);
+        }
+        fflush(stderr);
+    }
     /* LOUD AND TERMINAL. PHP's own answer to a failed allocation is a fatal message and
      * exit(1), which in a results table is indistinguishable from the trigger failing. This
      * marker is distinguishable, and it aborts rather than limping on with a heap that is no

@@ -137,10 +137,30 @@ static void ub_ticks(int t) { (void)t; }
 static void ub_on_timeout(int sec TSRMLS_DC) { (void)sec; }
 static int  ub_stream_open(const char *fn, zend_file_handle *h TSRMLS_DC)
 { (void)fn; (void)h; return FAILURE; }
+/* EMALLOC, NOT MALLOC, and that is a correctness requirement rather than a preference.
+ *
+ * zend_error hands this buffer straight to a zval: `z_error_message->value.str.val =
+ * zend_vspprintf(...)` (Zend/zend.c:940). PHP then destroys that zval the ordinary way, which
+ * frees the string with EFREE. A buffer allocated here with malloc is therefore freed by PHP's
+ * own allocator, and what happens next depends on the allocator underneath:
+ *
+ *   hierarchical  _efree reaches the level below, which frees a pointer it did issue -- it came
+ *                 from the same musl heap -- so the mistake is invisible;
+ *   the seam      _efree asks the seam for the header of a pointer the seam never issued, and
+ *                 the seam refuses rather than guessing. CRASH-035 failed exactly there, with
+ *                 ZEND_CAP_FOREIGN naming an address inside no block this layer owns.
+ *
+ * So the seam found a porting defect that the looser arrangement hid, which is the fourth time
+ * this port's own substitute layer has been the thing under test rather than PHP. PHP's real
+ * vspprintf (main/snprintf.c) allocates with emalloc; this now matches it.
+ *
+ * NOTE for the comparison column: engine/rung_E_domain.c has the same malloc here. It is left
+ * alone, because that arm is the comparison column and changing it would invalidate results
+ * already recorded -- but its CRASH-035 reading is worth re-examining on those grounds. */
 static int ub_vspprintf(char **pbuf, size_t max_len, const char *fmt, va_list ap)
 {
     int n = (max_len && max_len < 4096u) ? (int)max_len : 4095;
-    *pbuf = (char *) malloc((unsigned long)n + 1);
+    *pbuf = (char *) emalloc((unsigned long)n + 1);
     if (!*pbuf) { return 0; }
     return vsnprintf(*pbuf, (unsigned long)n + 1, fmt, ap);
 }

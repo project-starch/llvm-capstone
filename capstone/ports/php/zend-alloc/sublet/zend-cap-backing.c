@@ -153,6 +153,31 @@ struct zend_cap_block *zend_cap_find(unsigned long key)
     return (struct zend_cap_block *)0;
 }
 
+/* WHICH block, if any, contains this address -- for the diagnostic on a pointer the seam did
+ * not issue. "PHP freed something we never gave it" has two very different causes, and the
+ * answer decides whether this is a seam bug or a fact about PHP:
+ *
+ *   an INTERIOR pointer   PHP is freeing base + k for some k != 0, so the single-key index is
+ *                         the wrong model and the seam needs a range lookup;
+ *   NOT IN ANY BLOCK      PHP is freeing memory that did not come from emalloc at all -- a
+ *                         static buffer, or something zend_strndup/malloc produced -- which no
+ *                         allocator seam can be expected to own.
+ *
+ * The plan lists this as open risk 3 and says it should be audited rather than discovered. It
+ * was discovered, which is what the fail-closed path is for; this makes the discovery
+ * actionable in one run instead of several. */
+struct zend_cap_block *zend_cap_find_containing(unsigned long addr)
+{
+    unsigned long b;
+    for (b = 0; b < ZEND_CAP_BUCKETS; b++) {
+        struct zend_cap_block *r;
+        for (r = buckets[b]; r; r = r->next) {
+            if (r->live && addr >= r->base && addr < r->base + r->bytes) { return r; }
+        }
+    }
+    return (struct zend_cap_block *)0;
+}
+
 void zend_cap_backing_stats(unsigned long out[4])
 {
     out[0] = records_live;
