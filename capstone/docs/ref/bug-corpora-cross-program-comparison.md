@@ -43,9 +43,9 @@ Read from each `corpus.json` and its `case.json` files.
 | mruby | gc-slot-repros | 0 | 0 | 0 | -- | -- |
 | mruby | release-differential | 23 | 23 | 4 | -- | -- |
 | Perl | release-differential | 11 | 11 | 4 | -- | -- |
-| PostgreSQL | c-repros | 5 | 5 | 2 | virtual-malloc | virtual-malloc |
+| PostgreSQL | c-repros | 5 | 5 | 3 | virtual-malloc | spatial, sublet, virtual-malloc |
 | PostgreSQL | mmgr-repros | 5 | 5 | 6 | virtual-malloc, virtual-pg-pools | spatial, sublet, virtual-malloc, virtual-pg-pools |
-| PostgreSQL | sql-repros | 9 | 9 | 3 | virtual-malloc, virtual-pg-pools | virtual-malloc, virtual-pg-pools |
+| PostgreSQL | sql-repros | 9 | 9 | 3 | virtual-malloc, virtual-pg-pools | spatial, sublet, virtual-malloc, virtual-pg-pools |
 | SQLite | capi-repros | 0 | 0 | 1 | -- | -- |
 | SQLite | engine-repros | 33 | 33 | 3 | virtual-malloc, virtual-nested-pools | virtual-malloc, virtual-nested-pools |
 | tshark | plain-heap-repros | 12 | 12 | 10 | virtual-malloc | virtual-malloc |
@@ -58,8 +58,12 @@ Read from each `corpus.json` and its `case.json` files.
   twelve corpora do too:
   - FFmpeg pool and plane have no virtual recipe;
   - wmem's bundles are the 23-case R9b run.
-- **`case.json` fields.** Every physical arm, and httpd's, mruby's and Perl's corpora entirely, keep
-  hand-recorded `case.json` verdicts that cite a result record.
+
+  PostgreSQL's Capstone arms, `spatial` and `sublet`, are bundles in all three of its corpora since
+  PR #218 (2026-10-12); mmgr-repros' already were. Its `cheribsd-revocation` arm stays hand-written,
+  because that runner emits no bundle yet.
+- **`case.json` fields.** Every other physical arm, and httpd's, mruby's and Perl's corpora entirely,
+  keep hand-recorded `case.json` verdicts that cite a result record.
 - **Agreement.** Both forms pass the same `check-corpus.py`, and the strict board treats them the same.
   But only the bundles are re-judged automatically when the judge or a configuration's controls change
   (`derive-verdicts.py --check`).
@@ -173,6 +177,16 @@ chunk reaches `free()`: the plain temporal cases.
   - the supervised CheriBSD runs resolve sites, including in libc;
   - the PoisonCap runner resolves each case's label.
 - **SQLite and PostgreSQL** attribute most virtual catches by function. See item 1 under section 6.
+- **PostgreSQL's physical arms** also run each case's own negative control (PR #218), under two rules:
+  - c-repros and mmgr-repros read it on every fault, and a control that faults clears an attribution
+    the declared site had made.
+  - sql-repros reads it only for a fault that nothing else attributed. Its 02 and 03 fault inside
+    `memcpy`, which no case can declare as its site, and are attributed by the control alone: the
+    statement below the threshold completes on the same image. Its sublet 01, 04 and 06 rest on their
+    declared sites alone; their `control.sql` exists and was not run.
+  - c-repros' physical `sublet` arm is configuration `app-sublet`: the SDK's `malloc` is Sublet's heap
+    (`sublet_heap.c`). Its `uaf-malloc` control must fault, and it is checked in the same boot. The
+    board still reads PostgreSQL's column 2 from `virtual-malloc`.
 
 ## 5. What this audit changed
 
@@ -222,10 +236,22 @@ free into a nested allocator.
    - The cases: SQLite engine-repros declares sites in 21 cases and PostgreSQL in 6 (c-repros 2,
      sql-repros 3, mmgr-repros 1).
    - Each was committed in the same commit as the virtual bundle that resolved the fault there
-     (65d46bbc49d1, 0f257e5af3f0), so history cannot show that it was declared before the run.
-     `SCHEMA.md` requires a site to be declared from source before the run.
+     (65d46bbc49d1, 0f257e5af3f0), so history cannot show that it was declared before the virtual run.
+     PostgreSQL's own `fault_sites_why` says the sites were declared after the virtual run resolved
+     the fault. `SCHEMA.md` requires the reason to come from the source or from an earlier independent
+     run, never from the fault it admits.
    - In those four corpora, 32 virtual CAUGHT cells are attributed by function. How many rest on those
      declarations, rather than on the runner's own consumer lists, is for the owners to establish.
+   - **PostgreSQL's physical arms (PR #218) came after the declaration.**
+     - The sites were committed at 2026-10-10 09:38Z.
+     - The four physical bundles are stamped from 15:06 that day to 03:46 the next. They record runner
+       versions first committed at 15:09Z, 18:55Z and 03:49Z.
+     - For those cells the virtual run is the earlier independent run that `SCHEMA.md` allows.
+     - c-repros 00 and 03 also carry a held per-case control. sql-repros sublet 01, 04 and 06 rest on
+       the sites alone.
+   - **No gate checks a function attribution against the case's site list.** With `fault_sites` deleted
+     from those five cases, `derive-verdicts.py --check` and `check-corpus.py` both still pass (checked
+     2026-10-12). A re-judge reads the stored attribution; it does not redo it.
    - Running the cases again under a pre-registration would settle it.
 2. **mruby's and Perl's temporal catches are not separated from bounds**, and Perl's five CHERI
    catches fault with revocation off.
@@ -237,5 +263,9 @@ free into a nested allocator.
 4. **PostgreSQL sql-repros 03 on `virtual-malloc`.**
    - Its NO-READING was judged against the 64-variant control, which PR #215 showed crosses the uint16
      threshold itself.
-   - The corrected 48-variant control has not been run on virtual. That needs the virtual PostgreSQL
-     image and cluster fixture, which this host does not have.
+   - The corrected 48-variant control has run on both physical Capstone arms, on the trigger's own image
+     (PR #215). PR #218's bundles attribute 03 by `control.sql`, which is that statement since #215;
+     the bundles do not record the control's hash. It has not been run on virtual.
+   - #215's author declined that run on their host (comment on #215, 2026-10-10): there is no virtual
+     kit there, and PR #216 changes the capability and node-table layouts, so a kit built now would be
+     invalidated. They placed it with the lane that owns the virtual platform, after #216 lands.
