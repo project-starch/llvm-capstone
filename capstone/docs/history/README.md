@@ -66,6 +66,21 @@ Useful if null_blk split breaks again and you need the crash reproduction sequen
 - `08-05-2026_12-19-23_null_block_reference_test.md`
 - `08-05-2026_12-30-00_null_block_crash_reproduction_instructions.md`
 
+### The state and next-step journals before 2026-10-01
+
+The two startup files were append-only journals and had grown to 2,030 and
+1,560 lines, most of it superseded. On 2026-10-13 everything in them dated
+before 2026-10-01 moved here verbatim, each with an index of its own sections:
+
+- `13-10-2026_01-00-00_state-journal-through-2026-09-29.md` -- 58 sections.
+- `13-10-2026_01-00-00_next-step-journal-through-2026-09-29.md` -- 20 sections,
+  five of them headed `0. CURRENT`. **Do not take a next step from it**: a
+  superseded entry in a next-step file is an instruction, and the board it
+  instructs has been reflashed since.
+
+The cut was by date alone, so neither file's contents were judged: a section
+that stayed is not thereby current, and one that moved is not thereby wrong.
+
 ## Retention guidance
 
 - Keep `history/` as archival context, but do not duplicate its narrative into `state/` or `design/`.
