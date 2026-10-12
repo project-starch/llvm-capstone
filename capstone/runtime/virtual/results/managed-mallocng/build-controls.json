@@ -1,0 +1,18 @@
+{
+  "ffmpeg": {
+    "exit": 2,
+    "passed": true
+  },
+  "wireshark": {
+    "exit": 2,
+    "passed": true
+  },
+  "ffmpeg-runner": {
+    "exit": 2,
+    "passed": true
+  },
+  "wireshark-runner": {
+    "exit": 2,
+    "passed": true
+  }
+}

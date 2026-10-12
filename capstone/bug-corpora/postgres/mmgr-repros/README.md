@@ -90,6 +90,11 @@ with `capstone_vm --profile virtual`. Two builds per arm, both with the
       --hosted-build BUILD --controls-hosted-build BUILD_CONTROLS \
       --llvm-bin <toolchain>/bin --raw LOGS
 
+For a fresh ephemeral guest, replace `--state VM_STATE` with
+`--virtual-kit KIT`. The kit contains `qemu-system-riscv64`, `images/` and
+`adapter/` as specified in `tools/virtualvm.py`. This stages all arm controls,
+defects and safe per-case variants into one boot and applies the same judge.
+
 The runner refuses a build whose `PG_SUBLET` or SDK does not match the arm. It
 reports one Observation per run and the shared judge decides; it writes
 `OUT/<arm>/` bundles, and `tools/derive-verdicts.py` turns the bundles named in
