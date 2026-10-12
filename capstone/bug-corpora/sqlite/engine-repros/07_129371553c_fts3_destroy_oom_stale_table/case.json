@@ -28,15 +28,18 @@
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
-      "verdict": "NO-READING",
-      "verdict_note": "the builder marks it not applicable to this arm (it configures sqlite_heap itself)",
-      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools",
-      "verdict_reason": "out-of-denominator"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f95e2b454 in fts3DestroyMethod; by function: fts3DestroyMethod is where host ASan reported it",
+      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
-  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=257, witnesses=18)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=257, witnesses=18)",
+  "fault_sites": [
+    "fts3DestroyMethod"
+  ],
+  "fault_sites_why": "The stale access is fts3DestroyMethod evaluating p->zName for the next fts3DbExec after a schema reset freed the Fts3Table (PROVENANCE.md: host ASan READ of size 8 in fts3DestroyMethod). Declared 2026-10-11 before the first run of this case on virtual-nested-pools, the first arm that builds it with a revoking memsys5; the source is PROVENANCE.md, which predates that run."
 }

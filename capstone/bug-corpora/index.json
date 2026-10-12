@@ -1038,8 +1038,8 @@
         "virtual-nested-pools": "virtual-sqlite-memsys5-pools"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools"
+        "virtual-malloc": "results/2026-10-11-virtual-request-bounds/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
       },
       "where": "capstone/bug-corpora/sqlite/engine-repros"
     },
@@ -1737,7 +1737,7 @@
         "version": "3.22.0",
         "pin_source": {
           "file": "capstone/ports/sqlite/cheribsd/build-corpus-cheri.sh",
-          "grep": "SQLITE_AMALGAMATION"
+          "grep": "shared/sqlite-3.22.0-full/ext"
         }
       },
       "targets": [
