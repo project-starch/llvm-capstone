@@ -238,6 +238,41 @@ def main():
         if not ok:
             print(f"         EXPECTED observed={want}")
 
+    # The audit arm's decoder and the attribution it licenses. 0xE3 | who | requested<<24 |
+    # available<<8 | overrun, as zc_audit_src packs it.
+    word = (0xE3 << 56) | (1 << 48) | (16 << 24) | (13 << 8) | 3
+    audit_checks = [
+        ("an audit word decodes to requested/available/overrun",
+         f"PHP_VIRTUAL FAULT_REPORT 0x{word:016x}", (1, 16, 13, 3)),
+        ("a word with the wrong marker is not an audit report",
+         f"PHP_VIRTUAL FAULT_REPORT 0x{(0xEA << 56) | 1:016x}", None),
+        ("no report at all", "PHP_VIRTUAL stage=0x03f evaluating the trigger", None),
+    ]
+    for name, text, want in audit_checks:
+        got = rc.decode_audit(text)
+        ok = got == want
+        bad += not ok
+        print(f"  [{'ok ' if ok else 'FAIL'}] audit: {name} -> {got}")
+        if not ok:
+            print(f"         EXPECTED {want}")
+
+    # A fault in the copy primitive is attributable ONLY with the audit arm's evidence, and the
+    # two outcomes must differ -- otherwise the audit changes nothing and is theatre.
+    copy_fault = ["PHP_VIRTUAL stage=0x03f evaluating the trigger", FAULT]
+    without = observe("CRASH-073", copy_fault, 139, "", "url.c", fired)
+    with_audit = rc.observe("CRASH-073", EXACT, "deadbeef", {"CRASH-073": 139},
+                            {"CRASH-073": copy_fault}, FakeSites(""), "url.c", fired,
+                            (1, 16, 13, 3))
+    for label, obs, want_v in (("without the audit arm", without, verdicts.NO_READING),
+                               ("with the audit arm", with_audit, verdicts.CAUGHT)):
+        v, reason, evidence = verdicts.judge(obs, ARMS[EXACT])
+        ok = v == want_v
+        bad += not ok
+        print(f"  [{'ok ' if ok else 'FAIL'}] a copy-primitive fault {label} -> {v}"
+              f"{'/' + reason if reason else ''}")
+        if not ok:
+            print(f"         EXPECTED {want_v}")
+
     # The judge must also refuse a control name the configuration does not declare, rather than
     # quietly ignoring it -- that is how a run grades itself.
     rogue = verdicts.Observation(case="CRASH-110", arm=EXACT, reached=True, completed=True,
@@ -248,7 +283,7 @@ def main():
     except ValueError as e:
         print(f"  [ok ] an undeclared control name is refused: {e}")
 
-    print(f"\n{len(checks) + len(control_cases) + 3} checks, {bad} failed")
+    print(f"\n{len(checks) + len(control_cases) + len(audit_checks) + 5} checks, {bad} failed")
     return 1 if bad else 0
 
 

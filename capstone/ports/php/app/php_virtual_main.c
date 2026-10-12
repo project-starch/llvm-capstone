@@ -39,6 +39,7 @@
  * exactly the evidence that a faulting run cannot produce.
  */
 #include <zend.h>
+#include "zend_alloc.h"
 #include <zend_API.h>
 #include <zend_compile.h>
 #include <zend_execute.h>
@@ -47,6 +48,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "php_virtual_port.h"
+
+/* THE GEOMETRY THE PORT DERIVES FROM, checked against PHP's own header rather than assumed.
+ * zend_cap_widen steps back ZEND_CAP_HEADER_BYTES to find the block the heap handed out; if
+ * that is not exactly sizeof(zend_mem_header) it looks up the wrong block and _efree reads a
+ * neighbour's header. A differently configured tree must therefore fail to BUILD. */
+PHP_VIRTUAL_ASSERT(header_is_48, sizeof(zend_mem_header) == ZEND_CAP_HEADER_BYTES);
+PHP_VIRTUAL_ASSERT(header_padding_is_0, MEM_HEADER_PADDING == 0);
 
 /* Same bits and the same values as engine/rung_E_domain.c, so a verdict derived from one is
  * comparable with a verdict derived from the other. */

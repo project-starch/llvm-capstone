@@ -19,6 +19,9 @@
 #include <stdlib.h>
 #include <malloc_capstone.h>
 
+/* ZEND_CAP_HEADER_BYTES, asserted against PHP's own sizeof in php_virtual_main.c. */
+#include "php_virtual_port.h"
+
 /* THE WIDEN IS REAL WORK HERE TOO, and the identity was WRONG. Recorded because the mistake is
  * instructive and the probe that blessed it was blind to the case that matters.
  *
@@ -58,9 +61,6 @@
  * `p - HEADER` is safe even though it lies below that capability's base -- it is metadata, not
  * a dereference, which app/probe-hier-widen.c stage 4 of the seam probe also measured.
  */
-#define ZEND_CAP_HEADER_BYTES 48UL      /* sizeof(zend_mem_header) on a 16-byte-pointer target;
-                                         * app/php_virtual_main.c asserts it against PHP's own */
-
 void *zend_cap_widen(void *p)
 {
     struct capstone_malloc_slot *r;

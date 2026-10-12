@@ -94,6 +94,58 @@ def read_reachable(text):
     return out
 
 
+def read_copycases(text):
+    """Cases whose over-read is performed BY a shared copy primitive (COPYCASE in the suite).
+
+    A fault inside memcpy is attributable to no case by its site -- and it is also the shape of
+    a bound the port itself got wrong, which is how _erealloc's narrow-pointer bug once scored
+    as a catch. These cases are therefore attributed at the ALLOCATOR BOUNDARY instead, by the
+    audit arm, never by where the pc landed.
+    """
+    block = re.search(r"declare -A COPYCASE=\((.*?)\)", text, re.S)
+    if not block:
+        sys.exit("run-triggers.sh no longer declares COPYCASE")
+    return dict(re.findall(r"\[(CRASH-\d+)\]=(\w+)", block.group(1)))
+
+
+# php_fault_report's word, as zc_audit_src packs it (php_capstone_zend_hier.c:117):
+#   0xE3 | who | requested<<24 | available<<8 | overrun
+AUDIT_MARKER = 0xE3
+AUDIT_LINE = re.compile(r"PHP_VIRTUAL FAULT_REPORT 0x([0-9a-f]{16})")
+
+
+def decode_audit(text):
+    """(who, requested, available, overrun) from an audit run's output, or None."""
+    m = AUDIT_LINE.search(text or "")
+    if not m:
+        return None
+    v = int(m.group(1), 16)
+    if (v >> 56) & 0xFF != AUDIT_MARKER:
+        return None
+    return ((v >> 48) & 0xFF, (v >> 24) & 0xFFFF, (v >> 8) & 0xFFFF, v & 0xFF)
+
+
+def run_audit(args, cases, manifest):
+    """One boot of the audit image. Returns {case: (who, requested, available, overrun)}.
+
+    The audit arm is diagnostic and never scored: it halts at the first overrun, so a case that
+    reaches its defect at all cannot also complete here.
+    """
+    runs = [(c, f"{args.audit.name} {manifest[c]['mode']} {c} < /mnt/vm/{c}.php") for c in cases]
+    record = args.out / "audit-run.json"
+    rc, rec = run_guest(args, args.audit, runs, record, args.out / "audit-serial.log")
+    out = {}
+    for case in cases:
+        got = decode_audit("\n".join(rec["output"].get(case, [])))
+        if got:
+            out[case] = got
+            print(f"    audit {case}: requested {got[1]} from a source authorising {got[2]}"
+                  f" -- overrun {got[3]} byte(s)")
+        else:
+            print(f"    audit {case}: no overrun reported (exit={rec['exits'].get(case)})")
+    return out
+
+
 class Sites:
     """pc -> file:line, for the attribution the physical suite makes on EXPECT_FILE."""
 
@@ -159,7 +211,7 @@ def read_control(rec):
     return verdicts.Control(name=CONTROL_RUN, observed=observed, evidence=evidence)
 
 
-def observe(case, arm, image_sha, exits, chunks, sites, expect, control):
+def observe(case, arm, image_sha, exits, chunks, sites, expect, control, audit=None):
     """One Observation. Facts only -- what the judge needs and nothing it should infer."""
     text = "\n".join(chunks.get(case, []))
     rc = exits.get(case)
@@ -189,6 +241,17 @@ def observe(case, arm, image_sha, exits, chunks, sites, expect, control):
         if expect and expect in where:
             obs.attribution = "function"
             obs.attribution_evidence = f"fault in {expect} ({func} at {where}), as declared"
+        elif audit:
+            # The over-read was performed BY a copy primitive, so the pc attributes nothing.
+            # The audit arm asked the question the pc cannot: did the CALLER request more than
+            # its source capability authorises?
+            who, requested, available, overrun = audit
+            obs.attribution = "probe"
+            obs.attribution_evidence = (
+                f"fault at {where or hex(fault.pc)} is inside the copy primitive, which "
+                f"attributes nothing by site; the audit arm reports the caller requesting "
+                f"{requested} bytes from a source authorising {available} -- an overrun of "
+                f"{overrun} (zc_audit_src who={who})")
         else:
             obs.attribution_evidence = (f"fault at {where or hex(fault.pc)} in "
                                         f"{func or fault.symbol or '?'}, not in {expect}")
@@ -208,6 +271,9 @@ def main():
     p.add_argument("--adapter", type=Path, required=True)
     p.add_argument("--control", type=Path, required=True, help="php-control.dom (rounded bounds)")
     p.add_argument("--fault", type=Path, required=True, help="php-fault.dom (exact bounds)")
+    p.add_argument("--audit", type=Path,
+                   help="php-audit.dom (-DZEND_CAP_ESTRNDUP_AUDIT): the diagnostic arm that "
+                        "attributes an over-read performed by a shared copy primitive")
     p.add_argument("--out", type=Path, required=True, help="directory for the result bundles")
     p.add_argument("--case", action="append", dest="only", metavar="CRASH-nnn",
                    help="restrict to these cases (default: every reachable spatial case)")
@@ -245,6 +311,9 @@ def main():
           f"(they need the allocator seam, not this pair)"
           + (f"; --case narrowed this run to {len(spatial)}" if args.only else ""))
 
+    copycases = read_copycases(text)
+    audit_cases = [c for c in spatial if c in copycases]
+
     llvm_bin = os.environ.get("CAPSTONE_LLVM_BIN")
     if not llvm_bin:
         sys.exit("CAPSTONE_LLVM_BIN is unset; source capstone/tests/capstone-test-env.sh")
@@ -255,6 +324,19 @@ def main():
                 "firmware": verdicts.sha256(args.images / "fw_jump.elf"),
                 "kernel": verdicts.sha256(args.images / "Image"),
                 "runner": verdicts.sha256(HERE / "run-virtual.py")}
+
+    # THE AUDIT ARM FIRST, so its evidence exists when the scored arms are judged. It is its
+    # own image and its own boot; a case it cannot attribute stays unattributed rather than
+    # being credited to the nearest plausible site.
+    audit = {}
+    if audit_cases:
+        if args.audit and not args.from_record:
+            print(f"\n==> audit arm ({args.audit.name}) for {' '.join(audit_cases)}", flush=True)
+            audit = run_audit(args, audit_cases, manifest)
+        else:
+            why = "no --audit image given" if not args.audit else "--from-record"
+            print(f"\n==> audit arm NOT run ({why}); {' '.join(audit_cases)} can only be "
+                  f"attributed by site, which for a copy-performed over-read means not at all")
 
     worst = 0
     for arm, kind in ARMS.items():
@@ -298,7 +380,7 @@ def main():
         rows = []
         for case in spatial:
             obs = observe(case, arm, sha[arm], exits, chunks, sites,
-                          expect_file.get(case, "url.c"), control)
+                          expect_file.get(case, "url.c"), control, audit.get(case))
             if not rec["completed"]:
                 # The runner did not get through its own script: every row from this boot is
                 # infrastructure, whatever the individual markers say.

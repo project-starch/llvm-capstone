@@ -668,11 +668,18 @@ they cannot be rationalised afterwards:
 3. **Fewer than 6 reached.** `reached` is the "evaluating the trigger" stage line; a case that
    dies in `zend_startup` is `setup-fault`, not a miss.
 
-## Phase A — SPATIAL PAIR RESULT (2026-10-12): 5 of 6 CAUGHT at ASAN's own line
+## Phase A — SPATIAL PAIR RESULT (2026-10-12): 6 of 6 CAUGHT, 5 by site and 1 by the audit arm
 
-Pre-registered at `57bed3ca68b1` before the run. Two boots, one image per arm, the trigger on
-stdin, judged by `bug-corpora/tools/verdicts.py`. Bundles:
-`$CAPSTONE_TMP_ROOT/php-virtual-runs3/bundles/<arm>/{verdicts.jsonl,inputs.json}`.
+Pre-registered at `57bed3ca68b1` before the run. Three boots — the diagnostic audit arm, then
+one per scored arm — with the trigger on stdin and the verdict from
+`bug-corpora/tools/verdicts.py`. Bundles:
+`$CAPSTONE_TMP_ROOT/php-virtual-runs-final/bundles/<arm>/{verdicts.jsonl,inputs.json}`, each
+recording the image, the judge and the platform by sha256.
+
+**Reproduced across two independent runs on different builds** (the second after the geometry
+assertions were added), identical case for case, including the audit arm's numbers. Scored
+image `d796157d62e40ecd…`, judge `c5e5872372b392de…`, compiler `3e0ade8b6898db5e…`, qemu
+`b1903a3d4160db18…`.
 
 | case | `php-virtual-zend-exact` (fault) | site the fault symbolizes to | ASAN's own frame |
 |---|---|---|---|
@@ -681,7 +688,7 @@ stdin, judged by `bug-corpora/tools/verdicts.py`. Bundles:
 | CRASH-066 | **CAUGHT** | `ext/standard/var_unserializer.c:390:14` | var_unserializer.c |
 | CRASH-091 | **CAUGHT** | `ext/standard/html.c:656:33` | html.c |
 | CRASH-102 | **CAUGHT** | `ext/standard/string.c:1332:8` | `php_strspn` @ string.c:1332 |
-| CRASH-073 | NO-READING `unattributed` | `??:0:0` — inside the copy primitive | memcpy ← `_estrndup` ← `php_url_parse` |
+| CRASH-073 | **CAUGHT** (by the audit arm) | `??:0:0` — inside the copy primitive | memcpy ← `_estrndup` ← `php_url_parse` |
 
 | arm | control `emalloc-overread` | declared | cases |
 |---|---|---|---|
@@ -706,7 +713,7 @@ came out differently and both are explained, not excused:
   file. The virtual column reproduces that, at the same function and line. What this costs is
   honest to state: for CRASH-102 the matched pair proves nothing, and the catch rests on the
   site attribution alone.
-- **CRASH-073 is a NO-READING, not a catch.** Its over-read is performed *by the copy*:
+- **CRASH-073 needed a third arm, and got one.** Its over-read is performed *by the copy*:
   `ret->path = estrndup(s, ue - s)` with `ue - s` three bytes too long, so the fault lands
   inside the tag-preserving `memcpy` (`musl-capstone/runtime/string_bounds_safe.c`), which
   carries no line info — hence `??:0:0`. The judge refuses it, correctly: a fault in a shared
@@ -715,18 +722,33 @@ came out differently and both are explained, not excused:
   narrow-pointer bug once scored as a catch this way). The physical column does not attribute
   it by site either — it builds a third, diagnostic arm (`-DZEND_CAP_ESTRNDUP_AUDIT`,
   `run-triggers.sh:137-154`) that compares the requested length against what the SOURCE
-  capability authorises and halts with both numbers. That arm is the remaining work for this
-  case, and on this profile it is *easier* to read than physically: `php_fault_report` prints
-  its word to stderr instead of encoding it in `badaddr`.
+  capability authorises and halts with both numbers. On this profile that word is *printed*
+  rather than encoded in `badaddr`, since `php_fault_report` has a stderr to use.
+
+  **The audit arm reproduces the physical column's numbers exactly:**
+
+  | | who | requested | authorised | over by |
+  |---|---|---|---|---|
+  | physical (`engine/FINDINGS.md:1053`) | 1 (`_estrndup`) | 3 | 2 | 1 |
+  | virtual (this run) | 1 (`_estrndup`) | 3 | 2 | 1 |
+
+  `requested = 3` is ASAN's own "READ of size 3" for this case. With that evidence the fault
+  becomes `attribution: "probe"` and CRASH-073 is **CAUGHT**; without it the judge returns
+  `unattributed`, and `app/test-run-cases.py` asserts both outcomes from the same transcript —
+  so the audit arm demonstrably changes the verdict rather than decorating it.
 
 ### Phase A's exit criterion, honestly scored
 
 The criterion was *"the virtual arm reproduces the physical arm's verdicts on the reachable
 cases, with each fault at the same function and line"*. On the spatial axis — the 6 cases this
-phase can reach — the virtual column agrees with the physical one on **5 of 6 at ASAN's own
-file and line**, with the sixth withheld by the judge for a reason the physical column also
-has to work around, and with a known mechanism to resolve it. The 18 temporal cases are not
-in Phase A's scope at all and this run says nothing about them; that is the allocator seam.
+phase can reach — **it is met: 6 of 6 CAUGHT, five at ASAN's own file and line and the sixth
+attributed at the allocator boundary with the physical column's exact numbers.** The rounded
+arm is 5 MISSED and 1 CAUGHT, the one being CRASH-102, which no allocator control can mask.
+
+Both arms' controls behaved as `arms.json` declares, and the fault arm's fired *at its probe*.
+
+The 18 temporal cases are not in Phase A's scope and this run says nothing about them — not
+MISSED, nothing. That is the allocator seam, and it is next.
 
 ## Phase B — real PHP
 

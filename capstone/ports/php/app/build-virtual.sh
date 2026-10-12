@@ -107,6 +107,7 @@ case "$WHAT" in
     # overwrite the first's objects, and a pair assembled from whichever came last is not a
     # pair -- the two images would be byte-identical and the suite's own gate would refuse them.
     case " ${EXTRA_CF:-} " in
+      *" -DZEND_CAP_ESTRNDUP_AUDIT "*)   _arm=audit ;;
       *" -DZEND_CAP_BOUNDS_REAL_SIZE "*) _arm=control ;;
       *) _arm=fault ;;
     esac
@@ -235,7 +236,11 @@ case "$WHAT" in
     # arms of a pair cannot be mislabelled by a typo in a wrapper. The spatial control is the
     # one that reproduces stock PHP's REAL_SIZE rounding and must COMPLETE; the fault arm bounds
     # every capability to the caller's request.
+    # The audit arm is diagnostic and is never scored: it halts at the allocator boundary with
+    # the requested length and what the source capability authorises, which is how a fault
+    # performed BY a shared copy primitive gets attributed to a case at all.
     case " ${EXTRA_CF:-} " in
+      *" -DZEND_CAP_ESTRNDUP_AUDIT "*)   ARM=audit ;;
       *" -DZEND_CAP_BOUNDS_REAL_SIZE "*) ARM=control ;;
       *) ARM=fault ;;
     esac

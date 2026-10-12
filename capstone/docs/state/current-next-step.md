@@ -1,3 +1,31 @@
+2026-10-12 — **The PHP port runs as an ordinary Linux process on virtual Capstone, and the spatial
+pair is 6 of 6 CAUGHT.** PHP 5.0.0's engine links against the Capstone musl SDK as a capability
+application: 47 objects, 34 Zend TUs plus 8 of `ext/standard`, with musl replacing the 29-header
+`stubinc` farm and ~900 lines of hand-written libc. All 42 of PHP's own TUs compiled on the first
+attempt with no change to `Zend/` or `ext/` — the plan's open question 1, answered. The physical
+domain port (`ports/php/engine/`) is untouched and remains the comparison column.
+
+Result on the spatial axis, pre-registered at `57bed3ca68b1`, reproduced on two builds: CRASH-110
+`url.c:132`, CRASH-016 `formatted_print.c:592`, CRASH-066 `var_unserializer.c:390`, CRASH-091
+`html.c:656`, CRASH-102 `string.c:1332` — each ASAN's own line — and CRASH-073 attributed by a
+diagnostic audit arm with the physical column's exact numbers (requested 3, authorised 2, over by
+1). The rounded control arm is 5 MISSED and 1 CAUGHT, the one being CRASH-102, whose object is
+already 8-aligned so `REAL_SIZE` has no slack to offer it. Both arms' controls behaved as
+`arms.json` declares and the fault arm's fired at its probe.
+
+Scope, stated because the headline invites the wrong reading: this is **6 of the 24** reachable
+cases. The other 18 are temporal and need the Sublet allocator seam, which `build-virtual.sh`
+refuses out loud rather than half-building. **Next: that seam** — per-`emalloc` lifetimes over a
+block the virtual heap lends, which the seam probe already showed is possible and which also
+removes the physical port's unlink-before-revoke deviation (the cause of CRASH-057's no-reading).
+
+Two things the next session should not have to rediscover. `zend_cap_widen` is NOT the identity on
+this profile: PHP's `_efree` parks its pointer in a size-CLASS cache, so a narrow capability there
+poisons the next tenant and faults at `zend_alloc.c:404` during `zend_startup`. And the emulator is
+an `--enable-debug` build, ~60x slower than upstream's reference record, which is why
+`runtime/virtual/run.py`'s two 200,000-allocation recycling cases are impractical here; the gate
+stands at 34 of its 41 checks, with mruby and everything downstream of it unresolved.
+
 2026-10-10 — **The next bitstream is approved and in synthesis: `next-bitstream-r51-r52` = capstone-ariane
 `0568f93a9` (776d9d859 + R-52 + R-51). The lead's word: "yes, go, approve synth".**
 
