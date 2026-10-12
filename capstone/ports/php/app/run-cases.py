@@ -127,6 +127,38 @@ def run_guest(args, image, runs, record, serial):
     return rc, json.loads(record.read_text())
 
 
+# The line the control prints immediately before the access under test. A control that faulted
+# WITHOUT printing it did not reach its own probe, and must not be scored as the bound firing.
+CONTROL_AT_PROBE = "now reading index 9"
+
+
+def read_control(rec):
+    """What the arm's control actually did -- and WHERE, which is the half that matters.
+
+    A control is only evidence about the bound if it reached the access under test. On the
+    first run of the exact arm it faulted during zend_startup, at zend_alloc.c:404, long
+    before its probe -- and a bare `fault if there was a fault` test scored that as the arm
+    behaving exactly as declared, which is how a broken arm comes to look like a controlled
+    one. `none` sends it to the judge as control-failed instead, with the site in evidence.
+    """
+    exits, chunks = rec["exits"], rec["output"]
+    text = "\n".join(chunks.get(CONTROL_RUN, []))
+    fault = verdicts.domain_fault(text, None)
+    at_probe = CONTROL_AT_PROBE in text
+    if fault and at_probe:
+        observed, evidence = "fault", f"cause={fault.cause} pc={fault.pc:#x} at its own probe"
+    elif fault:
+        observed = "none"
+        evidence = (f"cause={fault.cause} pc={fault.pc:#x} BEFORE the probe -- the control died "
+                    f"in setup, so it says nothing about the bound")
+    elif exits.get(CONTROL_RUN) == 0 and "CONTROL completed" in text:
+        observed, evidence = "complete", "ran past the over-read and completed"
+    else:
+        observed = "none"
+        evidence = f"exit={exits.get(CONTROL_RUN)}, no fault and no completion marker"
+    return verdicts.Control(name=CONTROL_RUN, observed=observed, evidence=evidence)
+
+
 def observe(case, arm, image_sha, exits, chunks, sites, expect, control):
     """One Observation. Facts only -- what the judge needs and nothing it should infer."""
     text = "\n".join(chunks.get(case, []))
@@ -180,6 +212,8 @@ def main():
     p.add_argument("--case", action="append", dest="only", metavar="CRASH-nnn",
                    help="restrict to these cases (default: every reachable spatial case)")
     p.add_argument("--timeout", type=int, default=900)
+    p.add_argument("--from-record", action="store_true",
+                   help="re-judge the runs already stored in --out instead of booting")
     args = p.parse_args()
 
     text = suite_text()
@@ -189,6 +223,7 @@ def main():
     manifest = json.loads((TRIGGERS / "manifest.json").read_text())["cases"]
 
     spatial = [c for c in reachable if axis.get(c, "heap") == "heap"]
+    off_axis = len(reachable) - len(spatial)      # counted BEFORE --case narrows the run
     missing = [c for c in spatial if c not in manifest]
     if missing:
         sys.exit(f"no trigger file for {missing}; run extract-triggers.py")
@@ -206,8 +241,9 @@ def main():
         sys.exit("the two arms are byte-identical -- -DZEND_CAP_BOUNDS_REAL_SIZE did nothing")
 
     print(f"reachable={len(reachable)} spatial={len(spatial)}: {' '.join(spatial)}")
-    print(f"not in scope on this axis: {len(reachable) - len(spatial)} temporal cases "
-          f"(they need the allocator seam, not this pair)")
+    print(f"not in scope on this axis: {off_axis} temporal cases "
+          f"(they need the allocator seam, not this pair)"
+          + (f"; --case narrowed this run to {len(spatial)}" if args.only else ""))
 
     llvm_bin = os.environ.get("CAPSTONE_LLVM_BIN")
     if not llvm_bin:
@@ -231,18 +267,32 @@ def main():
             mode = manifest[case]["mode"]
             runs.append((case, f"{image.name} {mode} {case} < /mnt/vm/{case}.php"))
         record = args.out / f"{arm}-run.json"
-        rc, rec = run_guest(args, image, runs, record, args.out / f"{arm}-serial.log")
+        if args.from_record:
+            # Re-judge a stored run. judge() is a pure function of (Observation, arm), so a
+            # change to the rules or to how a transcript is read can be applied to runs already
+            # on disk -- which is most of the reason for using the shared judge at all.
+            if not record.is_file():
+                sys.exit(f"--from-record: no stored run at {record}")
+            rc, rec = 0, json.loads(record.read_text())
+            # THE STORED RUN MUST BE THIS BINARY'S. capstone-exec prints the image's sha256 on
+            # every fault line, so a record produced by a different build can be refused
+            # instead of silently re-judged against whatever is on disk now -- the stale
+            # artifact being read as the current one.
+            stored = {m for chunk in rec["output"].values()
+                      for line in chunk
+                      for m in re.findall(r"sha256=([0-9a-f]{64}) image=", line)}
+            if stored and sha[arm] not in stored:
+                sys.exit(f"--from-record: {record.name} was produced by image "
+                         f"{sorted(stored)[0][:16]}..., but {image.name} is now "
+                         f"{sha[arm][:16]}...; rebuild or re-run rather than re-judging")
+            print(f"    re-judging the stored run in {record.name} (no boot)"
+                  + (f", image {sorted(stored)[0][:16]}... confirmed" if stored else ""))
+        else:
+            rc, rec = run_guest(args, image, runs, record, args.out / f"{arm}-serial.log")
 
         exits, chunks = rec["exits"], rec["output"]
-        ctext = "\n".join(chunks.get(CONTROL_RUN, []))
-        cfault = verdicts.domain_fault(ctext, None)
-        observed = ("fault" if cfault else
-                    "complete" if (exits.get(CONTROL_RUN) == 0 and "CONTROL completed" in ctext)
-                    else "none")
-        control = verdicts.Control(name=CONTROL_RUN, observed=observed,
-                                   evidence=(f"cause={cfault.cause} pc={cfault.pc:#x}" if cfault
-                                             else f"exit={exits.get(CONTROL_RUN)}"))
-        print(f"    control {CONTROL_RUN}: observed={observed} ({control.evidence})")
+        control = read_control(rec)
+        print(f"    control {CONTROL_RUN}: observed={control.observed} ({control.evidence})")
 
         sites = Sites(llvm_bin, image)
         rows = []

@@ -81,10 +81,12 @@ case "$WHAT" in
     # Does the HIERARCHICAL wrapper still need zend_cap_widen here? Phase A reuses
     # libc/php_capstone_zend_hier.c unchanged, and that file's widen reads the PHYSICAL
     # arena's slot table, which does not exist on this profile. See the probe's own header.
-    SRC="$HERE/probe-hier-widen.c"
     IMG="$OUT/probe-hier-widen.dom"
     echo "  compiling the hier-widen probe ..."
-    "$CC" -O1 "$SRC" -o "$IMG" || { echo "hier probe build FAILED" >&2; exit 1; }
+    # php_virtual_lower.c is linked in, not re-implemented: stages 3 and 4 test the PORT's own
+    # zend_cap_widen, so a probe with its own copy would pass while the engine still broke.
+    "$CC" -O1 "$HERE/probe-hier-widen.c" "$HERE/php_virtual_lower.c" -o "$IMG" \
+      || { echo "hier probe build FAILED" >&2; exit 1; }
     echo "  built $IMG"
     ;;
   php)

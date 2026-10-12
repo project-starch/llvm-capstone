@@ -421,6 +421,69 @@ the launcher refuses to start without the exact-bounds profile (`exec.c:698`).
 **Exit A when** the virtual arm reproduces the physical arm's verdicts on the 24 reachable
 cases, with each fault at the same function and line.
 
+## Platform gate — RESULT (2026-10-12): 34 of 41 checks, and why the rest did not run
+
+Plan Verification item 2, run before any PHP verdict is believed. `runtime/virtual/run.py` with
+`contract.dom`, `sqlite3.dom` and `mruby` built against this SDK. Two attempts were needed, and
+the reason is a finding in itself.
+
+| attempt | scope | passed | cut short by |
+|---|---|---|---|
+| 1 | full battery, `--timeout 2700` | 23 | timed out inside `sparse-stale`, the second 200,000-allocation recycling case |
+| 2 | `--skip-recycling`, `--timeout 1800` | 32 of 38 | `mruby` never exited; everything after it is collateral |
+
+**Union: 34 of the 41 distinct checks pass.** The seven that never did are `mruby`,
+`mruby_results`, `sparse-stale`, and the four that run after mruby in the same guest script
+(`cleanup`, `completed`, `linux_pages_released`, `linux_demand_faults`).
+
+What passed is the part PHP's seam rests on, including the checks that are hardest to satisfy
+by accident:
+
+- `fault_causes` — the whole expected cause sequence `[24, 24, 28, 24, 15, 13, 13, 28]`, in
+  order. A platform that trapped the wrong thing, or the right thing in the wrong place, fails
+  this check and nothing else in the gate is as specific.
+- `bounds`, `stale`, `retired`, `linear`, `linear-stale`, `linear_denial_site`,
+  `vm_denial_sites`, `vm_denial_operations` — spatial faults, stale-capability faults, retired
+  nodes, and the linear-loan denials, each at its declared site.
+- `threads`, `threads_output`, `heap-threads`, `preempt`, `parallel_one`, `parallel_two`,
+  `spin_entered` — the shared-`mm` thread contract and signal termination.
+- `sqlite_write`, `sqlite_read`, `sqlite_results` — SQLite's shell writing a database in one
+  process and a second process reading `SQLITE_PERSIST=100` back out of it. This is the closest
+  analogue to PHP in the battery: a large C program with its own allocator over musl, touching
+  files, and it is the check that most directly says "a program of this shape runs here".
+- `sparse-churn` with `sparse_recycling` (attempt 1): 200,000 allocations with protected stale
+  tags, `nodes=2600070 collections=124 reclaimed=2598542`. Node collection works at scale.
+
+### The emulator is a debug build, and that is why the long cases are impractical here
+
+Upstream's committed passing record (`runtime/virtual/pthread-compatibility-result.json`)
+reports `launch_ns` of 89–107 **ms**. The same launches here cost 1–6 **seconds**, and
+`sparse-churn` alone ran 590 s. `capstone/capstone-qemu/build` is configured
+`--enable-debug`: no optimisation, assertions on. That accounts for the ~60× gap far better
+than host load does, and it is the reason the recycling pair cannot be run casually on this
+machine.
+
+It was **not** swapped for a release build, deliberately: the physical column's 23-of-24 was
+measured with this exact binary, and every result bundle records its sha256. Changing the
+emulator mid-measurement would be a change to the instrument between two columns that are
+meant to differ only in the profile. A release build is the right thing to do once, as its own
+step, with both columns re-measured.
+
+### mruby: unresolved, and probably the node table rather than the port
+
+mruby ran 1,600+ s at 100% CPU, silent, and was killed by the gate's timeout. One concrete
+difference from upstream's passing run is in its own stats: upstream shows
+`node_bytes=1048576`, ours `node_bytes=28672`. `run.py`'s guest script loads the module with a
+bare `insmod capstone_vm.ko`, so the node table starts at `node_initial_pages=4`, and a GC that
+mints nodes faster than the table grows provokes exactly the growth-and-sweep storm this plan
+names as open risk 4. That is a hypothesis with an obvious test — load the module with
+`node_initial_pages=1024` — not a diagnosis, and it is recorded as such.
+
+**What this does and does not license.** It licenses believing a PHP fault on this platform: the
+trap causes, the sites, the bounds, the stale-capability behaviour and the node machinery are
+all measured here and all correct. It does not license a claim that this machine passes the
+gate as published — it does not, 34 of 41 — and the gap is named rather than rounded off.
+
 ## Phase A — BUILD RESULT (2026-10-12) and the pre-registration for its first run
 
 **PHP 5.0.0's engine links and runs as an ordinary Linux process on the virtual profile.** 47
@@ -451,21 +514,107 @@ What stayed, and why each is PHP-level rather than OS-level:
 | `app/php_virtual_lower.c` (new) | `zend_cap_widen`, which is the IDENTITY here — see below |
 | `app/php_virtual_main.c` (new) | a real `main(argc, argv)`, the trigger on stdin |
 
-### `zend_cap_widen` is the identity on this profile, and that is a reading with a test
+### `zend_cap_widen` on this profile — the question, and how it was first answered wrongly
 
 The physical wrapper must widen any pointer that re-enters the level below, because it narrows
 everything it hands up. That widen recovers the block capability from the physical arena's slot
-table, which this profile does not have. Reading `runtime/virtual/heap.c:203-217` says the
-widen is unnecessary rather than unimplementable: `free()` and `realloc()` use the caller's
-pointer for a one-byte probe at the cursor (`lbu zero, 0(p)`) and as a key for
-`__capstone_malloc_find`, then operate through `r->raw` — the capability the heap itself
-retained over the block. The caller's *bounds* are never the bounds the copy or the free uses.
+table, which this profile does not have, so Phase A had to answer what replaces it.
 
-A reading is not a result, so `app/probe-hier-widen.c` reproduces PHP's exact geometry
-(`malloc(48 + n)`, hand back `p + 48`, narrow to `[block_base, object_cursor + n)`) and frees
-and reallocs through the narrowed pointer. Its stage 2 is a **negative control**: one byte past
-the narrowed end must fault. Without that stage, "free survived a narrowed pointer" is equally
-consistent with the narrowing never having happened.
+The first answer was **the identity**, on the strength of reading
+`runtime/virtual/heap.c:203-217`: `free()` and `realloc()` use the caller's pointer for a
+one-byte probe at the cursor (`lbu zero, 0(p)`) and as a lookup key, then operate through
+`r->raw` — the capability the heap itself retained over the block — so the caller's *bounds* are
+never the bounds the copy or the free uses. That reading is correct. The conclusion drawn from
+it was not, and the section below records what it missed, what the probe that blessed it could
+not see, and the measurement that settled it. The probe is `app/probe-hier-widen.c`; it now has
+five stages because two of them were added after the engine refused to start.
+
+### `zend_cap_widen` — RESULT: the identity was WRONG, and so was its first replacement
+
+Measured, not inferred. `probe-hier-widen.dom` under `capstone-vexec`:
+
+| stage | tests | reading |
+|---|---|---|
+| 0 | free through the header recovered from a NARROWED object pointer | **PASS**, completed |
+| 1 | realloc through that pointer, then check the payload survived the copy | **PASS**, payload intact, block moved `...98050` → `...98230` |
+| 2 | **negative control**: write one byte past the narrowed end | **FAULT**, cause 28 |
+
+Stage 2's hardware line is the one that makes the other two mean anything:
+
+```
+[CAPSTONE] Cap mem access OOB: ... cursor = 3fa608a080, imm = 24,
+           addr = 3fa608a098, size = 1, bounds = (3fa608a050, 3fa608a098)
+```
+
+`addr` is exactly `bounds.end`, one byte past a 72-byte block ending at `...098` — so the
+narrowing in stages 0 and 1 was real and the frees did not merely survive an unenforced bound.
+`zend_cap_widen` is therefore the identity on this profile, `php_capstone_zend_hier.c` is reused
+with no edit, and Phase A needs no block registry. Node use for the whole probe: `nodes=49
+node_capacity=1024 node_growths=0`.
+
+#### Why the identity was wrong, and what the probe was blind to
+
+Stages 0–2 above are correct and were still not enough. They establish that `free()` and
+`realloc()` need no widen, which is true, and that was read as *"`zend_cap_widen` can be the
+identity"*, which is false.
+
+`_efree` does not merely hand the pointer DOWN. It **parks** it:
+`AG(cache)[CACHE_INDEX][count++] = p` (`zend_alloc.c:272`), and a later `_emalloc` of the same
+size class hands that same `p + 48` to a *different* tenant. Narrowing is monotonic, and
+`CACHE_INDEX` is `REAL_SIZE(size) >> 3`, so a 25-byte object and a 32-byte one share a bucket:
+the 32-byte tenant inherits a capability that ends after 25 bytes, and its own
+`p[length] = 0` faults at `zend_alloc.c:404`, inside `_estrndup`, with no defect anywhere near
+it.
+
+**Measured, on the first run of the exact arm: all six cases *and the arm's own control* faulted
+at `zend_alloc.c:404` during `zend_startup`, before any trigger ran.** The judge refused all six
+as `NO-READING / setup-fault` rather than reporting six catches — the gate working exactly as
+intended on an arm that was broken.
+
+The hier wrapper's own comment block names this line and this mechanism as the reason the
+physical port needed the widen. The probe had tested the half of that comment about descending
+into the lower level, and not the half about the cache. **The lesson is not "the comment was
+unclear" — it is that a probe which confirms the reading you already had is the cheapest kind
+to write and the easiest to over-read.**
+
+#### And the replacement had a second bug, which stage 3 caught in one run
+
+The fix is the physical port's: recover the block capability, using `__capstone_malloc_find`
+(a declared part of `arch-capstone64/malloc_capstone.h`) in place of the arena's slot table, so
+there is no second source of truth and no table of our own to exhaust.
+
+Transcribing the physical formula directly was wrong. It re-bases on the slot capability's
+**base** (`php_capstone_malloc.c:190`), which is right there because an arena slot's cursor *is*
+its base. `heap.c`'s `r->raw` is the pointer mallocng returned: its cursor sits at the block
+key while its base is lower, since mallocng's slot prefix lies below the object. Using the base
+shifted the cursor by exactly that prefix — 16 bytes — so PHP's `ptr - 48` landed inside the
+allocator's own metadata and read garbage as a capability.
+
+Two readings, one run apart:
+
+| | reading |
+|---|---|
+| stage 3 (the fix's own test) | **FAIL**: `narrowed cursor=…080`, `widened cursor=…090` — "the widen moved the cursor" |
+| the engine, same build | cause 24 at one pc for every case and both arms, `value = 0x12` — an untagged pointer dereferenced |
+
+The second is what this bug looks like without the probe: a single unreadable fault site shared
+by every arm, which is the shape of *"every arm reports the same upstream failure"* that this
+project's own debugging rules warn about. Stage 3 names it in one line instead. Re-basing on
+`r->raw`'s cursor fixes it, and all five stages then behave:
+
+| stage | reading |
+|---|---|
+| 0 free through a narrowed-derived header | PASS |
+| 1 realloc through a narrowed pointer | PASS, payload intact |
+| 3 widen recovers the block extent, cursor intact | PASS |
+| 4 cache hand-back: park as 25 bytes, re-issue as 32, write index 31 | PASS |
+| 2 **negative control**: one byte past the narrowed end | FAULT, cause 28, `addr == bounds.end` |
+
+**What the widen grants, stated because it is a real cost.** The recovered capability spans the
+heap's whole block, mallocng's slot prefix included, so an under-read *below* a cached object is
+not caught. The wrapper re-narrows everything it hands up, and PHP holds the wide pointer only
+as the parked cache entry and for its own header arithmetic. The physical port makes the same
+trade for the same reason.
 
 ### Phase A measures the SPATIAL axis only — 6 of the 24, not 24
 
@@ -518,6 +667,66 @@ they cannot be rationalised afterwards:
    shape CRASH-057 took on the physical column.
 3. **Fewer than 6 reached.** `reached` is the "evaluating the trigger" stage line; a case that
    dies in `zend_startup` is `setup-fault`, not a miss.
+
+## Phase A — SPATIAL PAIR RESULT (2026-10-12): 5 of 6 CAUGHT at ASAN's own line
+
+Pre-registered at `57bed3ca68b1` before the run. Two boots, one image per arm, the trigger on
+stdin, judged by `bug-corpora/tools/verdicts.py`. Bundles:
+`$CAPSTONE_TMP_ROOT/php-virtual-runs3/bundles/<arm>/{verdicts.jsonl,inputs.json}`.
+
+| case | `php-virtual-zend-exact` (fault) | site the fault symbolizes to | ASAN's own frame |
+|---|---|---|---|
+| CRASH-110 | **CAUGHT** | `ext/standard/url.c:132:11` | `php_url_parse` @ url.c:132 |
+| CRASH-016 | **CAUGHT** | `ext/standard/formatted_print.c:592:10` | formatted_print.c |
+| CRASH-066 | **CAUGHT** | `ext/standard/var_unserializer.c:390:14` | var_unserializer.c |
+| CRASH-091 | **CAUGHT** | `ext/standard/html.c:656:33` | html.c |
+| CRASH-102 | **CAUGHT** | `ext/standard/string.c:1332:8` | `php_strspn` @ string.c:1332 |
+| CRASH-073 | NO-READING `unattributed` | `??:0:0` — inside the copy primitive | memcpy ← `_estrndup` ← `php_url_parse` |
+
+| arm | control `emalloc-overread` | declared | cases |
+|---|---|---|---|
+| `php-virtual-zend-rounded` | complete — "ran past the over-read" | complete | 5 MISSED, 1 CAUGHT |
+| `php-virtual-zend-exact` | fault, cause 28, **at its own probe** | fault | 5 CAUGHT, 1 NO-READING |
+
+**Both arms' controls did exactly what `arms.json` declares, and the fault arm's did so at the
+probe rather than somewhere else** — which is the distinction that the first version of this
+harness could not make, and the reason it briefly scored a dead arm as a controlled one.
+
+### Against the pre-registration
+
+The prediction was CAUGHT × 6 on the exact arm and MISSED × 6 on the rounded one. Two cells
+came out differently and both are explained, not excused:
+
+- **CRASH-102 is CAUGHT on the ROUNDED arm too**, at `string.c:1332`, the same line ASAN
+  names. Predicted MISSED; the prediction was wrong because `REAL_SIZE` rounding has no cover
+  to offer this case. The object is already 8-aligned, so the rounding yields **zero slack**
+  and the 1-byte over-read faults in both arms. The physical column reached this conclusion
+  first and `engine/FINDINGS.md` records it: the case is scored **CAUGHT (no pair)**, like the
+  `global`-axis CRASH-005, with the safeguard that the fault must land in the defect's own
+  file. The virtual column reproduces that, at the same function and line. What this costs is
+  honest to state: for CRASH-102 the matched pair proves nothing, and the catch rests on the
+  site attribution alone.
+- **CRASH-073 is a NO-READING, not a catch.** Its over-read is performed *by the copy*:
+  `ret->path = estrndup(s, ue - s)` with `ue - s` three bytes too long, so the fault lands
+  inside the tag-preserving `memcpy` (`musl-capstone/runtime/string_bounds_safe.c`), which
+  carries no line info — hence `??:0:0`. The judge refuses it, correctly: a fault in a shared
+  copy primitive is attributable to no case by site, and *"it is also the shape of a bound the
+  port itself got wrong"* (`php_capstone_zend_hier.c`, which says so because `_erealloc`'s
+  narrow-pointer bug once scored as a catch this way). The physical column does not attribute
+  it by site either — it builds a third, diagnostic arm (`-DZEND_CAP_ESTRNDUP_AUDIT`,
+  `run-triggers.sh:137-154`) that compares the requested length against what the SOURCE
+  capability authorises and halts with both numbers. That arm is the remaining work for this
+  case, and on this profile it is *easier* to read than physically: `php_fault_report` prints
+  its word to stderr instead of encoding it in `badaddr`.
+
+### Phase A's exit criterion, honestly scored
+
+The criterion was *"the virtual arm reproduces the physical arm's verdicts on the reachable
+cases, with each fault at the same function and line"*. On the spatial axis — the 6 cases this
+phase can reach — the virtual column agrees with the physical one on **5 of 6 at ASAN's own
+file and line**, with the sixth withheld by the judge for a reason the physical column also
+has to work around, and with a known mechanism to resolve it. The 18 temporal cases are not
+in Phase A's scope at all and this run says nothing about them; that is the allocator seam.
 
 ## Phase B — real PHP
 

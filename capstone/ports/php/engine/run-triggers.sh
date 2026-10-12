@@ -516,7 +516,7 @@ case "$WHICH" in
     done ;;
   CRASH-*)
     one_case "$WHICH" "$(sel_of "$WHICH")" ; worst=$? ;;
-  *) echo "usage: $0 [both|lang|blind|objects|CRASH-NNN]" >&2; exit 2 ;;
+  *) echo "usage: $0 [both|lang|blind|objects|pureext|CRASH-NNN]" >&2; exit 2 ;;
 esac
 echo
 exit $worst

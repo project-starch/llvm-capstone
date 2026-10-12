@@ -378,8 +378,14 @@ Cheap habits that catch all of the above:
   never by an anomaly detector built around the old symptom.** "R-52 fixed on silicon" (2026-10-11)
   rested on a finite-and-monotone count, while the same boot printed `now()` = 0.24 s beside a 240 s
   integer clock. It was retracted the same evening (23213fb4a701).
-* **Never filter between a gate and its exit status.** A pipe replaces `$?` with the last stage's,
-  so `gate | tail && commit` commits what the gate rejected. Redirect, never pipe. And invoke a
+* **Never put ANYTHING between a gate and its exit status.** A pipe replaces `$?` with the last
+  stage's, so `gate | tail && commit` commits what the gate rejected: redirect, never pipe. The
+  same applies to a command that merely follows it -- `gate; echo "rc=$?"` is fine, but
+  `gate; echo "done $(date) rc=$?"` and a wrapper script whose last line is `date` both report
+  the LATER command's status, so a killed or failed run writes rc=0 and reads as a pass. Capture
+  `rc=$?` on its own statement, immediately, before anything else runs. (Twice on 2026-10-12: a
+  `$(date)` inside the reporting `echo`, then a runner wrapper ending in `date -Iseconds` whose
+  rc file said 0 for a gate that had been killed mid-run.) And invoke a
   gate by **ABSOLUTE PATH**: one that fails to START exits 127 and reads exactly like one that ran
   and passed. `precommit-scan.sh` did that on 2026-08-27 — called from a subdirectory, exit 127,
   reported as "scan-rc" alongside a commit. Treat any exit status the gate does not itself define
