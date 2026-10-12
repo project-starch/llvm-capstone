@@ -136,6 +136,19 @@ RUN curl -fsSL --proto '=https' --tlsv1.2 \
     && /opt/cmake/bin/cmake --version | head -1
 ENV PATH=/opt/cmake/bin:$PATH
 
+# ruby, for ONE consumer: capstone/ports/mruby/app/build-mruby-domain.sh drives mruby's own
+# rake cross build, so qualifying the virtual profile with runtime/virtual/run.py is impossible
+# without it -- that gate's 46th check runs an mruby image, and a check that cannot run reads
+# exactly like a check that passed. ruby is NOT a project build dependency otherwise; nothing
+# in llvm, qemu or the runtime touches it.
+#
+# ruby-rubygems and rake come with ruby-full, but naming rake explicitly keeps the thing the
+# build actually invokes visible here rather than implied by a metapackage.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ruby-full rake \
+    && rm -rf /var/lib/apt/lists/* \
+    && ruby --version && rake --version
+
 # Matches run.sh's bind mount. Set here too so `podman run <image>` without run.sh still
 # lands somewhere sensible rather than /.
 WORKDIR /work/llvm-capstone

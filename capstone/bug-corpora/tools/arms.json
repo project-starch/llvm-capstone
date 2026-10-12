@@ -240,6 +240,28 @@
         "uaf-malloc",
         "chunk-free-90"
       ]
+    },
+    "php-virtual-zend-rounded": {
+      "target": "capstone-virtual",
+      "summary": "PHP 5.0.0's own Zend/zend_alloc.c, compiled byte-identical from the corpus tree, running as a Linux process on the virtual Capstone profile over musl mallocng (capstone/runtime/virtual/heap.c): one malloc per emalloc (ZEND_MM is undefined in this build, so ZEND_DO_MALLOC is plain malloc), and the hierarchical wrapper (ports/php/engine/libc/php_capstone_zend_hier.c, -DZEND_CAP_BOUNDS_REAL_SIZE) re-bounds each result to REAL_SIZE(n) = (n+7)&~7. That is stock PHP's rounding, so up to 7 bytes of slack past every object are reachable -- the mechanism that hides 8 of the 31 cases from ASAN on an unpatched allocator. The HONEST-GAP column of the spatial pair",
+      "mechanism": "per-object bounds at the ROUNDED size; mallocng retires a block's lifetime underneath, but PHP's AG(cache) absorbs most frees so inner lifetimes are coarser than per object",
+      "controls": {
+        "emalloc-overread": "complete"
+      },
+      "controls_for_missed": [
+        "emalloc-overread"
+      ]
+    },
+    "php-virtual-zend-exact": {
+      "target": "capstone-virtual",
+      "summary": "the same image and the same byte-identical zend_alloc.c, with the hierarchical wrapper re-bounding each emalloc result to the CALLER's request instead of to REAL_SIZE(n). The two arms differ in that bound alone -- same TU list, same ext/standard, same trigger on stdin -- so a catch here is attributable to the bound and nothing else",
+      "mechanism": "per-object bounds at the REQUESTED size, over a block mallocng bounds and retires underneath",
+      "controls": {
+        "emalloc-overread": "fault"
+      },
+      "controls_for_missed": [
+        "emalloc-overread"
+      ]
     }
   }
 }

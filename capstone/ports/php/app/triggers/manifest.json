@@ -1,0 +1,113 @@
+{
+  "cases": {
+    "CRASH-003": {
+      "file": "CRASH-003.php",
+      "mode": "stmt"
+    },
+    "CRASH-004": {
+      "file": "CRASH-004.php",
+      "mode": "stmt"
+    },
+    "CRASH-005": {
+      "file": "CRASH-005.php",
+      "mode": "stmt"
+    },
+    "CRASH-010": {
+      "file": "CRASH-010.php",
+      "mode": "stmt"
+    },
+    "CRASH-016": {
+      "file": "CRASH-016.php",
+      "mode": "stmt"
+    },
+    "CRASH-022": {
+      "file": "CRASH-022.php",
+      "mode": "stmt"
+    },
+    "CRASH-024": {
+      "file": "CRASH-024.php",
+      "mode": "stmt"
+    },
+    "CRASH-025": {
+      "file": "CRASH-025.php",
+      "mode": "stmt"
+    },
+    "CRASH-035": {
+      "file": "CRASH-035.php",
+      "mode": "stmt"
+    },
+    "CRASH-042": {
+      "file": "CRASH-042.php",
+      "mode": "stmt"
+    },
+    "CRASH-047": {
+      "file": "CRASH-047.php",
+      "mode": "stmt"
+    },
+    "CRASH-057": {
+      "file": "CRASH-057.php",
+      "mode": "stmt"
+    },
+    "CRASH-065": {
+      "file": "CRASH-065.php",
+      "mode": "stmt"
+    },
+    "CRASH-066": {
+      "file": "CRASH-066.php",
+      "mode": "stmt"
+    },
+    "CRASH-067": {
+      "file": "CRASH-067.php",
+      "mode": "stmt"
+    },
+    "CRASH-068": {
+      "file": "CRASH-068.php",
+      "mode": "stmt"
+    },
+    "CRASH-073": {
+      "file": "CRASH-073.php",
+      "mode": "expr"
+    },
+    "CRASH-074": {
+      "file": "CRASH-074.php",
+      "mode": "stmt"
+    },
+    "CRASH-080": {
+      "file": "CRASH-080.php",
+      "mode": "stmt"
+    },
+    "CRASH-091": {
+      "file": "CRASH-091.php",
+      "mode": "stmt"
+    },
+    "CRASH-102": {
+      "file": "CRASH-102.php",
+      "mode": "stmt"
+    },
+    "CRASH-103": {
+      "file": "CRASH-103.php",
+      "mode": "stmt"
+    },
+    "CRASH-110": {
+      "file": "CRASH-110.php",
+      "mode": "expr"
+    },
+    "CRASH-140": {
+      "file": "CRASH-140.php",
+      "mode": "stmt"
+    },
+    "CRASH-151": {
+      "file": "CRASH-151.php",
+      "mode": "stmt"
+    },
+    "CRASH-155": {
+      "file": "CRASH-155.php",
+      "mode": "stmt"
+    },
+    "CRASH-160": {
+      "file": "CRASH-160.php",
+      "mode": "stmt"
+    }
+  },
+  "source": "ports/php/engine/rung_E_domain.c"
+}

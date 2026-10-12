@@ -421,6 +421,104 @@ the launcher refuses to start without the exact-bounds profile (`exec.c:698`).
 **Exit A when** the virtual arm reproduces the physical arm's verdicts on the 24 reachable
 cases, with each fault at the same function and line.
 
+## Phase A — BUILD RESULT (2026-10-12) and the pre-registration for its first run
+
+**PHP 5.0.0's engine links and runs as an ordinary Linux process on the virtual profile.** 47
+objects: 34 Zend TUs (the physical build's own `TUS` list plus `zend_alloc`), 8 `ext/standard`
+TUs (`PHP_CAP_EXT=pure`), and 5 support files. `.text` 1,100,780  `.rodata` 125,748  `.data`
+34,200  `.bss` 322,544. No undefined weak symbols, so the C-56 preflight has nothing to refuse.
+
+**All 42 of PHP's own translation units compiled against the Capstone musl on the first
+attempt.** That was the plan's open question 1 — *"does PHP 5.0.0 build at all as a hosted
+process against the Capstone musl SDK?"* — and the answer needed no source changes to `Zend/`
+or `ext/`, which stay byte-identical from the read-only corpus mount. The only two failures
+were in this port's own new code: `INTERNAL_FUNCTION_PARAMETERS` has no `return_value_ptr` in
+5.0.0 (`zend.h:248`), and `php_fault_report` had to be given a virtual-profile definition.
+
+What went away, measured against `engine/build-engine.sh`: the 29-header `stubinc` farm, five of
+the six `libc/php_capstone_*.c` files (~900 lines of hand-written libc), the beebs
+tag-preserving `memcpy`, the compiler-rt builtin list, `start.S`, `capstone_setjmp.S`,
+`domreq.S`, the link script, and every one of `-target`, `+m`, `-ffreestanding`,
+`-nostdlibinc`, `-isystem stubinc`. `capstone-cc` supplies all of it.
+
+What stayed, and why each is PHP-level rather than OS-level:
+
+| file | why it has no musl counterpart |
+|---|---|
+| `libc/php_capstone_zend_hier.c` | the bounds wrapper — it *is* the experiment, reused unchanged |
+| `libc/php_capstone_php_stubs.c` | `main/`'s globals (`PG`/`SG`/`BG`, `sapi_module`) and `php_printf`, needed until Phase B links `main/` |
+| `libc/php_capstone_ext_stubs.c` | the three externs `ext/standard/url.c` reaches for in `streams` |
+| `app/php_virtual_lower.c` (new) | `zend_cap_widen`, which is the IDENTITY here — see below |
+| `app/php_virtual_main.c` (new) | a real `main(argc, argv)`, the trigger on stdin |
+
+### `zend_cap_widen` is the identity on this profile, and that is a reading with a test
+
+The physical wrapper must widen any pointer that re-enters the level below, because it narrows
+everything it hands up. That widen recovers the block capability from the physical arena's slot
+table, which this profile does not have. Reading `runtime/virtual/heap.c:203-217` says the
+widen is unnecessary rather than unimplementable: `free()` and `realloc()` use the caller's
+pointer for a one-byte probe at the cursor (`lbu zero, 0(p)`) and as a key for
+`__capstone_malloc_find`, then operate through `r->raw` — the capability the heap itself
+retained over the block. The caller's *bounds* are never the bounds the copy or the free uses.
+
+A reading is not a result, so `app/probe-hier-widen.c` reproduces PHP's exact geometry
+(`malloc(48 + n)`, hand back `p + 48`, narrow to `[block_base, object_cursor + n)`) and frees
+and reallocs through the narrowed pointer. Its stage 2 is a **negative control**: one byte past
+the narrowed end must fault. Without that stage, "free survived a narrowed pointer" is equally
+consistent with the narrowing never having happened.
+
+### Phase A measures the SPATIAL axis only — 6 of the 24, not 24
+
+This is a property of Phase A, not of the profile, and it corrects an assumption worth stating
+plainly: the physical suite's 23 CAUGHT are **mostly temporal**, measured in `seam` mode with
+`-DZEND_TEMPORAL`, where `zend_alloc.c` is dropped and the port's own arena serves `emalloc`
+with revocation per object. That arena, its slot table and its revocation are physical-profile
+code; replacing them with Sublet regions over a block the virtual heap lends is the allocator
+seam, which the section below treats as its own design question. `build-virtual.sh` therefore
+**refuses** `PHP_CAP_ALLOC_MODE=seam` out loud rather than quietly building something else.
+
+Derived from `engine/run-triggers.sh` by `app/run-cases.py` rather than retyped — the case list
+from `BLIND_REACHABLE` plus the `pureext` list, the axis from `axis_of`, the expected fault file
+from `EXPECT_FILE`:
+
+| axis | cases | in Phase A |
+|---|---|---|
+| spatial (`heap`) | CRASH-016, 066, 073, 091, 102, 110 | **yes, 6** |
+| temporal | the other 18 | no — the seam, and silence here is NOT a miss |
+
+### The pair's own positive control, and why it is per-arm
+
+`php_virtual_main.c` carries a third mode, `control`, run through the same engine in the same
+state as a case: `emalloc(9)`, write 9 bytes, then read index 9. `REAL_SIZE(9)` is 16, so the
+expected outcome is **opposite on the two arms** — the rounded arm must COMPLETE (the slack is
+reachable, which is the very mechanism that hides these cases from ASAN) and the exact arm must
+FAULT. `arms.json` declares which, so the adapter cannot grade itself. The geometry is
+CRASH-110's deliberately: the control does not show that some bound somewhere works, it shows
+that *the* bound this case depends on is reachable in this image, on this arm, in this run.
+
+### PRE-REGISTRATION — predicted verdicts, recorded before the first run
+
+Per the root `CLAUDE.md`: the prediction lands on the lane branch before the run, and the result
+commit cites this commit's hash.
+
+| arm | predicted | why |
+|---|---|---|
+| `php-virtual-zend-rounded` (control) | **MISSED** × 6, control `emalloc-overread` = complete | the bound is `REAL_SIZE(n)`, so each over-read lands in the rounding slack exactly as it does on stock PHP. This is the honest-gap column; a CAUGHT here would mean the arms are not what they say |
+| `php-virtual-zend-exact` (fault) | **CAUGHT** × 6, each fault in the file `EXPECT_FILE` names (`url.c`, `url.c`, `var_unserializer.c`, `html.c`, `string.c`, `formatted_print.c`), control = fault | all six are CAUGHT physically on this axis; the profile change should not move them |
+
+Three ways this prediction could fail that would be findings rather than noise, named now so
+they cannot be rationalised afterwards:
+
+1. **A fault in the right arm at the wrong place.** With real musl underneath, a case can now
+   reach further than it did freestanding — a `str_repeat` that used to hit a stub may now run —
+   and fault somewhere the physical column never saw. The judge calls that `unattributed`, and
+   it must stay that: a catch at an undeclared site is not this case's catch.
+2. **The control arm faulting.** It is built to reproduce stock PHP's rounding; if it faults,
+   the port deviates from stock PHP and the pair proves nothing (`control-failed`). This is the
+   shape CRASH-057 took on the physical column.
+3. **Fewer than 6 reached.** `reached` is the "evaluating the trigger" stage line; a case that
+   dies in `zend_startup` is `setup-fault`, not a miss.
+
 ## Phase B — real PHP
 
 The corpus tree is **already configured** (`main/php_config.h`, `main/build-defs.h`,
