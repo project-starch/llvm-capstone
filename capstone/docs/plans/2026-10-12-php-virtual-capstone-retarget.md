@@ -252,6 +252,80 @@ Two platform facts also came out of this, both now fixed in the code rather than
   indistinguishable from a guest that never booted. It now takes the lock `LOCK_NB` and exits
   with an explanation instead of hanging.
 
+## Merge regression gate — RESULT (2026-10-12): 23 of 24 CAUGHT, 1 NO-READING
+
+Re-measured after the LLVM and QEMU rebuilds, which is what the merge owed. The physical arm is
+run by two suites, not one: `blind` (11 cases) and `pureext` (13). Together they are the 24.
+
+| suite | cases | result |
+|---|---|---|
+| `blind` | 11 | **11 CAUGHT**, rc=0 |
+| `pureext` | 13 | **12 CAUGHT**, 1 NO-READING, rc=75 |
+
+The 12: CRASH-016, 022, 035, 047, 066, 074, 080, 091, 102, 103, 151, 160. So **23/24 confirmed**,
+and the previous "24/24" -- always provisional pending this re-run -- does not survive it.
+
+### CRASH-057 is a NO-READING (`setup-fault`), and the cause is the port's own deviation
+
+The control arm faults `cause=24, pc=0x101cecc30`, which symbolises to
+`zend-alloc/zend_capstone_alloc.h:547` -- the **hoisted, unconditional**
+`REMOVE_POINTER_FROM_LIST(p)`. The control is built `-DZEND_TEMPORAL -DZEND_NO_REVOKE`, so it
+takes that path, and that file's own comment names this symptom exactly: *"a cause-24 whose
+faulting instruction is a capability load through a pointer that was read out of freed memory."*
+
+Mechanism: stock PHP returns early for cached blocks and **never unlinks them**
+(`zend_alloc.c:271-278`). The port unlinks every block in **both** arms, so that the matched pair
+differs in revocation alone. The hoist is needed only by the fault arm -- under revocation a dead
+block left in the list poisons its neighbours -- but applying it to the control makes the control
+deviate from stock PHP in a way that can fault. CRASH-057's use-after-free write corrupts a block
+header and the extra unlink then walks the corrupted link; stock PHP would never walk it.
+
+Measured: the fault site, the arm's flags, and `temporal_sanity` PASSING (benign workload with
+revocation ON completes, so the revocation machinery is sound). Inferred but **not isolated**:
+that the corrupting write is CRASH-057's own UAF. Isolating it means editing the physical
+allocator, which is the comparison column this plan keeps untouched, and it would not change the
+classification. `NO-READING / setup-fault` is the honest label and the suite reached it by itself.
+
+### Why this matters for the retarget: the probe proves the deviation becomes unnecessary
+
+The hoist exists only because the physical port has **one capability spanning header and
+payload**, so revoking the payload kills the header and every link pointing at it. The seam probe
+(stage 0, above) shows the virtual seam separates them: the header stays live through the
+payload's retirement. So the virtual port can keep PHP's `_efree` ordering **byte-for-byte in both
+arms**, and this whole class of artefact -- CRASH-057's no-reading now, and the four historical
+false CAUGHT verdicts -- disappears by construction rather than by careful ordering. That is a
+stronger argument for the retarget than the plan originally had.
+
+### Toolchain freshness: the gate fired, and the compiler is exonerated for codegen
+
+`toolchain-fresh.py` reported **STALE**, 3,486 pending steps covering the tools in use including a
+clang relink. Two causes, neither of them uncompiled source:
+
+- **`.ninja_log` was missing** while `.ninja_deps` from the build was present, so ninja had lost
+  its record of command lines and reported built outputs as dirty ("command line not found in
+  log").
+- **clang embeds the git revision**, so committing moved it from `c060a688` to `82761ef2`.
+
+Resolved by measurement rather than argument. The build was completed (3,486 steps, rc=0) and one
+arm was rebuilt with the finished compiler and compared section by section against the image the
+suites actually ran:
+
+| section | old vs new |
+|---|---|
+| `.text`, `.rodata`, `.data`, `.gct`, `.capstone_domreq`, `.debug_info` | **byte-identical** |
+| `.debug_str`, `.symtab` | differ -- the producer string `clang version 22.0.0git (... c060a688)` vs `(... 82761ef2)`, and the offsets that follow it |
+
+So **codegen did not move and the 23/24 stands.** The gate now returns rc=2 ("cannot fully
+check") rather than rc=1 ("stale"): it is not stale for the targets it checks, and the residual is
+a coverage gap -- it reports that build scripts invoke a tool named `llvm-capstone` that it does
+not verify.
+
+One piece of friction worth fixing in dev's tooling rather than here: because clang embeds the
+revision, **this gate reports STALE after every commit**, and clearing it costs a 3,486-step
+rebuild that changes only a debug string. A revision-only drift is worth distinguishing from a
+source drift, or the gate trains people to ignore it -- which is the one thing a C-44 guard must
+never do.
+
 ## Phase 0 — merge
 
 Per `CLAUDE.md` ("Active plans live in `capstone/docs/plans/`, committed, portable across
