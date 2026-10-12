@@ -5,6 +5,7 @@ source "$here/../../tests/capstone-test-env.sh"
 out=${1:?Output directory}
 musl=${2:?Prepared Capstone musl source tree}
 shift 2
+export CAPSTONE_APPLICATION_PROFILE=virtual
 for patchfile in "$here/../../ports/musl-capstone/musl-patches/"*.patch; do
     if ! patch -d "$musl" -p1 -R --dry-run -s -f < "$patchfile" >/dev/null 2>&1; then
         echo "musl source is not current: run prepare-musl-capstone.sh (missing $(basename "$patchfile"))" >&2

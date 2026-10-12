@@ -23,7 +23,7 @@ account.
 
 tshark takes its `malloc` from the platform's allocator. On the virtual profile
 (`CAPSTONE_APPLICATION_PROFILE=virtual`) that is musl's mallocng, which bounds every
-object and ends its lifetime on `free`; `TSAPP_HEAP` then selects nothing. On the
+object and ends its lifetime on `free`; leave `TSAPP_HEAP` unset (virtual rejects it). On the
 physical profile `TSAPP_HEAP=level0|shrink` selects the first-fit heap without or
 with per-object bounds, for both `host/build-domain.sh` and the runner. The Sublet
 heap arm (`TSAPP_HEAP=sublet`, `runtime/sublet_heap.c`, and patch 0007, which shrank

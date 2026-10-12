@@ -11,6 +11,7 @@ comparison: it would match anything. TSAPP_MINIMAL=none skips the check and says
 verdict line.
 """
 import argparse
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -42,10 +43,16 @@ def main():
     if args.mode == 'oracle' and not args.captures:
         parser.error('oracle needs capture names')
     work = Path(os.environ.get('TS_WORK', '/tmp/capstone/tshark-app'))
-    heap = os.environ.get('TSAPP_HEAP', 'level0')
-    if heap not in ('level0', 'shrink'):
-        parser.error('TSAPP_HEAP must be level0 or shrink')
-    images = Path(os.environ.get('TSAPP_DOMAIN_DIR', work / ('domain' + ('-' + heap if heap != 'level0' else ''))))
+    profile = json.loads((Path(args.state) / 'config.json').read_text()).get('identity', {}).get('profile', 'physical')
+    if profile == 'virtual':
+        if 'TSAPP_HEAP' in os.environ:
+            parser.error('TSAPP_HEAP is physical-only; virtual uses mallocng')
+        heap = 'mallocng'
+    else:
+        heap = os.environ.get('TSAPP_HEAP', 'level0')
+        if heap not in ('level0', 'shrink'):
+            parser.error('TSAPP_HEAP must be level0 or shrink')
+    images = Path(os.environ.get('TSAPP_DOMAIN_DIR', work / ('domain-shrink' if heap == 'shrink' else 'domain')))
     stock = Path(os.environ.get('TSAPP_STOCK', work / 'native-stock/run/tshark'))
     minimal = os.environ.get('TSAPP_MINIMAL', str(work / 'native-min-pa/run/tshark'))
     if minimal != 'none' and not Path(minimal).is_file():

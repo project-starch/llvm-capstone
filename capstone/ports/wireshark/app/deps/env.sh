@@ -25,6 +25,8 @@ _ts_key=$( {
   (cd "$CAPSTONE_REPO_ROOT" && git ls-files capstone/runtime capstone/ports/common/application) |
     sort | while IFS= read -r path; do cat "$CAPSTONE_REPO_ROOT/$path"; done
   cat "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh"
+  cat "$_ts_musl_port"/musl-patches/*.patch
+  find "$_ts_musl_port/arch-capstone64" -type f -print0 | sort -z | xargs -0 cat
 } | sha256sum | cut -c1-16)
 
 # One libc and one runtime per key, never rebuilt in place: a build that sourced this file keeps
