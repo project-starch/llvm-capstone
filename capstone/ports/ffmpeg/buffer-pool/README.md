@@ -4,8 +4,6 @@
 use the shared purecap toolchain. Each hosted build exposes a CMake allocator
 library and `bin/allocator-example`; a custom main can be linked through
 `PORT_CLIENT_SOURCE`. Protection scope is stated separately from build support.
-The experimental [PoisonCap workflow](host/cheribsd/poisoncap/README.md)
-reconstructs its published platform and selects a separate per-lease adapter.
 
 This component records native FFmpeg's AVBufferPool and AVRefStructPool
 operations and replays their allocator behavior in a Capstone domain. The
@@ -63,7 +61,7 @@ The [A1 ancestor-revocation matrix](results/measurements/20260919-alias-scatter/
 checks aliases in globals, heap objects, linked lists, independent sibling-pool
 storage and a register. All 44 executions pass, including same-address reuse
 and no-revoke counterparts. This is a synthetic Capstone fixture in the replay
-harness; it does not measure a CHERI/PoisonCap hierarchy comparison.
+harness; it does not measure a CHERI hierarchy comparison.
 
 The [CHERI spatial comparison](results/measurements/20260919-cheri/README.md)
 reports nine verified replays, compressed-bounds padding and static storage.

@@ -254,6 +254,36 @@
         "uaf-malloc"
       ]
     },
+    "virtual-ffmpeg-pool-stock": {
+      "target": "capstone-virtual",
+      "summary": "ffmpeg/pool-repros on the virtual profile with AVBufferPool and AVRefStructPool STOCK: the buffer-pool port's capstone-application library (patch 0001 only), its av_malloc the process's malloc, built by the corpus's shared/build-cases.sh, so every pool entry is one virtual-mallocng object, bounded and never freed while the pool lives; a buffer returned to the pool is retired by nothing",
+      "mechanism": "exact bounds and lifetime retirement of every entry and object the pools take from the system; none on a return to the pool",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "pool-return-90": "complete"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "pool-return-90"
+      ]
+    },
+    "virtual-ffmpeg-pool-sublet": {
+      "target": "capstone-virtual",
+      "summary": "the same corpus with -DFFPOOL_SUBLET=ON, which applies the port's patch 0003: every buffer or refstruct object a pool hands out is a child lifetime of its entry (CDERIVE), bounded to it and revoked when it returns to the pool (CREVOKE)",
+      "mechanism": "per-hand-out bounds and revocation in AVBufferPool and AVRefStructPool",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "pool-return-90": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "pool-return-90"
+      ]
+    },
     "virtual-cpython": {
       "target": "capstone-virtual",
       "summary": "the CPython 3.13.7 interpreter for the virtual profile (ports/common/application/build-virtual.sh cpython, CPY_TEST_CAPI=1) run as a process under capstone-vexec: its one heap is musl mallocng, which bounds and retires every object it hands out -- PyMem_Raw allocations, objects over 512 bytes, and the arenas pymalloc takes -- while pymalloc stock (patch 0009) carves its blocks inside those arenas unbounded",

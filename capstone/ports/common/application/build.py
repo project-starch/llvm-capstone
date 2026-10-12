@@ -155,7 +155,7 @@ def main():
     if args.allocations:
         extra += ['-O1', *defines, EXPERIMENTS / 'allocations.c',
                   '-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free']
-    if args.nested not in ('none', 'cpython', 'postgres'):
+    if args.nested not in ('none', 'cpython', 'postgres', 'ffmpeg'):
         extra += ['-O1', '-Wl,--wrap=__capstone_region', *defines, '-I',
                   REPO / 'capstone/runtime/include', HERE / 'regions.c']
     if args.reuse_gap:

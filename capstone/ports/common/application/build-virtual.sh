@@ -40,6 +40,7 @@ case "$APP" in
   ffmpeg)
     export FFAPP_WORK=$OUT/source
     bash "$PORTS/ffmpeg/app/host/build-domain.sh"
+    [[ ${FFAPP_SUBLET:-0} != 1 ]] || NESTED=ffmpeg
     ;;
   tshark)
     export TS_WORK=$OUT/source

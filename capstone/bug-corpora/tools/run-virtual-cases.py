@@ -284,6 +284,17 @@ HOSTED = {
         controls_dir="controls/virtual",
         control_names={90: "chunk-free-90"},
     ),
+    'pool-repros': dict(
+        format="case-line",
+        cache={"virtual-malloc": {"FFPOOL_SUBLET": "OFF"},
+               "virtual-nested-pools": {"FFPOOL_SUBLET": "ON"}},
+        cache_dir="work/port",
+        program="bin/defect-{nn}",
+        extra={"virtual-malloc": [], "virtual-nested-pools": []},
+        mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
+        controls_dir="controls/virtual",
+        control_names={90: "pool-return-90"},
+    ),
 }
 
 

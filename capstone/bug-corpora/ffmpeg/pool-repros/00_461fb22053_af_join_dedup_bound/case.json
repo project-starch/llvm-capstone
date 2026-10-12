@@ -29,18 +29,6 @@
       "oracle": "fault at the labelled read probe",
       "cause": 24
     },
-    "sublet-port": {
-      "fixtures": [
-        40,
-        41
-      ],
-      "oracle": "case.c unchanged against the Sublet port of FFmpeg's own pools (app port, FFAPP_POOL=sublet): the defect faults, cause 24, at an instruction case.c's line table puts on a line that dereferences the stale pointer (85,86,89), before the verdict line; the fix completes with VERDICT FIXED",
-      "control": "the same case.c and driver objects (byte-identical), linked against upstream's pools (FFAPP_POOL=stock): the defect completes with VERDICT DEFECT-REPRODUCED, the fix with VERDICT FIXED",
-      "cause": 24,
-      "status": "measured",
-      "verdict": "CAUGHT",
-      "measured": "2026-10-04, ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/result-lines.txt: fx40: AS PREDICTED  predicted: FAULT 85,86,89  got: cause 24 at image 0x2164c, case.c:85, value_hi 13b89602540"
-    },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "oracle": "MEASURED 2026-10-06 on this host, revocation ON, guest default preserved: the sequence COMPLETES. NOT CAUGHT. pool-0-36 reported `FF2 status=0 events=1 metadata=1472 payload=128`, runner exit 0, 7 of 7 cases passed. The mechanism, now evidenced rather than argued: a buffer returned to an AVBufferPool never reaches free(), so it never enters the quarantine the revoker sweeps and the sweep has nothing to find. THE CONTROL FIRED IN THE SAME BOOT, which is the bar the retraction set and the one the withdrawn claim never met: revocation-control reported `REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1` and then FAULTED -- SIGPROT, si_code 2 (PROT_CHERI_TAG), addr=pc=0x101dc0, equal to the address supervise resolved for mc_defect_read independently of the run. So the revoker demonstrably sweeps in this guest, and a completion here is 'the mechanism is active and did not fire' rather than 'the mechanism is absent'. The platform controls passed alongside it: cheribsd-abi `CHERI_ABI pointer_bytes=16 runtime_revocation=1`, cheribsd-bounds CHERI_BOUNDARY_READY. THIS IS THE READING THAT 18a16640682b CLAIMED AND NEVER TOOK -- see the `retraction` field below, which is kept rather than deleted. The predicted OUTCOME was right; what was wrong was asserting it had been observed. It has now been observed. HOW IT WAS MEASURED, stated here because the retraction below says the cited runner 'cannot produce it' and a reader should not take that as 'unmeasurable': the reading was taken by running the SAME purecap pool-security binary through ports/common/host/cheribsd/run.py with --runtime-revocation on. What cannot produce it is the port's own PoisonCap wrapper, whose unconditional literal 'off' at poisoncap/run.py:129-130 is the specific thing the retraction withdrew a citation to.",
@@ -50,28 +38,6 @@
       "platform": "stock CheriBSD purecap built on this host (kernel CHERI-PURECAP-QEMU, releng/26.07-88f39900c329 = pins.env's CHERIBSD_REV) -- the same vehicle as the memcached, wireshark and ffmpeg spatial readings.",
       "guest_default": "preserved",
       "case": "pool-0-36"
-    },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "case": "pool-0-36",
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **NOT CAUGHT** -- the sequence completes, exit 0. Platform controls in the same boot: poison-live exit 0; poison-read exit 162; poison-write exit 162; poison-reuse exit 0; poison-reused-read exit 162; cheribsd-abi exit 0; cheribsd-bounds exit 162.",
-      "role": "control for poisoncap-protected: same binary and guest, one difference",
-      "prediction": "the sequence completes, exit 0",
-      "status": "measured",
-      "verdict": "NOT CAUGHT"
-    },
-    "poisoncap-protected": {
-      "mode": 2,
-      "case": "pool-2-36",
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap/: **CAUGHT** -- SIGPROT (exit 162) after the setup marker FF2_PROBE case=36 ready. Platform controls in the same boot: poison-live exit 0; poison-read exit 162; poison-write exit 162; poison-reuse exit 0; poison-reused-read exit 162; cheribsd-abi exit 0; cheribsd-bounds exit 162.",
-      "exit": 162,
-      "note": "CheriBSD reports a process status, not a fault PC, so the marker is what separates this from an arbitrary crash: it is printed only once reuse at the same address has been checked",
-      "signal": 34,
-      "si_code": null,
-      "si_code_note": "not captured: the runner records a process exit status and 162 is 128+34, so the signal is derived, but si_code is not recoverable from an exit status and is not guessed here",
-      "prediction": "SIGPROT after the setup marker FF2_PROBE case=36 ready",
-      "status": "measured",
-      "verdict": "CAUGHT"
     },
     "native-detect": {
       "status": "measured",
@@ -95,15 +61,30 @@
       "status": "measured",
       "verdict": "NOT CAUGHT",
       "measured": "2026-10-04"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, AVBufferPool and AVRefStructPool stock in a Capstone process (tools/arms.json virtual-ffmpeg-pool-stock): the stale access lands in an entry the pool kept, so the case completes with VERDICT DEFECT-REPRODUCED and this arm did not see it, or it faults in ff2_case_run",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, the pools with the buffer-pool port's patch 0003 (tools/arms.json virtual-ffmpeg-pool-sublet): every hand-out a child lifetime of its pool entry, revoked when it returns: as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f86a1140c in ff2_case_run; by function: the fault is in ff2_case_run, a site the case declared before the run (case.json fault_sites)",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools"
     }
   },
   "status": "native pair run 2026-09-20 and passed; the Capstone, Sublet and PoisonCap arms likewise. The cheribsd-revocation arm is RETRACTED to a prediction as of 2026-10-06 -- it was never measured; see that arm. SUPERSEDED (noted 2026-10-08): the arm was afterwards RE-MEASURED (2026-10-06) with a revocation control that FIRED IN THE SAME BOOT -- NOT CAUGHT -- which meets the bar the retraction set. The arm is the record; this sentence is kept as history. ADVISORY on a SEPARATE and WEAKER gap, recorded rather than left for the next reader to find: the poisoncap arms cite the same pool-0-36/37/38 names and also have no committed bundle, because cases 36-38 entered the runner after the only pilot that recorded pool cases. That is weaker than the retracted claim -- `--case pool-2-36` IS a valid selector, so the run is possible and plausibly happened uncommitted, whereas the cheribsd arm had no code path at all. It is flagged, not retracted. Run 2026-09-29 under QEMU against the Sublet port of FFmpeg's own pools (sublet-port arm, fixtures 40/41): the defect faults with cause 24 and completes with DEFECT-REPRODUCED on upstream's pools; the fix completes on both; results/20260929-qemu-sublet-port run 2026-09-29 under QEMU against the Sublet port of FFmpeg's own pools (sublet-port arm, fixtures 40/41): the defect faults with cause 24 at case.c:85 x3 and completes with DEFECT-REPRODUCED on upstream's pools x3; the fix completes x3 on both; results/20260929-qemu-sublet-port. CheriBSD MEASURED 2026-10-06 with the revocation control FAULTING in the same boot: completes, not caught (results/20261006-cheribsd/). The arm retracted this morning now carries the measurement it had only claimed. ASan measured 2026-10-09 (results/2026-10-09-native-asan/): NOT CAUGHT. PoisonCap measured 2026-10-09 (results/2026-10-09-poisoncap/): mode 0 completes, mode 2 SIGPROT.",
   "comparison": [
     "Capstone (spatial)",
     "Sublet",
-    "CHERI default (stock CheriBSD, revoker on) -- PREDICTED, NOT MEASURED",
-    "PoisonCap (mode 2)"
+    "CHERI default (stock CheriBSD, revoker on) -- PREDICTED, NOT MEASURED"
   ],
   "nested": true,
-  "nested_why": "AVBufferPool recycles the object; the platform allocator saw only the pool's block -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED."
+  "nested_why": "AVBufferPool recycles the object; the platform allocator saw only the pool's block -- so under this inventory's axis, WHO ALLOCATED THE OBJECT, this row is NESTED.",
+  "fault_sites": [
+    "ff2_case_run"
+  ],
+  "fault_sites_why": "Declared 2026-10-11, before the first virtual run. The case has no labelled probe: its stale access is an inline dereference in its own body, ff2_case_run, on the lines the sublet-port arm's oracle names. A fault elsewhere in ff2_case_run is ruled out by the fixed run of the same image, which executes the same setup and must complete; the faulting line is checked against case.c's line table afterwards."
 }
