@@ -175,7 +175,7 @@ def main():
                     gc_gaps=args.gc_gaps,
                     reuse_gap=args.reuse_gap,
                     allocations_sha256=sha(EXPERIMENTS / 'allocations.c') if args.allocations else None,
-                    heap='virtual' if args.profile == 'virtual' else 'level0',
+                    heap='mallocng' if args.profile == 'virtual' else 'level0',
                     nested=args.nested, recipe_revision=input_revision,
                     runtime_revision=subprocess.check_output(['git', '-C', REPO, 'rev-parse', 'HEAD'], text=True).strip(),
                     runtime_dirty=bool(subprocess.check_output(['git', '-C', REPO, 'status', '--porcelain'])),

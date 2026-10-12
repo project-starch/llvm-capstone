@@ -1,6 +1,7 @@
 # Delegated application ports
 
-Application images use ABI v2 exclusively. The SDK supplies startup, argv,
+Application images use delegated ABI v2. Virtual images additionally identify
+VM-service ABI v5. The SDK supplies startup, argv,
 environment, cwd, standard streams, libc overrides, syscall delegation and the
 existing allocator grants. `capstone-exec` rejects old images with exit 126;
 there is no HostCall fallback and no SDK switch to build v1 applications.
@@ -12,6 +13,12 @@ and offline tshark. Standalone allocator and FPGA instruction tests are
 separate targets; their historical HostCall transport is not an application ABI.
 
 ## Virtual source builds
+
+Virtual has one outer allocator: Capstone-compiled musl mallocng. SDK metadata
+records `profile: virtual` and `allocator: mallocng`; build manifests use the
+same allocator name. Inner protection switches change the application's pools,
+not malloc/free. `FFAPP_HEAP` and `TSAPP_HEAP` select physical heaps and are
+rejected in virtual builds and runners. Unset them when selecting virtual.
 
 The [virtual result](../../../runtime/virtual/app-ports-result.json) passes
 16/16 normal workload checks and 17/17 inner-allocator checks, plus 32/32
@@ -29,7 +36,7 @@ Use fresh output directories: relinking physically compiled objects cannot
 convert their addressing convention. Physical remains the default profile.
 
 For the normal variants, the shared wrapper builds upstream objects and a
-matching VM-service v2 SDK, then records input and image hashes:
+matching VM-service v5 SDK, then records input and image hashes:
 
 ```sh
 export CAPSTONE_LLVM_BUILD_DIR=/path/to/qualified/compiler-build

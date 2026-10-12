@@ -2,14 +2,22 @@
 # Link full tshark, staged starts and allocator fixtures with the shared ABI-v2 SDK.
 set -euo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual && ${TSAPP_HEAP+x} ]]; then
+  echo "TSAPP_HEAP is physical-only; virtual uses mallocng" >&2
+  exit 2
+fi
 source "$APP/deps/env.sh"
 B=$TS_WORK/xbuild
-HEAP=${TSAPP_HEAP:-level0}
-case $HEAP in
-  level0) OUT=$TS_WORK/domain HEAPF=(-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0) ;;
-  shrink) OUT=$TS_WORK/domain-shrink HEAPF=() ;;
-  *) echo "TSAPP_HEAP must be level0 or shrink" >&2; exit 2 ;;
-esac
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+  HEAP=mallocng OUT=$TS_WORK/domain HEAPF=()
+else
+  HEAP=${TSAPP_HEAP:-level0}
+  case $HEAP in
+    level0) OUT=$TS_WORK/domain HEAPF=(-DCAPSTONE_LEVEL0_STATS -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0) ;;
+    shrink) OUT=$TS_WORK/domain-shrink HEAPF=(-DCAPSTONE_LEVEL0_STATS) ;;
+    *) echo "TSAPP_HEAP must be level0 or shrink" >&2; exit 2 ;;
+  esac
+fi
 ARENA=${TSAPP_ARENA_BYTES:-$((40 << 20))}
 STACK=${TSAPP_STACK_BYTES:-$((1 << 20))}
 LD=${CAPSTONE_LD_LLD:?}
@@ -44,7 +52,7 @@ SDK=$OUT/sdk
 bash "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh" \
   "$SDK" "$TS_MUSL" "$TS_LIBC_ARCHIVE" \
   -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" -DCAPSTONE_APPLICATION_STACK_BYTES="$STACK" \
-  -DCMAKE_C_FLAGS_RELEASE="-O1 -DCAPSTONE_LEVEL0_STATS ${HEAPF[*]}"
+  -DCMAKE_C_FLAGS_RELEASE="-O1 ${HEAPF[*]}"
 export CAPSTONE_SDK=$SDK
 PROFILEF=()
 [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} != virtual ]] || PROFILEF=(-DTSAPP_VIRTUAL_HEAP)
@@ -100,4 +108,4 @@ print(f"{img.rsplit('/', 1)[1]}  code_len={memsz} ({memsz / 2**20:.1f} MiB)  dec
 PY
 done
 ( cd "$OUT" && sha256sum tshark_m*.dom tsapp_fx*.dom ) > "$OUT/SHA256SUMS"
-echo "heap arm ${TSAPP_HEAP:-level0}: $OUT"
+echo "heap $HEAP: $OUT"

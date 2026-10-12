@@ -22,7 +22,8 @@ SFX=; [ "$CLIP" = 1 ] || SFX="-${CLIP}s"
 INPUT=${FFAPP_INPUT:-/tmp/input$SFX.mkv}
 # Includes the common SDK data/stack reservation; CMA must cover the image.
 ORDER_CEILING=$(( ${FFAPP_ORDER_CEILING_MB:-256} * 1024 * 1024 ))
-# FFAPP_HEAP: which allocator the images link. It is the only thing the arms differ in; the
+# FFAPP_HEAP selects physical-profile heaps only; virtual always links mallocng.
+# It is the only thing the physical arms differ in; the
 # FFmpeg libraries are shared (built once, under domain/), so an arm cannot differ by accident
 # in anything else.
 #   level0  musl-capstone's level0 as every earlier run used it: every heap pointer carries the
@@ -33,12 +34,17 @@ ORDER_CEILING=$(( ${FFAPP_ORDER_CEILING_MB:-256} * 1024 * 1024 ))
 #           revocation.                                                           -> domain-shrink/
 # The sublet arm (musl-capstone's sublet_heap.c) and the pool modes on it (FFAPP_POOL=0|2) were
 # removed on 2026-10-11 with the physical Sublet heap; their recorded results stay in results/.
-HEAP=${FFAPP_HEAP:-level0}
-case $HEAP in
-  level0) OUT="$WORK/domain"; HEAPF=(-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0) ;;
-  shrink) OUT="$WORK/domain-shrink"; HEAPF=() ;;
-  *) echo "FFAPP_HEAP must be level0 or shrink" >&2; exit 2 ;;
-esac
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+  [[ ! ${FFAPP_HEAP+x} ]] || { echo "FFAPP_HEAP is physical-only; virtual uses mallocng" >&2; exit 2; }
+  HEAP=mallocng OUT="$WORK/domain" HEAPF=()
+else
+  HEAP=${FFAPP_HEAP:-level0}
+  case $HEAP in
+    level0) OUT="$WORK/domain"; HEAPF=(-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0) ;;
+    shrink) OUT="$WORK/domain-shrink"; HEAPF=() ;;
+    *) echo "FFAPP_HEAP must be level0 or shrink" >&2; exit 2 ;;
+  esac
+fi
 FFEXTRA=()
 # FFAPP_SUBLET=1 (virtual profile only): FFmpeg's own pools protected by the buffer-pool port's
 # patch 0003, every AVBufferPool and AVRefStructPool entry handed out as a Sublet child lifetime
@@ -67,11 +73,15 @@ if [[ ! -f "$MUSL_CACHE_ROOT/musl-1.2.5.tar.gz" && -f "$CAPSTONE_TMP_ROOT/musl-s
 fi
 MUSL=$(bash "$MUSL_PORT/prepare-musl-capstone.sh" | tail -1)
 ARCHIVE=$WORK/musl-build/libc-capstone.a
-COMPILER_HASH=$(sha256sum "$CLANG" | cut -d' ' -f1)
-COMPILER_HASH="$COMPILER_HASH:${CAPSTONE_APPLICATION_PROFILE:-physical}"
-if [[ ! -f "$ARCHIVE" || $(cat "$WORK/musl-build/compiler.sha256" 2>/dev/null) != "$COMPILER_HASH" ]]; then
+LIBC_KEY=$({
+  sha256sum "$CLANG"
+  printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-physical}"
+  cat "$MUSL_PORT"/{build-musl-capstone,prepare-musl-capstone}.sh "$MUSL_PORT"/musl-patches/*.patch
+  find "$MUSL_PORT/arch-capstone64" -type f -print0 | sort -z | xargs -0 cat
+} | sha256sum | cut -d' ' -f1)
+if [[ ! -f "$ARCHIVE" || $(cat "$WORK/musl-build/source.sha256" 2>/dev/null) != "$LIBC_KEY" ]]; then
   OUT_DIR=$WORK/musl-build bash "$MUSL_PORT/build-musl-capstone.sh"
-  printf '%s\n' "$COMPILER_HASH" > "$WORK/musl-build/compiler.sha256"
+  printf '%s\n' "$LIBC_KEY" > "$WORK/musl-build/source.sha256"
 fi
 if [[ $SUBLET == 1 ]]; then
   SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" --sublet | tail -1)
@@ -91,7 +101,8 @@ fi
 
 # --- shared application SDK ------------------------------------------------
 SDK=$RT/sdk
-SDK_FLAGS="-O1 -DCAPSTONE_LEVEL0_STATS ${HEAPF[*]}"
+SDK_FLAGS=-O1
+[[ $HEAP == mallocng ]] || SDK_FLAGS+=" -DCAPSTONE_LEVEL0_STATS ${HEAPF[*]}"
 bash "$REPO_ROOT/capstone/ports/common/application/build-sdk.sh" "$SDK" "$MUSL" "$ARCHIVE" \
   -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" -DCAPSTONE_APPLICATION_STACK_BYTES="$STACK" \
   -DCMAKE_C_FLAGS_RELEASE="$SDK_FLAGS"

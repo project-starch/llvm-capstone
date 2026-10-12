@@ -6,9 +6,13 @@ project(capstone_application LANGUAGES C ASM)
 set(CMAKE_C_STANDARD 11)
 option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter" OFF)
 if(CAPSTONE_APPLICATION_VIRTUAL)
+  set(sdk_profile virtual)
+  set(sdk_allocator mallocng)
   add_compile_options("$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")
   set(sdk_codegen "[\"-mllvm\", \"-capstone-gp-free\", \"-mllvm\", \"-capstone-image-gp\"]")
 else()
+  set(sdk_profile physical)
+  set(sdk_allocator level0)
   set(sdk_codegen "[]")
 endif()
 option(CAPSTONE_CHECK_COMPILER_ABI "Qualify Capstone direct-call codegen" ON)
@@ -73,6 +77,8 @@ if(CAPSTONE_APPLICATION_SDK)
 "{
   \"version\": 1,
   \"application_abi\": 2,
+  \"profile\": \"${sdk_profile}\",
+  \"allocator\": \"${sdk_allocator}\",
   \"codegen\": ${sdk_codegen},
   \"cc\": \"${CMAKE_C_COMPILER}\",
   \"ld\": \"${CMAKE_LINKER}\",
