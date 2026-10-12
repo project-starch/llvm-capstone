@@ -6,20 +6,20 @@
  * the slot, size class, offset, retention and release. No placement policy or
  * fixed object-count limit lives in this interface. */
 struct capstone_malloc_slot {
-    void *authority, *raw, *group;
+    void *parent, *issued, *group;
     struct capstone_malloc_slot *next;
     size_t key, nominal;
     unsigned index, kind;
     unsigned char prefix[4] __attribute__((aligned(4)));
 };
 void *__capstone_malloc_map(size_t);
-void *__capstone_malloc_group_attach(struct capstone_malloc_slot *, void **,
+void *__capstone_malloc_group_attach(struct capstone_malloc_slot *,
                                     void *, size_t);
-void *__capstone_malloc_group_map(struct capstone_malloc_slot *, void **,
+void *__capstone_malloc_group_map(struct capstone_malloc_slot *,
                                  size_t, size_t, unsigned);
-void *__capstone_malloc_group_nested(struct capstone_malloc_slot *, void **,
+void *__capstone_malloc_group_nested(struct capstone_malloc_slot *,
                                     size_t, unsigned, struct capstone_malloc_slot *);
-void *__capstone_malloc_group_remap(struct capstone_malloc_slot *, void **,
+void *__capstone_malloc_group_remap(struct capstone_malloc_slot *,
                                    void *, size_t, size_t);
 void *__capstone_malloc_slot_take(struct capstone_malloc_slot *);
 void *__capstone_malloc_slot_start(struct capstone_malloc_slot *);

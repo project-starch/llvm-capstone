@@ -186,7 +186,19 @@ def main():
         if b.returncode:
             print(f"CONTROL-FAILED controls build: {b.stderr[:300]}", file=sys.stderr)
             return 75
-    plan = [(f"control-{n}", controls_img, [n]) for n in spec["controls"]]
+    carve_controls = {"live-carve", "uaf-carve"} if config == "virtual-ffmpeg-carve" else set()
+    plan = [(f"control-{n}", controls_img, [n]) for n in spec["controls"] if n not in carve_controls]
+    if carve_controls:
+        carve_img = bindir / "carve-controls.dom"
+        b = subprocess.run([str(cc), "-O0", "-DFFC_SUBLET_CARVE", f"-I{shared}",
+                            f"-I{REPO / 'capstone/runtime/include'}",
+                            str(shared / "carve-recarve-control.c"), str(shared / "driver.c"),
+                            "-o", str(carve_img)], capture_output=True, text=True)
+        if b.returncode:
+            print(f"CONTROL-FAILED carve controls build: {b.stderr[:300]}", file=sys.stderr)
+            return 75
+        plan += [("control-live-carve", carve_img, ["fixed", "98"]),
+                 ("control-uaf-carve", carve_img, ["buggy", "98"])]
     for d in found:
         if d.name in built:
             n = str(int(d.name[:2]))
@@ -207,7 +219,13 @@ def main():
             controls.append(v.Control(name, "none", "the control did not run"))
             continue
         text, result = runs[f"control-{name}"]
-        controls.append(v.Control(name, observe_control(name, text, result),
+        seen = observe_control(name, text, result)
+        if name in carve_controls:
+            fault = v.domain_fault(result.get("fault") or "", v.Symbols(a.llvm_bin, carve_img))
+            seen = ("fault" if fault and fault.symbol and PROBE.search(fault.symbol) else
+                    "complete" if result.get("kind") == "exit" and result.get("value") == 0
+                    and "VERDICT FIXED" in text else "none")
+        controls.append(v.Control(name, seen,
                                   evidence_line(result, text)))
         print(f"  control {name:<14} {controls[-1].observed:<9} (expected {spec['controls'][name]})", flush=True)
 

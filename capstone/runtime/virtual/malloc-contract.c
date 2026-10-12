@@ -6,8 +6,6 @@
 #include <errno.h>
 #ifdef __CAPSTONE_PURECAP__
 #include "vm.h"
-extern unsigned long __capstone_sublet_malloc_linear(size_t, sublet_cap *);
-extern void __capstone_sublet_free_linear(unsigned long);
 #endif
 static void *volatile saved;
 __attribute__((noinline)) static void fault_store(volatile char *p)
@@ -61,18 +59,27 @@ static void tagged(void)
     container[0] = value;
     uintptr_t old = (uintptr_t)container;
     container = realloc(container, 65536);
-    require(container && (uintptr_t)container != old, "moving realloc trigger");
+    require(container != NULL, "realloc container");
+#ifdef __CAPSTONE_PURECAP__
+    /* The qualified mallocng size classes force this move. The native
+     * reference libc may legally grow the allocation in place. */
+    require((uintptr_t)container != old, "moving realloc trigger");
+#else
+    (void)old;
+#endif
     require(container[0][0] == 71, "moving realloc preserves capability");
     free(container[0]); free(container);
 #ifdef __CAPSTONE_PURECAP__
     sublet_cap owner;
-    unsigned long base = __capstone_sublet_malloc_linear(32, &owner);
-    require(base != 0, "linear allocation");
+    require(!cap_vm_acquire(&owner, 4096, 4096, PROT_READ | PROT_WRITE,
+                            7, CAP_VM_MAPPING), "linear VM grant");
+    unsigned long base = sublet_base(&owner);
     container = calloc(1, 64); require(container != NULL, "linear container");
     sublet_move(&owner, (sublet_cap *)container);
     container = realloc(container, 65536); require(container != NULL, "linear container move");
     require(sublet_base((sublet_cap *)container) == base, "linear tag transfer");
-    __capstone_sublet_free_linear(base); free(container);
+    require(!__capstone_vm_unmap(base, 4096), "linear VM grant release");
+    free(container);
 #endif
     puts("MALLOC_TAG_COPY_OK");
 }

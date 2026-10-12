@@ -20,6 +20,14 @@ Vorbis I spec says to truncate -- see its `live_proof`; it has not been demonstr
 
 ## Shapes
 
+The virtual `virtual-nested-pools` arm allocates backing with ordinary musl
+malloc/calloc. It derives a managed block lifetime and exact child ranges with
+`CDERIVE`, checks sibling non-overlap in software, and retires children with
+`CREVOKE`. No linear lending or split/merge protocol is used. The runner checks
+outer bounds/UAF controls and two inner controls: an unaligned range can be
+retired and reissued while its sibling stays live; the retired alias must fault
+at the labelled access. All fixed cases run under the same protection.
+
 | shape | cases | upstream | the crossing | consequence |
 |---|:--:|---|---|---|
 | a region carved one row shorter than its writer's row count | 0 | `85407c7e63` | writes U's tenth row, 9 bytes, onto vbuf's row 0 | V overwrites it; the field MC reads V's samples as U's |
