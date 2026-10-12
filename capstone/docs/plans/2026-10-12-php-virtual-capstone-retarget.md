@@ -421,7 +421,7 @@ the launcher refuses to start without the exact-bounds profile (`exec.c:698`).
 **Exit A when** the virtual arm reproduces the physical arm's verdicts on the 24 reachable
 cases, with each fault at the same function and line.
 
-## Platform gate — RESULT (2026-10-12): 34 of 41 checks, and why the rest did not run
+## Platform gate — RESULT (2026-10-12): `run.py` 34 of 41, `run-malloc.py` 17 of 19
 
 Plan Verification item 2, run before any PHP verdict is believed. `runtime/virtual/run.py` with
 `contract.dom`, `sqlite3.dom` and `mruby` built against this SDK. Two attempts were needed, and
@@ -453,6 +453,30 @@ by accident:
   files, and it is the check that most directly says "a program of this shape runs here".
 - `sparse-churn` with `sparse_recycling` (attempt 1): 200,000 allocations with protected stale
   tags, `nodes=2600070 collections=124 reclaimed=2598542`. Node collection works at scale.
+
+### `run-malloc.py`, the gate's other half — RESULT: 17 of 19, both failures in the ORACLE
+
+The layer PHP's allocator sits directly on. Every check about the Capstone allocator passes:
+
+- `bounds`, `stale`, `stale-free`, `reuse-free`, `reuse-stale`, `inplace-stale`, `remap-stale`,
+  `interior-free` — spatial and lifetime behaviour, including a free through an interior pointer;
+- `200000_lifetimes`, `70000_simultaneously_live_objects`, `collection_exercised` — at scale;
+- `local_allocation_fast_path`, `fast_path_control_detects_service`, `no_kernel_fault`,
+  `real_linux_mremap_growth_and_shrink`, `basic_inplace_mremap_failure`, `cleanup`.
+
+The two that fail, `native_reference` and `nonlinear_and_linear_tag_transfer`, have **one**
+cause between them and it is not the platform: the native reference binary is the buildroot
+**riscv64 glibc** cross-compiler, because this machine has no native RV64 *musl* toolchain, and
+`malloc-contract.c` asserts allocator behaviour that is musl's. It died at
+`MALLOC_FAIL:moving realloc trigger` with `MALLOC_NATIVE_EXIT:1` — glibc's `realloc` did not
+move the block where musl's does. `nonlinear_and_linear_tag_transfer` then fails for the same
+reason and nothing else: it counts `MALLOC_TAG_COPY_OK` twice, once per `ok` run, and the native
+run exited before printing it. **The Capstone run printed it**, so the tag transfer the check
+exists for — including the linear `sublet_move` case — does hold here.
+
+This was predicted before the run rather than explained after it. Closing it properly needs a
+native RV64 musl toolchain, which is a buildroot reconfiguration and its own piece of work; the
+gate must not be reported as passing until then.
 
 ### The emulator is a debug build, and that is why the long cases are impractical here
 
