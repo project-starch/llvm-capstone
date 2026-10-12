@@ -6,7 +6,7 @@ driving the real upstream function, measured on three arms on 2026-10-06.
 | arm | detected | scored |
 |---|---:|---:|
 | `spatial` (base Capstone) | **5** | 5 |
-| ~~`sublet`~~ (dropped: it was level0 under a Sublet label, see below) | -- | -- |
+| `sublet` (Capstone + Sublet, the application heap) | **5** | 5 |
 | `cheribsd-revocation` (purecap) | **3** | 5 |
 
 **The two the purecap guest misses are the finding, and they were predicted
@@ -22,6 +22,13 @@ exceeds the ALLOCATOR'S ROUNDING, not when it exceeds the object.
 2026-10-06 was not the Sublet heap"). Its SDK kept the default level0 heap, so its five
 catches, at the same pcs as `spatial`, were level0 bounds under a Sublet label. The run
 stays in `sublet-20261006-161014` as the record of what was measured; no verdict is taken
+
+**Re-measured 2026-10-11 and it holds: 5 of 5.** The arm now runs on an SDK built with
+`CAPSTONE_APPLICATION_HEAP=sublet`, where `malloc`, `free` and `realloc` are
+`sublet_heap.c`'s. `tools/arms.json` `app-sublet` declares `uaf-malloc` must FAULT on this arm
+where `app-level0` declares it must COMPLETE, and both controls behaved as declared in the same
+boot: that, and not the label, is what makes this a Sublet measurement
+(`20261011-034640-qemu/sublet`).
 from it. This paragraph used to call it "a measurement and not a relabelled copy" -- the
 images did differ, but the configuration under test did not. The protected-allocator
 column for these programs is `virtual-malloc` (5 of 5, `2026-10-10-virtual/`).

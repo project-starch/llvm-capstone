@@ -1,9 +1,18 @@
 # Results
 
 9 defects in PostgreSQL 17.5 and its contrib extensions, each a `trigger.sql`
-run against a real stand-alone backend, measured on three arms on 2026-10-06;
-case 03 re-measured on all three on 2026-10-10. Five of the nine detections have a
-negative control run beside them; the section below names the four that do not.
+run against a real stand-alone backend. First measured on three arms on
+2026-10-06; case 03 re-measured on all three on 2026-10-10; and on 2026-10-10
+both Capstone arms re-measured through the shared judge, which is where these
+verdicts now come from.
+
+`verdicts.tsv` and every `case.json` verdict for `spatial`, `sublet`,
+`virtual-malloc` and `virtual-pg-pools` are written by
+`tools/derive-verdicts.py` from the bundles `corpus.json` names in
+`verdict_bundles`; `check-corpus.py` re-judges every stored Observation and
+fails on any difference, so none of them can be edited by hand.
+`cheribsd-revocation` is the exception and is still hand-written: its runner
+does not emit a bundle yet.
 
 | arm | detected | scored | out of denominator |
 |---|---:|---:|---:|
@@ -17,12 +26,21 @@ Every denominator is the cases *that arm can run*, and nothing is out of one.
 
 Each of the five cases that any arm detects has a `control.sql`: the same
 statement with one value moved to the safe side of the boundary the defect
-crosses, which must COMPLETE on the same image and the same fixture. Of the nine
-detections, five have that control run on file, and it completes in each:
-`cheribsd-revocation` 02 and 03 (`cheribsd-revocation-control-20261010-104207`),
-`sublet` 02 (`sublet-control-20261010-043643`) and 03 (`sublet-control-20261010-105616`),
-and `spatial` 03 (`spatial-control-20261010-104936`). The other four -- `sublet` 01, 04
-and 06, and `spatial` 02 -- have no control run yet and rest on the trigger run alone.
+crosses, which must COMPLETE on the same image and the same fixture.
+
+On the two Capstone arms the runner now runs a case's control IN THE SAME
+INVOCATION as the case, whenever the case faulted, and the judge records what
+it showed beside the verdict. On cases 02 and 03 the control is what attributes
+the fault -- the evidence reads `by control: control.sql (the statement below
+the threshold) completed on this image` on both arms. On 01, 04 and 06 the
+fault lands in a function the case declares, so the declared site attributes it
+and the control is not what the row rests on. That is the separation the judge
+draws: the declared site says WHERE the fault is, a control says whether the
+arm would have faulted anyway.
+
+The purecap arm's controls were run as a separate pass
+(`cheribsd-revocation-control-20261010-104207`, all five held), because that
+runner takes `--control` rather than pairing the two in one invocation.
 
 **Case 03's first control was wrong, and it cost the row a withdrawal.** On
 2026-10-08 the sublet row was withdrawn because the control faulted at the

@@ -116,6 +116,16 @@ shared judge (`tools/verdicts.py`) decides; it writes `OUT/<arm>/` bundles, and
 `tools/derive-verdicts.py` turns the bundles named in `corpus.json` `verdict_bundles` into the
 `case.json` verdicts and `results/verdicts.tsv` (SCHEMA.md, "Verdicts").
 
+`BUILD_DOMAIN` also builds each case **twice**: `NN-slug-<arm>.dom` and
+`NN-slug-<arm>-control.dom`, the second from the same `case.c` with `PG_NEGATIVE_CONTROL` defined.
+That replaces the one invalid access with a valid one and leaves the allocation and free traffic
+byte for byte, so the control must COMPLETE. This is a different question from the programs under
+`controls/`: those ask whether the arm reports at all, and this asks whether a particular fault
+depends on a particular defect. The runner boots a case's control only when that case faulted and
+nothing else attributed it; a control that completes attributes the fault, and a control that
+faults means the fault was not the defect. The `-control` suffix is outside the glob that
+discovers cases, so a control cannot be scored as a measurement.
+
     export CAPSTONE_QEMU_BINARY=<tree>/capstone/capstone-qemu/build/qemu-system-riscv64
     export CAPSTONE_LLVM_BUILD_DIR=<tree>/llvm/build-rel      # NOT cmake-build-debug
     export CAPSTONE_BUILDROOT_DIR=<tree>/capstone/caplifive-buildroot

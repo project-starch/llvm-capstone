@@ -43,7 +43,9 @@
     "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261008-080219",
     "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043120",
     "capstone/bug-corpora/postgres/sql-repros/results/sublet-control-20261010-043643",
-    "capstone/bug-corpora/postgres/sql-repros/results/2026-10-10-virtual"
+    "capstone/bug-corpora/postgres/sql-repros/results/2026-10-10-virtual",
+    "capstone/bug-corpora/postgres/sql-repros/results/20261010-181355-qemu/spatial",
+    "capstone/bug-corpora/postgres/sql-repros/results/20261010-183151-qemu/sublet"
   ],
   "runners": [
     "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",
@@ -57,6 +59,8 @@
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-    "virtual-pg-pools": "results/2026-10-10-virtual/virtual-pg-pools"
+    "virtual-pg-pools": "results/2026-10-10-virtual/virtual-pg-pools",
+    "spatial": "results/20261010-181355-qemu/spatial",
+    "sublet": "results/20261010-183151-qemu/sublet"
   }
 }

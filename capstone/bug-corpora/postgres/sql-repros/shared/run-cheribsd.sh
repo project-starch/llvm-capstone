@@ -62,11 +62,17 @@ G() { ssh -n $K -p "$PORT" root@localhost "$@" 2>/dev/null; }
 # A COPY THAT FAILS IS NOT A RUN. scp here used to discard its own exit status,
 # so a failed copy left the PREVIOUS case file in /tmp and the next case was
 # scored against it. The hash is read back out of the guest.
+# PUT_SHA256 is the digest of the last file this put() sent, so a run can record not just the
+# NAME of the file it ran but its contents. Two control runs of the same corpus differ only by
+# which control.sql was current, and until 2026-10-10 they could be told apart only by their
+# timestamps -- raised in review on PR #215.
+PUT_SHA256=""
 put() {
   scp $K -P "$PORT" "$1" root@localhost:"$2" >/dev/null 2>&1 || {
     echo "COPY FAILED: $1 -> guest:$2" >&2; return 1; }
   local want have
   want=$(sha256sum < "$1" | cut -d" " -f1)
+  PUT_SHA256=$want
   have=$(G "sha256 -q $2" | tr -d "\r")
   [ -n "$have" ] && [ "$want" = "$have" ] || {
     echo "COPY MISMATCH: $1 -> guest:$2 ($want != ${have:-unreadable})" >&2; return 1; }
@@ -126,6 +132,7 @@ for e in $WANT; do
   fi
 done
 
+RAN_SHAS=""
 TSV=$OUT/matrix.tsv
 printf 'case\tarm\tverdict\tevidence\n' > "$TSV"
 n=0
@@ -157,11 +164,14 @@ for tag in $CASES; do
   fi
 
   if ! put "$d/$SQLNAME" /tmp/run.sql; then
+    :
     v=other
     why="$SQLNAME did not reach the guest intact -- an infrastructure failure, not a measurement"
     printf "%-52s %-16s %s\n" "$tag" "$v" "${why:0:60}"
     printf "%s\tcheribsd-revocation\t%s\t%s\n" "$tag" "$v" "$why" >> "$TSV"; continue
   fi
+  RAN_SHAS="$RAN_SHAS    \"$tag\": \"$PUT_SHA256\",
+"
   raw=$(G "su -m pg -c 'w=\$(mktemp -d /tmp/pcrun-XXXXXX); cp -R $BASE \$w/data; \
     timeout 900 $PGBIN/postgres --single -D \$w/data postgres < /tmp/run.sql 2>&1; \
     echo __EXIT=\$?; rm -rf \$w'")
@@ -243,9 +253,13 @@ cat > "$OUT/inputs.json" <<JSON
     "case": "$GATE",
     "verdict": "${gv:-absent}",
     "passed": $([ -n "$CONTROL" ] || [ "${gv:-}" = detected ] && echo true || echo false),
-    "kind": "a corpus case required to be detected, which is weaker than a purpose-built control: it says the mechanism reported on something in this configuration, not that it would have reported on each silent case"
+    "applied": $([ -n "$CONTROL" ] && echo false || echo true),
+    "kind": "a corpus case required to be detected, which is weaker than a purpose-built control: it says the mechanism reported on something in this configuration, not that it would have reported on each silent case"$([ -n "$CONTROL" ] && printf ',\n    "not_applied_because": "this is a control run: nothing in it should fault, so a gate that requires a detection cannot be read. passed is true by that exemption and is NOT evidence that the mechanism reported in this run"')
   },
   "ran": "$SQLNAME",
+  "ran_sha256": {
+$(printf '%s' "$RAN_SHAS" | sed '$ s/,$//')
+  },
   "only": "${ONLY:-all}",
   "cases": $n,
   "scored": $scored

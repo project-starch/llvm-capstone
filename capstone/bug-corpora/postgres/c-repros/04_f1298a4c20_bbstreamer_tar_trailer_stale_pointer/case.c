@@ -1,5 +1,14 @@
 #include "corpus.h"
 
+/* NEGATIVE CONTROL, under -DPGCLIENT_NEGATIVE_CONTROL.
+ *
+ * SCHEMA rule 5. A fault is this case's result only if it depends on the
+ * defect, and an arm that would fault on the same shape just below the
+ * threshold is reporting something else. The control keeps the allocation,
+ * the call and the function under test, and moves ONE value to the safe side
+ * of the boundary the defect crosses. It must complete.
+ */
+
 PGCLIENT_CASE(4) {
 /* pg_basebackup reads past its input when forwarding a tar member trailer.
  * Upstream fix f1298a4c20; live at the 17.5 pin.
@@ -36,7 +45,14 @@ PGCLIENT_CASE(4) {
   /* The input chunk, sized so the padding ends exactly at its end -- the
    * condition that turns the advanced pointer from "wrong bytes" into "off
    * the end of the allocation". Allocated exactly, no slack. */
+#ifdef PGCLIENT_NEGATIVE_CONTROL
+  /* Twice the padding, so bbstreamer_buffer_until leaves `data` in the middle
+   * of the chunk rather than one past its end. The same transcribed read of
+   * pad_bytes_expected bytes then stays inside the allocation. */
+  const int chunk_len = pad_bytes_expected * 2;
+#else
   const int chunk_len = pad_bytes_expected;
+#endif
   char *chunk = pgclient_malloc((size_t) chunk_len);
   for (int i = 0; i < chunk_len; i++) chunk[i] = 0;
 
