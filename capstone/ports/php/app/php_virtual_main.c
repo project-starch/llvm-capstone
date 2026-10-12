@@ -76,7 +76,14 @@ PHP_VIRTUAL_ASSERT(header_padding_is_0, MEM_HEADER_PADDING == 0);
  * cheapest way to manufacture a result, and the physical port's own gate exists because of it.
  * In hier mode the arm is still a compile-time flag, exactly as it is physically; the runtime
  * mode bits arrive with the allocator seam. */
-#ifdef ZEND_CAP_BOUNDS_REAL_SIZE
+#ifdef ZEND_CAP_SUBLET
+/* SEAM MODE: the arm is a RUNTIME word, not a compile-time flag, so one image serves both runs
+ * of a pair and they cannot differ in anything else. zend_cap_mode() reads PHP_CAP_MODE and
+ * echoes what it resolved, and REFUSES to pick an arm if the variable is absent -- a run that
+ * silently chose is a run whose result means nothing. */
+#  include "zend-cap-port.h"
+#  define PHP_VIRTUAL_ARM "seam (allocator mode is runtime: see the ZEND_CAP_MODE line)"
+#elif defined(ZEND_CAP_BOUNDS_REAL_SIZE)
 #  define PHP_VIRTUAL_ARM "bounds=real-size (CONTROL: stock PHP's rounding is reachable)"
 #else
 #  define PHP_VIRTUAL_ARM "bounds=exact (FAULT: every capability ends at the caller's request)"
@@ -274,6 +281,22 @@ int main(int argc, char **argv)
     printf("PHP_VIRTUAL case=%s mode=%s\n", label, mode);
     fflush(stdout);
 
+#ifdef ZEND_CAP_SUBLET
+    /* THE ARM, resolved HERE -- before a single emalloc -- so it is in the transcript even for
+     * a run that faults during startup, and so an absent mode fails before the engine rather
+     * than halfway through it.
+     *
+     * argv[3] in preference to PHP_CAP_MODE, because then the arm is visible in the command
+     * line the runner printed as well as in this process's output: a pair whose two runs are
+     * one image differing only in a mode word has to make that word impossible to lose. With
+     * neither present, zend_cap_mode() aborts rather than choosing. */
+    if (argc > 3) {
+        zend_cap_set_mode((unsigned int) strtoul(argv[3], (char **)0, 0));
+    } else {
+        (void) zend_cap_mode();
+    }
+#endif
+
     if (strcmp(mode, "stmt") != 0 && strcmp(mode, "expr") != 0
         && strcmp(mode, "control") != 0) {
         fprintf(stderr, "usage: %s <expr|stmt|control> [case-label] < trigger.php\n", argv[0]);
@@ -395,6 +418,23 @@ int main(int argc, char **argv)
 
     if (err_count) { stage |= ST_ERRORS; }
 
+#ifdef ZEND_CAP_SUBLET
+    /* WHAT THE SEAM ACTUALLY DID. The pair's gate is that the fault run reports strictly more
+     * revokes than the control; without these counters that gate cannot be evaluated, and a
+     * pair whose arms were secretly the same would report a clean sweep. sublet_stats is static
+     * per translation unit, so the heap's counters do not see this layer's. */
+    {
+        unsigned long cs[8], bs[4];
+        zend_cap_stats(cs);
+        zend_cap_backing_stats(bs);
+        printf("PHP_VIRTUAL SEAM blocks=%lu frees=%lu issues=%lu retires=%lu revokes=%lu "
+               "splits=%lu reallocs=%lu live=%lu\n",
+               cs[0], cs[1], cs[2], cs[3], cs[4], cs[5], cs[6], cs[7]);
+        printf("PHP_VIRTUAL SEAM records_live=%lu records_peak=%lu slabs=%lu lookups=%lu\n",
+               bs[0], bs[1], bs[2], bs[3]);
+        fflush(stdout);
+    }
+#endif
     printf("PHP_VIRTUAL RESULT stage=0x%03x rtype=%u errors=%u output_bytes=%lu\n",
            stage, rtype, err_count, sink_bytes);
     printf("PHP_VIRTUAL retval=0x%08x\n",

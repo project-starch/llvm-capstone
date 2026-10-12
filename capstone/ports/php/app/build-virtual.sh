@@ -89,6 +89,67 @@ case "$WHAT" in
       || { echo "hier probe build FAILED" >&2; exit 1; }
     echo "  built $IMG"
     ;;
+  inert)
+    # PATCH INERTNESS (the plan's Verification 4). The patched zend_alloc.c, compiled WITHOUT
+    # -DZEND_CAP_SUBLET, must produce the same object as the pristine source. If it does, then
+    # the physical column's results and Phase A's hierarchical results are untouched by the
+    # file having been patched at all, and the three ZEND_CAP_* macros really are inert.
+    #
+    # Compiled at -g0 for this comparison ONLY. Debug info embeds the source PATH, and the two
+    # files necessarily live at different paths (/corpus is read-only, so the patched copy is
+    # under $OUT) -- that difference is not codegen, and comparing with it in would make the
+    # check fail for a reason that has nothing to do with the patch.
+    P=${PHP_SRC:-/corpus/build/php-5.0.0}
+    [ -d "$P/Zend" ] || { echo "PHP source not at $P -- corpus not mounted?" >&2; exit 2; }
+    SEAM="$R/capstone/ports/php/zend-alloc/sublet"
+    PATCHES="$R/capstone/ports/php/zend-alloc/patches"
+    W="$OUT/php-virtual/inert"
+    rm -rf "$W"; mkdir -p "$W/patched/Zend"
+    cp "$P/Zend/zend_alloc.c" "$W/patched/Zend/zend_alloc.c"
+    patch -s -p1 -d "$W/patched" < "$PATCHES/php-5.0.0-0001-zend-alloc-sublet-hooks.patch" \
+      || { echo "  the patch does not apply" >&2; exit 1; }
+    ICF=(-O0 -std=gnu89 -fno-common -g0 -mllvm -capstone-shrink-stack=false
+         -I"$P" -I"$P/Zend" -I"$P/main" -I"$P/TSRM" -I"$P/ext" -I"$P/ext/standard")
+    "$CC" "${ICF[@]}" -c "$P/Zend/zend_alloc.c" -o "$W/pristine.o" 2>"$W/pristine.log" \
+      || { echo "  pristine zend_alloc.c did not compile" >&2; tail -5 "$W/pristine.log" >&2; exit 1; }
+    "$CC" "${ICF[@]}" -c "$W/patched/Zend/zend_alloc.c" -o "$W/patched.o" 2>"$W/patched.log" \
+      || { echo "  patched zend_alloc.c did not compile with the define absent" >&2
+           tail -5 "$W/patched.log" >&2; exit 1; }
+    if cmp -s "$W/pristine.o" "$W/patched.o"; then
+      echo "  PATCH IS INERT: patched == pristine byte for byte with ZEND_CAP_SUBLET undefined"
+      "$CAPSTONE_LLVM_BIN/llvm-objdump" -h "$W/pristine.o" 2>/dev/null \
+        | awk '$2==".text"{printf "    .text %d bytes, identical\n", strtonum("0x" $3)}'
+    else
+      echo "  PATCH IS NOT INERT -- the guarded hunks changed the object:" >&2
+      cmp -l "$W/pristine.o" "$W/patched.o" 2>/dev/null | head -5 >&2
+      "$CAPSTONE_LLVM_BIN/llvm-objdump" -h "$W/pristine.o" > "$W/h-pristine.txt" 2>/dev/null
+      "$CAPSTONE_LLVM_BIN/llvm-objdump" -h "$W/patched.o"  > "$W/h-patched.txt"  2>/dev/null
+      diff "$W/h-pristine.txt" "$W/h-patched.txt" >&2 || true
+      exit 1
+    fi
+    # And the positive control: WITH the define it must differ, or the check above is vacuous.
+    "$CC" "${ICF[@]}" -DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone" \
+      -c "$W/patched/Zend/zend_alloc.c" -o "$W/sublet.o" 2>"$W/sublet.log" \
+      || { echo "  patched zend_alloc.c did not compile WITH the define" >&2
+           tail -5 "$W/sublet.log" >&2; exit 1; }
+    if cmp -s "$W/pristine.o" "$W/sublet.o"; then
+      echo "  CONTROL FAILED: -DZEND_CAP_SUBLET produced the same object, so the hunks do nothing" >&2
+      exit 1
+    fi
+    echo "  control: with -DZEND_CAP_SUBLET the object DOES differ, so the hunks are live"
+    ;;
+  seam-probe)
+    # The seam allocator, driven directly through the hooks the patched zend_alloc.c calls,
+    # before any of PHP is pointed at it. Links the REAL zend-cap-*.c: a probe with its own
+    # copy of the logic would pass while the engine broke.
+    SEAM="$R/capstone/ports/php/zend-alloc/sublet"
+    IMG="$OUT/probe-seam.dom"
+    echo "  compiling the seam probe ..."
+    "$CC" -O1 -I"$R/capstone" -I"$SEAM" \
+      "$SEAM/probe-seam.c" "$SEAM/zend-cap-blocks.c" "$SEAM/zend-cap-backing.c" \
+      -o "$IMG" || { echo "seam probe build FAILED" >&2; exit 1; }
+    echo "  built $IMG"
+    ;;
   php)
     # ---- the engine itself, as a hosted process ----------------------------------------
     #
@@ -103,26 +164,33 @@ case "$WHAT" in
     P=${PHP_SRC:-/corpus/build/php-5.0.0}
     [ -d "$P/Zend" ] || { echo "PHP source not at $P -- corpus not mounted?" >&2; exit 2; }
     E="$R/capstone/ports/php/engine"
+    MODE=${PHP_CAP_ALLOC_MODE:-hier}
+    case "$MODE" in
+      hier|seam) ;;
+      *) echo "  PHP_CAP_ALLOC_MODE=$MODE? (hier|seam)" >&2; exit 2 ;;
+    esac
+    SEAM="$R/capstone/ports/php/zend-alloc/sublet"
+    PATCHES="$R/capstone/ports/php/zend-alloc/patches"
+
     # Per-arm object and log directories. One shared obj/ would have the second build
     # overwrite the first's objects, and a pair assembled from whichever came last is not a
     # pair -- the two images would be byte-identical and the suite's own gate would refuse them.
+    #
+    # SEAM MODE IS THE EXCEPTION, and deliberately so: there the arm is a RUNTIME mode
+    # (PHP_CAP_MODE, read by zend_cap_mode()), so ONE image serves both runs and the two arms
+    # cannot differ in anything but the mode word. The byte-identical check that guards the
+    # hierarchical pair would be exactly wrong here -- see the plan's Verification 5, which
+    # replaces it with: the image must contain the revoke encoding, the two runs must report
+    # different mode lines, and the fault run must report strictly more revokes.
     case " ${EXTRA_CF:-} " in
       *" -DZEND_CAP_ESTRNDUP_AUDIT "*)   _arm=audit ;;
       *" -DZEND_CAP_BOUNDS_REAL_SIZE "*) _arm=control ;;
       *) _arm=fault ;;
     esac
+    [ "$MODE" = seam ] && _arm=seam
     OBJ="$OUT/php-virtual/$_arm/obj"; LOG="$OUT/php-virtual/$_arm/log"
     mkdir -p "$OBJ" "$LOG"
 
-    MODE=${PHP_CAP_ALLOC_MODE:-hier}
-    if [ "$MODE" != hier ]; then
-      # seam mode is the physical port's arena allocator serving emalloc directly, and its
-      # arena, slot table and revocation are physical-profile code. Replacing it is the
-      # allocator-seam work the plan treats as its own design question -- not Phase A.
-      echo "  PHP_CAP_ALLOC_MODE=$MODE is not available on the virtual profile yet (hier only)." >&2
-      echo "  The temporal axis arrives with the Sublet seam; see the plan's allocator section." >&2
-      exit 2
-    fi
 
     CF=(-O0 -std=gnu89 -fno-common -gline-tables-only
         -I"$P" -I"$P/Zend" -I"$P/main" -I"$P/TSRM" -I"$P/ext" -I"$P/ext/standard")
@@ -170,6 +238,33 @@ case "$WHAT" in
                        -D_estrdup=php_raw_estrdup -D_estrndup=php_raw_estrndup
                        -D_efree=php_raw_efree)
 
+    # ---- the allocator seam ----------------------------------------------------------
+    # zend_alloc.c is PATCHED rather than renamed aside: the six derivation sites have to go
+    # through a lookup, which no -D can do. The corpus is mounted read-only, so the patch is
+    # applied to a copy and the pristine tree is never touched.
+    ZEND_ALLOC_SRC="$P/Zend/zend_alloc.c"
+    if [ "$MODE" = seam ]; then
+      PATCHED="$OUT/php-virtual/$_arm/patched"
+      rm -rf "$PATCHED"
+      mkdir -p "$PATCHED/Zend"
+      cp "$P/Zend/zend_alloc.c" "$PATCHED/Zend/zend_alloc.c"
+      patch -s -p1 -d "$PATCHED" < "$PATCHES/php-5.0.0-0001-zend-alloc-sublet-hooks.patch" \
+        || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
+      ZEND_ALLOC_SRC="$PATCHED/Zend/zend_alloc.c"
+      # -I the seam for zend-cap-port.h, and -I capstone for <sublet/sublet.h>, which is the
+      # same header the virtual heap itself uses.
+      # NOT -DPHP_CAP_ALLOC_SEAM: that is the PHYSICAL port's flag for "zend_alloc.c is
+      # dropped", under which libc/php_capstone_php_stubs.c supplies alloc_globals and
+      # start_memory_manager itself. This seam KEEPS zend_alloc.c -- that is the whole point --
+      # so those definitions must come from PHP, and PHP's AG(cache) stays live. ZEND_CAP_SUBLET
+      # is the only flag the seam needs.
+      CF+=(-DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone")
+      ZEND_ALLOC_RENAME=()          # the seam calls PHP's own entry points; nothing is renamed
+      echo "  allocator: SEAM -- zend_alloc.c patched (8 guarded hunks), per-emalloc lifetimes"
+    else
+      echo "  allocator: HIERARCHICAL -- zend_alloc.c renamed aside and re-bounded"
+    fi
+
     # ext/standard, byte-identical from the corpus tree. Checked against build-engine.sh's own
     # list rather than trusted: these two must select the same TUs or the two columns are not
     # the same program.
@@ -197,16 +292,27 @@ case "$WHAT" in
     # and ours:
     #   php_virtual_lower.c       zend_cap_widen, the identity here -- see that file
     #   php_virtual_main.c        a real main(), the trigger on stdin
-    SUP=("$E/libc/php_capstone_zend_hier.c" "$E/libc/php_capstone_php_stubs.c"
-         "$E/libc/php_capstone_ext_stubs.c" "$HERE/php_virtual_lower.c"
-         "$HERE/php_virtual_main.c")
+    SUP=("$E/libc/php_capstone_php_stubs.c" "$E/libc/php_capstone_ext_stubs.c"
+         "$HERE/php_virtual_lower.c" "$HERE/php_virtual_main.c")
+    if [ "$MODE" = seam ]; then
+      # The seam serves PHP's allocator from below instead of wrapping it from above, so the
+      # re-bounding wrapper is not linked at all: there is nothing to re-bound, because
+      # ZEND_CAP_PAYLOAD already hands out a capability bounded to the caller's object.
+      SUP+=("$SEAM/zend-cap-blocks.c" "$SEAM/zend-cap-backing.c")
+    else
+      SUP+=("$E/libc/php_capstone_zend_hier.c")
+    fi
 
     OBJS=()
     fails=0
     echo "  compiling $TU_COUNT+1 Zend TUs, $(printf '%s\n' $EXT | wc -l) ext/standard, ${#SUP[@]} support ..."
     for t in $TUS; do
-      _rn=(); [ "$t" = "zend_alloc" ] && _rn=("${ZEND_ALLOC_RENAME[@]}")
-      "$CC" "${CF[@]}" ${_rn[@]+"${_rn[@]}"} -c "$P/Zend/$t.c" -o "$OBJ/$t.o" 2>"$LOG/$t.log" \
+      _rn=(); _src="$P/Zend/$t.c"
+      if [ "$t" = "zend_alloc" ]; then
+        _src="$ZEND_ALLOC_SRC"
+        [ ${#ZEND_ALLOC_RENAME[@]} -gt 0 ] && _rn=("${ZEND_ALLOC_RENAME[@]}")
+      fi
+      "$CC" "${CF[@]}" ${_rn[@]+"${_rn[@]}"} -c "$_src" -o "$OBJ/$t.o" 2>"$LOG/$t.log" \
         || { echo "    FAILED Zend/$t"; fails=$((fails + 1)); continue; }
       OBJS+=("$OBJ/$t.o")
     done
@@ -244,6 +350,7 @@ case "$WHAT" in
       *" -DZEND_CAP_BOUNDS_REAL_SIZE "*) ARM=control ;;
       *) ARM=fault ;;
     esac
+    [ "$MODE" = seam ] && ARM=seam
     IMG="$OUT/php-virtual/php-$ARM.dom"
     echo "  arm: $ARM"
     echo "  linking ..."
@@ -262,5 +369,5 @@ case "$WHAT" in
     fi
     sha256sum "$IMG"
     ;;
-  *) echo "usage: build-virtual.sh [probe|hier-probe|php]" >&2; exit 2 ;;
+  *) echo "usage: build-virtual.sh [probe|hier-probe|seam-probe|inert|php]" >&2; exit 2 ;;
 esac

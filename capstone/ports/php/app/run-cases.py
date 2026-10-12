@@ -44,6 +44,24 @@ import verdicts                                                  # noqa: E402
 ARMS = {"php-virtual-zend-rounded": "control", "php-virtual-zend-exact": "fault"}
 CONTROL_RUN = "emalloc-overread"      # must match arms.json's `controls` key
 
+# The temporal axis: THREE columns from ONE image, differing only in a runtime mode word, so a
+# catch can be attributed to the per-object retire rather than to the allocator underneath it.
+# The modes themselves live in arms.json, so the runner cannot quietly disagree with the judge.
+TEMPORAL_ARMS = ("php-virtual-seam-stock", "php-virtual-seam-block", "php-virtual-seam-object")
+SANITY_RUN = "revocation-sanity"      # must match arms.json's `controls` key
+SANITY_CASE = "CRASH-110"             # a benign workload for the temporal axis: its only defect
+                                      # is spatial, and these arms hold the bound at REAL_SIZE
+MODE_LINE = re.compile(r"ZEND_CAP_MODE (\d+) exact=(\d) revoke=(\d)")
+SEAM_LINE = re.compile(r"PHP_VIRTUAL SEAM blocks=(\d+) frees=(\d+) issues=(\d+) "
+                       r"retires=(\d+) revokes=(\d+)")
+# The seam's own failures, which are instrument failures and never verdicts.
+SEAM_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
+SEAM_DOUBLE_FREE = re.compile(r"ZEND_CAP_DOUBLE_FREE key=(0x[0-9a-f]+)")
+# A fault inside the seam's own code is a port artefact, not a catch. Named here because the
+# physical column learned it the expensive way: a fault in the allocator looks exactly like a
+# fault in the program when all you have is a pc.
+SEAM_OWN_FILES = ("zend-cap-blocks.c", "zend-cap-backing.c", "zend_alloc.c")
+
 
 def suite_text():
     if not SUITE.is_file():
@@ -163,14 +181,14 @@ class Sites:
         return func, where
 
 
-def run_guest(args, image, runs, record, serial):
+def run_guest(args, image, runs, record, serial, extra=()):
     cmd = [sys.executable, str(HERE / "run-virtual.py"),
            "--qemu", str(args.qemu), "--images", str(args.images), "--adapter", str(args.adapter),
            "--image", str(image), "--record", str(record), "--serial-log", str(serial),
            "--timeout", str(args.timeout)]
     for name, argv in runs:
         cmd += ["--run", f"{name}={argv}"]
-    for case in args.cases:
+    for case in list(args.cases) + [c for c in extra if c not in args.cases]:
         cmd += ["--extra", str(TRIGGERS / f"{case}.php")]
     print("  " + " ".join(cmd[:6]) + " ...", flush=True)
     rc = subprocess.call(cmd)
@@ -263,14 +281,197 @@ def observe(case, arm, image_sha, exits, chunks, sites, expect, control, audit=N
     return obs
 
 
+def seam_counters(text):
+    """(mode, revokes, retires) a run reported about itself, or (None, None, None)."""
+    m, s = MODE_LINE.search(text or ""), SEAM_LINE.search(text or "")
+    return (int(m.group(1)) if m else None,
+            int(s.group(5)) if s else None,
+            int(s.group(4)) if s else None)
+
+
+def observe_temporal(case, arm, image_sha, exits, chunks, sites, control, stock_completed):
+    """One Observation on the temporal axis.
+
+    Attribution here cannot be by site: a use-after-free faults wherever the program touches
+    the dead object, which is somewhere in Zend/ or ext/ and differs per case. It is taken from
+    the STOCK column instead -- the same image, the same input, the same trigger, with nothing
+    revoked. If that run completed and this one faulted, the fault is the defect rather than a
+    port artefact, which is exactly what the judge's `control` attribution is for.
+    """
+    text = "\n".join(chunks.get(case, []))
+    rc = exits.get(case)
+    obs = verdicts.Observation(case=case, arm=arm, image_sha256=image_sha, controls=[control])
+
+    fail = SEAM_FAIL.search(text)
+    if fail:
+        # The instrument ran out or found its own invariant broken. Never a verdict.
+        obs.infra = "infra"
+        obs.notes = f"the seam failed: code={fail.group(1)} {fail.group(2)[:80]}"
+        return obs
+    if rc is None:
+        obs.infra = "infra"
+        obs.notes = "the run produced no exit marker"
+        return obs
+
+    obs.reached = "evaluating the trigger" in text
+    obs.reach_evidence = "stage line 'evaluating the trigger' printed"
+    obs.completed = "PHP_VIRTUAL_DONE" in text and rc == 0
+    _, revokes, retires = seam_counters(text)
+    if revokes is not None:
+        obs.notes = f"revokes={revokes} retires={retires}"
+
+    double = SEAM_DOUBLE_FREE.search(text)
+    if double:
+        # Two efrees of the same pointer with no allocation between: CWE-415, caught by name at
+        # a labelled site rather than left to corrupt AG(cache).
+        obs.fault = verdicts.Fault(cause=0, pc=0, symbol="zend_cap_retire")
+        obs.attribution = "probe"
+        obs.attribution_evidence = (f"ZEND_CAP_DOUBLE_FREE at {double.group(1)}: the same block "
+                                    f"retired twice with no issue in between")
+        return obs
+
+    fault = verdicts.domain_fault(text, sites.symbols)
+    if fault is not None:
+        obs.fault = fault
+        m = re.search(r"code=(0x[0-9a-f]+)-", text)
+        func, where = sites.locate(fault.pc, int(m.group(1), 16)) if m else ("", "")
+        obs.notes = (obs.notes + "; " if obs.notes else "") + (f"{func} at {where}" if where else "")
+        if any(f in (where or "") for f in SEAM_OWN_FILES):
+            obs.attribution_evidence = (f"fault at {where} is inside the port's own allocator, "
+                                        f"not in the program under test")
+        elif stock_completed:
+            obs.attribution = "control"
+            obs.attribution_evidence = (f"fault at {where or hex(fault.pc)} in "
+                                        f"{func or '?'}; the stock column (nothing revoked) ran "
+                                        f"this same image on this same trigger to completion")
+        else:
+            obs.attribution_evidence = (f"fault at {where or hex(fault.pc)}, and the stock "
+                                        f"column did not complete this case either, so nothing "
+                                        f"ties the fault to the defect")
+    elif rc not in (0, None):
+        obs.infra = "infra"
+        obs.notes = f"exit {rc} with no domain fault reported"
+    return obs
+
+
+def run_temporal(args, cases, manifest, arms):
+    """Three columns from one image. Returns the exit status."""
+    sha = verdicts.sha256(args.seam)
+    llvm_bin = os.environ["CAPSTONE_LLVM_BIN"]
+    sites = Sites(llvm_bin, args.seam)
+
+    # GATE (a): the image must contain the revoke encoding at all. The byte-identical check that
+    # guards a compile-time pair cannot apply to one image with a runtime mode, so this replaces
+    # it -- see the plan's Verification 5.
+    dis = subprocess.run([str(Path(llvm_bin) / "llvm-objdump"), "-d", str(args.seam)],
+                         capture_output=True, text=True).stdout
+    revokes_in_image = len(re.findall(r"\brevoke\b", dis))
+    if not revokes_in_image:
+        sys.exit(f"{args.seam.name} contains no revoke instruction: every arm would be the "
+                 f"stock column and a clean sweep would mean nothing")
+    print(f"image carries {revokes_in_image} revoke instructions, "
+          f"{len(re.findall(chr(92) + 'bmrev' + chr(92) + 'b', dis))} mrev")
+
+    platform = {"compiler": verdicts.sha256(Path(llvm_bin) / "clang"),
+                "qemu": verdicts.sha256(args.qemu),
+                "firmware": verdicts.sha256(args.images / "fw_jump.elf"),
+                "kernel": verdicts.sha256(args.images / "Image"),
+                "runner": verdicts.sha256(HERE / "run-virtual.py")}
+    args.out.mkdir(parents=True, exist_ok=True)
+
+    seen_modes, seen_revokes, records, worst = {}, {}, {}, 0
+    stock_completed = set()
+    for arm in TEMPORAL_ARMS:
+        mode = arms[arm]["mode"]
+        print(f"\n==> {arm}  (PHP_CAP_MODE={mode}, {args.seam.name})", flush=True)
+        runs = [(SANITY_RUN, f"{args.seam.name} expr {SANITY_CASE} {mode} "
+                             f"< /mnt/vm/{SANITY_CASE}.php")]
+        for case in cases:
+            runs.append((case, f"{args.seam.name} {manifest[case]['mode']} {case} {mode} "
+                               f"< /mnt/vm/{case}.php"))
+        record = args.out / f"{arm}-run.json"
+        if args.from_record:
+            if not record.is_file():
+                sys.exit(f"--from-record: no stored run at {record}")
+            rc, rec = 0, json.loads(record.read_text())
+        else:
+            rc, rec = run_guest(args, args.seam, runs, record,
+                                args.out / f"{arm}-serial.log", extra=[SANITY_CASE])
+        worst = max(worst, rc)
+        records[arm] = rec
+
+        stext = "\n".join(rec["output"].get(SANITY_RUN, []))
+        smode, srevokes, _ = seam_counters(stext)
+        seen_modes[arm] = smode
+        seen_revokes[arm] = srevokes
+        sanity_ok = ("PHP_VIRTUAL_DONE" in stext and rec["exits"].get(SANITY_RUN) == 0)
+        print(f"    {SANITY_RUN}: {'complete' if sanity_ok else 'DID NOT COMPLETE'} "
+              f"(mode={smode} revokes={srevokes})")
+        if arm == TEMPORAL_ARMS[0]:
+            for case in cases:
+                ctext = "\n".join(rec["output"].get(case, []))
+                if "PHP_VIRTUAL_DONE" in ctext and rec["exits"].get(case) == 0:
+                    stock_completed.add(case)
+            print(f"    the stock column completed {len(stock_completed)} of {len(cases)} cases")
+
+    # GATE (b): the three runs must report DIFFERENT mode words.
+    if len({m for m in seen_modes.values() if m is not None}) != len(TEMPORAL_ARMS):
+        sys.exit(f"the arms did not report distinct modes: {seen_modes} -- one image serving "
+                 f"three columns has only the mode word to tell them apart")
+    # GATE (c): revocation must be STRICTLY ordered, or the columns are not what they claim.
+    stock, block, obj = (seen_revokes[a] for a in TEMPORAL_ARMS)
+    if None in (stock, block, obj):
+        sys.exit(f"an arm reported no seam counters: {seen_revokes}")
+    if not (stock == 0 and block == 0 and obj > 0):
+        sys.exit(f"revoke counts are not ordered stock=0, block=0, object>0: "
+                 f"stock={stock} block={block} object={obj}. The per-object retire is the only "
+                 f"difference between the block and object columns, so this is the gate that "
+                 f"says the difference is real.")
+    print(f"\ngates: modes {seen_modes}; revokes stock={stock} block={block} object={obj}")
+
+    for arm in TEMPORAL_ARMS:
+        rec = records[arm]
+        stext = "\n".join(rec["output"].get(SANITY_RUN, []))
+        observed = ("complete" if ("PHP_VIRTUAL_DONE" in stext
+                                   and rec["exits"].get(SANITY_RUN) == 0)
+                    else "fault" if verdicts.domain_fault(stext, None) else "none")
+        control = verdicts.Control(name=SANITY_RUN, observed=observed,
+                                   evidence=f"{SANITY_CASE} at mode {arms[arm]['mode']}, "
+                                            f"exit={rec['exits'].get(SANITY_RUN)}")
+        rows = []
+        for case in cases:
+            obs = observe_temporal(case, arm, sha, rec["exits"], rec["output"], sites, control,
+                                   case in stock_completed)
+            if not rec["completed"]:
+                obs.infra = "infra"
+                obs.notes = (obs.notes + "; " if obs.notes else "") + \
+                            "the runner did not complete its guest script"
+            verdict = verdicts.judge(obs, arms[arm])
+            rows.append((obs, verdict))
+            print(f"    {case:<11} {verdict[0]:<10} {verdict[1] or '':<13} "
+                  f"{(obs.notes or '')[:58]}")
+        bundle = verdicts.write_bundle(
+            args.out / arm, "php-5.0.0-engine-repros", arm, rows,
+            {"platform": platform, "judge": verdicts.sha256(TOOLS / "verdicts.py"),
+             "image": sha, "axis": "temporal", "mode": arms[arm]["mode"],
+             "revokes": seen_revokes[arm],
+             "phase": "the Sublet allocator seam; one image, three runtime columns"})
+        print(f"    bundle: {args.out / arm}  tally={bundle['tally']}")
+    return worst
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--qemu", type=Path, required=True)
     p.add_argument("--images", type=Path, required=True)
     p.add_argument("--adapter", type=Path, required=True)
-    p.add_argument("--control", type=Path, required=True, help="php-control.dom (rounded bounds)")
-    p.add_argument("--fault", type=Path, required=True, help="php-fault.dom (exact bounds)")
+    p.add_argument("--control", type=Path, help="php-control.dom (rounded bounds), spatial axis")
+    p.add_argument("--fault", type=Path, help="php-fault.dom (exact bounds), spatial axis")
+    p.add_argument("--axis", choices=("spatial", "temporal"), default="spatial",
+                   help="spatial: the hierarchical bound pair (two images). temporal: the "
+                        "Sublet seam's three runtime columns (one image)")
+    p.add_argument("--seam", type=Path, help="php-seam.dom, for --axis temporal")
     p.add_argument("--audit", type=Path,
                    help="php-audit.dom (-DZEND_CAP_ESTRNDUP_AUDIT): the diagnostic arm that "
                         "attributes an over-read performed by a shared copy primitive")
@@ -288,6 +489,30 @@ def main():
     reachable = read_reachable(text)
     manifest = json.loads((TRIGGERS / "manifest.json").read_text())["cases"]
 
+    arms_all = verdicts.load_arms()
+
+    if args.axis == "temporal":
+        if not args.seam:
+            sys.exit("--axis temporal needs --seam php-seam.dom")
+        temporal = [c for c in reachable if axis.get(c) == "temporal"]
+        if args.only:
+            unknown = [c for c in args.only if c not in temporal]
+            if unknown:
+                sys.exit(f"{unknown} are not reachable temporal cases; temporal = {temporal}")
+            temporal = [c for c in temporal if c in args.only]
+        missing = [c for c in temporal + [SANITY_CASE] if c not in manifest]
+        if missing:
+            sys.exit(f"no trigger file for {missing}; run extract-triggers.py")
+        args.cases = temporal
+        print(f"reachable={len(reachable)} temporal={len(temporal)}: {' '.join(temporal)}")
+        print(f"not in scope on this axis: "
+              f"{len([c for c in reachable if axis.get(c, 'heap') == 'heap'])} spatial cases "
+              f"(the hierarchical pair measures those)")
+        return run_temporal(args, temporal, manifest,
+                            {a: arms_all[a] for a in TEMPORAL_ARMS})
+
+    if not (args.control and args.fault):
+        sys.exit("--axis spatial needs --control and --fault")
     spatial = [c for c in reachable if axis.get(c, "heap") == "heap"]
     off_axis = len(reachable) - len(spatial)      # counted BEFORE --case narrows the run
     missing = [c for c in spatial if c not in manifest]
@@ -387,7 +612,7 @@ def main():
                 obs.infra = "infra"
                 obs.notes = (obs.notes + "; " if obs.notes else "") + \
                             "the runner did not complete its guest script"
-            verdict = verdicts.judge(obs, verdicts.load_arms()[arm])
+            verdict = verdicts.judge(obs, arms_all[arm])
             rows.append((obs, verdict))
             site = obs.notes.split(";")[0]
             print(f"    {case:<11} {verdict[0]:<10} {verdict[1] or ''} {site}")

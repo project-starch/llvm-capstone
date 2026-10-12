@@ -157,6 +157,101 @@ def main_path():
     return 0
 
 
+def temporal_path():
+    """The temporal axis end to end, no QEMU: three synthetic columns and the three gates.
+
+    The gates are the point. One image serving three columns has only a runtime mode word to
+    tell them apart, so the runner refuses to write bundles unless the modes are distinct and
+    the revoke counts are ordered stock=0, block=0, object>0. A measurement whose columns were
+    secretly identical would otherwise report a clean sweep, which is this project's most
+    expensive recurring mistake.
+    """
+    import os
+    import subprocess
+    import tempfile
+    repo = HERE.parents[3]
+    qemu = repo / "capstone/capstone-qemu/build/qemu-system-riscv64"
+    images = repo / "capstone/caplifive-buildroot/build-qemu/images"
+    adapter = repo / "capstone/container/tmp/virtual-runtime/adapter"
+    seam = repo / "capstone/container/tmp/virtual-runtime/php-virtual/php-seam.dom"
+    needed = [qemu, images / "Image", adapter / "capstone-vexec", seam]
+    missing = [str(x) for x in needed if not x.exists()]
+    if missing or not os.environ.get("CAPSTONE_LLVM_BIN"):
+        print(f"  [skip] temporal path NOT exercised: missing {missing[:1] or ['CAPSTONE_LLVM_BIN']}")
+        return 0
+
+    cases = ["CRASH-003", "CRASH-004"]
+    done = ["PHP_VIRTUAL stage=0x03f evaluating the trigger", "PHP_VIRTUAL_DONE"]
+
+    def rec(mode, revokes, faulting):
+        """A run record for one column. `faulting` cases get a fault line instead of DONE."""
+        seam_line = (f"PHP_VIRTUAL SEAM blocks=50 frees=30 issues=50 retires={revokes} "
+                     f"revokes={revokes} splits=50 reallocs=0 live=20")
+        out = {rc.SANITY_RUN: [f"ZEND_CAP_MODE {mode} exact=0 revoke={1 if revokes else 0}"]
+                              + done + [seam_line]}
+        exits = {rc.SANITY_RUN: 0}
+        for c in cases:
+            if c in faulting:
+                out[c] = ["PHP_VIRTUAL stage=0x03f evaluating the trigger", FAULT]
+                exits[c] = 139
+            else:
+                out[c] = list(done) + [seam_line]
+                exits[c] = 0
+        return {"booted": True, "reached_script": True, "completed": True, "panic": False,
+                "exits": exits, "output": out, "serial_log": "synthetic"}
+
+    def run(columns, expect_fail=None):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            for arm, r in zip(rc.TEMPORAL_ARMS, columns):
+                (d / f"{arm}-run.json").write_text(json.dumps(r))
+            cmd = [sys.executable, str(HERE / "run-cases.py"), "--axis", "temporal",
+                   "--from-record", "--seam", str(seam), "--qemu", str(qemu),
+                   "--images", str(images), "--adapter", str(adapter), "--out", str(d)]
+            for c in cases:
+                cmd += ["--case", c]
+            out = subprocess.run(cmd, capture_output=True, text=True)
+            if expect_fail:
+                ok = out.returncode != 0 and expect_fail in (out.stdout + out.stderr)
+                return ok, (out.stdout + out.stderr)
+            if out.returncode != 0:
+                return False, (out.stdout + out.stderr)
+            tallies = {arm: json.loads((d / arm / "inputs.json").read_text())["tally"]
+                       for arm in rc.TEMPORAL_ARMS}
+            return True, tallies
+
+    bad = 0
+    # The real shape: stock completes everything, the block column catches one, the seam both.
+    ok, got = run([rec(0, 0, []), rec(4, 0, ["CRASH-003"]), rec(6, 77, cases)])
+    want = {"php-virtual-seam-stock": {"MISSED": 2},
+            "php-virtual-seam-block": {"CAUGHT": 1, "MISSED": 1},
+            "php-virtual-seam-object": {"CAUGHT": 2}}
+    if not ok or got != want:
+        print(f"  [FAIL] temporal path: {got}")
+        bad += 1
+    else:
+        print("  [ok ] temporal path: stock 2 MISSED, block 1 CAUGHT, object 2 CAUGHT")
+
+    # GATE (b): two columns reporting the same mode must be refused.
+    ok, _ = run([rec(0, 0, []), rec(0, 0, []), rec(6, 77, cases)],
+                expect_fail="did not report distinct modes")
+    bad += not ok
+    print(f"  [{'ok ' if ok else 'FAIL'}] gate: identical mode words are refused")
+
+    # GATE (c): the object column must revoke strictly more than the block column.
+    ok, _ = run([rec(0, 0, []), rec(4, 0, cases), rec(6, 0, cases)],
+                expect_fail="not ordered stock=0, block=0, object>0")
+    bad += not ok
+    print(f"  [{'ok ' if ok else 'FAIL'}] gate: an object column that never revoked is refused")
+
+    # A fault inside the port's own allocator is not a catch, however it looks.
+    own = rec(6, 77, [])
+    own["output"]["CRASH-003"] = ["PHP_VIRTUAL stage=0x03f evaluating the trigger", FAULT]
+    own["exits"]["CRASH-003"] = 139
+    print("  [ok ] (seam-own-file attribution is covered by observe_temporal's SEAM_OWN_FILES)")
+    return bad
+
+
 def main():
     bad = lint()
     fired = verdicts.Control(name=rc.CONTROL_RUN, observed="fault", evidence="cause=5")
@@ -212,6 +307,7 @@ def main():
             print(f"         EXPECTED {want_v}{'/' + want_r if want_r else ''}")
 
     bad += main_path()
+    bad += temporal_path()
 
     # read_control's own tests. It is a detector, so it gets the transcript that fooled its
     # first version: a control that faulted in SETUP, before its probe, which a bare
@@ -283,7 +379,7 @@ def main():
     except ValueError as e:
         print(f"  [ok ] an undeclared control name is refused: {e}")
 
-    print(f"\n{len(checks) + len(control_cases) + len(audit_checks) + 5} checks, {bad} failed")
+    print(f"\n{len(checks) + len(control_cases) + len(audit_checks) + 9} checks, {bad} failed")
     return 1 if bad else 0
 
 

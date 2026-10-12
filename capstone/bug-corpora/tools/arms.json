@@ -262,6 +262,42 @@
       "controls_for_missed": [
         "emalloc-overread"
       ]
+    },
+    "php-virtual-seam-stock": {
+      "target": "capstone-virtual",
+      "summary": "PHP 5.0.0's own Zend/zend_alloc.c, patched with eight guarded hunks so that each emalloc's block is split into a 48-byte header and a payload region (ports/php/zend-alloc/sublet, -DZEND_CAP_SUBLET), running as a Linux process on virtual Capstone. PHP_CAP_MODE=0: NOTHING is revoked -- no per-object retire, and a freed block's loan is deliberately LEAKED rather than returned, because returning it would have mallocng revoke the block and catch the defect for us. A freed block therefore stays readable exactly as it does on stock PHP, and AG(cache) is live and absorbing most frees. The honest-gap column: what ASAN sees",
+      "mechanism": "none: a freed block stays readable, and the cache absorbs most frees anyway",
+      "mode": 0,
+      "controls": {
+        "revocation-sanity": "complete"
+      },
+      "controls_for_missed": [
+        "revocation-sanity"
+      ]
+    },
+    "php-virtual-seam-block": {
+      "target": "capstone-virtual",
+      "summary": "the same single image, PHP_CAP_MODE=4: the loan is returned on a real free, so musl's mallocng revokes per BLOCK underneath (runtime/virtual/heap.c), but this layer performs no per-object retire. Catches a use-after-free on a block PHP actually handed back; MISSES one on a block AG(cache) absorbed, which is the mechanism hiding 23 of the 31 cases from ASAN. This column exists so that a catch on the object arm is attributable to the SEAM rather than to the allocator underneath it",
+      "mechanism": "per-block, in the level below: mallocng revokes a block when the block is freed",
+      "mode": 4,
+      "controls": {
+        "revocation-sanity": "complete"
+      },
+      "controls_for_missed": [
+        "revocation-sanity"
+      ]
+    },
+    "php-virtual-seam-object": {
+      "target": "capstone-virtual",
+      "summary": "the same single image, PHP_CAP_MODE=6: the payload region is revoked at EVERY _efree, cache-absorbed or not, and re-taken under a fresh node when AG(cache) hands the block to its next tenant -- so the previous tenant's capability stays dead even though the bytes are live again. The header is never revoked, so zend_alloc.c keeps its own control flow byte for byte: the cache park still writes p->cached and REMOVE_POINTER_FROM_LIST still walks neighbour headers, all live. Differs from php-virtual-seam-block in the per-object retire alone",
+      "mechanism": "per-object: sublet_give on the payload region at every efree, over a block the virtual heap lends",
+      "mode": 6,
+      "controls": {
+        "revocation-sanity": "complete"
+      },
+      "controls_for_missed": [
+        "revocation-sanity"
+      ]
     }
   }
 }
