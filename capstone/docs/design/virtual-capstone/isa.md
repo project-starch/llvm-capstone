@@ -37,10 +37,12 @@ The following R-type encodings all use opcode `0x5b`, funct3 `1`.
 | `CSRUNV rd, rs1, rs2` | `0x24` | Physical frame address, action | Event kind or action result |
 | `CSMINT rd, rs1, rs2` | `0x50` | Destination slot VA, descriptor VA | Scalar private ancestor ID; tagged linear child in slot |
 | `CDERIVE rd, rs1, rs2` | `0x51` | Non-linear parent with cursor at child start, scalar size | Fresh non-linear child with inherited data rights and MANAGE |
-| `CREVOKE rs1, rs2` (rd=0) | `0x52` | Management-capable parent, child reference | Invalidate that direct child and its subtree |
+| `CREVOKE rs1, rs2` (rd=0) | `0x52` | Management-capable non-linear parent, non-linear child reference | Invalidate that direct child and its subtree |
 | `CSRETIRE rd, rs1, rs2` | `0x53` | Ancestor ID; conventionally zero in rs2 | Zero on success, one on rejected retirement |
 
-Virtual applications can execute `CDERIVE` and `CREVOKE`. `CSRUNV` and
+Virtual applications can execute `CDERIVE` and `CREVOKE`. Both decode only in the virtual profile
+(`x-capstone-u-mode=true`); the physical profile raises illegal-instruction fault 2 for them, as the
+RTL, which does not implement them, would. `CSRUNV` and
 `CSRETIRE` require trusted S or scalar M mode and reject C mode. `CSMINT`
 rejects U and virtual C; its decoder also accepts legacy physical C when
 the extension is enabled. It must remain a trusted root-creation operation.
@@ -95,8 +97,14 @@ is granted for the new node even when the parent lacks it. Sources are
 unchanged except when explicitly selected as rd; rd=0 discards the result
 but still allocates. Allocation uses the existing pressure/collection path.
 
-`CREVOKE` checks both tags and live nodes, MANAGE on rs1, and direct parentage
-of rs2's node. It then invalidates and unlinks that child and its descendants.
+`CREVOKE` checks both tags, that both operands are NONLIN references (cause 26
+otherwise), both live nodes, MANAGE on rs1, and direct parentage of rs2's node;
+the node table also refuses a linear node as the child. It then invalidates and
+unlinks that child and its descendants. The type checks matter because `CSMINT`
+can mint MANAGE onto a linear grant: without them, an `MREV` handle over that
+grant could end the linear node behind it, and legacy `CSREVOKE` of the handle
+would then find an empty subtree and return LIN instead of UNINIT, skipping the
+re-initialization rule.
 No payload bytes are accessed or initialized. Narrowed bounds, offsets and
 data rights on either reference do not affect release authority. Foreign
 children, grandchildren and self-revocation fault with cause 29; missing
@@ -109,9 +117,38 @@ This two-operand operation is distinct from legacy one-handle `CSREVOKE`
 `CSSPLIT` keeps the original node in both resulting references; allocating
 a sibling here would let a client escape its original lifetime. Linear
 splits still create siblings. `CSMREV` records the new parent and increases
-all existing subtree depths. Non-linear stale references retain their tags
-and IDs when loaded from live storage; dereferencing them faults. Collection
-still clears their tags before ID reuse.
+all existing subtree depths. In the virtual profile, non-linear stale references
+retain their tags and IDs when loaded from live storage; dereferencing them faults
+with cause 25 where it used to fault with 24 (an untagged reload). Collection still
+clears their tags before ID reuse: the adapter's sweep over registers, saved
+contexts and memory. The physical profile is unchanged: a revoked capability of
+any type reloads untagged (24). That differs from the RTL, whose `LDC` forwards
+the loaded value verbatim for every type (`docs/ref/ISSUES.md` Q-11), and is left
+for Q-11's own fix so that recorded physical results stay reproducible.
+
+**Authority model.** MANAGE is the right to end direct children. Creating a child
+is unprivileged: `CDERIVE` needs no MANAGE, so any non-linear reference can create
+lifetimes and consume nodes, and `capstone_cap_without_manage` stops a client from
+ending lifetimes but not from creating them. The right to end a child does not
+depend on the parent reference's bounds, and MANAGE survives `CSSHRINK`,
+`CSCINCOFFSET` and non-linear `CSSPLIT`. An allocator must therefore keep this
+invariant: **every pointer that leaves the allocator is a `CDERIVE` child, or has
+had MANAGE removed.** A narrowed or offset view of a pool that escapes with MANAGE
+can end every live object in that pool.
+
+**Overlap.** Live children may overlap: two `CDERIVE`s over the same bytes both
+succeed. Linear carving made disjointness hold by construction; with `CDERIVE`
+it is an allocator duty, and an allocator bug that issues a chunk twice is
+invisible to the ISA.
+
+**Representability (compact profile).** `CDERIVE` refuses bounds that do not
+round-trip exactly (cause 29), and there is no instruction to ask what is
+representable. With the 27-bit bounds field, a length L of 4 KiB or more needs
+base and end aligned to 2^(msb(L)-9), applied to the length after that rounding:
+8 bytes for 4 KiB, 128 bytes for 64 KiB, 2 KiB for 1 MiB, while a length just
+below a power of two, such as 8191, rounds up to it and takes its alignment (16).
+Shorter lengths are exact. Allocators with large, oddly aligned objects must round.
+The exact-bounds profile has no such restriction.
 
 The C interface is [capability.h](../../../runtime/include/capstone/capability.h):
 `capstone_cap_derive(parent, offset, size)` interprets the offset relative
@@ -119,9 +156,30 @@ to the parent's base and rejects offset overflow before setting the cursor;
 `capstone_cap_revoke_child(parent, child)` releases the child; and
 `capstone_cap_without_manage(cap)` removes only MANAGE. These wrappers use
 raw `.insn` encodings and require no compiler backend, mnemonic or intrinsic
-addition. Allocator bookkeeping must still prevent overlapping live children
-and protect management-capable copies. This ISA change does not migrate the
-allocator adapters or qualify RTL.
+addition. `capstone_cap_derive` and `capstone_cap_without_manage` check that
+their operand is a NONLIN reference first, and refuse anything else atomically
+with a zero-size `CDERIVE` (cause 26, or 24 if untagged), because the `CSSCC` and
+`CSTIGHTEN` they use would otherwise move a linear operand out of its register.
+Allocator bookkeeping must still prevent overlapping live children and protect
+management-capable copies. This ISA change does not migrate the allocator
+adapters or qualify RTL.
+
+**Open items** (deferred design choices, recorded at review):
+- whether ending a child should depend on the parent reference's bounds (CREVOKE
+  requiring the child to lie within them, which needs the child node's own extent),
+  or narrowing should drop MANAGE;
+- `CDERIVE` with rd=0 still allocates a node nothing can name; reserving rd=0 as
+  illegal, as `CREVOKE` reserves rd≠0, would remove it;
+- NOT_CHILD and a corrupt node table both raise cause 29 with tval 0, so a
+  program defect cannot be told from an infrastructure fault; a distinguishing
+  tval would separate them;
+- a representability query for the compact profile (see above);
+- one mnemonic everywhere: the QEMU decoder says `cskill`, and `CREVOKE` differs
+  by one letter from legacy `CSREVOKE`;
+- assembler and disassembler support (`llvm-objdump` shows both as `<unknown>`).
+- a guest-level test that a collected and reused ID cannot be reached through a
+  stale reference reloaded from memory; the model exercises the table, not the
+  adapter's sweep, and the bare-metal gate has no collection.
 
 ## Saved context protocol
 

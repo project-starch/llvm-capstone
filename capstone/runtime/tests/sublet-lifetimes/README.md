@@ -13,11 +13,20 @@ relocations; the runner refuses a relocated object before embedding its code
 in the qualified bare-metal bootstrap. `-capstone-gp-free` selects the
 existing virtual calling convention.
 
-Eight checks cover a nonzero base-relative offset, inherited data rights,
-removing MANAGE, freeing through a client copy, fresh allocation over the
-same bytes without zeroing, and rejection of an overflowing offset. Failure
-cases check the exact fault PC and that no node was allocated. The QEMU
-submodule's `tests/sublet-lifetimes` gate covers the instruction-level edge
+Twenty checks (five variants, `-O1`/`-O2`, flat/paged) cover a nonzero
+base-relative offset, inherited data rights, removing MANAGE, freeing through a
+client copy, fresh allocation over the same bytes without zeroing, and four
+failures, each at its exact fault PC with its exact node count:
+- an overflowing offset is refused at the zero-size `CDERIVE` (29);
+- a linear parent is refused at that same instruction (26), before the `CSSCC`
+  that would move it out of its register;
+- a reference without MANAGE cannot end a child, at the `CREVOKE` (27);
+- the child, released through its client alias, faults when dereferenced (25).
+
+Besides the compiler it needs host `clang` with `ld.lld` on `PATH` and `rg`.
+Case 36 of the QEMU gate's numbering is reserved for this test's success case.
+
+The QEMU submodule's `tests/sublet-lifetimes` gate covers the instruction-level edge
 cases; `tests/virtual-capstone-model` covers the independent lifetime model.
 
 The wrappers prepare the allocator-facing interface. Existing mallocng,

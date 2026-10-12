@@ -29,11 +29,17 @@ enum {
  * A fresh child inherits data rights and gains MANAGE for its own children.
  * The parent is unchanged. Invalid/empty ranges fault before allocation.
  * Check offset before addition so wraparound cannot turn it into a valid
- * range. The ISA takes the requested start from the parent's cursor. */
+ * range. The ISA takes the requested start from the parent's cursor.
+ * The type is checked first: SCC moves a linear source, so a linear (or any
+ * other non-NONLIN) parent goes straight to the zero-size CDERIVE, which
+ * refuses it (cause 26) with the parent register intact. */
 static inline void *capstone_cap_derive(void *parent, unsigned long offset,
                                        unsigned long size) {
   void *child;
-  __asm__ volatile(".insn r 0x5b, 0x1, 0x04, t0, %1, x3\n"
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x04, t0, %1, x1\n"
+                   "addi t0, t0, -1\n"
+                   "bnez t0, 1f\n"
+                   ".insn r 0x5b, 0x1, 0x04, t0, %1, x3\n"
                    ".insn r 0x5b, 0x1, 0x04, t1, %1, x4\n"
                    "sub t1, t1, t0\n"
                    "bgtu %2, t1, 1f\n"
@@ -58,10 +64,19 @@ static inline void capstone_cap_revoke_child(void *parent, void *child) {
 }
 
 /* Issue a non-linear reference with the same data rights but no MANAGE.
- * TIGHTEN encodes its rights mask in rs2's register number, not its value. */
+ * TIGHTEN encodes its rights mask in rs2's register number, not its value.
+ * TIGHTEN also moves a linear source, so anything but a non-linear reference
+ * is refused first, atomically, by a zero-size CDERIVE into x0 (cause 26;
+ * an untagged value gives 24). Nothing is allocated and cap stays intact. */
 static inline void *capstone_cap_without_manage(void *cap) {
   void *copy;
   unsigned long rights;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x04, t0, %0, x1\n"
+                   "addi t0, t0, -1\n"
+                   "beqz t0, 1f\n"
+                   ".insn r 0x5b, 0x1, 0x51, x0, %0, x0\n"
+                   "1:\n"
+                   : : "r"(cap) : "t0", "memory");
   __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x5\n"
                    : "=r"(rights) : "r"(cap));
 #define CAPSTONE_WITHOUT_MANAGE_CASE(n) \

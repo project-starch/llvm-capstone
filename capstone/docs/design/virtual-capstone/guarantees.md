@@ -46,6 +46,13 @@ Anonymous `MAP_SHARED` and SysV compatibility accepted by the runtime remain
 process-local backing in this no-fork profile. They do not establish
 cross-process tagged sharing.
 
+Sublet child lifetimes (`CDERIVE`/`CREVOKE`, virtual profile only) weaken two
+properties that linear carving gave by construction. Live children may overlap,
+so disjointness is an allocator duty. And `CREVOKE` ends a child without the
+re-initialization result legacy `REVOKE` reports, so payload scrubbing before
+reuse is an allocator duty too; only non-linear nodes can be ended this way.
+See [isa.md](isa.md) for the allocator invariant on MANAGE.
+
 The node-growth extension replaces the fixed 65,536-slot / 1-MiB table with
 base-page-backed tables bounded by RAM, an optional quota and the 30-bit ID
 field. It retains the separate limits of 32 supervisor slots on the hart, at most
