@@ -3,7 +3,7 @@
     python3 -m unittest discover -s capstone/bug-corpora/tools -p 'test_*.py'
 
 The c-repros inputs are the committed console and result files of its 2026-10-06 runs; the mmgr
-inputs are lines from a 2026-10-10 serial log, quoted as the guest printed them.
+inputs are the launcher's lines from a 2026-10-10 virtual run, quoted as the guest printed them.
 """
 import importlib.util
 import json
@@ -131,7 +131,6 @@ class MmgrCaseControls(unittest.TestCase):
         co = v.Observation(case="", arm="", reached=True, completed=True)
         self.runner.qualify_fault(self.observed, co)
         self.assertEqual(self.observed.attribution, "function")
-
 
 
 class SqlThresholdProbe(unittest.TestCase):
@@ -353,7 +352,6 @@ class Mmgr(unittest.TestCase):
         self.assertEqual(self.observe("", {"kind": "exit", "value": 1}).infra, "infra")
 
 
-
 if __name__ == "__main__":
     unittest.main()
 
@@ -532,4 +530,3 @@ class VirtualHosted(unittest.TestCase):
     def test_stem_matches_the_ports_program_name(self):
         self.assertEqual(self.rv.stem(Path("13_0261fd7da6_http_range_cursor_past_chunk")),
                          "13-http-range-cursor-past-chunk")
-

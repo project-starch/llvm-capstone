@@ -8,7 +8,7 @@ class Wmem(Format):
     name, version = "wireshark.wmem", 1
     magic = struct.pack("<Q", 0x31304D454D575357)
     header, record = struct.Struct("<16Q"), struct.Struct("<6Q")
-    header_fields = "magic count mode status completed news allocs frees reallocs free_alls gcs destroys checksum live_allocators regions_created regions_peak".split()
+    header_fields = "magic count mode status completed news allocs frees reallocs free_alls gcs destroys checksum live_allocators system_allocs system_peak".split()
     record_fields = "op allocator object size type arg".split()
     operations = {
         1: "new",

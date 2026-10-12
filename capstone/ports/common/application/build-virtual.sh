@@ -8,13 +8,6 @@ APP=$1
 OUT=$(realpath -m "$2")
 [[ ! -e "$OUT" ]] || { echo "use a fresh output directory: $OUT" >&2; exit 2; }
 case "$APP" in cpython|postgres|ffmpeg|tshark) ;; *) echo "unsupported application: $APP" >&2; exit 2;; esac
-# Specialized decoder pools and wmem chunks keep their source recipe's link.
-# The generic relinker does not carry their extra allocator objects.
-if [[ $APP == ffmpeg && -n ${FFAPP_POOL:-} ]] ||
-   [[ $APP == tshark && ${TSAPP_HEAP:-level0} == chunks ]]; then
-  echo 'use the application source recipe directly for this inner allocator variant' >&2
-  exit 2
-fi
 mkdir -p "$OUT/source"
 export CAPSTONE_APPLICATION_PROFILE=virtual
 PORTS=$CAPSTONE_REPO_ROOT/capstone/ports
@@ -30,6 +23,9 @@ case "$APP" in
     python3 "$PORTS/cpython/app/link-cpython-capstone.py" "$CPY_ROOT/build" \
       --native "$CPY_ROOT/build-python" --out "$CPY_ROOT/link"
     [[ ${CPY_SUBLET:-0} != 1 ]] || NESTED=cpython
+    # CPython 3.13 sizes its C recursion limit (Py_C_RECURSION_LIMIT 10000) for the
+    # 8 MiB main stack Linux gives a process. With 1 MiB, deep recursion overflows
+    # the stack before the interpreter's own guard raises RecursionError.
     STACK=8388608
     ;;
   postgres)

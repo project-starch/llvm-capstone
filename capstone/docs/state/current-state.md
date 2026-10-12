@@ -1,14 +1,27 @@
 # Current Capstone state
 
-## 2026-10-10 — Sublet lifetime extension on `isa/sublet-lifetimes`
+## 2026-10-10 — CheriBSD PoisonCap removed (branch `nested/poisoncap-removal`)
+
+Our CheriBSD PoisonCap adapter is gone from every port except PostgreSQL, which goes with
+its rewrite: the FFmpeg, wmem, memcached, APR and Perl SV-head backends, their runners,
+the `poisoncap-*` arms of the fourteen FFmpeg, tshark, memcached and httpd corpora, the
+two PoisonCap columns of `catch-tables.py`, and the study's `nested-poisoncap` planner
+and build paths. The platform recipe (`ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/`)
+and its libc fix stay, because the stock CheriBSD runners of the httpd and memcached corpora
+boot that image. Every PoisonCap entry below is history; its results stay in `results/`.
+
+## 2026-10-12 — Sublet lifetime extension merged; allocator migration in review
 
 `CDERIVE`/two-operand `CREVOKE`, node-scoped MANAGE and explicit parent links
 are implemented and qualified in QEMU with C wrappers. The format has
 30-bit IDs, four rights bits and 16-byte node records. Rebuild the Linux
 adapter with the new header; its capacity limits change too. Compiler
 backend changes are unnecessary. See the [qualification and commands](../design/virtual-capstone/development.md#sublet-lifetime-qualification).
-This is a task-branch result, not a merged baseline or an allocator-port,
-performance or RTL claim.
+QEMU #21 landed as `7dbfdd534eea`; runtime #216 landed as `baa1ab2faded`,
+which pins that integrated QEMU commit. The allocator migration branch builds
+on this baseline. Its archived port and workload measurements retain their
+original source and binary identities; rebasing does not requalify those runs.
+This is QEMU evidence, with no new performance or RTL claim.
 
 ## 2026-10-10 — `fpga-testing-dev` rebuilt as one linear history (RTL lane)
 
@@ -1321,7 +1334,7 @@ Automatic libc revocation remains explicitly off while adapter sweeps remain
 on, using the documented platform workaround. Native tests and all four
 backend builds pass. This is not whole-interpreter protection or isolation of
 hostile nested managers. [Pilot and provenance](../../ports/cpython/pymalloc/results/20260919-poisoncap/README.md),
-[build/link/run guide](../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
+build/link/run guide (removed 2026-10-10 with the adapter; see the [port README's History](../../ports/cpython/pymalloc/README.md#history)).
 
 ## 2026-09-19 — Experimental PoisonCap FFmpeg port
 

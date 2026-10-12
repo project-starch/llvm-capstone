@@ -1,5 +1,7 @@
 # Sublet and PoisonCap application memory study
 
+> **Removed 2026-10-10.** CheriBSD PoisonCap (our adapter, its backends and runners) is gone from the tree; PostgreSQL's arm goes with its rewrite. This plan is history, and the results it produced stay where they were recorded.
+
 The primary question is the cost of protecting an application's **internal
 allocator boundary**. Default CheriBSD malloc revocation does not by itself
 observe those lifetimes. PoisonCap is the implemented nested-allocator

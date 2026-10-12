@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Qualify Capstone malloc/free protection on three builds of one contract.
+"""Qualify the physical profile's malloc/free protection on two builds of one contract.
 
-sublet:  HEAP=sublet, spatial and temporal protection.
-level0:  HEAP=level0 as applications get it, each allocation bounded (spatial).
-control: HEAP=level0 with CAPSTONE_LEVEL0_OBJECT_BOUNDS=0, unprotected.
+level0:  the heap as applications get it, each allocation bounded (spatial).
+control: level0 with CAPSTONE_LEVEL0_OBJECT_BOUNDS=0, unprotected.
 
-Requires the three host ELFs and their LLD maps, and checks the guest image
+Requires the two host ELFs and their LLD maps, and checks the guest image
 hashes. Fault cases must reach the test operation, then fault at its
 instruction with the expected cause, or survive it and exit with the control
-sentinel (90): every fault case faults on sublet, the spatial ones fault on
-level0 too, and none faults on the control.
+sentinel (90): the spatial ones fault on level0, and none faults on the
+control. level0 does not revoke, so the temporal cases run through on both;
+free revokes on the virtual profile, whose heap runtime/virtual qualifies.
 See docs/plans/capstone-heap-protection.md for the scope of this qualification.
 """
 import argparse
@@ -31,7 +31,7 @@ SPATIAL = ("fault-bounds", "fault-bounds-large", "fault-realloc-shrink")
 FAULTS = ("fault-stale", "fault-reused", *SPATIAL, "fault-double-free", "fault-double-free-reused")
 COMPLETES = ("healthy", "churn", "heap-bounds", "heap-neighbour", "heap-companion",
              "heap-realloc-shrink")
-ARMS = ("sublet", "level0", "control")
+ARMS = ("level0", "control")
 HEAP_SYMBOLS = ("malloc", "free", "calloc", "realloc", "__libc_malloc", "__libc_free")
 
 
@@ -98,7 +98,7 @@ def probe_pc(elf, objdump, table, function, dest):
 
 def survives(label, mode):
     """A fault case the build does not protect against: it must run to the sentinel."""
-    return mode in FAULTS and (label == "control" or (label == "level0" and mode not in SPATIAL))
+    return mode in FAULTS and (label == "control" or mode not in SPATIAL)
 
 
 def check_case(label, mode, result, before, after, evidence):
@@ -114,8 +114,6 @@ def check_case(label, mode, result, before, after, evidence):
     live = {k: after[k] for k in ("live_domains", "live_regions", "live_bytes")}
     require(all(v == 0 for v in live.values()), f"{label} {mode}: resources leaked: {live}")
     require(nodes >= 0, f"{label} {mode}: allocation counter went backwards")
-    if label == "sublet" and mode in ("churn", "fault-reused"):
-        require(nodes >= 200000, f"{label} {mode}: reuse workload did not complete ({nodes} nodes)")
     record = {"supervisor": verdict, "wait_status": status, "nodes_allocated": nodes, "live_after": live}
     if mode not in FAULTS:
         require(os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0, f"{label} {mode}: abnormal completion")
@@ -139,10 +137,9 @@ def check_case(label, mode, result, before, after, evidence):
                 f"{label} {mode}: fault record does not identify the executed ELF")
         # This QEMU's _helper_access_with_cap reports a load bounds violation
         # as LOAD_ACCESS_FAULT (5), not the RTL's capability exception encoding.
-        causes = (5,) if mode in SPATIAL else (24, 25)
-        require(fault["cause"] in causes, f"{label} {mode}: unexpected fault cause {fault['cause']}")
+        require(fault["cause"] == 5, f"{label} {mode}: unexpected fault cause {fault['cause']}")
         link_pc = fault["pc"] - (fault["entry"] - evidence["entry"])
-        site = "sh_free" if mode.startswith("fault-double-free") else "capstone_heap_fault_load"
+        site = "capstone_heap_fault_load"
         require(link_pc == evidence["probes"][site], f"{label} {mode}: fault at wrong instruction {link_pc:#x}")
         record["fault"] = {"cause": fault["cause"], "link_pc": hex(link_pc), "site": site}
     record["operation_reached"] = True
@@ -152,7 +149,7 @@ def check_case(label, mode, result, before, after, evidence):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state", type=Path, required=True)
-    for label, what in (("sublet", "the HEAP=sublet image"), ("level0", "the default HEAP=level0 image"),
+    for label, what in (("level0", "the default level0 image"),
                         ("control", "the level0 image built with CAPSTONE_LEVEL0_OBJECT_BOUNDS=0")):
         parser.add_argument(f"--{label}-image", required=True, help=f"guest path of {what}")
         parser.add_argument(f"--{label}-elf", type=Path, required=True)
@@ -180,17 +177,10 @@ def main():
         elf = getattr(args, f"{label}_elf")
         map_path = getattr(args, f"{label}_map") or Path(str(elf) + ".map")
         table = read_symbols(elf, args.nm)
-        wanted = "sublet_heap.c.obj" if label == "sublet" else "level0.c.obj"
+        wanted = "level0.c.obj"
         owners = check_link_map(map_path.read_text(), table, wanted)
         evidence[label] = {"sha256": sha256(elf), "entry": table["domain_main"][0]}
-        if label == "sublet":
-            evidence[label]["probes"] = {
-                "capstone_heap_fault_load": probe_pc(elf, args.objdump, table, "capstone_heap_fault_load", "a0"),
-                # free takes the heap lock and frees in sh_free, whose first act is the
-                # stale-pointer probe: with several threads, the probe and the revocation
-                # must be one step, or two frees of one pointer could both pass the probe
-                "sh_free": probe_pc(elf, args.objdump, table, "sh_free", "zero")}
-        elif label == "level0":
+        if label == "level0":
             evidence[label]["probes"] = {
                 "capstone_heap_fault_load": probe_pc(elf, args.objdump, table, "capstone_heap_fault_load", "a0")}
         report["symbols"][label] = {"entry_points": owners, "sha256": evidence[label]["sha256"],

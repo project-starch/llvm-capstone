@@ -11,10 +11,13 @@ where a freed chunk HELD in quarantine (the stale pointer followed, the chunk ne
 as caught and is shown apart from a fault; (2) Sublet in malloc -- Sublet only as the system
 allocator, the program's nested allocator stock; (3) Sublet in nested -- the nested allocator's
 Sublet port (for a plain case, the program's whole configuration with that port live). Then one row
-per bug. --board-json also writes the rows, for the slides.
+per bug. --board-json also writes the rows, for the slides. Where a group's column 2 or 3 is a
+physical Sublet-heap arm (`sublet` on a plain corpus, `sublet-malloc`, `sublet-full`, `sublet-carve`,
+`sublet-chunks`, `sysalloc-sublet`, `sublet-svheads`), it reads that arm's RECORDED verdicts: the arms
+were retired with the heap on 2026-10-11. --board-virtual is the same rows on the virtual profile.
 
 --all adds the other six programs -- CPython, httpd, mruby, Perl, PostgreSQL, SQLite -- to the board,
-and only to the board: their corpora carry the three columns' arms but not the six-column set.
+and only to the board: their corpora carry the three columns' arms but not the four-column set.
 Every one of their cells is an explicit `verdict` read out of the bundle that measured it (the
 arm's `verdict_from` names the row); their oracles predate the MEASURED convention and are not
 read. A column no bundle has measured for a group stays a hole, so --all exits 1 until the holes
@@ -52,7 +55,7 @@ TARGETS = ("ffmpeg", "wireshark", "memcached")
 EXTRA = ("cpython", "httpd", "mruby", "perl", "postgres", "sqlite")
 ALL = "--all" in sys.argv
 if ALL and not ({"--board", "--board-json", "--board-virtual"} & set(sys.argv)):
-    sys.exit("catch-tables: --all is for the board; the six-column tables cover FFmpeg, tshark and memcached")
+    sys.exit("catch-tables: --all is for the board; the four-column tables cover FFmpeg, tshark and memcached")
 PROGRAMS = TARGETS + EXTRA if ALL else TARGETS
 NOTRUN = {"predicted", "not written", "declined"}
 LAYER = {"pool-repros": "AVBufferPool", "plain-temporal-repros": "direct malloc", "plain-heap-repros": "direct malloc",
@@ -101,13 +104,15 @@ def verdict(arm):
 
 # The three columns per bug. Column 2 is Sublet ONLY as the system allocator; on a plain corpus that
 # is the `sublet` arm itself, on a nested one the arm that leaves the nested allocator stock.
-COL2 = {"pool-repros": "sublet-malloc", "wmem-repros": "sublet-malloc", "allocator-repros": "sublet-malloc"}
+COL2 = {"pool-repros": "sublet-malloc", "wmem-repros": "virtual-malloc", "allocator-repros": "sublet-malloc"}
 # Column 3 is the Sublet port of the INNERMOST allocator that made the object the access belongs to; a
 # plain case runs in the program's full configuration. Where code carves the object out of a block that
 # allocator handed out -- a codec's carve, av_frame_get_buffer's planes, memcached's ITEM_key/ITEM_suffix
 # inside a slab item -- that carve is the innermost allocator, and its port is the case's `sublet-carve`
 # arm (memcached 06/07: the slab port plus the key/suffix carve). One rule, so the two corpora agree.
-COL3 = {"pool-repros": "sublet-port", "wmem-repros": "sublet-chunks", "allocator-repros": "sublet",
+# wmem is measured on the virtual profile, as pymalloc, PostgreSQL and SQLite below: column 2 is
+# `virtual-malloc`, column 3 wmem's patch 0001, `virtual-nested-pools`.
+COL3 = {"pool-repros": "sublet-port", "wmem-repros": "virtual-nested-pools", "allocator-repros": "sublet",
         "carved-repros": "sublet-carve", "plane-repros": "sublet-carve"}
 
 
@@ -118,9 +123,11 @@ def col3_arm(corpus, arms):
 # --all: per group of the other six programs, (allocator layer, nested, column-2 arm, column-3 arm).
 # nested None: a whole-program corpus whose cases cross different boundaries and are not split here.
 # Column 2 for a nested group is `sublet-malloc`, the same arm the three programs use; none of these
-# groups has measured it yet, so those cells are holes. Perl's `sysalloc-sublet` is that arm under
-# its own name (the Sublet heap, Perl's SV arenas stock); mruby has no such run. Column 3 is the
-# group's Sublet port: the APR ports' `sublet`, Perl's SV-head port, mruby's GC port. pymalloc,
+# groups measured it before it was retired with the Sublet heap (2026-10-11), so those cells stay
+# holes. Perl's `sysalloc-sublet` is that arm under its own name (the Sublet heap, Perl's SV arenas
+# stock; recorded, retired the same day). Column 3 is the group's Sublet port: the APR ports'
+# `sublet`, Perl's SV-head port. mruby is measured on the virtual profile: column 2 is
+# `virtual-malloc`, column 3 its GC-slot patch 0008, `virtual-nested-pools`. pymalloc,
 # PostgreSQL and SQLite are measured on the virtual profile instead: column 2 is `virtual-malloc`,
 # column 3 the nested allocator's port on a block virtual mallocng lends. postgres/c-repros are
 # frontend programs with no nested allocator linked at all, so both columns are the protected
@@ -145,7 +152,7 @@ EXTRA_GROUPS = {
     ("cpython", "pymalloc-repros"): ("pymalloc", True, "virtual-malloc", "virtual-nested-pools"),
     ("httpd", "apr-pool-repros"): ("APR pools", True, "sublet-malloc", "sublet"),
     ("httpd", "bucket-repros"): ("APR buckets", True, "sublet-malloc", "sublet"),
-    ("mruby", "release-differential"): ("whole program", None, "sysalloc-sublet", "sublet-gc"),
+    ("mruby", "release-differential"): ("whole program", None, "virtual-malloc", "virtual-nested-pools"),
     ("perl", "release-differential"): ("whole program", None, "sysalloc-sublet", "sublet-svheads"),
     ("postgres", "c-repros"): ("direct malloc", False, "virtual-malloc", "virtual-malloc"),
     ("postgres", "mmgr-repros"): ("memory contexts", True, "virtual-malloc", "virtual-pg-pools"),
@@ -195,11 +202,10 @@ for p in TARGETS:
                  nested=bool(d.get("nested")),
                  asan=verdict(a.get("native-detect")),
                  cheri=verdict(a.get("cheribsd-revocation")),
-                 pc0=verdict(a.get("poisoncap-spatial")),
-                 pc1=verdict(a.get("poisoncap-protected")),
-                 cap=verdict(a.get("spatial")),
-                 sub=verdict(protected(a, "sublet", "sublet-chunks") if corpus != "pool-repros"
-                             else protected(a, "sublet", "sublet-port")),
+                 cap=verdict(a.get("virtual-malloc" if corpus == "wmem-repros" else "spatial")),
+                 sub=verdict(a.get("virtual-nested-pools") if corpus == "wmem-repros"
+                             else protected(a, "sublet", "sublet-port") if corpus == "pool-repros"
+                             else protected(a, "sublet", "sublet-chunks")),
                  fcap=verdict(a.get("capstone-subobject")), fcheri=verdict(a.get("cheribsd-subobject")),
                  kcap=verdict(a.get("capstone-carve-bounds")), kcheri=verdict(a.get("cheribsd-carve-bounds")),
                  scarve=verdict(a.get("sublet-carve")),
@@ -217,7 +223,7 @@ for p in TARGETS:
                 odd.append(f"{p}/{corpus}/{r['case']} {k}({r[k + 'arm']})={r[k]}")
         if r["c1"] not in ("fault", "held", "missed"):
             odd.append(f"{p}/{corpus}/{r['case']} c1={r['c1']}")
-        for k in ("asan", "cheri", "pc0", "pc1", "cap", "sub"):
+        for k in ("asan", "cheri", "cap", "sub"):
             if r[k] not in ("caught", "missed"):
                 odd.append(f"{p}/{corpus}/{r['case']} {k}={r[k]}")
         rows.append(r)
@@ -262,8 +268,7 @@ if ALL and {r["prog"] for r in extra} != set(EXTRA):
     sys.exit(f"catch-tables: --all found cases for {sorted({r['prog'] for r in extra})}, not all of {EXTRA}")
 BOARD_ROWS = rows + extra
 
-COLS = (("asan", "ASan"), ("cheri", "CheriBSD"), ("pc0", "PoisonCap m0"), ("pc1", "PoisonCap m1"),
-        ("cap", "Cap bounds"), ("sub", "Cap+Sublet"))
+COLS = (("asan", "ASan"), ("cheri", "CheriBSD"), ("cap", "Cap bounds"), ("sub", "Cap+Sublet"))
 
 
 def cell(g, k):
@@ -418,8 +423,8 @@ if "--markdown" in sys.argv:
     for kind in ("temporal", "spatial"):
         tr = table_rows(kind)
         print(f"\n**{kind.capitalize()} ({tr[-1][3]})**\n")
-        print("| program | allocator layer | axis | n | ASan | CheriBSD | PoisonCap mode 0 | PoisonCap mode 1 | Capstone bounds | Capstone + Sublet |")
-        print("|---|---|---|---:|---:|---:|---:|---:|---:|---:|")
+        print("| program | allocator layer | axis | n | ASan | CheriBSD | Capstone bounds | Capstone + Sublet |")
+        print("|---|---|---|---:|---:|---:|---:|---:|")
         for p, layer, ax, n, cells in tr:
             print(f"| {NAME[p]} | {layer} | {ax} | {n} | " + " | ".join(c.replace('/', ' / ') for c in cells) + " |")
 

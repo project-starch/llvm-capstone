@@ -51,6 +51,7 @@ BENCH_DIR="$CAPSTONE_REPO_ROOT/capstone/benchmarks"
 # separately so the next move breaks one line, not two.
 SQLITE_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/sqlite"
 POSTGRES_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/postgres"
+POSTGRES_BUILD="${CAPSTONE_TMP_ROOT:-/tmp/capstone}/nightly/postgres-memory-contexts"
 MICROPYTHON_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/micropython"
 CORE_SUITES=(
   # 3600 for the same reason as the two below, and this one is self-inflicted:
@@ -115,16 +116,12 @@ CORE_SUITES=(
 # Extended tier: need kernel modules / extra setup; opt-in via --extended.
 EXTENDED_SUITES=(
   # postgres-mmgr is the second application gate, and it is here rather than in
-  # CORE because its first run fetches and configures a PostgreSQL tree. It
-  # needs no recording: it generates its own trace, checks the manager still
-  # compiles for capstone64, checks the host build asks the level below for the
-  # blocks a known-good build asked for, replays the same trace in a domain,
-  # and checks every object it freed still held what was written into it.
-  "postgres-mmgr|bash $POSTGRES_DIR/run-pg-gate.sh|3600"
-  # postgres-sublet is the protection gate for the same allocator: the level
-  # below against every claim the design makes about it, then the manager over
-  # it with the teardown cost an identity the domain checks itself.
-  "postgres-sublet|bash $POSTGRES_DIR/run-pg-sublet-gate.sh|3600"
+  # CORE because its first run fetches and configures a PostgreSQL tree. The
+  # memory-context component's native suite: the pinned source and its patch
+  # variants are verified, the replay is checked against the recorded counts
+  # and payloads, and the client examples run. The protected variant runs on
+  # the virtual platform, under the mmgr-repros corpus.
+  "postgres-mmgr|cmake --preset native -S $POSTGRES_DIR/memory-contexts -B $POSTGRES_BUILD && cmake --build $POSTGRES_BUILD && ctest --test-dir $POSTGRES_BUILD --output-on-failure|3600"
   # micropython is the third application gate, and it is here rather than in
   # CORE because its first run clones MicroPython at its pin. Three steps: the
   # verdict logic refuses wrong answers, the image links in two passes and
