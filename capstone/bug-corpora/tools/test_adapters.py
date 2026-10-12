@@ -91,43 +91,47 @@ class CRepros(unittest.TestCase):
         self.assertEqual(self.run_arm.observe_control("uaf-malloc", "", {"fault": line}), "none")
 
 
-class MmgrCaseControlDiscovery(unittest.TestCase):
-    """A control program must never be discoverable as a case, and the reverse.
-
-    The two globs differ only by a suffix, and getting that wrong would let a control -- which is
-    built to COMPLETE -- be scored as a measurement of the arm.
-    """
-    run_defects = load(CORPORA / "postgres/mmgr-repros/shared/run-defects.py", "mmgr_run_defects")
+class MmgrCaseControls(unittest.TestCase):
+    """Safe variants remain separate programs and cannot qualify a broken arm."""
+    runner = load(CORPORA / "postgres/mmgr-repros/shared/run-defects.py", "mmgr_controls")
 
     def setUp(self):
-        import tempfile
-        self.tmp = tempfile.TemporaryDirectory()
-        self.bin = Path(self.tmp.name) / "bin"
-        self.bin.mkdir()
-        for name in ("00-tuplestore-double-free-spatial.dom",
-                     "00-tuplestore-double-free-spatial-control.dom",
-                     "01-vacuum-stale-spatial.dom",
-                     "01-vacuum-stale-spatial-control.dom",
-                     "00-tuplestore-double-free-sublet.dom",
-                     "00-tuplestore-double-free-sublet-control.dom"):
-            (self.bin / name).touch()
-        self.addCleanup(self.tmp.cleanup)
+        self.observed = v.Observation(case="00_case", arm="virtual-pg-pools", reached=True,
+                                      fault=v.Fault(cause=24, pc=16))
 
-    def test_cases_exclude_controls(self):
-        found = self.run_defects.discover(Path(self.tmp.name), "spatial")
-        self.assertEqual(sorted(found), [0, 1])
-        self.assertTrue(all(not stem.endswith("-control") for stem, _ in found.values()))
-        self.assertTrue(all("-control.dom" not in path.name for _, path in found.values()))
+    def test_case_and_control_paths_are_distinct(self):
+        d = Path("00_fix_tuplestore_double_free")
+        self.assertEqual(self.runner.program(Path("build"), d),
+                         Path("build/bin/00-tuplestore-double-free"))
+        self.assertEqual(self.runner.program(Path("build"), d, control=True),
+                         Path("build/bin/00-tuplestore-double-free-control"))
 
-    def test_controls_exclude_cases(self):
-        found = self.run_defects.discover_case_controls(Path(self.tmp.name), "spatial")
-        self.assertEqual(sorted(found), [0, 1])
-        self.assertTrue(all(path.name.endswith("-spatial-control.dom")
-                            for _, path in found.values()))
+    def test_held_control_attributes_an_unplaced_fault(self):
+        co = v.Observation(case="", arm="", reached=True, completed=True)
+        self.runner.qualify_fault(self.observed, co)
+        self.assertEqual(v.judge(self.observed, {"controls": {}})[0], v.CAUGHT)
+        self.assertEqual(self.observed.attribution, "control")
 
-    def test_the_mode_is_respected(self):
-        self.assertEqual(sorted(self.run_defects.discover_case_controls(
-            Path(self.tmp.name), "sublet")), [0])
+    def test_faulting_control_invalidates_even_a_labelled_fault(self):
+        self.observed.attribution = "probe"
+        co = v.Observation(case="", arm="", fault=v.Fault(cause=28, pc=32))
+        self.runner.qualify_fault(self.observed, co)
+        self.assertEqual(v.judge(self.observed, {"controls": {}})[:2],
+                         (v.NO_READING, "unattributed"))
+
+    def test_missing_unreached_and_timed_out_controls_do_not_attribute(self):
+        for co in (None, v.Observation(case="", arm="", completed=True),
+                   v.Observation(case="", arm="", reached=True, completed=True, infra="infra")):
+            with self.subTest(control=co):
+                self.runner.qualify_fault(self.observed, co)
+                self.assertEqual(v.judge(self.observed, {"controls": {}})[0], v.NO_READING)
+
+    def test_completed_control_preserves_a_declared_site(self):
+        self.observed.attribution = "function"
+        co = v.Observation(case="", arm="", reached=True, completed=True)
+        self.runner.qualify_fault(self.observed, co)
+        self.assertEqual(self.observed.attribution, "function")
+
 
 
 class SqlThresholdProbe(unittest.TestCase):
@@ -317,36 +321,37 @@ class Sqlite(unittest.TestCase):
 
 class Mmgr(unittest.TestCase):
     mmgr = load(CORPORA / "postgres/mmgr-repros/shared/run-defects.py", "mmgr_run")
-    SERIAL = """[CAPSTONE] Print = Scalar(0xcf18000000000002)
-[CAPSTONE] Print = Cap(1, 0x7, 0x101a1280c, 0x101a00000, 0x101ae9800)
-[CAPSTONE] Print = Cap(1, 0x7, 0x101a1287c, 0x101a00000, 0x101ae9800)
-[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x101a1280c, tval = 0x0, badaddr = 0x0
-"""
+    FAULT = ("capstone-exec: domain fault cause=24 pc=0x3f9d810ba8 address=0x3f98e1e050 "
+             "entry=0x3f9d800890 code=0x3f9d800000-0x3f9da00000 last=0x42 preparing=0x42")
+    TEXT = f"PG_DEFECT case=3 ready\ncapstone-vm: {FAULT}\ncapstone-vm: application terminated by signal 11\n"
+    RESULT = {"kind": "signal", "value": 11, "fault": FAULT, "image_sha256": "0" * 64}
 
-    def observe(self, serial, sites=()):
-        self.mmgr.SYMBOLS = {"img": FakeSymbols("pg_probe")}
-        orig = v.sha256
-        self.mmgr.v.sha256 = lambda p: "0" * 64
-        try:
-            return self.mmgr.observe(serial, 2, 1, "img", set(sites))
-        finally:
-            self.mmgr.v.sha256 = orig
+    def observe(self, text, result, symbol="pg_probe", sites=()):
+        return self.mmgr.observe_hosted(3, text, result, FakeSymbols(symbol), set(sites))
 
-    def test_fault_at_the_published_probe(self):
-        o = self.observe(self.SERIAL)
+    def test_fault_in_the_probe(self):
+        o = self.observe(self.TEXT, self.RESULT)
         self.assertEqual((o.reached, o.attribution, o.fault.cause), (True, "probe", 24))
 
+    def test_fault_at_a_declared_site(self):
+        o = self.observe(self.TEXT, self.RESULT, "SubletRelease", {"SubletRelease"})
+        self.assertEqual(o.attribution, "function")
+
     def test_fault_elsewhere_is_unattributed(self):
-        o = self.observe(self.SERIAL.replace("pc = 0x101a1280c", "pc = 0x101a05cf0"))
-        self.assertIsNone(o.attribution)
+        self.assertIsNone(self.observe(self.TEXT, self.RESULT, "AllocSetAlloc").attribution)
 
-    def test_delivered_fault_needs_the_launcher_death(self):
-        serial = self.SERIAL.replace("domain halted by capability fault", "domain capability fault delivered")
-        self.assertIsNone(self.observe(serial).fault)
-        self.assertIsNotNone(self.observe(serial + "__EXIT_CODE__139\n").fault)
+    def test_completion_without_fault(self):
+        o = self.observe("PG_DEFECT case=3 ready\nPG_DEFECT case=3 mode=0 completed\n",
+                         {"kind": "exit", "value": 0})
+        self.assertEqual((o.reached, o.completed, o.fault), (True, True, None))
 
-    def test_no_serial_is_infra(self):
-        self.assertEqual(self.observe("").infra, "infra")
+    def test_control_failure_is_infra(self):
+        o = self.observe("CONTROL-FAILED fixture is case 3, run asked for 4\n", {"kind": "exit", "value": 75})
+        self.assertEqual(o.infra, "infra")
+
+    def test_no_output_is_infra(self):
+        self.assertEqual(self.observe("", {"kind": "exit", "value": 1}).infra, "infra")
+
 
 
 if __name__ == "__main__":

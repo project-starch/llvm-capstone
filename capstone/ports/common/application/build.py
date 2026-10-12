@@ -113,8 +113,6 @@ def main():
     if args.musl: musl = args.musl.resolve()
     if args.libc: libc = args.libc.resolve()
     objects = inputs(args.app, root)
-    if args.nested == 'postgres':
-        objects += [root / 'link/context-pools.o']
     if args.nested == 'perl':
         # Built by ports/perl/musl/build-perl-domain.sh with PERLD_SV_HEADS=1.
         objects += [root / 'link/perl-sv-heads.o']
@@ -142,15 +140,13 @@ def main():
          '-DCAPSTONE_APPLICATION_STACK_BYTES=' + str(args.stack_bytes),
          '-DCMAKE_BUILD_TYPE=Release',
          '-DCMAKE_C_FLAGS_RELEASE=-O1' +
-         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'postgres': 64, 'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
+         (' -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
     run(['cmake', '--build', sdk, '-j8'])
     probe = out / 'memory.o'
-    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_PG_CONTEXT_SUBLET'] if args.nested == 'postgres' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
+    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
     if args.reuse_gap: defines += ['-DEXP_PG_REUSE_GAP']
     if args.allocations: defines += ['-DEXP_ALLOCATIONS', '-DEXP_CAPSTONE']
-    memory_includes = (['-I', REPO / 'capstone/ports/postgres/memory-contexts/src/allocators/sublet',
-                        '-I', REPO / 'capstone/runtime/include']
-                       if args.nested == 'postgres' else [])
+    memory_includes = []
     if args.instrument:
         run([sdk / 'capstone-cc', '-O1', *defines, *memory_includes,
              '-c', EXPERIMENTS / 'memory.c', '-o', probe])
@@ -159,7 +155,7 @@ def main():
     if args.allocations:
         extra += ['-O1', *defines, EXPERIMENTS / 'allocations.c',
                   '-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free']
-    if args.nested not in ('none', 'cpython'):
+    if args.nested not in ('none', 'cpython', 'postgres'):
         extra += ['-O1', '-Wl,--wrap=__capstone_region', *defines, '-I',
                   REPO / 'capstone/runtime/include', HERE / 'regions.c']
     if args.reuse_gap:
@@ -171,7 +167,7 @@ def main():
         if args.app == 'ffmpeg': extra += ['-I', REPO / 'capstone/ports/ffmpeg/app/src/shared']
     if args.instrument:
         extra += ['-Wl,--wrap=main,--wrap=write', probe]
-    elif args.nested in ('postgres',):
+    elif args.nested in ():
         extra += ['-O1', '-Wl,--wrap=main', *defines, HERE / 'initialize.c']
     run([sdk / 'capstone-cc', *extra, *objects, '-o', image])
     run([args.toolchain / 'bin/llvm-objcopy', '--strip-debug', image])

@@ -79,7 +79,7 @@
     },
     "virtual-mallocng-pg-pools": {
       "target": "capstone-virtual",
-      "summary": "virtual-mallocng plus PostgreSQL's memory contexts on the Sublet context pools, built for the virtual profile (ports/common/application/build-virtual.sh postgres with PGSU_NESTED=sublet): palloc chunks bounded and retired per chunk",
+      "summary": "virtual-mallocng plus the memory-context port's patch 0003 in the server, built for the virtual profile (ports/common/application/build-virtual.sh postgres with PGSU_NESTED=sublet): every palloc chunk a child lifetime of its block (CDERIVE), bounded to the request and revoked by pfree and repalloc (CREVOKE)",
       "mechanism": "as virtual-mallocng; per-chunk bounds and revocation in palloc",
       "controls": {
         "bounds-malloc": "fault",
@@ -96,7 +96,7 @@
     },
     "virtual-mallocng-replay": {
       "target": "capstone-virtual",
-      "summary": "the memory-contexts replay built as a Capstone application (capstone-application toolchain, virtual SDK) and run as a process under capstone-vexec: PostgreSQL's aset/slab stock on virtual mallocng, which bounds and retires each block it hands the manager but not the chunks carved from it",
+      "summary": "the memory-contexts replay built as a Capstone application (capstone-application toolchain, virtual SDK) and run as a process under capstone-vexec: PostgreSQL's managers with the capability-layout patches on virtual mallocng, which bounds and retires each block it hands the manager but not the chunks carved from it",
       "mechanism": "exact bounds and lifetime retirement of malloc blocks; none per chunk",
       "controls": {
         "uaf-chunk": "complete"
@@ -107,8 +107,8 @@
     },
     "virtual-mallocng-replay-pools": {
       "target": "capstone-virtual",
-      "summary": "the same replay with PG_SUBLET: PostgreSQL's managers on the Sublet context pools, their arena lent by the virtual heap as one linear capability (__capstone_sublet_malloc_linear), so every chunk is its own capability, retired when the manager takes it back",
-      "mechanism": "as virtual-mallocng-replay; per-chunk bounds and revocation in the nested allocator",
+      "summary": "the same replay with PG_SUBLET, which applies the port's patch 0003: every chunk a child lifetime of its block (CDERIVE), bounded to the request and revoked by pfree and repalloc (CREVOKE)",
+      "mechanism": "as virtual-mallocng-replay; per-chunk bounds and revocation in the memory contexts",
       "controls": {
         "uaf-chunk": "fault"
       },
