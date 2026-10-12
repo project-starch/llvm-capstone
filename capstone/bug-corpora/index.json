@@ -446,8 +446,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential"
@@ -460,7 +458,6 @@
       "runners": [
         "capstone/bug-corpora/httpd/apr-pool-repros/runners/capstone-domain/run-defects.py",
         "capstone/bug-corpora/httpd/apr-pool-repros/runners/cheribsd/run-defects.py",
-        "capstone/bug-corpora/httpd/apr-pool-repros/runners/poisoncap/run-defects.py",
         "capstone/bug-corpora/httpd/apr-pool-repros/runners/run-native.sh"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
@@ -488,8 +485,6 @@
       "required_arms": [
         "spatial",
         "sublet",
-        "poisoncap-spatial",
-        "poisoncap-protected",
         "cheribsd-revocation",
         "native-detect",
         "native-fix-differential"
@@ -502,7 +497,6 @@
       "runners": [
         "capstone/bug-corpora/httpd/bucket-repros/runners/capstone-domain/run-defects.py",
         "capstone/bug-corpora/httpd/bucket-repros/runners/cheribsd/run-defects.py",
-        "capstone/bug-corpora/httpd/bucket-repros/runners/poisoncap/run-defects.py",
         "capstone/bug-corpora/httpd/bucket-repros/runners/run-native.sh"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
@@ -2012,7 +2006,7 @@
     }
   ],
   "issues": {
-    "open": 108,
+    "open": 109,
     "resolved": 77
   },
   "fixtures": [

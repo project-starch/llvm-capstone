@@ -83,11 +83,9 @@ def profile(state):
 
 def sdk_identity(sdk):
     """(heap, profile) an application SDK was built with, read from the SDK itself, never from a
-    label. On the virtual profile malloc is the local mallocng whatever the heap option says, so
-    the profile is reported as the heap there."""
+    label: musl mallocng on the virtual profile, level0 on the physical one."""
     cache = (Path(sdk) / "CMakeCache.txt").read_text()
-    heap = re.search(r"^CAPSTONE_APPLICATION_HEAP:STRING=(\S+)", cache, re.M)
     virtual = re.search(r"^CAPSTONE_APPLICATION_VIRTUAL:BOOL=(\S+)", cache, re.M)
     if virtual and virtual.group(1).upper() in ("ON", "TRUE", "1"):
         return "virtual-mallocng", "virtual"
-    return (heap.group(1) if heap else None), "physical"
+    return "level0", "physical"

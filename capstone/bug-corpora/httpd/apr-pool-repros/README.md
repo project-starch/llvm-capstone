@@ -32,8 +32,9 @@ referenced rather than copied. Where this corpus differs:
   CheriBSD with its own libc revocation, nodes from the platform's `malloc`,
   mode 0 only, with a positive control in the same boot. It is the FFmpeg
   corpus's arm of that name.
-* **`poisoncap-*`** run the port's PoisonCap build (`-DAPRP_POISONCAP=ON`) as a pair under `supervise`, measured 2026-09-22: mode 0 completes, mode 1 faults at the labelled read (`results/20260922-poisoncap/`). Formerly declared and not written, when no PoisonCap build of APR
-  existed.
+* **`poisoncap-*`**, the port's PoisonCap pair, was measured 2026-09-22 (mode 0
+  completes, mode 1 faults at the labelled read: `results/20260922-poisoncap/`) and
+  removed with the PoisonCap build on 2026-10-10.
 
 ## Three targets, one sequence
 
@@ -67,7 +68,7 @@ second contract, and a checker that fails by design is noise.
 | what it reports | why |
 |---|---|
 | `native-fix-differential` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
-| `cheribsd-revocation` | the contract's CheriBSD arms are the PoisonCap pair. This one has no adapter at all: it is the platform as shipped, and calling it `poisoncap-spatial` would claim an adapter that is not in the binary |
+| `cheribsd-revocation` | the contract names no stock CheriBSD arm. This one has no adapter at all: it is the platform as shipped |
 | `case.c declares no PYC_CASE` | the macro is the corpus's seam to its allocator; here it is `APR_CASE`. The rule the checker means — a case declares the number its directory carries, and the driver refuses a fixture that names another — is implemented |
 
 Extending the checker to know these is a change to the pymalloc corpus and

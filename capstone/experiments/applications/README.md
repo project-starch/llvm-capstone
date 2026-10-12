@@ -54,10 +54,11 @@ libraries. SQLite takes the existing amalgamation and VFS objects, with
 `--libc-root` to select an existing musl build. tshark reads the upstream
 ninja link command; its dependencies must already be built.
 
-`--heap sublet --heap-log N` selects the common Sublet malloc implementation.
-The separate `--nested cpython`, `--nested mruby` and `--nested perl` modes
-select already-built ports of pymalloc, GC slots and SV heads while leaving
-their system allocator as the first-fit heap (`level0.c`).
+The `--nested mruby` and `--nested perl` modes select already-built
+ports of GC slots and SV heads while leaving their system allocator as the
+first-fit heap (`level0.c`). CPython builds only with `--profile virtual`, where
+the system allocator is musl mallocng; `--nested cpython` is pymalloc's port on
+top of it (`ports/common/application/build-virtual.sh` with `CPY_SUBLET=1`).
 They allocate the grants described in `regions.c`; they do not silently
 fall back if a protected port's region is absent. Record the supplied source
 revision, object hashes, protection contract and build manifest together.
@@ -69,8 +70,7 @@ Stage images and workload scripts in the VM's share under `experiments/`.
 The language workloads take `normal_batch_size batches retained_records`.
 Batch `batches/2` is a 4× burst. Native execution of the same workload must
 produce the independently calculated checksum before its domain cell is run.
-CPython also needs its prepared standard-library zip under
-`experiments/pyhome/lib/python313.zip`; Perl uses its staged standard library.
+Perl uses its staged standard library.
 
 ```sh
 python3 capstone/experiments/applications/matrix.py \

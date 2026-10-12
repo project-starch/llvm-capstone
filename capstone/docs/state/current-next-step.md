@@ -1,12 +1,17 @@
-2026-10-10 — **Sublet lifetime extension: review the paired QEMU/runtime change
-on `isa/sublet-lifetimes`.** Its [qualification](../design/virtual-capstone/development.md#sublet-lifetime-qualification)
-covers the ISA, storage formats, public C wrappers and existing processor
-regressions. Land the QEMU change in `virtual-capstone` before selecting its
-landed commit in the superproject. Rebuild the Linux adapter; the node-table
-ABI and namespace limits changed. The next allocator step is to migrate a
-small adapter to derive/revoke-child and requalify its negative cases before
-measuring workloads. No allocator capacity/performance improvement is yet
-claimed by this implementation.
+2026-10-10 — **CheriBSD PoisonCap is removed** (branch `nested/poisoncap-removal`; PostgreSQL's arm
+goes with its rewrite). Every PoisonCap next step below is void, and its results stay as history.
+See `current-state.md`.
+
+2026-10-12 — **Sublet ISA and wrappers are merged; review the allocator migration.**
+QEMU #21 and runtime #216 are integrated, with the superproject pinned to QEMU
+`7dbfdd534eea`. The migration moves the eight nested allocator ports to the
+managed lifetime operations and retires the physical Sublet heap and active
+PoisonCap tooling. Review the per-port code and its recorded controls together.
+Historical measurements identify their original builds; they are not results
+from the rebased tree. The PostgreSQL hosted runner now retains the per-case
+negative controls introduced by #218; rerun its paired guest cases before
+claiming new qualification. Preserve the recorded negative results, including
+memcached fixture 24 and the CPython pop comparison discrepancy.
 
 2026-10-10 — **The next bitstream is approved and in synthesis: `next-bitstream-r51-r52` = capstone-ariane
 `0568f93a9` (776d9d859 + R-52 + R-51). The lead's word: "yes, go, approve synth".**
