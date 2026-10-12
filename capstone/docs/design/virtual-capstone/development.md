@@ -10,6 +10,34 @@ the original review boundaries; use the checkout's QEMU pin for new builds.
 `virtual-musl-local` adds Capstone-compiled mallocng executing locally in the
 application; see the [allocator contract](../../../runtime/virtual/mallocng.md).
 
+## Sublet lifetime qualification
+
+The Sublet extension changes the capability and node-table layouts. Rebuild
+QEMU and the Linux adapter together. The C wrappers use existing `.insn`
+support; rebuilding LLVM for new opcodes is unnecessary. The [ISA contract](isa.md#sublet-child-lifetimes)
+documents the range, authority and format rules.
+
+```sh
+source capstone/tests/capstone-test-env.sh
+python3 capstone/capstone-qemu/tests/virtual-capstone-model/model.py
+bash capstone/capstone-qemu/tests/sublet-lifetimes/run.sh
+bash capstone/runtime/tests/sublet-lifetimes/run.sh
+bash capstone/capstone-qemu/tests/virtual-capstone-m1/run.sh
+bash capstone/capstone-qemu/tests/virtual-capstone-runtime/run.sh
+bash capstone/capstone-qemu/tests/virtual-capstone-runtime/exact-bounds.sh
+```
+
+Verified on this implementation: 9,758 model prefixes and eight directed
+traces per storage backend (host, flat and paged); 41 table/encoding checks,
+19 paged growth/reuse checks, and detected mutation controls; 74 Sublet
+instruction checks; eight C-wrapper checks with the existing compiler;
+60 M1, 69 virtual-runtime and four exact-bounds regression checks. The Linux
+adapter builds with the new shared header and 30-bit namespace limits. A
+Linux smoke using a matching kernel/module pair and the recorded local-mallocng
+contract binary passes normal execution, stale-access denial (cause 25,
+exit 139), and module cleanup.
+Allocator migration, full workload measurements and RTL remain separate.
+
 ## Repositories and profiles
 
 | Component | Integration/review location |
