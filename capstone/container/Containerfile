@@ -9,7 +9,9 @@
 # newer releases risk:
 #
 #   gcc 11.4   -- llvm/cmake/modules/CheckCompilerVersion.cmake wants GCC >= 7.4
-#   cmake 3.22 -- llvm/CMakeLists.txt wants cmake_minimum_required(3.20)
+#   cmake 3.22 -- clears llvm/CMakeLists.txt's cmake_minimum_required(3.20), but NOT the
+#                 3.25 that capstone/runtime/application/CMakeLists.txt wants, so a
+#                 modern cmake is installed over it below
 #   python3.10 -- still ships distutils, which older Buildroot host packages import
 #
 # 24.04 buys nothing here (LLVM 22 builds fine on gcc 11) and its python 3.12 is the
@@ -108,6 +110,31 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             --default-toolchain 1.83.0 \
     && chmod -R a+rX /opt/cargo /opt/rustup
 ENV PATH=/opt/cargo/bin:$PATH
+
+# A modern CMake, over the top of jammy's 3.22.
+#
+# WHY. capstone/runtime/application/CMakeLists.txt -- the application SDK, which every
+# virtual-profile port is built through -- opens with cmake_minimum_required(VERSION 3.25),
+# as do runtime/exec, runtime/tests/application and runtime/tests/fault-recovery. jammy
+# ships 3.22.1, so those trees cannot be configured at all: the SDK build dies at
+# `cmake --fresh` (a 3.24 option) and would die again on the version floor if that were
+# removed. Keeping the distro cmake for the LLVM and QEMU legs and adding a second one for
+# the runtime would be two sources of truth, so this replaces it on PATH for everything.
+#
+# Kitware's own static binary tarball rather than apt.kitware.com: one pinned URL, no
+# third-party apt key, and the version is recorded here rather than resolved at build time.
+# 3.31.6 is not arbitrary -- it is what this project's host has, so container and host agree
+# and a configure that works in one works in the other.
+ENV CAPSTONE_CMAKE_VERSION=3.31.6
+RUN curl -fsSL --proto '=https' --tlsv1.2 \
+      "https://github.com/Kitware/CMake/releases/download/v${CAPSTONE_CMAKE_VERSION}/cmake-${CAPSTONE_CMAKE_VERSION}-linux-x86_64.tar.gz" \
+      -o /tmp/cmake.tar.gz \
+    && mkdir -p /opt/cmake \
+    && tar -xzf /tmp/cmake.tar.gz -C /opt/cmake --strip-components=1 \
+    && rm /tmp/cmake.tar.gz \
+    && chmod -R a+rX /opt/cmake \
+    && /opt/cmake/bin/cmake --version | head -1
+ENV PATH=/opt/cmake/bin:$PATH
 
 # Matches run.sh's bind mount. Set here too so `podman run <image>` without run.sh still
 # lands somewhere sensible rather than /.

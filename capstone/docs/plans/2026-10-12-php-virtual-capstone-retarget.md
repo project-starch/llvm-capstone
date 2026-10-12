@@ -180,7 +180,9 @@ Everything the virtual profile needs is present on this machine, which was not a
 | prepared kernel build (`KERNEL_BUILD`) | `caplifive-buildroot/build-qemu/build/linux-custom` | Linux 6.x, has `.config`, `Module.symvers`, `vmlinux`, `autoconf.h` |
 | firmware / kernel / rootfs for a VM | `caplifive-buildroot/build/images` | `fw_jump.elf`, `Image` (19.8 MB), `rootfs.ext2` (2 GB), built 2026-09-21 |
 | QEMU | `capstone-qemu/build/qemu-system-riscv64` | built 2026-09-20 from the **old** pointer -- predates `virt-capstone` and `x-capstone-u-mode`, so it must be rebuilt |
-| container image | `localhost/capstone-build` | 1.77 GB, present |
+| container image | `localhost/capstone-build` | 1.77 GB, present, but its **cmake 3.22.1 is too old** -- see below |
+| `cmake` >= 3.25 | in the container | **was missing.** `capstone/runtime/application/CMakeLists.txt:1` requires 3.25 and `ports/common/application/build-sdk.sh:15` passes `--fresh` (3.24+); jammy ships 3.22.1, so the SDK could not be configured at all. Fixed by installing Kitware's pinned 3.31.6 into `/opt/cmake` in `container/Containerfile`, matching the host's version |
+| `-mllvm -capstone-image-gp` | the rebuilt clang | **accepted now; it was rejected before the rebuild.** This was the hard prerequisite -- verified with the known-good `-capstone-shrink-stack=false` as a positive control and a nonsense flag as a negative control, because a bare `-help-list-hidden` grep had previously reported a false zero for all three flags |
 
 Neither the host nor the container has a cross gcc on `PATH`; it has to be taken from the
 buildroot tree above. The container has no `flex`/`bison`, which is why a real PHP `configure`
@@ -191,6 +193,64 @@ One consequence to decide before Phase A's run step: the merge moved the `caplif
 pointer to `8fd1ea1249a9` while the worktree -- and the images above -- are from `d04bd83b13cd`.
 Updating that submodule invalidates the images and costs a buildroot rebuild, so leave it until
 something actually needs the newer kernel module.
+
+## Seam probe — RESULT (run 2026-10-12, three independent boots, identical readings)
+
+`ports/php/zend-alloc/sublet/probe-sublet-split.c`, built against the virtual SDK and run as a
+Linux user process in the guest. **The seam design is confirmed.** All six stages read as
+predicted, and the control passed, so the other five are evidence rather than noise.
+
+| stage | tests | reading |
+|---|---|---|
+| 0 | **positive control**: split at `base+48`, retire payload, write header, re-issue, senior revoke | **PASS, completed** -- "header still writable after the payload was retired" |
+| 1 | write through a retired payload alias | **FAULT** cause 24 (`cincoffset with an UNTAGGED rs1`) |
+| 2 | read through a retired payload alias | **FAULT** cause 24 |
+| 3 | the `AG(cache)` case: re-issue the region, then use the OLD alias | **FAULT** cause 24 -- re-issue does **not** resurrect the previous tenant's pointer |
+| 4 | read the *cursor* of a retired capability, no dereference | **SURVIVED** |
+| 5 | `sublet_split` at `base+40`, not a 16-byte multiple | **PERMITTED**, bounds exact |
+
+What this settles, in the plan's own terms:
+
+- **The design claim holds.** Stage 0 is the whole seam in miniature: header and payload can be
+  separated so that retiring one leaves the other live. So `zend_alloc.c` can keep reading
+  `p->size` and writing `p->cached` after the logical free, and **the physical port's
+  unlink-before-revoke deviation is not needed** -- the thing that cost "four false CAUGHT
+  verdicts" there does not have to be repeated here.
+- **Stage 3 is the one that matters for PHP**, because `AG(cache)` reuse is exactly the trap
+  `docs/design/virtual-capstone/ownership.md` warns about: reusing bytes inside a still-live
+  outer allocation does not by itself give inner temporal protection. A fresh `sublet_take` over
+  the same bytes *does* kill the old alias, so retiring at `_efree` (above PHP's cache) gives
+  per-object lifetimes **with `zend_alloc.c` still byte-identical**. That is the combination the
+  physical port could only have one half of at a time.
+- **Open risk 2 is resolved, and in the harder direction.** A cursor read on a dead capability
+  does **not** trap (stage 4). So `ZEND_CAP_HEADER(ptr)` will *not* fault on a double-`efree`:
+  the adapter must probe the record explicitly and fault at a named label of its own. This is
+  the better outcome -- it means the adapter chooses where that fault lands, instead of it
+  landing inside the index lookup where the harness would refuse it as a port artefact.
+- **No padding is required**, and the limit of that reading is recorded in the probe itself:
+  stage 5 exercises the *split* only. `sublet_give_to` fills in 16-byte steps, so revoking a
+  non-grain region remains untested. PHP never needs it -- `sizeof(zend_mem_header)` is 48, a
+  grain multiple -- so the adapter will not split off-grain and the question stays closed by
+  construction rather than by measurement.
+- **Node cost, first real measurement.** Stage 0's `CAPSTONE_VM_STATS`: `nodes=50`,
+  `node_capacity=1024`, `node_growths=0` for one block's full lifecycle. Far from the table
+  pressure the plan budgets for, but it is one block; the figure to watch is PHP's high-water,
+  and the plan's fail-closed rule on cause 30 stands.
+
+Two platform facts also came out of this, both now fixed in the code rather than in prose:
+
+- **`capstone_vm` cannot provision a guest on this project.** Its guest setup runs `dropbearkey`
+  unconditionally and `BR2_PACKAGE_DROPBEAR` is unset in our pinned buildroot *and* in dev's.
+  The plan's `capstone_vm up --profile virtual` + `ports/common/application/run.py` route is
+  therefore unavailable. `runtime/virtual/run.py` uses no SSH at all, so `app/run-virtual.py`
+  borrows that mechanism instead: `-serial stdio`, a staged read-only ext4 disk, console
+  driving, `VM_EXIT:<name>:<code>` markers, `-snapshot` so the shared 2 GB rootfs is never
+  written. The batching benefit survives -- many `capstone-vexec` runs inside one boot, since a
+  capability fault kills the child and not the guest -- it just arrives by a different route.
+- **The QEMU lock must not be taken twice.** `run-virtual.py` takes it itself, so wrapping it in
+  `capstone_with_qemu_lock` deadlocks until the outer timeout, which on the console is
+  indistinguishable from a guest that never booted. It now takes the lock `LOCK_NB` and exits
+  with an explanation instead of hanging.
 
 ## Phase 0 — merge
 
