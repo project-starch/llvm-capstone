@@ -5,6 +5,13 @@ with this repo's port runtime, and the same release built natively as the
 reference its output is compared with. Why perl, which release, and what its four
 nested allocators look like: `docs/design/perl-sublet-port-evaluation.md`.
 
+The shared entry for a virtual build is
+[`ports/common/application/build-virtual.sh`](../../common/application/README.md)
+(`build-virtual.sh perl <fresh dir>`), which runs this recipe with `PERLD_PROFILE=virtual`, and
+`CAPSTONE_VIRTUAL_LIFETIMES=1` for `PERLD_SUBLET=1`. This
+port's own recipe stays the source of truth for what gets built, and still
+takes its own variables directly.
+
 ## Result (2026-09-29, delegated runtime)
 
 Built with patches 0001-0008 on the delegated runtime (application ABI v2,

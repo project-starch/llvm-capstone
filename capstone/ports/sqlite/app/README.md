@@ -7,6 +7,13 @@ delegated runtime as a Linux command:
 - SQLite's own defaults, the unix VFS and musl;
 - database files, POSIX record locks, temporary files and floating point.
 
+The shared entry for a virtual build is
+[`ports/common/application/build-virtual.sh`](../../common/application/README.md)
+(`build-virtual.sh sqlite <fresh dir>`), which runs this recipe with an SDK it builds, and
+`CAPSTONE_VIRTUAL_LIFETIMES=1` for `SQLITE_HEAP=memsys5-sublet`. This
+port's own recipe stays the source of truth for what gets built, and still
+takes its own variables directly.
+
 The other SQLite builds in [`..`](../README.md) are freestanding domains, and nothing of them is
 used here.
 
