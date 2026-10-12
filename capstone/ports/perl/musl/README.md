@@ -75,14 +75,24 @@ There is no Perl-specific entry adapter, argument file, compiler wrapper or VM
 runner. The old `run-perl-domain.sh` interface has been removed. Use ordinary
 argv, `run --cwd DIR -e NAME=value`, or `capstone-exec` in the Linux guest shell.
 
-`PERLD_HEAP=level0` remains the default; `PERLD_HEAP=sublet` selects the common
-revoking heap with `PERLD_HEAP_LOG`. That changes the system allocator only. For
-per-head protection, `PERLD_SV_HEADS=1` builds the study variant of
+The physical profile's heap is level0. For per-head protection there,
+`PERLD_SV_HEADS=1` builds the study variant of
 [`../sv-heads`](../sv-heads/README.md), whose Sublet backend revokes every
 released SV head; `experiments/applications/build.py --nested perl` relinks it
 with its region grant. The image declares its additional heap grant;
 the launcher supplies it and the monitor reclaims it, including after SIGKILL.
-No caller-side `PERLD_HEAP_REGION_BYTES` is needed.
+`PERLD_HEAP=sublet` and `sublet-svheads` were removed on 2026-10-11 with the
+physical Sublet heap; their recorded results stay in the corpus's
+[`results/20261006`](../../../bug-corpora/perl/release-differential/results/20261006).
+
+On the virtual profile the SV heads are protected by the two Sublet instructions directly:
+`PERLD_SUBLET=1` applies [`../sublet/patches/5.36.3`](../sublet/patches/5.36.3) with
+`-DPERL_CAPSTONE_SUBLET`, and each head is handed out as a CDERIVE child of its arena's
+lifetime and revoked by CREVOKE when it is freed. No adapter, region or grant is involved; the
+patch header says what it changes and why. Measured 2026-10-11 on the Sublet-lifetime QEMU
+(`bug-corpora/perl/release-differential`): on that platform backticks fault with cause 25 in
+`fileno` and a piped `open` returns ENOSYS, on the stock image and the protected one alike, so
+the delegated `popen` path of patch 0008 does not work there; `system()` returns -1.
 
 An upstream TAP harness can run several tests without rebooting. Place the
 upstream `t/` and `lib/` on the share, install the host CLI, then from the host's
@@ -160,6 +170,8 @@ in regex state with pointer-typed fields; both are unconditional.
 | 0006 | `doio.c` | `S_openn_setup` does `Zero(mode,sizeof(mode),char)` where `mode` is its own `char *` parameter, so it clears **a pointer's** size, not the buffer's. Both callers pass a `char[PERL_MODE_MAX]`, and PERL_MODE_MAX is 8, so wherever a pointer is 8 bytes the two agree by coincidence; at 16 it writes 16 bytes into an 8-byte stack array. A defect in perl rather than a porting difference, so the patch is unconditional and a no-op elsewhere. Present unchanged in 5.32.1, 5.36.3 and 5.38.2, and worth reporting upstream. Found at the script's first `open()` |
 | 0007 | `pp_ctl.c` | `rxres_save` puts `RX_SAVED_COPY`, `RX_SUBBEG` and an optional copied buffer through `UV` slots. Restoring a 128-bit capability from a 64-bit `UV` keeps its address but loses its tag. `lex.t` then faults in `Perl_pregfree2` when it decrements the saved-copy reference count. Pointer-typed fields preserve the capability; all 120 `lex.t` assertions now pass |
 | 0008 | `util.c` | Route backticks and piped opens through libc's delegated `popen`/`pclose`, preserving the child's wait status without cloning the domain. Shell-launched images additionally require the guest binfmt_misc handler |
+| 0009 | `toke.c` | Pass a local copy of the constant `no_code`, not the constant itself, by value. A const global aggregate holding pointers, passed by value, faults in the virtual profile's code generation (compiler issue C-77, `docs/ref/ISSUES.md`): every bareword starting with `::` (`::is`, `::ok` throughout Perl's tests) faulted in `memcpy` at compile time. Behaviour unchanged |
+| 0010 | `builtin.c` | Each `builtin::` call checker gets its descriptor as an index into `builtins[]`, not as `newSVuv(PTR2UV(builtin))` turned back with `NUM2PTR`: through an integer the capability loses its tag, so every `builtin::` call and every program loading `overload.pm` faulted, on this port and on CheriBSD purecap alike (measured 2026-10-11). An upstream pattern, harmless where a pointer is an integer |
 
 ## Open, in the order they matter
 

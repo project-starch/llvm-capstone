@@ -1,0 +1,3215 @@
+{
+ "snapshot": "git archive 16d2171a3edc capstone + ports/perl/musl/patches/5.36.3/0011 (uncommitted, sha256 297200543564b3f980dd312a41dfbe1d7c4a266caff30fe74b9759c6499927b5) + compiler-rt/lib/builtins of 9bc6f9adf1c9",
+ "images": {
+  "stock": "a5efdd17817fa36024b5c0cfd672f224b1dcf983d294f8cfab6c613971095db1",
+  "protected": "09e87eae3297b61dc4ebd5113766ff67b17d735dd3ad88519000d8c904cf9abd"
+ },
+ "native": {
+  "without-0011": "6f4afa79f9ea05aec653c8dacc9363bdbf7ba627608123291ffb9c247dd8b0f7",
+  "with-0011": "567bae4e6440f866414311c724359b0e6afa7507595751e29d07c20a88dc244e"
+ },
+ "native_gate": {
+  "harness": [
+   {
+    "file": "base/cond.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "base/if.t",
+    "without": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "base/lex.t",
+    "without": {
+     "plan": "1..120",
+     "ok": 121,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..120",
+     "ok": 121,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "base/num.t",
+    "without": {
+     "plan": "1..56",
+     "ok": 57,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..56",
+     "ok": 57,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "base/pat.t",
+    "without": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "base/rs.t",
+    "without": {
+     "plan": "1..41",
+     "ok": 42,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..41",
+     "ok": 42,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "base/term.t",
+    "without": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "base/translate.t",
+    "without": {
+     "plan": "1..257",
+     "ok": 258,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..257",
+     "ok": 258,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "base/while.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic.t",
+    "without": {
+     "plan": "1..66",
+     "ok": 67,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..66",
+     "ok": 67,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_01_c3.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_01_c3_utf8.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_01_dfs.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_01_dfs_utf8.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_02_c3.t",
+    "without": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_02_c3_utf8.t",
+    "without": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_02_dfs.t",
+    "without": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_02_dfs_utf8.t",
+    "without": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_03_c3.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_03_c3_utf8.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_03_dfs.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_03_dfs_utf8.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_04_c3.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_04_c3_utf8.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_04_dfs.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_04_dfs_utf8.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_05_c3.t",
+    "without": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_05_c3_utf8.t",
+    "without": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_05_dfs.t",
+    "without": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_05_dfs_utf8.t",
+    "without": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/basic_utf8.t",
+    "without": {
+     "plan": "1..53",
+     "ok": 54,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..53",
+     "ok": 54,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/c3_with_overload.t",
+    "without": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/c3_with_overload_utf8.t",
+    "without": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/complex_c3.t",
+    "without": {
+     "plan": "1..12",
+     "ok": 13,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..12",
+     "ok": 13,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/complex_c3_utf8.t",
+    "without": {
+     "plan": "1..12",
+     "ok": 13,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..12",
+     "ok": 13,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/complex_dfs.t",
+    "without": {
+     "plan": "1..11",
+     "ok": 12,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..11",
+     "ok": 12,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/complex_dfs_utf8.t",
+    "without": {
+     "plan": "1..11",
+     "ok": 12,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..11",
+     "ok": 12,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/dbic_c3.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/dbic_c3_utf8.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/dbic_dfs.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/dbic_dfs_utf8.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/inconsistent_c3.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/inconsistent_c3_utf8.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/isa_aliases.t",
+    "without": {
+     "plan": "1..13",
+     "ok": 14,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..13",
+     "ok": 14,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/isa_aliases_utf8.t",
+    "without": {
+     "plan": "1..12",
+     "ok": 13,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..12",
+     "ok": 13,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/isa_c3.t",
+    "without": {
+     "plan": "1..35",
+     "ok": 36,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..35",
+     "ok": 36,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/isa_c3_utf8.t",
+    "without": {
+     "plan": "1..34",
+     "ok": 35,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..34",
+     "ok": 35,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/isa_dfs.t",
+    "without": {
+     "plan": "1..34",
+     "ok": 35,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..34",
+     "ok": 35,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/isa_dfs_utf8.t",
+    "without": {
+     "plan": "1..34",
+     "ok": 35,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..34",
+     "ok": 35,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/isarev.t",
+    "without": {
+     "plan": "1..24",
+     "ok": 25,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..24",
+     "ok": 25,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/isarev_utf8.t",
+    "without": {
+     "plan": "1..24",
+     "ok": 25,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..24",
+     "ok": 25,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/method_caching.t",
+    "without": {
+     "plan": "1..36",
+     "ok": 37,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..36",
+     "ok": 37,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/method_caching_utf8.t",
+    "without": {
+     "plan": "1..28",
+     "ok": 29,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..28",
+     "ok": 29,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_NEXT.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_NEXT_utf8.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_edgecases.t",
+    "without": {
+     "plan": "1..12",
+     "ok": 13,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..12",
+     "ok": 13,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_edgecases_utf8.t",
+    "without": {
+     "plan": "1..12",
+     "ok": 13,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..12",
+     "ok": 13,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_goto.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_goto_utf8.t",
+    "without": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..4",
+     "ok": 5,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_inanon.t",
+    "without": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_inanon_utf8.t",
+    "without": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..2",
+     "ok": 3,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_ineval.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_ineval_utf8.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_method.t",
+    "without": {
+     "plan": "1..5",
+     "ok": 6,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..5",
+     "ok": 6,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_method_utf8.t",
+    "without": {
+     "plan": "1..5",
+     "ok": 6,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..5",
+     "ok": 6,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_skip.t",
+    "without": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/next_skip_utf8.t",
+    "without": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..10",
+     "ok": 11,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/overload_c3.t",
+    "without": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/overload_c3_utf8.t",
+    "without": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/overload_dfs.t",
+    "without": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/package_aliases.t",
+    "without": {
+     "plan": "1..54",
+     "ok": 55,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..54",
+     "ok": 55,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/package_aliases_utf8.t",
+    "without": {
+     "plan": "1..52",
+     "ok": 53,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..52",
+     "ok": 53,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/pkg_gen.t",
+    "without": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/pkg_gen_utf8.t",
+    "without": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..7",
+     "ok": 8,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/recursion_c3.t",
+    "without": {
+     "plan": "1..8",
+     "ok": 9,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..8",
+     "ok": 9,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/recursion_c3_utf8.t",
+    "without": {
+     "plan": "1..8",
+     "ok": 9,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..8",
+     "ok": 9,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/recursion_dfs.t",
+    "without": {
+     "plan": "1..8",
+     "ok": 9,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..8",
+     "ok": 9,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/recursion_dfs_utf8.t",
+    "without": {
+     "plan": "1..8",
+     "ok": 9,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..8",
+     "ok": 9,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/vulcan_c3.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/vulcan_c3_utf8.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/vulcan_dfs.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "mro/vulcan_dfs_utf8.t",
+    "without": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1",
+     "ok": 2,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "op/gv.t",
+    "without": {
+     "plan": "1..304",
+     "ok": 305,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..304",
+     "ok": 305,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   },
+   {
+    "file": "op/magic.t",
+    "without": {
+     "plan": "1..208",
+     "ok": 208,
+     "not_ok": 1,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..208",
+     "ok": 208,
+     "not_ok": 1,
+     "result": "PASS"
+    },
+    "identical_tap": false
+   },
+   {
+    "file": "op/taint.t",
+    "without": {
+     "plan": "1..1058",
+     "ok": 1059,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "with_0011": {
+     "plan": "1..1058",
+     "ok": 1059,
+     "not_ok": 0,
+     "result": "PASS"
+    },
+    "identical_tap": true
+   }
+  ],
+  "raw": {
+   "base_cond.t.stderr": {
+    "identical": true,
+    "sha256_without": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_with": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "base_cond.t.stdout": {
+    "identical": true,
+    "sha256_without": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+    "sha256_with": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485"
+   },
+   "base_if.t.stderr": {
+    "identical": true,
+    "sha256_without": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_with": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "base_if.t.stdout": {
+    "identical": true,
+    "sha256_without": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+    "sha256_with": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9"
+   },
+   "base_lex.t.stderr": {
+    "identical": true,
+    "sha256_without": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_with": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "base_lex.t.stdout": {
+    "identical": true,
+    "sha256_without": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+    "sha256_with": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8"
+   },
+   "base_num.t.stderr": {
+    "identical": true,
+    "sha256_without": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_with": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "base_num.t.stdout": {
+    "identical": true,
+    "sha256_without": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "sha256_with": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2"
+   },
+   "base_pat.t.stderr": {
+    "identical": true,
+    "sha256_without": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_with": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "base_pat.t.stdout": {
+    "identical": true,
+    "sha256_without": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+    "sha256_with": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad"
+   },
+   "base_rs.t.stderr": {
+    "identical": true,
+    "sha256_without": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_with": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "base_rs.t.stdout": {
+    "identical": true,
+    "sha256_without": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+    "sha256_with": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a"
+   },
+   "base_term.t.stderr": {
+    "identical": true,
+    "sha256_without": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_with": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "base_term.t.stdout": {
+    "identical": true,
+    "sha256_without": "954eb67d78c6ac5a8a1ae9f86632c6b12ab45e67822531ed39da37678814c61f",
+    "sha256_with": "954eb67d78c6ac5a8a1ae9f86632c6b12ab45e67822531ed39da37678814c61f"
+   },
+   "base_translate.t.stderr": {
+    "identical": true,
+    "sha256_without": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_with": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "base_translate.t.stdout": {
+    "identical": true,
+    "sha256_without": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+    "sha256_with": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1"
+   },
+   "base_while.t.stderr": {
+    "identical": true,
+    "sha256_without": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_with": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "base_while.t.stdout": {
+    "identical": true,
+    "sha256_without": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "sha256_with": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147"
+   },
+   "control.stdout": {
+    "identical": true,
+    "sha256_without": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+    "sha256_with": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2"
+   },
+   "smoke.stderr": {
+    "identical": true,
+    "sha256_without": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_with": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "smoke.stdout": {
+    "identical": true,
+    "sha256_without": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "sha256_with": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e"
+   }
+  },
+  "all_identical": false
+ },
+ "same_answers": {
+  "control": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 19.43,
+    "stdout_sha256_guest": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+    "stdout_sha256_host": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "native_with_0011_sha256": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 17.81,
+    "stdout_sha256_guest": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+    "stdout_sha256_host": "d117fa006ba9208500b2930ce69cbde436c647afa917cb7396a9bc9111a46dd2",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "stock_equals_protected": true
+  },
+  "base/cond.t": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 20.62,
+    "stdout_sha256_guest": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+    "stdout_sha256_host": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "native_with_0011_sha256": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 12.74,
+    "stdout_sha256_guest": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+    "stdout_sha256_host": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "stock_equals_protected": true
+  },
+  "base/if.t": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 21.26,
+    "stdout_sha256_guest": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+    "stdout_sha256_host": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "native_with_0011_sha256": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 18.94,
+    "stdout_sha256_guest": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+    "stdout_sha256_host": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "stock_equals_protected": true
+  },
+  "base/lex.t": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 22.61,
+    "stdout_sha256_guest": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+    "stdout_sha256_host": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "native_with_0011_sha256": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 22.87,
+    "stdout_sha256_guest": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+    "stdout_sha256_host": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "stock_equals_protected": true
+  },
+  "base/num.t": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 19.75,
+    "stdout_sha256_guest": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "stdout_sha256_host": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "native_with_0011_sha256": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 12.42,
+    "stdout_sha256_guest": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "stdout_sha256_host": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "stock_equals_protected": true
+  },
+  "base/pat.t": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 18.46,
+    "stdout_sha256_guest": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+    "stdout_sha256_host": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "native_with_0011_sha256": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 18.56,
+    "stdout_sha256_guest": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+    "stdout_sha256_host": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "stock_equals_protected": true
+  },
+  "base/rs.t": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 19.04,
+    "stdout_sha256_guest": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+    "stdout_sha256_host": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "native_with_0011_sha256": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 21.08,
+    "stdout_sha256_guest": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+    "stdout_sha256_host": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "stock_equals_protected": true
+  },
+  "base/term.t": {
+   "stock": {
+    "exit": 139,
+    "guest_wall_s": 23.07,
+    "stdout_sha256_guest": "f432ad69c1aab1363b37c5be4bfd0eb385c31f12ba16e08a131395f65ce8d449",
+    "stdout_sha256_host": "f432ad69c1aab1363b37c5be4bfd0eb385c31f12ba16e08a131395f65ce8d449",
+    "fault_cause": 25,
+    "stdout_equals_native_with_0011": false
+   },
+   "native_with_0011_sha256": "954eb67d78c6ac5a8a1ae9f86632c6b12ab45e67822531ed39da37678814c61f",
+   "protected": {
+    "exit": 139,
+    "guest_wall_s": 22.98,
+    "stdout_sha256_guest": "f432ad69c1aab1363b37c5be4bfd0eb385c31f12ba16e08a131395f65ce8d449",
+    "stdout_sha256_host": "f432ad69c1aab1363b37c5be4bfd0eb385c31f12ba16e08a131395f65ce8d449",
+    "fault_cause": 25,
+    "stdout_equals_native_with_0011": false
+   },
+   "stock_equals_protected": true
+  },
+  "base/translate.t": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 18.68,
+    "stdout_sha256_guest": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+    "stdout_sha256_host": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "native_with_0011_sha256": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 19.25,
+    "stdout_sha256_guest": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+    "stdout_sha256_host": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "stock_equals_protected": true
+  },
+  "base/while.t": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 14.19,
+    "stdout_sha256_guest": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "stdout_sha256_host": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "native_with_0011_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 18.7,
+    "stdout_sha256_guest": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "stdout_sha256_host": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "stock_equals_protected": true
+  },
+  "smoke": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 31.47,
+    "stdout_sha256_guest": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "stdout_sha256_host": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "native_with_0011_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 36.38,
+    "stdout_sha256_guest": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "stdout_sha256_host": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "fault_cause": null,
+    "stdout_equals_native_with_0011": true
+   },
+   "stock_equals_protected": true
+  }
+ },
+ "same_answers_images_guest": {
+  "stock": "a5efdd17817fa36024b5c0cfd672f224b1dcf983d294f8cfab6c613971095db1",
+  "protected": "09e87eae3297b61dc4ebd5113766ff67b17d735dd3ad88519000d8c904cf9abd"
+ },
+ "corpus": {
+  "virtual-malloc": {
+   "inputs": {
+    "arm": "virtual-malloc",
+    "image_sha256": "a5efdd17817fa36024b5c0cfd672f224b1dcf983d294f8cfab6c613971095db1",
+    "cases": 11,
+    "controls": {
+     "eval": true,
+     "shim": true
+    },
+    "timeout_s": 600,
+    "platform": {
+     "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+     "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+     "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+     "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+     "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+     "ssh_server": "900e4b0526538c4af35825f33ba192acb5f2f9b7dc49938039b5b8084db29882",
+     "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+     "job_helper": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+     "compiler": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+     "runner": "ca6e88f87401bf9f68a215c00c541d18f4b61fafc3178e3565e4c766871a4a40",
+     "judge": "c5e5872372b392de5325a2951e0ef57798cb9295d753b2b77db7223732c7a25f",
+     "profile": "virtual",
+     "exact_bounds": true
+    },
+    "triggers": {
+     "01_ad5fedb002_for-loop-gv-freed-early": "252a969a740e904cf26f706b68697d74ecf3fa7c9d72156edf5137ac7ee56d16",
+     "02_d2cddbe1df_caller-args-freed-sv": "c87184d0421a29edd8cfdcafc6e014b355b7e9561fbc3413073f43740b1af0d4",
+     "03_9e298ab597_av-extend-unshift-stale-slots": "a0a8f4c0945e174e2cd80e9a5136f9bc2d61d26044b7fcbcedcb444525e74e32",
+     "04_e4be969235_join-delimiter-freed-by-magic": "33ded74f3bf0dcacb54075989f413b4c2c456b953f6d50b18e22903275f6e6cb",
+     "05_17535c984a_cloned-const-sub-unrefcounted": "e0fbcd45a7b6a6c984b25bea51dd30ce131c43af94384182cedb3cc301f3dad5",
+     "06_40727c420c_code-blocks-count-reused": "e5902280a01895e022335bf2faf6415f9a38a4756c09922e8325c899c4016926",
+     "07_39b4841b25_recursive-code-eval-rex-freed": "d29f8739eeb3ede942e2e55f2fa1153a9bc6e9e61f3023ea3e51319e93790e78",
+     "08_b7b77ffc1e_clear-errsv-on-a-glob": "37088baf07fe4d3b0e894c4b305a7c66ce41b6bf616499ca8d44276cfbcf112c",
+     "09_1189b87114_special-block-cv-freed": "56e1f2399456071fd80e508dfec1a0cb6b4c074468f55fc32409bba5ebf57471",
+     "10_254b30e378_perlio-scalar-write-overlap": "961e4e41cf7ed9d65a4414e6bb35658fa724b4d0344390618240399ee27ad6e4",
+     "11_af11b0c528_cow-subbeg-across-code-eval": "c9544f35c16d5fdceac444584a485a553f906dbc85c4409b44207afa1fcd2a18"
+    }
+   },
+   "rows": [
+    {
+     "case": "01_ad5fedb002_for-loop-gv-freed-early",
+     "arm": "virtual-malloc",
+     "outcome": "fault",
+     "cause": "24",
+     "function": "Perl_pp_iter",
+     "in_fault_sites": "yes",
+     "harness": ""
+    },
+    {
+     "case": "02_d2cddbe1df_caller-args-freed-sv",
+     "arm": "virtual-malloc",
+     "outcome": "exit255",
+     "cause": "",
+     "function": "",
+     "in_fault_sites": "",
+     "harness": "[PASS] 0 panic: attempt to copy freed scalar 3fbaae6550 to 3fba0331e0 at /mnt/host/perl-cases/02.pl line 14."
+    },
+    {
+     "case": "03_9e298ab597_av-extend-unshift-stale-slots",
+     "arm": "virtual-malloc",
+     "outcome": "completed",
+     "cause": "",
+     "function": "",
+     "in_fault_sites": "",
+     "harness": "[PASS] 1"
+    },
+    {
+     "case": "04_e4be969235_join-delimiter-freed-by-magic",
+     "arm": "virtual-malloc",
+     "outcome": "fault",
+     "cause": "25",
+     "function": "memmove",
+     "in_fault_sites": "yes",
+     "harness": ""
+    },
+    {
+     "case": "05_17535c984a_cloned-const-sub-unrefcounted",
+     "arm": "virtual-malloc",
+     "outcome": "completed",
+     "cause": "",
+     "function": "",
+     "in_fault_sites": "",
+     "harness": "[FAIL] 1 of 2: 2,ok,no 'Attempt to free unreferenced scalar' Attempt to free unreferenced scalar'"
+    },
+    {
+     "case": "06_40727c420c_code-blocks-count-reused",
+     "arm": "virtual-malloc",
+     "outcome": "completed",
+     "cause": "",
+     "function": "",
+     "in_fault_sites": "",
+     "harness": "[FAIL] 5 of 29: 12,like,code in array 8,got=XAB-QC | 15,unlike,code in array 8 not 3 | 25,like,code in array 14,got=aabb-bb-=ee"
+    },
+    {
+     "case": "07_39b4841b25_recursive-code-eval-rex-freed",
+     "arm": "virtual-malloc",
+     "outcome": "fault",
+     "cause": "25",
+     "function": "S_regcppop",
+     "in_fault_sites": "yes",
+     "harness": ""
+    },
+    {
+     "case": "08_b7b77ffc1e_clear-errsv-on-a-glob",
+     "arm": "virtual-malloc",
+     "outcome": "fault",
+     "cause": "28",
+     "function": "Perl_pp_gvsv",
+     "in_fault_sites": "no",
+     "harness": ""
+    },
+    {
+     "case": "09_1189b87114_special-block-cv-freed",
+     "arm": "virtual-malloc",
+     "outcome": "fault",
+     "cause": "24",
+     "function": "Perl_newATTRSUB_x",
+     "in_fault_sites": "yes",
+     "harness": ""
+    },
+    {
+     "case": "10_254b30e378_perlio-scalar-write-overlap",
+     "arm": "virtual-malloc",
+     "outcome": "fault",
+     "cause": "25",
+     "function": "memmove",
+     "in_fault_sites": "yes",
+     "harness": ""
+    },
+    {
+     "case": "11_af11b0c528_cow-subbeg-across-code-eval",
+     "arm": "virtual-malloc",
+     "outcome": "completed",
+     "cause": "",
+     "function": "",
+     "in_fault_sites": "",
+     "harness": "[FAIL] 3 of 3: 1,is,[perl #16952] failed (?{}) branch keeps prior captures,got=foo-o"
+    }
+   ]
+  },
+  "virtual-nested-pools": {
+   "inputs": {
+    "arm": "virtual-nested-pools",
+    "image_sha256": "09e87eae3297b61dc4ebd5113766ff67b17d735dd3ad88519000d8c904cf9abd",
+    "cases": 11,
+    "controls": {
+     "eval": true,
+     "shim": true
+    },
+    "timeout_s": 600,
+    "platform": {
+     "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+     "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+     "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+     "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+     "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+     "ssh_server": "900e4b0526538c4af35825f33ba192acb5f2f9b7dc49938039b5b8084db29882",
+     "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+     "job_helper": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+     "compiler": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+     "runner": "ca6e88f87401bf9f68a215c00c541d18f4b61fafc3178e3565e4c766871a4a40",
+     "judge": "c5e5872372b392de5325a2951e0ef57798cb9295d753b2b77db7223732c7a25f",
+     "profile": "virtual",
+     "exact_bounds": true
+    },
+    "triggers": {
+     "01_ad5fedb002_for-loop-gv-freed-early": "252a969a740e904cf26f706b68697d74ecf3fa7c9d72156edf5137ac7ee56d16",
+     "02_d2cddbe1df_caller-args-freed-sv": "c87184d0421a29edd8cfdcafc6e014b355b7e9561fbc3413073f43740b1af0d4",
+     "03_9e298ab597_av-extend-unshift-stale-slots": "a0a8f4c0945e174e2cd80e9a5136f9bc2d61d26044b7fcbcedcb444525e74e32",
+     "04_e4be969235_join-delimiter-freed-by-magic": "33ded74f3bf0dcacb54075989f413b4c2c456b953f6d50b18e22903275f6e6cb",
+     "05_17535c984a_cloned-const-sub-unrefcounted": "e0fbcd45a7b6a6c984b25bea51dd30ce131c43af94384182cedb3cc301f3dad5",
+     "06_40727c420c_code-blocks-count-reused": "e5902280a01895e022335bf2faf6415f9a38a4756c09922e8325c899c4016926",
+     "07_39b4841b25_recursive-code-eval-rex-freed": "d29f8739eeb3ede942e2e55f2fa1153a9bc6e9e61f3023ea3e51319e93790e78",
+     "08_b7b77ffc1e_clear-errsv-on-a-glob": "37088baf07fe4d3b0e894c4b305a7c66ce41b6bf616499ca8d44276cfbcf112c",
+     "09_1189b87114_special-block-cv-freed": "56e1f2399456071fd80e508dfec1a0cb6b4c074468f55fc32409bba5ebf57471",
+     "10_254b30e378_perlio-scalar-write-overlap": "961e4e41cf7ed9d65a4414e6bb35658fa724b4d0344390618240399ee27ad6e4",
+     "11_af11b0c528_cow-subbeg-across-code-eval": "c9544f35c16d5fdceac444584a485a553f906dbc85c4409b44207afa1fcd2a18"
+    }
+   },
+   "rows": [
+    {
+     "case": "01_ad5fedb002_for-loop-gv-freed-early",
+     "arm": "virtual-nested-pools",
+     "outcome": "fault",
+     "cause": "25",
+     "function": "Perl_pp_iter",
+     "in_fault_sites": "yes",
+     "harness": ""
+    },
+    {
+     "case": "02_d2cddbe1df_caller-args-freed-sv",
+     "arm": "virtual-nested-pools",
+     "outcome": "fault",
+     "cause": "25",
+     "function": "Perl_sv_setsv_flags",
+     "in_fault_sites": "",
+     "harness": ""
+    },
+    {
+     "case": "03_9e298ab597_av-extend-unshift-stale-slots",
+     "arm": "virtual-nested-pools",
+     "outcome": "completed",
+     "cause": "",
+     "function": "",
+     "in_fault_sites": "",
+     "harness": "[PASS] 1"
+    },
+    {
+     "case": "04_e4be969235_join-delimiter-freed-by-magic",
+     "arm": "virtual-nested-pools",
+     "outcome": "fault",
+     "cause": "25",
+     "function": "memmove",
+     "in_fault_sites": "yes",
+     "harness": ""
+    },
+    {
+     "case": "05_17535c984a_cloned-const-sub-unrefcounted",
+     "arm": "virtual-nested-pools",
+     "outcome": "fault",
+     "cause": "25",
+     "function": "Perl_cv_undef_flags",
+     "in_fault_sites": "",
+     "harness": ""
+    },
+    {
+     "case": "06_40727c420c_code-blocks-count-reused",
+     "arm": "virtual-nested-pools",
+     "outcome": "completed",
+     "cause": "",
+     "function": "",
+     "in_fault_sites": "",
+     "harness": "[FAIL] 5 of 29: 12,like,code in array 8,got=XAB-QC | 15,unlike,code in array 8 not 3 | 25,like,code in array 14,got=aabb-bb-=ee"
+    },
+    {
+     "case": "07_39b4841b25_recursive-code-eval-rex-freed",
+     "arm": "virtual-nested-pools",
+     "outcome": "fault",
+     "cause": "25",
+     "function": "S_regcppop",
+     "in_fault_sites": "yes",
+     "harness": ""
+    },
+    {
+     "case": "08_b7b77ffc1e_clear-errsv-on-a-glob",
+     "arm": "virtual-nested-pools",
+     "outcome": "fault",
+     "cause": "28",
+     "function": "Perl_pp_gvsv",
+     "in_fault_sites": "no",
+     "harness": ""
+    },
+    {
+     "case": "09_1189b87114_special-block-cv-freed",
+     "arm": "virtual-nested-pools",
+     "outcome": "fault",
+     "cause": "25",
+     "function": "Perl_newATTRSUB_x",
+     "in_fault_sites": "yes",
+     "harness": ""
+    },
+    {
+     "case": "10_254b30e378_perlio-scalar-write-overlap",
+     "arm": "virtual-nested-pools",
+     "outcome": "fault",
+     "cause": "25",
+     "function": "memmove",
+     "in_fault_sites": "yes",
+     "harness": ""
+    },
+    {
+     "case": "11_af11b0c528_cow-subbeg-across-code-eval",
+     "arm": "virtual-nested-pools",
+     "outcome": "completed",
+     "cause": "",
+     "function": "",
+     "in_fault_sites": "",
+     "harness": "[FAIL] 3 of 3: 1,is,[perl #16952] failed (?{}) branch keeps prior captures,got=foo-o"
+    }
+   ]
+  }
+ },
+ "qualify": {
+  "stock": [
+   {
+    "test": "op/gv.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "236",
+    "not_ok": "1"
+   },
+   {
+    "test": "op/taint.t",
+    "outcome": "exit255",
+    "cause": "",
+    "function": "",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "op/magic.t",
+    "outcome": "fault",
+    "cause": "25",
+    "function": "fileno",
+    "ok": "60",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "XS_mro_get_linear_isa",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_01_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_01_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_01_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_01_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_02_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_02_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_02_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "10",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_02_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "10",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_03_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_03_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_03_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_03_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_04_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_04_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_04_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_04_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_05_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_05_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_05_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_05_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "XS_mro_get_linear_isa",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/c3_with_overload.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/c3_with_overload_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/complex_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/complex_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/complex_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "11",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/complex_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "11",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/dbic_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/dbic_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/dbic_dfs.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/dbic_dfs_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/inconsistent_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "XS_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/inconsistent_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "XS_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_aliases.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "13",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_aliases_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "12",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "34",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "34",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isarev.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isarev_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/method_caching.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "21",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/method_caching_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "19",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_NEXT.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_NEXT_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_edgecases.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_edgecases_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_goto.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_goto_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_inanon.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_inanon_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_ineval.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_ineval_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_method.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_method_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_skip.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_skip_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/overload_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/overload_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/overload_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "7",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/package_aliases.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/package_aliases_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/pkg_gen.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "5",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/pkg_gen_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "5",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/recursion_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/recursion_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/recursion_dfs.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/recursion_dfs_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/vulcan_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/vulcan_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/vulcan_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/vulcan_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   }
+  ],
+  "protected": [
+   {
+    "test": "op/gv.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "236",
+    "not_ok": "1"
+   },
+   {
+    "test": "op/taint.t",
+    "outcome": "exit255",
+    "cause": "",
+    "function": "",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "op/magic.t",
+    "outcome": "fault",
+    "cause": "25",
+    "function": "fileno",
+    "ok": "60",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "XS_mro_get_linear_isa",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_01_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_01_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_01_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_01_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_02_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_02_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_02_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "10",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_02_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "10",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_03_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_03_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_03_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_03_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_04_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_04_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_04_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_04_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_05_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_05_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_05_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_05_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/basic_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "XS_mro_get_linear_isa",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/c3_with_overload.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/c3_with_overload_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/complex_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/complex_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/complex_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "11",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/complex_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "11",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/dbic_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/dbic_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/dbic_dfs.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/dbic_dfs_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/inconsistent_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "XS_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/inconsistent_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "XS_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_aliases.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "13",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_aliases_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "12",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "34",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isa_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "34",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isarev.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/isarev_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/method_caching.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "21",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/method_caching_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "19",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_NEXT.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_NEXT_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_edgecases.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_edgecases_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_goto.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_goto_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "4",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_inanon.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_inanon_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "2",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_ineval.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_ineval_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_method.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_method_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_skip.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/next_skip_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/overload_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/overload_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/overload_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "7",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/package_aliases.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/package_aliases_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/pkg_gen.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "5",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/pkg_gen_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_package_moved",
+    "ok": "5",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/recursion_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/recursion_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/recursion_dfs.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/recursion_dfs_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/vulcan_c3.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/vulcan_c3_utf8.t",
+    "outcome": "fault",
+    "cause": "24",
+    "function": "Perl_mro_get_linear_isa",
+    "ok": "0",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/vulcan_dfs.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   },
+   {
+    "test": "mro/vulcan_dfs_utf8.t",
+    "outcome": "completed",
+    "cause": "",
+    "function": "",
+    "ok": "1",
+    "not_ok": "0"
+   }
+  ]
+ }
+}
