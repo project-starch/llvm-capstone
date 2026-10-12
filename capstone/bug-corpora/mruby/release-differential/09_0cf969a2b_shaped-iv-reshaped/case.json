@@ -8,6 +8,11 @@
   "live_in_pin": true,
   "live_proof": "upstream fixed it in 0cf969a2b (0cf969a2b79462e8709e244da9d66144203f3651) (2026-09-18), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: heap-use-after-free (with MRB_HEAP_PAGE_SIZE=1: heap-use-after-free); the same case on master: no report",
   "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "fault_sites": [
+    "shaped_iv_foreach",
+    "mrb_iv_foreach"
+  ],
+  "fault_sites_why": "host ASan at the pin (probe/native-control.sh NC_ASAN=1 build, MRBD_NO_BOXING, gcc -O1 -g), 2026-10-11 on p13: heap-use-after-free at shaped_iv_foreach (variable.c:464) under mrb_iv_foreach (variable.c:746), READ of size 4; shaped_iv_foreach is static and may be folded into mrb_iv_foreach. That run uses no Capstone arm; it was taken after the virtual arms of 2026-10-11 had run and before the bounds-only and CheriBSD reruns of the same day.",
   "arms": {
     "sysalloc-none": {
       "oracle": "completes and the harness reports PASS: the defect executes and is silent in every sense this arm can see"
@@ -15,17 +20,25 @@
     "sysalloc-bounds": {
       "oracle": "completes and the harness reports PASS: the defect executes and is silent in every sense this arm can see"
     },
-    "sublet-gc": {
-      "oracle": "capability fault, cause 24",
-      "verdict": "CAUGHT",
-      "verdict_from": "results/20261006/matrix.tsv 0cf969a2b sublet-gc: fault c24"
-    },
     "cheribsd-revocation": {
       "oracle": "completes and the harness reports PASS: the defect executes and nothing here sees it",
-      "verdict": "MISSED",
-      "verdict_from": "results/20261006-cheribsd/matrix.tsv 0cf969a2b: completes rc=0"
+      "verdict": "NOT-REISSUED",
+      "verdict_from": "results/2026-10-11-system-group/cheribsd/matrix.tsv 09",
+      "verdict_note": "completes, [\"PASS\"]; with the quarantine probe: 1459 frees, all 1459 quarantined, 0 allocations returned while quarantined, 0 sweeps -- the freed block was held, never reissued, so the stale pointer read the dead object and no other (2026-10-11, default revocation, revocation control faulting in the same boot)"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, mruby 4.0.0-rc2 as ported on musl mallocng (exact bounds, lifetime retirement on free); its GC object slots are unbounded offsets in a malloc'd heap page: a capability fault (cause 24-30) is CAUGHT, a run that completes is MISSED",
+      "verdict": "CAUGHT",
+      "verdict_note": "capability fault, cause 25, in mrb_iv_foreach",
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc/matrix.tsv 09"
+    },
+    "virtual-nested-pools": {
+      "oracle": "the same with patch 0008 (MRBD_SUBLET=1): every GC object slot a CDERIVE child of its heap page, revoked by CREVOKE when the sweep frees it: as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "capability fault, cause 25, in mrb_iv_foreach",
+      "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools/matrix.tsv 09"
     }
   },
-  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
+  "status": "sysalloc-none and sysalloc-bounds measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default; virtual-malloc and virtual-nested-pools measured 2026-10-11 on the virtual profile. The sublet-gc arm left the case with the Sublet heap and the GC-slot adapter on 2026-10-11; its readings stay in results/20261006.",
   "allocator_layer": "the shaped-IV block (system allocator)"
 }

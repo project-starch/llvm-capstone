@@ -1,0 +1,378 @@
+{
+ "program": "mruby 4.0.0-rc2",
+ "pre_registration": "16d2171a3edc",
+ "workload": "AO render benchmark (benchmark/bm_ao_render.rb of the pinned tree) at REDUCED size 16x16 (argument 16; NSUBSAMPLES 2, NAO_SAMPLES 8 unchanged), one interpreter process per boot, run directly (no mstats.rb wrapper); the observer covers the whole process. Deviation from the registered 64x64, see README",
+ "boundaries": {
+  "gc-slots": {
+   "stock": {
+    "buckets": {
+     "1": 685,
+     "2": 1370,
+     "3": 2740,
+     "4": 5480,
+     "5": 10960,
+     "6": 21920,
+     "7": 43624,
+     "8": 86463,
+     "9": 171776,
+     "10": 311298,
+     "11": 218075,
+     "12": 1888,
+     "13": 356,
+     "14": 2288,
+     "15": 4556,
+     "16": 6800,
+     "17": 13466,
+     "18": 9,
+     "19": 1105
+    },
+    "issues": 916101,
+    "releases": 913510,
+    "reuses": 904859,
+    "distinct_starts": 11242,
+    "attempts": 916101,
+    "error": 0,
+    "capacity": 1048576,
+    "median_bucket": 10,
+    "guest_seconds": 1132,
+    "boot_wall_seconds": 1144.8,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 685,
+       "2": 1370,
+       "3": 2740,
+       "4": 5480,
+       "5": 10960,
+       "6": 21920,
+       "7": 43624,
+       "8": 86463,
+       "9": 171776,
+       "10": 311298,
+       "11": 218075,
+       "12": 1888,
+       "13": 356,
+       "14": 2288,
+       "15": 4556,
+       "16": 6800,
+       "17": 13466,
+       "18": 9,
+       "19": 1105
+      },
+      "issues": 916101,
+      "releases": 913510,
+      "reuses": 904859,
+      "distinct_starts": 11242,
+      "attempts": 916101,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 10,
+      "guest_seconds": 1132,
+      "boot_wall_seconds": 1144.8
+     },
+     {
+      "buckets": {
+       "1": 685,
+       "2": 1370,
+       "3": 2740,
+       "4": 5480,
+       "5": 10960,
+       "6": 21920,
+       "7": 43624,
+       "8": 86463,
+       "9": 171776,
+       "10": 311298,
+       "11": 218075,
+       "12": 1888,
+       "13": 356,
+       "14": 2288,
+       "15": 4556,
+       "16": 6800,
+       "17": 13466,
+       "18": 9,
+       "19": 670
+      },
+      "issues": 916101,
+      "releases": 913510,
+      "reuses": 904424,
+      "distinct_starts": 11677,
+      "attempts": 916101,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 10,
+      "guest_seconds": 1191,
+      "boot_wall_seconds": 1205.4
+     },
+     {
+      "buckets": {
+       "1": 685,
+       "2": 1370,
+       "3": 2740,
+       "4": 5480,
+       "5": 10960,
+       "6": 21920,
+       "7": 43624,
+       "8": 86463,
+       "9": 171776,
+       "10": 311298,
+       "11": 218075,
+       "12": 1888,
+       "13": 356,
+       "14": 2288,
+       "15": 4556,
+       "16": 6800,
+       "17": 13457,
+       "19": 2
+      },
+      "issues": 916101,
+      "releases": 913510,
+      "reuses": 903738,
+      "distinct_starts": 12363,
+      "attempts": 916101,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 10,
+      "guest_seconds": 663,
+      "boot_wall_seconds": 671.2
+     }
+    ],
+    "buckets_from": "repetition 1"
+   },
+   "protected": {
+    "buckets": {
+     "1": 685,
+     "2": 1370,
+     "3": 2740,
+     "4": 5480,
+     "5": 10960,
+     "6": 21920,
+     "7": 43624,
+     "8": 86463,
+     "9": 171776,
+     "10": 311298,
+     "11": 218075,
+     "12": 1888,
+     "13": 356,
+     "14": 2288,
+     "15": 4556,
+     "16": 6800,
+     "17": 14312,
+     "19": 1221
+    },
+    "issues": 916101,
+    "releases": 913510,
+    "reuses": 905812,
+    "distinct_starts": 10289,
+    "attempts": 916101,
+    "error": 0,
+    "capacity": 1048576,
+    "median_bucket": 10,
+    "guest_seconds": 1134,
+    "boot_wall_seconds": 1148.3,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 685,
+       "2": 1370,
+       "3": 2740,
+       "4": 5480,
+       "5": 10960,
+       "6": 21920,
+       "7": 43624,
+       "8": 86463,
+       "9": 171776,
+       "10": 311298,
+       "11": 218075,
+       "12": 1888,
+       "13": 356,
+       "14": 2288,
+       "15": 4556,
+       "16": 6800,
+       "17": 14312,
+       "19": 1221
+      },
+      "issues": 916101,
+      "releases": 913510,
+      "reuses": 905812,
+      "distinct_starts": 10289,
+      "attempts": 916101,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 10,
+      "guest_seconds": 1134,
+      "boot_wall_seconds": 1148.3
+     },
+     {
+      "buckets": {
+       "1": 685,
+       "2": 1370,
+       "3": 2740,
+       "4": 5480,
+       "5": 10960,
+       "6": 21920,
+       "7": 43624,
+       "8": 86463,
+       "9": 171776,
+       "10": 311298,
+       "11": 218075,
+       "12": 1888,
+       "13": 356,
+       "14": 2288,
+       "15": 4556,
+       "16": 6800,
+       "17": 14165,
+       "19": 2
+      },
+      "issues": 916101,
+      "releases": 913510,
+      "reuses": 904446,
+      "distinct_starts": 11655,
+      "attempts": 916101,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 10,
+      "guest_seconds": 1192,
+      "boot_wall_seconds": 1206.7
+     },
+     {
+      "buckets": {
+       "1": 685,
+       "2": 1370,
+       "3": 2740,
+       "4": 5480,
+       "5": 10960,
+       "6": 21920,
+       "7": 43624,
+       "8": 86463,
+       "9": 171776,
+       "10": 311298,
+       "11": 218075,
+       "12": 1888,
+       "13": 356,
+       "14": 2288,
+       "15": 4556,
+       "16": 6800,
+       "17": 13466,
+       "18": 9,
+       "19": 670
+      },
+      "issues": 916101,
+      "releases": 913510,
+      "reuses": 904424,
+      "distinct_starts": 11677,
+      "attempts": 916101,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 10,
+      "guest_seconds": 692,
+      "boot_wall_seconds": 701.2
+     }
+    ],
+    "buckets_from": "repetition 1"
+   }
+  }
+ },
+ "comparison": {
+  "gc-slots": {
+   "median_bucket": {
+    "stock": [
+     10,
+     10,
+     10
+    ],
+    "protected": [
+     10,
+     10,
+     10
+    ]
+   },
+   "reusediff_rep1": 0.0010450885862883703,
+   "reusediff_all_pairs": [
+    0.0,
+    0.002255559395543248
+   ],
+   "reusediff_within_arm": {
+    "stock": [
+     0.000480381750859507,
+     0.0012289180073276698
+    ],
+    "protected": [
+     0.0007724866285487136,
+     0.0015183126142973298
+    ]
+   },
+   "identical_bins_rep1": false
+  }
+ },
+ "images": {
+  "stock": {
+   "staged_sha256": {
+    "bm_ao_render.rb": "e44efffd6415b9ef875bd92272ad2bd984ab4bc0f078b6e73aa791fd9865180f",
+    "capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+    "capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+    "gate.sh": "111ab269771c90f9562809198dff51183b07097d4087b2a294fd9ce6fd17cba5",
+    "mruby": "45fc3b81da836ff439a515ba6811a24e68c92c295bf6697ef4ca42973e669cd5"
+   }
+  },
+  "protected": {
+   "staged_sha256": {
+    "bm_ao_render.rb": "e44efffd6415b9ef875bd92272ad2bd984ab4bc0f078b6e73aa791fd9865180f",
+    "capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+    "capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+    "gate.sh": "111ab269771c90f9562809198dff51183b07097d4087b2a294fd9ce6fd17cba5",
+    "mruby": "8487ecb12b22452069e72d3d5b671b8bc2491c185e3e014fc735d523c8d68716"
+   }
+  }
+ },
+ "platform": {
+  "platform_sha256": {
+   "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+   "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+   "qemu-system-riscv64": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+   "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "run_staged_sha256": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c"
+ },
+ "build": {
+  "source_snapshot": "git archive 16d2171a3edc capstone + experiments/study/reuse-hooks/{cpython,mruby} + compiler-rt/lib/builtins of 9bc6f9adf1c9, committed as a fresh repository; the mruby images were built at its second commit (gc-reuse-gap.patch gained #include <stdlib.h>); its third commit only added the runner's --ao-width",
+  "recipe": "experiments/study/reuse-hooks/mruby/build-mruby-reuse.sh ARM SDK ROOT: ports/mruby/app/build-mruby-domain.sh unchanged (MRBD_PIN=4.0.0-rc2, MRBD_SUBLET=0|1), then gc-reuse-gap.patch on the prepared tree, build/ removed, the same script from its mruby stage with MRBD_DEFINES=-DEXP_REUSE_GAP",
+  "sdk": "one virtual-profile application SDK (musl 1.2.5, build-sdk.sh, CAPSTONE_APPLICATION_ARENA_BYTES=67108864, CAPSTONE_APPLICATION_VIRTUAL ON), copied once per arm",
+  "mruby_commit": "9d523e2f74f2e63ca02840937523de61398a617d",
+  "bm_ao_render_rb_sha256": "e44efffd6415b9ef875bd92272ad2bd984ab4bc0f078b6e73aa791fd9865180f",
+  "define": "-DEXP_REUSE_GAP via MRBD_DEFINES (both builds of each tree, native and capstone)",
+  "hook_patch": "gc-reuse-gap.patch (one file for both arms)",
+  "hook_patch_sha256": "0cf22747902e56b455afe28583f6733d08e86b3488593a4b16e210e17368f736",
+  "patched_gc_c_sha256": "6fe03e52be21b7a4e9c4b46f78e0e7caa1ac0d83c742f0c7dac065f2aeb336ab",
+  "observer_header_sha256": "627b0fe3ac30d75b384b35f37e9436c329f9f506afc13b94fb3ab87fc2df1769",
+  "observer_capacity": 1048576,
+  "clang_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "arms": {
+   "stock": {
+    "mrbd_sublet": 0,
+    "image_sha256": "45fc3b81da836ff439a515ba6811a24e68c92c295bf6697ef4ca42973e669cd5",
+    "cderive_crevoke_in_text": [
+     0,
+     0
+    ],
+    "build_seconds": 229
+   },
+   "protected": {
+    "mrbd_sublet": 1,
+    "image_sha256": "8487ecb12b22452069e72d3d5b671b8bc2491c185e3e014fc735d523c8d68716",
+    "cderive_crevoke_in_text": [
+     8,
+     2
+    ],
+    "build_seconds": 229
+   }
+  }
+ },
+ "deviation": {
+  "registered_workload": "bm_ao_render.rb as shipped (IMAGE_WIDTH = IMAGE_HEIGHT = 64, NSUBSAMPLES 2, NAO_SAMPLES 8)",
+  "measured_workload": "bm_ao_render.rb 16 (IMAGE_WIDTH = IMAGE_HEIGHT = 16 via ARGV[0]; NSUBSAMPLES 2 and NAO_SAMPLES 8 unchanged)",
+  "reason": "the registered size did not finish within a 1-hour boot timeout (both arms, r1); at width 16 a probe took 486 s for 916,101 slot issues, which extrapolates to about 2.2 h for the 15.1M issues of width 64",
+  "native_oracle_width16_sha256": "cfd73bb1de97514b2adacbda3a377e5172aecbe48819f654071d1996359ca634",
+  "native_width64_issues": 15096713,
+  "full_size_status": "running (4-hour boot timeout); to be added as an addendum"
+ }
+}
