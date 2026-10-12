@@ -11,11 +11,9 @@
 #include <errno.h>
 #include <capstone/virtual.h>
 #include "vm.h"
+#include <capstone/capability.h>
 
 extern int malloc_trim(size_t);
-extern unsigned long __capstone_sublet_malloc_linear(size_t, sublet_cap *);
-extern void __capstone_sublet_free_linear(unsigned long);
-extern void __capstone_sublet_heap_stats(unsigned long [9]);
 static void *volatile stale;
 static jmp_buf jump;
 static __thread unsigned thread_value = 41;
@@ -125,33 +123,30 @@ int main(int argc, char **argv)
         }
         fail("VM denial survived");
     }
-    if (!strcmp(mode, "linear") || !strcmp(mode, "linear-stale")) {
-        sublet_cap loan;
-        unsigned long before[9], after[9];
-        __capstone_sublet_heap_stats(before);
-        unsigned long base = __capstone_sublet_malloc_linear(4096, &loan);
-        require(base && base == sublet_base(&loan) && sublet_end(&loan) >= base + 4096,
-                "linear block grant");
-        char *p = sublet_take(&loan);
-        memset(p, 0x5a, 4096);
+    if (!strcmp(mode, "nested") || !strcmp(mode, "nested-stale")) {
+        char *allocation = malloc(4096);
+        require(allocation != NULL, "nested block allocation");
+        char *parent = capstone_cap_derive(allocation, 0, 4096);
+        char *p = capstone_cap_derive(parent, 0, 128);
+        char *sibling = capstone_cap_derive(parent, 128, 128);
+        p[0] = 17; sibling[0] = 31;
         stale = p;
-        __capstone_sublet_free_linear(base);
-        __capstone_sublet_heap_stats(after);
-        require(after[0] == before[0] + 1 && after[1] == before[1] + 1 &&
-                after[7] >= before[7] + 1 && after[2] == 0, "linear block retire counters"); /* Nested group retirement can also revoke its parent. */
-        char *replacement = malloc(4096);
-        require(replacement != NULL, "linear block reuse");
-        replacement[0] = 23;
-        if (!strcmp(mode, "linear-stale")) {
-            puts("VIRTUAL_LINEAR_ACCESS:stale"); fflush(stdout);
-            __asm__ volatile(".global cap_vm_fault_linear\ncap_vm_fault_linear:\nlbu zero, 0(%0)"
+        capstone_cap_revoke_child(parent, p);
+        parent[0] = 23;
+        require(sibling[0] == 31, "sibling survives child retirement");
+        char *replacement = capstone_cap_derive(parent, 0, 128);
+        require((uintptr_t)replacement == (uintptr_t)p && replacement[0] == 23,
+                "same-address successor survives");
+        /* Free the outer malloc object: its child and grandchild must die. */
+        stale = capstone_cap_derive(replacement, 0, 16);
+        free(allocation);
+        if (!strcmp(mode, "nested-stale")) {
+            puts("VIRTUAL_NESTED_ACCESS:stale"); fflush(stdout);
+            __asm__ volatile(".global cap_vm_fault_nested\ncap_vm_fault_nested:\nlbu zero, 0(%0)"
                              : : "r"(stale) : "memory");
-            fail("linear descendant survived retirement");
+            fail("nested descendant survived outer free");
         }
-        require(replacement[0] == 23, "linear replacement live");
-        free(replacement);
-        (void)malloc_trim(0); /* musl selects group release during free. */
-        puts("VIRTUAL_LINEAR_OK");
+        puts("VIRTUAL_NESTED_OK");
         return 0;
     }
     if (!strcmp(mode, "heap-threads")) {

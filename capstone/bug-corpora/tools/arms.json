@@ -127,15 +127,19 @@
     },
     "virtual-ffmpeg-carve": {
       "target": "capstone-virtual",
-      "summary": "FFmpeg's carved corpus on the virtual profile with its carve on Sublet (-DFFC_SUBLET_CARVE): the block is lent LINEAR by virtual mallocng (__capstone_sublet_malloc_linear) and split into one region per carve, each issued as a bounded alias; a re-carve revokes the old aliases",
+      "summary": "FFmpeg's carved corpus on virtual mallocng (-DFFC_SUBLET_CARVE): each disjoint region is a bounded CDERIVE child of the block; CREVOKE ends a region and free ends every descendant",
       "mechanism": "per-region bounds and revocation in the carve port, over virtual mallocng",
       "controls": {
         "bounds-malloc": "fault",
-        "uaf-malloc": "fault"
+        "uaf-malloc": "fault",
+        "live-carve": "complete",
+        "uaf-carve": "fault"
       },
       "controls_for_missed": [
         "bounds-malloc",
-        "uaf-malloc"
+        "uaf-malloc",
+        "live-carve",
+        "uaf-carve"
       ]
     },
     "virtual-memcached-stock": {

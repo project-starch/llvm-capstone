@@ -76,17 +76,12 @@ _Noreturn void ffc_fail(unsigned code);
  * round-up on CHERI cannot pass silently as a catch or a miss. */
 void *ffc_carve(void *block, size_t off, size_t len, const char *name);
 
-/* THE SUBLET PORT OF THE CARVE, FFC_SUBLET_CARVE (added 2026-10-09; Capstone, virtual profile since
- * the physical Sublet heap was removed on 2026-10-11). The block is not malloc's: ffc_block_alloc
- * takes it LINEAR from virtual mallocng (__capstone_sublet_malloc_linear), and the case gets only
- * its address, an untagged token that nothing may dereference. ffc_carve() then splits the block,
- * in ascending order, into one Sublet region per carve -- split points on 16-byte boundaries, a
- * region's granularity -- and issues each as an alias bounded to exactly [off, off + len). A carve
- * whose end is not on a 16-byte boundary takes the rest of the block as its region, so the carves
- * after it share that region: their bounds stay exact, their revocation is joint. ffc_recarve()
- * gives a region back, which revokes every alias of it -- what re-carving does to the old regions
- * -- and free() is the heap's single revoke of the whole block. Without the switch none of this is
- * compiled. */
+/* The virtual Sublet carve uses the common mallocng heap. The driver retains
+ * the allocation and a managed child parent; cases receive a scalar block token.
+ * Each disjoint carve is an exact-sized CDERIVE child, including unaligned
+ * ranges. Re-carving revokes that child; a subsequent carve of the same range
+ * issues a fresh lifetime. Freeing the outer allocation retires all descendants.
+ * The driver checks non-overlap in software. */
 #ifdef FFC_SUBLET_CARVE
 void *ffc_block_alloc(size_t bytes, int zero);
 void ffc_block_free(void *block);
