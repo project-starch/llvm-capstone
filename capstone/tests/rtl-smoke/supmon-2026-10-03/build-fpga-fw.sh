@@ -50,7 +50,7 @@ if n == 0: sys.exit("POSTCALL GATE FAIL: no domcall found in the generated monit
 open(p, "w").write("\n".join(out)); print(f"postcall: {kind} after {n} domcall sites")
 PY
 fi
-(cd "$OUT/opensbi" && taskset -c 0-7,32-39 nice -n 10 make -s PLATFORM=fpga/ariane CROSS_COMPILE="$XC" CAPSTONE_PLATFORM_DEFS="$DEFS" FW_PAYLOAD_PATH="$OUT/images/Image" \
+(cd "$OUT/opensbi" && nice -n 10 make -s PLATFORM=fpga/ariane CROSS_COMPILE="$XC" CAPSTONE_PLATFORM_DEFS="$DEFS" FW_PAYLOAD_PATH="$OUT/images/Image" \
    FW_FDT_PATH="$OUT/images/caplifive.dtb" FW_PAYLOAD_FDT_PATH="$OUT/images/caplifive.dtb" -j12 > "$OUT/make.log" 2>&1)
 cp "$OUT/opensbi/build/platform/fpga/ariane/firmware/fw_payload.bin" "$OUT/fw_payload.bin"
 # GATE (2026-10-03, board boot supmon-c5): dom_init carves every monitor global from dom_stack before any trap
