@@ -21,6 +21,10 @@ function(ffpool_source variant)
     list(APPEND dependencies
       "${PROJECT_SOURCE_DIR}/patches/ffmpeg-${FFMPEG_VERSION}-0002-libavutil-pool-payload-lifetime-hooks.patch")
   endif()
+  if(variant STREQUAL "protected")
+    list(APPEND dependencies
+      "${PROJECT_SOURCE_DIR}/patches/ffmpeg-${FFMPEG_VERSION}-0003-libavutil-pools-as-sublet-lifetimes.patch")
+  endif()
   add_custom_command(OUTPUT "${stamp}"
     BYPRODUCTS "${source_dir}/libavutil/buffer.c" "${source_dir}/libavutil/refstruct.c"
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/cmake/prepare-source.py"

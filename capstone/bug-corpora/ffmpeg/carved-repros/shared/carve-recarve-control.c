@@ -1,14 +1,16 @@
 #include "corpus.h"
 
-/* The re-carve control of the sublet-carve arm (FFC_SUBLET_CARVE only), run beside the cases in the
- * same boot. A 64-byte block, a 16-byte region carved from it and written once through its alias;
- * then, on the buggy arm, the region is carved again (ffc_recarve: its Sublet region is given back,
- * one revoke) and the OLD alias is written. That write must fault at the labelled probe: it is the
- * only evidence that the port's revocation exists, because no case in the corpus re-carves -- every
- * catch there comes from the bound the port sets on each region. The fixed arm writes the same byte
- * without the re-carve and must complete. */
+/* The re-carve control of the Sublet carve (FFC_SUBLET_CARVE only). The physical sublet-carve arm
+ * ran it beside the cases in the same boot until that arm was retired with the Sublet heap on
+ * 2026-10-11; the virtual runner does not run it. A 64-byte block, a 16-byte region carved from it
+ * and written once through its alias; then, on the buggy arm, the region is carved again
+ * (ffc_recarve: its Sublet region is given back, one revoke) and the OLD alias is written. That
+ * write must fault at the labelled probe: it is the only evidence that the port's revocation
+ * exists, because no case in the corpus re-carves -- every catch there comes from the bound the
+ * port sets on each region. The fixed arm writes the same byte without the re-carve and must
+ * complete. */
 #ifndef FFC_SUBLET_CARVE
-#error "the re-carve control exists only for the sublet-carve arm"
+#error "the re-carve control exists only for the Sublet carve"
 #endif
 FFC_CASE(98) {
   unsigned char *block = calloc(1, 64);

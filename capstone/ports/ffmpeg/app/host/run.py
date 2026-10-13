@@ -20,11 +20,9 @@ def main():
         parser.error('--state or CAPSTONE_VM_STATE is required')
     work = Path(os.environ.get('FFAPP_WORK', '/tmp/capstone/ffmpeg-app'))
     heap = os.environ.get('FFAPP_HEAP', 'level0')
-    if heap not in ('level0', 'shrink', 'sublet'):
-        parser.error('FFAPP_HEAP must be level0, shrink or sublet')
+    if heap not in ('level0', 'shrink'):
+        parser.error('FFAPP_HEAP must be level0 or shrink')
     domain = 'domain' + ('-' + heap if heap != 'level0' else '')
-    if os.environ.get('FFAPP_POOL'):
-        domain += '-pool' + os.environ['FFAPP_POOL']
     clip = os.environ.get('FFAPP_CLIP_SECONDS', '1')
     suffix = '' if clip == '1' else '-' + clip + 's'
     images = work / (domain + suffix)

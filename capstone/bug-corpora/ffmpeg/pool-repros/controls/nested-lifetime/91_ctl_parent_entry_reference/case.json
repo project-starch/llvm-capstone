@@ -1,0 +1,14 @@
+{
+  "case": 91,
+  "title": "CONTROL 1 (parent): after A returns to its AVBufferPool, the entry's storage is read and written through the pool's own reference, BufferPoolEntry.data (and, protected, the entry's lifetime sublet_life)",
+  "control_for": "patch 0003 (FFPOOL_SUBLET=ON): the release revokes only the user's child, not the reference the pool manages the storage through",
+  "pre_registration": "capstone/docs/plans/2026-10-11-nested-lifetime-controls.md",
+  "release_operation": "av_buffer_unref -> pool_release_buffer, where patch 0003 revokes (CREVOKE)",
+  "parent_reference": "BufferPoolEntry.data: the allocation's own pointer, stored by pool_alloc_buffer and freed through by buffer_pool_flush; patch 0003 derives sublet_life from it and every hand-out from sublet_life",
+  "argv": ["run", "91"],
+  "probes": ["read_probe", "write_probe"],
+  "arms": {
+    "release": {"oracle": "complete: reads A's 0x5A, the write reads back"},
+    "protected": {"oracle": "complete: reads A's 0x5A, the write reads back, and the same through sublet_life"}
+  }
+}

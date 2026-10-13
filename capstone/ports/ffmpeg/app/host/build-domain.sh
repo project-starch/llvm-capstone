@@ -31,58 +31,30 @@ ORDER_CEILING=$(( ${FFAPP_ORDER_CEILING_MB:-256} * 1024 * 1024 ))
 #           default.                                                              -> domain/
 #   shrink  the same allocator with its default per-object bounds, still no
 #           revocation.                                                           -> domain-shrink/
-#   sublet  musl-capstone's sublet_heap.c instead of level0: a buddy heap over a LINEAR region the
-#           launcher transfers (a program region, parked by hostcall.c's
-#           __capstone_region), per-object bounds, and every free revokes.         -> domain-sublet/
-#           The arm differs in three objects -- the allocator, hostcall.o (the parking) and the
-#           guest host (the grant) -- all of them the heap's delivery, none of them FFmpeg.
+# The sublet arm (musl-capstone's sublet_heap.c) and the pool modes on it (FFAPP_POOL=0|2) were
+# removed on 2026-10-11 with the physical Sublet heap; their recorded results stay in results/.
 HEAP=${FFAPP_HEAP:-level0}
-HEAP_REGION=${FFAPP_HEAP_REGION_BYTES:-$((8 * 1024 * 1024))}   # sublet arm: the granted pool
-ENTRYF=()
 case $HEAP in
   level0) OUT="$WORK/domain"; HEAPF=(-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0) ;;
   shrink) OUT="$WORK/domain-shrink"; HEAPF=() ;;
-  sublet) OUT="$WORK/domain-sublet"; HEAPF=()
-          ENTRYF=(-DFFAPP_SUBLET_HEAP=1) ;;
-  *) echo "FFAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
+  *) echo "FFAPP_HEAP must be level0 or shrink" >&2; exit 2 ;;
 esac
-# FFAPP_POOL (on the sublet heap only): FFmpeg's OWN pools under the buffer-pool port's
-# lifetime hooks, in the whole program. libavutil comes from prepare-source.sh --pool (its own
-# build directory), the buffer-pool port's payload allocator and Capstone backend are linked,
-# and the guest host shares a fourth region for the payloads (program region 1).
-#   0  the payloads are bounded per object and never revoked
-#   2  a Sublet lease per pool get, revoked when the buffer returns to its pool
-# The two differ in nothing but that mode: the matched pair for the pool fixtures.
-#   sublet  NOT the buffer-pool port's substitute but the Sublet PORT of FFmpeg's own pools
-#           (ports/ffmpeg/sublet): the pools keep their policy and take their storage LINEAR
-#           from the Sublet heap, so there is no payload region and no buffer-pool file.
-#   stock   the matched control of `sublet`: the SAME patched source with the port's macro at 0,
-#           so FFmpeg's pools run upstream's path on the Sublet heap. It differs from `sublet` in
-#           FF_SUBLET_POOLS alone, and builds the pool fixtures, which no heap arm does.
-POOL=${FFAPP_POOL:-}
-POOL_REGION=${FFAPP_POOL_REGION_BYTES:-$((4 * 1024 * 1024))}
-POOLF=(); FFEXTRA=()
-if [ -n "$POOL" ]; then
-  [ "$HEAP" = sublet ] || { echo "FFAPP_POOL needs FFAPP_HEAP=sublet" >&2; exit 2; }
-  case $POOL in 0|2|sublet|stock) ;; *) echo "FFAPP_POOL must be 0, 2, sublet or stock" >&2; exit 2 ;; esac
-  OUT="$WORK/domain-sublet-pool$POOL"
-  if [ "$POOL" = sublet ]; then
-    POOLF=(-DFFAPP_SUBLET_POOLS=1)
-    FFEXTRA=(-DFF_SUBLET_POOLS=1)
-  elif [ "$POOL" = stock ]; then
-    FFEXTRA=(-DFF_SUBLET_POOLS=0)
-  else
-    POOLF=(-DFFAPP_POOL_MODE="$POOL" -DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL"
-           -I"$APP_DIR/../buffer-pool/src/shared")
-  fi
+FFEXTRA=()
+# FFAPP_SUBLET=1 (virtual profile only): FFmpeg's own pools protected by the buffer-pool port's
+# patch 0003, every AVBufferPool and AVRefStructPool entry handed out as a Sublet child lifetime
+# and revoked when it returns to its pool. The libraries are built from prepare-source.sh
+# --sublet, and capability.h's include path joins the configure key, so they rebuild.
+SUBLET=${FFAPP_SUBLET:-0}
+case $SUBLET in 0|1) ;; *) echo "FFAPP_SUBLET must be 0 or 1" >&2; exit 2 ;; esac
+if [[ $SUBLET == 1 ]]; then
+  [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]] \
+    || { echo "FFAPP_SUBLET=1 needs CAPSTONE_APPLICATION_PROFILE=virtual" >&2; exit 2; }
+  FFEXTRA+=(-I"$REPO_ROOT/capstone/runtime/include")
 fi
 OUT="$OUT$SFX"
 BASE="$WORK/domain"                  # the shared FFmpeg build and configure stubs
 RT="$OUT/runtime"
 XB="$BASE/ffmpeg-build"
-[ -n "$POOL" ] && XB="$BASE/ffmpeg-build-pool"
-[ "$POOL" = sublet ] && XB="$BASE/ffmpeg-build-poolsublet"
-[ "$POOL" = stock ] && XB="$BASE/ffmpeg-build-poolstock"
 mkdir -p "$RT" "$XB"
 
 CLANG=${CAPSTONE_CLANG:?}
@@ -101,10 +73,8 @@ if [[ ! -f "$ARCHIVE" || $(cat "$WORK/musl-build/compiler.sha256" 2>/dev/null) !
   OUT_DIR=$WORK/musl-build bash "$MUSL_PORT/build-musl-capstone.sh"
   printf '%s\n' "$COMPILER_HASH" > "$WORK/musl-build/compiler.sha256"
 fi
-if [ "$POOL" = sublet ] || [ "$POOL" = stock ]; then
+if [[ $SUBLET == 1 ]]; then
   SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" --sublet | tail -1)
-elif [ -n "$POOL" ]; then
-  SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" --pool | tail -1)
 else
   SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" | tail -1)
 fi
@@ -121,24 +91,11 @@ fi
 
 # --- shared application SDK ------------------------------------------------
 SDK=$RT/sdk
-SDK_HEAP=$HEAP
-[[ $HEAP == shrink ]] && SDK_HEAP=level0
-SDK_FLAGS="-O1 -DCAPSTONE_SUBLET_HEAP_STATS -DCAPSTONE_LEVEL0_STATS ${HEAPF[*]}"
-GRANT=0
-[[ $HEAP == sublet ]] && GRANT=$HEAP_REGION
-if [[ $POOL == 0 || $POOL == 2 ]]; then GRANT=$((HEAP_REGION + POOL_REGION)); fi
+SDK_FLAGS="-O1 -DCAPSTONE_LEVEL0_STATS ${HEAPF[*]}"
 bash "$REPO_ROOT/capstone/ports/common/application/build-sdk.sh" "$SDK" "$MUSL" "$ARCHIVE" \
-  -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG=22 \
   -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" -DCAPSTONE_APPLICATION_STACK_BYTES="$STACK" \
-  -DCAPSTONE_APPLICATION_GRANT_BYTES="$GRANT" -DCMAKE_C_FLAGS_RELEASE="$SDK_FLAGS"
+  -DCMAKE_C_FLAGS_RELEASE="$SDK_FLAGS"
 export CAPSTONE_SDK=$SDK
-RUNTIME=()
-if [[ $POOL == 0 || $POOL == 2 ]]; then
-  "$SDK/capstone-cc" -O1 -DEXP_HEAP_AND_POOL -DPORT_HEAP_REGION_BYTES="${HEAP_REGION}UL" \
-    -DPORT_INNER_REGION_BYTES="${POOL_REGION}UL" -I"$REPO_ROOT/capstone/runtime/include" \
-    -c "$REPO_ROOT/capstone/ports/common/application/regions.c" -o "$RT/regions.o"
-  RUNTIME+=("$RT/regions.o" -Wl,--wrap=__capstone_region)
-fi
 
 CONFIGURE_OPTS=(--disable-everything --disable-autodetect --disable-doc --disable-network --disable-asm --disable-inline-asm
   --optflags="${FFAPP_OPT_FLAGS:--O1 -fno-omit-frame-pointer}"
@@ -257,27 +214,8 @@ FFLIBS=(); for _d in $(ff_libdirs); do FFLIBS+=("$XB/$_d/$_d.a"); done
 FFLIBS+=("${VSLIB[@]}")   # after libavfilter, which calls it; libvidstab itself needs only libc
 for _l in "${FFLIBS[@]}"; do [ -f "$_l" ] || { echo "configure enabled $(basename "$_l") but it was not built" >&2; exit 1; }; done
 
-# The Sublet port's level below: FFmpeg's pools take their blocks from the Sublet heap.
-if [ "$POOL" = sublet ]; then
-  "$CLANG" "${FLAGS[@]}" -I"$XB" -I"$SRC" -I"$REPO_ROOT/capstone/sublet" \
-    -c "$APP_DIR/src/capstone-domain/ffsublet.c" -o "$RT/ffsublet.o"
-  RUNTIME+=("$RT/ffsublet.o")
-fi
-# The pool arms' payload allocator and Capstone backend: the buffer-pool port's files,
-# unmodified. Compiled after FFmpeg, because libavutil/mem.h needs the generated avconfig.h.
-if [ "$POOL" = 0 ] || [ "$POOL" = 2 ]; then
-  BPS="$APP_DIR/../buffer-pool/src"
-  POOLINC=(-I"$REPO_ROOT/capstone/runtime/include" -I"$BPS/shared" -I"$BPS/capstone-domain"
-           -I"$BPS/allocators/sublet" -I"$XB" -I"$SRC")
-  for f in shared/pool-allocator.c capstone-domain/payload-capabilities.c allocators/sublet/pool-leases.c; do
-    o="$RT/bp-$(basename "${f%.c}").o"
-    "$CLANG" "${FLAGS[@]}" "${POOLINC[@]}" -c "$BPS/$f" -o "$o"
-    RUNTIME+=("$o")
-  done
-fi
-
 # --- the program --------------------------------------------------------------------
-APPF=("${FLAGS[@]}" "${POOLF[@]}" -I"$XB" -I"$SRC" -I"$APP_DIR/src/shared")
+APPF=("${FLAGS[@]}" -I"$XB" -I"$SRC" -I"$APP_DIR/src/shared")
 "$CLANG" "${APPF[@]}" -c "$APP_DIR/src/shared/ffapp_decode.c" -o "$OUT/ffapp_decode.o"
 
 budget() {   # prints: code_len total_bytes verdict
@@ -302,10 +240,9 @@ print(code_len, alloc, "FITS" if alloc <= ceiling else "DOES-NOT-FIT")' 33554688
 }
 
 for stage in 1 2 3 4 5 6; do   # 6 = M2a, open_input only (bisection stage)
-  "$CLANG" "${APPF[@]}" "${ENTRYF[@]}" -DFFAPP_STOP_AT="$stage" -DFFAPP_INPUT="\"$INPUT\"" \
+  "$CLANG" "${APPF[@]}" -DFFAPP_STOP_AT="$stage" -DFFAPP_INPUT="\"$INPUT\"" \
     -c "$APP_DIR/src/capstone-domain/ffapp_domain.c" -o "$OUT/ffapp_domain_m$stage.o"
   "$SDK/capstone-cc" -o "$OUT/ffapp_m$stage.dom" \
-    "${RUNTIME[@]}" \
     "$OUT/ffapp_domain_m$stage.o" "$OUT/ffapp_decode.o" "${FFLIBS[@]}" "$ARCHIVE"
   read -r code_len alloc verdict < <(budget "$OUT/ffapp_m$stage.dom")
   printf 'M%d image %s  code_len=%d  allocation=%d  %s\n' "$stage" "$OUT/ffapp_m$stage.dom" \
@@ -318,156 +255,37 @@ done
 # the registered demuxers, the probe's verdict, and avformat_open_input's error.
 "$CLANG" "${APPF[@]}" -DFFAPP_DIAG -c "$APP_DIR/src/shared/ffapp_decode.c" -o "$OUT/ffapp_decode_diag.o"
 "$SDK/capstone-cc" -o "$OUT/ffapp_m6diag.dom" \
-  "${RUNTIME[@]}" \
   "$OUT/ffapp_domain_m6.o" "$OUT/ffapp_decode_diag.o" "${FFLIBS[@]}" "$ARCHIVE"
 # Its matched twin: identical except that it reads the input from the 9p share.
-"$CLANG" "${APPF[@]}" "${ENTRYF[@]}" -DFFAPP_STOP_AT=6 -DFFAPP_INPUT='"/mnt/host/input.mkv"' \
+"$CLANG" "${APPF[@]}" -DFFAPP_STOP_AT=6 -DFFAPP_INPUT='"/mnt/host/input.mkv"' \
   -c "$APP_DIR/src/capstone-domain/ffapp_domain.c" -o "$OUT/ffapp_domain_m6_9p.o"
 "$SDK/capstone-cc" -o "$OUT/ffapp_m6diag9p.dom" \
-  "${RUNTIME[@]}" \
   "$OUT/ffapp_domain_m6_9p.o" "$OUT/ffapp_decode_diag.o" "${FFLIBS[@]}" "$ARCHIVE"
 echo "diag images $OUT/ffapp_m6diag.dom ($INPUT) and $OUT/ffapp_m6diag9p.dom (/mnt/host/input.mkv)"
 
 # The M5 POSITIVE CONTROL image: identical except that it decodes the one-byte-flipped
 # input. In the same boot as M5 its hashes must DIFFER from the reference, or the domain
 # comparison could not have failed and proves nothing (host/compare-md5.py --control).
-"$CLANG" "${APPF[@]}" "${ENTRYF[@]}" -DFFAPP_STOP_AT=5 -DFFAPP_INPUT="\"${INPUT%.mkv}.flip.mkv\"" \
+"$CLANG" "${APPF[@]}" -DFFAPP_STOP_AT=5 -DFFAPP_INPUT="\"${INPUT%.mkv}.flip.mkv\"" \
   -c "$APP_DIR/src/capstone-domain/ffapp_domain.c" -o "$OUT/ffapp_domain_m5flip.o"
 "$SDK/capstone-cc" -o "$OUT/ffapp_m5flip.dom" \
-  "${RUNTIME[@]}" \
   "$OUT/ffapp_domain_m5flip.o" "$OUT/ffapp_decode.o" "${FFLIBS[@]}" "$ARCHIVE"
 echo "control image $OUT/ffapp_m5flip.dom decodes ${INPUT%.mkv}.flip.mkv"
 
 # --- safety fixtures (src/capstone-domain/ffapp_safety.c) ------------------------------
 # One image per fixture: a fault ends the emulator, so a faulting fixture reports nothing else.
 # Same runtime, allocator and libraries as the milestone images above; only the entry differs.
-FIXTURES="1 2 3 4 5 6 7 8 9 10 16 24 25"   # 16 on the heap arms: the stock control for the pool arms;
+FIXTURES="1 2 3 4 5 6 7 8 9 10 16 24 25"   # 16: stock refstruct's in-band header;
                                            # 24 and 25 are two upstream defects live at the pin
-[ -n "$POOL" ] && FIXTURES="$(seq -s ' ' 1 17) 20 21"          # the pool fixtures, and the pool-end counts
 # FFAPP_EXTRA_FIXTURES: more fixture ids on any arm, e.g. a diagnostic on the level0 heap
 FIXTURES="$FIXTURES ${FFAPP_EXTRA_FIXTURES:-}"
-# Track B, af_join (fixtures 18 and 19): only when configure built the join filter
-# (FFAPP_EXTRA_CONFIGURE="--enable-avfilter --enable-filter=join --enable-decoder=pcm_s16le_planar").
-# 18 links libavfilter as built. 19 links af_join.o with upstream's fix 461fb22053 reverted -- one
-# token, the dedup loop's bound -- ahead of libavfilter.a, so the archive's copy is never pulled.
-# The as-shipped file is compiled here too, with the same command, and must come out
-# BYTE-IDENTICAL to the archive's member: that proves the command is the library's own, so the
-# reverted object differs from the linked library by that one token and nothing else.
-FIXLINK=()
-if [ -n "$POOL" ] && [ -f "$XB/libavfilter/af_join.o" ]; then
-  FIXTURES="$FIXTURES 18 19 30 31 32 33"   # 30-33: configure-only diagnostics for 18's graph
-  AJ=$OUT/afjoin; rm -rf "$AJ"; mkdir -p "$AJ"
-  # make's own command for the archive member, as make would run it now (V=1 prints it whole; -s
-  # would silence the recipe echo), less its dependency-file flags, which would overwrite make's
-  # record for af_join.o with the reruns' inputs.
-  AJCMD=$(cd "$XB" && make -n -B V=1 libavfilter/af_join.o 2>/dev/null | grep -F ' -c -o libavfilter/af_join.o ' | tail -1 || true)
-  [ -n "$AJCMD" ] || { echo "AF_JOIN GATE: make printed no compile command for libavfilter/af_join.o" >&2; exit 1; }
-  AJCMD=$(printf '%s' "$AJCMD" | sed 's/ -MMD -MF [^ ]* -MT [^ ]*//')
-  case $AJCMD in *" -MF "*|*" -MMD"*) echo "AF_JOIN GATE: dependency flags left in: $AJCMD" >&2; exit 1 ;; esac
-  AJSRC=$(printf '%s\n' $AJCMD | grep -E 'af_join\.c$' | tail -1)
-  [ -n "$AJSRC" ] || { echo "AF_JOIN GATE: no af_join.c in make's command: $AJCMD" >&2; exit 1; }
-  cp "$SRC/libavfilter/af_join.c" "$AJ/af_join.c"
-  python3 - "$AJ/af_join.c" "$AJ/rev/af_join.c" <<'PY'
-import os, sys
-s = open(sys.argv[1]).read()
-old = "        if (j == nb_buffers)\n            s->buffers[nb_buffers++] = buf;\n"
-if s.count(old) != 1: sys.exit("af_join: the fixed dedup bound is not there exactly once")
-os.makedirs(os.path.dirname(sys.argv[2]), exist_ok=True)
-open(sys.argv[2], "w").write(s.replace(old, "        if (j == i)\n            s->buffers[nb_buffers++] = buf;\n"))
-PY
-  # The shipped object, by make's command with only -o changed; then BOTH copies by the same route
-  # the revert must take -- a file outside the tree, its includes found with -I, and __FILE__ mapped
-  # to make's spelling -- so the route itself is shown to reproduce the member.
-  ( cd "$XB" && eval "${AJCMD/ -o libavfilter\/af_join.o / -o $AJ/af_join.o }" )
-  cmp -s "$AJ/af_join.o" "$XB/libavfilter/af_join.o" \
-    || { echo "AF_JOIN GATE: make's own command, rerun, does not reproduce libavfilter's af_join.o" >&2; exit 1; }
-  ROUTE="-I$SRC/libavfilter -fmacro-prefix-map=$(dirname "$AJ/af_join.c")/=$(dirname "$AJSRC")/"
-  ( cd "$XB" && eval "$(printf '%s' "$AJCMD" | sed "s| -o libavfilter/af_join.o | -o $AJ/af_join_shipped.o |; s| $AJSRC\$| $AJ/af_join.c|") $ROUTE" )
-  ( cd "$XB" && eval "$(printf '%s' "$AJCMD" | sed "s| -o libavfilter/af_join.o | -o $AJ/af_join_reverted.o |; s| $AJSRC\$| $AJ/rev/af_join.c|") -I$SRC/libavfilter -fmacro-prefix-map=$AJ/rev/=$(dirname "$AJSRC")/" )
-  cmp -s "$AJ/af_join_shipped.o" "$XB/libavfilter/af_join.o" \
-    || { echo "AF_JOIN GATE: the out-of-tree route does not reproduce libavfilter's af_join.o" >&2; exit 1; }
-  diff "$AJ/af_join.c" "$AJ/rev/af_join.c" > "$AJ/revert.diff" || true   # 1 = they differ, as they must
-  [ "$(grep -c '^[<>]' "$AJ/revert.diff")" = 2 ] || { echo "AF_JOIN GATE: the revert is not one line" >&2; exit 1; }
-  echo "af_join: as-shipped object reproduced byte-identically; fixture 19 links the one-token revert"
-fi
-# Track B, vidstab (fixtures 22 and 23): only when configure built the vidstabtransform filter
-# (FFAPP_EXTRA_CONFIGURE="--enable-avfilter --enable-gpl --enable-libvidstab
-#  --enable-filter=vidstabtransform --enable-decoder=yuv4"; libvidstab is built above).
-# 22 links libavfilter as built. 23 links vf_vidstabtransform.o with upstream's fix 316531e61c
-# reverted: trackb/vidstab-316531e61c.diff, the fix's own diff, applied in reverse at fuzz 0.
-# af_join's two gates apply unchanged, and one more: applying the fix to the reverted file must
-# give back the shipped file byte for byte, so the revert is exactly the fix's reverse.
-if [ -n "$POOL" ] && [ -f "$XB/libavfilter/vf_vidstabtransform.o" ]; then
-  FIXTURES="$FIXTURES 22 23"
-  VS=$OUT/vidstab; rm -rf "$VS"; mkdir -p "$VS/rev/libavfilter" "$VS/rt/libavfilter"
-  VSCMD=$(cd "$XB" && make -n -B V=1 libavfilter/vf_vidstabtransform.o 2>/dev/null | grep -F ' -c -o libavfilter/vf_vidstabtransform.o ' | tail -1 || true)
-  [ -n "$VSCMD" ] || { echo "VIDSTAB GATE: make printed no compile command for libavfilter/vf_vidstabtransform.o" >&2; exit 1; }
-  VSCMD=$(printf '%s' "$VSCMD" | sed 's/ -MMD -MF [^ ]* -MT [^ ]*//')
-  case $VSCMD in *" -MF "*|*" -MMD"*) echo "VIDSTAB GATE: dependency flags left in: $VSCMD" >&2; exit 1 ;; esac
-  VSSRC=$(printf '%s\n' $VSCMD | grep -E 'vf_vidstabtransform\.c$' | tail -1)
-  [ -n "$VSSRC" ] || { echo "VIDSTAB GATE: no vf_vidstabtransform.c in make's command: $VSCMD" >&2; exit 1; }
-  cp "$SRC/libavfilter/vf_vidstabtransform.c" "$VS/vf_vidstabtransform.c"
-  cp "$SRC/libavfilter/vf_vidstabtransform.c" "$VS/rev/libavfilter/"
-  ( cd "$VS/rev" && patch -s -p1 -R --fuzz=0 --no-backup-if-mismatch < "$APP_DIR/trackb/vidstab-316531e61c.diff" ) \
-    || { echo "VIDSTAB GATE: upstream's fix 316531e61c does not reverse at fuzz 0" >&2; exit 1; }
-  cp "$VS/rev/libavfilter/vf_vidstabtransform.c" "$VS/rt/libavfilter/"
-  ( cd "$VS/rt" && patch -s -p1 --fuzz=0 --no-backup-if-mismatch < "$APP_DIR/trackb/vidstab-316531e61c.diff" ) \
-    && cmp -s "$VS/rt/libavfilter/vf_vidstabtransform.c" "$SRC/libavfilter/vf_vidstabtransform.c" \
-    || { echo "VIDSTAB GATE: applying the fix to the revert does not give back the shipped file" >&2; exit 1; }
-  ( cd "$XB" && eval "${VSCMD/ -o libavfilter\/vf_vidstabtransform.o / -o $VS/vs_make.o }" )
-  cmp -s "$VS/vs_make.o" "$XB/libavfilter/vf_vidstabtransform.o" \
-    || { echo "VIDSTAB GATE: make's own command, rerun, does not reproduce libavfilter's vf_vidstabtransform.o" >&2; exit 1; }
-  ( cd "$XB" && eval "$(printf '%s' "$VSCMD" | sed "s| -o libavfilter/vf_vidstabtransform.o | -o $VS/vs_shipped.o |; s| $VSSRC\$| $VS/vf_vidstabtransform.c|") -I$SRC/libavfilter -fmacro-prefix-map=$VS/=$(dirname "$VSSRC")/" )
-  ( cd "$XB" && eval "$(printf '%s' "$VSCMD" | sed "s| -o libavfilter/vf_vidstabtransform.o | -o $VS/vs_reverted.o |; s| $VSSRC\$| $VS/rev/libavfilter/vf_vidstabtransform.c|") -I$SRC/libavfilter -fmacro-prefix-map=$VS/rev/libavfilter/=$(dirname "$VSSRC")/" )
-  cmp -s "$VS/vs_shipped.o" "$XB/libavfilter/vf_vidstabtransform.o" \
-    || { echo "VIDSTAB GATE: the out-of-tree route does not reproduce libavfilter's vf_vidstabtransform.o" >&2; exit 1; }
-  diff "$VS/vf_vidstabtransform.c" "$VS/rev/libavfilter/vf_vidstabtransform.c" > "$VS/revert.diff" || true
-  echo "vidstab: as-shipped object reproduced byte-identically; fixture 23 links upstream's fix reversed ($(grep -c '^[<>]' "$VS/revert.diff") changed lines)"
-fi
-# Each Track B pair links its filter's object AHEAD of the libraries on BOTH sides, the shipped
-# one for 18 and 22, so the two images of a pair differ in that object's bytes and the fixture id
-# alone. Linking it ahead for the reverted side only moved every later symbol too (audit,
-# 2026-09-29: 10,062 symbol lines differed between the first 18 and 19 images).
 for fx in $FIXTURES; do
-  FIXLINK=()
-  case $fx in
-    18) FIXLINK=("$AJ/af_join_shipped.o") ;;  19) FIXLINK=("$AJ/af_join_reverted.o") ;;
-    22) FIXLINK=("$VS/vs_shipped.o") ;;       23) FIXLINK=("$VS/vs_reverted.o") ;;
-  esac
-  # FFAPP_LINK_AHEAD_<n>: objects linked ahead of the libraries for fixture <n> only (diagnostics)
-  _ahead=FFAPP_LINK_AHEAD_$fx; [ -n "${!_ahead:-}" ] && FIXLINK+=(${!_ahead})
   "$CLANG" "${APPF[@]}" -DFFAPP_FIXTURE="$fx" \
     -c "$APP_DIR/src/capstone-domain/ffapp_safety.c" -o "$OUT/ffapp_safety_$fx.o"
   "$SDK/capstone-cc" -o "$OUT/ffapp_fx$fx.dom" \
-    "${RUNTIME[@]}" \
-    "$OUT/ffapp_safety_$fx.o" "${FIXLINK[@]}" "${FFLIBS[@]}" "$ARCHIVE"
+    "$OUT/ffapp_safety_$fx.o" "${FFLIBS[@]}" "$ARCHIVE"
 done
-# FFAPP_CORPUS_DIR: the FFmpeg pool bug corpus (capstone/bug-corpora/ffmpeg/pool-repros), each
-# case.c UNCHANGED against this image's libavutil, on the Sublet port of the pools and on its
-# stock control only (the substitute's arms have the corpus's own runner). Fixture 40 + 2 * case
-# + fixed: the case with upstream's defect, then with the fix. case.c is compiled with -g, so
-# a fault's pc can be named by its source line (the corpus runner's verdict does that).
-if [ -n "${FFAPP_CORPUS_DIR:-}" ]; then
-  { [ "$POOL" = sublet ] || [ "$POOL" = stock ]; } \
-    || { echo "FFAPP_CORPUS_DIR needs FFAPP_POOL=sublet or stock" >&2; exit 2; }
-  CORPUS_CASES=("$FFAPP_CORPUS_DIR"/[0-9][0-9]_*/case.c)
-  [ -f "${CORPUS_CASES[0]}" ] || { echo "no NN_*/case.c under $FFAPP_CORPUS_DIR" >&2; exit 2; }
-  CORPUSF=(-I"$FFAPP_CORPUS_DIR/shared" -I"$APP_DIR/../buffer-pool/src/shared")
-  for c in "${CORPUS_CASES[@]}"; do
-    n=$(basename "$(dirname "$c")"); n=$((10#${n%%_*}))
-    for fixed in 0 1; do
-      fx=$((40 + 2 * n + fixed))
-      "$CLANG" "${APPF[@]}" "${CORPUSF[@]}" -g -c "$c" -o "$OUT/ffapp_corpus_case_$fx.o"
-      "$CLANG" "${APPF[@]}" "${CORPUSF[@]}" -DFFAPP_FIXTURE="$fx" -DFFAPP_CORPUS_FIXED="$fixed" \
-        -c "$APP_DIR/src/capstone-domain/ffapp_corpus.c" -o "$OUT/ffapp_corpus_$fx.o"
-      "$SDK/capstone-cc" -o "$OUT/ffapp_fx$fx.dom" \
-        "${RUNTIME[@]}" \
-        "$OUT/ffapp_corpus_$fx.o" "$OUT/ffapp_corpus_case_$fx.o" "${FFLIBS[@]}" "$ARCHIVE"
-    done
-  done
-  echo "corpus images: ${#CORPUS_CASES[@]} cases x (defect, fix) from $FFAPP_CORPUS_DIR"
-fi
-echo "safety fixture images ($HEAP heap${POOL:+, pool mode $POOL}): $(ls "$OUT"/ffapp_fx*.dom | wc -l)"
+echo "safety fixture images ($HEAP heap): $(ls "$OUT"/ffapp_fx*.dom | wc -l)"
 
 # --- C-50 gate: no integer address formed off sp/s0 and used as a store base ------------
 # The compiler miscompiles an integer-valued pointer in a by-value aggregate (ISSUES.md
