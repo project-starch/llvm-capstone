@@ -42,6 +42,11 @@ with the reversal flag enabled, but this does not prove the intended
 orphan-header dereference occurred. Its temporal-fault prediction is retained;
 safe fixture 25 returns `1900020`. Establishing the mover's actual path is
 still required. The protected gate is recorded as FAIL, not normalized to PASS.
+Established since, on 2026-10-13: path witnesses in the mover show the reversed
+header-only free branch is never taken for the fixture's header, on either arm,
+so the orphan is never built and `1800021` was a return from a sequence that had
+not created its own precondition. See
+[ports/memcached/app/results/2026-10-13-fixture-24-path](../../../../ports/memcached/app/results/2026-10-13-fixture-24-path/README.md).
 
 The [CPython archive audit](cpython-archive-audit.json) recomputes all 2,183
 stock/protected outcomes in the committed sharded campaign: they agree,

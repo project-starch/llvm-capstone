@@ -50,7 +50,21 @@ path, so its data chunks are orphaned with a dangling head. Unset, the mover is 
      if (settings.verbose > 1) {
 --- a/slabs_mover.c
 +++ b/slabs_mover.c
-@@ -322,6 +322,15 @@
+@@ -269,6 +269,13 @@
+          * lock the entire structure. If a chunk has ITEM_CHUNK flag, its
+          * head cannot be slabbed, so the normal routine is safe. */
+         it = a->ch->head;
++#ifdef MC_CAPSTONE_SAFETY_FIXTURES
++        extern volatile int mcapp_reverse_c0e5a99;
++        extern volatile unsigned long mcapp_c0e5a99_orphan_head;
++        extern volatile unsigned mcapp_c0e5a99_orphan_read;
++        if (mcapp_reverse_c0e5a99 && __builtin_capstone_cap_get_cursor((void *)it) == mcapp_c0e5a99_orphan_head)
++            mcapp_c0e5a99_orphan_read++;
++#endif
+         assert(it->it_flags & ITEM_CHUNKED);
+     }
+ 
+@@ -322,6 +329,15 @@
              /* See above comment. No ITEM_SLABBED or ITEM_LINKED. Mark
               * busy and wait for item to complete its upload. */
              status = MOVE_BUSY_FLOATING;
@@ -66,7 +80,7 @@ path, so its data chunks are orphaned with a dangling head. Unset, the mover is 
          }
      }
  
-@@ -463,7 +472,14 @@
+@@ -463,7 +479,18 @@
                      || item_is_flushed(it)) {
                      /* Expired, don't save. */
                      STORAGE_delete(t->storage, it);
@@ -74,7 +88,11 @@ path, so its data chunks are orphaned with a dangling head. Unset, the mover is 
 +                    /* fixture 24 reverses c0e5a99: before it, an expired CHUNKED header took this
 +                       header-only free branch, orphaning its data chunks with a dangling head */
 +                    extern volatile int mcapp_reverse_c0e5a99;
++                    extern volatile unsigned long mcapp_c0e5a99_orphan_head;
++                    extern volatile unsigned mcapp_c0e5a99_header_only;
 +                    if (!ch && ((it->it_flags & ITEM_CHUNKED) == 0 || mcapp_reverse_c0e5a99)) {
++                        if (mcapp_reverse_c0e5a99 && __builtin_capstone_cap_get_cursor((void *)it) == mcapp_c0e5a99_orphan_head)
++                            mcapp_c0e5a99_header_only++;
 +#else
                      if (!ch && (it->it_flags & ITEM_CHUNKED) == 0) {
 +#endif
