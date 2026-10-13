@@ -58,6 +58,8 @@
   },
   "verdict_bundles": {
     "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
-    "silicon-carve-bounds": "results/2026-10-16-silicon/silicon-carve-bounds"
+    "silicon-carve-bounds": "results/2026-10-16-silicon/silicon-carve-bounds",
+    "virtual-malloc": "results/2026-10-13-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-13-virtual/virtual-nested-pools"
   }
 }
