@@ -3,7 +3,7 @@ import struct
 import subprocess
 import sys
 
-ported, reference, directory = sys.argv[1:]
+replay, directory = sys.argv[1:]
 out = pathlib.Path(directory)
 out.mkdir(parents=True, exist_ok=True)
 MAGIC = 0x31304D454D575357
@@ -73,13 +73,8 @@ def encode(es):
 
 trace = out / "directed.bin"
 trace.write_bytes(encode(events))
-results = []
-for name, exe in (("ported", ported), ("reference", reference)):
-    report = out / f"{name}.bin"
-    run = subprocess.run([exe, str(trace), str(report)], check=True, capture_output=True)
-    results.append(run.stdout)
-assert results[0] == results[1], results
-report = struct.unpack("<16Q", (out / "ported.bin").read_bytes())
+subprocess.run([replay, str(trace), str(out / "report.bin")], check=True, capture_output=True)
+report = struct.unpack("<16Q", (out / "report.bin").read_bytes())
 assert report[3] == 0 and report[4] == len(events), report
 assert report[5:12] == tuple(
     counts[k] for k in ("news", "allocs", "frees", "reallocs", "free_alls", "gcs", "destroys")
@@ -104,7 +99,7 @@ for name, raw in {
     path = out / f"{name}.bin"
     path.write_bytes(raw)
     assert (
-        subprocess.run([ported, str(path), str(out / "rejected.bin")], capture_output=True).returncode
+        subprocess.run([replay, str(path), str(out / "rejected.bin")], capture_output=True).returncode
         != 0
     ), name
-print(f"PASS native/reference: {len(events)} events; malformed controls")
+print(f"PASS native: {len(events)} events; malformed controls")

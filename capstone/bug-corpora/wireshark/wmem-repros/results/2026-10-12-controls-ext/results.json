@@ -1,0 +1,1791 @@
+{
+ "what": "wmem block_fast lifetime controls (parent, successor; sibling not applicable) of docs/plans/2026-10-12-nested-lifetime-controls-extended.md, Wireshark 4.6.8 wmem BLOCK_FAST allocator released by wmem_free_all, protected = patch 0001 (WM_SUBLET=ON), release = wmem as released",
+ "revision": {
+  "llvm_capstone_head": "5d336c73931cd87a3c50262648c88ac9688409d3",
+  "branch": "ports/nested-controls-extended",
+  "snapshot": "git archive HEAD capstone compiler-rt/lib/builtins, plus the uncommitted files below",
+  "uncommitted_files": {
+   "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast/00_control_parent_block/case.c": "9bb6053e29798043a42937f130ccbe479f518681d14c4591f96a6f411b8e264d",
+   "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast/01_control_successor_reuse/case.c": "1c3844d876835764aec48b6e91f9a2a61fd6205defc9c271a236ef13ee093095",
+   "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast/02_control_successor_stale/case.c": "0eb5f7d6c04403aeeb2dfc30f31365f0aaf239045c13dd4cc84c01d4911d8eae",
+   "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast/blockfast.h": "28d6a8880fed817ffd719a87d9c6f73006d833d988e070f04f240abe994ea4a5",
+   "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast/run-lifetime-controls.py": "74370721298f534a037cab9cd2b994cc1b2a108cf255d6d709f0a4dd1d14edb4",
+   "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast/shared": "symlink -> ../../shared"
+  },
+  "tracked_modifications": "none"
+ },
+ "platform": {
+  "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512"
+ },
+ "configuration": {
+  "protected": {
+   "WM_SUBLET": "ON",
+   "profile": "virtual",
+   "exact_bounds": true,
+   "harts": 1,
+   "allocator": "WMEM_ALLOCATOR_BLOCK_FAST",
+   "release": "wmem_free_all",
+   "build_type": "Release",
+   "sdk_json_sha256": "52fd406304fd8b05f13ae47613f8a018435759ff44be037ecaf760a91089c926",
+   "sdk_cc_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+   "wmem_variant": "sublet (patch 0001)",
+   "patch_sha256": "5f2ef5f320edc27e85a3b005c11a257ffe925f56489a50bfbaf7b27f316b19e6"
+  },
+  "release": {
+   "WM_SUBLET": "OFF",
+   "profile": "virtual",
+   "exact_bounds": true,
+   "harts": 1,
+   "allocator": "WMEM_ALLOCATOR_BLOCK_FAST",
+   "release": "wmem_free_all",
+   "build_type": "Release",
+   "sdk_json_sha256": "52fd406304fd8b05f13ae47613f8a018435759ff44be037ecaf760a91089c926",
+   "sdk_cc_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+   "wmem_variant": "reference",
+   "patch_sha256": "5f2ef5f320edc27e85a3b005c11a257ffe925f56489a50bfbaf7b27f316b19e6"
+  }
+ },
+ "probe_lines": {
+  "wm_defect_probe": "capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53",
+  "wm_defect_write": "capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:65",
+  "wm_ctl_load_insn": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/lifetime.h:124",
+  "wm_ctl_store_insn": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime/lifetime.h:132"
+ },
+ "runner_sha256": "74370721298f534a037cab9cd2b994cc1b2a108cf255d6d709f0a4dd1d14edb4",
+ "run_staged_sha256": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c",
+ "boots": [
+  {
+   "boot": "protected-1",
+   "started_utc": "2026-10-11T21:58:32Z",
+   "wall_seconds": 7.5,
+   "boot_completed": true,
+   "gate_sha256": "1d9e43caeeed8e12cea7feb3e75b8caa82a5223cf38b1749996db590489ee849"
+  },
+  {
+   "boot": "protected-2",
+   "started_utc": "2026-10-11T21:58:59Z",
+   "wall_seconds": 7.8,
+   "boot_completed": true,
+   "gate_sha256": "1d9e43caeeed8e12cea7feb3e75b8caa82a5223cf38b1749996db590489ee849"
+  },
+  {
+   "boot": "protected-3",
+   "started_utc": "2026-10-11T21:59:25Z",
+   "wall_seconds": 7.2,
+   "boot_completed": true,
+   "gate_sha256": "1d9e43caeeed8e12cea7feb3e75b8caa82a5223cf38b1749996db590489ee849"
+  },
+  {
+   "boot": "release-1",
+   "started_utc": "2026-10-11T21:58:18Z",
+   "wall_seconds": 7.1,
+   "boot_completed": true,
+   "gate_sha256": "1d9e43caeeed8e12cea7feb3e75b8caa82a5223cf38b1749996db590489ee849"
+  },
+  {
+   "boot": "release-2",
+   "started_utc": "2026-10-11T21:58:45Z",
+   "wall_seconds": 7.2,
+   "boot_completed": true,
+   "gate_sha256": "1d9e43caeeed8e12cea7feb3e75b8caa82a5223cf38b1749996db590489ee849"
+  },
+  {
+   "boot": "release-3",
+   "started_utc": "2026-10-11T21:59:13Z",
+   "wall_seconds": 7.1,
+   "boot_completed": true,
+   "gate_sha256": "1d9e43caeeed8e12cea7feb3e75b8caa82a5223cf38b1749996db590489ee849"
+  }
+ ],
+ "not_applicable": {
+  "sibling": "block_fast has no single-object release: wmem_free is a no-op and wmem_free_all ends every object at once; the pre-registration reports it as not applicable, not as a pass"
+ },
+ "verdicts": {
+  "00-parent-block": {
+   "protected": "AS PREDICTED",
+   "release": "AS PREDICTED"
+  },
+  "01-successor-reuse": {
+   "protected": "AS PREDICTED",
+   "release": "AS PREDICTED"
+  },
+  "02-successor-stale": {
+   "protected": "AS PREDICTED",
+   "release": "AS PREDICTED"
+  }
+ },
+ "controls": {
+  "00-parent-block": {
+   "protected": {
+    "image_sha256": "9b3500c7617d8575eec6ee9b298bd274267425faa1930d89b30fbae515602080",
+    "boots": [
+     {
+      "boot": "protected-1",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3fa57fe0a0",
+       "second": "0x3fa57fe0f0",
+       "block": "0x3fa57fe050",
+       "life": "0x3fa57fe050",
+       "generation-before-reset": "0x3fa57fe050",
+       "generation-after-reset": "0x3fa57fe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3fa57fe0a0",
+        "0x3fa57fe0e0"
+       ],
+       "second": [
+        "0x3fa57fe0f0",
+        "0x3fa57fe130"
+       ],
+       "block": [
+        "0x3fa57fe050",
+        "0x3fa59fe050"
+       ],
+       "life": [
+        "0x3fa57fe050",
+        "0x3fa59fe050"
+       ],
+       "generation-before-reset": [
+        "0x3fa57fe050",
+        "0x3fa59fe050"
+       ],
+       "generation-after-reset": [
+        "0x3fa57fe050",
+        "0x3fa59fe050"
+       ]
+      },
+      "accesses": [
+       "read block-pos via=block addr=0x3fa57fe060 len=4 probe=wm_ctl_load_insn site=case.c:40 done",
+       "read A-chunk-header via=block addr=0x3fa57fe090 len=4 probe=wm_ctl_load_insn site=case.c:46 done",
+       "read A-former-range via=block addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:49 done",
+       "write A-former-range via=block addr=0x3fa57fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:52 done",
+       "read A-former-range via=block addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:53 done",
+       "read A-former-range via=generation addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:61 done",
+       "write A-former-range via=generation addr=0x3fa57fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:64 done",
+       "read A-former-range via=block addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:65 done",
+       "read A-former-range via=life addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73 done",
+       "write A-former-range via=life addr=0x3fa57fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:76 done",
+       "read A-former-range via=block addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:77 done"
+      ],
+      "checks": [
+       "A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+       "A-former-range-written bytes=0..63 mismatches=0 ok",
+       "A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+       "A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+       "A-former-range-via-life bytes=0..63 mismatches=0 ok",
+       "A-former-range-written-via-life bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=protected",
+       "A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+       "released A via wmem_free_all",
+       "block-pos pos=64 ok: the reset rewound pos to the header",
+       "A-chunk-header len=64 ok: the reset left A's chunk header"
+      ]
+     },
+     {
+      "boot": "protected-2",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3f85dfe0a0",
+       "second": "0x3f85dfe0f0",
+       "block": "0x3f85dfe050",
+       "life": "0x3f85dfe050",
+       "generation-before-reset": "0x3f85dfe050",
+       "generation-after-reset": "0x3f85dfe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3f85dfe0a0",
+        "0x3f85dfe0e0"
+       ],
+       "second": [
+        "0x3f85dfe0f0",
+        "0x3f85dfe130"
+       ],
+       "block": [
+        "0x3f85dfe050",
+        "0x3f85ffe050"
+       ],
+       "life": [
+        "0x3f85dfe050",
+        "0x3f85ffe050"
+       ],
+       "generation-before-reset": [
+        "0x3f85dfe050",
+        "0x3f85ffe050"
+       ],
+       "generation-after-reset": [
+        "0x3f85dfe050",
+        "0x3f85ffe050"
+       ]
+      },
+      "accesses": [
+       "read block-pos via=block addr=0x3f85dfe060 len=4 probe=wm_ctl_load_insn site=case.c:40 done",
+       "read A-chunk-header via=block addr=0x3f85dfe090 len=4 probe=wm_ctl_load_insn site=case.c:46 done",
+       "read A-former-range via=block addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:49 done",
+       "write A-former-range via=block addr=0x3f85dfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:52 done",
+       "read A-former-range via=block addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:53 done",
+       "read A-former-range via=generation addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:61 done",
+       "write A-former-range via=generation addr=0x3f85dfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:64 done",
+       "read A-former-range via=block addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:65 done",
+       "read A-former-range via=life addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73 done",
+       "write A-former-range via=life addr=0x3f85dfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:76 done",
+       "read A-former-range via=block addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:77 done"
+      ],
+      "checks": [
+       "A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+       "A-former-range-written bytes=0..63 mismatches=0 ok",
+       "A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+       "A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+       "A-former-range-via-life bytes=0..63 mismatches=0 ok",
+       "A-former-range-written-via-life bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=protected",
+       "A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+       "released A via wmem_free_all",
+       "block-pos pos=64 ok: the reset rewound pos to the header",
+       "A-chunk-header len=64 ok: the reset left A's chunk header"
+      ]
+     },
+     {
+      "boot": "protected-3",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3fac0fe0a0",
+       "second": "0x3fac0fe0f0",
+       "block": "0x3fac0fe050",
+       "life": "0x3fac0fe050",
+       "generation-before-reset": "0x3fac0fe050",
+       "generation-after-reset": "0x3fac0fe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3fac0fe0a0",
+        "0x3fac0fe0e0"
+       ],
+       "second": [
+        "0x3fac0fe0f0",
+        "0x3fac0fe130"
+       ],
+       "block": [
+        "0x3fac0fe050",
+        "0x3fac2fe050"
+       ],
+       "life": [
+        "0x3fac0fe050",
+        "0x3fac2fe050"
+       ],
+       "generation-before-reset": [
+        "0x3fac0fe050",
+        "0x3fac2fe050"
+       ],
+       "generation-after-reset": [
+        "0x3fac0fe050",
+        "0x3fac2fe050"
+       ]
+      },
+      "accesses": [
+       "read block-pos via=block addr=0x3fac0fe060 len=4 probe=wm_ctl_load_insn site=case.c:40 done",
+       "read A-chunk-header via=block addr=0x3fac0fe090 len=4 probe=wm_ctl_load_insn site=case.c:46 done",
+       "read A-former-range via=block addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:49 done",
+       "write A-former-range via=block addr=0x3fac0fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:52 done",
+       "read A-former-range via=block addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:53 done",
+       "read A-former-range via=generation addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:61 done",
+       "write A-former-range via=generation addr=0x3fac0fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:64 done",
+       "read A-former-range via=block addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:65 done",
+       "read A-former-range via=life addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73 done",
+       "write A-former-range via=life addr=0x3fac0fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:76 done",
+       "read A-former-range via=block addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:77 done"
+      ],
+      "checks": [
+       "A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+       "A-former-range-written bytes=0..63 mismatches=0 ok",
+       "A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+       "A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+       "A-former-range-via-life bytes=0..63 mismatches=0 ok",
+       "A-former-range-written-via-life bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=protected",
+       "A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+       "released A via wmem_free_all",
+       "block-pos pos=64 ok: the reset rewound pos to the header",
+       "A-chunk-header len=64 ok: the reset left A's chunk header"
+      ]
+     }
+    ]
+   },
+   "release": {
+    "image_sha256": "707122339426ff310910a7d193a894cefbc6204128881518ff1ccd8f6943580d",
+    "boots": [
+     {
+      "boot": "release-1",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3f958fe080",
+       "second": "0x3f958fe0d0",
+       "block": "0x3f958fe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3f958fe050",
+        "0x3f95afe050"
+       ],
+       "second": [
+        "0x3f958fe050",
+        "0x3f95afe050"
+       ],
+       "block": [
+        "0x3f958fe050",
+        "0x3f95afe050"
+       ]
+      },
+      "accesses": [
+       "read block-pos via=block addr=0x3f958fe060 len=4 probe=wm_ctl_load_insn site=case.c:40 done",
+       "read A-chunk-header via=block addr=0x3f958fe070 len=4 probe=wm_ctl_load_insn site=case.c:46 done",
+       "read A-former-range via=block addr=0x3f958fe080 len=64 probe=wm_ctl_load_insn site=case.c:49 done",
+       "write A-former-range via=block addr=0x3f958fe080 len=64 probe=wm_ctl_store_insn site=case.c:52 done",
+       "read A-former-range via=block addr=0x3f958fe080 len=64 probe=wm_ctl_load_insn site=case.c:53 done"
+      ],
+      "checks": [
+       "A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+       "A-former-range-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=release",
+       "A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+       "released A via wmem_free_all",
+       "block-pos pos=32 ok: the reset rewound pos to the header",
+       "A-chunk-header len=64 ok: the reset left A's chunk header",
+       "generation absent: the release build has no patch 0001"
+      ]
+     },
+     {
+      "boot": "release-2",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3f9f2fe080",
+       "second": "0x3f9f2fe0d0",
+       "block": "0x3f9f2fe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3f9f2fe050",
+        "0x3f9f4fe050"
+       ],
+       "second": [
+        "0x3f9f2fe050",
+        "0x3f9f4fe050"
+       ],
+       "block": [
+        "0x3f9f2fe050",
+        "0x3f9f4fe050"
+       ]
+      },
+      "accesses": [
+       "read block-pos via=block addr=0x3f9f2fe060 len=4 probe=wm_ctl_load_insn site=case.c:40 done",
+       "read A-chunk-header via=block addr=0x3f9f2fe070 len=4 probe=wm_ctl_load_insn site=case.c:46 done",
+       "read A-former-range via=block addr=0x3f9f2fe080 len=64 probe=wm_ctl_load_insn site=case.c:49 done",
+       "write A-former-range via=block addr=0x3f9f2fe080 len=64 probe=wm_ctl_store_insn site=case.c:52 done",
+       "read A-former-range via=block addr=0x3f9f2fe080 len=64 probe=wm_ctl_load_insn site=case.c:53 done"
+      ],
+      "checks": [
+       "A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+       "A-former-range-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=release",
+       "A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+       "released A via wmem_free_all",
+       "block-pos pos=32 ok: the reset rewound pos to the header",
+       "A-chunk-header len=64 ok: the reset left A's chunk header",
+       "generation absent: the release build has no patch 0001"
+      ]
+     },
+     {
+      "boot": "release-3",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3fa6cfe080",
+       "second": "0x3fa6cfe0d0",
+       "block": "0x3fa6cfe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3fa6cfe050",
+        "0x3fa6efe050"
+       ],
+       "second": [
+        "0x3fa6cfe050",
+        "0x3fa6efe050"
+       ],
+       "block": [
+        "0x3fa6cfe050",
+        "0x3fa6efe050"
+       ]
+      },
+      "accesses": [
+       "read block-pos via=block addr=0x3fa6cfe060 len=4 probe=wm_ctl_load_insn site=case.c:40 done",
+       "read A-chunk-header via=block addr=0x3fa6cfe070 len=4 probe=wm_ctl_load_insn site=case.c:46 done",
+       "read A-former-range via=block addr=0x3fa6cfe080 len=64 probe=wm_ctl_load_insn site=case.c:49 done",
+       "write A-former-range via=block addr=0x3fa6cfe080 len=64 probe=wm_ctl_store_insn site=case.c:52 done",
+       "read A-former-range via=block addr=0x3fa6cfe080 len=64 probe=wm_ctl_load_insn site=case.c:53 done"
+      ],
+      "checks": [
+       "A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+       "A-former-range-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=release",
+       "A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+       "released A via wmem_free_all",
+       "block-pos pos=32 ok: the reset rewound pos to the header",
+       "A-chunk-header len=64 ok: the reset left A's chunk header",
+       "generation absent: the release build has no patch 0001"
+      ]
+     }
+    ]
+   }
+  },
+  "01-successor-reuse": {
+   "protected": {
+    "image_sha256": "b1aef8e8eb56a13e29c8ea39b6fa69b1814146b85c7fa5cb8cc63aeb1b350c05",
+    "boots": [
+     {
+      "boot": "protected-1",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3f9b3fe0a0",
+       "second": "0x3f9b3fe0f0",
+       "block": "0x3f9b3fe050",
+       "life": "0x3f9b3fe050",
+       "generation-before-reset": "0x3f9b3fe050",
+       "C": "0x3f9b3fe0a0",
+       "generation-after-reset": "0x3f9b3fe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3f9b3fe0a0",
+        "0x3f9b3fe0e0"
+       ],
+       "second": [
+        "0x3f9b3fe0f0",
+        "0x3f9b3fe130"
+       ],
+       "block": [
+        "0x3f9b3fe050",
+        "0x3f9b5fe050"
+       ],
+       "life": [
+        "0x3f9b3fe050",
+        "0x3f9b5fe050"
+       ],
+       "generation-before-reset": [
+        "0x3f9b3fe050",
+        "0x3f9b5fe050"
+       ],
+       "C": [
+        "0x3f9b3fe0a0",
+        "0x3f9b3fe0e0"
+       ],
+       "generation-after-reset": [
+        "0x3f9b3fe050",
+        "0x3f9b5fe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3f9b3fe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3f9b3fe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=protected",
+       "A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3f9b3fe0a0",
+       "successor A=0x3f9b3fe0a0 C=0x3f9b3fe0a0 tries=1 equal=yes"
+      ]
+     },
+     {
+      "boot": "protected-2",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3fb5ffe0a0",
+       "second": "0x3fb5ffe0f0",
+       "block": "0x3fb5ffe050",
+       "life": "0x3fb5ffe050",
+       "generation-before-reset": "0x3fb5ffe050",
+       "C": "0x3fb5ffe0a0",
+       "generation-after-reset": "0x3fb5ffe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3fb5ffe0a0",
+        "0x3fb5ffe0e0"
+       ],
+       "second": [
+        "0x3fb5ffe0f0",
+        "0x3fb5ffe130"
+       ],
+       "block": [
+        "0x3fb5ffe050",
+        "0x3fb61fe050"
+       ],
+       "life": [
+        "0x3fb5ffe050",
+        "0x3fb61fe050"
+       ],
+       "generation-before-reset": [
+        "0x3fb5ffe050",
+        "0x3fb61fe050"
+       ],
+       "C": [
+        "0x3fb5ffe0a0",
+        "0x3fb5ffe0e0"
+       ],
+       "generation-after-reset": [
+        "0x3fb5ffe050",
+        "0x3fb61fe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3fb5ffe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3fb5ffe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=protected",
+       "A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3fb5ffe0a0",
+       "successor A=0x3fb5ffe0a0 C=0x3fb5ffe0a0 tries=1 equal=yes"
+      ]
+     },
+     {
+      "boot": "protected-3",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3f913fe0a0",
+       "second": "0x3f913fe0f0",
+       "block": "0x3f913fe050",
+       "life": "0x3f913fe050",
+       "generation-before-reset": "0x3f913fe050",
+       "C": "0x3f913fe0a0",
+       "generation-after-reset": "0x3f913fe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3f913fe0a0",
+        "0x3f913fe0e0"
+       ],
+       "second": [
+        "0x3f913fe0f0",
+        "0x3f913fe130"
+       ],
+       "block": [
+        "0x3f913fe050",
+        "0x3f915fe050"
+       ],
+       "life": [
+        "0x3f913fe050",
+        "0x3f915fe050"
+       ],
+       "generation-before-reset": [
+        "0x3f913fe050",
+        "0x3f915fe050"
+       ],
+       "C": [
+        "0x3f913fe0a0",
+        "0x3f913fe0e0"
+       ],
+       "generation-after-reset": [
+        "0x3f913fe050",
+        "0x3f915fe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3f913fe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3f913fe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=protected",
+       "A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3f913fe0a0",
+       "successor A=0x3f913fe0a0 C=0x3f913fe0a0 tries=1 equal=yes"
+      ]
+     }
+    ]
+   },
+   "release": {
+    "image_sha256": "3d73f90165c251ed8c915fdd3d9dba00c9396bd43297740b6df5f0fb097de3cc",
+    "boots": [
+     {
+      "boot": "release-1",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3fbb3fe080",
+       "second": "0x3fbb3fe0d0",
+       "block": "0x3fbb3fe050",
+       "C": "0x3fbb3fe080"
+      },
+      "bounds": {
+       "A": [
+        "0x3fbb3fe050",
+        "0x3fbb5fe050"
+       ],
+       "second": [
+        "0x3fbb3fe050",
+        "0x3fbb5fe050"
+       ],
+       "block": [
+        "0x3fbb3fe050",
+        "0x3fbb5fe050"
+       ],
+       "C": [
+        "0x3fbb3fe050",
+        "0x3fbb5fe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3fbb3fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3fbb3fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=release",
+       "A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3fbb3fe080",
+       "successor A=0x3fbb3fe080 C=0x3fbb3fe080 tries=1 equal=yes"
+      ]
+     },
+     {
+      "boot": "release-2",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3f9e1fe080",
+       "second": "0x3f9e1fe0d0",
+       "block": "0x3f9e1fe050",
+       "C": "0x3f9e1fe080"
+      },
+      "bounds": {
+       "A": [
+        "0x3f9e1fe050",
+        "0x3f9e3fe050"
+       ],
+       "second": [
+        "0x3f9e1fe050",
+        "0x3f9e3fe050"
+       ],
+       "block": [
+        "0x3f9e1fe050",
+        "0x3f9e3fe050"
+       ],
+       "C": [
+        "0x3f9e1fe050",
+        "0x3f9e3fe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3f9e1fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3f9e1fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=release",
+       "A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3f9e1fe080",
+       "successor A=0x3f9e1fe080 C=0x3f9e1fe080 tries=1 equal=yes"
+      ]
+     },
+     {
+      "boot": "release-3",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3f8e4fe080",
+       "second": "0x3f8e4fe0d0",
+       "block": "0x3f8e4fe050",
+       "C": "0x3f8e4fe080"
+      },
+      "bounds": {
+       "A": [
+        "0x3f8e4fe050",
+        "0x3f8e6fe050"
+       ],
+       "second": [
+        "0x3f8e4fe050",
+        "0x3f8e6fe050"
+       ],
+       "block": [
+        "0x3f8e4fe050",
+        "0x3f8e6fe050"
+       ],
+       "C": [
+        "0x3f8e4fe050",
+        "0x3f8e6fe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3f8e4fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3f8e4fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=release",
+       "A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3f8e4fe080",
+       "successor A=0x3f8e4fe080 C=0x3f8e4fe080 tries=1 equal=yes"
+      ]
+     }
+    ]
+   }
+  },
+  "02-successor-stale": {
+   "protected": {
+    "image_sha256": "5fb4e364f37fb90ef788c1d0b859dff122f9c8ea457800e1b3c5c98b715595f1",
+    "boots": [
+     {
+      "boot": "protected-1",
+      "prediction": "AS PREDICTED",
+      "outcome": "fault cause=25 pc=0x3f91c91e40 (link 0x21e40, wm_probe+20, label wm_defect_probe, capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53) address=0x3f910fe0a0",
+      "addresses": {
+       "A": "0x3f910fe0a0",
+       "second": "0x3f910fe0f0",
+       "block": "0x3f910fe050",
+       "life": "0x3f910fe050",
+       "generation-before-reset": "0x3f910fe050",
+       "C": "0x3f910fe0a0",
+       "generation-after-reset": "0x3f910fe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3f910fe0a0",
+        "0x3f910fe0e0"
+       ],
+       "second": [
+        "0x3f910fe0f0",
+        "0x3f910fe130"
+       ],
+       "block": [
+        "0x3f910fe050",
+        "0x3f912fe050"
+       ],
+       "life": [
+        "0x3f910fe050",
+        "0x3f912fe050"
+       ],
+       "generation-before-reset": [
+        "0x3f910fe050",
+        "0x3f912fe050"
+       ],
+       "C": [
+        "0x3f910fe0a0",
+        "0x3f910fe0e0"
+       ],
+       "generation-after-reset": [
+        "0x3f910fe050",
+        "0x3f912fe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3f910fe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3f910fe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done",
+       "read stale-A via=A addr=0x3f910fe0a0 len=64 probe=wm_defect_probe site=case.c:23 NOT DONE"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=protected",
+       "A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3f910fe0a0",
+       "successor A=0x3f910fe0a0 C=0x3f910fe0a0 tries=1 equal=yes"
+      ]
+     },
+     {
+      "boot": "protected-2",
+      "prediction": "AS PREDICTED",
+      "outcome": "fault cause=25 pc=0x3fb3991e40 (link 0x21e40, wm_probe+20, label wm_defect_probe, capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53) address=0x3fb2dfe0a0",
+      "addresses": {
+       "A": "0x3fb2dfe0a0",
+       "second": "0x3fb2dfe0f0",
+       "block": "0x3fb2dfe050",
+       "life": "0x3fb2dfe050",
+       "generation-before-reset": "0x3fb2dfe050",
+       "C": "0x3fb2dfe0a0",
+       "generation-after-reset": "0x3fb2dfe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3fb2dfe0a0",
+        "0x3fb2dfe0e0"
+       ],
+       "second": [
+        "0x3fb2dfe0f0",
+        "0x3fb2dfe130"
+       ],
+       "block": [
+        "0x3fb2dfe050",
+        "0x3fb2ffe050"
+       ],
+       "life": [
+        "0x3fb2dfe050",
+        "0x3fb2ffe050"
+       ],
+       "generation-before-reset": [
+        "0x3fb2dfe050",
+        "0x3fb2ffe050"
+       ],
+       "C": [
+        "0x3fb2dfe0a0",
+        "0x3fb2dfe0e0"
+       ],
+       "generation-after-reset": [
+        "0x3fb2dfe050",
+        "0x3fb2ffe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3fb2dfe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3fb2dfe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done",
+       "read stale-A via=A addr=0x3fb2dfe0a0 len=64 probe=wm_defect_probe site=case.c:23 NOT DONE"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=protected",
+       "A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3fb2dfe0a0",
+       "successor A=0x3fb2dfe0a0 C=0x3fb2dfe0a0 tries=1 equal=yes"
+      ]
+     },
+     {
+      "boot": "protected-3",
+      "prediction": "AS PREDICTED",
+      "outcome": "fault cause=25 pc=0x3f82691e40 (link 0x21e40, wm_probe+20, label wm_defect_probe, capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53) address=0x3f81afe0a0",
+      "addresses": {
+       "A": "0x3f81afe0a0",
+       "second": "0x3f81afe0f0",
+       "block": "0x3f81afe050",
+       "life": "0x3f81afe050",
+       "generation-before-reset": "0x3f81afe050",
+       "C": "0x3f81afe0a0",
+       "generation-after-reset": "0x3f81afe050"
+      },
+      "bounds": {
+       "A": [
+        "0x3f81afe0a0",
+        "0x3f81afe0e0"
+       ],
+       "second": [
+        "0x3f81afe0f0",
+        "0x3f81afe130"
+       ],
+       "block": [
+        "0x3f81afe050",
+        "0x3f81cfe050"
+       ],
+       "life": [
+        "0x3f81afe050",
+        "0x3f81cfe050"
+       ],
+       "generation-before-reset": [
+        "0x3f81afe050",
+        "0x3f81cfe050"
+       ],
+       "C": [
+        "0x3f81afe0a0",
+        "0x3f81afe0e0"
+       ],
+       "generation-after-reset": [
+        "0x3f81afe050",
+        "0x3f81cfe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3f81afe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3f81afe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done",
+       "read stale-A via=A addr=0x3f81afe0a0 len=64 probe=wm_defect_probe site=case.c:23 NOT DONE"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok"
+      ],
+      "notes": [
+       "arm=protected",
+       "A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3f81afe0a0",
+       "successor A=0x3f81afe0a0 C=0x3f81afe0a0 tries=1 equal=yes"
+      ]
+     }
+    ]
+   },
+   "release": {
+    "image_sha256": "b18d74194ba48b36274199743658eefbaf186a451049ab311e522f2bf80c6678",
+    "boots": [
+     {
+      "boot": "release-1",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3f880fe080",
+       "second": "0x3f880fe0d0",
+       "block": "0x3f880fe050",
+       "C": "0x3f880fe080"
+      },
+      "bounds": {
+       "A": [
+        "0x3f880fe050",
+        "0x3f882fe050"
+       ],
+       "second": [
+        "0x3f880fe050",
+        "0x3f882fe050"
+       ],
+       "block": [
+        "0x3f880fe050",
+        "0x3f882fe050"
+       ],
+       "C": [
+        "0x3f880fe050",
+        "0x3f882fe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3f880fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3f880fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done",
+       "read stale-A via=A addr=0x3f880fe080 len=64 probe=wm_defect_probe site=case.c:23 done"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok",
+       "stale-A-reads-C bytes=0..63 mismatches=0 ok",
+       "stale-A-reads-A bytes=0..63 mismatches=64",
+       "stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0"
+      ],
+      "notes": [
+       "arm=release",
+       "A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3f880fe080",
+       "successor A=0x3f880fe080 C=0x3f880fe080 tries=1 equal=yes",
+       "stale-A first_byte=0xc0 C_first_byte=0xc0"
+      ]
+     },
+     {
+      "boot": "release-2",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3f7f2fe080",
+       "second": "0x3f7f2fe0d0",
+       "block": "0x3f7f2fe050",
+       "C": "0x3f7f2fe080"
+      },
+      "bounds": {
+       "A": [
+        "0x3f7f2fe050",
+        "0x3f7f4fe050"
+       ],
+       "second": [
+        "0x3f7f2fe050",
+        "0x3f7f4fe050"
+       ],
+       "block": [
+        "0x3f7f2fe050",
+        "0x3f7f4fe050"
+       ],
+       "C": [
+        "0x3f7f2fe050",
+        "0x3f7f4fe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3f7f2fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3f7f2fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done",
+       "read stale-A via=A addr=0x3f7f2fe080 len=64 probe=wm_defect_probe site=case.c:23 done"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok",
+       "stale-A-reads-C bytes=0..63 mismatches=0 ok",
+       "stale-A-reads-A bytes=0..63 mismatches=64",
+       "stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0"
+      ],
+      "notes": [
+       "arm=release",
+       "A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3f7f2fe080",
+       "successor A=0x3f7f2fe080 C=0x3f7f2fe080 tries=1 equal=yes",
+       "stale-A first_byte=0xc0 C_first_byte=0xc0"
+      ]
+     },
+     {
+      "boot": "release-3",
+      "prediction": "AS PREDICTED",
+      "outcome": "completed",
+      "addresses": {
+       "A": "0x3fab9fe080",
+       "second": "0x3fab9fe0d0",
+       "block": "0x3fab9fe050",
+       "C": "0x3fab9fe080"
+      },
+      "bounds": {
+       "A": [
+        "0x3fab9fe050",
+        "0x3fabbfe050"
+       ],
+       "second": [
+        "0x3fab9fe050",
+        "0x3fabbfe050"
+       ],
+       "block": [
+        "0x3fab9fe050",
+        "0x3fabbfe050"
+       ],
+       "C": [
+        "0x3fab9fe050",
+        "0x3fabbfe050"
+       ]
+      },
+      "accesses": [
+       "write C via=C addr=0x3fab9fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149 done",
+       "read C via=C addr=0x3fab9fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150 done",
+       "read stale-A via=A addr=0x3fab9fe080 len=64 probe=wm_defect_probe site=case.c:23 done"
+      ],
+      "checks": [
+       "C-written bytes=0..63 mismatches=0 ok",
+       "stale-A-reads-C bytes=0..63 mismatches=0 ok",
+       "stale-A-reads-A bytes=0..63 mismatches=64",
+       "stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0"
+      ],
+      "notes": [
+       "arm=release",
+       "A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+       "released A via wmem_free_all",
+       "alloc try=1 addr=0x3fab9fe080",
+       "successor A=0x3fab9fe080 C=0x3fab9fe080 tries=1 equal=yes",
+       "stale-A first_byte=0xc0 C_first_byte=0xc0"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "raw": {
+  "protected-1": {
+   "00-parent-block": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x2294c",
+     "wm_defect_write": "0x22978"
+    },
+    "lines": [
+     "WM_CTL arm=protected",
+     "WM_CTL ref A addr=0x3fa57fe0a0 base=0x3fa57fe0a0 end=0x3fa57fe0e0",
+     "WM_CTL ref second addr=0x3fa57fe0f0 base=0x3fa57fe0f0 end=0x3fa57fe130",
+     "WM_CTL ref block addr=0x3fa57fe050 base=0x3fa57fe050 end=0x3fa59fe050",
+     "WM_CTL ref life addr=0x3fa57fe050 base=0x3fa57fe050 end=0x3fa59fe050",
+     "WM_CTL ref generation-before-reset addr=0x3fa57fe050 base=0x3fa57fe050 end=0x3fa59fe050",
+     "WM_CTL A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL access read block-pos via=block addr=0x3fa57fe060 len=4 probe=wm_ctl_load_insn site=case.c:40",
+     "WM_CTL done read block-pos",
+     "WM_CTL block-pos pos=64 ok: the reset rewound pos to the header",
+     "WM_CTL access read A-chunk-header via=block addr=0x3fa57fe090 len=4 probe=wm_ctl_load_insn site=case.c:46",
+     "WM_CTL done read A-chunk-header",
+     "WM_CTL A-chunk-header len=64 ok: the reset left A's chunk header",
+     "WM_CTL access read A-former-range via=block addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:49",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=block addr=0x3fa57fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:52",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:53",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL ref generation-after-reset addr=0x3fa57fe050 base=0x3fa57fe050 end=0x3fa59fe050",
+     "WM_CTL access read A-former-range via=generation addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:61",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=generation addr=0x3fa57fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:64",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:65",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+     "WM_CTL ref life addr=0x3fa57fe050 base=0x3fa57fe050 end=0x3fa59fe050",
+     "WM_CTL access read A-former-range via=life addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-via-life bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=life addr=0x3fa57fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:76",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3fa57fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:77",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written-via-life bytes=0..63 mismatches=0 ok",
+     "WM_DEFECT case=0 mode=0 completed"
+    ]
+   },
+   "01-successor-reuse": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21a88",
+     "wm_defect_write": "0x21ab4"
+    },
+    "lines": [
+     "WM_CTL arm=protected",
+     "WM_CTL ref A addr=0x3f9b3fe0a0 base=0x3f9b3fe0a0 end=0x3f9b3fe0e0",
+     "WM_CTL ref second addr=0x3f9b3fe0f0 base=0x3f9b3fe0f0 end=0x3f9b3fe130",
+     "WM_CTL ref block addr=0x3f9b3fe050 base=0x3f9b3fe050 end=0x3f9b5fe050",
+     "WM_CTL ref life addr=0x3f9b3fe050 base=0x3f9b3fe050 end=0x3f9b5fe050",
+     "WM_CTL ref generation-before-reset addr=0x3f9b3fe050 base=0x3f9b3fe050 end=0x3f9b5fe050",
+     "WM_CTL A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3f9b3fe0a0",
+     "WM_CTL successor A=0x3f9b3fe0a0 C=0x3f9b3fe0a0 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3f9b3fe0a0 base=0x3f9b3fe0a0 end=0x3f9b3fe0e0",
+     "WM_CTL ref generation-after-reset addr=0x3f9b3fe050 base=0x3f9b3fe050 end=0x3f9b5fe050",
+     "WM_CTL access write C via=C addr=0x3f9b3fe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3f9b3fe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_DEFECT case=1 mode=0 completed"
+    ]
+   },
+   "02-successor-stale": {
+    "rc": 139,
+    "fault": {
+     "cause": 25,
+     "pc": "0x3f91c91e40",
+     "address": "0x3f910fe0a0",
+     "code_start": "0x3f91c80000",
+     "link_pc": "0x21e40",
+     "function": "wm_probe",
+     "offset": 20,
+     "label": "wm_defect_probe",
+     "probe_line": "capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53"
+    },
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21e40",
+     "wm_defect_write": "0x21e6c"
+    },
+    "lines": [
+     "WM_CTL arm=protected",
+     "WM_CTL ref A addr=0x3f910fe0a0 base=0x3f910fe0a0 end=0x3f910fe0e0",
+     "WM_CTL ref second addr=0x3f910fe0f0 base=0x3f910fe0f0 end=0x3f910fe130",
+     "WM_CTL ref block addr=0x3f910fe050 base=0x3f910fe050 end=0x3f912fe050",
+     "WM_CTL ref life addr=0x3f910fe050 base=0x3f910fe050 end=0x3f912fe050",
+     "WM_CTL ref generation-before-reset addr=0x3f910fe050 base=0x3f910fe050 end=0x3f912fe050",
+     "WM_CTL A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3f910fe0a0",
+     "WM_CTL successor A=0x3f910fe0a0 C=0x3f910fe0a0 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3f910fe0a0 base=0x3f910fe0a0 end=0x3f910fe0e0",
+     "WM_CTL ref generation-after-reset addr=0x3f910fe050 base=0x3f910fe050 end=0x3f912fe050",
+     "WM_CTL access write C via=C addr=0x3f910fe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3f910fe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL access read stale-A via=A addr=0x3f910fe0a0 len=64 probe=wm_defect_probe site=case.c:23",
+     "WM_DEFECT case=2 ready",
+     "capstone-exec: domain fault cause=25 pc=0x3f91c91e40 address=0x3f910fe0a0 entry=0x3f91c80890 code=0x3f91c80000-0x3f91d00000 last=0x42 preparing=0x42 sha256=5fb4e364f37fb90ef788c1d0b859dff122f9c8ea457800e1b3c5c98b715595f1 image=/mnt/vm/02-successor-stale.dom",
+     "Segmentation fault"
+    ]
+   }
+  },
+  "protected-2": {
+   "00-parent-block": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x2294c",
+     "wm_defect_write": "0x22978"
+    },
+    "lines": [
+     "WM_CTL arm=protected",
+     "WM_CTL ref A addr=0x3f85dfe0a0 base=0x3f85dfe0a0 end=0x3f85dfe0e0",
+     "WM_CTL ref second addr=0x3f85dfe0f0 base=0x3f85dfe0f0 end=0x3f85dfe130",
+     "WM_CTL ref block addr=0x3f85dfe050 base=0x3f85dfe050 end=0x3f85ffe050",
+     "WM_CTL ref life addr=0x3f85dfe050 base=0x3f85dfe050 end=0x3f85ffe050",
+     "WM_CTL ref generation-before-reset addr=0x3f85dfe050 base=0x3f85dfe050 end=0x3f85ffe050",
+     "WM_CTL A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL access read block-pos via=block addr=0x3f85dfe060 len=4 probe=wm_ctl_load_insn site=case.c:40",
+     "WM_CTL done read block-pos",
+     "WM_CTL block-pos pos=64 ok: the reset rewound pos to the header",
+     "WM_CTL access read A-chunk-header via=block addr=0x3f85dfe090 len=4 probe=wm_ctl_load_insn site=case.c:46",
+     "WM_CTL done read A-chunk-header",
+     "WM_CTL A-chunk-header len=64 ok: the reset left A's chunk header",
+     "WM_CTL access read A-former-range via=block addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:49",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=block addr=0x3f85dfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:52",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:53",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL ref generation-after-reset addr=0x3f85dfe050 base=0x3f85dfe050 end=0x3f85ffe050",
+     "WM_CTL access read A-former-range via=generation addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:61",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=generation addr=0x3f85dfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:64",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:65",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+     "WM_CTL ref life addr=0x3f85dfe050 base=0x3f85dfe050 end=0x3f85ffe050",
+     "WM_CTL access read A-former-range via=life addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-via-life bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=life addr=0x3f85dfe0a0 len=64 probe=wm_ctl_store_insn site=case.c:76",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3f85dfe0a0 len=64 probe=wm_ctl_load_insn site=case.c:77",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written-via-life bytes=0..63 mismatches=0 ok",
+     "WM_DEFECT case=0 mode=0 completed"
+    ]
+   },
+   "01-successor-reuse": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21a88",
+     "wm_defect_write": "0x21ab4"
+    },
+    "lines": [
+     "WM_CTL arm=protected",
+     "WM_CTL ref A addr=0x3fb5ffe0a0 base=0x3fb5ffe0a0 end=0x3fb5ffe0e0",
+     "WM_CTL ref second addr=0x3fb5ffe0f0 base=0x3fb5ffe0f0 end=0x3fb5ffe130",
+     "WM_CTL ref block addr=0x3fb5ffe050 base=0x3fb5ffe050 end=0x3fb61fe050",
+     "WM_CTL ref life addr=0x3fb5ffe050 base=0x3fb5ffe050 end=0x3fb61fe050",
+     "WM_CTL ref generation-before-reset addr=0x3fb5ffe050 base=0x3fb5ffe050 end=0x3fb61fe050",
+     "WM_CTL A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3fb5ffe0a0",
+     "WM_CTL successor A=0x3fb5ffe0a0 C=0x3fb5ffe0a0 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3fb5ffe0a0 base=0x3fb5ffe0a0 end=0x3fb5ffe0e0",
+     "WM_CTL ref generation-after-reset addr=0x3fb5ffe050 base=0x3fb5ffe050 end=0x3fb61fe050",
+     "WM_CTL access write C via=C addr=0x3fb5ffe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3fb5ffe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_DEFECT case=1 mode=0 completed"
+    ]
+   },
+   "02-successor-stale": {
+    "rc": 139,
+    "fault": {
+     "cause": 25,
+     "pc": "0x3fb3991e40",
+     "address": "0x3fb2dfe0a0",
+     "code_start": "0x3fb3980000",
+     "link_pc": "0x21e40",
+     "function": "wm_probe",
+     "offset": 20,
+     "label": "wm_defect_probe",
+     "probe_line": "capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53"
+    },
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21e40",
+     "wm_defect_write": "0x21e6c"
+    },
+    "lines": [
+     "WM_CTL arm=protected",
+     "WM_CTL ref A addr=0x3fb2dfe0a0 base=0x3fb2dfe0a0 end=0x3fb2dfe0e0",
+     "WM_CTL ref second addr=0x3fb2dfe0f0 base=0x3fb2dfe0f0 end=0x3fb2dfe130",
+     "WM_CTL ref block addr=0x3fb2dfe050 base=0x3fb2dfe050 end=0x3fb2ffe050",
+     "WM_CTL ref life addr=0x3fb2dfe050 base=0x3fb2dfe050 end=0x3fb2ffe050",
+     "WM_CTL ref generation-before-reset addr=0x3fb2dfe050 base=0x3fb2dfe050 end=0x3fb2ffe050",
+     "WM_CTL A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3fb2dfe0a0",
+     "WM_CTL successor A=0x3fb2dfe0a0 C=0x3fb2dfe0a0 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3fb2dfe0a0 base=0x3fb2dfe0a0 end=0x3fb2dfe0e0",
+     "WM_CTL ref generation-after-reset addr=0x3fb2dfe050 base=0x3fb2dfe050 end=0x3fb2ffe050",
+     "WM_CTL access write C via=C addr=0x3fb2dfe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3fb2dfe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL access read stale-A via=A addr=0x3fb2dfe0a0 len=64 probe=wm_defect_probe site=case.c:23",
+     "WM_DEFECT case=2 ready",
+     "capstone-exec: domain fault cause=25 pc=0x3fb3991e40 address=0x3fb2dfe0a0 entry=0x3fb3980890 code=0x3fb3980000-0x3fb3a00000 last=0x42 preparing=0x42 sha256=5fb4e364f37fb90ef788c1d0b859dff122f9c8ea457800e1b3c5c98b715595f1 image=/mnt/vm/02-successor-stale.dom",
+     "Segmentation fault"
+    ]
+   }
+  },
+  "protected-3": {
+   "00-parent-block": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x2294c",
+     "wm_defect_write": "0x22978"
+    },
+    "lines": [
+     "WM_CTL arm=protected",
+     "WM_CTL ref A addr=0x3fac0fe0a0 base=0x3fac0fe0a0 end=0x3fac0fe0e0",
+     "WM_CTL ref second addr=0x3fac0fe0f0 base=0x3fac0fe0f0 end=0x3fac0fe130",
+     "WM_CTL ref block addr=0x3fac0fe050 base=0x3fac0fe050 end=0x3fac2fe050",
+     "WM_CTL ref life addr=0x3fac0fe050 base=0x3fac0fe050 end=0x3fac2fe050",
+     "WM_CTL ref generation-before-reset addr=0x3fac0fe050 base=0x3fac0fe050 end=0x3fac2fe050",
+     "WM_CTL A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL access read block-pos via=block addr=0x3fac0fe060 len=4 probe=wm_ctl_load_insn site=case.c:40",
+     "WM_CTL done read block-pos",
+     "WM_CTL block-pos pos=64 ok: the reset rewound pos to the header",
+     "WM_CTL access read A-chunk-header via=block addr=0x3fac0fe090 len=4 probe=wm_ctl_load_insn site=case.c:46",
+     "WM_CTL done read A-chunk-header",
+     "WM_CTL A-chunk-header len=64 ok: the reset left A's chunk header",
+     "WM_CTL access read A-former-range via=block addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:49",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=block addr=0x3fac0fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:52",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:53",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL ref generation-after-reset addr=0x3fac0fe050 base=0x3fac0fe050 end=0x3fac2fe050",
+     "WM_CTL access read A-former-range via=generation addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:61",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-via-generation bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=generation addr=0x3fac0fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:64",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:65",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written-via-generation bytes=0..63 mismatches=0 ok",
+     "WM_CTL ref life addr=0x3fac0fe050 base=0x3fac0fe050 end=0x3fac2fe050",
+     "WM_CTL access read A-former-range via=life addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:73",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-via-life bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=life addr=0x3fac0fe0a0 len=64 probe=wm_ctl_store_insn site=case.c:76",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3fac0fe0a0 len=64 probe=wm_ctl_load_insn site=case.c:77",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written-via-life bytes=0..63 mismatches=0 ok",
+     "WM_DEFECT case=0 mode=0 completed"
+    ]
+   },
+   "01-successor-reuse": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21a88",
+     "wm_defect_write": "0x21ab4"
+    },
+    "lines": [
+     "WM_CTL arm=protected",
+     "WM_CTL ref A addr=0x3f913fe0a0 base=0x3f913fe0a0 end=0x3f913fe0e0",
+     "WM_CTL ref second addr=0x3f913fe0f0 base=0x3f913fe0f0 end=0x3f913fe130",
+     "WM_CTL ref block addr=0x3f913fe050 base=0x3f913fe050 end=0x3f915fe050",
+     "WM_CTL ref life addr=0x3f913fe050 base=0x3f913fe050 end=0x3f915fe050",
+     "WM_CTL ref generation-before-reset addr=0x3f913fe050 base=0x3f913fe050 end=0x3f915fe050",
+     "WM_CTL A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3f913fe0a0",
+     "WM_CTL successor A=0x3f913fe0a0 C=0x3f913fe0a0 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3f913fe0a0 base=0x3f913fe0a0 end=0x3f913fe0e0",
+     "WM_CTL ref generation-after-reset addr=0x3f913fe050 base=0x3f913fe050 end=0x3f915fe050",
+     "WM_CTL access write C via=C addr=0x3f913fe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3f913fe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_DEFECT case=1 mode=0 completed"
+    ]
+   },
+   "02-successor-stale": {
+    "rc": 139,
+    "fault": {
+     "cause": 25,
+     "pc": "0x3f82691e40",
+     "address": "0x3f81afe0a0",
+     "code_start": "0x3f82680000",
+     "link_pc": "0x21e40",
+     "function": "wm_probe",
+     "offset": 20,
+     "label": "wm_defect_probe",
+     "probe_line": "capstone/bug-corpora/wireshark/wmem-repros/shared/driver.c:53"
+    },
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21e40",
+     "wm_defect_write": "0x21e6c"
+    },
+    "lines": [
+     "WM_CTL arm=protected",
+     "WM_CTL ref A addr=0x3f81afe0a0 base=0x3f81afe0a0 end=0x3f81afe0e0",
+     "WM_CTL ref second addr=0x3f81afe0f0 base=0x3f81afe0f0 end=0x3f81afe130",
+     "WM_CTL ref block addr=0x3f81afe050 base=0x3f81afe050 end=0x3f81cfe050",
+     "WM_CTL ref life addr=0x3f81afe050 base=0x3f81afe050 end=0x3f81cfe050",
+     "WM_CTL ref generation-before-reset addr=0x3f81afe050 base=0x3f81afe050 end=0x3f81cfe050",
+     "WM_CTL A_offset_in_block=0x50 block_header=64 chunk_header=16 pos_before_reset=224",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3f81afe0a0",
+     "WM_CTL successor A=0x3f81afe0a0 C=0x3f81afe0a0 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3f81afe0a0 base=0x3f81afe0a0 end=0x3f81afe0e0",
+     "WM_CTL ref generation-after-reset addr=0x3f81afe050 base=0x3f81afe050 end=0x3f81cfe050",
+     "WM_CTL access write C via=C addr=0x3f81afe0a0 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3f81afe0a0 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL access read stale-A via=A addr=0x3f81afe0a0 len=64 probe=wm_defect_probe site=case.c:23",
+     "WM_DEFECT case=2 ready",
+     "capstone-exec: domain fault cause=25 pc=0x3f82691e40 address=0x3f81afe0a0 entry=0x3f82680890 code=0x3f82680000-0x3f82700000 last=0x42 preparing=0x42 sha256=5fb4e364f37fb90ef788c1d0b859dff122f9c8ea457800e1b3c5c98b715595f1 image=/mnt/vm/02-successor-stale.dom",
+     "Segmentation fault"
+    ]
+   }
+  },
+  "release-1": {
+   "00-parent-block": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21d38",
+     "wm_defect_write": "0x21d64"
+    },
+    "lines": [
+     "WM_CTL arm=release",
+     "WM_CTL ref A addr=0x3f958fe080 base=0x3f958fe050 end=0x3f95afe050",
+     "WM_CTL ref second addr=0x3f958fe0d0 base=0x3f958fe050 end=0x3f95afe050",
+     "WM_CTL ref block addr=0x3f958fe050 base=0x3f958fe050 end=0x3f95afe050",
+     "WM_CTL A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL access read block-pos via=block addr=0x3f958fe060 len=4 probe=wm_ctl_load_insn site=case.c:40",
+     "WM_CTL done read block-pos",
+     "WM_CTL block-pos pos=32 ok: the reset rewound pos to the header",
+     "WM_CTL access read A-chunk-header via=block addr=0x3f958fe070 len=4 probe=wm_ctl_load_insn site=case.c:46",
+     "WM_CTL done read A-chunk-header",
+     "WM_CTL A-chunk-header len=64 ok: the reset left A's chunk header",
+     "WM_CTL access read A-former-range via=block addr=0x3f958fe080 len=64 probe=wm_ctl_load_insn site=case.c:49",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=block addr=0x3f958fe080 len=64 probe=wm_ctl_store_insn site=case.c:52",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3f958fe080 len=64 probe=wm_ctl_load_insn site=case.c:53",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL generation absent: the release build has no patch 0001",
+     "WM_DEFECT case=0 mode=0 completed"
+    ]
+   },
+   "01-successor-reuse": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x219d0",
+     "wm_defect_write": "0x219fc"
+    },
+    "lines": [
+     "WM_CTL arm=release",
+     "WM_CTL ref A addr=0x3fbb3fe080 base=0x3fbb3fe050 end=0x3fbb5fe050",
+     "WM_CTL ref second addr=0x3fbb3fe0d0 base=0x3fbb3fe050 end=0x3fbb5fe050",
+     "WM_CTL ref block addr=0x3fbb3fe050 base=0x3fbb3fe050 end=0x3fbb5fe050",
+     "WM_CTL A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3fbb3fe080",
+     "WM_CTL successor A=0x3fbb3fe080 C=0x3fbb3fe080 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3fbb3fe080 base=0x3fbb3fe050 end=0x3fbb5fe050",
+     "WM_CTL access write C via=C addr=0x3fbb3fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3fbb3fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_DEFECT case=1 mode=0 completed"
+    ]
+   },
+   "02-successor-stale": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21d94",
+     "wm_defect_write": "0x21dc0"
+    },
+    "lines": [
+     "WM_CTL arm=release",
+     "WM_CTL ref A addr=0x3f880fe080 base=0x3f880fe050 end=0x3f882fe050",
+     "WM_CTL ref second addr=0x3f880fe0d0 base=0x3f880fe050 end=0x3f882fe050",
+     "WM_CTL ref block addr=0x3f880fe050 base=0x3f880fe050 end=0x3f882fe050",
+     "WM_CTL A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3f880fe080",
+     "WM_CTL successor A=0x3f880fe080 C=0x3f880fe080 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3f880fe080 base=0x3f880fe050 end=0x3f882fe050",
+     "WM_CTL access write C via=C addr=0x3f880fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3f880fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL access read stale-A via=A addr=0x3f880fe080 len=64 probe=wm_defect_probe site=case.c:23",
+     "WM_DEFECT case=2 ready",
+     "WM_CTL done read stale-A",
+     "WM_CTL check stale-A-reads-C bytes=0..63 mismatches=0 ok",
+     "WM_CTL check stale-A-reads-A bytes=0..63 mismatches=64",
+     "WM_CTL check stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0",
+     "WM_CTL stale-A first_byte=0xc0 C_first_byte=0xc0",
+     "WM_DEFECT case=2 mode=0 completed"
+    ]
+   }
+  },
+  "release-2": {
+   "00-parent-block": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21d38",
+     "wm_defect_write": "0x21d64"
+    },
+    "lines": [
+     "WM_CTL arm=release",
+     "WM_CTL ref A addr=0x3f9f2fe080 base=0x3f9f2fe050 end=0x3f9f4fe050",
+     "WM_CTL ref second addr=0x3f9f2fe0d0 base=0x3f9f2fe050 end=0x3f9f4fe050",
+     "WM_CTL ref block addr=0x3f9f2fe050 base=0x3f9f2fe050 end=0x3f9f4fe050",
+     "WM_CTL A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL access read block-pos via=block addr=0x3f9f2fe060 len=4 probe=wm_ctl_load_insn site=case.c:40",
+     "WM_CTL done read block-pos",
+     "WM_CTL block-pos pos=32 ok: the reset rewound pos to the header",
+     "WM_CTL access read A-chunk-header via=block addr=0x3f9f2fe070 len=4 probe=wm_ctl_load_insn site=case.c:46",
+     "WM_CTL done read A-chunk-header",
+     "WM_CTL A-chunk-header len=64 ok: the reset left A's chunk header",
+     "WM_CTL access read A-former-range via=block addr=0x3f9f2fe080 len=64 probe=wm_ctl_load_insn site=case.c:49",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=block addr=0x3f9f2fe080 len=64 probe=wm_ctl_store_insn site=case.c:52",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3f9f2fe080 len=64 probe=wm_ctl_load_insn site=case.c:53",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL generation absent: the release build has no patch 0001",
+     "WM_DEFECT case=0 mode=0 completed"
+    ]
+   },
+   "01-successor-reuse": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x219d0",
+     "wm_defect_write": "0x219fc"
+    },
+    "lines": [
+     "WM_CTL arm=release",
+     "WM_CTL ref A addr=0x3f9e1fe080 base=0x3f9e1fe050 end=0x3f9e3fe050",
+     "WM_CTL ref second addr=0x3f9e1fe0d0 base=0x3f9e1fe050 end=0x3f9e3fe050",
+     "WM_CTL ref block addr=0x3f9e1fe050 base=0x3f9e1fe050 end=0x3f9e3fe050",
+     "WM_CTL A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3f9e1fe080",
+     "WM_CTL successor A=0x3f9e1fe080 C=0x3f9e1fe080 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3f9e1fe080 base=0x3f9e1fe050 end=0x3f9e3fe050",
+     "WM_CTL access write C via=C addr=0x3f9e1fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3f9e1fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_DEFECT case=1 mode=0 completed"
+    ]
+   },
+   "02-successor-stale": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21d94",
+     "wm_defect_write": "0x21dc0"
+    },
+    "lines": [
+     "WM_CTL arm=release",
+     "WM_CTL ref A addr=0x3f7f2fe080 base=0x3f7f2fe050 end=0x3f7f4fe050",
+     "WM_CTL ref second addr=0x3f7f2fe0d0 base=0x3f7f2fe050 end=0x3f7f4fe050",
+     "WM_CTL ref block addr=0x3f7f2fe050 base=0x3f7f2fe050 end=0x3f7f4fe050",
+     "WM_CTL A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3f7f2fe080",
+     "WM_CTL successor A=0x3f7f2fe080 C=0x3f7f2fe080 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3f7f2fe080 base=0x3f7f2fe050 end=0x3f7f4fe050",
+     "WM_CTL access write C via=C addr=0x3f7f2fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3f7f2fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL access read stale-A via=A addr=0x3f7f2fe080 len=64 probe=wm_defect_probe site=case.c:23",
+     "WM_DEFECT case=2 ready",
+     "WM_CTL done read stale-A",
+     "WM_CTL check stale-A-reads-C bytes=0..63 mismatches=0 ok",
+     "WM_CTL check stale-A-reads-A bytes=0..63 mismatches=64",
+     "WM_CTL check stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0",
+     "WM_CTL stale-A first_byte=0xc0 C_first_byte=0xc0",
+     "WM_DEFECT case=2 mode=0 completed"
+    ]
+   }
+  },
+  "release-3": {
+   "00-parent-block": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21d38",
+     "wm_defect_write": "0x21d64"
+    },
+    "lines": [
+     "WM_CTL arm=release",
+     "WM_CTL ref A addr=0x3fa6cfe080 base=0x3fa6cfe050 end=0x3fa6efe050",
+     "WM_CTL ref second addr=0x3fa6cfe0d0 base=0x3fa6cfe050 end=0x3fa6efe050",
+     "WM_CTL ref block addr=0x3fa6cfe050 base=0x3fa6cfe050 end=0x3fa6efe050",
+     "WM_CTL A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL access read block-pos via=block addr=0x3fa6cfe060 len=4 probe=wm_ctl_load_insn site=case.c:40",
+     "WM_CTL done read block-pos",
+     "WM_CTL block-pos pos=32 ok: the reset rewound pos to the header",
+     "WM_CTL access read A-chunk-header via=block addr=0x3fa6cfe070 len=4 probe=wm_ctl_load_insn site=case.c:46",
+     "WM_CTL done read A-chunk-header",
+     "WM_CTL A-chunk-header len=64 ok: the reset left A's chunk header",
+     "WM_CTL access read A-former-range via=block addr=0x3fa6cfe080 len=64 probe=wm_ctl_load_insn site=case.c:49",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-after-reset bytes=0..63 mismatches=0 ok",
+     "WM_CTL access write A-former-range via=block addr=0x3fa6cfe080 len=64 probe=wm_ctl_store_insn site=case.c:52",
+     "WM_CTL done write A-former-range",
+     "WM_CTL access read A-former-range via=block addr=0x3fa6cfe080 len=64 probe=wm_ctl_load_insn site=case.c:53",
+     "WM_CTL done read A-former-range",
+     "WM_CTL check A-former-range-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL generation absent: the release build has no patch 0001",
+     "WM_DEFECT case=0 mode=0 completed"
+    ]
+   },
+   "01-successor-reuse": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x219d0",
+     "wm_defect_write": "0x219fc"
+    },
+    "lines": [
+     "WM_CTL arm=release",
+     "WM_CTL ref A addr=0x3f8e4fe080 base=0x3f8e4fe050 end=0x3f8e6fe050",
+     "WM_CTL ref second addr=0x3f8e4fe0d0 base=0x3f8e4fe050 end=0x3f8e6fe050",
+     "WM_CTL ref block addr=0x3f8e4fe050 base=0x3f8e4fe050 end=0x3f8e6fe050",
+     "WM_CTL A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3f8e4fe080",
+     "WM_CTL successor A=0x3f8e4fe080 C=0x3f8e4fe080 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3f8e4fe080 base=0x3f8e4fe050 end=0x3f8e6fe050",
+     "WM_CTL access write C via=C addr=0x3f8e4fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3f8e4fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_DEFECT case=1 mode=0 completed"
+    ]
+   },
+   "02-successor-stale": {
+    "rc": 0,
+    "fault": null,
+    "labels": {
+     "wm_ctl_load_insn": "0x20df0",
+     "wm_ctl_store_insn": "0x20e24",
+     "wm_defect_probe": "0x21d94",
+     "wm_defect_write": "0x21dc0"
+    },
+    "lines": [
+     "WM_CTL arm=release",
+     "WM_CTL ref A addr=0x3fab9fe080 base=0x3fab9fe050 end=0x3fabbfe050",
+     "WM_CTL ref second addr=0x3fab9fe0d0 base=0x3fab9fe050 end=0x3fabbfe050",
+     "WM_CTL ref block addr=0x3fab9fe050 base=0x3fab9fe050 end=0x3fabbfe050",
+     "WM_CTL A_offset_in_block=0x30 block_header=32 chunk_header=16 pos_before_reset=192",
+     "WM_CTL released A via wmem_free_all",
+     "WM_CTL alloc try=1 addr=0x3fab9fe080",
+     "WM_CTL successor A=0x3fab9fe080 C=0x3fab9fe080 tries=1 equal=yes",
+     "WM_CTL ref C addr=0x3fab9fe080 base=0x3fab9fe050 end=0x3fabbfe050",
+     "WM_CTL access write C via=C addr=0x3fab9fe080 len=64 probe=wm_ctl_store_insn site=blockfast.h:149",
+     "WM_CTL done write C",
+     "WM_CTL access read C via=C addr=0x3fab9fe080 len=64 probe=wm_ctl_load_insn site=blockfast.h:150",
+     "WM_CTL done read C",
+     "WM_CTL check C-written bytes=0..63 mismatches=0 ok",
+     "WM_CTL access read stale-A via=A addr=0x3fab9fe080 len=64 probe=wm_defect_probe site=case.c:23",
+     "WM_DEFECT case=2 ready",
+     "WM_CTL done read stale-A",
+     "WM_CTL check stale-A-reads-C bytes=0..63 mismatches=0 ok",
+     "WM_CTL check stale-A-reads-A bytes=0..63 mismatches=64",
+     "WM_CTL check stale-A-reads-A first_mismatch=0 got=0xc0 want=0xa0",
+     "WM_CTL stale-A first_byte=0xc0 C_first_byte=0xc0",
+     "WM_DEFECT case=2 mode=0 completed"
+    ]
+   }
+  }
+ }
+}

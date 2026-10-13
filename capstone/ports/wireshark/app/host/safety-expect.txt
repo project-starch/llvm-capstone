@@ -3,6 +3,11 @@
 # boot. A cell whose outcome differs is a FINDING, never an edit to this file: if a prediction is
 # wrong, the result says so and this file keeps the prediction that was made.
 #
+# Removed with their arms on 2026-10-11, not edited: the `sublet` rows (TSAPP_HEAP=sublet, the
+# physical Sublet heap, runtime/sublet_heap.c) and the `chunks` rows (wmem's chunk port over it).
+# tshark now takes its malloc from the platform's own allocator; the runs of both arms stay in
+# results/ and in git history.
+#
 # The format is the FFmpeg port's (ports/ffmpeg/app/host/safety-expect.txt), judged by
 # host/safety-verdict.py:
 #   RETURN <hex>   the image exited with exactly this mark (fixture * 0x100000 + value)
@@ -62,70 +67,11 @@ shrink  10  RETURN a0015b
 shrink  11  RETURN b0015b
 shrink  12  RETURN c000ee
 
-# THE SUBLET ARM (host/build-domain.sh TSAPP_HEAP=sublet), registered 2026-09-25 after the level0
-# and shrink runs, BEFORE any sublet image had booted, and pushed before its first run.
-# - The heap is runtime/sublet_heap.c over a 16 MiB pool the host transfers LINEAR: each g_malloc
-#   pointer is narrowed to the bytes asked for, free scrubs the object and revokes every alias,
-#   and free and realloc first read one byte through the pointer they are given.
-# - On capstone-qemu a revoked capability reloads untagged (ISSUES Q-11), and one still in a
-#   register faults as revoked. So a use after free (4), a use after reuse (5) and a stale free
-#   (6, which faults inside free, on that probe read) are each predicted to fault as temporal, at
-#   the address the fixture printed.
-# - wmem's blocks are 1 MiB here (patch 0007), and a scope reset never calls free: a BLOCK_FAST
-#   reset keeps and rewinds its first block, and a BLOCK reset re-initialises its blocks. So the
-#   pointers in 10 and 11 are never revoked, and those two are predicted to RETURN as on the other
-#   arms. That is the gap the wmem hooks would close. 12 stays inside one block: RETURN.
-# - 9 is the compiler's merged globals, the same on every arm.
-sublet   1  RETURN 100001
-sublet   1  LEN    64
-sublet   2  FAULT  oob
-sublet   3  FAULT  oob
-sublet   4  FAULT  temporal
-sublet   5  FAULT  temporal
-sublet   6  FAULT  temporal
-sublet   7  FAULT  oob
-sublet   8  FAULT  oob
-sublet   9  RETURN 90005b
-sublet  10  RETURN a0015b
-sublet  11  RETURN b0015b
-sublet  12  RETURN c000ee
-
-# FIXTURE 13 on the sublet arm, the chunks arm's matched control (wmem step 2, registered with
-# ports/wireshark/wmem/PREREGISTRATION-tshark-step2.md before the first chunks boot). The freed
-# chunk stays readable: upstream's free changes nothing the old pointer's capability covers. Its
-# first bytes may now hold a free-list link, so the value is not predicted.
-sublet  13  RETURN *
-
-# THE CHUNKS ARM (host/build-domain.sh TSAPP_HEAP=chunks): the sublet arm with wmem's BLOCK
-# allocator under the chunk port (ports/wireshark/wmem, patches 0001+0002). Registered before any
-# chunks image had booted, and pushed before its first run.
-# - 1-9 do not touch wmem, and the heap is the sublet arm's: the same verdicts.
-# - 10 is BLOCK_FAST, which the chunk port leaves unchanged: RETURN, as on the sublet arm.
-# - 11: a BLOCK reset is one revoke of the block's senior handle, so the pointer kept across it
-#   faults, temporal. 12: every chunk is handed out through an alias bounded to its request, so a
-#   write past the first allocation into the second faults, oob, at the printed target. 13: the
-#   chunk free is a revoke, so the read faults, temporal.
-chunks   1  RETURN 100001
-chunks   1  LEN    64
-chunks   2  FAULT  oob
-chunks   3  FAULT  oob
-chunks   4  FAULT  temporal
-chunks   5  FAULT  temporal
-chunks   6  FAULT  temporal
-chunks   7  FAULT  oob
-chunks   8  FAULT  oob
-chunks   9  RETURN 90005b
-chunks  10  RETURN a0015b
-chunks  11  FAULT  temporal
-chunks  12  FAULT  oob
-chunks  13  FAULT  temporal
-
 # ---------------------------------------------------------------------------------------------
 # Fixtures 14 and 15, registered 2026-10-03 BEFORE either was built or run on any arm.
 # The two upstream Wireshark defects confirmed LIVE at our v4.6.8 pin by the cherry-pick probe
 # (git log v4.6.8 --grep='cherry picked from commit <sha>', empty for both, non-empty for a
-# control fix that WAS backported). Both are HEAP class, so `chunks` is predicted to behave
-# exactly as `sublet`: its difference is wmem's block allocator, which neither fixture uses.
+# control fix that WAS backported). Both are HEAP class: neither uses wmem's block allocator.
 #
 # Values are DERIVED, not copied from another row: fill() writes v0 + i, the new owner's v0 is
 # 0x5b, so the byte read is 0x5b + <object offset>. Fixture 14 touches through an INTERIOR key at
@@ -138,9 +84,5 @@ chunks  13  FAULT  temporal
 # and not per ender, so a DISAGREEMENT between 14 and 15 would itself be the result.
 level0  14  RETURN e00163
 shrink  14  RETURN e00163
-sublet  14  FAULT  temporal
-chunks  14  FAULT  temporal
 level0  15  RETURN f0015b
 shrink  15  RETURN f0015b
-sublet  15  FAULT  temporal
-chunks  15  FAULT  temporal

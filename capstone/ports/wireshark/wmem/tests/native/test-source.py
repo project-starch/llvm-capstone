@@ -11,6 +11,7 @@ prepared = Path(sys.argv[2])
 port = Path(__file__).resolve().parents[2]
 patches = sorted((port / "patches").glob("*.patch"))
 units = (
+    "wmem_allocator.h",
     "wmem_core.c",
     "wmem_user_cb.c",
     "wmem_allocator_simple.c",
