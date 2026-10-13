@@ -5988,3 +5988,17 @@ boot, and each board image is named by hash.
 - **R-51 is fixed on silicon in the same bitstream:** a domain's PC capability is enforced after a RETURN yield (the
   matched pair reads 0 / 0x1C / 0x1C, against 0 / 0xBAD / 0). The memcached B-series and its oracle hash are unchanged
   on it, and so is the supervision overhead (+0.666 %).
+
+## The bounds encoder on silicon: R-54 observed, and R-11 on the heap (B4, caplifive_r51r52_0568f93a9, 2026-10-13)
+- **R-54:** the full bounds scheme does not renormalise. A capability whose span, rounded to its granule, reaches the
+  next power of two decodes about half short once its cursor leaves the base.
+  - r54-bounds read 39, as pre-registered (lane b0-silicon-runtime 3b2c603fe8b0).
+  - 65535 B decoded 32768, and 8191 B decoded 4096, after a cursor move of 8.
+  - The controls 65536 B and 65471 B covered.
+  - A real malloc(65535) decoded [-48, +32784).
+- **R-11 on the heap:** that malloc(65535) read 3 bytes short AT BASE, because it straddles a 4 MiB boundary. The
+  cursorless branch truncates its top, and the glue-only workaround does not reach the heap.
+- **Scope:**
+  - These are bounds READ BACK with lcc. No access was made through a short capability, so no fault is claimed.
+  - QEMU reads every value exact: it keeps fat bounds.
+  - The fixes are pending: the renormalisation for R-54, and the format move for R-11.
