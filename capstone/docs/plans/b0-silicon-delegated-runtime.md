@@ -1951,6 +1951,49 @@ memcached ba7e6921 stay OK; none of their globals, stacks, dom_data or arenas re
   64 B for b1-thread, 32 B for b0-hello and 128 B for the SQLite cell. One sub-region for all globals gives 32 KiB
   for memcached, which has a 16 MiB global.
 
+## B4 pre-registered (2026-10-13, before the boot): R-54 on silicon, 0568f93a9
+R-54 is predicted from source and two independent ports. This boot asks the resident bitstream directly, and becomes
+the "before" arm for the bitstream that carries the renormalisation.
+
+**Probe:** `runtime/silicon/r54-bounds.c`, image r54-bounds.dom sha256 0b0ff5d555188612. It was built by
+build-b0-hello.sh with B0_ARENA = 2 MiB and B0_DATA = 3 MiB; the R-11 gate and its self-test passed.
+- Each arm narrows a capability to [s, s + n) with `shrink` (cursor on the base: the cursorless write-back), reads its
+  bounds with lcc, moves the cursor by 8 with cincoffsetimm (the full-branch write-back), and reads them again.
+- In the artifact: `shrink a0` -> `lcc a3/a1, a0` -> `cincoffsetimm a0, a0, 0x8` -> `lcc a2/a0, a0`.
+- Nothing is dereferenced through a capability under test, so every arm returns.
+- s is an offset from a 4 KiB-aligned anchor in a 1 MiB heap block, so the readings, as offsets from s, are
+  base-independent.
+- H is the allocator's own `malloc(65535)`, walked the same way, with R-54's predicate printed for its own base.
+
+**QEMU control (fw-b1-a11d424, GP_FABRICATE=0, MOVC_NULL_SCALAR=1):** b0-hello rc 0; r54-bounds rc 0, every reading
+exact: QEMU keeps fat bounds. H landed at s % 4096 = 2544, where the predicate says short.
+
+**Boot:** caplifive_r51r52_0568f93a9 (resident), firmware built from the B4 private image like B3j's (wrapper 882892f,
+monitor 1f9aedd, `-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET`).
+Rungs: b0-stats, b0-hello (control), r54-bounds, b0-stats2. PREFLIGHT=0 (private image).
+
+**Predicted readings, from check-repr.py's port (offsets from s):**
+| arm | n | at base | moved |
+|---|---|---|---|
+| A | 65,535 at anchor + 0 | [+0, +65535) | **[+0, +32768) SHORT** |
+| B | 65,520 at anchor + 16 | [+0, +65520) | **[-16, +32752) SHORT** |
+| C | 8,191 at anchor + 0 | [+0, +8191) | **[+0, +4096) SHORT** |
+| D | 65,536 (control) | [+0, +65536) | [+0, +65536) covers |
+| G | 65,471 (control) | [+0, +65471) | [+0, +65472) covers: rounded up 1 B, no wrap |
+| H | malloc(65535) | [+0, +65535) | SHORT iff its printed predicate says short; at s % 4096 = 2544 (QEMU's place), [-48, +32784) |
+- rc (oracle) = **39**: A, B, C and H. 7 if H lands where its predicate says covers.
+- b0-hello retval 0; b0-stats and b0-stats2 retval 0.
+
+**Refutations:**
+- A, B or C covering once moved: R-54 does not hold on silicon as stated, or the core renormalises somewhere the
+  source reading missed.
+- D or G short, or G's end not +65472: the port's full branch is wrong.
+- Any at-base reading inexact (rc bit 64): the shrink write-back is not the cursorless branch the model assumes.
+- H disagreeing with its own printed predicate.
+
+**On the renormalising bitstream** (the RTL lane's fix, predicted only once check-repr ports it from the commit), every
+arm should read covering, and rc 0.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
