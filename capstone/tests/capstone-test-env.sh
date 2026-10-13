@@ -120,3 +120,28 @@ if [ -z "${CAPSTONE_TOOLCHAIN_CHECKED:-}" ]; then
 fi
 
 
+
+# A cache key that hashes "every source under these paths" must never hash NOTHING.
+# Twice now a listing has failed and left a key with no runtime source in it, so a
+# change there silently reused the old runtime: `rg` absent on a host (2026-10-01,
+# wireshark/app/deps/env.sh, 163 sources dropped) and `git ls-files` in a tree export
+# with no .git (2026-10-13, memcached on p12: 269 files here, 0 there). Both printed
+# to stderr inside a pipeline and both were ignored, because an empty listing reads
+# exactly like "nothing to hash". Switching tools did not fix that and cannot: the bug
+# is that the failure is not detected. This prints one repo-relative path per line and
+# FAILS when it would print none.
+capstone_source_listing() {
+  [ $# -gt 0 ] || { echo "capstone_source_listing: no paths given" >&2; return 2; }
+  _csl_out=$(cd "$CAPSTONE_REPO_ROOT" && git ls-files --cached --others --exclude-standard "$@" 2>/dev/null)
+  if [ -z "$_csl_out" ]; then
+    # Not a git repository, or git is unavailable: a tree export is a supported input.
+    _csl_out=$(cd "$CAPSTONE_REPO_ROOT" && find "$@" -type f 2>/dev/null)
+  fi
+  if [ -z "$_csl_out" ]; then
+    echo "capstone_source_listing: no files under '$*' in $CAPSTONE_REPO_ROOT" >&2
+    unset _csl_out
+    return 1
+  fi
+  printf '%s\n' "$_csl_out" | sort
+  unset _csl_out
+}
