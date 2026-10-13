@@ -2062,6 +2062,21 @@ decodes). Against the unfixed QEMU it differs on exactly the 1,089 wrapping trip
 - Nothing faults from that, but per-global separation on silicon is gone until the glue carves a globals sub-region.
 - Heap objects of 4 KiB and up get outward-rounded bounds at base.
 
+**The monitor under both options** (the RTL lane's question, 2026-10-13). check-repr now replays the monitor's own
+splits too: code, seal, dom_data, the descriptor area, gp, and code at its entry.
+- **Renormalisation needs no monitor change.** An exact region never renormalises: its rounded span is its length,
+  which is below 2^(E+13). dom_data, seal and the descriptor area are always exact, because their ends sit on
+  repr_gran and their own granule is no larger. All 11 images read every monitor capability exact, under every
+  encoder.
+- **C-13's rule misses the CODE region under a full-scheme encoding, i.e. (b) and the format move.** repr_gran is sized
+  from the data length. When code dominates, split_size's own granule is larger, and the domain's code capability
+  rounds its top past split_size into the seal region.
+  - Synthetic managed layouts (700-1000 KiB of code, 40 KiB of data, 1 MiB block): 68 of 74 sizes; none under
+    cursorless. This is now a --self-test control.
+  - None of the 11 real images is code-heavy enough.
+  - Fix, if (b) or the format move is taken: size the granule from max(split_size's own granule, repr_gran) in
+    create_domain (the FPGA monitor line, this lane's), with the firmware for that bitstream.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,

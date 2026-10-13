@@ -60,7 +60,9 @@ path instead, replayed end to end with a literal port of compress/decompress_bou
     base in the CMA window is tried, not one;
   * the monitor's managed create_domain: repr_gran, split_size, data_off, data_top
     aligned down to repr_gran (M-14), the dom_data split, and its cursor parks at
-    data_top - 16 and - 32 (each a lossy re-encode);
+    data_top - 16 and - 32 (each a lossy re-encode); and (monitor_splits, 2026-10-13) every
+    capability the monitor itself splits off: code, seal, dom_data, the descriptor area, gp
+    and the code capability at its entry, each from its parent's DECODED bounds;
   * the glue: CAPSTONE_GLUE_CONTEXTS' move to END - 32 and back and the arena split at
     END - A (A from __capstone_context_arena_bytes), then the table and every global
     carved downward, each split's upper half taking the lower half's DECODED top, with
@@ -336,6 +338,49 @@ def process_layout(path, arena_override=None):
                 count=count, recs=recs, arena=arena or 0)
 
 
+def monitor_splits(lay, base, tot, code_size, split_size, data_off, data_top, out):
+    """The monitor's own create_domain splits (sbi_capstone.c, the FPGA line wt-mon-supcall 1f9aedd): the block, the
+    seal split at base + split_size, the data split at ds, the managed descriptor split at data_top, the gp split at
+    base + gpoff, and the code capability's cursor moved to its entry. Each split refuses a point outside its parent's
+    DECODED bounds (TRAP); a capability that does not cover its region is SHORT ("monitor ..." in out["moved"]); one that
+    covers more is OVERLAP. C-13 sizes repr_gran from the DATA length, so under a full-scheme encoding a code region
+    whose own granule is larger rounds its top outward past split_size (2026-10-13; exact under cursorless)."""
+    def split(name, parent, mid):
+        if not parent[0] <= mid < parent[1]:
+            out["trap"].append(("monitor " + name, mid - parent[0], parent[0], parent[1]))
+            return None, None
+        return writeback(parent[0], mid, parent[0]), writeback(mid, parent[1], mid)
+
+    def judge(name, got, want):
+        if got[0] > want[0] or got[1] < want[1]:
+            out["moved"].append(("monitor " + name, want[1] - want[0], got[0], got[1]))
+        elif got != want:
+            out["overlap"].append(("monitor " + name, (want[0] - got[0]) + (got[1] - want[1]), got[0], got[1]))
+
+    ds = base + split_size + data_off
+    code, rest = split("seal split", writeback(base, base + tot, base), base + split_size)
+    if rest is None:
+        return
+    judge("code [base, split_size)", code, (base, base + split_size))
+    seal, data = split("data split", rest, ds)
+    if data is None:
+        return
+    judge("seal", seal, (base + split_size, ds))
+    if lay["managed"]:
+        data, _desc = split("descriptor split", data, data_top)
+        if data is None:
+            return
+    judge("dom_data", data, (ds, data_top))
+    gpoff = lay["gpoff"]
+    if gpoff and code_size > gpoff:
+        c, gp = split("gp split", code, base + gpoff)
+        if gp is None:
+            return
+        judge("code [base, gpoff)", c, (base, base + gpoff))
+        judge("gp [gpoff, split_size)", gp, (base + gpoff, base + split_size))
+        judge("code at its entry", writeback(c[0], c[1], base + min(0x40, gpoff - 16)), (base, base + gpoff))
+
+
 def replay_process(lay, base, carve_align):
     """One base: the module's block, the monitor's split, the glue's carve. An image without .capstone_domreq takes
     the classic path: the module sizes the block as code_len + max(code_len, 64 KiB) (capstone.c's dom_headroom),
@@ -355,6 +400,7 @@ def replay_process(lay, base, carve_align):
     data_off = (1536 + gran - 1) & ~(gran - 1)
     data_top = ((base + tot - 1024) & ~(gran - 1)) if lay["managed"] else base + tot
     ds = base + split_size + data_off
+    monitor_splits(lay, base, tot, code_size, split_size, data_off, data_top, out)
     s, e = writeback(ds, data_top, ds)                 # the dom_data split (cursorless)
     for cur in ((data_top - 16, data_top - 32, ds) if lay["managed"] else (data_top - 16, ds)):  # parks, then back
         s, e = writeback(s, e, cur)
@@ -587,6 +633,21 @@ def self_test():
         FORMAT = "cursorless"
         if writeback(0x1f0000, 0x200011, 0x1f0000) != (0x1f0000, 0x200010):
             print("self-test FAIL: --renorm changed the cursorless branch"); bad += 1
+        # the monitor's code region: 720,904 B of code, 40 KiB of data (a 1 MiB block) rounds the code capability out
+        # past split_size under the full scheme, and stays exact under cursorless
+        lay = dict(managed=True, code_len=720904, req_data=40 * 1024, req_stack=0, gpoff=0x60000, arena=0, count=0,
+                   recs=[])
+        for fmt, want in (("full", True), ("cursorless", False)):
+            FORMAT = fmt
+            o = dict(trap=[], moved=[], overlap=[])
+            base, tot, code_size = 0xac000000, 1 << 20, (720904 + 15) & ~15
+            hb = (tot - code_size - 1536).bit_length() - 1        # the replay's own geometry formulas
+            gran = 1 << ((hb - 12 if hb > 12 else 0) + 3)
+            monitor_splits(lay, base, tot, code_size, (code_size + gran - 1) & ~(gran - 1),
+                           (1536 + gran - 1) & ~(gran - 1), (base + tot - 1024) & ~(gran - 1), o)
+            got = any(x[0].startswith("monitor code") for x in o["overlap"])
+            if got != want or o["trap"] or o["moved"]:
+                print("self-test FAIL: the monitor code-region control under %s read %s" % (fmt, o)); bad += 1
     finally:
         FORMAT, RENORM = saved, saved_rn
     print("self-test: %s" % ("every control fires" if not bad else "%d control(s) did not fire" % bad))
