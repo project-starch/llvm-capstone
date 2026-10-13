@@ -13,6 +13,22 @@
 #include "vm.h"
 #include <capstone/capability.h>
 
+/* This program tests the runtime's own allocator, so every allocation must
+ * reach it. Applications compile hosted, where clang may remove a malloc/free
+ * pair it can see through and treat the removed allocation as successful: the
+ * recycling loop below then allocated nothing, and the failed-realloc check
+ * compiled to a constant. A call through a volatile function pointer is one the
+ * compiler cannot see through, whatever the SDK's flags. (no_builtin on the
+ * calling functions does not prevent the elision.) */
+static void *(*volatile contract_malloc)(size_t) = malloc;
+static void *(*volatile contract_calloc)(size_t, size_t) = calloc;
+static void *(*volatile contract_realloc)(void *, size_t) = realloc;
+static void (*volatile contract_free)(void *) = free;
+#define malloc(n) contract_malloc(n)
+#define calloc(n, m) contract_calloc(n, m)
+#define realloc(p, n) contract_realloc(p, n)
+#define free(p) contract_free(p)
+
 extern int malloc_trim(size_t);
 static void *volatile stale;
 static jmp_buf jump;
