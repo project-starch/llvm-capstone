@@ -1875,7 +1875,9 @@ from 0568f93a9's acceptance (above).
 - the exact encoding change;
 - which software must change in lockstep (QEMU, the compiler, the monitor, the runtime, the module);
 - whether images built for 0568f93a9 stay valid, since the R-43 and S-16 controls are same-image comparisons;
-- whether check-repr.py's compress/decompress port, the R-11 build gate, still models the hardware.
+- whether check-repr.py's compress/decompress port, the R-11 build gate, still models the hardware. **Answered
+  2026-10-13: yes under `--format full`, which also found R-54; see "check-repr.py under the Sublet capability
+  format" below.**
 The FP rows (B3i, B3j, fphold, now()) do not depend on the capability format.
 - **B3j (b3-fpnow-probe):** shapes A, B, C and D each read **0 of 40,000 wrong**, and the checker control passes. C's
   1 of 20,000 on 0568f93a9 is predicted to go too, if it was R-53's stale restore.
@@ -1890,6 +1892,72 @@ The FP rows (B3i, B3j, fphold, now()) do not depend on the capability format.
   - any B3j shape wrong;
   - any B3i window reading 0, C or ?;
   - a now() value under 2 s when the integer clock reads hundreds.
+
+## check-repr.py under the Sublet capability format (2026-10-13): the gate ported, and the encoder's wrap (R-54)
+This answers the SCOPE CHANGE's fourth question for the R-11 gate. `check-repr.py --format full` models the
+capstone-sublet RTL, read in the RTL lane's working tree on 2026-10-13 before 13:04, i.e. before the R-54 renormalisation
+landed in that tree, and before any commit: `bounds_t` is the 27-bit full
+scheme for every capability, and the cursorless branch is gone. `compress_bounds` and `decompress_bounds` keep the old
+full branch's bodies, so the port is the existing one with the `start == cursor` branch skipped. `--format cursorless`
+stays the default, for 0568f93a9 and earlier.
+
+**The port is checked against two other transcriptions.** `qemu-encoder-diff.py` builds capstone-qemu's
+`cap_compress.c` (origin/isa/sublet-lifetimes) standalone and runs 60,000 random triples through both:
+- 0 word mismatches, 0 decode mismatches;
+- the harness fires: a one-character mutant of the port's top round-up gives 13,697 of 20,000 mismatches;
+- two other mutants were equivalent on its input domain: the R correction with the cursor in bounds, and the iE = 0
+  carry at length 0. Neither is a finding about the port.
+- the C mirrors the RTL's identifiers, so it guards against a typo, not a shared misreading. A claim-auditor wrote a
+  third port straight from the SV, with explicit bit slicing: 0 mismatches on 300,000 cases.
+
+**R-54: the full scheme does not renormalise.** `compress_bounds` rounds the top up with `T[11:3] += 1` and keeps E.
+- When that pushes the span to 2^13 granules, the word needs E+1, and decodes about half the span SHORT.
+- Exactly, over 200,000 random cases with no exception: [s, e) with len >= 4 KiB, E = hb(len) - 12 and g = 2^(E+3)
+  decodes not covering itself iff roundup(e, g) - rounddown(s, g) >= 2^(E+13).
+- Example: [0xadf2a000, 0xadfa9fe0) decodes [0xadf2a000, 0xadf6a000).
+- QEMU's encoder had the same flaw. It showed it only through STC, because its SPLIT and SHRINK keep exact bounds.
+- On 0568f93a9 it applies whenever a cursor leaves the base (the same full branch). On capstone-sublet it also applies
+  at every SPLIT.
+- The RTL lane confirmed it with its own port and is fixing it in the RTL: renormalise to E+1 when the predicate
+  holds. Its tree carries the step from 13:04, not yet committed; capstone-qemu has it in aad781e15a. Sequencing is
+  the lead's.
+- The audit (claim-auditor, 2026-10-13) found nothing after `compress_bounds` that renormalises or refuses. It
+  reproduced the 5 trap bases with its own port, and read 0 of 255 with the renormalised encoder.
+  - Two model corrections, neither changing a verdict: the glue hands the stack over with its cursor AT t1
+    (`scc sp, sp, t1`), not at top - 16; and the runtime's later carves (context.c) are not replayed.
+
+**The replay now also fails on:**
+- SPLIT TRAP: a carve point outside the remainder's decoded bounds; SPLIT raises ILLEGAL_OPERAND_VALUE.
+- SHORT ONCE MOVED: a global's zero-fill walker, the stack handed over at its top, dom_data or the context arena
+  re-encoding short.
+- OVERLAP (full only): a capability reaching outside its own storage. It fails unless `--allow-overlap`.
+
+Classic (non-domreq) images go through the same replay under `--format full`, with the module's
+code_len + max(code_len, 64 KiB) block and the monitor's unmanaged split. `--self-test` runs the model's four positive
+controls; each fails on a deliberately exact model. build-b0-hello.sh runs it, and takes `B0_CAP_FORMAT`.
+
+**On 0568f93a9 (cursorless), nothing changes.** The per-image verdicts equal the committed tool's: k800 OK, the R-43
+images OK, the SQLite cells AT RISK at 14 bases and stale-full r1_slots_pools at 7, all known. b0-hello, b1-thread and
+memcached ba7e6921 stay OK; none of their globals, stacks, dom_data or arenas re-encodes short.
+
+**Predicted for the capstone-sublet encoding WITHOUT the renormalisation (the tree before 13:04):**
+| image | fault | OVERLAP, up to |
+|---|---|---|
+| k800, s06agg (classic) | none | 64 B, 112 B |
+| R-43 live16/128/512, r1_slots_pools (both) | none | 1,008 B; 496 / 2,560 B |
+| cell5, cell6, cell6-r43probe (SQLite) | none: the 14 trap bases of 0568f93a9 go | 4,096 B |
+| b0-hello | none | 384 B |
+| b1-thread | **SPLIT TRAP at 5 of 255 CMA bases** (R-54, the stack remainder wraps) | 2,048 B |
+| memcached ba7e6921 | none | 32,768 B |
+- So the acceptance list's same-image controls are not refuted by the encoding. With the renormalising encoder,
+  b1-thread's trap bases are predicted to go; check-repr will model that from the RTL commit, not from its description.
+- **OVERLAP is a safety change, not a fault.** With the cursorless branch gone, SPLIT rounds the remainder's top up into
+  the global just carved, and the next global inherits it. Every glue-carved global's capability reaches into its
+  upper neighbour, and the stack's top into the lowest global, by up to the remainder's granule. That is the runtime
+  glue's design input.
+- Carving the >= 8 KiB globals separately and the rest inside one sub-region would bound it at 128 B for memcached,
+  64 B for b1-thread, 32 B for b0-hello and 128 B for the SQLite cell. One sub-region for all globals gives 32 KiB
+  for memcached, which has a 16 MiB global.
 
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This

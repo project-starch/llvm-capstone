@@ -72,6 +72,51 @@ top moved), and the stack left above the globals template. WIDEN (a storage
 capability's bounds grow once its cursor moves off the base) is printed as a count
 and does not fail the check.
 
+THE FULL SCHEME DOES NOT RENORMALISE (found 2026-10-13, both formats). compress_bounds
+rounds the top up with `T[11:3] += 1` and keeps E. When that pushes the span to 2**13
+granules, the word needs E+1 and decodes about half the span SHORT. Exactly: a capability
+[s, e) with len >= 4 KiB, E = hb(len) - 12, g = 2**(E+3) decodes NOT covering itself iff
+roundup(e, g) - rounddown(s, g) >= 2**(E+13) (200,000 random cases, no exception). capstone-qemu's
+cap_compress had the same flaw (0 mismatches against this port on 60,000 cases; its C mirrors the
+RTL's identifiers, so that guards against a typo here, not a shared misreading -- a third port
+written from the SV with explicit bit slicing agreed on 300,000). QEMU showed it only through STC:
+its SPLIT and SHRINK keep exact bounds. Fixed in the encoder by taking E+1 when the rounded span
+reaches 2**(E+13): capstone-qemu aad781e15a, and the RTL lane's capstone-sublet tree from
+2026-10-13 13:04. Every format without that fix reaches it once a cursor leaves the base, so the
+replay also fails on:
+  * SPLIT TRAP: a carve point outside the remainder's DECODED bounds, which SPLIT refuses
+    with ILLEGAL_OPERAND_VALUE (capstone_dyn_unit.anvil, func SPLIT). The replay stops there.
+  * SHORT ONCE MOVED: a global (the zero-fill walker), the stack (handed over with its cursor
+    at t1, `scc sp, sp, t1`), dom_data or the context arena re-encoding to bounds that no longer
+    cover it. The runtime's own later carves (context.c's) and heap splits are NOT replayed.
+
+THE CLASSIC SDK PATH (an image without .capstone_domreq) is replayed by the same code under
+--format full: the module sizes the block code_len + max(code_len, 64 KiB) (capstone.c's
+dom_headroom), and the monitor keeps data_top = tot_size and parks only gp. Under
+--format cursorless such an image keeps the older window check below (check()).
+
+THE FULL FORMAT (--format full; capstone-sublet, 2026-10-13). The next bitstream's RTL removes
+the cursorless branch: bounds_t IS the 27-bit full scheme for every capability, and the freed
+28th bit widens perm to 4 (word {revnode 30 | perm 4 | type 3 | bounds 27}, capstone-qemu's
+layout on isa/sublet-lifetimes). compress_bounds and decompress_bounds keep the old full
+branch's bodies unchanged, so --format full is the same port with the start == cursor branch
+skipped. Source: the capstone-sublet working tree's ariane_pkg.sv read on 2026-10-13 BEFORE 13:04,
+i.e. WITHOUT the R-54 renormalisation the same tree gained at 13:04; the renormalising encoder is
+ported from its commit, not from that tree, and this line then cites the hash. Under it the base rounds DOWN and the top rounds UP,
+to 2**(E+3) with E = max(0, hb(len) - 12) (exact below 4 KiB), so a carve no longer shortens a
+global: it WIDENS one. A split at a point off the remainder's granule leaves the remainder's
+top above the split, and the next global inherits that top. So under --format full:
+  * OVERLAP: a global's storage capability reaches outside its own [t1, want_top), into its
+    neighbour (or the stack remainder reaches into the lowest global). It fails the check unless
+    --allow-overlap, so that accepting it is written into a build recipe, not defaulted.
+  * the remainder's granule at the first carve is printed: the alignment a per-global carve
+    would need, i.e. whether CAPSTONE_GLUE_CARVE_ALIGN can be adapted or the glue must first
+    split off a globals sub-region.
+  * WIDEN must read 0 (the encoding no longer depends on the cursor); a non-zero count is an
+    ERROR in the port, not a finding.
+The default stays --format cursorless, the resident bitstreams' encoding (0568f93a9 and
+earlier, ariane_pkg.sv at 776d9d859). Every header line names the format it modelled.
+
 Exit status 1 if any domain is at risk.
 """
 import struct
@@ -80,6 +125,15 @@ import sys
 
 WINDOW_BITS = 21                      # ariane_pkg.sv floors the scan at bit 20
 WINDOW = 1 << WINDOW_BITS
+FORMAT = "cursorless"                 # --format: "cursorless" (resident silicon) or "full" (capstone-sublet)
+
+
+def full_granule(length):
+    """The full scheme's exactness granule for a capability of this length: 1 below 4 KiB (iE = 0), else
+    2**(E+3) with E = max(0, hb(length) - 12)."""
+    if length < 4096:
+        return 1
+    return 1 << (max(0, length.bit_length() - 1 - 12) + 3)
 
 
 def cursorless_top_exact(base, top):
@@ -110,8 +164,9 @@ M64 = (1 << 64) - 1
 
 
 def rtl_compress(start, end, cursor):
-    """compress_bounds, ariane_pkg.sv:793-851 at 776d9d859 (a literal port)."""
-    if start == cursor:
+    """compress_bounds, ariane_pkg.sv:793-851 at 776d9d859 (a literal port). --format full skips the cursorless
+    branch, as the capstone-sublet RTL does; the full branch is unchanged there."""
+    if FORMAT == "cursorless" and start == cursor:
         lz = 63
         while lz > 20 and ((cursor >> lz) & 1) == ((end >> lz) & 1):
             lz -= 1
@@ -251,10 +306,13 @@ def process_layout(path, arena_override=None):
     img, lo, hi, secs, syms = read_elf(path)
     if lo is None:
         raise ValueError("no PT_LOAD")
-    d = secs[".capstone_domreq"]
-    magic, req_data, req_stack = struct.unpack_from("<QQQ", img, d[4])
-    if magic != 0x5145524d4f445043:
-        raise ValueError("bad .capstone_domreq magic")
+    managed = ".capstone_domreq" in secs
+    req_data = req_stack = 0
+    if managed:
+        d = secs[".capstone_domreq"]
+        magic, req_data, req_stack = struct.unpack_from("<QQQ", img, d[4])
+        if magic != 0x5145524d4f445043:
+            raise ValueError("bad .capstone_domreq magic")
     ini = secs[".capstone_gp_initdesc"]
     _built, count = struct.unpack_from("<QQ", img, ini[4])
     recs = [struct.unpack_from("<QQq", img, ini[4] + 32 + 24 * i) for i in range(count)]
@@ -262,15 +320,20 @@ def process_layout(path, arena_override=None):
     if arena is None and "__capstone_context_entry" in syms:
         raise ValueError("the image has minted contexts but no CONTEXTS_FIRST_ENTRY arena split was recognised in "
                          ".text; pass --arena BYTES")
-    return dict(carve_align=glue_carve_align(img, secs),
+    return dict(managed=managed, carve_align=glue_carve_align(img, secs),
                 code_len=hi - lo, gpoff=ini[3] - lo, req_data=req_data, req_stack=req_stack,
                 count=count, recs=recs, arena=arena or 0)
 
 
 def replay_process(lay, base, carve_align):
-    """One base: the module's block, the monitor's managed split, the glue's carve."""
-    out = dict(short=[], inexact=0, widen=0, m14=None)
-    total = lay["code_len"] + lay["req_data"] + 8 * 1024 + 1024
+    """One base: the module's block, the monitor's split, the glue's carve. An image without .capstone_domreq takes
+    the classic path: the module sizes the block as code_len + max(code_len, 64 KiB) (capstone.c's dom_headroom),
+    the monitor keeps data_top = tot_size (no descriptor area, no top alignment) and parks only gp."""
+    out = dict(short=[], inexact=0, widen=0, m14=None, overlap=[], gran=None, trap=[], moved=[])
+    if lay["managed"]:
+        total = lay["code_len"] + lay["req_data"] + 8 * 1024 + 1024
+    else:
+        total = lay["code_len"] + max(lay["code_len"], 64 * 1024)
     total = (total + 4095) & ~4095
     tot = 1 << (total - 1).bit_length()
     code_size = (lay["code_len"] + 15) & ~15
@@ -279,18 +342,27 @@ def replay_process(lay, base, carve_align):
     gran = 1 << ((hb - 12 if hb > 12 else 0) + 3)
     split_size = (code_size + gran - 1) & ~(gran - 1)
     data_off = (1536 + gran - 1) & ~(gran - 1)
-    data_top = ((base + tot - 1024) & ~(gran - 1))
+    data_top = ((base + tot - 1024) & ~(gran - 1)) if lay["managed"] else base + tot
     ds = base + split_size + data_off
     s, e = writeback(ds, data_top, ds)                 # the dom_data split (cursorless)
-    for cur in (data_top - 16, data_top - 32, ds):     # gp and code parks, cursor back
+    for cur in ((data_top - 16, data_top - 32, ds) if lay["managed"] else (data_top - 16, ds)):  # parks, then back
         s, e = writeback(s, e, cur)
     if (s, e) != (ds, data_top):
         out["m14"] = (ds, data_top, s, e)
     end = e
     if lay["arena"]:
         s, e = writeback(s, e, end - 32)               # CONTEXTS_FIRST_ENTRY: END - 32 and back
+        if s > ds or e < end:
+            out["moved"].append(("dom_data", end - ds, s, e))
         s, e = writeback(s, e, s)
+        if not s <= end - lay["arena"] < e:
+            out["trap"].append(("arena split", end - lay["arena"], s, e))
+        a = writeback(end - lay["arena"], e, end - lay["arena"])
+        am = writeback(a[0], a[1], a[1] - 32)          # the context arena, its cursor moved
+        if am[0] > end - lay["arena"] or am[1] < end:
+            out["moved"].append(("arena", lay["arena"], am[0], am[1]))
         s, e = writeback(s, end - lay["arena"], s)     # sp = [base, END - A)
+    s0 = s
     t1 = e
     g = 16
     if carve_align:
@@ -304,31 +376,56 @@ def replay_process(lay, base, carve_align):
     table = lay["count"] * 16
     table = (table + g - 1) & ~(g - 1)
     sp_base, sp_top = s, e
+    want_top = sp_top
     t1 -= table
-    _gs, _ge = writeback(t1, sp_top, t1)
+    if not sp_base <= t1 < sp_top:                     # SPLIT raises ILLEGAL_OPERAND_VALUE (capstone_dyn_unit.anvil)
+        out["trap"].append(("table", table, sp_base, sp_top))
+    if out["trap"]:                                    # the core traps here; nothing after it happens
+        out.update(stack=None, tot=tot, end=end, data_top=data_top)
+        return out
+    gs, ge = writeback(t1, sp_top, t1)
     sp_base, sp_top = writeback(sp_base, t1, sp_base)
     if sp_top != t1:
         out["inexact"] += 1
+    if gs < t1 or ge > want_top:
+        out["overlap"].append(("table", max(0, t1 - gs) + max(0, ge - want_top), gs, ge))
+    out["gran"] = full_granule(t1 - sp_base)
     for i, (size, _al, _off) in enumerate(lay["recs"]):
         stor = max((size + 15) & ~15, 16)
         stor = (stor + g - 1) & ~(g - 1)
         want_top = t1
         t1 -= stor
+        if not sp_base <= t1 < sp_top:
+            out["trap"].append(("global[%d]" % i, size, sp_base, sp_top))
+            out.update(stack=None, tot=tot, end=end, data_top=data_top)
+            return out
         st = writeback(t1, sp_top, t1)
         sp_base, sp_top = writeback(sp_base, t1, sp_base)
         if sp_top != t1 or st[1] != want_top:
             out["inexact"] += 1
-        if st[1] - st[0] < size:
-            out["short"].append((i, size, st[0], st[1]))
+        if st[0] > t1 or st[1] < t1 + size:           # coverage; under cursorless the base is exact, so this is
+            out["short"].append((i, size, st[0], st[1]))   # the old length check
+        if st[0] < t1 or st[1] > want_top:
+            out["overlap"].append(("global[%d]" % i, max(0, t1 - st[0]) + max(0, st[1] - want_top), st[0], st[1]))
         moved = writeback(st[0], st[1], st[0] + (8 if size > 8 else 1))
-        if moved != st:
+        if moved[0] > t1 or moved[1] < t1 + size:      # the zero-fill walker, or any pointer into the global
+            out["moved"].append(("global[%d]" % i, size, moved[0], moved[1]))
+        elif moved != st:
             out["widen"] += 1
+            if FORMAT == "full":
+                raise ValueError("--format full read WIDEN at base %#x global[%d]; the full scheme does not depend on "
+                                 "the cursor, so the port is wrong" % (base, i))
+    if sp_top > t1:
+        out["overlap"].append(("stack", sp_top - t1, sp_base, sp_top))
+    sm = writeback(sp_base, sp_top, t1)                # the glue hands sp over with `scc sp, sp, t1`: cursor AT t1
+    if sm[0] > s0 or sm[1] < t1:
+        out["moved"].append(("stack", t1 - s0, sm[0], sm[1]))
     out["stack"] = t1 - (ds + max(0, code_size - lay["gpoff"]))
     out.update(tot=tot, end=end, data_top=data_top)
     return out
 
 
-def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None):
+def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None, allow_overlap=False):
     name = path.split("/")[-1]
     lay = process_layout(path, arena)
     detected = lay["carve_align"]
@@ -337,40 +434,136 @@ def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None):
     how = "detected" if carve_align == detected else "FORCED, the code says %s" % ("on" if detected else "off")
     first = replay_process(lay, cma_base, carve_align)
     tot = first["tot"]
-    step = min(tot, 1 << 20)
+    step = min(tot, 1 << 20) if lay["managed"] else tot   # CMA aligns to 1 MiB; the buddy allocator to the block
     bases = list(range(cma_base, cma_base + cma_size - tot + 1, step))
     bad = []
     worst_stack = None
     widen = 0
+    ov_n = ov_max = ov_bases = 0
+    gran = 0
     for b in bases:
         r = replay_process(lay, b, carve_align)
         widen = max(widen, r["widen"])
-        worst_stack = r["stack"] if worst_stack is None else min(worst_stack, r["stack"])
-        if r["short"] or r["inexact"] or r["m14"] or r["stack"] < lay["req_stack"]:
+        if r["stack"] is not None:                     # None: the replay stopped at a SPLIT TRAP
+            worst_stack = r["stack"] if worst_stack is None else min(worst_stack, r["stack"])
+        gran = max(gran, r["gran"])
+        if r["overlap"]:
+            ov_bases += 1
+            ov_n = max(ov_n, len(r["overlap"]))
+            ov_max = max(ov_max, max(o[1] for o in r["overlap"]))
+        fault = (r["short"] or r["trap"] or r["moved"] or r["m14"] or (r["stack"] or 0) < lay["req_stack"]
+                 or (FORMAT == "cursorless" and r["inexact"]))
+        if fault or (r["overlap"] and FORMAT == "full" and not allow_overlap):
             bad.append((b, r))
-    print("%-28s process ABI: code_len=%d domreq=%d arena=%d count=%d tot=%d carve-align=%s (%s); %d bases "
-          "(%#x + k*%#x): %s" % (name, lay["code_len"], lay["req_data"], lay["arena"], lay["count"], tot,
-                                 "on" if carve_align else "off", how, len(bases), cma_base, step,
-                                 "OK" if not bad else "AT RISK at %d" % len(bad)))
+    print("%-28s %s, format %s: code_len=%d domreq=%d arena=%d count=%d tot=%d carve-align=%s (%s); "
+          "%d bases (%#x + k*%#x): %s" % (name, "process ABI" if lay["managed"] else "classic SDK", FORMAT,
+                                          lay["code_len"], lay["req_data"], lay["arena"], lay["count"],
+                                          tot, "on" if carve_align else "off", how, len(bases), cma_base, step,
+                                          "OK" if not bad else "AT RISK at %d" % len(bad)))
     print("    worst stack above the globals template %d (declared %d); WIDEN up to %d storage capabilities"
           % (worst_stack, lay["req_stack"], widen))
-    for b, r in bad[:3]:
-        print("    base %#x: dom_data top %#x, %d inexact carve point(s), %d SHORT%s%s" % (
-            b, r["end"], r["inexact"], len(r["short"]),
-            ", M-14: dom_data [%#x,%#x) became [%#x,%#x)" % r["m14"] if r["m14"] else "",
-            ", stack %d below the declared %d" % (r["stack"], lay["req_stack"]) if r["stack"] < lay["req_stack"] else ""))
-        for i, size, lo, hi in r["short"][:3]:
-            print("        global[%d] size %d got [%#x,%#x) = %d bytes" % (i, size, lo, hi, hi - lo))
+    if FORMAT == "full":
+        print("    OVERLAP at %d of %d bases: up to %d capabilities, up to %d bytes outside their own storage%s; the "
+              "remainder's full-scheme granule at the first carve is up to %d bytes" % (
+                  ov_bases, len(bases), ov_n, ov_max, " (allowed by --allow-overlap)" if ov_bases and allow_overlap
+                  else "", gran))
+    faults = [x for x in bad if x[1]["short"] or x[1]["trap"] or x[1]["moved"] or x[1]["m14"]]
+    if faults and len(faults) < len(bad):
+        print("    %d of the %d bases at risk FAULT; the rest only OVERLAP. The faulting ones first:" % (len(faults), len(bad)))
+    for b, r in (faults + [x for x in bad if x not in faults])[:3]:
+        report_base(lay, b, r, "")
     if show_base is not None:
-        r = replay_process(lay, show_base, carve_align)
-        print("    base %#x (requested): dom_data top %#x, %d inexact, %d SHORT" % (show_base, r["end"], r["inexact"],
-                                                                       len(r["short"])))
-        for i, size, lo, hi in r["short"][:3]:
-            print("        global[%d] size %d got [%#x,%#x) = %d bytes" % (i, size, lo, hi, hi - lo))
+        report_base(lay, show_base, replay_process(lay, show_base, carve_align), " (requested)")
     return bad
 
 
-def check(path):
+def report_base(lay, b, r, label):
+    print("    base %#x%s: dom_data top %#x, %d inexact carve point(s), %d SHORT, %d SPLIT TRAP, %d SHORT ONCE MOVED%s%s"
+          % (b, label, r["end"], r["inexact"], len(r["short"]), len(r["trap"]), len(r["moved"]),
+             ", M-14: dom_data [%#x,%#x) became [%#x,%#x)" % r["m14"] if r["m14"] else "",
+             ", stack %d below the declared %d" % (r["stack"], lay["req_stack"])
+             if r["stack"] is not None and r["stack"] < lay["req_stack"] else ""))
+    for i, size, lo, hi in r["short"][:3]:
+        print("        global[%d] size %d got [%#x,%#x) = %d bytes" % (i, size, lo, hi, hi - lo))
+    for what, size, lo, hi in r["trap"][:3]:
+        print("        SPLIT TRAP carving %s (%d bytes): the remainder decodes as [%#x,%#x)" % (what, size, lo, hi))
+    for what, size, lo, hi in r["moved"][:3]:
+        print("        SHORT ONCE MOVED %s (%d bytes) re-encodes as [%#x,%#x)" % (what, size, lo, hi))
+    if FORMAT == "full":
+        for what, extra, lo, hi in sorted(r["overlap"], key=lambda o: -o[1])[:3]:
+            print("        OVERLAP %s got [%#x,%#x), %d bytes outside its own storage" % (what, lo, hi, extra))
+
+
+def check_legacy_full(name, count, recs, carve, tot, allow_overlap=False):
+    """The old SDK region under --format full: carve downward from tot at base 0, each split's upper half taking the
+    remainder's DECODED top, and classify by coverage and overlap as the process replay does."""
+    sp_base, sp_top = 0, tot
+    top = tot
+    short, overlap = [], []
+    gran = full_granule(tot - count * 16)
+    for label, length in ([("cap-table", count * 16)] +
+                          [("global[%d]" % i, max((s + 15) & ~15, 16)) for i, (s, _a, _b) in enumerate(recs)]):
+        base = top - length
+        st = writeback(base, sp_top, base)
+        sp_base, sp_top = writeback(sp_base, base, sp_base)
+        if st[0] > base or st[1] < top:
+            short.append((label, length, st[0], st[1]))
+        if st[0] < base or st[1] > top:
+            overlap.append((label, max(0, base - st[0]) + max(0, st[1] - top), st[0], st[1]))
+        top = base
+    if sp_top > top:
+        overlap.append(("stack", sp_top - top, sp_base, sp_top))
+    bad = short + ([] if allow_overlap else overlap)
+    print("%-28s format full: count=%-5d carve=%-8d tot=%-9d %s; OVERLAP %d capabilities, up to %d bytes; the "
+          "remainder's granule at the first carve %d" % (
+              name, count, carve, tot, "OK" if not bad else "AT RISK", len(overlap),
+              max([o[1] for o in overlap] or [0]), gran))
+    for label, length, lo, hi in short[:3]:
+        print("    SHORT %-12s len=%-8d got [%#x,%#x)" % (label, length, lo, hi))
+    for label, extra, lo, hi in sorted(overlap, key=lambda o: -o[1])[:3]:
+        print("    OVERLAP %-12s got [%#x,%#x), %d bytes outside its own storage" % (label, lo, hi, extra))
+    return bad
+
+
+def self_test():
+    """The model's positive controls: each must FIRE, or the gate is unproven. Returns the number that did not."""
+    global FORMAT
+    saved, bad = FORMAT, 0
+    try:
+        FORMAT = "full"
+        # the wrap: len 0x7ffe0, E = 6, rounded span 2**19 = 2**(E+13); decodes 256 KiB short (2026-10-13)
+        got = writeback(0xadf2a000, 0xadfa9fe0, 0xadf2a000)
+        if got != (0xadf2a000, 0xadf6a000):
+            print("self-test FAIL: the full scheme's wrap did not fire: %s" % (tuple(map(hex, got)),)); bad += 1
+        # the full scheme rounds an inexact top UP and does not depend on the cursor
+        # [0x10010, 0x12018): len 0x2008, E = 1, granule 16, so the top must round up to 0x12020
+        if writeback(0x10010, 0x12018, 0x10010) != (0x10010, 0x12020) or \
+                writeback(0x10010, 0x12018, 0x11000) != (0x10010, 0x12020):
+            print("self-test FAIL: the full scheme did not round the top up independently of the cursor"); bad += 1
+        # the predicate, on a seeded sample
+        import random
+        rnd = random.Random(1)
+        for _ in range(20000):
+            k = rnd.randrange(13, 40)
+            ln = (1 << k) - rnd.randrange(0, 1 << (k - 7)) if rnd.randrange(2) else rnd.randrange(4096, 1 << k)
+            st = (rnd.randrange(0, 1 << 40) >> 4) << 4
+            d = writeback(st, st + ln, st)
+            g = full_granule(ln)
+            span = -(-(st + ln) // g) * g - st // g * g
+            if (d[0] > st or d[1] < st + ln) != (span >= g << 10):
+                print("self-test FAIL: the wrap predicate disagrees at [%#x,%#x)" % (st, st + ln)); bad += 1
+                break
+        FORMAT = "cursorless"
+        # the cursorless top truncation across a 2 MiB window (R-11's mechanism): E = 1 drops the top's bit 0
+        if writeback(0x1f0000, 0x200011, 0x1f0000) != (0x1f0000, 0x200010):
+            print("self-test FAIL: the cursorless truncation did not fire"); bad += 1
+    finally:
+        FORMAT = saved
+    print("self-test: %s" % ("every control fires" if not bad else "%d control(s) did not fire" % bad))
+    return bad
+
+
+def check(path, allow_overlap=False):
     name = path.split("/")[-1]
     off = find_initdesc(path)
     if off is None:
@@ -391,6 +584,9 @@ def check(path):
     pages = (len(img) + 65536 - 1) // 4096 + 1
     order = max(0, (pages - 1).bit_length())
     tot = (1 << order) * 4096
+
+    if FORMAT == "full":
+        return check_legacy_full(name, count, recs, carve, tot, allow_overlap)
 
     if tot > WINDOW:
         # Interior splits now straddle a 2 MiB boundary. Replay the carve at a
@@ -421,7 +617,9 @@ def check(path):
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser(description="check gp-captable domains against CVA6's bounds compression")
-    ap.add_argument("domains", nargs="+")
+    ap.add_argument("domains", nargs="*")
+    ap.add_argument("--self-test", action="store_true", help="run the model's positive controls first; exit 1 if any "
+                                                              "does not fire")
     ap.add_argument("--carve-align", choices=("auto", "on", "off"), default="auto",
                     help="process ABI: whether the glue has CAPSTONE_GLUE_CARVE_ALIGN; auto (default) reads it from "
                          "the image's code, on/off override that")
@@ -432,16 +630,26 @@ if __name__ == "__main__":
                     help="process ABI: the context arena's size, when the glue's own sequence is not recognised")
     ap.add_argument("--base", type=lambda v: int(v, 0), default=None,
                     help="process ABI: also report this one base in detail (e.g. a board's DBAS)")
+    ap.add_argument("--format", choices=("cursorless", "full"), default="cursorless",
+                    help="the bitstream's bounds encoding: cursorless (default; 0568f93a9 and earlier) or full "
+                         "(capstone-sublet: one scheme, no cursorless branch)")
+    ap.add_argument("--allow-overlap", action="store_true",
+                    help="--format full: report OVERLAP without failing")
     a = ap.parse_args()
+    FORMAT = a.format
     failed = 0
+    if a.self_test and self_test():
+        sys.exit(1)
+    if not a.domains and not a.self_test:
+        ap.error("no domains given")
     for p in a.domains:
         try:
             secs = read_elf(p)[3]
-            if ".capstone_domreq" in secs:
+            if ".capstone_domreq" in secs or (FORMAT == "full" and ".capstone_gp_initdesc" in secs):
                 bad = check_process(p, {"auto": None, "on": True, "off": False}[a.carve_align], a.cma_base, a.cma_size,
-                                    a.base, a.arena)
+                                    a.base, a.arena, a.allow_overlap)
             else:
-                bad = check(p)
+                bad = check(p, a.allow_overlap)
             if bad:
                 failed += 1
         except Exception as exc:                       # noqa: BLE001
