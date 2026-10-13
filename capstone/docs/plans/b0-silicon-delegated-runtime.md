@@ -2095,6 +2095,15 @@ test by test. **Corrected 2026-10-14 (the RTL lane's retraction):**
   retired instructions) over every gated tree, and re-taking the baseline under the fixed harness.
 - The board predictions below stand on their own grounds: check-repr's model, and the readings recorded on
   0568f93a9. The sweep was supporting evidence only.
+- **The readings-level result (the RTL lane, 2026-10-14):** .sweep-compare.py compared each test's taken exceptions,
+  CAPPRINT readings, retired instructions and SUP_TRACE detector count against the 0568f93a9 baseline's output.
+  - 2a3a87dfc, 4a4261bb4 (this bitstream's tree), d34c26002, and Sublet steps 2-4: 92 of 92 identical, detector 0
+    on both sides.
+  - Sublet step 5: one difference that is not a reading. r31-revoke-cursor retired 999,229 against 999,223 at the
+    2,000,013-cycle cutoff, with the same exceptions and readings; it is a spin-to-the-limit arm cut six
+    instructions apart.
+  - rand, perf_tcache_random and perf_riscv_random have no log on any tree, the baseline included.
+  - So option (b)'s neutrality holds on readings.
 The earlier rows (B3j, B3i, fphold, b3-clock and now(), R-51, the S-16 set, the R-43 list, C5u, s10b,
 s06agg) stand as pre-registered above; this adds what R-54's fix and option (b) change.
 
