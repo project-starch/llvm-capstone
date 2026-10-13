@@ -88,7 +88,7 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
 `allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `fault_sites`,
-`fault_sites_why`, `duplicate_of`. Optional means
+`fault_sites_why`, `duplicate_of`, `control_probe`, `control_probe_why`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -135,6 +135,12 @@ stale access has no labelled probe -- a double free faults inside the manager, a
 inside `memcpy`. It needs `fault_sites_why`, and the reason must come from the source or from an
 earlier independent run, never from the fault it is about to admit: a site chosen after seeing where
 a run faulted would turn every crash into a catch.
+
+`control_probe` names an existing file inside the case directory. It isolates the
+defect when the full trigger also exercises other defects, so a runner can pair
+that probe with the safe control. `control_probe_why` is required and explains
+why the full trigger cannot provide that pairing. A control probe does not by
+itself declare a fault site or change a recorded verdict.
 
 ## Arms
 
