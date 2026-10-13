@@ -35,8 +35,11 @@ the 95-test sweep identical to 0568f93a9 on 2a3a87dfc and 328f61761, the FP / bo
 - **(b) = 4a4261bb4**: (a) plus the encoder change. No truncation anywhere; but where the cursorless scheme gave an
   EXACT top, a glue-carved global's capability now reaches into its upper neighbour by under a granule (the board
   lane's table: k800 64 B, s06agg 112 B, r1_slots_pools 2,560 / 496 B, live16 1,008 B, SQLite cells 4,096 B,
-  b0-hello 384 B, b1-thread 2,048 B, memcached 32,768 B) and level0 objects of 4 KiB and up round outward. No
-  fault on any of the 11 acceptance images under either (check-repr --renorm, the board lane).
+  b0-hello 384 B, b1-thread 2,048 B, memcached 32,768 B) and level0 objects of 4 KiB and up round outward.
+  check-repr --renorm over the 11 acceptance images (the board lane, b0-silicon-delegated-runtime.md): under (b) no
+  fault on any image; under (a) every verdict as on 0568f93a9, R-11's existing trap bases included (stale-full
+  r1_slots_pools AT RISK at 7 of 255 bases, the SQLite cells cell5-memsys5-O2 and cell6-sublet-O2 at 14 of 253
+  each), because the cursorless scheme truncates at base and the renormalisation does not reach it.
 - r54-bounds as the before/after arm (the board lane's corrected prediction): 0568f93a9 39, (a) 0, (b) 64.
 - Monitor side (the board lane owns): no change for the renormalisation (every monitor capability is exact under
   every scheme); under (b) the C-13 granule rule leaves the CODE region's top rounding into the seal region for
