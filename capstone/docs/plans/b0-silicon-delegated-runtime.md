@@ -2185,14 +2185,25 @@ cursorless words. Before its pre-registration, this lane owes:
    - r54-bounds 64, as on (b);
    - s06agg 64 (plain data through the NOT_CAP path);
    - every image of the (b) table with the same check-repr verdicts, because the encoder is identical to (b)'s;
-   - the R1 release-cost harness's REVOKE readings: UNCHANGED.
-     - On d93a8d66b's S1 ladder a REVOKE right behind an MREV reads +8 cycles at every node count
-       (n1 0x13d -> 0x145 ... n160 0x2557 -> 0x255f, the RTL lane). The slope and the program's total time are
-       unchanged; the 8 cycles move out of MREV's retirement into REVOKE's bracket.
-     - R1 brackets REVOKE right after the handle's ldc (r1_slots_pools.c:139-143: ldc, csrr, REVOKE, csrr), and
-       the handle's MREV ran at fixture issue time, long before. So the shift should not reach R1's numbers (76
-       cycles at 2 nodes, 22.7 per node, fpga-silicon-measurements-for-paper.md). MREV's added check pass falls
-       outside the bracket, at issue time.
+   - the R1 release-cost harness's REVOKE readings: TWO OUTCOMES registered. (Revised 2026-10-14: the first
+     version predicted "unchanged" on the premise that S1's REVOKE sits directly behind an MREV. The RTL lane
+     corrected that premise.)
+     - On d93a8d66b's S1 ladder the timed REVOKE reads +8 cycles at every node count
+       (n1 0x13d -> 0x145 ... n160 0x2557 -> 0x255f). In s1-n8 the last MREV commits at 3838 (3846 on step 5),
+       then a NE, a csrr and the LCCs; the REVOKE issues at 3844 and commits at 4284 on BOTH trees.
+     - So everything before it ran 8 cycles early, and the REVOKE completes at a pinned absolute cycle about 440
+       cycles after the MREV. What pins it is UNRESOLVED: a rev-node write of MREV still draining, the R-35 fill
+       taps, or the simulation memory model's fixed-delay schedule. A one-change variant puts it in MREV's
+       reorder, not in the kill-mode exits.
+     - R1 brackets REVOKE right after the handle's ldc (r1_slots_pools.c:139-143), with the handle's MREV at
+       fixture issue time and no other rev-node traffic in between.
+     - **Outcome A, unchanged** (76 cycles at 2 nodes, 22.7 per node, fpga-silicon-measurements-for-paper.md): the
+       pin is a simulation-model artefact, or a drain that completes before R1's bracket opens.
+     - **Outcome B, intercept +8, slope unchanged:** the pin is RTL, a drain of MREV's last write that a later
+       REVOKE still waits behind. The paper's intercept then moves.
+     - The RTL lane offered a timed pair for the Sublet bare set: a REVOKE right behind an MREV, and one with no
+       MREV or rev-node traffic in the previous ~1,000 cycles. It settles A against B on the acceptance boot, and
+       is pre-registered from simulation before the flash.
 5. **The Sublet acceptance floor (the RTL lane's):** three bare JTAG arms pre-registered from simulation
    (sublet-derive-kill 19 readings, sublet-mrev-orphan 8, sublet-split-shares-node 7). The positive control is the
    same arms on the FP bitstream, which trap 2 at the first CDERIVE.
