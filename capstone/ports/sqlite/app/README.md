@@ -80,6 +80,13 @@ the native programs' output, byte for byte:
 - **`speedtest1`**: the main testset on a database file. For each of its 32 phases the oracle
   records the row count and an FNV-1a hash of every result cell.
 
+`SQLITE_HEAP=memsys5` builds the engine with `SQLITE_ENABLE_MEMSYS5`, and
+`SQLITE_HEAP=memsys5-sublet` also applies [`../sublet/sublet-3220000-memsys5.patch`](../sublet/README.md),
+the protected memsys5 and lookaside of `../repro322/build-virtual.py --sublet`. Both compile the
+same copy with the same flags, so the two images differ only in the patch. memsys5 takes over
+only when the program configures a heap: `speedtest1 --heap 1048576 64` is the corpus's heap
+(`repro322_common.h`).
+
 ## Results
 
 Recorded in [`results/20260930-sqlite-322-app.json`](results/20260930-sqlite-322-app.json).
@@ -99,5 +106,4 @@ Recorded in [`results/20260930-sqlite-322-app.json`](results/20260930-sqlite-322
 - **More than one thread.** This base has none.
 - **Not run yet:**
   - the sqllogictest corpus with this build;
-  - `speedtest1` above size 1, and testsets other than `main`;
-  - the Sublet heap, which has no `malloc_usable_size` yet.
+  - `speedtest1` above size 1, and testsets other than `main`.
