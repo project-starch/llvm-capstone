@@ -24,6 +24,23 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def self_reported_noop(detail):
+    """True when a fixture's own mark says its triggering condition never happened.
+
+    mcapp-safety.c marks a no-op with MCAPP_MARK(n, 0xE00xx) -- "triggering condition not
+    created", "not linked", "no filler value" -- or 0x7, "the mover waited: the page did not
+    move". Every mark a fixture returns for a real outcome is a small value (0x1, 0x20, 0x101,
+    0x15b, 0x1ee ...), so the ranges do not overlap. safety-expect.txt says so in prose:
+    "A 0xE0018 mark means the triggering condition was not created; 0x7 means the header page
+    did not move. Either is a finding about the fixture, never a pass." The RETURN * matcher
+    cannot enforce that -- it checks only the fixture prefix -- so fixture 24 passed this gate
+    81/81 on the plain arm while never building its orphan (measured 2026-10-13). This is the
+    enforcement.
+    """
+    low = int(detail, 16) & 0xFFFFF
+    return low >= 0xE0000 or low == 0x7
+
+
 def worker_counts(data):
     counts = {}
     for value in re.findall(rb'^MC-WORKER (\d+) conn$', data, re.M):
@@ -184,6 +201,12 @@ def main():
             fixtures.append(dict(fixture=number, passed=passed, outcome=got, detail=detail,
                                  expected=predictions[number]))
             check(label + '_prediction', passed)
+            # A no-op mark fails unless a prediction names that exact mark, which is how a
+            # KNOWN no-op is recorded rather than hidden (fixture 23: RETURN 1700007).
+            registered = any(want[0] == 'RETURN' and want[1] != '*' and want[1] == detail
+                             for want in predictions[number])
+            check(label + '_trigger',
+                  got != 'RETURN' or registered or not self_reported_noop(detail))
     check('adapter_cleanup', run.returncode == 0 and '\nMC_CLEANUP:0\n' in log)
     record = dict(status='PASS' if all(c['passed'] for c in checks) else 'FAIL', arm=a.arm,
                   checks=checks, fixtures=fixtures, workers=4, harts=1, virtual_vm_abi=5,
