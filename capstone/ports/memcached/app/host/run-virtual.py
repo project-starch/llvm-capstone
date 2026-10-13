@@ -36,6 +36,10 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     for name in ('build', 'adapter', 'qemu', 'images', 'cross-cc', 'pthread', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
+    # virtual: the plain images on the outer revoking heap, judged by the `sublet` predictions.
+    # sublet: host/build-sublet.sh's images (patch 0006, Sublet inside slabs.c and cache.c), judged by
+    # the `lifetimes` predictions. The worker-marker image and the native controls are the same.
+    p.add_argument('--arm', choices=('virtual', 'sublet'), default='virtual')
     p.add_argument('--port', type=int, default=21299)
     p.add_argument('--timeout', type=int, default=1200)
     p.add_argument('--native-reference', type=Path,
@@ -50,8 +54,10 @@ def main():
     subprocess.run([str(a.cross_cc), '-O1', '-Wall', str(harness_source), '-lpthread', '-o', str(stage/'mc-harness')], check=True)
     inputs = dict(launcher=a.adapter/'capstone-vexec', module=a.adapter/'module/capstone_vm.ko',
                   job=a.adapter/'capstone-job', pthread=a.pthread,
-                  memcached=a.build/'domain/memcached.dom', marker=a.build/'marker/memcached.dom',
-                  safety=a.build/'safety/memcached-safety-virtual.dom',
+                  memcached=a.build/('sublet/memcached.dom' if a.arm == 'sublet' else 'domain/memcached.dom'),
+                  marker=a.build/'marker/memcached.dom',
+                  safety=a.build/('sublet/memcached-safety.dom' if a.arm == 'sublet'
+                                  else 'safety/memcached-safety-virtual.dom'),
                   native=a.build/'native/bin/memcached', native_marker=a.build/'marker/memcached-native',
                   qemu=a.qemu, harness_source=harness_source)
     inputs.update({name: a.images/name for name in ('Image', 'fw_jump.elf', 'rootfs.ext2')})
@@ -98,13 +104,14 @@ def main():
               'insmod capstone_vm.ko || exit 1', 'chmod 666 /dev/capstone-vm',
               'export CAPSTONE_EXEC_DIAGNOSTICS=1',
               'echo MC_BEGIN:pthread', './capstone-vexec ./pthread.dom', 'echo MC_END:pthread:$?']
+    predicted_arm = 'lifetimes' if a.arm == 'sublet' else 'sublet'
     predictions = {}
     for line in (APP/'host/safety-expect.txt').read_text().splitlines():
         words = line.split('#')[0].split()
-        if len(words) == 4 and words[0] == 'sublet':
+        if len(words) == 4 and words[0] == predicted_arm:
             predictions.setdefault(int(words[1]), []).append(words[2:])
     if not predictions:
-        raise ValueError('no Sublet predictions for the virtual outer heap')
+        raise ValueError(f'no {predicted_arm} predictions in host/safety-expect.txt')
     cases = [('normal1', 'memcached', 'TERM', 0), ('normal2', 'memcached', 'TERM', 0),
              ('usr1', 'memcached', 'USR1', 0), ('marker', 'marker', 'TERM', 0)]
     cases += [(f'fx{n}', 'safety', 'TERM', n) for n in sorted(predictions)]
@@ -178,13 +185,14 @@ def main():
                                  expected=predictions[number]))
             check(label + '_prediction', passed)
     check('adapter_cleanup', run.returncode == 0 and '\nMC_CLEANUP:0\n' in log)
-    record = dict(status='PASS' if all(c['passed'] for c in checks) else 'FAIL',
+    record = dict(status='PASS' if all(c['passed'] for c in checks) else 'FAIL', arm=a.arm,
                   checks=checks, fixtures=fixtures, workers=4, harts=1, virtual_vm_abi=5,
                   native_reference_sha256=sha(reference_record) if reference_record else None,
                   native_transcript_sha256={label: hashlib.sha256(files['transcript.norm']).hexdigest()
                                             for label, files in native.items()},
-                  safety_prediction_arm='sublet',
-                  known_gaps=['nested slab/cache lifetimes', 'bipbuffer logical reuse'],
+                  safety_prediction_arm=predicted_arm,
+                  known_gaps=(['bipbuffer logical reuse'] if a.arm == 'sublet'
+                              else ['nested slab/cache lifetimes', 'bipbuffer logical reuse']),
                   input_sha256={name: sha(path) for name, path in inputs.items()},
                   runner_sha256=sha(Path(__file__)), gate_sha256=hashlib.sha256(gate.encode()).hexdigest(),
                   predictions_sha256=sha(APP/'host/safety-expect.txt'))
