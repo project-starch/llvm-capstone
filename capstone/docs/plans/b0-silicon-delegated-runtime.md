@@ -1895,28 +1895,36 @@ The FP rows (B3i, B3j, fphold, now()) do not depend on the capability format.
 
 ## check-repr.py under the Sublet capability format (2026-10-13): the gate ported, and the encoder's wrap (R-54)
 This answers the SCOPE CHANGE's fourth question for the R-11 gate. `check-repr.py --format full` models the
-capstone-sublet RTL, read in the RTL lane's working tree on 2026-10-13, before its commit: `bounds_t` is the 27-bit full
+capstone-sublet RTL, read in the RTL lane's working tree on 2026-10-13 before 13:04, i.e. before the R-54 renormalisation
+landed in that tree, and before any commit: `bounds_t` is the 27-bit full
 scheme for every capability, and the cursorless branch is gone. `compress_bounds` and `decompress_bounds` keep the old
 full branch's bodies, so the port is the existing one with the `start == cursor` branch skipped. `--format cursorless`
 stays the default, for 0568f93a9 and earlier.
 
-**The port is checked against an independent transcription.** `qemu-encoder-diff.py` builds capstone-qemu's
+**The port is checked against two other transcriptions.** `qemu-encoder-diff.py` builds capstone-qemu's
 `cap_compress.c` (origin/isa/sublet-lifetimes) standalone and runs 60,000 random triples through both:
 - 0 word mismatches, 0 decode mismatches;
 - the harness fires: a one-character mutant of the port's top round-up gives 13,697 of 20,000 mismatches;
 - two other mutants were equivalent on its input domain: the R correction with the cursor in bounds, and the iE = 0
   carry at length 0. Neither is a finding about the port.
+- the C mirrors the RTL's identifiers, so it guards against a typo, not a shared misreading. A claim-auditor wrote a
+  third port straight from the SV, with explicit bit slicing: 0 mismatches on 300,000 cases.
 
 **R-54: the full scheme does not renormalise.** `compress_bounds` rounds the top up with `T[11:3] += 1` and keeps E.
 - When that pushes the span to 2^13 granules, the word needs E+1, and decodes about half the span SHORT.
 - Exactly, over 200,000 random cases with no exception: [s, e) with len >= 4 KiB, E = hb(len) - 12 and g = 2^(E+3)
   decodes not covering itself iff roundup(e, g) - rounddown(s, g) >= 2^(E+13).
 - Example: [0xadf2a000, 0xadfa9fe0) decodes [0xadf2a000, 0xadf6a000).
-- QEMU's encoder has the same flaw, and never shows it, because its SPLIT does not compress.
+- QEMU's encoder had the same flaw. It showed it only through STC, because its SPLIT and SHRINK keep exact bounds.
 - On 0568f93a9 it applies whenever a cursor leaves the base (the same full branch). On capstone-sublet it also applies
   at every SPLIT.
-- The RTL lane confirmed it with its own port and is taking the fix in the RTL: renormalise to E+1 when the predicate
-  holds, with QEMU's `cap_compress` changed in lockstep. Sequencing is the lead's.
+- The RTL lane confirmed it with its own port and is fixing it in the RTL: renormalise to E+1 when the predicate
+  holds. Its tree carries the step from 13:04, not yet committed; capstone-qemu has it in aad781e15a. Sequencing is
+  the lead's.
+- The audit (claim-auditor, 2026-10-13) found nothing after `compress_bounds` that renormalises or refuses. It
+  reproduced the 5 trap bases with its own port, and read 0 of 255 with the renormalised encoder.
+  - Two model corrections, neither changing a verdict: the glue hands the stack over with its cursor AT t1
+    (`scc sp, sp, t1`), not at top - 16; and the runtime's later carves (context.c) are not replayed.
 
 **The replay now also fails on:**
 - SPLIT TRAP: a carve point outside the remainder's decoded bounds; SPLIT raises ILLEGAL_OPERAND_VALUE.
@@ -1932,7 +1940,7 @@ controls; each fails on a deliberately exact model. build-b0-hello.sh runs it, a
 images OK, the SQLite cells AT RISK at 14 bases and stale-full r1_slots_pools at 7, all known. b0-hello, b1-thread and
 memcached ba7e6921 stay OK; none of their globals, stacks, dom_data or arenas re-encodes short.
 
-**Predicted for the capstone-sublet encoding, before any renormalisation fix:**
+**Predicted for the capstone-sublet encoding WITHOUT the renormalisation (the tree before 13:04):**
 | image | fault | OVERLAP, up to |
 |---|---|---|
 | k800, s06agg (classic) | none | 64 B, 112 B |
@@ -1993,6 +2001,35 @@ Rungs: b0-stats, b0-hello (control), r54-bounds, b0-stats2. PREFLIGHT=0 (private
 
 **On the renormalising bitstream** (the RTL lane's fix, predicted only once check-repr ports it from the commit), every
 arm should read covering, and rc 0.
+
+## B4 RESULT (2026-10-13 13:21-13:26, caplifive_r51r52_0568f93a9, firmware bc0f7df85e64): R-54 observed on silicon, and R-11 on the heap
+- b0-stats retval 0; b0-hello (control) retval 0 (DBAS 0xac080000); b0-stats2 retval 0.
+- **r54-bounds retval 39, as predicted** (image 0b0ff5d555188612, DBAS 0xac100000). Offsets from s, at base, then
+  after the cursor moved by 8:
+  - A, n 65535: [+0, +65535) then **[+0, +32768) SHORT**;
+  - B, n 65520 at +16: [+0, +65520) then **[-16, +32752) SHORT**;
+  - C, n 8191: [+0, +8191) then **[+0, +4096) SHORT**;
+  - D, n 65536: [+0, +65536) then [+0, +65536), covers;
+  - G, n 65471: [+0, +65471) then [+0, +65472), covers, rounded up 1 B as predicted;
+  - H, malloc(65535) at s % 4096 = 3568: **at base [+0, +65532)**, then **[-48, +32784) SHORT** (its predicate: short).
+- Every A-G reading equals check-repr.py's port, value for value. R-54 is silicon behaviour, not a model artefact.
+- **One pre-registered row missed: H at base.** I predicted [+0, +65535) from QEMU's placement (s % 4096 = 2544). On the
+  board H sat at s % 4096 = 3568, the same residue modulo its 64-byte granule, so the moved reading held.
+  - The at-base reading is 3 bytes short. That is the CURSORLESS branch truncating the top (R-11's mechanism), E = 2.
+  - check-repr's model reproduces both of H's readings exactly at 16 addresses, every one straddling 0xac400000. That
+    boundary lies inside the 4 MiB domain at 0xac100000.
+- **RETRACTED (made in lane commit 2d7d41c93d85 and relayed to the lead by the RTL lane):** "level0 narrows each
+  object to exactly n bytes with cap_shrink(p, c, c + n), which is exact because the cursor sits on the base". It is
+  exact only for an object that stays inside one 2 MiB window, or whose end is a multiple of 2^E. One that crosses a
+  2^(20+E) boundary loses up to 2^E - 1 bytes at its top before any cursor moves.
+  - R-11's workaround (CAPSTONE_GLUE_CARVE_ALIGN) covers the glue's carve, not the heap.
+  - What would have caught it: the H row's prediction came from QEMU's address, and the window rule depends on the
+    absolute address. H's at-base value should have been predicted per address, as its moved value was.
+- **So for the next bitstreams:**
+  - the renormalisation (R-54's fix) closes the moved-cursor half;
+  - only removing the cursorless branch (the format move) closes the heap's at-base truncation;
+  - between them, a level0 stopgap (round each narrowed end to a granule the window rule keeps) would trade away
+    exact-n bounds. That is the runtime side's call.
 
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This

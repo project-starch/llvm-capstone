@@ -76,14 +76,19 @@ THE FULL SCHEME DOES NOT RENORMALISE (found 2026-10-13, both formats). compress_
 rounds the top up with `T[11:3] += 1` and keeps E. When that pushes the span to 2**13
 granules, the word needs E+1 and decodes about half the span SHORT. Exactly: a capability
 [s, e) with len >= 4 KiB, E = hb(len) - 12, g = 2**(E+3) decodes NOT covering itself iff
-roundup(e, g) - rounddown(s, g) >= 2**(E+13) (200,000 random cases, no exception;
-capstone-qemu's cap_compress has the same flaw, 0 mismatches against this port on 60,000
-cases, and QEMU never shows it because its SPLIT does not compress). Every format reaches it
-once a cursor leaves the base, so the replay also fails on:
+roundup(e, g) - rounddown(s, g) >= 2**(E+13) (200,000 random cases, no exception). capstone-qemu's
+cap_compress had the same flaw (0 mismatches against this port on 60,000 cases; its C mirrors the
+RTL's identifiers, so that guards against a typo here, not a shared misreading -- a third port
+written from the SV with explicit bit slicing agreed on 300,000). QEMU showed it only through STC:
+its SPLIT and SHRINK keep exact bounds. Fixed in the encoder by taking E+1 when the rounded span
+reaches 2**(E+13): capstone-qemu aad781e15a, and the RTL lane's capstone-sublet tree from
+2026-10-13 13:04. Every format without that fix reaches it once a cursor leaves the base, so the
+replay also fails on:
   * SPLIT TRAP: a carve point outside the remainder's DECODED bounds, which SPLIT refuses
     with ILLEGAL_OPERAND_VALUE (capstone_dyn_unit.anvil, func SPLIT). The replay stops there.
   * SHORT ONCE MOVED: a global (the zero-fill walker), the stack (handed over with its cursor
-    at the top), dom_data or the context arena re-encoding to bounds that no longer cover it.
+    at t1, `scc sp, sp, t1`), dom_data or the context arena re-encoding to bounds that no longer
+    cover it. The runtime's own later carves (context.c's) and heap splits are NOT replayed.
 
 THE CLASSIC SDK PATH (an image without .capstone_domreq) is replayed by the same code under
 --format full: the module sizes the block code_len + max(code_len, 64 KiB) (capstone.c's
@@ -95,8 +100,9 @@ the cursorless branch: bounds_t IS the 27-bit full scheme for every capability, 
 28th bit widens perm to 4 (word {revnode 30 | perm 4 | type 3 | bounds 27}, capstone-qemu's
 layout on isa/sublet-lifetimes). compress_bounds and decompress_bounds keep the old full
 branch's bodies unchanged, so --format full is the same port with the start == cursor branch
-skipped. Source: the capstone-sublet working tree's ariane_pkg.sv as of 2026-10-13, not yet
-committed; cite its hash here once it lands. Under it the base rounds DOWN and the top rounds UP,
+skipped. Source: the capstone-sublet working tree's ariane_pkg.sv read on 2026-10-13 BEFORE 13:04,
+i.e. WITHOUT the R-54 renormalisation the same tree gained at 13:04; the renormalising encoder is
+ported from its commit, not from that tree, and this line then cites the hash. Under it the base rounds DOWN and the top rounds UP,
 to 2**(E+3) with E = max(0, hb(len) - 12) (exact below 4 KiB), so a carve no longer shortens a
 global: it WIDENS one. A split at a point off the remainder's granule leaves the remainder's
 top above the split, and the next global inherits that top. So under --format full:
@@ -411,7 +417,7 @@ def replay_process(lay, base, carve_align):
                                  "the cursor, so the port is wrong" % (base, i))
     if sp_top > t1:
         out["overlap"].append(("stack", sp_top - t1, sp_base, sp_top))
-    sm = writeback(sp_base, sp_top, sp_top - 16)       # the glue hands sp over with its cursor at the top
+    sm = writeback(sp_base, sp_top, t1)                # the glue hands sp over with `scc sp, sp, t1`: cursor AT t1
     if sm[0] > s0 or sm[1] < t1:
         out["moved"].append(("stack", t1 - s0, sm[0], sm[1]))
     out["stack"] = t1 - (ds + max(0, code_size - lay["gpoff"]))

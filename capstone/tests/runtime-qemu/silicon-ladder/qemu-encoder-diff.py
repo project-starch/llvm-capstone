@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Diff check-repr.py's port of the RTL's bounds encoder against capstone-qemu's cap_compress.c, compiled standalone.
 
-The two are independent transcriptions: check-repr.py's compress/decompress were ported from capstone-ariane's
-ariane_pkg.sv, the C is capstone-qemu's own. Agreement on random triples is evidence that neither has a typo; it is
-NOT evidence that either is right (both share the R-54 wrap, for instance). The script also counts the triples that
-decode NOT covering their input and checks them against R-54's predicate.
+check-repr.py's compress/decompress were ported from capstone-ariane's ariane_pkg.sv; the C is capstone-qemu's
+own, but it mirrors the RTL's identifiers line for line, so agreement guards against a TYPO in either, not against a
+shared misreading, and says nothing about whether either is right (both had the R-54 wrap until aad781e15a). The
+script also counts the triples that decode NOT covering their input and checks them against R-54's predicate; at a
+ref with the renormalisation (origin/bounds-encoder-renormalise) the word comparison is EXPECTED to fail on exactly
+the wrapping triples until check-repr.py ports the fix.
 
     qemu-encoder-diff.py [--ref origin/isa/sublet-lifetimes] [--qemu <capstone-qemu checkout>] [-n 60000]
 
