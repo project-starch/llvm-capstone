@@ -46,6 +46,47 @@ the 95-test sweep identical to 0568f93a9 on 2a3a87dfc and 328f61761, the FP / bo
   code-heavy layouts (none of the 11 images), fix = size the granule from max(split_size's granule, repr_gran).
 - QEMU side (the helper lane owns): aad781e15acd lands only with the flash that carries 2a3a87dfc.
 
+## Synthesis of `fp-fixes` 4a4261bb4, pre-registered 2026-10-14 (before the handoff; hash to be pinned)
+
+The lead's decisions of 2026-10-14 in the RTL lane's conversation: the FP bitstream is built from option (b) =
+4a4261bb4; two builds, this one now and the Sublet one when its gates pass; the build is authorised now, the flash
+needs the lead's own word when the sealed hash exists. Name: `caplifive_fpb_4a4261bb4.bit` (tag fpb = FP fixes,
+option b). The board's acceptance is pre-registered on b0-silicon-runtime 5e82c06d61f9 for both options; the
+QEMU renormalisation aad781e15acd lands with this flash.
+
+What the synth lane receives with the hash:
+- Tree: capstone-ariane 4a4261bb4 = 0568f93a9 + cc1159a51 (R-53) + ae21e121e (rs3) + 2a3a87dfc (R-54) + 4a4261bb4
+  (encoder without the cursorless scheme). Hand-written files touched: commit_stage.sv, issue_read_operands.sv,
+  ariane_pkg.sv (compress_bounds / compress_cap). No Anvil unit changes; the generated units are byte-identical.
+- Lint (rtl-lint-gate.sh in the pinned container, every commit on its own): LATCH 52, MULTIDRIVEN 3, ALWCOMBORDER 0,
+  COMBDLY 0, UNOPTFLAT 40, ANVIL_UNOPTFLAT 0, BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 833 (832 + compress_cap's cap.cursor,
+  no longer read by the encoder), CASEOVERLAP 2, SELRANGE 100; the negative control reads BLOCKED.
+- The 40 UNOPTFLAT names are IDENTICAL between 0568f93a9 and 4a4261bb4 (by-name diff of the two listings, 2026-10-14
+  morning), so "loop membership by stem unchanged" is pre-build evidence here, not a prediction.
+- Behaviour: the 95-test sweep identical to 0568f93a9 test by test with no log at the cycle limit; rv64ud 12/12, the
+  s18/s19/r52/r51 FP arms, the bounds arms (bounds-renorm, cursorless-off) and the supervised arms as recorded in
+  the commits.
+- run.tcl and the flow untouched.
+
+Predictions, written before the build (the refutation keys in brackets):
+- Routed WNS inside the standing band -13.335..-5.855 (715bdd1fe -9.949, 0568f93a9 -8.368 held it; a null RTL
+  change has moved WNS by 3.7 ns). [outside the band: the failing endpoint's start and end points are read before
+  anything else is concluded]
+- Loop membership by stem unchanged; LUTLP-1 0. [a new stem names its cone; LUTLP > 0 is a stop]
+- Area: the issue stage gains one 4-way select per scoreboard entry for the rs3 source (tens of LUTs); ex_stage's
+  compress path LOSES the 21-bit cursorless scheme and its output mux and gains the renormalisation's 64-bit
+  compare and add (net flat to down, under a hundred LUTs either way); commit_stage's dirty-FP term is one gate.
+  No new flops. [a rise of hundreds of LUTs anywhere is a finding, not noise]
+- The discriminator for a timing move: a failing endpoint whose path enters compress_bounds (the renormalisation's
+  adder feeds the T field) names the encoder change; one inside issue_read_operands' operand muxes names the rs3
+  fix; anything else is the band's noise.
+- Route time: 0568f93a9's route took ~156 min against 20-31 for the three before it and was flagged; the same flag
+  applies, and a repeat is a question for the synth lane, not this change.
+- DTS: 65536 revocation nodes, unchanged (INIT_STAGE's head := 3; the pool and CAP_REVNODE_MEM_BASE untouched).
+
+The grade (sealed sha256, size, routed WNS, stems, LUT/FF rows, route time) is appended here when the synth lane
+reports, before the flash.
+
 ## Branch `capstone-sublet` (on top of fp-fixes)
 
 | Commit | What |
