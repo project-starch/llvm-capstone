@@ -2122,6 +2122,33 @@ cell6, b0-hello, b1-thread, memcached ba7e6921 and r54-bounds):
 - (b): rc other than 64; any arm short; any at-base reading other than the table's.
 - Either: a standing control changing.
 
+## FP bitstream (b) acceptance staged, 2026-10-14 (before the flash; the bitstream hash pinned when sealed)
+The lead chose option (b), capstone-ariane 4a4261bb4, to be built as caplifive_fpb_4a4261bb4.bit (the RTL lane's
+synthesis pre-registration: dev cd8c12bc2627). The acceptance of record is 5e82c06d61f9's (b) column, plus the FP rows
+of fc3225fb237d and 6bc165f2e1c2. Staged in /tmp/capstone/accept-fpb (chain.sh, r43/, oracles/):
+- **Order, as 0568f93a9's chain:**
+  1. the S-16 bare set;
+  2. the R-43 list a1-a10;
+  3. C5u;
+  4. R-51;
+  5. s10b;
+  6. s06agg;
+  7. boot C+F, the one change of form: the B-series, the FP probes and r54-bounds in ONE private image.
+  The chain stops at the first control that fails.
+- **Boot C+F:**
+  - rungs: b0-stats, b0-hello (control), b1-thread, b2-memcached, b3-setclock, b3-oracle, b3-fpstate (B3i),
+    b3-fpnow (B3j), b3-fphold (B3f), r54-bounds, b3-clock (last: on 776d9d859 it did not return), b0-stats2;
+  - private image 79f84cd81fef8dfa and firmware abdb54361c4f (wrapper 882892f, monitor 1f9aedd, QUIET), every staged
+    file hash-checked in the initramfs and removed again from the shared buildroot;
+  - images by hash: b0-hello db4385ff32deddf6, b1-thread ac2369aa6a548926, memcached ba7e6921cf27f2b6,
+    r54-bounds 0b0ff5d555188612, fphold 48f5eb725abbbd49, fpstate 957a6ac11149f931, fpnow 4e4e7604faca561b,
+    clock 5aa140cf39647700.
+- **Oracles:** 0 for every rung but r54-bounds, which is 64 under (b), in a separate oracles/ directory so the
+  resident bitstream's 39 stays scorable.
+- **CPU pinning:** the scripts are the mask-free copies (dev 7d02b385901a); none pins to apollo's measurement half.
+- **s06agg reads 64**, as pre-registered. The RTL lane raised and withdrew a cursorless dependence: its verdict reads
+  plain data through the NOT_CAP path, before compress_bounds.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
