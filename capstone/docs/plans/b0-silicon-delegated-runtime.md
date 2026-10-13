@@ -2087,7 +2087,15 @@ The bitstream the lead chooses is either:
 - **(b) 4a4261bb4**: (a) plus the encoder's cursorless branch removed. Its tree is byte-identical to 328f61761's, the
   one ported and checked (tree 8bdb52a5).
 Both are on origin fp-fixes. The RTL lane's 95-test sweeps on 2a3a87dfc and 4a4261bb4 are identical to 0568f93a9's
-test by test. The earlier rows (B3j, B3i, fphold, b3-clock and now(), R-51, the S-16 set, the R-43 list, C5u, s10b,
+test by test. **Corrected 2026-10-14 (the RTL lane's retraction):**
+- That comparison was of exit codes only.
+- 26 of the 95 tests are readings-only arms that end in a spin. They reach the sweep's 2,000,013-cycle limit on every
+  tree, baseline included, and the testbench reported that limit as SUCCESS. For those 26 it compared nothing.
+- The RTL lane is re-running the readings-level comparison (.sweep-compare.py: exceptions, CAPPRINT readings,
+  retired instructions) over every gated tree, and re-taking the baseline under the fixed harness.
+- The board predictions below stand on their own grounds: check-repr's model, and the readings recorded on
+  0568f93a9. The sweep was supporting evidence only.
+The earlier rows (B3j, B3i, fphold, b3-clock and now(), R-51, the S-16 set, the R-43 list, C5u, s10b,
 s06agg) stand as pre-registered above; this adds what R-54's fix and option (b) change.
 
 **B4's r54-bounds (image 0b0ff5d555188612), from check-repr.py's port** (`--renorm`, cursorless for (a), full for
