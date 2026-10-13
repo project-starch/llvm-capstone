@@ -20,7 +20,9 @@
     "cheribsd-subobject",
     "cheribsd-carve-bounds",
     "silicon-level0",
-    "silicon-carve-bounds"
+    "silicon-carve-bounds",
+    "virtual-malloc",
+    "virtual-nested-pools"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -50,7 +52,9 @@
   "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
   "arm_configurations": {
     "silicon-level0": "silicon-ffmpeg-plane-level0",
-    "silicon-carve-bounds": "silicon-ffmpeg-plane-bounds"
+    "silicon-carve-bounds": "silicon-ffmpeg-plane-bounds",
+    "virtual-malloc": "virtual-mallocng",
+    "virtual-nested-pools": "virtual-ffmpeg-plane-carve"
   },
   "verdict_bundles": {
     "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
