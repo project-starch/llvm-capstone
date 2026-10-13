@@ -82,7 +82,7 @@ main() {
     IFS='|' read -r tag img rec <<< "$j"
     echo "$tag START $(date +%H:%M:%S) $(sha256sum $img | cut -c1-16)" >> $OUT/SEQ
     SUP_IMG=$img SUP_OUT=$OUT/runs/$tag SUP_REC_ADDR=$rec SUP_TIMEOUT=${CAPSTL_TIMEOUT:-90} \
-      taskset -c 0-7,32-39 nice -n 10 python3 ${SUP_RUNNER:-$L/run_sup_bare.py} > $OUT/runs-$tag.log 2>&1
+      nice -n 10 python3 ${SUP_RUNNER:-$L/run_sup_bare.py} > $OUT/runs-$tag.log 2>&1
     echo "$tag END rc=$? $(date +%H:%M:%S)" >> $OUT/SEQ
     sleep 8
   done

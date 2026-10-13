@@ -15,6 +15,6 @@ DEFS="-DCAPSTONE_TARGET_QEMU -DCAPSTONE_DEBUG_ENABLE $*"
 for f in lib/sbi/sbi_capstone_dom.c lib/sbi/capstone_int_handler.c; do
   "$CC" --abi capstone "$OUT/opensbi/$f" -- -I"$OUT/opensbi/lib/sbi/capstone-sbi" -D__riscv_xlen=64 $DEFS > "$OUT/opensbi/$f.S" 2> "$OUT/$(basename $f).capstone-c.log"
 done
-taskset -c 0-7,32-39 nice -n 10 make -s -C "$OUT/opensbi" PLATFORM=generic CROSS_COMPILE="$XC" -j12 > "$OUT/make.log" 2>&1
+nice -n 10 make -s -C "$OUT/opensbi" PLATFORM=generic CROSS_COMPILE="$XC" -j12 > "$OUT/make.log" 2>&1
 ls -la "$OUT/opensbi/build/platform/generic/firmware/fw_jump.elf"
 echo "defs: $DEFS"; echo "capstone-c: $(git -C $HOME/dev/llvm-capstone/capstone/capstone-c rev-parse --short HEAD)"
