@@ -148,7 +148,10 @@ real prototype. The SDK runtime and libc implement those functions and stay
 freestanding. Inlined copies must keep capability tags, which needs a compiler
 with the C-78 fix; `runtime/virtual/run-hosted.py` checks both (hosted `main`,
 and tags across inlined, called, looped, moved, reallocated and sorted copies,
-with a byte-copy control that must lose the tag).
+with a byte-copy control that must lose the tag). Every application compile also
+runs clang's IR verifier (`-fverify-intermediate-code`), which a release compiler
+otherwise skips, so a pass that builds malformed IR stops the build with its
+reason instead of crashing code generation or miscompiling.
 
 The source recipes now compile and link through the same SDK:
 
