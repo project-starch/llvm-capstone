@@ -205,15 +205,7 @@ def main() -> int:
             archives.append(str(name))
 
     sdk = pathlib.Path(os.environ["CAPSTONE_SDK"])
-    nested = []
-    if os.environ.get("CPY_SUBLET") == "1":
-        common = HERE.parents[1] / "common/application"
-        nested = [str(sdk / name) for name in
-                  ("pym_backing.o", "pym_block_lifetimes.o", "pym_sublet_glue.o")]
-        nested += ["-O1", "-DEXP_PYMALLOC", "-Wl,--wrap=main,--wrap=__capstone_region",
-                   "-I", str(HERE.parents[2] / "runtime/include"),
-                   str(common / "regions.c"), str(common / "initialize.c")]
-    base = [str(sdk / "capstone-cc"), "-Wl,--error-limit=0", *nested, *present, *archives]
+    base = [str(sdk / "capstone-cc"), "-Wl,--error-limit=0", *present, *archives]
     strict = run([*base, "-o", str(out / "python.dom")])
     (out / "link-strict.log").write_text(strict.stdout + strict.stderr)
     undefined = parse_undefined(strict.stderr)
