@@ -2031,6 +2031,37 @@ arm should read covering, and rc 0.
   - between them, a level0 stopgap (round each narrowed end to a granule the window rule keeps) would trade away
     exact-n bounds. That is the runtime side's call.
 
+## The FP bitstream's two encoder options, as check-repr reads them (2026-10-13)
+The RTL lane's fp-fixes branch: cc1159a51 (R-53) -> ae21e121e (the R-52 residual, rs3) -> 2a3a87dfc (R-54's
+renormalisation). It is building a fourth, optional commit that turns the cursorless branch off in the ENCODER only.
+The decoder still accepts cursorless words, so no image format moves. The lead chooses between the two.
+
+`check-repr.py --renorm` ports 2a3a87dfc's step. It agrees with that commit's bounds-model.py on 300,000 decodes,
+fixed and unfixed; a cross-check (renormalised port against the unfixed model) differs on 14,570 of 20,000, so the
+comparison fires. It also agrees with capstone-qemu aad781e15a (`qemu-encoder-diff.py --renorm`: 0 mismatches, 0 short
+decodes). Against the unfixed QEMU it differs on exactly the 1,089 wrapping triples.
+
+**(a) R-53 + rs3 + renorm** (`--format cursorless --renorm`):
+- Every verdict equals today's. The R-11 trap bases already known stay: stale-full r1_slots_pools at 7, the SQLite
+  cells at 14.
+- R-54's moved-cursor half closes. B4's A, B, C and H are predicted to cover once moved.
+- R-11 stays where the glue workaround does not reach. On the heap, B4's H at base stays [+0, +65532) when it
+  straddles a 4 MiB boundary.
+
+**(b) (a) + encoder-cursorless-off** (`--format full --renorm`):
+- No fault on any image: k800, s06agg, both r1_slots_pools, R-43 live16, the SQLite cells, b0-hello, b1-thread,
+  memcached and r54-bounds. R-11's trap bases and b1-thread's wrap traps both go.
+- OVERLAP on every image: a glue-carved global's capability reaches into its upper neighbour by up to the
+  remainder's granule.
+  - k800 64 B, s06agg 112 B;
+  - r1_slots_pools 2,560 B (stale-full) and 496 B;
+  - R-43 live16 1,008 B;
+  - SQLite cells 4,064 to 4,096 B;
+  - b0-hello 384 B, b1-thread 2,048 B, r54-bounds 4,096 B;
+  - memcached 32,768 B.
+- Nothing faults from that, but per-global separation on silicon is gone until the glue carves a globals sub-region.
+- Heap objects of 4 KiB and up get outward-rounded bounds at base.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
