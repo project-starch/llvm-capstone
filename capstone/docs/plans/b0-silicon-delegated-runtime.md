@@ -2077,6 +2077,48 @@ splits too: code, seal, dom_data, the descriptor area, gp, and code at its entry
   - Fix, if (b) or the format move is taken: size the granule from max(split_size's own granule, repr_gran) in
     create_domain (the FPGA monitor line, this lane's), with the firmware for that bitstream.
 
+## FP-bitstream acceptance amended for R-54, pre-registered 2026-10-13 (before any build; bitstream hash to be pinned)
+The bitstream the lead chooses is either:
+- **(a) capstone-ariane 2a3a87dfc**: R-53 cc1159a51, the R-52 residual's rs3 fix ae21e121e, and R-54's renormalisation,
+  off 0568f93a9;
+- **(b) 4a4261bb4**: (a) plus the encoder's cursorless branch removed. Its tree is byte-identical to 328f61761's, the
+  one ported and checked (tree 8bdb52a5).
+Both are on origin fp-fixes. The RTL lane's 95-test sweeps on 2a3a87dfc and 4a4261bb4 are identical to 0568f93a9's
+test by test. The earlier rows (B3j, B3i, fphold, b3-clock and now(), R-51, the S-16 set, the R-43 list, C5u, s10b,
+s06agg) stand as pre-registered above; this adds what R-54's fix and option (b) change.
+
+**B4's r54-bounds (image 0b0ff5d555188612), from check-repr.py's port** (`--renorm`, cursorless for (a), full for
+(b)); offsets from s, at base then moved by 8:
+| arm | 0568f93a9 (B4, observed) | (a) 2a3a87dfc | (b) 4a4261bb4 |
+|---|---|---|---|
+| A 65535 | [+0, +65535) / [+0, +32768) | [+0, +65535) / [+0, +65536) | [+0, +65536) / [+0, +65536) |
+| B 65520 at +16 | [+0, +65520) / [-16, +32752) | [+0, +65520) / [-16, +65520) | [-16, +65520) / [-16, +65520) |
+| C 8191 | [+0, +8191) / [+0, +4096) | [+0, +8191) / [+0, +8192) | [+0, +8192) / [+0, +8192) |
+| D 65536 | [+0, +65536) / same | same | same |
+| G 65471 | [+0, +65471) / [+0, +65472) | [+0, +65471) / [+0, +65472) | [+0, +65472) / [+0, +65472) |
+| H malloc(65535), straddling a 4 MiB boundary as at B4 | [+0, +65532) / [-48, +32784) | [+0, +65532) / [-112, +65552) | [-112, +65552) / same |
+| H not straddling | (not observed) | [+0, +65535) / [-112, +65552) | [-112, +65552) / same |
+| **rc** | **39** | **0** | **64** (bit 64: the at-base readings round outward, by design) |
+- Under (a), H at base keeps R-11's truncation when it straddles. It covers once moved.
+
+**The R-11 gate per option** (check-repr.py; the images are k800, s06agg, both r1_slots_pools, R-43 live16, cell5,
+cell6, b0-hello, b1-thread, memcached ba7e6921 and r54-bounds):
+- (a): `--format cursorless --renorm`. Every verdict as on 0568f93a9: stale-full r1 AT RISK at 7 bases, cell5/cell6 at
+  14, all others OK.
+- (b): `--format full --renorm`. No fault on any image, but OVERLAP on every one (64 B for k800 to 32,768 B for
+  memcached); a build gate passes it only with --allow-overlap. Every monitor capability is exact for these
+  images under both options.
+
+**Standing controls under (b):** predicted unchanged, because none of their readings is a bound read back.
+- The encoder change touches every capability written with its cursor on the base.
+- A reading that changes under (b) but not under (a) points at the encoder change, not at R-53, rs3 or the
+  renormalisation.
+
+**Refutations:**
+- (a): any arm short once moved; rc other than 0 (the H line may read +65532 at base and still rc 0).
+- (b): rc other than 64; any arm short; any at-base reading other than the table's.
+- Either: a standing control changing.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
