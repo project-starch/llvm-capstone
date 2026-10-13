@@ -1164,6 +1164,28 @@ stays open for the permission check and the cause number. Follow-up 674cdab03c r
 unsigned-overflow acceptance at the upper edge of the sealed-return window and from the general
 bounds check.
 
+## Q-15 — CDERIVE and CREVOKE across the QEMU profiles and the RTL: representability and decode differ `OPEN — for the format cycle; recorded 2026-10-13 from the RTL lane's capstone-sublet work`
+
+**Representability.** A CDERIVE child whose bounds the compact format cannot hold is treated three ways.
+capstone-qemu's compact profile refuses it with cause 29: `helper_csderive` compresses the child and
+compares the round trip (`target/riscv/op_helper.c`, capstone-qemu 7dbfdd534eea). The exact-bounds
+profile (`x-capstone-exact-bounds=true`) keeps the requested bounds in its shadow metadata. On the RTL
+work tree (capstone-ariane `capstone-sublet`, as the RTL lane reports it) CDERIVE does no round trip, and
+the child's bounds round outward at compression, as SPLIT and SHRINK already do there. The virtual
+runtime's ABI v5 requires the exact-bounds profile (`capstone/runtime/virtual/README.md`), so the
+allocators migrated to CDERIVE do not rely on the refusal. On the RTL their large, unaligned children
+would get bounds rounded outward instead of exact ones. This is the exact-bounds question of
+`docs/plans/virtual-capstone-rtl-feasibility.md`, now for CDERIVE as well.
+
+**Decode.** capstone-qemu decodes CDERIVE and CREVOKE only with `x-capstone-u-mode` (`trans_csderive`,
+`trans_cskill`, 5fb78e41a3); the physical profile raises illegal instruction 2, because the deployed RTL
+implements neither. The `capstone-sublet` RTL implements both. The QEMU gate must change in the same
+step as a bitstream that carries them, or the physical QEMU traps on code the board executes.
+
+**Fault order: agrees.** As the RTL lane reports it, the RTL follows `helper_csderive` and `helper_cskill`:
+CDERIVE raises 24, 26, 25, 29, then 30 or 25 from the node unit; CREVOKE raises 24, 26, 25, 27, then 29
+or 25. CDERIVE with rd = x0 still allocates, and CREVOKE with rd other than x0 is illegal, in both.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
