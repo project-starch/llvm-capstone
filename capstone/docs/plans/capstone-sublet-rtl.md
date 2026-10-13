@@ -70,7 +70,10 @@ What the synth lane receives with the hash:
   they are readings-only arms that never write tohost (capsbi-init, ccsrrw, cbnz, capenter, call-*, domain-save-*,
   r30-fill-init, r31-revoke-cursor, ...), and the harness printed that as SUCCESS. For those 26 the RC list compared
   nothing; the readings-level comparison in the RTL tree (`.sweep-compare.py`: per-test exceptions, CAPPRINT readings,
-  retired instructions) is being run over every gated tree against the baseline and its summary is appended here.
+  retired instructions) was run over every gated tree against the baseline output (0568f93a9, seed 20260922, memory
+  delay 12) on 2026-10-14: 2a3a87dfc and 4a4261bb4 each "95 tests: 92 identical (exceptions, readings, retired),
+  0 differ, 3 missing" (rand, perf_tcache_random, perf_riscv_random: no log on either side, on every tree), the
+  SUP_TRACE detector 0 on both sides. That is the FP bitstream's neutrality evidence; the RC lists were not.
   The harness fix (the limit now reads FAILED) rides the Sublet branch; the sweep baseline is re-taken on 0568f93a9
   under it, and the 26 arms get a tohost write in a later commit.
 - run.tcl and the flow untouched.
@@ -106,6 +109,10 @@ reports, before the flash.
 | 11c405304 | CREVOKE joins R-45's commit-flush list (`commit_stage.sv`, the fix that already orders younger loads behind REVOKE and DROP, on silicon since 2026-09-29), so a load right after CREVOKE refetches and is denied. Found by the port of QEMU's cases: the `ld` right after CREVOKE executed ~400 cycles before the kill finished and committed in order one cycle after it. A first version was an issue-side barrier over every tree mutation, withdrawn once the board lane pointed at R-45; SPLIT/DELIN/MREV/CDERIVE end no node and stay unordered. QEMU's sublet-lifetimes cases 0-34 and 37 ported as sublet-cases.S (36 of 36, plus the wrong-PC negative control that must fail). |
 
 | 464abe2ce | MREV deepens its whole subtree (deepen_req: a read-only overflow check before the handle, a write walk after) and a LINEAR split's sibling goes BEFORE the parent (QEMU's cap_rev_mrev and dup_before). The claim-auditor refuted the earlier "deepening is unreachable" argument: this RTL duplicates LINEAR capabilities (R-21: TIGHTEN/SHRINKTO return rs1 unchanged), so a node can carry a LINEAR (MREV) and a NONLIN duplicate (DELIN, CDERIVE); mrev twice then revoke of the inner handle orphaned the child. The helper lane found the same duplicate in QEMU (SHRINKTO; probe capstone/runtime/tests/sublet-lifetimes/mrev-over-derived), so QEMU exercises its deepening walk too. Arm sublet-mrev-orphan reads 0 (the orphan) on the step-4 tree and 25 here. |
+| cd5f35df2 | Arm sup-sublet: CDERIVE and CREVOKE inside a supervised domain (sup-escape.S's pattern, one seal and stub per arm, the capabilities inherited in GPRs, no mint inside). A derive, a store and load through the child, a CREVOKE and a RETURN read 0 \| 0xe 0x77 0 \| 1 0x77 0xe 0x5a5a; the four refusals escape as kind 2 with CSUPCAUSE 25 (a load through the dead child, R-45's refetch), 27 (no MANAGE), 29 (a grandchild), 26 (a LINEAR parent), each at offset 0 from its faulting instruction with the stub left SEALED (4); mcause 0. sup-static-audit.py reads 0 forbidden on every stub. |
+| ac2968e10 | The testharness ends a run at its cycle limit as FAILED (`rvfi_tracer.sv`: `end_of_test_q <= 32'hffff_ffff` instead of `32'h1`, which `ariane_tb.cpp` printed as SUCCESS with tohost 0). Positive control hang-control.S (no tohost write) reads FAILED at the limit. The supervised ladder takes `SUP_TIME_OUT`; the three arms that legitimately exceed 4M get their budget in `testlist_sup.yaml` comments with the cycle they end at: sup-mswap-capstl 6M (4,632,088), sup-stcsb-ev-q5k 6M (5,017,611), sup-stcsb-ev-q2k 9M (7,134,138). |
+| d93a8d66b | From the synthesis-oriented audit: KILL_NODE (a copy of REVOKE_NODE with other exits, which had raised the rev-node's memory write-request selector, R-35's -27.665 ns path, from 13 to 21 sites) is deleted; kill_req latches the same walk and sets kill_mode, REVOKE_NODE's exits answer kill_res or rev_res on it (18 sites). MREV's order becomes check, deepen-write, handle: a flush between mrev_res and the write pass used to leave the parent's depth bumped and its subtree not deepened, so a later REVOKE of the parent stopped at its first child; now a flush in either gap leaves the subtree one deeper than needed, which no walk can mis-read, and the replay deepens once more. The ex_stage record comment names the 110-bit record. Lint UNUSEDSIGNAL 902 -> 894 by name. Cost: MREV retires 8 cycles sooner and the next rev-node request completes when it did before (the pre-registration below has the measurement). |
+| 4be92a85a | verif/sim/Makefile only: a FAILED simulation still writes its retirement trace. The recipe ran the simulator as its own line, so after ac2968e10 a limit-ending run (exit non-zero) stopped make before spike-dasm wrote the .log; the first tip sweep under the fixed harness compared 66 of 95 and reported the 26 readings-only arms MISSING on both sides. Negative control: that run (.log.iss only); positive: hang-control FAILED with its .log, the wrong-PC control FAILED with its .log, a passing case unchanged. core/ and corev_apu/ untouched. |
 
 Divergences recorded (helper lane's Q-15 and this doc): no representability check in CDERIVE (the RTL rounds outward
 at compression; QEMU's compact profile refuses with 29; the migrated allocators run on QEMU's exact-bounds profile
@@ -118,16 +125,99 @@ round. What is coupled to the Sublet bitstream is therefore the QEMU decode gate
 check-repr.py (c9dab70b5a15) lists: its default --format moves from cursorless to full, the globals carve may need
 CAPSTONE_GLUE_CARVE_ALIGN or a globals sub-region (the OVERLAP under full encoding), and WIDEN must read 0.
 
-Still to do on the branch, in order:
+Gates on the tip (RTL d93a8d66b, gate tree 4be92a85a; every claim under the FIXED harness with the trace kept, on a
+snapshot proven equal to `git archive 4be92a85a` file by file, 2026-10-14): lint at baseline by name (the 40 loop
+names identical to 0568f93a9's); the 95-test sweep by .sweep-compare.py against 0568f93a9 re-swept under the same
+harness: 91 identical, 1 differ (r31-revoke-cursor's retired count at the cutoff, step 5's spin shift), 3 missing (the
+random generators, no log on either side), the 26 limit-ending arms compared on readings for the first time; the 36
+ported cases pass and the wrong-PC control fails; the four Sublet arms, sup-sublet and the supervised set at its
+budgets read their recorded values; the 17 R-12 ladder arms against the step-5 tree: 8 identical, 9 carrying one
+8-cycle move from MREV to the request after it, attributed below. The synthesis-oriented audit (rtl-oracle) answered:
+see the pre-registration.
 
-1. The testharness fix: `ariane_tb.cpp` prints SUCCESS when the cycle limit expires with no tohost write, so a hung
-   or over-budget test exits 0 and the exit-code sweep cannot see a new hang. Its own commit: a time-limit exit that
-   prints FAILED, with the three supervised arms that legitimately need more budget (sup-mswap-capstl ~4.6M cycles,
-   sup-stcsb-ev-q5k ~5.3M, -q2k ~8M, the board lane's reading of the 2026-10-10 logs) given 6M / 6M / 9M so their full
-   readings become their baseline. No sweep test reaches the limit on any tree gated this cycle.
-2. Gates before synthesis: lint at baseline by name, the sweep identical, the sup list identical plus the new arms,
-   claim-auditor on the kill walk's bound and the parent link's generation rule, then synthesis on the lead's word
-   with the pre-registration pushed first.
+## Synthesis of `capstone-sublet` d93a8d66b, pre-registered 2026-10-14 (before the handoff; the hash pinned)
+
+Build-go: the lead's word of 2026-10-14 ("go for the FP build now; the Sublet build when its gates pass"). The
+flash waits for flash-go: the lead's own word once the sealed hash exists AND the lockstep list is green (the FP
+acceptance boots complete; the QEMU decode gate on capstone-qemu physical-sublet-decode 9739f6e415 merged; check-repr
+and build-b0-hello.sh defaulting to `--format full --renorm` with the OVERLAP interim `--allow-overlap` and the
+figures recorded; the static-audit header naming 0x51/0x52 as allowed; the acceptance images rebuilt under the new
+word). Name: `caplifive_sublet_d93a8d66b.bit`.
+
+What the synth lane receives with the hash:
+- Tree: capstone-ariane capstone-sublet 4be92a85a = 4a4261bb4 (the FP bitstream's tree, a strict prefix) + 124d38406 (the load-side
+  S-06 invariant scoped to LDC) + d34c26002 (the word {revnode_id 30 | perm 4 | cap_type 3 | bounds 27}) + b330433fe
+  (CDERIVE / CREVOKE, the node parent link, derive_req / kill_req) + 52ad6e5ea (non-linear SPLIT keeps its node) +
+  11c405304 (CREVOKE in R-45's commit flush; QEMU's 36 cases ported) + 464abe2ce (MREV deepens its subtree; LINEAR
+  split siblings before the parent) + cd5f35df2 (the supervised arm) + ac2968e10 (the testharness ends a run at the
+  cycle limit as FAILED) + d93a8d66b (the audit's consequences: one walk for revoke and kill, deepen before the
+  handle, the record comment) + 4be92a85a (verif/sim/Makefile only: a FAILED simulation still writes its retirement
+  trace). The synthesis target is 4be92a85a's parent d93a8d66b: `git diff --stat d93a8d66b 4be92a85a` lists one file, verif/sim/Makefile,
+  so core/ and corev_apu/ are byte-identical between the hash that is built and the tree the gates ran on.
+  Hand-written RTL touched beyond the FP tree: ariane_pkg.sv, commit_stage.sv,
+  decoder.sv, ex_stage.sv, issue_read_operands.sv, load_unit.sv, tracer.sv; Anvil: capstone_unit.anvilh,
+  capstone_rev_node.anvil, capstone_dyn_unit.anvil, capstone_flu_unit.anvil (the generated units differ from
+  0568f93a9's).
+- Lint (rtl-lint-gate.sh, the pinned container, from `git archive` of the tip): LATCH 52, MULTIDRIVEN 3, ALWCOMBORDER 0, COMBDLY 0, UNOPTFLAT 40, ANVIL_UNOPTFLAT 0,
+  BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 894, CASEOVERLAP 2, SELRANGE 100; PASS; negative control BLOCKED. The 40 UNOPTFLAT names are identical to 0568f93a9's (by-name diff, 2026-10-14). UNUSEDSIGNAL by file against 0568f93a9 (832):
+  capstone_dyn_unit.anvil.sv 259 -> 296, capstone_rev_node.anvil.sv 34 -> 58 (generated thread wires, by name),
+  ariane_pkg.sv 6 -> 7 (compress_cap's cap.cursor, the FP tree's 833); every other file unchanged. In the hand-written
+  files the only by-name differences against 4a4261bb4 are the three metadata slices renumbered by the word
+  (commit_stage.sv cap_result_metadata, load_unit.sv cap_metadata and rs1_cap_metadata).
+- Behaviour, all under the FIXED harness (the limit reads FAILED) with the Makefile fix (a failed run keeps its
+  trace), on both sides: the 95-test sweep compared by .sweep-compare.py against 0568f93a9 swept under the same
+  harness: 95 tests: 91 identical (exceptions, readings, retired), 1 differ, 3 missing (rand, perf_tcache_random,
+  perf_riscv_random: no log on either side); the SUP_TRACE detector 0 on both; the 26 limit-ending arms compared on
+  their readings this time, all identical; the one difference is r31-revoke-cursor retired 999,229 vs 999,223 at the
+  2,000,013-cycle cutoff with identical exceptions and readings, step 5's shift (MREV's check pass starts the arm's
+  spin later), present on 464abe2ce already. The first attempt (before the Makefile fix) compared 66 and reported the 26 limit-ending
+  arms MISSING on both sides: a run that exits non-zero stopped the recipe before spike-dasm wrote the trace. QEMU's 36 portable sublet-lifetimes cases pass and
+  the wrong-PC control fails; sublet-derive-kill (19 readings), sublet-split-shares-node (7), sublet-mrev-orphan (8),
+  sup-sublet (29) read their pre-registered values; sup-arm/escape/quantum and the three re-budgeted supervised arms
+  reach CAP_PASS; the 17 R-12 ladder arms (reclaimer, pool-exhaust, delin-dead, the S1 ladder) against the
+  step-5 tree 464abe2ce, the ten limit-ending arms included, by exceptions and readings: 8 identical; opcost's
+  two-node REVOKE 0xfb -> 0x103 (+8) with its SPLIT and both MREV readings unchanged; the S1 ladder's timed
+  revoke +8 at every N (n1 0x13d -> 0x145 ... n160 0x2557 -> 0x255f: the intercept, not the slope); freelist-n16386
+  reaches 16,964 readings before the 2M-cycle limit against 16,933, every common reading identical. Attributed, not
+  assumed: the per-instruction commit cycles in the SUP_TRACE show the cycles MOVED, not added. In s1-n8 the first
+  MREV commits 8 cycles sooner on the tip and every later instruction runs 8 cycles early with identical gaps, until
+  the timed REVOKE, which commits at the SAME absolute cycle on both trees (4284): its reading grows by the 8 cycles
+  the program arrived early, and the program's total time is unchanged to the cycle. opcost and the n16386 loop show
+  the same shape (MREV -8 / REVOKE +8, sum 0; the loop MREV -27, DROP +10, REVOKE +15, net -2 per iteration). A
+  one-change variant (step 6's kill-mode exits alone on the step-5 tree, deepen bound and MREV order as in step 5)
+  reads step 5's values exactly on opcost and s1-n8, and the rtl-oracle's read of the generated unit confirms the
+  exits and the kill_mode set cost zero states, so the move belongs to MREV's reorder (check, deepen-write, handle):
+  the handle's parent write is now MREV's last request, MREV retires sooner, and the next rev-node request completes
+  when it did before. Which structure holds that completion point (the rev-node memory channel's write completion
+  or the R-35 fill taps) is UNRESOLVED and does not change the reading of the move. A constant per-revoke offset that follows an
+  MREV; the board lane's S1 release-cost slope is unaffected, its intercept moves by 8 cycles. RETRACTED here, lane
+  branch only (d93a8d66b's message, never on dev): "r12-s1-n8: the same verdicts" was an exit-code comparison; under
+  the fixed harness that arm had no retirement trace on either side (the Makefile gap above), so RC=1 on both meant
+  only that both reached the limit.
+- The synthesis-oriented audit (rtl-oracle, 2026-10-14): every record literal names all eight fields and every
+  generated write drives the parent slice; the 110-bit packing and both taps' slices bit-exact; the 3-bit stage
+  case full with a default; R-27's nine-channel drain order-consistent; the three new endpoints add no same-cycle
+  request-to-response path and no new crossing into the wt_dcache_mem ring. Its two findings are already in the
+  tree (d93a8d66b): the kill walk no longer duplicates REVOKE_NODE, and MREV deepens before it mints.
+- run.tcl and the flow untouched. DTS: 65536 nodes unchanged (INIT_STAGE head := 3, the sentinel 65535).
+
+Predictions, written before the build (refutation keys in brackets):
+- Routed WNS inside -13.335..-5.855. [outside: read the failing endpoint's start and end before concluding]
+- Loop membership by stem unchanged; LUTLP-1 0. [a new stem names its cone; LUTLP > 0 is a stop]
+- The first failing endpoint, if timing moves, sits behind the rev-node's memory-channel write selector that R-35
+  named as the -27.665 ns path: the selector has 18 write sites and 140-bit arms against 13 and 124 on 0568f93a9,
+  so revnode_fill_id_q / revnode_rdfill_id_q (ex_stage.sv, the R-35 registers) or the consumers of node_update_a/b
+  come first. [an endpoint elsewhere first is a different finding]
+- Area: capstone_rev_node up by hundreds of LUTs (two walk modes, a deepen stage, three endpoint selectors, a
+  16-bit parent field through every record register: four rev_node_t registers x 16 FFs = 64 FFs plus the
+  deepen_mode / kill_mode / stage bits); capstone_dyn_unit up by hundreds (CDERIVE, CREVOKE, the MREV sequence, the
+  NONLIN split branch); the decoder two cases; issue_read_operands two ops in a set; commit_stage one op in a list;
+  ex_stage two more drain bits and 16 more request bits. Everything else flat. [a rise outside these units is a
+  finding]
+- Route time: flagged if it crosses the 3h30m mark again, as 0568f93a9's did.
+
+The grade (sealed sha256, size, routed WNS, stems, LUT/FF rows, route time) is appended here when the synth lane
+reports, before the flash.
 
 ## Lessons recorded this cycle (memory, not rules)
 
