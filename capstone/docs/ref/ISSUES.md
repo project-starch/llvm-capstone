@@ -1140,6 +1140,22 @@ A program that passes an invalid immediate therefore runs on the emulator and tr
 first instance was E3's R1 harness encoding a register NUMBER (12) into the immediate field; see
 R-21's box. **Which behaviour is intended is a spec question**, and neither source reads as the
 specification. The RTL's refusal is the safer default.
+
+> **2026-10-14: the threshold moved, and escalation has a second cause difference.**
+> - **Threshold.** Since capstone-qemu #21 (7dbfdd534eea, dev's pin) the permission field is 4 bits wide
+>   (MANAGE = 8). `helper_cstighten` now clamps `perms > CAP_PERMS_ALL` (15), not `> 7`. Immediates 8-15
+>   are real requests, and the silent clamp applies only above 15.
+> - **Escalation.** An immediate the source does not hold is "Illegal operand value (29)" in the
+>   specification (`cap-man-insn.adoc`, TIGHTEN: `imm <= 7` and `imm <=p x[rs1].perms` fails). The RTL
+>   raises 29 too, through the same `(imm_v & rs1_perm) != imm_v` test above. The RTL lane reports the
+>   same for capstone-sublet's MANAGE bit, in its port of the sublet-lifetimes case 26.
+> - **QEMU's cause.** capstone-qemu raises 26 (`helper_cstighten`: `cap_perms_allow` fails, then
+>   `RISCV_EXCP_UNEXP_CAP_TYPE`). It does so on both profiles: case 26 `cannot_restore_manage` reads 26 at its
+>   fault site on the virtual gate and on the physical-case run of capstone-qemu `physical-sublet-decode`
+>   (9739f6e415).
+>
+> The specification's rule is written for the 3-bit field. Whether a MANAGE request follows it is for the
+> format cycle (Q-15).
 ## Q-14 — capstone-qemu enforces no capability permission on a data load or store, and reports an out-of-bounds access as an access fault `OPEN — model divergence; found 2026-09-30 by Probe A case A2 (delegation-threads)`
 
 **What the emulator checks.** `_helper_access_with_cap` (`target/riscv/op_helper.c:1611`, capstone-qemu
@@ -1186,6 +1202,17 @@ would get bounds rounded outward instead of exact ones. This is the exact-bounds
 `trans_cskill`, 5fb78e41a3); the physical profile raises illegal instruction 2, because the deployed RTL
 implements neither. The `capstone-sublet` RTL implements both. The QEMU gate must change in the same
 step as a bitstream that carries them, or the physical QEMU traps on code the board executes.
+
+The flip is ready and held on capstone-qemu branch `physical-sublet-decode` (9739f6e415, based on
+7dbfdd534eea). It merges with the flash that carries capstone-sublet, not before. The branch:
+- removes the profile check from both decoders (CREVOKE with rd ≠ x0 stays illegal);
+- adds five physical-profile arms: untagged operands → 24, rd ≠ x0 → 2, and a CREVOKE-ended
+  grandchild → 25, paired with the same arm without the CREVOKE;
+- runs the gate's 37 cases on the physical profile.
+
+All 37 give the virtual cause at the same fault site, except two that differ by design: case 34
+(24, Q-11) and case 35 (29 at the CDERIVE: no exact bounds). The gate reads 119/119 on the branch,
+and 78/119 on the gated build, where every physical case stops with 2.
 
 **Fault order: agrees.** As the RTL lane reports it, the RTL follows `helper_csderive` and `helper_cskill`:
 CDERIVE raises 24, 26, 25, 29, then 30 or 25 from the node unit; CREVOKE raises 24, 26, 25, 27, then 29

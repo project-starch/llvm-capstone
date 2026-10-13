@@ -63,9 +63,16 @@ What the synth lane receives with the hash:
   no longer read by the encoder), CASEOVERLAP 2, SELRANGE 100; the negative control reads BLOCKED.
 - The 40 UNOPTFLAT names are IDENTICAL between 0568f93a9 and 4a4261bb4 (by-name diff of the two listings, 2026-10-14
   morning), so "loop membership by stem unchanged" is pre-build evidence here, not a prediction.
-- Behaviour: the 95-test sweep identical to 0568f93a9 test by test with no log at the cycle limit; rv64ud 12/12, the
-  s18/s19/r52/r51 FP arms, the bounds arms (bounds-renorm, cursorless-off) and the supervised arms as recorded in
-  the commits.
+- Behaviour: the 95-test sweep's RC list identical to 0568f93a9's; rv64ud 12/12, the s18/s19/r52/r51 FP arms, the
+  bounds arms (bounds-renorm, cursorless-off) and the supervised arms as recorded in the commits. RETRACTED
+  2026-10-14, same day: "no log at the cycle limit" was read with the wrong number (4,000,013, the ladder runner's;
+  the sweep's is 2,000,013). 26 of the sweep's 95 tests end at ITS limit on every tree, baseline included, because
+  they are readings-only arms that never write tohost (capsbi-init, ccsrrw, cbnz, capenter, call-*, domain-save-*,
+  r30-fill-init, r31-revoke-cursor, ...), and the harness printed that as SUCCESS. For those 26 the RC list compared
+  nothing; the readings-level comparison in the RTL tree (`.sweep-compare.py`: per-test exceptions, CAPPRINT readings,
+  retired instructions) is being run over every gated tree against the baseline and its summary is appended here.
+  The harness fix (the limit now reads FAILED) rides the Sublet branch; the sweep baseline is re-taken on 0568f93a9
+  under it, and the 26 arms get a tohost write in a later commit.
 - run.tcl and the flow untouched.
 
 Predictions, written before the build (the refutation keys in brackets):
