@@ -1868,7 +1868,15 @@ The RTL lane confirmed both in simulation, on branch capstone-sublet off 0568f93
   forwarding live and exposed it. The fix is in progress (arm r52-fcvt-behind-fdiv.S).
 
 Predictions for a bitstream carrying both fixes, written before it exists. Everything else is predicted unchanged
-from 0568f93a9's acceptance (above):
+from 0568f93a9's acceptance (above).
+
+**SCOPE CHANGE, 2026-10-13: the same branch also carries the Sublet-lifetimes capability format move (4-bit perm,
+27-bit bounds).** Every "unchanged" row below is CONDITIONAL until the RTL lane answers four questions:
+- the exact encoding change;
+- which software must change in lockstep (QEMU, the compiler, the monitor, the runtime, the module);
+- whether images built for 0568f93a9 stay valid, since the R-43 and S-16 controls are same-image comparisons;
+- whether check-repr.py's compress/decompress port, the R-11 build gate, still models the hardware.
+The FP rows (B3i, B3j, fphold, now()) do not depend on the capability format.
 - **B3j (b3-fpnow-probe):** shapes A, B, C and D each read **0 of 40,000 wrong**, and the checker control passes. C's
   1 of 20,000 on 0568f93a9 is predicted to go too, if it was R-53's stale restore.
 - **B3i (b3-fpstate-probe):** n, w, l, z, s and f each read **IIIIIIIIIIII**. The signal frame and the fork child
