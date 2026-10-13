@@ -2166,6 +2166,40 @@ of fc3225fb237d and 6bc165f2e1c2. Staged in /tmp/capstone/accept-fpb (chain.sh, 
 - **s06agg reads 64**, as pre-registered. The RTL lane raised and withdrew a cursorless dependence: its verdict reads
   plain data through the NOT_CAP path, before compress_bounds.
 
+## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
+The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
+sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one
+cutoff-count difference. It flashes only after the FP acceptance boots, because its decoder no longer reads
+cursorless words. Before its pre-registration, this lane owes:
+1. **The gate:**
+   - check-repr.py's default and build-b0-hello.sh's B0_CAP_FORMAT move to `full --renorm`; this is already due at
+     the FP (b) flash, since (b) encodes every capability in the full scheme;
+   - OVERLAP: `--allow-overlap` with the figures recorded per image until the globals sub-region carve lands
+     (whether that carve must come first is the lead's choice);
+   - WIDEN under full already raises.
+2. **CAPSTONE_GLUE_CARVE_ALIGN:** it computes the cursorless granule, the `xor/srli 21` pair. Under the full scheme
+   it is a documented no-op until the sub-region carve replaces it.
+3. **The monitor's create_domain granule (C-13):** max(split_size's own granule, repr_gran). It matters only for
+   code-heavy images, and none is in the acceptance set.
+4. **Predictions to pre-register:**
+   - r54-bounds 64, as on (b);
+   - s06agg 64 (plain data through the NOT_CAP path);
+   - every image of the (b) table with the same check-repr verdicts, because the encoder is identical to (b)'s;
+   - the R1 release-cost harness's REVOKE readings: UNCHANGED.
+     - On d93a8d66b's S1 ladder a REVOKE right behind an MREV reads +8 cycles at every node count
+       (n1 0x13d -> 0x145 ... n160 0x2557 -> 0x255f, the RTL lane). The slope and the program's total time are
+       unchanged; the 8 cycles move out of MREV's retirement into REVOKE's bracket.
+     - R1 brackets REVOKE right after the handle's ldc (r1_slots_pools.c:139-143: ldc, csrr, REVOKE, csrr), and
+       the handle's MREV ran at fixture issue time, long before. So the shift should not reach R1's numbers (76
+       cycles at 2 nodes, 22.7 per node, fpga-silicon-measurements-for-paper.md). MREV's added check pass falls
+       outside the bracket, at issue time.
+5. **The Sublet acceptance floor (the RTL lane's):** three bare JTAG arms pre-registered from simulation
+   (sublet-derive-kill 19 readings, sublet-mrev-orphan 8, sublet-split-shares-node 7). The positive control is the
+   same arms on the FP bitstream, which trap 2 at the first CDERIVE.
+6. **Optional, this lane:** a runtime-level rung (capstone_cap_derive / capstone_cap_revoke_child through
+   build-b0-hello.sh, in the shape of QEMU's sublet cases 0/1/3/7/10/22), with values pre-registered from the RTL
+   simulation of the same source.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
