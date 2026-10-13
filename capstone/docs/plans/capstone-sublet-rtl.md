@@ -63,7 +63,12 @@ Divergences recorded (helper lane's Q-15 and this doc): no representability chec
 at compression; QEMU's compact profile refuses with 29; the migrated allocators run on QEMU's exact-bounds profile
 and never see the refusal); TIGHTEN asking for a right the source lacks raises 29 here and in the academic spec, 26
 in QEMU (sublet case 26); the physical QEMU profile raises 2 for CDERIVE/CREVOKE and must flip in the same step as
-the bitstream that carries them.
+the bitstream that carries them. The capability word itself needs no QEMU change: every QEMU profile has used
+{revnode_id 30 | perm 4 | cap_type 3 | bounds 27} since capstone-qemu #21 (cap_compress.c is shared by all
+profiles; bounds were always the 27-bit full scheme), so the format move brings the RTL to QEMU, not the other way
+round. What is coupled to the Sublet bitstream is therefore the QEMU decode gate above and, on the SDK side, what
+check-repr.py (c9dab70b5a15) lists: its default --format moves from cursorless to full, the globals carve may need
+CAPSTONE_GLUE_CARVE_ALIGN or a globals sub-region (the OVERLAP under full encoding), and WIDEN must read 0.
 
 Still to do on the branch, in order:
 
