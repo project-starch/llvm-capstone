@@ -1,0 +1,520 @@
+{
+ "program": "Perl 5.36.3",
+ "pre_registration": "16d2171a3edc",
+ "workload": "scripts/smoke.pl, CAPSTONE_PERL_SMOKE_OBJECTS=2000, capstone-vexec perl.dom smoke.pl DIR",
+ "boundaries": {
+  "sv-heads": {
+   "stock": {
+    "buckets": {
+     "1": 15648,
+     "2": 13014,
+     "3": 9377,
+     "4": 7772,
+     "5": 2600,
+     "6": 1452,
+     "7": 362,
+     "8": 520,
+     "9": 241,
+     "10": 330,
+     "11": 527,
+     "12": 1036,
+     "13": 7,
+     "14": 2,
+     "15": 3,
+     "16": 3454
+    },
+    "issues": 80204,
+    "releases": 76294,
+    "reuses": 56345,
+    "distinct_starts": 23859,
+    "attempts": 80204,
+    "error": 0,
+    "capacity": 262144,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 15648,
+       "2": 13014,
+       "3": 9377,
+       "4": 7772,
+       "5": 2600,
+       "6": 1452,
+       "7": 362,
+       "8": 520,
+       "9": 241,
+       "10": 330,
+       "11": 527,
+       "12": 1036,
+       "13": 7,
+       "14": 2,
+       "15": 3,
+       "16": 3454
+      },
+      "issues": 80204,
+      "releases": 76294,
+      "reuses": 56345,
+      "distinct_starts": 23859,
+      "attempts": 80204,
+      "error": 0,
+      "capacity": 262144
+     },
+     {
+      "buckets": {
+       "1": 15648,
+       "2": 13014,
+       "3": 9377,
+       "4": 7772,
+       "5": 2600,
+       "6": 1452,
+       "7": 362,
+       "8": 520,
+       "9": 241,
+       "10": 330,
+       "11": 527,
+       "12": 1036,
+       "13": 7,
+       "14": 2,
+       "15": 3,
+       "16": 3454
+      },
+      "issues": 80204,
+      "releases": 76294,
+      "reuses": 56345,
+      "distinct_starts": 23859,
+      "attempts": 80204,
+      "error": 0,
+      "capacity": 262144
+     },
+     {
+      "buckets": {
+       "1": 15648,
+       "2": 13014,
+       "3": 9377,
+       "4": 7772,
+       "5": 2600,
+       "6": 1452,
+       "7": 362,
+       "8": 520,
+       "9": 241,
+       "10": 330,
+       "11": 527,
+       "12": 1036,
+       "13": 7,
+       "14": 2,
+       "15": 3,
+       "16": 3454
+      },
+      "issues": 80204,
+      "releases": 76294,
+      "reuses": 56345,
+      "distinct_starts": 23859,
+      "attempts": 80204,
+      "error": 0,
+      "capacity": 262144
+     }
+    ]
+   },
+   "protected": {
+    "buckets": {
+     "1": 15648,
+     "2": 13014,
+     "3": 9377,
+     "4": 7772,
+     "5": 2600,
+     "6": 1452,
+     "7": 362,
+     "8": 520,
+     "9": 241,
+     "10": 330,
+     "11": 527,
+     "12": 1036,
+     "13": 7,
+     "14": 2,
+     "15": 3,
+     "16": 3454
+    },
+    "issues": 80204,
+    "releases": 76294,
+    "reuses": 56345,
+    "distinct_starts": 23859,
+    "attempts": 80204,
+    "error": 0,
+    "capacity": 262144,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 15648,
+       "2": 13014,
+       "3": 9377,
+       "4": 7772,
+       "5": 2600,
+       "6": 1452,
+       "7": 362,
+       "8": 520,
+       "9": 241,
+       "10": 330,
+       "11": 527,
+       "12": 1036,
+       "13": 7,
+       "14": 2,
+       "15": 3,
+       "16": 3454
+      },
+      "issues": 80204,
+      "releases": 76294,
+      "reuses": 56345,
+      "distinct_starts": 23859,
+      "attempts": 80204,
+      "error": 0,
+      "capacity": 262144
+     },
+     {
+      "buckets": {
+       "1": 15648,
+       "2": 13014,
+       "3": 9377,
+       "4": 7772,
+       "5": 2600,
+       "6": 1452,
+       "7": 362,
+       "8": 520,
+       "9": 241,
+       "10": 330,
+       "11": 527,
+       "12": 1036,
+       "13": 7,
+       "14": 2,
+       "15": 3,
+       "16": 3454
+      },
+      "issues": 80204,
+      "releases": 76294,
+      "reuses": 56345,
+      "distinct_starts": 23859,
+      "attempts": 80204,
+      "error": 0,
+      "capacity": 262144
+     },
+     {
+      "buckets": {
+       "1": 15648,
+       "2": 13014,
+       "3": 9377,
+       "4": 7772,
+       "5": 2600,
+       "6": 1452,
+       "7": 362,
+       "8": 520,
+       "9": 241,
+       "10": 330,
+       "11": 527,
+       "12": 1036,
+       "13": 7,
+       "14": 2,
+       "15": 3,
+       "16": 3454
+      },
+      "issues": 80204,
+      "releases": 76294,
+      "reuses": 56345,
+      "distinct_starts": 23859,
+      "attempts": 80204,
+      "error": 0,
+      "capacity": 262144
+     }
+    ]
+   },
+   "summary": {
+    "median_bucket": {
+     "stock": [
+      2,
+      2,
+      2
+     ],
+     "protected": [
+      2,
+      2,
+      2
+     ]
+    },
+    "reusediff_rep1": 0.0,
+    "reusediff_all_cross_pairs": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "reusediff_within_stock": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "reusediff_within_protected": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "identical_rep1": true,
+    "per_bucket_ranges": {
+     "1": {
+      "stock": [
+       15648,
+       15648
+      ],
+      "protected": [
+       15648,
+       15648
+      ]
+     },
+     "2": {
+      "stock": [
+       13014,
+       13014
+      ],
+      "protected": [
+       13014,
+       13014
+      ]
+     },
+     "3": {
+      "stock": [
+       9377,
+       9377
+      ],
+      "protected": [
+       9377,
+       9377
+      ]
+     },
+     "4": {
+      "stock": [
+       7772,
+       7772
+      ],
+      "protected": [
+       7772,
+       7772
+      ]
+     },
+     "5": {
+      "stock": [
+       2600,
+       2600
+      ],
+      "protected": [
+       2600,
+       2600
+      ]
+     },
+     "6": {
+      "stock": [
+       1452,
+       1452
+      ],
+      "protected": [
+       1452,
+       1452
+      ]
+     },
+     "7": {
+      "stock": [
+       362,
+       362
+      ],
+      "protected": [
+       362,
+       362
+      ]
+     },
+     "8": {
+      "stock": [
+       520,
+       520
+      ],
+      "protected": [
+       520,
+       520
+      ]
+     },
+     "9": {
+      "stock": [
+       241,
+       241
+      ],
+      "protected": [
+       241,
+       241
+      ]
+     },
+     "10": {
+      "stock": [
+       330,
+       330
+      ],
+      "protected": [
+       330,
+       330
+      ]
+     },
+     "11": {
+      "stock": [
+       527,
+       527
+      ],
+      "protected": [
+       527,
+       527
+      ]
+     },
+     "12": {
+      "stock": [
+       1036,
+       1036
+      ],
+      "protected": [
+       1036,
+       1036
+      ]
+     },
+     "13": {
+      "stock": [
+       7,
+       7
+      ],
+      "protected": [
+       7,
+       7
+      ]
+     },
+     "14": {
+      "stock": [
+       2,
+       2
+      ],
+      "protected": [
+       2,
+       2
+      ]
+     },
+     "15": {
+      "stock": [
+       3,
+       3
+      ],
+      "protected": [
+       3,
+       3
+      ]
+     },
+     "16": {
+      "stock": [
+       3454,
+       3454
+      ],
+      "protected": [
+       3454,
+       3454
+      ]
+     }
+    },
+    "ranges_overlap_every_bucket": true,
+    "buckets_identical_every_pair": true
+   }
+  }
+ },
+ "images": {
+  "stock": {
+   "sha256": "2e533bf2f477cf6a4220a05856560f526b0f5cbe4e9a3abb0d9925052c8ff164",
+   "uninstrumented_sha256": "bf0ed9cba9807ebe941b41b8f0d205d906339898c4d0eb985986c83d239dc13b"
+  },
+  "protected": {
+   "sha256": "b978c3528881656c99011281014a62a48a8f6d17fb7da23dc89db62f9ebe5ae4",
+   "uninstrumented_sha256": "5b97009a7dd97021d342ac8dc3a1b197b7b30d8c740b279e8102addfc0794aa5"
+  }
+ },
+ "platform": {
+  "sha256": {
+   "qemu-system-riscv64": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+   "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+   "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+   "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+   "capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+   "capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+   "run-staged.py": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c",
+   "clang": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4"
+  },
+  "description": "Sublet-lifetime QEMU af37cc32, launcher 3975314a, module a1c6cb6b, exact bounds, one hart, 2 GiB (as registered)"
+ },
+ "runs": {
+  "stock": [
+   {
+    "exit": 0,
+    "guest_wall_s": 38.08,
+    "image_sha256_guest": "2e533bf2f477cf6a4220a05856560f526b0f5cbe4e9a3abb0d9925052c8ff164",
+    "stdout_sha256_guest": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "cleanup_rmmod_rc": 0,
+    "stderr_other_lines": [],
+    "stdout_sha256_host": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "output_check": true
+   },
+   {
+    "exit": 0,
+    "guest_wall_s": 37.99,
+    "image_sha256_guest": "2e533bf2f477cf6a4220a05856560f526b0f5cbe4e9a3abb0d9925052c8ff164",
+    "stdout_sha256_guest": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "cleanup_rmmod_rc": 0,
+    "stderr_other_lines": [],
+    "stdout_sha256_host": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "output_check": true
+   },
+   {
+    "exit": 0,
+    "guest_wall_s": 38.04,
+    "image_sha256_guest": "2e533bf2f477cf6a4220a05856560f526b0f5cbe4e9a3abb0d9925052c8ff164",
+    "stdout_sha256_guest": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "cleanup_rmmod_rc": 0,
+    "stderr_other_lines": [],
+    "stdout_sha256_host": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "output_check": true
+   }
+  ],
+  "protected": [
+   {
+    "exit": 0,
+    "guest_wall_s": 44.25,
+    "image_sha256_guest": "b978c3528881656c99011281014a62a48a8f6d17fb7da23dc89db62f9ebe5ae4",
+    "stdout_sha256_guest": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "cleanup_rmmod_rc": 0,
+    "stderr_other_lines": [],
+    "stdout_sha256_host": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "output_check": true
+   },
+   {
+    "exit": 0,
+    "guest_wall_s": 43.92,
+    "image_sha256_guest": "b978c3528881656c99011281014a62a48a8f6d17fb7da23dc89db62f9ebe5ae4",
+    "stdout_sha256_guest": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "cleanup_rmmod_rc": 0,
+    "stderr_other_lines": [],
+    "stdout_sha256_host": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "output_check": true
+   },
+   {
+    "exit": 0,
+    "guest_wall_s": 44.05,
+    "image_sha256_guest": "b978c3528881656c99011281014a62a48a8f6d17fb7da23dc89db62f9ebe5ae4",
+    "stdout_sha256_guest": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "cleanup_rmmod_rc": 0,
+    "stderr_other_lines": [],
+    "stdout_sha256_host": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "output_check": true
+   }
+  ]
+ },
+ "buckets_note": "3 repetitions per arm; 'buckets' and the counters beside it are repetition 1, 'repetitions' lists all three in order"
+}

@@ -1,0 +1,12 @@
+case	arm	outcome	cause	function	in_fault_sites	harness
+01_ad5fedb002_for-loop-gv-freed-early	virtual-malloc	fault	24	Perl_pp_iter	yes	
+02_d2cddbe1df_caller-args-freed-sv	virtual-malloc	exit255				[PASS] 0 panic: attempt to copy freed scalar 3fac866550 to 3fabdee1d0 at /mnt/host/perl-cases/02.pl line 14.
+03_9e298ab597_av-extend-unshift-stale-slots	virtual-malloc	completed				[PASS] 1
+04_e4be969235_join-delimiter-freed-by-magic	virtual-malloc	fault	25	memmove	yes	
+05_17535c984a_cloned-const-sub-unrefcounted	virtual-malloc	completed				[FAIL] 1 of 2: 2,ok,no 'Attempt to free unreferenced scalar' Attempt to free unreferenced scalar'
+06_40727c420c_code-blocks-count-reused	virtual-malloc	completed				[FAIL] 5 of 29: 12,like,code in array 8,got=XAB-QC | 15,unlike,code in array 8 not 3 | 25,like,code in array 14,got=aabb-bb-=ee
+07_39b4841b25_recursive-code-eval-rex-freed	virtual-malloc	fault	25	S_regcppop	yes	
+08_b7b77ffc1e_clear-errsv-on-a-glob	virtual-malloc	fault	28	Perl_pp_gvsv	no	
+09_1189b87114_special-block-cv-freed	virtual-malloc	fault	24	Perl_newATTRSUB_x	yes	
+10_254b30e378_perlio-scalar-write-overlap	virtual-malloc	fault	25	memmove	yes	
+11_af11b0c528_cow-subbeg-across-code-eval	virtual-malloc	completed				[FAIL] 3 of 3: 1,is,[perl #16952] failed (?{}) branch keeps prior captures,got=foo-o

@@ -1,0 +1,99 @@
+Reuse-distance hooks for Perl 5.36.3, PROTECTED arm: applies to the port tree
+plus ports/perl/sublet/patches/5.36.3/0001 (PERLD_SUBLET=1). That patch puts
+uproot_SV and plant_SV under #ifdef PERL_CAPSTONE_SUBLET with the upstream
+macros in #else, so the same two hook lines go into both branches, at the same
+place as in the stock variant: in uproot_SV right after ++PL_sv_count (before
+Perl_sv_arena_issue derives the child), in plant_SV right before --PL_sv_count.
+
+Everything is under EXP_REUSE_GAP (passed by the wrapper through PERLD_OPT, so
+it reaches the target compile only, not perl-cross's host miniperl). Without
+the define the preprocessed source is unchanged. Boundary "sv-heads": every
+hand-out of a free head (uproot_SV, the one path to a new head, from new_SV
+and Perl_more_sv) is reuse_gap_attempt + reuse_gap_issue with the head's
+address and sizeof(SV); every release (plant_SV, which del_SV expands to) is
+reuse_gap_release. The address is the pointer the free list holds. sv.c
+includes reuse-gap-hook.h and reuse-gap-observer.h, which the wrapper copies
+into the source root.
+
+--- a/sv_inline.h
++++ b/sv_inline.h
+@@ -56,6 +56,19 @@
+ #  define MEM_LOG_DEL_SV(sv, file, line, func)  NOOP
+ #endif
+ 
++#ifdef EXP_REUSE_GAP
++/* Reuse-distance observer (experiments/study/reuse-hooks/perl): uproot_SV
++   reports each hand-out of a free head and plant_SV each release, keyed by
++   the head's address as the free list holds it (sv.c). Integers only. */
++PERL_CALLCONV void Perl_reuse_gap_sv_issue(const SV *sv);
++PERL_CALLCONV void Perl_reuse_gap_sv_release(const SV *sv);
++#  define REUSE_GAP_SV_ISSUE(p)	Perl_reuse_gap_sv_issue(p)
++#  define REUSE_GAP_SV_RELEASE(p)	Perl_reuse_gap_sv_release(p)
++#else
++#  define REUSE_GAP_SV_ISSUE(p)	NOOP
++#  define REUSE_GAP_SV_RELEASE(p)	NOOP
++#endif
++
+ #ifdef PERL_CAPSTONE_SUBLET
+ /* The free list holds the arena's own pointers; the head is handed out as a
+    child lifetime of its arena, bounded to it (sv.c). */
+@@ -65,6 +78,7 @@
+         (p) = PL_sv_root;                               \
+         PL_sv_root = MUTABLE_SV(SvARENA_CHAIN(p));              \
+         ++PL_sv_count;                                  \
++        REUSE_GAP_SV_ISSUE(p);                          \
+         (p) = Perl_sv_arena_issue(p);                   \
+     } STMT_END
+ #else
+@@ -73,6 +87,7 @@
+         (p) = PL_sv_root;                               \
+         PL_sv_root = MUTABLE_SV(SvARENA_CHAIN(p));              \
+         ++PL_sv_count;                                  \
++        REUSE_GAP_SV_ISSUE(p);                          \
+     } STMT_END
+ #endif
+ 
+--- a/sv.c
++++ b/sv.c
+@@ -241,6 +241,25 @@
+ #  define DEBUG_SV_SERIAL(sv)	NOOP
+ #endif
+ 
++#ifdef EXP_REUSE_GAP
++/* Reuse-distance observer, one boundary: SV heads (sv_inline.h). The table
++   is static, 2^18 slots; the report is one REUSE-GAP line on stderr at exit. */
++#include "reuse-gap-hook.h"
++REUSE_GAP_HOOK(sv_reuse_gap, "sv-heads", 18, 0)
++
++void
++Perl_reuse_gap_sv_issue(const SV *sv)
++{
++    reuse_gap_hook_issue(&sv_reuse_gap, (uint64_t)(uintptr_t)sv, sizeof(SV));
++}
++
++void
++Perl_reuse_gap_sv_release(const SV *sv)
++{
++    reuse_gap_hook_release(&sv_reuse_gap, (uint64_t)(uintptr_t)sv);
++}
++#endif
++
+ /* Mark an SV head as unused, and add to free list.
+  *
+  * If SVf_BREAK is set, skip adding it to the free list, as this SV had
+@@ -334,6 +353,7 @@
+             SvARENA_CHAIN_SET(plant_p, PL_sv_root);	\
+             PL_sv_root = (plant_p);				\
+         }						\
++        REUSE_GAP_SV_RELEASE(plant_p);			\
+         --PL_sv_count;					\
+     } STMT_END
+ #else
+@@ -349,6 +369,7 @@
+             SvARENA_CHAIN_SET(p, PL_sv_root);	\
+             PL_sv_root = (p);				\
+         }						\
++        REUSE_GAP_SV_RELEASE(p);			\
+         --PL_sv_count;					\
+     } STMT_END
+ #endif
