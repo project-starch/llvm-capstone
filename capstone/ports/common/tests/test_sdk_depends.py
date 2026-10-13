@@ -176,5 +176,67 @@ class SdkDependencies(unittest.TestCase):
                       "the control no longer reproduces the defect")
 
 
+class SourceListing(unittest.TestCase):
+    """A cache key over "every source under these paths" must never hash nothing.
+
+    Twice a listing failed and left a libc/runtime key with no runtime source in it, so a
+    change there silently reused the old runtime: rg absent on a host (2026-10-01, 163
+    sources) and git ls-files in a tree export with no .git (2026-10-13, measured on p12:
+    269 files in a checkout, 0 there). Swapping the tool was the fix both times and could
+    not work, because the bug is that an empty listing is accepted.
+    """
+
+    ENV = REPO / "capstone/tests/capstone-test-env.sh"
+    PATHS = "capstone/runtime capstone/ports/common/application"
+
+    def listing(self, root=None):
+        override = f"CAPSTONE_REPO_ROOT={root} " if root else ""
+        script = (f'source "{self.ENV}" >/dev/null 2>&1; '
+                  f'{override}capstone_source_listing {self.PATHS}')
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+
+    def test_a_checkout_lists_its_sources(self):
+        done = self.listing()
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertGreater(len(done.stdout.split()), 200, "a checkout has hundreds of these")
+
+    def test_a_tree_export_without_git_falls_back_to_find(self):
+        root = Path(tempfile.mkdtemp(prefix="export-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        for rel in ("capstone/runtime/a.c", "capstone/ports/common/application/b.sh"):
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text("x\n")
+        self.assertFalse((root / ".git").exists())
+        done = self.listing(root)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(sorted(done.stdout.split()),
+                         ["capstone/ports/common/application/b.sh", "capstone/runtime/a.c"])
+
+    def test_an_empty_listing_is_an_error_not_an_empty_key(self):
+        root = Path(tempfile.mkdtemp(prefix="empty-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        for rel in ("capstone/runtime", "capstone/ports/common/application"):
+            (root / rel).mkdir(parents=True)
+        done = self.listing(root)
+        self.assertEqual(done.returncode, 1, f"an empty listing must fail: {done!r}")
+        self.assertEqual(done.stdout, "")
+        self.assertIn("no files under", done.stderr)
+
+    def test_no_cache_key_pipes_a_bare_listing_into_its_digest(self):
+        # The regression this guards: a bare `git ls-files ... |` inside the digest block,
+        # where a non-zero exit is invisible.
+        offenders = []
+        for env in sorted(REPO.glob("capstone/ports/*/app/deps/env.sh")):
+            text = env.read_text()
+            if "git ls-files" in text and "capstone_source_listing" not in text:
+                offenders.append(str(env.relative_to(REPO)))
+        self.assertEqual(offenders, [], "these compute a key from an unchecked listing")
+        # and the check must have looked at the two files that had the defect
+        found = {str(p.relative_to(REPO)) for p in REPO.glob("capstone/ports/*/app/deps/env.sh")}
+        for required in ("capstone/ports/memcached/app/deps/env.sh",
+                         "capstone/ports/wireshark/app/deps/env.sh"):
+            self.assertIn(required, found)
+
+
 if __name__ == "__main__":
     unittest.main()
