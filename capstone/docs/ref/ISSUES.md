@@ -1909,6 +1909,58 @@ computes correctly, then the same test bare on the board.
 printed by native programs, and native baselines that use doubles. Board results computed on the host, and
 everything inside delegated domains, are unaffected.
 
+### R-54 — the full bounds scheme does not renormalise: a capability whose rounded span reaches the next power of two decodes about HALF its length short `SOURCE-READ AND PREDICTED 2026-10-13, not observed on silicon; read at capstone-ariane 0568f93a9 (the resident bitstream) and the capstone-sublet working tree of 2026-10-13, and capstone-qemu origin/isa/sublet-lifetimes d238f66e34. FIX IN PROGRESS in the RTL (renormalise to E+1) with QEMU's cap_compress in lockstep; sequencing is the lead's`
+
+> **The defect.** `compress_bounds`' full branch (`ariane_pkg.sv`) chooses E from the length, then rounds the top up
+> with `if(((bounds.base >> (E+3))<<(E+3)) != bounds.base) T[11:3] += 1;` and never revisits E.
+> - Every iE = 1 word encodes a span of 2^12 to 2^13 granules of 2^E: decode sets `T[13:12] = B[13:12] + carry + 1`.
+> - When rounding the base down and the top up to g = 2^(E+3) makes the span reach 2^(E+13), the word needs E+1. It
+>   decodes about half the span short.
+> - **Exactly, 200,000 random cases, no exception:** [s, e) with len >= 4 KiB, E = hb(len) - 12 decodes NOT covering
+>   itself iff `roundup(e, g) - rounddown(s, g) >= 2^(E+13)`.
+> - Example: [0xadf2a000, 0xadfa9fe0) (len 0x7ffe0, E = 6) encodes b = t = 336 and decodes [0xadf2a000, 0xadf6a000),
+>   256 KiB short.
+>
+> **Two independent transcriptions agree.**
+> - check-repr.py's port of the RTL and capstone-qemu's `cap_compress.c`, built standalone: 0 word and 0 decode
+>   mismatches on 60,000 random triples.
+> - The RTL lane's own port reproduces the example.
+> - QEMU has the same flaw and never shows it: its SPLIT works on fat bounds and never compresses.
+>
+> **Where it is live.**
+> - On 0568f93a9: whenever a cursor leaves the base. The cursorless branch covers `start == cursor` only, so after any
+>   cursor move the full branch re-encodes.
+> - On capstone-sublet (the format move): at every SPLIT, since the cursorless branch is gone.
+>
+> **Reproducer, runnable, no board:**
+> - `tests/runtime-qemu/silicon-ladder/check-repr.py --self-test`: the example plus a 20,000-case predicate check; each
+>   control fails on a deliberately exact model.
+> - `qemu-encoder-diff.py --qemu <capstone-qemu>`: the differential, and the predicate checked on QEMU's own decode. A
+>   one-character mutant of the port gives 13,697 of 20,000 mismatches, so it fires.
+> - The RTL lane's directed arm `bounds-renorm.S` lands with the fix.
+>
+> **Impact, from check-repr.py's replay.** It covers the glue's carve, the zero-fill walker on each global, the stack
+> handed over at its top, dom_data's parks and the context arena.
+> - **0568f93a9:** b0-hello, b1-thread, memcached ba7e6921 and the acceptance list's images: nothing re-encodes short.
+>   The replay does NOT cover runtime heap splits (musl, memcached's slabs, the sublet heap), so this is evidence for
+>   those images' set-up, not a statement that no runtime capability hits it.
+> - **0568f93a9's heap, from the model:** level0 (the B builds' malloc) narrows each object to exactly n bytes with
+>   `cap_shrink(p, c, c + n)`, which is exact because the cursor sits on the base. The first cursor move into the
+>   object (p + i, a memcpy walker) re-encodes it in the full branch.
+>   - Enumerated over every 16-aligned base offset, an object decodes SHORT for exactly these sizes in
+>     [4 KiB, 256 KiB): 8185..8191, 16369..16383, 32721..32767, 65425..65535, 130833..131071, 261649..262143 bytes
+>     (914 sizes), each at some of its bases.
+>   - Sizes that are exactly a power of two never do.
+>   - 16-byte-rounded sizes reach it only from 32,736 bytes up.
+>   - Not observed on the board. B2/B3 memcached passing says only that its allocations missed these sizes or bases.
+> - **capstone-sublet encoding:** b1-thread hits a SPLIT TRAP at 5 of 255 1 MiB CMA bases (e.g. 0xadf00000). The
+>   stack remainder [0xadf2a000, 0xadfa9fe0) wraps, and the next carve point 0xadfa9760 lies above its decoded top.
+>   Every other acceptance image runs; it only overlaps (b0-silicon-delegated-runtime.md, "check-repr.py under the
+>   Sublet capability format").
+> - **The fix (the RTL lane):** after the leading-zeros loop, if `(roundup(e, g) - rounddown(s, g)) >> (E+3) >= 1024`,
+>   take E+1. Verified in the lane's model over 400,000 regions x three cursors: 0 not covering, against 519 without.
+>   check-repr will model it from the commit.
+
 ### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `NOT REPRODUCED on caplifive_supcall_715bdd1fe (arm12-ldc 3/3), mechanism unknown, apertures 219..222 armed; was: OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
 
 **S-17: NOT REPRODUCED on `caplifive_supcall_715bdd1fe.bit`.** arm12-ldc ran 3 of 3, 8,552 escapes each, identical
