@@ -1121,6 +1121,11 @@ passes on the emulator and loses it on silicon — the opposite polarity from Q-
 every loaded linear capability back and reads the base before the store, so the Sublet port is unaffected.
 Related: R-21, R-22 (resolved on silicon), Q-04.
 
+> **2026-10-13: only legacy C mode still copies.** Since capstone-qemu 0d28cc3c82 (2026-10-07), `ldc`/`stc`
+> consume a non-NONLIN source in protected U, virtual C and trusted S (`trans_capstone.c.inc`: "Legacy C
+> mode keeps its recorded Q-12 divergence"; `docs/design/virtual-capstone/isa.md`). The divergence above
+> remains for legacy physical C mode.
+
 
 ## Q-13 — an out-of-range TIGHTEN permission immediate (> 7): the RTL faults, capstone-qemu clamps it to NA `OPEN — model divergence and a spec question for the lead; found 2026-09-25 (E3 boot r42e3) through a harness encoding bug`
 
@@ -1185,6 +1190,46 @@ step as a bitstream that carries them, or the physical QEMU traps on code the bo
 **Fault order: agrees.** As the RTL lane reports it, the RTL follows `helper_csderive` and `helper_cskill`:
 CDERIVE raises 24, 26, 25, 29, then 30 or 25 from the node unit; CREVOKE raises 24, 26, 25, 27, then 29
 or 25. CDERIVE with rd = x0 still allocates, and CREVOKE with rd other than x0 is illegal, in both.
+
+**LINEAR duplicates.** CDERIVE's authority model assumes that a LINEAR capability is never copied. MANAGE
+is the right to end direct children (`docs/design/virtual-capstone/isa.md`, Authority model). The one
+other way to end them is a legacy REVOKE of an MREV handle. Without a copy, that handle is always older
+than the children it ends. MREV needs a LINEAR reference to the node, and children can be derived only
+from a NONLIN one. So a handle over a node with derived children was taken while a LINEAR reference
+still named the node, before any child existed. Case 23 of capstone-qemu's sublet-lifetimes gate
+(`tests/sublet-lifetimes/program.inc`) uses that ordering, and it is by design.
+
+With a copy, the handle can be taken after the children exist, and a legacy REVOKE of it ends them.
+Neither MREV nor legacy REVOKE reads a permission, so the copy needs no MANAGE. Neither does case 23's
+handle. The duplicate changes the order, not the authority required.
+
+Where copies exist:
+- **Deployed RTL.** The assumption fails while R-21 is open: TIGHTEN and SHRINKTO return rs1 unchanged
+  beside a LINEAR rd, confirmed on silicon 2026-09-25. U-2 (CJALR passes rs1 through when rs1 ≠ rd) is
+  a further candidate outside R-21. Its rd side is untraced.
+- **capstone-qemu.** SHRINKTO with rd ≠ rs1 leaves its LINEAR source in place in every profile (R-21's
+  box). By source reading only, CJALR and CBNZ load PCC from a register without clearing
+  it (`helper_cjalr_switch_caps`, `helper_set_pc_cap`), where the specification writes cnull
+  (`ctrl-flow-insn.adoc`).
+  `ldc`/`stc` offer no route in virtual C. Since capstone-qemu 0d28cc3c82 they move in protected U,
+  virtual C and trusted S, and Q-12's copy survives only in legacy C mode.
+
+`capstone/runtime/tests/sublet-lifetimes/mrev-over-derived/` runs the SHRINKTO route on the virtual
+profile of capstone-qemu 7dbfdd534eea, and passes 12/12:
+- REVOKE of the late handle ends the derived child with 25;
+- the in-place control, whose MREV operand MOVC has nulled, is refused at the MREV with 26.
+
+It does not exercise CJALR or CBNZ.
+
+The tree handles the shape: MREV deepens the whole subtree, derived children included. The RTL lane
+reports that the `capstone-sublet` RTL takes QEMU's tree semantics for this reason:
+- MREV deepens the subtree;
+- a LINEAR split's sibling goes before the node.
+
+No tree rule can stop the copy; only the specification's move semantics can. The tree could detect the
+shape: DELIN clears the node's `linear` flag (`cap_rev_delin`), and a node named by a LINEAR register
+has no derived children unless a copy exists. Whether MREV should refuse such a node is undecided and
+untested.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
