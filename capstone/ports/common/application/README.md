@@ -140,6 +140,16 @@ migration is `compiler/sroa-keep-capability-whole` at `7d01722aab88`; the compil
 sources on the delegation-only branch do not include all its prerequisites. A compiler that builds the SDK is not necessarily
 new enough to compile every upstream program.
 
+Applications compile **hosted**, like native and CheriBSD builds: `capstone-cc`
+passes neither `-ffreestanding` nor `-fno-builtin`. `main` returns 0 at its closing
+brace, and clang knows the C library, so it inlines small `memcpy`/`memset`,
+folds `strlen` of a literal and checks an undeclared library call against its
+real prototype. The SDK runtime and libc implement those functions and stay
+freestanding. Inlined copies must keep capability tags, which needs a compiler
+with the C-78 fix; `runtime/virtual/run-hosted.py` checks both (hosted `main`,
+and tags across inlined, called, looped, moved, reallocated and sorted copies,
+with a byte-copy control that must lose the tag).
+
 The source recipes now compile and link through the same SDK:
 
 | Port | Source recipe | Application output |

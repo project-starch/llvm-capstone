@@ -129,10 +129,17 @@ def main(argv: list[str] | None = None) -> int:
         if arguments == ["--check-toolchain"]:
             check_toolchain(config["cc"])
             return 0
+        # Applications are hosted: musl is the whole C library and the Linux
+        # VM serves its system calls. So main returns 0 at its end, and clang
+        # knows the library's functions: it inlines small memcpy/memset with
+        # capability loads and stores, folds strlen of a literal, and checks
+        # a call to an undeclared library function against its real
+        # prototype. The SDK runtime and libc implement those functions and
+        # stay freestanding (capstone-domain.cmake, musl's own build).
         target = [config["cc"], "-target", "capstone64-unknown-elf",
                   "-Xclang", "-target-feature", "-Xclang", "+m",
                   "-Xclang", "-target-feature", "-Xclang", "+a",
-                  "-ffreestanding", "-fno-builtin", "-fno-jump-tables", "-nostdinc"]
+                  "-fno-jump-tables", "-nostdinc"]
         target.extend(config.get("codegen", []))
         for suffix in ("arch/capstone64", "arch/generic", "obj/include", "include"):
             target.extend(("-isystem", str(Path(config["musl"]) / suffix)))
