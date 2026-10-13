@@ -59,7 +59,7 @@ import verdicts as v  # noqa: E402
 
 PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
 CONTROLS_C = REPO / "capstone/bug-corpora/postgres/c-repros/shared/controls.c"
-CORPORA = ("plain-heap-repros", "plain-temporal-repros", "subobject-repros", "carved-repros")
+CORPORA = ("plain-heap-repros", "plain-temporal-repros", "subobject-repros", "carved-repros", "plane-repros")
 
 
 def observe(number, text, result, symbols=None, sites=()):
@@ -187,7 +187,12 @@ def main():
             print(f"CONTROL-FAILED controls build: {b.stderr[:300]}", file=sys.stderr)
             return 75
     carve_controls = {"live-carve", "uaf-carve"} if config == "virtual-ffmpeg-carve" else set()
-    plan = [(f"control-{n}", controls_img, [n]) for n in spec["controls"] if n not in carve_controls]
+    # ffmpeg/plane-repros' frame carve (shared/virtual-frame.c, in the arm's --cc-arg): a read at the
+    # alpha plane's last byte must complete, one byte past it must fault at the probe (the plane's
+    # bound), and a read after av_frame_free must fault at the probe (the frame's lifetime ended).
+    plane_controls = {"plane-live", "plane-bound", "plane-free"} if config == "virtual-ffmpeg-plane-carve" else set()
+    plan = [(f"control-{n}", controls_img, [n]) for n in spec["controls"]
+            if n not in carve_controls and n not in plane_controls]
     if carve_controls:
         carve_img = bindir / "carve-controls.dom"
         b = subprocess.run([str(cc), "-O0", "-DFFC_SUBLET_CARVE", f"-I{shared}",
@@ -199,6 +204,19 @@ def main():
             return 75
         plan += [("control-live-carve", carve_img, ["fixed", "98"]),
                  ("control-uaf-carve", carve_img, ["buggy", "98"])]
+    plane_imgs = {}
+    if plane_controls:
+        for src, number in (("plane-bound-control.c", "99"), ("plane-free-control.c", "98")):
+            img = bindir / src.replace(".c", ".dom")
+            b = subprocess.run([str(cc), "-O0", "-DCORPUS_VIRTUAL", f"-I{shared}", str(shared / src),
+                                str(shared / "driver.c"), *a.cc_arg, "-o", str(img)], capture_output=True, text=True)
+            if b.returncode:
+                print(f"CONTROL-FAILED plane control {src}: {b.stderr[:300]}", file=sys.stderr)
+                return 75
+            plane_imgs[number] = img
+        plan += [("control-plane-live", plane_imgs["99"], ["fixed", "99"]),
+                 ("control-plane-bound", plane_imgs["99"], ["buggy", "99"]),
+                 ("control-plane-free", plane_imgs["98"], ["buggy", "98"])]
     for d in found:
         if d.name in built:
             n = str(int(d.name[:2]))
@@ -220,8 +238,9 @@ def main():
             continue
         text, result = runs[f"control-{name}"]
         seen = observe_control(name, text, result)
-        if name in carve_controls:
-            fault = v.domain_fault(result.get("fault") or "", v.Symbols(a.llvm_bin, carve_img))
+        if name in carve_controls or name in plane_controls:
+            img = carve_img if name in carve_controls else plane_imgs["98" if name == "plane-free" else "99"]
+            fault = v.domain_fault(result.get("fault") or "", v.Symbols(a.llvm_bin, img))
             seen = ("fault" if fault and fault.symbol and PROBE.search(fault.symbol) else
                     "complete" if result.get("kind") == "exit" and result.get("value") == 0
                     and "VERDICT FIXED" in text else "none")

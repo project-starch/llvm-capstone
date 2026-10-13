@@ -77,6 +77,12 @@
       "verdict": "NOT CAUGHT",
       "measured": "2026-10-09",
       "preregistered": "03c471feabcc"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, stock libavutil on virtual mallocng (tools/arms.json virtual-mallocng): the read one row past the alpha plane lands inside the frame's one malloc'd buffer, so the case completes with VERDICT DEFECT-REPRODUCED and this arm does not see it -- MISSED. Predicted 2026-10-13, before the first run."
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, the frame carve on managed lifetimes (tools/arms.json virtual-ffmpeg-plane-carve, -DFFP_VIRTUAL_CARVE, shared/virtual-frame.c): each plane a CDERIVE child bounded to its ALLOCATED extent, padded_height = 32 rows, as upstream lays it out. The read at offset 160 of the alpha plane is inside that extent, so the case completes -- MISSED, as the physical sublet-carve arm read. The plane controls must behave in the same boot: plane-live completes, plane-bound (one byte past the extent) and plane-free (after av_frame_free) fault at ffp_read_probe. Predicted 2026-10-13, before the first run."
     }
   },
   "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-carve-bounds/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT.",

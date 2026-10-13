@@ -272,6 +272,25 @@
         "uaf-malloc",
         "pool-return-90"
       ]
+    },
+    "virtual-ffmpeg-plane-carve": {
+      "target": "capstone-virtual",
+      "summary": "FFmpeg's plane corpus on virtual mallocng with the frame carve on managed lifetimes (-DFFP_VIRTUAL_CARVE, shared/virtual-frame.c, -Wl,--wrap=av_frame_get_buffer): the frame's buffer is one malloc'd block, the frame a CDERIVE child of it, each plane a child of the frame bounded to its allocated extent (av_image_fill_plane_sizes at FFALIGN(height, 32)); freeing the frame frees the block and ends every plane",
+      "mechanism": "per-plane bounds and revocation in the frame carve, over virtual mallocng",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "plane-live": "complete",
+        "plane-bound": "fault",
+        "plane-free": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "plane-live",
+        "plane-bound",
+        "plane-free"
+      ]
     }
   }
 }
