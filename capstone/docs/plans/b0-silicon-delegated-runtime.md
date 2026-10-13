@@ -1858,6 +1858,31 @@ Predicted on caplifive_r51r52_0568f93a9:
   - Handed to the RTL lane for a directed arm in this exact order (N=1 boot; the shape is deterministic,
     40,000 of 40,000).
 
+## Acceptance of the R-53 + R-52-residual bitstream, pre-registered 2026-10-13 (before any build; hash to be pinned)
+The RTL lane confirmed both in simulation, on branch capstone-sublet off 0568f93a9:
+- **R-53 (was S-19):** with FS = Clean, fld, fadd.d, fmv.d.x and fcvt.w.d leave sstatus FS = 2 (Clean) and SD = 0 on
+  0568f93a9 and on 776d9d859; only fsflags dirties FS. With the #2936 parenthesisation each sets FS = 3, SD = 1.
+- **The R-52 residual:** order A, bare, reads exactly 0x3feb71f814fa0d22 (2 x frac), the board's value. Orders B and D
+  and the 40-nop variant read the correct 0x406e0db8fc0a7d07. fmul.d in place of fdiv.d reads 2 x the product, so it is
+  any longer-latency FP op in flight when the shorter one issues. On 776d9d859 the arm reads 0: R-52's fix made FP
+  forwarding live and exposed it. The fix is in progress (arm r52-fcvt-behind-fdiv.S).
+
+Predictions for a bitstream carrying both fixes, written before it exists. Everything else is predicted unchanged
+from 0568f93a9's acceptance (above):
+- **B3j (b3-fpnow-probe):** shapes A, B, C and D each read **0 of 40,000 wrong**, and the checker control passes. C's
+  1 of 20,000 on 0568f93a9 is predicted to go too, if it was R-53's stale restore.
+- **B3i (b3-fpstate-probe):** n, w, l, z, s and f each read **IIIIIIIIIIII**. The signal frame and the fork child
+  read I. k reads I except fs5. The switch counts stay as on 0568f93a9 (w vol 1, l invol >= 1, z vol 1, f vol 1).
+- **B3f/B3g/B3h (b3-fphold-probe):** every variant reads 0 of 12 changed, and v7 reads exactly 1.
+- **b3-clock-probe:** arith 0 of 200,000; the self-test 1 of 12; hold-native and hold-domain 0 of 12. **now() checked
+  against the integer clock printed beside it:** in[0] within 1 s of the monotonic reading, not in [0, 2).
+- The harness's stop_seconds is then a real FP measurement, and should be in QEMU's 1.1-1.5 s range or a little above.
+- R-51 0 / 0x1C / 0x1C, the S-16 set, the R-43 list, C5u, s10b and s06agg: unchanged.
+- **Refutations:**
+  - any B3j shape wrong;
+  - any B3i window reading 0, C or ?;
+  - a now() value under 2 s when the integer clock reads hundreds.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
