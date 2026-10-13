@@ -1,5 +1,8 @@
 # Capstone testing matrix and current recommendations
 
+Sublet ISA extension: [contract and qualification](../design/virtual-capstone/development.md#sublet-lifetime-qualification). Use matching QEMU
+and adapter builds; allocator ports and RTL are not migrated by this change.
+
 Application benchmark study: the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
 separate reference data. The [planner](../../experiments/study/README.md) supports

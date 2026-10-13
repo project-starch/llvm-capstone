@@ -50,15 +50,27 @@ failed=0
 for d in "$R"/[0-9][0-9]_*/; do
   [[ -f $d/case.c ]] || continue
   tag=$(basename "$d")
-  if "$CC" "$OPT" -I"$S" "$d/case.c" "$S/driver.c" "$S"/upstream_*.c \
-       -o "$OUT/$tag.dom" 2> "$OUT/$tag.err"; then
-    printf '  %-52s OK  %s bytes\n' "$tag" "$(stat -c %s "$OUT/$tag.dom")"
-    built=$((built + 1))
-  else
-    printf '  %-52s FAIL\n' "$tag"
-    sed 's/^/      /' < "$OUT/$tag.err" | head -8
-    failed=$((failed + 1))
-  fi
+  # Each case builds TWICE: the case, and its own negative control with
+  # -DPGCLIENT_NEGATIVE_CONTROL, which moves one value to the safe side of the
+  # boundary the defect crosses and must therefore COMPLETE. This is the
+  # per-case control the judge calls attribution by `control`, and it is a
+  # different question from controls.dom below: that one asks whether this
+  # configuration reports at all, this one asks whether THIS fault depends on
+  # THIS defect. The suffix keeps it out of case discovery, so no runner can
+  # pick a control up as a measurement.
+  for variant in "" "-control"; do
+    defs=()
+    [[ -n $variant ]] && defs=(-DPGCLIENT_NEGATIVE_CONTROL)
+    if "$CC" "$OPT" -I"$S" "${defs[@]}" "$d/case.c" "$S/driver.c" "$S"/upstream_*.c \
+         -o "$OUT/$tag$variant.dom" 2> "$OUT/$tag$variant.err"; then
+      printf '  %-52s OK  %s bytes\n' "$tag$variant" "$(stat -c %s "$OUT/$tag$variant.dom")"
+      built=$((built + 1))
+    else
+      printf '  %-52s FAIL\n' "$tag$variant"
+      sed 's/^/      /' < "$OUT/$tag$variant.err" | head -8
+      failed=$((failed + 1))
+    fi
+  done
 done
 # The arm's controls, from the same SDK (shared/controls.c), and what this build IS: the runner
 # reads the heap from here and refuses an arm whose configuration needs another one.

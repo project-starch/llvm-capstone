@@ -1,5 +1,8 @@
 # Capstone project documentation
 
+Sublet ISA extension: [contract and qualification](design/virtual-capstone/development.md#sublet-lifetime-qualification). Use matching QEMU
+and adapter builds; allocator ports and RTL are not migrated by this change.
+
 Start with the [virtual Capstone guide](design/virtual-capstone/README.md)
 to understand the supervised virtual C profile: ownership,
 processor interface, Linux runtime, application ports and safety limits.

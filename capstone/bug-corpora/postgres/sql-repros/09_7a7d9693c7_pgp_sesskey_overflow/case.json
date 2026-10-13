@@ -12,16 +12,15 @@
   "arms": {
     "spatial": {
       "oracle": "the copy past sess_key is reported, or the case completes and this arm did not see it",
-      "verdict": "silent",
-      "evidence": "completed with no directive and no fault",
-      "run": "run 2026-10-06 in the C-caller form, after the case stopped needing pgcrypto; see results/"
+      "verdict": "MISSED",
+      "verdict_note": "reached (the trigger statement ran (3 prompts, 1 setup line(s))) and completed with no fault",
+      "verdict_from": "results/20261010-181355-qemu/spatial"
     },
     "sublet": {
       "oracle": "the copy past sess_key is reported, or the case completes and this arm did not see it",
       "verdict": "MISSED",
-      "evidence": "completed with no directive and no fault",
-      "run": "run 2026-10-06 in the C-caller form, after the case stopped needing pgcrypto; see results/",
-      "verdict_from": "results/matrix.tsv sublet: silent"
+      "verdict_note": "reached (the trigger statement ran (3 prompts, 1 setup line(s))) and completed with no fault",
+      "verdict_from": "results/20261010-183151-qemu/sublet"
     },
     "cheribsd-revocation": {
       "oracle": "the copy past sess_key is reported, or the case completes and this arm did not see it",

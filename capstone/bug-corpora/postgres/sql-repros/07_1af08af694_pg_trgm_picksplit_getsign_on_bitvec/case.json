@@ -12,16 +12,15 @@
   "arms": {
     "spatial": {
       "oracle": "the mechanism reports, or the case completes and it did not",
-      "verdict": "silent",
-      "evidence": "completed with no directive and no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "verdict": "MISSED",
+      "verdict_note": "reached (the trigger statement ran (7 prompts, 1 setup line(s))) and completed with no fault",
+      "verdict_from": "results/20261010-181355-qemu/spatial"
     },
     "sublet": {
       "oracle": "the mechanism reports, or the case completes and it did not",
       "verdict": "MISSED",
-      "evidence": "completed with no directive and no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
-      "verdict_from": "results/matrix.tsv sublet: silent"
+      "verdict_note": "reached (the trigger statement ran (7 prompts, 1 setup line(s))) and completed with no fault",
+      "verdict_from": "results/20261010-183151-qemu/sublet"
     },
     "cheribsd-revocation": {
       "oracle": "the mechanism reports, or the case completes and it did not",

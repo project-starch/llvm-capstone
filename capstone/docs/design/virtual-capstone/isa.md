@@ -4,7 +4,7 @@
 
 This chapter describes the experimental interface introduced at
 [QEMU revision 9bf9c1f28653][qemu], plus the paged node-store, collection-list and opt-in exact-bounds
-extensions. The superproject QEMU pin selects their
+extensions and the Sublet lifetime operations below. The superproject QEMU pin selects their
 implementation; the older source links describe the original interface.
 Numeric allocations and the context-storage
 ABI are not frozen. It supplements the [academic-spec amendment][spec-patch];
@@ -36,9 +36,13 @@ The following R-type encodings all use opcode `0x5b`, funct3 `1`.
 |---|---|---|---|
 | `CSRUNV rd, rs1, rs2` | `0x24` | Physical frame address, action | Event kind or action result |
 | `CSMINT rd, rs1, rs2` | `0x50` | Destination slot VA, descriptor VA | Scalar private ancestor ID; tagged linear child in slot |
+| `CDERIVE rd, rs1, rs2` | `0x51` | Non-linear parent with cursor at child start, scalar size | Fresh non-linear child with inherited data rights and MANAGE |
+| `CREVOKE rs1, rs2` (rd=0) | `0x52` | Management-capable non-linear parent, non-linear child reference | Invalidate that direct child and its subtree |
 | `CSRETIRE rd, rs1, rs2` | `0x53` | Ancestor ID; conventionally zero in rs2 | Zero on success, one on rejected retirement |
 
-Virtual applications cannot execute these instructions. `CSRUNV` and
+Virtual applications can execute `CDERIVE` and `CREVOKE`. Both decode only in the virtual profile
+(`x-capstone-u-mode=true`); the physical profile raises illegal-instruction fault 2 for them, as the
+RTL, which does not implement them, would. `CSRUNV` and
 `CSRETIRE` require trusted S or scalar M mode and reject C mode. `CSMINT`
 rejects U and virtual C; its decoder also accepts legacy physical C when
 the extension is enabled. It must remain a trusted root-creation operation.
@@ -60,11 +64,11 @@ revision. Linux syscall and VM service numbers belong to software ABIs.
 ### Minting and retiring an arena
 
 `CSMINT` reads an 8-byte-aligned descriptor of three little-endian u64 values:
-`base`, exclusive `end`, and permissions (`X=1`, `W=2`, `R=4`). The destination
+`base`, exclusive `end`, and permissions (`X=1`, `W=2`, `R=4`, `MANAGE=8`). The destination
 must be a writable, 16-byte-aligned ordinary-RAM slot. Descriptor words and
 the destination are translated with the trusted caller's permissions.
 
-It requires `base < end`, permissions at most 7, two available IDs, and an
+It requires `base < end`, permissions at most 15, two available IDs, and an
 exact compress/decompress round trip of the initial bounds and cursor in the
 default profile. With `x-capstone-exact-bounds=true`, the existing physical
 shadow bounds are authoritative, and the round-trip restriction is lifted.
@@ -79,6 +83,103 @@ capability in ordinary kernel C state.
 `CSRETIRE` checks and walks the descendants, invalidates and unlinks them,
 then invalidates and unlinks the ancestor. It does not unmap pages, erase
 payloads or immediately recycle IDs. Those are ordered adapter duties.
+
+### Sublet child lifetimes
+
+`CDERIVE` requires a tagged, live NONLIN parent and an untagged, positive
+size. The range `[parent.cursor, parent.cursor + size)` must lie inside
+the parent's bounds; subtraction checks the range without overflow. The
+compact profile also requires an exact bounds round trip. The exact-bounds
+profile retains the requested bounds in the existing shadow metadata.
+The operation creates a non-linear child node immediately after its parent
+in preorder and returns its capability. Data rights are inherited; MANAGE
+is granted for the new node even when the parent lacks it. Sources are
+unchanged except when explicitly selected as rd; rd=0 discards the result
+but still allocates. Allocation uses the existing pressure/collection path.
+
+`CREVOKE` checks both tags, that both operands are NONLIN references (cause 26
+otherwise), both live nodes, MANAGE on rs1, and direct parentage of rs2's node;
+the node table also refuses a linear node as the child. It then invalidates and
+unlinks that child and its descendants. The type checks matter because `CSMINT`
+can mint MANAGE onto a linear grant: without them, an `MREV` handle over that
+grant could end the linear node behind it, and legacy `CSREVOKE` of the handle
+would then find an empty subtree and return LIN instead of UNINIT, skipping the
+re-initialization rule.
+No payload bytes are accessed or initialized. Narrowed bounds, offsets and
+data rights on either reference do not affect release authority. Foreign
+children, grandchildren and self-revocation fault with cause 29; missing
+MANAGE faults with 27; stale operands fault with 25. All checks precede
+mutation. Nonzero rd is reserved and causes illegal-instruction fault 2.
+This two-operand operation is distinct from legacy one-handle `CSREVOKE`
+(funct7=0), which retains its reclamation semantics.
+
+`CSTIGHTEN` accepts four rights bits and cannot add any of them. Non-linear
+`CSSPLIT` keeps the original node in both resulting references; allocating
+a sibling here would let a client escape its original lifetime. Linear
+splits still create siblings. `CSMREV` records the new parent and increases
+all existing subtree depths. In the virtual profile, non-linear stale references
+retain their tags and IDs when loaded from live storage; dereferencing them faults
+with cause 25 where it used to fault with 24 (an untagged reload). Collection still
+clears their tags before ID reuse: the adapter's sweep over registers, saved
+contexts and memory. The physical profile is unchanged: a revoked capability of
+any type reloads untagged (24). That differs from the RTL, whose `LDC` forwards
+the loaded value verbatim for every type (`docs/ref/ISSUES.md` Q-11), and is left
+for Q-11's own fix so that recorded physical results stay reproducible.
+
+**Authority model.** MANAGE is the right to end direct children. Creating a child
+is unprivileged: `CDERIVE` needs no MANAGE, so any non-linear reference can create
+lifetimes and consume nodes, and `capstone_cap_without_manage` stops a client from
+ending lifetimes but not from creating them. The right to end a child does not
+depend on the parent reference's bounds, and MANAGE survives `CSSHRINK`,
+`CSCINCOFFSET` and non-linear `CSSPLIT`. An allocator must therefore keep this
+invariant: **every pointer that leaves the allocator is a `CDERIVE` child, or has
+had MANAGE removed.** A narrowed or offset view of a pool that escapes with MANAGE
+can end every live object in that pool.
+
+**Overlap.** Live children may overlap: two `CDERIVE`s over the same bytes both
+succeed. Linear carving made disjointness hold by construction; with `CDERIVE`
+it is an allocator duty, and an allocator bug that issues a chunk twice is
+invisible to the ISA.
+
+**Representability (compact profile).** `CDERIVE` refuses bounds that do not
+round-trip exactly (cause 29), and there is no instruction to ask what is
+representable. With the 27-bit bounds field, a length L of 4 KiB or more needs
+base and end aligned to 2^(msb(L)-9), applied to the length after that rounding:
+8 bytes for 4 KiB, 128 bytes for 64 KiB, 2 KiB for 1 MiB, while a length just
+below a power of two, such as 8191, rounds up to it and takes its alignment (16).
+Shorter lengths are exact. Allocators with large, oddly aligned objects must round.
+The exact-bounds profile has no such restriction.
+
+The C interface is [capability.h](../../../runtime/include/capstone/capability.h):
+`capstone_cap_derive(parent, offset, size)` interprets the offset relative
+to the parent's base and rejects offset overflow before setting the cursor;
+`capstone_cap_revoke_child(parent, child)` releases the child; and
+`capstone_cap_without_manage(cap)` removes only MANAGE. These wrappers use
+raw `.insn` encodings and require no compiler backend, mnemonic or intrinsic
+addition. `capstone_cap_derive` and `capstone_cap_without_manage` check that
+their operand is a NONLIN reference first, and refuse anything else atomically
+with a zero-size `CDERIVE` (cause 26, or 24 if untagged), because the `CSSCC` and
+`CSTIGHTEN` they use would otherwise move a linear operand out of its register.
+Allocator bookkeeping must still prevent overlapping live children and protect
+management-capable copies. This ISA change does not migrate the allocator
+adapters or qualify RTL.
+
+**Open items** (deferred design choices, recorded at review):
+- whether ending a child should depend on the parent reference's bounds (CREVOKE
+  requiring the child to lie within them, which needs the child node's own extent),
+  or narrowing should drop MANAGE;
+- `CDERIVE` with rd=0 still allocates a node nothing can name; reserving rd=0 as
+  illegal, as `CREVOKE` reserves rd≠0, would remove it;
+- NOT_CHILD and a corrupt node table both raise cause 29 with tval 0, so a
+  program defect cannot be told from an infrastructure fault; a distinguishing
+  tval would separate them;
+- a representability query for the compact profile (see above);
+- one mnemonic everywhere: the QEMU decoder says `cskill`, and `CREVOKE` differs
+  by one letter from legacy `CSREVOKE`;
+- assembler and disassembler support (`llvm-objdump` shows both as `<unknown>`).
+- a guest-level test that a collected and reused ID cannot be reached through a
+  stale reference reloaded from memory; the model exercises the table, not the
+  adapter's sweep, and the bare-metal gate has no collection.
 
 ## Saved context protocol
 
@@ -185,8 +286,11 @@ The guest table is kernel-owned writable RAM with a 4-KiB-aligned physical
 backing. Slot 0 is a header, never a node.
 The header contains capacity (bit 63 enables recycling) and the next-unused
 ID. Recycling also reserves slot 1 for free-list metadata and allocation
-statistics, so its first usable ID is 2. A node record contains u32 previous
-ID, next ID, depth and flags (VALID=1, LINEAR=2, FREE=4).
+statistics, so its first usable ID is 2. A node record's first word contains
+u32 previous and next IDs. The second contains depth in bits 0..29, direct
+parent in bits 30..59, and VALID/LINEAR/FREE in bits 60..62; bit 63 is reserved.
+Parent 0 denotes a root. Host records use their existing UINT32_MAX sentinel.
+Depth overflow refuses allocation. Node records remain 16 bytes.
 
 The node-growth extension adds a paged format while retaining flat-table
 support. Bit 62 selects paging and requires the recycling bit. The physical
@@ -198,12 +302,12 @@ root contains these little-endian fields:
 | 8 | Next unused ID |
 | 16 | Free-list head (low u32), free count (high u32) |
 | 24 | Cumulative allocations |
-| 32 | Version magic `0x3145474150444f4e` |
+| 32 | Version magic `0x3245474150444f4e` (`NODPAGE2`) |
 | 40 | Retired records not yet returned to the free list |
 | 48, 56 | Reserved, zero |
-| 64 | 32 physical directory pointers |
+| 64 | 16 physical directory pointers |
 
-The 31-bit ID is split into `5:9:9:8`: root entry, two 512-entry directory
+The 30-bit ID is split into `4:9:9:8`: root entry, two 512-entry directory
 indices, then record index. Each directory and record page is aligned
 ordinary writable 4-KiB RAM. Missing, misaligned or non-RAM pointers, and a
 pointer back to an earlier page on the path, refuse lookup. The trusted adapter guarantees that pages do not
@@ -221,9 +325,13 @@ lookups on capability checks; this qualification is not an RTL speedup claim.
 
 Existing records and up to two allocation candidates are preflighted before
 any node mutation; this includes fresh candidates straddling a page boundary.
-The same node-list algorithm and capability encoding are retained. The
+Sublet changes the node record and capability encoding together. The
 [shared format header](../../../capstone-qemu/target/riscv/cap_rev_table_abi.h)
 is used by the QEMU backend and copied into the Linux module build.
+The module's namespace and page quotas use that header's 30-bit limit.
+Rebuild the module with this QEMU; old node/capability layouts are incompatible.
+The paged magic rejects the old layout. The flat test layout has no version
+magic and must be initialized afresh by matching software.
 
 For scalable collection, bit 63 of frame word 80 selects a linked page list;
 the remaining bits hold its total entry count, and word 81 holds its first
@@ -240,8 +348,8 @@ and capacity, and revocation walks have a visit bound. These checks assume
 trusted metadata and the one-hart profile.
 
 The QEMU memory encoding is 128 bits: ordinary cursor in the low 64 bits;
-the upper word contains 27 bounds bits, 3 type bits, 3 permission bits and
-a 31-bit node ID. It contains neither generation nor address-space bits.
+the upper word contains 27 bounds bits, 3 type bits, 4 permission bits and
+a 30-bit node ID. It contains neither generation nor address-space bits.
 The deployed RTL instead allocates 28 bounds bits and 30 node bits.
 Moreover, some QEMU data paths retain uncompressed bounds beside the tag.
 Exact minting alone does not settle general SHRINK/SPLIT/store/load
