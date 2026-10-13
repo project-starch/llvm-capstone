@@ -104,9 +104,10 @@ the cursorless branch: bounds_t IS the 27-bit full scheme for every capability, 
 28th bit widens perm to 4 (word {revnode 30 | perm 4 | type 3 | bounds 27}, capstone-qemu's
 layout on isa/sublet-lifetimes). compress_bounds and decompress_bounds keep the old full
 branch's bodies unchanged, so --format full is the same port with the start == cursor branch
-skipped. Source: the capstone-sublet working tree's ariane_pkg.sv read on 2026-10-13 BEFORE 13:04,
-i.e. WITHOUT the R-54 renormalisation the same tree gained at 13:04; the renormalising encoder is
-ported from its commit, not from that tree, and this line then cites the hash. Under it the base rounds DOWN and the top rounds UP,
+skipped. --format full --renorm is the committed capstone-sublet tree, capstone-ariane d34c26002
+(the format move on fp-fixes 4a4261bb4): its compress/decompress are 4a4261bb4's full branch with
+the cursorless type and decoder branch removed (`git diff 4a4261bb4 d34c26002`, read 2026-10-13).
+--format full alone is that tree before R-54's step, as read on 2026-10-13 before 13:04. Under it the base rounds DOWN and the top rounds UP,
 to 2**(E+3) with E = max(0, hb(len) - 12) (exact below 4 KiB), so a carve no longer shortens a
 global: it WIDENS one. A split at a point off the remainder's granule leaves the remainder's
 top above the split, and the next global inherits that top. So under --format full:

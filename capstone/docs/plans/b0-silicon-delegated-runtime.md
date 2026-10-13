@@ -1899,7 +1899,10 @@ capstone-sublet RTL, read in the RTL lane's working tree on 2026-10-13 before 13
 landed in that tree, and before any commit: `bounds_t` is the 27-bit full
 scheme for every capability, and the cursorless branch is gone. `compress_bounds` and `decompress_bounds` keep the old
 full branch's bodies, so the port is the existing one with the `start == cursor` branch skipped. `--format cursorless`
-stays the default, for 0568f93a9 and earlier.
+stays the default, for 0568f93a9 and earlier. **Since committed:** the format move is capstone-ariane d34c26002, on
+fp-fixes 4a4261bb4. Its bounds encoder and decoder are 4a4261bb4's full branch, renormalisation included, with the
+cursorless type and decoder branch removed (`git diff 4a4261bb4 d34c26002`). `--format full --renorm` models it, and
+`--format full` alone is the pre-13:04 tree the predictions below were made from.
 
 **The port is checked against two other transcriptions.** `qemu-encoder-diff.py` builds capstone-qemu's
 `cap_compress.c` (origin/isa/sublet-lifetimes) standalone and runs 60,000 random triples through both:
