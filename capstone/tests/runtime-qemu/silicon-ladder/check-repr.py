@@ -81,9 +81,11 @@ cap_compress had the same flaw (0 mismatches against this port on 60,000 cases; 
 RTL's identifiers, so that guards against a typo here, not a shared misreading -- a third port
 written from the SV with explicit bit slicing agreed on 300,000). QEMU showed it only through STC:
 its SPLIT and SHRINK keep exact bounds. Fixed in the encoder by taking E+1 when the rounded span
-reaches 2**(E+13): capstone-qemu aad781e15a, and the RTL lane's capstone-sublet tree from
-2026-10-13 13:04. Every format without that fix reaches it once a cursor leaves the base, so the
-replay also fails on:
+reaches 2**(E+13): capstone-qemu aad781e15a, and capstone-ariane 2a3a87dfc (fp-fixes, on 0568f93a9;
+the capstone-sublet tree carries the same step). --renorm models that fix in either format, ported
+from 2a3a87dfc: 0 mismatches against its bounds-model.py (300,000 decodes, fixed and unfixed) and
+against aad781e15a (qemu-encoder-diff.py --renorm). Every encoder without it reaches the wrap once a
+cursor leaves the base, so the replay also fails on:
   * SPLIT TRAP: a carve point outside the remainder's DECODED bounds, which SPLIT refuses
     with ILLEGAL_OPERAND_VALUE (capstone_dyn_unit.anvil, func SPLIT). The replay stops there.
   * SHORT ONCE MOVED: a global (the zero-fill walker), the stack (handed over with its cursor
@@ -119,6 +121,7 @@ earlier, ariane_pkg.sv at 776d9d859). Every header line names the format it mode
 
 Exit status 1 if any domain is at risk.
 """
+import random
 import struct
 import subprocess
 import sys
@@ -126,6 +129,7 @@ import sys
 WINDOW_BITS = 21                      # ariane_pkg.sv floors the scan at bit 20
 WINDOW = 1 << WINDOW_BITS
 FORMAT = "cursorless"                 # --format: "cursorless" (resident silicon) or "full" (capstone-sublet)
+RENORM = False                        # --renorm: R-54's fix, capstone-ariane 2a3a87dfc (fp-fixes) / aad781e15a (QEMU)
 
 
 def full_granule(length):
@@ -177,6 +181,13 @@ def rtl_compress(start, end, cursor):
     while lz > 12 and ((ln >> lz) & 1) == 0:
         lz -= 1
     e = lz - 12
+    if RENORM and not (e == 0 and ((ln >> 12) & 1) == 0):
+        # R-54's fix, ported from capstone-ariane 2a3a87dfc (ariane_pkg.sv compress_bounds): when the span rounded out
+        # to 2^(E+3) reaches 1024 granules, take E + 1 (64-bit arithmetic, as xlen_t)
+        tg = ((end + ((1 << (e + 3)) - 1)) & M64) >> (e + 3)
+        bg = start >> (e + 3)
+        if ((tg - bg) & M64) >= 1024:
+            e += 1
     if e == 0 and ((ln >> 12) & 1) == 0:
         return ("full", 0, start & 0x3FFF, end & 0xFFF, 0)
     b13_3 = ((start >> e) >> 3) & 0x7FF
@@ -456,7 +467,8 @@ def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None, 
         if fault or (r["overlap"] and FORMAT == "full" and not allow_overlap):
             bad.append((b, r))
     print("%-28s %s, format %s: code_len=%d domreq=%d arena=%d count=%d tot=%d carve-align=%s (%s); "
-          "%d bases (%#x + k*%#x): %s" % (name, "process ABI" if lay["managed"] else "classic SDK", FORMAT,
+          "%d bases (%#x + k*%#x): %s" % (name, "process ABI" if lay["managed"] else "classic SDK",
+                                          FORMAT + ("+renorm" if RENORM else ""),
                                           lay["code_len"], lay["req_data"], lay["arena"], lay["count"],
                                           tot, "on" if carve_align else "off", how, len(bases), cma_base, step,
                                           "OK" if not bad else "AT RISK at %d" % len(bad)))
@@ -514,7 +526,7 @@ def check_legacy_full(name, count, recs, carve, tot, allow_overlap=False):
     if sp_top > top:
         overlap.append(("stack", sp_top - top, sp_base, sp_top))
     bad = short + ([] if allow_overlap else overlap)
-    print("%-28s format full: count=%-5d carve=%-8d tot=%-9d %s; OVERLAP %d capabilities, up to %d bytes; the "
+    print("%-28s format full" + ("+renorm" if RENORM else "") + ": count=%-5d carve=%-8d tot=%-9d %s; OVERLAP %d capabilities, up to %d bytes; the "
           "remainder's granule at the first carve %d" % (
               name, count, carve, tot, "OK" if not bad else "AT RISK", len(overlap),
               max([o[1] for o in overlap] or [0]), gran))
@@ -527,9 +539,10 @@ def check_legacy_full(name, count, recs, carve, tot, allow_overlap=False):
 
 def self_test():
     """The model's positive controls: each must FIRE, or the gate is unproven. Returns the number that did not."""
-    global FORMAT
-    saved, bad = FORMAT, 0
+    global FORMAT, RENORM
+    saved, saved_rn, bad = FORMAT, RENORM, 0
     try:
+        RENORM = False
         FORMAT = "full"
         # the wrap: len 0x7ffe0, E = 6, rounded span 2**19 = 2**(E+13); decodes 256 KiB short (2026-10-13)
         got = writeback(0xadf2a000, 0xadfa9fe0, 0xadf2a000)
@@ -541,7 +554,6 @@ def self_test():
                 writeback(0x10010, 0x12018, 0x11000) != (0x10010, 0x12020):
             print("self-test FAIL: the full scheme did not round the top up independently of the cursor"); bad += 1
         # the predicate, on a seeded sample
-        import random
         rnd = random.Random(1)
         for _ in range(20000):
             k = rnd.randrange(13, 40)
@@ -557,8 +569,26 @@ def self_test():
         # the cursorless top truncation across a 2 MiB window (R-11's mechanism): E = 1 drops the top's bit 0
         if writeback(0x1f0000, 0x200011, 0x1f0000) != (0x1f0000, 0x200010):
             print("self-test FAIL: the cursorless truncation did not fire"); bad += 1
+        # --renorm (2a3a87dfc): the wrap's example covers with E = 7 (its top rounded to 1 KiB), with the cursor moved,
+        # and the predicate's sample all covers; the cursorless branch is untouched by it
+        RENORM = True
+        FORMAT = "full"
+        if writeback(0xadf2a000, 0xadfa9fe0, 0xadf2a008) != (0xadf2a000, 0xadfaa000):
+            print("self-test FAIL: --renorm did not cover the wrap's example"); bad += 1
+        rnd = random.Random(2)
+        for _ in range(20000):
+            k = rnd.randrange(13, 40)
+            ln = (1 << k) - rnd.randrange(0, 1 << (k - 7)) if rnd.randrange(2) else rnd.randrange(4096, 1 << k)
+            st = (rnd.randrange(0, 1 << 40) >> 4) << 4
+            d = writeback(st, st + ln, st + 8)
+            if d[0] > st or d[1] < st + ln:
+                print("self-test FAIL: --renorm left [%#x,%#x) short" % (st, st + ln)); bad += 1
+                break
+        FORMAT = "cursorless"
+        if writeback(0x1f0000, 0x200011, 0x1f0000) != (0x1f0000, 0x200010):
+            print("self-test FAIL: --renorm changed the cursorless branch"); bad += 1
     finally:
-        FORMAT = saved
+        FORMAT, RENORM = saved, saved_rn
     print("self-test: %s" % ("every control fires" if not bad else "%d control(s) did not fire" % bad))
     return bad
 
@@ -633,10 +663,14 @@ if __name__ == "__main__":
     ap.add_argument("--format", choices=("cursorless", "full"), default="cursorless",
                     help="the bitstream's bounds encoding: cursorless (default; 0568f93a9 and earlier) or full "
                          "(capstone-sublet: one scheme, no cursorless branch)")
+    ap.add_argument("--renorm", action="store_true",
+                    help="R-54's fix in the encoder (capstone-ariane 2a3a87dfc): the full branch takes E + 1 when the "
+                         "rounded span reaches 1024 granules")
     ap.add_argument("--allow-overlap", action="store_true",
                     help="--format full: report OVERLAP without failing")
     a = ap.parse_args()
     FORMAT = a.format
+    RENORM = a.renorm
     failed = 0
     if a.self_test and self_test():
         sys.exit(1)

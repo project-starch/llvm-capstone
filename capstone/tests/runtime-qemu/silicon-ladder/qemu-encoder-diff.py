@@ -93,11 +93,15 @@ def main():
     ap.add_argument("--ref", default="origin/isa/sublet-lifetimes")
     ap.add_argument("-n", type=int, default=60000)
     ap.add_argument("--seed", type=int, default=20261013)
+    ap.add_argument("--renorm", action="store_true",
+                    help="model R-54's fix (check-repr.py --renorm); use with a QEMU ref that carries it "
+                         "(origin/bounds-encoder-renormalise); every decode must then cover its input")
     a = ap.parse_args()
     spec = importlib.util.spec_from_file_location("cr", os.path.join(HERE, "check-repr.py"))
     cr = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cr)
     cr.FORMAT = "full"
+    cr.RENORM = a.renorm
     tri = cases(a.n, a.seed)
     with tempfile.TemporaryDirectory() as d:
         exe = build(a.qemu, a.ref, d)
@@ -127,11 +131,13 @@ def main():
             notcover += bad
             g = cr.full_granule(e - s)
             span = -(-e // g) * g - s // g * g
-            pred_bad += bad != (e - s >= 4096 and span >= g << 10)
-    print("qemu-encoder-diff: %s at %s, %d triples: %d word mismatches, %d decode mismatches%s; %d decode not "
-          "covering their input, R-54's predicate wrong on %d" % (a.qemu, a.ref, len(tri), word, dec,
+            pred_bad += bad if a.renorm else bad != (e - s >= 4096 and span >= g << 10)
+    print("qemu-encoder-diff: %s at %s%s, %d triples: %d word mismatches, %d decode mismatches%s; %d decode not "
+          "covering their input, %s %d" % (a.qemu, a.ref, " (--renorm)" if a.renorm else "", len(tri), word, dec,
                                                                     " (first: %s)" % first if first else "",
-                                                                    notcover, pred_bad))
+                                                                    notcover,
+                                                                    "which must be 0:" if a.renorm else
+                                                                    "R-54's predicate wrong on", pred_bad))
     return 1 if word or dec or pred_bad else 0
 
 
