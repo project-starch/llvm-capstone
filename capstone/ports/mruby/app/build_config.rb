@@ -66,13 +66,11 @@ MRuby::CrossBuild.new('capstone') do |conf|
   conf.archiver.command = ENV.fetch('LLVM_AR')
   conf.linker.command = 'capstone-cc'
   conf.linker.flags << ENV.fetch('MRBD_SPAWN_OBJECT')
-  if (region = ENV['MRBD_REGION_OBJECT'])
-    conf.linker.flags += ['-Wl,--wrap=__capstone_region', region]
-  end
-  # MRBD_HEAP=sublet-gc: every GC object slot under Sublet (patch 0008), which
-  # needs sublet.h from the runtime tree; the build script exports its path.
-  if (inc = ENV['MRBD_GC_SUBLET_INCLUDE'])
-    conf.cc.defines << 'MRB_CAPSTONE_GC_SUBLET'
+  # MRBD_SUBLET=1: every GC object slot a Sublet child lifetime of its page
+  # (patch 0008), which needs capstone/capability.h; the build script exports
+  # the runtime's include directory.
+  if (inc = ENV['MRBD_SUBLET_INCLUDE'])
+    conf.cc.defines << 'MRB_CAPSTONE_SUBLET'
     conf.cc.include_paths << inc
   end
   gems.call(conf)
