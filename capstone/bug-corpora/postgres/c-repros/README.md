@@ -25,14 +25,16 @@ decision, 2026-10-10).
 
 **The arm recorded as `sublet` on 2026-10-06 was not the Sublet heap, and is dropped.** It ran on
 the SDK that `ports/postgres/app/build-domain.sh` builds for the server's `PGSU_NESTED=sublet` arm.
-Both PostgreSQL SDKs keep the default `CAPSTONE_APPLICATION_HEAP level0`
-(`runtime/application/CMakeLists.txt`); the sublet one only adds a grant for the server's context
-pools, which these programs never use. Its five catches -- at the same pcs as the `spatial` run --
+Both PostgreSQL SDKs kept the default `CAPSTONE_APPLICATION_HEAP level0`
+(`runtime/application/CMakeLists.txt`); the sublet one only added a grant for the server's context
+pools, which these programs never use (the grant went with the lifetime adapter on 2026-10-11). Its five catches -- at the same pcs as the `spatial` run --
 were level0 bounds under a Sublet label. The run stays in `results/sublet-20261006-161014` as the
 record of what was measured; no verdict is taken from it.
 
-**The arm is back as of 2026-10-11, on a heap that is actually Sublet's.**
-`CAPSTONE_APPLICATION_HEAP` takes `sublet` as well as `level0`, and
+**Historical physical Sublet arm, measured 2026-10-11 and now retired.**
+The lifetime-port migration removes this heap and its active arm declaration.
+The following describes the archived build, whose result bundle is retained.
+In that build, `CAPSTONE_APPLICATION_HEAP` took `sublet` as well as `level0`, and
 `ports/musl-capstone/runtime/sublet_heap.c` implements it: a binary buddy allocator over one
 linear region, each block with its own revocation node, the alias shrunk to the request so the
 bounds are the object's rather than the block's, and `free` scrubbing and revoking so every copy
@@ -46,7 +48,7 @@ declared: `results/20261011-034640-qemu/sublet`.
 
 ## Building and running
 
-    # once per arm: an application SDK built with the arm's heap
+    # once per arm: an application SDK of the arm's profile (physical: level0)
     bash shared/build-domain.sh <SDK> <OUT>          # cases, controls.dom, build.json (the SDK's heap)
     python3 shared/run-arm.py --arm spatial --state <capstone-vm state> --bindir <OUT> \
         --llvm-bin <compiler>/bin

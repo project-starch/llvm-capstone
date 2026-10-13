@@ -15,22 +15,11 @@
 # had to be relaxed for these cases to run. They had no domain build, and this
 # is it.
 #
-# WHAT THE SUBLET ARM MEANS HERE, and why nothing about it is weakened. Sublet
-# protects sub-allocations an application allocator carves out of a block it
-# owns. These cases have no application allocator, so there is nothing to
-# sublet and the arm has nothing extra to enforce; the refusing malloc of
-# memory-contexts/src/allocators/sublet/unsupported-allocators.c, whose job is
-# to catch a PostgreSQL memory manager reaching an unadapted libc path, is not
-# in this build and is untouched by it. Running the sublet SDK here measures
-# whether its runtime changes what happens to a plain malloc'd object, which
-# is a result worth having and is not a claim that these cases exercise
-# sublet.
-#
 #   usage: build-domain.sh <sdk dir> [out dir]
 #
 # The SDK is the one an arm was built with, so the cases run on exactly the
-# runtime the rest of that arm ran on -- for the two PostgreSQL arms,
-# $PG_SU_ROOT/runtime from ports/postgres/app/build-domain.sh.
+# runtime the rest of that arm ran on: a physical-profile SDK (level0) for
+# `spatial`, a virtual-profile one (musl mallocng) for `virtual-malloc`.
 set -euo pipefail
 SDK=${1:?usage: build-domain.sh <sdk dir> [out dir]}
 S=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -73,17 +62,17 @@ for d in "$R"/[0-9][0-9]_*/; do
   done
 done
 # The arm's controls, from the same SDK (shared/controls.c), and what this build IS: the runner
-# reads the heap from here and refuses an arm whose configuration needs another one.
+# reads the profile from here and refuses an arm whose configuration needs another one.
 if "$CC" "$OPT" "$S/controls.c" -o "$OUT/controls.dom" 2> "$OUT/controls.err"; then
   echo "  controls.dom OK"
 else
   echo "  controls.dom FAIL"; sed 's/^/      /' < "$OUT/controls.err" | head -8
   failed=$((failed + 1))
 fi
-heap=$(sed -n 's/^CAPSTONE_APPLICATION_HEAP:STRING=//p' "$SDK/CMakeCache.txt")
 virtual=$(sed -n 's/^CAPSTONE_APPLICATION_VIRTUAL:BOOL=//p' "$SDK/CMakeCache.txt")
+heap=level0; [[ ${virtual^^} == @(ON|TRUE|1) ]] && heap=virtual-mallocng
 printf '{"sdk": "%s", "heap": "%s", "virtual": "%s", "runtime_sha256": "%s", "opt": "%s"}\n' \
-  "$(cd "$SDK" && pwd)" "${heap:-unknown}" "${virtual:-OFF}" \
+  "$(cd "$SDK" && pwd)" "$heap" "${virtual:-OFF}" \
   "$(sha256sum "$SDK/libapplication-runtime.a" 2>/dev/null | cut -d' ' -f1)" "$OPT" > "$OUT/build.json"
-echo "built=$built failed=$failed heap=${heap:-unknown}  ($OUT)"
+echo "built=$built failed=$failed heap=$heap  ($OUT)"
 [[ $failed -eq 0 ]]
