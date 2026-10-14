@@ -2077,7 +2077,8 @@ everything inside delegated domains, are unaffected.
 > **The symptom.** On caplifive_fpb_afcd19bea, every Linux boot stops right after the `sched_clock` line.
 > - That line is itself stamped `[0.000000]` (on 0568f93a9: `[0.000168]`). It is followed by `[ cut here ]`, which is
 >   random_init's `WARN(!entropy)`, and by nothing else.
-> - After the hang the hart takes no debug halt (OpenOCD `dmstatus=0x00030c82`).
+> - After the hang the hart takes no debug halt (OpenOCD `dmstatus=0x00030c82`). No positive control has halted a
+>   RUNNING core on this bitstream, so "wedged" against "debug halt does not work here" is UNRESOLVED.
 > - It happens on the pinned firmware fw_2f49d5b257f7 (3 of 3), which booted to a login on 0568f93a9, so the bitstream
 >   is the variable. The bare S-16 set, R-51 and s10b read identically on both bitstreams.
 >
@@ -2098,15 +2099,23 @@ everything inside delegated domains, are unaffected.
 > - read `MTMB:02000000 MTMC:02000000` before the change and `MTMF:0200BFF8` after it, as predicted;
 > - stamped `sched_clock` `[0.000166]`, booted to a login, and read k800 4 and s06agg 64.
 >
-> **The rest of the boot carve** (`tests/runtime-qemu/silicon-ladder/monitor-boot-carve.py`, check-repr's encoder):
-> - Under the full scheme it also displaces these cursors, each piece overlapping its neighbour:
->   - the boot stack: cursor 0x80000000 against 0x80080380;
->   - the interrupt-handler stack: cursor 0x80000000 against 0x80082380 (setcursor'd to its end afterwards);
->   - the interrupt-handler seal: cursor 0x8008a000 against 0x8008a380. Written at that cursor, so it agrees with its
->     decoded base and overlaps the stack's top 0x380 bytes.
-> - CAPENTER's region 0 rounds its top to 0x80400000, past `_cap_text_start`.
-> - None of these stopped Linux or the two domains of boot M. Interrupt-heavy work (supervised preemption) has not
->   run on them.
+> **The rest of the boot carve.** RETRACTED 2026-10-15, the same day. The first version of this entry listed the boot
+> stack, the interrupt-handler stack and the interrupt-handler seal beside mtime as displaced carves that might matter.
+> Lane messages also said a blanket cursor fix in split_out_cap would break interrupts. Neither holds. The model does
+> displace those cursors under the full scheme (`tests/runtime-qemu/silicon-ladder/monitor-boot-carve.py`), but only
+> mtime's is ever dereferenced (claim-auditor):
+> - dom_init resets the boot stack's cursor (`scc(sp, sp, t1)`, sbi_capstone_dom.c.S);
+> - cap_env_init resets the interrupt-handler stack's cursor (`__setcursor` to its end);
+> - this silicon never reads the seal: `cap_cih : '0` (ex_stage.sv:860/873), and the decoder's `cih_i` is
+>   "To be enabled".
+>
+> **What does matter beyond mtime: the region table.** The model replays cap_env_init's region table.
+> - **Under cursorless,** the region covering Linux (0x80200000) is [0x8008a780, 2^40), above all of the monitor's
+>   memory.
+> - **Under the full scheme,** it is [0x80000000, 2^40). It starts at the monitor's own text, and three regions begin
+>   at 0x80000000.
+> - Whether that gives S-mode access to monitor memory depends on how the CPMP enforces it. That is UNVERIFIED.
+> - Boot M's login says nothing about it either way.
 >
 > **Why the gate missed it.** check-repr's monitor model replayed create_domain only, and judged each piece's bounds
 > (SHORT/OVERLAP), never the cursor the monitor dereferences. The RTL lane's option (b) recommendation also did not
