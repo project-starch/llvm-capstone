@@ -6973,13 +6973,14 @@ bool llvm::isSafeToSpeculativelyExecuteWithOpcode(
     return true;
   case Instruction::GetElementPtr: {
     // On a target whose pointers are CAPABILITIES, address arithmetic is not a
-    // total operation: Capstone's `cincoffset` raises UNEXPECTED_OPERAND when
-    // its base register holds no capability (capstone_flu_unit.anvil:29-33,
-    // 57-60), and a NULL pointer holds none. So a GEP that a normal target can
-    // hoist for free -- computing `&p->field` in a loop preheader above the
-    // `p != NULL` test -- becomes a TRAP on the null iteration. That is the
-    // second half of Capstone issue C-19: LICM hoisted exactly two such GEPs
-    // out of SQLite's selectExpander and the domain died at loop entry.
+    // total operation: Capstone's `cincoffset` raises UNEXPECTED_CAP_TYPE on an
+    // uninitialised or sealed capability. Until the CHERI rule (2026-10-14,
+    // capstone/docs/plans/2026-09-24-scc-cincoffset-untagged.md) it also raised
+    // UNEXPECTED_OPERAND on a NULL base, which is how this was found (C-19):
+    // LICM hoisted `&p->field` above `p != NULL` out of SQLite's selectExpander
+    // and the domain died at loop entry. NULL now computes an untagged address,
+    // but a guard such as a capability-type test can still exclude an
+    // uninitialised or sealed base, so the rule stays.
     //
     // Non-integral address spaces are the right predicate rather than a
     // hardcoded number: they already mean "this pointer is not just an
@@ -6990,6 +6991,8 @@ bool llvm::isSafeToSpeculativelyExecuteWithOpcode(
     // performance in loops: only a base that is not already known non-null
     // blocks speculation. Allocas, globals and pointers past a null check are
     // all known non-null, so the common address computations still hoist.
+    // Non-nullness does not prove that a base is not sealed; it is the line
+    // this rule has always drawn, not a proof.
     const auto *GEP = dyn_cast<GEPOperator>(Inst);
     if (!GEP)
       return true;

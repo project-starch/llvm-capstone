@@ -4,11 +4,11 @@
 ; hoisted out of a loop.
 ;
 ; On a capability target, address arithmetic is not total: Capstone's
-; `cincoffset` raises UNEXPECTED_OPERAND when its base register holds no
-; capability, and a NULL pointer holds none. Hoisting `&p->field` into the
-; preheader therefore turns a guarded, never-executed computation into a trap.
-; That is Capstone issue C-19: LICM hoisted exactly two such GEPs out of
-; SQLite's selectExpander and the domain died at loop entry.
+; `cincoffset` raises UNEXPECTED_CAP_TYPE on an uninitialised or sealed
+; capability, which a guard can exclude. Until the CHERI rule (2026-10-14) it
+; also trapped on a NULL base, and that is how this was found (C-19): LICM
+; hoisted two such GEPs out of SQLite's selectExpander and the domain died at
+; loop entry. NULL now computes; the rule stays for the other bases.
 ;
 ; The two functions below differ in ONE thing -- whether the base is known
 ; non-null -- so this pins the DISCRIMINATION, not merely the absence of a

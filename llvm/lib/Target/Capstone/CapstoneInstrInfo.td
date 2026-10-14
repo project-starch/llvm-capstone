@@ -2663,10 +2663,11 @@ def PseudoBRIDGE_CAP : Pseudo<(outs GPCR:$rd), (ins GPR:$rs), []>;
 //     j    done
 //   bridge:
 //     rd = PseudoBRIDGE_CAP addr ; otherwise: an untagged value, the address
-// so the scc never sees an operand it traps on. It stays a pseudo until then
-// so MachineLICM and MachineCSE see one side-effect-free instruction; after
-// expansion scc is in trapsOnUntaggedOperand, so later code motion keeps it
-// behind its branch (C-66).
+// so the scc never sees an operand it traps on (a sealed or uninitialised one;
+// an untagged one computes under the CHERI rule, but takes the bridge anyway).
+// It stays a pseudo until then so MachineLICM and MachineCSE see one
+// side-effect-free instruction; after expansion scc is in
+// trapsOnUntaggedOperand, so later code motion keeps it behind its branch (C-66).
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 24 in
 def PseudoSetAddr : Pseudo<(outs GPCR:$rd), (ins GPCR:$cap, GPR:$addr), []>;
 
