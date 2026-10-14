@@ -65,7 +65,7 @@ contents), not a spec-level contract. Both implementations keep it, and the QEMU
 
 | Where | MOVC uses | Relies on zeroing? |
 |---|---|---|
-| compiler (`llvm/lib/Target/Capstone`) | `copyPhysReg` emits MOVC for every GPCR copy; `eliminateFrameIndex` emits MOVC for a zero-offset sp/fp copy; `PseudoCapGlobalBase` and the direct-call target are fused to avoid a LINEAR MOVC source (C-46) | No. MOVC is modelled as a pure copy (C-46: `$rs1` is a plain use), so compiled code cannot depend on the source being zeroed. `CapstoneDeadRegisterDefinitions` only renames GPR defs to x0, never a GPCR def, so the compiler never emits `movc zero, rs`. |
+| compiler (`llvm/lib/Target/Capstone`) | `copyPhysReg` emits MOVC for every GPCR copy; `eliminateFrameIndex` emits MOVC for a zero-offset sp/fp copy; `PseudoCapGlobalBase` and the direct-call target are fused to avoid a LINEAR MOVC source (C-46) | No. MOVC is modelled as a pure copy (C-46: `$rs1` is a plain use), so compiled code cannot depend on the source being zeroed. `CapstoneDeadRegisterDefinitions` only renames GPR defs to x0, never a GPCR def, so backend-generated copies never use `movc zero, rs` (inline or hand-written assembly can). |
 | `ports/musl-capstone/runtime/start-musl.S` | `:98` `movc sp, t5` (t5 from SPLIT); `:236` `movc t1, ra`; `:454` `movc a1, a2` | No. `:236` clears ra with `li ra, 0` on the next line. The scrub path (`.Lmusl_scrub_return`) clears every register with `li`, never with MOVC. |
 | `my_first_domain/start.S:216` | `movc t1, ra` | No; `li ra, 0` follows. |
 | musl `altstack.S`, `set_thread_area.S`, `pthread_arch.h`, `delegate.c` | stack switch; `movc tp, a0` then `li a0, 0`; `movc %0, tp` | No. |
@@ -93,7 +93,7 @@ contents), not a spec-level contract. Both implementations keep it, and the QEMU
 | Where | Change | Branch |
 |---|---|---|
 | spec | MOVC text: copy untagged data; consume only a tagged non-NONLIN source; no exception. Both lines: `master` (which still had the 24 trap) and `capstone-bootstrap` (llvm-capstone's pin). | capstone-academic-spec `spec/movc-untagged-source` (3d15807, on master), `spec/movc-untagged-source-bootstrap` (15a8e3d, on capstone-bootstrap) |
-| QEMU | Default already was the rule. **One deviation fixed:** `movc zero, rs` wrote `rs` into x0's storage, so a later `stc zero` stored that value instead of cnull. New suite `tests/movc-untagged-source` (62 checks; `--legacy` 85). | capstone-qemu `isa/movc-untagged-source` |
+| QEMU | The rule on the virtual profile (`x-capstone-u-mode`), which already kept an untagged source. The physical profile now nulls an untagged source, as the RTL still does, because physical QEMU models the silicon: the same split the maintainer gave the untagged CINCOFFSET/SCC rule (capstone-qemu 2794082073). **One deviation fixed:** `movc zero, rs` wrote `rs` into x0's storage, so a later `stc zero` stored that value instead of cnull. New suite `tests/movc-untagged-source` (67 checks; `--legacy` 85). | capstone-qemu `isa/movc-untagged-source` |
 | compiler | No source change. A lit test shows that the feature, when it arrives as a function attribute (the SDK's path), removes the STC+LDC rewrite. | llvm-capstone `isa/movc-untagged-source` |
 | SDK (virtual profile) | `-Xclang -target-feature -Xclang +movc-keeps-integer-source` in the application, runtime, builtins and musl codegen. The physical profile and the compiler default are unchanged: the bitstream still nulls. | same |
 | probe | `movc-rule` turns the feature off explicitly, so it still tests the rewrite under the new SDK default. | same |
@@ -158,21 +158,24 @@ Until then, every physical-profile image keeps the C-32 rewrite (the compiler de
 All measured on 2026-10-14 by this lane. Hosts and binaries are as named; p12 is shared, so its
 times are not timings.
 
-**QEMU** (p12; capstone-qemu `isa/movc-untagged-source`, i.e. 91b96f2b plus the x0 fix):
-- `tests/movc-untagged-source/run.sh`: 62/62.
-- `--legacy` (`CAPSTONE_MOVC_NULL_SCALAR=1`): 85/85. The 60 builds that expect the old rule pass every
-  leg, the 22 default builds of the cases that differ are rejected, the 2 harness controls are
-  rejected, and the switch notice is present.
-- On 91b96f2b (before the x0 fix): 54/62. `x0_destination` and `consuming_types_self_and_x0` fail in
-  all four contexts.
-- Four scratch mutants of `helper_csmovc`:
-  - "consume only LIN" fails 15 runs (REVOKE, UNINIT, SEALED, SEALED-RETURN, and the self and x0
-    moves);
-  - "consume nothing" fails 27 runs;
-  - "consume NONLIN too" fails 17 runs;
-  - "write x0" fails 8 runs.
-- Other suites on the same binary (before the review additions): `virtual-capstone-runtime` 69/69,
-  `store-tags` 4/4, `exact-bounds` 4/4, `virtual-capstone-m1` 60/60, `sublet-lifetimes` 78/78.
+**QEMU** (p12; capstone-qemu `isa/movc-untagged-source` on `virtual-capstone` 70e98dd390, which
+has #22, #23, #25 and #26):
+- `tests/movc-untagged-source/run.sh`: 67/67.
+  - 45 virtual and M1 checks under the rule.
+  - 15 physical builds under the RTL's rule, plus 5 physical default builds of the differing cases,
+    which are correctly rejected.
+  - 2 harness controls.
+- `--legacy` (`CAPSTONE_MOVC_NULL_SCALAR=1`, every context under the RTL's rule): 85/85.
+- Before the x0 fix (91b96f2b), `x0_destination` and `consuming_types_self_and_x0` failed in every
+  context.
+- Mutants of `helper_csmovc`, each built from its own source tree (failing checks out of 67):
+  - no physical branch: 10, exactly the physical differing cases;
+  - "consume only LIN": 15 (REVOKE, UNINIT, SEALED, SEALED-RETURN, and the self and x0 moves);
+  - "consume nothing": 27;
+  - "consume NONLIN too": 17;
+  - "write x0": 8.
+- Other suites on the same binary: `virtual-capstone-runtime` 69/69, `store-tags` 4/4,
+  `exact-bounds` 4/4, `virtual-capstone-m1` 69/69, `capstone-untagged-arith` 6/6.
 
 **Compiler** (p12, `~/cc-ab/build-C80b`, assertions ON):
 - The new lit test passes, and both of its mutations are rejected.
