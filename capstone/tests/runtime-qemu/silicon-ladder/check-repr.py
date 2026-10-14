@@ -85,8 +85,8 @@ written from the SV with explicit bit slicing agreed on 300,000). QEMU showed it
 its SPLIT and SHRINK keep exact bounds. Fixed in the encoder by taking E+1 when the rounded span
 reaches 2**(E+13): capstone-qemu aad781e15a, and capstone-ariane 2a3a87dfc (fp-fixes, on 0568f93a9;
 the capstone-sublet tree carries the same step). --renorm models that fix in either format, ported
-from 2a3a87dfc: 0 mismatches against its bounds-model.py (300,000 decodes, fixed and unfixed) and
-against aad781e15a (qemu-encoder-diff.py --renorm). Every encoder without it reaches the wrap once a
+from 2a3a87dfc and now in afcd19bea's residue form (identical below 2^64; at the top of the address space
+2a3a87dfc's 64-bit add wraps and decodes half the span, this form decodes [0, 0), and neither covers); checked against bounds-model.py and capstone-qemu (qemu-encoder-diff.py --renorm). Every encoder without it reaches the wrap once a
 cursor leaves the base, so the replay also fails on:
   * SPLIT TRAP: a carve point outside the remainder's DECODED bounds, which SPLIT refuses
     with ILLEGAL_OPERAND_VALUE (capstone_dyn_unit.anvil, func SPLIT). The replay stops there.
@@ -185,11 +185,15 @@ def rtl_compress(start, end, cursor):
         lz -= 1
     e = lz - 12
     if RENORM and not (e == 0 and ((ln >> 12) & 1) == 0):
-        # R-54's fix, ported from capstone-ariane 2a3a87dfc (ariane_pkg.sv compress_bounds): when the span rounded out
-        # to 2^(E+3) reaches 1024 granules, take E + 1 (64-bit arithmetic, as xlen_t)
-        tg = ((end + ((1 << (e + 3)) - 1)) & M64) >> (e + 3)
-        bg = start >> (e + 3)
-        if ((tg - bg) & M64) >= 1024:
+        # R-54's fix in its residue form, ported from capstone-ariane afcd19bea (ariane_pkg.sv compress_bounds) and
+        # identical to capstone-qemu 4a21b485b01f. The rounded span in granules is q, q+1 or q+2 (q = len >> (E+3) <
+        # 1024), so E + 1 exactly when q == 1023 with a nonzero remainder, or q == 1022 with sr + lr > g. Below 2^64
+        # this equals 2a3a87dfc's `(end + g - 1) >> (E+3) - start >> (E+3) >= 1024`. At the top of the address space
+        # that form's 64-bit add wraps and misses the step ([0, 2^64-1) keeps E = 51, decoding [0, 2^63)); this one
+        # takes it, rounds the top to 2^64, which no 64-bit end holds, and decodes [0, 0). Neither covers such a region.
+        g = 1 << (e + 3)
+        q, sr, lr = ln >> (e + 3), start & (g - 1), ln & (g - 1)
+        if (q == 1023 and (sr | lr) != 0) or (q == 1022 and sr + lr > g):
             e += 1
     if e == 0 and ((ln >> 12) & 1) == 0:
         return ("full", 0, start & 0x3FFF, end & 0xFFF, 0)
@@ -449,6 +453,8 @@ def carve_pool(lay, out, s, e, ds, code_size, region_align):
             out["trap"].append(("shrink " + what, n, pool[0], pool[1]))
             return p_lo
         c = writeback(lo, hi, lo)
+        if what.startswith("global["):
+            out["caps"].append((int(what[7:-1]), n, lo, c[0], c[1]))
         if c[0] > lo or c[1] < lo + n:
             out["short"].append((what, n, c[0], c[1]))
         elif c != (lo, hi):
@@ -469,7 +475,7 @@ def replay_process(lay, base, carve_align, carve="split"):
     """One base: the module's block, the monitor's split, the glue's carve. An image without .capstone_domreq takes
     the classic path: the module sizes the block as code_len + max(code_len, 64 KiB) (capstone.c's dom_headroom),
     the monitor keeps data_top = tot_size (no descriptor area, no top alignment) and parks only gp."""
-    out = dict(short=[], inexact=0, widen=0, m14=None, overlap=[], gran=None, trap=[], moved=[])
+    out = dict(short=[], inexact=0, widen=0, m14=None, overlap=[], gran=None, trap=[], moved=[], caps=[])
     if lay["managed"]:
         total = lay["code_len"] + lay["req_data"] + 8 * 1024 + 1024
     else:
@@ -546,6 +552,7 @@ def replay_process(lay, base, carve_align, carve="split"):
             out.update(stack=None, tot=tot, end=end, data_top=data_top)
             return out
         st = writeback(t1, sp_top, t1)
+        out["caps"].append((i, size, t1, st[0], st[1]))  # (record, size, the global's address, decoded bounds)
         sp_base, sp_top = writeback(sp_base, t1, sp_base)
         if sp_top != t1 or st[1] != want_top:
             out["inexact"] += 1
@@ -713,6 +720,11 @@ def self_test():
         FORMAT = "full"
         if writeback(0xadf2a000, 0xadfa9fe0, 0xadf2a008) != (0xadf2a000, 0xadfaa000):
             print("self-test FAIL: --renorm did not cover the wrap's example"); bad += 1
+        top = rtl_compress(0, M64, 1)                    # [0, 2^64 - 1): the residue form takes E = 52
+        if top[0] != "full" or top[4] != 52:
+            print("self-test FAIL: --renorm missed the step at the top of the address space: %s" % (top,)); bad += 1
+        if writeback(0, M64, 1) != (0, 0):              # a rounded top of 2^64 is unrepresentable: masked like the
+            print("self-test FAIL: the decoder did not wrap a 2^64 top to 0"); bad += 1   # RTL's xlen_t, not covering
         rnd = random.Random(2)
         for _ in range(20000):
             k = rnd.randrange(13, 40)

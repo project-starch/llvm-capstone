@@ -82,6 +82,8 @@ def cases(n, seed):
             ln = rnd.randrange(1, 1 << 14)
         al = rnd.choice([0, 4, 8, 12, 16, 21])
         base = (rnd.randrange(0, 1 << 40) >> al) << al
+        if rnd.randrange(8) == 0:                        # the top of the address space, where a 64-bit end add wraps
+            base = max(0, (1 << 64) - ln - rnd.randrange(0, 1 << 20))
         cur = base if rnd.randrange(3) == 0 else base + rnd.randrange(0, ln + 1)
         out.append((base, base + ln, cur))
     return out
@@ -110,7 +112,7 @@ def main():
     if len([r for r in res if r]) != len(tri):
         print("ERROR: the C driver answered %d of %d triples" % (len([r for r in res if r]), len(tri)))
         return 1
-    word = dec = notcover = pred_bad = 0
+    word = dec = notcover = pred_bad = unrep = 0
     first = None
     for (s, e, c), line in zip(tri, res):
         _lo, hi, qb, qe = (int(x, 16) for x in line.split())
@@ -127,15 +129,20 @@ def main():
             dec += 1
             first = first or "decode [%#x,%#x) vs [%#x,%#x) for [%#x,%#x) cursor %#x" % (pb, pe, qb, qe, s, e, c)
         if s <= c <= e:
+            gq = 1 if ie == 0 else 1 << (E + 3)
+            if -(-e // gq) * gq >= 1 << 64:              # the rounded top is 2^64 or more: no 64-bit end can hold it
+                unrep += 1                               # (both encoder forms decode it short); counted, not judged
+                continue
             bad = qb > s or qe < e
             notcover += bad
             g = cr.full_granule(e - s)
             span = -(-e // g) * g - s // g * g
             pred_bad += bad if a.renorm else bad != (e - s >= 4096 and span >= g << 10)
     print("qemu-encoder-diff: %s at %s%s, %d triples: %d word mismatches, %d decode mismatches%s; %d decode not "
-          "covering their input, %s %d" % (a.qemu, a.ref, " (--renorm)" if a.renorm else "", len(tri), word, dec,
+          "covering their input (%d more with a rounded top at or above 2^64, unrepresentable, not judged), %s %d" % (
+              a.qemu, a.ref, " (--renorm)" if a.renorm else "", len(tri), word, dec,
                                                                     " (first: %s)" % first if first else "",
-                                                                    notcover,
+                                                                    notcover, unrep,
                                                                     "which must be 0:" if a.renorm else
                                                                     "R-54's predicate wrong on", pred_bad))
     return 1 if word or dec or pred_bad else 0
