@@ -85,7 +85,7 @@ llvm/include/llvm/IR/RuntimeLibcalls.td | +20 -0 | def CAPSTONE_FLUSH_ICACHE : R
 llvm/include/llvm/Object/ELFObjectFile.h | +27 -0 | Expected<SubtargetFeatures> getCapstoneFeatures() const;
 llvm/include/llvm/TargetParser/CMakeLists.txt | +3 -0 | set(LLVM_TARGET_DEFINITIONS ${PROJECT_SOURCE_DIR}/lib/Target/Capstone/Capstone.td)
 llvm/include/llvm/TargetParser/Triple.h | +15 -0 | capstone32,  // Capstone: capstone32
-llvm/lib/Analysis/ValueTracking.cpp | +30 -0 | // On a target whose pointers are CAPABILITIES, address arithmetic is not a
+llvm/lib/Analysis/ValueTracking.cpp | +33 -0 | // On a target whose pointers are CAPABILITIES, address arithmetic is not a
 llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp | +50 -2 | // Some targets, including Capstone with addrspace(200) capability
 llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp | +4 -1 | // Capstone: stripAndAccumulate... wants the INDEX width, which is not the
 llvm/lib/CodeGen/AtomicExpandPass.cpp | +15 -1 | // non-integral address space (a capability) is more than its bits: taken
