@@ -9,11 +9,15 @@
  *           its window too);
  *   rowrite as vma, then write page 9: still a fault (the domain dies), so a
  *           FOLL_FORCE pin never makes read-only memory writable;
- *   retire  write page 0, then munmap: every pin of the window is released. */
+ *   retire  write page 0, then munmap: every pin of the window is released.
+ * run-step-hooks.py also uses:
+ *   walk     write every page in order (one fault per page with window 1);
+ *   syscalls 64 delegated umask() calls, each checking the previous reply. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 
 #define PAGE 4096
 #define PAGES 32
@@ -26,6 +30,16 @@ static void require(int ok, const char *message)
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "base";
+    if (!strcmp(mode, "syscalls")) {
+        mode_t previous = umask(022);
+        for (int i = 0; i < 64; ++i) {
+            mode_t next = i & 1 ? 022 : 077;
+            require(umask(next) == (i & 1 ? 077 : 022), "umask reply");
+        }
+        umask(previous);
+        printf("PIN_OK:%s\n", mode);
+        return 0;
+    }
     volatile char *a = mmap(NULL, PAGES * PAGE, PROT_READ | PROT_WRITE,
                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     require(a != MAP_FAILED, "mmap");
@@ -45,6 +59,11 @@ int main(int argc, char **argv)
             a[9 * PAGE] = 1;
             require(0, "store to a read-only page succeeded");
         }
+    } else if (!strcmp(mode, "walk")) {
+        for (int i = 0; i < PAGES; ++i)
+            a[i * PAGE] = (char)i;
+        for (int i = 0; i < PAGES; ++i)
+            require(a[i * PAGE] == (char)i, "walk readback");
     } else if (!strcmp(mode, "retire")) {
         a[0] = 1;
         require(!munmap((void *)a, PAGES * PAGE), "munmap");

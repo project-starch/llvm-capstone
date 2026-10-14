@@ -281,6 +281,29 @@ allocator's block-record count. Rebuild the runtime SDK and relink applications
 to use its proactive node-budget service; old SDKs can return `ENOMEM` from
 their fixed-budget check before an instruction requests node growth.
 
+The adapter resolves a domain page fault inside `CV_STEP` and resumes the
+domain; it returns to the launcher for a pending signal, `need_resched()` or
+after one 5 ms quantum, checked with interrupts off just before each
+`CSRUNV`. The module parameter `pin_ahead_pages` (default 1) pins that many
+pages from a lazy-arena fault onward, 16 at a time. Two gates cover these,
+built from `pin-ahead-contract.c` like `node.dom` above:
+
+```sh
+python3 capstone/runtime/virtual/run-pin-ahead.py ... --application "$out/pin.dom"
+make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE=... M=<copy of module/> \
+  CV_TEST_HOOKS=1 modules     # the test build; never install it elsewhere
+python3 capstone/runtime/virtual/run-step-hooks.py ... --module <that .ko> \
+  --application "$out/pin.dom"
+```
+
+`run-pin-ahead.py` checks the window's clipping (arena, VMA, an already
+pinned page), read-only `FOLL_FORCE` backing staying read-only, and release on
+`munmap`. `run-step-hooks.py` uses the test build's hooks to inject a
+reschedule, a signal, an expired budget or `SIGKILL` at three points of
+`CV_STEP`, and a short GUP result, and checks that no `CSRUNV` follows an
+injection, that pins and fault counts match uninjected runs, that GUP is
+never asked for more than 16 pages, and that every `FOLL_PIN` pin is released.
+
 ## Qualification and limits
 
 The growing-table [qualification manifest](results/node-growth/qualification.json)
