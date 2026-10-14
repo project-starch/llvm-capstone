@@ -2273,6 +2273,34 @@ longer separates globals.
 - The default stays B0_GLUE_CARVE=align, so no existing build changes. Images built for the FP (b) or Sublet
   bitstream should use pool.
 
+## Boot W pre-registered (2026-10-14, before the flash): the globals carve on silicon, split against pool
+The FP chain's step 8, after boot C+F, EXPLORATORY: outside the acceptance verdict, and unable to stop the chain.
+It is the board's first direct reading of per-global separation.
+- The probe: runtime/silicon/carve-witness.c, eight initialised globals of 24, 100, 5000, 40, 9000, 7, 65536 and
+  200 bytes. Each reads its own capability's base and end with lcc, relative to its address.
+- Built twice from one source with B0_DATA = 1 MiB (the default 256 KiB failed the gate: stack margin -72,592,
+  which is the gate working):
+  - cw-align: the split carve, cafd2c97fcd2a25c;
+  - cw-pool: the pool carve, dev 93e440624945, 24b8a8f477942e2d.
+- Rungs: b0-stats, b0-hello (control), cw-align, cw-pool, b0-stats2. Private image 328e0d5f4c3d152f, firmware
+  ff1e132b1084 (wrapper 882892f, monitor 1f9aedd, QUIET).
+- **Predicted on the FP bitstream (b), from check-repr's replay** (`--format full --renorm`, the records of g0..g7
+  mapped through their template offsets):
+  - **cw-align rc 8 at every CMA base:** every global's capability reaches outside its storage. At 248 of 255 bases
+    the readings are g0 [+0, +1488), g1 [+0, +1600), g2 [+0, +6608), g3 [+0, +512), g4 [+0, +9520), g5 [+0, +1456),
+    g6 [-80, +66864), g7 [+0, +1536). The other 7 bases have four other patterns, all rc 8.
+  - **cw-pool rc 0 at every base**, each capability exactly its own 16-byte-rounded storage: g0 [+0, +32),
+    g1 [+0, +112), g2 [+0, +5008), g3 [+0, +48), g4 [+0, +9008), g5 [+0, +16), g6 [+0, +65536), g7 [+0, +208).
+  - Each line is checked against the replay at the DBAS the run prints.
+- **On a cursorless bitstream (0568f93a9), for reference:** both builds read exact at most bases. cw-align shows
+  CARVE_ALIGN's own padding at a few, which is not neighbour overlap.
+- **QEMU** (fw-b1-a11d424, GP_FABRICATE=0): both builds read rc 0 with the pool prediction's exact values. QEMU's
+  SPLIT keeps fat bounds, so QEMU cannot show the split carve's overlap; that is why this witness runs on silicon.
+- **Refutations:**
+  - cw-pool any line BEYOND, or any value other than the table above: the pool carve does not separate on silicon;
+  - cw-align rc 0 on (b): the encoder change did not reach the carve as modelled.
+  Either is read before anything else.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,

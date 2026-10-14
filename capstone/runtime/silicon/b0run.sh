@@ -76,7 +76,7 @@ case "$rung" in
       echo "RESULT $rung retval=903"
     fi
     ;;
-  b0-memcpy|b0-printf|b1-thread|b0-strtod|r54-bounds)
+  b0-memcpy|b0-printf|b1-thread|b0-strtod|r54-bounds|cw-align|cw-pool)
     # The application's own exit status is the result; capstone-exec's own failures keep their codes (125 and so on).
     # B0.8 b0-memcpy, the R-29 memcpy guard on silicon: 0 the unguarded control miscopied and the guarded copy never
     # did; 1 the guarded copy miscopied; 2 the control never miscopied (void: no hazard created).
@@ -87,6 +87,9 @@ case "$rung" in
     # B1.0b b0-strtod, the narrowed float parser: 0 all 23 cases equal the host's; otherwise the number that differ.
     # B4 r54-bounds (ISSUES R-54): a bitmask, bit k set if arm k (A B C D G H) decoded SHORT once its cursor moved;
     # 64 if an at-base reading was not exact. QEMU reads 0; 0568f93a9 is predicted 39 (A, B, C and H).
+    # cw-align / cw-pool (carve-witness.c, the same source with the split and the pool globals carve): the number of
+    # its eight globals whose capability reaches outside its own 16-byte-rounded storage. Under the full bounds scheme
+    # (FP bitstream (b), Sublet) check-repr predicts cw-align 8 and cw-pool 0 at every base.
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     /usr/bin/capstone-exec "$dom" > /tmp/b0.out 2> /tmp/b0.err
     rc=$?

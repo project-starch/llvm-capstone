@@ -449,6 +449,8 @@ def carve_pool(lay, out, s, e, ds, code_size, region_align):
             out["trap"].append(("shrink " + what, n, pool[0], pool[1]))
             return p_lo
         c = writeback(lo, hi, lo)
+        if what.startswith("global["):
+            out["caps"].append((int(what[7:-1]), n, lo, c[0], c[1]))
         if c[0] > lo or c[1] < lo + n:
             out["short"].append((what, n, c[0], c[1]))
         elif c != (lo, hi):
@@ -469,7 +471,7 @@ def replay_process(lay, base, carve_align, carve="split"):
     """One base: the module's block, the monitor's split, the glue's carve. An image without .capstone_domreq takes
     the classic path: the module sizes the block as code_len + max(code_len, 64 KiB) (capstone.c's dom_headroom),
     the monitor keeps data_top = tot_size (no descriptor area, no top alignment) and parks only gp."""
-    out = dict(short=[], inexact=0, widen=0, m14=None, overlap=[], gran=None, trap=[], moved=[])
+    out = dict(short=[], inexact=0, widen=0, m14=None, overlap=[], gran=None, trap=[], moved=[], caps=[])
     if lay["managed"]:
         total = lay["code_len"] + lay["req_data"] + 8 * 1024 + 1024
     else:
@@ -546,6 +548,7 @@ def replay_process(lay, base, carve_align, carve="split"):
             out.update(stack=None, tot=tot, end=end, data_top=data_top)
             return out
         st = writeback(t1, sp_top, t1)
+        out["caps"].append((i, size, t1, st[0], st[1]))  # (record, size, the global's address, decoded bounds)
         sp_base, sp_top = writeback(sp_base, t1, sp_base)
         if sp_top != t1 or st[1] != want_top:
             out["inexact"] += 1
