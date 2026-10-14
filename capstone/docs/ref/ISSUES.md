@@ -2072,6 +2072,51 @@ everything inside delegated domains, are unaffected.
 >   take E+1. Verified in the lane's model over 400,000 regions x three cursors: 0 not covering, against 519 without.
 >   check-repr will model it from the commit.
 
+### R-55 — under the full bounds scheme the FPGA monitor's boot-time carves land their cursors below the carve point; `mtime` reads the CLINT's msip, S-mode time is 0 and Linux hangs in start_kernel `OBSERVED ON SILICON 2026-10-15 (caplifive_fpb_afcd19bea; option (b) 4a4261bb4 and the Sublet build carry the same encoder change); CONFIRMED by a one-cursor firmware change that boots Linux on the same bitstream (boot M); the fix is a monitor change, which the lead decides`
+
+> **The symptom.** On caplifive_fpb_afcd19bea, every Linux boot stops right after the `sched_clock` line.
+> - That line is itself stamped `[0.000000]` (on 0568f93a9: `[0.000168]`). It is followed by `[ cut here ]`, which is
+>   random_init's `WARN(!entropy)`, and by nothing else.
+> - After the hang the hart takes no debug halt (OpenOCD `dmstatus=0x00030c82`).
+> - It happens on the pinned firmware fw_2f49d5b257f7 (3 of 3), which booted to a login on 0568f93a9, so the bitstream
+>   is the variable. The bare S-16 set, R-51 and s10b read identically on both bitstreams.
+>
+> **The mechanism, from three sources.**
+> - The core has no `time` CSR. The FPGA monitor emulates S-mode rdtime in handle_exception as `time_val = *mtime`
+>   (sbi_capstone.c, CAPSTONE_TARGET_FPGA).
+> - cap_env_init mints `mtime` with `split_out_cap(0x200bff8, 8, 0)`: a SPLIT at 0x200bff8, then a SPLIT of the upper
+>   piece at 0x200c000, returning that split's LOWER piece.
+> - SPLIT gives the lower piece `cursor = rs1_orig.metadata.start`, the parent's DECODED start
+>   (capstone_dyn_unit.anvil func SPLIT). QEMU's CSSPLIT sets the same cursor (the RTL lane, op_helper.c).
+> - The cursorless scheme (0568f93a9) kept a cursor-on-base capability's base exact. The full scheme (option (b))
+>   rounds the upper piece [0x200bff8, 0x10000000) down to base 0x2000000.
+> - So `mtime` = [0x2000000, 0x200c000), cursor 0x2000000, and `*mtime` reads msip, which is 0.
+> - QEMU's virtual profile keeps exact bases, so QEMU cannot show it. The cursor rule is not what differs.
+>
+> **Confirmed on the board (boot M, pre-registered on b0-silicon-runtime a26c9f01935e).** A private firmware that
+> differs from the pinned one only by `mtime = __setcursor(cap, SBI_MTIME_ADDR)` in cap_env_init:
+> - read `MTMB:02000000 MTMC:02000000` before the change and `MTMF:0200BFF8` after it, as predicted;
+> - stamped `sched_clock` `[0.000166]`, booted to a login, and read k800 4 and s06agg 64.
+>
+> **The rest of the boot carve** (`tests/runtime-qemu/silicon-ladder/monitor-boot-carve.py`, check-repr's encoder):
+> - Under the full scheme it also displaces these cursors, each piece overlapping its neighbour:
+>   - the boot stack: cursor 0x80000000 against 0x80080380;
+>   - the interrupt-handler stack: cursor 0x80000000 against 0x80082380 (setcursor'd to its end afterwards);
+>   - the interrupt-handler seal: cursor 0x8008a000 against 0x8008a380. Written at that cursor, so it agrees with its
+>     decoded base and overlaps the stack's top 0x380 bytes.
+> - CAPENTER's region 0 rounds its top to 0x80400000, past `_cap_text_start`.
+> - None of these stopped Linux or the two domains of boot M. Interrupt-heavy work (supervised preemption) has not
+>   run on them.
+>
+> **Why the gate missed it.** check-repr's monitor model replayed create_domain only, and judged each piece's bounds
+> (SHORT/OVERLAP), never the cursor the monitor dereferences. The RTL lane's option (b) recommendation also did not
+> ask who relies on a lower piece's cursor landing on the carve point.
+>
+> **The fix space (the lead's).** The RTL lane recommends no RTL change: a carve sets its cursor explicitly. The
+> alternatives are:
+> - flash back to 0568f93a9 (cursorless, without the FP fixes);
+> - build the (a) tree 2a3a87dfc (cursorless kept, R-11's truncated tops back).
+
 ### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `NOT REPRODUCED on caplifive_supcall_715bdd1fe (arm12-ldc 3/3), mechanism unknown, apertures 219..222 armed; was: OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
 
 **S-17: NOT REPRODUCED on `caplifive_supcall_715bdd1fe.bit`.** arm12-ldc ran 3 of 3, 8,552 escapes each, identical

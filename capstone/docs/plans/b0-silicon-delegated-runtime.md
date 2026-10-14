@@ -2272,6 +2272,24 @@ boot-time mtime capability.**
     image is checked before anything else.
   - No OpenSBI banner: boot fw-ctl as the control before concluding anything.
 
+## Boot M RESULT (2026-10-15 03:30-03:47, caplifive_fpb_afcd19bea, firmware fw-mtime 647dce4c7fce): every reading as pre-registered; R-55 confirmed
+- **UART:**
+  - before the change: `MTMB:02000000`, `MTMC:02000000`;
+  - after it: `MTMF:0200BFF8`.
+  So the monitor's mtime capability had base and cursor at the CLINT's base, and the one change put the cursor on
+  mtime.
+- **Linux:** `[    0.000166] sched_clock: ...`, then `Calibrating delay loop` and a login; no CUT_HERE.
+- **The rungs:** k800 `retval=4 instret=1089`, s06agg `retval=64`. This is chain step 6's form; on 2026-10-11 the same
+  form read the same values on 0568f93a9.
+- **The driver's s07 detector:** it printed its own SELFTEST FAIL / INSTRUMENT FAULT lines. They are outside the
+  verdict and say nothing about the core.
+- **The matched pair, one cursor apart:** fw-ctl (equal to the pinned image, which hangs 3 of 3) against fw-mtime
+  (boots). The time-0 hang, and the wedge after its warning, are fully explained by the mtime cursor. The other
+  displaced carves (R-55's list) did not stop Linux or these two domains. Interrupt-heavy work has not run on them.
+- **Registered:** R-55 in ISSUES.md.
+- **What is left for the acceptance:** the chain cannot resume on the shared firmware, which still carries the
+  displaced cursor. The path (a monitor fix landed and the chain re-run on afcd19bea, or a flash back) is the lead's.
+
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
 sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one
