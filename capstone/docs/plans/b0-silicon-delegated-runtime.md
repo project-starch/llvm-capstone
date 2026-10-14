@@ -1899,7 +1899,10 @@ capstone-sublet RTL, read in the RTL lane's working tree on 2026-10-13 before 13
 landed in that tree, and before any commit: `bounds_t` is the 27-bit full
 scheme for every capability, and the cursorless branch is gone. `compress_bounds` and `decompress_bounds` keep the old
 full branch's bodies, so the port is the existing one with the `start == cursor` branch skipped. `--format cursorless`
-stays the default, for 0568f93a9 and earlier.
+stays the default, for 0568f93a9 and earlier. **Since committed:** the format move is capstone-ariane d34c26002, on
+fp-fixes 4a4261bb4. Its bounds encoder and decoder are 4a4261bb4's full branch, renormalisation included, with the
+cursorless type and decoder branch removed (`git diff 4a4261bb4 d34c26002`). `--format full --renorm` models it, and
+`--format full` alone is the pre-13:04 tree the predictions below were made from.
 
 **The port is checked against two other transcriptions.** `qemu-encoder-diff.py` builds capstone-qemu's
 `cap_compress.c` (origin/isa/sublet-lifetimes) standalone and runs 60,000 random triples through both:
@@ -2076,6 +2079,55 @@ splits too: code, seal, dom_data, the descriptor area, gp, and code at its entry
   - None of the 11 real images is code-heavy enough.
   - Fix, if (b) or the format move is taken: size the granule from max(split_size's own granule, repr_gran) in
     create_domain (the FPGA monitor line, this lane's), with the firmware for that bitstream.
+
+## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
+Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
+longer separates globals.
+- **Why:** each SPLIT off the stack remainder rounds the remainder's top UP into the piece just carved, and the next
+  global inherits that top.
+- **How much:** each global's capability reaches into its neighbour by up to the remainder's granule; check-repr
+  reads 64 B (k800) to 32 KiB (memcached).
+- **Why CARVE_ALIGN doesn't help:** it computes the cursorless granule.
+
+**Design (CAPSTONE_GLUE_POOL_CARVE; build-b0-hello.sh B0_GLUE_CARVE=pool):**
+- Pass 1 walks the descriptor for the pieces' lowest base without touching a capability.
+- ONE split cuts the stack [base, P_lo) from the pool [P_lo, END), with P_lo aligned to the stack remainder's
+  granule.
+- The table and every global come from a cincoffset copy of the (NONLIN) pool, narrowed with SHRINK
+  (capstone_flu_unit.anvil: narrows rd in place, keeps its node, clamps the cursor). Each piece is aligned to its OWN
+  full-scheme granule.
+- s7 (the pool) is cleared before the application starts.
+- A global's capability then depends only on its own length and alignment, and no revocation node is spent per
+  global: about 265 fewer for memcached, about 160 for the SQLite cell. The node budgets already recorded were
+  measured with the split carve and stay valid for those images.
+
+**Model first (check-repr.py carve_pool):** 11 images, every CMA base.
+- full+renorm: 0 traps, 0 short, 0 short-once-moved, **OVERLAP 0**; padding 64 B to 3.8 KiB; every stack margin
+  above its requirement.
+- The split carve on the same images overlaps everywhere (64 B to 32 KiB): the control.
+- cursorless: also exact for these 11 images. That is not guaranteed in general: a small global straddling a 32 MiB
+  boundary would truncate. The glue therefore stays aligned to each piece's own granule, and check-repr verifies each
+  image against the resident format.
+- check-repr detects the pool glue from the image: the table's `shrink(gp, t1, t4)`, 0x03d311db.
+
+**Built and run:**
+- With the define off, the glue object and b0-hello are byte-identical to the unmodified glue (82b5bb388e2f8f7a,
+  f75bb823bdde319a).
+- b0-hello with the pool carve: eecd8964994b10d4, gate OK. Under full+renorm it reads OVERLAP 0, against the split
+  build's overlap at all 512 bases, up to 384 B.
+- The disassembly shows the pool split (0x0d611bdb, `split s7, sp, s6`), the table's and each global's
+  cincoffset + shrink, and `li s7, 0`.
+- QEMU (fw-b1-a11d424, GP_FABRICATE=0): both builds print the hello line, rc 0.
+- b1-thread (with its context arena): split 0fc75a06633ae0bf, pool a5ec32d0c5095f0d. Under full+renorm the split
+  build overlaps at all 255 bases (up to 2,048 B) and the pool build at none. In QEMU both join with 124, rc 0.
+- memcached (the B2 recipe): split 62fad1bc8bc15a79, pool 1c63bff566577a4f, from the same tree. Under full+renorm
+  the pool build reads OVERLAP 0 at all 225 bases.
+  - In QEMU (fw-b1-top, GP_FABRICATE=0, the guest clock set as for B3c), the oracle harness reads transcript
+    e0a254c47e7ee28c (1,931,207 bytes) for BOTH builds. That is the native oracle's hash, and both exit 0 on TERM.
+- QEMU proves the glue runs and the program works; only the model proves the bounds. The board witness is
+  carve-witness.c, pre-registered separately.
+- The default stays B0_GLUE_CARVE=align, so no existing build changes. Images built for the FP (b) or Sublet
+  bitstream should use pool.
 
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This

@@ -103,7 +103,14 @@ GLUE_CTX=(); [ "$CTXB" -gt 0 ] && GLUE_CTX=(-DCAPSTONE_GLUE_CONTEXTS=1 -DCAPSTON
 [ -n "${B0_GLUE_EXTRA:-}" ] && GLUE_CTX+=($B0_GLUE_EXTRA)
 # CAPSTONE_GLUE_CARVE_ALIGN (ISSUES R-11): carve points stay multiples of the region's cursorless granule, which
 # matters once the data region spans more than one 2 MiB window (memcached's does).
-"$CC" "${ASM[@]}" -DCAPSTONE_GLUE_YIELD=1 -DCAPSTONE_GLUE_NO_MCSR=1 -DCAPSTONE_GLUE_CARVE_ALIGN=1 "${GLUE_CTX[@]}" -c "$CAP/tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S" \
+# B0_GLUE_CARVE: align (default, CAPSTONE_GLUE_CARVE_ALIGN, the cursorless rule) or pool (CAPSTONE_GLUE_POOL_CARVE: one
+# split, every global by SHRINK from the pool, exact under the full bounds scheme; check-repr detects it from the image).
+case "${B0_GLUE_CARVE:-align}" in
+  align) CARVE_DEF=-DCAPSTONE_GLUE_CARVE_ALIGN=1 ;;
+  pool)  CARVE_DEF=-DCAPSTONE_GLUE_POOL_CARVE=1 ;;
+  *) echo "B0_GLUE_CARVE must be align or pool" >&2; exit 2 ;;
+esac
+"$CC" "${ASM[@]}" -DCAPSTONE_GLUE_YIELD=1 -DCAPSTONE_GLUE_NO_MCSR=1 $CARVE_DEF "${GLUE_CTX[@]}" -c "$CAP/tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S" \
   -o "$OUT/glue.o"   # outside obj/, so the obj/*.o glob below does not list it twice
 for f in set_thread_area setjmp altstack; do "$CC" "${ASM[@]}" -c "$M/$f.S" -o "$OUT/obj/asm_$f.o"; done
 "$CC" "${ASM[@]}" "${APPDEFS[@]}" -c "$CAP/runtime/domain/domreq.S" -o "$OUT/obj/asm_domreq.o"

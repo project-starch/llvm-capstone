@@ -104,9 +104,10 @@ the cursorless branch: bounds_t IS the 27-bit full scheme for every capability, 
 28th bit widens perm to 4 (word {revnode 30 | perm 4 | type 3 | bounds 27}, capstone-qemu's
 layout on isa/sublet-lifetimes). compress_bounds and decompress_bounds keep the old full
 branch's bodies unchanged, so --format full is the same port with the start == cursor branch
-skipped. Source: the capstone-sublet working tree's ariane_pkg.sv read on 2026-10-13 BEFORE 13:04,
-i.e. WITHOUT the R-54 renormalisation the same tree gained at 13:04; the renormalising encoder is
-ported from its commit, not from that tree, and this line then cites the hash. Under it the base rounds DOWN and the top rounds UP,
+skipped. --format full --renorm is the committed capstone-sublet tree, capstone-ariane d34c26002
+(the format move on fp-fixes 4a4261bb4): its compress/decompress are 4a4261bb4's full branch with
+the cursorless type and decoder branch removed (`git diff 4a4261bb4 d34c26002`, read 2026-10-13).
+--format full alone is that tree before R-54's step, as read on 2026-10-13 before 13:04. Under it the base rounds DOWN and the top rounds UP,
 to 2**(E+3) with E = max(0, hb(len) - 12) (exact below 4 KiB), so a carve no longer shortens a
 global: it WIDENS one. A split at a point off the remainder's granule leaves the remainder's
 top above the split, and the next global inherits that top. So under --format full:
@@ -315,6 +316,16 @@ def glue_carve_align(img, secs):
     return False
 
 
+def glue_pool_carve(img, secs):
+    """Whether the glue was built with CAPSTONE_GLUE_POOL_CARVE: the table's `shrink(gp, t1, t4)` (0x03d311db), which
+    nothing else emits (an application never shrinks gp). Scanned at 2-byte steps, as RVC can misalign it."""
+    text = secs.get(".text")
+    if not text:
+        return False
+    off, size = text[4], text[5]
+    return any(struct.unpack_from("<I", img, off + i)[0] == 0x03D311DB for i in range(0, size - 3, 2))
+
+
 def process_layout(path, arena_override=None):
     img, lo, hi, secs, syms = read_elf(path)
     if lo is None:
@@ -333,7 +344,7 @@ def process_layout(path, arena_override=None):
     if arena is None and "__capstone_context_entry" in syms:
         raise ValueError("the image has minted contexts but no CONTEXTS_FIRST_ENTRY arena split was recognised in "
                          ".text; pass --arena BYTES")
-    return dict(managed=managed, carve_align=glue_carve_align(img, secs),
+    return dict(managed=managed, carve_align=glue_carve_align(img, secs), pool_carve=glue_pool_carve(img, secs),
                 code_len=hi - lo, gpoff=ini[3] - lo, req_data=req_data, req_stack=req_stack,
                 count=count, recs=recs, arena=arena or 0)
 
@@ -381,7 +392,80 @@ def monitor_splits(lay, base, tot, code_size, split_size, data_off, data_top, ou
         judge("code at its entry", writeback(c[0], c[1], base + min(0x40, gpoff - 16)), (base, base + gpoff))
 
 
-def replay_process(lay, base, carve_align):
+def carve_pool(lay, out, s, e, ds, code_size, region_align):
+    """The pool carve (CAPSTONE_GLUE_POOL_CARVE, 2026-10-14): ONE split of the stack remainder [s, e) at P_lo, the pool
+    [P_lo, e) DELIN'd, and the table and every global derived from a copy of the pool with SHRINK (capstone_flu_unit
+    .anvil SHRINK: narrows rd in place, keeps its node, cursor clamped into the new bounds). Each piece is aligned to
+    its OWN full-scheme granule (and, with region_align, to CARVE_ALIGN's 2^E from (s ^ e) >> 21, which the cursorless
+    branch needs); P_lo to the stack remainder's granule. A global's capability then depends on its own length and
+    alignment only, never on a large remainder's granule."""
+    END = e
+    g_reg = 16
+    if region_align:
+        x, g = (s ^ END) >> 21, 1
+        while x:
+            g <<= 1
+            x >>= 1
+        g_reg = max(16, g)
+
+    def gr(n):
+        return max(g_reg, full_granule(n))
+
+    def up(v, g):
+        return (v + g - 1) & ~(g - 1)
+
+    pieces = []
+    tl = lay["count"] * 16
+    if tl:
+        g = gr(tl)
+        tl_p = up(tl, g)
+        t = (END - tl_p) & ~(g - 1)
+        pieces.append(("table", tl, t, t + tl_p))
+    else:
+        t = END
+    for i, (size, _al, _off) in enumerate(lay["recs"]):
+        stor = max((size + 15) & ~15, 16)
+        g = gr(stor)
+        stor_i = up(stor, g)
+        lo = (t - stor_i) & ~(g - 1)
+        pieces.append(("global[%d]" % i, size, lo, lo + stor_i))
+        t = lo
+    p_raw = t
+    g_sp = max(g_reg, full_granule(p_raw - s))
+    p_lo = p_raw & ~(g_sp - 1)
+    out["pad"] = sum(hi - lo - max((n + 15) & ~15, 16) for _w, n, lo, hi in pieces) + (p_raw - p_lo)
+    out["gran"] = g_sp
+    if not s <= p_lo < e:
+        out["trap"].append(("pool split", END - p_lo, s, e))
+        return p_lo
+    stack = writeback(s, p_lo, s)
+    pool = writeback(p_lo, e, p_lo)
+    if stack[0] > s or stack[1] < p_lo:
+        out["moved"].append(("stack (pool split)", p_lo - s, stack[0], stack[1]))
+    elif stack != (s, p_lo):
+        out["overlap"].append(("stack", (s - stack[0]) + (stack[1] - p_lo), stack[0], stack[1]))
+    for what, n, lo, hi in pieces:
+        if not (pool[0] <= lo and hi <= pool[1] and lo < hi):     # SHRINK raises ILLEGAL_OPERAND_VALUE
+            out["trap"].append(("shrink " + what, n, pool[0], pool[1]))
+            return p_lo
+        c = writeback(lo, hi, lo)
+        if c[0] > lo or c[1] < lo + n:
+            out["short"].append((what, n, c[0], c[1]))
+        elif c != (lo, hi):
+            out["overlap"].append((what, (lo - c[0]) + (c[1] - hi), c[0], c[1]))
+        out["inexact"] += c != (lo, hi)
+        m = writeback(c[0], c[1], lo + (8 if n > 8 else 1))
+        if m[0] > lo or m[1] < lo + n:
+            out["moved"].append((what, n, m[0], m[1]))
+        elif m != c:
+            out["widen"] += 1
+    sm = writeback(stack[0], stack[1], p_lo)          # the stack handed over with its cursor at its top
+    if sm[0] > s or sm[1] < p_lo:
+        out["moved"].append(("stack", p_lo - s, sm[0], sm[1]))
+    return p_lo
+
+
+def replay_process(lay, base, carve_align, carve="split"):
     """One base: the module's block, the monitor's split, the glue's carve. An image without .capstone_domreq takes
     the classic path: the module sizes the block as code_len + max(code_len, 64 KiB) (capstone.c's dom_headroom),
     the monitor keeps data_top = tot_size (no descriptor area, no top alignment) and parks only gp."""
@@ -419,6 +503,11 @@ def replay_process(lay, base, carve_align):
         if am[0] > end - lay["arena"] or am[1] < end:
             out["moved"].append(("arena", lay["arena"], am[0], am[1]))
         s, e = writeback(s, end - lay["arena"], s)     # sp = [base, END - A)
+    if carve != "split":
+        p_lo = carve_pool(lay, out, s, e, ds, code_size, carve == "pool-region")
+        out["stack"] = None if out["trap"] else p_lo - (ds + max(0, code_size - lay["gpoff"]))
+        out.update(tot=tot, end=end, data_top=data_top)
+        return out
     s0 = s
     t1 = e
     g = 16
@@ -489,7 +578,8 @@ def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None, 
     if carve_align is None:
         carve_align = detected
     how = "detected" if carve_align == detected else "FORCED, the code says %s" % ("on" if detected else "off")
-    first = replay_process(lay, cma_base, carve_align)
+    carve = "pool" if lay["pool_carve"] else "split"
+    first = replay_process(lay, cma_base, carve_align, carve)
     tot = first["tot"]
     step = min(tot, 1 << 20) if lay["managed"] else tot   # CMA aligns to 1 MiB; the buddy allocator to the block
     bases = list(range(cma_base, cma_base + cma_size - tot + 1, step))
@@ -499,7 +589,7 @@ def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None, 
     ov_n = ov_max = ov_bases = 0
     gran = 0
     for b in bases:
-        r = replay_process(lay, b, carve_align)
+        r = replay_process(lay, b, carve_align, carve)
         widen = max(widen, r["widen"])
         if r["stack"] is not None:                     # None: the replay stopped at a SPLIT TRAP
             worst_stack = r["stack"] if worst_stack is None else min(worst_stack, r["stack"])
@@ -512,11 +602,13 @@ def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None, 
                  or (FORMAT == "cursorless" and r["inexact"]))
         if fault or (r["overlap"] and FORMAT == "full" and not allow_overlap):
             bad.append((b, r))
-    print("%-28s %s, format %s: code_len=%d domreq=%d arena=%d count=%d tot=%d carve-align=%s (%s); "
+    carve_desc = ("carve=pool (detected)" if carve == "pool"
+                  else "carve-align=%s (%s)" % ("on" if carve_align else "off", how))
+    print("%-28s %s, format %s: code_len=%d domreq=%d arena=%d count=%d tot=%d %s; "
           "%d bases (%#x + k*%#x): %s" % (name, "process ABI" if lay["managed"] else "classic SDK",
                                           FORMAT + ("+renorm" if RENORM else ""),
                                           lay["code_len"], lay["req_data"], lay["arena"], lay["count"],
-                                          tot, "on" if carve_align else "off", how, len(bases), cma_base, step,
+                                          tot, carve_desc, len(bases), cma_base, step,
                                           "OK" if not bad else "AT RISK at %d" % len(bad)))
     print("    worst stack above the globals template %d (declared %d); WIDEN up to %d storage capabilities"
           % (worst_stack, lay["req_stack"], widen))
@@ -531,7 +623,7 @@ def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None, 
     for b, r in (faults + [x for x in bad if x not in faults])[:3]:
         report_base(lay, b, r, "")
     if show_base is not None:
-        report_base(lay, show_base, replay_process(lay, show_base, carve_align), " (requested)")
+        report_base(lay, show_base, replay_process(lay, show_base, carve_align, carve), " (requested)")
     return bad
 
 
@@ -648,6 +740,16 @@ def self_test():
             got = any(x[0].startswith("monitor code") for x in o["overlap"])
             if got != want or o["trap"] or o["moved"]:
                 print("self-test FAIL: the monitor code-region control under %s read %s" % (fmt, o)); bad += 1
+        # the globals carve (CAPSTONE_GLUE_POOL_CARVE): on a managed layout with mixed global sizes, the split carve
+        # MUST overlap under the full scheme and the pool carve must be exact, with no fault in either
+        FORMAT, RENORM = "full", True
+        lay = dict(managed=True, code_len=100000, req_data=600000, req_stack=0, gpoff=0x10000, arena=0, count=6,
+                   recs=[(24, 8, -1), (5000, 8, -1), (100, 8, -1), (70000, 8, -1), (7, 1, -1), (300, 8, -1)])
+        rs, rp = replay_process(lay, 0xac100000, False, "split"), replay_process(lay, 0xac100000, False, "pool")
+        if not rs["overlap"] or rp["overlap"] or rp["trap"] or rp["short"] or rp["moved"]:
+            print("self-test FAIL: the pool-carve control: split overlap %d, pool overlap %d trap %d short %d moved %d"
+                  % (len(rs["overlap"]), len(rp["overlap"]), len(rp["trap"]), len(rp["short"]), len(rp["moved"])))
+            bad += 1
     finally:
         FORMAT, RENORM = saved, saved_rn
     print("self-test: %s" % ("every control fires" if not bad else "%d control(s) did not fire" % bad))
