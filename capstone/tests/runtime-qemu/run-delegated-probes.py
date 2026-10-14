@@ -33,7 +33,11 @@ started with (CAPSTONE_MOVC_NULL_SCALAR, recorded in the state directory);
 run it once in a guest with the switch off and once in one with it on. It is
 built twice: movc-rule with the compiler's live-source copy rule (C-32's fix,
 -movc-keeps-integer-source, which overrides the virtual SDK's default) and
-movc-keep with +movc-keeps-integer-source, a plain movc for every copy.
+movc-keep with +movc-keeps-integer-source, a plain movc for every copy. The
+override reaches only the probe's own file. An SDK whose sdk.json codegen has
+the feature (the virtual SDK since Q-04) built its runtime and libc for Q-04's
+MOVC, so movc-rule in a guest with the switch on is reported as a failure
+naming that cause. Qualify the old MOVC with an SDK built without the feature.
 With the switch on, keep must lose C-32's two values (the positive control)
 and rule must not. The build refuses (exit 2) a toolchain that lacks either,
 because a keep built without the feature is a duplicate of rule and a rule
@@ -195,6 +199,13 @@ def check_movc(variant):
             return problems + [f"no MOVC-PROBE, MOVC-C32 {variant} or MOVC-ICONV {variant} line"]
         on = ctx.get("movc-switch") == "1"
         b, c, got, n = probe.group(1), probe.group(2), c32.group(1), int(iconv.group(1))
+        if on and variant == "rule" and ctx.get("sdk-movc-keeps"):
+            # The probe's own file is built without the feature, but the
+            # runtime, libc and builtins it links assume Q-04's MOVC. Under the
+            # old MOVC that image mixes two rules, so a pass would prove nothing.
+            problems.append("the SDK compiles its runtime and libc with +movc-keeps-integer-source "
+                            "(Q-04); a guest with CAPSTONE_MOVC_NULL_SCALAR=1 cannot qualify "
+                            "movc-rule against it: use an SDK built without the feature")
         if on and (b, c) == ("5", "5"):
             problems.append("switch on changed nothing: this QEMU has no CAPSTONE_MOVC_NULL_SCALAR")
         elif (b, c) != ("5", "0" if on else "5"):
@@ -424,7 +435,8 @@ def run(args, config, built):
     env = dict(os.environ, PYTHONPATH=str(HOST))
     cli = [sys.executable, "-m", "capstone_vm", "--state", str(state)]
     ctx = {"movc-switch": vm.get("identity", {}).get("environment", {}).get("CAPSTONE_MOVC_NULL_SCALAR", "0"),
-           "profile": vm.get("identity", {}).get("profile", "physical")}
+           "profile": vm.get("identity", {}).get("profile", "physical"),
+           "sdk-movc-keeps": "+movc-keeps-integer-source" in config.get("codegen", [])}
     native = args.work / "init-fini.native.txt"
     ctx["init-fini-native"] = native.read_text() if native.exists() else ""
     stage = Path(tempfile.mkdtemp(prefix="runtime-probes-", dir=share))
@@ -567,6 +579,11 @@ def self_test():
          movc("5", "rule", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 0}, False),
         ("movc-rule off: a notice with the switch off", check_movc("rule"), ok_exit(0),
          movc("5", "rule", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 1}, False),
+        ("movc-rule on: the SDK's own code assumes Q-04", check_movc("rule"), ok_exit(0),
+         movc("0", "rule", "0x5000", 3), "",
+         {"movc-switch": "1", "movc-notices": 1, "sdk-movc-keeps": True}, False),
+        ("movc-keep on with a Q-04 SDK", check_movc("keep"), ok_exit(0), movc("0", "keep", "0x1", 1), "",
+         {"movc-switch": "1", "movc-notices": 1, "sdk-movc-keeps": True}, True),
         ("movc-rule: the other variant's lines", check_movc("rule"), ok_exit(0),
          movc("5", "keep", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 0}, False),
         ("intcap", check_intcap("intcap"), ok_exit(0), intcap("intcap", ALL) + "INTCAP intcap END bad=0\n",
