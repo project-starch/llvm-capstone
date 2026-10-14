@@ -29034,7 +29034,7 @@ SDValue DAGCombiner::convertSelectOfFPConstantsToLoadOffset(
 
   // Create a ConstantArray of the two constants.
   Constant *CA = ConstantArray::get(ArrayType::get(FPTy, 2), Elts);
-  SDValue CPIdx = DAG.getConstantPool(CA, TLI.getPointerTy(DAG.getDataLayout()),
+  SDValue CPIdx = DAG.getConstantPool(CA, TLI.getConstantPoolPtrTy(TD),
                                       TD.getPrefTypeAlign(FPTy));
   Align Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlign();
 
@@ -29048,7 +29048,7 @@ SDValue DAGCombiner::convertSelectOfFPConstantsToLoadOffset(
   AddToWorklist(Cond.getNode());
   SDValue CstOffset = DAG.getSelect(DL, Zero.getValueType(), Cond, One, Zero);
   AddToWorklist(CstOffset.getNode());
-  CPIdx = DAG.getNode(ISD::ADD, DL, CPIdx.getValueType(), CPIdx, CstOffset);
+  CPIdx = DAG.getMemBasePlusOffset(CPIdx, CstOffset, DL);
   AddToWorklist(CPIdx.getNode());
   return DAG.getLoad(TV->getValueType(0), DL, DAG.getEntryNode(), CPIdx,
                      MachinePointerInfo::getConstantPool(

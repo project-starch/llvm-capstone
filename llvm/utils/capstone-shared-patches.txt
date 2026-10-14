@@ -74,6 +74,7 @@ llvm/include/llvm/BinaryFormat/Dwarf.def | +2 -0 | HANDLE_DW_CC(0xd1, LLVM_Capst
 llvm/include/llvm/BinaryFormat/ELF.h | +32 -1 | EM_CAPSTONE = 259,      // Capstone
 llvm/include/llvm/BinaryFormat/ELFRelocs/Capstone_nonstandard.def | +32 -0 | #ifndef ELF_Capstone_NONSTANDARD_RELOC
 llvm/include/llvm/CodeGen/TargetInstrInfo.h | +19 -0 | /// is safe to move. A target whose arithmetic can fault -- Capstone's
+llvm/include/llvm/CodeGen/TargetLowering.h | +8 -0 | /// target such as Capstone (C-80) it is a capability type, not the AS0
 llvm/include/llvm/CodeGen/ValueTypes.h | +8 -0 | /// Return true if this is a vector value type (Capstone).
 llvm/include/llvm/CodeGen/ValueTypes.td | +69 -34 | bit isCapstoneVecTuple = false;
 llvm/include/llvm/CodeGenTypes/MachineValueType.h | +30 -0 | /// Return true if this is a Capstone vector tuple type where the
@@ -95,11 +96,13 @@ llvm/lib/CodeGen/DwarfEHPrepare.cpp | +26 -4 | // space 0. On a capability targe
 llvm/lib/CodeGen/EarlyIfConversion.cpp | +7 -0 | if (TII->canTrap(MI)) {
 llvm/lib/CodeGen/MachineCSE.cpp | +8 -0 | // capability increment above that test, where kwnames is NULL.
 llvm/lib/CodeGen/MachineLICM.cpp | +16 -1 | MachineLoop *SpeculationLoop = nullptr;
-llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +29 -13 | static bool isIntegerTruncate(SDValue N) {
+llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +31 -15 | static bool isIntegerTruncate(SDValue N) {
+llvm/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp | +7 -7 | DAG.getConstantPool(LLVMC, TLI.getConstantPoolPtrTy(DAG.getDataLayout()));
 llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp | +116 -14 | return Type.isInteger() || Type.isCheriCapability();
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits cannot be represented here at all. Targets with capability (wider than
-llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +93 -20 | (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&
-llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp | +51 -9 | // GLOBALS address space. On a fat-pointer target that is a capability type,
+llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +111 -23 | (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&
+llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp | +53 -9 | // pool's pointer type. On a fat-pointer target that is a capability type,
+llvm/lib/CodeGen/TargetLoweringBase.cpp | +6 -0 | MVT TargetLoweringBase::getConstantPoolPtrTy(const DataLayout &DL) const {
 llvm/lib/CodeGen/ValueTypes.cpp | +4 -0 | // Same shape as the fat pointer below it. There is no capability type in IR,
 llvm/lib/IR/IRBuilder.cpp | +17 -2 | /// the data layout puts globals, allocas and functions all in it (Capstone's
 llvm/lib/IR/Intrinsics.cpp | +1 -0 | #include "llvm/IR/IntrinsicsCapstone.h"
