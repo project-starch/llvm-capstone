@@ -1,6 +1,7 @@
-2026-10-14: **TWO BITSTREAMS HANDED TO THE SYNTH LANE, both pre-registered on dev before the handoff**; neither
-build has started, because the synth lane needs the lead's word in ITS session (a go relayed from another lane does
-not count), for the FP build, for an elaboration-only pass of the Sublet tip, and for the Sublet build, in that order.
+2026-10-14: **TWO BITSTREAMS IN SYNTHESIS, both pre-registered on dev before the handoff.** The synth lane needed
+the lead's word in ITS session (a go relayed from another lane does not count); it came, and the FP build started
+03:36 UTC, the elaboration-only pass of the Sublet tip ran clean in parallel, and the Sublet build followed (second
+attempt 06:12 UTC after the guard's 240 s window aborted the first during the 461 s dyn-unit Anvil compile).
 - `caplifive_fpb_4a4261bb4.bit` (fp-fixes: R-53, the R-52 residual, R-54's renormalisation, the encoder without the
   cursorless scheme): pre-registration cd8c12bc2627; the board's acceptance amendment on lane b0-silicon-runtime.
 - `caplifive_sublet_d93a8d66b.bit` (capstone-sublet: the 27-bit-bounds / 4-bit-perm word, CDERIVE / CREVOKE, the
@@ -18,9 +19,14 @@ not count), for the FP build, for an elaboration-only pass of the Sublet tip, an
   tests only) runs the same binary on both bitstreams for the board's R1 release-cost numbers; in simulation step 5
   and step 6 read identical on both arms (outcome A: R1's 76 / 22.7 predicted to hold), and the FP tree pays the
   MREV's drain at a revoke issued right behind it (381 against 230 cycles), which the Sublet trees absorb inside MREV.
-- **Next:** the lead's word to the synth lane; grade each report against its pre-registration; the FP flash on the
-  lead's word, then the acceptance boots, then the Sublet flash; convert the 26 readings-only sweep arms to write
-  tohost.
+- **FP sealed 2026-10-14, graded in the plan doc: WNS -15.360, OUT of the -13.335..-5.855 band by 2 ns**, loops and
+  LUTLP as predicted, area +1,739 LUT (prediction refuted: issue_read_operands +2,446). The path names R-54's
+  renormalisation adder in compress_bounds on the scoreboard/issue forwarding path (the worst endpoint is 8.4 ns
+  better on 0568f93a9; the rs3 fix is cleared). The Sublet tip, same adder, routed -15.898 pre-seal. sha256
+  a63cbd815fe96957a979fc94c6c1bf29060428db9523d43485d392aeca10ff65.
+- **Next:** the lead decides whether the -15.360 bitstream is flashed for the FP acceptance chain (empirical: every
+  accepted bitstream was negative, -8.3 to -12.9; the fallback stays registered) or held for a cheaper
+  renormalisation; the Sublet seal and grade; convert the 26 readings-only sweep arms to write tohost.
 
 2026-10-10 — **Sublet lifetime extension: review the paired QEMU/runtime change
 on `isa/sublet-lifetimes`.** Its [qualification](../design/virtual-capstone/development.md#sublet-lifetime-qualification)
