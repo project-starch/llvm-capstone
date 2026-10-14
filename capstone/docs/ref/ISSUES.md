@@ -8153,6 +8153,59 @@ and passes against the patched one, and libc-test's `pthread_cond` passes
 libc; objects compiled against the old headers that embed a `pthread_cond_t` must be recompiled
 (perl and mruby embed none).
 
+### C-79 — library calls the simplifier emits take and return address-space-0 pointers, so with builtins on a folded `strchr` returns a plain integer `FIXED 2026-10-13 on compiler/libcall-capability-pointers — COMPILER; found 2026-10-13 building SPEC CPU2017 hosted (500.perlbench_r crashed clang, 525.x264_r failed instruction selection)`
+
+**What happens.** `BuildLibCalls.cpp` declares every library function the simplifier emits with
+`B.getPtrTy()`, address space 0, at 33 sites. On Capstone every C pointer is a capability in the
+data layout's globals address space (`G200`), and an address-space-0 pointer is a plain integer.
+So each rewrite that introduces a call builds malformed IR: `strchr("$@%*;[]&\\_+", c)` folded to
+`memchr` returns `ptr` and is compared against `ptr addrspace(200) null`; `printf("...\n")` folded
+to `puts` passes a capability to an integer parameter. Release clang runs no verifier, so the IR
+reaches code generation, where it crashed (perlbench `toke.c`, `Perl_validate_proto`, segfault in
+`SelectionDAG::FoldConstantArithmetic` under `SimplifySetCC`) or failed with "scalar-to-vector
+conversion failed" (x264 `ldecod_src/img_io.c`). With `-fverify-intermediate-code` the same
+compiles stop with "Call parameter type does not match function signature!".
+
+**Why it was not seen before.** The application SDK passed `-fno-builtin`, which disables these
+simplifications, until applications became hosted. Both failures need builtins: each file builds
+under `-ffreestanding -fno-builtin` with the same compiler, and under `-fno-builtin-memchr` or
+`-fno-builtin-strchr` alone `toke.c` builds hosted.
+
+**The same defect in the builder.** `IRBuilder::CreateGlobalString` put every string it created
+in address space 0 unless told otherwise. `printf("...\n")` folded to `puts` passes a NEW global,
+the string without its newline, and that global was an integer address: with the declarations
+fixed, a verified build of the ten SPEC C programs still failed 18 times, every one a `puts` of
+such a `@str`. The stack protector, the sanitizers and the C API create strings the same way.
+
+**Fix.** One helper, `getLibPtrTy`, gives the declarations' pointer type as the data layout's
+default globals address space (200 on Capstone, 0 on every other target the file is built for),
+and all 33 sites use it. `CreateGlobalString` takes an optional address space and, when none is
+given, uses the same default; the one simplifier call that passed an explicit 0 now passes none.
+Lit test: `llvm/test/Transforms/InstCombine/capstone-libcall-capability-pointers.ll` (strchr to
+memchr, printf to puts with its new global, strcpy to memcpy), with a recorded mutation for each
+half.
+
+*2026-10-14, review (Codex):* the data layout's globals address space is not the library ABI on every
+target. AMDGPU puts globals in G1, an ordinary 64-bit address space, while its C library takes flat
+pointers, so `G` would have declared `memchr` on `addrspace(1)` with a plain-`ptr` operand, and
+`CreateGlobalString`'s new default would have handed GCOV and DFSan (whose structures hold
+address-space-0 pointers) strings in address space 1. Both now take the globals address space only
+when the data layout puts globals, allocas and functions all in it (Capstone's A200-P200-G200, the
+pure-capability shape); every other target keeps address space 0, exactly as upstream. A second
+review rejected "pointers wider than their index" as the test: AMDGPU's buffer fat pointers (AS7,
+AS8) are that too and are no C pointer type. Controls:
+`llvm/test/Transforms/InstCombine/libcall-globals-addrspace.ll`, run with globals in G1, G7 and G8
+(`memchr` and the `puts` string stay in address space 0); the first version fails all three, the
+width rule the last two.
+
+**Not covered (open).** Other places still build address-space-0 pointers for library calls on
+Capstone: `LowerGlobalDtors.cpp` declares `__cxa_atexit` with them; SelectionDAG libcalls with an
+output pointer (`frexp`, `sincos` and similar, `LegalizeFloatTypes.cpp`, `LegalizeDAG.cpp`,
+`SelectionDAG.cpp`) pass their stack slot through `mv`, which drops its tag (reproduced with
+`llvm.frexp`); and GCOV, DFSan and the stack-smash handler build their own address-space-0 types for
+strings. None is reached by today's hosted builds (clang calls `frexp` directly, with a capability
+argument).
+
 ### C-78 — a 16-aligned copy whose size is not a multiple of 16 strips the tags of the capabilities in its whole granules `FIXED 2026-10-13 on compiler/memcpy-capability-granules — COMPILER; found 2026-10-13 by the hosted-application probe (runtime/virtual/hosted-contract.c) when the SDK stopped passing -fno-builtin`
 
 **What happens.** `CapstoneTargetLowering::findOptimalMemOpLowering` copied with capability units

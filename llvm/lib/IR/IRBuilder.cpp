@@ -40,16 +40,31 @@ using namespace llvm;
 /// has array of i8 type filled in with the nul terminated string value
 /// specified.  If Name is specified, it is the name of the global variable
 /// created.
+///
+/// C-79: without an explicit address space, the globals address space when
+/// the data layout puts globals, allocas and functions all in it (Capstone's
+/// A200-P200-G200, where a string is reached through a capability); address
+/// space 0 on every other target, as upstream (AMDGPU's G1, beside A5 and P0,
+/// is not where its string users' pointers live). BuildLibCalls.cpp's
+/// getLibPtrTy uses the same rule.
+static unsigned getDefaultStringAddressSpace(const DataLayout &DL) {
+  unsigned AS = DL.getDefaultGlobalsAddressSpace();
+  return AS == DL.getAllocaAddrSpace() && AS == DL.getProgramAddressSpace()
+             ? AS
+             : 0;
+}
+
 GlobalVariable *IRBuilderBase::CreateGlobalString(StringRef Str,
                                                   const Twine &Name,
-                                                  unsigned AddressSpace,
+                                                  std::optional<unsigned> AddressSpace,
                                                   Module *M, bool AddNull) {
   Constant *StrConstant = ConstantDataArray::getString(Context, Str, AddNull);
   if (!M)
     M = BB->getParent()->getParent();
   auto *GV = new GlobalVariable(
       *M, StrConstant->getType(), true, GlobalValue::PrivateLinkage,
-      StrConstant, Name, nullptr, GlobalVariable::NotThreadLocal, AddressSpace);
+      StrConstant, Name, nullptr, GlobalVariable::NotThreadLocal,
+      AddressSpace.value_or(getDefaultStringAddressSpace(M->getDataLayout())));
   GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
   GV->setAlignment(M->getDataLayout().getPrefTypeAlign(getInt8Ty()));
   return GV;
