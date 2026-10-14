@@ -2284,8 +2284,14 @@ boot-time mtime capability.**
 - **The driver's s07 detector:** it printed its own SELFTEST FAIL / INSTRUMENT FAULT lines. They are outside the
   verdict and say nothing about the core.
 - **The matched pair, one cursor apart:** fw-ctl (equal to the pinned image, which hangs 3 of 3) against fw-mtime
-  (boots). The time-0 hang, and the wedge after its warning, are fully explained by the mtime cursor. The other
-  displaced carves (R-55's list) did not stop Linux or these two domains. Interrupt-heavy work has not run on them.
+  (boots). The mtime cursor is the cause of time reading 0, and removing it removes the warning and the hang.
+  - ~~The time-0 hang, and the wedge after its warning, are fully explained by the mtime cursor. The other displaced
+    carves (R-55's list) did not stop Linux or these two domains. Interrupt-heavy work has not run on them.~~
+  - RETRACTED 2026-10-15. Why the kernel's WARN path never completes on afcd19bea is UNRESOLVED. That path never ran
+    on 0568f93a9, and the debug-halt failure has no positive control on a running core.
+  - The other displaced cursors are never dereferenced: the boot stack's and the interrupt stack's are reset, and
+    this silicon never reads the seal. R-55 records this, and what does matter: the region table, where under
+    the full scheme Linux's region begins at 0x80000000.
 - **Registered:** R-55 in ISSUES.md.
 - **What is left for the acceptance:** the chain cannot resume on the shared firmware, which still carries the
   displaced cursor. The path (a monitor fix landed and the chain re-run on afcd19bea, or a flash back) is the lead's.
