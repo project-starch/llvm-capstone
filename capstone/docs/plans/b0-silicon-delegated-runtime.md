@@ -2140,6 +2140,16 @@ cell6, b0-hello, b1-thread, memcached ba7e6921 and r54-bounds):
 - Either: a standing control changing.
 
 ## FP bitstream (b) acceptance staged, 2026-10-14 (before the flash; the bitstream hash pinned when sealed)
+**Sealed (the synth lane, 2026-10-14):** caplifive_fpb_4a4261bb4.bit, sha256
+a63cbd815fe96957a979fc94c6c1bf29060428db9523d43485d392aeca10ff65, 11,443,722 B.
+- **Routed WNS -15.360: OUTSIDE the pre-registered band -13.335..-5.855.** The worst paths enter compress_bounds,
+  which the synthesis pre-registration's discriminator (capstone-sublet-rtl.md) names as the renormalisation.
+- The flash is the lead's decision, with that WNS stated.
+- If it is flashed, the chain's first control, the S-16 bare set, stops the chain on any timing-induced failure
+  before a verdict is read.
+- A verified add-free form of the renormalisation test went to the RTL lane for a respin, if one is wanted:
+  wrap iff (q == 1023 and the remainders are nonzero) or (q == 1022 and sr + lr > g), with q = len >> (E+3).
+  It matches 2a3a87dfc's step on 400,000 regions.
 The lead chose option (b), capstone-ariane 4a4261bb4, to be built as caplifive_fpb_4a4261bb4.bit (the RTL lane's
 synthesis pre-registration: dev cd8c12bc2627). The acceptance of record is 5e82c06d61f9's (b) column, plus the FP rows
 of fc3225fb237d and 6bc165f2e1c2. Staged in /tmp/capstone/accept-fpb (chain.sh, r43/, oracles/):
