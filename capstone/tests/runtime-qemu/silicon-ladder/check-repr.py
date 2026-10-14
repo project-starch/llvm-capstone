@@ -85,8 +85,8 @@ written from the SV with explicit bit slicing agreed on 300,000). QEMU showed it
 its SPLIT and SHRINK keep exact bounds. Fixed in the encoder by taking E+1 when the rounded span
 reaches 2**(E+13): capstone-qemu aad781e15a, and capstone-ariane 2a3a87dfc (fp-fixes, on 0568f93a9;
 the capstone-sublet tree carries the same step). --renorm models that fix in either format, ported
-from 2a3a87dfc and now in afcd19bea's residue form (identical below 2^64; exact at the top of the address space,
-where 2a3a87dfc's 64-bit add wraps); checked against bounds-model.py and capstone-qemu (qemu-encoder-diff.py --renorm). Every encoder without it reaches the wrap once a
+from 2a3a87dfc and now in afcd19bea's residue form (identical below 2^64; at the top of the address space
+2a3a87dfc's 64-bit add wraps and decodes half the span, this form decodes [0, 0), and neither covers); checked against bounds-model.py and capstone-qemu (qemu-encoder-diff.py --renorm). Every encoder without it reaches the wrap once a
 cursor leaves the base, so the replay also fails on:
   * SPLIT TRAP: a carve point outside the remainder's DECODED bounds, which SPLIT refuses
     with ILLEGAL_OPERAND_VALUE (capstone_dyn_unit.anvil, func SPLIT). The replay stops there.
@@ -723,6 +723,8 @@ def self_test():
         top = rtl_compress(0, M64, 1)                    # [0, 2^64 - 1): the residue form takes E = 52
         if top[0] != "full" or top[4] != 52:
             print("self-test FAIL: --renorm missed the step at the top of the address space: %s" % (top,)); bad += 1
+        if writeback(0, M64, 1) != (0, 0):              # a rounded top of 2^64 is unrepresentable: masked like the
+            print("self-test FAIL: the decoder did not wrap a 2^64 top to 0"); bad += 1   # RTL's xlen_t, not covering
         rnd = random.Random(2)
         for _ in range(20000):
             k = rnd.randrange(13, 40)
