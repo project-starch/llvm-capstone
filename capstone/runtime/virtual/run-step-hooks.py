@@ -5,10 +5,11 @@ Needs the TEST build of the adapter module (make CV_TEST_HOOKS=1 in
 module/), passed with --module; the production module has none of the
 hooks. A hook injects need_resched, a signal (TIF_NOTIFY_SIGNAL), an expired
 deadline or SIGKILL at one point of CV_STEP: right after a demand GUP (1), in
-the interrupt-enabled window before a later CSRUNV (2), or before the first
-CSRUNV of an ioctl (3). The module counts injections, the stops they caused
-and any CSRUNV entered while one was pending (a violation), plus every GUP
-request and its size, every stop check made with interrupts on, and every
+the interrupt-enabled window before a later CSRUNV (2), before the first
+CSRUNV of an ioctl (3), or after CSRUNV returns a fault, before it is
+resolved (4). The module counts injections, the stops they caused, any CSRUNV
+entered and any GUP requested while one was pending (violations), plus every
+GUP request and its size, every stop check made with interrupts on, and every
 CSRUNV entry, and prints them at rmmod. /proc/vmstat's FOLL_PIN counters show
 that every pin taken was released, including over the pin-ahead modes,
 retirement, a dying domain and, with --malloc-application (malloc.dom from
@@ -38,6 +39,10 @@ CONFIGS = {
     'signal3':    ('test_inject=2 test_inject_at=3 test_inject_every=2', 'walk syscalls', 0),
     'kill1':      ('test_inject=4 test_inject_at=1 test_inject_every=4 pin_ahead_pages=64', 'walk', 137),
     'kill2':      ('test_inject=4 test_inject_at=2 test_inject_every=4 pin_ahead_pages=16', 'walk', 137),
+    'resched4':   ('test_inject=1 test_inject_at=4 pin_ahead_pages=16', 'walk', 0),
+    'signal4':    ('test_inject=2 test_inject_at=4 pin_ahead_pages=16', 'walk', 0),
+    'deadline4':  ('test_inject=3 test_inject_at=4 pin_ahead_pages=16', 'walk', 0),
+    'kill4':      ('test_inject=4 test_inject_at=4 test_inject_every=4 pin_ahead_pages=16', 'walk', 137),
     'short64':    ('test_short_gup=1 pin_ahead_pages=64', 'walk seq', 0),
     'life16':     ('pin_ahead_pages=16', 'seq stop vma vmax retire', 0),
     'life64':     ('pin_ahead_pages=64', 'seq stop vma vmax retire', 0),
@@ -169,6 +174,8 @@ def main():
                 rep['stops'] + rep['consumed'] == rep['injections'] and
                 (rep['consumed'] == 0 or 'test_inject=1 ' in params + ' '))
             checks[f'{name}_no_entry_while_pending'] = rep['violations'] == 0
+            # No fault is resolved (no GUP: it can sleep) once one is pending.
+            checks[f'{name}_no_gup_while_pending'] = rep['gup_pending'] == 0
         if 'test_inject_at=3' in params:
             checks[f'{name}_initial_stops'] = rep['initial_stops'] == rep['injections']
         checks[f'{name}_gup_batch_bound'] = 0 < rep['gup_max'] <= 16
@@ -183,10 +190,14 @@ def main():
     checks['base64_full_batches'] = reports.get('base64', {}).get('gup_max') == 16
     checks['short64_partial_results'] = reports.get('short64', {}).get('short_results', 0) > 0
     # A stop changes no accounting: same pins and fault events as the
-    # uninjected run with the same effective window.
+    # uninjected run with the same effective window. A condition raised
+    # after a demand GUP stops the pin-ahead window (window 1); one raised
+    # before resolution leaves the fault to the launcher's CV_RESOLVE, whose
+    # window is the full one.
     for name, ref in (('resched2', 'base1'), ('signal2', 'base1'), ('deadline2', 'base1'),
                       ('resched3', 'base1'), ('signal3', 'base1'),
-                      ('resched1', 'base16'), ('signal1', 'base1'), ('deadline1', 'base1')):
+                      ('resched1', 'base1'), ('signal1', 'base1'), ('deadline1', 'base1'),
+                      ('resched4', 'base16'), ('signal4', 'base16'), ('deadline4', 'base16')):
         for mode in CONFIGS[name][1].split():
             got, want = counts(name, mode), counts(ref, mode)
             checks[f'{name}_{mode}_accounting'] = bool(got and want and got == want)

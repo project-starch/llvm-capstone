@@ -635,7 +635,8 @@ static int remap_end(struct context *c, const struct cv_remap *r)
  * must catch, at a chosen point of CV_STEP; counters say whether CSRUNV was
  * entered while an injection was pending, and what GUP was asked for. */
 static unsigned long test_inject;       /* 1 resched, 2 signal, 3 deadline, 4 SIGKILL */
-static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an entry, 3 before an ioctl's first entry */
+static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an entry, 3 before an ioctl's first entry,
+                                           4 after CSRUNV returns a fault, before resolve() */
 static unsigned long test_inject_every = 1;
 static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a batch */
 module_param(test_inject, ulong, 0444);
@@ -644,7 +645,7 @@ module_param(test_inject_every, ulong, 0444);
 module_param(test_short_gup, ulong, 0444);
 static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
 static u64 test_consumed, test_checks, test_checks_irqs_on, test_entries;
-static u64 test_gup_requests, test_gup_max, test_short_results;
+static u64 test_gup_requests, test_gup_max, test_short_results, test_gup_pending;
 static bool test_pending, test_expired, test_in_step;
 
 static void test_hook(unsigned long at)
@@ -675,6 +676,8 @@ static void test_entry(void)
 }
 static void test_gup(unsigned long pages)
 {
+    /* GUP may sleep and fault in memory: no stop condition may be pending. */
+    if (test_pending && test_condition()) ++test_gup_pending;
     ++test_gup_requests;
     test_gup_max = max(test_gup_max, (u64)pages);
 }
@@ -682,10 +685,10 @@ static void test_report(const char *why)
 {
     pr_info("capstone_vm test %s: injections=%llu stops=%llu initial_stops=%llu "
             "violations=%llu consumed=%llu gup_requests=%llu gup_max=%llu short_results=%llu "
-            "checks=%llu checks_irqs_on=%llu entries=%llu\n",
+            "gup_pending=%llu checks=%llu checks_irqs_on=%llu entries=%llu\n",
             why, test_injections, test_stops, test_initial_stops, test_violations,
             test_consumed, test_gup_requests, test_gup_max, test_short_results,
-            test_checks, test_checks_irqs_on, test_entries);
+            test_gup_pending, test_checks, test_checks_irqs_on, test_entries);
 }
 #define TEST_HOOK(at) test_hook(at)
 #define TEST_GUP(pages) test_gup(pages)
@@ -715,9 +718,9 @@ static bool cv_step_stop(u64 deadline)
            ktime_get_ns() >= deadline || TEST_EXPIRED();
 }
 
-/* A pin-ahead window is pinned PIN_AHEAD_BATCH pages at a time; between
- * batches it stops at a pending signal or at the caller's deadline, so the
- * extra work under vm_lock and mmap_lock stays bounded whatever the window. */
+/* A pin-ahead window is pinned PIN_AHEAD_BATCH pages at a time; before each
+ * batch it stops on cv_step_stop(), so the extra work under vm_lock and
+ * mmap_lock stays bounded whatever the window. */
 #define PIN_AHEAD_BATCH 16
 
 /* Called with mmap_read_lock held, after the faulting page passed resolve()'s
@@ -736,7 +739,7 @@ static void pin_ahead(struct context *c, struct arena *a,
         unsigned long batch = min(count - done, (unsigned long)PIN_AHEAD_BATCH);
         struct page **pages = a->pages + first + done;
         long n;
-        if (signal_pending(current) || ktime_get_ns() >= deadline || TEST_EXPIRED())
+        if (cv_step_stop(deadline))
             return;
         TEST_GUP(batch);
 #ifdef CV_TEST_HOOKS
@@ -983,13 +986,23 @@ retry:
             t->started = true; t->reply_cap = false;
             local_irq_restore(flags); preempt_enable();
             ++c->stats.steps;
+            if (t->event != 4)
+                break;
             /* Resolve a page fault here, as CV_RESOLVE would, and resume
              * without the two system calls a return through the launcher
-             * costs. A fault resolve() refuses goes back to the launcher,
+             * costs. resolve() can sleep in mmap_lock and GUP while vm_lock
+             * is held, so a stop condition already raised (or a quantum
+             * already spent) returns the fault unresolved, as without this
+             * loop. A fault resolve() refuses goes back to the launcher,
              * whose own CV_RESOLVE fails the same way and delivers it. A
              * fault resolved here but stopped before the next entry is
              * resolved again, idempotently, by the launcher's CV_RESOLVE. */
-            if (t->event != 4 || resolve(c, t, budget_end))
+            TEST_HOOK(4);
+            if (cv_step_stop(budget_end)) {
+                TEST_STOPPED(false);
+                break;
+            }
+            if (resolve(c, t, budget_end))
                 break;
             ++c->stats.faults;
         }

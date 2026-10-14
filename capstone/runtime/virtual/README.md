@@ -283,10 +283,14 @@ their fixed-budget check before an instruction requests node growth.
 
 The adapter resolves a domain page fault inside `CV_STEP` and resumes the
 domain; it returns to the launcher for a pending signal, `need_resched()` or
-after one 5 ms quantum, checked with interrupts off just before each
-`CSRUNV`. The module parameter `pin_ahead_pages` (default 1) pins that many
-pages from a lazy-arena fault onward, 16 at a time. Two gates cover these,
-built from `pin-ahead-contract.c` like `node.dom` above:
+the end of a 5 ms quantum. Those are checked before a fault is resolved,
+before each 16-page batch of the pin-ahead window, and with interrupts off
+just before each `CSRUNV`. Work already under way finishes first: the
+`mmap_lock` wait of a resolution, and one GUP (the faulting page or one
+batch). The module
+parameter `pin_ahead_pages` (default 1) pins that many pages from a
+lazy-arena fault onward, 16 at a time. Two gates cover these, built from
+`pin-ahead-contract.c` like `node.dom` above:
 
 ```sh
 python3 capstone/runtime/virtual/run-pin-ahead.py ... --application "$out/pin.dom"
@@ -299,9 +303,9 @@ python3 capstone/runtime/virtual/run-step-hooks.py ... --module <that .ko> \
 `run-pin-ahead.py` checks the window's clipping (arena, VMA, an already
 pinned page), read-only `FOLL_FORCE` backing staying read-only, and release on
 `munmap`. `run-step-hooks.py` uses the test build's hooks to inject a
-reschedule, a signal, an expired budget or `SIGKILL` at three points of
-`CV_STEP`, and a short GUP result, and checks that no `CSRUNV` follows an
-injection, that pins and fault counts match uninjected runs, that GUP is
+reschedule, a signal, an expired budget or `SIGKILL` at four points of
+`CV_STEP`, and a short GUP result, and checks that no `CSRUNV` and no GUP
+follows an injection, that pins and fault counts match uninjected runs, that GUP is
 never asked for more than 16 pages, and that every `FOLL_PIN` pin is released.
 
 ## Qualification and limits
