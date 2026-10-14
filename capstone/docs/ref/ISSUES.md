@@ -339,7 +339,7 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 **Impact.** A program that branches on these errnos (ENODEV for an unsupported file mapping, ENOMEM for an oversize mapping) takes another path. No port has been checked for such a dependency.
 
 
-## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); spec text on capstone-academic-spec spec/movc-untagged-source(-bootstrap), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
+## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
 > With `rd != rs1`, MOVC writes `x[rs1]` to `x[rd]`, contents and tag, and nulls `x[rs1]` only if it is
@@ -347,8 +347,9 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 > `rd == rs1` is a no-op; nothing raises. NOT "consume only LINEAR": REVOKE, UNINIT, SEALED,
 > SEALEDRET and EXIT stay consuming. Matrix, audit (nothing relies on MOVC zeroing an integer source),
 > security argument and evidence: `plans/2026-10-14-movc-untagged-source.md`.
-> - **Spec:** capstone-academic-spec `spec/movc-untagged-source` (on master, which still had the
->   24 trap) and `spec/movc-untagged-source-bootstrap` (on capstone-bootstrap, the pinned line).
+> - **Record:** the `movc` row of `llvm/lib/Target/Capstone/CapstoneISASemantics.md`, where the
+>   untagged CINCOFFSET/SCC rule is recorded too. The academic-spec text is not updated; it already
+>   differs from the implementations elsewhere.
 > - **QEMU:** the virtual profile already kept an untagged source. Until Q-04 (b), the physical
 >   profile nulls it as the RTL does (physical QEMU models the silicon, as with the untagged
 >   CINCOFFSET/SCC rule). One deviation from the matrix is fixed: `movc zero, rs` wrote `rs` into

@@ -92,7 +92,7 @@ contents), not a spec-level contract. Both implementations keep it, and the QEMU
 
 | Where | Change | Branch |
 |---|---|---|
-| spec | MOVC text: copy untagged data; consume only a tagged non-NONLIN source; no exception. Both lines: `master` (which still had the 24 trap) and `capstone-bootstrap` (llvm-capstone's pin). | capstone-academic-spec `spec/movc-untagged-source` (3d15807, on master), `spec/movc-untagged-source-bootstrap` (15a8e3d, on capstone-bootstrap) |
+| record | The `movc` row of `CapstoneISASemantics.md` holds the rule, per profile, next to the untagged CINCOFFSET/SCC rule. The academic-spec text is not updated (no write access, and it already differs from the implementations elsewhere); spec texts for `master` and `capstone-bootstrap` are kept locally as `spec/movc-untagged-source(-bootstrap)`. | this branch |
 | QEMU | The rule on the virtual profile (`x-capstone-u-mode`), which already kept an untagged source. The physical profile now nulls an untagged source, as the RTL still does, because physical QEMU models the silicon: the same split the maintainer gave the untagged CINCOFFSET/SCC rule (capstone-qemu 2794082073). **One deviation fixed:** `movc zero, rs` wrote `rs` into x0's storage, so a later `stc zero` stored that value instead of cnull. New suite `tests/movc-untagged-source` (67 checks; `--legacy` 85). | capstone-qemu `isa/movc-untagged-source` |
 | compiler | No source change. A lit test shows that the feature, when it arrives as a function attribute (the SDK's path), removes the STC+LDC rewrite. | llvm-capstone `isa/movc-untagged-source` |
 | SDK (virtual profile) | `-Xclang -target-feature -Xclang +movc-keeps-integer-source` in the application, runtime, builtins and musl codegen. The physical profile and the compiler default are unchanged: the bitstream still nulls. | same |
@@ -235,7 +235,7 @@ tree, so it has the flag) and the Dk tree. That is how the gates used this SDK a
 ## Review
 
 Codex (gpt-6.1-sol, xhigh) reviewed the memo, the audit, the QEMU fix and tests, the lit test, the
-SDK and probe changes, both spec texts and the RTL note.
+SDK and probe changes, the spec texts (kept locally) and the RTL note.
 
 Verdict: the core is sound. That covers:
 - QEMU's consumption predicate and the x0 guard;
