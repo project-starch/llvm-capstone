@@ -625,40 +625,62 @@ static int remap_end(struct context *c, const struct cv_remap *r)
     return 0;
 }
 
+/* CV_STEP resolves faults and resumes for at most one supervisor quantum;
+ * CV_RESOLVE gives its pin-ahead window the same bound. */
+#define CV_STEP_BUDGET_NS (5 * NSEC_PER_MSEC)
+
+/* Pending work for this task, or the end of its budget: return to the
+ * launcher (and release vm_lock) instead of entering the domain again. */
+static bool cv_step_stop(u64 deadline)
+{
+    return signal_pending(current) || need_resched() || ktime_get_ns() >= deadline;
+}
+
+/* A pin-ahead window is pinned PIN_AHEAD_BATCH pages at a time; between
+ * batches it stops at a pending signal or at the caller's deadline, so the
+ * extra work under vm_lock and mmap_lock stays bounded whatever the window. */
+#define PIN_AHEAD_BATCH 16
+
 /* Called with mmap_read_lock held, after the faulting page passed resolve()'s
  * checks in VMA v. Each further page is pinned exactly as a fault on it
  * would pin it, in the same VMA, so it gets the same policy; one that fails
  * a check ends the window unpinned and faults later as it does today. */
 static void pin_ahead(struct context *c, struct arena *a,
-                      struct vm_area_struct *v, unsigned first)
+                      struct vm_area_struct *v, unsigned first, u64 deadline)
 {
     unsigned long start = a->address + (unsigned long)first * PAGE_SIZE;
-    unsigned count = 0;
-    long n;
+    unsigned long count = 0, done;
     while (count + 1 < pin_ahead_pages && first + count < a->count &&
-           start + (unsigned long)count * PAGE_SIZE < v->vm_end &&
-           !a->pages[first + count])
+           start + count * PAGE_SIZE < v->vm_end && !a->pages[first + count])
         ++count;
-    if (!count) return;
-    n = pin_user_pages_remote(c->mm, start, count,
-                              FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
-                              a->pages + first, NULL, NULL);
-    for (long j = max(n, 0L); j < count; ++j)
-        a->pages[first + j] = NULL;
-    for (long j = 0; j < max(n, 0L); ++j) {
-        struct page *page = a->pages[first + j];
-        if (!PageAnon(page) || page_mapcount(page) != 1) {
-            for (long k = j; k < n; ++k) {
-                unpin_user_page(a->pages[first + k]);
-                a->pages[first + k] = NULL;
+    for (done = 0; done < count;) {
+        unsigned long batch = min(count - done, (unsigned long)PIN_AHEAD_BATCH);
+        struct page **pages = a->pages + first + done;
+        long n;
+        if (signal_pending(current) || ktime_get_ns() >= deadline)
+            return;
+        n = pin_user_pages_remote(c->mm, start + done * PAGE_SIZE, batch,
+                                  FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
+                                  pages, NULL, NULL);
+        for (long j = max(n, 0L); j < batch; ++j)
+            pages[j] = NULL;
+        for (long j = 0; j < max(n, 0L); ++j) {
+            if (!PageAnon(pages[j]) || page_mapcount(pages[j]) != 1) {
+                for (long k = j; k < n; ++k) {
+                    unpin_user_page(pages[k]);
+                    pages[k] = NULL;
+                }
+                return;
             }
-            break;
+            ++c->stats.pinned_pages;
         }
-        ++c->stats.pinned_pages;
+        if (n != batch)
+            return;
+        done += batch;
     }
 }
 
-static int resolve(struct context *c, struct cv_thread *t)
+static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
     struct page *page;
@@ -690,7 +712,7 @@ static int resolve(struct context *c, struct cv_thread *t)
             mmap_read_unlock(c->mm); unpin_user_page(page); return -EACCES;
         }
         if (!a->pages[index])
-            pin_ahead(c, a, v, index + 1);
+            pin_ahead(c, a, v, index + 1, deadline);
         mmap_read_unlock(c->mm);
         if (a->pages[index]) {
             /* mprotect may leave a write fault for Linux to resolve. It must
@@ -822,6 +844,7 @@ retry:
         struct cv_step r;
         struct cv_thread *t;
         u64 budget_end;
+        bool resolved = false;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
@@ -833,7 +856,7 @@ retry:
         /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
          * faulting would never be preempted: bound the resolved faults by
          * one quantum of this ioctl, then return and release vm_lock. */
-        budget_end = ktime_get_ns() + 5 * NSEC_PER_MSEC;
+        budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
         for (unsigned long action = r.reply ? 2 : 0;; action = 0) {
             preempt_disable(); local_irq_save(flags);
             if (!t->started) {
@@ -847,13 +870,21 @@ retry:
             ++c->stats.steps;
             /* Resolve a page fault here, as CV_RESOLVE would, and resume
              * without the two system calls a return through the launcher
-             * costs. Pending work for this task still returns first; so does
-             * a fault resolve() refuses, which the launcher then delivers
-             * after its own CV_RESOLVE fails the same way. */
-            if (t->event != 4 || signal_pending(current) || need_resched() ||
-                ktime_get_ns() >= budget_end || resolve(c, t))
+             * costs. Pending work for this task still returns first, checked
+             * again after resolve() (which can sleep, pin ahead, or see a
+             * signal arrive) and so before every CSRUNV; so does a fault
+             * resolve() refuses, which the launcher then delivers after its
+             * own CV_RESOLVE fails the same way. A fault resolved here and
+             * then returned is resolved again, idempotently, by the
+             * launcher's CV_RESOLVE. */
+            if (t->event != 4 || cv_step_stop(budget_end) ||
+                resolve(c, t, budget_end))
                 break;
             ++c->stats.faults;
+            if (cv_step_stop(budget_end)) {
+                resolved = true;
+                break;
+            }
         }
         if (t->event == 5) {
             int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
@@ -866,7 +897,7 @@ retry:
         memcpy(r.args, t->frame + 72, sizeof(r.args));
         r.thread = t->id;
         t->terminal = r.kind == 2;
-        if (r.kind == 4) ++c->stats.faults;
+        if (r.kind == 4 && !resolved) ++c->stats.faults;
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
         if (rc) t->terminal = true;
     } else if (op == CV_RESOLVE) {
@@ -874,7 +905,7 @@ retry:
         struct cv_thread *t;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
-        rc = t ? resolve(c, t) : -ESRCH;
+        rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
     } else if (op == CV_RETIRE) {
         u64 id;
         if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
