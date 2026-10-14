@@ -28,6 +28,7 @@
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/CodeGen/RuntimeLibcallUtil.h"
 #include "llvm/CodeGen/StackMaps.h"
 #include "llvm/CodeGen/TargetLowering.h"
@@ -959,6 +960,11 @@ void TargetLoweringBase::initActions() {
   // This one by default will call __clear_cache unless the target
   // wants something different.
   setOperationAction(ISD::CLEAR_CACHE, MVT::Other, LibCall);
+}
+
+MVT TargetLoweringBase::getConstantPoolPtrTy(const DataLayout &DL) const {
+  return getPointerTy(DL, getTargetMachine().getAddressSpaceForPseudoSourceKind(
+                              PseudoSourceValue::ConstantPool));
 }
 
 MVT TargetLoweringBase::getScalarShiftAmountTy(const DataLayout &DL,
