@@ -56,8 +56,13 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
   region table cap_env_init leaves:** the S-mode region covering Linux decodes as [0x80000000, 2^40) instead of
   [0x8008a780, 2^40), because a region that long has a 1 GiB granule and its base rounds down to the monitor's own
   text. The CPMP (pmp_data_if.sv) is a pure allow-list over the DECODED bounds of the 16 entries for S/U-mode
-  accesses, with no deny entries and an M-mode bypass, so that table lets Linux read, write and fetch the monitor's
-  memory. The fix is in the carve, not the RTL: a chain of regions each base-aligned to its own granule (for example
+  accesses, with no deny entries and an M-mode bypass, so that table GRANTS Linux the monitor's memory; the grant is
+  MASKED for the monitor's range, on the data and the fetch side alike, because the legacy PMP is checked first and
+  the CPMP only when it raised no fault (an AND), and OpenSBI's PMP regions 03/04 give S/U nothing in
+  [0x80000000, 0x800A0000) (the board lane's correction, 2026-10-15; "a real isolation hole" was over-read). What
+  the rounded table still breaks is the region bookkeeping and runtime domain isolation: a region carved for a
+  domain out of Linux's region stays covered by Linux's rounded region (check-repr's create_domain OVERLAP class).
+  The fix is in the carve, not the RTL: a chain of regions each base-aligned to its own granule (for example
   [0x8008a800, 0x84000000), [0x84000000, 0xC0000000), [0xC0000000, 2^40)), verified by monitor-boot-carve.py or
   check-repr under --format full --renorm before any flash. The same monitor is what the Sublet bitstream needs.
 - **Next:** the lead chooses: the monitor fix (mtime's explicit cursor plus a region chain whose bases are
