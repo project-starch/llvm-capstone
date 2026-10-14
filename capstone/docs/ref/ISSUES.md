@@ -1142,7 +1142,7 @@ R-21's box. **Which behaviour is intended is a spec question**, and neither sour
 specification. The RTL's refusal is the safer default.
 
 > **2026-10-14: the threshold moved, and escalation has a second cause difference.**
-> - **Threshold.** Since capstone-qemu #21 (7dbfdd534eea, dev's pin) the permission field is 4 bits wide
+> - **Threshold.** Since capstone-qemu #21 (7dbfdd534eea) the permission field is 4 bits wide
 >   (MANAGE = 8). `helper_cstighten` now clamps `perms > CAP_PERMS_ALL` (15), not `> 7`. Immediates 8-15
 >   are real requests, and the silent clamp applies only above 15.
 > - **Escalation.** An immediate the source does not hold is "Illegal operand value (29)" in the
