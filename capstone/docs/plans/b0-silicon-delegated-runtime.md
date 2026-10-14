@@ -2198,6 +2198,80 @@ of fc3225fb237d and 6bc165f2e1c2. Staged in /tmp/capstone/accept-fpb (chain.sh, 
     bracket is node-linear (fpga-silicon-measurements-for-paper.md). So no REVOKE work spills past R1's bracket,
     and the release model's per-term split stands.
 
+## FP respin acceptance RESULT so far (2026-10-15, caplifive_fpb_afcd19bea.bit): Linux does not boot; root-cause candidate, and boot M pre-registered
+Flashed on the lead's word in conversation (01:29-01:31; the read-back named it; 0568f93a9 stays registered).
+- **S-16 control set (bare, 01:32-01:47):** 18 of 18 arms complete; all 98 readings identical to 0568f93a9's run.
+- **R-43 a1 (01:47-02:18): FAILED, and the chain stopped there as designed.**
+  - Every Linux boot stops after `sched_clock: 64 bits at 13MHz ...`, with `------------[ cut here ]------------` and
+    no further output. That held on all three cold-boot attempts with today's rebuilt a1 firmware.
+  - The shared checkout's preflight predates the `caplifive_fpb_*` row, so the R-43 sub-chain declared
+    PREFLIGHT_DTS_NODES=65536. The C-DTS check ran and passed. afcd19bea's revocation-node base equals 0568f93a9's.
+- **Matched pair: the bitstream, not the firmware (02:18-02:47).**
+  - The pinned firmware fw_2f49d5b257f7 booted to a login on 0568f93a9 on 2026-10-11 (k800 4, s06agg 64).
+  - On afcd19bea it hangs at the same character offset, 3 of 3.
+  - The driver code, the boot sequence and the environment are identical; the only variable is the bitstream. The
+    claim-auditor CONFIRMED this.
+  - The first divergence comes before the warning: the `sched_clock` line is stamped `[0.000168]` on 0568f93a9 and
+    `[0.000000]` on all six afcd19bea boots, i.e. S-mode time reads 0.
+  - The warning matches random_init's `WARN(!entropy, "Missing cycle counter...")`, whose message has no newline.
+  - After the hang the hart takes no debug halt (OpenOCD: `dmstatus=0x00030c82`, allrunning, `failed to halt`).
+  - The CLINT's mtime counts at reset (GDB: 0x030da3c0 -> 0x04900aac in about 2 s).
+- **Bare rows on afcd19bea (02:51-02:58):**
+  - R-51 before 0x1C/0x1C, after 0/0x1C/0x1C; s10b 8/1: identical to 0568f93a9's.
+  - s1gap (exploratory, for the RTL lane's PREREG):
+    - close: k=1 gap 0x8, revoke 0x3A; k=2 0x2F/0x21; k=3 0x1D/0x31; k=4 0x1C/0x49;
+    - far: k=1 0xFA6/0x42; k=2 0xFBC/0x21; k=3 0xFBD/0x2D; k=4 0xFBD/0x47;
+    - no traps.
+- **Breakpoint probes: void.** A software breakpoint at sbi_timer_value never stopped. Its positive control, a
+  breakpoint at `_trap_handler`, never stopped either. After CAPENTER, traps enter through `ctvec` (`_cap_trap_entry`),
+  so that control was mis-chosen. Whether software breakpoints fire in M-mode on this core is UNRESOLVED.
+
+**Root-cause candidate (not yet confirmed on the board): option (b)'s encoder displaces the cursor of the monitor's
+boot-time mtime capability.**
+1. The core has no `time` CSR. The FPGA monitor emulates S-mode rdtime in handle_exception as `time_val = *mtime`
+   (sbi_capstone.c, CAPSTONE_TARGET_FPGA).
+2. cap_env_init mints `mtime` with split_out_cap(0x200bff8, 8, 0): one SPLIT at 0x200bff8, then a SPLIT of the upper
+   piece at 0x200c000, keeping that split's lower piece.
+3. Anvil SPLIT gives the lower piece `cursor = rs1_orig.metadata.start`, its parent's DECODED start
+   (capstone_dyn_unit.anvil func SPLIT).
+4. Under the cursorless scheme (0568f93a9), the upper piece [0x200bff8, 0x10000000) keeps an exact base, because its
+   cursor sits on its base. Under the full scheme (4a4261bb4 and afcd19bea) its base rounds down to 0x2000000.
+   `mtime` therefore comes out as [0x2000000, 0x200c000) with its cursor at 0x2000000, and `*mtime` reads the CLINT's
+   msip, which is 0.
+5. The replay of the whole boot carve through check-repr's encoder is silicon-ladder/monitor-boot-carve.py.
+   Under the full scheme it also shows these cursors displaced, each piece overlapping its neighbour:
+   - the boot stack: cursor 0x80000000 against 0x80080380;
+   - the interrupt-handler stack: cursor 0x80000000 against 0x80082380;
+   - the interrupt-handler seal: cursor 0x8008a000 against 0x8008a380.
+   The UART, mtimecmp and the interrupt-handler code are exact. Under cursorless all seven are exact.
+6. This mechanism is not timing. It predicts that 4a4261bb4, and the Sublet build (which carries the same encoder
+   change), fail the same way under this monitor. QEMU's SPLIT keeps exact bounds, so QEMU cannot show it.
+7. **The gate's blind spot:** check-repr's monitor_splits judged a split piece's bounds (SHORT/OVERLAP) and never the
+   cursor the monitor dereferences. It also replayed create_domain only, not cap_env_init. That is the CLAUDE.md
+   class "a check keyed to one shape".
+
+**Boot M, pre-registered (before the boot): the cursor fix alone, on afcd19bea.** Private firmware, never landed.
+- **How it was built:** /tmp/capstone/fpb-diag/build.sh copies opensbi-custom, regenerates the monitor with capstone-c,
+  and links the pinned firmware's own kernel payload.
+- **Gates:**
+  - the regenerated control `.c.S` equals the shared one byte for byte;
+  - the control image fw-ctl edaf8fc29228 equals the pinned 2f49d5b257f7 except the payload-end word (+16) and 16
+    trailing zero bytes.
+- **The patched image:** fw-mtime 647dce4c7fce. In cap_env_init it reports the mtime capability's decoded base and
+  cursor (MTMB, MTMC), sets the cursor to SBI_MTIME_ADDR, and reports it again (MTMF). No other change.
+- **Form:** chain step 6 (k800, then s06agg), the driver unchanged, FPGA_FW pointing at fw-mtime.
+- **Predictions:**
+  - UART: `MTMB:0x2000000`, `MTMC:0x2000000`, `MTMF:0x200bff8`. If MTMC reads 0x200bff8, the cursor was never
+    displaced and the mechanism is REFUTED.
+  - The sched_clock line is stamped nonzero, and there is no CUT_HERE at random_init.
+  - Linux reaches login; k800 retval 4; s06agg 64.
+- **Outcomes that are not a pass:**
+  - Linux still stops after a nonzero stamp: time-0 is explained but is not the whole story. The displaced interrupt
+    carves are next, and the run is read no further.
+  - MTMC reads 0x2000000 but the stamp is still `[0.000000]`: the patch did not reach the emulation path, and the
+    image is checked before anything else.
+  - No OpenSBI banner: boot fw-ctl as the control before concluding anything.
+
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
 sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one
