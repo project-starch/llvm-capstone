@@ -2147,6 +2147,15 @@ a63cbd815fe96957a979fc94c6c1bf29060428db9523d43485d392aeca10ff65, 11,443,722 B.
 - The flash is the lead's decision, with that WNS stated.
 - If it is flashed, the chain's first control, the S-16 bare set, stops the chain on any timing-induced failure
   before a verdict is read.
+- **The respin, sealed 2026-10-14:** caplifive_fpb_afcd19bea.bit, sha256
+  d8d2b641da70207c74d41a69ef60a561426fc573b6767fd03bd6d3c28a5fb3f8, 11,443,722 B.
+  - Routed WNS -15.310: still OUTSIDE the band, 0.050 ns better (inside the noise a null change has shown).
+    TNS 13 % better. The prediction "WNS back in band" is refuted; the worst path's endpoints are the next read.
+  - Functionally, the encoder decides E as 2a3a87dfc did wherever the rounded top is representable, so every
+    prediction above carries to it unchanged.
+  - Lockstep QEMU: capstone-qemu 4a21b485b01f, the same residue form.
+  - The flash is the lead's decision, between 4a4261bb4 (-15.360) and afcd19bea (-15.310); the acceptance takes
+    either.
 - A verified add-free form of the renormalisation test went to the RTL lane for a respin, if one is wanted:
   wrap iff (q == 1023 and the remainders are nonzero) or (q == 1022 and sr + lr > g), with q = len >> (E+3).
   It matches 2a3a87dfc's step on 400,000 regions.
