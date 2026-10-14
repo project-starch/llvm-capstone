@@ -6,7 +6,9 @@ project(capstone_application LANGUAGES C ASM)
 set(CMAKE_C_STANDARD 11)
 option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter" OFF)
 set(profile_codegen)
+set(sdk_profile physical)
 if(CAPSTONE_APPLICATION_VIRTUAL)
+  set(sdk_profile virtual)
   include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VirtualCodegen.cmake")
   set(profile_codegen ${CAPSTONE_VIRTUAL_CODEGEN})
   list(JOIN profile_codegen " " virtual_codegen)
@@ -75,6 +77,7 @@ if(CAPSTONE_APPLICATION_SDK)
 "{
   \"version\": 1,
   \"application_abi\": 2,
+  \"profile\": \"${sdk_profile}\",
   \"codegen\": ${sdk_codegen},
   \"cc\": \"${CMAKE_C_COMPILER}\",
   \"ld\": \"${CMAKE_LINKER}\",
