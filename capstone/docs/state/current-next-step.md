@@ -1,3 +1,27 @@
+2026-10-14: **TWO BITSTREAMS HANDED TO THE SYNTH LANE, both pre-registered on dev before the handoff**; neither
+build has started, because the synth lane needs the lead's word in ITS session (a go relayed from another lane does
+not count), for the FP build, for an elaboration-only pass of the Sublet tip, and for the Sublet build, in that order.
+- `caplifive_fpb_4a4261bb4.bit` (fp-fixes: R-53, the R-52 residual, R-54's renormalisation, the encoder without the
+  cursorless scheme): pre-registration cd8c12bc2627; the board's acceptance amendment on lane b0-silicon-runtime.
+- `caplifive_sublet_d93a8d66b.bit` (capstone-sublet: the 27-bit-bounds / 4-bit-perm word, CDERIVE / CREVOKE, the
+  node parent link, MREV deepening, CREVOKE in R-45's flush): pre-registration f26d8baf949b; gate tree 4be92a85a
+  (verif/sim/Makefile only above the RTL). Gates: lint at baseline by name, the 95-test sweep readings-identical
+  to 0568f93a9 under the fixed harness (91 identical, 1 explained, 3 random generators without logs), 36 ported
+  QEMU cases, the supervised arm. Flash only after the FP acceptance boots complete and the lockstep list is green
+  (QEMU decode gate 9739f6e415, check-repr / B0_CAP_FORMAT full, the OVERLAP interim, C-13).
+- Found on the way, both fixed on the branch: the testharness printed SUCCESS at its cycle limit (ac2968e10), and
+  the fixed harness then left no retirement trace for a failed run (4be92a85a); 26 of the sweep's 95 arms are
+  readings-only and end at the limit on every tree, so every earlier "sweep identical" by exit code compared nothing
+  for them (retraction 6549f8cc5c1d; the readings-level comparison now stands in its place).
+- Step 6 moves 8 cycles from MREV to the next timed REVOKE in the r12-s1 ladder (the program's total time unchanged
+  to the cycle). The timed pair `capstone/tests/rtl-smoke/s1-revoke-gap-2026-10-14/` (capstone-sublet 5d2a5b988,
+  tests only) runs the same binary on both bitstreams for the board's R1 release-cost numbers; in simulation step 5
+  and step 6 read identical on both arms (outcome A: R1's 76 / 22.7 predicted to hold), and the FP tree pays the
+  MREV's drain at a revoke issued right behind it (381 against 230 cycles), which the Sublet trees absorb inside MREV.
+- **Next:** the lead's word to the synth lane; grade each report against its pre-registration; the FP flash on the
+  lead's word, then the acceptance boots, then the Sublet flash; convert the 26 readings-only sweep arms to write
+  tohost.
+
 2026-10-10 — **Sublet lifetime extension: review the paired QEMU/runtime change
 on `isa/sublet-lifetimes`.** Its [qualification](../design/virtual-capstone/development.md#sublet-lifetime-qualification)
 covers the ISA, storage formats, public C wrappers and existing processor
