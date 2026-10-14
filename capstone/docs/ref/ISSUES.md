@@ -7978,6 +7978,45 @@ and passes against the patched one, and libc-test's `pthread_cond` passes
 libc; objects compiled against the old headers that embed a `pthread_cond_t` must be recompiled
 (perl and mruby embed none).
 
+### C-78 — a 16-aligned copy whose size is not a multiple of 16 strips the tags of the capabilities in its whole granules `FIXED 2026-10-13 on compiler/memcpy-capability-granules — COMPILER; found 2026-10-13 by the hosted-application probe (runtime/virtual/hosted-contract.c) when the SDK stopped passing -fno-builtin`
+
+**What happens.** `CapstoneTargetLowering::findOptimalMemOpLowering` copied with capability units
+(`ldc`/`stc`) only when both ends are 16-aligned AND the size is a multiple of 16. Every other copy
+went to the scalar path, whose comment held that it "cannot carry an in-place tagged capability".
+A 16-aligned copy of 24 or 40 bytes can: its whole granules hold capabilities and only the tail is
+plain data. `memcpy(d, s, offsetof(T, tail))` over a struct that starts with pointers is that shape.
+The scalar path copied it with 8-byte `ld`/`sd`, and a plain store never carries a tag.
+
+```c
+_Alignas(16) unsigned char s[48], d[48];   /* s[0..15] holds a capability */
+__builtin_memcpy(d, s, 24);                /* ld, ld, ld; sd, sd, sd: tag gone */
+__builtin_memcpy(d, s, 32);                /* ldc, ldc; stc, stc: tags kept   */
+```
+
+**Measured (2026-10-13, compiler cda7e335ff9f, the virtual SDK, QEMU 491db4ce).** The disassembly
+above, in both an SDK with `-fno-builtin` and one without it. At run time the probe's
+`memcpy_24_capability_head` reads the copied capability untagged in the SDK without `-fno-builtin`,
+and passes in the SDK with it, because there `memcpy` is a call into musl, whose run-time
+alignment check copies the granule as a capability. `__builtin_memcpy` inlines in both, so the
+bug was reachable before the SDK change; `-fno-builtin` only kept explicit `memcpy` calls away
+from it.
+
+**Fix.** A 16-aligned copy of more than 16 bytes whose size is not a multiple of 16 takes one
+`c128` unit per whole granule and scalar units of 8, 4, 2 and 1 bytes for the tail, within the
+existing 32-granule budget. Copies that are not 16-aligned on both ends, or shorter than a
+granule, are unchanged. Under `-capstone-memcpy-high-half-fixup` (the S-06 silicon experiment,
+default off) these sizes keep their previous lowering, because that experiment's decline and
+hook agree only on the 16-multiple shape. Lit test:
+`llvm/test/CodeGen/Capstone/memcpy-capability-granules.ll`, with a recorded mutation.
+
+
+*2026-10-14, review (Codex):* both capability branches of `findOptimalMemOpLowering` (this one and
+the 16-multiple one before it) narrowed the granule count `Op.size() / 16` to 32 bits before the
+32-granule budget check, so a constant copy of 2^36 + 17 bytes counted one granule and was inlined
+as a 17-byte copy (2^36 + 16 as one capability). The count is now 64-bit;
+`memcpy-capability-granules.ll` gains both sizes, which the narrowed count inlines and the fix sends
+to `memcpy`. **Still open:** a copy forced inline (`llvm.memcpy.inline`) past the budget falls to
+the scalar path and loses its tags.
 ### C-77 — a const global aggregate that holds pointers, passed BY VALUE, faults in the virtual profile: the argument copy's memcpy gets its operands through integer moves `OPEN — COMPILER; found 2026-10-11 by the Perl port on the virtual profile (the lexer's "::" bareword path), reduced to a 20-line C program; worked around in the port (ports/perl/musl/patches/5.36.3/0009)`
 
 **What happens.** Built with a virtual-profile SDK (`-capstone-gp-free -capstone-image-gp`,
