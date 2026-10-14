@@ -740,6 +740,16 @@ def self_test():
             got = any(x[0].startswith("monitor code") for x in o["overlap"])
             if got != want or o["trap"] or o["moved"]:
                 print("self-test FAIL: the monitor code-region control under %s read %s" % (fmt, o)); bad += 1
+        # the globals carve (CAPSTONE_GLUE_POOL_CARVE): on a managed layout with mixed global sizes, the split carve
+        # MUST overlap under the full scheme and the pool carve must be exact, with no fault in either
+        FORMAT, RENORM = "full", True
+        lay = dict(managed=True, code_len=100000, req_data=600000, req_stack=0, gpoff=0x10000, arena=0, count=6,
+                   recs=[(24, 8, -1), (5000, 8, -1), (100, 8, -1), (70000, 8, -1), (7, 1, -1), (300, 8, -1)])
+        rs, rp = replay_process(lay, 0xac100000, False, "split"), replay_process(lay, 0xac100000, False, "pool")
+        if not rs["overlap"] or rp["overlap"] or rp["trap"] or rp["short"] or rp["moved"]:
+            print("self-test FAIL: the pool-carve control: split overlap %d, pool overlap %d trap %d short %d moved %d"
+                  % (len(rs["overlap"]), len(rp["overlap"]), len(rp["trap"]), len(rp["short"]), len(rp["moved"])))
+            bad += 1
     finally:
         FORMAT, RENORM = saved, saved_rn
     print("self-test: %s" % ("every control fires" if not bad else "%d control(s) did not fire" % bad))
