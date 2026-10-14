@@ -2224,6 +2224,55 @@ cursorless words. Before its pre-registration, this lane owes:
    build-b0-hello.sh, in the shape of QEMU's sublet cases 0/1/3/7/10/22), with values pre-registered from the RTL
    simulation of the same source.
 
+## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
+Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
+longer separates globals.
+- **Why:** each SPLIT off the stack remainder rounds the remainder's top UP into the piece just carved, and the next
+  global inherits that top.
+- **How much:** each global's capability reaches into its neighbour by up to the remainder's granule; check-repr
+  reads 64 B (k800) to 32 KiB (memcached).
+- **Why CARVE_ALIGN doesn't help:** it computes the cursorless granule.
+
+**Design (CAPSTONE_GLUE_POOL_CARVE; build-b0-hello.sh B0_GLUE_CARVE=pool):**
+- Pass 1 walks the descriptor for the pieces' lowest base without touching a capability.
+- ONE split cuts the stack [base, P_lo) from the pool [P_lo, END), with P_lo aligned to the stack remainder's
+  granule.
+- The table and every global come from a cincoffset copy of the (NONLIN) pool, narrowed with SHRINK
+  (capstone_flu_unit.anvil: narrows rd in place, keeps its node, clamps the cursor). Each piece is aligned to its OWN
+  full-scheme granule.
+- s7 (the pool) is cleared before the application starts.
+- A global's capability then depends only on its own length and alignment, and no revocation node is spent per
+  global: about 265 fewer for memcached, about 160 for the SQLite cell. The node budgets already recorded were
+  measured with the split carve and stay valid for those images.
+
+**Model first (check-repr.py carve_pool):** 11 images, every CMA base.
+- full+renorm: 0 traps, 0 short, 0 short-once-moved, **OVERLAP 0**; padding 64 B to 3.8 KiB; every stack margin
+  above its requirement.
+- The split carve on the same images overlaps everywhere (64 B to 32 KiB): the control.
+- cursorless: also exact for these 11 images. That is not guaranteed in general: a small global straddling a 32 MiB
+  boundary would truncate. The glue therefore stays aligned to each piece's own granule, and check-repr verifies each
+  image against the resident format.
+- check-repr detects the pool glue from the image: the table's `shrink(gp, t1, t4)`, 0x03d311db.
+
+**Built and run:**
+- With the define off, the glue object and b0-hello are byte-identical to the unmodified glue (82b5bb388e2f8f7a,
+  f75bb823bdde319a).
+- b0-hello with the pool carve: eecd8964994b10d4, gate OK. Under full+renorm it reads OVERLAP 0, against the split
+  build's overlap at all 512 bases, up to 384 B.
+- The disassembly shows the pool split (0x0d611bdb, `split s7, sp, s6`), the table's and each global's
+  cincoffset + shrink, and `li s7, 0`.
+- QEMU (fw-b1-a11d424, GP_FABRICATE=0): both builds print the hello line, rc 0.
+- b1-thread (with its context arena): split 0fc75a06633ae0bf, pool a5ec32d0c5095f0d. Under full+renorm the split
+  build overlaps at all 255 bases (up to 2,048 B) and the pool build at none. In QEMU both join with 124, rc 0.
+- memcached (the B2 recipe): split 62fad1bc8bc15a79, pool 1c63bff566577a4f, from the same tree. Under full+renorm
+  the pool build reads OVERLAP 0 at all 225 bases.
+  - In QEMU (fw-b1-top, GP_FABRICATE=0, the guest clock set as for B3c), the oracle harness reads transcript
+    e0a254c47e7ee28c (1,931,207 bytes) for BOTH builds. That is the native oracle's hash, and both exit 0 on TERM.
+- QEMU proves the glue runs and the program works; only the model proves the bounds. The board witness is
+  carve-witness.c, pre-registered separately.
+- The default stays B0_GLUE_CARVE=align, so no existing build changes. Images built for the FP (b) or Sublet
+  bitstream should use pool.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
