@@ -137,6 +137,37 @@ Predictions, written before the build (the refutation keys in brackets):
   started: a cheaper formulation of the renormalisation condition (decide E+1 from the length and the two low
   granule residues rather than from two full 64-bit shifted sums), synthesised alone before it goes anywhere.
 
+## Synthesis of `fp-fixes` afcd19bea (the respin), pre-registered 2026-10-14 before the handoff
+
+Build-go: the lead's word to the synth lane, not yet given for this hash. Name `caplifive_fpb_afcd19bea.bit`.
+
+- Tree: 4a4261bb4 + afcd19bea, which changes compress_bounds alone (ariane_pkg.sv) and the bounds model: R-54's
+  renormalisation condition in residue form. The decision E+1 is the same function of (start, len) as before, proven
+  by derivation (the rounded span is q + ceil((sr+lr)/g), so it reaches 1024 exactly when q == 1023 with a non-zero
+  residue or q == 1022 with sr + lr > g) and checked in bounds-model.py over 8,259,510 regions (18,024 wrapping, 0
+  mismatches; the form without the q == 1022 term mismatches 182 of 197,607, so the check fires). On the path it
+  replaces the end-address add, two 64-bit barrel shifts, a subtract and a compare with a 10-bit window on len, two
+  masks from E, one add of the residues and two reductions.
+- Gates on the committed tree: lint 52/3/0/0/40/0/2/25/833/2/100 with every UNUSEDSIGNAL and UNOPTFLAT name identical
+  to 4a4261bb4's, negative control BLOCKED; bounds-renorm and cursorless-off read 4a4261bb4's values; the 95-test
+  sweep against 0568f93a9 (the old harness on both sides, every arm with a trace): 92 identical, 0 differ, 3 random
+  generators without logs. No Anvil change; the generated units are byte-identical to 4a4261bb4's.
+- The flow untouched; DTS 65536 unchanged; the bookkeeping prefixes (`_fpb_`) already cover the name.
+
+Predictions, written before the build (refutation keys in brackets):
+- Routed WNS INSIDE -13.335..-5.855, and better than 4a4261bb4's -15.360 by at least 1.5 ns. [WNS still near -15
+  with the worst paths through the compress cone's arithmetic: the adder's form was not the cost, and what remains
+  (the E selection feeding the window and the masks, or the T/B field shifts) is the next thing read; WNS in band
+  with the worst path elsewhere: the FP bitstream is graded on that path like any other.]
+- The worst 20 paths carry fewer compress-cone CARRY4 cells than FP's 40-47, by the synth lane's query with its
+  controls (the CARRY4 metric, the same refinement as the sealed grades); the IRO cone's CARRY4 count drops from 186
+  toward 0568f93a9's 63. [unchanged counts: the arithmetic is elsewhere in the cone, not in the condition]
+- Area: issue_read_operands down by on the order of 2,000 LUT from 4a4261bb4 (+2,446 against 0568f93a9 there), the
+  scoreboard and ex_stage own cells down by part of their +207 / +179; no new flops; everything else flat. [IRO flat:
+  the condition's logic was not what the +2,446 was]
+- Loop membership by stem unchanged; LUTLP-1 0.
+- Route time: no prediction (host-dependent); the synthesis timing-optimisation phase is recorded for the spread.
+
 ## Branch `capstone-sublet` (on top of fp-fixes)
 
 | Commit | What |

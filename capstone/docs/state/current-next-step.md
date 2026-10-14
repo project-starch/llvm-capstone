@@ -28,6 +28,9 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
   renormalisation adder on the forwarding path, 31-43 carry cells on 19 of the worst 20), loops the same set with a
   different arc left for the router, dyn_unit +4,879 LUT, the cursorless decode's removal -15,000 LUT in the issue
   stage and csr_regfile. sha256 89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430.
+- **The respin is ready: fp-fixes afcd19bea** (R-54's renormalisation condition in residue form, the same decision,
+  equivalence checked over 8.3 million regions; lint and the 95-test sweep identical, the bounds arms unchanged),
+  pre-registered in the plan doc as caplifive_fpb_afcd19bea.bit. Its build needs the lead's word to the synth lane.
 - **Next:** the lead decides whether the -15.360 bitstream is flashed for the FP acceptance chain (empirical: every
   accepted bitstream was negative, -8.3 to -12.9; the fallback stays registered) or held for a cheaper
   renormalisation; the Sublet seal and grade; convert the 26 readings-only sweep arms to write tohost.
