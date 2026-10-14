@@ -7972,6 +7972,13 @@ guarded block into the outer loop's preheader, above the test (`-stop-before/-af
 early-machinelicm`). On a conventional target that computes an address nobody uses; on Capstone
 CIncOffset of an untagged value raises UNEXPECTED_OPERAND.
 
+*2026-10-14:* the CHERI rule (plans/2026-09-24-scc-cincoffset-untagged.md) makes CIncOffset of an
+untagged value compute an untagged address, so a NULL base no longer traps. The guard of this entry
+and C-66, and C-19's IR rule, stay: CIncOffset(Imm) and SCC still raise 26 on an uninitialised or
+sealed capability, and a guard such as a capability-type test can exclude one (a review found the
+IR rule would otherwise let LICM hoist past that test). Their comments and tests now give that
+reason.
+
 **Why LLVM does it.** MachineLICM hoists any loop-invariant instruction that is safe to move, and
 only loads must also be guaranteed to execute. Pointer arithmetic is assumed not to trap. On Capstone
 `CIncOffset`, `CIncOffsetImm`, `LCC` and `SHRINK` trap on an untagged operand (the QEMU helpers that
@@ -8584,9 +8591,10 @@ one extra capability increment on the paths through both blocks, and nothing on 
 How many it refuses on CPython is measured below, after the end-to-end pair.
 
 **If the ISA changes.** `plans/2026-09-24-scc-cincoffset-untagged.md` asks whether an untagged
-`CINCOFFSET`/`SCC` should compute, as CHERI's do. If it does, those opcodes leave
-`trapsOnUntaggedOperand` and every pass above follows from that one line. That memo also says
-"no program we build needs the change now"; this issue is a program that does.
+`CINCOFFSET`/`SCC` should compute, as CHERI's do. That memo also says "no program we build needs
+the change now"; this issue is a program that does. *2026-10-14: adopted for QEMU and the
+compiler. The opcodes did NOT leave `trapsOnUntaggedOperand`: they still raise 26 on an
+uninitialised or sealed capability, so neither the guard here nor C-19's IR rule can go.*
 
 **Not covered.** A machine pass added later that speculates without asking `canTrap`. The passes
 that can place an instruction on a new path were inventoried for this entry (MachineLICM,

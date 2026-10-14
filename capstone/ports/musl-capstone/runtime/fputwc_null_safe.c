@@ -7,11 +7,12 @@
  *
  * Before __towrite has run, wpos and wend are both null, and `wpos + 4` is
  * then arithmetic on a null pointer. C says that is undefined and every flat
- * libc says it is four; a capability machine says it is a trap. The RTL raises
- * here, not only the emulator: capstone-ariane/core/anvil_build/
- * capstone_flu_unit.anvil:57-60 raises UNEXPECTED_OPERAND when CINCOFFSETIMM
- * gets a NOT_CAP operand, and QEMU reports the same as cause 24 with val=0x0.
- * libc-test's swprintf died on it, at `cincoffsetimm a2, a0, 0x4`.
+ * libc says it is four; a capability machine said it was a trap.
+ * capstone-ariane/core/anvil_build/capstone_flu_unit.anvil:57-60 raises
+ * UNEXPECTED_OPERAND when CINCOFFSETIMM gets a NOT_CAP operand, and QEMU
+ * reported the same as cause 24 with val=0x0: libc-test's swprintf died on it,
+ * at `cincoffsetimm a2, a0, 0x4`. Under the CHERI rule (2026-10-14) QEMU
+ * computes the untagged address instead; this stays until the RTL does too.
  *
  * The question the line is asking is how much room is left, so ask that. The
  * two cursors go through uintptr_t, which is 64 bits here, so the subtraction

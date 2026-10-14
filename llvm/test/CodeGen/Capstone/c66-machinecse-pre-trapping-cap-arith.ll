@@ -3,7 +3,9 @@
 ; neither dominates the other, duplicates the expression into their nearest
 ; common dominator, and lets CSE delete the originals -- so the copy runs on
 ; every path through that dominator, including the paths that reach neither
-; block. CIncOffset of an untagged value (NULL) traps. CPython forms
+; block. CIncOffset of an uninitialised or sealed capability traps (and of
+; NULL too, until the CHERI rule of 2026-10-14, which is how this was found).
+; CPython forms
 ; &kwnames->ob_item in the preheaders of two inlined find_keyword loops, each
 ; entered only when `nkwargs > 0`; PRE put the increment into their common
 ; dominator above that test, and every call without keyword arguments trapped

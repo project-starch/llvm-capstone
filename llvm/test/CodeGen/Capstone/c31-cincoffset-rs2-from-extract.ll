@@ -3,8 +3,8 @@
 ; the rs2 of a cincoffset, the register the hardware reads for rs2 is the live
 ; capability's own register, whose metadata shadow is still TAGGED.  The RTL
 ; raises UNEXPECTED_OPERAND on a tagged rs2 (capstone_flu_unit.anvil:30, rtl-oracle
-; 2026-09-04); QEMU reads the cursor and carries on (op_helper.c:736-737).  So
-; `q + (long)p` is a silicon-only fault in ordinary C.  Measured 2026-09-04 on
+; 2026-09-04); QEMU then read the cursor and carried on (it raises too since
+; 2026-10-14).  So `q + (long)p` was a silicon-only fault in ordinary C.  Measured 2026-09-04 on
 ; the branch compiler: at -O2 @use_int_of_ptr is `cincoffset a0, a1, a0` with a0
 ; the untouched capability argument.  -O0 spills and reloads the integer through
 ; memory (`ld a1, 0(a1)`), which is an integer write and clears the shadow.

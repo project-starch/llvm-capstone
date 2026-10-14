@@ -2054,13 +2054,17 @@ unsigned CapstoneInstrInfo::getInstBundleLength(const MachineInstr &MI) const {
 }
 
 // Capability instructions that LLVM treats as free of side effects but that
-// must not run on an operand that is not a tagged capability. Taken from the
-// QEMU model: CIncOffset(Imm), LCC, SHRINK and SEAL raise UNEXPECTED_OPERAND
-// (cause 24) on an untagged rs1; SCC, TIGHTEN and INIT assert that it is
-// tagged. The first four come from ordinary pointer code, the rest from the
-// capability intrinsics. SEAL and INIT are selected as their tied pseudos,
-// which is what the code-motion passes see. MOVC is absent: it moves an
-// untagged value without complaint.
+// can trap on some operand, so they must not be executed on a path where they
+// did not run. LCC (selectors other than the type query), SHRINK and SEAL raise
+// UNEXPECTED_OPERAND (cause 24) on an untagged rs1; TIGHTEN and INIT need a
+// tagged one too. CIncOffset(Imm) and SCC no longer trap on an untagged rs1:
+// since the CHERI rule (2026-10-14, plans/2026-09-24-scc-cincoffset-untagged.md)
+// they compute an untagged result. They stay here because a tagged rs1 that is
+// uninitialised or sealed still raises UNEXPECTED_CAP_TYPE (26), and runtime
+// code does guard arithmetic on such a value (`if (fresh) r = init(p); else
+// r = p + 16;`). SEAL and INIT are selected as their tied pseudos, which is
+// what the code-motion passes see. MOVC is absent: it moves an untagged value
+// without complaint.
 static bool trapsOnUntaggedOperand(unsigned Opcode) {
   switch (Opcode) {
   case Capstone::CIncOffset:
@@ -2081,10 +2085,11 @@ static bool trapsOnUntaggedOperand(unsigned Opcode) {
 
 // LLVM assumes that an instruction which neither accesses memory nor has side
 // effects can run on any path, and pointer arithmetic is such an instruction
-// everywhere else. On Capstone it is not: CIncOffset of an untagged value -- a
-// NULL pointer, say -- traps instead of computing a harmless address. So any
-// pass that executes an instruction on a path where it did not run before is
-// speculating, and for these it must not.
+// everywhere else. On Capstone it is not quite: CIncOffset of an uninitialised
+// or sealed capability traps instead of computing an address. (Until the CHERI
+// rule it also trapped on an untagged value, a NULL pointer, which is how C-58
+// and C-66 below were found.) So any pass that executes an instruction on a path
+// where it did not run before is speculating, and for these it must not.
 //
 // This used to be answered only to MachineLICM, through its shouldHoist hook,
 // with the dominance test re-derived by reachability because that hook gets no
