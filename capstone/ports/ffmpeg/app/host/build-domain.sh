@@ -97,6 +97,9 @@ MUSL=$(bash "$MUSL_PORT/prepare-musl-capstone.sh" | tail -1)
 ARCHIVE=$WORK/musl-build/libc-capstone.a
 COMPILER_HASH=$(sha256sum "$CLANG" | cut -d' ' -f1)
 COMPILER_HASH="$COMPILER_HASH:${CAPSTONE_APPLICATION_PROFILE:-physical}"
+# The archive also depends on musl's compile flags (survey-musl-capstone.py,
+# e.g. the virtual profile's F/D code generation) and on the musl patches.
+COMPILER_HASH="$COMPILER_HASH:$(cat "$MUSL_PORT/survey-musl-capstone.py" "$MUSL_PORT"/musl-patches/*.patch | sha256sum | cut -d' ' -f1)"
 if [[ ! -f "$ARCHIVE" || $(cat "$WORK/musl-build/compiler.sha256" 2>/dev/null) != "$COMPILER_HASH" ]]; then
   OUT_DIR=$WORK/musl-build bash "$MUSL_PORT/build-musl-capstone.sh"
   printf '%s\n' "$COMPILER_HASH" > "$WORK/musl-build/compiler.sha256"
@@ -116,7 +119,9 @@ INC=(-nostdinc -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
 FLAGS=("${TARGET[@]}" -ffreestanding -fno-builtin -fno-jump-tables -ffunction-sections
        -fdata-sections -O1 -Wno-int-conversion -D_GNU_SOURCE "${INC[@]}")
 if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
-  FLAGS+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+  FLAGS+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp
+          -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d
+          -Xclang -target-abi -Xclang lp64)
 fi
 
 # --- shared application SDK ------------------------------------------------

@@ -164,6 +164,9 @@ fi
 
 if stage mruby; then
   COMPILER_HASH=$(sha256sum "$CAPSTONE_CLANG" | cut -d' ' -f1)
+  # The SDK's code generation (sdk.json "codegen", e.g. the virtual profile's
+  # F/D) is part of what the objects were compiled with.
+  COMPILER_HASH="$COMPILER_HASH:$(grep '"codegen"' "$O/sdk.json" | sha256sum | cut -d' ' -f1)"
   if [[ $(cat "$ROOT/.compiler-sha256" 2>/dev/null) != "$COMPILER_HASH" ]]; then
     rm -rf "$M/build/capstone"
   fi
