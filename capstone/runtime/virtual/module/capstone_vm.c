@@ -62,6 +62,10 @@ static unsigned long node_max_pages;
 module_param(node_initial_pages, ulong, 0444);
 module_param(node_batch_pages, ulong, 0444);
 module_param(node_max_pages, ulong, 0444);
+/* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
+ * arena, the VMA and the first page already pinned. 1 pins only the page. */
+static unsigned long pin_ahead_pages = 1;
+module_param(pin_ahead_pages, ulong, 0444);
 
 static unsigned long node_capacity(const struct context *c)
 { return c->table[0] & ~CAP_REV_TABLE_FLAGS; }
@@ -621,6 +625,39 @@ static int remap_end(struct context *c, const struct cv_remap *r)
     return 0;
 }
 
+/* Called with mmap_read_lock held, after the faulting page passed resolve()'s
+ * checks in VMA v. Each further page is pinned exactly as a fault on it
+ * would pin it, in the same VMA, so it gets the same policy; one that fails
+ * a check ends the window unpinned and faults later as it does today. */
+static void pin_ahead(struct context *c, struct arena *a,
+                      struct vm_area_struct *v, unsigned first)
+{
+    unsigned long start = a->address + (unsigned long)first * PAGE_SIZE;
+    unsigned count = 0;
+    long n;
+    while (count + 1 < pin_ahead_pages && first + count < a->count &&
+           start + (unsigned long)count * PAGE_SIZE < v->vm_end &&
+           !a->pages[first + count])
+        ++count;
+    if (!count) return;
+    n = pin_user_pages_remote(c->mm, start, count,
+                              FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
+                              a->pages + first, NULL, NULL);
+    for (long j = max(n, 0L); j < count; ++j)
+        a->pages[first + j] = NULL;
+    for (long j = 0; j < max(n, 0L); ++j) {
+        struct page *page = a->pages[first + j];
+        if (!PageAnon(page) || page_mapcount(page) != 1) {
+            for (long k = j; k < n; ++k) {
+                unpin_user_page(a->pages[first + k]);
+                a->pages[first + k] = NULL;
+            }
+            break;
+        }
+        ++c->stats.pinned_pages;
+    }
+}
+
 static int resolve(struct context *c, struct cv_thread *t)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
@@ -648,11 +685,13 @@ static int resolve(struct context *c, struct cv_thread *t)
         n = pin_user_pages_remote(c->mm, address & PAGE_MASK, 1,
                                   FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
                                   &page, NULL, NULL);
-        mmap_read_unlock(c->mm);
-        if (n != 1) return -EFAULT;
+        if (n != 1) { mmap_read_unlock(c->mm); return -EFAULT; }
         if (!PageAnon(page) || page_mapcount(page) != 1) {
-            unpin_user_page(page); return -EACCES;
+            mmap_read_unlock(c->mm); unpin_user_page(page); return -EACCES;
         }
+        if (!a->pages[index])
+            pin_ahead(c, a, v, index + 1);
+        mmap_read_unlock(c->mm);
         if (a->pages[index]) {
             /* mprotect may leave a write fault for Linux to resolve. It must
              * resolve to the same backing: tag-preserving moves are not part
