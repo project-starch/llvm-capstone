@@ -98,6 +98,25 @@ export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
   printf 'export PATH=%q:$PATH\n' "$O:$CAPSTONE_LLVM_BIN"
 } > "$ROOT/capstone-env.sh"
 
+# ---- what the objects were built with ------------------------------------------
+# Make rebuilds an object when its sources change, not when the compiler, the
+# SDK's profile or the flags do, so an object is reused only under the identity
+# it was built with: the SDK's compiler (which the direct compilations below
+# must also be), its profile and codegen, and this script's flags. The stamp is
+# written after a make stage succeeds and removed before one starts.
+SDK_CC=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cc"])' "$O/sdk.json")
+[[ $(realpath "$SDK_CC") == $(realpath "$CAPSTONE_CLANG") ]] \
+  || { echo "CAPSTONE_CLANG $CAPSTONE_CLANG is not the SDK's compiler $SDK_CC" >&2; exit 2; }
+# Configure bakes the compiler, the SDK and its CFLAGS into the Makefiles, so
+# a change of any of them needs a configure, not a clean make.
+CONFIG_IDENTITY=$({ sha256sum < "$(realpath "$SDK_CC")"
+                    python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c.get("profile") or sys.exit(
+                      "the SDK in "+sys.argv[1]+" names no profile; rebuild it (PGSU_FROM=runtime)"), c["codegen"])' "$O/sdk.json"
+                    printf '%s\n' "$OPT" "$NESTED" "${PGSU_GAP_OBSERVER:-0}"; } | sha256sum | cut -d' ' -f1)
+IDENTITY=$(printf '%s\n' "$CONFIG_IDENTITY" "${CF[@]}" | sha256sum | cut -d' ' -f1)
+STAMP=$ROOT/domain/objects.identity
+CONFIG_STAMP=$ROOT/domain/configure.identity
+
 # ---- the source, patched -------------------------------------------------------
 cd "$ROOT/domain"
 MODE_FILE=$ROOT/domain/nested.mode
@@ -143,8 +162,19 @@ printf '%s\n' "$NESTED" > "$MODE_FILE"
 printf '%s\n' "$PATCH_HASH" > "$ROOT/domain/patchset.sha256"
 cd postgresql-17.5
 
+# Every object this build makes, the modules' and the link's included: make
+# clean misses the copied-in module, and distclean the configured ones.
+remove_objects() {
+  rm -f "$STAMP"
+  find src contrib -name '*.o' -delete
+  find src -name objfiles.txt -delete
+  rm -f "$ROOT"/link/*.o
+}
+
 # ---- configure, with the answers this target needs forced -------------------------
 if stage configure; then
+  remove_objects
+  rm -f "$CONFIG_STAMP"
   [[ -f config.status ]] && make distclean >/dev/null 2>&1 || true
   nested_flags=
   if [[ $NESTED == sublet ]]; then
@@ -163,6 +193,13 @@ if stage configure; then
   grep -q 'define HAVE_COMPUTED_GOTO' src/include/pg_config.h \
     && { echo "pg_config.h still defines HAVE_COMPUTED_GOTO" >&2; exit 2; }
   grep -E '^#define (MAXIMUM_ALIGNOF|SIZEOF_VOID_P|USE_SYSV_SHARED_MEMORY)' src/include/pg_config.h | sed 's/^/[build-domain] /'
+  printf '%s\n' "$CONFIG_IDENTITY" > "$CONFIG_STAMP"
+fi
+# A make or link that reuses this configuration needs the one it was made with.
+if ! stage configure && { stage make || stage link; }; then
+  [[ -f $CONFIG_STAMP && $(cat "$CONFIG_STAMP") == "$CONFIG_IDENTITY" ]] || {
+    echo "the tree was configured with another compiler, SDK profile or CFLAGS (or none recorded);" \
+         "rerun with PGSU_FROM=configure" >&2; exit 2; }
 fi
 
 # The modules linked into the image, because a domain cannot dlopen (patch 0015,
@@ -182,6 +219,19 @@ MODULES="$MODULES pgcorpus_reach:contrib/pgcorpus_reach"
 module_objs() { make -s -C "$1" -f Makefile -f "$SCRIPT_DIR/toolchain/print-objs.mk" print-objs; }
 
 # ---- make ---------------------------------------------------------------------------
+# Objects from an earlier run are reused only under the identity they were built with.
+# Configure, or make with PGSU_CLEAN=1, starts them over instead.
+fresh=0
+if stage configure || { [[ ${PGSU_CLEAN:-0} == 1 ]] && stage make; }; then fresh=1; fi
+if (( ! fresh )); then
+  if [[ -n $(find src contrib -name '*.o' -print -quit) || -n $(find "$ROOT/link" -name '*.o' -print -quit) ]]; then
+    [[ -f $STAMP ]] || { echo "objects without a build identity ($STAMP); rerun from PGSU_FROM=configure" >&2; exit 2; }
+    [[ $(cat "$STAMP") == "$IDENTITY" ]] || {
+      echo "objects were built with other direct-compilation flags; rerun with PGSU_FROM=configure" \
+           "or PGSU_CLEAN=1 PGSU_FROM=make" >&2; exit 2; }
+  fi
+fi
+
 if stage make; then
   # --enable-depend tracks headers from now on; a tree configured without it
   # (before 2026-09-24 20:30) rebuilds nothing for a patched header. PGSU_CLEAN=1
@@ -190,8 +240,10 @@ if stage make; then
     # src/include too: its header-stamp would otherwise say the generated
     # headers (errcodes.h, fmgroids.h) are current after their files are gone.
     for d in src/port src/common src/backend src/timezone src/include; do make -C "$d" clean > /dev/null 2>&1 || true; done
+    remove_objects
     log "objects removed (PGSU_CLEAN=1)"
   fi
+  rm -f "$STAMP"
   make -C src/backend generated-headers > "$ROOT/domain-genheaders.log" 2>&1
   export CAPSTONE_COMPILE_LOG=$ROOT/domain-objects.tsv
   : > "$CAPSTONE_COMPILE_LOG"
@@ -266,6 +318,7 @@ if stage make; then
       -o "$ROOT/link/spatial-reuse-gap.o"
     log "original-layout context observer: $ROOT/link/spatial-reuse-gap.o"
   fi
+  printf '%s\n' "$IDENTITY" > "$STAMP"
 fi
 
 # ---- link ---------------------------------------------------------------------------
