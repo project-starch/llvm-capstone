@@ -2114,8 +2114,16 @@ everything inside delegated domains, are unaffected.
 >   memory.
 > - **Under the full scheme,** it is [0x80000000, 2^40). It starts at the monitor's own text, and three regions begin
 >   at 0x80000000.
-> - Whether that gives S-mode access to monitor memory depends on how the CPMP enforces it. That is UNVERIFIED.
-> - Boot M's login says nothing about it either way.
+> - Whether that gives S-mode access to monitor memory: the CPMP alone would, and the legacy PMP denies it.
+>   - The CPMP (pmp_data_if.sv, afcd19bea) is an allow-list: any tagged entry whose decoded bounds cover the
+>     address, with the matching permission and a live node, allows the access; M-mode bypasses it.
+>   - The legacy PMP check runs first and unconditionally (`if (lsu_valid_i && !data_allow_o)` faults), and the
+>     CPMP check only adds to it (`&& !lsu_exception_o.valid`). The two combine as AND.
+>   - OpenSBI programs Region04 [0x80000000, 0x8007ffff] and Region03 [0x80080000, 0x8009ffff] with S/U:()
+>     (boot M's log, PMP Count 16). The monitor's memory ends at 0x8008d000.
+>   - So on this firmware the over-wide region does not expose the monitor to Linux. The region bookkeeping is
+>     still wrong (regions overlap), and domain memory carved later from Linux's region can stay inside Linux's
+>     rounded region: the create_domain OVERLAP class check-repr reports.
 >
 > **Why the gate missed it.** check-repr's monitor model replayed create_domain only, and judged each piece's bounds
 > (SHORT/OVERLAP), never the cursor the monitor dereferences. The RTL lane's option (b) recommendation also did not
