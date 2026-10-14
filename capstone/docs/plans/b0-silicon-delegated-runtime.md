@@ -2165,6 +2165,19 @@ of fc3225fb237d and 6bc165f2e1c2. Staged in /tmp/capstone/accept-fpb (chain.sh, 
 - **CPU pinning:** the scripts are the mask-free copies (dev 7d02b385901a); none pins to apollo's measurement half.
 - **s06agg reads 64**, as pre-registered. The RTL lane raised and withdrew a cursorless dependence: its verdict reads
   plain data through the NOT_CAP path, before compress_bounds.
+- **Added 2026-10-14, exploratory, outside the verdict: the REVOKE timed pair** (step 5b, after s10b;
+  run-capstl.sh's new `s1gap` set). The images are s1gap-close b351bc50610e61bc and s1gap-far 5a35240633e85f2c,
+  board_rec 0x80003080, from dev feecdba9d635.
+  - Re-verified here: SHA256SUMS OK; each image carries four `ldc; csrr mcycle; REVOKE; csrr mcycle` brackets, R1's
+    shape, at 0x800002cc / 0x8000040c / 0x80000548 / 0x80000684; the pair differs only in the four GAP
+    immediates, the GAP reading and the banner character.
+  - The same images run again on the Sublet bitstream. They are graded against s1-revoke-gap-2026-10-14/PREREG.md,
+    as a pattern rather than cycle values: far equal on both bitstreams at every k; close k = 2..4 equal; close k = 1
+    LOWER on Sublet than on FP, never higher. That is outcome A, under which R1's 76 / 22.7 hold.
+  - The PREREG reads the close arm's k = 2..4 gap brackets as a REVOKE's walk continuing after retirement. R1's own
+    silicon data rule that out in R1's shape: the fill is 474,817 cycles at EVERY n for B = 256 KiB, and the REVOKE
+    bracket is node-linear (fpga-silicon-measurements-for-paper.md). So no REVOKE work spills past R1's bracket,
+    and the release model's per-term split stands.
 
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
