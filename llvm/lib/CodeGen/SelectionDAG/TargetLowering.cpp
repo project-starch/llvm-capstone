@@ -9477,15 +9477,17 @@ SDValue TargetLowering::CTTZTableLookup(SDNode *Node, SelectionDAG &DAG,
   const DataLayout &TD = DAG.getDataLayout();
   MachinePointerInfo PtrInfo =
       MachinePointerInfo::getConstantPool(DAG.getMachineFunction());
-  // The table is a constant-pool entry, so its address lives in the DEFAULT
-  // GLOBALS address space. On a fat-pointer target that is a capability type,
+  // The table is a constant-pool entry, so its address has the constant
+  // pool's pointer type. On a fat-pointer target that is a capability type,
   // not the AS0 integer that getPointerTy(TD) names, and the target's
   // ConstantPool lowering produces the capability whatever type was asked for
   // (Capstone C-20: every cttz asserted "Type mismatch for custom legalized
-  // operation" here). The lookup index stays an integer; getMemBasePlusOffset
-  // applies it to the capability, as it does for every other global. Targets
-  // whose globals address space is 0 see no change.
-  EVT CPVT = getPointerTy(TD, TD.getDefaultGlobalsAddressSpace());
+  // operation" here; C-80 moved every constant-pool producer onto
+  // getConstantPoolPtrTy). The lookup index stays an integer;
+  // getMemBasePlusOffset applies it to the capability, as it does for every
+  // other global. Targets whose constant pool is in address space 0 see no
+  // change.
+  EVT CPVT = getConstantPoolPtrTy(TD);
   EVT IdxVT = CPVT.isInteger() ? CPVT : getPointerTy(TD, 0);
   unsigned ShiftAmt = BitWidth - Log2_32(BitWidth);
   SDValue Neg = DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT), Op);

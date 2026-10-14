@@ -7972,6 +7972,14 @@ guarded block into the outer loop's preheader, above the test (`-stop-before/-af
 early-machinelicm`). On a conventional target that computes an address nobody uses; on Capstone
 CIncOffset of an untagged value raises UNEXPECTED_OPERAND.
 
+*2026-10-14:* the CHERI rule (plans/2026-09-24-scc-cincoffset-untagged.md) makes CIncOffset of an
+untagged value compute an untagged address on QEMU's virtual profile, so a NULL base no longer traps
+there. The physical profile and the RTL still trap. The guard of this entry
+and C-66, and C-19's IR rule, stay: CIncOffset(Imm) and SCC still raise 26 on an uninitialised or
+sealed capability, and a guard such as a capability-type test can exclude one (a review found the
+IR rule would otherwise let LICM hoist past that test). Their comments and tests now give that
+reason.
+
 **Why LLVM does it.** MachineLICM hoists any loop-invariant instruction that is safe to move, and
 only loads must also be guaranteed to execute. Pointer arithmetic is assumed not to trap. On Capstone
 `CIncOffset`, `CIncOffsetImm`, `LCC` and `SHRINK` trap on an untagged operand (the QEMU helpers that
@@ -8153,6 +8161,70 @@ and passes against the patched one, and libc-test's `pthread_cond` passes
 libc; objects compiled against the old headers that embed a `pthread_cond_t` must be recompiled
 (perl and mruby embed none).
 
+### C-80 — with F/D enabled, every FP constant that is not an immediate gets an address-space-0 constant-pool address, which Capstone's lowering cannot honour `FIXED 2026-10-14 on compiler/select-fp-constants-capability — COMPILER; found 2026-10-14 building SPEC CPU2017 544.nab_r with +f,+d`
+
+**What happens.** Generic SelectionDAG code that puts a constant into the constant pool types the
+pool's address with `TLI.getPointerTy(DL)`, the address-space-0 pointer type, which on Capstone is a
+plain `i64`. Capstone reaches its constant pool through a capability, and `lowerConstantPool`
+returns one (`LGA:c128`). On a build with assertions, legalisation stops at
+`LegalizeDAG.cpp` "Type mismatch for custom legalized operation"; without assertions the mismatch
+passes silently. Seven producers do this: `ExpandConstantFP`, `ExpandConstant`, constant
+`BUILD_VECTOR` expansion and the `UINT_TO_FP` fudge table in `LegalizeDAG.cpp`; the
+select-of-FP-constants combine in `DAGCombiner.cpp`; inline-asm `"m"` constants in
+`SelectionDAGBuilder.cpp`; and `CTTZTableLookup` in `TargetLowering.cpp`, which C-20 had already
+fixed alone. Two of them, the fudge table and the select combine, also add an offset to the pool
+address with an integer `ISD::ADD`. Reaching it needs no select: `fadd double %x, <pi>` is enough.
+The select combine was the first reach (nab's `sff.c`, `ephi`, NaN or 1.5), where a release build
+segfaulted in `DAGCombiner::visitADD`.
+
+Separately, `SelectionDAGBuilder` asserted that every inline-asm memory operand has the
+address-space-0 pointer type, so `"*m"` with a capability pointer aborted an assertions build too,
+independent of the constant pool.
+
+**Why it was not seen before.** The application SDK targets `+m,+a` with soft float. Every FP
+operation is a call, so no FP constant reaches the pool, and integer constants already bypass
+`ExpandConstant` (`lowerConstant` emits its own capability load). It appears as soon as a build
+enables the D extension (`+f,+d` under the `lp64` ABI, for hardware FP in a virtual-C domain). The
+first fix, a `reduceSelectOfFPConstantLoads` override, only closed the select combine; it passed
+lit because every compiler it was tested on was built without assertions. The maintainer's review
+on an assertions build found the general case.
+
+**Fix.** `TargetLoweringBase::getConstantPoolPtrTy(DL)` gives the type of a constant-pool address:
+the pointer type of the address space the target machine assigns constant-pool memory
+(`getAddressSpaceForPseudoSourceKind(PseudoSourceValue::ConstantPool)`), the same one
+`MachinePointerInfo::getConstantPool` already records. Capstone returns its alloca address space
+(200), so the address is a `c128` capability, which it already custom-lowers. On every other target
+the pool pointer TYPE is unchanged: address space 0, or AMDGPU's pool space 4, a 64-bit pointer like
+address space 0. The two offset additions change form only where a target asks for `PTRADD`: by
+default nowhere but Capstone; with AArch64's `+cpa -aarch64-use-featcpa-codegen` or AMDGPU's
+`-amdgpu-use-sdag-ptradd` (both hidden, off by default, not tested here) they become `PTRADD`, as
+those options intend. All seven producers use it (CTTZ's C-20 rule folded in), and the two offset
+additions use `getMemBasePlusOffset`, which emits `PTRADD` and so `cincoffset` on a capability. The
+inline-asm assertion accepts the operand's own address space, the constant pool's and the frame's.
+The `reduceSelectOfFPConstantLoads` override is removed: the combine now builds a correct address.
+CHERI LLVM makes the same change, with the default globals address space.
+
+**Evidence** (assertions-on Release build of llvm/clang/lld, targets Capstone and X86; before =
+the branch at the review, `7b1ff902` rebased on dev `a4a41f19`; after = this fix):
+- `llvm/test/CodeGen/Capstone/constant-pool-capability-address.ll` (f64 and f32 `fadd` of π,
+  inline-asm `"m"` of an `i64` and of a `double`, inline-asm `"*m"` of a capability pointer) and
+  `select-fp-constants.ll` (one two-entry pool, the entry reached by `cincoffset`, no integer `add`;
+  float control with no pool) abort the before-llc and pass after, with `-verify-machineinstrs`.
+- Mutations, each rebuilt: the select combine's offset back to `ISD::ADD` fails
+  `select-fp-constants.ll` ("This operator does not apply to FP types!"); the old inline-asm
+  assertion fails `constant-pool-capability-address.ll`.
+- lit over CodeGen/Capstone and CodeGen/X86, 5391 tests: no test fails after that passed before;
+  `select-fp-constants.ll` goes from failing to passing. Failing on both: the X86 `emutls*` and
+  `tls-android` tests (dev's; the merge review saw `RISCV/emutls.ll` fail on dev too) and
+  `shared-patches-present.test`, which needs a git checkout; run in the worktree the drift check
+  passes (118 shared files).
+- Controls: large `i64` constant, `cttz.i64` and the legal-immediate float select compile
+  byte-identically before and after; an X86-64 `fadd` of π, an FP select and an inline-asm `"m"`
+  double compile byte-identically before and after.
+- Not run: AMDGPU, AArch64 and RISCV (Capstone and RISCV cannot be linked into one binary), and
+  the vector `BUILD_VECTOR` and fudge-table producers, which `+f,+d` alone does not reach on
+  Capstone.
+
 ### C-79 — library calls the simplifier emits take and return address-space-0 pointers, so with builtins on a folded `strchr` returns a plain integer `FIXED 2026-10-13 on compiler/libcall-capability-pointers — COMPILER; found 2026-10-13 building SPEC CPU2017 hosted (500.perlbench_r crashed clang, 525.x264_r failed instruction selection)`
 
 **What happens.** `BuildLibCalls.cpp` declares every library function the simplifier emits with
@@ -8204,7 +8276,12 @@ output pointer (`frexp`, `sincos` and similar, `LegalizeFloatTypes.cpp`, `Legali
 `SelectionDAG.cpp`) pass their stack slot through `mv`, which drops its tag (reproduced with
 `llvm.frexp`); and GCOV, DFSan and the stack-smash handler build their own address-space-0 types for
 strings. None is reached by today's hosted builds (clang calls `frexp` directly, with a capability
-argument).
+argument). *2026-10-14, merge review (by source reading, not run):* GCOV (`llvm_gcda_*`) and DFSan
+declare their runtime functions with address-space-0 pointer parameters but now receive strings
+from `CreateGlobalString`'s default, which on Capstone is address space 200, so `--coverage` or
+`-fsanitize=dataflow` on Capstone would emit an ill-typed call. Before C-79 they passed a plain
+integer where the runtime expects a capability, so this was already broken, differently. Nothing
+under `capstone/` builds with `--coverage`, `-fprofile-arcs` or `-fsanitize=dataflow`.
 
 ### C-78 — a 16-aligned copy whose size is not a multiple of 16 strips the tags of the capabilities in its whole granules `FIXED 2026-10-13 on compiler/memcpy-capability-granules — COMPILER; found 2026-10-13 by the hosted-application probe (runtime/virtual/hosted-contract.c) when the SDK stopped passing -fno-builtin`
 
@@ -8584,9 +8661,10 @@ one extra capability increment on the paths through both blocks, and nothing on 
 How many it refuses on CPython is measured below, after the end-to-end pair.
 
 **If the ISA changes.** `plans/2026-09-24-scc-cincoffset-untagged.md` asks whether an untagged
-`CINCOFFSET`/`SCC` should compute, as CHERI's do. If it does, those opcodes leave
-`trapsOnUntaggedOperand` and every pass above follows from that one line. That memo also says
-"no program we build needs the change now"; this issue is a program that does.
+`CINCOFFSET`/`SCC` should compute, as CHERI's do. That memo also says "no program we build needs
+the change now"; this issue is a program that does. *2026-10-14: adopted for QEMU's virtual
+profile and the compiler; physical QEMU still raises 24, like the RTL. The opcodes did NOT leave `trapsOnUntaggedOperand`: they still raise 26 on an
+uninitialised or sealed capability, so neither the guard here nor C-19's IR rule can go.*
 
 **Not covered.** A machine pass added later that speculates without asking `canTrap`. The passes
 that can place an instruction on a new path were inventoried for this entry (MachineLICM,

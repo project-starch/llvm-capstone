@@ -137,6 +137,114 @@ Predictions, written before the build (the refutation keys in brackets):
   started: a cheaper formulation of the renormalisation condition (decide E+1 from the length and the two low
   granule residues rather than from two full 64-bit shifted sums), synthesised alone before it goes anywhere.
 
+## Synthesis of `fp-fixes` afcd19bea (the respin), pre-registered 2026-10-14 before the handoff
+
+Build-go: the lead's word to the synth lane, not yet given for this hash. Name `caplifive_fpb_afcd19bea.bit`.
+
+- Tree: 4a4261bb4 + afcd19bea, which changes compress_bounds alone (ariane_pkg.sv) and the bounds model: R-54's
+  renormalisation condition in residue form. The decision E+1 is the same function of (start, len) as the first form
+  MEANT, proven by derivation (the rounded span is q + ceil((sr+lr)/g), so it reaches 1024 exactly when q == 1023
+  with a non-zero residue or q == 1022 with sr + lr > g) and checked in bounds-model.py over 8,259,510 regions
+  (18,024 wrapping, 0 mismatches; the form without the q == 1022 term mismatches 182 of 197,607, so the check fires).
+  CORRECTED the same day (the helper lane's cross-check against QEMU's cap_compress, 2,001,820 cases): not the same
+  decision as the first form COMPUTED at the top of the address space. That form's end-address add was 64-bit in
+  the RTL as in QEMU, so a region whose rounded top reaches 2^64 wrapped it and missed the step ([0, 2^64-1) at
+  E = 51 decoded [0, 2^63), 43 of 44 such regions); the residue form takes E+1 there. Unreachable today (the genesis
+  capabilities stop at 2^63), but a real encoder difference: the respin closes it as a side effect, the model
+  carries the 64-bit form as a control that must fire (fp-fixes, comment and model only, the netlist of afcd19bea
+  unchanged), and the flash pairing is afcd19bea with QEMU 4a21b485b01f. Measured directly afterwards (the helper
+  lane): the codec test's exact 128-bit reference at 4a21b485b01f against the model's residue form, 0 mismatches on all
+  2,001,820 encoder cases (1,970,205 ordinary, 31,571 wrapping, 44 top-of-range), the old masked sum form differing
+  on 196 wrapping cases as the control; and ref_compress == cap_compress on all 6,014,628 checks there. The model had hidden it because its 'sum'
+  form used unbounded integers after a 64-bit mask on the end: neither the hardware nor exact arithmetic. On the path it
+  replaces the end-address add, two 64-bit barrel shifts, a subtract and a compare with a 10-bit window on len, two
+  masks from E, one add of the residues and two reductions.
+- Gates on the committed tree: lint 52/3/0/0/40/0/2/25/833/2/100 with every UNUSEDSIGNAL and UNOPTFLAT name identical
+  to 4a4261bb4's, negative control BLOCKED; bounds-renorm and cursorless-off read 4a4261bb4's values; the 95-test
+  sweep against 0568f93a9 (the old harness on both sides, every arm with a trace): 92 identical, 0 differ, 3 random
+  generators without logs. No Anvil change; the generated units are byte-identical to 4a4261bb4's.
+- The flow untouched; DTS 65536 unchanged; the bookkeeping prefixes (`_fpb_`) already cover the name.
+
+Predictions, written before the build (refutation keys in brackets):
+- Routed WNS INSIDE -13.335..-5.855, and better than 4a4261bb4's -15.360 by at least 1.5 ns. [WNS still near -15
+  with the worst paths through the compress cone's arithmetic: the adder's form was not the cost, and what remains
+  (the E selection feeding the window and the masks, or the T/B field shifts) is the next thing read; WNS in band
+  with the worst path elsewhere: the FP bitstream is graded on that path like any other.]
+- The worst 20 paths carry fewer compress-cone CARRY4 cells than FP's 40-47, by the synth lane's query with its
+  controls (the CARRY4 metric, the same refinement as the sealed grades); the IRO cone's CARRY4 count drops from 186
+  toward 0568f93a9's 63. [unchanged counts: the arithmetic is elsewhere in the cone, not in the condition]
+- Area: issue_read_operands down by on the order of 2,000 LUT from 4a4261bb4 (+2,446 against 0568f93a9 there), the
+  scoreboard and ex_stage own cells down by part of their +207 / +179; no new flops; everything else flat. [IRO flat:
+  the condition's logic was not what the +2,446 was]
+- Loop membership by stem unchanged; LUTLP-1 0.
+- Route time: no prediction (host-dependent); the synthesis timing-optimisation phase is recorded for the spread.
+
+### Grade of `caplifive_fpb_afcd19bea.bit` (the first respin; sealed 2026-10-14 by the synth lane)
+
+- Seal: exit 0, write_bitstream completed; bitstream 11,443,722 B, sha256
+  d8d2b641da70207c74d41a69ef60a561426fc573b6767fd03bd6d3c28a5fb3f8; provenance afcd19bea; the Anvil units
+  regenerated and byte-identical to 4a4261bb4's; flow 1h36m; synthesis peak 21.36 GB; the synthesis
+  timing-optimisation phase 8.0 min against FP's 164 (the spread 10-97 on the earlier builds).
+- **WNS: REFUTED.** Routed -15.310 against FP's -15.360 (+0.050, not the predicted 1.5 ns; TNS 13.3% better,
+  -633,024 against -730,170; failing endpoints 99,729). The refutation key fires: the condition's form was not the
+  cost.
+- The cone arm, with a blind spot disclosed: the sealed grades' cone counted only the scoreboard's rs1 and result
+  metadata endpoints, and on this build it read 0 CARRY4 on the worst 20 because **the worst endpoints MOVED**: all
+  top 10 are the scoreboard's dom_switch_req ra_data registers (-15.310..-15.089), written through
+  compress_cap(dom_switch_ra_data) at ex_stage.sv L1484, every path starting at csr_regfile's cpmp bounds
+  register; in the worst 500, ra_data endpoints 114 -> 216 and rs1_metadata 138 -> 73. With the cone extended to
+  ra_data (post hoc, disclosed; the extension fails FP's frontend negative control 33/8, so FP keeps its narrow-cone
+  figure) and re-run on all three netlists: 0568f93a9 worst 20 = 0 CARRY4 (controls 0/0, 14/0); the respin 20 on all
+  20 (65-66 cells; controls 0/0 and 12/0 clean; positive 55/21) against FP's 40-47. "Fewer than 40-47": HOLDS.
+  "The IRO cone's CARRY4 drops toward 63": REFUTED (214 narrow, 285 extended). The sealed worst path: 129 logic
+  levels (CARRY4 31, of which IRO 20; LUT 98) against FP's 143 (CARRY4 59, IRO 47; LUT 84): the carry roughly
+  halved, the LUT levels grew by 14 (the window shift and the masks are LUT depth), the slack unchanged. FP's worst
+  endpoint reads -13.551 here (1.809 ns better than on FP); 0568f93a9's worst endpoint -11.028.
+- Area against 4a4261bb4 (LUT / FF): **REFUTED**: issue_read_operands +2,494 (predicted about -2,000); scoreboard
+  -1,049 (more than its +207), ex_stage own -77; NOT flat elsewhere: dyn_unit -2,180, dom_switcher -1,593,
+  csr_regfile -1,461, lsu -242, rev_node +47; TOP -2,190 / +24 (new flops +24, small, not zero). Loops: HOLDS
+  (membership the same, the dtlb arc, LUTLP 0). rs3: 0 of the worst 20 through its comparators.
+- Reading: the three compress_cap instances (the flu result, the dyn result, the domain-switch return address) all
+  carry the renormalisation, and the slack is set by whichever of them is slowest after each change; the cheaper
+  arithmetic halved the carry on the path and the LUT depth of the window and masks took its place, so the serial
+  stage between the exponent search and the field shifters, not the arithmetic inside it, is what the path waits
+  on. The second respin (below) forms both candidate encodings in parallel so the decision overlaps the shifts; if
+  that too leaves the slack near -15, the depth is the whole decompress-to-compress path through the CSR
+  capability registers and no form of the condition reaches the band, which is a different decision (a pipeline
+  stage, or a bitstream tested outside the band). Flashing any of the three sealed bitstreams at these numbers is
+  the lead's call; the respin is the best of them on TNS.
+
+## Synthesis of `fp-renorm-dual` 2859dfb67 (the second respin), pre-registered 2026-10-14 before the handoff
+
+Build-go: the lead's word to the synth lane, not yet given. Name `caplifive_fpb_2859dfb67.bit`.
+
+- Tree: 4a4261bb4 + afcd19bea (the residue-form condition) + 59e6bcce1 (comment and model) + 2859dfb67, which
+  changes compress_bounds alone: the two candidate encodings at E and E + 1 are formed in parallel (their field
+  shifts and 9-bit round-ups) and the renormalisation decision selects between them at the end, so the decision's
+  latency overlaps the shifts instead of preceding them. The function of (start, len) is unchanged (the residue
+  decision verbatim; the model is the oracle; bounds-renorm and cursorless-off read 4a4261bb4's values).
+- Why: the first respin (afcd19bea) routed at -15.348 against -15.360 with TNS better by 13.5%: cheaper arithmetic,
+  the same worst path. Sealed: -15.310, the worst endpoints moved to the domain-switch return-address
+  compress instance at the same slack, the carry on the path halved and the LUT depth up by 14 levels (the grade
+  above).
+- Gates on the committed tree: lint 52/3/0/0/40/0/2/25/833/2/100 with every name identical to 4a4261bb4's, negative
+  control BLOCKED; the 95-test sweep against 0568f93a9 92 identical; the two bounds arms unchanged. No Anvil change.
+- The flow untouched; DTS 65536 unchanged; the `_fpb_` bookkeeping covers the name.
+
+Predictions, written before the build (refutation keys in brackets):
+- Routed WNS better than afcd19bea's -15.348 by at least 1 ns, the serial stage removed from the path; inside the
+  band if the remaining chains (the length subtract and the residue add, both present on every path through the
+  function) are not what sets it. [WNS within 0.5 ns of -15.348: the decision's depth is not what the worst path
+  waits on; read the worst path's cells for which chain remains, and the next candidate takes the residue add off
+  the path by comparing masked end and start instead of adding residues.]
+- The worst path's compress-cone CARRY4 count drops below the respin's (the E + 1 candidate's shifts add LUTs, not
+  carry cells); the IRO cone's CARRY4 count stays near the respin's. [a rise: the second candidate's round-up chains
+  were placed in series after all]
+- Area: issue_read_operands UP from the respin by the second candidate's shifters (hundreds of LUT), no new flops,
+  everything else flat. [IRO flat: synthesis had already duplicated the shifters itself]
+- Loop membership by stem unchanged; LUTLP-1 0. Route time: no prediction; the synthesis timing-optimisation phase
+  recorded for the spread.
+
 ## Branch `capstone-sublet` (on top of fp-fixes)
 
 | Commit | What |
@@ -179,7 +287,12 @@ see the pre-registration.
 
 Build-go: the lead's word of 2026-10-14 ("go for the FP build now; the Sublet build when its gates pass"). The
 flash waits for flash-go: the lead's own word once the sealed hash exists AND the lockstep list is green (the FP
-acceptance boots complete; the QEMU decode gate on capstone-qemu physical-sublet-decode 9739f6e415 merged; check-repr
+acceptance boots complete; the QEMU decode gate on capstone-qemu physical-sublet-decode, now 256e2505b9ad on the new
+virtual-capstone 70e98dd3903c (sublet-lifetimes 119/119, runtime 69/69), merged; for the FP flash the renormalisation
+branch bounds-encoder-renormalise lands at 4a21b485b01f (QEMU's cap_compress in the residue form verbatim, the
+codec test taking the step in exact arithmetic with four top-of-range regions, 6,014,628 checks, 0 failures), the
+encoder that pairs with the residue-form RTL; ef143e7012e4 pairs with the sum-form RTL and is superseded (the helper
+lane, 2026-10-14); check-repr
 and build-b0-hello.sh defaulting to `--format full --renorm` with the OVERLAP interim `--allow-overlap` and the
 figures recorded; the static-audit header naming 0x51/0x52 as allowed; the acceptance images rebuilt under the new
 word). Name: `caplifive_sublet_d93a8d66b.bit`.
@@ -305,8 +418,43 @@ optimisation the cone is anchored on the rs3_fpr-gated result bits and reported 
 through-point differences all inside the existing LSU/dcache family, none in compress_bounds, issue_read_operands
 or the scoreboard; the routed check_timing at seal is the grade.
 
-The grade (sealed sha256, size, routed WNS, stems, LUT/FF rows) is appended here when the synth lane reports, before
-the flash.
+### Grade of `caplifive_sublet_d93a8d66b.bit` (sealed 2026-10-14 by the synth lane; graded against the lines above)
+
+- Seal: exit 0, write_bitstream completed; bitstream 11,443,722 B, sha256
+  89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430; provenance HEAD d93a8d66b; flow 2h37m (route
+  time VOID); synthesis peak 21.71 GB; the tarball synth-d93a8d66b-exit0.tar.gz.
+- **WNS: OUT of band.** Routed -15.856 (TNS -889,578; 100,895 of 255,793 endpoints failing; WHS +0.058), 2.521 ns
+  below -13.335; 0.5 ns worse than the FP bitstream's -15.360 on a tree that is FP plus the Sublet commits.
+- Stems: HOLDS with one note. Synthesis-stage membership the same (7 loops); routed loop count 1 as on FP and
+  0568f93a9, but the arc left unbroken for routing MOVED: lsu_bypass's cap_clear_addr_q[55] I3->O here against the
+  dtlb state_q[3] arc on the other two. The clear_addr loop is in all three synthesis logs' member lists (FP's
+  synthesis put 18 8-326 exceptions on it, the Sublet tip's 0): the same loop set, a different member left for the
+  router, not a new loop. LUTLP-1: 0, HOLDS.
+- First failing endpoint: **not** the rev-node memory write selector, so the prediction's named endpoint does not
+  fire; the worst 20 paths start at csr_regfile's cpmp bounds iE register and end at the issue stage's and the
+  scoreboard's metadata registers (-15.856..-15.574), the same shape as FP's. revnode_fill_id_q (169 nets) and
+  revnode_rdfill_id_q (58 nets) survive and sit on 0 of the 20; node_update_a/b did not survive optimisation (0 nets,
+  reported as its own finding). The selector is close behind: the worst path through revnode_rdfill_id_q reads
+  -14.914, 0.942 ns from the worst, ending at the issue stage's cap_metadata_b; through revnode_fill_id_q -13.248.
+- Area against 4a4261bb4 (LUT / FF): **partly REFUTED.** rev_node +623 / +151, the predicted hundreds; dyn_unit
+  +4,879 / +36 (own cells +3,075), thousands against "hundreds"; and "everything else flat" is wrong in the other
+  direction: issue_read_operands -7,976, csr_regfile -7,500 (the cursorless decode that decompress_cap_tagged and
+  decompress_cap_metadata inlined there is gone; an inference from where the drops land, not a cell-level
+  measurement), scoreboard +716, lsu -664, dom_switcher +257, ex_stage own +120; TOP -6,976 / +184.
+- Cross-build endpoint slacks: FP's worst endpoint reads -15.260 here; 0568f93a9's worst endpoint reads -12.998 here
+  (-8.368 there, -11.856 on FP).
+- The compress-cone query, a second post-hoc refinement applied to all three netlists (dom_switcher excluded too;
+  its rd_req_q cells are loop members and polluted the negative controls; even then the frontend control hits 14
+  non-arithmetic cells on 0568f93a9 and the Sublet tip, so the metric is CARRY4 count, chosen post hoc and disclosed):
+  0568f93a9 cone CARRY4 108 (IRO 63, dyn 45), worst 20 paths 0 hits, controls 0/0, positive 18; FP cone 248 (IRO
+  186, dyn 62), worst 20 all 40-47 hits, controls 0/0, positive 37; Sublet cone 252 (IRO 185, dyn 65, rev_node 2),
+  31-43 hits on 19 of 20, controls 0/0, positive 43. With this version the 0568f93a9 side of the FP comparison is
+  clean, which the FP grade above lacked: 0568f93a9's worst paths carry no compress-cone arithmetic, FP's and the
+  Sublet tip's carry 31-47 carry cells of it.
+- Reading: the same cause as FP's, R-54's renormalisation adder on the forwarding path, with the Sublet units adding
+  0.5 ns on top and the rev-node write selector's read-fill path within a nanosecond of the worst. The respin
+  candidate (the residue form of the condition, on fp-fixes first) applies to both trees; the Sublet branch takes it
+  after the FP tree's result. Flashing either bitstream at these numbers is the lead's call.
 
 ## Lessons recorded this cycle (memory, not rules)
 

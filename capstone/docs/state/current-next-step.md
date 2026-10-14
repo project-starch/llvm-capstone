@@ -24,7 +24,19 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
   renormalisation adder in compress_bounds on the scoreboard/issue forwarding path (the worst endpoint is 8.4 ns
   better on 0568f93a9; the rs3 fix is cleared). The Sublet tip, same adder, routed -15.898 pre-seal. sha256
   a63cbd815fe96957a979fc94c6c1bf29060428db9523d43485d392aeca10ff65.
-- **Next:** the lead decides whether the -15.360 bitstream is flashed for the FP acceptance chain (empirical: every
+- **Sublet sealed 2026-10-14, graded in the plan doc: WNS -15.856, OUT of band by 2.5 ns**, the same cause (the
+  renormalisation adder on the forwarding path, 31-43 carry cells on 19 of the worst 20), loops the same set with a
+  different arc left for the router, dyn_unit +4,879 LUT, the cursorless decode's removal -15,000 LUT in the issue
+  stage and csr_regfile. sha256 89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430.
+- **The respin is ready: fp-fixes afcd19bea** (R-54's renormalisation condition in residue form, the same decision,
+  equivalence checked over 8.3 million regions; lint and the 95-test sweep identical, the bounds arms unchanged),
+  pre-registered in the plan doc as caplifive_fpb_afcd19bea.bit. Its build needs the lead's word to the synth lane.
+- **The first respin sealed 2026-10-14: WNS -15.310 (+0.05), TNS 13% better; REFUTED.** The worst path moved to the
+  domain-switch return-address compress instance at the same slack: the cost is the decision stage in series before
+  the field shifters on every compress path, not the arithmetic's form. sha256
+  d8d2b641da70207c74d41a69ef60a561426fc573b6767fd03bd6d3c28a5fb3f8. The second respin (fp-renorm-dual 2859dfb67,
+  both encodings formed in parallel) is gated and pre-registered; its build needs the lead's word to the synth lane.
+- **Next:** the lead decides whether one of the three sealed bitstreams (-15.36 / -15.86 / -15.31) is flashed for the FP acceptance chain (empirical: every
   accepted bitstream was negative, -8.3 to -12.9; the fallback stays registered) or held for a cheaper
   renormalisation; the Sublet seal and grade; convert the 26 readings-only sweep arms to write tohost.
 

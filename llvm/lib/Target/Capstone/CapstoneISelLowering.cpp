@@ -9697,10 +9697,14 @@ SDValue CapstoneTargetLowering::lowerBlockAddress(
 SDValue CapstoneTargetLowering::lowerConstantPool(
     SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
-  // C-43 backstop. On rv64im soft-float there is no ISD::ConstantPool producer
-  // (large ints/doubles ride lowerConstant, no vectors), so this site is
-  // unreachable even with -capstone-gpfree-constant-pools and is not covered by a
-  // test; the lit positive control fires the guard through lowerConstant instead.
+  // Producers: on rv64im soft-float none (large ints/doubles ride
+  // lowerConstant, no vectors). With +f/+d, generic FP-constant expansion, the
+  // select-of-FP-constants combine and inline-asm "m" constants reach here as
+  // ConstantPool:c128, the type getConstantPoolPtrTy gives them (C-80; before
+  // it they arrived as ConstantPool:i64 and this capability result tripped
+  // "Type mismatch for custom legalized operation").
+  // C-43 backstop: the guard below is covered by a lit positive control
+  // through lowerConstant, not through this site.
   diagnoseAnonymousConstantUnderGpCaptable(DAG, DL);
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   SDValue TargetAddr = DAG.getTargetConstantPool(N->getConstVal(), MVT::i64,
