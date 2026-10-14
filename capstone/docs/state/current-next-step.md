@@ -49,8 +49,19 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
   the monitor is one. QEMU's virtual profile cannot show it (exact bases). The board lane is testing the software
   fix (boot M: the carve sets mtime's cursor explicitly); the robust rule is that every carve sets its cursor, which
   makes the same monitor correct on the Sublet bitstream and the physical QEMU profile.
-- **Next:** the lead chooses: the monitor workaround (explicit cursors after every boot carve; no reflash, keeps the
-  FP fixes; the RTL lane's recommendation), a flash back to 0568f93a9 (cursorless, loses the FP fixes), or a build of
+- **Confirmed by a matched pair (the board lane's boot M, R-55 on dev 631c9630b0ff):** a private firmware that
+  differs from the pinned one by one line, setting mtime's cursor after the carve, boots Linux to login on the flashed
+  respin (k800 4, s06agg 64); the pinned firmware hangs 3/3. Only mtime's displaced cursor is ever dereferenced (this
+  silicon never reads CIH; the stacks reset their cursors). **A second consequence of the full scheme, found in the
+  region table cap_env_init leaves:** the S-mode region covering Linux decodes as [0x80000000, 2^40) instead of
+  [0x8008a780, 2^40), because a region that long has a 1 GiB granule and its base rounds down to the monitor's own
+  text. The CPMP (pmp_data_if.sv) is a pure allow-list over the DECODED bounds of the 16 entries for S/U-mode
+  accesses, with no deny entries and an M-mode bypass, so that table lets Linux read, write and fetch the monitor's
+  memory. The fix is in the carve, not the RTL: a chain of regions each base-aligned to its own granule (for example
+  [0x8008a800, 0x84000000), [0x84000000, 0xC0000000), [0xC0000000, 2^40)), verified by monitor-boot-carve.py or
+  check-repr under --format full --renorm before any flash. The same monitor is what the Sublet bitstream needs.
+- **Next:** the lead chooses: the monitor fix (mtime's explicit cursor plus a region chain whose bases are
+  representable; no reflash, keeps the FP fixes; the RTL lane's recommendation), a flash back to 0568f93a9 (cursorless, loses the FP fixes), or a build of
   the (a) tree 2a3a87dfc (cursorless kept, R-11's truncated tops back, the same renormalisation path and likely the
   same WNS). Separately: whether the second respin (fp-renorm-dual 2859dfb67) is built for the FP acceptance chain (empirical: every
   accepted bitstream was negative, -8.3 to -12.9; the fallback stays registered) or held for a cheaper
