@@ -24,6 +24,10 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
   renormalisation adder in compress_bounds on the scoreboard/issue forwarding path (the worst endpoint is 8.4 ns
   better on 0568f93a9; the rs3 fix is cleared). The Sublet tip, same adder, routed -15.898 pre-seal. sha256
   a63cbd815fe96957a979fc94c6c1bf29060428db9523d43485d392aeca10ff65.
+- **Sublet sealed 2026-10-14, graded in the plan doc: WNS -15.856, OUT of band by 2.5 ns**, the same cause (the
+  renormalisation adder on the forwarding path, 31-43 carry cells on 19 of the worst 20), loops the same set with a
+  different arc left for the router, dyn_unit +4,879 LUT, the cursorless decode's removal -15,000 LUT in the issue
+  stage and csr_regfile. sha256 89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430.
 - **Next:** the lead decides whether the -15.360 bitstream is flashed for the FP acceptance chain (empirical: every
   accepted bitstream was negative, -8.3 to -12.9; the fallback stays registered) or held for a cheaper
   renormalisation; the Sublet seal and grade; convert the 26 readings-only sweep arms to write tohost.

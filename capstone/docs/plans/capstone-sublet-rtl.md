@@ -305,8 +305,43 @@ optimisation the cone is anchored on the rs3_fpr-gated result bits and reported 
 through-point differences all inside the existing LSU/dcache family, none in compress_bounds, issue_read_operands
 or the scoreboard; the routed check_timing at seal is the grade.
 
-The grade (sealed sha256, size, routed WNS, stems, LUT/FF rows) is appended here when the synth lane reports, before
-the flash.
+### Grade of `caplifive_sublet_d93a8d66b.bit` (sealed 2026-10-14 by the synth lane; graded against the lines above)
+
+- Seal: exit 0, write_bitstream completed; bitstream 11,443,722 B, sha256
+  89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430; provenance HEAD d93a8d66b; flow 2h37m (route
+  time VOID); synthesis peak 21.71 GB; the tarball synth-d93a8d66b-exit0.tar.gz.
+- **WNS: OUT of band.** Routed -15.856 (TNS -889,578; 100,895 of 255,793 endpoints failing; WHS +0.058), 2.521 ns
+  below -13.335; 0.5 ns worse than the FP bitstream's -15.360 on a tree that is FP plus the Sublet commits.
+- Stems: HOLDS with one note. Synthesis-stage membership the same (7 loops); routed loop count 1 as on FP and
+  0568f93a9, but the arc left unbroken for routing MOVED: lsu_bypass's cap_clear_addr_q[55] I3->O here against the
+  dtlb state_q[3] arc on the other two. The clear_addr loop is in all three synthesis logs' member lists (FP's
+  synthesis put 18 8-326 exceptions on it, the Sublet tip's 0): the same loop set, a different member left for the
+  router, not a new loop. LUTLP-1: 0, HOLDS.
+- First failing endpoint: **not** the rev-node memory write selector, so the prediction's named endpoint does not
+  fire; the worst 20 paths start at csr_regfile's cpmp bounds iE register and end at the issue stage's and the
+  scoreboard's metadata registers (-15.856..-15.574), the same shape as FP's. revnode_fill_id_q (169 nets) and
+  revnode_rdfill_id_q (58 nets) survive and sit on 0 of the 20; node_update_a/b did not survive optimisation (0 nets,
+  reported as its own finding). The selector is close behind: the worst path through revnode_rdfill_id_q reads
+  -14.914, 0.942 ns from the worst, ending at the issue stage's cap_metadata_b; through revnode_fill_id_q -13.248.
+- Area against 4a4261bb4 (LUT / FF): **partly REFUTED.** rev_node +623 / +151, the predicted hundreds; dyn_unit
+  +4,879 / +36 (own cells +3,075), thousands against "hundreds"; and "everything else flat" is wrong in the other
+  direction: issue_read_operands -7,976, csr_regfile -7,500 (the cursorless decode that decompress_cap_tagged and
+  decompress_cap_metadata inlined there is gone; an inference from where the drops land, not a cell-level
+  measurement), scoreboard +716, lsu -664, dom_switcher +257, ex_stage own +120; TOP -6,976 / +184.
+- Cross-build endpoint slacks: FP's worst endpoint reads -15.260 here; 0568f93a9's worst endpoint reads -12.998 here
+  (-8.368 there, -11.856 on FP).
+- The compress-cone query, a second post-hoc refinement applied to all three netlists (dom_switcher excluded too;
+  its rd_req_q cells are loop members and polluted the negative controls; even then the frontend control hits 14
+  non-arithmetic cells on 0568f93a9 and the Sublet tip, so the metric is CARRY4 count, chosen post hoc and disclosed):
+  0568f93a9 cone CARRY4 108 (IRO 63, dyn 45), worst 20 paths 0 hits, controls 0/0, positive 18; FP cone 248 (IRO
+  186, dyn 62), worst 20 all 40-47 hits, controls 0/0, positive 37; Sublet cone 252 (IRO 185, dyn 65, rev_node 2),
+  31-43 hits on 19 of 20, controls 0/0, positive 43. With this version the 0568f93a9 side of the FP comparison is
+  clean, which the FP grade above lacked: 0568f93a9's worst paths carry no compress-cone arithmetic, FP's and the
+  Sublet tip's carry 31-47 carry cells of it.
+- Reading: the same cause as FP's, R-54's renormalisation adder on the forwarding path, with the Sublet units adding
+  0.5 ns on top and the rev-node write selector's read-fill path within a nanosecond of the worst. The respin
+  candidate (the residue form of the condition, on fp-fixes first) applies to both trees; the Sublet branch takes it
+  after the FP tree's result. Flashing either bitstream at these numbers is the lead's call.
 
 ## Lessons recorded this cycle (memory, not rules)
 
