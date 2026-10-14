@@ -142,10 +142,18 @@ Predictions, written before the build (the refutation keys in brackets):
 Build-go: the lead's word to the synth lane, not yet given for this hash. Name `caplifive_fpb_afcd19bea.bit`.
 
 - Tree: 4a4261bb4 + afcd19bea, which changes compress_bounds alone (ariane_pkg.sv) and the bounds model: R-54's
-  renormalisation condition in residue form. The decision E+1 is the same function of (start, len) as before, proven
-  by derivation (the rounded span is q + ceil((sr+lr)/g), so it reaches 1024 exactly when q == 1023 with a non-zero
-  residue or q == 1022 with sr + lr > g) and checked in bounds-model.py over 8,259,510 regions (18,024 wrapping, 0
-  mismatches; the form without the q == 1022 term mismatches 182 of 197,607, so the check fires). On the path it
+  renormalisation condition in residue form. The decision E+1 is the same function of (start, len) as the first form
+  MEANT, proven by derivation (the rounded span is q + ceil((sr+lr)/g), so it reaches 1024 exactly when q == 1023
+  with a non-zero residue or q == 1022 with sr + lr > g) and checked in bounds-model.py over 8,259,510 regions
+  (18,024 wrapping, 0 mismatches; the form without the q == 1022 term mismatches 182 of 197,607, so the check fires).
+  CORRECTED the same day (the helper lane's cross-check against QEMU's cap_compress, 2,001,820 cases): not the same
+  decision as the first form COMPUTED at the top of the address space. That form's end-address add was 64-bit in
+  the RTL as in QEMU, so a region whose rounded top reaches 2^64 wrapped it and missed the step ([0, 2^64-1) at
+  E = 51 decoded [0, 2^63), 43 of 44 such regions); the residue form takes E+1 there. Unreachable today (the genesis
+  capabilities stop at 2^63), but a real encoder difference: the respin closes it as a side effect, the model
+  carries the 64-bit form as a control that must fire (fp-fixes, comment and model only, the netlist of afcd19bea
+  unchanged), and the flash pairing is afcd19bea with QEMU 4a21b485b01f. The model had hidden it because its 'sum'
+  form used unbounded integers after a 64-bit mask on the end: neither the hardware nor exact arithmetic. On the path it
   replaces the end-address add, two 64-bit barrel shifts, a subtract and a compare with a 10-bit window on len, two
   masks from E, one add of the residues and two reductions.
 - Gates on the committed tree: lint 52/3/0/0/40/0/2/25/833/2/100 with every UNUSEDSIGNAL and UNOPTFLAT name identical
@@ -210,7 +218,12 @@ see the pre-registration.
 
 Build-go: the lead's word of 2026-10-14 ("go for the FP build now; the Sublet build when its gates pass"). The
 flash waits for flash-go: the lead's own word once the sealed hash exists AND the lockstep list is green (the FP
-acceptance boots complete; the QEMU decode gate on capstone-qemu physical-sublet-decode 9739f6e415 merged; check-repr
+acceptance boots complete; the QEMU decode gate on capstone-qemu physical-sublet-decode, now 256e2505b9ad on the new
+virtual-capstone 70e98dd3903c (sublet-lifetimes 119/119, runtime 69/69), merged; for the FP flash the renormalisation
+branch bounds-encoder-renormalise lands at 4a21b485b01f (QEMU's cap_compress in the residue form verbatim, the
+codec test taking the step in exact arithmetic with four top-of-range regions, 6,014,628 checks, 0 failures), the
+encoder that pairs with the residue-form RTL; ef143e7012e4 pairs with the sum-form RTL and is superseded (the helper
+lane, 2026-10-14); check-repr
 and build-b0-hello.sh defaulting to `--format full --renorm` with the OVERLAP interim `--allow-overlap` and the
 figures recorded; the static-audit header naming 0x51/0x52 as allowed; the acceptance images rebuilt under the new
 word). Name: `caplifive_sublet_d93a8d66b.bit`.
