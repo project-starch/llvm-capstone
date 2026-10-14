@@ -149,10 +149,17 @@ Build-go: the lead's word to the synth lane, not yet given for this hash. Name `
   CORRECTED the same day (the helper lane's cross-check against QEMU's cap_compress, 2,001,820 cases): not the same
   decision as the first form COMPUTED at the top of the address space. That form's end-address add was 64-bit in
   the RTL as in QEMU, so a region whose rounded top reaches 2^64 wrapped it and missed the step ([0, 2^64-1) at
-  E = 51 decoded [0, 2^63), 43 of 44 such regions); the residue form takes E+1 there. Unreachable today (the genesis
-  capabilities stop at 2^63), but a real encoder difference: the respin closes it as a side effect, the model
-  carries the 64-bit form as a control that must fire (fp-fixes, comment and model only, the netlist of afcd19bea
-  unchanged), and the flash pairing is afcd19bea with QEMU 4a21b485b01f. Measured directly afterwards (the helper
+  E = 51 decoded [0, 2^63), 43 of 44 such regions); the residue form takes E+1 there. CORRECTED AGAIN the same
+  evening (the board lane's decode check, 200,000 regions): the respin does NOT fix that region, it changes how it
+  fails. A rounded top of 2^64 is unrepresentable in a 64-bit top under either form: the old form decodes half the
+  span, the residue form rounds the top to 2^64, which wraps to 0, and decodes an empty capability; 71,962 regions
+  with a rounded top at or above 2^64 decode not covering under both, and every region with a representable rounded
+  top covers under both, 0 misses. My model had hidden this too: its decoder built the top in unbounded integers and
+  returned 2^64 for nine constructed regions, which the covering test accepted; it now masks to 64 bits as the RTL
+  does (fp-fixes d00cee347) and asserts that the residue encoder decodes short on exactly the unrepresentable
+  regions. Unreachable today (the genesis capabilities stop at 2^63); the forms differ only there and only in the
+  failure mode. The model carries the 64-bit form as a control that must fire (comment and model only, the netlist
+  of afcd19bea unchanged), and the flash pairing is afcd19bea with QEMU 4a21b485b01f. Measured directly afterwards (the helper
   lane): the codec test's exact 128-bit reference at 4a21b485b01f against the model's residue form, 0 mismatches on all
   2,001,820 encoder cases (1,970,205 ordinary, 31,571 wrapping, 44 top-of-range), the old masked sum form differing
   on 196 wrapping cases as the control; and ref_compress == cap_compress on all 6,014,628 checks there. The model had hidden it because its 'sum'

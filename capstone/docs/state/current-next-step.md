@@ -36,7 +36,23 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
   the field shifters on every compress path, not the arithmetic's form. sha256
   d8d2b641da70207c74d41a69ef60a561426fc573b6767fd03bd6d3c28a5fb3f8. The second respin (fp-renorm-dual 2859dfb67,
   both encodings formed in parallel) is gated and pre-registered; its build needs the lead's word to the synth lane.
-- **Next:** the lead decides whether one of the three sealed bitstreams (-15.36 / -15.86 / -15.31) is flashed for the FP acceptance chain (empirical: every
+- **2026-10-15, 01:31: the first respin `caplifive_fpb_afcd19bea.bit` is FLASHED on the lead's word (sha256
+  d8d2b641...); the S-16 bare set, R-51 and s10b read identical to 0568f93a9, so the bitstream runs at WNS -15.310.
+  Linux does NOT boot on it** (every boot stops right after the sched_clock line; the pinned firmware that booted on
+  0568f93a9 hangs 3/3; the board lane, lane b0-silicon-runtime a26c9f01935e). Candidate cause, confirmed in RTL and
+  QEMU source and not timing: SPLIT gives the lower piece its DECODED base as cursor (the same rule in
+  capstone_dyn_unit.anvil and op_helper.c), and under the full-scheme encoder of 4a4261bb4 (option (b)) that base
+  is rounded below an unaligned carve point, so the monitor's boot-time mtime carve (split_out_cap at 0x200bff8)
+  ends with a cursor at 0x2000000 and rdtime reads msip; three more boot carves are displaced the same way. The
+  cursorless scheme kept those bases exact, which is what option (a) and 0568f93a9 have. RETRACTION-CLASS: the RTL
+  lane recommended (b) without enumerating the consumers of "the lower piece's cursor lands on the carve point";
+  the monitor is one. QEMU's virtual profile cannot show it (exact bases). The board lane is testing the software
+  fix (boot M: the carve sets mtime's cursor explicitly); the robust rule is that every carve sets its cursor, which
+  makes the same monitor correct on the Sublet bitstream and the physical QEMU profile.
+- **Next:** the lead chooses: the monitor workaround (explicit cursors after every boot carve; no reflash, keeps the
+  FP fixes; the RTL lane's recommendation), a flash back to 0568f93a9 (cursorless, loses the FP fixes), or a build of
+  the (a) tree 2a3a87dfc (cursorless kept, R-11's truncated tops back, the same renormalisation path and likely the
+  same WNS). Separately: whether the second respin (fp-renorm-dual 2859dfb67) is built for the FP acceptance chain (empirical: every
   accepted bitstream was negative, -8.3 to -12.9; the fallback stays registered) or held for a cheaper
   renormalisation; the Sublet seal and grade; convert the 26 readings-only sweep arms to write tohost.
 
