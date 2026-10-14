@@ -31,7 +31,12 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
 - **The respin is ready: fp-fixes afcd19bea** (R-54's renormalisation condition in residue form, the same decision,
   equivalence checked over 8.3 million regions; lint and the 95-test sweep identical, the bounds arms unchanged),
   pre-registered in the plan doc as caplifive_fpb_afcd19bea.bit. Its build needs the lead's word to the synth lane.
-- **Next:** the lead decides whether the -15.360 bitstream is flashed for the FP acceptance chain (empirical: every
+- **The first respin sealed 2026-10-14: WNS -15.310 (+0.05), TNS 13% better; REFUTED.** The worst path moved to the
+  domain-switch return-address compress instance at the same slack: the cost is the decision stage in series before
+  the field shifters on every compress path, not the arithmetic's form. sha256
+  d8d2b641da70207c74d41a69ef60a561426fc573b6767fd03bd6d3c28a5fb3f8. The second respin (fp-renorm-dual 2859dfb67,
+  both encodings formed in parallel) is gated and pre-registered; its build needs the lead's word to the synth lane.
+- **Next:** the lead decides whether one of the three sealed bitstreams (-15.36 / -15.86 / -15.31) is flashed for the FP acceptance chain (empirical: every
   accepted bitstream was negative, -8.3 to -12.9; the fallback stays registered) or held for a cheaper
   renormalisation; the Sublet seal and grade; convert the 26 readings-only sweep arms to write tohost.
 
