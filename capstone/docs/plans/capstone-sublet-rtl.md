@@ -46,7 +46,7 @@ the 95-test sweep identical to 0568f93a9 on 2a3a87dfc and 328f61761, the FP / bo
   code-heavy layouts (none of the 11 images), fix = size the granule from max(split_size's granule, repr_gran).
 - QEMU side (the helper lane owns): aad781e15acd lands only with the flash that carries 2a3a87dfc.
 
-## Synthesis of `fp-fixes` 4a4261bb4, pre-registered 2026-10-14 (before the handoff; hash to be pinned)
+## Synthesis of `fp-fixes` 4a4261bb4, pre-registered 2026-10-14 (before the handoff; the hash pinned)
 
 The lead's decisions of 2026-10-14 in the RTL lane's conversation: the FP bitstream is built from option (b) =
 4a4261bb4; two builds, this one now and the Sublet one when its gates pass; the build is authorised now, the flash
@@ -145,7 +145,8 @@ figures recorded; the static-audit header naming 0x51/0x52 as allowed; the accep
 word). Name: `caplifive_sublet_d93a8d66b.bit`.
 
 What the synth lane receives with the hash:
-- Tree: capstone-ariane capstone-sublet 4be92a85a = 4a4261bb4 (the FP bitstream's tree, a strict prefix) + 124d38406 (the load-side
+- Tree: capstone-ariane capstone-sublet 4be92a85a (since then c8d1ff214: two tests-only commits above it, the timed
+  REVOKE pair and sweep-compare.py; RTL unchanged) = 4a4261bb4 (the FP bitstream's tree, a strict prefix) + 124d38406 (the load-side
   S-06 invariant scoped to LDC) + d34c26002 (the word {revnode_id 30 | perm 4 | cap_type 3 | bounds 27}) + b330433fe
   (CDERIVE / CREVOKE, the node parent link, derive_req / kill_req) + 52ad6e5ea (non-linear SPLIT keeps its node) +
   11c405304 (CREVOKE in R-45's commit flush; QEMU's 36 cases ported) + 464abe2ce (MREV deepens its subtree; LINEAR

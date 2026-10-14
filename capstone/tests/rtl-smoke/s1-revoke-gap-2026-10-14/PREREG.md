@@ -78,9 +78,13 @@ Read before the board run:
   FP tree the mrev retires before that drain ends (no deepening passes), on the Sublet trees the two deepening walks
   inside mrev absorb it. The whole program is still 105 cycles shorter on FP (4,707 against 4,812): the cost moved,
   it was not added. Same mechanism class as the s1-n8 observation, seen from the other side.
-- The gap bracket at k = 2..4 of the close arm (0x88 = 136 with GAP 0 against 0x8 at k = 1) shows a revoke's walk
-  continuing after the instruction retires: the next csrr waits on it. The revoke bracket (0x31 = 49) therefore
-  measures the issue-to-retire part, not the walk.
+- The gap bracket at k = 2..4 of the close arm (0x88 = 136 with GAP 0 against 0x8 at k = 1) shows that SOMETHING
+  continues after the revoke retires in this shape and the next csrr waits on it: the remaining rev-node work of a
+  revoke over an already-dead base (k = 2..4 walk corpses only), or a write drain. It is not shown to be the kill walk
+  R1 measures: on silicon R1's fill bracket, the one right after REVOKE, is flat in n (474,817 cycles at every n for
+  B = 256 KiB) while its REVOKE bracket is node-linear (76 to 11,634 for 2 to 512 nodes), so a post-retire walk would
+  have grown the fill and did not (the board lane, 2026-10-14). The revoke bracket here (0x31 = 49) is the
+  issue-to-retire part of whatever that is.
 
 **Silicon predictions, the same image on both bitstreams** (patterns, not cycle values: the simulation's memory
 model is S12_MEM_DELAY=12, silicon's latency differs): far arm equal on both at every k; close arm k = 2..4 equal;
