@@ -39,8 +39,17 @@ define void @g() addrspace(200) {
 }
 """
 
+# The virtual profile runs F and D in hardware (cmake/VirtualCodegen.cmake).
+# Its FP constants live in the constant pool, which only a compiler that
+# addresses the pool through a capability compiles (C-80): older ones crash
+# on both functions below.
+FLOAT_PROBE = """
+double scale(double x) { return x * 3.14159; }
+double pick(int c) { return c ? 1.5 : 2.5; }
+"""
 
-def check_toolchain(cc: str) -> None:
+
+def check_toolchain(cc: str, codegen: list[str] | tuple[str, ...] = ()) -> None:
     result = subprocess.run([cc, "-S", "-x", "ir", "-target", "capstone64-unknown-elf",
                              "-O2", "-o", "-", "-"], input=CALL_TARGET_PROBE,
                             text=True, capture_output=True)
@@ -57,12 +66,26 @@ def check_toolchain(cc: str) -> None:
     # pointer arithmetic. Without it they compile an integer-only fallback
     # that links successfully and faults on the first symbol/Datum access.
     result = subprocess.run([cc, '-fsyntax-only', '-x', 'c', '-target',
-                             'capstone64-unknown-elf', '-'], text=True, capture_output=True,
+                             'capstone64-unknown-elf', *codegen, '-'], text=True, capture_output=True,
                             input='#if __SIZEOF_INTCAP__ != 16\n#error intcap required\n#endif\n'
                                   '_Static_assert(sizeof(__uintcap_t) == 16, "intcap");\n'
                                   '__uintcap_t f(void *p) { return (__uintcap_t)p; }\n')
     if result.returncode:
-        raise ValueError('application SDK requires the intcap compiler extensions; use a qualified toolchain')
+        raise ValueError('application SDK requires the intcap compiler extensions (with the SDK '
+                         'code generation); use a qualified toolchain: '
+                         + (result.stderr.strip().splitlines() or [''])[0])
+    if "+d" in codegen:
+        for mode in (["-S", "-o", "-"], ["-c", "-o", os.devnull]):
+            result = subprocess.run([cc, *mode, "-x", "c", "-target", "capstone64-unknown-elf",
+                                     "-O2", *codegen, "-"], input=FLOAT_PROBE, text=True,
+                                    capture_output=True)
+            if result.returncode:
+                lines = result.stderr.strip().splitlines()
+                first = next((line for line in lines if "error" in line),
+                             lines[-1] if lines else "no output")
+                raise ValueError("compiler cannot compile hard-float code (C-80): " + first)
+            if mode[0] == "-S" and not re.search(r"^\s*fmul\.d\s", result.stdout, re.MULTILINE):
+                raise ValueError("compiler emits no hardware floating point for the SDK's codegen")
 
 
 def expand(arguments: list[str], depth: int = 0) -> list[str]:
@@ -119,15 +142,15 @@ def link_arguments(arguments: list[str]) -> tuple[list[str], list[str], list[str
 def main(argv: list[str] | None = None) -> int:
     try:
         arguments = expand(sys.argv[1:] if argv is None else argv)
-        if len(arguments) == 2 and arguments[0] == "--check-compiler":
-            check_toolchain(arguments[1])
+        if len(arguments) >= 2 and arguments[0] == "--check-compiler":
+            check_toolchain(arguments[1], arguments[2:])
             return 0
         sdk = Path(os.environ.get("CAPSTONE_SDK", Path(sys.argv[0]).absolute().parent))
         config = json.loads((sdk / "sdk.json").read_text())
         if config["version"] != 1 or config.get("application_abi") != 2:
             raise ValueError("unsupported SDK version; rebuild the SDK")
         if arguments == ["--check-toolchain"]:
-            check_toolchain(config["cc"])
+            check_toolchain(config["cc"], config.get("codegen", []))
             return 0
         target = [config["cc"], "-target", "capstone64-unknown-elf",
                   "-Xclang", "-target-feature", "-Xclang", "+m",

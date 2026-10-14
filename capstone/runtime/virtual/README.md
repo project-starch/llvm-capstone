@@ -222,6 +222,47 @@ The gp-free application's ordinary scalar-return call convention retains its
 image PCC. General JIT calls between separately bounded code mappings need a
 capability call/return ABI and are not claimed by the executable-context test.
 
+## Floating point
+
+Virtual-C applications run the F and D extensions in hardware. The compiler
+must address the constant pool through a capability (C-80, capstone fix
+7ce213020f87); SDK configuration and `capstone-cc --check-toolchain` refuse
+one that does not. The SDK compiles applications, the runtime, musl and the
+compiler builtins with `+f,+d` under the `lp64` calling convention
+(`cmake/VirtualCodegen.cmake`; `capstone-cc` reads the same flags from
+`sdk.json`): floating-point arguments and results still travel in integer
+registers, and only long double (binary128) stays in software. There is no
+soft-float variant of the virtual SDK. FP loads and stores are checked through
+their capability like integer ones.
+
+QEMU's supervisor gives each context its own f registers and `fcsr`: CSRUNV
+starts an application with FS Initial, zero registers and the default
+environment, and every escape and resume saves and restores them
+(capstone-qemu `tests/virtual-capstone-runtime/fp.sh`). A QEMU without that
+start leaves FS Off, and the first FP instruction faults. This is a property
+of the virtual platform: the RTL's physical domain switcher saves no FP state,
+and its firmware starts domains with FS Off.
+
+`fenv.c` implements musl's environment functions on `fcsr` (musl's riscv64
+assembly is selected by `__riscv_flen`, which this target does not define),
+and gives compiler-rt's long double addition the dynamic rounding mode and the
+inexact flag (only addition and subtraction consult them; compiler-rt's
+binary128 multiplication, division and narrowing round to nearest). A new
+thread starts with its creator's environment (C11 7.6), and a signal handler
+that returns leaves the interrupted code's environment as it was, as Linux's
+sigreturn does; a handler left by `longjmp` keeps its changes, and handlers
+still receive no FP register image. `fp-contract.c` checks rounding modes,
+exception flags, `fegetenv`/`fesetenv`/`feholdexcept`, libm under the dynamic
+rounding mode, long double, thread inheritance and isolation, and signal
+handlers:
+
+```sh
+"$out/sdk/capstone-cc" -O2 capstone/runtime/virtual/fp-contract.c -o "$out/fp.dom"
+python3 capstone/runtime/virtual/run-fp.py --qemu /path/to/qemu-system-riscv64 \
+  --images /path/to/images --adapter "$out/adapter" --application "$out/fp.dom" \
+  --work "$out/fp-gate"
+```
+
 ## Build and run
 
 Use a compiler built from this branch, including `clang`, `lld`, `llvm-ar`

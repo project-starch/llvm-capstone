@@ -5,9 +5,14 @@ set(CMAKE_C_FLAGS_RELEASE "-O1 -DNDEBUG" CACHE STRING "Release C flags")
 project(capstone_application LANGUAGES C ASM)
 set(CMAKE_C_STANDARD 11)
 option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter" OFF)
+set(profile_codegen)
 if(CAPSTONE_APPLICATION_VIRTUAL)
-  add_compile_options("$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")
-  set(sdk_codegen "[\"-mllvm\", \"-capstone-gp-free\", \"-mllvm\", \"-capstone-image-gp\"]")
+  include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VirtualCodegen.cmake")
+  set(profile_codegen ${CAPSTONE_VIRTUAL_CODEGEN})
+  list(JOIN profile_codegen " " virtual_codegen)
+  add_compile_options("$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
+  list(JOIN profile_codegen "\", \"" sdk_codegen)
+  set(sdk_codegen "[\"${sdk_codegen}\"]")
 else()
   set(sdk_codegen "[]")
 endif()
@@ -16,7 +21,7 @@ if(CAPSTONE_CHECK_COMPILER_ABI)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/../host/capstone_vm/compiler.py"
-            --check-compiler "${CMAKE_C_COMPILER}"
+            --check-compiler "${CMAKE_C_COMPILER}" ${profile_codegen}
     RESULT_VARIABLE compiler_probe_status
     ERROR_VARIABLE compiler_probe_error)
   if(NOT compiler_probe_status EQUAL 0)
