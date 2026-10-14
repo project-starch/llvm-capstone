@@ -486,10 +486,14 @@ public:
   /// Name is specified, it is the name of the global variable created.
   ///
   /// If no module is given via \p M, it is take from the insertion point basic
-  /// block.
+  /// block. Without an \p AddressSpace the global goes in address space 0,
+  /// except where the data layout puts globals, allocas and functions all in
+  /// one address space (a pure-capability layout such as Capstone's), where it
+  /// goes there (C-79: on Capstone a string in address space 0 is reached
+  /// through a plain integer, not a capability).
   LLVM_ABI GlobalVariable *CreateGlobalString(StringRef Str,
                                               const Twine &Name = "",
-                                              unsigned AddressSpace = 0,
+                                              std::optional<unsigned> AddressSpace = std::nullopt,
                                               Module *M = nullptr,
                                               bool AddNull = true);
 
@@ -2051,7 +2055,7 @@ public:
   /// block.
   LLVM_DEPRECATED("Use CreateGlobalString instead", "CreateGlobalString")
   Constant *CreateGlobalStringPtr(StringRef Str, const Twine &Name = "",
-                                  unsigned AddressSpace = 0,
+                                  std::optional<unsigned> AddressSpace = std::nullopt,
                                   Module *M = nullptr, bool AddNull = true) {
     GlobalVariable *GV =
         CreateGlobalString(Str, Name, AddressSpace, M, AddNull);

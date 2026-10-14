@@ -79,6 +79,7 @@ llvm/include/llvm/CodeGen/ValueTypes.td | +69 -34 | bit isCapstoneVecTuple = fal
 llvm/include/llvm/CodeGenTypes/MachineValueType.h | +30 -0 | /// Return true if this is a Capstone vector tuple type where the
 llvm/include/llvm/IR/CMakeLists.txt | +1 -0 | tablegen(LLVM IntrinsicsCapstone.h -gen-intrinsic-enums -intrinsic-prefix=capstone)
 llvm/include/llvm/IR/CallingConv.h | +17 -0 | /// Calling convention used for Capstone V-extension.
+llvm/include/llvm/IR/IRBuilder.h | +7 -3 | /// one address space (a pure-capability layout such as Capstone's), where it
 llvm/include/llvm/IR/Intrinsics.td | +1 -0 | include "llvm/IR/IntrinsicsCapstone.td"
 llvm/include/llvm/IR/RuntimeLibcalls.td | +20 -0 | def CAPSTONE_FLUSH_ICACHE : RuntimeLibcall;
 llvm/include/llvm/Object/ELFObjectFile.h | +27 -0 | Expected<SubtargetFeatures> getCapstoneFeatures() const;
@@ -100,6 +101,7 @@ llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +93 -20 | (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&
 llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp | +51 -9 | // GLOBALS address space. On a fat-pointer target that is a capability type,
 llvm/lib/CodeGen/ValueTypes.cpp | +4 -0 | // Same shape as the fat pointer below it. There is no capability type in IR,
+llvm/lib/IR/IRBuilder.cpp | +17 -2 | /// the data layout puts globals, allocas and functions all in it (Capstone's
 llvm/lib/IR/Intrinsics.cpp | +1 -0 | #include "llvm/IR/IntrinsicsCapstone.h"
 llvm/lib/Object/ELF.cpp | +12 -0 | // Capstone (e_machine 259) has its own relocation numbering in
 llvm/lib/Object/ELFObjectFile.cpp | +39 -0 | #include "llvm/Support/CapstoneAttributeParser.h"
@@ -109,6 +111,8 @@ llvm/lib/TargetParser/CMakeLists.txt | +2 -0 | CapstoneISAInfo.cpp
 llvm/lib/TargetParser/TargetDataLayout.cpp | +46 -0 | static std::string computeCapstoneDataLayout(const Triple &TT,
 llvm/lib/TargetParser/Triple.cpp | +21 -1 | case capstone32:     return "capstone32";
 llvm/lib/Transforms/Scalar/SROA.cpp | +145 -0 | /// Capstone: does a value of type \p Ty hold a pointer wider than its index --
+llvm/lib/Transforms/Utils/BuildLibCalls.cpp | +56 -33 | // targets. On Capstone every C pointer is a capability in the address space the
+llvm/lib/Transforms/Utils/SimplifyLibCalls.cpp | +1 -1 | Src = B.CreateGlobalString(SrcStr, "str", /*AddressSpace=*/std::nullopt,
 llvm/utils/TableGen/Basic/CMakeLists.txt | +1 -0 | CapstoneTargetDefEmitter.cpp
 llvm/utils/TableGen/Basic/VTEmitter.cpp | +19 -3 | if (IsCapstoneVecTuple) {
 llvm/utils/TableGen/Common/CodeGenDAGPatterns.cpp | +41 -7 | // A capability IS a pointer type. Leaving it out makes iPTR intersect to the

@@ -94,8 +94,48 @@ Predictions, written before the build (the refutation keys in brackets):
   applies, and a repeat is a question for the synth lane, not this change.
 - DTS: 65536 revocation nodes, unchanged (INIT_STAGE's head := 3; the pool and CAP_REVNODE_MEM_BASE untouched).
 
-The grade (sealed sha256, size, routed WNS, stems, LUT/FF rows, route time) is appended here when the synth lane
-reports, before the flash.
+### Grade of `caplifive_fpb_4a4261bb4.bit` (sealed 2026-10-14 by the synth lane; graded here against the lines above)
+
+- Seal: exit 0, write_bitstream completed; bitstream 11,443,722 B, sha256
+  a63cbd815fe96957a979fc94c6c1bf29060428db9523d43485d392aeca10ff65; flow 4h33m (route time VOID: the host was shared
+  at load 80-100 for the first hours); synthesis peak 22.05 GB; the tarball synth-4a4261bb4-exit0.tar.gz.
+- **WNS: OUT of band.** Routed -15.360 (TNS -730,170; 99,793 of 255,583 endpoints failing; WHS +0.035), 2.025 ns
+  below -13.335, against 0568f93a9's -8.368 with the same flow. The pre-seal placement estimate was -14.980, the
+  router's figure -15.407; the sealed timing summary is the authority.
+- Stems: HOLDS. Synthesis-stage membership the same by stem; routed loops 1, the TIMING-23 arc i_dtlb state_q[3]
+  I1->O, identical to 0568f93a9. LUTLP-1: 0, HOLDS (the CFGBVS-1 control present).
+- Area: **REFUTED.** TOP +1,739 LUT against a prediction of "net flat to down, under a hundred either way":
+  issue_read_operands +2,446 LUT, scoreboard +207, ex_stage own +179, dom_switcher +193; lsu -326, dyn_unit -131,
+  csr_regfile -69, rev_node -4, commit_stage 0. "No new flops" HOLDS (FF -92). The prediction modelled the rs3
+  select (tens of LUTs, correct for that) and the encoder as "a 64-bit compare and add", and missed that the
+  compare-and-add sits in the capability result path that the scoreboard and issue stage forward: the IRO cone's
+  CARRY4 count went 63 -> 186.
+- The discriminator (repaired before the seal, above): **(a), the renormalisation adder is named.** The worst ten
+  paths all start at csr_regfile's cpmp bounds register and end at the scoreboard's rs1_metadata and the issue stage's
+  rd/cap metadata registers, slacks -15.360..-15.154, 143 logic levels with 59 CARRY4 of which 47 in
+  issue_read_operands (0568f93a9's worst path: 100 levels, 17 CARRY4, none in IRO); in the worst 500, IRO metadata
+  endpoints 0 -> 98 and scoreboard rs1_metadata endpoints 40 -> 138. FP's worst endpoint reads -6.986 on 0568f93a9
+  (8.374 ns better there); 0568f93a9's worst endpoint reads -11.856 on FP (3.488 ns worse). The compress-cone query:
+  the matcher as first written FAILED its negative control (the dyn unit's outputs drive LSU requests whose responses
+  return to the metadata registers, so the cone held the LSU/dcache loop; 26/5 and 30/5 on the control), result
+  discarded; refined post hoc (LSU, cache, CSR, MMU and frontend cells excluded, disclosed as post hoc): FP's worst
+  20 paths 20/20 in the cone (78-84 cells, 40-47 CARRY4 each), positive control 68/37, negative dcache 0/0, negative
+  frontend 0/0. On 0568f93a9's netlist the refined query is NOT clean (its worst 20 and its frontend control both hit
+  15/1 through one dom_switcher CARRY4), so for 0568f93a9 the endpoint slack is the datum, not the query. Assumption
+  stated, not verified cell by cell: by the RTL the only arithmetic between the unit outputs and the scoreboard
+  metadata registers is compress_cap -> compress_bounds.
+- The rs3 arm: rs3_src and rs3_fpr did not survive optimisation (0 nets, 0 cells; reported as its own finding); anchored
+  on the surviving rs3_fwd_req comparators, the worst 20 paths touch 0 of them (2 touch rs3_cap_metadata, the data
+  side); the worst path constrained through rs3_fwd_req is -6.931 against -15.337 unconstrained. The rs3 fix is not
+  the cause. Caveat: the inline rs3_src compares inside the rs3_data / rs3_cap_metadata assigns are not anchored.
+- Reading: R-54's renormalisation as written (`tg = (base + ((1 << (E+3)) - 1)) >> (E+3); bg = start >> (E+3); if
+  (tg - bg >= 1024) E = E + 1`, two barrel shifts, a 64-bit add, a subtract and a compare, evaluated inside
+  compress_bounds on every capability result) costs about 2,400 LUT and about 2 ns of WNS on the forwarding path
+  that was already the critical cone, and the Sublet tip, which carries the same adder, routed at -15.898 pre-seal.
+  Whether a -15.360 bitstream runs on the board is empirical (every accepted bitstream had negative WNS, between -8.3
+  and -12.9), and the flash is the lead's call; the fallback bitstream stays registered. The RTL-side follow-up, not
+  started: a cheaper formulation of the renormalisation condition (decide E+1 from the length and the two low
+  granule residues rather than from two full 64-bit shifted sums), synthesised alone before it goes anywhere.
 
 ## Branch `capstone-sublet` (on top of fp-fixes)
 
@@ -217,8 +257,56 @@ Predictions, written before the build (refutation keys in brackets):
   finding]
 - Route time: flagged if it crosses the 3h30m mark again, as 0568f93a9's did.
 
-The grade (sealed sha256, size, routed WNS, stems, LUT/FF rows, route time) is appended here when the synth lane
-reports, before the flash.
+Elaboration-only pass (Vivado `synth_design -rtl`, run.tcl lines 1-85 byte-identical to the repo's, a fresh worktree
+at d93a8d66b, Anvil regenerated, the same 276 files as the FP build; the synth lane, 2026-10-14, on the lead's word):
+exit 0, 0 ERROR, 0 CRITICAL WARNING, 484 WARNING over 20 ids against the FP build's elaboration stage 478 over 21;
+every Synth-8 id count identical, the whole difference three tool ids (IP "moved" notices from the harness, two
+run-property notices only the full flow emits). The three classes asked for, read with Vivado's per-id message cap
+LIFTED so the rev-node unit was actually visible (capped, 8-6157 saturated before rev_node was elaborated and the
+zero meant nothing): no struct-literal field-count mismatch; no width mismatch on the 140-bit node write request or
+its slices in ex_stage.sv (the same six warnings on the same six lines as FP); no case-without-default and nothing on
+the 3-bit stage register in the generated rev-node unit. Per module, uncapped: rev_node six removed registers (all
+Anvil scaffolding present in FP's generated source), 29 no-load port bits of which the only new ones are
+_ep_kill_req_0 bits 16-29, the parent id's generation field, unread there by design because CREVOKE's dyn-unit
+handler has already checked both nodes through the generation-checked query and the kill handler re-checks the
+child's generation and the parent's index only (rev_req's bits 16-29 are unread for the same reason); dyn_unit and
+flu_unit removed-register names all present in FP's source. Limit: "present in FP" is a source-name comparison, not an
+uncapped FP warning diff (the FP worktree was busy). The dyn unit's Anvil compile took 461 s against 153 s for the FP
+tree's whole pre-Vivado phase; the build guard's 240 s window aborted the first Sublet attempt before Vivado started,
+the second runs with a 20-minute window. Both builds ran on a host shared at load 80-100, so the route-time lines of
+BOTH pre-registrations are VOID for these runs (they measure the host); WNS, stems, LUTLP and the area rows stand.
+
+Synthesis timing optimisation, an observation outside both pre-registrations (the synth lane's wall-clock and cpu
+figures, cpu/wall 0.99 on both, single-threaded): FP 4a4261bb4 163.9 min, of which at least 59 at host load <= 20;
+the Sublet tip 41.4 min entirely at load 14-20. The host inflates FP's figure and cannot account for the gap. The
+baseline is NOT a point: with compress_bounds and decompress_bounds byte-identical by function-body sha across
+8f6a0af98, 715bdd1fe, 776d9d859 and 0568f93a9, the phase took 10, 48, 97 and 28 min, and the largest swing (776d9d859
+97 -> 0568f93a9 28) came from a diff touching only ex_stage.sv and issue_read_operands.sv. So FP's 164 is the longest
+observed, the Sublet tip's 41 sits inside the historical spread, and "neither the renormalisation nor the cursorless
+decode alone is slow" rests on single samples from a 10-97 min spread. The combination hypothesis (FP alone has the
+renormalised encoder output feeding the cursorless decoder's base reconstruction, a wider encode-to-decode cone)
+stays consistent with every point and is not established by them; a 2a3a87dfc build would discriminate only with a
+reading far outside 10-97 and is not asked for. What grades the FP bitstream is the routed WNS and, if it leaves the
+band, the failing endpoint's cone. Before the seal the FP pre-registration's discriminator was repaired (the synth
+lane, 2026-10-14): compress_bounds and decompress_bounds inline, so the check has to be on their call sites, and the
+DECOMPRESS arm cannot fail: in 0568f93a9's routed worst-100 every path passes through the pmp data interface's
+decompress_cap_metadata, and decompress_bounds is byte-identical between 0568f93a9 and FP, so a hit there says nothing
+about the change. That arm is retired as unfalsifiable. The COMPRESS arm (FP's changed function) is graded by a
+read-only netlist query on the routed checkpoint, whether the worst path's cells lie in the all_fanin cone of the
+compress_cap outputs (ex_stage's flu/dyn rs1 and result metadata, dom_switch_ra_data, commit_stage's capenter pc
+metadata), with a constructed path through that cone as the can-fail control, and a name heuristic only as the
+pre-filter; the rs3 arm is graded the same way on the fanout of ae21e121e's rs3_src select. Correction to the FP
+pre-registration's own description of that change (the synth lane read the diff, 2026-10-14): ae21e121e adds no
+4-way per-scoreboard-entry select; its only new logic is a 5-bit 2:1 mux per ISSUE PORT (rs3_src = rs3_fpr ?
+result[4:0] : rd), substituted for rd as the comparator input of the existing per-wb-port and per-entry rs3 matches
+(rs3_fwd_req, rs3_data, rs3_cap_metadata). The area prediction (tens of LUTs) stands; the cone to query is that
+mux's fanout through the comparators into the rs3 operand selects, and if the rs3_src name did not survive
+optimisation the cone is anchored on the rs3_fpr-gated result bits and reported as such, never as a zero. FP's synthesis-stage loop indicator: 7 loops as on 0568f93a9, membership the same by stem, the
+through-point differences all inside the existing LSU/dcache family, none in compress_bounds, issue_read_operands
+or the scoreboard; the routed check_timing at seal is the grade.
+
+The grade (sealed sha256, size, routed WNS, stems, LUT/FF rows) is appended here when the synth lane reports, before
+the flash.
 
 ## Lessons recorded this cycle (memory, not rules)
 
