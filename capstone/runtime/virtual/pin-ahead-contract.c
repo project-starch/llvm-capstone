@@ -7,6 +7,8 @@
  *   vma     pages 8..31 read-only; write page 0 (the window stops at the
  *           VMA end, page 8), then read page 8 (pinned with FOLL_FORCE, and
  *           its window too);
+ *   vmax    pages 8..31 read-write-execute, a VMA FOLL_WRITE can also pin:
+ *           a write to page 0 pins up to the VMA end (8) all the same;
  *   rowrite as vma, then write page 9: still a fault (the domain dies), so a
  *           FOLL_FORCE pin never makes read-only memory writable;
  *   retire  write page 0, then munmap: every pin of the window is released.
@@ -59,6 +61,10 @@ int main(int argc, char **argv)
             a[9 * PAGE] = 1;
             require(0, "store to a read-only page succeeded");
         }
+    } else if (!strcmp(mode, "vmax")) {
+        require(!mprotect((void *)(a + 8 * PAGE), (PAGES - 8) * PAGE,
+                          PROT_READ | PROT_WRITE | PROT_EXEC), "mprotect");
+        a[0] = 1;
     } else if (!strcmp(mode, "walk")) {
         for (int i = 0; i < PAGES; ++i)
             a[i * PAGE] = (char)i;

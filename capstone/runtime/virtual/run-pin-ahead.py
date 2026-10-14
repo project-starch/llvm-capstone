@@ -13,7 +13,7 @@ import subprocess
 
 HERE = Path(__file__).resolve().parent
 WINDOWS = (1, 16, 64)
-MODES = ('base', 'seq', 'stop', 'vma', 'rowrite', 'retire')
+MODES = ('base', 'seq', 'stop', 'vma', 'vmax', 'rowrite', 'retire')
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
 export CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
@@ -38,6 +38,7 @@ EXPECT = {
     'seq':    lambda w: (min(w, 32), min(w, 32), 1),
     'stop':   lambda w: (min(w, 28) + min(w, 4), min(w, 28) + min(w, 4), 2),
     'vma':    lambda w: (min(w, 8) + min(w, 24), min(w, 8) + min(w, 24), 2),
+    'vmax':   lambda w: (min(w, 8), min(w, 8), 1),
     'retire': lambda w: (0, None, 1),
 }
 

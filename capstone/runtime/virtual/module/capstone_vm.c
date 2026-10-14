@@ -643,7 +643,7 @@ module_param(test_inject_at, ulong, 0444);
 module_param(test_inject_every, ulong, 0444);
 module_param(test_short_gup, ulong, 0444);
 static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
-static u64 test_consumed;
+static u64 test_consumed, test_checks, test_checks_irqs_on, test_entries;
 static u64 test_gup_requests, test_gup_max, test_short_results;
 static bool test_pending, test_expired, test_in_step;
 
@@ -681,14 +681,17 @@ static void test_gup(unsigned long pages)
 static void test_report(const char *why)
 {
     pr_info("capstone_vm test %s: injections=%llu stops=%llu initial_stops=%llu "
-            "violations=%llu consumed=%llu gup_requests=%llu gup_max=%llu short_results=%llu\n",
+            "violations=%llu consumed=%llu gup_requests=%llu gup_max=%llu short_results=%llu "
+            "checks=%llu checks_irqs_on=%llu entries=%llu\n",
             why, test_injections, test_stops, test_initial_stops, test_violations,
-            test_consumed, test_gup_requests, test_gup_max, test_short_results);
+            test_consumed, test_gup_requests, test_gup_max, test_short_results,
+            test_checks, test_checks_irqs_on, test_entries);
 }
 #define TEST_HOOK(at) test_hook(at)
 #define TEST_GUP(pages) test_gup(pages)
 #define TEST_EXPIRED() test_expired
-#define TEST_ENTRY() test_entry()
+#define TEST_ENTRY() do { test_entry(); ++test_entries; } while (0)
+#define TEST_CHECK() do { ++test_checks; if (!irqs_disabled()) ++test_checks_irqs_on; } while (0)
 #define TEST_STOPPED(initial) do { if (test_pending) { ++test_stops; \
         if (initial) ++test_initial_stops; } } while (0)
 #define TEST_STEP_BEGIN() do { test_in_step = true; } while (0)
@@ -698,6 +701,7 @@ static void test_report(const char *why)
 #define TEST_GUP(pages) do { } while (0)
 #define TEST_EXPIRED() false
 #define TEST_ENTRY() do { } while (0)
+#define TEST_CHECK() do { } while (0)
 #define TEST_STOPPED(initial) do { } while (0)
 #define TEST_STEP_BEGIN() do { } while (0)
 #define TEST_IOCTL_DONE() do { } while (0)
@@ -958,6 +962,7 @@ retry:
              * loop retries EINTR and EAGAIN; the reply above is rewritten
              * identically). Before a later one the fault just resolved goes
              * back as it was, already counted. */
+            TEST_CHECK();
             if (cv_step_stop(budget_end)) {
                 local_irq_restore(flags); preempt_enable();
                 TEST_STOPPED(!entries);
