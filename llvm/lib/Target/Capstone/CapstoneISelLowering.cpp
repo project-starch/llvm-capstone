@@ -25806,7 +25806,7 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
   // cannot be fixed by choosing a different unit here without also losing tags.
   if (Op.isMemcpy() && Op.size() != 0 && (Op.size() % 16) == 0 &&
       Op.isAligned(Align(16))) {
-    unsigned NumChunks = Op.size() / 16;
+    uint64_t NumChunks = Op.size() / 16; // 64-bit: a narrowed count passes the budget
     if (NumChunks <= 32) {
       // Capability-grained copy chunks are capabilities.
       MemOps.assign(NumChunks, MVT::c128);
@@ -25814,9 +25814,34 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
     }
   }
 
-  // Any other memcpy is *sub-capability*: not 16-byte aligned on both ends with
-  // a 16-multiple size, so it cannot carry an in-place tagged capability (that
-  // case returned above).  Do not let the generic lowering pick an i128
+  // C-78. A capability-aligned copy whose size is NOT a multiple of 16 still
+  // carries capabilities in each of its whole granules: a 24-byte copy of a
+  // 16-aligned region holds one capability and 8 bytes of plain data, which is
+  // what `memcpy(d, s, offsetof(T, tail))` over a struct that starts with
+  // pointers is. It used to fall through to the scalar path below, which
+  // copies every byte with `ld`/`sd` and strips those tags. Copy the whole
+  // granules as capabilities and only the tail with scalar units.
+  //
+  // Not under the S-06 fixup: that silicon experiment handles only the
+  // 16-multiple shape above, and its decline/hook pair must keep agreeing on
+  // every other copy, so with the flag on these sizes keep their old lowering.
+  if (Op.isMemcpy() && Op.size() > 16 && (Op.size() % 16) != 0 &&
+      Op.isAligned(Align(16)) && !CapstoneMemcpyHighHalfFixup) {
+    uint64_t NumChunks = Op.size() / 16; // 64-bit: a narrowed count passes the budget
+    if (NumChunks <= 32) {
+      MemOps.assign(NumChunks, MVT::c128);
+      uint64_t Remaining = Op.size() % 16;
+      for (uint64_t Unit = 8; Remaining != 0; Unit /= 2)
+        for (; Remaining >= Unit; Remaining -= Unit)
+          MemOps.push_back(MVT::getIntegerVT(Unit * 8));
+      return true;
+    }
+  }
+
+  // Any other memcpy is *sub-capability*: not 16-byte aligned on both ends, or
+  // too large for the chunk budget, so its granules are not copied as
+  // capabilities here (the aligned cases returned above).  Do not let the
+  // generic lowering pick an i128
   // (capability) unit here: whenever only the destination happens to be
   // 16-aligned, a misaligned-source i128 load is (mis)legalized into a single
   // i64 load zero-extended to i128 while the paired i128 store stays a 16-byte
