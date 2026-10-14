@@ -10,6 +10,7 @@
 #include <linux/slab.h>
 #include <linux/list.h>
 #include <linux/wait.h>
+#include <linux/ktime.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
@@ -781,6 +782,7 @@ retry:
     } else if (op == CV_STEP) {
         struct cv_step r;
         struct cv_thread *t;
+        u64 budget_end;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
@@ -789,16 +791,31 @@ retry:
         if (r.reply && !t->reply_cap) {
             t->frame[28] = r.result; t->frame[29] = 0;
         }
-        preempt_disable(); local_irq_save(flags);
-        if (!t->started) {
-            t->frame[0] = csr_read(CSR_SATP);
-            t->frame[1] = virt_to_phys(c->table);
-            t->frame[7] = 3;
+        /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
+         * faulting would never be preempted: bound the resolved faults by
+         * one quantum of this ioctl, then return and release vm_lock. */
+        budget_end = ktime_get_ns() + 5 * NSEC_PER_MSEC;
+        for (unsigned long action = r.reply ? 2 : 0;; action = 0) {
+            preempt_disable(); local_irq_save(flags);
+            if (!t->started) {
+                t->frame[0] = csr_read(CSR_SATP);
+                t->frame[1] = virt_to_phys(c->table);
+                t->frame[7] = 3;
+            }
+            t->event = run(t->frame_pa, action);
+            t->started = true; t->reply_cap = false;
+            local_irq_restore(flags); preempt_enable();
+            ++c->stats.steps;
+            /* Resolve a page fault here, as CV_RESOLVE would, and resume
+             * without the two system calls a return through the launcher
+             * costs. Pending work for this task still returns first; so does
+             * a fault resolve() refuses, which the launcher then delivers
+             * after its own CV_RESOLVE fails the same way. */
+            if (t->event != 4 || signal_pending(current) || need_resched() ||
+                ktime_get_ns() >= budget_end || resolve(c, t))
+                break;
+            ++c->stats.faults;
         }
-        t->event = run(t->frame_pa, r.reply ? 2 : 0);
-        t->started = true; t->reply_cap = false;
-        local_irq_restore(flags); preempt_enable();
-        ++c->stats.steps;
         if (t->event == 5) {
             int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
             /* Return through Linux between retries. Refuse endless retries
