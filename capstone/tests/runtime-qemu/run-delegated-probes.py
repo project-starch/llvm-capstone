@@ -31,8 +31,9 @@ the symptom its old control produced.
 movc runs in any guest and is judged by the switch that guest's QEMU was
 started with (CAPSTONE_MOVC_NULL_SCALAR, recorded in the state directory);
 run it once in a guest with the switch off and once in one with it on. It is
-built twice: movc-rule with the compiler's live-source copy rule (C-32's fix)
-and movc-keep with +movc-keeps-integer-source, a plain movc for every copy.
+built twice: movc-rule with the compiler's live-source copy rule (C-32's fix,
+-movc-keeps-integer-source, which overrides the virtual SDK's default) and
+movc-keep with +movc-keeps-integer-source, a plain movc for every copy.
 With the switch on, keep must lose C-32's two values (the positive control)
 and rule must not. The build refuses (exit 2) a toolchain that lacks either,
 because a keep built without the feature is a duplicate of rule and a rule
@@ -295,8 +296,11 @@ VARIANTS = {
                    check_done("SUBWORD-ATOMICS-DONE")),
     "subword-O2": (["subword-atomics/subword_atomics.c"], ["-O2"], [], [],
                    check_done("SUBWORD-ATOMICS-DONE")),
-    "movc-rule": (["movc-null-scalar/movc_test.c"], ["-O2", '-DVARIANT="rule"'], [], [],
-                  check_movc("rule")),
+    # The virtual SDK's codegen turns +movc-keeps-integer-source on (Q-04); rule
+    # turns it off again (SDK flags come first, the last setting wins).
+    "movc-rule": (["movc-null-scalar/movc_test.c"],
+                  ["-O2", '-DVARIANT="rule"', "-Xclang", "-target-feature",
+                   "-Xclang", "-movc-keeps-integer-source"], [], [], check_movc("rule")),
     "movc-keep": (["movc-null-scalar/movc_test.c"],
                   ["-O2", '-DVARIANT="keep"', "-Xclang", "-target-feature",
                    "-Xclang", "+movc-keeps-integer-source"], [], [], check_movc("keep")),
