@@ -448,6 +448,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     struct page **pages;
     long n;
     if (!r->bytes || r->bytes > CV_MAX_REGION_BYTES ||
+        (!r->linear && r->bytes > CV_MAX_EAGER_BYTES) ||
         ((r->address | r->bytes) & (PAGE_SIZE - 1)) ||
         (!c->exact_bounds && (!is_power_of_2(r->bytes) || (r->address & (r->bytes - 1)))) ||
         r->address > ULONG_MAX - r->bytes ||
