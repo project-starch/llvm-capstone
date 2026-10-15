@@ -43,7 +43,8 @@ import struct
 VIRTUAL = {"profile": "virtual", "codegen": [
     "-mllvm", "-capstone-gp-free", "-mllvm", "-capstone-image-gp",
     "-Xclang", "-target-feature", "-Xclang", "+f", "-Xclang", "-target-feature", "-Xclang", "+d",
-    "-Xclang", "-target-abi", "-Xclang", "lp64"]}
+    "-Xclang", "-target-abi", "-Xclang", "lp64",
+    "-Xclang", "-target-feature", "-Xclang", "+movc-keeps-integer-source"]}
 PHYSICAL = {"profile": "physical", "codegen": []}
 
 
@@ -108,9 +109,11 @@ class ProfileArgumentTests(unittest.TestCase):
     def test_profile_codegen_must_match(self):
         check_profile(VIRTUAL)
         check_profile(PHYSICAL)
+        # The MOVC copy rule is not part of the profile.
+        check_profile({"profile": "virtual", "codegen": VIRTUAL["codegen"][:-4]})
         for config in ({"codegen": []}, {"profile": "virtual", "codegen": []},
                        {"profile": "physical", "codegen": VIRTUAL["codegen"]},
-                       {"profile": "virtual", "codegen": VIRTUAL["codegen"][:-4]}):
+                       {"profile": "virtual", "codegen": VIRTUAL["codegen"][:-8]}):
             with self.assertRaises(ValueError):
                 check_profile(config)
 
@@ -120,6 +123,18 @@ class ProfileArgumentTests(unittest.TestCase):
                          "-Xclang", "-target-feature", "-Xclang", "+d",
                          "-Xclang=-target-abi", "-Xclang=lp64", "-mllvm", "-capstone-gp-free=true"], VIRTUAL)
         check_arguments(["-O2", "-c", "a.c", "-mllvm", "-capstone-gp-free=false"], PHYSICAL)
+
+    def test_the_movc_copy_rule_is_the_callers(self):
+        # tests/runtime-qemu's movc-rule and movc-keep, through capstone-cc.
+        for config in (VIRTUAL, PHYSICAL):
+            for sign in "+-":
+                check_arguments(["-O2", "-c", "a.c", "-Xclang", "-target-feature",
+                                 "-Xclang", sign + "movc-keeps-integer-source"], config)
+                check_arguments(["-O2", "-c", "a.c", "-Xclang=-target-feature",
+                                 "-Xclang=" + sign + "movc-keeps-integer-source"], config)
+        # Only as a -target-feature value: the driver word is still refused.
+        self.refused(VIRTUAL, "-c", "a.c", "-movc-keeps-integer-source")
+        self.refused(VIRTUAL, "-c", "a.c", "-Xclang", "-target-feature", "-movc-keeps-integer-source")
 
     def test_fp_and_abi_changes_are_refused(self):
         for config, feature in ((VIRTUAL, "-d"), (VIRTUAL, "-f"), (VIRTUAL, "+q"), (VIRTUAL, "+v"),
@@ -200,6 +215,12 @@ class PlannedJobTests(unittest.TestCase):
         from capstone_vm.compiler import check_cc1
         check_cc1(self.job(), VIRTUAL)
         check_cc1(self.job("-target-feature", "+movc-keeps-integer-source"), VIRTUAL)
+        # The SDK's +movc-keeps-integer-source, then the caller's -: the last wins.
+        check_cc1(self.job("-target-feature", "+movc-keeps-integer-source",
+                           "-target-feature", "-movc-keeps-integer-source"), VIRTUAL)
+        check_cc1(self.job(), VIRTUAL)
+        check_cc1(self.job("-target-feature", "-movc-keeps-integer-source", features=("+m", "+a"), gp=()),
+                  PHYSICAL)
         check_cc1(self.job(kind="-cc1as", features=()), VIRTUAL)
         check_cc1(self.job(features=("+m", "+a"), gp=()), PHYSICAL)
 
