@@ -2746,6 +2746,15 @@ Launch:
 - EXCT: the granule rule mispredicts exactness on silicon.
 - Ids that differ while the addresses equal the record: the C and the replay disagree. Diff the two algorithms
   before anything else.
+
+**Amended 2026-10-16, before the boot: a2 runs on caplifive_sublet_d93a8d66b instead.** The FP respin is no longer
+flashed. The predictions above are unchanged:
+- d93a8d66b's encoder makes the same E decision as afcd19bea's on every representable region (RTL lane,
+  2026-10-16);
+- its one SPLIT change (a non-linear SPLIT keeps its node) changes node consumption, not the monitor's region table;
+- the Sublet acceptance's Linux rows passed on this bitstream with the previous monitor.
+The run is run-accept-exact.sh a2 with tag s9a2. The shared checkout moves to buildroot 211d48a, opensbi a8bdc90 and
+capstone-sbi eb88326 for the boot, and an EXIT trap restores d04bd83 / df0e9a8 / 93440d5.
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
 sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one
