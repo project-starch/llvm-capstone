@@ -339,7 +339,26 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 **Impact.** A program that branches on these errnos (ENODEV for an unsupported file mapping, ENOMEM for an oversize mapping) takes another path. No port has been checked for such a dependency.
 
 
-## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
+## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
+
+> **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
+> With `rd != rs1`, MOVC writes `x[rs1]` to `x[rd]`, contents and tag, and nulls `x[rs1]` only if it is
+> a TAGGED capability whose type is not NONLIN. Untagged data (null included) and NONLIN stay;
+> `rd == rs1` is a no-op; nothing raises. NOT "consume only LINEAR": REVOKE, UNINIT, SEALED,
+> SEALEDRET and EXIT stay consuming. Matrix, audit (nothing relies on MOVC zeroing an integer source),
+> security argument and evidence: `plans/2026-10-14-movc-untagged-source.md`.
+> - **Record:** the `movc` row of `llvm/lib/Target/Capstone/CapstoneISASemantics.md`, where the
+>   untagged CINCOFFSET/SCC rule is recorded too. The academic-spec text is not updated; it already
+>   differs from the implementations elsewhere.
+> - **QEMU:** the virtual profile already kept an untagged source. Until Q-04 (b), the physical
+>   profile nulls it as the RTL does (physical QEMU models the silicon, as with the untagged
+>   CINCOFFSET/SCC rule). One deviation from the matrix is fixed: `movc zero, rs` wrote `rs` into
+>   x0's storage, so a later `stc zero` stored it (capstone-qemu `isa/movc-untagged-source`). New
+>   suite `tests/movc-untagged-source`: 67/67, and 85/85 with `--legacy`
+>   (`CAPSTONE_MOVC_NULL_SCALAR=1`, every context under the RTL's rule).
+> - **Q-04 (b), the RTL:** add `NOT_CAP` to the preserve branch of `capstone_flu_unit.anvil:14`.
+>   The exact diff, directed tests, synthesis and board predictions are in the plan. NOT applied;
+>   until it is, the board nulls an integer source and physical-profile code keeps C-32's rewrite.
 
 > **2026-09-24: the emulator can now do what the RTL does here, on request.** capstone-qemu's
 > `CAPSTONE_MOVC_NULL_SCALAR=1` makes `helper_csmovc` null an untagged source too (default off: the
@@ -2623,6 +2642,16 @@ handler, so only that invocation dies and the rest of the run still returns data
 RETURN" rule applied to privilege rather than to control flow.
 
 ### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL nulls its source (silently: MOVC raises nothing) `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN A CHOSEN AND MERGED 2026-09-15 (46c53b7b6ae2, on dev at e3bb47b43680) AND MEASURED NOT TO FIX THIS SITE — the design choice is BACK WITH THE LEAD; still blocking P1's O2 arms; reproducer no longer an XFAIL, and a local reproducer of the surviving site is in capstone/tests/c32-sinkfold-repro/`
+
+> **2026-10-14: RESOLVED FOR THE VIRTUAL PROFILE by the Q-04 decision; still open for the physical
+> profile until Q-04 (b) is on a bitstream.** The virtual-profile SDK now compiles every application,
+> the runtime, the builtins and musl with `+movc-keeps-integer-source`, so a live-source copy is
+> one MOVC again, which capstone-qemu's MOVC (the decided rule) keeps for an integer. The compiler
+> default and the physical profile keep `CapstoneLiveSourceCopy`. Measured: 557.xz_r built with that
+> SDK has 0 adjacent STC+LDC slot pairs in the whole linked binary, against 1548 with the same tree
+> and compiler without the feature. Other measurements: `plans/2026-10-14-movc-untagged-source.md`.
+> The delegated probe's `movc-rule` variant now turns the feature off explicitly, so it still
+> tests the rewrite.
 
 > **PR #94 (CapstoneRecoverProvenance) does NOT fix C-32, and D′ was not redundant (2026-09-28).**
 > Measured by the compiler lane with a three-way compile of the SQLite Sublet TU. The pre-registration

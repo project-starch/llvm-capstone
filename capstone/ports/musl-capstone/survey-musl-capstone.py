@@ -180,11 +180,13 @@ def main() -> int:
     flags = compile_flags(musl)
     if args.virtual:
         # The virtual code generation of runtime/cmake/VirtualCodegen.cmake: libm
-        # and the rest run F and D in hardware under the lp64 calling convention.
+        # and the rest run F and D in hardware under the lp64 calling convention,
+        # and MOVC keeps an untagged source (+movc-keeps-integer-source, Q-04).
         flags += ["-mllvm", "-capstone-gp-free", "-mllvm", "-capstone-image-gp",
                   "-Xclang", "-target-feature", "-Xclang", "+f",
                   "-Xclang", "-target-feature", "-Xclang", "+d",
                   "-Xclang", "-target-abi", "-Xclang", "lp64",
+                  "-Xclang", "-target-feature", "-Xclang", "+movc-keeps-integer-source",
                   "-DCAPSTONE_MUSL_MALLOC=1"]
 
     objdir = pathlib.Path(args.objects).resolve() if args.objects else None

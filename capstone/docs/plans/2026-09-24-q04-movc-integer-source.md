@@ -1,5 +1,8 @@
 # Q-04: should MOVC consume an integer source? Recommendation: no
 
+> **Decided 2026-10-14 as recommended here** (the lead's option 1). What changed, the audit and the
+> evidence: [`2026-10-14-movc-untagged-source.md`](2026-10-14-movc-untagged-source.md).
+
 *2026-09-24. A decision for the project lead, with the spec's owners for the text and the hardware
 side for the RTL. It supersedes nothing: item 4 of `DECISIONS-WAITING-2026-09-10.md` states the
 question, and this file is the recommendation and the evidence for it.*

@@ -193,6 +193,10 @@ globals and anonymous constant pools. It permits those pools only for this
 profile; the bounded capability-table ABI retains its existing refusal.
 Virtual C cannot fabricate a missing gp. The shared setjmp and signal-stack
 assembly follows the profile's scalar return-address convention.
+The profile also passes `+movc-keeps-integer-source`: capstone-qemu's MOVC
+keeps an untagged source (Q-04, decided 2026-10-14), so the compiler copies a
+live-source capability register with one MOVC instead of the C-32 STC+LDC
+pair. The physical profile keeps the pair until its bitstream has Q-04 (b).
 
 ## VM service contract
 
