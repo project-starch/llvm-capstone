@@ -6171,3 +6171,32 @@ in a 64 MiB domain:
 So the cold penalty sits in domain creation, and the region cost scales with the domain's size. These are stage
 boundaries in the launcher. What the monitor and the CMA do inside each stage is not split.
 
+## The plain bug corpora of memcached, FFmpeg and tshark on silicon: every spatial defect caught, and every temporal one caught by per-object lifetimes and missed without them (caplifive_sublet_d93a8d66b, 2026-10-16)
+This covers 72 case directories: 46 plain-heap (FFmpeg 13 is a duplicate of 02) and 26 plain-temporal.
+- Each case was built for the silicon ABI (B0 pipeline, -O0, the pool carve) and run as a Linux-hosted domain through
+  capstone-exec.
+- The fixed run and the buggy run share one image.
+- The arm's controls ran in the same boot.
+- Pre-registered before each boot: the helper lane's per-case table (silicon-predictions/2026-10-16-plain, dev
+  510126308bb6) and bug-corpora/silicon-runs/2026-10-16-plain (lane fa3806536fa7 and 0f1c5d7f7463).
+
+| arm | heap | spatial (46) | temporal (26) | controls |
+|---|---|---|---|---|
+| silicon-lifetimes | level0, each object a CDERIVE child at its request size; free is CREVOKE | 46 CAUGHT at the labelled probe, cause 28 | 26 CAUGHT at the labelled probe, cause 25 | oob 28, uaf 25 at their probes; clean and subobj return |
+| silicon-level0 | level0, per-object bounds only | 46 CAUGHT at the labelled probe, cause 28 | 26 MISSED (the defect reproduces) | oob 28 at its probe; uaf returns; clean and subobj return |
+
+- **The fixed arm** of every case printed VERDICT FIXED and exited 0.
+- **148 of 148 runs per boot ended by themselves.** A domain fault ends only its own capstone-exec, and the next run
+  continues: the first deliberate faults through the process ABI on silicon.
+- **The silicon-mimic QEMU** (capstone-qemu d35af47b163c, GP_FABRICATE=0) read every row the same, on the same images.
+  Two cause codes differ:
+  - spatial: QEMU reports 5 / 7, the RTL its own OUT_OF_BOUNDS, 28;
+  - temporal: QEMU reports 24, because its ldc untags a revoked capability (ISSUES Q-11), and the RTL 25.
+
+**Scope, before quoting:**
+- These are the plain corpora. Their objects come from malloc, so per-object bounds catch every spatial crossing here.
+  Every object is exact at its 16-byte placement under the full scheme (the prediction table's geometry).
+- The sub-object (9) and nested (50) corpora are not in these rows.
+- The lifetimes arm is level0 with a CDERIVE child per object. A request that is not exact at its placement would keep
+  plain bounds and no lifetime; none in this corpus does.
+- It is not the virtual profile's mallocng.
