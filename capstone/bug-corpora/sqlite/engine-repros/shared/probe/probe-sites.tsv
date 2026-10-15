@@ -10,3 +10,5 @@
 36	01	static void resetAccumulator(Parse *pParse, AggInfo *pAggInfo){	      Expr *pE = pFunc->pExpr;	before	      LB_HIT(36, pFunc->pExpr, 8);
 37	02	SQLITE_PRIVATE int sqlite3BtreeRollback(Btree *p, int tripCode, int writeOnly){	  BtShared *pBt = p->pBt;	before	  LB_HIT(37, p, 8);
 38	02	static void detachFunc(	  sqlite3BtreeClose(pDb->pBt);	before	  if( lb_site==38 ){ lb_puts("LB_OBJECT site=38 closing_dest_btree p="); lb_putx((unsigned long long)(uintptr_t)pDb->pBt); lb_puts("\n"); }
+2	03	SQLITE_PRIVATE void sqlite3DbFreeNN(sqlite3 *db, void *p){	    if( db->pnBytesFreed ){	before	    LB_HIT(2, db, 8);
+39	03	SQLITE_PRIVATE void sqlite3LeaveMutexAndCloseZombie(sqlite3 *db){	  sqlite3_free(db);	before	  if( lb_site==39 ){ lb_puts("LB_OBJECT site=39 freeing_connection db="); lb_putx((unsigned long long)(uintptr_t)db); lb_puts("\n"); }

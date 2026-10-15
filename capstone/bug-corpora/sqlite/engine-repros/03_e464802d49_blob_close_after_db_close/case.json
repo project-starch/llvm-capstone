@@ -1,15 +1,15 @@
 {
   "case": 3,
   "upstream_fix": "e464802d49",
-  "title": "row05",
+  "title": "heap-use-after-free in sqlite3DbFreeNN",
   "consumer": "sqlite3.c (sqlite3DbFreeNN)",
   "live_in_pin": true,
-  "live_proof": "the defect is public and fixed upstream in 3.29.0, after the 3.22.0 pin; sqlite3_blob_close() in the pinned tree uses the lookaside-allocated Incrblob with no guard against the connection having been closed",
+  "live_proof": "the defect is public and fixed upstream in 3.29.0, after the 3.22.0 pin; sqlite3_blob_close in the pinned tree finalizes before freeing the Incrblob, so the last statement on a zombie connection frees the connection and sqlite3DbFree then reads it. Host ASan on this case source: heap-use-after-free, 696 bytes inside a 704-byte region, read in sqlite3DbFreeNN <- sqlite3DbFree <- sqlite3_blob_close, freed by sqlite3LeaveMutexAndCloseZombie <- sqlite3_finalize <- sqlite3_blob_close, allocated by openDatabase (results/2026-10-11-host-asan)",
   "allocator_layer": "memsys5",
-  "object": "the Incrblob, allocated from the connection's lookaside pool",
-  "lifetime_ender": "sqlite3_close_v2() frees the connection and its lookaside pool while the blob handle is still open",
+  "object": "the sqlite3 connection itself, allocated by openDatabase: sqlite3DbFree reads db->lookaside on it, not the Incrblob it is freeing",
+  "lifetime_ender": "sqlite3_close_v2 makes the connection a zombie, and the sqlite3_finalize inside sqlite3_blob_close then frees it (sqlite3LeaveMutexAndCloseZombie) before the same function reads it again",
   "shape": "free / stale read",
-  "fidelity": "real consumer, real allocator: SQLite's own memsys5 heap with lookaside on. This case predates the group harness and still talks to the older hostcall interface, which is why the Sublet arm skips it -- the standalone domain has no Sublet grant glue for it",
+  "fidelity": "real consumer, real allocator: SQLite's own memsys5 heap. Lookaside is OFF in this corpus (-DSQLITE_DEFAULT_LOOKASIDE=0,0), so the Incrblob comes straight from memsys5 and the case prints sqlite3_db_status to say so; the stale read is of the connection's own lookaside descriptor field, which sqlite3DbFree consults whether or not a pool exists, and host ASan confirms it fires with lookaside on and off. Ported 2026-10-05 from the legacy standalone domain onto REPRO322_MAIN, which is what let the Sublet arm run it at all",
   "arms": {
     "spatial": {
       "oracle": "complete"
