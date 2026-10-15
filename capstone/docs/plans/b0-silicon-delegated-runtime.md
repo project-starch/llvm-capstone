@@ -2999,7 +2999,13 @@ before any call, so it reads the same on both.
 
 **The run:** b0-bake-b6.sh bakes a private image (the B4/B5 pattern, restored by an EXIT trap). Its firmware is built
 on boot C+F's recipe (wrapper d7489e3, monitor 7361e1c, the supervised-call defines). It bakes only after the Linux
-half of the Sublet acceptance releases the shared buildroot. The firmware hash is recorded here before the boot.
+half of the Sublet acceptance releases the shared buildroot.
+- **Built 2026-10-16 03:10, before the boot:**
+  - private Image d68e4edcc4e0795a;
+  - firmware **7a4ef23ad1626527** (dom_stack gate PASS);
+  - staged b6-sublet.dom d989874aa2ca0161 and b0run.sh f579e57cfa3f5de4, the committed file with the b6-sublet case;
+  - every staged file present in the cpio, and absent again after the restore bake.
+- **Rungs:** b0-stats b0-hello r54-bounds b6-sublet b0-stats2.
 
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
