@@ -13,6 +13,7 @@ FPGA_BITSTREAM = the resident name); the report is the UART's `SR <count>` / `SV
 | `images/sublet-derive-kill.bin` | `6b6eb589929a2d9003277582ae751fc40a985d1a92249a0f8304fc3ab718eea3` | 0x80004100 | 19 | 0xe 0x100 0x300 0x1 0x1234 0xe 0x1d 0x1b 0x0 0x19 0x19 0x1d 0x1d 0x0 0x19 0xe 0x5678 0x1a 0x18 |
 | `images/sublet-split-shares-node.bin` | `029dff8faf069d6e68079a576c277415e5e1b60228835f57203176c422cb0a80` | 0x80004000 | 7 | 0x1111 0x2222 0x0 0x19 0x19 0x0 0x19 |
 | `images/sublet-mrev-orphan.bin` | `22989ae01b40f4dca02044a613b0ab6114201bd144aa4f3832db6b629de3bf92` | 0x80005000 | 8 | 0x0 0x0 0x0 0x0 0x0 0x19 0x19 0x19 |
+| `images/sup-sublet.bin` | `d7b3e3f811aa582d6d943b47498799c20d877ae2c67623d023e0a132bc72c7d0` | 0x80007c40 | 26 | 0x0 0x1 0x77 0xe 0x5a5a 0x0 0x5 0x19 0x0 0x4 0x0 0x5 0x1b 0x0 0x4 0x0 0x5 0x1d 0x0 0x4 0x0 0x5 0x1a 0x0 0x4 0x0 |
 
 The vectors are the operands of the tests' CAPPRINTs in retirement order on the Sublet tip (snapshot sublet-renorm,
 RTL d93a8d66b, the same on every step since each arm was added); the simulation's trace also shows the trap handler's
@@ -44,8 +45,15 @@ same 8 readings).
 
 ## What is NOT in this floor
 
-sup-sublet (the supervised-domain arm, 29 readings) needs its in-domain CAPPRINTs rewritten for the board: the bare
-wrapper's CAPPRINT mints a record capability, which a supervised domain may not do. Second wave. The SDK-level witness
+sup-sublet is the second wave, built here already: the supervised-domain arm (CDERIVE and CREVOKE inside a domain
+under CSSUPERVISE/CALL, the four refusals escaping to the monitor with CSUPCAUSE 25 / 27 / 29 / 26). Its three in-domain
+CAPPRINTs are compiled out on the board (the wrapper's CAPPRINT mints a record capability, which a supervised domain
+may not do; capstone-sublet carries the `#ifndef BOARD_TEST_CH`), so its board vector is the simulation's 29 values
+minus the domain's 0xe, 0x77 and 0, 26 values, with the monitor's reads of 0x77 / 0xe / 0x5a5a through s1 carrying
+the same information. It uses the monitor's CSSUPERVISE and CALL, so it runs after the three bare arms, and it is the
+first supervised domain on the Sublet bitstream: a trap anywhere ends it with mcause as the last reading. On the FP
+bitstream it is a second positive control: the domain's first CDERIVE escapes with CSUPCAUSE 2 instead of completing.
+The SDK-level witness
 (a physical image calling the runtime's derive and revoke) waits for the runtime's sublet_carve fix (R-55 family) and
 the full-format SDK defaults. The s1-revoke-gap pair runs on this bitstream as is, for the FP-against-Sublet
 comparison its PREREG records.
