@@ -186,6 +186,36 @@ case "$rung" in
     step=${rung#b5-mruby-}; step=${step%-stats}
     b5_mruby "$rung" "$step" env CAPSTONE_DELEGATE_STATS=1 /usr/bin/capstone-exec /test-domains/mruby.dom
     ;;
+  corpus-*)
+    # The bug corpus on silicon (bug-corpora/tools/run-silicon-cases.py; docs/plans/2026-10-15-bug-corpus-on-fpga.md):
+    # every line of /test-domains/corpus/<arm>/runs.txt is `<key> <image> <argv...>`, run in order through capstone-exec
+    # with its fault record on stderr, bracketed `CORPUS-RUN <key> BEGIN` / `CORPUS-RUN <key> END kind= value=` for the
+    # host-side judge. Each run has its own 120 s watchdog. retval: the number of runs that ended without the watchdog's
+    # help short of the list's length (0 = every run ended by itself; the judge reads the rest from the transcript).
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    dir=/test-domains/corpus/${rung#corpus-}
+    [ -f $dir/runs.txt ] || { echo "RESULT $rung retval=911"; exit 1; }
+    total=0; ended=0
+    while read -r key img args; do
+      [ -n "$key" ] || continue
+      total=$((total + 1))
+      echo "CORPUS-RUN $key BEGIN"
+      rm -f /tmp/corpus.wd
+      CAPSTONE_EXEC_DIAGNOSTICS=1 /usr/bin/capstone-exec $dir/$img $args > /tmp/corpus.out 2>&1 &
+      cx=$!
+      ( sleep 120; if kill -0 $cx 2>/dev/null; then echo wd > /tmp/corpus.wd; kill -KILL $cx; fi ) &
+      wd=$!
+      wait $cx; rc=$?
+      kill $wd 2>/dev/null; wait $wd 2>/dev/null
+      cat /tmp/corpus.out
+      if [ -e /tmp/corpus.wd ]; then echo "CORPUS-RUN $key WATCHDOG"; fi
+      if [ $rc -gt 128 ]; then kind=signal; value=$((rc - 128)); else kind=exit; value=$rc; fi
+      [ -e /tmp/corpus.wd ] || ended=$((ended + 1))
+      echo "CORPUS-RUN $key END kind=$kind value=$value"
+    done < $dir/runs.txt
+    echo "CORPUS: $ended of $total runs ended by themselves"
+    echo "RESULT $rung retval=$((total - ended))"
+    ;;
   b5-native-O2-e|b5-native-O2-bench|b5-native-O1-e|b5-native-O1-bench)
     # B5's unprotected baseline: the same mruby as a NATIVE Linux process (build_config-board-native.rb: the board's
     # gcc 12.3 and glibc, rv64g lp64d hard-float, at -O2 and -O1), the same scripts and the same hash check. No module
