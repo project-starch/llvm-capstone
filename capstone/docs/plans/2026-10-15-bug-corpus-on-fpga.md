@@ -60,17 +60,45 @@ Two sets of results already exist.
 
 ## 3. What differs on silicon (each must enter the per-case prediction)
 
-- **Exact bounds are absent.** Bounds are representable-only, and the allocator pads to the representable size
-  (R-33's rule). A one-past or short-overflow case can read MISSED on silicon where virtual read CAUGHT.
+- **Exact bounds are absent.** Bounds are representable-only, and every capability rounds OUTWARD. A probe that
+  lands inside a child's slack reads MISSED on silicon where virtual read CAUGHT. The RTL lane's model gives both
+  slacks per object (next bullet). Every object below 4 KiB at a 16-byte-aligned cursor is exact on this encoder, so
+  the small-object cases carry over unchanged.
 - **CDERIVE rounds outward.** `caplifive_sublet_d93a8d66b.bit` (sha256 89ba6d81…, CDERIVE/CREVOKE, the node parent
   link) was flashed on 2026-10-15 at 23:54, per the board lane. On it, CDERIVE rounds a child's bounds outward where
   physical QEMU refuses with 29 (ISSUES Q-15). A nested child can therefore cover more than its object.
-- **Whether a stale access traps.** R-35 (ISSUES-ARCHIVE) is FIXED on the M-mode LSU data path. But every
-  plain-temporal `case.json` still says "deployed silicon lets such a data access retire" (citing Q-11). One of the
-  two is stale, and every temporal verdict depends on which.
-- **R-11, top truncation past a 2 MiB window.** It is worked around in the glue only, and "does not reach the heap":
-  a malloc(65535) read 3 bytes short at its base (`fpga-silicon-measurements-for-paper.md`, the r54-bounds section).
-- **R-12: the node pool is 65,536, and exhaustion deadlocks the core.** The nested arms derive per object.
+  - The RTL does not refuse a child whose rounded bounds leave the parent.
+  - The model is `bounds-model.py` in capstone-ariane `capstone-sublet` (`verif/tests/custom/capstone`). It takes
+    `cderive_child(cursor, size, parent)`, or on the command line `python3 bounds-model.py cderive 0xCURSOR 0xSIZE
+    [0xPBASE 0xPTOP]`, and returns base, top, slack_below, slack_above, granule, exact, pad_size, pad_align and
+    exceeds_parent. It uses the RTL's own encoder.
+  - Example: malloc(65535) at a +0x10 cursor decodes [cursor-16, end+113) with a 128-byte granule. It is exact at
+    65536 B on 128-byte alignment.
+- **A stale access traps with 25.** This is the RTL lane's directed test `stale-access.S` on `d93a8d66b`'s RTL
+  (M-mode LSU path, 2026-10-16). A load and a store through a revoked capability each raise 25, in three paths:
+  - a CDERIVE child after CREVOKE;
+  - a LINEAR piece after REVOKE of its MREV handle;
+  - a child parked with STC and reloaded with LDC after the kill. The LDC itself does not fault; the use does.
+
+  Exactly the six probed accesses trapped, and no stale store landed. So R-35's fix holds, and the plain-temporal
+  `case.json` disclaimer "deployed silicon lets such a data access retire" is stale, for this bitstream and the FP
+  respin alike. The silicon reading of the same arm is one bare boot away.
+- **Rounding, not truncation.** R-11 (a top truncated past a 2 MiB window) belonged to the cursorless scheme, which
+  capstone-ariane `4a4261bb4` removed. On `d93a8d66b` no capability has a truncated top (RTL lane, 2026-10-16). The
+  heap sees over-coverage instead, which is the CDERIVE model's slack: malloc(65535) at a 16-byte cursor covers 113
+  bytes past its end.
+  - The "3 bytes short at base" reading in `fpga-silicon-measurements-for-paper.md` belongs to `0568f93a9`.
+  - ISSUES' R-11 heading predates this.
+- **The node pool refuses with 30; it does not deadlock.** Since 2026-09-16 (`r12-pool-exhaust.S`), the 65,533rd
+  allocation is refused with cause 30. The base stays valid, and the refusal is idempotent. ISSUES' R-12 heading,
+  "DEADLOCKS the core", predates that.
+  - Capacity: 65,532 mints from reset with nothing freed.
+  - Accounting per instruction (RTL lane): +1 node per MREV, LINEAR SPLIT, CDERIVE and ALLOC. Zero for a NONLIN
+    SPLIT, DELIN, TIGHTEN, SHRINK and CINCOFFSET.
+  - DROP leaks one node.
+  - CREVOKE frees the child. REVOKE frees the run below the handle and keeps the handle.
+  - Freed nodes are reused LIFO, up to 16,384 reuses per index.
+  - A nested case's peak is its live handles, plus live LINEAR siblings and live children, plus the DROPs so far.
 - **Soft float only.** A domain starts with FS Off, and one F/D instruction wedges the board. Every image passes
   `runtime/silicon/no-fp-gate.py`.
 - **MOVC (Q-04, C-32): silicon nulls an untagged source.** The silicon-mimic QEMU runs with `CAPSTONE_MOVC_NULL_SCALAR=1`.
@@ -95,14 +123,8 @@ The oracle is the virtual one (`tools/verdicts.py`), with the fault read from th
 
 ## 5. Asks
 
-**RTL lane.**
-1. A directed test on `d93a8d66b`'s RTL: a data load and a data store through a capability whose node was revoked,
-   on the M-mode LSU path, with the cause each raises. This settles R-35 against the case.json disclaimer before
-   any temporal prediction.
-2. CDERIVE's outward rounding (Q-15), as a function of size and alignment. Give it as a model the prediction
-   tool can call, not as prose.
-3. R-11 on the heap: which allocation sizes and placements in the corpus cross a truncating window.
-4. R-12 against the nested arms: the node count each nested case reaches, and the margin to 65,536.
+**RTL lane.** All four asks were answered on 2026-10-16: stale access, the CDERIVE model, R-11 and R-12. The
+answers are in section 3. Still open: the bare-boot silicon reading of `stale-access.S`.
 
 **Board lane.**
 1. The plain corpora first (80 defects). Each case is a small `case.c` + `shared/driver.c` + probe harness, not an
@@ -118,12 +140,17 @@ The oracle is the virtual one (`tools/verdicts.py`), with the fault read from th
    - That is compiler-lane territory where gp-captable or LTO breaks (I-8, C-75).
 
 **Both lanes.** A pre-registered per-case prediction table is committed before the first boot. It is computed by a
-tool from the recorded verdicts and the models in 5.2-5.4, never by hand (memory: compute every predicted value).
+tool from the recorded verdicts and the RTL lane's models in section 3 (`cderive_child`, the node accounting), never by hand.
 
 ## 6. LEAD decisions
 
 - **(a) Bounds exactness.** Exact bounds do not exist on this RTL. Either a predicted, pre-registered spatial
   difference is an acceptable outcome, or the silicon allocator must pad so that the cases stay comparable.
+  - The RTL lane's input: padding to representable bounds (`pad_size` at `pad_align`) keeps the allocator's own
+    bookkeeping exact. It does NOT restore a verdict whose probe falls inside the slack, because the padding is
+    inside the child.
+  - Its proposal: pad anyway, and pre-register MISSED where the probe offset lies within slack_below or slack_above,
+    CAUGHT elsewhere.
 - **(b) The silicon allocator for the malloc arms.** Two options: dev's managed mallocng (CDERIVE/CREVOKE, as
   virtual), ported to the silicon ABI; or the silicon Sublet runtime (`runtime/include/sublet/sublet.h`), whose
   `sublet_carve` the board lane is fixing for R-55. The silicon runtime's own allocator is level0 (per-object
