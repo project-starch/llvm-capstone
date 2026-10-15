@@ -617,8 +617,11 @@ def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None, 
                                           lay["code_len"], lay["req_data"], lay["arena"], lay["count"],
                                           tot, carve_desc, len(bases), cma_base, step,
                                           "OK" if not bad else "AT RISK at %d" % len(bad)))
-    print("    worst stack above the globals template %d (declared %d); WIDEN up to %d storage capabilities"
-          % (worst_stack, lay["req_stack"], widen))
+    # worst_stack is None when no base reached the stack carve (every one trapped before it): say so, rather than
+    # crash the report and hide the reasons printed below behind an ERROR line.
+    print("    worst stack above the globals template %s (declared %d); WIDEN up to %d storage capabilities"
+          % ("n/a (no base reached the stack carve)" if worst_stack is None else "%d" % worst_stack,
+             lay["req_stack"], widen))
     if FORMAT == "full":
         print("    OVERLAP at %d of %d bases: up to %d capabilities, up to %d bytes outside their own storage%s; the "
               "remainder's full-scheme granule at the first carve is up to %d bytes" % (

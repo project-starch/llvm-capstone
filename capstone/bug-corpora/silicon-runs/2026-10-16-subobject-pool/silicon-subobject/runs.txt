@@ -1,0 +1,22 @@
+silicon-subobject:control-clean controls.dom clean
+silicon-subobject:control-oob controls.dom oob
+silicon-subobject:control-uaf controls.dom uaf
+silicon-subobject:control-subobj controls.dom subobj
+silicon-subobject:ffmpeg-subobject-00-fixed ffmpeg-subobject-00.dom fixed 0
+silicon-subobject:ffmpeg-subobject-00-buggy ffmpeg-subobject-00.dom buggy 0
+silicon-subobject:ffmpeg-subobject-01-fixed ffmpeg-subobject-01.dom fixed 1
+silicon-subobject:ffmpeg-subobject-01-buggy ffmpeg-subobject-01.dom buggy 1
+silicon-subobject:ffmpeg-subobject-02-fixed ffmpeg-subobject-02.dom fixed 2
+silicon-subobject:ffmpeg-subobject-02-buggy ffmpeg-subobject-02.dom buggy 2
+silicon-subobject:ffmpeg-subobject-03-fixed ffmpeg-subobject-03.dom fixed 3
+silicon-subobject:ffmpeg-subobject-03-buggy ffmpeg-subobject-03.dom buggy 3
+silicon-subobject:ffmpeg-subobject-04-fixed ffmpeg-subobject-04.dom fixed 4
+silicon-subobject:ffmpeg-subobject-04-buggy ffmpeg-subobject-04.dom buggy 4
+silicon-subobject:ffmpeg-subobject-05-fixed ffmpeg-subobject-05.dom fixed 5
+silicon-subobject:ffmpeg-subobject-05-buggy ffmpeg-subobject-05.dom buggy 5
+silicon-subobject:ffmpeg-subobject-06-fixed ffmpeg-subobject-06.dom fixed 6
+silicon-subobject:ffmpeg-subobject-06-buggy ffmpeg-subobject-06.dom buggy 6
+silicon-subobject:ffmpeg-subobject-07-fixed ffmpeg-subobject-07.dom fixed 7
+silicon-subobject:ffmpeg-subobject-07-buggy ffmpeg-subobject-07.dom buggy 7
+silicon-subobject:ffmpeg-subobject-08-fixed ffmpeg-subobject-08.dom fixed 8
+silicon-subobject:ffmpeg-subobject-08-buggy ffmpeg-subobject-08.dom buggy 8

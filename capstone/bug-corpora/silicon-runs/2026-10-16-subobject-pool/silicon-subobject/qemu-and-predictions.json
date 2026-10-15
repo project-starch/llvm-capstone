@@ -1,0 +1,177 @@
+{
+ "arm": "silicon-subobject",
+ "build": {
+  "defs": "",
+  "app_cflags": "-Xclang -fcapstone-subobject-bounds",
+  "extra_cflags": "-std=c11 -Daligned_alloc(a,n)=malloc(n) -I/tmp/capstone/wt-b0/capstone/ports/ffmpeg/buffer-pool/src/shared -I/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported -I/tmp/capstone/wt-b0/capstone/ports/ffmpeg/buffer-pool/cmake/replay-config -I/tmp/capstone/wt-b0/capstone/runtime/include",
+  "extra_src": [
+   "buffer.c",
+   "refstruct.c",
+   "observe-pool-events.c",
+   "pool-allocator.c",
+   "metadata-allocator.c",
+   "payload-pointers.c"
+  ]
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "RETURNED",
+  "subobj": "CAUGHT"
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-subobject-00",
+   "case": "00_8864fd0aec_cbs_h265_pic_timing_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "image_sha256": "fd5f7983cdd3ed9173f50a4583666eccf9caf3593ffa7c8098e7811b30588b3f",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ff2_case_run"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "ff2_case_run"
+   }
+  },
+  {
+   "name": "ffmpeg-subobject-01",
+   "case": "01_68845e26f7_vulkan_hevc_refpicset_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "image_sha256": "4f3c37393501e18d4c8e130201c66c7898c632e3a5eec77fa27c7f6f3194f9bf",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ff2_case_run"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "ff2_case_run"
+   }
+  },
+  {
+   "name": "ffmpeg-subobject-02",
+   "case": "02_e058af88ab_vulkan_hevc_dpb_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "image_sha256": "55bf7cf3a997bbdab912e4eff8e35641a24e8118738d27cb87aef0faff503423",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ff2_case_run"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "ff2_case_run"
+   }
+  },
+  {
+   "name": "ffmpeg-subobject-03",
+   "case": "03_89de2f0de1_aac_arith_last_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "image_sha256": "d814ba99f3bf34eaff382896019b525cc77d9237fdf6bdadaf651645215bb9e9",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ff2_case_run"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "ff2_case_run"
+   }
+  },
+  {
+   "name": "ffmpeg-subobject-04",
+   "case": "04_1a00ea51cb_rtsp_control_url_underflow",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "image_sha256": "f750b66d6d00095ad91959e5abb9f1c16b0905ec69cb8ac74f1d31c440abd6a9",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-subobject-05",
+   "case": "05_d29ff88422_vulkan_av1_tile_sizes",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "image_sha256": "afa87fe39e36000b0346978abdd055822ca4ac3a39ed60a6f1437658bd7e1293",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "write_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "write_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-subobject-06",
+   "case": "06_a809a784ec_vvc_entry_point_start_ctu",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "image_sha256": "075ad71d71b322e995dd938436e333ce8cf44825144836eb243343216ddec89c",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-subobject-07",
+   "case": "07_275e217b10_hlsenc_key_uri_strlcpy_size",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "image_sha256": "377de54e02821c1918614b0053f9e3dcf38cdcd874ff2821ec03513327ecf288",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "memcpy"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "memcpy"
+   }
+  },
+  {
+   "name": "ffmpeg-subobject-08",
+   "case": "08_fb862976df_cbs_h266_col_width_val",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "image_sha256": "58d98715a8964480ac439795cacfc722eef54ffc8712b191e9838df04964c068",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "write_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "write_probe"
+   }
+  }
+ ]
+}
