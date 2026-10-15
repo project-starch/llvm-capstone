@@ -34,7 +34,7 @@ The tool is `tools/predict-silicon.py`, and its docstring states the method. To 
 | | child at the request size | child at the size rounded to the alignment |
 |---|---|---|
 | 16-byte placement | 45/45 spatial CAUGHT, as virtual | 40/45: memcached 00, FFmpeg 01, 04, 05 and tshark 03 MISSED |
-| 8-byte placement | 44/45, plus tshark 00 (8192 B) DEPENDS on placement (1 of 2) | 41/45 |
+| 8-byte placement | 44 caught; tshark 00 (8192 B) DEPENDS on placement (1 of 2) | 41 caught, 3 missed (memcached 00, FFmpeg 04, tshark 03), 1 placement-dependent (tshark 00) |
 
 - **Spatial.**
   - All 45 virtual catches are accesses outside their object: 44 past its end, 1 before its start.
@@ -56,9 +56,14 @@ The tool is `tools/predict-silicon.py`, and its docstring states the method. To 
 - **Cross-check against an independent measurement.** CheriBSD's malloc hands out bounds rounded up to its size
   class. Its measured table reads request 17 → 32 bytes and request 24 → 32 bytes
   (`ffmpeg/plain-heap-repros/results/2026-10-08-cheribsd/size-classes-2026-10-10.txt`): a multiple of 16 for
-  these sizes. CHERI recorded NOT CAUGHT for these plain-heap cases (`cheribsd-subobject`): memcached 00, FFmpeg 01,
-  04 and 05, and tshark 03. That is exactly the five this table predicts MISSED under rounding to 16, with the other
-  40 caught both ways. The geometry and the verdict logic therefore agree with a run they did not see.
+  these sizes.
+  - CHERI recorded NOT CAUGHT for these plain-heap cases (`cheribsd-subobject`): memcached 00, FFmpeg 01, 04 and 05,
+    and tshark 03. That is the same five this table predicts MISSED under rounding to 16, with the other 40 caught
+    both ways.
+  - This is CONSISTENT with CHERI, not an independent proof. CheriBSD's rounding is measured at 17 and 24 but only
+    inferred at 1 and 9, the sizes of tshark 03 and memcached 00. Both allocators round the same way, so the
+    agreement is partly arithmetic.
+  - What it does show is that the measured geometry (size and offset) matches CHERI's record case by case.
 
 ## Assumptions (say which one held when the board reads)
 

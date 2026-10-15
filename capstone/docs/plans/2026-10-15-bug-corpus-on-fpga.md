@@ -153,7 +153,8 @@ tool from the recorded verdicts and the RTL lane's models in section 3 (`cderive
 - **Spatial (45).** Every virtual catch carries over if the silicon allocator derives each child at the request size
   on a 16-byte placement; every object is exact under the encoder.
   - An allocator that rounds the child up to 16 misses five: memcached 00, FFmpeg 01, 04 and 05, and tshark 03.
-    These are exactly the five CHERI's size-class rounding misses.
+    These are the same five CHERI recorded NOT CAUGHT. That is consistent, not independent: CheriBSD also rounds,
+    measured at 17 and 24 B, inferred at 1 and 9 B.
   - On an 8-byte placement, tshark 00 (8192 B) also depends on placement.
 - **Temporal (26).** CAUGHT with cause 25 under an allocator that revokes, and MISSED under level0.
 - **Subobject (9).** MISSED.
