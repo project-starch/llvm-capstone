@@ -2676,6 +2676,66 @@ Launch:
   CAPSTONE_EXEC_DIAGNOSTICS, so the split between the 2.9 MB image, the 64 MiB domain's regions and mrb_open is not
   measured. The domain's size is the first suspect, since B0_DATA (40 MiB) is far above QEMU's peak use.
 
+## R-55 (regions) pre-registered (2026-10-15, before the boot): a nominal-bounds region table with exact remainders, R-43 a2 on caplifive_fpb_afcd19bea
+**The change** (all FPGA; QEMU's monitor assembly byte-identical, plain and supervised):
+- **The monitor** (capstone-sbi r55/board-exact eb88326 on the board line, the same change as r55/exact-regions
+  ebe0a25 on the supcall line):
+  - every slot carries its nominal bounds;
+  - with exact_regions, coverage and head/tail are decided on them;
+  - after boot every remainder is cut into pieces whose decoded bounds equal their nominal ones (SPLIT, then SHRINK,
+    then a read-back that reports EXCT if a piece is still inexact);
+  - a cut the decoded bounds do not allow is reported (EXCS), never executed;
+  - CAPSTONE_MAX_REGION_N is 127, the most capstone-c's dom_init can carve.
+- **The wrapper** (caplifive-opensbi r55/board-exact a8bdc90; supcall line 1269c77):
+  - exact_regions turns on only when the encoder rounds (region 1's decoded base is not _cap_text_end);
+  - Linux's region ends at 0xC0000000 (every remainder <= 1 GiB, granule <= 1 MiB);
+  - the boot's slots are cut exact;
+  - the plain dom_stack is 16 KiB (gate: 8336 B carved).
+- **Module and libcapstone:** MAX_REGION_N 127 (caplifive-buildroot r55/region-limit-127 211d48a). The rr host is
+  rebuilt against it: 0a5c9025e8e6f5db, by the recipe that reproduces 2c9e82d101b48160 byte for byte.
+
+**The instrument** (tests/runtime-qemu/silicon-ladder/r55-regions/): a replay of the region table.
+- It uses check-repr's literal port of the RTL encoder and the monitor's carve algorithm, under the recorded a2 carve
+  sequences.
+- Controls:
+  - it reproduces every slot id of 0568f93a9's a2 under cursorless (14 tests) and of the respin's under the full
+    scheme (9 tests, table full at 96);
+  - its OVERLAP metric reads 0 on 0568f93a9 and 508 pairs over 47 carved ranges on the respin.
+- Under the new policy: 111 slots for 0568f93a9's twelve invocations plus the closing k800, OVERLAP 0, no inexact
+  piece.
+
+**The boot** (board line, plain build through the shared buildroot):
+- The shared checkout was moved from buildroot d04bd83 / opensbi df0e9a8 / capstone-sbi 93440d5 to 211d48a / a8bdc90
+  / eb88326.
+- The runner is the R-43 a2 list unchanged (r1_slots_pools 1b7a04fe237e1580, relinked k800 589ceee3), output tag s9a2.
+
+**Predictions:**
+1. **As a2's own pre-registration:**
+   - RESULT k800 retval=4 twice, from the relinked control;
+   - 12 x speedtest1-ran=0x4EB1xxxx;
+   - every R1 point line ok=1 bad=0;
+   - 12 x released pool rc=1;
+   - no cause-25.
+   So Linux boots on the new boot carve, and the twelfth invocation completes. On the respin the table filled at
+   invocation 8.
+2. **No RGNF, RGNO, EXCT or EXCS line.**
+3. **Region ids:**
+   - If every DBAS/BASE equals 0568f93a9's sequence (the respin's first eight did), the ids are:
+     - opening k800: [24];
+     - invocations: [28,29,31,32,34], [36,37,38,39,41], [42,43,44,45,47], [49,50,51,52,53],
+       [55,56,58,59,61], [63,64,65,66,68], [69,70,71,72,74], [76,77,78,79,81], [82,83,84,85,86],
+       [88,90,92,93,95], [96,97,98,99,101], [103,104,105,106,108];
+     - closing k800: [110].
+   - Whatever the addresses, the replay of the board's own recorded sequence must reproduce every id it reads, and
+     report OVERLAP 0.
+
+**What a failure would say:**
+- Linux does not boot: the boot carve (the DRAM split or the post-boot cutting) is wrong. The fallback is the
+  shared checkout's previous pins (a firmware load, no reflash).
+- RGNF: the slot budget is wrong.
+- EXCT: the granule rule mispredicts exactness on silicon.
+- Ids that differ while the addresses equal the record: the C and the replay disagree. Diff the two algorithms
+  before anything else.
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
 sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one
