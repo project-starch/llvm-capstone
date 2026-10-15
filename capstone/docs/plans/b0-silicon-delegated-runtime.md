@@ -3143,6 +3143,24 @@ caplifive_sublet_d93a8d66b, with tags s12*. The acceptance pins come back in an 
 (classic path untested on silicon) and in 25 buildroot commits. A failure keeps the board on the acceptance pins and
 is attributed by diffing the two trees, not by guessing.
 
+## The board's checkout on capstone-bootstrap, RESULT (2026-10-16 04:16-04:22): the classic path does not run on it; the board stays on the acceptance pins
+- **a2 on the bootstrap pins:** Linux boots, then the k800 control fails at once: `ladder-perf: create_dom failed`
+  (HARD STOP: no RESULT). Tag s12a2.
+- **a1 and a4** were refused before any boot by a driver copy pinned to d04bd83 exactly. Their re-run was cancelled:
+  the same control would fail the same way.
+- **Why:** capstone-bootstrap's module is the process-ABI line. Twelve commits between d04bd83 and 549d686 make it so:
+  process.c, ADOPT/FORGET, context ids, 16 descriptors. The frozen classic hosts (lpc 3b93a2b6e2adfa36,
+  sqlite_host_rr.user) speak the classic interface. This lane's own B0 bake scripts already say a classic control
+  cannot share a module load with the process ABI.
+- **The miss:** the pre-registration's premise, that the bootstrap module still serves the classic rows, was not
+  checked before spending the boot. It was available in this lane's notes. One boot, about 5 minutes.
+- **What capstone-bootstrap IS validated by:** boot P, the process ABI on the same monitor tree (234ee66's tree is
+  ebe0a25's) with the 127-slot process module, every rung as pre-registered.
+- **Converging the board needs one of two things,** a decision for later:
+  - the classic hosts rebuilt against capstone-bootstrap's libcapstone;
+  - or the classic rows moved to process-ABI images.
+- Until then the board's shared checkout stays at d04bd83 / df0e9a8 / 93440d5.
+
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
 longer separates globals.
