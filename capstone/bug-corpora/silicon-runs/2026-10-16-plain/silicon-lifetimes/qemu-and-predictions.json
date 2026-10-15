@@ -1,0 +1,1247 @@
+{
+ "arm": "silicon-lifetimes",
+ "controls_qemu": {
+  "clean": {
+   "qemu": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1"
+  },
+  "oob": {
+   "qemu": "CAUGHT",
+   "detail": "cause=7 pc=0xe0200f54 address=0xe0263918 in ctl_write_probe+0x2c (the labelled probe)"
+  },
+  "uaf": {
+   "qemu": "CAUGHT",
+   "detail": "cause=24 pc=0xe0200f88 address=0xe0263900 in ctl_read_probe+0x20 (the labelled probe)"
+  },
+  "subobj": {
+   "qemu": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a"
+  }
+ },
+ "rows": [
+  {
+   "name": "memcached-heap-00",
+   "case": "00_ddee3e2_authfile_scan_past_calloc",
+   "corpus": "capstone/bug-corpora/memcached/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "896212fd26d1deb46e0ec7a516581e878b5c3460223cfc4aec3a504a343af6df",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe"
+   }
+  },
+  {
+   "name": "memcached-heap-01",
+   "case": "01_d5d9ff0_cachedump_end_marker_off_by_one",
+   "corpus": "capstone/bug-corpora/memcached/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "5a3bec9e9d18c3bac190e19116019086a7367719ef1d4014964a837e937bdede",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe"
+   }
+  },
+  {
+   "name": "memcached-heap-02",
+   "case": "02_391f2e4762bf_freesuffix_realloc_sized_in_bytes",
+   "corpus": "capstone/bug-corpora/memcached/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "6623d683df1761fbda83f3d26aadbaf8559dbcf9a331e5f252344b5648d324db",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe"
+   }
+  },
+  {
+   "name": "memcached-heap-03",
+   "case": "03_16a809e2a062_cache_create_freelist_sized_by_object",
+   "corpus": "capstone/bug-corpora/memcached/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "33cc454e5b761053136c18211afbabcaada9460ecf9b3c161d9117d95ffb69c0",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe"
+   }
+  },
+  {
+   "name": "memcached-heap-04",
+   "case": "04_40aff8b0f113_stats_end_marker_past_exact_buffer",
+   "corpus": "capstone/bug-corpora/memcached/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "b01d5dd297d7bfff3285aff8046392a51f18ab48b7422ef9b4c306c218c7d078",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe"
+   }
+  },
+  {
+   "name": "memcached-heap-05",
+   "case": "05_49f3b0ca9b57_out_string_crlf_copied_with_its_nul",
+   "corpus": "capstone/bug-corpora/memcached/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "94fe850d48e8e84fb5a85c1b0f5733dc1b2a40c0d1e8ce8cebc5333d7e1fd0d6",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mch_write_probe"
+   }
+  },
+  {
+   "name": "memcached-heap-06",
+   "case": "06_212c3820c7bb_key_hash_filter_tag_length_underflow",
+   "corpus": "capstone/bug-corpora/memcached/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "b6a13cbec9275993d0b11a18fbdf96ea7d661356942fe3e68f1f4ea0ab87c24d",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "mch_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "mch_read_probe"
+   }
+  },
+  {
+   "name": "memcached-heap-07",
+   "case": "07_0f605245cf3f_bin_delete_logs_unterminated_key",
+   "corpus": "capstone/bug-corpora/memcached/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "2785a16eae7765bdbb6074aed4b755ef02595d2f9852172ce202fee291ae66bd",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "mch_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "mch_read_probe"
+   }
+  },
+  {
+   "name": "memcached-heap-08",
+   "case": "08_fa51ad8452d5_slab_list_shuffle_reads_one_past",
+   "corpus": "capstone/bug-corpora/memcached/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "243743c753c3a93d6c31693e40b0f2410b76a98fab454f22b78132d992aac68a",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "mch_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "mch_read_probe"
+   }
+  },
+  {
+   "name": "memcached-temporal-00",
+   "case": "00_0d4901071c74_restart_line_freed_at_entry_but_not_cleared",
+   "corpus": "capstone/bug-corpora/memcached/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "dc0b4b3e06dc313ca44a70f787d9b2b504122df8c58d5938efa92abb0982e2a2",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mct_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "mct_read_probe"
+   }
+  },
+  {
+   "name": "memcached-temporal-01",
+   "case": "01_e7793811f8c8_logger_write_to_watcher_freed_by_the_poll",
+   "corpus": "capstone/bug-corpora/memcached/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "31505645d9202bb6c6b7160ecb66a2cdd0d9f404b6da699fd7e518d99b4fba04",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mct_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "mct_write_probe"
+   }
+  },
+  {
+   "name": "memcached-temporal-02",
+   "case": "02_3bc58f6ea55a_logger_loop_condition_still_reads_the_freed_watcher",
+   "corpus": "capstone/bug-corpora/memcached/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "2507ce650edc0d91cee8ec3513001c6d4b14212be55ac433ac03e7e1670d9b24",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mct_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "mct_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-00",
+   "case": "00_d133b4a231_showcwt_kernel_scan_past_array",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "a0d4112d6177c6e577a44a4288f294814801e352d4ccea266daf05c3ecc385ac",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-01",
+   "case": "01_bcbf3a5630_vf_scale_format_list_compaction",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "0c68e8ffc003310d4f34c1382e34fd1a176d1bed56aa261e4b0bda8d3d9382af",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-02",
+   "case": "02_56309e476a_vf_vif_mirror_below_base",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "0a3eb7384da4a01a99da2e6d7c99b642d8f32cd09820b2d910d64def83d56f04",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-03",
+   "case": "03_495b402f27_diracdec_edge_emu_buffer_undersized",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "664cb10588d3c1e9e393eba12b93ea293d26afa2be0608df0fd6ea4d001741d1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-04",
+   "case": "04_b3c7ebc1ed_swaprect_temp_sized_for_plane0",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "d8bca433935d73847800723d56563d20d91549a68076bb9e0f4891349fd5aec9",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-05",
+   "case": "05_8553e6ef57_cbs_av1_t35_payload_unpadded",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "18b566099acef08cfc407755802b85c0e7af3b73070233700c069c41735606e1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-06",
+   "case": "06_041d4f010e_prores_raw_header_len_unchecked",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "a85fe3370423d1deba7f6cb87e94192bc97ff2b46564a5e6196dd97e82892daa",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-07",
+   "case": "07_8880a174d0_librist_read_ignores_caller_size",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "aa5ac9582b1abd7c677eec3ed237dc5c3ae31e042efef55d00bb75d5d43741fa",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-08",
+   "case": "08_b2df2f4f22_mpegenc_system_header_fixed_128",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "908773d59d91a3ff15ab6f01b54626c0c280cc23b9fd39c809b318e5fb87eeb6",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-09",
+   "case": "09_16b2049d4d_cfhd_transform2_wider_than_plane",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "7d8f437e2dab54830463090268e9ad7772ca10708d90fa1a6108ad5726717d09",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-10",
+   "case": "10_989444060d5f_lut3d_size2_computed_before_directive",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "11ccdf3b2bbd77f000ff160740fa4e2670a5cb118b37af3007c0738f3e711adb",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-11",
+   "case": "11_76645e096fab_exif_string_clone_drops_terminator",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "906ba787ca9b8f0727f6ec71758bc43af8bfeca87641a46c15594e700da1502f",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-12",
+   "case": "12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "b25ea0a870e54010b38c45eb903e90cbec40220525e3517623efbf6b8e32bb0e",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-13",
+   "case": "13_8af6c71d96f4_vif_single_reflection_indexes_below_base",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "35ad33daac6ee396c05218ddab32f8ffa21e54965f1a41bbecb52e59366b58b6",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-14",
+   "case": "14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "3953b717f0773316aacbe683c235b4b2b217838beb559864bf071f88567e04e2",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-15",
+   "case": "15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "f332a557fded3f3424f3f281ebb9337655be068d7eaa7900912ec9943cd27876",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-16",
+   "case": "16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "b250b45a442b35c05850baa428eed9e8e5e38b5d07d6c9f5701ffab0e4f1903d",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-17",
+   "case": "17_18761f9fb55c_rtpdec_av1_output_cursor_advanced_for_skipped_obu",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "ac89cd02ac210e507a7562c74e6284375aea1c302aff65c2feaa0f3fcb80eb14",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-18",
+   "case": "18_e8031e5b9ad2_showcwt_du_scroll_reads_row_past_plane",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "cbd5f36ac0e61b2ae08d27da89b1f74e06132734fe543a3c52185f7d4faea331",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-19",
+   "case": "19_905a4324030e_showcwt_position_initialised_to_sono_size",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "1aecaeebcc4f6fb7ee2df006d6d3f412c6b2459dd21d81b71aed239483843542",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-20",
+   "case": "20_bbdce45fda1e_diracdec_mctmp_rows_below_worst_case",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "b49684f73b55d448127d69e6396d4f4ab69512102766b7c9c529ed8d0d978083",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-21",
+   "case": "21_3fbb9560821b_afir_crossfade_reads_beyond_input_frame",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "6a8a08bcf0a2dd89cd42d9aa682e7e6597b7e849cc5ceb149635e7403a6d8162",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-22",
+   "case": "22_242ff799c75f_tdsc_cursor_advanced_by_a_stride_the_loop_already_added",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "544048c11435729985f82365a87018b378c1cc13368a1bf94e2a63a4ba5c4b75",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-23",
+   "case": "23_f45da79b2c33_exr_dwa_block_written_full_eight_by_eight",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "9c9dfadb1aba372b3fda875f841c86953ca02343518c26ef4fc2a399a7a37caf",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ffh_write_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-heap-24",
+   "case": "24_162f75b5e679_exr_pxr24_uint_branch_strides_by_the_data_window",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "b160310d3500af5ad1b0edba4663ce0cc49959c2bdf1f45a7c7498c91a4246c7",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffh_read_probe_u8"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-00",
+   "case": "00_716d2a47c565_ops_dispatch_interior_alias_after_free",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "33ec4e09b3a90fd454a44e4bae84a7c3af1ec70511c05d4c5ec78282584338a6",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-01",
+   "case": "01_c98810ab47fa_hw_base_encode_list_walk_reads_freed_link",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "f0649996fcc91632d75143793178017e5b7efbe660b82e2dd0bed73bfe268c11",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-02",
+   "case": "02_43de8b328b62_lzf_write_cursor_stale_after_realloc",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "bc77c96663a5bd9b579396ab36a9dbdbc908d1b1e400f6847dd0357ccade4697",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_write_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-03",
+   "case": "03_dc87758775e2_aviobuf_checksum_ptr_stale_after_realloc",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "dba70772db9d54977e87252c7b1f6a9ad2127a52c8fbd3a436e870a319fa811e",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-04",
+   "case": "04_4b2248594c7f_jpeg2000_packed_headers_stream_stale_base",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "6810f715de931a793df8f233887d2e15dc55d722b6d3ead1ab93d1522bacaa01",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-05",
+   "case": "05_d6458f6a8bf1_aacdec_tag_che_map_keeps_freed_element",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "855c8fd53abe30c514b254aab44da45008bebe3c09128822eaab7d2ca7de94d0",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-06",
+   "case": "06_e8714f6f93d1_h264_delayed_pic_holds_interior_pointers",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "6ff98927c71a5583e61653e9e58eb1945a66b5a82cacebf9801c98b414ff8463",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_write_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-07",
+   "case": "07_a43e9cdd442b_isom_extradata_freed_before_callee_frees_it",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "1f51bbe8530ff452643c65068d89c17f9256f7158ab6be038788af6932a97d77",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-08",
+   "case": "08_8a4ea9644833_diracdec_realloc_on_the_wrong_field",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "c652bc826514ad9778536cfc594fd11c4569465e207a61db07cc950399659270",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-09",
+   "case": "09_265731f201f1_tx_subcontext_field_left_dangling_on_failure",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "f706ce7177b87751001e12452619aa43a63b9f2168569c077b1fe10e4a6d7c20",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-10",
+   "case": "10_e7a65142b972_aacpsy_clears_the_local_not_the_field",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "a4e6094b59c4a232b05f795ddf64d09ef0483c83b42acd63ee8917b261d4a9e4",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-11",
+   "case": "11_ba28222a14ab_ratecontrol_expr_field_not_cleared",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "492171502bf87ef550b47ccf856570e01564324a5655517e355bc47d1ee9b76c",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "ffmpeg-temporal-12",
+   "case": "12_2e04d35c69e6_vlc_buf_freed_by_callee_then_read",
+   "corpus": "capstone/bug-corpora/ffmpeg/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "faff65ec6f42cd721c77cb72495def11f1bddfe6e73a7820b4bb443edd2e94b5",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "fft_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "fft_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-00",
+   "case": "00_19c51d27b9_netscaler_record_past_page",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "b8da057d36eafce40a5b481050aa6ed8cc4c698669c10b912507b783b37b63a4",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-01",
+   "case": "01_373504f7c9_dfvm_error_message_wrong_index",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "91646bf571bf005cead6742e32769dd67274ebf13fbbddae4b7231549d79ce51",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-02",
+   "case": "02_381681583b_pcapng_nrb_custom_string_over_copy",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "464bdf140fe54b6ced564f02e25f96510f14370469bcc03d8e6d1108a94ec347",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-03",
+   "case": "03_c556b648aa_strptime_reads_past_null_timezone",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "d75785f89bf8bea6e8d126cb502a11135e0ba182bad3ff99719bc5cf0d294c95",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-04",
+   "case": "04_87803328179_blf_apptext_sized_without_terminator",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "d161c222db4ba420611c83559dd77a37d82c560da8ebe046c8eed86b081ddfb5",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-05",
+   "case": "05_140aad08e081_nettrace_packet_buf_scanned_by_strstr",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "8f69216447adc650f499c190cfbba7e09a3bdf0fa2f84b0f4415c021822b2338",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-06",
+   "case": "06_3aad1ef236e6_t61_accent_branch_reads_the_following_byte",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "e6bc5a2e1c3dc0868d3e69c0c15d7d99e193d810110897ceaa1cef73dd3a8e1d",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-07",
+   "case": "07_e2ca71beaed2_uat_unbinstring_leaves_no_terminator",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "3ebfb0c0aed40aa5af43c4bc78962021ea5e2614f02660d3903ea6ed0064e7d4",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-08",
+   "case": "08_0cae98570ebc_cl_find_custom_memcmp_reads_the_prefix_length",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "8c6b42eb22c0c5a7303ae4264706ce7354d987cf4605a0624af85b858311e13e",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-09",
+   "case": "09_bf123efe154d_uat_oid_empty_field_underflows_the_index",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "cf8e3261afc4e67350516c3dd457ba52ce0ae393771bfe1f9b5f804d15fd26c4",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "wsh_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-10",
+   "case": "10_e9b933473e8f_address_to_str_buf_clamps_to_size_not_last_index",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "66d381f7b0f880f38048fd81603963a693848ccb1ef1e96b89da2f5eda070db6",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "wsh_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "wsh_write_probe"
+   }
+  },
+  {
+   "name": "wireshark-heap-11",
+   "case": "11_4b15bf76a7f7_oid_to_str_buf_tail_reservation_one_short",
+   "corpus": "capstone/bug-corpora/wireshark/plain-heap-repros",
+   "kind": "spatial",
+   "image_sha256": "0cf270b9f8ef65ad3745e5854292534c0a834a4e54ea20499ef22cacf157b7a8",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "wsh_write_probe+0x2c"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "wsh_write_probe"
+   }
+  },
+  {
+   "name": "wireshark-temporal-00",
+   "case": "00_f3c2e6087e7b_k12_callee_frees_its_own_argument",
+   "corpus": "capstone/bug-corpora/wireshark/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "b73f999ff38b5f5f96656fbbc375efbcc167ea47102127fca3a7e9dd49dd8de4",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wst_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wst_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-temporal-01",
+   "case": "01_7dcf69480de8_peak_trc_callee_frees_state_struct",
+   "corpus": "capstone/bug-corpora/wireshark/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "d8c8fdcaa0528230d74ca365293f81a4f3e4cf1ded08db9aaab448ecdf612c40",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wst_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wst_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-temporal-02",
+   "case": "02_0fc7f3781351_wspstat_container_freed_before_its_contents",
+   "corpus": "capstone/bug-corpora/wireshark/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "55e3280f5eb3b1e447ecd3ec524756831b0db9d29db8d5fd62540fcb3c207297",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wst_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wst_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-temporal-03",
+   "case": "03_012a179785ab_filesystem_alias_named_copy_is_not_a_copy",
+   "corpus": "capstone/bug-corpora/wireshark/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "70f939e65b99130f0fb5ff26b32b65efc5a0544a703e4b9416be2e59bddfa55a",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wst_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wst_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-temporal-04",
+   "case": "04_07ffcf90426b_extcap_one_help_string_stored_in_many_owners",
+   "corpus": "capstone/bug-corpora/wireshark/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "b3315599a9701b6dfbc2f6517f3110eae4601cb8ee047d7934f3c57a6a1e3fc5",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wst_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wst_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-temporal-05",
+   "case": "05_fb46cda19602_wtap_close_inner_loop_rewinds_outer_cursor",
+   "corpus": "capstone/bug-corpora/wireshark/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "437e372a3a9db786838cc1d869e05019d64ac9f06abd3a4a2d9c722ae7b4ec21",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wst_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wst_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-temporal-06",
+   "case": "06_d3e3c00fbbe2_prefs_static_filter_label_not_cleared",
+   "corpus": "capstone/bug-corpora/wireshark/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "2ee69a676fc568866e13fa4ac6a5fda2f263fe15c26976736c4ab75ae79d6de3",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wst_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wst_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-temporal-07",
+   "case": "07_8dc7d164dcdb_prefs_reset_not_idempotent",
+   "corpus": "capstone/bug-corpora/wireshark/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "ec673648bde6f9c67c66cf9286a740a719db59a0a4015d81461dd6aa29e0d662",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wst_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wst_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-temporal-08",
+   "case": "08_48a00fd55671_ftype_string_freed_twice_by_caller_and_callee",
+   "corpus": "capstone/bug-corpora/wireshark/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "2c02d7f5a81357f075bf9a6512e5e605200672f4a558ba5c3e917a265ec200b1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wst_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wst_read_probe"
+   }
+  },
+  {
+   "name": "wireshark-temporal-09",
+   "case": "09_cfc15838bdec_capture_ifinfo_out_parameter_left_unassigned",
+   "corpus": "capstone/bug-corpora/wireshark/plain-temporal-repros",
+   "kind": "temporal",
+   "image_sha256": "d16db7249e1c69dca8f7f12a29f156ee517f23b737177e893f5d73b23cb6e7ce",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wst_read_probe+0x20"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wst_read_probe"
+   }
+  }
+ ]
+}
