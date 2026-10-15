@@ -94,6 +94,15 @@ volatile int mcapp_reverse_a836eab;
 
 /* Read by slabs_mover.c (patch 0005): set only by fixture 24, to reverse c0e5a99. */
 volatile int mcapp_reverse_c0e5a99;
+/* Path witnesses for fixture 24. The fixture names its target header by CURSOR
+   ADDRESS, the identity test this port uses everywhere (mcapp_cur), because a
+   capability-to-capability `==` would not be an address comparison and a witness
+   that silently failed to match would read 0 and be taken for "path not taken".
+   The mover records taking the reversed header-only branch and later loading that
+   exact orphan as a chunk's head. */
+volatile unsigned long mcapp_c0e5a99_orphan_head;
+volatile unsigned mcapp_c0e5a99_header_only;
+volatile unsigned mcapp_c0e5a99_orphan_read;
 
 static unsigned long mcapp_cur(const volatile void *p) { return __builtin_capstone_cap_get_cursor((void *)p); }
 static unsigned long mcapp_end(const volatile void *p) { return __builtin_capstone_cap_get_end((void *)p); }
@@ -948,6 +957,9 @@ static int mcapp_fixture(int n)
             printf("MCAPP-FIX %d ia not linked\n", n);
             return MCAPP_MARK(n, 0xE0018);
         }
+        mcapp_c0e5a99_orphan_head = mcapp_cur(ia);
+        mcapp_c0e5a99_header_only = 0;
+        mcapp_c0e5a99_orphan_read = 0;
         unsigned long hdr_flags_addr = (unsigned long)(void *)&ia->it_flags;
         unsigned hdr_dst = 0;
         for (unsigned c = POWER_SMALLEST; c <= 63; c++)
@@ -970,6 +982,11 @@ static int mcapp_fixture(int n)
         for (int w = 0; w < 300 && !hdr_moved; w++) { usleep(10000); hdr_moved = slabs_page_count(hdr_cls) == 1; }
         printf("MCAPP-FIX %d header-page-moved=%d reversed=%d\n", n, hdr_moved, mcapp_reverse_c0e5a99);
         if (!hdr_moved) return MCAPP_MARK(n, 0x7);     /* the mover waited: header page not moved */
+        printf("MCAPP-FIX %d header-only=%u\n", n, mcapp_c0e5a99_header_only);
+        if (n == 24 && mcapp_c0e5a99_header_only != 1) {
+            printf("MCAPP-FIX %d triggering condition not created (header-only branch not observed)\n", n);
+            return MCAPP_MARK(n, 0xE0018);
+        }
         /* second move: a data chunk's page. The mover reads the orphan chunk's head here. */
         mcapp_touching(n, hdr_flags_addr);
         enum reassign_result_type r2 = REASSIGN_RUNNING;
@@ -980,6 +997,11 @@ static int mcapp_fixture(int n)
         int chk_moved = 0;
         for (int w = 0; w < 300 && !chk_moved; w++) { usleep(10000); chk_moved = slabs_page_count(chk_cls) < 2; }
         printf("MCAPP-FIX %d chunk-reassign=%d chunk-page-moved=%d\n", n, (int)r2, chk_moved);
+        printf("MCAPP-FIX %d orphan-head-read=%u\n", n, mcapp_c0e5a99_orphan_read);
+        if (n == 24 && mcapp_c0e5a99_orphan_read == 0) {
+            printf("MCAPP-FIX %d triggering condition not created (orphan head not examined)\n", n);
+            return MCAPP_MARK(n, 0xE0018);
+        }
         /* On the lifetimes arm the mover faulted at hdr_flags_addr and never got here. Reaching this
            line means no fault: the plain arm, or the shipped arm (25) with no orphan. */
         return MCAPP_MARK(n, (chk_moved ? 0x20 : 0x10) | (mcapp_reverse_c0e5a99 ? 1 : 0));
