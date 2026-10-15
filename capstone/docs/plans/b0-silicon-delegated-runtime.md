@@ -3007,6 +3007,34 @@ half of the Sublet acceptance releases the shared buildroot.
   - every staged file present in the cpio, and absent again after the restore bake.
 - **Rungs:** b0-stats b0-hello r54-bounds b6-sublet b0-stats2.
 
+## B6 RESULT (2026-10-16 03:11-03:16, caplifive_sublet_d93a8d66b, firmware 7a4ef23ad162): every line as pre-registered
+CDERIVE and CREVOKE work from a Linux-hosted delegated application, through the runtime's helpers, with no monitor
+change.
+- **Rungs:** b0-stats 0, b0-hello 0, r54-bounds 64, **b6-sublet 0**, b0-stats2 0.
+- **The B6 lines on silicon:**
+
+  ```
+  B6 P: valid 1 type 1 perm 7 len 8192 base%16 0
+  B6 G: valid 1 type 1 perm 15 [+0, +4096)
+  B6 C: valid 1 type 1 perm 15 [+256, +768)
+  B6 S: through c 0x1234, through g+256 0x1234
+  B6 K: valid 1 type 1 perm 15 [+256, +320)
+  B6 R: after revoke_child(g, c): c valid 0, k valid 0, g valid 1, g+256 0x1234
+  B6 N: valid 1 type 1 perm 15 [+256, +768)
+  B6 N: g+256 0x5678
+  B6 E: after revoke_child(g, c2): c2 valid 0, g valid 1
+  B6 rc=0
+  ```
+
+- Every line equals QEMU's (acbad0f7ec82) except R and E. There silicon reads the revoked children valid 0, as
+  predicted; QEMU's lcc validity is a stub (Q-11).
+- **What it establishes on silicon:**
+  - a perm-7 heap block derives a group that carries MANAGE;
+  - the group's children have exact bounds and share bytes with it;
+  - CREVOKE ends a child and its grandchild (the subtree) and leaves the group live with the bytes in place;
+  - the range is reusable by a fresh child.
+- This is the allocator pattern the bug corpus's malloc arms need. It runs with no monitor change.
+
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
 longer separates globals.
