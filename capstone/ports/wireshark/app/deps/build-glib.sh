@@ -44,8 +44,23 @@ done
 grep -E "^(Ok|Expected Fail|Fail|Unexpected Pass|Skipped|Timeout): " "$LOG/native-test.log" | tr -s ' ' | tr '\n' ' '; echo
 nfail=$(awk '/^(Fail|Unexpected Pass|Timeout):/{s+=$2} END{print s+0}' "$LOG/native-test.log")
 nok=$(awk '/^Ok:/{print $2}' "$LOG/native-test.log")
-[ "${nok:-0}" -gt 50 ] && [ "$nfail" = 0 ] || { echo "glib: NATIVE TEST FAILED (ok ${nok:-0}, fail $nfail)" >&2; exit 1; }
-echo "glib: native glib suite OK ($nok ok)"
+# One failure depends on the build host, not on glib: tzdata 2024b and later make PST8PDT a link to
+# America/Los_Angeles, whose first transition is LMT, so gdatetime's posix-parse case reads "LMT"
+# where it asserts "PST". It is accepted only as that test with that assertion and nothing else.
+TL=$N/build/meson-logs/testlog.txt
+tzonly=0
+if [ "$nfail" = 1 ] && grep -qE '^ *[0-9]+/[0-9]+ glib[^ ]* - glib:gdatetime +ERROR' "$TL" &&
+   [ "$(grep -cE '^ *[0-9]+/[0-9]+ .* (FAIL|ERROR|TIMEOUT) ' "$TL")" = 1 ] &&
+   grep -q 'test_posix_parse: assertion failed (g_time_zone_get_abbreviation (tz, 0) == "PST"): ("LMT" == "PST")' "$TL"; then
+  tzonly=1
+fi
+[ "${nok:-0}" -gt 50 ] && { [ "$nfail" = 0 ] || [ "$tzonly" = 1 ]; } ||
+  { echo "glib: NATIVE TEST FAILED (ok ${nok:-0}, fail $nfail)" >&2; exit 1; }
+if [ "$tzonly" = 1 ]; then
+  echo "glib: native glib suite OK ($nok ok; gdatetime posix-parse fails on this host's tzdata, as expected)"
+else
+  echo "glib: native glib suite OK ($nok ok)"
+fi
 
 cp "$TS_DEPS_PREFIX"/lib/pkgconfig/*.pc "$PC/" 2>/dev/null || true
 cat > "$PC/libpcre2-8.pc" <<PCEOF

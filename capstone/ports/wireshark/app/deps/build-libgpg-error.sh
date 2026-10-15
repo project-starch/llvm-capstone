@@ -19,11 +19,16 @@ OPTS=(--disable-shared --enable-static --disable-threads --disable-nls --disable
 # consumer_thread unconditionally, t-poll.c:441-442), and automake builds every test program before
 # running any. So the suite runs with t-poll taken out of BOTH lists; every other test must pass.
 GPGE_TESTS="t-version t-strerror t-syserror t-lock t-printf t-b64 t-argparse t-logging t-stringutils t-malloc t-spawn t-strlist t-name-value"
+# Upstream's tests/t-lock.c calls time() without <time.h>. GCC 14 and later reject an implicit
+# declaration, make stops at t-lock, and the ten tests after it are never built, so the check
+# below reports 3 of 13 on any such host. The test programs alone take the old default; the
+# library and the Capstone cross build are compiled as before.
 # The native build is also installed into a native-only prefix: libgcrypt's native check links it.
 NP=$TS_DEPS_BUILD/native-prefix
 ( cd "$N" && env -u CC -u AR -u RANLIB ./configure --prefix="$NP" "${OPTS[@]}" > "$LOG/native-configure.log" 2>&1 &&
   env -u CC -u AR -u RANLIB make -j"${JOBS:-8}" -C src > "$LOG/native-build.log" 2>&1 &&
-  env -u CC -u AR -u RANLIB make -C tests $GPGE_TESTS > "$LOG/native-tests-build.log" 2>&1 ) || true
+  env -u CC -u AR -u RANLIB make -C tests CFLAGS="-g -O2 -Wno-error=implicit-function-declaration" \
+    $GPGE_TESTS > "$LOG/native-tests-build.log" 2>&1 ) || true
 : > "$LOG/native-check.log"
 for tst in $GPGE_TESTS; do   # each test program run directly; exit status 0 is a pass, as automake counts it
   if [ -x "$N/tests/$tst" ] && ( cd "$N/tests" && ./$tst ) >> "$LOG/native-check.log" 2>&1; then
