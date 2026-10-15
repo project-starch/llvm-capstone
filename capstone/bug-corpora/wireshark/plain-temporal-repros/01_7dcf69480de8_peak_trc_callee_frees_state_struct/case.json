@@ -45,6 +45,18 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=24 pc=0x3fb3790c7c in wst_read_probe; by probe: the fault is at the labelled probe wst_read_probe",
       "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "silicon-level0": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b): the same silicon-ABI build and board run with level0 as it ships (tools/arms.json silicon-level0, the bounds-only control arm). A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's oob control faulted and its uaf control completed. Pre-registered in silicon-predictions/2026-10-16-plain: MISSED, because level0 revokes nothing.",
+      "verdict": "MISSED",
+      "verdict_note": "reached (case=1 arm=buggy) and completed with no fault; silicon; buggy run end kind=exit value=0",
+      "verdict_from": "results/2026-10-16-silicon/silicon-level0"
+    },
+    "silicon-lifetimes": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b): the case built for the silicon ABI and run as a delegated application, its heap level0 with CAPSTONE_LEVEL0_LIFETIMES (tools/arms.json silicon-level0-lifetimes; built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py). A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's oob and uaf controls both faulted. Pre-registered in silicon-predictions/2026-10-16-plain: CAUGHT with cause 25, because free CREVOKEs the object (QEMU reads 24, ISSUES Q-11).",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0xac0811a4 in wst_read_probe; by probe: the fault is at the labelled probe wst_read_probe",
+      "verdict_from": "results/2026-10-16-silicon/silicon-lifetimes"
     }
   },
   "case": 1,

@@ -272,6 +272,36 @@
         "uaf-malloc",
         "pool-return-90"
       ]
+    },
+    "silicon-level0-lifetimes": {
+      "target": "capstone-silicon",
+      "summary": "the case built for the silicon ABI (runtime/silicon/build-b0-hello.sh: gp-captable, full LTO, soft float, the pool carve) and run on the FPGA as a delegated application through capstone-exec, its heap level0 built with CAPSTONE_LEVEL0_LIFETIMES: every object is a CDERIVE child of one MANAGE group over the arena, at exactly its request size on a 16-byte placement, and free CREVOKEs it, so a stale capability's next use traps 25; inexact requests keep plain bounds and no lifetime. First measured on caplifive_sublet_d93a8d66b (silicon-runs/2026-10-16-plain)",
+      "mechanism": "per-object exact bounds and a CDERIVE/CREVOKE lifetime per object in level0, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf"
+      ]
+    },
+    "silicon-level0": {
+      "target": "capstone-silicon",
+      "summary": "the same silicon-ABI build and board run as silicon-level0-lifetimes with level0 as it ships: malloc bounds each object to its request (SHRINK) and free only marks the block free, so a temporal case completes by construction; the bounds-only control arm",
+      "mechanism": "per-object bounds in level0, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "complete",
+        "subobj": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf"
+      ]
     }
   }
 }

@@ -71,3 +71,16 @@ The tool is `tools/predict-silicon.py`, and its docstring states the method. To 
   alignment. The two columns cover the request size and the rounded size.
 - The probe's access is the object's own pointer plus the measured offset. Both profiles use 16-byte capabilities,
   so an object's layout and size as measured on the virtual profile are its silicon layout and size.
+
+## Read on silicon (2026-10-16)
+
+The board ran the plain corpora on `caplifive_sublet_d93a8d66b` (bundle `silicon-runs/2026-10-16-plain`, read into each
+corpus as the `silicon-lifetimes` and `silicon-level0` arms by `tools/silicon-verdicts.py`).
+- **The assumption that held is the first column: the child at the request size, on a 16-byte placement.** That is
+  level0 with `CAPSTONE_LEVEL0_LIFETIMES`. Its mechanism was shown on silicon first by the board lane's B6:
+  - a group derived from a malloc'd block has exact bounds;
+  - CREVOKE ends a child and its grandchild, and a fresh child reuses the range.
+- **silicon-lifetimes:** 46 spatial CAUGHT at the labelled probe (cause 28, the RTL's OUT_OF_BOUNDS) and 26 temporal
+  CAUGHT with cause 25. That is every row as predicted, the duplicate FFmpeg 13 included.
+- **silicon-level0:** 46 spatial CAUGHT and 26 temporal MISSED, as predicted for an allocator that does not revoke.
+- The rounded-size column was not the configuration measured, so its five predicted misses remain predictions.
