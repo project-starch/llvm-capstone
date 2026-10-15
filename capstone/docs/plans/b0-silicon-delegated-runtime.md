@@ -2889,6 +2889,92 @@ Shared tree d04bd83 / df0e9a8 / 93440d5. The respin's fw3 firmwares, by hash: s0
     the wedge to the runtime's carve and shows the fix removes it on silicon.
 - **a10:** mcause 25 (trap log 0x99), mepc DBAS+0x4354 (DBAS 0x81A00000), tval 0xac100000, as pre-registered.
 
+## B6 pre-registered (2026-10-16, before the boot): CDERIVE / CREVOKE from a delegated application, caplifive_sublet_d93a8d66b
+The bare floor showed the instructions on silicon with nothing between the test and the core. B6 issues them from a
+Linux-hosted domain, through the runtime's own helpers (`capstone_cap_derive`, `capstone_cap_revoke_child` in
+runtime/include/capstone/capability.h), on the heap malloc hands the domain. This is the path the bug corpus's nested
+arms and every migrated allocator take.
+
+**Why it can work with no monitor change.** An rtl-oracle read at d93a8d66b, whose lines this lane re-read:
+- CDERIVE checks the parent's type (NONLIN) and never MANAGE, and mints the child with `(parent.perm & 7) | 8`
+  (capstone_dyn_unit.anvil:272);
+- only CREVOKE needs MANAGE (:306);
+- CAPENTER's genesis capabilities are perm 7 (capstone_flu_unit.anvil:503).
+So a domain derives a group from its perm-7 heap block, and the group (with MANAGE) derives and revokes its children.
+
+**The image:** runtime/silicon/b6-sublet.c, built by build-b0-hello.sh (B0_APP=b6-sublet, pool carve).
+- d989874aa2ca0161 (frozen at /tmp/capstone/b6/frozen).
+- check-repr full+renorm OK at 512 bases, OVERLAP 0; no FP instructions.
+- 8 CDERIVE and 2 CREVOKE encodings; sup-static-audit 0 forbidden.
+
+**Arms:** P malloc(8192); G = derive(p, 0, 4096); C = derive(g, 256, 512); S a store through c read through c and g;
+K = derive(c, 0, 64); R revoke_child(g, c); N = derive(g, 256, 512) again; E revoke_child(g, c2). Every value is read
+with lcc or through a live capability, so every arm returns.
+
+**QEMU** (silicon-mimic, firmware d5c57ee765c9, capstone-qemu acbad0f7ec82 with the physical decode, sha256 7867d241):
+- every line as designed, with rc 80. The two set bits are R and E: QEMU's lcc validity selector is a stub that reads
+  1 for a revoked child (op_helper.c helper_cslcc; ISSUES Q-11's second divergence);
+- negative control on the pre-decode QEMU (4940d3fde12b): cause 2 at the first CDERIVE (0xa2b39bdb).
+
+The first build (a39ca7382563fef5) read a revoked child's validity after a printf call. Under QEMU the callee's
+spill and restore of that register handed back a non-capability, so lcc raised 24. That is ISSUES Q-11: QEMU's ldc
+untags a loaded capability whose node is revoked, while the RTL forwards it unchanged. The rung now reads validity
+before any call, so it reads the same on both.
+
+**Predicted on silicon** (rc 0):
+- the QEMU lines, except that R reads `c valid 0, k valid 0, g valid 1, g+256 0x1234` and E reads `c2 valid 0, g valid
+  1`. Silicon's lcc validity is the node's: s1gap read a revoked base as 0 in every run;
+- P: `valid 1 type 1 perm 7 len 8192`;
+- G: `valid 1 type 1 perm 15 [+0, +4096)`;
+- C: `perm 15 [+256, +768)`;
+- S: 0x1234 / 0x1234;
+- K: `perm 15 [+256, +320)`;
+- N: `perm 15 [+256, +768)`, g+256 0x5678.
+- **Controls in the same boot:** b0-stats 0, b0-hello 0 (db4385ff32deddf6), r54-bounds 64 (0b0ff5d555188612), all
+  as boot C+F read on this bitstream.
+- **What would refute it:**
+  - a fault in B6, so capstone-exec returns its own code: the domain path refuses what the bare floor allowed;
+  - any perm or bounds value other than above;
+  - a revoked child reading valid 1: CREVOKE did not end the child's node.
+
+**The run:** b0-bake-b6.sh bakes a private image (the B4/B5 pattern, restored by an EXIT trap). Its firmware is built
+on boot C+F's recipe (wrapper d7489e3, monitor 7361e1c, the supervised-call defines). It bakes only after the Linux
+half of the Sublet acceptance releases the shared buildroot.
+- **Built 2026-10-16 03:10, before the boot:**
+  - private Image d68e4edcc4e0795a;
+  - firmware **7a4ef23ad1626527** (dom_stack gate PASS);
+  - staged b6-sublet.dom d989874aa2ca0161 and b0run.sh f579e57cfa3f5de4, the committed file with the b6-sublet case;
+  - every staged file present in the cpio, and absent again after the restore bake.
+- **Rungs:** b0-stats b0-hello r54-bounds b6-sublet b0-stats2.
+
+## B6 RESULT (2026-10-16 03:11-03:16, caplifive_sublet_d93a8d66b, firmware 7a4ef23ad162): every line as pre-registered
+CDERIVE and CREVOKE work from a Linux-hosted delegated application, through the runtime's helpers, with no monitor
+change.
+- **Rungs:** b0-stats 0, b0-hello 0, r54-bounds 64, **b6-sublet 0**, b0-stats2 0.
+- **The B6 lines on silicon:**
+
+  ```
+  B6 P: valid 1 type 1 perm 7 len 8192 base%16 0
+  B6 G: valid 1 type 1 perm 15 [+0, +4096)
+  B6 C: valid 1 type 1 perm 15 [+256, +768)
+  B6 S: through c 0x1234, through g+256 0x1234
+  B6 K: valid 1 type 1 perm 15 [+256, +320)
+  B6 R: after revoke_child(g, c): c valid 0, k valid 0, g valid 1, g+256 0x1234
+  B6 N: valid 1 type 1 perm 15 [+256, +768)
+  B6 N: g+256 0x5678
+  B6 E: after revoke_child(g, c2): c2 valid 0, g valid 1
+  B6 rc=0
+  ```
+
+- Every line equals QEMU's (acbad0f7ec82) except R and E. There silicon reads the revoked children valid 0, as
+  predicted; QEMU's lcc validity is a stub (Q-11).
+- **What it establishes on silicon:**
+  - a perm-7 heap block derives a group that carries MANAGE;
+  - the group's children have exact bounds and share bytes with it;
+  - CREVOKE ends a child and its grandchild (the subtree) and leaves the group live with the bytes in place;
+  - the range is reusable by a fresh child.
+- This is the allocator pattern the bug corpus's malloc arms need. It runs with no monitor change.
+
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
 longer separates globals.

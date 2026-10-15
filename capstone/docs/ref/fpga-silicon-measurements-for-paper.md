@@ -6133,3 +6133,16 @@ the FP respin's (shared tree d04bd83 / df0e9a8 / 93440d5).
 - Images: fixed 4bfe3b0ec8494385, unfixed b029b33c879495e9 (capstone-artifacts/c6-sublet-fix-2026-10-15).
 
 QEMU's physical profile keeps exact SPLIT bases and cannot tell the two apart.
+
+### CDERIVE / CREVOKE from a delegated application (B6, firmware 7a4ef23ad162, 2026-10-16)
+b6-sublet.c (image d989874aa2ca0161) runs under Linux and the monitor and uses the runtime's capstone_cap_derive /
+capstone_cap_revoke_child on its malloc'd heap.
+- A perm-7 block derives a group with perm 15 (MANAGE) over exactly [+0, +4096).
+- The group derives a child over exactly [+256, +768); a store through the child reads back through the group.
+- The child derives a grandchild [+256, +320).
+- CREVOKE(group, child) reads the child and the grandchild invalid (0), the group valid, and the bytes still there.
+- A fresh child over the same range works.
+- rc 0, every reading as pre-registered (lane 2a91e97661b4, 0fa554ba6c3e), with the b0-hello and r54-bounds (64)
+  controls in the same boot.
+- QEMU (acbad0f7ec82) reads the same, except that its lcc validity stub reports the revoked children as 1.
+
