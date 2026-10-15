@@ -339,7 +339,26 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 **Impact.** A program that branches on these errnos (ENODEV for an unsupported file mapping, ENOMEM for an oversize mapping) takes another path. No port has been checked for such a dependency.
 
 
-## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
+## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
+
+> **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
+> With `rd != rs1`, MOVC writes `x[rs1]` to `x[rd]`, contents and tag, and nulls `x[rs1]` only if it is
+> a TAGGED capability whose type is not NONLIN. Untagged data (null included) and NONLIN stay;
+> `rd == rs1` is a no-op; nothing raises. NOT "consume only LINEAR": REVOKE, UNINIT, SEALED,
+> SEALEDRET and EXIT stay consuming. Matrix, audit (nothing relies on MOVC zeroing an integer source),
+> security argument and evidence: `plans/2026-10-14-movc-untagged-source.md`.
+> - **Record:** the `movc` row of `llvm/lib/Target/Capstone/CapstoneISASemantics.md`, where the
+>   untagged CINCOFFSET/SCC rule is recorded too. The academic-spec text is not updated; it already
+>   differs from the implementations elsewhere.
+> - **QEMU:** the virtual profile already kept an untagged source. Until Q-04 (b), the physical
+>   profile nulls it as the RTL does (physical QEMU models the silicon, as with the untagged
+>   CINCOFFSET/SCC rule). One deviation from the matrix is fixed: `movc zero, rs` wrote `rs` into
+>   x0's storage, so a later `stc zero` stored it (capstone-qemu `isa/movc-untagged-source`). New
+>   suite `tests/movc-untagged-source`: 67/67, and 85/85 with `--legacy`
+>   (`CAPSTONE_MOVC_NULL_SCALAR=1`, every context under the RTL's rule).
+> - **Q-04 (b), the RTL:** add `NOT_CAP` to the preserve branch of `capstone_flu_unit.anvil:14`.
+>   The exact diff, directed tests, synthesis and board predictions are in the plan. NOT applied;
+>   until it is, the board nulls an integer source and physical-profile code keeps C-32's rewrite.
 
 > **2026-09-24: the emulator can now do what the RTL does here, on request.** capstone-qemu's
 > `CAPSTONE_MOVC_NULL_SCALAR=1` makes `helper_csmovc` null an untagged source too (default off: the
@@ -2104,7 +2123,7 @@ everything inside delegated domains, are unaffected.
 >   take E+1. Verified in the lane's model over 400,000 regions x three cursors: 0 not covering, against 519 without.
 >   check-repr will model it from the commit.
 
-### R-55 — under the full bounds scheme the FPGA monitor's boot-time carves land their cursors below the carve point; `mtime` reads the CLINT's msip, S-mode time is 0 and Linux hangs in start_kernel `OBSERVED ON SILICON 2026-10-15 (caplifive_fpb_afcd19bea; option (b) 4a4261bb4 and the Sublet build carry the same encoder change); CONFIRMED by a one-cursor firmware change that boots Linux on the same bitstream (boot M). PARTLY FIXED 2026-10-15 in the monitor, LANDED on capstone-bootstrap the same day (capstone-sbi 2ea8a9a, caplifive-opensbi 5695abf, caplifive-buildroot a3191e8): Linux, R-43 a1/a3-a6/a10, the ladder, P1 cell 5 and the B-series and FP probes pass on the respin. OPEN, with fixes built and awaiting their board runs: the region table and remainder isolation (R-43 a2; capstone-sbi r55/board-exact eb88326, r55/exact-regions ebe0a25) and the sublet runtime (P1 cell 6; llvm-capstone lane b0-silicon-runtime fd16ea507fef)`
+### R-55 — under the full bounds scheme the FPGA monitor's boot-time carves land their cursors below the carve point; `mtime` reads the CLINT's msip, S-mode time is 0 and Linux hangs in start_kernel `OBSERVED ON SILICON 2026-10-15 (caplifive_fpb_afcd19bea; option (b) 4a4261bb4 and the Sublet build carry the same encoder change); CONFIRMED by a one-cursor firmware change that boots Linux on the same bitstream (boot M). PARTLY FIXED 2026-10-15 in the monitor, LANDED on capstone-bootstrap the same day (capstone-sbi 2ea8a9a, caplifive-opensbi 5695abf, caplifive-buildroot a3191e8): Linux, R-43 a1/a3-a6/a10, the ladder, P1 cell 5 and the B-series and FP probes pass on the respin. SUBLET HALF FIXED ON SILICON 2026-10-16 (caplifive_sublet_d93a8d66b: a matched P1 cell 6 pair, the fixed image completes with QEMU's counters and the unfixed one wedges with 26 at the same revoke). OPEN: the region table and remainder isolation, with a fix built and awaiting its board run (R-43 a2; capstone-sbi r55/board-exact eb88326, r55/exact-regions ebe0a25; C5u ran the exact-regions supcall line on silicon cleanly)`
 
 > **The symptom.** On caplifive_fpb_afcd19bea, every Linux boot stops right after the `sched_clock` line.
 > - That line is itself stamped `[0.000000]` (on 0568f93a9: `[0.000168]`). It is followed by `[ cut here ]`, which is
@@ -2192,6 +2211,13 @@ everything inside delegated domains, are unaffected.
 >   scheme every allocation after the first starts, and points, below its own start (model: the second 64 B allocation
 >   of a 2 MiB arena points at the first). The frozen P1 cell-6 image wedges with mcause 26 at `revoke t0` in
 >   sqlite3DbNNFreeNN. It ran to the end on 0568f93a9.
+>   - **FIXED ON SILICON 2026-10-16.** sublet_split SHRINKs the lower piece to its nominal base. On
+>     caplifive_sublet_d93a8d66b, a matched pair of P1 cell 6 images that differ only by that change:
+>     - fixed 4bfe3b0ec8494385 completes with `112006 38bb59fd` and sublet 5568/37970/32569/37970/5401, QEMU's
+>       counters exactly;
+>     - unfixed b029b33c879495e9 wedges with mcause 26 at `revoke t0` in sqlite3DbNNFreeNN, tval 0xac11a8c0, as
+>       the frozen image did.
+>     - Frozen images built on the old runtime still cannot pass on a full-scheme bitstream; rebuild them.
 >
 > **The fix space (the lead's).** The RTL lane recommends no RTL change: a carve sets its cursor explicitly. The
 > alternatives are:
@@ -2623,6 +2649,16 @@ handler, so only that invocation dies and the rest of the run still returns data
 RETURN" rule applied to privilege rather than to control flow.
 
 ### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL nulls its source (silently: MOVC raises nothing) `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN A CHOSEN AND MERGED 2026-09-15 (46c53b7b6ae2, on dev at e3bb47b43680) AND MEASURED NOT TO FIX THIS SITE — the design choice is BACK WITH THE LEAD; still blocking P1's O2 arms; reproducer no longer an XFAIL, and a local reproducer of the surviving site is in capstone/tests/c32-sinkfold-repro/`
+
+> **2026-10-14: RESOLVED FOR THE VIRTUAL PROFILE by the Q-04 decision; still open for the physical
+> profile until Q-04 (b) is on a bitstream.** The virtual-profile SDK now compiles every application,
+> the runtime, the builtins and musl with `+movc-keeps-integer-source`, so a live-source copy is
+> one MOVC again, which capstone-qemu's MOVC (the decided rule) keeps for an integer. The compiler
+> default and the physical profile keep `CapstoneLiveSourceCopy`. Measured: 557.xz_r built with that
+> SDK has 0 adjacent STC+LDC slot pairs in the whole linked binary, against 1548 with the same tree
+> and compiler without the feature. Other measurements: `plans/2026-10-14-movc-untagged-source.md`.
+> The delegated probe's `movc-rule` variant now turns the feature off explicitly, so it still
+> tests the rewrite.
 
 > **PR #94 (CapstoneRecoverProvenance) does NOT fix C-32, and D′ was not redundant (2026-09-28).**
 > Measured by the compiler lane with a three-way compile of the SQLite Sublet TU. The pre-registration

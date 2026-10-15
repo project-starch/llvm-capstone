@@ -148,6 +148,20 @@ answers are in section 3. The stale-access arm was confirmed on silicon on 2026-
 **Both lanes.** A pre-registered per-case prediction table is committed before the first boot. It is computed by a
 tool from the recorded verdicts and the RTL lane's models in section 3 (`cderive_child`, the node accounting), never by hand.
 
+**The plain corpora's table is committed (2026-10-16):** `bug-corpora/silicon-predictions/2026-10-16-plain/`, made by
+`tools/predict-silicon.py` from geometry measured on the virtual profile (`tools/corpus-geometry.h`).
+- **Spatial (45).** Every virtual catch carries over if the silicon allocator derives each child at the request size
+  on a 16-byte placement; every object is exact under the encoder.
+  - An allocator that rounds the child up to 16 misses five: memcached 00, FFmpeg 01, 04 and 05, and tshark 03.
+    These are the same five CHERI recorded NOT CAUGHT. That is consistent, not independent: CheriBSD also rounds,
+    measured at 17 and 24 B, inferred at 1 and 9 B.
+  - On an 8-byte placement, tshark 00 (8192 B) also depends on placement.
+- **Temporal (26).** CAUGHT with cause 25 under an allocator that revokes, and MISSED under level0.
+- **Subobject (9).** MISSED.
+
+So decision (b) decides the spatial column too: the request size against the rounded size. The nested corpora wait
+for it.
+
 ## 6. LEAD decisions
 
 - **(a) Bounds exactness.** Exact bounds do not exist on this RTL. Either a predicted, pre-registered spatial

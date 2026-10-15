@@ -84,8 +84,8 @@ replace the musl probes of the HostCall v0 application runtime, removed on
 | `mmap-shm`, `mmap-shm-control` | `mmap-shm/mmap_shm.c` | every mmap/shm check passes; the control's raw `SYS_mmap` gets ENOSYS and an unserved report (with `CAPSTONE_DELEGATE_STATS=1`) |
 | `tls-O0`, `tls-O2`, `tls-overrun` | `thread-local/` | nine checks at each level (C-47); the overrun ends in SIGSEGV with a fault record |
 | `cap-atomics-O0/O2`, `subword-O0/O2` | `capability-atomics/`, `subword-atomics/` | the DONE line with no failure (C-54, C-51) |
-| `movc-rule`, `movc-keep` | `movc-null-scalar/movc_test.c` | `b=5 c=5` in a guest without `CAPSTONE_MOVC_NULL_SCALAR`, `b=5 c=0` in one with it (Q-04); C-32's two values (`c32 0x5000`, `iconv n=3`) survive in both variants without the switch, and with it survive in `rule` (the live-source copy rule) and are lost in `keep` (`+movc-keeps-integer-source`, the positive control) |
-| `intcap`, `intcap-uptr` | `intcap/intcap_test.c` | with `__uintcap_t`, all nine cases ok and `END bad=0`; the `unsigned long` control passes the six integer cases and ends in SIGSEGV at its first dereference |
+| `movc-rule`, `movc-keep` | `movc-null-scalar/movc_test.c` | `b=5 c=5` in a virtual-profile guest without `CAPSTONE_MOVC_NULL_SCALAR`, `b=5 c=0` in one with it and in any physical-profile guest, whose MOVC nulls an untagged source as the RTL does (Q-04). Where MOVC keeps an untagged source, C-32's two values (`c32 0x5000`, `iconv n=3`) survive in both variants. Where it nulls one, they survive in `rule` (the live-source copy rule) and are lost in `keep` (`+movc-keeps-integer-source`, the positive control), and `rule` fails with a stated reason when the SDK's codegen has `+movc-keeps-integer-source` (the virtual SDK since Q-04, 2026-10-14): that SDK's runtime and libc assume Q-04's MOVC, so qualify the old MOVC with an SDK built without the feature |
+| `intcap`, `intcap-uptr` | `intcap/intcap_test.c` | with `__uintcap_t`, all nine cases ok and `END bad=0`; the `unsigned long` control passes the six integer cases and ends in SIGSEGV at its first dereference. In a guest whose MOVC nulls an untagged source, `intcap` fails with the same stated reason as `movc-rule` when the SDK's codegen has `+movc-keeps-integer-source`, because it is built with that codegen; the control still runs |
 | `arith-0..2` | `untagged-cap-arith/arith_test.c` | case 0 stores through both results; cases 1 and 2 print the untagged integer result in a virtual-profile guest (2026-10-14) and end in SIGSEGV with cause 24 in a physical-profile guest, as on the RTL; the runner reads the profile from the state directory; case 2 runs last |
 
 ```bash
@@ -102,9 +102,14 @@ The v0 probes' controls linked a pinned older runtime file (hostcall.c, tls.c or
 helper's host_service.h). An SDK links its runtime archive whole, so those controls
 cannot be rebuilt; `--self-test` shows that each check fails on the symptom its
 control produced. `mmap-shm-control` and `tls-overrun` remain controls that run.
-`movc-rule` and `movc-keep` are judged by the switch the guest's QEMU was started with,
-which `capstone_vm` records in the state directory; the build refuses (exit 2) a toolchain
+`movc-rule` and `movc-keep` are judged by the guest's profile and the switch its QEMU was
+started with, both of which `capstone_vm` records in the state directory. On the physical
+profile QEMU's MOVC nulls an untagged source as the RTL does, so they are judged as with the
+switch on, without its notice. The build refuses (exit 2) a toolchain
 whose `llc` lacks the live-source copy pass or `+movc-keeps-integer-source`.
+capstone-cc refuses `+movc-keeps-integer-source` with a physical SDK, whose silicon nulls
+an untagged MOVC source until Q-04 (b); the runner sets `CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE=1`
+for the `movc-keep` compile alone, the control that shows what the flag loses there.
 
 First run on a VM (2026-09-30, the delegation stack with dev 330014ea merged; record
 `results/20260930-delegated-probes-stack.json`): 22 of the 23 variants pass in a guest without
