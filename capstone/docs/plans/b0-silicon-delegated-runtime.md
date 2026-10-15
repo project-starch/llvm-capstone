@@ -2432,6 +2432,16 @@ identical; R-51 0x1C/0x1C and 0/0x1C/0x1C; s10b 8/1; s1gap recorded for the RTL 
 - **a10:** mcause 25, mepc DBAS+0x4354, tval 0xac100000, refusal latched. As pre-registered. The refusal id reads 0x63
   against 0x5f, a node id that shifts with allocation history.
 - **C5u: functional only.** Its 2026-10-03 monitor cannot be regenerated, so it ran the current supervised-call line.
+  - **Explained 2026-10-15: no call was supervised, because that build lacked the defines.** r55-fix/build-all-2.sh
+    built C5u with `CAPSTONE_SUPERVISED_CALL CAPSTONE_SUPERVISOR_CSR_EVENTS CAPSTONE_SUPERVISE_QUIET`.
+  - The classic hook compiles only under `CAPSTONE_SUPERVISE_CLASSIC_TEST`. C5u's own pre-registration
+    (supmon-2026-10-03/PREREG.md) used `CLASSIC_TEST, CLASSIC_MASK=14, QUIET_MASK=12, FENCE_MASK=4, TRACE_EVENTS,
+    MAX_RESUMES=4000`.
+  - The transcripts agree: 0568f93a9's C5u printed 1,283 SUPK, 1,280 SUPA and 4 SUPM; this one printed none.
+  - Two-sided on the generated assembly: a build with those defines carries the SUPM tag, and one without does not.
+  - A correctly built C5u firmware on the current line (r55/exact-regions, image a9e838663d64) is dccb46a3fd0f,
+    dom_stack gate PASS. It awaits its board run.
+  - This was a build error of this lane's, not a monitor defect.
   - Four supervised-mode speedtests, hash `112006 38bb59fd` each, k800 4.
   - But no SUP* trace tag appeared, and all four read about 2.552 G cycles. On 0568f93a9 the same four read 2.552 G
     baseline, 2.569 G and 2.570 G quiet (+0.67%), and 2.905 G loud.

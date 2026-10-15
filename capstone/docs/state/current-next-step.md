@@ -99,6 +99,23 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
       image;
     - level0 is O(live blocks) per malloc/free, so an allocation-heavy silicon app needs its own allocator
       (mruby: silicon-alloc.c).
+- **2026-10-15, late: R-55's monitor fixes are LANDED on capstone-bootstrap** (capstone-sbi 2ea8a9a, caplifive-opensbi
+  5695abf, caplifive-buildroot a3191e8). They are four plus two squashed commits of the silicon line:
+  - the supervised CALL and classic hook;
+  - B0's managed applications;
+  - the FAULT report;
+  - R-55's cursors and SHRINK.
+  Gated on QEMU: run.py 25/25 and sockets 11/11. tag_pages 676 -> 681 is bisected to 10a0690's aligned data_top, a
+  placement change.
+
+  The board's shared FPGA checkout stays pinned at df0e9a8 / 93440d5.
+
+  **Built and awaiting board runs** (the board is the lead's to release):
+  - the exact-regions monitor: a nominal-bounds region table and exact remainders, the region table at 127 slots,
+    the module and libcapstone at 127 (r55-regions/ has the replay, its controls and the predictions);
+  - the sublet fix: QEMU A/B identical; nginx's test is not run, because its recipe is broken on dev (pg_level0.c
+    removed by c5d247874078);
+  - C5u with its proper defines (dccb46a3fd0f).
 - **Next:** the Sublet bitstream inherits every R-55 item (the full scheme on every capability), so before its flash:
   the carve policy in the monitor (granule-aligned points or SHRINK plus explicit cursor, OVERLAP 0 under
   --format full --renorm), the runtime's sublet_carve fix, and the lockstep list as recorded. Then the lead's word.
