@@ -1,6 +1,7 @@
 # Delegated application ports
 
-Application images use ABI v2 exclusively. The SDK supplies startup, argv,
+Application images use delegated ABI v2. Virtual images additionally identify
+VM-service ABI v5. The SDK supplies startup, argv,
 environment, cwd, standard streams, libc overrides, syscall delegation and the
 existing allocator grants. `capstone-exec` rejects old images with exit 126;
 there is no HostCall fallback and no SDK switch to build v1 applications.
@@ -12,6 +13,12 @@ and offline tshark. Standalone allocator and FPGA instruction tests are
 separate targets; their historical HostCall transport is not an application ABI.
 
 ## Virtual source builds
+
+Virtual has one outer allocator: Capstone-compiled musl mallocng. SDK metadata
+records `profile: virtual` and `allocator: mallocng`; build manifests use the
+same allocator name. Inner protection switches change the application's pools,
+not malloc/free. `FFAPP_HEAP` and `TSAPP_HEAP` select physical heaps and are
+rejected in virtual builds and runners. Unset them when selecting virtual.
 
 The [virtual result](../../../runtime/virtual/app-ports-result.json) passes
 16/16 normal workload checks and 17/17 inner-allocator checks, plus 32/32
@@ -29,7 +36,7 @@ Use fresh output directories: relinking physically compiled objects cannot
 convert their addressing convention. Physical remains the default profile.
 
 For the normal variants, the shared wrapper builds upstream objects and a
-matching VM-service v2 SDK, then records input and image hashes:
+matching VM-service v5 SDK, then records input and image hashes:
 
 ```sh
 export CAPSTONE_LLVM_BUILD_DIR=/path/to/qualified/compiler-build
@@ -46,15 +53,12 @@ the PostgreSQL source archive and host Meson for GLib. CPython's distribution
 library and PostgreSQL's cluster/share files must accompany their images.
 
 `CPY_SUBLET=1` and `PGSU_NESTED=sublet` select their protected inner allocator
-variants through the wrapper. For FFmpeg pools and tshark wmem chunks, invoke
-their source recipes directly with the virtual profile and
-`FFAPP_HEAP=sublet FFAPP_POOL=sublet` or `TSAPP_HEAP=chunks`; use their
-`domain-sublet-poolsublet/ffapp_m5.dom` or `domain-chunks/tshark_m5.dom` output.
-The generic relinker does not include those additional allocator objects.
+variants through the wrapper. FFmpeg's pools are protected by the buffer-pool
+port's patch 0003 and measured as a component (`bug-corpora/ffmpeg/pool-repros`).
 Historical memory-study observers remain outside this virtual qualification.
-Run the inner CPython image with `CPY_SUBLET_MODE=1` to revoke on every free;
-its adapter's default mode performs spatial checks only. The workload runner
-sets that variable and `--cpython-inner` requires its revocation-mode marker.
+The inner CPython image (`CPY_SUBLET=1`) revokes every pymalloc block on free:
+patch 0014 derives each block as a child lifetime and revokes it (`CDERIVE`,
+`CREVOKE`); there is no run-time mode.
 For the source recipe's FFmpeg M5 image, pass `--ffmpeg-staged`: its successful
 exit status is the stage number 5, unlike the generic application's status 0.
 Both profiles require all 30 frame hashes to match the native reference.
@@ -147,7 +151,7 @@ python3 capstone/ports/common/application/build.py \
 The output directory must be new. `--libc-root` selects a separate musl build;
 `--musl` and `--libc` select explicit source/archive paths (useful for tshark's
 keyed dependency builds). SQLite needs `--include` pointing at `sqlite3.h`.
-`--heap sublet` selects system allocator protection. `--nested cpython|mruby|postgres|perl`
+`--nested cpython|mruby|postgres|perl`
 retains the existing nested allocator adapters and requests their static backing
 from the v2 descriptor. The study entry point in `experiments/applications/`
 uses this builder with `--instrument`; normal applications need no study wrapper.

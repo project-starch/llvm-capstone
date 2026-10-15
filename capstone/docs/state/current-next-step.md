@@ -88,6 +88,28 @@ ABI and namespace limits changed. The next allocator step is to migrate a
 small adapter to derive/revoke-child and requalify its negative cases before
 measuring workloads. No allocator capacity/performance improvement is yet
 claimed by this implementation.
+2026-10-10 — **CheriBSD PoisonCap is removed** (branch `nested/poisoncap-removal`; PostgreSQL's arm
+goes with its rewrite). Every PoisonCap next step below is void, and its results stay as history.
+See `current-state.md`.
+
+2026-10-12 — **Sublet ISA is merged; allocator cleanup has fresh qualification.**
+QEMU #21 and runtime #216 are integrated, with the superproject pinned to QEMU
+`7dbfdd534eea`. The migration moves the eight nested allocator ports to the
+managed lifetime operations and retires the physical Sublet heap and active
+PoisonCap tooling. Review the per-port code and its recorded controls together.
+Historical measurements identify their original builds; they are not results
+from the rebased tree. The PostgreSQL hosted runner retains the per-case
+negative controls introduced by #218, and the fresh paired run detects all
+five defects while all safe variants complete. The
+[cleanup qualification](../../runtime/virtual/results/managed-mallocng/README.md)
+records allocator, runtime, corpus and application checks. Review and land the
+migration branch with this evidence. Next investigate memcached fixture 24:
+both page moves complete, but the protected run returns instead of faulting.
+Establish whether the orphan-head access occurs before changing its prediction.
+The previously mentioned CPython pop discrepancy is absent from the current
+sharded archive: recomputing all 2,183 outcomes matches its zero-difference
+stock/protected summary. Earlier failed runs and differences from native
+remain recorded; this audit is not a new suite run.
 
 2026-10-10 — **The next bitstream is approved and in synthesis: `next-bitstream-r51-r52` = capstone-ariane
 `0568f93a9` (776d9d859 + R-52 + R-51). The lead's word: "yes, go, approve synth".**

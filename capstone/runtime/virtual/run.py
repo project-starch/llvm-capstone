@@ -31,7 +31,7 @@ cat /tmp/ok.out
 ./capstone-vexec contract.dom threads > /tmp/threads.out 2>&1
 echo VM_EXIT:threads:$?
 cat /tmp/threads.out
-for mode in vm linear linear-stale heap-threads sparse-churn stale bounds retired vm-ro-write vm-none-read vm-guard vm-padding sparse-stale; do
+for mode in vm nested nested-stale heap-threads sparse-churn stale bounds retired vm-ro-write vm-none-read vm-guard vm-padding sparse-stale; do
   ./capstone-vexec contract.dom "$mode" 2>&1
   echo VM_EXIT:$mode:$?
 done
@@ -155,7 +155,7 @@ def main():
             except subprocess.TimeoutExpired: guest.kill(); guest.wait()
     lines = [s.strip() for s in out.decode(errors='replace').splitlines()]
     tests = {}
-    for name, code in [('normal', 0), ('threads', 0), ('vm', 0), ('linear', 0), ('linear-stale', 139), ('heap-threads', 0), ('vm-ro-write', 139), ('vm-none-read', 139), ('vm-guard', 139), ('vm-padding', 139), ('sparse-churn', 0), ('sparse-stale', 139), ('stale', 139), ('bounds', 139), ('retired', 139),
+    for name, code in [('normal', 0), ('threads', 0), ('vm', 0), ('nested', 0), ('nested-stale', 139), ('heap-threads', 0), ('vm-ro-write', 139), ('vm-none-read', 139), ('vm-guard', 139), ('vm-padding', 139), ('sparse-churn', 0), ('sparse-stale', 139), ('stale', 139), ('bounds', 139), ('retired', 139),
                        ('preempt', 143), ('parallel_one', 0), ('parallel_two', 0),
                        ('sqlite_write', 0), ('sqlite_read', 0), ('mruby', 0), ('cleanup', 0)]:
         if a.skip_recycling and name in ('sparse-churn', 'sparse-stale'): continue
@@ -182,10 +182,9 @@ def main():
     tests['threads_output'] = (lines.count('VIRTUAL_THREAD_CHILD') == 1 and
                                lines.count('VIRTUAL_THREADS_OK shared_mm lifetime_root quantum') == 1)
     causes = [int(m[1]) for s in lines if (m := re.match(r'capstone-exec: domain fault cause=(\d+) ', s))]
-    # Loading a saved revoked pointer clears its tag; the later dereference
-    # is therefore cause 24. The direct live-register node check has its own
-    # cause-25 instruction gate.
-    tests['fault_causes'] = causes == [24, 24, 28, 24, 15, 13, 13, 28] + ([] if a.skip_recycling else [24])
+    # Revoked NONLIN loads retain their tag on the current ISA: dereferencing
+    # one faults with cause 25. A complete collection clears stale tags (24).
+    tests['fault_causes'] = causes == [25, 25, 28, 25, 15, 13, 13, 28] + ([] if a.skip_recycling else [24])
     symbols = {}
     nm = Path(os.environ['CAPSTONE_LLVM_BIN']) / 'llvm-nm'
     for line in subprocess.check_output([str(nm), '--defined-only', str(a.application)], text=True).splitlines():
@@ -195,8 +194,8 @@ def main():
     fault_sites = [tuple(int(v, 16) for v in m.groups()) for s in lines
                    if (m := re.search(r'domain fault cause=\d+ pc=0x([0-9a-f]+).* entry=0x([0-9a-f]+)', s))]
     names = ('ro', 'none', 'guard', 'padding') + (() if a.skip_recycling else ('collected',))
-    tests['linear_output'] = lines.count('VIRTUAL_LINEAR_OK') == 1
-    tests['linear_denial_site'] = bool(fault_sites) and fault_sites[0][0] - fault_sites[0][1] == symbols.get('cap_vm_fault_linear', -1) - symbols['domain_main']
+    tests['nested_output'] = lines.count('VIRTUAL_NESTED_OK') == 1
+    tests['nested_denial_site'] = bool(fault_sites) and fault_sites[0][0] - fault_sites[0][1] == symbols.get('cap_vm_fault_nested', -1) - symbols['domain_main']
     tests['vm_denial_sites'] = len(fault_sites) == 4 + len(names) and all(
         pc - entry == symbols.get('cap_vm_fault_' + name, -1) - symbols['domain_main']
         for name, (pc, entry) in zip(names, fault_sites[4:]))
@@ -208,7 +207,7 @@ def main():
     tests['spin_entered'] = lines.count('VIRTUAL_SPIN_READY') == 1
     stats = [dict((k, int(v)) for k, v in re.findall(r'(\w+)=(\d+)', s))
              for s in lines if s.startswith('CAPSTONE_VM_STATS ')]
-    # normal, threads, VM policy, linear loan, shared heap, optional sparse churn,
+    # normal, threads, VM policy, nested lifetimes, shared heap, optional sparse churn,
     # two normal launches, SQLite x2, mruby. Preserve the original page oracle.
     start = 5 if a.skip_recycling else 6
     base_stats = stats[:2] + stats[start:start + 5]

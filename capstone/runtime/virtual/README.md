@@ -1,13 +1,17 @@
 # Virtual C applications on Linux
 
-The local-mallocng branch builds on node growth and the virtual stack landed on `dev`
-at `08cf07d75ad2`, with the application build repairs. Its
+The virtual stack, node growth and local mallocng are merged on `dev`.
+The managed lifetime ISA is pinned at QEMU `7dbfdd534eea`; rebuild the adapter
+against that pin. The allocator uses musl mallocng with local `CDERIVE` and
+`CREVOKE` hooks; see [its representation](mallocng.md). The earlier
 [qualification manifest](results/node-growth/qualification.json) identifies
 exact source and executable hashes. Earlier R1/R2/R3 result files below retain
 their historical scope. This profile uses trusted Linux, same-mm pthreads
 and one hart. The [local-mallocng qualification](results/local-mallocng/README.md)
-records the current allocator profile; historical results below retain their
-original allocator and binary identities.
+records the preceding allocator representation; historical results below retain their
+original allocator and binary identities. The
+[managed-mallocng qualification](results/managed-mallocng/README.md) records
+the current implementation and its known negative result.
 
 This adapter runs Capstone applications in **C mode with user virtual
 addresses**. The existing Linux kernel schedules the launcher, owns its page
@@ -103,16 +107,16 @@ by granting more permissions. It does not supply a pager or change VMA permissio
 make a denied access succeed. TLS uses the common capability libc setup.
 
 Each launch owns a growing lifetime table with 16-byte records. Its physical
-root stays fixed; a 5:9:9-bit directory maps the high 23 bits of a node ID to
+root stays fixed; a 4:9:9-bit directory maps the high 22 bits of a node ID to
 a 4-KiB record page, and the low eight bits select one of its 256 slots.
 Only base-page allocations are required. The initial four record pages plus
 root and directory pages occupy 28 KiB; IDs 0 and 1 remain reserved.
 
 ```text
-node ID:       [ 5 bits ][ 9 bits ][ 9 bits ][ 8 bits ]
+node ID:       [ 4 bits ][ 9 bits ][ 9 bits ][ 8 bits ]
                    |         |         |         |
 srevroot (PA)      v         v         v         v
-     +------> root[32] -> dir[512] -> dir[512] -> nodes[256]
+     +------> root[16] -> dir[512] -> dir[512] -> nodes[256]
               +64 B       4 KiB       4 KiB       4 KiB
              header                             16 B/node
 
@@ -131,7 +135,7 @@ remain pinned because a PCC has no tag to clear. Teardown discards the context
 and clears tags before freeing all table pages and its saved frame.
 
 `node_initial_pages` (default 4), `node_batch_pages` (16) and `node_max_pages`
-(0 means the 31-bit ID limit) count record pages and are read-only module
+(0 means the 30-bit ID limit) count record pages and are read-only module
 parameters; directory pages are accounted separately in `node_bytes`. Existing free
 IDs are used first. Pressure can collect a substantial retired population or
 append initialized pages, then retry the original instruction. At a quota or
@@ -392,12 +396,14 @@ gate; this adapter does not replace their monitor or CALL/RETURN path.
 This is the first QEMU application profile: one hart, private anonymous
 mappings, 256 MiB per registered region, 1 GiB
 aggregate registered VA, 512 mappings, and a recyclable node table bounded by
-RAM, an optional module quota and the 31-bit ID field. The separate allocator
-block/arena limits are unchanged by node-table growth.
+RAM, an optional module quota and the 30-bit ID field. mallocng's object
+records grow through its metadata allocator; they have no fixed object-count limit.
 Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
 signals need further contracts. The qualified pthread subset is described
-above. Address hints/fixed mappings and `mremap` remain unsupported. Partial unmap
+above. Address hints/fixed mappings and public application `mremap` remain
+unsupported; mallocng uses the private remap slow path described in
+[the allocator contract](mallocng.md). Partial unmap
 requires a separate lifetime contract: a live wide capability must not acquire
 a replacement mapping placed into its former hole. Anonymous
 `MAP_SHARED` and SysV segments are process-local compatibility for nested
@@ -407,8 +413,8 @@ Pages stay pinned after first touch. A page that Linux populated without an
 application fault is pinned by the next retirement or collection, so a
 teardown does not clear its tags itself; Linux clears them with ordinary
 stores when it zeroes the page for reuse. The initial ELF image has the
-existing combined code/data layout. Representability padding above 4 KiB
-requests is accessible within its own block. Recycling requires the
+existing combined code/data layout. The required exact-bounds profile preserves
+requested malloc object bounds through spill and restore. Recycling requires the
 registered-page and saved-context sweep; a namespace full of live or pinned
 identities reports resource exhaustion when growth is unavailable.
 Compact-bounds conformance of every existing compiler/helper path

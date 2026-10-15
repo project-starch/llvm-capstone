@@ -1,14 +1,42 @@
 # Current Capstone state
 
-## 2026-10-10 — Sublet lifetime extension on `isa/sublet-lifetimes`
+## 2026-10-12 — Virtual allocator cleanup qualified on the migration branch
+
+`ports/nested-allocators-rebased` uses managed lifetimes in outer musl mallocng
+too. Its allocation policy is unchanged; linear heap loans and their final
+carved-corpus consumer are removed. Virtual build metadata names `mallocng`,
+physical heap selectors are rejected, and cache keys include the musl
+representation sources. The [qualification](../../runtime/virtual/results/managed-mallocng/README.md)
+records 19/19 allocator checks, 43/43 runtime checks, 16/16 normal port checks,
+paired FFmpeg 13/13 and PostgreSQL 5/5 corpus results with safe controls.
+memcached passes 81/81 outer-only checks and 82/83 with protected pools;
+fixture 24 remains unresolved. Recomputed CPython archived sharded outcomes
+agree for all 2,183 stock/protected tests. Full upstream campaigns and older
+measurements retain their original scope. These cleanup commits are on the
+migration branch, not claimed merged into `dev`.
+
+## 2026-10-10 — CheriBSD PoisonCap removed (branch `nested/poisoncap-removal`)
+
+Our CheriBSD PoisonCap adapter is gone from every port except PostgreSQL, which goes with
+its rewrite: the FFmpeg, wmem, memcached, APR and Perl SV-head backends, their runners,
+the `poisoncap-*` arms of the fourteen FFmpeg, tshark, memcached and httpd corpora, the
+two PoisonCap columns of `catch-tables.py`, and the study's `nested-poisoncap` planner
+and build paths. The platform recipe (`ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/`)
+and its libc fix stay, because the stock CheriBSD runners of the httpd and memcached corpora
+boot that image. Every PoisonCap entry below is history; its results stay in `results/`.
+
+## 2026-10-12 — Sublet lifetime extension merged; allocator migration in review
 
 `CDERIVE`/two-operand `CREVOKE`, node-scoped MANAGE and explicit parent links
 are implemented and qualified in QEMU with C wrappers. The format has
 30-bit IDs, four rights bits and 16-byte node records. Rebuild the Linux
 adapter with the new header; its capacity limits change too. Compiler
 backend changes are unnecessary. See the [qualification and commands](../design/virtual-capstone/development.md#sublet-lifetime-qualification).
-This is a task-branch result, not a merged baseline or an allocator-port,
-performance or RTL claim.
+QEMU #21 landed as `7dbfdd534eea`; runtime #216 landed as `baa1ab2faded`,
+which pins that integrated QEMU commit. The allocator migration branch builds
+on this baseline. Its archived port and workload measurements retain their
+original source and binary identities; rebasing does not requalify those runs.
+This is QEMU evidence, with no new performance or RTL claim.
 
 ## 2026-10-10 — `fpga-testing-dev` rebuilt as one linear history (RTL lane)
 
@@ -1321,7 +1349,7 @@ Automatic libc revocation remains explicitly off while adapter sweeps remain
 on, using the documented platform workaround. Native tests and all four
 backend builds pass. This is not whole-interpreter protection or isolation of
 hostile nested managers. [Pilot and provenance](../../ports/cpython/pymalloc/results/20260919-poisoncap/README.md),
-[build/link/run guide](../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
+build/link/run guide (removed 2026-10-10 with the adapter; see the [port README's History](../../ports/cpython/pymalloc/README.md#history)).
 
 ## 2026-09-19 — Experimental PoisonCap FFmpeg port
 

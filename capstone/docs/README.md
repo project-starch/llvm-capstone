@@ -1,19 +1,22 @@
 # Capstone project documentation
 
-Sublet ISA extension: [contract and qualification](design/virtual-capstone/development.md#sublet-lifetime-qualification). Use matching QEMU
-and adapter builds; allocator ports and RTL are not migrated by this change.
+Sublet ISA extension: [contract and qualification](design/virtual-capstone/development.md#sublet-lifetime-qualification).
+QEMU and runtime support are merged, pinned to QEMU `7dbfdd534eea`. Use matching
+QEMU and adapter builds. The allocator migration on
+`ports/nested-allocators-rebased` uses managed lifetimes in the eight nested
+ports and in the [outer musl mallocng](../runtime/virtual/mallocng.md).
+Virtual has one malloc/free implementation; inner pool protection is a
+separate application choice. RTL migration remains separate work.
 
 Start with the [virtual Capstone guide](design/virtual-capstone/README.md)
 to understand the supervised virtual C profile: ownership,
 processor interface, Linux runtime, application ports and safety limits.
-The core virtual stack is on `dev`. The growing node-table extension is on
-`review/virtual-node-growth`, based on `dev` plus `review/virtual-build-repairs`.
+The core virtual stack, growing node tables, build repairs and local mallocng
+are on `dev`.
 Use its pinned QEMU and the [runtime build instructions](../runtime/virtual/README.md);
 [qualification records](../runtime/virtual/results/node-growth/qualification.json)
 identify the exact tested inputs and scope.
-The `virtual-musl-local` branch adds [local Capstone-compiled mallocng](../runtime/virtual/mallocng.md)
-with upstream allocation policy and capability lifetime hooks. Its
-[qualification](../runtime/virtual/results/local-mallocng/README.md) records
+The original [local-mallocng qualification](../runtime/virtual/results/local-mallocng/README.md) records
 the local service-boundary, safety, thread and application checks.
 
 Lane-only work on `delegation-threads` (not landed on `dev`):
@@ -86,10 +89,8 @@ PoisonCap temporal adapter delays it. The selected GC-page metadata and
 post-render retention countercosts are reported alongside the advantage. The
 [full-application campaign contract](plans/application-memory-campaign.md)
 fixes the same four memory experiments for each admitted benchmark. The
-[planner](../experiments/study/README.md) now admits a pinned mruby four-arm
-binding for subsequent runs; other PoisonCap application boundaries still
-need registered adapters. The measured AO campaign used the shared guest
-runners directly.
+measured AO campaign used the shared guest runners directly. CheriBSD PoisonCap
+was removed on 2026-10-10; the campaigns above that used it stay as history.
 
 Application memory behavior: [twelve paired workload configurations](../experiments/applications/results/20260927-reuse/README.md)
 pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU

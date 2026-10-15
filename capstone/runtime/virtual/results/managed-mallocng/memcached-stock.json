@@ -1,0 +1,660 @@
+{
+  "status": "PASS",
+  "arm": "virtual",
+  "checks": [
+    {
+      "name": "native_null",
+      "passed": true
+    },
+    {
+      "name": "oracle_detects_value",
+      "passed": true
+    },
+    {
+      "name": "oracle_detects_cas",
+      "passed": true
+    },
+    {
+      "name": "pthread_unsupported_clone_refused",
+      "passed": true
+    },
+    {
+      "name": "pthread_tls_mutex_cond_tagged_join",
+      "passed": true
+    },
+    {
+      "name": "pthread_timed_wait",
+      "passed": true
+    },
+    {
+      "name": "pthread_independent_blocking_io",
+      "passed": true
+    },
+    {
+      "name": "pthread_private_epoll_events",
+      "passed": true
+    },
+    {
+      "name": "pthread_shared_tls_transport",
+      "passed": true
+    },
+    {
+      "name": "pthread_64_joined_lifetimes",
+      "passed": true
+    },
+    {
+      "name": "normal1_harness",
+      "passed": true
+    },
+    {
+      "name": "normal1_protocol",
+      "passed": true
+    },
+    {
+      "name": "normal1_identity",
+      "passed": true
+    },
+    {
+      "name": "normal1_exit",
+      "passed": true
+    },
+    {
+      "name": "normal1_stderr",
+      "passed": true
+    },
+    {
+      "name": "normal2_harness",
+      "passed": true
+    },
+    {
+      "name": "normal2_protocol",
+      "passed": true
+    },
+    {
+      "name": "normal2_identity",
+      "passed": true
+    },
+    {
+      "name": "normal2_exit",
+      "passed": true
+    },
+    {
+      "name": "normal2_stderr",
+      "passed": true
+    },
+    {
+      "name": "usr1_harness",
+      "passed": true
+    },
+    {
+      "name": "usr1_protocol",
+      "passed": true
+    },
+    {
+      "name": "usr1_identity",
+      "passed": true
+    },
+    {
+      "name": "usr1_exit",
+      "passed": true
+    },
+    {
+      "name": "usr1_stderr",
+      "passed": true
+    },
+    {
+      "name": "marker_harness",
+      "passed": true
+    },
+    {
+      "name": "marker_protocol",
+      "passed": true
+    },
+    {
+      "name": "marker_identity",
+      "passed": true
+    },
+    {
+      "name": "marker_exit",
+      "passed": true
+    },
+    {
+      "name": "four_workers",
+      "passed": true
+    },
+    {
+      "name": "worker_gate_control",
+      "passed": true
+    },
+    {
+      "name": "marker_stderr",
+      "passed": true
+    },
+    {
+      "name": "fx1_harness",
+      "passed": true
+    },
+    {
+      "name": "fx1_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx2_harness",
+      "passed": true
+    },
+    {
+      "name": "fx2_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx3_harness",
+      "passed": true
+    },
+    {
+      "name": "fx3_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx4_harness",
+      "passed": true
+    },
+    {
+      "name": "fx4_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx5_harness",
+      "passed": true
+    },
+    {
+      "name": "fx5_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx6_harness",
+      "passed": true
+    },
+    {
+      "name": "fx6_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx7_harness",
+      "passed": true
+    },
+    {
+      "name": "fx7_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx8_harness",
+      "passed": true
+    },
+    {
+      "name": "fx8_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx9_harness",
+      "passed": true
+    },
+    {
+      "name": "fx9_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx10_harness",
+      "passed": true
+    },
+    {
+      "name": "fx10_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx12_harness",
+      "passed": true
+    },
+    {
+      "name": "fx12_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx13_harness",
+      "passed": true
+    },
+    {
+      "name": "fx13_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx14_harness",
+      "passed": true
+    },
+    {
+      "name": "fx14_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx15_harness",
+      "passed": true
+    },
+    {
+      "name": "fx15_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx16_harness",
+      "passed": true
+    },
+    {
+      "name": "fx16_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx17_harness",
+      "passed": true
+    },
+    {
+      "name": "fx17_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx18_harness",
+      "passed": true
+    },
+    {
+      "name": "fx18_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx19_harness",
+      "passed": true
+    },
+    {
+      "name": "fx19_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx20_harness",
+      "passed": true
+    },
+    {
+      "name": "fx20_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx21_harness",
+      "passed": true
+    },
+    {
+      "name": "fx21_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx22_harness",
+      "passed": true
+    },
+    {
+      "name": "fx22_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx23_harness",
+      "passed": true
+    },
+    {
+      "name": "fx23_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx24_harness",
+      "passed": true
+    },
+    {
+      "name": "fx24_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx25_harness",
+      "passed": true
+    },
+    {
+      "name": "fx25_prediction",
+      "passed": true
+    },
+    {
+      "name": "adapter_cleanup",
+      "passed": true
+    }
+  ],
+  "fixtures": [
+    {
+      "fixture": 1,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "100001",
+      "expected": [
+        [
+          "RETURN",
+          "100001"
+        ],
+        [
+          "LEN",
+          "64"
+        ]
+      ]
+    },
+    {
+      "fixture": 2,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 3,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 4,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 5,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 6,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 7,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 8,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 9,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "9000ee",
+      "expected": [
+        [
+          "RETURN",
+          "9000ee"
+        ]
+      ]
+    },
+    {
+      "fixture": 10,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "a0015b",
+      "expected": [
+        [
+          "RETURN",
+          "a0015b"
+        ]
+      ]
+    },
+    {
+      "fixture": 12,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "c00101",
+      "expected": [
+        [
+          "RETURN",
+          "c00101"
+        ]
+      ]
+    },
+    {
+      "fixture": 13,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "d00101",
+      "expected": [
+        [
+          "RETURN",
+          "d00101"
+        ]
+      ]
+    },
+    {
+      "fixture": 14,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "e0015c",
+      "expected": [
+        [
+          "RETURN",
+          "e0015c"
+        ]
+      ]
+    },
+    {
+      "fixture": 15,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "f0012e",
+      "expected": [
+        [
+          "RETURN",
+          "f0012e"
+        ]
+      ]
+    },
+    {
+      "fixture": 16,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "1000191",
+      "expected": [
+        [
+          "RETURN",
+          "1000191"
+        ]
+      ]
+    },
+    {
+      "fixture": 17,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 18,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 19,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "130015b",
+      "expected": [
+        [
+          "RETURN",
+          "130015b"
+        ]
+      ]
+    },
+    {
+      "fixture": 20,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 21,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 22,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "16001ee",
+      "expected": [
+        [
+          "RETURN",
+          "16001ee"
+        ]
+      ]
+    },
+    {
+      "fixture": 23,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "1700007",
+      "expected": [
+        [
+          "RETURN",
+          "1700007"
+        ]
+      ]
+    },
+    {
+      "fixture": 24,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "1800021",
+      "expected": [
+        [
+          "RETURN",
+          "*"
+        ]
+      ]
+    },
+    {
+      "fixture": 25,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "1900020",
+      "expected": [
+        [
+          "RETURN",
+          "*"
+        ]
+      ]
+    }
+  ],
+  "workers": 4,
+  "harts": 1,
+  "virtual_vm_abi": 5,
+  "native_reference_sha256": null,
+  "native_transcript_sha256": {
+    "null1": "ee1522c8e0eceec97a20b0372e888be774e019178e3a3c45cead03663d934651",
+    "null2": "ee1522c8e0eceec97a20b0372e888be774e019178e3a3c45cead03663d934651",
+    "value": "e3ee5a9a60c0f03a3396485437c74c994d477f8557233056ec2574c1bc07ae43",
+    "cas": "b430b123fb872f55018e6ce753c41f16a03e83b15cccb2b053f48ad0aa9c7fcf",
+    "usr1": "ee1522c8e0eceec97a20b0372e888be774e019178e3a3c45cead03663d934651",
+    "marker": "ee1522c8e0eceec97a20b0372e888be774e019178e3a3c45cead03663d934651"
+  },
+  "safety_prediction_arm": "sublet",
+  "known_gaps": [
+    "nested slab/cache lifetimes",
+    "bipbuffer logical reuse"
+  ],
+  "input_sha256": {
+    "launcher": "6abc4a05983f052753a5ef5d4b146a56ea8182039fec3068754389029fe079a0",
+    "module": "948e329244021fb3eccc92a29f4ed6b88da5a014398bf209f03b4e95dc069499",
+    "job": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+    "pthread": "7fe972c263e6db6635bfffca134d4d99f65fd47e63687c32798dbcfdbf723384",
+    "memcached": "cf619e0b2d09b8cf92442db5d2b9abd93fb1e2fdbb7941f97dd16106ae59ec33",
+    "marker": "f2a032cdc24ce346b439ea758b4e93f58c35856503e8c557cdedf51e10d30063",
+    "safety": "0510690262a63168adffff238f79e809857f4f583705e02d44422c9c4beb55df",
+    "native": "94a419ed1a761ac241dd9f5a01a36defa7bbd97b65ab821b84b421d8bcdd2894",
+    "native_marker": "7ad50c28ac7e6aa15b49398eb10d47298ec0447e88a47c9202326edb7f60b8d8",
+    "qemu": "491db4ce9c73b6f6fa21ed5be1ca81d69a1c8f729f3aabc327843e075fbd8287",
+    "harness_source": "1e569a8b63b49af1262db6456c271f24d8ee6ffc2ab58f29b0e445cff557532e",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "runner_sha256": "51129247f81d1171579c3604f7149717e9922254f48095fa6a755426063aa78e",
+  "gate_sha256": "2baaa1db7f41a167eb3b6776e815e42a14ec7420fc69fc1aa8d56deec662f890",
+  "predictions_sha256": "a183e1c5c4a39236a117ac7c9e3838491a70f1700693b6fc3a0580da73201412"
+}

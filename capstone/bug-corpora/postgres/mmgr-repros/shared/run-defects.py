@@ -117,7 +117,9 @@ def observe_hosted(which, text, result, symbols, sites):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("output", type=Path)
-    p.add_argument("--state", type=Path, required=True, help="a capstone_vm VM started --profile virtual")
+    platform_args = p.add_mutually_exclusive_group(required=True)
+    platform_args.add_argument("--state", type=Path, help="a capstone_vm VM started --profile virtual")
+    platform_args.add_argument("--virtual-kit", type=Path, help="run all cases and their safe variants in one fresh boot")
     p.add_argument("--arm", required=True, choices=sorted(VIRTUAL_SUBLET))
     p.add_argument("--hosted-build", type=Path, required=True,
                    help="the port configured with the capstone-application preset, -DPG_CORPUS_DIR=<corpus>")
@@ -127,7 +129,7 @@ def main():
     p.add_argument("--raw", type=Path, required=True, help="console logs; outside the bundle")
     a = p.parse_args()
     import appvm
-    if appvm.profile(a.state) != "virtual":
+    if a.state and appvm.profile(a.state) != "virtual":
         p.error(f"{a.state} is not a virtual-profile VM")
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
     spec = v.load_arms()[config]
@@ -142,9 +144,29 @@ def main():
             return 75
     a.raw.mkdir(parents=True, exist_ok=True)
 
+    staged_runs = None
+    if a.virtual_kit:
+        import virtualvm
+        batch = virtualvm.Batch(a.raw / "stage")
+        for label, build, cases in (("control", a.controls_hosted_build, dirs(CORPUS / "controls")),
+                                     ("case", a.hosted_build, dirs(CORPUS))):
+            for n, d in enumerate(cases):
+                for control in (False, True) if label == "case" else (False,):
+                    image = program(build, d, control=control)
+                    if not image.is_file():
+                        continue
+                    name = f"{label}-{image.name}"
+                    batch.put(f"images/{name}", image)
+                    batch.step(name, f"./capstone-vexec ./images/{name} 0 {n}")
+        staged_runs, _, _ = batch.execute(a.virtual_kit, a.raw / "guest", 300 + 60 * len(batch.steps))
+
     def run(build, d, n, *, control=False):
         image = program(build, d, control=control)
-        text, result = appvm.run_app(a.state, image, ["0", str(n)], a.raw / f"{a.arm}-{image.name}")
+        if staged_runs is not None:
+            label = "control" if build == a.controls_hosted_build else "case"
+            text, result = staged_runs.get(f"{label}-{image.name}", ("[runner] TIMEOUT", {"kind": "none"}))
+        else:
+            text, result = appvm.run_app(a.state, image, ["0", str(n)], a.raw / f"{a.arm}-{image.name}")
         return image, text, result
 
     controls = []
@@ -178,7 +200,8 @@ def main():
               f"{verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:90]}", flush=True)
     record = v.write_bundle(a.output, f"postgres/{CORPUS.name}", a.arm, rows, {
         "configuration": config, "predicted": VIRTUAL_PREDICTED[a.arm],
-        "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
+        "platform": (virtualvm.platform(a.virtual_kit, a.llvm_bin / "clang", HERE) if a.virtual_kit
+                     else appvm.platform(a.state, a.llvm_bin / "clang", HERE))})
     print(f"--- {a.arm} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 

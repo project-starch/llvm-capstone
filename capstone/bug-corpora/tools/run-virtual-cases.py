@@ -186,7 +186,19 @@ def main():
         if b.returncode:
             print(f"CONTROL-FAILED controls build: {b.stderr[:300]}", file=sys.stderr)
             return 75
-    plan = [(f"control-{n}", controls_img, [n]) for n in spec["controls"]]
+    carve_controls = {"live-carve", "uaf-carve"} if config == "virtual-ffmpeg-carve" else set()
+    plan = [(f"control-{n}", controls_img, [n]) for n in spec["controls"] if n not in carve_controls]
+    if carve_controls:
+        carve_img = bindir / "carve-controls.dom"
+        b = subprocess.run([str(cc), "-O0", "-DFFC_SUBLET_CARVE", f"-I{shared}",
+                            f"-I{REPO / 'capstone/runtime/include'}",
+                            str(shared / "carve-recarve-control.c"), str(shared / "driver.c"),
+                            "-o", str(carve_img)], capture_output=True, text=True)
+        if b.returncode:
+            print(f"CONTROL-FAILED carve controls build: {b.stderr[:300]}", file=sys.stderr)
+            return 75
+        plan += [("control-live-carve", carve_img, ["fixed", "98"]),
+                 ("control-uaf-carve", carve_img, ["buggy", "98"])]
     for d in found:
         if d.name in built:
             n = str(int(d.name[:2]))
@@ -207,7 +219,13 @@ def main():
             controls.append(v.Control(name, "none", "the control did not run"))
             continue
         text, result = runs[f"control-{name}"]
-        controls.append(v.Control(name, observe_control(name, text, result),
+        seen = observe_control(name, text, result)
+        if name in carve_controls:
+            fault = v.domain_fault(result.get("fault") or "", v.Symbols(a.llvm_bin, carve_img))
+            seen = ("fault" if fault and fault.symbol and PROBE.search(fault.symbol) else
+                    "complete" if result.get("kind") == "exit" and result.get("value") == 0
+                    and "VERDICT FIXED" in text else "none")
+        controls.append(v.Control(name, seen,
                                   evidence_line(result, text)))
         print(f"  control {name:<14} {controls[-1].observed:<9} (expected {spec['controls'][name]})", flush=True)
 
@@ -262,7 +280,14 @@ def wmem_probe(case_dir):
 
 
 HOSTED = {
-    'wmem-repros': dict(
+    # wireshark/wmem-repros on the wmem port (ports/wireshark/wmem, preset capstone-application),
+    # g_malloc/g_free being virtual mallocng in both arms.
+    #   virtual-malloc: wmem as released (WM_SUBLET=OFF); the buggy run is the fix differential
+    #     (`0 N buggy`), whose temporal cases ASSERT the stale chunk was reoccupied before reading it.
+    #   virtual-nested-pools: the port's patch 0001 (WM_SUBLET=ON), every block and block_fast object
+    #     a CDERIVE child of its block, revoked by CREVOKE; the buggy run is the plain sequence (`0 N`).
+    # Both: the fixed run is the differential (`0 N fixed`): VERDICT FIXED and exit 0.
+    "wmem-repros": dict(
         cache={"virtual-malloc": {"WM_SUBLET": "OFF"}, "virtual-nested-pools": {"WM_SUBLET": "ON"}},
         mode={"virtual-malloc": "0", "virtual-nested-pools": "0"},
         buggy={"virtual-malloc": ["buggy"], "virtual-nested-pools": []},
@@ -272,7 +297,14 @@ HOSTED = {
         controls_dir="controls",
         control_names={0: "uaf-chunk", 1: "uaf-jumbo", 2: "bounds-chunk"},
     ),
-    'allocator-repros': dict(
+    # memcached/allocator-repros on the allocators port (ports/memcached/allocators), built by the
+    # corpus's own shared/build-cases.sh capstone-application, whose programs print the case.c
+    # drivers' lines (`case=N arm=...`, VERDICT), so observe()/fixed_ok() read them.
+    #   virtual-malloc: the stock ledger, every slab page and cache.c object one virtual-mallocng
+    #     object (MCP_STOCK_MALLOC, as the ASan arm), `fixed|buggy N`.
+    #   virtual-nested-pools: slabs.c and cache.c with the application's Sublet patch 0006 and no
+    #     ledger (MCP_SUBLET, shared/driver-virtual.c): `fixed|buggy N`.
+    "allocator-repros": dict(
         format="case-line",
         cache={"virtual-malloc": {"MCP_STOCK_MALLOC": "ON", "MCP_SUBLET": "OFF"},
                "virtual-nested-pools": {"MCP_SUBLET": "ON", "MCP_STOCK_MALLOC": "OFF"}},
@@ -283,7 +315,13 @@ HOSTED = {
         controls_dir="controls/virtual",
         control_names={90: "chunk-free-90"},
     ),
-    'pool-repros': dict(
+    # ffmpeg/pool-repros on the buffer-pool port (ports/ffmpeg/buffer-pool), built by the corpus's
+    # own shared/build-cases.sh capstone-application, whose programs print the case.c driver's lines
+    # (`case=N arm=...`, VERDICT), so observe()/fixed_ok() read them.
+    #   virtual-malloc: the stock pools, every entry one virtual-mallocng object, `fixed|buggy N`.
+    #   virtual-nested-pools: the pools with patch 0003 (FFPOOL_SUBLET), every hand-out a child
+    #     lifetime of its entry, revoked at the return: `fixed|buggy N`.
+    "pool-repros": dict(
         format="case-line",
         cache={"virtual-malloc": {"FFPOOL_SUBLET": "OFF"},
                "virtual-nested-pools": {"FFPOOL_SUBLET": "ON"}},

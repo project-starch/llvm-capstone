@@ -65,8 +65,11 @@ every chunk and object as a CDERIVE child lifetime, and `slabs_free` and
 `cache_free` revoke it (CREVOKE). There is no adapter. The patch header says
 how the slab mover, chunked items and page moves are covered and what it
 gives up. `host/build-sublet.sh` (run by `build-virtual.sh`) builds its oracle
-and safety images under `$MC_WORK/sublet/`, and gates that both carry the two
-instructions and the plain images none. `run-virtual.py --arm sublet` runs the
+and safety images under `$MC_WORK/sublet/`. Its gate checks both allocator
+objects for the two instructions, then recompiles those objects without the
+inner-protection define and requires neither instruction. Whole-image counts
+cannot distinguish the variants: the shared outer mallocng uses both operations
+too. `run-virtual.py --arm sublet` runs the
 same gate on them and judges the fixtures by the `lifetimes` predictions in
 `host/safety-expect.txt`, registered before the first build. The physical
 `slabsublet` arms, the allocators port's ledger inside memcached on the Sublet

@@ -181,7 +181,7 @@
  		}
  
 +#ifdef CAPSTONE_MUSL_MALLOC
-+		p = __capstone_malloc_group_map(m->cap_slots, &m->cap_tail,
++		p = __capstone_malloc_group_map(m->cap_slots,
 +		                                needed, cnt == 1 ? needed-UNIT : size, cnt);
 +#else
  		p = mmap(0, needed, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
@@ -199,7 +199,7 @@
  			p[UNIT+i*size-4] = 0;
 +#ifdef CAPSTONE_MUSL_MALLOC
 +		m->cap_parent = &g->cap_slots[idx];
-+		p = __capstone_malloc_group_nested(m->cap_slots, &m->cap_tail,
++		p = __capstone_malloc_group_nested(m->cap_slots,
 +		                                  size, cnt, m->cap_parent);
 +#endif
  		active_idx = cnt-1;
@@ -241,7 +241,7 @@
  			return 0;
  		}
 +#ifdef CAPSTONE_MUSL_MALLOC
-+		p = __capstone_malloc_group_attach(g->cap_slots, &g->cap_tail, p,
++		p = __capstone_malloc_group_attach(g->cap_slots, p,
 +		                                  (needed+4095)&-4096UL);
 +		g->cap_slots[0].group = g;
 +		g->cap_slots[0].index = 0;
@@ -255,31 +255,11 @@
  		g->last_idx = 0;
  		g->freeable = 1;
  		g->sizeclass = 63;
-@@ -385,3 +419,24 @@
+@@ -385,3 +419,4 @@
  	return g->sizeclass >= 48 ||
  		get_stride(g) < UNIT*size_classes[g->sizeclass];
  }
 +
-+#ifdef CAPSTONE_MUSL_MALLOC
-+void __capstone_mallocng_restore(struct capstone_malloc_slot *s, void *raw)
-+{
-+	struct meta *g = s->group;
-+	unsigned char *p = raw;
-+	size_t offset = ((uintptr_t)p - (uintptr_t)g->mem->storage)/UNIT;
-+	cap_prefix(p)[1] = s->index;
-+	if (offset <= 0xffff) {
-+		*(uint16_t *)(cap_prefix(p)+2) = offset;
-+		cap_prefix(p)[0] = 0;
-+	} else {
-+		*(uint16_t *)(cap_prefix(p)+2) = 0;
-+		*(uint32_t *)(p-8) = offset;
-+		cap_prefix(p)[0] = 1;
-+	}
-+	unsigned char *end = __capstone_malloc_slot_start(s) + get_stride(g) - IB;
-+	*end = 0;
-+	set_size(p, end, s->nominal);
-+}
-+#endif
 --- a/src/malloc/mallocng/malloc_usable_size.c
 +++ b/src/malloc/mallocng/malloc_usable_size.c
 @@ -8,6 +8,9 @@
@@ -313,12 +293,11 @@
  	unsigned char storage[];
  };
  
-@@ -29,7 +37,16 @@
+@@ -29,7 +37,15 @@
  	uintptr_t freeable:1;
  	uintptr_t sizeclass:6;
  	uintptr_t maplen:8*sizeof(uintptr_t)-12;
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	void *cap_tail;
 +	struct capstone_malloc_slot *cap_parent;
 +	struct capstone_malloc_slot cap_slots[32];
 +#endif
@@ -330,7 +309,7 @@
  
  struct meta_area {
  	uint64_t check;
-@@ -121,17 +138,37 @@
+@@ -121,17 +137,37 @@
  	return m->avail_mask = mask & act;
  }
  
@@ -371,7 +350,7 @@
  		assert(!offset);
  		offset = *(uint32_t *)(p - 8);
  		assert(offset > 0xffff);
-@@ -154,11 +191,12 @@
+@@ -154,11 +190,12 @@
  		assert(offset <= meta->maplen*4096UL/UNIT - 1);
  	}
  	return (struct meta *)meta;
@@ -385,7 +364,7 @@
  	if (reserved >= 5) {
  		assert(reserved == 5);
  		reserved = *(const uint32_t *)(end-4);
-@@ -190,7 +228,7 @@
+@@ -190,7 +227,7 @@
  		end[-5] = 0;
  		reserved = 5;
  	}
@@ -394,7 +373,7 @@
  }
  
  static inline void *enframe(struct meta *g, int idx, size_t n, int ctr)
-@@ -198,11 +236,14 @@
+@@ -198,11 +235,14 @@
  	size_t stride = get_stride(g);
  	size_t slack = (stride-IB-n)/UNIT;
  	unsigned char *p = g->mem->storage + stride*idx;
@@ -411,7 +390,7 @@
  	if (off > slack) {
  		size_t m = slack;
  		m |= m>>1; m |= m>>2; m |= m>>4;
-@@ -213,16 +254,19 @@
+@@ -213,16 +253,19 @@
  	if (off) {
  		// store offset in unused header at offset zero
  		// if enframing at non-zero offset.
@@ -464,7 +443,7 @@
  		size_t needed = (n + base + UNIT + IB + 4095) & -4096;
  		new = g->maplen*4096UL == needed ? g->mem :
 +#ifdef CAPSTONE_MUSL_MALLOC
-+			__capstone_malloc_group_remap(g->cap_slots, &g->cap_tail, g->mem,
++			__capstone_malloc_group_remap(g->cap_slots, g->mem,
 +			                                g->maplen*4096UL, needed);
 +#else
  			mremap(g->mem, g->maplen*4096UL, needed, MREMAP_MAYMOVE);
