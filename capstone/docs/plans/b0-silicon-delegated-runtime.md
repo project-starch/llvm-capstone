@@ -2791,6 +2791,91 @@ cursorless words. Before its pre-registration, this lane owes:
    build-b0-hello.sh, in the shape of QEMU's sublet cases 0/1/3/7/10/22), with values pre-registered from the RTL
    simulation of the same source.
 
+## Sublet acceptance pre-registered (2026-10-15, before any Sublet boot): caplifive_sublet_d93a8d66b.bit
+**The flash.**
+- The lead's own word in conversation, 2026-10-15: "Flash Sublet now". It replaces `caplifive_fpb_afcd19bea.bit`, which
+  stays the registered fallback.
+- The file was pulled from the synth host's d93a worktree: sha256
+  89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430, 11,443,722 B, equal to the sealed hash.
+- Routed WNS is -15.856. The synth lane notes that run.tcl:93-99 warns that a timing-failing bitstream can behave
+  intermittently. So a single failure on this bitstream is repeated before it is attributed to anything.
+- The lockstep items above hold where they touch these rows:
+  - the FP acceptance boots are complete;
+  - the images below are full-format, as on (b);
+  - the rev-node memory is unchanged (CAP_REVNODE_MEM_BASE 0xBFF0_0000, a 16-bit index on both trees), so
+    PREFLIGHT_DTS_NODES stays 65536.
+
+**The FP positive control, run before the flash (23:48-23:51, afcd19bea), did NOT read as pre-registered.**
+- control-call-retpc: SR 8, `0 0x12 0x21 0 0x51 0 0 0`, identical to 01:33 the same day.
+- sublet-derive-kill (6b6eb589929a2d90): SUPTEST BEGIN and SB1, then no SR or SV at all, and the 90 s timeout.
+- The PREREG's "0x2 at #1" did not read, because the image never reached its first CAPPRINT. It did not read the
+  Sublet vector either, and that is what this control existed to show.
+- Likely mechanism (sent to the RTL lane, unconfirmed): the test's handler resumes every trap at s10, so a trap on the
+  FP tree loops.
+  - Either `CAPPERM(a1, 14)` traps before s10 is set (the MANAGE bit predates d34c26002),
+  - or CDERIVE traps 2 and the resumed `LCC` on the un-derived s1 traps again.
+- The PREREG's sentence was checked on the step-before tree (the new word, no CDERIVE), not on the FP tree.
+
+**Bare half** (`/tmp/capstone/accept-sublet/chain-bare.sh`; one power cycle per image; out `/tmp/capstone/accept-sublet`).
+1. **Control:** the S-16 set, 18 arms and 98 readings, identical to the FP respin's record (accept-fpb/accept).
+   cmp-readings.py exits 0 only when every arm is present and identical. Any difference STOPS the chain.
+2. **The RTL lane's floor:** sublet-bare-2026-10-15/PREREG.md (dev 368c0d641107, 9289c83847ed, 413de971c6f5), graded
+   by position with grade-floor.py. Both directions were tested on synthetic logs.
+   - control-call-retpc as above.
+   - **sublet-derive-kill**, SR 19: `0xe 0x100 0x300 0x1 0x1234 0xe 0x1d 0x1b 0x0 0x19 0x19 0x1d 0x1d 0x0 0x19 0xe 0x5678
+     0x1a 0x18`.
+   - **sublet-split-shares-node**, SR 7: `0x1111 0x2222 0x0 0x19 0x19 0x0 0x19`.
+   - **sublet-mrev-orphan**, SR 8: `0x0 0x0 0x0 0x0 0x0 0x19 0x19 0x19`.
+   - **sup-sublet**, SR 26: `0x0 0x1 0x77 0xe 0x5a5a 0x0 0x5 0x19 0x0 0x4 0x0 0x5 0x1b 0x0 0x4 0x0 0x5 0x1d 0x0 0x4 0x0 0x5
+     0x1a 0x0 0x4 0x0`. This is the first supervised domain on this bitstream.
+   - **The negative readings inside them:** derive-kill's refusals 0x1d / 0x1b / 0x19, the dead-child loads 0x19 (R-45's
+     flush now covering CREVOKE), and mrev-orphan's 0x19 at #6 and #8.
+3. **s1gap**, graded by s1-revoke-gap-2026-10-14/PREREG.md against the FP readings of 02:58.
+   - The FP readings:
+     - close: `0x8 0x3a 0x0 | 0x2f 0x21 0x0 | 0x1d 0x31 0x0 | 0x1c 0x49 0x0 | 0x0 0x0 0x0 0x4`;
+     - far: `0xfa6 0x42 0x0 | 0xfbc 0x21 0x0 | 0xfbd 0x2d 0x0 | 0xfbd 0x47 0x0 | 0x0 0x0 0x3e8 0x4`.
+   - Predicted on Sublet:
+     - the far arm equal at every k;
+     - the close arm equal at k = 2..4;
+     - the close arm's k = 1 revoke at or below 0x3a, never above.
+   - A Sublet reading above FP's at any index is a finding against outcome A, and is read first.
+   - For R1, the far shape predicts that the published 76 cycles at 2 nodes and 22.7 per node hold.
+4. **r51:** before `0x1c 0x1c`, after `0x0 0x1c 0x1c`. **s10b:** `0x8 0x1`. Both as on FP.
+
+**Linux half** (`chain-linux.sh`; each row its own cold boot; R-43 tags `s10*`, so the respin's `s8*` records stay).
+- **Inputs:**
+  - the shared tree at buildroot d04bd83, opensbi df0e9a8, capstone-sbi 93440d5, checked before any boot;
+  - the respin's fw3 firmwares, by hash: s06agg 8b4cbb4b4dff, boot C+F 060d6566c956, boot W 69895472f098;
+  - C5u's corrected firmware dccb46a3fd0f.
+- **Predictions:** those of the respin's R-55 result above, unchanged. The encoder makes the same E decision as
+  afcd19bea on every representable region, and no row uses CDERIVE or CREVOKE.
+
+1. **s06agg** (the gate for the rest): k800 4, s06agg 64, and a nonzero `sched_clock` stamp.
+2. **Boot C+F:**
+   - B3j: 0 of 40,000 wrong, and the checker control passes;
+   - B3i: all I, except k's fs5;
+   - B3f: 0 of 12, and v7 exactly 1;
+   - b3-clock: arith 0 of 200,000, self-test 1, hold 0 / 0;
+   - b3-oracle transcript e0a254c47e7ee28c, 1,931,207 B;
+   - b1-thread 124; b2 VERSION/STORED/VALUE;
+   - **r54-bounds 64.**
+3. **R-43:**
+   - a1: `speedtest1-ran=0x4EB1xxxx`, `R1 m1 end ... alloc=160 minted=191 revoked=160`, k800 4;
+   - a3: 12 wide points, ok 12;
+   - a4 / a5 / a6: live-sweep 544 / 4352 / 17408;
+   - a7: 17 of 17 retval == oracle, with instret identical to 0568f93a9's;
+   - a8: `112006 38bb59fd`, lookasides 25010;
+   - a10, last: mcause 25, mepc DBAS+0x4354, tval 0xac100000.
+   - **Not re-run here:**
+     - a2, which on this monitor fills the 96-slot table (RGNF E00C); its exact-regions arm is a separate row;
+     - the frozen a9, a known R-55 sublet wedge (mcause 26); the cell 6 matched pair replaces it.
+4. **C5u** on dccb46a3fd0f: SUPK and SUPA in the thousands, 4 SUPM, four speedtests at `112006 38bb59fd`, and the quiet
+   arm's overhead near 0568f93a9's +0.67%. This is the firmware's first silicon run, so it comes after the known rows.
+5. **Boot W:** cw-align 8, cw-pool 0.
+
+The cell 6 pair, the exact-regions a2, the process-ABI boot and B5 on this bitstream follow. Each is pre-registered in
+its own section before it runs.
+
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
 longer separates globals.
