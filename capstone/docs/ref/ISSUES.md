@@ -1142,7 +1142,7 @@ R-21's box. **Which behaviour is intended is a spec question**, and neither sour
 specification. The RTL's refusal is the safer default.
 
 > **2026-10-14: the threshold moved, and escalation has a second cause difference.**
-> - **Threshold.** Since capstone-qemu #21 (7dbfdd534eea, dev's pin) the permission field is 4 bits wide
+> - **Threshold.** Since capstone-qemu #21 (7dbfdd534eea) the permission field is 4 bits wide
 >   (MANAGE = 8). `helper_cstighten` now clamps `perms > CAP_PERMS_ALL` (15), not `> 7`. Immediates 8-15
 >   are real requests, and the silent clamp applies only above 15.
 > - **Escalation.** An immediate the source does not hold is "Illegal operand value (29)" in the
@@ -8416,6 +8416,45 @@ as a 17-byte copy (2^36 + 16 as one capability). The count is now 64-bit;
 `memcpy-capability-granules.ll` gains both sizes, which the narrowed count inlines and the fix sends
 to `memcpy`. **Still open:** a copy forced inline (`llvm.memcpy.inline`) past the budget falls to
 the scalar path and loses its tags.
+### C-77 — a const global aggregate that holds pointers, passed BY VALUE, faults in the virtual profile: the argument copy's memcpy gets its operands through integer moves `OPEN — COMPILER; found 2026-10-11 by the Perl port on the virtual profile (the lexer's "::" bareword path), reduced to a 20-line C program; worked around in the port (ports/perl/musl/patches/5.36.3/0009)`
+
+**What happens.** Built with a virtual-profile SDK (`-capstone-gp-free -capstone-image-gp`,
+compiler cda7e335ff9f, the p13 kit's) and run on the Sublet-lifetime QEMU, a call that passes a
+`static const` struct by value faults with cause 24 inside `memcpy`, at an address in the image's
+own `.rodata` (the constant). Variants of one program, each in its own process, at -O2 and at -O0
+alike:
+
+| argument passed by value | result |
+|---|---|
+| `static const struct { void *a,*b,*c,*d,*e; unsigned long off; _Bool lex; }` (96 bytes) | **cause 24 in memcpy** |
+| the same struct, not `const` | correct |
+| the same struct, copied into a local first and the local passed | correct |
+| a `static const` struct of six `long` (48 bytes, no pointers) | correct |
+| a `static const struct { void *a; long b; }` (32 bytes, passed in registers) | correct |
+
+```c
+struct pc { void *a, *b, *c, *d, *e; unsigned long off; _Bool lex; };
+static const struct pc k_pc = { 0 };
+__attribute__((noinline)) static long t_pc(struct pc c) { return (long)c.off + (c.a == 0); }
+int main(void) { return (int)t_pc(k_pc); }   /* cause 24 in memcpy */
+```
+
+**What the caller does (-O2, disassembly of the faulting call).** The source is formed correctly as
+a capability (`scc a4, gp, a0`, `delin a4`, `shrink a4, a2, a1`), and the destination is the frame
+copy's capability in `s2`. Both are then handed to `memcpy` through integer moves, `mv a1, a4` and
+`mv a0, s2`, where a capability copy is `movc`, so `memcpy` receives untagged operands and faults
+reading the source. A mutable global and a local take a different path and pass tagged operands.
+
+**Where it bit.** Perl 5.36.3's `toke.c` passes the constant `no_code` (a struct of five pointers)
+by value for a bareword beginning with `::` (`::is`, `::ok`, used throughout Perl's own tests),
+so any program containing one faulted at compile time. The port copies the constant into a local
+first (patch 0009), as the same file's `yyl_keylookup` already does. Any program built with a
+virtual SDK can carry the same shape.
+
+**Not done.** The fix belongs in caller-side byval lowering (the C-50 neighbourhood,
+`CapstoneISelLowering.cpp`): the copy's operands must stay in capability registers. Not
+reproduced against a compiler built from a later revision; no lit test yet.
+
 ### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism read out of the code 2026-09-30`
 
 **What happens.** `tests/runtime-qemu/subword-atomics`, built by the application SDK's

@@ -1,7 +1,7 @@
 {
   "program": "postgres",
   "role": "allocator-component",
-  "title": "PostgreSQL's memory contexts, replayed against aset, slab and generation",
+  "title": "PostgreSQL's memory contexts, replayed against aset, generation, slab and bump",
   "upstream": {
     "version": "17.0",
     "pin_source": {
@@ -10,9 +10,8 @@
     }
   },
   "targets": [
-    "capstone-domain",
+    "capstone-virtual",
     "cheribsd-purecap",
-    "linux-guest",
     "native"
   ],
   "corpora": [

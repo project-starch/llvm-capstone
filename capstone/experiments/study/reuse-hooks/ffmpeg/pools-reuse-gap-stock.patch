@@ -1,0 +1,146 @@
+Reuse-distance hooks for FFmpeg 9.0.1 libavutil, STOCK arm: applies to the
+tree of ports/ffmpeg/app/host/prepare-source.sh (the app's patches 0001-0005).
+
+Everything is under EXP_REUSE_GAP (passed by the wrapper as
+FFAPP_EXTRA_CONFIGURE=--extra-cflags=-DEXP_REUSE_GAP). Without the define
+the preprocessed source is unchanged. Two boundaries, each with its own
+static table (2^14 slots) and exit-time REUSE-GAP line on stderr:
+
+  buffer-pool     hand-out: av_buffer_pool_get, for every successful get,
+                  reissued (pool->pool) or new (pool_alloc_buffer), with the
+                  entry's own data pointer (BufferPoolEntry.data) and
+                  pool->size; return: pool_release_buffer, same address;
+                  drop: buffer_pool_flush freeing an idle entry.
+  refstruct-pool  hand-out: refstruct_pool_get_ext, reissued
+                  (available_entries) or new, with the entry's start (its
+                  RefCount header, the object minus REFCOUNT_OFFSET) and
+                  REFCOUNT_OFFSET + pool->size; return: pool_return_entry,
+                  the header's address; drop: pool_free_entry.
+
+buffer.c and refstruct.c include reuse-gap-hook.h and reuse-gap-observer.h,
+which the wrapper copies into libavutil/.
+
+--- a/libavutil/buffer.c
++++ b/libavutil/buffer.c
+@@ -25,6 +25,14 @@
+ #include "common.h"
+ #include "mem.h"
+ #include "thread.h"
++#ifdef EXP_REUSE_GAP
++/* Reuse-distance observer (experiments/study/reuse-hooks/ffmpeg), boundary
++ * "buffer-pool": av_buffer_pool_get's hand-out of an entry, new or reissued,
++ * and pool_release_buffer's return, keyed by the entry's own data pointer.
++ * Integers only. */
++#include "reuse-gap-hook.h"
++REUSE_GAP_HOOK(buffer_pool_reuse_gap, "buffer-pool", 14, 1)
++#endif
+ 
+ static AVBufferRef *buffer_create(AVBuffer *buf, uint8_t *data, size_t size,
+                                   void (*free)(void *opaque, uint8_t *data),
+@@ -305,6 +313,9 @@
+         BufferPoolEntry *buf = pool->pool;
+         pool->pool = buf->next;
+ 
++#ifdef EXP_REUSE_GAP
++        reuse_gap_hook_drop(&buffer_pool_reuse_gap);
++#endif
+         buf->free(buf->opaque, buf->data);
+         av_freep(&buf);
+     }
+@@ -347,6 +358,9 @@
+     BufferPoolEntry *buf = opaque;
+     AVBufferPool *pool = buf->pool;
+ 
++#ifdef EXP_REUSE_GAP
++    reuse_gap_hook_release(&buffer_pool_reuse_gap, (uint64_t)(uintptr_t)buf->data);
++#endif
+     ff_mutex_lock(&pool->mutex);
+     buf->next = pool->pool;
+     pool->pool = buf;
+@@ -408,6 +422,16 @@
+     }
+     ff_mutex_unlock(&pool->mutex);
+ 
++#ifdef EXP_REUSE_GAP
++    if (ret) {
++        /* buf is the free-list head read above: NULL means a new entry. */
++        const BufferPoolEntry *entry = ret->buffer->opaque;
++        reuse_gap_hook_issue_entry(&buffer_pool_reuse_gap,
++                                   (uint64_t)(uintptr_t)entry->data,
++                                   pool->size ? pool->size : 1, !buf);
++    }
++#endif
++
+     if (ret)
+         atomic_fetch_add_explicit(&pool->refcount, 1, memory_order_relaxed);
+ 
+--- a/libavutil/refstruct.c
++++ b/libavutil/refstruct.c
+@@ -28,6 +28,14 @@
+ #include "mem.h"
+ #include "mem_internal.h"
+ #include "thread.h"
++#ifdef EXP_REUSE_GAP
++/* Reuse-distance observer (experiments/study/reuse-hooks/ffmpeg), boundary
++ * "refstruct-pool": refstruct_pool_get_ext's hand-out of an entry, new or
++ * reissued, and pool_return_entry's return, keyed by the entry's start, its
++ * RefCount header. Integers only. */
++#include "reuse-gap-hook.h"
++REUSE_GAP_HOOK(refstruct_pool_reuse_gap, "refstruct-pool", 14, 1)
++#endif
+ 
+ #ifndef REFSTRUCT_CHECKED
+ #ifndef ASSERT_LEVEL
+@@ -217,6 +225,9 @@
+ {
+     if (pool->free_entry_cb)
+         pool->free_entry_cb(pool->opaque, get_userdata(ref));
++#ifdef EXP_REUSE_GAP
++    reuse_gap_hook_drop(&refstruct_pool_reuse_gap);
++#endif
+     av_free(ref);
+ }
+ 
+@@ -225,6 +236,9 @@
+     RefCount *ref = ref_;
+     AVRefStructPool *pool = ref->opaque.nc;
+ 
++#ifdef EXP_REUSE_GAP
++    reuse_gap_hook_release(&refstruct_pool_reuse_gap, (uint64_t)(uintptr_t)ref);
++#endif
+     ff_mutex_lock(&pool->mutex);
+     if (!pool->uninited) {
+         ref->opaque.nc = pool->available_entries;
+@@ -251,6 +265,9 @@
+ {
+     void *ret = NULL;
+ 
++#ifdef EXP_REUSE_GAP
++    int reuse_gap_fresh = 0;
++#endif
+     memcpy(datap, &(void *){ NULL }, sizeof(void*));
+ 
+     ff_mutex_lock(&pool->mutex);
+@@ -272,6 +289,9 @@
+             return AVERROR(ENOMEM);
+         ref = get_refcount(ret);
+         ref->free = pool_return_entry;
++#ifdef EXP_REUSE_GAP
++        reuse_gap_fresh = 1;
++#endif
+         if (pool->init_cb) {
+             int err = pool->init_cb(pool->opaque, ret);
+             if (err < 0) {
+@@ -289,6 +309,12 @@
+     if (pool->pool_flags & AV_REFSTRUCT_POOL_FLAG_ZERO_EVERY_TIME)
+         memset(ret, 0, pool->size);
+ 
++#ifdef EXP_REUSE_GAP
++    reuse_gap_hook_issue_entry(&refstruct_pool_reuse_gap,
++                               (uint64_t)(uintptr_t)ret - REFCOUNT_OFFSET,
++                               REFCOUNT_OFFSET + (pool->size ? pool->size : 1),
++                               reuse_gap_fresh);
++#endif
+     memcpy(datap, &ret, sizeof(ret));
+ 
+     return 0;

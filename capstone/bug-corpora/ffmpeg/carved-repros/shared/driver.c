@@ -37,42 +37,43 @@ ffc_write_probe_u32(volatile uint32_t *p, uint32_t v) {
 static unsigned long addr(const void *p) { return (unsigned long)(uintptr_t)p; }
 
 #ifdef FFC_SUBLET_CARVE
-#include <sublet/sublet.h>
-/* musl-capstone/runtime/sublet_heap.c: the block stays LINEAR in *out, the heap keeps its handle. */
-unsigned long __capstone_sublet_malloc_linear(size_t n, capstone_cap_slot *out);
-void __capstone_sublet_free_linear(unsigned long base);
+#include <capstone/capability.h>
+#undef malloc
+#undef calloc
+#undef free
 #define FFC_PIECES 32
-/* One carved block at a time, which is what every case holds. */
+/* One carved block at a time. The case receives only its scalar address;
+ * the allocator keeps the parent and gives out bounded child lifetimes. */
 static struct {
-  unsigned long base, end, cur; /* cur: the start of the uncarved, still linear remainder */
-  int live, zero;
-  unsigned pieces, gaps;
-  capstone_cap_slot rest, piece[FFC_PIECES], gap[FFC_PIECES];
+  void *allocation, *life;
+  unsigned long base, end;
+  int live;
+  unsigned pieces;
   unsigned long lo[FFC_PIECES], hi[FFC_PIECES];
-  unsigned char *alias[FFC_PIECES]; /* each region's whole alias; carves narrow a copy */
+  unsigned char *alias[FFC_PIECES];
 } blk;
 
 void *ffc_block_alloc(size_t bytes, int zero) {
   CHECK(!blk.live, 961);
-  unsigned long base = __capstone_sublet_malloc_linear(bytes, &blk.rest);
-  if (!base)
+  void *p = zero ? calloc(1, bytes) : malloc(bytes);
+  if (!p)
     return NULL;
-  blk.base = blk.cur = base;
-  blk.end = capstone_cap_end(&blk.rest);
+  blk.allocation = p;
+  blk.life = capstone_cap_derive(p, 0, bytes);
+  blk.base = addr(p);
+  blk.end = blk.base + bytes;
   blk.live = 1;
-  blk.zero = zero;
-  blk.pieces = blk.gaps = 0;
-  printf("block linear bytes=%zu lent=%lu\n", bytes, blk.end - base);
-  /* An address, not a capability: the block is reachable only through the regions carved
-   * from it, so a case that dereferenced the block itself would fault here, not pass. */
-  return (void *)base;
+  blk.pieces = 0;
+  printf("block mallocng bytes=%zu\n", bytes);
+  return (void *)blk.base;
 }
 
 void ffc_block_free(void *block) {
   if (!block)
     return;
   CHECK(blk.live && addr(block) == blk.base, 965);
-  __capstone_sublet_free_linear(blk.base); /* one revoke: every region's alias dies */
+  free(blk.allocation); /* Ends the group and every issued region below it. */
+  blk.allocation = blk.life = NULL;
   blk.live = 0;
 }
 
@@ -81,45 +82,36 @@ void ffc_recarve(void *region) {
   unsigned j = 0;
   while (j < blk.pieces && !(blk.lo[j] <= a && a < blk.hi[j]))
     ++j;
-  CHECK(blk.live && j < blk.pieces, 966);
-  sublet_give(&blk.piece[j]); /* one revoke: every alias of the region dies; it is linear again */
+  CHECK(blk.live && j < blk.pieces && blk.alias[j], 966);
+  capstone_cap_revoke_child(blk.life, region);
+  blk.alias[j] = NULL;
   printf("recarve region=[%lu,%lu)\n", blk.lo[j] - blk.base, blk.hi[j] - blk.base);
 }
 
-static unsigned char *sublet_region(size_t off, size_t len, const char *name, unsigned long *lo,
-                                    unsigned long *hi) {
+static unsigned char *sublet_region(size_t off, size_t len, const char *name,
+                                    unsigned long *lo, unsigned long *hi) {
+  (void)name;
+  CHECK(blk.live && len && off <= blk.end - blk.base &&
+        len <= blk.end - blk.base - off, 963);
   unsigned long s = blk.base + off, e = s + len;
   unsigned j;
-  CHECK(blk.live && len && e <= blk.end, 963);
-  if (s >= blk.cur) {
-    unsigned long at = s & ~15UL;
-    if (at > blk.cur) { /* bytes no carve names: a region of their own, never issued */
-      CHECK(blk.gaps < FFC_PIECES, 964);
-      sublet_carve(&blk.rest, at, &blk.gap[blk.gaps++]);
-      blk.cur = at;
-    }
-    CHECK(blk.pieces < FFC_PIECES, 964);
-    j = blk.pieces++;
-    blk.lo[j] = at;
-    blk.hi[j] = (e & 15) ? blk.end : e;
-    sublet_carve(&blk.rest, blk.hi[j], &blk.piece[j]);
-    blk.cur = blk.hi[j];
-    blk.alias[j] = sublet_take(&blk.piece[j]);
-  } else {
-    j = 0;
-    while (j < blk.pieces && !(blk.lo[j] <= s && e <= blk.hi[j]))
-      ++j;
-    if (j == blk.pieces) {
-      fprintf(stderr, "CONTROL-FAILED carve %s [%zu,%zu) spans two Sublet regions: not expressible\n",
-              name, off, off + len);
-      exit(75);
-    }
+  for (j = 0; j < blk.pieces; ++j) {
+    if (s == blk.lo[j] && e == blk.hi[j])
+      break;
+    CHECK(e <= blk.lo[j] || s >= blk.hi[j], 964);
   }
-  *lo = blk.lo[j] - blk.base;
-  *hi = blk.hi[j] - blk.base;
-  unsigned char *a = blk.alias[j];
-  a += s - __builtin_capstone_cap_get_cursor(a);
-  return __builtin_capstone_cap_shrink(a, s, e);
+  if (j == blk.pieces) {
+    CHECK(j < FFC_PIECES, 964);
+    ++blk.pieces;
+    blk.lo[j] = s;
+    blk.hi[j] = e;
+    blk.alias[j] = NULL;
+  }
+  if (!blk.alias[j])
+    blk.alias[j] = capstone_cap_derive(blk.life, off, len);
+  *lo = off;
+  *hi = off + len;
+  return blk.alias[j];
 }
 #endif
 
@@ -130,8 +122,6 @@ void *ffc_carve(void *block, size_t off, size_t len, const char *name) {
   unsigned long lo, hi;
   CHECK(addr(block) == blk.base, 962);
   unsigned char *p = sublet_region(off, len, name, &lo, &hi);
-  if (blk.zero)
-    memset(p, 0, len); /* calloc's zeroing, through the region's own alias */
   printf("carve %s off=%zu len=%zu bounds=%llu base_eq=%d region=[%lu,%lu)\n", name, off, len,
          (unsigned long long)(__builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_base(p)),
          __builtin_capstone_cap_get_base(p) == blk.base + off, lo, hi);

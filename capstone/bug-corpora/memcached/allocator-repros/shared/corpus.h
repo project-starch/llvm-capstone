@@ -9,22 +9,24 @@
  *
  * WHAT IS REAL AND WHAT IS REDUCED. The allocators are real: slabs.c and
  * cache.c from the pinned memcached 1.6.45, unmodified but for the shim and
- * lifetime-hook patches the port applies. The consumer is reduced to the
+ * lifetime-hook patches the port applies -- or, in the Sublet build
+ * (MC_CAPSTONE_SUBLET), the shims and the application's patch 0006. The consumer is reduced to the
  * allocator calls the upstream defect makes, in the same order; the per-case
  * PROVENANCE.md says what was left out. memcached is a threaded server and
  * two of its defects are races; the reduction serialises the interleaving the
  * upstream commit describes, which is the one thing a single thread can do.
  *
  * THREE TARGETS, SAME SEQUENCE. Natively the arms differ by the upstream FIX and
- * the driver prints what the case observed. In a Capstone domain the arms
- * differ by PROTECTION -- mode 0 spatial must complete, mode 1 sublet must
- * fault at the labelled probe -- and the program reports nothing about itself:
- * the runner reads the fault off the monitor and the completion off the
- * report. On CheriBSD the same hosted program runs in mode 0 against the
- * platform's own malloc, with libc revocation on or off, and a supervisor
- * observes it from outside; the probe there is a capability-base load so the
- * label sits on the instruction the kernel's trap PC can be compared against.
- * Only the probe and the marker are target-specific, and neither is a case. */
+ * the driver prints what the case observed. On the virtual Capstone profile the
+ * arms differ by PROTECTION -- stock slabs.c/cache.c on virtual mallocng, or
+ * the same with patch 0006 -- and the runner reads a fault at the labelled
+ * probe off the job record. On CheriBSD the same hosted program runs in mode 0
+ * against the platform's own malloc, with libc revocation on or off, and a
+ * supervisor observes it from outside; the probe there is a capability-base
+ * load so the label sits on the instruction the kernel's trap PC can be
+ * compared against. Only the probe is target-specific, and it is not a case.
+ * (The freestanding Capstone domain target and its marker were removed with
+ * the physical Sublet heap, 2026-10-11.) */
 #ifndef MC_CORPUS_H
 #define MC_CORPUS_H
 #include "mc_slabs_shim.h"
@@ -66,14 +68,7 @@ static volatile unsigned char *held __attribute__((used));
  * (case 5) failed to link with "undefined symbol: mc_defect_read" because of it. */
 __attribute__((noinline, used)) static unsigned
 read_probe(const volatile unsigned char *p) {
-#if defined(MCP_DOMAIN)
-  unsigned long value;
-  __asm__ volatile(".globl mc_defect_read\nmc_defect_read:\nlbu %0, 0(%1)\n"
-                   : "=r"(value)
-                   : "r"(p)
-                   : "memory");
-  return value;
-#elif defined(__CHERI_PURE_CAPABILITY__)
+#if defined(__CHERI_PURE_CAPABILITY__)
   /* Capability-base byte load; a "C" operand keeps the stale capability itself
    * as the base, so a revoked tag faults HERE and nowhere earlier. */
   unsigned long value;
@@ -89,13 +84,7 @@ read_probe(const volatile unsigned char *p) {
 /* No case writes. The label must still exist, because mark() publishes both
  * addresses; `used` keeps --gc-sections from dropping it. */
 __attribute__((used, noinline)) static void write_probe(volatile unsigned char *p) {
-#if defined(MCP_DOMAIN)
-  unsigned long value = 93;
-  __asm__ volatile(
-      ".globl mc_defect_write\nmc_defect_write:\nsb %0, 0(%1)\n" ::"r"(value),
-      "r"(p)
-      : "memory");
-#elif defined(__CHERI_PURE_CAPABILITY__)
+#if defined(__CHERI_PURE_CAPABILITY__)
   unsigned long value = 93;
   __asm__ volatile(
       ".globl mc_defect_write\nmc_defect_write:\ncsb %0, 0(%1)\n" ::"r"(value),
@@ -105,22 +94,10 @@ __attribute__((used, noinline)) static void write_probe(volatile unsigned char *
   *p = 93;
 #endif
 }
-/* Publish the case and both probe addresses through the monitor, so the host
- * knows which instruction a fault is allowed to be at. Nothing to publish
- * natively: the driver's output is the result there. */
-__attribute__((unused)) static void mark(unsigned which) {
-#ifdef MCP_DOMAIN
-  extern void mc_defect_read(void), mc_defect_write(void);
-  unsigned long code = 0xcf1c000000000000UL | which;
-  __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0\n"
-                   ".insn r 0x5b, 0x1, 0x43, x0, %1, x0\n"
-                   ".insn r 0x5b, 0x1, 0x43, x0, %2, x0\n" ::"r"(code),
-                   "r"(mc_defect_read), "r"(mc_defect_write)
-                   : "memory");
-#else
-  (void)which;
-#endif
-}
+/* The domain target published the case and both probe addresses through its
+ * monitor here; every remaining target reads the fault off the process, so
+ * this is a no-op kept for the cases that call it. */
+__attribute__((unused)) static void mark(unsigned which) { (void)which; }
 
 /* The carve-bounds remedy, MC_CARVE_BOUNDS (added 2026-10-09). memcached carves an item's key,
  * suffix and value out of the item's flexible array data[] by pointer arithmetic -- ITEM_key,
@@ -162,7 +139,14 @@ void mc_case_body(int fixed, struct mc_outcome *o);
  * The fixture's event id must name this case, so a fixture built for another
  * case is refused rather than silently running this one. The domain arms
  * always run the buggy sequence; protection is the variable there, not the
- * fix. slabs_init has already run, with upstream's defaults, in the entry. */
+ * fix. slabs_init has already run, with upstream's defaults, in the entry.
+ * The Sublet build has no ledger and no replay entry: its driver
+ * (driver-virtual.c) calls mc_case_body directly. */
+#ifdef MC_CAPSTONE_SUBLET
+#define MC_CASE(number)                                                        \
+  const int mc_case_number = (number);                                         \
+  void mc_case_body(int fixed, struct mc_outcome *o)
+#else
 #define MC_CASE(number)                                                        \
   const int mc_case_number = (number);                                         \
   void mcp_replay(const struct mcp_header *input, struct mcp_header *out) {    \
@@ -184,4 +168,5 @@ void mc_case_body(int fixed, struct mc_outcome *o);
     mcp_stats(out);                                                            \
   }                                                                            \
   void mc_case_body(int fixed, struct mc_outcome *o)
+#endif
 #endif /* MC_CORPUS_H */

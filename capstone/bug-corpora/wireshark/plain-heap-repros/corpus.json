@@ -13,8 +13,6 @@
     "spatial",
     "sublet",
     "sublet-chunks",
-    "poisoncap-spatial",
-    "poisoncap-protected",
     "cheribsd-revocation",
     "native-detect",
     "native-fix-differential",

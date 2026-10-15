@@ -5,12 +5,8 @@
 #   cross-build.sh          -> $TS_WORK/xbuild: static libwsutil, libwiretap and libwireshark,
 #                              plus tshark linked by capstone-cc as a first link check
 #
-# Source: the pinned tarball (upstream.json), plus every patch in patches/ except 0007, plus
+# Source: the pinned tarball (upstream.json), plus every patch in patches/, plus
 # src/capstone-stubs.c copied into epan/dissectors/ (the whitelist lists it as a dissector file).
-# 0007 (wmem's block size) belongs to the sublet heap arm alone: host/build-domain.sh applies it
-# to its own copies of the two wmem files. Applied here as well, it would land in every arm's
-# libwsutil (moving wmem's asserts' __LINE__ even where its define is off) and then fail to apply
-# a second time in the sublet arm.
 #
 # What makes it a cross build, each from reading the tree (the M0 plan's Step C3):
 # - BUILD_SHARED_LIBS=OFF: capstone-cc links domains, never shared objects;
@@ -23,6 +19,9 @@
 # - the options the native minimal build had, and the optional libraries it did not find (xxhash,
 #   minizip-ng, libnl) turned off;
 # - CAPSTONE_SINGLE_THREAD_DOMAIN (patch 0004), CAPSTONE_HF_PREALLOC=4096 (patch 0005), NDEBUG;
+# - TSAPP_SUBLET=1 (virtual profile only): wmem's block and block_fast objects as Sublet child
+#   lifetimes, the wmem port's patch 0001 applied at fuzz 0 after this port's patches, with
+#   capstone/runtime/include (capability.h) on the include path;
 # - -fno-stack-protector. Wireshark adds -fstack-protector-strong whenever the compiler accepts it,
 #   and every stack-protector mode crashes capstone64's clang in "Insert stack protectors"
 #   (ISSUES.md C-60, open: the guard slot is built in address space 0). The first cross build
@@ -39,6 +38,13 @@
 set -euo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$APP/deps/env.sh"
+SUBLET=${TSAPP_SUBLET:-0} SUBLETF=
+case $SUBLET in 0|1) ;; *) echo "TSAPP_SUBLET must be 0 or 1" >&2; exit 2 ;; esac
+if [[ $SUBLET == 1 ]]; then
+  [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]] \
+    || { echo "TSAPP_SUBLET=1 needs CAPSTONE_APPLICATION_PROFILE=virtual" >&2; exit 2; }
+  SUBLETF=" -I$CAPSTONE_REPO_ROOT/capstone/runtime/include"
+fi
 SRC=$TS_WORK/xsrc B=$TS_WORK/xbuild LOG=$TS_WORK/xbuild-logs P=$TS_DEPS_PREFIX
 read -r URL SHA VER < <(python3 -c 'import json,sys; u=json.load(open(sys.argv[1])); print(u["url"], u["sha256"], u["version"])' "$APP/upstream.json")
 TAR=$TS_WORK/wireshark-$VER.tar.xz
@@ -47,9 +53,13 @@ echo "$SHA  $TAR" | sha256sum -c --quiet -
 rm -rf "$SRC" "$B" "$LOG"; mkdir -p "$SRC" "$B" "$LOG"
 tar -xf "$TAR" -C "$SRC" --strip-components=1
 for p in "$APP"/patches/0*.patch; do
-  case $p in */0007-*) continue ;; esac
   patch -s -d "$SRC" -p1 < "$p"
 done
+if [[ $SUBLET == 1 ]]; then
+  patch -s -d "$SRC" -p1 --batch --forward --fuzz=0 \
+    < "$APP/../wmem/patches/wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch" \
+    || { echo "cross-build: wmem patch 0001 does not apply at fuzz 0" >&2; exit 1; }
+fi
 cp "$APP/src/capstone-stubs.c" "$SRC/epan/dissectors/"
 
 cat > "$B/capstone64.cmake" <<TCEOF
@@ -70,7 +80,7 @@ OFF_TOOLS=(wireshark stratoshark logray dumpcap capinfos captype editcap mergeca
   wifidump xxx2deb)
 ARGS=(-G Ninja -S "$SRC" -B "$B" -DCMAKE_TOOLCHAIN_FILE="$B/capstone64.cmake"
   -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O2 -DNDEBUG"
-  -DCMAKE_C_FLAGS="-DCAPSTONE_SINGLE_THREAD_DOMAIN -DCAPSTONE_HF_PREALLOC=4096 -fno-stack-protector"
+  -DCMAKE_C_FLAGS="-DCAPSTONE_SINGLE_THREAD_DOMAIN -DCAPSTONE_HF_PREALLOC=4096 -fno-stack-protector$SUBLETF"
   -DBUILD_SHARED_LIBS=OFF -DBUILD_tshark=ON
   -DENABLE_PLUGINS=OFF -DENABLE_PCAP=OFF -DENABLE_LUA=OFF -DENABLE_CAP=OFF -DENABLE_GNUTLS=OFF
   -DENABLE_NETLINK=OFF -DENABLE_MINIZIPNG=OFF -DENABLE_XXHASH=OFF -DENABLE_COMPILER_COLOR_DIAGNOSTICS=OFF

@@ -32,6 +32,17 @@ class SafetyTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             safety.classify(out, diagnostic.replace('1234', '1235'), result, 2)
 
+    def test_revoked_interior_store_requires_its_exact_address(self):
+        # memcached fixture 18 writes byte 32, not the allocation's base.
+        fault = 'capstone-exec: domain fault cause=25 pc=0x1234 address=0x9020'
+        result = dict(kind='signal', value=11, fault=fault)
+        diagnostic = 'Cap mem access on revoked capability: pc = 1234, imm = 0, cursor = 9020'
+        out = 'MCAPP-FIX 18 target=9020\nMCAPP-FIX 18 touch\n'
+        got, _ = safety.classify(out, diagnostic, result, 18)
+        self.assertEqual(got[:2], ('FAULT', 'temporal'))
+        got, _ = safety.classify(out.replace('9020', '9000'), diagnostic, result, 18)
+        self.assertEqual(got[0], 'FAULT-ELSEWHERE')
+
 
 if __name__ == '__main__':
     unittest.main()

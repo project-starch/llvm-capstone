@@ -41,8 +41,7 @@ has() { python3 -c 'import sys; sys.exit(0 if b"MC-WORKER %d conn" in open(sys.a
 for f in "$OUT/memcached-native" "$OUT/memcached.dom"; do
   has "$f" || { echo "MARKER GATE: $f lacks the marker string: the define did not reach thread.c"; exit 1; }
 done
-for f in "$MC_WORK/native/bin/memcached" "$MC_WORK/domain/memcached-level0.dom" "$MC_WORK/domain/memcached-shrink.dom" \
-         "$MC_WORK/domain/memcached-sublet.dom"; do
+for f in "$MC_WORK/native/bin/memcached" "$MC_WORK/domain/memcached-level0.dom" "$MC_WORK/domain/memcached-shrink.dom"; do
   [ -f "$f" ] || continue
   ! has "$f" || { echo "MARKER GATE: the oracle image $f carries the marker"; exit 1; }
 done

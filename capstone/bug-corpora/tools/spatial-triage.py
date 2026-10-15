@@ -8,7 +8,7 @@ the mirror instrument.
 The question that decides a candidate's value is NOT "is it an overflow" but **which bound does the
 overflow cross**:
 
-  class A  the malloc/g_malloc bound ............ shrink and sublet already fault; CHERI too.
+  class A  the malloc/g_malloc bound ............ shrink and virtual mallocng already fault; CHERI too.
                                                   A tie row: no contribution.
   class B  a sub-allocation bound INSIDE a       . only a ported inner allocator faults
            nested allocator's block                (chunks / slabsublet* / pool*). The prize.
@@ -249,7 +249,7 @@ def classify(program, sha):
     if saw_nested:
         proposed = "B"          # inside a nested allocator's block -- only a ported arm faults
     elif saw_plain:
-        proposed = "A"          # crosses the malloc bound -- shrink/sublet and CHERI already fault
+        proposed = "A"          # crosses the malloc bound -- shrink, virtual mallocng and CHERI already fault
     elif stack_decls:
         proposed = "STACK"      # no allocator involved; out of class for the nested story
         evidence.append(f"STACK   declared in the hunk: {', '.join(stack_decls[:4])}")

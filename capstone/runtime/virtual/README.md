@@ -1,13 +1,17 @@
 # Virtual C applications on Linux
 
-The local-mallocng branch builds on node growth and the virtual stack landed on `dev`
-at `08cf07d75ad2`, with the application build repairs. Its
+The virtual stack, node growth and local mallocng are merged on `dev`.
+The managed lifetime ISA is pinned at QEMU `7dbfdd534eea`; rebuild the adapter
+against that pin. The allocator uses musl mallocng with local `CDERIVE` and
+`CREVOKE` hooks; see [its representation](mallocng.md). The earlier
 [qualification manifest](results/node-growth/qualification.json) identifies
 exact source and executable hashes. Earlier R1/R2/R3 result files below retain
 their historical scope. This profile uses trusted Linux, same-mm pthreads
 and one hart. The [local-mallocng qualification](results/local-mallocng/README.md)
-records the current allocator profile; historical results below retain their
-original allocator and binary identities.
+records the preceding allocator representation; historical results below retain their
+original allocator and binary identities. The
+[managed-mallocng qualification](results/managed-mallocng/README.md) records
+the current implementation and its known negative result.
 
 This adapter runs Capstone applications in **C mode with user virtual
 addresses**. The existing Linux kernel schedules the launcher, owns its page
@@ -103,16 +107,16 @@ by granting more permissions. It does not supply a pager or change VMA permissio
 make a denied access succeed. TLS uses the common capability libc setup.
 
 Each launch owns a growing lifetime table with 16-byte records. Its physical
-root stays fixed; a 5:9:9-bit directory maps the high 23 bits of a node ID to
+root stays fixed; a 4:9:9-bit directory maps the high 22 bits of a node ID to
 a 4-KiB record page, and the low eight bits select one of its 256 slots.
 Only base-page allocations are required. The initial four record pages plus
 root and directory pages occupy 28 KiB; IDs 0 and 1 remain reserved.
 
 ```text
-node ID:       [ 5 bits ][ 9 bits ][ 9 bits ][ 8 bits ]
+node ID:       [ 4 bits ][ 9 bits ][ 9 bits ][ 8 bits ]
                    |         |         |         |
 srevroot (PA)      v         v         v         v
-     +------> root[32] -> dir[512] -> dir[512] -> nodes[256]
+     +------> root[16] -> dir[512] -> dir[512] -> nodes[256]
               +64 B       4 KiB       4 KiB       4 KiB
              header                             16 B/node
 
@@ -131,7 +135,7 @@ remain pinned because a PCC has no tag to clear. Teardown discards the context
 and clears tags before freeing all table pages and its saved frame.
 
 `node_initial_pages` (default 4), `node_batch_pages` (16) and `node_max_pages`
-(0 means the 31-bit ID limit) count record pages and are read-only module
+(0 means the 30-bit ID limit) count record pages and are read-only module
 parameters; directory pages are accounted separately in `node_bytes`. Existing free
 IDs are used first. Pressure can collect a substantial retired population or
 append initialized pages, then retry the original instruction. At a quota or
@@ -222,6 +226,85 @@ The gp-free application's ordinary scalar-return call convention retains its
 image PCC. General JIT calls between separately bounded code mappings need a
 capability call/return ABI and are not claimed by the executable-context test.
 
+## Floating point
+
+Virtual-C applications run the F and D extensions in hardware. The compiler
+must address the constant pool through a capability (C-80, capstone fix
+7ce213020f87); SDK configuration and `capstone-cc --check-toolchain` refuse
+one that does not. The SDK compiles applications, the runtime, musl and the
+compiler builtins with `+f,+d` under the `lp64` calling convention
+(`cmake/VirtualCodegen.cmake`; `capstone-cc` reads the same flags from
+`sdk.json`): floating-point arguments and results still travel in integer
+registers, and only long double (binary128) stays in software. There is no
+soft-float variant of the virtual SDK. FP loads and stores are checked through
+their capability like integer ones.
+
+QEMU's supervisor gives each context its own f registers and `fcsr`: CSRUNV
+starts an application with FS Initial, zero registers and the default
+environment, and every escape and resume saves and restores them
+(capstone-qemu `tests/virtual-capstone-runtime/fp.sh`). A QEMU without that
+start leaves FS Off, and the first FP instruction faults. This is a property
+of the virtual platform: the RTL's physical domain switcher saves no FP state,
+and its firmware starts domains with FS Off.
+
+`fenv.c` implements musl's environment functions on `fcsr` (musl's riscv64
+assembly is selected by `__riscv_flen`, which this target does not define),
+and gives compiler-rt's long double addition the dynamic rounding mode and the
+inexact flag. A new
+thread starts with its creator's environment (C11 7.6), and a signal handler
+that returns leaves the interrupted code's environment as it was, as Linux's
+sigreturn does; a handler left by `longjmp` keeps its changes, and handlers
+still receive no FP register image. `fp-contract.c` checks rounding modes,
+exception flags, `fegetenv`/`fesetenv`/`feholdexcept`, libm under the dynamic
+rounding mode, long double, thread inheritance and isolation, and signal
+handlers:
+
+```sh
+"$out/sdk/capstone-cc" -O2 capstone/runtime/virtual/fp-contract.c -o "$out/fp.dom"
+python3 capstone/runtime/virtual/run-fp.py --qemu /path/to/qemu-system-riscv64 \
+  --images /path/to/images --adapter "$out/adapter" --application "$out/fp.dom" \
+  --work "$out/fp-gate"
+```
+
+**Long double (binary128) is not fenv-correct; known and deferred.** Its
+addition and subtraction use the dynamic rounding mode for ordinary finite
+results, but: exact cancellation and opposite-sign zero sums have the wrong
+zero sign under downward rounding; an early exponent overflow returns infinity
+whatever the rounding mode and raises neither overflow nor inexact; overflow
+in the final rounding raises inexact but not overflow; signaling NaNs and
+opposite infinities raise no invalid. Multiplication, division and narrowing
+round to nearest and raise no flags. (compiler-rt `fp_add_impl.inc`; a fix
+needs invalid and overflow hooks beside the inexact one.) With the default
+rounding mode the results are correct; only the flags are missing. The SPEC
+CPU2017 C benchmarks in scope call no `<fenv.h>` function, and the one whose
+types could select long double (538.imagick_r, `MagickRealType`) is configured
+for float.
+
+**The profile is fixed.** `sdk.json` names its profile (`physical` or
+`virtual`), and `capstone-cc` refuses an SDK whose codegen is not that
+profile's, and any caller argument that would change it: another FP or vector
+feature or ABI (`-Xclang -target-feature/-target-abi`, `-march=`, `-mabi=`,
+`-mfloat-abi=`, assembler `-Wa,-march=` and the like), another target or CPU,
+a configuration file, LTO, or a gp option against the profile. Repeating a
+profile setting is allowed. Every link then checks each object and archive
+member it can read, the SDK's own runtime, libc and builtins included: a C
+object's `.capstone.attributes` ISA must have F and D under virtual (and no
+other FP or vector extension) and none of them under physical; no object may
+use a hardware-float calling convention (ELF flags); and under virtual no
+object may call the binary32/binary64 soft-float helpers (`__adddf3` ...).
+Thin archives, bitcode, shared libraries, objects naming dependent libraries
+(`.deplibs`; the link also runs with `--no-dependent-libraries`) and linker
+options outside a short allowlist (`--wrap`, `--undefined`, `--defsym`,
+`-Map`, `--gc-sections` and the like; never scripts, response files or
+library aliases that could add unchecked inputs) are refused, as is a
+`CCC_OVERRIDE_OPTIONS` environment that would edit the compiler's arguments. This catches stale and mismatched
+builds (a C object from a physical or an older soft-float virtual SDK fails a
+virtual link on its ISA), not every incompatible object: assembly records no
+ISA, and neither the capability calling convention nor the gp choice is
+recorded, so a C object built with F and D but without the virtual profile's
+gp-free code generation passes a virtual link, and an old soft-float virtual
+object passes a physical one.
+
 ## Build and run
 
 Use a compiler built from this branch, including `clang`, `lld`, `llvm-ar`
@@ -280,6 +363,33 @@ It measures node capacity and all directory/record bytes separately from the
 allocator's block-record count. Rebuild the runtime SDK and relink applications
 to use its proactive node-budget service; old SDKs can return `ENOMEM` from
 their fixed-budget check before an instruction requests node growth.
+
+The adapter resolves a domain page fault inside `CV_STEP` and resumes the
+domain; it returns to the launcher for a pending signal, `need_resched()` or
+the end of a 5 ms quantum. Those are checked before a fault is resolved,
+before each 16-page batch of the pin-ahead window, and with interrupts off
+just before each `CSRUNV`. Work already under way finishes first: the
+`mmap_lock` wait of a resolution, and one GUP (the faulting page or one
+batch). The module
+parameter `pin_ahead_pages` (default 1) pins that many pages from a
+lazy-arena fault onward, 16 at a time. Two gates cover these, built from
+`pin-ahead-contract.c` like `node.dom` above:
+
+```sh
+python3 capstone/runtime/virtual/run-pin-ahead.py ... --application "$out/pin.dom"
+make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE=... M=<copy of module/> \
+  CV_TEST_HOOKS=1 modules     # the test build; never install it elsewhere
+python3 capstone/runtime/virtual/run-step-hooks.py ... --module <that .ko> \
+  --application "$out/pin.dom"
+```
+
+`run-pin-ahead.py` checks the window's clipping (arena, VMA, an already
+pinned page), read-only `FOLL_FORCE` backing staying read-only, and release on
+`munmap`. `run-step-hooks.py` uses the test build's hooks to inject a
+reschedule, a signal, an expired budget or `SIGKILL` at four points of
+`CV_STEP`, and a short GUP result, and checks that no `CSRUNV` and no GUP
+follows an injection, that pins and fault counts match uninjected runs, that GUP is
+never asked for more than 16 pages, and that every `FOLL_PIN` pin is released.
 
 ## Qualification and limits
 
@@ -365,12 +475,14 @@ gate; this adapter does not replace their monitor or CALL/RETURN path.
 This is the first QEMU application profile: one hart, private anonymous
 mappings, 256 MiB per registered region, 1 GiB
 aggregate registered VA, 512 mappings, and a recyclable node table bounded by
-RAM, an optional module quota and the 31-bit ID field. The separate allocator
-block/arena limits are unchanged by node-table growth.
+RAM, an optional module quota and the 30-bit ID field. mallocng's object
+records grow through its metadata allocator; they have no fixed object-count limit.
 Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
 signals need further contracts. The qualified pthread subset is described
-above. Address hints/fixed mappings and `mremap` remain unsupported. Partial unmap
+above. Address hints/fixed mappings and public application `mremap` remain
+unsupported; mallocng uses the private remap slow path described in
+[the allocator contract](mallocng.md). Partial unmap
 requires a separate lifetime contract: a live wide capability must not acquire
 a replacement mapping placed into its former hole. Anonymous
 `MAP_SHARED` and SysV segments are process-local compatibility for nested
@@ -380,8 +492,8 @@ Pages stay pinned after first touch. A page that Linux populated without an
 application fault is pinned by the next retirement or collection, so a
 teardown does not clear its tags itself; Linux clears them with ordinary
 stores when it zeroes the page for reuse. The initial ELF image has the
-existing combined code/data layout. Representability padding above 4 KiB
-requests is accessible within its own block. Recycling requires the
+existing combined code/data layout. The required exact-bounds profile preserves
+requested malloc object bounds through spill and restore. Recycling requires the
 registered-page and saved-context sweep; a namespace full of live or pinned
 identities reports resource exhaustion when growth is unavailable.
 Compact-bounds conformance of every existing compiler/helper path

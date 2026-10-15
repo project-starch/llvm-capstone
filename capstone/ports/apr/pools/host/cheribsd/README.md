@@ -21,8 +21,7 @@ platform's own `malloc` and go back through its own `free`, exactly as upstream
 APR does (`src/cheribsd/node-malloc.c`); there is no payload region and no
 adapter authority. libc revocation is therefore asked the question at the
 level where it lives — and APR never calls `free()` on the path where a
-destroyed pool's node is reused, so it is never asked. Mode 1 is refused. There
-is no PoisonCap build of APR.
+destroyed pool's node is reused, so it is never asked. Mode 1 is refused.
 
 `bin/revocation-control` is the positive control that makes a completing stock
 arm mean something: it frees a block, sweeps, and reads through the old pointer

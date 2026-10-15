@@ -29,6 +29,9 @@ ROOT=${PG_SU_ROOT:-$CAPSTONE_TMP_ROOT/pg-single-user}
 RT=${RUNTIME_REPO:-$CAPSTONE_REPO_ROOT}
 NESTED=${PGSU_NESTED:-none}
 case "$NESTED" in none|sublet) ;; *) echo "PGSU_NESTED=$NESTED?" >&2; exit 2 ;; esac
+# The spatial observer patches mcxt.c, which patch 0003 rewrites the dispatch of.
+[[ $NESTED == none || ${PGSU_GAP_OBSERVER:-0} == 0 ]] \
+  || { echo "PGSU_GAP_OBSERVER is the unprotected arm's instrument" >&2; exit 2; }
 MANAGER=$SCRIPT_DIR/../memory-contexts
 MUSL_PORT=$RT/capstone/ports/musl-capstone
 MRT=$MUSL_PORT/runtime
@@ -76,15 +79,17 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
 RF=("${CF[@]}" -std=c99 -D_XOPEN_SOURCE=700
     -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
 if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
-  CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
-  RF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+  CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp
+       -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d
+       -Xclang -target-abi -Xclang lp64)
+  RF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp
+       -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d
+       -Xclang -target-abi -Xclang lp64)
 fi
 O=$ROOT/runtime
 if stage runtime; then
-  EXTRA=()
-  [[ $NESTED == sublet ]] && EXTRA=(-DCAPSTONE_APPLICATION_GRANT_BYTES=67108864)
   bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
-    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
+    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA"
 fi
 export CAPSTONE_SDK=$O
 export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
@@ -93,6 +98,25 @@ export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
   printf 'export CAPSTONE_SDK=%q\n' "$O"
   printf 'export PATH=%q:$PATH\n' "$O:$CAPSTONE_LLVM_BIN"
 } > "$ROOT/capstone-env.sh"
+
+# ---- what the objects were built with ------------------------------------------
+# Make rebuilds an object when its sources change, not when the compiler, the
+# SDK's profile or the flags do, so an object is reused only under the identity
+# it was built with: the SDK's compiler (which the direct compilations below
+# must also be), its profile and codegen, and this script's flags. The stamp is
+# written after a make stage succeeds and removed before one starts.
+SDK_CC=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cc"])' "$O/sdk.json")
+[[ $(realpath "$SDK_CC") == $(realpath "$CAPSTONE_CLANG") ]] \
+  || { echo "CAPSTONE_CLANG $CAPSTONE_CLANG is not the SDK's compiler $SDK_CC" >&2; exit 2; }
+# Configure bakes the compiler, the SDK and its CFLAGS into the Makefiles, so
+# a change of any of them needs a configure, not a clean make.
+CONFIG_IDENTITY=$({ sha256sum < "$(realpath "$SDK_CC")"
+                    python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c.get("profile") or sys.exit(
+                      "the SDK in "+sys.argv[1]+" names no profile; rebuild it (PGSU_FROM=runtime)"), c["codegen"])' "$O/sdk.json"
+                    printf '%s\n' "$OPT" "$NESTED" "${PGSU_GAP_OBSERVER:-0}"; } | sha256sum | cut -d' ' -f1)
+IDENTITY=$(printf '%s\n' "$CONFIG_IDENTITY" "${CF[@]}" | sha256sum | cut -d' ' -f1)
+STAMP=$ROOT/domain/objects.identity
+CONFIG_STAMP=$ROOT/domain/configure.identity
 
 # ---- the source, patched -------------------------------------------------------
 cd "$ROOT/domain"
@@ -115,17 +139,17 @@ fi
 if [[ ! -d postgresql-17.5 ]]; then
   tar xjf "$TARBALL"
   for p in "$SCRIPT_DIR"/patches/*.patch; do
-    # This patch targets CheriBSD's external freelist, not the Capstone backend.
-    case $p in */0018-*) continue ;; esac
+    # The spatial observer's hooks sit where patch 0003 changes mcxt.c.
+    [[ $NESTED == sublet && $p == */0017-* ]] && continue
     (cd postgresql-17.5 && patch -p1 -s < "$p") || { echo "patch $p did not apply" >&2; exit 2; }
     log "applied $(basename "$p")"
   done
   if [[ $NESTED == sublet ]]; then
-    for p in "$MANAGER"/patches/postgresql-17.0-000{3,4,5,6,7}-*.patch; do
-      (cd postgresql-17.5 && patch --batch --forward --fuzz=0 -p1 -s < "$p") \
-        || { echo "nested patch $p did not apply" >&2; exit 2; }
-      log "applied $(basename "$p") to PostgreSQL 17.5"
-    done
+    # The 17.0 and 17.5 manager sources are identical; the replay's patch serves both.
+    p=$MANAGER/patches/postgresql-17.0-0003-memory-contexts-sublet-lifetimes.patch
+    (cd postgresql-17.5 && patch --batch --forward --fuzz=0 -p1 -s < "$p") \
+      || { echo "nested patch $p did not apply" >&2; exit 2; }
+    log "applied $(basename "$p") to PostgreSQL 17.5"
   fi
 fi
 # The corpus's own module, copied in rather than kept in the tarball: cases 05
@@ -139,12 +163,23 @@ printf '%s\n' "$NESTED" > "$MODE_FILE"
 printf '%s\n' "$PATCH_HASH" > "$ROOT/domain/patchset.sha256"
 cd postgresql-17.5
 
+# Every object this build makes, the modules' and the link's included: make
+# clean misses the copied-in module, and distclean the configured ones.
+remove_objects() {
+  rm -f "$STAMP"
+  find src contrib -name '*.o' -delete
+  find src -name objfiles.txt -delete
+  rm -f "$ROOT"/link/*.o
+}
+
 # ---- configure, with the answers this target needs forced -------------------------
 if stage configure; then
+  remove_objects
+  rm -f "$CONFIG_STAMP"
   [[ -f config.status ]] && make distclean >/dev/null 2>&1 || true
   nested_flags=
   if [[ $NESTED == sublet ]]; then
-    nested_flags="-I$MANAGER/src/allocators/sublet -I$RT/capstone/runtime/include"
+    nested_flags="-I$RT/capstone/runtime/include"
   elif [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
     nested_flags="-DPG_SPATIAL_GAP_OBSERVER=1 -I$SCRIPT_DIR/toolchain"
   fi
@@ -159,6 +194,13 @@ if stage configure; then
   grep -q 'define HAVE_COMPUTED_GOTO' src/include/pg_config.h \
     && { echo "pg_config.h still defines HAVE_COMPUTED_GOTO" >&2; exit 2; }
   grep -E '^#define (MAXIMUM_ALIGNOF|SIZEOF_VOID_P|USE_SYSV_SHARED_MEMORY)' src/include/pg_config.h | sed 's/^/[build-domain] /'
+  printf '%s\n' "$CONFIG_IDENTITY" > "$CONFIG_STAMP"
+fi
+# A make or link that reuses this configuration needs the one it was made with.
+if ! stage configure && { stage make || stage link; }; then
+  [[ -f $CONFIG_STAMP && $(cat "$CONFIG_STAMP") == "$CONFIG_IDENTITY" ]] || {
+    echo "the tree was configured with another compiler, SDK profile or CFLAGS (or none recorded);" \
+         "rerun with PGSU_FROM=configure" >&2; exit 2; }
 fi
 
 # The modules linked into the image, because a domain cannot dlopen (patch 0015,
@@ -178,6 +220,19 @@ MODULES="$MODULES pgcorpus_reach:contrib/pgcorpus_reach"
 module_objs() { make -s -C "$1" -f Makefile -f "$SCRIPT_DIR/toolchain/print-objs.mk" print-objs; }
 
 # ---- make ---------------------------------------------------------------------------
+# Objects from an earlier run are reused only under the identity they were built with.
+# Configure, or make with PGSU_CLEAN=1, starts them over instead.
+fresh=0
+if stage configure || { [[ ${PGSU_CLEAN:-0} == 1 ]] && stage make; }; then fresh=1; fi
+if (( ! fresh )); then
+  if [[ -n $(find src contrib -name '*.o' -print -quit) || -n $(find "$ROOT/link" -name '*.o' -print -quit) ]]; then
+    [[ -f $STAMP ]] || { echo "objects without a build identity ($STAMP); rerun from PGSU_FROM=configure" >&2; exit 2; }
+    [[ $(cat "$STAMP") == "$IDENTITY" ]] || {
+      echo "objects were built with other direct-compilation flags; rerun with PGSU_FROM=configure" \
+           "or PGSU_CLEAN=1 PGSU_FROM=make" >&2; exit 2; }
+  fi
+fi
+
 if stage make; then
   # --enable-depend tracks headers from now on; a tree configured without it
   # (before 2026-09-24 20:30) rebuilds nothing for a patched header. PGSU_CLEAN=1
@@ -186,8 +241,10 @@ if stage make; then
     # src/include too: its header-stamp would otherwise say the generated
     # headers (errcodes.h, fmgroids.h) are current after their files are gone.
     for d in src/port src/common src/backend src/timezone src/include; do make -C "$d" clean > /dev/null 2>&1 || true; done
+    remove_objects
     log "objects removed (PGSU_CLEAN=1)"
   fi
+  rm -f "$STAMP"
   make -C src/backend generated-headers > "$ROOT/domain-genheaders.log" 2>&1
   export CAPSTONE_COMPILE_LOG=$ROOT/domain-objects.tsv
   : > "$CAPSTONE_COMPILE_LOG"
@@ -246,22 +303,14 @@ if stage make; then
   [[ -z $missing ]] \
     || { echo "backend build incomplete: missing objects $missing" >&2; exit 2; }
   log "objects compiled: $(find src/backend -name '*.o' | wc -l); link inputs missing: ${missing:-none}"
-  if [[ $NESTED == sublet ]]; then
-    GAP_FLAGS=()
-    if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then GAP_FLAGS=(-DPG_REUSE_GAP_OBSERVER=1); fi
-    "$CAPSTONE_CLANG" "${CF[@]}" -I"$RT/capstone/runtime/include" \
-      -I"$MANAGER/src/allocators/sublet" \
-      "${GAP_FLAGS[@]}" \
-      -c "$MANAGER/src/allocators/sublet/context-pools.c" \
-      -o "$ROOT/link/context-pools.o"
-    log "Sublet context-pool backend: $ROOT/link/context-pools.o"
-  elif [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
+  if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
     "$CAPSTONE_CLANG" "${CF[@]}" -I"$SCRIPT_DIR/toolchain" \
       -I"$SCRIPT_DIR/../../../experiments/study" \
       -c "$SCRIPT_DIR/toolchain/spatial-reuse-gap.c" \
       -o "$ROOT/link/spatial-reuse-gap.o"
     log "original-layout context observer: $ROOT/link/spatial-reuse-gap.o"
   fi
+  printf '%s\n' "$IDENTITY" > "$STAMP"
 fi
 
 # ---- link ---------------------------------------------------------------------------
@@ -302,12 +351,7 @@ printf '%s\n' $objs | LC_ALL=C sort -u > "$ROOT/link/backend-objects.txt"
   -o "$ROOT/link/static_modules.o"
 log "modules linked in: $(grep -c PGSU_MODULE_END "$TABLE"), $(grep -c PGSU_SYMBOL "$TABLE") functions"
 EXTRA=()
-if [[ $NESTED == sublet ]]; then
-  EXTRA+=("$ROOT/link/context-pools.o" -O1 -DEXP_PG_CONTEXT_SUBLET
-    -Wl,--wrap=main,--wrap=__capstone_region -I"$RT/capstone/runtime/include"
-    "$RT/capstone/ports/common/application/regions.c"
-    "$RT/capstone/ports/common/application/initialize.c")
-elif [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
+if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
   EXTRA+=("$ROOT/link/spatial-reuse-gap.o")
 fi
 # shellcheck disable=SC2086

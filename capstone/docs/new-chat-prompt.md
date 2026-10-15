@@ -5,9 +5,8 @@ and adapter builds; allocator ports and RTL are not migrated by this change.
 
 Application benchmark study: the [Sublet/PoisonCap design](plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
-separate reference data. The [planner](../experiments/study/README.md) supports
-PoisonCap plans but blocks execution qualification pending observed inner-policy
-accounting. Twenty host checks pass. Upstream mruby lists passes 4/4 original
+separate reference data. The [planner](../experiments/study/README.md) no longer
+plans PoisonCap arms (removed 2026-10-10). Twenty host checks passed then. Upstream mruby lists passes 4/4 original
 arms; both PoisonCap SQLite modes complete the artifact's 20 active phases at
 size 1. Twelve phases are commented out in that artifact, and the main
 result oracle is missing. These are readiness results, not a memory ranking.

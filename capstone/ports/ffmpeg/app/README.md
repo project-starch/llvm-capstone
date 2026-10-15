@@ -36,8 +36,8 @@ recording from `buffer-pool/host/record.sh:23-34`.
 | **M1–M5** | **reached 2026-09-23 on QEMU.** Per-frame MD5 is **bit-identical to native** (30/30, reference built from unpatched FFmpeg), and the flipped-input control fires. Run of record: `results/2026-09-23-qemu-m1-m5/`. **Relies on QEMU's fabricated cursor-0 `gp`**, which cannot exist on silicon; with fabrication off, the domain dies in musl-capstone's start code. That is common to every domain on this ABI |
 | **Safety** | **measured 2026-09-23 on QEMU**, `results/2026-09-23-qemu-safety/`, with three heap arms (`FFAPP_HEAP`):<br>• **`level0`** (the run of record): heap overflows and every temporal error succeed.<br>• **`shrink`:** per-object heap bounds; overflows fault, temporal errors succeed.<br>• **`sublet`:** per-object bounds plus revoke on free; on QEMU every heap-overflow and temporal fixture faults, while the deployed silicon is documented to let a stale data access retire (ISSUES Q-11, measurements §7r).<br>M1–M5 are bit-identical on all three. Globals share their GlobalMerge group's bounds on this ABI (not on M6's) |
 | **Pools** | **measured 2026-09-24 on QEMU**, `results/2026-09-24-qemu-pool-safety/`: FFmpeg's own `AVBufferPool` buffers and every refstruct object under the buffer-pool port's Sublet leases, inside the whole decoder (`FFAPP_HEAP=sublet FFAPP_POOL=0\|2`).<br>• **Correctness:** M1–M5 bit-identical 30/30 in every completed run.<br>• **Fixtures:** 14/14 pool fixtures as pre-registered. Stale pool reads and a stale unref succeed on `pool0` and fault or are refused on `pool2`.<br>• **Silicon caveat:** as for the heap arms (Q-11).<br>• **Hardened 2026-09-24** (`results/2026-09-24-qemu-hardening/`): every fixture cell at N = 3 (141 runs, all as predicted); fixture 16's stock control measured; a 5-second, 150-frame workload bit-identical on level0, sublet and pool2 |
-| **Sublet port of the pools** | **measured 2026-09-29 on QEMU**, `../sublet/results/2026-09-29-qemu/`: FFmpeg's `AVBufferPool` and refstruct pools ported onto Sublet (`FFAPP_POOL=sublet`), their storage lent LINEAR by the Sublet heap, a return is a revoke; `FFAPP_POOL=stock` is the one-macro control.<br>• M1–M5 bit-identical 30/30 on both arms, flip control firing.<br>• Pool fixtures 11–17, 20, 21 as pre-registered, N = 3 |
-| **Track B** | **measured 2026-09-29 on QEMU**: pool defects as FFmpeg's real code, each fixed defect re-introduced by the exact reverse of its upstream fix.<br>• **af_join** (fixtures 18/19), `results/2026-09-29-trackb-afjoin/`: 12 of 12 as registered.<br>• **vidstab** (fixtures 22/23, libvidstab compiled in), `results/2026-09-29-trackb-vidstab/`: 12 of 12 as registered.<br>• vp9 documented, not run; h264_refs not run (plan `docs/plans/2026-09-25-ffmpeg-full-port-and-sublet.md`, "Track B outcome") |
+| **Sublet port of the pools** | **measured 2026-09-29 on QEMU**, `../sublet/results/2026-09-29-qemu/`: FFmpeg's `AVBufferPool` and refstruct pools ported onto the physical Sublet heap (`FFAPP_POOL=sublet`, with `stock` as its control). Removed 2026-10-11: the pools' protection is now the buffer-pool port's patch 0003 (CDERIVE/CREVOKE), measured on the virtual profile by `bug-corpora/ffmpeg/pool-repros`; these results stay as recorded. |
+| **Track B** | **measured 2026-09-29 on QEMU**: pool defects as FFmpeg's real code, each fixed defect re-introduced by the exact reverse of its upstream fix.<br>• **af_join** (fixtures 18/19), `results/2026-09-29-trackb-afjoin/`: 12 of 12 as registered.<br>• **vidstab** (fixtures 22/23, libvidstab compiled in), `results/2026-09-29-trackb-vidstab/`: 12 of 12 as registered.<br>• vp9 documented, not run; h264_refs not run (plan `docs/plans/2026-09-25-ffmpeg-full-port-and-sublet.md`, "Track B outcome").<br>Removed 2026-10-11 with the pool arms it ran on; the pool defects are measured by `bug-corpora/ffmpeg/pool-repros`, and these results stay as recorded. |
 | M6 | the gp-captable (silicon) ABI, which is also what removes the fabricated-`gp` dependence. See the plan's §4 (one-translation-unit question) |
 
 **What M0 establishes:**
@@ -95,6 +95,18 @@ platform binaries and memory settings belong to that VM's configuration.
 
 All work products go under `$CAPSTONE_TMP_ROOT/ffmpeg-app/` (`FFAPP_WORK`). The tunables are
 `FFAPP_ARENA_BYTES` (1.5 MiB), `FFAPP_STACK_BYTES` (256 KiB) and `FFAPP_JOBS` (48, apollo).
+On the physical profile, `FFAPP_HEAP` selects the heap arm for `build-domain.sh` and `run-qemu.sh` (`run-safety.sh` takes
+it as its first argument): `level0` (the default, arena-wide bounds) or `shrink` (per-object
+bounds). The `sublet` arm and its pool modes (`FFAPP_POOL=0|2`) were removed on 2026-10-11 with
+the physical Sublet heap; their recorded results stay in `results/`.
+Virtual always uses musl mallocng; leave `FFAPP_HEAP` unset (builds and runners reject it).
+On that profile, `FFAPP_SUBLET=1` builds the libraries with FFmpeg's own pools protected by
+the buffer-pool port's patch 0003 (`prepare-source.sh --sublet`): every `AVBufferPool` and
+`AVRefStructPool` entry is handed out as a Sublet child lifetime and revoked when it returns to its
+pool. `build-virtual.sh ffmpeg` records such an image as the nested build. Measured 2026-10-11
+([results/2026-10-11-virtual-pools](results/2026-10-11-virtual-pools/README.md)): the decode matches
+native on both inputs, and pool fixtures 12, 13 and 15 fault temporal where the stock pools return
+stale bytes.
 
 ## Layout
 
@@ -104,7 +116,7 @@ All work products go under `$CAPSTONE_TMP_ROOT/ffmpeg-app/` (`FFAPP_WORK`). The 
 | `patches/0003-capstone-mpegpicture-pool-opaque-is-a-real-pointer.patch` | works around ISSUES.md C-50. `ff_mpv_alloc_pic_pool` passes a real pointer to a static mode, not an int through `void*` |
 | `patches/0004-capstone-ff-field-at-keeps-alignment.patch` | works around ISSUES.md C-69. `FF_FIELD_AT` states the pointee's alignment under `__CAPSTONE__`, so libavfilter's format negotiation stops loading pointers byte by byte, which drops their tags |
 | `patches/0005-capstone-framepool-keeps-pointer-provenance.patch` | libavfilter's `framepool.c` aligned its planes through `uintptr_t`; it now uses 0002's `cap_align_ptr` at the three sites |
-| `deps/libvidstab.json`, `trackb/` | Track B: the pinned libvidstab release that `--enable-libvidstab` builds into the image, and upstream's vidstab fix, which fixture 23 links reversed |
+| `deps/libvidstab.json` | the pinned libvidstab release that `--enable-libvidstab` builds into the image |
 | `host/scan-addi-sp.py` | C-50 build gate: an integer address off `sp`/`s0` used as a load/store base |
 | `patches/0002-capstone-keep-pointer-provenance.patch` | `av_x_if_null`, `av_stristr`, `avcodec_fill_audio_frame`'s const cast, and `frame.c`'s three `FFALIGN`-on-a-pointer sites. They now align by adding an offset, and NULL stays NULL |
 | `src/shared/ffapp_decode.c` | the decode core, staged `M1..M5` (`ffapp_decode.h` has the codes) |

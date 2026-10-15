@@ -70,7 +70,8 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
-                 "citation_constraint", "fault_sites", "fault_sites_why", "duplicate_of"}
+                 "citation_constraint", "fault_sites", "fault_sites_why", "duplicate_of",
+                 "control_probe", "control_probe_why"}
 # `duplicate_of` names a sibling case directory that records the SAME upstream defect -- e.g. a
 # release-branch backport of the fix another case already carries (`git patch-id` equal). The case
 # stays in the corpus, so its numbering and every record that cites it stay valid, and
@@ -107,37 +108,17 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
 ARM_ORACLES = {
     "spatial": {"oracle"},
     "sublet": {"oracle"},
-    "poisoncap-spatial": {"oracle", "mode"},
-    "poisoncap-protected": {"oracle", "mode", "signal", "si_code"},
     "cheribsd-revocation": {"oracle"},
-    # The three system-allocator arms of docs/ref/runtime-terms-glossary.md
-    # section 6. They are one image each of the same source, differing only in
-    # the heap it links: the first-fit heap without per-object bounds, the same
-    # heap as applications get it today, and the Sublet heap. A port that also
-    # sublets its own allocator names that arm for the port (sublet-gc,
-    # sublet-svheads) -- the name says which nested allocator was sublet, because
-    # a program has more than one and only the named one is protected.
+    # The system-allocator arms of docs/ref/runtime-terms-glossary.md section 6:
+    # the first-fit heap without per-object bounds, and as applications get it today.
     "sysalloc-none": {"oracle"},
     "sysalloc-bounds": {"oracle"},
-    "sysalloc-sublet": {"oracle"},
-    "sublet-gc": {"oracle"},
-    "sublet-svheads": {"oracle"},
     # Bounds narrower than the allocation, the remedies for a crossing that stays inside one:
     # struct-field bounds from each compiler, and the carved corpus's narrowing at the carve.
     "capstone-subobject": {"oracle"},
     "cheribsd-subobject": {"oracle"},
     "capstone-carve-bounds": {"oracle"},
     "cheribsd-carve-bounds": {"oracle"},
-    # tshark's chunk allocator over the Sublet heap (the wireshark plain-heap corpus).
-    "sublet-chunks": {"oracle"},
-    # The three columns asked for per bug (docs/ref/spatial-vs-temporal-three-programs.md section 0):
-    # Sublet ONLY as the system allocator under the program's stock nested allocator; the whole
-    # program's Sublet configuration (heap + its nested allocator's port) on a plain case; and the
-    # Sublet port of a carving routine (regions split from a linear block, each its own alias).
-    "sublet-malloc": {"oracle"},
-    "sublet-full": {"oracle"},
-    "sublet-carve": {"oracle"},
-    "sublet-pymalloc": {"oracle"},
     # The virtual Capstone profile (capstone/runtime/virtual): local mallocng with capability
     # lifetimes, and PostgreSQL's contexts on Sublet context pools over it. tools/arms.json says
     # what each is; they are not the physical Sublet heap.
@@ -150,6 +131,18 @@ ARM_ORACLES = {
     "backing": set(),
     "host-asan": {"oracle"},
     "capstone-domain": {"oracle"},
+}
+# The physical Sublet heap's arms, retired with the heap on 2026-10-11 (SCHEMA.md). A case keeps
+# what they recorded -- a `verdict` or `status: measured` -- and may not declare one as a run to
+# come. `sublet` is not here: the APR corpora's `sublet` is the pools port's mode, which still runs;
+# the plain corpora's recorded `sublet` readings were the heap's.
+RETIRED = {
+    "sysalloc-sublet": {"oracle"},
+    "sublet-svheads": {"oracle"},
+    "sublet-chunks": {"oracle"},
+    "sublet-malloc": {"oracle"},
+    "sublet-full": {"oracle"},
+    "sublet-carve": {"oracle"},
 }
 WORDS = {"eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
          "thirteen": 13, "twenty": 20}
@@ -269,7 +262,7 @@ def check_cases(corpus, decl, dirs, problems):
     # corpus may mix .t and .pl, or .sql and anything else, without splitting.
     source_name = "case.c" if decl["case_schema"] == "case-json" else None
     live = {"true": 0, "false": 0, "not_asserted": 0}
-    arm_keys = dict(ARM_ORACLES)
+    arm_keys = {**ARM_ORACLES, **RETIRED}
     for name, keys in decl.get("arm_keys", {}).items():
         arm_keys[name] = set(keys)
     provenance = 0
@@ -320,6 +313,17 @@ def check_cases(corpus, decl, dirs, problems):
         elif "fault_sites_why" in case:
             problems.append(f"{where}: fault_sites_why without fault_sites")
 
+        if "control_probe" in case:
+            probe = case["control_probe"]
+            if not (isinstance(probe, str) and probe and
+                    not Path(probe).is_absolute() and ".." not in Path(probe).parts and
+                    (path / probe).is_file()):
+                problems.append(f"{where}: control_probe must name a file inside the case directory")
+            if not isinstance(case.get("control_probe_why"), str) or not case["control_probe_why"].strip():
+                problems.append(f"{where}: control_probe without control_probe_why")
+        elif "control_probe_why" in case:
+            problems.append(f"{where}: control_probe_why without control_probe")
+
         # live_in_pin is the field the index reports per version, so its
         # absence must be a corpus-wide decision rather than a per-case
         # oversight: a corpus either records it for every case or for none.
@@ -363,6 +367,10 @@ def check_cases(corpus, decl, dirs, problems):
                 # output to look wrong.
                 if name not in arm_keys:
                     problems.append(f"{where}: arm {name!r} is not in SCHEMA.md")
+                    continue
+                if name in RETIRED and not ("verdict" in arm or arm.get("status") == "measured"):
+                    problems.append(f"{where}: arm {name!r} was retired on 2026-10-11; only a "
+                                    f"recorded reading may name it")
                     continue
                 if arm.get("status") == "not written":
                     continue
@@ -518,6 +526,9 @@ def self_test():
     victim = CORPORA / "cpython/pymalloc-repros"
     accepted = []
     corruptions = (
+        ("a control probe naming no file", lambda c: c.update(control_probe="missing.py", control_probe_why="test")),
+        ("a control probe with no reason", lambda c: c.update(control_probe="case.c")),
+        ("a control probe reason with no probe", lambda c: c.update(control_probe_why="test")),
         ("a missing required field", lambda c: c.pop("consumer")),
         ("a case number the directory does not carry", lambda c: c.update(case=42)),
         ("an arm with neither oracle nor status", lambda c: c["arms"].update(spatial={})),
@@ -527,6 +538,8 @@ def self_test():
         # gate that spots it.
         ("a misspelled arm hidden behind 'not written'",
          lambda c: c["arms"].update(spatail={"status": "not written"})),
+        ("a retired arm declared as a run to come",
+         lambda c: c["arms"].update({"sysalloc-sublet": {"status": "not written"}})),
         # A duplicate leaves every table, so one naming nothing would silently drop a case.
         ("duplicate_of naming no sibling case", lambda c: c.update(duplicate_of="99_no_such_case")),
     )

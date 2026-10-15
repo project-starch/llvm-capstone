@@ -86,7 +86,7 @@ replace the musl probes of the HostCall v0 application runtime, removed on
 | `cap-atomics-O0/O2`, `subword-O0/O2` | `capability-atomics/`, `subword-atomics/` | the DONE line with no failure (C-54, C-51) |
 | `movc-rule`, `movc-keep` | `movc-null-scalar/movc_test.c` | `b=5 c=5` in a guest without `CAPSTONE_MOVC_NULL_SCALAR`, `b=5 c=0` in one with it (Q-04); C-32's two values (`c32 0x5000`, `iconv n=3`) survive in both variants without the switch, and with it survive in `rule` (the live-source copy rule) and are lost in `keep` (`+movc-keeps-integer-source`, the positive control) |
 | `intcap`, `intcap-uptr` | `intcap/intcap_test.c` | with `__uintcap_t`, all nine cases ok and `END bad=0`; the `unsigned long` control passes the six integer cases and ends in SIGSEGV at its first dereference |
-| `arith-0..2` | `untagged-cap-arith/arith_test.c` | case 0 stores through both results; cases 1 and 2 end in SIGSEGV with cause 24 (`--arith-expect cheri`: they print the integer result); case 2 runs last |
+| `arith-0..2` | `untagged-cap-arith/arith_test.c` | case 0 stores through both results; cases 1 and 2 print the untagged integer result in a virtual-profile guest (2026-10-14) and end in SIGSEGV with cause 24 in a physical-profile guest, as on the RTL; the runner reads the profile from the state directory; case 2 runs last |
 
 ```bash
 # build only (no guest needed)

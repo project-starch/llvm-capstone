@@ -21,27 +21,22 @@ verdict and says so on every verdict line. `ntp` must differ on stdout because i
 outside the whitelist. Use `TSAPP_USER=UID:GID` for an unprivileged existing guest
 account.
 
-`TSAPP_HEAP=level0|shrink|sublet|chunks` selects the heap arm for both
-`host/build-domain.sh` and the runner. `chunks` is the `sysalloc-sublet` arm (`TSAPP_HEAP=sublet`) with wmem's
-BLOCK allocator under the chunk port of `../wmem` (see `host/build-domain.sh`);
-its predictions are the `chunks` rows of `host/safety-expect.txt`.
-
-Every full run on the sublet heap spends revocation nodes (about 12,600 on dhcp, `split` +
-`mrev` on its `TSAPP-HEAP` line), and a boot that ran out of them once died on QEMU's pool
-assertion. So a guest boot holds at most 4 full `sysalloc-sublet` runs, and at most
-`TSAPP_CHUNKS_RUNS_PER_BOOT` (default 1) chunks runs. The chunks limit is set from a measured
-spend, by the rule in `../wmem/PREREGISTRATION-tshark-step2.md` (T5). The runner counts M5 runs
-per guest boot (its `boot_id`, in the VM's state directory, since the guest outlives one
-invocation). It refuses a request that would pass the limit before anything runs; restart the VM
-for a fresh boot.
+tshark takes its `malloc` from the platform's allocator. On the virtual profile
+(`CAPSTONE_APPLICATION_PROFILE=virtual`) that is musl's mallocng, which bounds every
+object and ends its lifetime on `free`; leave `TSAPP_HEAP` unset (virtual rejects it). On the
+physical profile `TSAPP_HEAP=level0|shrink` selects the first-fit heap without or
+with per-object bounds, for both `host/build-domain.sh` and the runner. The Sublet
+heap arm (`TSAPP_HEAP=sublet`, `runtime/sublet_heap.c`, and patch 0007, which shrank
+wmem's blocks to fit its pool) was removed on 2026-10-11; its runs stay in `results/`.
+On the virtual profile, `TSAPP_SUBLET=1` builds tshark with wmem protected by the wmem port's
+patch 0001 (`host/cross-build.sh` applies it at fuzz 0 after this port's patches and puts
+`capstone/runtime/include` on the include path): every `block` and `block_fast` object is handed
+out as a Sublet child lifetime of its block and revoked by free, realloc and the reset that ends
+its pool. `build-virtual.sh tshark` records such an image as the nested build.
 
 `host/build-domain.sh` gates every image: no undefined weak symbol, and no constructor section
-outside the arrays the runtime walks. On the chunks arm it also runs a negative control. M5,
-relinked without `chunks.o`, must come back with exactly the chunk port's twelve entry points
-undefined. That shows the link gate can fire, and pins that the ported block allocator and its
-backing reach the chunk port. It is the ABI-v2 successor of the v0 control that T1 of the chunks
-pre-registration names ("M5 without `hostcall.o`"). **Open:** the `sysalloc-none` (`TSAPP_HEAP=level0`), `sysalloc-bounds`
-(`TSAPP_HEAP=shrink`) and `sysalloc-sublet` arms run no link control. An ABI-v2 SDK links its runtime archive whole, so there is no runtime object to
+outside the arrays the runtime walks. **Open:** the `sysalloc-none` (`TSAPP_HEAP=level0`) and `sysalloc-bounds`
+(`TSAPP_HEAP=shrink`) arms run no link control. An ABI-v2 SDK links its runtime archive whole, so there is no runtime object to
 leave out, and no v2 equivalent has been defined for them.
 
 Safety fixtures use `common/application/check-safety.py --port wireshark`, with

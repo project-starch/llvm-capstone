@@ -39,12 +39,33 @@ Every case declares one of these, and the table partitions the corpus.
 
 Built by `ports/sqlite/repro322/build-virtual.py` (`--memsys5`, `--sublet`) from the adapted 3.22.0
 amalgamation plus `fts5-azarg-patch.py`, run by `shared/run-virtual.py` on a persistent virtual VM,
-judged by `tools/verdicts.py`; bundles in `results/2026-10-10-virtual/<arm>`, verdicts derived into
-each `case.json`. Before any case each arm runs `controls/` -- a memsys5 block used after free and
+judged by `tools/verdicts.py`; the current bundles are `results/2026-10-11-virtual-request-bounds/<arm>`
+(memsys5 and the lookaside on CDERIVE/CREVOKE, each memsys5 block bounded to its request), verdicts
+derived into each `case.json`. Before any case each arm runs `controls/` -- a memsys5 block used after free and
 written 1 KiB past its start -- which complete on the stock arm and fault on the port, as declared.
 
-A fault counts only in a function the case justifies (`fault_sites`): where host ASan reported it
-(cases 00, 25-32), or what the source and `PROVENANCE.md` name as the stale access. The harness
+A fault counts only in a function the case justifies (`fault_sites`): where host ASan reported it,
+or what the source and `PROVENANCE.md` name as the stale access.
+
+**Does the case make its invalid access at all?** memsys5 makes ASan blind, so
+`shared/run-host-asan.py` builds every case natively with SQLite on the system allocator, lookaside
+off, no page-cache bulk pool and a 4 GiB quarantine, and both controls must report
+(`results/2026-10-11-host-asan/results.json`). On 2026-10-11 it reports 26 of the 33 cases as an
+invalid heap access (17 heap-use-after-free, 9 heap-buffer-overflow, case 00's stale read among
+them) and case 02 as a SEGV. Six are silent, 01, 04, 08, 09, 11 and 13. ASan's silence is not the finding, because it only sees
+`malloc` lifetimes: each of the six was then traced under gdb at its own free and use sites, and
+each case's `note` records what the trigger does instead. In five the lifetime never ends before the
+use (01 never reaches its `sqlite3ExprListDelete`; 08 and 09 restart only after the consumer has
+finished; 11's pending hash is already empty because every INSERT auto-commits; 13's in-place
+rewrite runs but no reallocation is established). **04 is different**: it reaches the condition
+upstream's fix guards, a cursor at `CURSOR_REQUIRESEEK` whose page is unpinned in the cache, and the
+read is answered from the cursor's cached cell info instead. The lifetime that ended there is the
+cursor's REFERENCE to the page -- the page is neither freed nor reassigned, so no `malloc`-level
+mechanism can see it. Each case's `note` also names what its upstream regression test does that the
+trigger does not. (04's stale object is a cached B-tree page, which the page cache recycles without
+a free, so ASan's silence is weaker evidence there.) The same check showed four corpus triggers had
+fallen behind the corrected copies in `ports/sqlite/cheribsd/cases/` (10, 14, 15, 22); they were
+replaced, each `PROVENANCE.md` says how. The harness
 prints `<tag> BEGIN` before the case body, not at the access, so a MISSED here rests on the case
 having begun and returned.
 

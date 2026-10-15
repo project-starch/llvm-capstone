@@ -29,14 +29,8 @@ static size_t counter(const char *name, int *error) {
 void exp_alloc_start(void);
 void exp_alloc_report(const char *);
 #endif
-#ifdef EXP_MRB_GC_STUDY
-void mrb_gc_study_report(const char *);
-#endif
 
 static void report(const char *phase) {
-#ifdef EXP_MRB_GC_STUDY
-  mrb_gc_study_report(phase);
-#endif
 #ifdef EXP_ALLOCATIONS
   exp_alloc_report(phase);
 #endif

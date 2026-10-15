@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The native fix differential: every case, buggy then fixed, on the hosted build of the wmem port
-# with upstream's own allocator (WM_CHUNKS=OFF), as `program 0 N buggy|fixed`.
+# with wmem as released, as `program 0 N buggy|fixed`.
 #
 #   bash runners/run-native.sh <fresh outdir> [extra cmake args...]
 #
@@ -15,7 +15,7 @@ ROOT=$(cd -- "$HERE/.." && pwd)
 PORT=$(cd -- "$ROOT/../../../ports/wireshark/wmem" && pwd)
 OUT=${1:?usage: run-native.sh <fresh outdir> [cmake args...]}; shift
 [ -e "$OUT" ] && { echo "CONTROL-FAILED $OUT exists" >&2; exit 75; }
-cmake --preset native -S "$PORT" -B "$OUT" -DWM_CORPUS_DIR="$ROOT" -DWM_CHUNKS=OFF "$@" > "$OUT.configure.log" 2>&1 \
+cmake --preset native -S "$PORT" -B "$OUT" -DWM_CORPUS_DIR="$ROOT" "$@" > "$OUT.configure.log" 2>&1 \
   && cmake --build "$OUT" -j "${JOBS:-8}" > "$OUT.build.log" 2>&1 \
   || { echo "CONTROL-FAILED build (see $OUT.build.log)" >&2; exit 75; }
 status=0 seen=0

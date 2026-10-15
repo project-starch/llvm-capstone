@@ -15,18 +15,23 @@
 set -u
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CORPUS=$(cd "$HERE/.." && pwd)
-# build-tgot/ holds two binaries and only the inner one is in the guest.
-# The outer build-tgot/python is a different, smaller build; pointing
-# here made the guest-copy check below refuse every run, which is the
-# check doing its job on a bad default. The delivered 2026-10-08 and -09
-# runs record the inner build's hash, df124719.
-PY=${CHERI_PYTHON:-$HOME/arms/cpython/cheribsd/build-tgot/build/python}
+# The interpreter ports/cpython/app/cheribsd/build.sh produced. No default: the
+# 2026-10-08 and -09 runs defaulted to a path whose outer and inner binaries
+# differed, and the guest-copy check below refused every run until it was named.
+PY=${CHERI_PYTHON:?set CHERI_PYTHON to the python build.sh produced}
 GUEST=${GUEST:-/root/cpython}
 # PYTHONHOME is the pyhome DIRECTORY INSIDE the install, not the install.
 # With the wrong one every case dies before any Python runs, with
 # "No module named encodings" -- indistinguishable from a silent arm.
 PYHOME=${PYHOME:-$GUEST/pyhome}
+# The release's Lib, for the `test` package the stdlib zip leaves out and the
+# upstream tests import (test.support). The virtual runner stages all of Lib.
+CPY_LIB=${CPY_LIB:-$(dirname "$PY")/src/Python-3.13.7/Lib}
+# Both built from capstone/bug-corpora/tools/cheribsd/sicode.c and
+# capstone/bug-corpora/postgres/mmgr-repros/results/20261008-cheribsd/quarantine-probe.c.
 SICODE=${SICODE:-/root/sicode.so}
+SELFTEST=${SELFTEST:-/root/sicode-selftest}
+QPROBE=${QPROBE:-/root/quarantine-probe.so}
 GUEST_PORT=${GUEST_PORT:-10086}
 # --negative-control: see run-arm.sh. Detect BEFORE filtering -- the first
 # version detected after the flag had been removed, so the control ran the real
@@ -47,7 +52,7 @@ in_subset() {  # $1 = case directory name, e.g. 07_gh140594
   [ -z "$ONLY" ] && return 0
   case ",$ONLY," in *",${1%%_*},"*) return 0 ;; *) return 1 ;; esac
 }
-K="-o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=120"
+K="-o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=120 ${GUEST_KEY:+-i $GUEST_KEY}"
 G() { ssh $K -p "$GUEST_PORT" root@localhost "$@" 2>/dev/null; }
 P() { scp -q $K -P "$GUEST_PORT" "$1" root@localhost:"$2" 2>/dev/null; }
 
@@ -94,7 +99,15 @@ guestsha=$(G "sha256sum $GUEST/python 2>/dev/null | cut -d' ' -f1")
   exit 2; }
 echo "binary: ${hostsha:0:16} (host and guest agree)"
 G "test -f $SICODE" || { echo "no $SICODE in the guest -- push it before running" >&2; exit 2; }
-pc=$(G "cd $GUEST && env PYTHONHOME=$PYHOME LD_PRELOAD=$SICODE timeout 300 ./python objects.py 8 3 0 2>&1 | tail -1")
+G "test -f $QPROBE" || { echo "no $QPROBE in the guest -- push it before running" >&2; exit 2; }
+pcout=$(G "cd $GUEST && env PYTHONHOME=$PYHOME LD_PRELOAD=$SICODE:$QPROBE timeout 300 ./python objects.py 8 3 0 2>&1")
+pc=$(printf '%s\n' "$pcout" | grep -a '^EXP-OK' | tail -1)
+# The quarantine probe reports from a destructor; a workload that ends normally
+# without its line means the preload did not take, and every case would lack it.
+qpc=$(printf '%s\n' "$pcout" | grep -a '^QUARANTINE shadow=mapped' | tail -1)
+[[ -n $qpc ]] || { echo "REFUSING: the quarantine probe did not report on the workload" >&2
+  printf '%s\n' "$pcout" | tail -5 >&2; exit 2; }
+echo "quarantine probe: $qpc"
 echo "positive control: ${pc:-<no output>}"
 case "$pc" in
   EXP-OK*) ;;
@@ -105,29 +118,49 @@ case "$pc" in
 esac
 # si_code reporting is what makes this arm informative at all: without it a
 # fault is just "it crashed", and BOUNDS, TAG and PERM are indistinguishable.
-#
-# The probe is mech-control S_OOB -- an in-bounds pointer read past the end --
-# and it carries si_code out through its EXIT STATUS, _exit(100 + si_code), so
-# this reads the status directly. Reading it through a pipeline would give the
-# pipeline's status instead, which is how an earlier check here reported rc=0
-# for a probe that had in fact faulted.
-MECH=${MECH:-/root/mech-control}
-G "test -x $MECH" || { echo "no $MECH in the guest -- the si_code handler cannot be controlled" >&2
-  echo "  build it from ports/cpython/cheribsd and push it, or set MECH=" >&2; exit 2; }
-scrc=$(G "cd /root && env LD_PRELOAD=$SICODE timeout 60 $MECH S_OOB >/dev/null 2>&1; echo \$?")
-case "$scrc" in
-  101) sc="si_code=1 (PROT_CHERI_BOUNDS) via mech-control S_OOB" ;;
-  1??) sc="si_code=$((scrc-100)) via mech-control S_OOB"
-       echo "WARNING: S_OOB reported si_code $((scrc-100)), expected 1 (BOUNDS)." >&2
-       echo "  The handler works, but a spatial probe faulting for another reason" >&2
-       echo "  means this arm's si_code values need rechecking before they are read." >&2 ;;
-  *)   echo "REFUSING: mech-control S_OOB exited $scrc, not 100+si_code." >&2
-       echo "  The si_code handler reported nothing on a deliberate out-of-bounds read," >&2
-       echo "  so every fault this arm sees would be unclassifiable." >&2
-       exit 2 ;;
-esac
+# The reporter's own self-test is the control: a read past a 16-byte allocation
+# must report PROT_CHERI_BOUNDS, and a read through a freed pointer after a
+# forced revocation pass must report PROT_CHERI_TAG. The second is also the
+# positive control for revocation itself on this guest.
+G "test -x $SELFTEST" || { echo "no $SELFTEST in the guest -- push it before running" >&2; exit 2; }
+# The self-test has no handler of its own: the line comes from the preload,
+# loaded exactly as it is in front of the interpreter.
+sb=$(G "env LD_PRELOAD=$SICODE:$QPROBE timeout 60 $SELFTEST bounds 2>&1" | grep -a -o 'si_code=[0-9]* ([A-Z_]*)' | head -1)
+sr=$(G "env LD_PRELOAD=$SICODE:$QPROBE timeout 60 $SELFTEST revoked 2>&1" | grep -a -o 'si_code=[0-9]* ([A-Z_]*)' | head -1)
+[[ $sb == "si_code=1 (PROT_CHERI_BOUNDS)" && $sr == "si_code=2 (PROT_CHERI_TAG)" ]] || {
+  echo "REFUSING: the si_code self-test gave bounds '${sb:-nothing}', revoked '${sr:-nothing}'" >&2
+  echo "  expected si_code=1 (PROT_CHERI_BOUNDS) and si_code=2 (PROT_CHERI_TAG)." >&2
+  exit 2; }
+sc="bounds $sb, revoked $sr"
 echo "si_code control:  $sc"
-printf 'positive_control\t%s\nsicode_control\t%s\n' "$pc" "$sc" >> "$OUT/run.meta"
+printf 'positive_control\t%s\nsicode_control\t%s\nquarantine_control\t%s\n' "$pc" "$sc" "$qpc" >> "$OUT/run.meta"
+
+# ---- stage: the test package, which the stdlib zip does not carry --------
+# Without it every case that imports test.support stops at the import, with
+# rc=1 and no fault: on 2026-10-11 that read as case 19 completing.
+[[ -f $CPY_LIB/test/support/__init__.py ]] || { echo "no test package under $CPY_LIB" >&2; exit 2; }
+tar -C "$CPY_LIB" -cf - --exclude=__pycache__ test | G "mkdir -p $PYHOME/lib/python3.13 && rm -rf $PYHOME/lib/python3.13/test && tar -C $PYHOME/lib/python3.13 -xf -"
+G "test -f $PYHOME/lib/python3.13/test/support/__init__.py" || { echo "staging the test package failed" >&2; exit 2; }
+printf 'test_package\t%s\n' "$CPY_LIB/test" >> "$OUT/run.meta"
+
+# The launcher the virtual runner uses: ABR BEGIN before the trigger, and how it
+# ended after it, so an import failure is never read as a quiet run.
+LAUNCH=$(mktemp)
+cat > "$LAUNCH" <<'PY'
+import os, runpy, sys
+path = sys.argv[1]
+sys.argv[:] = [path]
+os.write(1, b"ABR BEGIN\n")
+try:
+    runpy.run_path(path, run_name="__main__")
+except SystemExit as e:
+    os.write(1, ("ABR EXIT %r\n" % (e.code,)).encode())
+    raise
+except BaseException as e:
+    os.write(1, ("ABR RAISED %s\n" % type(e).__name__).encode())
+    raise
+os.write(1, b"ABR RETURNED\n")
+PY
 
 # ---- stage: one directory per case, named as the corpus names it --------
 G "rm -rf /root/boundary && mkdir -p /root/boundary"
@@ -138,6 +171,7 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   G "mkdir -p /root/boundary/$c"
   # Every .py the case carries -- see the note in run-arm.sh's staging loop.
   ( cd "$d" && tar -cf - ./*.py ) | G "tar -C /root/boundary/$c -xf -"
+  G "cat > /root/boundary/$c/launch.py" < "$LAUNCH"
   if [ "$NEGCTL" = 1 ] && [ -f "$d/negative_control.py" ]; then
     # The strong control: the case's own allocation and free traffic with only
     # the offending access made valid. It is the one that qualifies a
@@ -161,13 +195,14 @@ done
 echo "staged $n cases"
 
 # ---- run ---------------------------------------------------------------
-printf 'case\tarm\trc\tsignal\tsi_code\tlast\n' > "$OUT/verdicts.tsv"
+printf 'case\tarm\trc\tsignal\tsi_code\tending\tquarantine\tlast\n' > "$OUT/verdicts.tsv"
+mkdir -p "$OUT/raw"
 printf 'case_budget\t%s\nonly\t%s\n' "$BUDGET" "${ONLY:-all}" >> "$OUT/run.meta"
 for d in "$CORPUS"/[0-9][0-9]_*/; do
   c=$(basename "$d")
   in_subset "$c" || continue
   out=$(G "cd /root/boundary/$c && env PYTHONDONTWRITEBYTECODE=1 PYTHONHOME=$PYHOME \
-            LD_PRELOAD=$SICODE timeout $BUDGET $GUEST/python trigger.py 2>&1; \
+            LD_PRELOAD=$SICODE:$QPROBE timeout $BUDGET $GUEST/python launch.py trigger.py 2>&1; \
           echo RC=\$?")
   # -a, and strip non-printables before anything is matched or recorded. Case
   # 02's upstream test asserts on a GARBLED field name -- the overflow's own
@@ -178,10 +213,18 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   rc=$(printf '%s' "$out" | grep -a -oE 'RC=[0-9]+' | tail -1 | cut -d= -f2)
   sig=$(printf '%s' "$out" | grep -a -oE 'signal=[0-9]+' | head -1 | cut -d= -f2)
   code=$(printf '%s' "$out" | grep -a -oE 'si_code=[0-9]+ \([A-Z_]+\)' | head -1)
-  last=$(printf '%s' "$out" | grep -a -v '^RC=' | tail -2 | tr '\n' ' ')
-  printf '%s\tcheribsd-revocation\t%s\t%s\t%s\t%s\n' \
-    "$c" "${rc:-?}" "${sig:-}" "${code:-}" "$last" >> "$OUT/verdicts.tsv"
-  printf '  %-56s rc=%-4s %s\n' "${c:0:56}" "${rc:-?}" "${code:-}"
+  printf '%s\n' "$out" > "$OUT/raw/$c.out"
+  # The preload loads into `timeout` too, which allocates nothing and exits
+  # last; only a process that allocated has mapped the shadow (the interpreter).
+  q=$(printf '%s' "$out" | grep -a -o 'QUARANTINE shadow=mapped.*' | paste -sd'|' -)
+  if ! printf '%s' "$out" | grep -aq '^ABR BEGIN'; then ending="not started"
+  else ending=$(printf '%s' "$out" | grep -a -oE '^ABR (RETURNED|EXIT .*|RAISED [A-Za-z]+)' | tail -1)
+       [[ -n $ending ]] || ending="no end line"; fi
+  case "$ending" in *ImportError|*ModuleNotFoundError) ending="$ending (not reached)" ;; esac
+  last=$(printf '%s' "$out" | grep -a -v '^RC=\|^QUARANTINE \|^ABR ' | tail -2 | tr '\n' ' ')
+  printf '%s\tcheribsd-revocation\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$c" "${rc:-?}" "${sig:-}" "${code:-}" "$ending" "${q:-}" "$last" >> "$OUT/verdicts.tsv"
+  printf '  %-56s rc=%-4s %s %s\n' "${c:0:56}" "${rc:-?}" "${code:-}" "$ending"
 done
 
 # ---- the configuration again, to show it did not move under the run ----

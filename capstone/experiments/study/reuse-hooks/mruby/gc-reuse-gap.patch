@@ -1,0 +1,96 @@
+--- a/src/gc.c
++++ b/src/gc.c
+@@ -185,6 +185,73 @@
+   RVALUE objects[MRB_HEAP_PAGE_SIZE];
+ } mrb_heap_page;
+ 
++#ifdef EXP_REUSE_GAP
++/* Reuse-distance observer (pre-registration 16d2171a3edc): GC object slot
++ * hand-out (mrb_obj_alloc) and the sweep's free, by the GC's own slot
++ * address. Integers only; the table is static, outside every heap page.
++ * One line at exit. Identical in the stock and MRB_CAPSTONE_SUBLET builds. */
++#include <stdio.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include "reuse-gap-observer.h"
++#define EXP_REUSE_GAP_CAPACITY ((size_t)1 << 20)
++static struct reuse_gap_slot exp_reuse_gap_slots[EXP_REUSE_GAP_CAPACITY];
++static struct reuse_gap_observer exp_reuse_gap;
++static int exp_reuse_gap_ready;
++
++static void
++exp_reuse_gap_report(void)
++{
++    const struct reuse_gap_observer *o = &exp_reuse_gap;
++    char line[1024];
++    int n = snprintf(line, sizeof line,
++        "REUSE-GAP gc-slots capacity=%zu attempts=%llu issues=%llu "
++        "releases=%llu reuses=%llu distinct_starts=%llu error=%u bins=",
++        o->capacity, (unsigned long long)o->attempts,
++        (unsigned long long)o->issues, (unsigned long long)o->releases,
++        (unsigned long long)o->reuses,
++        (unsigned long long)o->distinct_starts, o->error);
++    for (unsigned i = 0; i < 32 && n > 0 && (size_t)n < sizeof line; ++i) {
++        n += snprintf(line + n, sizeof line - (size_t)n, i ? ",%llu" : "%llu",
++                      (unsigned long long)o->bins[i]);
++    }
++    if (n > 0 && (size_t)n + 1 < sizeof line) {
++        line[n++] = '\n';
++        (void)!write(2, line, (size_t)n);
++    }
++}
++
++static void
++exp_reuse_gap_start(void)
++{
++    reuse_gap_init(&exp_reuse_gap, exp_reuse_gap_slots, EXP_REUSE_GAP_CAPACITY);
++    exp_reuse_gap_ready = 1;
++    if (atexit(exp_reuse_gap_report)) {
++        static const char msg[] = "REUSE-GAP gc-slots atexit failed\n";
++        (void)!write(2, msg, sizeof msg - 1);
++    }
++}
++
++static void
++exp_reuse_gap_issue(uint64_t start, uint64_t size)
++{
++    if (!exp_reuse_gap_ready) {
++        exp_reuse_gap_start();
++    }
++    reuse_gap_attempt(&exp_reuse_gap);
++    reuse_gap_issue(&exp_reuse_gap, start, size);
++}
++
++static void
++exp_reuse_gap_release(uint64_t start)
++{
++    if (!exp_reuse_gap_ready) {
++        exp_reuse_gap_start();
++    }
++    reuse_gap_release(&exp_reuse_gap, start);
++}
++#endif
++
+ typedef struct mrb_heap_region {
+   struct mrb_heap_region *next;
+   uint8_t *base;                 /* start of user buffer */
+@@ -683,6 +750,9 @@
+   }
+ 
+   gc->live++;
++#ifdef EXP_REUSE_GAP
++  exp_reuse_gap_issue((uint64_t)(uintptr_t)p, sizeof(RVALUE));
++#endif
+ #ifdef MRB_CAPSTONE_SUBLET
+   /* The arena and the caller get the object's child, never the GC's pointer. */
+   *p = RVALUE_zero;
+@@ -1292,6 +1362,9 @@
+         if (p->as.basic.tt != MRB_TT_FREE) {
+           obj_free(mrb, &p->as.basic, FALSE);
+           if (p->as.basic.tt == MRB_TT_FREE) {
++#ifdef EXP_REUSE_GAP
++            exp_reuse_gap_release((uint64_t)(uintptr_t)p);
++#endif
+ #ifdef MRB_CAPSTONE_SUBLET
+             gc_retire(page, p);
+ #endif

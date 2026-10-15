@@ -120,7 +120,14 @@ The four in the last row are the honest other direction: `606d9a6b2` and
 `628ccec60` is the `mruby-task` GC-slot row, whose reuse a bounds check has no
 event to fire on.
 
-## The revoking arms: what revocation catches
+## The revoking arms: what revocation catches (2026-10-06, physical domain)
+
+This section and the next record the Sublet-heap arms as measured on the
+physical Capstone domain. `sysalloc-sublet` and `sublet-gc` left the corpus on
+2026-10-11 with the Sublet heap and the GC-slot adapter they ran on; their
+readings stay in `results/20261006`. The virtual arms that replace them are
+under "On the virtual profile" below.
+
 
 `sysalloc-sublet` (`sublet`, revoke on free) and `sublet-gc` (every GC object slot issued and
 revoked on its own) were both **blocked** when this corpus was first measured:
@@ -173,16 +180,27 @@ and it is reachable at all only because the port now builds `mruby-task`.
     python3 probe/extract.py                       # needs a full mruby clone; see the script
     python3 probe/run-sweep.py <arm>/bin/mruby verdicts.json
 
-    # the domain arms, one boot each; the revoking arms need the node pool
+    # the physical domain arm (sysalloc-none / sysalloc-bounds), one boot
     bash probe/run-arm.sh level0
-    CAPSTONE_REV_NODES=16777216 bash probe/run-arm.sh sublet
     bash probe/depth-probe.sh
 
-The node figure is this kit's. `sublet_heap.c` records that capstone-qemu
-recycles retired identities since `22aec7ee0f`, which makes the 65,536-identity
-pool bound live identities rather than allocations per boot; that commit is not
-in the emulator this kit was built from, and on it the 65,536 default is not
-enough for these runs.
+    # the virtual arms: build-mruby-domain.sh with MRBD_SDK=<virtual SDK>, and
+    # MRBD_SUBLET=1 for the protected image; the C-API drivers (case 11) against
+    # each build; then, per arm, on a virtual VM
+    bash probe/build-capi.sh <stock>/src/mruby SDK CAPI-STOCK
+    bash probe/build-capi.sh <MRBD_SUBLET=1>/src/mruby SDK CAPI-SUBLET
+    python3 probe/run-virtual.py OUT --state VM --arm virtual-malloc \
+        --image <stock>/build/capstone/bin/mruby --capi-dir CAPI-STOCK --llvm-bin BIN
+    python3 probe/run-virtual.py OUT --state VM --arm virtual-nested-pools \
+        --image <MRBD_SUBLET=1>/build/capstone/bin/mruby --capi-dir CAPI-SUBLET --llvm-bin BIN
+
+    # case 11's native matched pair: the pin, and the pin with the fix's task.c hunks
+    git -C <mruby clone> show cb51fce92 -- mrbgems/mruby-task/src/task.c > fix.diff
+    bash probe/native-control.sh <stock>/src/mruby 11_cb51fce92_task-stack-envs fix.diff OUT
+
+The 2026-10-06 run also had `sublet` and `sublet-gc` images on the Sublet heap,
+which needed `CAPSTONE_REV_NODES=16777216`; `probe/analyse.py` reads that run's
+three arm outputs.
 
 The harness (`probe/harness.rb`, `probe/footer.rb`) and the four-arm build config
 are taken from the GC-slot corpus's own probe on `corpus/mruby-gc-slot-reuse`,
@@ -243,3 +261,67 @@ the 165 rows. That is why the run used all 674 cases.
 **`cheribsd-revocation` is declared and not written** for every case. It is the
 next measurement: the same population on CheriBSD purecap with libc revocation at
 its default.
+
+## On the virtual profile (2026-10-11)
+
+The 23 cases run as the port's mruby built for the virtual profile
+(`build-mruby-domain.sh` with `MRBD_SDK` naming a virtual SDK), one process per
+case under `capstone-vexec`, by `probe/run-virtual.py`
+([results/2026-10-11-virtual](results/2026-10-11-virtual/README.md); case 11 through its
+C-API driver in [results/2026-10-11-virtual-capi](results/2026-10-11-virtual-capi/README.md)). Two
+arms, two images that differ by one patch:
+
+| arm | mruby | caught | missed | no reading |
+|---|---|---:|---:|---:|
+| `virtual-malloc` | as ported, on musl mallocng: every malloc'd object bounded and retired on free; a GC object slot is an unbounded offset in its heap page | 20 | 3 | 0 |
+| `virtual-nested-pools` | the same with patch 0008 (`MRBD_SUBLET=1`): every GC object slot a `CDERIVE` child of its page, revoked by `CREVOKE` when the sweep frees it | 23 | 0 | 0 |
+
+The three that only the patch catches are the three GC-slot rows the old
+`sublet-gc` adapter alone caught -- `04_606d9a6b2`, `05_628ccec60` and
+`08_fb4974528` -- each now faulting with cause 25, an invalid lifetime, where
+`virtual-malloc` completes with the harness's wrong answer. `02_39aecc143`
+faults on both arms, earlier under the patch: at the revoked slot (cause 25)
+rather than after its reuse (cause 24).
+
+`11_cb51fce92` is measured through a C-API driver, `capi.c`. At the pin no
+script reaches its defect: upstream's test (`trigger.rb`) calls `Task#close`,
+which postdates the pin, so it raises `NoMethodError`, and raising after a task
+has run longjmps through a stale `jmp_buf` on the C stack -- a second
+mruby-task defect, which crashes the native build too (SIGSEGV in `__longjmp`),
+and which is what `trigger.rb` reached on both virtual images (cause 12, before
+the GC marks anything). The other paths that
+free a task's stack are C API. `capi.c` takes upstream's `TaskTest.run_sync`
+path without the helper: a closure escapes a proc run by
+`mrb_execute_proc_synchronously`, which frees the task's stack without
+detaching the closure's env, and a full collection then marks the env. Both
+arms fault there, cause 25 in `gc_mark_children`: the stack is a malloc'd
+block, so mallocng's retirement on free catches it without patch 0008. Two
+matched pairs, the pin against the pin with cb51fce92's `task.c` hunks alone,
+show the driver reaches that defect: natively SIGSEGV in `mrb_gc_mark` under
+`gc_mark_children` (upstream's backtrace), and under ASan a heap-use-after-free
+read there of the task's freed stack, against `CASE11 completed 30`; and on
+`virtual-malloc` cause 25 against exit 0, twice each
+(`probe/native-control.sh`, the bundle's README).
+
+A catch counts only if the patch does not fault on correct code. mruby's own
+test suite (`mrbtest`, 1,710 tests) runs to the same result on both images --
+1,700 OK, 9 skipped, and the one failure the virtual guest gives either image
+(`File#path`, a file-I/O test) -- with no capability fault; so does the port's
+`scripts/smoke.rb`, which each arm runs first as its control.
+
+Patch 0008 is 61 lines of code in `gc.c`. It replaces the adapter of 438 patch
+lines that held the GC's slots linearly in a region of the Sublet heap.
+
+## The system-allocator cases on the baseline and on CheriBSD (2026-10-11)
+
+Seven cases free their object through libc: 01, 03, 06, 09, 10, 11 and 17.
+[results/2026-10-11-system-group](results/2026-10-11-system-group/README.md)
+reads them, pre-registered with fault sites from host ASan, on the 2026-10-06
+bounds-only image (no temporal protection) and on CheriBSD with a quarantine
+probe, each fault placed by the image's symbols. The baseline reaches the
+access in five: 03, 09, 10 complete, 06 and 11 fault at their site; 01 and 17
+fault elsewhere (`mrb_vformat`, `mrb_func_basic_p`). On CheriBSD 06 faults at
+its site by bounds, 01 in `mrb_vformat` as on the baseline, and the other five
+complete while the probe shows every free quarantined, nothing reissued and no
+sweep: the block was held. So CheriBSD's verdicts for 03, 09, 10, 11 and 17
+are now `NOT-REISSUED` (the board's "held"), 01's `NO-READING`.

@@ -3,12 +3,12 @@
 [Guide](README.md) · Previous: [ISA](isa.md) · Next: [Guarantees](guarantees.md)
 
 Use the matching processor, compiler, runtime and application profile.
-The core virtual stack has landed on `dev`. The node-growth review branch
-`review/virtual-node-growth` adds paged lifetime storage on top of `dev` and
-the build repairs in `review/virtual-build-repairs`. Source links below retain
-the original review boundaries; use the checkout's QEMU pin for new builds.
-`virtual-musl-local` adds Capstone-compiled mallocng executing locally in the
-application; see the [allocator contract](../../../runtime/virtual/mallocng.md).
+The virtual stack, paged lifetime storage, build repairs and local mallocng
+have landed on `dev`. Source links below retain the original review boundaries;
+use the checkout's QEMU pin for new builds. The managed allocator migration
+uses `CDERIVE`/`CREVOKE` in mallocng and nested pools; see the
+[allocator contract](../../../runtime/virtual/mallocng.md) and
+[current qualification](../../../runtime/virtual/results/managed-mallocng/README.md).
 
 ## Sublet lifetime qualification
 
@@ -108,7 +108,7 @@ the VM-service profile.
 |---|---|---|
 | SQLite, mruby | Included in [#184](https://github.com/project-starch/llvm-capstone/pull/184) | Recorded workloads; not full upstream suites |
 | Perl | [#186](https://github.com/project-starch/llvm-capstone/pull/186) | `PERLD_PROFILE=virtual`; existing build restrictions remain |
-| CPython | [#187](https://github.com/project-starch/llvm-capstone/pull/187) | Inner temporal protection requires `CPY_SUBLET_MODE=1` |
+| CPython | [#187](https://github.com/project-starch/llvm-capstone/pull/187) | Inner temporal protection is the `CPY_SUBLET=1` build (patch 0014, `CDERIVE`/`CREVOKE` in obmalloc) |
 | PostgreSQL | [#188](https://github.com/project-starch/llvm-capstone/pull/188) | Single-user backend profile |
 | FFmpeg | [#189](https://github.com/project-starch/llvm-capstone/pull/189) | Configured decoder/pool workloads |
 | tshark | [#190](https://github.com/project-starch/llvm-capstone/pull/190) | Offline profile and selected wmem adapters |

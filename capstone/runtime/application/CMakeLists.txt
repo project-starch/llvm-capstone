@@ -5,10 +5,20 @@ set(CMAKE_C_FLAGS_RELEASE "-O1 -DNDEBUG" CACHE STRING "Release C flags")
 project(capstone_application LANGUAGES C ASM)
 set(CMAKE_C_STANDARD 11)
 option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter" OFF)
+set(profile_codegen)
+set(sdk_profile physical)
 if(CAPSTONE_APPLICATION_VIRTUAL)
-  add_compile_options("$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")
-  set(sdk_codegen "[\"-mllvm\", \"-capstone-gp-free\", \"-mllvm\", \"-capstone-image-gp\"]")
+  set(sdk_profile virtual)
+  set(sdk_allocator mallocng)
+  include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VirtualCodegen.cmake")
+  set(profile_codegen ${CAPSTONE_VIRTUAL_CODEGEN})
+  list(JOIN profile_codegen " " virtual_codegen)
+  add_compile_options("$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
+  list(JOIN profile_codegen "\", \"" sdk_codegen)
+  set(sdk_codegen "[\"${sdk_codegen}\"]")
 else()
+  set(sdk_profile physical)
+  set(sdk_allocator level0)
   set(sdk_codegen "[]")
 endif()
 option(CAPSTONE_CHECK_COMPILER_ABI "Qualify Capstone direct-call codegen" ON)
@@ -16,20 +26,24 @@ if(CAPSTONE_CHECK_COMPILER_ABI)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/../host/capstone_vm/compiler.py"
-            --check-compiler "${CMAKE_C_COMPILER}"
+            --check-compiler "${CMAKE_C_COMPILER}" ${profile_codegen}
     RESULT_VARIABLE compiler_probe_status
     ERROR_VARIABLE compiler_probe_error)
   if(NOT compiler_probe_status EQUAL 0)
     message(FATAL_ERROR "Capstone compiler ABI check failed: ${compiler_probe_error}")
   endif()
 endif()
+# The heap is level0 on the physical profile and musl mallocng on the virtual one; the
+# Sublet heap and its HEAP/HEAP_LOG selection were removed on 2026-10-11. A recipe that
+# still passes them would otherwise build level0 under its old label.
+if(DEFINED CAPSTONE_APPLICATION_HEAP OR DEFINED CAPSTONE_APPLICATION_HEAP_LOG)
+  message(FATAL_ERROR "CAPSTONE_APPLICATION_HEAP and CAPSTONE_APPLICATION_HEAP_LOG were removed with the Sublet heap; drop them")
+endif()
 set(CAPSTONE_APPLICATION_INPUTS "" CACHE STRING "Sources, objects and archives containing main")
 set(CAPSTONE_APPLICATION_NAME application CACHE STRING "Output basename")
 set(CAPSTONE_APPLICATION_DATA_BYTES 4194304 CACHE STRING "Globals and stack budget")
 set(CAPSTONE_APPLICATION_STACK_BYTES 1048576 CACHE STRING "Stack budget")
 set(CAPSTONE_APPLICATION_ARENA_BYTES 4194304 CACHE STRING "Application heap size")
-set(CAPSTONE_APPLICATION_HEAP level0 CACHE STRING "level0 or sublet")
-set(CAPSTONE_APPLICATION_HEAP_LOG 22 CACHE STRING "Sublet pool size as log2(bytes)")
 set(CAPSTONE_APPLICATION_GRANT_BYTES 0 CACHE STRING "Shared backing for the heap and inner allocators")
 set(CAPSTONE_APPLICATION_EXCHANGE_BYTES 262144 CACHE STRING "Exchange region for delegated syscalls (ABI v2)")
 # Threads (docs/plans/delegation-threads.md): how many run at once besides the
@@ -59,7 +73,6 @@ capstone_configure_application(${CAPSTONE_APPLICATION_NAME}
   DATA_BYTES ${CAPSTONE_APPLICATION_DATA_BYTES}
   STACK_BYTES ${CAPSTONE_APPLICATION_STACK_BYTES}
   ARENA_BYTES ${CAPSTONE_APPLICATION_ARENA_BYTES}
-  HEAP ${CAPSTONE_APPLICATION_HEAP} HEAP_LOG ${CAPSTONE_APPLICATION_HEAP_LOG}
   EXCHANGE_BYTES ${CAPSTONE_APPLICATION_EXCHANGE_BYTES}
   GRANT_BYTES ${CAPSTONE_APPLICATION_GRANT_BYTES}
   CONTEXTS ${CAPSTONE_APPLICATION_CONTEXTS}
@@ -70,6 +83,8 @@ if(CAPSTONE_APPLICATION_SDK)
 "{
   \"version\": 1,
   \"application_abi\": 2,
+  \"profile\": \"${sdk_profile}\",
+  \"allocator\": \"${sdk_allocator}\",
   \"codegen\": ${sdk_codegen},
   \"cc\": \"${CMAKE_C_COMPILER}\",
   \"ld\": \"${CMAKE_LINKER}\",

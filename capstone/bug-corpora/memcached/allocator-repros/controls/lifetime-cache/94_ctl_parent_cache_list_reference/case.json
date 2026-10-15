@@ -1,0 +1,17 @@
+{
+  "case": 94,
+  "title": "CONTROL (parent): A's storage, after cache_free, read and written through the reference cache.c keeps to it (cache->head.stqh_first, the free-list head; under patch 0006 A's lifetime, its CREVOKE parent)",
+  "variants": {
+    "list-head": "through cache->head.stqh_first"
+  },
+  "arms": {
+    "virtual-malloc": {
+      "oracle": "complete"
+    },
+    "virtual-nested-pools": {
+      "oracle": "complete"
+    }
+  },
+  "control_for": "the lifetime patch 0006's cache.c half (virtual-nested-pools) leaves permitted accesses alone; pre-registered in capstone/docs/plans/2026-10-12-nested-lifetime-controls-extended.md",
+  "run": "ctl-94 94 VARIANT, built by controls/lifetime-cache/build-controls.sh, run by controls/lifetime-cache/run-controls.py"
+}

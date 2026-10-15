@@ -10,8 +10,7 @@ KIT=${KIT:-${CAPSTONE_TMP_ROOT:-/tmp/capstone}/mruby-arms}
 W=$REPO; K=$KIT; RT=$W/capstone/runtime
 arm=$1; OUT=$K/results; mkdir -p $OUT
 export PYTHONPATH=$RT/host CAPSTONE_QEMU_LOCK=$K/qemu.lock
-# the revoking arms spend far more revocation nodes than the 65536 default
-case $arm in sublet|sublet-gc) export CAPSTONE_REV_NODES=16777216 ;; esac
+case $arm in level0) ;; *) echo "run-arm.sh: arm $arm? (level0; the Sublet-heap arms were removed 2026-10-11)" >&2; exit 2 ;; esac
 ROOT=/tmp/capstone/step-one-ecall; S=$K/vm-$arm
 vm() { python3 -m capstone_vm --state $S "$@"; }
 vm down > /dev/null 2>&1; rm -rf $S

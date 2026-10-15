@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <fenv.h>
 #include <stdint.h>
 #include <time.h>
 #include <sys/mman.h>
@@ -22,6 +23,7 @@ struct virtual_clone {
     void *meta;
     void *exchange;
     void *signals;
+    fenv_t fenv;
 };
 static __thread struct virtual_clone *current_clone;
 extern size_t __capstone_delegate_thread_state_size(void);
@@ -43,6 +45,10 @@ static void *clone_entry(void *p)
 {
     struct virtual_clone *r = p;
     current_clone = r;
+    /* A thread starts with its creator's floating-point environment (C11
+     * 7.6; Linux copies it at clone). Each context has its own fcsr and
+     * begins with the default one. */
+    fesetenv(&r->fenv);
     __capstone_delegate_thread_attach(r->transport, r->meta, r->exchange, r->signals);
     int result = r->entry(r->arg);
     int *clear = r->clear;
@@ -67,6 +73,7 @@ int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
     if (!r) return -ENOMEM;
     *r = (struct virtual_clone){.entry = entry, .arg = arg,
         .clear = flags & CLONE_CHILD_CLEARTID ? clear : NULL};
+    fegetenv(&r->fenv);
     r->transport = calloc(1, __capstone_delegate_thread_state_size());
     r->meta = calloc(1, CAPSTONE_DELEGATE_META_BYTES);
     r->exchange = malloc(1UL << 20);

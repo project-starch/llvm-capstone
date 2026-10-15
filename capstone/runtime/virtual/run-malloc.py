@@ -90,9 +90,9 @@ echo VIRTUAL_STAGED_DONE
         checks['200000_lifetimes'] = 'MALLOC_CHURN_OK\n' in log and 'MALLOC_CHURN_EXIT:0\n' in log
         checks['collection_exercised'] = any(int(n) > 0 for n in re.findall(r'collections=(\d+)', log))
     # Match only after the setup marker, up to this process's exit marker.
-    sites = [('reuse-stale', 24, 'cap_malloc_fault_store'), ('reuse-free', 24, 'cap_malloc_validate'),
-             ('stale', 24, 'cap_malloc_fault_store'), ('remap-stale', 24, 'cap_malloc_fault_store'), ('inplace-stale', 24, 'cap_malloc_fault_store'),
-             ('bounds', 28, 'cap_malloc_fault_store'), ('stale-free', 24, 'cap_malloc_validate'),
+    sites = [('reuse-stale', 25, 'cap_malloc_fault_store'), ('reuse-free', 25, 'cap_malloc_validate'),
+             ('stale', 25, 'cap_malloc_fault_store'), ('remap-stale', 25, 'cap_malloc_fault_store'), ('inplace-stale', 25, 'cap_malloc_fault_store'),
+             ('bounds', 28, 'cap_malloc_fault_store'), ('stale-free', 25, 'cap_malloc_validate'),
              ('interior-free', 2, 'cap_malloc_invalid_free')]
     for name, cause, symbol in sites:
         match = re.search(r'MALLOC_FAULT_READY:' + re.escape(name) + r'\n(.*?)MALLOC_DENIAL_EXIT:' +

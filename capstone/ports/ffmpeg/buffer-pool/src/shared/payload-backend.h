@@ -18,14 +18,7 @@ struct payload_block {
 #ifdef FFPOOL_STUDY_GAPS
   unsigned observed_lease;
 #endif
-#ifdef FFPOOL_POISONCAP
-  unsigned long poison_epoch;
-#endif
 };
-#ifdef FFPOOL_POISONCAP
-int ff2_poisoncap_reusable(const struct payload_block *block, unsigned mode);
-void ff2_poisoncap_teardown(struct payload_block *block, unsigned mode);
-#endif
 
 /* Called by ff2_payload_init after the backend has stored the incoming grant.
  * Passing the scalar address here avoids forwarding a linear capability through

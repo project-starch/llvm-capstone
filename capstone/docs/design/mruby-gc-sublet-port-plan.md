@@ -1,5 +1,10 @@
 # mruby's GC object heap under Sublet
 
+> **Superseded 2026-10-11.** The port no longer uses this design. Patch 0008 is now
+> `ports/mruby/app/patches/4.0.0-rc2/0008-gc-slots-as-sublet-lifetimes.patch`: each slot a `CDERIVE`
+> child of its page, revoked by `CREVOKE`, on the virtual profile. This plan is kept as the record of
+> the region-based adapter it described.
+
 *Design record, 2026-09-26, against mruby 4.0.0-rc2 (`9d523e2f74f2`), `src/gc.c`.
 The port it plans is the third arm of `ports/mruby/app` (`MRBD_HEAP`): level0,
 then `sublet` (mruby's bodies on the runtime's revoking heap, done, mrbtest

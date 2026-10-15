@@ -1,0 +1,717 @@
+{
+ "all_predictions_held": true,
+ "allocator": "pymalloc (PyObject_Malloc/PyObject_Free)",
+ "builds": {
+  "protected": {
+   "applied_patches": [
+    "cpython-3.13.7-0001-address-width.patch",
+    "cpython-3.13.7-0002-freed-pointer-address.patch",
+    "cpython-3.13.7-0003-radix-tree-address-bits.patch",
+    "cpython-3.13.7-0004-hash-pointer-address.patch",
+    "cpython-3.13.7-0005-qsbr-pad-multiple.patch",
+    "cpython-3.13.7-0007-pointer-int-at-address-width.patch",
+    "cpython-3.13.7-0008-gc-links-as-pointers.patch",
+    "cpython-3.13.7-0009-pymalloc-arena-pointer.patch",
+    "cpython-3.13.7-0010-dict-entries-pointer-aligned.patch",
+    "cpython-3.13.7-0011-no-specialization-with-capabilities.patch",
+    "cpython-3.13.7-0012-dtoa-bigint-pointer-aligned.patch",
+    "cpython-3.13.7-0013-pyarena-pointer-aligned.patch",
+    "cpython-3.13.7-0014-pymalloc-sublet-lifetimes.patch",
+    "cpython-3.13.7-0015-fork-exec-posix-spawn.patch",
+    "cpython-3.13.7-0016-thread-words-as-pointers.patch",
+    "cpython-3.13.7-0017-elementtree-join-flag-keeps-pointer.patch"
+   ],
+   "build": "build host: ctl-cpy/build/protected (build-arm.sh protected)",
+   "build_seconds": 273,
+   "configuration": "CPY_TEST_CAPI=1 CPY_SUBLET=1 (patches 0001-0005, 0007-0017; 0014 sha256 6c2c170ef57e49881360f902a23c890e9931774be6d850e0c6cf73a0331c3f89), _pymctl built in, virtual profile, mallocng, 8 MiB stack",
+   "gate_sha256": "85f6f2086ba0defbbd81271156c48db529c37059295a7aecc0f14bba6d5a57c5",
+   "image_sha256": "4d8f9405cec8de3fbfa5387b47cd11956ab9c43b729e7eb1610c6d43949fb1c9",
+   "labels": {
+    "pymctl_link_probe": "0x484bcc",
+    "pymctl_read": "0x484c0c",
+    "pymctl_read_probe": "0x484bf8",
+    "pymctl_stale_probe": "0x48510c",
+    "pymctl_stale_read": "0x485120",
+    "pymctl_write": "0x484c40",
+    "pymctl_write_probe": "0x484c20"
+   },
+   "manifest": {
+    "application": "cpython",
+    "arena_bytes": 67108864,
+    "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e",
+    "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+    "heap": "virtual",
+    "image_sha256": "4d8f9405cec8de3fbfa5387b47cd11956ab9c43b729e7eb1610c6d43949fb1c9",
+    "nested": "cpython",
+    "profile": "virtual",
+    "recipe_revision": "0668e2a9fcfcc8331fee75cdad4d5911071b8fbf",
+    "runtime_archive_sha256": "fc719e2acf7a922a0e4d0f4eb789f9bb8b02bd471c5110ca12c49a294f99426c",
+    "runtime_dirty": true,
+    "runtime_revision": "0668e2a9fcfcc8331fee75cdad4d5911071b8fbf",
+    "stack_bytes": 8388608
+   },
+   "stage_tree_sha256": "61a364a253712c32fb1c2d8109abac8eaf7d70fd18ffa270ccbff6c01804cbbb"
+  },
+  "release": {
+   "applied_patches": [
+    "cpython-3.13.7-0001-address-width.patch",
+    "cpython-3.13.7-0002-freed-pointer-address.patch",
+    "cpython-3.13.7-0003-radix-tree-address-bits.patch",
+    "cpython-3.13.7-0004-hash-pointer-address.patch",
+    "cpython-3.13.7-0005-qsbr-pad-multiple.patch",
+    "cpython-3.13.7-0007-pointer-int-at-address-width.patch",
+    "cpython-3.13.7-0008-gc-links-as-pointers.patch",
+    "cpython-3.13.7-0009-pymalloc-arena-pointer.patch",
+    "cpython-3.13.7-0010-dict-entries-pointer-aligned.patch",
+    "cpython-3.13.7-0011-no-specialization-with-capabilities.patch",
+    "cpython-3.13.7-0012-dtoa-bigint-pointer-aligned.patch",
+    "cpython-3.13.7-0013-pyarena-pointer-aligned.patch",
+    "cpython-3.13.7-0015-fork-exec-posix-spawn.patch",
+    "cpython-3.13.7-0016-thread-words-as-pointers.patch",
+    "cpython-3.13.7-0017-elementtree-join-flag-keeps-pointer.patch"
+   ],
+   "build": "build host: ctl-cpy/build/release (build-arm.sh release)",
+   "build_seconds": 275,
+   "configuration": "CPY_TEST_CAPI=1 CPY_SUBLET=0 (the same patches without 0014), _pymctl built in, virtual profile, mallocng, 8 MiB stack",
+   "gate_sha256": "9616b4ef9003cedfb9c2fa889e009f125768cdc3e5251c4ec657ebac4f449bab",
+   "image_sha256": "892a55a281d69fbf744b2b684be64f3a7a4a06f090dd2234d1b9e6de73ff0982",
+   "labels": {
+    "pymctl_link_probe": "0x484998",
+    "pymctl_read": "0x4849d8",
+    "pymctl_read_probe": "0x4849c4",
+    "pymctl_stale_probe": "0x484ed8",
+    "pymctl_stale_read": "0x484eec",
+    "pymctl_write": "0x484a0c",
+    "pymctl_write_probe": "0x4849ec"
+   },
+   "manifest": {
+    "application": "cpython",
+    "arena_bytes": 67108864,
+    "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e",
+    "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+    "heap": "virtual",
+    "image_sha256": "892a55a281d69fbf744b2b684be64f3a7a4a06f090dd2234d1b9e6de73ff0982",
+    "nested": "none",
+    "profile": "virtual",
+    "recipe_revision": "0668e2a9fcfcc8331fee75cdad4d5911071b8fbf",
+    "runtime_archive_sha256": "fc719e2acf7a922a0e4d0f4eb789f9bb8b02bd471c5110ca12c49a294f99426c",
+    "runtime_dirty": true,
+    "runtime_revision": "0668e2a9fcfcc8331fee75cdad4d5911071b8fbf",
+    "stack_bytes": 8388608
+   },
+   "stage_tree_sha256": "ab291525cb6a5f5d39c5b5bbdf3a6fec838b300bc41dae1d137abc0ba13ce233"
+  }
+ },
+ "cpython_archive_sha256": "6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2",
+ "llvm_capstone": {
+  "branch": "ports/nested-lifetime-controls",
+  "build_host_snapshot": "git archive of 53325bba (capstone/, compiler-rt/lib/builtins) plus the uncommitted files, committed on the build host: images at snapshot 0668e2a9, runner at e56a4689 (differs only in run-controls.py, one line)",
+  "head": "53325bba0d5c",
+  "manifest_runtime_dirty_reason": "the only untracked path was capstone/bug-corpora/tools/__pycache__/, written by a concurrent smoke run of the runner; no source file differed",
+  "uncommitted_files": {
+   "capstone/bug-corpora/cpython/pymalloc-repros/controls/nested-lifetime/_pymctl.c": "19bfc2c14ade97d6dbcd1e3679103214a3b12ef9e81039cf9617e9eb2c05d0f2",
+   "capstone/bug-corpora/cpython/pymalloc-repros/controls/nested-lifetime/build-arm.sh": "95479defda89e3cad8fe7b1a3f1c96fb88bcedb41dbb655f9d8e163277fbd7b1",
+   "capstone/bug-corpora/cpython/pymalloc-repros/controls/nested-lifetime/run-controls.py": "ce1d306eeac93fb38538f849158ff716f8ebeedb544a136f8070ccbc3ac6f2de"
+  }
+ },
+ "measured": "2026-10-11, build host p12 (80 cores, shared)",
+ "plan": "capstone/docs/plans/2026-10-11-nested-lifetime-controls.md",
+ "platform": {
+  "adapter/capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "adapter/module/capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "exact_bounds": true,
+  "images/Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "images/fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "images/rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "qemu-system-riscv64": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "runner": "capstone/runtime/virtual/run-staged.py",
+  "smp": 1
+ },
+ "probes": {
+  "pymctl_link_probe": "capstone/bug-corpora/cpython/pymalloc-repros/controls/nested-lifetime/_pymctl.c:82",
+  "pymctl_read": "capstone/bug-corpora/cpython/pymalloc-repros/controls/nested-lifetime/_pymctl.c:54",
+  "pymctl_stale_read": "capstone/bug-corpora/cpython/pymalloc-repros/controls/nested-lifetime/_pymctl.c:72",
+  "pymctl_write": "capstone/bug-corpora/cpython/pymalloc-repros/controls/nested-lifetime/_pymctl.c:63"
+ },
+ "program": "CPython 3.13.7",
+ "run_seconds": 237,
+ "runs": [
+  {
+   "arm": "protected",
+   "boot_rc": 0,
+   "boot_seconds": 212.7,
+   "controls": {
+    "parent": {
+     "addresses": {
+      "A": "0x3f95ba24b0"
+     },
+     "lines": [
+      "CTL parent A=0x3f95ba24b0 n=48 arena=0 arena_address=0x3f95b7f180 pool=0x3f95ba0000 offset=9392 szidx=2",
+      "CTL parent freed A; pool.count=337",
+      "CTL parent read pool.freeblock=0x3f95ba24b0 (A 0x3f95ba24b0) link=0x3f95ba3140 (old head 0x3f95ba3140) byte[47]=0xa1 (A wrote 0xa1)",
+      "CTL parent wrote 0x5a read back 0x5a, restored 0xa1",
+      "CTL parent completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes"
+     },
+     "rc": 0
+    },
+    "sibling": {
+     "addresses": {
+      "A": "0x3fad7224b0",
+      "B": "0x3fad723140"
+     },
+     "lines": [
+      "CTL sibling A=0x3fad7224b0 B=0x3fad723140 n=48 pool=0x3fad720000 skipped=0",
+      "CTL sibling freed A",
+      "CTL sibling read B: 0 of 48 bytes differ from what B was given",
+      "CTL sibling wrote B[47]=0x5a read back 0x5a",
+      "CTL sibling completed=1 intact=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes, B intact"
+     },
+     "rc": 0
+    },
+    "stale": {
+     "addresses": {
+      "A": "0x3f89b624b0",
+      "C": "0x3f89b624b0"
+     },
+     "fault": {
+      "address": "0x3f89b624b0",
+      "at_label": "pymctl_stale_read",
+      "cause": 25,
+      "function": "pymctl_stale_probe",
+      "image_pc": "0x485120",
+      "line": "domain fault cause=25 pc=0x3f87475120 address=0x3f89b624b0 entry=0x3f87000890 code=0x3f87000000-",
+      "offset": 20,
+      "pc": "0x3f87475120"
+     },
+     "lines": [
+      "CTL stale A=0x3f89b624b0 C=0x3f89b624b0 equal=1 tries=1 n=48",
+      "CTL stale wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL stale reading through the old A at pymctl_stale_read"
+     ],
+     "outcome": "fault",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; the read through A faults with cause 25 at pymctl_stale_read"
+     },
+     "rc": 139
+    },
+    "successor": {
+     "addresses": {
+      "A": "0x3f96863140",
+      "C": "0x3f96863140"
+     },
+     "lines": [
+      "CTL successor A=0x3f96863140 C=0x3f96863140 equal=1 tries=1 n=48",
+      "CTL successor wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL successor completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; access through C completes"
+     },
+     "rc": 0
+    }
+   },
+   "image_sha256": "4d8f9405cec8de3fbfa5387b47cd11956ab9c43b729e7eb1610c6d43949fb1c9",
+   "import": {
+    "lines": [
+     "CTL import _pymctl 3.13.7"
+    ],
+    "rc": 0
+   },
+   "repeat": 1,
+   "staged_done": true,
+   "stats_after": [
+    "live_domains\":0,\"live_regions\":0,\"live_bytes\":0"
+   ]
+  },
+  {
+   "arm": "protected",
+   "boot_rc": 0,
+   "boot_seconds": 204.4,
+   "controls": {
+    "parent": {
+     "addresses": {
+      "A": "0x3fbe5624b0"
+     },
+     "lines": [
+      "CTL parent A=0x3fbe5624b0 n=48 arena=0 arena_address=0x3fbe53f180 pool=0x3fbe560000 offset=9392 szidx=2",
+      "CTL parent freed A; pool.count=337",
+      "CTL parent read pool.freeblock=0x3fbe5624b0 (A 0x3fbe5624b0) link=0x3fbe563140 (old head 0x3fbe563140) byte[47]=0xa1 (A wrote 0xa1)",
+      "CTL parent wrote 0x5a read back 0x5a, restored 0xa1",
+      "CTL parent completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes"
+     },
+     "rc": 0
+    },
+    "sibling": {
+     "addresses": {
+      "A": "0x3f905a24b0",
+      "B": "0x3f905a3140"
+     },
+     "lines": [
+      "CTL sibling A=0x3f905a24b0 B=0x3f905a3140 n=48 pool=0x3f905a0000 skipped=0",
+      "CTL sibling freed A",
+      "CTL sibling read B: 0 of 48 bytes differ from what B was given",
+      "CTL sibling wrote B[47]=0x5a read back 0x5a",
+      "CTL sibling completed=1 intact=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes, B intact"
+     },
+     "rc": 0
+    },
+    "stale": {
+     "addresses": {
+      "A": "0x3faf9a24b0",
+      "C": "0x3faf9a24b0"
+     },
+     "fault": {
+      "address": "0x3faf9a24b0",
+      "at_label": "pymctl_stale_read",
+      "cause": 25,
+      "function": "pymctl_stale_probe",
+      "image_pc": "0x485120",
+      "line": "domain fault cause=25 pc=0x3fad475120 address=0x3faf9a24b0 entry=0x3fad000890 code=0x3fad000000-",
+      "offset": 20,
+      "pc": "0x3fad475120"
+     },
+     "lines": [
+      "CTL stale A=0x3faf9a24b0 C=0x3faf9a24b0 equal=1 tries=1 n=48",
+      "CTL stale wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL stale reading through the old A at pymctl_stale_read"
+     ],
+     "outcome": "fault",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; the read through A faults with cause 25 at pymctl_stale_read"
+     },
+     "rc": 139
+    },
+    "successor": {
+     "addresses": {
+      "A": "0x3fa8de3140",
+      "C": "0x3fa8de3140"
+     },
+     "lines": [
+      "CTL successor A=0x3fa8de3140 C=0x3fa8de3140 equal=1 tries=1 n=48",
+      "CTL successor wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL successor completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; access through C completes"
+     },
+     "rc": 0
+    }
+   },
+   "image_sha256": "4d8f9405cec8de3fbfa5387b47cd11956ab9c43b729e7eb1610c6d43949fb1c9",
+   "import": {
+    "lines": [
+     "CTL import _pymctl 3.13.7"
+    ],
+    "rc": 0
+   },
+   "repeat": 2,
+   "staged_done": true,
+   "stats_after": [
+    "live_domains\":0,\"live_regions\":0,\"live_bytes\":0"
+   ]
+  },
+  {
+   "arm": "protected",
+   "boot_rc": 0,
+   "boot_seconds": 129.4,
+   "controls": {
+    "parent": {
+     "addresses": {
+      "A": "0x3fb59224b0"
+     },
+     "lines": [
+      "CTL parent A=0x3fb59224b0 n=48 arena=0 arena_address=0x3fb58ff180 pool=0x3fb5920000 offset=9392 szidx=2",
+      "CTL parent freed A; pool.count=337",
+      "CTL parent read pool.freeblock=0x3fb59224b0 (A 0x3fb59224b0) link=0x3fb5923140 (old head 0x3fb5923140) byte[47]=0xa1 (A wrote 0xa1)",
+      "CTL parent wrote 0x5a read back 0x5a, restored 0xa1",
+      "CTL parent completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes"
+     },
+     "rc": 0
+    },
+    "sibling": {
+     "addresses": {
+      "A": "0x3fb09a24b0",
+      "B": "0x3fb09a3140"
+     },
+     "lines": [
+      "CTL sibling A=0x3fb09a24b0 B=0x3fb09a3140 n=48 pool=0x3fb09a0000 skipped=0",
+      "CTL sibling freed A",
+      "CTL sibling read B: 0 of 48 bytes differ from what B was given",
+      "CTL sibling wrote B[47]=0x5a read back 0x5a",
+      "CTL sibling completed=1 intact=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes, B intact"
+     },
+     "rc": 0
+    },
+    "stale": {
+     "addresses": {
+      "A": "0x3f8e9624b0",
+      "C": "0x3f8e9624b0"
+     },
+     "fault": {
+      "address": "0x3f8e9624b0",
+      "at_label": "pymctl_stale_read",
+      "cause": 25,
+      "function": "pymctl_stale_probe",
+      "image_pc": "0x485120",
+      "line": "domain fault cause=25 pc=0x3f8c475120 address=0x3f8e9624b0 entry=0x3f8c000890 code=0x3f8c000000-",
+      "offset": 20,
+      "pc": "0x3f8c475120"
+     },
+     "lines": [
+      "CTL stale A=0x3f8e9624b0 C=0x3f8e9624b0 equal=1 tries=1 n=48",
+      "CTL stale wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL stale reading through the old A at pymctl_stale_read"
+     ],
+     "outcome": "fault",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; the read through A faults with cause 25 at pymctl_stale_read"
+     },
+     "rc": 139
+    },
+    "successor": {
+     "addresses": {
+      "A": "0x3fafea3140",
+      "C": "0x3fafea3140"
+     },
+     "lines": [
+      "CTL successor A=0x3fafea3140 C=0x3fafea3140 equal=1 tries=1 n=48",
+      "CTL successor wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL successor completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; access through C completes"
+     },
+     "rc": 0
+    }
+   },
+   "image_sha256": "4d8f9405cec8de3fbfa5387b47cd11956ab9c43b729e7eb1610c6d43949fb1c9",
+   "import": {
+    "lines": [
+     "CTL import _pymctl 3.13.7"
+    ],
+    "rc": 0
+   },
+   "repeat": 3,
+   "staged_done": true,
+   "stats_after": [
+    "live_domains\":0,\"live_regions\":0,\"live_bytes\":0"
+   ]
+  },
+  {
+   "arm": "release",
+   "boot_rc": 0,
+   "boot_seconds": 195.9,
+   "controls": {
+    "parent": {
+     "addresses": {
+      "A": "0x3f9caa24b0"
+     },
+     "lines": [
+      "CTL parent A=0x3f9caa24b0 n=48 arena=0 arena_address=0x3f9ca7f180 pool=0x3f9caa0000 offset=9392 szidx=2",
+      "CTL parent freed A; pool.count=337",
+      "CTL parent read pool.freeblock=0x3f9caa24b0 (A 0x3f9caa24b0) link=0x3f9caa3140 (old head 0x3f9caa3140) byte[47]=0xa1 (A wrote 0xa1)",
+      "CTL parent wrote 0x5a read back 0x5a, restored 0xa1",
+      "CTL parent completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes"
+     },
+     "rc": 0
+    },
+    "sibling": {
+     "addresses": {
+      "A": "0x3f83d224b0",
+      "B": "0x3f83d23140"
+     },
+     "lines": [
+      "CTL sibling A=0x3f83d224b0 B=0x3f83d23140 n=48 pool=0x3f83d20000 skipped=0",
+      "CTL sibling freed A",
+      "CTL sibling read B: 0 of 48 bytes differ from what B was given",
+      "CTL sibling wrote B[47]=0x5a read back 0x5a",
+      "CTL sibling completed=1 intact=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes, B intact"
+     },
+     "rc": 0
+    },
+    "stale": {
+     "addresses": {
+      "A": "0x3f9b6a24b0",
+      "C": "0x3f9b6a24b0"
+     },
+     "lines": [
+      "CTL stale A=0x3f9b6a24b0 C=0x3f9b6a24b0 equal=1 tries=1 n=48",
+      "CTL stale wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL stale reading through the old A at pymctl_stale_read",
+      "CTL stale read through A returned 0xc3 (C wrote 0xc3) reads_c=1",
+      "CTL stale completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; the read through A completes and reads C's data"
+     },
+     "rc": 0
+    },
+    "successor": {
+     "addresses": {
+      "A": "0x3fbd9a3140",
+      "C": "0x3fbd9a3140"
+     },
+     "lines": [
+      "CTL successor A=0x3fbd9a3140 C=0x3fbd9a3140 equal=1 tries=1 n=48",
+      "CTL successor wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL successor completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; access through C completes"
+     },
+     "rc": 0
+    }
+   },
+   "image_sha256": "892a55a281d69fbf744b2b684be64f3a7a4a06f090dd2234d1b9e6de73ff0982",
+   "import": {
+    "lines": [
+     "CTL import _pymctl 3.13.7"
+    ],
+    "rc": 0
+   },
+   "repeat": 1,
+   "staged_done": true,
+   "stats_after": [
+    "live_domains\":0,\"live_regions\":0,\"live_bytes\":0"
+   ]
+  },
+  {
+   "arm": "release",
+   "boot_rc": 0,
+   "boot_seconds": 168.0,
+   "controls": {
+    "parent": {
+     "addresses": {
+      "A": "0x3fa6b224b0"
+     },
+     "lines": [
+      "CTL parent A=0x3fa6b224b0 n=48 arena=0 arena_address=0x3fa6aff180 pool=0x3fa6b20000 offset=9392 szidx=2",
+      "CTL parent freed A; pool.count=337",
+      "CTL parent read pool.freeblock=0x3fa6b224b0 (A 0x3fa6b224b0) link=0x3fa6b23140 (old head 0x3fa6b23140) byte[47]=0xa1 (A wrote 0xa1)",
+      "CTL parent wrote 0x5a read back 0x5a, restored 0xa1",
+      "CTL parent completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes"
+     },
+     "rc": 0
+    },
+    "sibling": {
+     "addresses": {
+      "A": "0x3f933624b0",
+      "B": "0x3f93363140"
+     },
+     "lines": [
+      "CTL sibling A=0x3f933624b0 B=0x3f93363140 n=48 pool=0x3f93360000 skipped=0",
+      "CTL sibling freed A",
+      "CTL sibling read B: 0 of 48 bytes differ from what B was given",
+      "CTL sibling wrote B[47]=0x5a read back 0x5a",
+      "CTL sibling completed=1 intact=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes, B intact"
+     },
+     "rc": 0
+    },
+    "stale": {
+     "addresses": {
+      "A": "0x3f8ada24b0",
+      "C": "0x3f8ada24b0"
+     },
+     "lines": [
+      "CTL stale A=0x3f8ada24b0 C=0x3f8ada24b0 equal=1 tries=1 n=48",
+      "CTL stale wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL stale reading through the old A at pymctl_stale_read",
+      "CTL stale read through A returned 0xc3 (C wrote 0xc3) reads_c=1",
+      "CTL stale completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; the read through A completes and reads C's data"
+     },
+     "rc": 0
+    },
+    "successor": {
+     "addresses": {
+      "A": "0x3f8c3e3140",
+      "C": "0x3f8c3e3140"
+     },
+     "lines": [
+      "CTL successor A=0x3f8c3e3140 C=0x3f8c3e3140 equal=1 tries=1 n=48",
+      "CTL successor wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL successor completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; access through C completes"
+     },
+     "rc": 0
+    }
+   },
+   "image_sha256": "892a55a281d69fbf744b2b684be64f3a7a4a06f090dd2234d1b9e6de73ff0982",
+   "import": {
+    "lines": [
+     "CTL import _pymctl 3.13.7"
+    ],
+    "rc": 0
+   },
+   "repeat": 2,
+   "staged_done": true,
+   "stats_after": [
+    "live_domains\":0,\"live_regions\":0,\"live_bytes\":0"
+   ]
+  },
+  {
+   "arm": "release",
+   "boot_rc": 0,
+   "boot_seconds": 182.0,
+   "controls": {
+    "parent": {
+     "addresses": {
+      "A": "0x3fbb9224b0"
+     },
+     "lines": [
+      "CTL parent A=0x3fbb9224b0 n=48 arena=0 arena_address=0x3fbb8ff180 pool=0x3fbb920000 offset=9392 szidx=2",
+      "CTL parent freed A; pool.count=337",
+      "CTL parent read pool.freeblock=0x3fbb9224b0 (A 0x3fbb9224b0) link=0x3fbb923140 (old head 0x3fbb923140) byte[47]=0xa1 (A wrote 0xa1)",
+      "CTL parent wrote 0x5a read back 0x5a, restored 0xa1",
+      "CTL parent completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes"
+     },
+     "rc": 0
+    },
+    "sibling": {
+     "addresses": {
+      "A": "0x3f8dae24b0",
+      "B": "0x3f8dae3140"
+     },
+     "lines": [
+      "CTL sibling A=0x3f8dae24b0 B=0x3f8dae3140 n=48 pool=0x3f8dae0000 skipped=0",
+      "CTL sibling freed A",
+      "CTL sibling read B: 0 of 48 bytes differ from what B was given",
+      "CTL sibling wrote B[47]=0x5a read back 0x5a",
+      "CTL sibling completed=1 intact=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "completes, B intact"
+     },
+     "rc": 0
+    },
+    "stale": {
+     "addresses": {
+      "A": "0x3f80b224b0",
+      "C": "0x3f80b224b0"
+     },
+     "lines": [
+      "CTL stale A=0x3f80b224b0 C=0x3f80b224b0 equal=1 tries=1 n=48",
+      "CTL stale wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL stale reading through the old A at pymctl_stale_read",
+      "CTL stale read through A returned 0xc3 (C wrote 0xc3) reads_c=1",
+      "CTL stale completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; the read through A completes and reads C's data"
+     },
+     "rc": 0
+    },
+    "successor": {
+     "addresses": {
+      "A": "0x3fbd723140",
+      "C": "0x3fbd723140"
+     },
+     "lines": [
+      "CTL successor A=0x3fbd723140 C=0x3fbd723140 equal=1 tries=1 n=48",
+      "CTL successor wrote 0xc3 through C, read back: 0 of 48 bytes differ",
+      "CTL successor completed=1"
+     ],
+     "outcome": "completed",
+     "prediction": {
+      "held": true,
+      "predicted": "C's address equals A's; access through C completes"
+     },
+     "rc": 0
+    }
+   },
+   "image_sha256": "892a55a281d69fbf744b2b684be64f3a7a4a06f090dd2234d1b9e6de73ff0982",
+   "import": {
+    "lines": [
+     "CTL import _pymctl 3.13.7"
+    ],
+    "rc": 0
+   },
+   "repeat": 3,
+   "staged_done": true,
+   "stats_after": [
+    "live_domains\":0,\"live_regions\":0,\"live_bytes\":0"
+   ]
+  }
+ ],
+ "toolchain": "the build host's virtual kit toolchain, compiler_sha256 in each manifest"
+}

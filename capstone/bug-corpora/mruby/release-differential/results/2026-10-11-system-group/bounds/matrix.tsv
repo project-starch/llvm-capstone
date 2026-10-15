@@ -1,0 +1,8 @@
+case	outcome	cause	function	in_fault_sites	reaches_access	harness
+01_13e017c2f_opgetidx0-stale-regs	status139	24	mrb_vformat	no	no	
+03_59552ecb8_sprintf-format-mutated	completed				yes	["PASS"]
+06_84cc5aa60_khash-freed-buckets	status139	5	kh_get_set_val	yes	yes	
+09_0cf969a2b_shaped-iv-reshaped	completed				yes	["PASS"]
+10_7c5915799_struct-member-storage	completed				yes	["Struct#== and #eql? with a member that replaces the storage", "NOT_FALSE", "true"]
+11_cb51fce92_task-stack-envs	status139	24	gc_mark_children	yes	yes	CASE11 ready
+17_bef45e223_pat-values-stale-ptr-and-len	status139	24	mrb_func_basic_p	no	no	

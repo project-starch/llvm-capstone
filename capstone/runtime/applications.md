@@ -62,9 +62,10 @@ capstone_configure_application(program
 
 Select `ports/common/cmake/toolchains/capstone-domain.cmake`, prepared musl
 headers/archive, `PORT_HEADER_PROVIDER=musl` and `PORT_C11_ATOMICS=ON`. Enable
-C and ASM. `HEAP sublet HEAP_LOG 22` selects the revoking allocator and declares
-its transferred grant automatically. Default `level0` uses a static arena.
-These allocators retain their existing, different protection semantics.
+C and ASM. The heap is `level0` over a static arena: each allocation bounded to
+its request, nothing revoked on free. With `CAPSTONE_APPLICATION_VIRTUAL` it is
+musl mallocng instead, which also ends each object's lifetime on free
+([virtual runtime](virtual/README.md)).
 
 For Make/configure or another upstream build system, build the same runtime as
 an SDK and give the generated driver to the upstream build as `CC`:
@@ -85,9 +86,11 @@ export CC="$CAPSTONE_TMP_ROOT/application-sdk/capstone-cc"
 compiler builtins. The driver preserves source/library order and normal
 compile/preprocessor modes; unknown options and unresolved symbols fail.
 Configuration checks the compiler's direct-call capability codegen and refuses
-the old C-46 backend. `capstone-cc --check-toolchain` repeats that check when an
-existing SDK is reused; source freshness checks alone cannot establish what an
-older compiler binary actually emits.
+the old C-46 backend; for the virtual profile, whose code generation includes
+hardware F and D, it also requires the compiler to compile floating-point
+constants (C-80) and to emit FP instructions. `capstone-cc --check-toolchain`
+repeats those checks when an existing SDK is reused; source freshness checks
+alone cannot establish what an older compiler binary actually emits.
 It does not claim C++ runtime, dynamic-linker or arbitrary GCC-driver support.
 The standalone CMake project defaults to the currently verified `-O1` runtime;
 compiler regression work may override that explicitly. The imported upstream
@@ -97,8 +100,7 @@ Alternatively, set `CAPSTONE_APPLICATION_INPUTS` to a semicolon-separated list
 of ordinary C sources, objects and archives and `CAPSTONE_APPLICATION_NAME` to
 an output basename. Omit `CAPSTONE_APPLICATION_SDK`; the output is `NAME.dom`.
 Exclude old port entry adapters and runtime objects. Resource settings are
-`CAPSTONE_APPLICATION_{DATA,STACK,ARENA}_BYTES`, `CAPSTONE_APPLICATION_HEAP` and
-`CAPSTONE_APPLICATION_HEAP_LOG`.
+`CAPSTONE_APPLICATION_{DATA,STACK,ARENA}_BYTES`.
 
 The [shared port build and run interface](../ports/common/application/README.md)
 covers Perl, mruby, CPython, PostgreSQL, SQLite, FFmpeg and tshark. Application
@@ -298,8 +300,8 @@ The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
 chunked, so a big read or write is a short one. A v2 image's descriptor is 48
 bytes. `capstone-exec` refuses any image without it (a v1 image, or one
 without the delegation flag) with exit 126; rebuild old applications.
-`CAPSTONE_APPLICATION_GRANT_BYTES` declares shared backing for the Sublet heap,
-where selected, and for existing nested allocators.
+`CAPSTONE_APPLICATION_GRANT_BYTES` declares shared backing for existing nested
+allocators.
 
 The launcher installs a seccomp filter from the same shape table before the
 first step: the delegated numbers plus its own, everything else answers
@@ -609,37 +611,32 @@ python3 capstone/runtime/tests/application/run.py \
   --state "$CAPSTONE_TMP_ROOT/dev-vm" --repeat 200 --report acceptance.json
 ```
 
-For the transferred heap/node-reuse/exhaustion controls, build the same
-`contract.c` through `runtime/application` with `CAPSTONE_APPLICATION_HEAP=sublet`,
-`CAPSTONE_APPLICATION_HEAP_LOG=20`, name `contract-sublet`, then additionally pass
-`--sublet-image /mnt/host/contract-sublet.dom` to the gate. All tests use the
-existing boot. The checked report includes platform hashes, before/after counters
-and the unchanged Linux boot ID. Two 200,000-cycle churn cases check continued
-execution, preservation of live data and rejection of an old reference after
-identity reuse. A separate case keeps creating valid ancestors to verify genuine
-exhaustion and recovery. Allocation-progress checks reject faults that happen
-before the intended threshold. Upstream test failures remain port results;
+All tests use the existing boot. The checked report includes platform hashes,
+before/after counters and the unchanged Linux boot ID. The transferred-heap,
+node-reuse and exhaustion controls ran on the Sublet heap's image, which was
+removed on 2026-10-11; their records stay under `tests/application/results/`.
+Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
-The libc heap qualification runs the heap cases of `contract.c` on three images
-of the same source: `sysalloc-sublet` (`sublet`, `HEAP=sublet`), `sysalloc-bounds` (`level0`, `HEAP=level0` as
-applications get it, each allocation bounded) and `sysalloc-none` (`control`, `HEAP=level0` built
-with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, unprotected). Every `fault-*` case must
-be a SIGSEGV on `sysalloc-sublet`; the spatial ones (`fault-bounds`, `fault-bounds-large`,
-`fault-realloc-shrink`) must be one on `sysalloc-bounds` too; every other case on `sysalloc-bounds`,
-and every case on `sysalloc-none`, must reach the survival marker and exit 90. Every
-`heap-*` case must complete on all three. The protected fault must occur at the
-intended byte probe with the expected QEMU cause (5 for the spatial cases, 24 or
-25 for the others; a double free stops at the Sublet heap's probe in `sh_free`,
-which `free` calls with the heap lock held). Churn must allocate at least 200,000
-nodes on `sysalloc-sublet`. A setup error, unrelated fault or early exhaustion fails the gate.
+The libc heap qualification runs the heap cases of `contract.c` on two images
+of the same source: `sysalloc-bounds` (`level0`, the heap as applications get it, each
+allocation bounded) and `sysalloc-none` (`control`, `level0` built with
+`-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, unprotected). The spatial `fault-*` cases
+(`fault-bounds`, `fault-bounds-large`, `fault-realloc-shrink`) must be a SIGSEGV on
+`sysalloc-bounds`, at the intended byte probe with QEMU cause 5; every other case on
+`sysalloc-bounds`, and every case on `sysalloc-none`, must reach the survival marker and
+exit 90, because `level0` revokes nothing on free. Every `heap-*` case must complete on
+both. A setup error or an unrelated fault fails the gate. The third arm,
+`sysalloc-sublet`, ran on the Sublet heap until its removal on 2026-10-11; temporal
+protection of the system allocator is the virtual profile's, qualified by
+[its gate](virtual/README.md).
 
 Build the `sysalloc-none` arm with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0` in `CMAKE_C_FLAGS`; the
 default `application-contract.dom` is the `sysalloc-bounds` arm. Build each image
 with an LLD map, using
 `-DCMAKE_EXE_LINKER_FLAGS="-Map=<absolute-build>/<target>.dom.map"` at CMake
-configuration. The runner requires the three ELFs and maps (default map path:
-`<elf>.map`; override with `--sublet-map`, `--level0-map` and `--control-map`). It checks the
+configuration. The runner requires the two ELFs and maps (default map path:
+`<elf>.map`; override with `--level0-map` and `--control-map`). It checks the
 allocation symbols' input objects, addresses and sizes, then matches the
 guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
 `llvm-objdump`.
@@ -647,7 +644,6 @@ guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
 ```sh
 python3 capstone/runtime/tests/application/run-heap.py \
   --state "$CAPSTONE_TMP_ROOT/dev-vm" \
-  --sublet-image /mnt/host/contract-sublet.dom --sublet-elf <build>/contract-sublet.dom \
   --level0-image /mnt/host/application-contract.dom --level0-elf <build>/application-contract.dom \
   --control-image /mnt/host/contract-no-object-bounds.dom --control-elf <build>/contract-no-object-bounds.dom \
   --nm <toolchain>/bin/llvm-nm --objdump <toolchain>/bin/llvm-objdump \
@@ -656,9 +652,7 @@ python3 capstone/runtime/tests/application/run-heap.py \
 python3 -m unittest discover -s capstone/runtime/tests/application -p test_heap_qualification.py
 ```
 
-It needs the emulator the tree pins (in-process node reuse): on the base
-emulator the 200,000-cycle churn case exhausts the node pool after about
-65,000 allocations, on any image. The
+The records ran all three arms. The
 [2026-09-30 record on the platform dev pins](tests/application/results/20260930-heap-qualification-on-dev.json)
 supersedes the first run's weaker verdict and filename checks, and the
 [2026-10-01 record](tests/application/results/20261001-heap-three-arms.json)

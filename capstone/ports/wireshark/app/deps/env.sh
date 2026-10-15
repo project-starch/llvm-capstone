@@ -13,18 +13,23 @@ export TS_LINKER_SCRIPT="$CAPSTONE_REPO_ROOT/capstone/my_first_domain/link.ld"
 
 # The key: the compiler (size and mtime of clang and the LLVM libraries it loads; a shared-libs
 # build keeps codegen in libLLVM*.so), every source the runtime is built from, and this file.
+_ts_sources=$(capstone_source_listing capstone/runtime capstone/ports/common/application) || return 1
 _ts_key=$( {
   printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-physical}"
   _b=$(readlink -f "$CAPSTONE_CLANG")
   { echo "$_b"; ldd "$_b" | awk '/=> \//{print $3}' | grep -E 'libLLVM|libclang' || true; } | xargs stat -L -c '%n %s %Y'
   cat "$_ts_musl_port"/runtime/*.c "$_ts_musl_port"/runtime/*.S "$_ts_musl_port/runtime/libc_overrides.list" \
       "$TS_DEPS_DIR/capstone-cc" "$TS_DEPS_DIR/env.sh"
-  # git ls-files, not rg. A script does not see an interactive rg: on apollo `rg` is "command not
-  # found", the listing is empty, and the key silently left out all 163 runtime and SDK sources,
-  # so a change there reused the old runtime (2026-10-01).
-  (cd "$CAPSTONE_REPO_ROOT" && git ls-files capstone/runtime capstone/ports/common/application) |
-    sort | while IFS= read -r path; do cat "$CAPSTONE_REPO_ROOT/$path"; done
+  # capstone_source_listing, not a bare git ls-files. The 2026-10-01 note below this line
+  # recorded the same failure from the other direction: `rg` was "command not found", the
+  # listing was empty, and the key silently left out all 163 runtime and SDK sources, so a
+  # change there reused the old runtime. Swapping the tool did not stop an empty listing
+  # being accepted; the helper fails instead, and falls back to find outside a git
+  # repository. Resolved before the digest, because a failure inside it would be invisible.
+  printf '%s\n' "$_ts_sources" | while IFS= read -r path; do cat "$CAPSTONE_REPO_ROOT/$path"; done
   cat "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh"
+  cat "$_ts_musl_port"/musl-patches/*.patch
+  find "$_ts_musl_port/arch-capstone64" -type f -print0 | sort -z | xargs -0 cat
 } | sha256sum | cut -c1-16)
 
 # One libc and one runtime per key, never rebuilt in place: a build that sourced this file keeps

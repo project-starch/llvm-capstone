@@ -39,7 +39,7 @@ import appvm  # noqa: E402
 import virtualvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
-HEAP = {"app-level0": "level0", "app-sublet": "sublet",
+HEAP = {"app-level0": "level0",
         "virtual-mallocng": "virtual-mallocng"}
 
 

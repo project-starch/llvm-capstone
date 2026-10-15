@@ -17,18 +17,8 @@ HERE = Path(__file__).resolve().parent
 ARMS = ('capstone', 'capstone-sublet', 'cheribsd-revocation-on', 'cheribsd-revocation-off')
 COMPARISONS = {
     'cheribsd': ARMS,
-    'nested-poisoncap': ('capstone', 'capstone-sublet', 'poisoncap-spatial', 'poisoncap-temporal'),
 }
 ARM_PLATFORMS = {arm: arm.split('-')[0] for group in COMPARISONS.values() for arm in group}
-POISONCAP_GATE = ('PoisonCap application execution is not yet qualified for this workload: require matched '
-                 'allocator boundaries, observed inner policy, quarantine-path accounting, '
-                 'and pinned kernel/libc/SDK identities. Component replays do not qualify.')
-POISONCAP_ADAPTERS = {
-    # A new application enters only after its shared runner checks the named
-    # inner policy and its build manifests identify the real nested adapter.
-    'mruby': dict(boundary='mruby-gc', capstone_observer='gc_gaps',
-                  poison_build='nested_gc'),
-}
 
 
 def arms(plan):
@@ -63,11 +53,11 @@ def write_new(path, value):
         stream.write('\n')
 
 
-def make_plan(catalog, profile, suites, repeats, seed, matrix=None, comparison='cheribsd'):
-    if profile not in ('nested', 'outer-malloc') or repeats < 1:
-        raise ValueError('explicit profile and positive repetitions required')
-    if comparison not in COMPARISONS or (comparison == 'nested-poisoncap' and profile != 'nested'):
-        raise ValueError('PoisonCap comparison requires the nested profile')
+def make_plan(catalog, suites, repeats, seed, matrix=None, comparison='cheribsd'):
+    if repeats < 1:
+        raise ValueError('positive repetitions required')
+    if comparison not in COMPARISONS:
+        raise ValueError('unknown comparison')
     selected_arms = COMPARISONS[comparison]
     guests = tuple(dict.fromkeys(platform(a) for a in selected_arms))
     known = {s['id']: s for s in catalog['suites']}
@@ -101,7 +91,7 @@ def make_plan(catalog, profile, suites, repeats, seed, matrix=None, comparison='
             for cell in block:
                 cell['id'] = identity(cell)[:20]
                 cells.append(cell)
-    result = dict(schema_version=1, profile=profile, seed=seed, repeats=repeats,
+    result = dict(schema_version=1, seed=seed, repeats=repeats,
                   catalog_sha256=identity(catalog), workloads=workloads, cells=cells)
     if comparison != 'cheribsd':
         result.update(schema_version=2, comparison=comparison)
@@ -117,8 +107,6 @@ def check_plan(plan):
 
 def qualified_points(plan, key, binding):
     """Check four artifacts as one comparison, never qualify just the winner."""
-    if plan.get('comparison', 'cheribsd') == 'nested-poisoncap':
-        return qualified_poisoncap_points(plan, key, binding)
     spec = plan['workloads'][key]
     suite = spec['suite']
     if binding['source'] != suite['source']:
@@ -127,8 +115,8 @@ def qualified_points(plan, key, binding):
         raise ValueError('benchmark source must be pinned before qualification')
     if binding['application_version'] != spec['application']['version']:
         raise ValueError('application version mismatch')
-    if binding['profile'] != plan['profile'] or set(binding['arms']) != set(ARMS):
-        raise ValueError('all four arms of the same profile are required')
+    if set(binding['arms']) != set(ARMS):
+        raise ValueError('all four arms are required')
     if binding['parameters'] != spec['parameters'] or not binding['adaptation']:
         raise ValueError('work parameters must match the plan; adaptation description required')
     if not re.fullmatch('[0-9a-f]{64}', binding['oracle_reference_sha256']):
@@ -161,9 +149,8 @@ def qualified_points(plan, key, binding):
             raise ValueError('point names another application')
         point.update(arm=arm, allocations=True, **oracle)
         if platform(arm) == 'capstone':
-            expected_heap = 'sublet' if arm == 'capstone-sublet' and plan['profile'] == 'outer-malloc' else 'level0'
-            expected_nested = suite['application'] if arm == 'capstone-sublet' and plan['profile'] == 'nested' else 'none'
-            if (build['heap'], build['nested']) != (expected_heap, expected_nested):
+            expected_nested = suite['application'] if arm == 'capstone-sublet' else 'none'
+            if (build['heap'], build['nested']) != ('level0', expected_nested):
                 raise ValueError('outer heap / internal allocator scope does not match the arm')
             point['image'] = item['binary']
         else:
@@ -184,108 +171,6 @@ def qualified_points(plan, key, binding):
     return points
 
 
-def qualified_poisoncap_points(plan, key, binding):
-    """Admit a real nested adapter and a binary oracle into both shared runners."""
-    if binding.get('comparison') != 'nested-poisoncap':
-        raise ValueError(POISONCAP_GATE)
-    spec = plan['workloads'][key]
-    suite = spec['suite']
-    app = suite['application']
-    adapter = POISONCAP_ADAPTERS.get(app)
-    if adapter is None or binding.get('nested_allocator') != adapter['boundary']:
-        raise ValueError('no qualified shared-runner adapter for the named boundary')
-    selected = COMPARISONS['nested-poisoncap']
-    if (binding['source'] != suite['source'] or
-            binding['application_version'] != spec['application']['version'] or
-            binding['profile'] != 'nested' or binding['parameters'] != spec['parameters'] or
-            not binding['adaptation'] or set(binding['arms']) != set(selected)):
-        raise ValueError('PoisonCap binding differs from the planned source, work or arms')
-    oracle = binding['oracle']
-    reference = Path(binding['oracle_reference'])
-    expected = binding['oracle_reference_sha256']
-    if (not re.fullmatch('[0-9a-f]{64}', expected) or
-            file_hash(reference) != expected or
-            oracle.get('expected_stdout_sha256') != expected or
-            oracle.get('expected_stdout_bytes') != reference.stat().st_size or
-            not oracle.get('expected_phases')):
-        raise ValueError('binary output oracle differs from the preserved native output')
-    platform_files = binding.get('platform_files', {})
-    required_platform = {'capstone_qemu', 'capstone_kernel', 'poisoncap_qemu',
-                         'poisoncap_kernel', 'poisoncap_libc'}
-    if not required_platform <= platform_files.keys() or any(
-            not re.fullmatch('[0-9a-f]{64}', spec['sha256']) or
-            file_hash(spec['path']) != spec['sha256']
-            for spec in platform_files.values()):
-        raise ValueError('running QEMU/kernel/libc platform identity is not pinned')
-    points, manifests = {}, {}
-    for arm in selected:
-        item = binding['arms'][arm]
-        build = read(item['build_manifest'])
-        binary = item['binary']
-        binary_sha = file_hash(binary)
-        evidence = item['qualification_evidence']
-        if not isinstance(evidence, dict) or not {'path', 'sha256'} <= evidence.keys():
-            raise ValueError('qualification evidence needs a path and SHA-256')
-        evidence_path = Path(evidence['path'])
-        if not evidence_path.is_absolute():
-            evidence_path = HERE.parents[2] / evidence_path
-        if binary_sha != build['image_sha256'] or \
-                build.get('application', build.get('app')) != app or \
-                {role: file_hash(path) for role, path in item['inputs'].items()} != binding['input_sha256'] or \
-                not item['resources'] or \
-                file_hash(evidence_path) != evidence['sha256']:
-            raise ValueError('PoisonCap arm lacks pinned binary, common input or qualification')
-        point = copy.deepcopy(item['point'])
-        if point['application'] != app or not point.get('argv') or \
-                any(k.startswith(('_RUNTIME_', 'MALLOC_', 'EXP_CHERI_')) or
-                    k == 'MRB_GC_POISONCAP' for k in point['environment']):
-            raise ValueError('point changes application or allocator policy')
-        if any(point.get('files', {}).get(path) not in point['argv']
-               for path in item['inputs'].values()):
-            raise ValueError('point does not execute the pinned workload input')
-        point.update(arm=arm, **oracle)
-        if platform(arm) == 'capstone':
-            nested = app if arm == 'capstone-sublet' else 'none'
-            if (build.get('heap'), build.get('nested')) != ('level0', nested) or \
-                    not build.get(adapter['capstone_observer']):
-                raise ValueError('Capstone arm is not the observed nested GC build')
-            point.update(image=binary, gc_gaps=True)
-        else:
-            if build.get('platform') != 'poisoncap' or \
-                    build.get(adapter['poison_build']) != 'poisoncap' or \
-                    point.get('nested_allocator') != adapter['boundary'] or \
-                    point['files'].get(binary) != point['argv'][0] or \
-                    point.get('revocation', 1) != 1:
-                raise ValueError('PoisonCap point is not the qualified nested interpreter')
-            policy = build.get('nested_policy')
-            if policy not in (None, 'published-sqlite-thresholds-corrected-v1'):
-                raise ValueError('unknown compiled nested quarantine policy')
-            if point.get('nested_policy') not in (None, policy):
-                raise ValueError('point and compiled nested quarantine policy disagree')
-            if policy:
-                if not re.fullmatch('[0-9a-f]{64}', build.get('quarantine_policy_sha256', '')):
-                    raise ValueError('published-policy build lacks its policy source hash')
-                point['nested_policy'] = policy
-            point.update(revocation=1, expected_min_sweeps=(0 if policy else int(arm == 'poisoncap-temporal')))
-        point['study_artifact'] = dict(binary_sha256=binary_sha,
-            build_manifest_sha256=file_hash(item['build_manifest']),
-            platform_files_sha256=identity(platform_files),
-            resources=item['resources'], qualification_evidence=evidence)
-        points[arm], manifests[arm] = point, build
-    spatial, sublet, control, temporal = (points[arm] for arm in selected)
-    if any(spatial[k] != sublet[k] for k in ('argv', 'environment')) or \
-            any(control[k] != temporal[k] for k in ('argv', 'environment', 'files')) or \
-            any(control['study_artifact'][k] != temporal['study_artifact'][k]
-                for k in ('binary_sha256', 'build_manifest_sha256')) or \
-            control['revocation'] != temporal['revocation'] or \
-            control['expected_stdout_sha256'] != temporal['expected_stdout_sha256']:
-        raise ValueError('within-platform controls do not share work and artifacts')
-    if manifests['poisoncap-spatial']['image_sha256'] != \
-            manifests['poisoncap-temporal']['image_sha256']:
-        raise ValueError('PoisonCap modes must use one binary')
-    return points
-
-
 def attempts(plan, paths):
     known = {c['id']: c for c in plan['cells']}
     found = {}
@@ -302,7 +187,7 @@ def attempts(plan, paths):
             if row['point']['arm'] != known[key]['arm']:
                 raise ValueError('attempt arm disagrees with its planned cell')
             cell = known[key]
-            if any(meta[k] != cell[k] for k in ('workload', 'repetition')) or meta['profile'] != plan['profile']:
+            if any(meta[k] != cell[k] for k in ('workload', 'repetition')):
                 raise ValueError('attempt workload or repetition disagrees with its planned cell')
             previous = bindings.setdefault(cell['workload'], meta['binding_sha256'])
             if previous != meta['binding_sha256']:
@@ -319,8 +204,7 @@ def emit(plan, bindings, guest, rows, repeat=None):
         raise ValueError('repetition is outside the plan')
     for key in plan['workloads']:
         if key not in bindings:
-            blocked[key] = (POISONCAP_GATE if plan.get('comparison') == 'nested-poisoncap'
-                            else 'No qualified four-arm binding')
+            blocked[key] = 'No qualified four-arm binding'
             continue
         # Invalid supplied evidence is an error, never an unavailable benchmark.
         qualified[key] = qualified_points(plan, key, bindings[key])
@@ -332,7 +216,7 @@ def emit(plan, bindings, guest, rows, repeat=None):
         point = copy.deepcopy(qualified[cell['workload']][cell['arm']])
         point['id'] = 'study-' + cell['id']
         point['study'] = dict(plan_id=plan['plan_id'], cell_id=cell['id'],
-            workload=cell['workload'], repetition=cell['repetition'], profile=plan['profile'],
+            workload=cell['workload'], repetition=cell['repetition'],
             binding_sha256=identity(bindings[cell['workload']]))
         points.append(point)
     return points, blocked
@@ -366,9 +250,7 @@ def main():
     listing.add_argument('--catalog', type=Path, default=HERE/'catalog.json')
     planning = sub.add_parser('plan')
     planning.add_argument('--catalog', type=Path, default=HERE/'catalog.json')
-    planning.add_argument('--profile', choices=['nested', 'outer-malloc'], required=True)
-    planning.add_argument('--comparison', choices=COMPARISONS, default='cheribsd',
-                          help='PoisonCap cells require a qualified nested-adapter binding')
+    planning.add_argument('--comparison', choices=COMPARISONS, default='cheribsd')
     planning.add_argument('--suites', nargs='+', required=True)
     planning.add_argument('--repeat', type=int, default=3)
     planning.add_argument('--seed', type=int, default=1)
@@ -380,7 +262,7 @@ def main():
         cmd.add_argument('--bindings', type=Path, required=True)
         cmd.add_argument('--runs', type=Path, nargs='*', default=[])
         if name == 'points':
-            cmd.add_argument('--platform', choices=['capstone', 'cheribsd', 'poisoncap'], required=True)
+            cmd.add_argument('--platform', choices=['capstone', 'cheribsd'], required=True)
             cmd.add_argument('--repetition', type=int)
             cmd.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
@@ -389,7 +271,7 @@ def main():
             print(f"{suite['id']}: {len(suite['cases'])} cases; {suite['adaptation_status']}; {suite['kind']}")
         return
     if args.command == 'plan':
-        plan = make_plan(read(args.catalog), args.profile, args.suites, args.repeat, args.seed,
+        plan = make_plan(read(args.catalog), args.suites, args.repeat, args.seed,
                          read(args.matrix) if args.matrix else None, args.comparison)
         write_new(args.out, plan)
         print(f"{len(plan['cells'])} planned attempts; plan {plan['plan_id']}")

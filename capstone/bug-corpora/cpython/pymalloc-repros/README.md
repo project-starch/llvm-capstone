@@ -2,20 +2,19 @@
 
 Consumer-side temporal-safety defects in CPython whose memory comes from
 pymalloc, so that no `free()` reaches `malloc` and a malloc-level tool has no
-event to see. One defect per boot, a paired spatial/Sublet arm in a domain, the
-fault PC checked against a labelled probe. The PostgreSQL memory-context corpus
-on its own branch is built the same way and was the template; it is not in this
-tree yet, so nothing here depends on it.
+event to see. Each defect is one program around the real `Objects/obmalloc.c`
+(ports/cpython/pymalloc), and a fault counts only at its labelled probe.
 
-The same twenty sequences also build for CheriBSD against the port's PoisonCap
-adapter, with the same pairing and the same labelled probe — see
-[the PoisonCap section](#the-same-twenty-on-poisoncapcheribsd) below. The
-results recorded here are the Capstone ones.
+The arms: `virtual-malloc` (pymalloc stock on virtual Capstone), `virtual-nested-pools`
+(the same with the port's patch 0003: every block a child lifetime of its
+arena, `CDERIVE`/`CREVOKE`) and `cheribsd-revocation` (stock CheriBSD, libc
+revocation as shipped).
 
 **Every one of the 20 reachable defects has a driver.** That is the whole
 reachable set at the pin, not a sample — the inventory, the triage and the three
 corrections that took it from 23 to 20 are in
-`docs/ref/cpython-pymalloc-defects.md`. Results: `results/20260919-qemu-20/` — **40/40 arms**.
+`docs/ref/cpython-pymalloc-defects.md`. Each arm's verdict names its bundle
+(`results/2026-10-10-patch0003/` for the two virtual arms).
 
 ## The twenty
 
@@ -101,23 +100,19 @@ That is the corpus's thesis in the project's own build documentation.
         case.c           the sequence; one program per defect
         case.json        machine-readable claims: layer, size, shape, arms, oracles
         PROVENANCE.md    the upstream hunk, quoted; what is real and what is reduced
-    shared/corpus.h      probes, markers, fault handler; what every case includes
+    shared/corpus.h      probes; what every case includes
     shared/build-cases.sh  builds one program per case, for either target
-    runners/<target>/    one directory per target
-        README.md            how to run the corpus there
-        run-defects.py       the runner and its oracles
-    tests/               everything that can say FAIL
-        cheribsd/            the CheriBSD oracles' own negative controls
-    platform/            the libc fix the CheriBSD target needs, and a script
-                         that applies it, rebuilds and reverts
+    controls/            the use-after-free control the virtual arms run first
+    runners/virtual/     the virtual Capstone runner and its manual
+    runners/cheribsd/    the stock CheriBSD revocation run
+    observe/supervise.c  the CheriBSD supervisor that observes a case's fault
     tools/               the survey scripts behind the inventory's numbers
     results/<stamp>/     matrix.tsv and input hashes; never raw serial captures
 
 One rule decides where a file goes. A case directory is **self-contained**: the
 claim, its provenance and its sequence. `shared/` is what every case includes
 and the script that builds them. Each target owns a directory under `runners/`
-with its runner and its manual. `tests/` is what can say FAIL; `tools/` is what produces the
-inventory's numbers.
+with its runner and its manual; `tools/` is what produces the inventory's numbers.
 
 **One program per defect.** A `case.c` includes `shared/corpus.h` and writes
 its sequence inside `PYC_CASE(N)`; the macro supplies `pym_replay`, so the file
@@ -135,46 +130,33 @@ it was written: the table has ten rows and the prose said nine. Run it after
 touching anything here:
 
     python3 ../../tools/check-corpus.py
-    python3 -m unittest discover -s tests -p 'test_*.py'
 
 ## Running it
 
-One source, one set of twenty cases, three targets. Each target's build and run
-commands, its oracle and its negative control are in its own manual:
+One source, one set of twenty cases, two targets:
 
 | target | arms | manual |
 |---|---|---|
-| Capstone domain | `spatial` / `sublet` | [`runners/capstone-domain/README.md`](runners/capstone-domain/README.md) |
 | virtual Capstone (the board's columns 2 and 3) | `virtual-malloc` / `virtual-nested-pools` | [`runners/virtual/README.md`](runners/virtual/README.md) |
-| CheriBSD purecap | mode `0` / `1`, or `spatial` / `protected` | [`runners/cheribsd/README.md`](runners/cheribsd/README.md) |
+| stock CheriBSD purecap (the board's CHERI column) | `cheribsd-revocation` | [`runners/cheribsd/README.md`](runners/cheribsd/README.md) |
 
 All build from the same `case.c` files.
-After touching anything here, run the checks:
 
-    python3 ../../tools/check-corpus.py
-    python3 -m unittest discover -s tests -p 'test_*.py'
+## History
 
-## The same twenty on PoisonCap/CheriBSD
-
-The same `shared/defects.c`, and the same pinned `Objects/obmalloc.c`, also
-build as an ordinary CheriBSD purecap program against the port's
-[PoisonCap adapter](../../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
-No case changes: the allocation sequences, the sizes and every `CHECK` are
-shared between the two targets, and only the probe instructions, the markers
-and the fault reporting are `#ifdef PYMALLOC_POISONCAP`-selected. A protected
-arm passes there on `SIGPROT` with `si_code` 2 at the labelled probe, where the
-Capstone `sublet` arm passes on a fault with its cause.
+Until 2026-10-10 the corpus also ran a `spatial`/`sublet` pair in a physical Capstone domain
+(`results/20260919-qemu-20`) and a PoisonCap pair on CheriBSD (`poisoncap-spatial`,
+`poisoncap-protected`, `results/20260919-poisoncap` in the port). Both used the port's lifetime
+adapter, which `CDERIVE`/`CREVOKE` made unnecessary; their targets and runners are removed and
+their results stay as recorded.
 
 ## What is NOT here
 
-- **No native arm.** The PostgreSQL corpus pairs its domain arms with an x86
+- **No native arm.** The PostgreSQL corpus pairs its arms with an x86
   `before.c`; this one does not. A native arm must claim nothing from ASan's
   silence — that claim is tautological, because the memory never reached
   `malloc` — so it needs a Valgrind run to say anything, and Valgrind is not
   installed on this host.
-- **No containment result.** Every Sublet row reads `delivered: false`: this QEMU
-  halts the domain rather than delivering the fault. The fault is raised; the VM
-  surviving it is not shown here.
 - **Nothing above pymalloc.** The two free-list cases and the one `PyArena` case
   need ports that do not exist. `gh-126703` is in the free-list layer despite
   sitting in the pymalloc bucket, and is excluded here for that reason.

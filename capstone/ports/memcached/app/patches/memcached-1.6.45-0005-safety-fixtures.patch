@@ -13,6 +13,14 @@ build copies it beside the file) and answers `mc_capstone_fixture <n>` by runnin
 worker that took the connection, which ends the process with the fixture's mark or faults. The
 oracle's and the marker's images are built without it.
 
+One fixture also reverses an upstream fix at run time: in slabs_mover.c, with mcapp_reverse_a836eab
+set (fixture 22 only), an item that is allocated but not yet linked is taken for cleared, as before
+a836eab, instead of MOVE_BUSY_FLOATING. Unset, the mover is upstream's.
+
+A second reversal (fixture 24 only, mcapp_reverse_c0e5a99): in the expired-item branch an expired
+CHUNKED header is freed header-only, as before c0e5a99, instead of taking the full chunked-free
+path, so its data chunks are orphaned with a dangling head. Unset, the mover is upstream's.
+
 --- a/proto_text.c
 +++ b/proto_text.c
 @@ -19,6 +19,12 @@
@@ -40,3 +48,54 @@ oracle's and the marker's images are built without it.
      int ret = process_request(&pr, command, cmdlen);
      c->resp->noreply = pr.noreply;
      if (settings.verbose > 1) {
+--- a/slabs_mover.c
++++ b/slabs_mover.c
+@@ -269,6 +269,13 @@
+          * lock the entire structure. If a chunk has ITEM_CHUNK flag, its
+          * head cannot be slabbed, so the normal routine is safe. */
+         it = a->ch->head;
++#ifdef MC_CAPSTONE_SAFETY_FIXTURES
++        extern volatile int mcapp_reverse_c0e5a99;
++        extern volatile unsigned long mcapp_c0e5a99_orphan_head;
++        extern volatile unsigned mcapp_c0e5a99_orphan_read;
++        if (mcapp_reverse_c0e5a99 && __builtin_capstone_cap_get_cursor((void *)it) == mcapp_c0e5a99_orphan_head)
++            mcapp_c0e5a99_orphan_read++;
++#endif
+         assert(it->it_flags & ITEM_CHUNKED);
+     }
+ 
+@@ -322,6 +329,15 @@
+             /* See above comment. No ITEM_SLABBED or ITEM_LINKED. Mark
+              * busy and wait for item to complete its upload. */
+             status = MOVE_BUSY_FLOATING;
++#ifdef MC_CAPSTONE_SAFETY_FIXTURES
++            {
++                /* fixture 22 reverses a836eab: before it, this item fell through as MOVE_PASS
++                   and its page was cleared under its holder */
++                extern volatile int mcapp_reverse_a836eab;
++                if (mcapp_reverse_a836eab)
++                    status = MOVE_PASS;
++            }
++#endif
+         }
+     }
+ 
+@@ -463,7 +479,18 @@
+                     || item_is_flushed(it)) {
+                     /* Expired, don't save. */
+                     STORAGE_delete(t->storage, it);
++#ifdef MC_CAPSTONE_SAFETY_FIXTURES
++                    /* fixture 24 reverses c0e5a99: before it, an expired CHUNKED header took this
++                       header-only free branch, orphaning its data chunks with a dangling head */
++                    extern volatile int mcapp_reverse_c0e5a99;
++                    extern volatile unsigned long mcapp_c0e5a99_orphan_head;
++                    extern volatile unsigned mcapp_c0e5a99_header_only;
++                    if (!ch && ((it->it_flags & ITEM_CHUNKED) == 0 || mcapp_reverse_c0e5a99)) {
++                        if (mcapp_reverse_c0e5a99 && __builtin_capstone_cap_get_cursor((void *)it) == mcapp_c0e5a99_orphan_head)
++                            mcapp_c0e5a99_header_only++;
++#else
+                     if (!ch && (it->it_flags & ITEM_CHUNKED) == 0) {
++#endif
+                         do_item_unlink(it, cbarg.hv);
+                         if (it->refcount == 1) {
+                             it->it_flags = ITEM_SLABBED|ITEM_FETCHED;

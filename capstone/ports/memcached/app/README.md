@@ -9,8 +9,9 @@ allocator seam under `../allocators`.
 The original virtual port started from `memcached-app` at `c839e7294e23`.
 This review slice preserves current dev’s additional slab/cache adapters,
 corpus fixtures and pre-registered safety predictions.
-The physical build/oracle/safety recipes and their three heap arms remain
-available. The virtual recipes use the common revoking heap and actual musl
+The physical build/oracle/safety recipes and their `level0` and `shrink` heap
+arms remain available. The physical `sublet` arm was removed on 2026-10-11 with
+the physical Sublet heap; its recorded results stay in `results/`. The virtual recipes use the common revoking heap and actual musl
 pthread/TLS/mutex/condition support. They need no new processor instruction,
 kernel module change, Linux-core patch or firmware change.
 
@@ -22,6 +23,12 @@ compiler configured. Use a fresh directory under `/tmp/capstone`:
 ```sh
 bash capstone/ports/memcached/app/host/build-virtual.sh /tmp/capstone/memcached-virtual
 ```
+
+The shared entry for a virtual build is
+[`ports/common/application/build-virtual.sh`](../../common/application/README.md)
+(`build-virtual.sh memcached <fresh dir>`), which runs this recipe. This
+port's own recipe stays the source of truth for what gets built, and still
+takes its own variables directly.
 
 This rebuilds musl/runtime, libevent, the server, native controls, worker-marker
 and safety variants, and the pthread contract. `CAPSTONE_APPLICATION_PROFILE`
@@ -54,8 +61,26 @@ checks on the extracted dev-based stack. It includes all 20 fixtures with a
 10. Normal, safety and worker-marker servers and native controls were built
 afresh; the Capstone libevent archives were reused, with their hashes and
 build scope recorded. Upstream libevent tests were not rerun.
-The virtual profile here uses the outer revoking heap; dev’s physical
-`slabsublet` arms remain separate and retain their existing source and tests.
+The virtual profile here uses the outer revoking heap.
+
+### Sublet inside the slabs and the object cache
+
+Patch 0006 (`-DMC_CAPSTONE_SUBLET`) closes the nested-allocator gap with two
+instructions in memcached's own allocators: `slabs.c` and `cache.c` hand out
+every chunk and object as a CDERIVE child lifetime, and `slabs_free` and
+`cache_free` revoke it (CREVOKE). There is no adapter. The patch header says
+how the slab mover, chunked items and page moves are covered and what it
+gives up. `host/build-sublet.sh` (run by `build-virtual.sh`) builds its oracle
+and safety images under `$MC_WORK/sublet/`. Its gate checks both allocator
+objects for the two instructions, then recompiles those objects without the
+inner-protection define and requires neither instruction. Whole-image counts
+cannot distinguish the variants: the shared outer mallocng uses both operations
+too. `run-virtual.py --arm sublet` runs the
+same gate on them and judges the fixtures by the `lifetimes` predictions in
+`host/safety-expect.txt`, registered before the first build. The physical
+`slabsublet` arms, the allocators port's ledger inside memcached on the Sublet
+heap, were removed on 2026-10-11 with that heap's lend API; their predictions
+stay in `host/safety-expect.txt` as the record.
 
 
 The [historical virtual result](results/virtual-result.json) passed **53/53 checks** and

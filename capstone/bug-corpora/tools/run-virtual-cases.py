@@ -28,8 +28,8 @@ free), and the judge scores no silence from a run whose controls did otherwise.
 
 WHAT THE ARM IS is read from the SDK and the kit, never from the label: the SDK's CMakeCache must
 say CAPSTONE_APPLICATION_VIRTUAL=ON (appvm.sdk_identity), the corpus.json must map the arm to a
-capstone-virtual configuration, and the run must be on a kit. A physical SDK or VM is refused --
-run-capstone-domain.py checks only the heap, and a virtual SDK would pass it as `spatial`.
+capstone-virtual configuration, and the run must be on a kit. A physical SDK or VM is refused, as
+run-capstone-domain.py refuses a virtual SDK.
 
 PREBUILT MODE (--prebuilt BUILD --prebuilt-controls BUILD), for the nested corpora: a case there is
 not a free-standing case.c but a program linked against its port's allocator library, built by the
@@ -186,7 +186,19 @@ def main():
         if b.returncode:
             print(f"CONTROL-FAILED controls build: {b.stderr[:300]}", file=sys.stderr)
             return 75
-    plan = [(f"control-{n}", controls_img, [n]) for n in spec["controls"]]
+    carve_controls = {"live-carve", "uaf-carve"} if config == "virtual-ffmpeg-carve" else set()
+    plan = [(f"control-{n}", controls_img, [n]) for n in spec["controls"] if n not in carve_controls]
+    if carve_controls:
+        carve_img = bindir / "carve-controls.dom"
+        b = subprocess.run([str(cc), "-O0", "-DFFC_SUBLET_CARVE", f"-I{shared}",
+                            f"-I{REPO / 'capstone/runtime/include'}",
+                            str(shared / "carve-recarve-control.c"), str(shared / "driver.c"),
+                            "-o", str(carve_img)], capture_output=True, text=True)
+        if b.returncode:
+            print(f"CONTROL-FAILED carve controls build: {b.stderr[:300]}", file=sys.stderr)
+            return 75
+        plan += [("control-live-carve", carve_img, ["fixed", "98"]),
+                 ("control-uaf-carve", carve_img, ["buggy", "98"])]
     for d in found:
         if d.name in built:
             n = str(int(d.name[:2]))
@@ -207,7 +219,13 @@ def main():
             controls.append(v.Control(name, "none", "the control did not run"))
             continue
         text, result = runs[f"control-{name}"]
-        controls.append(v.Control(name, observe_control(name, text, result),
+        seen = observe_control(name, text, result)
+        if name in carve_controls:
+            fault = v.domain_fault(result.get("fault") or "", v.Symbols(a.llvm_bin, carve_img))
+            seen = ("fault" if fault and fault.symbol and PROBE.search(fault.symbol) else
+                    "complete" if result.get("kind") == "exit" and result.get("value") == 0
+                    and "VERDICT FIXED" in text else "none")
+        controls.append(v.Control(name, seen,
                                   evidence_line(result, text)))
         print(f"  control {name:<14} {controls[-1].observed:<9} (expected {spec['controls'][name]})", flush=True)
 
@@ -262,42 +280,57 @@ def wmem_probe(case_dir):
 
 
 HOSTED = {
-    # wireshark/wmem-repros on the wmem port (ports/wireshark/wmem, preset capstone-application).
-    #   virtual-malloc: stock wmem, g_malloc/g_free = virtual mallocng (WM_LIBC_SYSTEM), mode 0; the
-    #     buggy run is the fix differential (`0 N buggy`), whose temporal cases ASSERT the stale chunk
-    #     was reoccupied before reading it -- the build the CheriBSD libc arm ran.
-    #   virtual-nested-pools: the Sublet region and chunk layers over a payload the virtual heap lends
-    #     linear (WM_SUBLET, shared/driver-virtual.c), mode 1; the buggy run is the protected sequence
-    #     (`1 N`), as the physical sublet-chunks arm ran it, with no observation added.
-    # Both: the fixed run is the differential (`MODE N fixed`): VERDICT FIXED and exit 0.
+    # wireshark/wmem-repros on the wmem port (ports/wireshark/wmem, preset capstone-application),
+    # g_malloc/g_free being virtual mallocng in both arms.
+    #   virtual-malloc: wmem as released (WM_SUBLET=OFF); the buggy run is the fix differential
+    #     (`0 N buggy`), whose temporal cases ASSERT the stale chunk was reoccupied before reading it.
+    #   virtual-nested-pools: the port's patch 0001 (WM_SUBLET=ON), every block and block_fast object
+    #     a CDERIVE child of its block, revoked by CREVOKE; the buggy run is the plain sequence (`0 N`).
+    # Both: the fixed run is the differential (`0 N fixed`): VERDICT FIXED and exit 0.
     "wmem-repros": dict(
-        cache={"virtual-malloc": {"WM_LIBC_SYSTEM": "ON", "WM_CHUNKS": "OFF", "WM_SUBLET": "OFF"},
-               "virtual-nested-pools": {"WM_SUBLET": "ON", "WM_CHUNKS": "ON", "WM_LIBC_SYSTEM": "OFF"}},
-        mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
+        cache={"virtual-malloc": {"WM_SUBLET": "OFF"}, "virtual-nested-pools": {"WM_SUBLET": "ON"}},
+        mode={"virtual-malloc": "0", "virtual-nested-pools": "0"},
         buggy={"virtual-malloc": ["buggy"], "virtual-nested-pools": []},
         probe=wmem_probe,
         ready="WM_DEFECT case={n} ready",
         done="WM_DEFECT case={n} mode={mode} completed",
-        controls_dir="controls/virtual",
-        control_names={90: "jumbo-reset-90", 91: "chunk-free-91"},
+        controls_dir="controls",
+        control_names={0: "uaf-chunk", 1: "uaf-jumbo", 2: "bounds-chunk"},
     ),
     # memcached/allocator-repros on the allocators port (ports/memcached/allocators), built by the
     # corpus's own shared/build-cases.sh capstone-application, whose programs print the case.c
     # drivers' lines (`case=N arm=...`, VERDICT), so observe()/fixed_ok() read them.
     #   virtual-malloc: the stock ledger, every slab page and cache.c object one virtual-mallocng
     #     object (MCP_STOCK_MALLOC, as the ASan arm), `fixed|buggy N`.
-    #   virtual-nested-pools: the shared ledger on the Sublet authority over a payload the virtual
-    #     heap lends linear (MCP_SUBLET, shared/driver-virtual.c), mode 1: `fixed|buggy N 1`.
+    #   virtual-nested-pools: slabs.c and cache.c with the application's Sublet patch 0006 and no
+    #     ledger (MCP_SUBLET, shared/driver-virtual.c): `fixed|buggy N`.
     "allocator-repros": dict(
         format="case-line",
         cache={"virtual-malloc": {"MCP_STOCK_MALLOC": "ON", "MCP_SUBLET": "OFF"},
                "virtual-nested-pools": {"MCP_SUBLET": "ON", "MCP_STOCK_MALLOC": "OFF"}},
         cache_dir="work/port",
         program="bin/defect-{nn}",
-        extra={"virtual-malloc": [], "virtual-nested-pools": ["1"]},
+        extra={"virtual-malloc": [], "virtual-nested-pools": []},
         mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
         controls_dir="controls/virtual",
         control_names={90: "chunk-free-90"},
+    ),
+    # ffmpeg/pool-repros on the buffer-pool port (ports/ffmpeg/buffer-pool), built by the corpus's
+    # own shared/build-cases.sh capstone-application, whose programs print the case.c driver's lines
+    # (`case=N arm=...`, VERDICT), so observe()/fixed_ok() read them.
+    #   virtual-malloc: the stock pools, every entry one virtual-mallocng object, `fixed|buggy N`.
+    #   virtual-nested-pools: the pools with patch 0003 (FFPOOL_SUBLET), every hand-out a child
+    #     lifetime of its entry, revoked at the return: `fixed|buggy N`.
+    "pool-repros": dict(
+        format="case-line",
+        cache={"virtual-malloc": {"FFPOOL_SUBLET": "OFF"},
+               "virtual-nested-pools": {"FFPOOL_SUBLET": "ON"}},
+        cache_dir="work/port",
+        program="bin/defect-{nn}",
+        extra={"virtual-malloc": [], "virtual-nested-pools": []},
+        mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
+        controls_dir="controls/virtual",
+        control_names={90: "pool-return-90"},
     ),
 }
 
@@ -340,8 +373,8 @@ def cache_says(build, want, sdk):
 
 
 def label_addresses(llvm_bin, image, names):
-    """Link addresses of the named symbols, zero-size labels included (wm_widen_probe is a label
-    inside a static function, which Symbols.lookup would report as that function instead)."""
+    """Link addresses of the named symbols, zero-size labels included (a fault-site label inside a
+    static function, which Symbols.lookup would report as that function instead)."""
     if not names:
         return {}
     out = subprocess.run([str(Path(llvm_bin) / "llvm-nm"), "--defined-only", str(image)],
@@ -551,7 +584,7 @@ def run_hosted(a, corpus):
     record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", a.arm, rows, {
         "configuration": config,
         "build": {"sdk_identity": [heap, profile], "prebuilt": local_path(str(a.prebuilt)),
-                  "cache": {k: (m.group(1) if m else None) for k, m in opts.items()},
+                  "cache": {k: (local_path(m.group(1)) if m else None) for k, m in opts.items()},
                   "argv": {"fixed": run_argv("fixed", "N"), "buggy": run_argv("buggy", "N")},
                   "controls": {c: v.sha256(prog) for c, (_, prog) in port_controls.items()}},
         "platform": platform})
