@@ -77,8 +77,9 @@ names, no FPGA token, never push the paper.
   is genuinely one line.
 - **Shared branches receive only squashed, logically complete commits.** A shared branch is `dev`
   here, and in every other repo the branch other lanes build on. Today that means `capstone-bootstrap`
-  in `caplifive-buildroot` and `caplifive-system`, and `c128-qemu-merge` in `capstone-qemu`; for any
-  other submodule, the branch the parent's pointer tracks.
+  in `caplifive-buildroot` and `caplifive-system`, and `virtual-capstone` in `capstone-qemu` (dev's pointer
+  has tracked it since 2026-10-08; `c128-qemu-merge` stopped at 2026-10-01); for any other submodule, the
+  branch the parent's pointer tracks.
   - Work on your own branch, named for the lane or the task (no prefix scheme), and push it as often as you like.
     That is what "push at stable points" means.
   - Land on the shared branch once per logical change, as ONE commit:
