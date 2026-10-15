@@ -94,6 +94,24 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=28 pc=0x3f91811388 in ffc_write_probe_u32; by probe: the fault is at the labelled probe ffc_write_probe_u32",
       "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
+    },
+    "silicon-carve-bounds": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), -DFFC_CARVE_BOUNDS over level0, every carve SHRINK-narrowed to its region (tools/arms.json silicon-ffmpeg-carve-bounds). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls, carve control 99 included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane e4f15d4b7a32, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac101228 in ffc_write_probe_u32; by probe: the fault is at the labelled probe ffc_write_probe_u32",
+      "verdict_from": "results/2026-10-16-silicon/silicon-carve-bounds"
+    },
+    "silicon-carve-sublet": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), -DFFC_SUBLET_CARVE over the silicon-level0-lifetimes heap, every carve a CDERIVE child of a group derived over its block (rounded outward by the RTL, not guaranteed exact), CREVOKEd on re-carve (tools/arms.json silicon-ffmpeg-carve-sublet). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls, carve control 99 included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane e4f15d4b7a32, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac101220 in ffc_write_probe_u32; by probe: the fault is at the labelled probe ffc_write_probe_u32",
+      "verdict_from": "results/2026-10-16-silicon/silicon-carve-sublet"
+    },
+    "silicon-level0": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), level0 as it ships with no carve narrowing (tools/arms.json silicon-ffmpeg-carve-level0). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls, carve control 99 included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane e4f15d4b7a32, before the boot): MISSED.",
+      "verdict": "MISSED",
+      "verdict_note": "reached (case=1 arm=buggy carve=pointer) and completed with no fault; silicon; buggy run end kind=exit value=0",
+      "verdict_from": "results/2026-10-16-silicon/silicon-level0"
     }
   },
   "status": "built 2026-10-09 and measured the same day on every arm, each against its pre-registration (see arms and results/). spatial measured 2026-10-09 (results/2026-10-09-capstone-spatial/): NOT CAUGHT. sublet measured 2026-10-09 (results/2026-10-09-capstone-sublet/): NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-capstone-carve-bounds/): CAUGHT. Native differential and ASan recorded 2026-10-09 (results/2026-10-09-native-*/): two-sided; ASan NOT CAUGHT. cheribsd-revocation measured 2026-10-09 (results/2026-10-09-cheribsd-revocation/): NOT CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT.",

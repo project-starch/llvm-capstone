@@ -133,6 +133,8 @@ ARM_ORACLES = {
     "silicon-subobject": {"oracle"},
     "silicon-pool-stock": {"oracle"},
     "silicon-pool-sublet": {"oracle"},
+    "silicon-carve-bounds": {"oracle"},
+    "silicon-carve-sublet": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),

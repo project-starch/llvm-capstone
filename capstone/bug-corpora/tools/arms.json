@@ -352,6 +352,61 @@
         "uaf",
         "pool-return-90"
       ]
+    },
+    "silicon-ffmpeg-carve-level0": {
+      "target": "capstone-silicon",
+      "summary": "FFmpeg's carved-repros on silicon over level0 as it ships, with no carve narrowing: a crossing that stays inside the carved block is invisible to the block's own bound. The carve control (shared/carve-control.c, case 99: one byte past a 16-byte carve inside its 64-byte block) completes",
+      "mechanism": "per-object bounds in level0; carves unbounded inside their block, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "subobj": "complete",
+        "uaf": "complete",
+        "carve-99": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "carve-99"
+      ]
+    },
+    "silicon-ffmpeg-carve-bounds": {
+      "target": "capstone-silicon",
+      "summary": "the carved corpus built with -DFFC_CARVE_BOUNDS over level0: every carve is a capability narrowed to exactly its region (__builtin_capstone_cap_shrink), so a crossing out of the region faults; bounds only, no lifetimes. The carve control faults",
+      "mechanism": "SHRINK-narrowed carves over level0, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "subobj": "complete",
+        "uaf": "complete",
+        "carve-99": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "carve-99"
+      ]
+    },
+    "silicon-ffmpeg-carve-sublet": {
+      "target": "capstone-silicon",
+      "summary": "the carved corpus built with -DFFC_SUBLET_CARVE over the silicon-level0-lifetimes heap: the driver CDERIVEs a group over each block and every carve is a CDERIVE child of that group, CREVOKEd on re-carve. The RTL rounds a CDERIVE child outward rather than refusing it, so a carve is not guaranteed exact (case 00's group is inexact). The carve control faults. The re-carve control (shared/carve-recarve-control.c, case 98) completes when the region is used live (live-carve) and faults when used after its re-carve (uaf-carve)",
+      "mechanism": "a CDERIVE child per carve with CREVOKE on re-carve, over per-object lifetimes, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "subobj": "complete",
+        "uaf": "fault",
+        "carve-99": "fault",
+        "live-carve": "complete",
+        "uaf-carve": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "carve-99",
+        "live-carve",
+        "uaf-carve"
+      ]
     }
   }
 }

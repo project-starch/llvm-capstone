@@ -3,11 +3,14 @@
 
   silicon-verdicts.py --arm ARM --configuration CONFIG --matrix board-matrix.json --transcript board-corpus.txt
                       --images DIR --llvm-bin DIR --stamp STAMP --platform KEY=VALUE... [--extra KEY=VALUE...]
-                      [--prefix ARM:] [--row-control ROW=CONTROL...]
+                      [--prefix ARM:] [--row-control ROW[:fixed|:buggy]=CONTROL...] [--skip-row ROW...]
 
 --prefix is for a boot that ran several arms: its blocks are named `<arm>:<run>`. --row-control turns a matrix row
 that is a control rather than a case (FFmpeg pool-repros' controls/virtual/90, for example) into the configuration's
-named control: its buggy run's fault means `fault`, and a clean exit means `complete`.
+named control. By default it reads the row's buggy run; `ROW:fixed=CONTROL` reads its fixed run instead, so one row
+can give two controls (the carved corpus's re-carve control 98: live-carve from its fixed run, uaf-carve from its buggy
+run). A fault means `fault`, and a clean exit means `complete`. --skip-row leaves out a row that belongs to another
+corpus's later run (a BUILD-FAILED plane row in the carved boot); every other row must be a case or a control.
 
 The board lane's matrix is a REPORT. This tool re-reads the run itself from the board transcript, and judges every
 case with tools/verdicts.py exactly as the QEMU arms are judged. It writes one bundle per corpus, at
@@ -19,7 +22,7 @@ case with tools/verdicts.py exactly as the QEMU arms are judged. It writes one b
 Per case:
 - The image's sha256 must equal the matrix row's.
 - The fixed run must print `VERDICT FIXED` and exit 0. Otherwise the case is NO-READING control-failed.
-- The buggy run's `case=N arm=buggy` line is the reach marker.
+- The buggy run's `case=N arm=buggy` line (optionally followed by more fields) is the reach marker.
 - Its capstone-exec fault line is resolved with the image's own symbols (verdicts.Symbols), and attributed to the
   labelled probe (the corpus PROBE rule) or to a function the case declares (`fault_sites`).
 - A run that printed `VERDICT DEFECT-REPRODUCED` and exited 0 COMPLETED.
@@ -78,6 +81,7 @@ def main():
     p.add_argument("--extra", action="append", default=[])
     p.add_argument("--prefix", default="")
     p.add_argument("--row-control", action="append", default=[])
+    p.add_argument("--skip-row", action="append", default=[])
     p.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
     arms = v.load_arms()
@@ -88,28 +92,36 @@ def main():
     runs = blocks(a.transcript)
 
     pre = a.prefix
-    row_controls = dict(kv.split("=", 1) for kv in a.row_control)
+    row_controls = []
+    for kv in a.row_control:
+        key, control = kv.split("=", 1)
+        row, _, run = key.partition(":")
+        row_controls.append((row, run or "buggy", control))
+    not_cases = {r for r, _, _ in row_controls} | set(a.skip_row)
     ctl_symbols = v.Symbols(a.llvm_bin, a.images / "controls.dom")
     controls = []
     for name in spec["controls"]:
-        if name in row_controls.values():
+        if name in {c for _, _, c in row_controls}:
             continue
         observed, evidence = control_observed(runs.get(f"{pre}control-{name}"), ctl_symbols)
         controls.append(v.Control(name=name, observed=observed, evidence=evidence))
-    for row in matrix["rows"]:
-        if row["name"] in row_controls:
-            image = a.images / f"{row['name']}.dom"
-            if v.sha256(image) != row["image_sha256"]:
-                raise SystemExit(f"{row['name']}: image sha256 is not the matrix's")
-            observed, evidence = control_observed(runs.get(f"{pre}{row['name']}-buggy"), v.Symbols(a.llvm_bin, image))
-            controls.append(v.Control(name=row_controls[row["name"]], observed=observed, evidence=evidence))
+    by_name = {row["name"]: row for row in matrix["rows"]}
+    for rname, run, control in row_controls:
+        row = by_name.get(rname)
+        if row is None:
+            raise SystemExit(f"--row-control {rname}: no such matrix row")
+        image = a.images / f"{rname}.dom"
+        if v.sha256(image) != row["image_sha256"]:
+            raise SystemExit(f"{rname}: image sha256 is not the matrix's")
+        observed, evidence = control_observed(runs.get(f"{pre}{rname}-{run}"), v.Symbols(a.llvm_bin, image))
+        controls.append(v.Control(name=control, observed=observed, evidence=evidence))
     missing = sorted(set(spec["controls"]) - {c.name for c in controls})
     if missing:
         raise SystemExit(f"controls {missing} of {a.configuration} have no run in this transcript")
 
     per_corpus, disagree = {}, []
     for row in matrix["rows"]:
-        if row["name"] in row_controls:
+        if row["name"] in not_cases:
             continue
         name, case = row["name"], row["case"]
         corpus = REPO / row["corpus"]
@@ -129,7 +141,7 @@ def main():
             obs.notes = f"the fixed run did not print VERDICT FIXED and exit 0 (end kind={fkind} value={fval})"
         else:
             body, kind, value = buggy
-            marker = re.search(r"^case=(\d+) arm=buggy$", body, re.M)
+            marker = re.search(r"^case=(\d+) arm=buggy(?: .*)?$", body, re.M)  # the carved driver appends carve=<mode>
             obs.reached = bool(marker)
             obs.reach_evidence = marker.group(0) if marker else ""
             obs.fault = v.domain_fault(body, v.Symbols(a.llvm_bin, image))
