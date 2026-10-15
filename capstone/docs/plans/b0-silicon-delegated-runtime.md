@@ -2755,6 +2755,26 @@ flashed. The predictions above are unchanged:
 - the Sublet acceptance's Linux rows passed on this bitstream with the previous monitor.
 The run is run-accept-exact.sh a2 with tag s9a2. The shared checkout moves to buildroot 211d48a, opensbi a8bdc90 and
 capstone-sbi eb88326 for the boot, and an EXIT trap restores d04bd83 / df0e9a8 / 93440d5.
+## R-55 (regions) RESULT (2026-10-16 03:22-03:40, caplifive_sublet_d93a8d66b, firmware 98d83e4ea98d): every prediction holds
+The board line with exact regions ran R-43 a2: wrapper a8bdc90, monitor eb88326, module and libcapstone at 127 slots
+(buildroot 211d48a), host 0a5c9025e8e6f5db, tag s9a2. The shared checkout returned to d04bd83 / df0e9a8 / 93440d5
+afterwards.
+- **First attempt, 03:20:** refused by the preflight before any boot. The Sublet name is in dev's preflight table but
+  not in the shared checkout's older copy. It was re-run with PREFLIGHT_DTS_NODES=65536 declared.
+- **Prediction 1 holds:**
+  - all 12 invocations complete, where the respin's table filled at 8;
+  - 60 of 60 R1 point lines ok=1 bad=0, and 12 x released pool rc=1;
+  - k800 4 twice from the relinked control;
+  - speedtest1-ran 1320222720 at the first invocation.
+- **Prediction 2 holds:** no RGNF, RGNO, EXCT or EXCS line in the transcript.
+- **Prediction 3 holds, by its second clause.** The CMA placed the shares elsewhere than 0568f93a9's record (first share
+  0x8125f000 against 0x818c0000), so the conditional id list does not apply.
+  - extract.py turns the board's own sequence into r55-regions/a2-sublet-d93a8d66b.json.
+  - replay.py --format full --policy exact --region2-end 0xC0000000 reproduces every id: 0 of 14 tests differ.
+  - It reports OVERLAP 0 and 0 inexact pieces, with 115 slots used and 104 live.
+- With C5u's clean run of the supcall line's same change (no EXCT, EXCS or RGNF; 1,282 supervised preemptions), the
+  region-table half of R-55 is fixed on silicon. It awaits landing on capstone-bootstrap.
+
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
 sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one
