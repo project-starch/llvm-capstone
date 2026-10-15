@@ -1,5 +1,10 @@
 util.c: backticks and piped open through the C library popen, which spawns.
 
+The popen branch runs perl's own taint checks first (taint_env and
+taint_proper under TAINTING_get), as the fork path does: without them qx
+ran under -T with a tainted PATH (comp/opsubs.t test 22). Piped opens were
+already caught by doio.c's own check.
+
 my_syspclose gives the FILE back to PerlIO before pclose: PerlIO_releaseFILE reads
 fileno(f), and pclose frees f. The other order read a freed FILE, which the
 virtual profile's revoking heap reports as cause 25 in fileno_unlocked on the
@@ -7,7 +12,7 @@ first close of a piped open (found on SPEC's perlbench, 2026-10-15).
 
 --- a/util.c
 +++ b/util.c
-@@ -2850,6 +2850,35 @@
+@@ -2850,6 +2850,40 @@
  
      PERL_ARGS_ASSERT_MY_POPEN;
  
@@ -25,6 +30,11 @@ first close of a piped open (found on SPEC's perlbench, 2026-10-15).
 +        FILE *f;
 +        PerlIO *io;
 +        PERL_FLUSHALL_FOR_CHILD;
++        /* the checks the fork path below makes before it runs the command */
++        if (TAINTING_get) {
++            taint_env();
++            taint_proper("Insecure %s%s", "EXEC");
++        }
 +        f = popen(cmd, mode);
 +        if (!f)
 +            return NULL;
@@ -43,7 +53,7 @@ first close of a piped open (found on SPEC's perlbench, 2026-10-15).
      PERL_FLUSHALL_FOR_CHILD;
  #ifdef OS2
      if (doexec) {
-@@ -3306,6 +3335,19 @@
+@@ -3306,6 +3340,19 @@
  =cut
  */
  
@@ -63,7 +73,7 @@ first close of a piped open (found on SPEC's perlbench, 2026-10-15).
  #if (!defined(DOSISH) || defined(HAS_FORK)) && !defined(VMS) && !defined(__LIBCATAMOUNT__) && !defined(__amigaos4__)
  I32
  Perl_my_pclose(pTHX_ PerlIO *ptr)
-@@ -3336,7 +3378,7 @@
+@@ -3336,7 +3383,7 @@
      should_wait = pid > 0;
  #endif
  
