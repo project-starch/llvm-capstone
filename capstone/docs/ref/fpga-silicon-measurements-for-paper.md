@@ -6232,3 +6232,28 @@ Five arms in one boot (05:51-06:46): firmware 37ae782f7718b018, the exact-region
   0003 revokes the user's child at release.
 - **These images need 88 MiB domains,** because the sub-object driver takes 64 MiB of payload up front. They launched
   without a CMA failure; one launch read 1.66 s.
+
+## FFmpeg's carved corpus on silicon: bounding each carved region catches all 13 crossings, and the Sublet carve's lifetimes hold (caplifive_sublet_d93a8d66b, 2026-10-16)
+Three arms in one boot (06:46-07:01): firmware 124238b7d5b41abd, set 2's line, 98 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-carved (lane e4f15d4b7a32).
+- Results: RESULTS.md there.
+
+| arm | carve | 13 cases | carve controls |
+|---|---|---|---|
+| silicon-level0 | upstream's pointer arithmetic | 13 MISSED | 99 completes |
+| silicon-carve-bounds | `FFC_CARVE_BOUNDS`: SHRINK per region | **13 CAUGHT 28** at the probe | 99 CAUGHT 28 |
+| silicon-carve-sublet | `FFC_SUBLET_CARVE`: a CDERIVE child per region, CREVOKE at a re-carve, over the lifetimes heap | **13 CAUGHT 28** at the probe | 99 CAUGHT 28; 98 (a re-carved region's old alias) CAUGHT 25 |
+
+- **Every row and control is as pre-registered,** by outcome, cause and site, on the pre-registered image.
+- **The predictions came from a silicon-mimic QEMU that rounds an inexact CDERIVE child as the RTL does:**
+  capstone-qemu silicon/cderive-round ce1be0c642, `CAPSTONE_CDERIVE_ROUND=1`.
+  - Its codec matches the RTL lane's bounds-model.py on 200,018 random triples.
+  - The RTL compresses every capability result at writeback (ex_stage.sv:1515 / :1528 at d93a8d66b), so the rounding
+    is immediate there too.
+- **One inexact derive was read on the board.** Case 00's group over a 35,840-byte block: its regions sit 48 bytes
+  below the case's arithmetic (`base_eq=0`), on silicon as on that QEMU, and the case reads as predicted anyway.
+
+**Scope, before quoting:**
+- The carved crossings stay inside one malloc'd block. A remedy is only possible at the carving code, which these two
+  arms add, in the corpus's driver, not in FFmpeg.
+- Every region here is at most 2,048 bytes, below the 4 KiB where the full scheme's bounds become inexact.

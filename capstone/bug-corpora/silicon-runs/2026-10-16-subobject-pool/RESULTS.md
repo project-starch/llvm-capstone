@@ -33,6 +33,10 @@ Pre-registered in README.md (lane 1ef381aaa812, before the boot). One boot, 05:5
   - This is the first application allocator run on silicon with CDERIVE nested inside the lifetimes heap: the pool's
     child, inside the entry's lifetime, inside level0's object.
 
+**The revised level0** (free by address, through the child recorded in the block's header) was re-run as promised.
+On the silicon-mimic QEMU, the plain corpora's lifetimes arm reads 72 of 72 as predicted, with controls ok: the
+revision changes no plain verdict.
+
 ## Per case
 
 | case | silicon-subobject | silicon-level0 | silicon-lifetimes |
