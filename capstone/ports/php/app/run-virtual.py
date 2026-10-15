@@ -36,13 +36,25 @@ MARK = "VM_EXIT"
 KERNEL_LINE = re.compile(r"^\[\s*\d+\.\d+\]")
 
 
-def guest_script(runs, env=()):
+def guest_script(runs, env=(), run_timeout=0):
     """runs: list of (name, argv-string). One capstone-vexec invocation each.
 
     env: NAME=VALUE pairs exported before the runs. This is how an arm that is a RUNTIME mode
     reaches the application when the application is real PHP: Phase A's SAPI took the seam mode
     as argv[3], but sapi/cli owns argv, so zend_cap_mode()'s other source -- PHP_CAP_MODE in the
     environment -- is the only route. One guest per arm, so the exports cannot leak across arms.
+
+    run_timeout: GUEST seconds after which one run is killed, 0 for no watchdog. ONE RUN THAT
+    BLOCKS MUST NOT COST THE WHOLE SESSION. Measured, not hypothetical: CRASH-092 opens a
+    loopback listener and never returns on this platform, and because every run of an arm
+    shares one boot, the outer --timeout then expired with the ten cases after it alphabetically
+    unobserved -- on BOTH arms that got that far, identically. That is a silence produced by the
+    harness, and the judge cannot tell it from a silence produced by the program.
+
+    This buildroot's busybox is built with CONFIG_TIMEOUT unset (no `timeout` applet), so the
+    watchdog is the shell one: background the run, background a killer, `wait` for whichever
+    wins. The kill is SIGKILL, so `wait` reports 137 -- but the marker is what the reader keys
+    on, because an exit code can be produced by the program and a marker only by this loop.
     """
     lines = ["#!/bin/sh", "cd /mnt/vm || exit 1", "insmod capstone_vm.ko || exit 1",
              "export CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1"]
@@ -57,9 +69,19 @@ def guest_script(runs, env=()):
         while words and re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*=[^ ]*", words[0]):
             assignments.append(words.pop(0))
         prefix = ("env " + " ".join(assignments) + " ") if assignments else ""
-        lines += [f"echo {MARK}_BEGIN:{name}",
-                  f"{prefix}./capstone-vexec {' '.join(words)} 2>&1",
-                  f"echo {MARK}:{name}:$?"]
+        lines.append(f"echo {MARK}_BEGIN:{name}")
+        if run_timeout:
+            lines += [f"{prefix}./capstone-vexec {' '.join(words)} 2>&1 &",
+                      "__p=$!",
+                      f"( sleep {run_timeout}; kill -9 $__p 2>/dev/null && "
+                      f"echo {MARK}_TIMEOUT:{name} ) &",
+                      "__k=$!",
+                      "wait $__p; __rc=$?",
+                      "kill -9 $__k 2>/dev/null",
+                      f"echo {MARK}:{name}:$__rc"]
+        else:
+            lines += [f"{prefix}./capstone-vexec {' '.join(words)} 2>&1",
+                      f"echo {MARK}:{name}:$?"]
     lines += ["echo PHP_VIRTUAL_RUNNER_DONE", ""]
     return "\n".join(lines)
 
@@ -80,6 +102,8 @@ def main():
                    help="exported in the guest before every run (e.g. PHP_CAP_MODE=6)")
     p.add_argument("--memory", default="2G")
     p.add_argument("--timeout", type=int, default=600)
+    p.add_argument("--run-timeout", type=int, default=0,
+                   help="guest seconds per run before it is killed (0: no watchdog)")
     p.add_argument("--record", type=Path)
     p.add_argument("--serial-log", type=Path)
     a = p.parse_args()
@@ -116,7 +140,7 @@ def main():
     for pair in a.env:
         if "=" not in pair:
             sys.exit(f"--env wants NAME=VALUE, got {pair!r}")
-    (stage / "gate.sh").write_text(guest_script(runs, a.env))
+    (stage / "gate.sh").write_text(guest_script(runs, a.env, a.run_timeout))
 
     disk = work / "stage.ext4"
     with disk.open("wb") as f:

@@ -125,6 +125,21 @@ def observation_cases():
                     "ZEND_CAP_FAIL code=3 unknown key 0x40\n", 139, controls(), True, "/x", "/y")
     check("a seam failure is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
 
+    # The per-run watchdog fired. A killed run is the harness giving up, never a statement
+    # about the program -- and in particular never the `not-reached` it would decay to if the
+    # marker were ignored, because a killed run is silent and un-reached by construction.
+    obs = R.observe("CRASH-092", SPEC, "php-real-stock", SHA,
+                    "ZEND_CAP_MODE 0 exact=0 revoke=0\nVM_EXIT_TIMEOUT:CRASH-092\nKilled\n",
+                    137, controls(), True, "/x", "/y")
+    v, reason, _ = verdicts.judge(obs, arms["php-real-stock"])
+    check("a watchdog kill is infra, not a reading", (v, reason), (verdicts.NO_READING, "infra"))
+
+    # No exit status at all: the guest session ended before this run reported.
+    obs = R.observe("CRASH-092", SPEC, "php-real-stock", SHA, "", None,
+                    controls(), True, "/x", "/y")
+    v, reason, _ = verdicts.judge(obs, arms["php-real-stock"])
+    check("a run with no exit status is infra", (v, reason), (verdicts.NO_READING, "infra"))
+
     # Completed, but not with the oracle's output: recorded as a note, still MISSED.
     obs = R.observe("CRASH-086", SPEC, "php-real-stock", SHA, "something else\n", 0,
                     [verdicts.Control(name=R.SANITY, observed="complete")], True, "/x", "/y")

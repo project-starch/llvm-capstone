@@ -84,6 +84,12 @@ SEAM_OWN = ("zend-cap-blocks.c", "zend-cap-backing.c", "php_virtual_lower.c")
 # run-cases.py drives for CRASH-073, and are `unattributed` until it is wired up here.
 ALLOCATOR_SITE = "Zend/zend_alloc.c"
 
+# The per-run watchdog in run-virtual.py fired on this run. A run that was KILLED is not
+# an observation of the program at all -- it is the harness giving up -- so it is reported
+# as infra rather than as a silence. Keyed on the marker and not on exit 137, because the
+# program can produce an exit code and only that loop can produce the marker.
+WATCHDOG = re.compile(r"VM_EXIT_TIMEOUT:")
+
 # The node table GROWS on this profile, so exhaustion is not a hard ceiling -- but a cause-30
 # resource fault lands at an arbitrary pc and is otherwise indistinguishable from a catch, so a
 # run that came close to capacity is refused rather than read.
@@ -226,6 +232,20 @@ def arm_controls(arm, sanity_ok, probe_ok, arms):
 def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached, llvm_bin,
             image, precondition_met=True):
     obs = verdicts.Observation(case=case, arm=arm, image_sha256=image_sha, controls=controls)
+    # NO DATA IS AN ERROR, NOT A ZERO. Both of these say the harness never got a reading, and
+    # both would otherwise fall through to `completed=False, reached=False` -- which the judge
+    # reports as `not-reached`, a statement about the PROGRAM. The first measurement made
+    # exactly that mistake available: CRASH-092 wedged the guest and the ten cases after it
+    # alphabetically were unobserved on two arms.
+    if WATCHDOG.search(text):
+        obs.infra = "infra"
+        obs.notes = "the per-run watchdog killed this run; it never returned a reading"
+        return obs
+    if exit_code is None:
+        obs.infra = "infra"
+        obs.notes = ("no exit status was observed for this run -- the guest session ended "
+                     "before it reported, so there is nothing here to judge")
+        return obs
     fail = SEAM_FAIL.search(text)
     if fail:
         obs.infra = "setup-fault"
@@ -305,7 +325,7 @@ def run_arm(args, arm, mode, cases, record, serial, wants_probe):
     cmd = [sys.executable, str(HERE / "run-virtual.py"),
            "--qemu", str(args.qemu), "--images", str(args.images), "--adapter", str(args.adapter),
            "--image", str(args.image), "--record", str(record), "--serial-log", str(serial),
-           "--timeout", str(args.timeout)]
+           "--timeout", str(args.timeout), "--run-timeout", str(args.run_timeout)]
     if wants_probe:
         cmd += ["--image", str(args.probe)]
     cmd += ["--extra", str(args.scratch / SANITY_SCRIPT)]
@@ -388,7 +408,10 @@ def main():
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--scratch", type=Path, help="where case files are staged (default: --out/stage)")
     p.add_argument("--llvm-bin", type=Path, default=REPO / "llvm/cmake-build-debug/bin")
-    p.add_argument("--timeout", type=int, default=2400)
+    p.add_argument("--timeout", type=int, default=4200,
+                   help="wall seconds for one arm's whole guest session")
+    p.add_argument("--run-timeout", type=int, default=40,
+                   help="GUEST seconds for one run before the watchdog kills it")
     p.add_argument("--case", action="append", help="restrict to these cases (debugging)")
     p.add_argument("--from-record", action="store_true",
                    help="re-judge stored runs without booting")
