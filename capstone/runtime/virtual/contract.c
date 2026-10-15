@@ -137,11 +137,31 @@ static void vm_large_contract(void)
     e[0] = 8; e[last - 1] = 9;
     puts("VIRTUAL_VM_LARGE_OK region aggregate realloc release");
 }
+/* More registered mappings than the first profile's 512: every allocation
+ * above mallocng's mmap threshold is a mapping of its own. One byte of each is
+ * touched, and they are freed again. */
+static void vm_mappings_contract(void)
+{
+    enum { count = 1200 };
+    static char *held[count];
+    const size_t bytes = 140000;
+    for (unsigned i = 0; i < count; ++i) {
+        held[i] = malloc(bytes);
+        require(held[i] != NULL, "mapping above 512");
+        held[i][bytes - 1] = (char)i;
+    }
+    for (unsigned i = 0; i < count; ++i)
+        require(held[i][bytes - 1] == (char)i, "mapping data");
+    for (unsigned i = 0; i < count; ++i)
+        free(held[i]);
+    puts("VIRTUAL_VM_MAPPINGS_OK 1200");
+}
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
     if (!strcmp(mode, "vm")) { vm_contract(); return 0; }
     if (!strcmp(mode, "vm-large")) { vm_large_contract(); return 0; }
+    if (!strcmp(mode, "vm-mappings")) { vm_mappings_contract(); return 0; }
     if (!strcmp(mode, "vm-ro-write") || !strcmp(mode, "vm-none-read") ||
         !strcmp(mode, "vm-guard") || !strcmp(mode, "vm-padding")) {
         char *p = mmap(NULL, 8193, PROT_READ | PROT_WRITE,
