@@ -176,7 +176,8 @@ for it. (What ran on the board, and what it read, is section 7.)
   `sublet_carve` the board lane is fixing for R-55. The silicon runtime's own allocator is level0 (per-object
   bounds, no temporal safety), so it cannot carry the temporal arms.
   - What ran (section 7): level0, and for the arms that revoke, level0 built with `CAPSTONE_LEVEL0_LIFETIMES`
-    (dev `2c53d5641b72`), where every object is a CDERIVE child of one group over the arena and free CREVOKEs it.
+    (dev `a9405e5bd711`; free reworked in `2c53d5641b72`): every object whose bounds are exact at its placement is a
+    CDERIVE child of one group over the arena, and free CREVOKEs it.
 - **(c) Order.** The plain corpora first, then the nested ones (proposed). Or both together, now that CDERIVE/CREVOKE
   are on silicon.
 

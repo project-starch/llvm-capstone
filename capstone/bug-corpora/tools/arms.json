@@ -389,7 +389,7 @@
     },
     "silicon-ffmpeg-carve-sublet": {
       "target": "capstone-silicon",
-      "summary": "the carved corpus built with -DFFC_SUBLET_CARVE over the silicon-level0-lifetimes heap: the driver CDERIVEs a group over each block and every carve is a CDERIVE child of that group, CREVOKEd on re-carve. The RTL rounds a CDERIVE child outward rather than refusing it, so a carve is not guaranteed exact (case 00's group is inexact). The carve control faults. The re-carve control (shared/carve-recarve-control.c, case 98) completes when the region is used live (live-carve) and faults when used after its re-carve (uaf-carve)",
+      "summary": "the carved corpus built with -DFFC_SUBLET_CARVE over the silicon-level0-lifetimes heap: the driver CDERIVEs a group over each block and every carve is a CDERIVE child of that group, CREVOKEd on re-carve. The RTL rounds a CDERIVE child outward rather than refusing it, so a carve is not guaranteed exact. In this corpus every region is at most 2,048 B, below the 4 KiB where bounds become inexact; case 00's group over its 35,840 B block is inexact, and its regions sit 48 B below the case's arithmetic on silicon as on the silicon-mimic QEMU (docs/ref/fpga-silicon-measurements-for-paper.md, the carved corpus). The carve control faults. The re-carve control (shared/carve-recarve-control.c, case 98) completes when the region is used live (live-carve) and faults when used after its re-carve (uaf-carve)",
       "mechanism": "a CDERIVE child per carve with CREVOKE on re-carve, over per-object lifetimes, on silicon",
       "controls": {
         "clean": "complete",
