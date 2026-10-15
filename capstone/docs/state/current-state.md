@@ -175,7 +175,8 @@ See the [runtime mechanism and reproduction commands](../../runtime/virtual/READ
 
 ## 2026-10-04, evening — the S-16 fix bitstream on silicon: S-16 fixed, the R-43 list unchanged, and the real workload preempts 1,277 times at +0.69 %
 
-- **The resident bitstream is `caplifive_supcall_715bdd1fe.bit`.**
+- **The resident bitstream is `caplifive_fpb_afcd19bea.bit` since 2026-10-15 01:31** (sha256 d8d2b641da70207c74d41a69ef60a561426fc573b6767fd03bd6d3c28a5fb3f8; routed WNS -15.310, outside the -13.335..-5.855 band, and it runs: every FP acceptance row as pre-registered). It carries fp-fixes afcd19bea: R-53, the R-52 residual, R-54's renormalisation in residue form, the encoder without the cursorless scheme. The full-scheme encoder needs the R-55 monitor (caplifive-opensbi df0e9a8 / capstone-sbi 6dad416 on the board line): explicit cursors after every carve. Registered fallback: `caplifive_r51r52_0568f93a9.bit` (resident 2026-10-11 to 10-15). The paragraph below describes the earlier resident 715bdd1fe and is kept for its workaround history.
+- **Earlier resident: `caplifive_supcall_715bdd1fe.bit`.**
   - capstone-ariane sup-call 715bdd1fe: R-49, R-50 and the S-17 apertures 219..222.
   - Flashed 18:41-18:43 on the lead's direct word with `drivers/flash-bitstream.py`. The sha256 matched the sealed
     hash, and the name was read back after the power cycle.

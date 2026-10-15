@@ -93,7 +93,26 @@ FP's at any index is a finding against outcome A and is read first. For R1: its 
 published 76 / 22.7 are predicted to hold on the Sublet bitstream.
 
 
-## On the board
+## On the board: readings so far
+
+**FP bitstream `caplifive_fpb_afcd19bea.bit` (the first respin, routed WNS -15.310), bare, 2026-10-15 02:51-02:58, no
+traps** (the board lane, lane b0-silicon-runtime 93bf8665c654), in the order gap / revoke per k:
+
+| arm | k=1 | k=2 | k=3 | k=4 |
+|---|---|---|---|---|
+| close (GAP 0) | 0x8 / 0x3a | 0x2f / 0x21 | 0x1d / 0x31 | 0x1c / 0x49 |
+| far (GAP 1000) | 0xfa6 / 0x42 | 0xfbc / 0x21 | 0xfbd / 0x2d | 0xfbd / 0x47 |
+
+Read against the simulation table above: the cycle values are not comparable (the simulation's memory model is
+S12_MEM_DELAY=12; silicon's revoke at k = 1 costs 58 cycles close and 66 far against 381 and 230 in simulation), and
+one simulation feature does NOT appear on silicon: the close arm's k = 1 is not slower than the far arm's (58 against
+66), so the "drain" that made a revoke right behind an MREV cost 150 cycles more in simulation is an artefact of the
+simulated memory latency, not a property of the design. The k = 2..4 brackets grow with k on both arms (33, 49, 73
+close; 33, 45, 71 far: the corpses walked), close and far within a few cycles of each other at every index. The
+decision this pair was built for, FP against Sublet on the same image, waits for the Sublet boot; the FP side of
+every index is now on record.
+
+## On the board: the plan
 
 Exploratory arms in the FP chain's bare set, after the controls and outside the acceptance verdict (the board lane's
 run-capstl.sh `s1gap` set), then again on the Sublet boot. The verdict is the per-index difference between the two

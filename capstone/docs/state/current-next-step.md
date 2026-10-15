@@ -72,7 +72,25 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
   The fix is in the carve, not the RTL: a chain of regions each base-aligned to its own granule (for example
   [0x8008a800, 0x84000000), [0x84000000, 0xC0000000), [0xC0000000, 2^40)), verified by monitor-boot-carve.py or
   check-repr under --format full --renorm before any flash. The same monitor is what the Sublet bitstream needs.
-- **Next:** the lead chooses: the monitor fix (mtime's explicit cursor plus a region chain whose bases are
+- **2026-10-15: the FP respin's acceptance with the R-55 monitor fixes is DONE (the board lane, lane
+  b0-silicon-runtime 93bf8665c654). The FP fixes hold on silicon, every reading as pre-registered:** B3j A-D 0 of
+  40,000 wrong with the checker control passing, B3i all I except k's fs5, B3f all 0 except v7 = 1, b3-clock
+  arithmetic 0 of 200k and now() in the hundreds of seconds, r54-bounds 64 on all four arms, R-51 / R-43 a6 / R-29
+  unchanged, the ladder's instret identical 17/17. No row failed in a way the out-of-band WNS explains: a
+  bitstream at -15.310 runs. The fix took three monitor layers (explicit MMIO cursors in cap_env_init; explicit
+  cursors in create_domain's copy, create_region and share_child_region; split_out_cap SHRINKing its piece to
+  [base, base + len), without which a CMA REGION_CREATE decoded from 0x80000000 and libcapstone refused it); on
+  caplifive-opensbi df0e9a8 / d7489e3 and capstone-sbi 6dad416 / fc5e3c6, FPGA-only, QEMU byte-identical. Run with
+  the carve overlap accepted (the lead's decision); OVERLAP 0 is the acceptance gate of the next monitor change.
+  Two rows still fail in the R-55 family and are software: R-43 a2 (split_out_cap's head/tail tests read decoded
+  bounds and fill the region table at invocation 8 of 12) and P1 cell 6 (the runtime's sublet_carve hands out a
+  SPLIT's lower piece at its decoded start; mcause 26 at revoke in sqlite3DbNNFreeNN). The s1gap pair's FP readings
+  are in its PREREG; the simulation's close-arm "drain" does not appear on silicon.
+- **Next:** the Sublet bitstream inherits every R-55 item (the full scheme on every capability), so before its flash:
+  the carve policy in the monitor (granule-aligned points or SHRINK plus explicit cursor, OVERLAP 0 under
+  --format full --renorm), the runtime's sublet_carve fix, and the lockstep list as recorded. Then the lead's word.
+  The second FP respin (fp-renorm-dual 2859dfb67) is a timing experiment only now, since -15.310 runs; its build
+  is the lead's call. Earlier choices superseded: the lead chose the monitor fix (mtime's explicit cursor plus a region chain whose bases are
   representable; no reflash, keeps the FP fixes; the RTL lane's recommendation), a flash back to 0568f93a9 (cursorless, loses the FP fixes), or a build of
   the (a) tree 2a3a87dfc (cursorless kept, R-11's truncated tops back, the same renormalisation path and likely the
   same WNS). Separately: whether the second respin (fp-renorm-dual 2859dfb67) is built for the FP acceptance chain (empirical: every
