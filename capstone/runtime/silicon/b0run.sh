@@ -178,6 +178,14 @@ case "$rung" in
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     b5_mruby "$rung" "${rung#b5-mruby-}" /usr/bin/capstone-exec /test-domains/mruby.dom
     ;;
+  b5-mruby-e-stats|b5-mruby-stdin-stats)
+    # Where B5's launch goes: the same step with CAPSTONE_DELEGATE_STATS=1, so capstone-exec prints its launch ticks
+    # (image, hash, spawner, device, domain, regions, seccomp; rdtime) and its delegate counters on stderr, which
+    # b5_mruby prints as B5e lines. The stdout hash check and the retvals are the plain step's.
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    step=${rung#b5-mruby-}; step=${step%-stats}
+    b5_mruby "$rung" "$step" env CAPSTONE_DELEGATE_STATS=1 /usr/bin/capstone-exec /test-domains/mruby.dom
+    ;;
   b5-native-O2-e|b5-native-O2-bench|b5-native-O1-e|b5-native-O1-bench)
     # B5's unprotected baseline: the same mruby as a NATIVE Linux process (build_config-board-native.rb: the board's
     # gcc 12.3 and glibc, rv64g lp64d hard-float, at -O2 and -O1), the same scripts and the same hash check. No module

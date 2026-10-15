@@ -3064,6 +3064,39 @@ change.
   - the range is reusable by a fresh child.
 - This is the allocator pattern the bug corpus's malloc arms need. It runs with no monitor change.
 
+## Boot P pre-registered (2026-10-16, before the boot): the process ABI on the exact-regions supcall line, and where B5's launch goes
+The last silicon row the R-55 plan owes:
+- the process ABI on the exact-regions monitor, with the 127-slot module;
+- an attribution of B5's 45.5 s cold launch.
+It runs on caplifive_sublet_d93a8d66b.
+
+- **Firmware 1b44a465d96753b2:** wrapper 1269c77 + monitor ebe0a25 (r55/exact-regions, the change a2 just read on the
+  board line), with boot C+F's supervised-call defines.
+- **Private Image ae58cf97765442da,** carrying:
+  - the 127-slot process-ABI module f2a2645cc570dcc6, as /capstone.ko and capstone-proc.ko;
+  - B5's mruby.dom a7ac283d7050a5d8 and its scripts;
+  - b0-hello, b5-hello, r54-bounds, cw-pool 24b8a8f477942e2d and b6-sublet d989874aa2ca0161;
+  - b0run.sh 726913dd4ed8d239.
+- **b0run.sh's new rungs,** b5-mruby-e-stats and b5-mruby-stdin-stats: B5's e and stdin steps with
+  CAPSTONE_DELEGATE_STATS=1. capstone-exec then prints `launch ticks image= hash= spawner= device= domain= regions=
+  seccomp= total=` (rdtime at each stage boundary, exec.c report_stats) and its delegate counters. The hash check and
+  the retvals are the plain steps'.
+- **Rungs:** b0-stats b0-hello b5-hello b5-mruby-e-stats b5-mruby-stdin-stats b5-mruby-bench r54-bounds cw-pool
+  b6-sublet b0-stats2.
+
+**Predictions:**
+- every rung's retval 0, except r54-bounds 64;
+- mruby e 53c234e5e8472b6a, stdin 5476dba1f4bd59f1, bench 8d1539bc79e2b630;
+- bench times within a few percent of B5's (same image and bitstream family);
+- b6-sublet 0 under this monitor, cw-pool 0;
+- no EXCT, EXCS or RGNF line.
+
+**Exploratory, no prediction:** the launch-tick split, and whether e (the first launch in the boot) and stdin read
+B5's cold 45.5 s and cached 24.6 s.
+
+**What a failure would say:** the boot differs from B5's only in the monitor (exact regions) and in the module (127
+slots), so a refused launch, a fault or a differing hash points at one of those two.
+
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
 longer separates globals.
