@@ -118,7 +118,7 @@ case "$rung" in
       echo "RESULT $rung retval=903"
     fi
     ;;
-  b0-memcpy|b0-printf|b1-thread|b0-strtod|r54-bounds|cw-align|cw-pool)
+  b0-memcpy|b0-printf|b1-thread|b0-strtod|r54-bounds|cw-align|cw-pool|b6-sublet)
     # The application's own exit status is the result; capstone-exec's own failures keep their codes (125 and so on).
     # B0.8 b0-memcpy, the R-29 memcpy guard on silicon: 0 the unguarded control miscopied and the guarded copy never
     # did; 1 the guarded copy miscopied; 2 the control never miscopied (void: no hazard created).
@@ -132,6 +132,9 @@ case "$rung" in
     # cw-align / cw-pool (carve-witness.c, the same source with the split and the pool globals carve): the number of
     # its eight globals whose capability reaches outside its own 16-byte-rounded storage. Under the full bounds scheme
     # (FP bitstream (b), Sublet) check-repr predicts cw-align 8 and cw-pool 0 at every base.
+    # B6 b6-sublet (capstone_cap_derive / capstone_cap_revoke_child from a domain): a bitmask, bit k set if arm k
+    # (G C S K R N E) read other than its expectation. Sublet bitstream predicted 0; QEMU reads 80 (R and E: its lcc
+    # validity selector is a stub that always reads 1, op_helper.c helper_cslcc).
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     /usr/bin/capstone-exec "$dom" > /tmp/b0.out 2> /tmp/b0.err
     rc=$?

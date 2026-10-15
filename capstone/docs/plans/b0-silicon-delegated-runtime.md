@@ -2912,6 +2912,58 @@ The full table is in fpga-silicon-measurements-for-paper.md ("Sublet's child lif
   - floor.sh re-ran it at 00:18 with the URL exported. No board time was spent on the void pass.
   - Its outputs are kept in accept-sublet/floor-void-nourl.
 
+## B6 pre-registered (2026-10-16, before the boot): CDERIVE / CREVOKE from a delegated application, caplifive_sublet_d93a8d66b
+The bare floor showed the instructions on silicon with nothing between the test and the core. B6 issues them from a
+Linux-hosted domain, through the runtime's own helpers (`capstone_cap_derive`, `capstone_cap_revoke_child` in
+runtime/include/capstone/capability.h), on the heap malloc hands the domain. This is the path the bug corpus's nested
+arms and every migrated allocator take.
+
+**Why it can work with no monitor change.** An rtl-oracle read at d93a8d66b, whose lines this lane re-read:
+- CDERIVE checks the parent's type (NONLIN) and never MANAGE, and mints the child with `(parent.perm & 7) | 8`
+  (capstone_dyn_unit.anvil:272);
+- only CREVOKE needs MANAGE (:306);
+- CAPENTER's genesis capabilities are perm 7 (capstone_flu_unit.anvil:503).
+So a domain derives a group from its perm-7 heap block, and the group (with MANAGE) derives and revokes its children.
+
+**The image:** runtime/silicon/b6-sublet.c, built by build-b0-hello.sh (B0_APP=b6-sublet, pool carve).
+- d989874aa2ca0161 (frozen at /tmp/capstone/b6/frozen).
+- check-repr full+renorm OK at 512 bases, OVERLAP 0; no FP instructions.
+- 8 CDERIVE and 2 CREVOKE encodings; sup-static-audit 0 forbidden.
+
+**Arms:** P malloc(8192); G = derive(p, 0, 4096); C = derive(g, 256, 512); S a store through c read through c and g;
+K = derive(c, 0, 64); R revoke_child(g, c); N = derive(g, 256, 512) again; E revoke_child(g, c2). Every value is read
+with lcc or through a live capability, so every arm returns.
+
+**QEMU** (silicon-mimic, firmware d5c57ee765c9, capstone-qemu acbad0f7ec82 with the physical decode, sha256 7867d241):
+- every line as designed, with rc 80. The two set bits are R and E: QEMU's lcc validity selector is a stub that reads
+  1 for a revoked child (op_helper.c helper_cslcc; ISSUES Q-11's second divergence);
+- negative control on the pre-decode QEMU (4940d3fde12b): cause 2 at the first CDERIVE (0xa2b39bdb).
+
+The first build (a39ca7382563fef5) read a revoked child's validity after a printf call. Under QEMU the callee's
+spill and restore of that register handed back a non-capability, so lcc raised 24. That is ISSUES Q-11: QEMU's ldc
+untags a loaded capability whose node is revoked, while the RTL forwards it unchanged. The rung now reads validity
+before any call, so it reads the same on both.
+
+**Predicted on silicon** (rc 0):
+- the QEMU lines, except that R reads `c valid 0, k valid 0, g valid 1, g+256 0x1234` and E reads `c2 valid 0, g valid
+  1`. Silicon's lcc validity is the node's: s1gap read a revoked base as 0 in every run;
+- P: `valid 1 type 1 perm 7 len 8192`;
+- G: `valid 1 type 1 perm 15 [+0, +4096)`;
+- C: `perm 15 [+256, +768)`;
+- S: 0x1234 / 0x1234;
+- K: `perm 15 [+256, +320)`;
+- N: `perm 15 [+256, +768)`, g+256 0x5678.
+- **Controls in the same boot:** b0-stats 0, b0-hello 0 (db4385ff32deddf6), r54-bounds 64 (0b0ff5d555188612), all
+  as boot C+F read on this bitstream.
+- **What would refute it:**
+  - a fault in B6, so capstone-exec returns its own code: the domain path refuses what the bare floor allowed;
+  - any perm or bounds value other than above;
+  - a revoked child reading valid 1: CREVOKE did not end the child's node.
+
+**The run:** b0-bake-b6.sh bakes a private image (the B4/B5 pattern, restored by an EXIT trap). Its firmware is built
+on boot C+F's recipe (wrapper d7489e3, monitor 7361e1c, the supervised-call defines). It bakes only after the Linux
+half of the Sublet acceptance releases the shared buildroot. The firmware hash is recorded here before the boot.
+
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
 longer separates globals.
