@@ -6031,8 +6031,35 @@ pre-registration and the matched pairs are in plans/b0-silicon-delegated-runtime
   - mruby's allocator on size classes (silicon-alloc.c). level0's first-fit list made the GC test take minutes.
 
 **Scope, before quoting:**
-- There is no unprotected baseline yet: the QEMU column is not one. Native mruby on the same board's Linux is the
-  baseline still to run.
+- The unprotected baseline is B5n, below.
 - The sizes are the board's, not the benchmarks' published ones.
 - No per-object spatial claim: GC heap pages carry one capability for 1,024 objects. No temporal claim. R-55's
   isolation caveat applies to every domain on this bitstream.
+
+### The baseline: native mruby on the same board (B5n, 2026-10-15, firmware 9e2cbbaf9ac4)
+The same mruby, scripts and sizes as an ordinary Linux process on the same silicon. Built with the board's gcc 12.3
+and glibc (rv64g lp64d hard-float), with the silicon build's gems and defines. Every stdout is byte-identical to x86
+native. The domain's bench was repeated in the same boot: identical hash and allocation count, times within 0.11% of
+B5's on four benchmarks and 0.9% on the 2.4 s so_lists.
+
+| benchmark | domain s (mean of 2) | native -O2 s | native -O1 s | domain / -O2 | domain / -O1 |
+|---|---|---|---|---|---|
+| mandel_term | 138.20 | 90.85 | 109.75 | 1.52 | 1.26 |
+| fib(24) | 45.51 | 29.92 | 36.53 | 1.52 | 1.25 |
+| so_lists (3 x 1000) | 2.45 | 1.68 | 1.92 | 1.46 | 1.27 |
+| so_mandelbrot (32) | 30.68 | 18.46 | 22.37 | 1.66 | 1.37 |
+| ao_render (8) | 81.95 | 59.71 | 69.69 | 1.37 | 1.18 |
+| total | 298.78 | 200.62 | 240.26 | 1.49 | 1.24 |
+
+Launch (`p 1+1`): the domain takes 45.5 s cold and 24.6 s cached; native takes 3.6-3.9 s. The domain's split between
+image, regions and interpreter start is not measured.
+
+**Quote it as an upper bound.** These ratios are not the cost of capabilities alone. Besides the protection, the
+domain differs in:
+- soft-float against hard-float;
+- clang/musl/full-LTO against gcc/glibc/dynamic;
+- a size-class allocator against glibc malloc;
+- delegated system calls.
+
+ao_render, the FP-heaviest benchmark, has the smallest ratio.
+

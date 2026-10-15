@@ -2595,6 +2595,87 @@ domain's regions and mrb_open with every gem. With the image cached (step stdin)
 - R-55's isolation caveat holds for every domain on this bitstream: a carve's remainder can overlap its neighbour,
   and the PMP masks only the monitor's range.
 
+## B5n pre-registered (2026-10-15, before the boot): the unprotected baseline, native mruby on the same board, and B5's bench repeated
+B5 measured the protected side only. B5n runs the same mruby as an ordinary Linux process on the same board and
+silicon, with the same scripts and the same hash check, and repeats the domain's bench in the same boot.
+
+**The native builds** (`build_config-board-native.rb`):
+- The board's own toolchain: buildroot gcc 12.3, glibc, rv64g lp64d hard-float, no RVC. These are busybox's and libc's
+  flags.
+- The same gems and defines as the silicon build, at two levels: `-O2` (mruby-rv64-O2 99af8bde1e36acf8) and `-O1` (the
+  silicon build's level; mruby-rv64-O1 1e6246f22c06055b).
+- QEMU pre-check (the VM's glibc accepts them): `e` and bench at both levels are byte-identical to x86 native
+  (53c234e5e8472b6a, 8d1539bc79e2b630).
+- What differs from the domain besides the protection: hard-float against soft-float, gcc/glibc against clang/musl,
+  and dynamic linking against one full-LTO image. So the ratio is an UPPER BOUND on the silicon ABI's cost, not the
+  cost of capabilities alone.
+
+**The boot.**
+- Image 50b7d46c47b340e9: its initramfs was extracted and every file checked by hash, b0run.sh 4e080fbdc8f7ffdc
+  included.
+- Firmware 9e2cbbaf9ac492bd, built as B5's (wrapper d7489e3, monitor 7361e1c).
+- b0run.sh now runs both arms through one function, b5_mruby. Its domain path is unchanged in behaviour: re-tested on
+  the host, all eight rungs read 0, a wrong hash 910, and a hung process 912.
+- Rungs: b0-stats, b0-hello (frozen control), b5-native-O2-e, b5-native-O2-bench, b5-native-O1-e, b5-native-O1-bench,
+  b5-mruby-bench (B5's image a7ac283d7050a5d8, again), b0-stats2.
+- Two launches, so the region table is not a concern.
+
+**Predictions:**
+1. Every retval 0. That includes the native bench's hash equal to x86's, so native hard-float is correct on this
+   bitstream, as B3j/B3i/B3f (boot C+F) say for R-52 and R-53.
+2. The domain bench repeats B5:
+   - sha 8d1539bc79e2b630;
+   - allocator 139/83453/0;
+   - each benchmark's time within ±2% of B5's (138.18, 45.52, 2.46, 30.67, 81.99 s). The ladder's cycles repeat
+     within ±1.6%.
+3. Native is faster than the domain on every benchmark. The ratios are the result and are NOT predicted.
+
+**What a failure would say:**
+- A native hash differs (910): a computation is wrong in a NATIVE hard-float process on this bitstream. That is the
+  R-52/R-53 family again, and the BENCH line names the benchmark. It would void the baseline's timing, not B5.
+- The domain repeat differs in hash or allocator count: B5's result does not repeat. That is the first thing to
+  re-examine.
+- A time outside ±2%: run-to-run variance is larger than the ladder's. Any quoted ratio then needs N > 1 per arm.
+
+## B5n RESULT (2026-10-15 19:32-19:52, caplifive_fpb_afcd19bea, firmware 9e2cbbaf9ac4): the baseline, every pre-registered reading as predicted; the domain runs mruby's benchmarks 1.18-1.37x slower than native at the same -O1
+One boot, eight rungs, every retval 0 against its oracle (pre-registration 372e0fc9a889).
+
+**Correctness:**
+- Native mruby on the board, at -O2 and -O1, prints stdout byte-identical to x86 native for `e` and bench. So native
+  hard-float is correct on this bitstream for this workload, R-52 and R-53 included.
+- The domain bench repeats B5 exactly: sha 8d1539bc79e2b630 and allocator 139/83453/0.
+
+**Times** (seconds, Time.now inside the process; "domain" is the mean of B5 and B5n):
+
+| benchmark | domain B5 | domain B5n | repeat | native -O2 | native -O1 | domain / -O2 | domain / -O1 |
+|---|---|---|---|---|---|---|---|
+| mandel_term | 138.18 | 138.22 | +0.02% | 90.85 | 109.75 | 1.52 | 1.26 |
+| fib(24) | 45.52 | 45.49 | -0.07% | 29.92 | 36.53 | 1.52 | 1.25 |
+| so_lists (3 x 1000) | 2.46 | 2.44 | -0.90% | 1.68 | 1.92 | 1.46 | 1.27 |
+| so_mandelbrot (32) | 30.67 | 30.69 | +0.07% | 18.46 | 22.37 | 1.66 | 1.37 |
+| ao_render (8) | 81.99 | 81.90 | -0.11% | 59.71 | 69.69 | 1.37 | 1.18 |
+| total | 298.82 | 298.73 | | 200.62 | 240.26 | 1.49 | 1.24 |
+
+Launch, from step `e` (`p 1+1`):
+- domain: 45.49 s cold and 24.59 s with the image cached;
+- native: 3.85 s at -O2 and 3.59 s at -O1.
+
+**Reading it:**
+- At the same optimisation level the silicon ABI costs 1.18-1.37x per benchmark, 1.24x in total.
+- Against the native -O2 build it costs 1.37-1.66x, 1.49x in total.
+- These are UPPER BOUNDS on the cost of capabilities. Besides the protection, the domain differs in:
+  - soft-float against hard-float;
+  - clang/musl against gcc/glibc;
+  - full LTO against dynamic linking;
+  - the size-class allocator against glibc's malloc;
+  - the delegation of every system call.
+- The FP-heaviest benchmark (ao_render) shows the SMALLEST ratio, which suggests soft-float is not the main contributor.
+- The repeat agrees within 0.11% on four benchmarks and 0.9% on so_lists (the shortest, 2.4 s). N = 2 for the domain,
+  N = 1 per native level.
+- Launch is the outlier: 21-42 s against under 4 s. Not attributed: these rungs ran without
+  CAPSTONE_EXEC_DIAGNOSTICS, so the split between the 2.9 MB image, the 64 MiB domain's regions and mrb_open is not
+  measured. The domain's size is the first suspect, since B0_DATA (40 MiB) is far above QEMU's peak use.
+
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
 sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one

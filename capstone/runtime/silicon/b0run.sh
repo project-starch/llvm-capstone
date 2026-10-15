@@ -25,6 +25,46 @@ load_proc_module() {
   fi
   insmod /test-domains/capstone-proc.ko && [ -c /dev/capstone ]
 }
+# B5: one mruby step through the given command -- a domain (capstone-exec mruby.dom) or the native build -- with
+# the same staging, watchdog and hash check. Usage: b5_mruby <rung> <step> <command...>; see the b5-mruby case.
+b5_mruby() {
+  rung=$1 step=$2; shift 2
+  # Only the scripts are copied: smoke.rb lists this directory (M12), so it must hold exactly what QEMU's did --
+  # the eight .rb files -- or the allocator's counts, which the pre-registration predicts, would differ by an entry.
+  rm -rf /tmp/b5 /tmp/b5.wd; mkdir -p /tmp/b5 && cp /test-domains/mruby/*.rb /tmp/b5/ || { echo "RESULT $rung retval=911"; exit 1; }
+  want=$(awk -v s="$step" '$1 == s { print $2 }' /test-domains/mruby/native.sha)
+  [ -n "$want" ] || { echo "B5: no native hash for $step"; echo "RESULT $rung retval=911"; exit 1; }
+  # Watchdogs from QEMU's times (e/stdin 6 s, smoke 11 s, bench 50 s, launch included) with room for a board of
+  # unknown speed relative to QEMU: generous, since a watchdog ending a slow but correct run would void it.
+  case $step in smoke) limit=900 ;; bench) limit=2400 ;; *) limit=600 ;; esac
+  ( i=0; while [ $i -lt $((limit / 10 + 2)) ]; do sleep 10; i=$((i+1)); echo "B5: hb $i"; done ) &
+  hb=$!
+  t0=$(cut -d' ' -f1 /proc/uptime)
+  case $step in
+    e)     "$@" -e 'p 1+1' ;;
+    stdin) "$@" < /tmp/b5/stdin.rb ;;
+    smoke) "$@" /tmp/b5/smoke.rb /tmp/b5 ;;
+    bench) "$@" /tmp/b5/b5-bench.rb /tmp/b5 ;;
+  esac > /tmp/b5.out 2> /tmp/b5.err &
+  cx=$!
+  ( sleep $limit
+    if kill -0 $cx 2>/dev/null; then
+      echo watchdog > /tmp/b5.wd
+      echo "B5: watchdog: $1 still running at $limit s; SIGTERM"; kill -TERM $cx; sleep 5; kill -KILL $cx 2>/dev/null
+    fi ) &
+  wd=$!
+  wait $cx
+  rc=$?
+  t1=$(cut -d' ' -f1 /proc/uptime)
+  kill $hb $wd 2>/dev/null
+  sed 's/^/B5o /' /tmp/b5.out; sed 's/^/B5e /' /tmp/b5.err
+  got=$(sha256sum < /tmp/b5.out | cut -c1-16)
+  echo "MRUBY $rung sha $got bytes $(wc -c < /tmp/b5.out) want $want rc $rc secs $(awk -v a="$t0" -v b="$t1" 'BEGIN { printf "%.2f", b - a }')"
+  if [ -e /tmp/b5.wd ]; then echo "RESULT $rung retval=912"
+  elif [ $rc -ne 0 ]; then echo "RESULT $rung retval=$((1000 + rc))"
+  elif [ "$got" = "$want" ]; then echo "RESULT $rung retval=0"
+  else echo "RESULT $rung retval=910"; fi
+}
 case "$rung" in
   k800|k800r)
     # k800r is the k800 RELINKED at 0x20000 (589ceee3): b0-hello.dom enters at 0x10000, and a second domain at a
@@ -129,47 +169,18 @@ case "$rung" in
     #   bench  b5-bench.rb: five of mruby's benchmarks, sized for the board; the wall time of each on stderr
     # The scripts run from /tmp/b5, a copy, since smoke.rb writes there. retval: 0 the stdout hash equals the native
     # one and the exit status is 0; 910 the hash differs and the status is 0; 911 the files could not be staged;
-    # 912 the watchdog ended a capstone-exec Linux was still running; 1000 + the exit status otherwise.
+    # 912 the watchdog ended a launcher Linux was still running; 1000 + the exit status otherwise.
     # One image serves the four steps (the driver names /test-domains/<rung>.dom; four 2.9 MB copies would cost the
     # JTAG upload ~70 s for nothing).
-    dom=/test-domains/mruby.dom
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
-    step=${rung#b5-mruby-}
-    # Only the scripts are copied: smoke.rb lists this directory (M12), so it must hold exactly what QEMU's did --
-    # the eight .rb files -- or the allocator's counts, which the pre-registration predicts, would differ by an entry.
-    rm -rf /tmp/b5 /tmp/b5.wd; mkdir -p /tmp/b5 && cp /test-domains/mruby/*.rb /tmp/b5/ || { echo "RESULT $rung retval=911"; exit 1; }
-    want=$(awk -v s="$step" '$1 == s { print $2 }' /test-domains/mruby/native.sha)
-    [ -n "$want" ] || { echo "B5: no native hash for $step"; echo "RESULT $rung retval=911"; exit 1; }
-    # Watchdogs from QEMU's times (e/stdin 6 s, smoke 11 s, bench 50 s, launch included) with room for a board of
-    # unknown speed relative to QEMU: generous, since a watchdog ending a slow but correct run would void it.
-    case $step in smoke) limit=900 ;; bench) limit=2400 ;; *) limit=600 ;; esac
-    ( i=0; while [ $i -lt $((limit / 10 + 2)) ]; do sleep 10; i=$((i+1)); echo "B5: hb $i"; done ) &
-    hb=$!
-    t0=$(cut -d' ' -f1 /proc/uptime)
-    case $step in
-      e)     /usr/bin/capstone-exec "$dom" -e 'p 1+1' ;;
-      stdin) /usr/bin/capstone-exec "$dom" < /tmp/b5/stdin.rb ;;
-      smoke) /usr/bin/capstone-exec "$dom" /tmp/b5/smoke.rb /tmp/b5 ;;
-      bench) /usr/bin/capstone-exec "$dom" /tmp/b5/b5-bench.rb /tmp/b5 ;;
-    esac > /tmp/b5.out 2> /tmp/b5.err &
-    cx=$!
-    ( sleep $limit
-      if kill -0 $cx 2>/dev/null; then
-        echo watchdog > /tmp/b5.wd
-        echo "B5: watchdog: capstone-exec still running at $limit s; SIGTERM"; kill -TERM $cx; sleep 5; kill -KILL $cx 2>/dev/null
-      fi ) &
-    wd=$!
-    wait $cx
-    rc=$?
-    t1=$(cut -d' ' -f1 /proc/uptime)
-    kill $hb $wd 2>/dev/null
-    sed 's/^/B5o /' /tmp/b5.out; sed 's/^/B5e /' /tmp/b5.err
-    got=$(sha256sum < /tmp/b5.out | cut -c1-16)
-    echo "MRUBY $step sha $got bytes $(wc -c < /tmp/b5.out) want $want rc $rc secs $(awk -v a="$t0" -v b="$t1" 'BEGIN { printf "%.2f", b - a }')"
-    if [ -e /tmp/b5.wd ]; then echo "RESULT $rung retval=912"
-    elif [ $rc -ne 0 ]; then echo "RESULT $rung retval=$((1000 + rc))"
-    elif [ "$got" = "$want" ]; then echo "RESULT $rung retval=0"
-    else echo "RESULT $rung retval=910"; fi
+    b5_mruby "$rung" "${rung#b5-mruby-}" /usr/bin/capstone-exec /test-domains/mruby.dom
+    ;;
+  b5-native-O2-e|b5-native-O2-bench|b5-native-O1-e|b5-native-O1-bench)
+    # B5's unprotected baseline: the same mruby as a NATIVE Linux process (build_config-board-native.rb: the board's
+    # gcc 12.3 and glibc, rv64g lp64d hard-float, at -O2 and -O1), the same scripts and the same hash check. No module
+    # and no domain.
+    opt=${rung#b5-native-}; opt=${opt%%-*}
+    b5_mruby "$rung" "${rung##*-}" /test-domains/mruby-rv64-$opt
     ;;
   b3-setclock)
     # B3w: the board's wall clock, read and then set for the b3-oracle rung that follows. memcached's negative
