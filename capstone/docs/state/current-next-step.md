@@ -116,6 +116,12 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
   - the sublet fix: QEMU A/B identical; nginx's test is not run, because its recipe is broken on dev (pg_level0.c
     removed by c5d247874078);
   - C5u with its proper defines (dccb46a3fd0f).
+- **2026-10-15 23:54: `caplifive_sublet_d93a8d66b.bit` FLASHED on the lead's word; 2026-10-16 00:23: the bare floor
+  reads every vector as pre-registered** (S-16 identical to FP; derive/kill 19, split-shares-node 7, mrev-orphan 8,
+  sup-sublet 26, stale-access 9: every stale load and store refused with 25, no stale store landing). The Sublet
+  instructions, their refusal causes, MREV deepening and the shared-node split are confirmed on silicon; the bug
+  corpus's temporal predictions take "refused, cause 25". Running next: the s1gap repeats, then the Linux half on the
+  R-55 monitor.
 - **Next:** the Sublet bitstream inherits every R-55 item (the full scheme on every capability), so before its flash:
   the carve policy in the monitor (granule-aligned points or SHRINK plus explicit cursor, OVERLAP 0 under
   --format full --renorm), the runtime's sublet_carve fix, and the lockstep list as recorded. Then the lead's word.

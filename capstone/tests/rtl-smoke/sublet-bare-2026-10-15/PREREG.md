@@ -30,6 +30,17 @@ sibling the test keeps in s11 (placed BEFORE the base's node, outside every walk
 exit is `CAP_PASS(s11)` under `#ifdef BOARD_REC_NODE`, the simulation path untouched (re-run after the edit: the
 same 8 readings).
 
+## On the board: READ AS PRE-REGISTERED (2026-10-16, 00:18-00:23)
+
+On `caplifive_sublet_d93a8d66b.bit` (flashed 2026-10-15 23:54 on the lead's word; the S-16 bare set 18 arms / 98
+readings identical to the FP respin's, control-call-retpc identical), all five arms read their vectors exactly, by
+position, from the raw UART logs (the board lane): sublet-derive-kill SR 19, sublet-split-shares-node SR 7,
+sublet-mrev-orphan SR 8, sup-sublet SR 26, stale-access SR 9 = 0x19 0x19 0x19 0x19 0x0 0x19 0x19 0x77 0x6. CDERIVE,
+CREVOKE and their refusal causes, the shared-node split, MREV deepening, a supervised domain deriving and ending its
+own children, and the refusal of every stale load and store (cause 25, no stale store landing) are on silicon. The FP
+positive control (derive-kill on the FP respin) read no SR line, as corrected above. The first attempt of the floor
+never reached the board (the chain's FPGA_URL was unset: void, no board time).
+
 ## Controls
 
 - **Positive control, on the FP bitstream BEFORE the flash** (`caplifive_fpb_afcd19bea.bit`, resident): the same
