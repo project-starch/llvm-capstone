@@ -18,7 +18,9 @@
     "native-fix-differential",
     "capstone-subobject",
     "cheribsd-subobject",
-    "virtual-malloc"
+    "virtual-malloc",
+    "silicon-lifetimes",
+    "silicon-level0"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -54,9 +56,13 @@
     ]
   },
   "arm_configurations": {
-    "virtual-malloc": "virtual-mallocng"
+    "virtual-malloc": "virtual-mallocng",
+    "silicon-lifetimes": "silicon-level0-lifetimes",
+    "silicon-level0": "silicon-level0"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc"
+    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+    "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
+    "silicon-level0": "results/2026-10-16-silicon/silicon-level0"
   }
 }

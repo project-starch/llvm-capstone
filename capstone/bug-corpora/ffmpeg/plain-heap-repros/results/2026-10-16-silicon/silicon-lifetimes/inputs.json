@@ -1,0 +1,20 @@
+{
+  "arm": "silicon-lifetimes",
+  "bitstream": "caplifive_sublet_d93a8d66b (sha256 89ba6d81...)",
+  "cases": 25,
+  "configuration": "silicon-level0-lifetimes",
+  "contract": "verdicts-v1",
+  "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+  "platform": {
+    "compiler": "unrecorded in the board bundle; images built by runtime/silicon/build-b0-hello.sh through tools/run-silicon-cases.py build (gp-captable, full LTO, soft float, pool carve, check-repr full+renorm)",
+    "firmware": "0409fc297ed52e26: the exact-regions supervised-call monitor (wrapper 1269c77, monitor ebe0a25) with the 127-slot process-ABI module",
+    "kernel": "inside the firmware payload above; not recorded separately",
+    "qemu": "none: silicon. The same images, by sha256, first passed the silicon-mimic capstone-qemu d35af47b163c (silicon-runs/2026-10-16-plain/silicon-lifetimes/qemu-and-predictions.json)",
+    "runner": "b0run.sh corpus-silicon-lifetimes (board lane); the run's transcript is summarised in silicon-runs/2026-10-16-plain/silicon-lifetimes/board-matrix.json and re-read here from the board transcript"
+  },
+  "pre_registration": "capstone/bug-corpora/silicon-predictions/2026-10-16-plain (510126308bb6); the board's README, lane fa3806536fa7, level0 amended 0f1c5d7f7463",
+  "source_bundle": "capstone/bug-corpora/silicon-runs/2026-10-16-plain/silicon-lifetimes",
+  "tally": {
+    "CAUGHT": 25
+  }
+}

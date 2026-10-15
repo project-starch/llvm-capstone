@@ -72,6 +72,18 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=28 pc=0x3f8f390b34 in ffh_read_probe; by probe: the fault is at the labelled probe ffh_read_probe",
       "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "silicon-level0": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b): the same silicon-ABI build and board run with level0 as it ships (tools/arms.json silicon-level0, the bounds-only control arm). A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's oob control faulted and its uaf control completed. Pre-registered in silicon-predictions/2026-10-16-plain: CAUGHT, per-object bounds at the request size (cause 28).",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac08114c in ffh_read_probe; by probe: the fault is at the labelled probe ffh_read_probe",
+      "verdict_from": "results/2026-10-16-silicon/silicon-level0"
+    },
+    "silicon-lifetimes": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b): the case built for the silicon ABI and run as a delegated application, its heap level0 with CAPSTONE_LEVEL0_LIFETIMES (tools/arms.json silicon-level0-lifetimes; built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py). A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's oob and uaf controls both faulted. Pre-registered in silicon-predictions/2026-10-16-plain: CAUGHT, the child at the request size being exact (the RTL reports cause 28, OUT_OF_BOUNDS).",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac08114c in ffh_read_probe; by probe: the fault is at the labelled probe ffh_read_probe",
+      "verdict_from": "results/2026-10-16-silicon/silicon-lifetimes"
     }
   },
   "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, and ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell. CheriBSD MEASURED 2026-10-06: CAUGHT at the labelled probe (0x1020ba), si_code 1, attribution established. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT.",
