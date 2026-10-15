@@ -5,6 +5,13 @@
  */
 #include "corpus.h"
 
+#ifdef CORPUS_GEOMETRY
+#include "corpus-geometry.h"
+#else
+#define CORPUS_GEOM(probe, p) ((void)0)
+#endif
+
+
 _Noreturn void mch_fail(unsigned code) {
   fprintf(stderr, "CONTROL-FAILED %u\n", code);
   exit(75); /* an infrastructure failure is never a verdict */
@@ -37,9 +44,11 @@ int main(int argc, char **argv) {
  * image. corpus.h explains why this is not `static` in the header. */
 __attribute__((noinline, used)) void
 mch_write_probe(volatile unsigned char *p, unsigned char v) {
+  CORPUS_GEOM("mch_write_probe", p);
   *p = v;
 }
 __attribute__((noinline, used)) unsigned
 mch_read_probe(const volatile unsigned char *p) {
+  CORPUS_GEOM("mch_read_probe", p);
   return *p;
 }
