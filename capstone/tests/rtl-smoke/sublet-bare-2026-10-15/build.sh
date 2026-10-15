@@ -7,7 +7,7 @@ set -euo pipefail
 B=$(cd "$(dirname "$0")" && pwd); L=$B/../sup-bare-2026-10-03-ladder
 BIN=${CAPSTONE_LLVM_BIN:-$(git -C "$B" rev-parse --show-toplevel)/llvm/cmake-build-debug/bin}
 SRC=${SUBLET_SRC:-$B/../../../capstone-ariane/verif/tests/custom/capstone}
-for f in sublet-derive-kill.S sublet-split-shares-node.S sublet-mrev-orphan.S sup-sublet.S; do cmp "$SRC/$f" "$B/tests/$f" || { echo "tests/$f differs from the RTL tree"; exit 1; }; done
+for f in sublet-derive-kill.S sublet-split-shares-node.S sublet-mrev-orphan.S sup-sublet.S stale-access.S; do cmp "$SRC/$f" "$B/tests/$f" || { echo "tests/$f differs from the RTL tree"; exit 1; }; done
 build() {   # name test-file id-char [extra -D]
   local n=$1 f=$2 ch=$3; shift 3
   "$BIN/clang" --target=riscv64-unknown-elf -march=rv64gc -mabi=lp64 -mcmodel=medany -static -nostdlib -nostartfiles \
@@ -24,4 +24,6 @@ build sublet-split-shares-node sublet-split-shares-node.S 83 -DBOARD_R_CAP=x16 -
 build sublet-mrev-orphan       sublet-mrev-orphan.S       79 -DBOARD_R_CAP=x9 -DBOARD_R_T1=x17 -DBOARD_R_T2=x8 -DBOARD_REC_NODE=x27
 # sup-sublet (second wave): its in-domain CAPPRINTs compile out under BOARD_TEST_CH; it never revokes the base's node; x8/x16/x17 free
 build sup-sublet               sup-sublet.S               85 -DBOARD_R_CAP=x16 -DBOARD_R_T1=x17 -DBOARD_R_T2=x8
+# stale-access (the bug corpus's ask 1): never revokes the base's node; x8/x16/x17 free
+build stale-access             stale-access.S             84 -DBOARD_R_CAP=x16 -DBOARD_R_T1=x17 -DBOARD_R_T2=x8
 (cd "$B/images" && sha256sum *.bin > SHA256SUMS)
