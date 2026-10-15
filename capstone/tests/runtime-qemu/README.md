@@ -107,6 +107,9 @@ started with, both of which `capstone_vm` records in the state directory. On the
 profile QEMU's MOVC nulls an untagged source as the RTL does, so they are judged as with the
 switch on, without its notice. The build refuses (exit 2) a toolchain
 whose `llc` lacks the live-source copy pass or `+movc-keeps-integer-source`.
+capstone-cc refuses `+movc-keeps-integer-source` with a physical SDK, whose silicon nulls
+an untagged MOVC source until Q-04 (b); the runner sets `CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE=1`
+for the `movc-keep` compile alone, the control that shows what the flag loses there.
 
 First run on a VM (2026-09-30, the delegation stack with dev 330014ea merged; record
 `results/20260930-delegated-probes-stack.json`): 22 of the 23 variants pass in a guest without

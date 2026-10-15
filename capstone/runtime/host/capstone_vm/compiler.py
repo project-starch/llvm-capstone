@@ -101,11 +101,22 @@ PROFILE_LLVM_OPTIONS = ("capstone-gp-free", "capstone-image-gp")
 # Every gp ABI option (gp-free, image-gp, gp-captable ...) is the profile's:
 # absent from its codegen means off.
 PROFILE_LLVM_OPTION = re.compile(r"^capstone-(gp-.*|image-gp)$")
-# The MOVC copy rule (Q-04) is the caller's to set either way: the virtual
-# SDK compiles with +movc-keeps-integer-source, and tests/runtime-qemu's
-# movc-rule probe turns it off again (-Xclang -target-feature -Xclang
-# -movc-keeps-integer-source).
+# The MOVC copy rule (Q-04) is the caller's to set either way on the virtual
+# profile: its SDK compiles with +movc-keeps-integer-source, and
+# tests/runtime-qemu's movc-rule probe turns it off again (-Xclang
+# -target-feature -Xclang -movc-keeps-integer-source). On the physical profile
+# only - is allowed: today's silicon nulls an untagged MOVC source until Q-04 (b)
+# is flashed, so + would lose every live integer-sourced copy (C-32). The
+# movc-keep probe, a control that shows exactly that, sets MOVC_PROBE_ENV.
 MOVC_FEATURE = "movc-keeps-integer-source"
+MOVC_PROBE_ENV = "CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE"
+
+
+def check_movc_feature(sign: str | None, profile: str, what: str) -> None:
+    if sign == "+" and profile == "physical" and os.environ.get(MOVC_PROBE_ENV) != "1":
+        raise ValueError(f"{what} +{MOVC_FEATURE}: the physical profile's MOVC nulls an untagged "
+                         f"source on today's silicon (Q-04 (b) not flashed), so live integer copies "
+                         f"would be lost (C-32); only a probe sets {MOVC_PROBE_ENV}=1")
 # Assembler options that select the architecture, its extensions or the ABI.
 ASSEMBLER_PROFILE = ("-march", "-mabi", "-mattr", "-mcpu", "-mfloat", "-target", "-triple", "-mllvm")
 
@@ -173,6 +184,9 @@ def check_profile(config: dict) -> tuple[dict, str | None, dict]:
            "abi": abi, "options": options}
     if got != want:
         raise ValueError(f"sdk.json codegen is not the {profile} profile's ({got} != {want}); rebuild the SDK")
+    if profile == "physical" and features.get(MOVC_FEATURE) == "+":
+        raise ValueError(f"sdk.json codegen has +{MOVC_FEATURE}, which the physical profile's silicon "
+                         f"does not support (Q-04 (b)); rebuild the SDK")
     return features, abi, options
 
 
@@ -242,6 +256,7 @@ def check_arguments(arguments: list[str], config: dict) -> None:
     base = {"m": "+", "a": "+", **features}
     for name, sign in caller_features.items():
         if name == MOVC_FEATURE:
+            check_movc_feature(sign, profile, "-target-feature")
             continue
         if base.get(name) != sign:
             raise ValueError(f"-target-feature {sign}{name}: the {profile} SDK profile "
@@ -577,6 +592,7 @@ def check_cc1(job: list[str], config: dict) -> None:
                 planned_options[name] = llvm_bool(name, value, "clang's plan")
         elif word.startswith(LAYOUT_FLAGS):
             raise ValueError(f"clang would compile with {word}, which changes the SDK's C ABI")
+    check_movc_feature(planned.get(MOVC_FEATURE), config["profile"], "clang would compile with")
     for name, sign in planned.items():
         if name != MOVC_FEATURE and allowed.get(name) != sign:
             raise ValueError(f"clang would compile with {sign}{name}, not the {config['profile']} profile's features")

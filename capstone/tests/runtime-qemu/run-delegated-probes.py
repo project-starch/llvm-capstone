@@ -398,7 +398,11 @@ def build(sdk, work, only):
         out.unlink(missing_ok=True)
         cmd = [str(sdk / "capstone-cc"), "-std=c11", *flags, *(str(HERE / s) for s in sources),
                "-o", str(out)]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # movc-keep is the control that shows what +movc-keeps-integer-source does under a
+        # MOVC that nulls an untagged source; capstone-cc refuses it on a physical SDK
+        # unless this compile, and only this one, opts in.
+        env = {**os.environ, "CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE": "1"} if name == "movc-keep" else None
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
         if result.returncode or not out.exists():
             raise SystemExit(f"run-delegated-probes: {name} did not build (rc {result.returncode}):\n"
                              f"{' '.join(cmd)}\n{result.stderr[-2000:]}")

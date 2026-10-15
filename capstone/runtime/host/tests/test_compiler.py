@@ -2,6 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 from capstone_vm.compiler import expand, link_arguments
 
@@ -109,6 +110,11 @@ class ProfileArgumentTests(unittest.TestCase):
     def test_profile_codegen_must_match(self):
         check_profile(VIRTUAL)
         check_profile(PHYSICAL)
+        # A physical SDK may never carry the virtual MOVC rule, opt-in or not.
+        with patch.dict(os.environ, {"CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE": "1"}):
+            with self.assertRaises(ValueError):
+                check_profile({"profile": "physical", "codegen": [
+                    "-Xclang", "-target-feature", "-Xclang", "+movc-keeps-integer-source"]})
         # The MOVC copy rule is not part of the profile.
         check_profile({"profile": "virtual", "codegen": VIRTUAL["codegen"][:-4]})
         for config in ({"codegen": []}, {"profile": "virtual", "codegen": []},
@@ -126,12 +132,28 @@ class ProfileArgumentTests(unittest.TestCase):
 
     def test_the_movc_copy_rule_is_the_callers(self):
         # tests/runtime-qemu's movc-rule and movc-keep, through capstone-cc.
-        for config in (VIRTUAL, PHYSICAL):
-            for sign in "+-":
-                check_arguments(["-O2", "-c", "a.c", "-Xclang", "-target-feature",
-                                 "-Xclang", sign + "movc-keeps-integer-source"], config)
-                check_arguments(["-O2", "-c", "a.c", "-Xclang=-target-feature",
-                                 "-Xclang=" + sign + "movc-keeps-integer-source"], config)
+        def movc(*signs, equals=False):
+            words = ["-O2", "-c", "a.c"]
+            for sign in signs:
+                words += (["-Xclang=-target-feature", "-Xclang=" + sign + "movc-keeps-integer-source"] if equals
+                          else ["-Xclang", "-target-feature", "-Xclang", sign + "movc-keeps-integer-source"])
+            return words
+        with patch.dict(os.environ):
+            os.environ.pop("CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE", None)
+            for equals in (False, True):
+                for sign in "+-":
+                    check_arguments(movc(sign, equals=equals), VIRTUAL)
+                check_arguments(movc("-", equals=equals), PHYSICAL)
+                # Physical silicon nulls an untagged MOVC source (Q-04 (b)): + is refused,
+                # whichever spelling, unless a later - wins.
+                self.refused(PHYSICAL, *movc("+", equals=equals))
+                self.refused(PHYSICAL, *movc("-", "+", equals=equals))
+                check_arguments(movc("+", "-", equals=equals), PHYSICAL)
+            # The movc-keep control's opt-in, set for that compile alone.
+            os.environ["CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE"] = "1"
+            check_arguments(movc("+"), PHYSICAL)
+            os.environ["CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE"] = "yes"
+            self.refused(PHYSICAL, *movc("+"))
         # Only as a -target-feature value: the driver word is still refused.
         self.refused(VIRTUAL, "-c", "a.c", "-movc-keeps-integer-source")
         self.refused(VIRTUAL, "-c", "a.c", "-Xclang", "-target-feature", "-movc-keeps-integer-source")
@@ -221,6 +243,13 @@ class PlannedJobTests(unittest.TestCase):
         check_cc1(self.job(), VIRTUAL)
         check_cc1(self.job("-target-feature", "-movc-keeps-integer-source", features=("+m", "+a"), gp=()),
                   PHYSICAL)
+        physical_keep = self.job("-target-feature", "+movc-keeps-integer-source", features=("+m", "+a"), gp=())
+        with patch.dict(os.environ):
+            os.environ.pop("CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE", None)
+            with self.assertRaises(ValueError):
+                check_cc1(physical_keep, PHYSICAL)
+            os.environ["CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE"] = "1"
+            check_cc1(physical_keep, PHYSICAL)
         check_cc1(self.job(kind="-cc1as", features=()), VIRTUAL)
         check_cc1(self.job(features=("+m", "+a"), gp=()), PHYSICAL)
 
