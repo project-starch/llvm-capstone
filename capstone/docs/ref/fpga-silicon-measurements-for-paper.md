@@ -6257,3 +6257,29 @@ Three arms in one boot (06:46-07:01): firmware 124238b7d5b41abd, set 2's line, 9
 - The carved crossings stay inside one malloc'd block. A remedy is only possible at the carving code, which these two
   arms add, in the corpus's driver, not in FFmpeg.
 - Every region here is at most 2,048 bytes, below the 4 KiB where the full scheme's bounds become inexact.
+
+## memcached's nested allocators and FFmpeg's plane case on silicon: patch 0006 catches all five reuses at the stale read; plane bounds catch the plane crossing (caplifive_sublet_d93a8d66b, 2026-10-16)
+Four arms in one boot (07:11-07:43): firmware 8c1a74aec8105d2d, the line of sets 2 and 3, 60 runs, each ended by
+itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-nested (lane 02105a6f4c96).
+- Results: RESULTS.md there.
+
+| arm | rows |
+|---|---|
+| memcached-silicon-mc-stock (slabs.c / cache.c stock, lifetimes heap) | 00-07 MISSED; 08 CAUGHT 28 (declared site); control 90 completes |
+| memcached-silicon-mc-sublet (patch 0006: every chunk and cache object a CDERIVE child, CREVOKEd at free) | **00-04 CAUGHT 25** at the stale read; 06-07 CAUGHT 28; 05 and 08 no reading; control 90 CAUGHT 25 |
+| plane-silicon-level0 | MISSED |
+| plane-silicon-carve-bounds | CAUGHT 28 at the probe |
+
+- **Every outcome and site is as pre-registered.** One cause is not: 05's fixed run read 24, not the 25 predicted. The
+  case's own sentinel byte overwrites the next item's `sublet_parent`, so CREVOKE gets a non-capability. RESULTS.md has
+  the detail.
+- **The level0 these images use places blocks of 4 KiB and up on their granule,** so a CDERIVE over them is exact and
+  base == cursor. Patch 0006's arithmetic needs that. An inexact child keeps its cursor at the requested start while
+  its base rounds down.
+
+**Scope, before quoting:**
+- memcached's 9 cases are 5 temporal (00-04) and 4 spatial (05-08).
+- 05 has no reading on any Sublet build, virtual included.
+- 08's buffer is a 16,400-byte child that rounds up 16 bytes at its granule: a predicted spatial difference on
+  silicon, where the scan stops in the slack.
