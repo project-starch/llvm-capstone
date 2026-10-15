@@ -279,6 +279,22 @@ def arm_controls(arm, sanity_ok, probe_ok, arms):
 def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached, llvm_bin,
             image, precondition_met=True, site_licensed=False):
     obs = verdicts.Observation(case=case, arm=arm, image_sha256=image_sha, controls=controls)
+    # NO PREMISE, SO NO PAIR. The corpus's own pristine record says native PHP does not
+    # complete this case -- it crashes with no capability platform anywhere near it -- so there
+    # is nothing here for an arm to catch or miss and the cell is out of the denominator.
+    #
+    # Said in the judge's own vocabulary rather than left to fall through. Without this the two
+    # such cases land wherever the later rules put them, and both landings MISREPORT: CRASH-057
+    # faults on our arms and so reads `setup-fault`, which blames our instrument for a crash
+    # native PHP also has, and CRASH-100 is silent and so reads `not-reached`, which is a claim
+    # about our run rather than about the oracle. Both are NO-READING either way, so this moves
+    # no case into or out of CAUGHT; it makes the reason true.
+    if spec["pristine_outcome"] != "OK":
+        obs.infra = "out-of-denominator"
+        obs.notes = (f"the corpus's pristine record for this case is "
+                     f"{spec['pristine_outcome']!r}, not OK: native PHP does not complete it, "
+                     f"so there is no pair to read")
+        return obs
     # NO DATA IS AN ERROR, NOT A ZERO. Both of these say the harness never got a reading, and
     # both would otherwise fall through to `completed=False, reached=False` -- which the judge
     # reports as `not-reached`, a statement about the PROGRAM. The first measurement made

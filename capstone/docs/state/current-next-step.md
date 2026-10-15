@@ -315,6 +315,71 @@ the FPGA monitor's supervised CALL, with no fabricated gp. Preflight was off, fo
     fabricated gp);
   - S-17 stays watched through apertures 219..222.
 
+## PHP ON VIRTUAL CAPSTONE — PHASE B MEASURED, 2026-10-15
+
+**Real PHP 5.0.0 runs as a Linux user process on virtual Capstone, and the scored run is in.**
+145 TUs — the Makefile's own `PHP_GLOBAL_OBJS` + `PHP_CLI_OBJS`, nothing dropped — so `main/`
+(26), `main/streams/` (9), `sapi/cli`, `TSRM/`, `regex/` and all 65 of `ext/standard` are
+linked and PHP owns `main()`. Phase A's ~360-line SAPI is gone. Guest output is byte-identical
+to native glibc PHP 5.0.0 from the corpus's pristine build.
+
+**The entire PHP-side change is one flag and two configure answers**: `-D__off64_t=off_t`
+(musl's `cookie_seek_function_t` *is* the pointer form `COOKIE_SEEKER_USES_OFF64_T` declares),
+and `HAVE_RES_NMKQUERY`/`HAVE_RES_NSEND` set to 0 for a libc with no reentrant resolver. 143 of
+143 TUs compiled first try. `Zend/` and `ext/` stay byte-identical from the read-only corpus
+mount, which is the whole basis of the result.
+
+**Result, against pre-registration `692e9d79a244` (cited by hash, pushed before the run):**
+
+```
+php-real-stock    CAUGHT=2   MISSED=26  infra=1  out-of-denominator=2
+php-real-block    CAUGHT=8   MISSED=19  infra=1  out-of-denominator=2  unattributed=1
+php-real-object   CAUGHT=21  MISSED=7   infra=1  out-of-denominator=2
+php-real-exact    CAUGHT=25  MISSED=1   infra=1  out-of-denominator=2  unattributed=2
+```
+
+**25 of 28** (31 less CRASH-057 and CRASH-100, which the oracle itself crashes on, less
+CRASH-092, which gave no reading). Gates all passed with real inputs: revokes 0/0/8937/8937,
+8 revoke instructions in the image, the bound probe faulting as declared on both spatial arms.
+Bundles are `bundle-php-real-{stock,block,object,exact}/{verdicts.jsonl,inputs.json}`, image
+sha256 `b36d053690136b03f92dcb8ebb67bde2759168fd3167d17c6f3fdaeebebf8836`.
+
+**63 of 72 pre-registered cells as predicted**, compared mechanically. Eight of the nine
+deviations are two cases that were NO-READING as predicted with a more precise reason. **One
+substantive miss: CRASH-140 on the block arm**, predicted CAUGHT, observed `unattributed`
+because it faults at `Zend/zend_hash.c:998` rather than ASAN's `zend_builtin_functions.c:1433`
+— the conservative direction. The cell named in advance as most likely to move, the
+nine-vs-seven `AG(cache)` split, did not move.
+
+**Four apparatus changes were made after the pre-registration and are named in the plan**
+(`docs/plans/2026-10-12-php-virtual-capstone-retarget.md`, "Phase B — RESULT"): a per-run
+watchdog; a second route to `reached` (this one moved two cells toward CAUGHT, and the
+direction was fixed in advance by the pre-registration, not the data); three gates that had no
+input at all, the revoke-ordering gate among them; and `out-of-denominator` as a reason.
+
+### What is owed on this lane, in order
+
+1. **CRASH-008 and CRASH-073's attribution.** Both fault; neither is attributable by site.
+   CRASH-073's ASAN site is inside `zend_alloc.c`; CRASH-008's overrun is performed by
+   `strcat` → `__stpcpy` inside musl-capstone's `string_bounds_safe.c`, so its audit hook
+   would go in a **shared** component — a separate decision, not this lane's to take alone.
+2. **CRASH-092 hangs and the cheapest explanation is refuted.** PHP 5.0.0's
+   `php_sock_stream_wait_for_data` turns one persistent `select()` error into an infinite loop,
+   but `app/probe-select.c` shows select and poll both correct here (4 stages, 0 failures), so
+   the hang is in PHP's stream logic, not the platform. Needs a run with PHP-level tracing.
+3. **`PHP_VIRTUAL_SHRINK_STACK=1` as its own variable.** Wired, off for this run by the
+   pre-registration, never measured. It is what would make a stack-object defect catchable;
+   re-measure the known cases with it on before claiming anything about that class.
+4. **The 24 Phase A cases re-measured on real PHP** — done for all of them by this run; what
+   remains is writing the agreement up as the two-column comparison.
+5. Carried: platform gate 34/41; `run-malloc.py` 17/19 (both failures traced to a buildroot
+   glibc oracle); the physical column's CRASH-035 reading; CRASH-057's interior free; the
+   corpus restructuring into `NN_<upstream-fix>_<slug>/`.
+
+**User-owned and still open:** `~/.claude-kisp/secrets/name-denylist.txt` and
+`fpga-console-url` (every commit on this lane needs `PRECOMMIT_SCAN_NO_URL_FILE=1` without
+them); the Typst deck `case-studies/php-capstone-deck/slides.typ` wants these final numbers.
+
 ## APP PORTS AND BUG CORPORA — 2026-10-04. **Nothing is owed on memcached, tshark or FFmpeg.** All 24
 registered-but-unmeasured cells are measured and committed: FFmpeg pool corpus 40-47 on both app arms
 (16/16, `ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/`), case 3's component pair as probe 39

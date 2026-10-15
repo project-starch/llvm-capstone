@@ -1057,6 +1057,225 @@ Stated in advance so a miss is informative rather than retrofitted:
    while `zend_error` hands the buffer to a zval PHP later `efree`s). Real `main/` supplies the
    genuine `vspprintf`, so this cell is being measured against PHP's own code for the first time.
 
+## Phase B — RESULT of the scored run on real PHP (2026-10-15)
+
+Answers the pre-registration at **`692e9d79a244d444b3786cbea31090628076a3d3`** above. One image
+(`php-real-seam.dom`, sha256 `b36d053690136b03f92dcb8ebb67bde2759168fd3167d17c6f3fdaeebebf8836`,
+5,082,184 bytes, 145 PHP TUs plus 3 support), four arms at `PHP_CAP_MODE` 0/4/6/7, 31 cases plus
+the controls per arm, one guest boot per arm. Bundles: `bundle-php-real-{stock,block,object,exact}/`
+with `verdicts.jsonl` and `inputs.json`.
+
+### The table
+
+| case | stock | block | object | exact |
+|---|---|---|---|---|
+| CRASH-003 | MISSED | **CAUGHT** | **CAUGHT** | **CAUGHT** |
+| CRASH-004 | MISSED | **CAUGHT** | **CAUGHT** | **CAUGHT** |
+| CRASH-008 | MISSED | MISSED | MISSED | unattributed |
+| CRASH-010 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-016 | MISSED | MISSED | MISSED | **CAUGHT** |
+| CRASH-022 | **CAUGHT** | **CAUGHT** | **CAUGHT** | **CAUGHT** |
+| CRASH-024 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-025 | MISSED | **CAUGHT** | **CAUGHT** | **CAUGHT** |
+| CRASH-035 | MISSED | **CAUGHT** | **CAUGHT** | **CAUGHT** |
+| CRASH-042 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-047 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-057 | out-of-denominator | out-of-denominator | out-of-denominator | out-of-denominator |
+| CRASH-065 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-066 | MISSED | MISSED | MISSED | **CAUGHT** |
+| CRASH-067 | MISSED | **CAUGHT** | **CAUGHT** | **CAUGHT** |
+| CRASH-073 | MISSED | MISSED | MISSED | unattributed |
+| CRASH-074 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-080 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-084 | MISSED | MISSED | MISSED | MISSED |
+| CRASH-086 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-091 | MISSED | MISSED | MISSED | **CAUGHT** |
+| CRASH-092 | infra | infra | infra | infra |
+| CRASH-099 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-100 | out-of-denominator | out-of-denominator | out-of-denominator | out-of-denominator |
+| CRASH-102 | **CAUGHT** | **CAUGHT** | **CAUGHT** | **CAUGHT** |
+| CRASH-103 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-110 | MISSED | MISSED | MISSED | **CAUGHT** |
+| CRASH-112 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-140 | MISSED | unattributed | **CAUGHT** | **CAUGHT** |
+| CRASH-151 | MISSED | MISSED | **CAUGHT** | **CAUGHT** |
+| CRASH-160 | MISSED | **CAUGHT** | **CAUGHT** | **CAUGHT** |
+
+```
+php-real-stock    CAUGHT=2   MISSED=26  infra=1  out-of-denominator=2
+php-real-block    CAUGHT=8   MISSED=19  infra=1  out-of-denominator=2  unattributed=1
+php-real-object   CAUGHT=21  MISSED=7   infra=1  out-of-denominator=2
+php-real-exact    CAUGHT=25  MISSED=1   infra=1  out-of-denominator=2  unattributed=2
+```
+
+**25 of 28.** The denominator is 31 less CRASH-057 and CRASH-100, which the corpus's own
+pristine record says native PHP does not complete (`SIGNAL:11`), and less CRASH-092, which
+produced no reading. The three cases in the denominator that are not caught are each explained
+and none of them is a silent miss:
+
+- **CRASH-008** and **CRASH-073** are `unattributed`, not `MISSED` — both fault, neither can be
+  attributed by site. CRASH-008's overrun is performed by `strcat` → `__stpcpy` inside
+  musl-capstone's `string_bounds_safe.c`, outside PHP's allocator boundary where the `COPYCASE`
+  audit lives; the symbolizer reads `??:0` because musl is not in the image's debug info.
+  CRASH-073's own ASAN site is `Zend/zend_alloc.c:403`, inside the allocator, where a fault
+  cannot be told from the port breaking. Both need an audit hook that does not exist yet, and
+  CRASH-008's would have to go in a **shared** component.
+- **CRASH-084** is a genuine `MISSED` as measured, and it is in the denominator here although
+  the pre-registration put it outside. The mechanism is known and is not about capabilities:
+  musl's `putenv("=")` computes `l == 0` and routes to `unsetenv`, so the empty-named string
+  never enters `environ` and the use-after-free has no precondition. Counting it out gives
+  **25 of 27**; it is reported in rather than out, because an exclusion decided by us is worth
+  less than a number that carries its own caveat.
+
+### Against the pre-registration: 63 of 72 cells, and one substantive miss
+
+Compared mechanically, cell by cell, over the 25 unseen cases the pre-registration committed to
+(the six already observed in the exploratory run are excluded, as it required):
+
+- **63 of 72 cells as predicted.**
+- **8 of the 9 deviations are the same two cases, and all 8 agree on the verdict** —
+  CRASH-092 and CRASH-100 were predicted `NO-READING not-reached` and read `infra` and
+  `out-of-denominator`. Both are NO-READING as predicted; only the reason differs, and in both
+  cases the observed reason is the more precise one (092 produced no reading because it hangs
+  and the watchdog killed it; 100 has no premise because the oracle crashes on it).
+- **One substantive deviation: CRASH-140 on the block arm**, predicted CAUGHT, observed
+  `unattributed`. It faults at `Zend/zend_hash.c:998` while ASAN's site is
+  `Zend/zend_builtin_functions.c:1433` — the dangling pointer is dereferenced inside the hash
+  walk rather than at ASAN's line. The deviation is in the conservative direction: the
+  measurement refuses to call it a catch. On `object` and `exact` it faults at ASAN's own site
+  and is CAUGHT.
+
+**The cell named in advance as most likely to move did not move.** The pre-registration said the
+nine-vs-seven split between cases needing the per-object retire and cases the block-level revoke
+also reaches was the thing most at risk, because real PHP's allocation history is not the
+engine's and a freed block can land in a different `AG(cache)` bucket. All nine predicted
+`MISSED/MISSED/CAUGHT` read exactly that, and six of the seven predicted `MISSED/CAUGHT/CAUGHT`
+read exactly that, the seventh being CRASH-140 above. The split survived the change of host.
+
+**The pre-registration's own summary total is wrong and its cells are right.** It says "23 CAUGHT
+of 28"; its per-cell table implies 25, and 25 is what was measured. The arithmetic slip is in the
+summary line, not in a prediction, and is recorded here rather than quietly compared against
+whichever number flattered the result.
+
+### What the arms establish
+
+Every cross-arm gate passed, with real inputs for the first time:
+
+```
+revoke instructions in image = 8
+php-real-stock   mode 0  revokes=0
+php-real-block   mode 4  revokes=0
+php-real-object  mode 6  revokes=8937
+php-real-exact   mode 7  revokes=8937
+seam-bound-probe faulted as declared on both spatial arms
+```
+
+The temporal triple separates three ways on real PHP: 2 → 8 → 21. The stock arm's two catches
+are not an anomaly and were predicted — CRASH-022's freed block is overwritten with scalar data,
+so the tag is gone whoever revokes, and CRASH-102 overruns past `REAL_SIZE`, which every arm
+bounds. The spatial pair adds four more at `exact` (CRASH-016, 066, 091, 110), each of which
+lives inside PHP's own `REAL_SIZE` rounding slack and is therefore invisible to any arm that
+reproduces PHP's rounding — which is the whole reason the ASAN-blind population exists.
+
+### Comparison with Phase A and with the physical column
+
+Phase A measured 24 reachable cases of 31 and caught all 24, with a ~360-line SAPI standing in
+for `main/`, `main/streams/`, `sapi/cli`, `TSRM/` and `regex/`. Phase B attempts all 31 against
+real PHP and reads 25 CAUGHT, 1 MISSED, 2 unattributed, 2 out of denominator and 1 infra. The
+seven cases Phase A could not reach are now reached or accounted for:
+
+| case | Phase A | Phase B |
+|---|---|---|
+| CRASH-086 | not reached (image size) | **CAUGHT** at object |
+| CRASH-099 | not reached (`php://memory`) | **CAUGHT** at object |
+| CRASH-112 | not reached (files, `/tmp`) | **CAUGHT** at object |
+| CRASH-008 | not reached (real `time()`) | reached, faults, `unattributed` (musl's `stpcpy`) |
+| CRASH-084 | not reached (`environ`) | reached, `MISSED` — musl's `putenv` gives it no premise |
+| CRASH-092 | not reached (loopback) | reached, **hangs**; no reading |
+| CRASH-100 | not reached (listener + stack) | out of denominator — the oracle crashes on it |
+
+### CRASH-092 hangs, and the obvious explanation is refuted
+
+CRASH-092 blocks forever on this platform. It stopped two arms of the first measurement dead
+and cost the ten cases after it alphabetically, which is what the per-run watchdog now prevents.
+
+The natural reading of PHP 5.0.0's own source makes the platform the suspect.
+`php_sock_stream_wait_for_data` (`main/streams/xp_socket.c:95-106`) is
+
+```c
+while(1) {
+    retval = select(sock->socket + 1, &tfdr, NULL, NULL, ptimeout);
+    if (retval == 0) sock->timeout_event = 1;
+    if (retval >= 0) break;
+}
+```
+
+A `select()` returning 0 or a positive count leaves the loop; one returning −1 does not, and
+nothing there inspects `errno` or counts attempts — **one persistent `select()` error is an
+infinite loop**. The case sets `default_socket_timeout` to 1 and `xp_socket.c:726` copies that
+into the socket, so a read of a connection nobody will answer should give up after a second.
+
+**`app/probe-select.c` refutes it.** On this platform an idle descriptor times out returning 0,
+a ready one is reported, a NULL timeout works, and `poll()` times out too — four stages, zero
+failures. The wait primitives PHP depends on are correct here, so the hang is in PHP's own
+stream logic or in the socket interaction, not in the platform, and locating it needs a run with
+PHP-level tracing. CRASH-092 stays `NO-READING infra` until then.
+
+### Changes to the apparatus after the pre-registration, named
+
+Four, all made during this measurement and all pushed before the result. Three of them fixed
+gates that were reporting nothing rather than reporting wrongly, which is the failure mode that
+survives review.
+
+1. **A per-run watchdog** (`c0322177a3cc`). One blocking case held the console until the arm's
+   whole session timed out, and the unattempted runs after it arrived at the judge as
+   `completed=False, reached=False` — which reads as `not-reached`, a statement about the
+   program drawn from a silence the harness produced. Killed runs and runs with no exit status
+   are now `infra`.
+2. **`reached` has a second route** (`20467b6e65f6`). It was derived from the control arm
+   completing, so a case the platform catches at mode 0 had no completing control arm by
+   construction and read `setup-fault` — the instrument blamed for its own clearest result. The
+   pre-registration predicted CRASH-022 CAUGHT on all three temporal arms, so the apparatus
+   could not express a prediction it had already made. A fault at the case's own ASAN-recorded
+   site now also establishes `reached`, which is the argument already used for environmental
+   preconditions. **This moved two cells toward CAUGHT and the direction was fixed in advance by
+   the pre-registration, not by the data.** Its cost: for CRASH-022 and CRASH-102 the reading no
+   longer carries the independent check that a control arm reproduced the oracle's output.
+3. **Three gates with no input** (`31509f8aec45`). The revoke-ordering gate — the strongest in
+   the measurement, and the one that would have caught the physical port's four false CAUGHTs
+   cheaply — was evaluating nothing, because Phase A printed those counters from its own
+   `main()` and real PHP owns `main()`. The node-pressure gate compared `nodes=` (cumulative
+   allocations, per `module/capstone_vm.c:673`) against `node_capacity` and would have refused
+   about twenty healthy runs as `infra`; it is replaced by keying on the cause-30 fault itself.
+   The stale-transcript guard compared the bound probe against the PHP image and refused the
+   probe's own honest transcript, which is what aborted the third run after three arms.
+4. **`out-of-denominator`** (this commit). A case the oracle crashes on is said to be out of the
+   denominator rather than decaying into `setup-fault` (which blames our instrument for a native
+   crash) or `not-reached` (which is a claim about our run). No case moves into or out of CAUGHT.
+
+The seam's exit hook is worth one more line because it cost a probe to understand. The first
+version printed the counters to **stdout** and produced nothing, although the call is at the top
+of `zend_cap_block_alloc` in the linked image and the object references `atexit`.
+`app/probe-atexit.c` shows this platform running atexit handlers in LIFO order, running
+destructors, and delivering stdout, stderr and a raw `write(2)` at exit — all of it, in a
+trivial program. So the loss is specific to PHP: by the time an exit hook runs, PHP's own
+shutdown has taken its stdout down. The counters now go to stderr and both hooks are armed.
+**Which hook speaks for PHP is not established** — `atexit` returns 0 and musl runs that list
+before the destructors — so the conclusion is the narrower one: an exit-time diagnostic on this
+port must use stderr and should not rest on a single hook.
+
+### What this does not establish
+
+- **`PHP_VIRTUAL_SHRINK_STACK` was off**, as the pre-registration required, so nothing here
+  speaks to the stack-object class. CRASH-100 is the case that needs it and the oracle gives it
+  no premise anyway.
+- **Site-based attribution is coarse for nine of the 31**, whose ASAN site is
+  `zend_execute_API.c:389` (`_zval_ptr_dtor`). They are separated by the per-arm controls, not
+  by the site.
+- **The six exploratory cases are not predictions** and are excluded from the 63-of-72.
+- **CRASH-092's hang is unexplained**, with the cheapest explanation eliminated rather than
+  confirmed.
+
 ## Phase B — real PHP
 
 The corpus tree is **already configured** (`main/php_config.h`, `main/build-defs.h`,

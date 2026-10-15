@@ -185,6 +185,19 @@ def observation_cases():
     check("an unconfirmed precondition is still not a reading",
           verdicts.judge(obs, arms["php-real-stock"])[1], "not-reached")
 
+    # The oracle says native PHP does not complete this case: out of the denominator, and said
+    # so, rather than decaying into a claim about our instrument or our run.
+    nopremise = dict(SPEC, pristine_outcome="SIGNAL:11")
+    obs = R.observe("CRASH-057", nopremise, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), False, "/x", "/y", True, False)
+    v, reason, _ = verdicts.judge(obs, exact)
+    check("a case the oracle crashes on is out of the denominator",
+          (v, reason), (verdicts.NO_READING, "out-of-denominator"))
+    obs = R.observe("CRASH-100", nopremise, "php-real-stock", SHA, "", 0,
+                    controls(probe=None), False, "/x", "/y", True, False)
+    check("and so is a silent one", verdicts.judge(obs, arms["php-real-stock"])[1],
+          "out-of-denominator")
+
     # The per-run watchdog fired. A killed run is the harness giving up, never a statement
     # about the program -- and in particular never the `not-reached` it would decay to if the
     # marker were ignored, because a killed run is silent and un-reached by construction.
@@ -381,10 +394,11 @@ def main_path_cases():
               sorted(by_case[c]["verdict"] for c in ("CRASH-086", "CRASH-110")),
               [verdicts.CAUGHT, verdicts.CAUGHT])
         # The oracle says the pristine build crashes on CRASH-057, so even a fault at ASAN's own
-        # site is not a reading: there is no silence on the control arm to compare it against.
+        # site is not a reading: there is no silence on the control arm to compare it against,
+        # and the reason names the oracle rather than blaming our setup for a native crash.
         check("a case the pristine build crashes on is not a reading",
               (by_case["CRASH-057"]["verdict"], by_case["CRASH-057"]["reason"]),
-              (verdicts.NO_READING, "setup-fault"))
+              (verdicts.NO_READING, "out-of-denominator"))
         # CRASH-092 faults at ASAN's site on the exact arm here, so its precondition is proved
         # and that licenses the catch.
         check("a precondition case that faults at ASAN's site is CAUGHT",
