@@ -77,3 +77,20 @@ board transcript:
   inexact fallback. The image's CDERIVE count and `__capstone_level0_unexact` are read first.
 - **A spatial row MISSED:** the RTL's bounds for that object are wider than the model's. Ask the helper lane to check
   the geometry before calling it a silicon result.
+
+## Amendment before the silicon-level0 boot (2026-10-16 04:52)
+
+**The silicon-lifetimes boot has run** (firmware 0409fc297ed52e26, 04:29-04:49; the result is in RESULTS.md):
+- 72 of 72 as predicted by outcome and site;
+- temporal cause 25, as predicted;
+- spatial cause **28**. The RTL's OUT_OF_BOUNDS (capstone_unit.anvilh:321) is the code QEMU reports as 5 / 7.
+  qemu-and-predictions.json had carried QEMU's 5 / 7 in that arm's per-row cause field. The text above left the
+  spatial cause open, so this is recorded, not re-scored.
+
+**silicon-level0, pre-registered now:**
+- QEMU (`silicon-level0/qemu-and-predictions.json`): controls clean RETURNED, oob CAUGHT 7, uaf RETURNED (reissued),
+  subobj RETURNED; 72 of 72 as predicted: 46 spatial CAUGHT at the probe, 26 temporal DEFECT-REPRODUCED.
+- **On silicon, firmware f1cfbeece7760d6b:**
+  - the same verdicts;
+  - spatial cause 28, from the lifetimes boot;
+  - uaf RETURNED.
