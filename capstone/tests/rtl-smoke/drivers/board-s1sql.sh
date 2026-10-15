@@ -26,7 +26,7 @@ bake(){ say "bake $1: waiting for the machine memory lock (another lane may be m
       ( cd $B && make build LINUX_PAYLOAD=1 A=$a CAPSTONE_CC_PATH=$CC ) > $OUT/bake-$tag-$a.log 2>&1 || exit 1
     done' _ "$B" "$CC" "$OUT" "$1"; }
 pgrep -f 'python3 -m fpga_driver' >/dev/null && fail "a board runner is live"
-[ "$(git -C $BM rev-parse --short HEAD)" = 2dcd3a5 ] || fail "monitor is not 2dcd3a5"
+git -C $BM merge-base --is-ancestor 2dcd3a5 HEAD || fail "monitor does not carry 2dcd3a5"
 cd $B || fail "no FPGA buildroot copy"
 [ "$(git rev-parse --short HEAD)" = d04bd83 ] || fail "FPGA copy is at $(git rev-parse --short HEAD), not d04bd83 (the #3 module)"
 HOSTF=$B/overlay/test-domains/sqlite_host.user
