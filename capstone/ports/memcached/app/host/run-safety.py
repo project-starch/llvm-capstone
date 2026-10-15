@@ -92,7 +92,7 @@ def main():
     state = args.out / 'vm'
     for _ in range(2400):
         shutil.rmtree(state, ignore_errors=True)
-        up = vm(state, 'up', *shlex.split(os.environ['CAPSTONE_VM_UP_ARGS']), '--share', str(share),
+        up = vm(state, 'up', *shlex.split(os.environ['CAPSTONE_VM_UP_ARGS']), '--profile', 'physical', '--share', str(share),
                 '--boot-timeout', '600', capture_output=True, text=True)
         (args.out / 'up.log').write_text(up.stdout + up.stderr)
         if up.returncode == 0:

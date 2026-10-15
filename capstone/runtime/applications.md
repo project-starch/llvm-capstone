@@ -62,13 +62,22 @@ capstone_configure_application(program
 
 Select `ports/common/cmake/toolchains/capstone-domain.cmake`, prepared musl
 headers/archive, `PORT_HEADER_PROVIDER=musl` and `PORT_C11_ATOMICS=ON`. Enable
-C and ASM. The heap is `level0` over a static arena: each allocation bounded to
-its request, nothing revoked on free. With `CAPSTONE_APPLICATION_VIRTUAL` it is
-musl mallocng instead, which also ends each object's lifetime on free
-([virtual runtime](virtual/README.md)).
+C and ASM. Applications are built for the virtual profile by default
+(`CAPSTONE_APPLICATION_VIRTUAL`, ON): the heap is musl mallocng, which bounds
+each object and ends its lifetime on free ([virtual runtime](virtual/README.md)).
+`-DCAPSTONE_APPLICATION_VIRTUAL=OFF` selects the physical profile, whose heap is
+`level0` over a static arena: each allocation bounded to its request, nothing
+revoked on free. The musl archive must be built for the same profile
+(`ports/musl-capstone/build-musl-capstone.sh` follows
+`CAPSTONE_APPLICATION_PROFILE`, `virtual` unless set to `physical`). A build
+directory keeps the profile it was first configured with; configure a fresh
+one, or pass the option, to change it.
 
 For Make/configure or another upstream build system, build the same runtime as
 an SDK and give the generated driver to the upstream build as `CC`:
+
+The SDK follows the same default; add `-DCAPSTONE_APPLICATION_VIRTUAL=OFF`
+for a physical-profile SDK.
 
 ```sh
 source capstone/tests/capstone-test-env.sh
@@ -115,14 +124,20 @@ Install the host Python package once:
 python3 -m venv "$CAPSTONE_TMP_ROOT/application-tools"
 "$CAPSTONE_TMP_ROOT/application-tools/bin/pip" install ./capstone/runtime/host
 export PATH="$CAPSTONE_TMP_ROOT/application-tools/bin:$PATH"
+# $ADAPTER: runtime/virtual/build-adapter.sh's output (the virtual launcher and module).
 capstone-vm --state "$CAPSTONE_TMP_ROOT/dev-vm" up \
   --qemu "$CAPSTONE_QEMU_BINARY" \
   --kernel "$CAPSTONE_BUILDROOT_DIR/build/images/Image" \
   --firmware "$CAPSTONE_BUILDROOT_DIR/build/images/fw_jump.elf" \
   --rootfs "$CAPSTONE_BUILDROOT_DIR/build/images/rootfs.ext2" \
+  --launcher "$ADAPTER/capstone-vexec" --module "$ADAPTER/module/capstone_vm.ko" \
   --share "$APPLICATION_SHARE"
 capstone-vm --state "$CAPSTONE_TMP_ROOT/dev-vm" shell
 ```
+
+The VM's profile is the virtual one unless `--profile physical` is given; it
+must match the images it runs. `--exact-bounds` adds QEMU's exact-bounds mode as a
+two-sided control; the mallocng heap does not need it.
 
 QEMU needs user networking (`--enable-slirp`). Defaults are one hart, 8 GiB RAM,
 512 MiB CMA, a 384 MiB retained process-storage limit, `CAPSTONE_GP_NONLIN=1`
@@ -133,7 +148,8 @@ emulator environment settings are recorded in the session identity and passed
 to QEMU on every boot or restart. The rootfs
 runs as a disposable snapshot; files on the host share remain persistent.
 
-The installed rootfs already supplies the tools. For development, optional
+The installed rootfs already supplies the tools of the physical profile; the
+virtual profile requires its `--launcher` and `--module`. For development,
 `--launcher`, `--module` and `--ssh-server` override installed components.
 `--launcher` also takes `capstone-job` from the same build directory unless
 `--job-helper` is supplied. The SSH override is a Dropbear multi-call binary.
@@ -601,14 +617,18 @@ ctest --test-dir "$CAPSTONE_TMP_ROOT/application-native" --output-on-failure
 PYTHONPATH=capstone/runtime/host python3 -m unittest discover -s capstone/runtime/host/tests
 ```
 
-Build `runtime/tests/application` using the application toolchain to obtain
-`application-contract.dom`. The Linux build also supplies `application-supervisor`
-and `application-process-test`. Stage those and `perl.dom`, `mruby.dom` on the
-existing share, then:
+This acceptance gate is the physical profile's: `application-process-test`
+drives the physical module's process and region interfaces. The virtual
+profile's gates are the [virtual runtime's](virtual/README.md). Build
+`runtime/tests/application` with `-DCAPSTONE_APPLICATION_VIRTUAL=OFF` using the
+application toolchain to obtain `application-contract.dom`. The Linux build also
+supplies `application-supervisor` and `application-process-test`. Stage those and
+physical-profile `perl.dom` and `mruby.dom` on the share of a VM started with
+`--profile physical`, then:
 
 ```sh
 python3 capstone/runtime/tests/application/run.py \
-  --state "$CAPSTONE_TMP_ROOT/dev-vm" --repeat 200 --report acceptance.json
+  --state "$CAPSTONE_TMP_ROOT/physical-vm" --repeat 200 --report acceptance.json
 ```
 
 All tests use the existing boot. The checked report includes platform hashes,
@@ -618,7 +638,9 @@ removed on 2026-10-11; their records stay under `tests/application/results/`.
 Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
-The libc heap qualification runs the heap cases of `contract.c` on two images
+The libc heap qualification is the physical profile's: build
+`runtime/tests/application` with `-DCAPSTONE_APPLICATION_VIRTUAL=OFF` and run it
+in a `--profile physical` VM. It runs the heap cases of `contract.c` on two images
 of the same source: `sysalloc-bounds` (`level0`, the heap as applications get it, each
 allocation bounded) and `sysalloc-none` (`control`, `level0` built with
 `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, unprotected). The spatial `fault-*` cases
@@ -643,7 +665,7 @@ guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
 
 ```sh
 python3 capstone/runtime/tests/application/run-heap.py \
-  --state "$CAPSTONE_TMP_ROOT/dev-vm" \
+  --state "$CAPSTONE_TMP_ROOT/physical-vm" \
   --level0-image /mnt/host/application-contract.dom --level0-elf <build>/application-contract.dom \
   --control-image /mnt/host/contract-no-object-bounds.dom --control-elf <build>/contract-no-object-bounds.dom \
   --nm <toolchain>/bin/llvm-nm --objdump <toolchain>/bin/llvm-objdump \

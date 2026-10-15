@@ -23,7 +23,7 @@ fi
   || { echo "build FAILED"; grep -E 'error' "$LOG/build.log" | head -5; exit 1; }
 touch "$LOG/cast-log.txt"; sort -u "$LOG/cast-log.txt" > "$LOG/cast-sites.txt"
 cp "$X/memcached" "$OUT/memcached.dom"
-if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual ]]; then
   # The virtual SDK supplies one growing, revoking heap; the physical
   # level0/shrink comparison arms retain their original recipe below.
   "$CAPSTONE_LLVM_BIN/llvm-readelf" -h "$OUT/memcached.dom" > /dev/null

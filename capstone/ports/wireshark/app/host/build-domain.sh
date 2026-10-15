@@ -2,13 +2,13 @@
 # Link full tshark, staged starts and allocator fixtures with the shared ABI-v2 SDK.
 set -euo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual && ${TSAPP_HEAP+x} ]]; then
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual && ${TSAPP_HEAP+x} ]]; then
   echo "TSAPP_HEAP is physical-only; virtual uses mallocng" >&2
   exit 2
 fi
 source "$APP/deps/env.sh"
 B=$TS_WORK/xbuild
-if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual ]]; then
   HEAP=mallocng OUT=$TS_WORK/domain HEAPF=()
 else
   HEAP=${TSAPP_HEAP:-level0}
@@ -55,7 +55,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh" \
   -DCMAKE_C_FLAGS_RELEASE="-O1 ${HEAPF[*]}"
 export CAPSTONE_SDK=$SDK
 PROFILEF=()
-[[ ${CAPSTONE_APPLICATION_PROFILE:-physical} != virtual ]] || PROFILEF=(-DTSAPP_VIRTUAL_HEAP)
+[[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} != virtual ]] || PROFILEF=(-DTSAPP_VIRTUAL_HEAP)
 RT=()
 "$SDK/capstone-cc" -O1 "${PROFILEF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
 

@@ -34,7 +34,7 @@ ORDER_CEILING=$(( ${FFAPP_ORDER_CEILING_MB:-256} * 1024 * 1024 ))
 #           revocation.                                                           -> domain-shrink/
 # The sublet arm (musl-capstone's sublet_heap.c) and the pool modes on it (FFAPP_POOL=0|2) were
 # removed on 2026-10-11 with the physical Sublet heap; their recorded results stay in results/.
-if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual ]]; then
   [[ ! ${FFAPP_HEAP+x} ]] || { echo "FFAPP_HEAP is physical-only; virtual uses mallocng" >&2; exit 2; }
   HEAP=mallocng OUT="$WORK/domain" HEAPF=()
 else
@@ -53,7 +53,7 @@ FFEXTRA=()
 SUBLET=${FFAPP_SUBLET:-0}
 case $SUBLET in 0|1) ;; *) echo "FFAPP_SUBLET must be 0 or 1" >&2; exit 2 ;; esac
 if [[ $SUBLET == 1 ]]; then
-  [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]] \
+  [[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual ]] \
     || { echo "FFAPP_SUBLET=1 needs CAPSTONE_APPLICATION_PROFILE=virtual" >&2; exit 2; }
   FFEXTRA+=(-I"$REPO_ROOT/capstone/runtime/include")
 fi
@@ -77,7 +77,7 @@ ARCHIVE=$WORK/musl-build/libc-capstone.a
 # profile's F/D code generation), as the hard-float SDK needs.
 LIBC_KEY=$({
   sha256sum "$CLANG"
-  printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-physical}"
+  printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-virtual}"
   cat "$MUSL_PORT"/{build-musl-capstone,prepare-musl-capstone}.sh "$MUSL_PORT/survey-musl-capstone.py" \
       "$MUSL_PORT"/musl-patches/*.patch
   find "$MUSL_PORT/arch-capstone64" -type f -print0 | sort -z | xargs -0 cat
@@ -98,7 +98,7 @@ INC=(-nostdinc -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
      -isystem "$MUSL/obj/include" -isystem "$MUSL/include" -isystem "$("$CLANG" -print-resource-dir)/include")
 FLAGS=("${TARGET[@]}" -ffreestanding -fno-builtin -fno-jump-tables -ffunction-sections
        -fdata-sections -O1 -Wno-int-conversion -D_GNU_SOURCE "${INC[@]}")
-if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual ]]; then
   FLAGS+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp
           -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d
           -Xclang -target-abi -Xclang lp64)
@@ -137,7 +137,7 @@ CONFIG_EDIT='s/^#define HAVE_POSIX_MEMALIGN 1$/#define HAVE_POSIX_MEMALIGN 0/; s
 # compiled before C-50..C-58 would have been reused on a fixed compiler.
 toolchain_id() {
   local bin; bin=$(readlink -f "$CLANG")
-  printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-physical}"
+  printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-virtual}"
   # `|| true`: a statically linked clang loads no LLVM libraries, and its codegen is in the binary.
   { echo "$bin"; ldd "$bin" | awk '/=> \//{print $3}' | grep -E 'libLLVM|libclang' || true; } |
     xargs stat -L -c '%n %s %Y'

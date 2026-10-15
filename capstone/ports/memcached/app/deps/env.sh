@@ -16,7 +16,7 @@ export MC_LINKER_SCRIPT="$CAPSTONE_REPO_ROOT/capstone/my_first_domain/link.ld"
 # build keeps codegen in libLLVM*.so), every source the runtime is built from, and this file.
 _mc_sources=$(capstone_source_listing capstone/runtime capstone/ports/common/application) || return 1
 _mc_key=$( {
-  printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-physical}"
+  printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-virtual}"
   _b=$(readlink -f "$CAPSTONE_CLANG")
   { echo "$_b"; ldd "$_b" | awk '/=> \//{print $3}' | grep -E 'libLLVM|libclang' || true; } | xargs stat -L -c '%n %s %Y'
   cat "$_mc_musl_port"/runtime/*.c "$_mc_musl_port"/runtime/*.S "$_mc_musl_port/runtime/libc_overrides.list" \
