@@ -478,7 +478,7 @@ gate; this adapter does not replace their monitor or CALL/RETURN path.
 
 This is the first QEMU application profile: one hart, private anonymous
 mappings, 2 GiB per registered region, 4 GiB
-registered VA per process, 512 mappings, and a recyclable node table bounded by
+registered VA per process, 8192 mappings, and a recyclable node table bounded by
 RAM, an optional module quota and the 30-bit ID field. mallocng's object
 records grow through its metadata allocator; they have no fixed object-count limit.
 Fork, shared tagged mappings, file-backed

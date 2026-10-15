@@ -39,6 +39,8 @@ done
 # records by position.
 (unset CAPSTONE_VM_STATS; ./capstone-vexec contract.dom vm-large 2>&1)
 echo VM_EXIT:vm-large:$?
+(unset CAPSTONE_VM_STATS; ./capstone-vexec contract.dom vm-mappings 2>&1)
+echo VM_EXIT:vm-mappings:$?
 ./capstone-vexec contract.dom spin > /tmp/spin.out 2>&1 & spin=$!
 # QEMU startup includes Linux image loading and the first delegated rounds;
 # allow the child to publish its readiness before testing signal termination.
@@ -159,7 +161,7 @@ def main():
             except subprocess.TimeoutExpired: guest.kill(); guest.wait()
     lines = [s.strip() for s in out.decode(errors='replace').splitlines()]
     tests = {}
-    for name, code in [('normal', 0), ('threads', 0), ('vm', 0), ('vm-large', 0), ('nested', 0), ('nested-stale', 139), ('heap-threads', 0), ('vm-ro-write', 139), ('vm-none-read', 139), ('vm-guard', 139), ('vm-padding', 139), ('sparse-churn', 0), ('sparse-stale', 139), ('stale', 139), ('bounds', 139), ('retired', 139),
+    for name, code in [('normal', 0), ('threads', 0), ('vm', 0), ('vm-large', 0), ('vm-mappings', 0), ('nested', 0), ('nested-stale', 139), ('heap-threads', 0), ('vm-ro-write', 139), ('vm-none-read', 139), ('vm-guard', 139), ('vm-padding', 139), ('sparse-churn', 0), ('sparse-stale', 139), ('stale', 139), ('bounds', 139), ('retired', 139),
                        ('preempt', 143), ('parallel_one', 0), ('parallel_two', 0),
                        ('sqlite_write', 0), ('sqlite_read', 0), ('mruby', 0), ('cleanup', 0)]:
         if a.skip_recycling and name in ('sparse-churn', 'sparse-stale'): continue
@@ -205,6 +207,7 @@ def main():
         for name, (pc, entry) in zip(names, fault_sites[4:]))
     tests['vm_contract'] = lines.count('VIRTUAL_VM_OK protections guards requested_length unused_pages execute rollback') == 1
     tests['vm_large_contract'] = lines.count('VIRTUAL_VM_LARGE_OK region aggregate realloc release') == 1
+    tests['vm_mappings_contract'] = lines.count('VIRTUAL_VM_MAPPINGS_OK 1200') == 1
     tests['heap_threads'] = lines.count('VIRTUAL_HEAP_THREADS_OK shared_ownership metadata_growth arena_growth') == 1
     tests['vm_denial_operations'] = all(lines.count('VIRTUAL_VM_ACCESS:' + op) == 1
                                       for op in ('write_ro', 'read_none', 'guard', 'padding') + (() if a.skip_recycling else ('collected',)))
