@@ -2,27 +2,27 @@
 # FP respin acceptance RE-RUN with the R-55 monitor fix (2026-10-15), on caplifive_fpb_afcd19bea.bit.
 # The first run (/tmp/capstone/accept-fpb) stopped at R-43 a1: Linux hangs because the monitor's mtime capability
 # reads msip (ISSUES R-55). Fix, both halves: caplifive-opensbi df0e9a8 / d7489e3 (cap_env_init's MMIO cursors) and
-# capstone-sbi 6dad416 / fc5e3c6 (create_domain's globals copy, create_region, share_child_region); r55-fix/build-all-2.sh.
+# capstone-sbi 93440d5 / 7361e1c (split_out_cap SHRINK; create_domain's globals copy, create_region, share_child_region); r55-fix/build-all-2.sh.
 # Not re-run (bare, monitor-free, already recorded on this bitstream today): S-16 18/18, R-51, s10b, s1gap.
 # Order: s06agg (the fixed firmware boots Linux: the cheap gate), R-43 a1..a10 (+ ladder, P1), C5u, boot C+F, boot W.
 # Every step stops the chain on failure except the exploratory boot W. Body in main().
 main() {
   set -u
-  local D=/tmp/capstone/accept-fpb-r55 L=/tmp/capstone/accept-fpb-r55/SEQ F=/tmp/capstone/r55-fix/fw2
+  local D=/tmp/capstone/accept-fpb-r55 L=/tmp/capstone/accept-fpb-r55/SEQ F=/tmp/capstone/r55-fix/fw3
   local RS=$HOME/dev/llvm-capstone/capstone/tests/rtl-smoke
   local C=$HOME/dev/llvm-capstone/capstone/caplifive-system/sw/buildroot/components/opensbi
   export FPGA_BITSTREAM=${NEWBIT:?set NEWBIT to the console-reported name}
   echo "CHAIN_START $(date +%H:%M:%S) $FPGA_BITSTREAM" >> $L
   # Identities, before any boot.
   local want
-  for want in "$F/fw-s06agg.bin b6cc1ea73168" "$F/c5u/fw_payload.bin a377c2415fd8" "$F/cf/fw_payload.bin d99e57bbee62" "$F/w/fw_payload.bin 76488c0374da"; do
+  for want in "$F/fw-s06agg.bin 8b4cbb4b4dff" "$F/c5u/fw_payload.bin 1f971278fd42" "$F/cf/fw_payload.bin 060d6566c956" "$F/w/fw_payload.bin 69895472f098"; do
     set -- $want
     [ "$(sha256sum $1 | cut -c1-12)" = "$2" ] || { echo "FW MISMATCH $1" >> $L; return 1; }
   done
   [ "$(git -C $C rev-parse --short=7 HEAD)" = df0e9a8 ] && grep -q "R-55" $C/lib/sbi/sbi_capstone_dom.c \
     || { echo "SHARED WRAPPER NOT AT df0e9a8" >> $L; return 1; }
-  [ "$(git -C $C/lib/sbi/capstone-sbi rev-parse --short=7 HEAD)" = 6dad416 ] && grep -q "R-55" $C/lib/sbi/capstone-sbi/sbi_capstone.c \
-    || { echo "SHARED MONITOR NOT AT 6dad416" >> $L; return 1; }
+  [ "$(git -C $C/lib/sbi/capstone-sbi rev-parse --short=7 HEAD)" = 93440d5 ] && grep -q "R-55" $C/lib/sbi/capstone-sbi/sbi_capstone.c \
+    || { echo "SHARED MONITOR NOT AT 93440d5" >> $L; return 1; }
   echo "IDENTITIES OK $(date +%H:%M:%S)" >> $L
 
   # 1. s06agg + k800 on the fixed board-line firmware: Linux must boot (boot M's analogue with the production fix).
@@ -46,7 +46,7 @@ main() {
   bash $D/r43/chain.sh; rc=$?
   echo "R43_CHAIN rc=$rc $(date +%H:%M:%S)" >> $L
   grep -q "R-55" $HOME/dev/llvm-capstone/capstone/caplifive-system/sw/buildroot/build-fpga/build/opensbi-custom/lib/sbi/sbi_capstone_dom.c \
-    && grep -q "R-55" $HOME/dev/llvm-capstone/capstone/caplifive-system/sw/buildroot/build-fpga/build/opensbi-custom/lib/sbi/capstone-sbi/sbi_capstone.c \
+    && grep -q "R-55 (bounds)" $HOME/dev/llvm-capstone/capstone/caplifive-system/sw/buildroot/build-fpga/build/opensbi-custom/lib/sbi/capstone-sbi/sbi_capstone.c \
     && echo "R43 BAKE CARRIED R-55" >> $L || { echo "R43 BAKE DID NOT CARRY R-55: its readings are on the unfixed monitor" >> $L; return 1; }
   [ $rc -eq 0 ] || { echo "STOPPED: the R-43 list failed" >> $L; return 1; }
 

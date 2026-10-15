@@ -2347,6 +2347,35 @@ boot-time mtime capability.**
   from Linux weaker until the carve-policy change). Rows that read a bounds fault are read against their record as
   usual. A changed fault reading there is the first thing checked against that overlap.
 
+**Attempts 1 and 2, and a second amendment before attempt 3 (same day).**
+- **Attempt 1 (13:05):** s06agg passed (k800 4, s06agg 64, `sched_clock` [0.000165]). R-43 then refused before any boot:
+  board-r1e4.sh's gate wants the monitor to be exactly 2dcd3a5. The R-43 and P1 drivers now run as private copies
+  whose gate is `merge-base --is-ancestor 2dcd3a5 HEAD`.
+  - That gate accepts 6dad416 and refuses the old pin 4274268.
+  - The committed drivers carry the same change on the lane, 2c9d7ce3e8ba.
+- **Attempt 2 (13:14):** s06agg passed again. R-43 a1 booted Linux, and the k800 control returned 4. The SQLite host
+  then stopped at its first region map: `capstone: map_region: region 18 is at or above the mapping limit (MAP_SIZE_LIMIT
+  268435456)`, then `SQ: X/fail`.
+  - The bake carried both R-55 halves.
+  - The REGION_CREATE was carved in CMA out of Linux's long tail region, and under the full scheme it decoded from
+    0x80000000, about 700 MiB.
+  - That is R-55's bounds half breaking a function, not only isolation.
+- **The bounds fix:** capstone-sbi 93440d5 (board) / 7361e1c (supcall). split_out_cap SHRINKs the piece it returns to
+  exactly [base, base + len) (keeps its node, clamps the cursor to base). This covers every split_out_cap caller.
+  - QEMU is byte-identical on both lines, and the FPGA change is in split_out_cap only.
+  - The generated assembly stores the shrunk register back to `region`'s home slot.
+  - Under the over-wide bounds, a revoked region's reclaim would also have zeroed its whole decoded range.
+- **Attempt 3's firmwares** (r55-fix/fw3), each payload identical to its control's:
+
+  | Row | Firmware |
+  |---|---|
+  | s06agg | 8b4cbb4b4dff |
+  | boot C+F | 060d6566c956 |
+  | boot W | 69895472f098 |
+  | C5u | 1f971278fd42 |
+
+  The shared tree's monitor is at 93440d5. The chain checks that the bake's copy carries "R-55 (bounds)".
+
 **Predictions: those of record, unchanged.**
 - The (b) column of 5e82c06d61f9, the FP rows of fc3225fb237d and 6bc165f2e1c2, b08839bbb7df's staging (r54-bounds
   64, every other rung 0), and 540a1814a90a for boot W (cw-align 8, cw-pool 0).
