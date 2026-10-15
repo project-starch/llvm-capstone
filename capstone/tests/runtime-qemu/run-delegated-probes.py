@@ -30,7 +30,9 @@ the symptom its old control produced.
 
 movc runs in any guest and is judged by the switch that guest's QEMU was
 started with (CAPSTONE_MOVC_NULL_SCALAR, recorded in the state directory);
-run it once in a guest with the switch off and once in one with it on. It is
+run it once in a guest with the switch off and once in one with it on. On the
+physical profile QEMU's MOVC nulls an untagged source as the RTL does, so
+there it is judged as with the switch on, whatever the switch. It is
 built twice: movc-rule with the compiler's live-source copy rule (C-32's fix,
 -movc-keeps-integer-source, which overrides the virtual SDK's default) and
 movc-keep with +movc-keeps-integer-source, a plain movc for every copy. The
@@ -197,17 +199,24 @@ def check_movc(variant):
         iconv = re.search(rf"^MOVC-ICONV {variant} n=(\d+)$", out, re.M)
         if not probe or not c32 or not iconv:
             return problems + [f"no MOVC-PROBE, MOVC-C32 {variant} or MOVC-ICONV {variant} line"]
-        on = ctx.get("movc-switch") == "1"
+        switch = ctx.get("movc-switch") == "1"
+        # Physical QEMU models the silicon: its MOVC nulls an untagged source
+        # whatever the switch says, as the RTL does until Q-04 (b).
+        physical = ctx.get("profile") != "virtual"
+        on = switch or physical
         b, c, got, n = probe.group(1), probe.group(2), c32.group(1), int(iconv.group(1))
         if on and variant == "rule" and ctx.get("sdk-movc-keeps"):
             # The probe's own file is built without the feature, but the
             # runtime, libc and builtins it links assume Q-04's MOVC. Under the
             # old MOVC that image mixes two rules, so a pass would prove nothing.
             problems.append("the SDK compiles its runtime and libc with +movc-keeps-integer-source "
-                            "(Q-04); a guest with CAPSTONE_MOVC_NULL_SCALAR=1 cannot qualify "
-                            "movc-rule against it: use an SDK built without the feature")
+                            "(Q-04); a guest whose MOVC nulls an untagged source (CAPSTONE_MOVC_NULL_SCALAR=1 "
+                            "or the physical profile) cannot qualify movc-rule against it: use an SDK built "
+                            "without the feature")
         if on and (b, c) == ("5", "5"):
-            problems.append("switch on changed nothing: this QEMU has no CAPSTONE_MOVC_NULL_SCALAR")
+            problems.append("physical profile kept an untagged source: this QEMU predates the Q-04 split"
+                            if physical else
+                            "switch on changed nothing: this QEMU has no CAPSTONE_MOVC_NULL_SCALAR")
         elif (b, c) != ("5", "0" if on else "5"):
             problems.append(f"probe b={b} c={c}, want b=5 c={'0' if on else '5'}")
         if not on or variant == "rule":
@@ -219,9 +228,12 @@ def check_movc(variant):
         elif got != "0x1" or n >= 3:
             problems.append(f"c32 got={got} iconv n={n}, want 0x1 and n<3: "
                             "the positive control did not see C-32")
+        # The switch reports itself only where it decides: the physical
+        # profile nulls before the switch is consulted.
         notices = ctx.get("movc-notices")
-        if notices is not None and bool(notices) != on:
-            problems.append(f"{notices} switch notices in qemu.log with the switch {'on' if on else 'off'}")
+        if notices is not None and bool(notices) != (switch and not physical):
+            problems.append(f"{notices} switch notices in qemu.log with the switch {'on' if switch else 'off'}"
+                            + (" on the physical profile" if physical else ""))
         return problems
     return check
 
@@ -562,30 +574,47 @@ def self_test():
         ("cap-atomics: untagged pointer faulted", check_done("CAP-ATOMICS-DONE"), segv,
          "ok   control: long store and fetch_add\n", "", {}, False),
         ("movc-rule off", check_movc("rule"), ok_exit(0), movc("5", "rule", "0x5000", 3), "",
-         {"movc-switch": "0", "movc-notices": 0}, True),
+         {"movc-switch": "0", "movc-notices": 0, "profile": "virtual"}, True),
         ("movc-keep off", check_movc("keep"), ok_exit(0), movc("5", "keep", "0x5000", 3), "",
-         {"movc-switch": "0", "movc-notices": 0}, True),
+         {"movc-switch": "0", "movc-notices": 0, "profile": "virtual"}, True),
         ("movc-rule on", check_movc("rule"), ok_exit(0), movc("0", "rule", "0x5000", 3), "",
-         {"movc-switch": "1", "movc-notices": 1}, True),
+         {"movc-switch": "1", "movc-notices": 1, "profile": "virtual"}, True),
         ("movc-keep on", check_movc("keep"), ok_exit(0), movc("0", "keep", "0x1", 1), "",
-         {"movc-switch": "1", "movc-notices": 1}, True),
+         {"movc-switch": "1", "movc-notices": 1, "profile": "virtual"}, True),
         ("movc-rule on: the copy rule missed a copy", check_movc("rule"), ok_exit(0),
-         movc("0", "rule", "0x1", 1), "", {"movc-switch": "1", "movc-notices": 1}, False),
+         movc("0", "rule", "0x1", 1), "", {"movc-switch": "1", "movc-notices": 1, "profile": "virtual"}, False),
         ("movc-keep on: the control did not see C-32", check_movc("keep"), ok_exit(0),
-         movc("0", "keep", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 1}, False),
+         movc("0", "keep", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 1, "profile": "virtual"}, False),
         ("movc-keep off: lost a value with QEMU's default", check_movc("keep"), ok_exit(0),
-         movc("5", "keep", "0x1", 1), "", {"movc-switch": "0", "movc-notices": 0}, False),
+         movc("5", "keep", "0x1", 1), "", {"movc-switch": "0", "movc-notices": 0, "profile": "virtual"}, False),
         ("movc-rule on: a QEMU without the switch", check_movc("rule"), ok_exit(0),
-         movc("5", "rule", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 0}, False),
+         movc("5", "rule", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 0, "profile": "virtual"}, False),
         ("movc-rule off: a notice with the switch off", check_movc("rule"), ok_exit(0),
-         movc("5", "rule", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 1}, False),
+         movc("5", "rule", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 1, "profile": "virtual"}, False),
         ("movc-rule on: the SDK's own code assumes Q-04", check_movc("rule"), ok_exit(0),
          movc("0", "rule", "0x5000", 3), "",
-         {"movc-switch": "1", "movc-notices": 1, "sdk-movc-keeps": True}, False),
+         {"movc-switch": "1", "movc-notices": 1, "profile": "virtual", "sdk-movc-keeps": True}, False),
         ("movc-keep on with a Q-04 SDK", check_movc("keep"), ok_exit(0), movc("0", "keep", "0x1", 1), "",
-         {"movc-switch": "1", "movc-notices": 1, "sdk-movc-keeps": True}, True),
+         {"movc-switch": "1", "movc-notices": 1, "profile": "virtual", "sdk-movc-keeps": True}, True),
+        ("movc-rule physical", check_movc("rule"), ok_exit(0), movc("0", "rule", "0x5000", 3), "",
+         {"movc-switch": "0", "movc-notices": 0, "profile": "physical"}, True),
+        ("movc-keep physical", check_movc("keep"), ok_exit(0), movc("0", "keep", "0x1", 1), "",
+         {"movc-switch": "0", "movc-notices": 0, "profile": "physical"}, True),
+        ("movc-rule physical, switch on", check_movc("rule"), ok_exit(0), movc("0", "rule", "0x5000", 3), "",
+         {"movc-switch": "1", "movc-notices": 0, "profile": "physical"}, True),
+        ("movc-rule physical: an untagged source kept", check_movc("rule"), ok_exit(0),
+         movc("5", "rule", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 0, "profile": "physical"},
+         False),
+        ("movc-keep physical: the control did not see C-32", check_movc("keep"), ok_exit(0),
+         movc("0", "keep", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 0, "profile": "physical"},
+         False),
+        ("movc-rule physical: a switch notice", check_movc("rule"), ok_exit(0),
+         movc("0", "rule", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 1, "profile": "physical"},
+         False),
+        ("movc-keep, no profile recorded: judged as physical", check_movc("keep"), ok_exit(0),
+         movc("0", "keep", "0x1", 1), "", {"movc-switch": "0", "movc-notices": 0}, True),
         ("movc-rule: the other variant's lines", check_movc("rule"), ok_exit(0),
-         movc("5", "keep", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 0}, False),
+         movc("5", "keep", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 0, "profile": "virtual"}, False),
         ("intcap", check_intcap("intcap"), ok_exit(0), intcap("intcap", ALL) + "INTCAP intcap END bad=0\n",
          "", {}, True),
         ("intcap: the pointer lost its tag", check_intcap("intcap"), segv, intcap("intcap", INT), "", {},
