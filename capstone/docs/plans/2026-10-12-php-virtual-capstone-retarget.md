@@ -934,6 +934,129 @@ denominator on evidence, named, with the evidence cited.
   with our SAPI; agreement on real PHP is what makes the two columns comparable, and CRASH-110
   is the only one checked so far.
 
+## Phase B — PRE-REGISTRATION for the scored run on real PHP (written 2026-10-15, before the run)
+
+Pushed to the lane branch before the measurement and cited by hash in the result commit, per the
+root `CLAUDE.md` rule. **Some cells below are not predictions and are marked so**: six cases were
+already observed in the exploratory attribution run recorded above, and a pre-registration that
+quietly re-predicted them would be worthless. The honest unit here is the **25 unseen cases**.
+
+### The population, derived rather than listed
+
+The 31 are not a list in our repo. They are the ASAN-blind population, recomputed from the
+corpus's own two result files at run time:
+
+```
+results-asan-default.json    outcome != "OK"
+results-asan-stockalloc.json outcome == "OK"
+```
+
+That reproduces **exactly 31** today. The expected site for each case is also taken from the
+oracle rather than from us — the first PHP source frame in ASAN's own stderr — so a catch is
+compared against what ASAN said, not against a table we maintain and could bend.
+
+### Arms
+
+One image, five runtime modes, because `zend_cap_mode()` reads `PHP_CAP_MODE` from the
+environment:
+
+| arm | mode | bound | revocation |
+|---|---|---|---|
+| `php-real-stock` | 0 | `REAL_SIZE` | none (the loan is never returned) |
+| `php-real-block` | 4 | `REAL_SIZE` | mallocng, per block |
+| `php-real-object` | 6 | `REAL_SIZE` | + the seam's per-`efree` retire |
+| `php-real-exact` | 7 | the caller's request | as mode 6 |
+
+Spatial pair: `object` (control, PHP's own rounding) vs `exact` (fault). Temporal triple:
+`stock` / `block` / `object`. Same gates as the seam measurement — the image must contain the
+revoke encoding, the arms must report distinct mode lines, and revokes must order
+`stock == 0 and block == 0 and object > 0`.
+
+**The spatial arms' bound control had to change, and the change is a weakening worth naming.**
+Phase A's `emalloc-overread` control lived inside our SAPI: `emalloc(9)`, write 9, read index 9,
+which completes on the rounded arm and faults on the exact one. Real PHP owns `main()`, so that
+control cannot run in-image, and PHP exposes no way to over-read a byte from a script. The
+replacement, declared in `arms.json` as `seam-bound-probe`, is `probe-seam` stage 7 — built from
+the same `zend-cap-*.c` sources, doing exactly that sequence, and ending in a fault by design.
+It is declared **identically on both spatial arms**, because it sets its own modes internally:
+it establishes that the seam's bound logic separates the two arms, **not** that a given image is
+running a given arm. What establishes the arm is the `ZEND_CAP_MODE` line the image itself
+prints, which the runner gates on. Pretending one probe did both jobs is the kind of control
+that reads as holding while proving nothing.
+
+`reached` is derived differently from Phase A and more strongly. Phase A read a stage bit out of
+our own SAPI; real PHP has no such bit, so the control arm's **stdout is compared against native
+pristine PHP 5.0.0 from the corpus's own build**. A case whose control arm does not reproduce
+the oracle's output byte for byte did not run the trigger, whatever its exit status, and is
+`NO-READING not-reached`.
+
+### Already observed — NOT predictions (exploratory run, this session)
+
+| case | observed | status |
+|---|---|---|
+| CRASH-110 | `url.c:132`, cause 28, mode 7 | Phase A's spatial catch reproduces |
+| CRASH-086 | `basic_functions.c:2135`, cause 24 | ASAN's own line |
+| CRASH-099 | `zend_execute_API.c:389`, cause 24 | ASAN's own line |
+| CRASH-112 | `zend_execute_API.c:389`, cause 24 | ASAN's own line |
+| CRASH-008 | `__stpcpy+44`, cause 28 | `unattributed` until the COPYCASE audit arm exists |
+| CRASH-084 | completed on both arms | `out-of-denominator`: musl's `putenv("=")` has `l == 0` and routes to `unsetenv`, so the empty-named string never enters `environ` and the UAF has no precondition |
+
+### Predictions for the 25 unseen cases
+
+**Temporal (17), at `stock` / `block` / `object`.** Phase A's seam measurement caught all 17;
+the prediction is that real PHP reproduces it, with the same split between cases the platform's
+own allocator catches and cases that need the per-object retire.
+
+- MISSED / MISSED / **CAUGHT** — the nine `AG(cache)` absorbs:
+  CRASH-010, 024, 042, 047, 065, 074, 080, 103, 151
+- MISSED / **CAUGHT** / **CAUGHT** — the seven the block-level revoke also reaches:
+  CRASH-003, 004, 025, 035, 067, 140, 160
+- **CAUGHT** / **CAUGHT** / **CAUGHT** — CRASH-022, whose freed block is overwritten with scalar
+  data, so the tag is gone regardless of who revokes
+
+**Spatial (5), at `object` (control) / `exact` (fault).**
+
+- MISSED / **CAUGHT**: CRASH-016, 066, 091
+- **CAUGHT** / **CAUGHT**: CRASH-102 — its object is already 8-aligned, so `REAL_SIZE` has no
+  slack to offer it, and it is caught on the rounded arm too
+- CRASH-073: `NO-READING unattributed` by site, **CAUGHT** only via the audit arm, because
+  ASAN's own site for it is `Zend/zend_alloc.c:403` — inside the allocator
+
+**Out of the denominator (1).** CRASH-057: `results-pristine-default.json` records `SIGNAL:11`
+for it alone among the 24, so the pair has no premise. Note ASAN's site for it is also
+`zend_alloc.c:403`.
+
+**Not reached (2).** CRASH-092 (`requires: network: working loopback`) and CRASH-100
+(`requires: network: an HTTP listener on 127.0.0.1:8599`) both need a second process in the
+guest, which this run does not provide. CRASH-100 additionally needs shrink-stack on, and
+`PHP_VIRTUAL_SHRINK_STACK` stays **off** for this run so the comparison with Phase A holds.
+
+**Totals predicted: 23 CAUGHT of 28 in the denominator** (31 less CRASH-057, 084, and the
+unattributed CRASH-008), with 092 and 100 `not-reached` inside that denominator.
+
+### Where this prediction is most likely to be wrong, and why
+
+Stated in advance so a miss is informative rather than retrofitted:
+
+1. **Real PHP's allocation history is not the engine's.** `main/`, `php_ini.c`, the streams layer
+   and `basic_functions.c`'s registration all run before the trigger, so a case's freed block can
+   land in a different `AG(cache)` bucket than it did in Phase A. `CACHE_INDEX` is
+   `REAL_SIZE(size)>>3` with 11 buckets × 256 entries, so a block that reached `free()` in Phase
+   A may be absorbed here, or the reverse. **The nine-vs-seven split is the cell most likely to
+   move**, and a case shifting between `block` and `object` is a finding about the cache, not a
+   regression.
+2. **Node-table pressure is higher.** Real PHP already reports `nodes≈12,200` with
+   `node_growths=3` on a benign workload, against the engine's ~10,300. A cause-30 resource
+   fault lands at an arbitrary pc and is otherwise indistinguishable from a catch, so any run
+   whose high-water comes within `CV_NODE_RESERVE` of capacity must be refused rather than read.
+3. **`_zval_ptr_dtor` is ASAN's site for nine of the 31.** Site-based attribution is therefore
+   coarse here: nine cases legitimately share one line, so "landed at the expected site" is
+   weaker evidence for those than for CRASH-110's `url.c:132`. The per-arm controls, not the
+   site, are what separate them.
+4. **CRASH-035 was the case the seam's own porting defect hid** (`ub_vspprintf` using `malloc`
+   while `zend_error` hands the buffer to a zval PHP later `efree`s). Real `main/` supplies the
+   genuine `vspprintf`, so this cell is being measured against PHP's own code for the first time.
+
 ## Phase B — real PHP
 
 The corpus tree is **already configured** (`main/php_config.h`, `main/build-defs.h`,
