@@ -1,5 +1,10 @@
 util.c: backticks and piped open through the C library popen, which spawns.
 
+my_syspclose gives the FILE back to PerlIO before pclose: PerlIO_releaseFILE reads
+fileno(f), and pclose frees f. The other order read a freed FILE, which the
+virtual profile's revoking heap reports as cause 25 in fileno_unlocked on the
+first close of a piped open (found on SPEC's perlbench, 2026-10-15).
+
 --- a/util.c
 +++ b/util.c
 @@ -2850,6 +2850,35 @@
@@ -49,8 +54,8 @@ util.c: backticks and piped open through the C library popen, which spawns.
 +{
 +#undef pclose
 +    FILE * const f = PerlIO_findFILE(ptr);
++    PerlIO_releaseFILE(ptr, f);     /* reads fileno(f): before pclose frees f */
 +    const I32 result = pclose(f);
-+    PerlIO_releaseFILE(ptr, f);
 +    return result;
 +}
 +#endif
