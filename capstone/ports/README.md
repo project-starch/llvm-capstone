@@ -150,3 +150,38 @@ See the [integration plan](../docs/plans/port-stack-integration.md) for the
 remaining cross-repository prerequisites and merge conflicts. Experimental
 application ports have manual validation; a skipped GitHub workflow is not a
 passing port test.
+
+## Reading a port change: mechanism and evidence are not the same diff
+
+A port change is mostly its evidence. Measured over the twenty commits that
+migrate the eight nested allocators to managed lifetimes, with the two commands
+below: **45,449 lines of mechanism across 452 files, 155,989 lines of recorded
+results across 827 files** -- 23% against 77%. The results are compact records
+with input and tool hashes, as the section above requires, but there are a great
+many of them, and a reviewer who reads a port change front to back spends most
+of the time in `verdicts.jsonl` and `outcomes*.json`.
+
+They are not meant to be read. They are meant to be **checked against the hashes
+in their own `results/*/` directory**, and recomputed if in doubt. The mechanism
+is meant to be read. So read the two separately:
+
+```sh
+# the mechanism: patches, adapter headers, runners, build glue, docs
+git diff <base>..<head> -- ':!*/results/*' ':!*/bug-corpora/*'
+
+# the evidence, checked rather than read
+git diff <base>..<head> -- '*/results/*' '*/bug-corpora/*'
+```
+
+Per port, the first command is small enough to read in one sitting: mruby 1,075
+lines, perl 1,157, sqlite 1,422, memcached 2,928, FFmpeg 3,315, CPython 4,692,
+Wireshark 5,511, PostgreSQL 16,920.
+
+**Mechanism and evidence stay in the same commit**, and that is deliberate. A
+code-only commit asserts that an allocator's objects now have managed lifetimes
+with nothing showing that they do; an evidence-only commit records verdicts
+against image hashes that are not yet in the tree. Neither stands on its own,
+which is this repository's bar for a commit, and `git bisect` degrades badly
+across the pair: an evidence-only commit can never fail, so a bisect lands on a
+mechanism commit whose measurement has not arrived and cannot tell a wrong arm
+from a missing one. The split above is a reading order, not a commit boundary.

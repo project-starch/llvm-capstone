@@ -11,6 +11,7 @@ every arm in one output, says so rather than accepting a selector it ignores.
 
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -111,6 +112,50 @@ class Dispatch(unittest.TestCase):
         done = self.resolve("cpython", "yes")
         self.assertNotEqual(done.returncode, 0)
         self.assertIn("CAPSTONE_VIRTUAL_LIFETIMES=yes", done.stderr)
+
+
+class Invocations(unittest.TestCase):
+    """Every recipe the entry calls gets the arguments that recipe requires.
+
+    --dry-run cannot catch this: it resolves the dispatch and runs no recipe, so
+    all eight dry-runs passed while the sqlite branch called prepare-sources.sh
+    with no argument at all and the fresh build died on its usage message
+    (measured on p12, 2026-10-13, after the entry's commit said the eight
+    invocations were still unrun). This reads the call sites statically, so it
+    needs no toolchain and no build.
+    """
+
+    def required_arguments(self, script):
+        text = script.read_text()
+        needed = [int(n) for n in re.findall(r"\$\{([0-9]+):\?", text)]
+        needed += [int(n) for n in re.findall(r"\[\[ \$# [=!]= ([0-9]+) \]\]", text)]
+        return max(needed, default=0)
+
+    def test_every_invoked_recipe_gets_the_arguments_it_requires(self):
+        checked, skipped = {}, []
+        for line in BUILDER.read_text().splitlines():
+            match = re.search(r'bash "\$PORTS/([^"]+)"(.*)$', line.strip())
+            if not match:
+                continue
+            relative, rest = match.group(1), match.group(2)
+            if "$" in relative:                      # build-$lib.sh: not resolvable here
+                skipped.append(relative)
+                continue
+            script = COMMON.parent / relative
+            self.assertTrue(script.is_file(), f"{relative} is not a file")
+            passed = len(re.findall(r'"[^"]*"', rest))
+            needed = self.required_arguments(script)
+            self.assertGreaterEqual(
+                passed, needed,
+                f"{relative} requires {needed} positional argument(s); "
+                f"build-virtual.sh passes {passed}")
+            checked[relative] = (passed, needed)
+        # A suite that silently covered nothing would pass too (the 2026-10-08
+        # shape: PASS printed over a subset), so require the call sites found.
+        self.assertGreaterEqual(len(checked), 8, f"only checked {sorted(checked)}")
+        self.assertEqual(skipped, ["wireshark/app/deps/build-$lib.sh"])
+        self.assertEqual(checked["sqlite/app/prepare-sources.sh"], (1, 1))
+        self.assertEqual(checked["sqlite/app/build-domain.sh"], (3, 3))
 
 
 if __name__ == "__main__":

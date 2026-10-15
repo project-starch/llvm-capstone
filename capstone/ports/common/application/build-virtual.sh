@@ -179,7 +179,7 @@ case "$APP" in
   sqlite)
     # 3.22.0: the shell and speedtest1, built by the SDK's capstone-cc against
     # musl's unix VFS. Not the freestanding ../build-sqlite-capstone.sh image.
-    SQ_SRC=$(bash "$PORTS/sqlite/app/prepare-sources.sh" | tail -1)
+    SQ_SRC=$(bash "$PORTS/sqlite/app/prepare-sources.sh" "$OUT/source" | tail -1)
     bash "$PORTS/sqlite/app/build-domain.sh" "$SDK" "$SQ_SRC" "$OUT/image"
     RELINK=0
     ;;
