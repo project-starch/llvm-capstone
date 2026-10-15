@@ -75,7 +75,10 @@ __sigsetjmp:
 2:
 	auipc t0, %pcrel_hi(__capstone_sigsetjmp_save)
 	addi t0, t0, %pcrel_lo(2b)
-#ifdef CAPSTONE_RUNTIME_VIRTUAL
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) || defined(CAPSTONE_GP_CAPTABLE_ABI)
+	/* Under the silicon ABI (B0, as altstack.S) a code address is a plain integer inside the domain's code
+	   capability and compiled code calls with jalr; gp is the capability TABLE there, so gp + the address is
+	   neither (smoke.rb's first raise jumped to it: cause 2, pc outside the code, B5 2026-10-15). */
 	jalr ra, 0(t0)
 #else
 	cincoffset t0, gp, t0
@@ -101,7 +104,7 @@ _longjmp:
 2:
 	auipc t0, %pcrel_hi(__capstone_longjmp_reap)
 	addi t0, t0, %pcrel_lo(2b)
-#ifdef CAPSTONE_RUNTIME_VIRTUAL
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) || defined(CAPSTONE_GP_CAPTABLE_ABI)
 	jalr ra, 0(t0)
 #else
 	cincoffset t0, gp, t0
