@@ -73,9 +73,10 @@ echo VIRTUAL_STAGED_DONE
     tests['noreturn:ran'] = 'HOSTED_NORETURN:41' in log
     tests['module_unloaded'] = 'HOSTED_CLEANUP:0' in log
     tests['virtual_tag_control_fired'] = arms['virtual'].get('control_byte_copy_drops_tag') is True
+    tests['virtual_pipe_control_fired'] = arms['virtual'].get('control_pipe_read_returns_available') is True
     # No checks parsed is a failed run, never an empty pass.
-    tests['virtual_checks_parsed'] = len(arms['virtual']) >= 14
-    tests['native_checks_parsed'] = len(arms['native']) >= 11
+    tests['virtual_checks_parsed'] = len(arms['virtual']) >= 21
+    tests['native_checks_parsed'] = len(arms['native']) >= 18
     result = dict(status='PASS' if all(tests.values()) else 'FAIL',
                   passed=sum(tests.values()), total=len(tests), tests=tests,
                   exits=exits, sha256={k: sha(v) for k, v in inputs.items()})

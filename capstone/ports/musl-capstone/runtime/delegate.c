@@ -19,6 +19,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/prctl.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <signal.h>
@@ -1217,6 +1218,46 @@ long __capstone_delegate_hello(unsigned long entry_address, unsigned long code_b
   return r;
 }
 
+/* A read or write whose buffer does not fit the exchange region is clamped
+ * (dl_call_once), so one delegated round moves at most the region. Linux moves
+ * a regular file's whole request unless the file ends or a signal or error
+ * intervenes, and programs rely on it: SPEC CPU2017's xz reads its input with
+ * one read() and takes any short count for the end of the file, so it got the
+ * first 262,128 bytes of a 1,287,176-byte file and reported corrupt data.
+ *
+ * For a regular file the transfer is therefore repeated until the request is
+ * complete, a round moves nothing (the end of the file) or a round fails; a
+ * failure after progress reports the bytes moved, as an interrupted transfer
+ * does. Pipes, sockets and terminals keep the single round: there a short
+ * count is the kernel's own answer, and another round could block. */
+static long dl_transfer(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+  long first = dl_call(nr, raw);
+  size_t want = (size_t)(unsigned long)raw[2];
+  if (first <= 0 || (size_t)first >= want)
+    return first;
+  struct stat st;
+  syscall_arg_t query[CAPSTONE_DELEGATE_ARGS] = {raw[0], (syscall_arg_t)&st, 0, 0, 0, 0};
+  if (dl_call(CAPSTONE_SYS_fstat, query) != 0 || !S_ISREG(st.st_mode))
+    return first;
+  int positioned = nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64;
+  /* The offset is an integer in a pointer-typed slot, so it carries no tag.
+     Arithmetic written as (long)raw[3] + done folds back into pointer
+     arithmetic on that slot, and CIncOffset faults on an untagged operand;
+     the cursor read is an integer the compiler cannot turn back. */
+  unsigned long offset = (unsigned long)__builtin_capstone_cap_get_cursor(raw[3]);
+  size_t done = (size_t)first;
+  while (done < want) {
+    syscall_arg_t next[CAPSTONE_DELEGATE_ARGS] = {
+        raw[0], (char *)raw[1] + done, (syscall_arg_t)(unsigned long)(want - done),
+        positioned ? (syscall_arg_t)(offset + done) : raw[3], raw[4], raw[5]};
+    long more = dl_call(nr, next);
+    if (more <= 0)
+      break;
+    done += (size_t)more;
+  }
+  return (long)done;
+}
+
 long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c, syscall_arg_t d,
                               syscall_arg_t e, syscall_arg_t f) {
@@ -1285,6 +1326,8 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     raw[5] = sig && sig->ss ? (syscall_arg_t)sig->ss : 0;
     return dl_call(CAPSTONE_SYS_pselect6, raw);
   }
+  case SYS_read: case SYS_write: case SYS_pread64: case SYS_pwrite64:
+    return dl_transfer((uint64_t)n, raw);
   case SYS_readv:
     return dl_vector((long)a, (const struct iovec *)b, (long)c, 0, 0, 0);
   case SYS_writev:

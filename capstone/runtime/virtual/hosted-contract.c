@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #ifdef __CAPSTONE_PURECAP__
 #define TAG(p) __builtin_capstone_cap_get_tag((void *)(p))
@@ -81,6 +83,38 @@ static int by_address(const void *x, const void *y)
 {
     int *a = *(int *const *)x, *b = *(int *const *)y;
     return (a > b) - (a < b);
+}
+
+/* One read() or write() on a regular file moves the whole request unless the
+ * file ends, as on Linux; the runtime must not stop at its exchange region.
+ * The pipe control must still return what is available at once: there a short
+ * count is the kernel's answer, and waiting for the rest would block forever. */
+static void transfers(void)
+{
+    enum { BIG = (1 << 20) + 123 };
+    unsigned char *out = malloc(BIG), *in = malloc(BIG);
+    for (int i = 0; i < BIG; ++i)
+        out[i] = (unsigned char)(i * 131 + 7);
+    const char *path = "/tmp/hosted-contract-transfer";
+    int fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0600);
+    check(fd >= 0 && write(fd, out, BIG) == BIG, "write_regular_file_whole");
+    memset(in, 0, BIG);
+    check(pread(fd, in, BIG, 0) == BIG && !memcmp(in, out, BIG), "pread_regular_file_whole");
+    memset(in, 0, BIG);
+    check(lseek(fd, 0, SEEK_SET) == 0 && read(fd, in, BIG) == BIG && !memcmp(in, out, BIG),
+          "read_regular_file_whole");
+    check(read(fd, in, BIG) == 0, "read_regular_file_end");
+    check(pread(fd, in, BIG, BIG - 1000) == 1000 && !memcmp(in, out + BIG - 1000, 1000),
+          "pread_short_at_end");
+    close(fd);
+    unlink(path);
+    int p[2];
+    check(pipe(p) == 0 && write(p[1], out, 100) == 100 && read(p[0], in, BIG) == 100,
+          "control_pipe_read_returns_available");
+    close(p[0]);
+    close(p[1]);
+    free(out);
+    free(in);
 }
 
 int main(void)
@@ -174,6 +208,8 @@ int main(void)
     copy_bytes(&control, &src[6], sizeof control);
     check(!TAG(control) && control == &cells[6], "control_byte_copy_drops_tag");
 #endif
+
+    transfers();
 
     printf("HOSTED_RESULT:%d/%d\n", checks - failures, checks);
     return failures != 0;
