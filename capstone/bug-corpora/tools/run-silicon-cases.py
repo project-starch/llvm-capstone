@@ -16,6 +16,18 @@ THE ARMS.
   silicon-lifetimes  the same, built with CAPSTONE_LEVEL0_LIFETIMES: every object is a CDERIVE child of one group
                      over the arena at exactly its request size, and free CREVOKEs it. The bug corpus's silicon-malloc
                      arm (lead decision (b), 2026-10-16), measured as a pattern on silicon by B6.
+  silicon-carve-sublet  FFmpeg's carved corpus with FFC_SUBLET_CARVE over the lifetimes heap: each carved region is
+                     a CDERIVE child of a group over the block, and a re-carve CREVOKEs it (virtual-nested-pools'
+                     mechanism).
+  silicon-carve-bounds  the carved and plane corpora with their source remedy (FFC_CARVE_BOUNDS / FFP_CARVE_BOUNDS):
+                     each region narrowed by SHRINK at the carving code, over level0.
+  silicon-mc-sublet  memcached's nested allocators with the application's patch 0006 (slabs.c and cache.c hand out
+                     CDERIVE children and revoke them at slabs_free / cache_free) over the lifetimes heap, driven by
+                     the corpus's driver-virtual.c: virtual-nested-pools' configuration on the silicon ABI.
+  silicon-mc-stock   the same allocators stock (patches 0001 + 0002) on the stock-malloc ledger (MCP_ADAPTER_BACKING):
+                     virtual-malloc's configuration. The prepared sources and the ledger come with --extra-src.
+The carved corpus also runs its own controls as rows: 99 (one byte past a 16-byte carve, inside its block) on every
+arm, and 98 (a re-carved region's old alias) on the Sublet carve. They gate the arm like the four tool controls.
 
 The judge is classify() from run-capstone-domain.py and the rules of tools/verdicts.py: a fault is CAUGHT only at the
 labelled probe or a fault site the case declared; a buggy row counts only when the same image's fixed run printed
@@ -54,7 +66,29 @@ ARMS = {
     "silicon-subobject": {"defs": "", "app_cflags": "-Xclang -fcapstone-subobject-bounds",
                           "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "RETURNED",
                                        "subobj": "CAUGHT"}},
+    # the carve switch is applied per corpus by `build`, never by hand, so an arm cannot carry the wrong one
+    "silicon-carve-sublet": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+                             "carve": {"carved-repros": f"-DFFC_SUBLET_CARVE -I{REPO}/capstone/runtime/include"},
+                             "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    "silicon-carve-bounds": {"defs": "", "carve": {"carved-repros": "-DFFC_CARVE_BOUNDS",
+                                                   "plane-repros": "-DFFP_CARVE_BOUNDS"},
+                             "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "RETURNED",
+                                          "subobj": "RETURNED"}},
+    # memcached/allocator-repros and its control 90 (controls/virtual): the per-corpus switches select the arm
+    "silicon-mc-sublet": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "driver": "driver-virtual.c",
+                          "corpus_defs": {"allocator-repros": "-DMC_CARVE_BOUNDS -DMC_CAPSTONE_SUBLET"},
+                          "virtual": "virtual-nested-pools",
+                          "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    "silicon-mc-stock": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+                         "corpus_defs": {"allocator-repros": "-DMCP_ADAPTER_BACKING"},
+                         "virtual": "virtual-malloc",
+                         "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
 }
+CARVE_SWITCHES = ("FFC_SUBLET_CARVE", "FFC_CARVE_BOUNDS", "FFP_CARVE_BOUNDS", "MC_CARVE_BOUNDS", "MC_CAPSTONE_SUBLET",
+                  "MCP_ADAPTER_BACKING")
+# corpus controls that gate their arm like the four tool controls (pool-control predates this and stays a plain row,
+# as set 2 was pre-registered with it)
+CONTROL_ROWS = ("carve-control", "mc-control")
 PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
 CTL_PROBE = re.compile(r"^ctl_(read|write)_probe$")
 
@@ -64,10 +98,26 @@ def kind_of(corpus):
     rel = corpus.relative_to(REPO / "capstone/bug-corpora").parts
     if rel[1] == "pool-repros":
         return "pool-control" if "controls" in rel else "pool"
+    if rel[1] == "allocator-repros":
+        return "mc-control" if "controls" in rel else "mc"
+    if rel[1] in ("carved-repros", "plane-repros"):
+        return rel[1].split("-")[0]          # carved / plane: interior to one block, caught only by a carve arm
     return rcd.corpus_kind(corpus)
 
 
 def predicted(kind, arm, case_dir=None):
+    if kind in ("carved", "plane", "carve-control"):
+        # a carve arm bounds every region at the carving code; 98 (the re-carve) exists only on the Sublet carve.
+        # Every region here is below 4 KiB, which the encoder bounds exactly at any cursor (bounds-model.py)
+        return "CAUGHT" if ARMS[arm].get("carve", {}).get(f"{kind if kind != 'carve-control' else 'carved'}-repros") \
+            else "DEFECT-REPRODUCED"
+    if kind == "mc-control":
+        # control 90: slabs_free revokes the chunk under patch 0006, and keeps it in its page otherwise
+        return "CAUGHT" if arm == "silicon-mc-sublet" else "DEFECT-REPRODUCED"
+    if kind == "mc":
+        # the virtual arm with the same mechanism, as recorded in case.json; NO-READING there was its fixed run failing
+        v = json.loads((case_dir / "case.json").read_text())["arms"][ARMS[arm]["virtual"]]["verdict"]
+        return {"CAUGHT": "CAUGHT", "MISSED": "DEFECT-REPRODUCED"}.get(v, "FIXED-ARM-FAILED")
     if kind in ("pool", "pool-control"):
         # stock pools reissue an entry with no revocation (virtual-malloc MISSED; control 90 completes); patch 0003
         # revokes the user's child on release (virtual-nested-pools CAUGHT; control 90 faults)
@@ -117,24 +167,38 @@ def cmd_build(a):
     ctl.write_text(rcd.CONTROL_C)
     appf = arm.get("app_cflags", "")
     jobs, cases = [("controls", [str(ctl)], f"-O0 {appf}".strip(), arm["defs"], out, None, None)], {}
+    if any(f"-D{sw}" in a.extra_cflags for sw in CARVE_SWITCHES):
+        sys.exit("CONTROL-FAILED a carve switch comes from the arm (ARMS[...]['carve']), never from --extra-cflags")
     for corpus in a.corpus:
         corpus = corpus.resolve()
         kind = kind_of(corpus)
         shared = corpus / "shared"
         rel = corpus.relative_to(REPO / "capstone/bug-corpora").parts   # memcached-heap, ffmpeg-subobject, ffmpeg-pool
         tag = f"{rel[0]}-{'-'.join(rel[1:]).replace('-repros', '').replace('plain-', '')}"
+        carve = arm.get("carve", {}).get(rel[1], "")
+        flags = f"{a.opt} -I{shared} {carve} {arm.get('corpus_defs', {}).get(rel[1], '')} {a.extra_cflags} {appf}".split()
+        driver = shared / arm.get("driver", "driver.c")
         for d in sorted(x for x in corpus.glob("[0-9][0-9]_*") if (x / "case.c").is_file()):
             name = f"{tag}-{d.name[:2]}"
             cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind=kind, n=str(int(d.name[:2])))
-            jobs.append((name, [str(d / "case.c"), str(shared / "driver.c"), *a.extra_src],
-                         f"{a.opt} -I{shared} {a.extra_cflags} {appf}".strip(), arm["defs"], out, a.data, a.arena))
+            jobs.append((name, [str(d / "case.c"), str(driver), *a.extra_src],
+                         " ".join(flags), arm["defs"], out, a.data, a.arena))
+        if kind == "carved":   # the corpus's own carve controls, built and run like a case
+            ctls = [("99", "carve-control.c")] + ([("98", "carve-recarve-control.c")] if "FFC_SUBLET_CARVE" in carve else [])
+            for n, src in ctls:
+                name = f"{tag}-c{n}"
+                cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=f"shared/{src}", kind="carve-control", n=n)
+                jobs.append((name, [str(shared / src), str(driver), *a.extra_src],
+                             " ".join(flags), arm["defs"], out, a.data, a.arena))
     built = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
         for name, rc, img in ex.map(build_one, jobs):
             print(f"  {name:<28} {'ok ' + sha256(img)[:16] if img else 'BUILD-FAILED rc=' + str(rc)}", flush=True)
             if img:
                 built[name] = dict(image=str(img), sha256=sha256(img))
-    manifest = dict(arm=a.arm, defs=arm["defs"], app_cflags=appf, extra_src=a.extra_src, extra_cflags=a.extra_cflags,
+    manifest = dict(arm=a.arm, defs=arm["defs"], app_cflags=appf, carve=arm.get("carve", {}),
+                    corpus_defs=arm.get("corpus_defs", {}), driver=arm.get("driver", "driver.c"), extra_src=a.extra_src,
+                    extra_cflags=a.extra_cflags,
                     controls=built.get("controls"), cases={
         n: dict(cases[n], **built[n]) if n in built else dict(cases[n], image=None) for n in cases})
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
@@ -175,7 +239,8 @@ def score(a, runs):
         bo, bd = rcd.classify(bt, br, syms, PROBE)
         fixed_ok = fo == "FIXED" and fr.get("kind") == "exit" and fr.get("value") == 0
         outcome, detail = (bo, bd) if fixed_ok else ("FIXED-ARM-FAILED", f"fixed read {fo}: {fd}")
-        site = outcome == "CAUGHT" and "(the labelled probe)" not in detail and rcd.at_declared_site(REPO / c["corpus"] / c["case"], detail)
+        site = outcome == "CAUGHT" and "(the labelled probe)" not in detail and c["kind"] not in CONTROL_ROWS \
+            and rcd.at_declared_site(REPO / c["corpus"] / c["case"], detail)     # a control has no declared sites
         want = predicted(c["kind"], a.arm, REPO / c["corpus"] / c["case"])
         rows.append(dict(name=name, case=c["case"], corpus=c["corpus"], kind=c["kind"], outcome=outcome, detail=detail,
                          predicted=want, image_sha256=c["sha256"],
@@ -183,8 +248,13 @@ def score(a, runs):
     for r in rows:
         print(f"  {r['name']:<24} {r['outcome']:<18} {'as predicted' if r['as_predicted'] else 'DIFFERS (predicted ' + r.get('predicted', '?') + ')'}"
               f"  {r.get('detail', '')[:100]}")
-    n_ok = sum(r["as_predicted"] for r in rows)
-    print(f"controls {'ok' if ok else 'FAILED'}; {n_ok} of {len(rows)} rows as predicted")
+    for r in rows:
+        if r.get("kind") in CONTROL_ROWS and not r["as_predicted"]:
+            ok = False      # the corpus's own carve control: the arm is not what it says
+            controls[r["name"]] = dict(outcome=r["outcome"], detail=r.get("detail", ""), required=r["predicted"], ok=False)
+    rows_cases = [r for r in rows if r.get("kind") not in CONTROL_ROWS]
+    n_ok = sum(r["as_predicted"] for r in rows_cases)
+    print(f"controls {'ok' if ok else 'FAILED'}; {n_ok} of {len(rows_cases)} rows as predicted")
     return controls, rows, ok
 
 
