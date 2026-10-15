@@ -1,0 +1,32 @@
+silicon-carve-bounds:control-clean controls.dom clean
+silicon-carve-bounds:control-oob controls.dom oob
+silicon-carve-bounds:control-uaf controls.dom uaf
+silicon-carve-bounds:control-subobj controls.dom subobj
+silicon-carve-bounds:ffmpeg-carved-00-fixed ffmpeg-carved-00.dom fixed 0
+silicon-carve-bounds:ffmpeg-carved-00-buggy ffmpeg-carved-00.dom buggy 0
+silicon-carve-bounds:ffmpeg-carved-01-fixed ffmpeg-carved-01.dom fixed 1
+silicon-carve-bounds:ffmpeg-carved-01-buggy ffmpeg-carved-01.dom buggy 1
+silicon-carve-bounds:ffmpeg-carved-02-fixed ffmpeg-carved-02.dom fixed 2
+silicon-carve-bounds:ffmpeg-carved-02-buggy ffmpeg-carved-02.dom buggy 2
+silicon-carve-bounds:ffmpeg-carved-03-fixed ffmpeg-carved-03.dom fixed 3
+silicon-carve-bounds:ffmpeg-carved-03-buggy ffmpeg-carved-03.dom buggy 3
+silicon-carve-bounds:ffmpeg-carved-04-fixed ffmpeg-carved-04.dom fixed 4
+silicon-carve-bounds:ffmpeg-carved-04-buggy ffmpeg-carved-04.dom buggy 4
+silicon-carve-bounds:ffmpeg-carved-05-fixed ffmpeg-carved-05.dom fixed 5
+silicon-carve-bounds:ffmpeg-carved-05-buggy ffmpeg-carved-05.dom buggy 5
+silicon-carve-bounds:ffmpeg-carved-06-fixed ffmpeg-carved-06.dom fixed 6
+silicon-carve-bounds:ffmpeg-carved-06-buggy ffmpeg-carved-06.dom buggy 6
+silicon-carve-bounds:ffmpeg-carved-07-fixed ffmpeg-carved-07.dom fixed 7
+silicon-carve-bounds:ffmpeg-carved-07-buggy ffmpeg-carved-07.dom buggy 7
+silicon-carve-bounds:ffmpeg-carved-08-fixed ffmpeg-carved-08.dom fixed 8
+silicon-carve-bounds:ffmpeg-carved-08-buggy ffmpeg-carved-08.dom buggy 8
+silicon-carve-bounds:ffmpeg-carved-09-fixed ffmpeg-carved-09.dom fixed 9
+silicon-carve-bounds:ffmpeg-carved-09-buggy ffmpeg-carved-09.dom buggy 9
+silicon-carve-bounds:ffmpeg-carved-10-fixed ffmpeg-carved-10.dom fixed 10
+silicon-carve-bounds:ffmpeg-carved-10-buggy ffmpeg-carved-10.dom buggy 10
+silicon-carve-bounds:ffmpeg-carved-11-fixed ffmpeg-carved-11.dom fixed 11
+silicon-carve-bounds:ffmpeg-carved-11-buggy ffmpeg-carved-11.dom buggy 11
+silicon-carve-bounds:ffmpeg-carved-12-fixed ffmpeg-carved-12.dom fixed 12
+silicon-carve-bounds:ffmpeg-carved-12-buggy ffmpeg-carved-12.dom buggy 12
+silicon-carve-bounds:ffmpeg-carved-c99-fixed ffmpeg-carved-c99.dom fixed 99
+silicon-carve-bounds:ffmpeg-carved-c99-buggy ffmpeg-carved-c99.dom buggy 99
