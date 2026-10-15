@@ -1,2 +1,1 @@
-build_config.rb.lock
-build_config-silicon.rb.lock
+build_config*.rb.lock
