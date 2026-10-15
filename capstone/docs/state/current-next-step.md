@@ -51,8 +51,15 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
   makes the same monitor correct on the Sublet bitstream and the physical QEMU profile.
 - **Confirmed by a matched pair (the board lane's boot M, R-55 on dev 631c9630b0ff):** a private firmware that
   differs from the pinned one by one line, setting mtime's cursor after the carve, boots Linux to login on the flashed
-  respin (k800 4, s06agg 64); the pinned firmware hangs 3/3. Only mtime's displaced cursor is ever dereferenced (this
-  silicon never reads CIH; the stacks reset their cursors). **A second consequence of the full scheme, found in the
+  respin (k800 4, s06agg 64); the pinned firmware hangs 3/3. Of cap_env_init's four displaced cursors only mtime's is dereferenced (this silicon never reads
+  CIH; the stacks reset their cursors), but R-55 is wider than the boot carve (the board lane's auditor, dev
+  a0234f57dc6d): create_domain's globals copy (`dom_data[ci] = dom_code[gpoff_c + ci]` after the seal split; SQLite,
+  memcached and the B-series take it, boot M's rungs were under the 256 B threshold), share_child_region's body and
+  shared_region_annotated's region all use a SPLIT's lower piece at its decoded-start cursor. Under the full scheme
+  the lower piece's top also rounds UP past the carve point, so an explicit cursor repairs the dereferences and only
+  a granule-aligned carve point (or a SHRINK to the representable interior) separates the pieces. The Sublet
+  bitstream uses the full scheme on every capability, so these fixes are needed for any Sublet domain regardless of
+  the FP decision; option (a) 2a3a87dfc (cursorless kept) avoids them for the FP acceptance only. **A second consequence of the full scheme, found in the
   region table cap_env_init leaves:** the S-mode region covering Linux decodes as [0x80000000, 2^40) instead of
   [0x8008a780, 2^40), because a region that long has a 1 GiB granule and its base rounds down to the monitor's own
   text. The CPMP (pmp_data_if.sv) is a pure allow-list over the DECODED bounds of the 16 entries for S/U-mode
