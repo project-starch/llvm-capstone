@@ -6146,3 +6146,28 @@ capstone_cap_revoke_child on its malloc'd heap.
   controls in the same boot.
 - QEMU (acbad0f7ec82) reads the same, except that its lcc validity stub reports the revoked children as 1.
 
+### The monitor's region table under the full bounds scheme, fixed on silicon (R-55, 2026-10-16)
+On a full-scheme bitstream, the FPGA monitor's carves rounded to decoded bounds. Nearly every carve then left an extra
+fragment, and R-43 a2 filled the 96-slot region table at invocation 8 of 12 (the FP respin). The fix:
+- a nominal-bounds table of 127 slots;
+- remainders cut into exact pieces;
+- Linux's region ended at 0xC0000000.
+It is landed on capstone-bootstrap: capstone-sbi 234ee66, caplifive-opensbi 3ab5655, caplifive-buildroot 549d686.
+
+On caplifive_sublet_d93a8d66b:
+- R-43 a2 completes all 12 invocations, with 60 of 60 R1 points ok and no RGNF, EXCT or EXCS.
+- The replay of the board's own carve sequence reproduces every region id with OVERLAP 0, so no remainder's decoded
+  bounds reach a carved domain.
+- The same change on the supervised-call line runs supervised SQLite (C5u) and the process ABI with every B-series
+  rung (boot P).
+
+### Where a delegated application's launch goes (boot P, 2026-10-16)
+capstone-exec's own launch ticks (rdtime at each stage; the board's timebase is 12.5 MHz) for mruby, a 2.9 MB image
+in a 64 MiB domain:
+- the first launch in a boot takes 35.1 s, of which domain creation is 22.9 s, mapping the regions 9.1 s and reading
+  the image 2.4 s;
+- a second launch takes 14.3 s, with domain creation 2.2 s and the regions still 9.2 s;
+- b0-hello (a 128 KiB image in a 256 KiB domain) launches in 1.6 s.
+So the cold penalty sits in domain creation, and the region cost scales with the domain's size. These are stage
+boundaries in the launcher. What the monitor and the CMA do inside each stage is not split.
+

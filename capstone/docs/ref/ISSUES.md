@@ -2123,7 +2123,7 @@ everything inside delegated domains, are unaffected.
 >   take E+1. Verified in the lane's model over 400,000 regions x three cursors: 0 not covering, against 519 without.
 >   check-repr will model it from the commit.
 
-### R-55 — under the full bounds scheme the FPGA monitor's boot-time carves land their cursors below the carve point; `mtime` reads the CLINT's msip, S-mode time is 0 and Linux hangs in start_kernel `OBSERVED ON SILICON 2026-10-15 (caplifive_fpb_afcd19bea; option (b) 4a4261bb4 and the Sublet build carry the same encoder change); CONFIRMED by a one-cursor firmware change that boots Linux on the same bitstream (boot M). PARTLY FIXED 2026-10-15 in the monitor, LANDED on capstone-bootstrap the same day (capstone-sbi 2ea8a9a, caplifive-opensbi 5695abf, caplifive-buildroot a3191e8): Linux, R-43 a1/a3-a6/a10, the ladder, P1 cell 5 and the B-series and FP probes pass on the respin. SUBLET HALF FIXED ON SILICON 2026-10-16 (caplifive_sublet_d93a8d66b: a matched P1 cell 6 pair, the fixed image completes with QEMU's counters and the unfixed one wedges with 26 at the same revoke). OPEN: the region table and remainder isolation, with a fix built and awaiting its board run (R-43 a2; capstone-sbi r55/board-exact eb88326, r55/exact-regions ebe0a25; C5u ran the exact-regions supcall line on silicon cleanly)`
+### R-55 — under the full bounds scheme the FPGA monitor's boot-time carves land their cursors below the carve point; `mtime` reads the CLINT's msip, S-mode time is 0 and Linux hangs in start_kernel `OBSERVED ON SILICON 2026-10-15 (caplifive_fpb_afcd19bea; option (b) 4a4261bb4 and the Sublet build carry the same encoder change); CONFIRMED by a one-cursor firmware change that boots Linux on the same bitstream (boot M). PARTLY FIXED 2026-10-15 in the monitor, LANDED on capstone-bootstrap the same day (capstone-sbi 2ea8a9a, caplifive-opensbi 5695abf, caplifive-buildroot a3191e8): Linux, R-43 a1/a3-a6/a10, the ladder, P1 cell 5 and the B-series and FP probes pass on the respin. FIXED ON SILICON 2026-10-16 (caplifive_sublet_d93a8d66b) in every half, and LANDED: the sublet runtime (dev a07a11194fa0; a matched P1 cell 6 pair, the fixed image completes with QEMU's counters and the unfixed one wedges with 26 at the same revoke), and the region table with exact remainders (capstone-bootstrap: capstone-sbi 234ee66, caplifive-opensbi 3ab5655, caplifive-buildroot 549d686; R-43 a2 completes 12 of 12 with every region id reproduced and OVERLAP 0; C5u and the process-ABI boot P on the same change). The board's shared checkout still runs the older pins (d04bd83 / df0e9a8 / 93440d5); moving it onto capstone-bootstrap is the next board item`
 
 > **The symptom.** On caplifive_fpb_afcd19bea, every Linux boot stops right after the `sched_clock` line.
 > - That line is itself stamped `[0.000000]` (on 0568f93a9: `[0.000168]`). It is followed by `[ cut here ]`, which is
@@ -2207,6 +2207,12 @@ everything inside delegated domains, are unaffected.
 > RESULT with the R-55 fixes"). Two rows still fail on the same family:
 > - **the region table:** split_out_cap decides head or tail on DECODED bounds. Nearly every carve leaves an extra
 >   fragment, about 11 slots per invocation against 6, so R-43 a2 fills the 96-slot table at invocation 8 of 12.
+>   - **FIXED ON SILICON 2026-10-16:** a nominal-bounds table (127 slots), remainders cut into exact pieces, and Linux's
+>     region ended at 0xC0000000.
+>     - R-43 a2 on caplifive_sublet_d93a8d66b completes 12 of 12 with no RGNF, EXCT or EXCS.
+>     - The replay of the board's own carve sequence (silicon-ladder/r55-regions) reproduces every region id with
+>       OVERLAP 0, so no remainder's decoded bounds reach a carved domain.
+>     - Landed on capstone-bootstrap: capstone-sbi 234ee66, caplifive-opensbi 3ab5655, caplifive-buildroot 549d686.
 > - **the sublet runtime:** `sublet_carve` hands out SPLIT's lower piece at `from`'s decoded start. Under the full
 >   scheme every allocation after the first starts, and points, below its own start (model: the second 64 B allocation
 >   of a 2 MiB arena points at the first). The frozen P1 cell-6 image wedges with mcause 26 at `revoke t0` in
