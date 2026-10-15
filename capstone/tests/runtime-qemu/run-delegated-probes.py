@@ -10,13 +10,17 @@ line: a variant with no result is a FAIL.
 
   run-delegated-probes.py --sdk SDK --work DIR --build-only
   run-delegated-probes.py --sdk SDK --work DIR --state STATE [--only NAME...]
-                          [--arith-expect trap|cheri] [--report FILE]
+                          [--report FILE]
   run-delegated-probes.py --self-test
 
 The images are staged in a fresh directory inside the VM's share and removed
 afterwards. The variants run in the order below: every one expected to return
 first, then the ones expected to fault, and last untagged-cap-arith's case 2,
 which aborts a QEMU without the scc fix.
+
+untagged-cap-arith's cases 1 and 2 are judged by the guest's profile, which
+capstone_vm records in the state directory: the virtual profile computes an
+untagged result, the physical profile raises 24 as the RTL does.
 
 What the probes check, and what replaced their HostCall v0 controls: see
 README.md in this directory. The controls that linked an older runtime file
@@ -248,15 +252,18 @@ def check_arith(case):
             if "ARITH-CASE 0 cinc=1 scc=1" not in out.splitlines():
                 problems.append(f"control: {lines(out, r'ARITH-CASE')}")
             return problems
-        if ctx.get("arith-expect", "trap") == "cheri":
-            want = "0x5008" if case == 1 else "0x6000"
-            problems = exits(record, 0)
-            if f"ARITH-CASE {case} result={want}" not in out.splitlines():
-                problems.append(f"want result={want}: {lines(out, r'ARITH-CASE')}")
+        if ctx.get("profile") != "virtual":
+            # Physical QEMU models the silicon: an untagged operand raises 24.
+            problems = faults(record, 24)
+            if lines(out, rf"ARITH-CASE {case} "):
+                problems.append(f"printed a result: {lines(out, r'ARITH-CASE')}")
             return problems
-        problems = faults(record, 24)
-        if lines(out, rf"ARITH-CASE {case} "):
-            problems.append(f"printed a result: {lines(out, r'ARITH-CASE')}")
+        # The virtual profile (2026-10-14): on an untagged operand both
+        # compute an untagged integer instead of raising 24.
+        want = "0x5008" if case == 1 else "0x6000"
+        problems = exits(record, 0)
+        if f"ARITH-CASE {case} result={want}" not in out.splitlines():
+            problems.append(f"want result={want}: {lines(out, r'ARITH-CASE')}")
         return problems
     return check
 
@@ -412,8 +419,8 @@ def run(args, config, built):
     share = Path(vm["share"])
     env = dict(os.environ, PYTHONPATH=str(HOST))
     cli = [sys.executable, "-m", "capstone_vm", "--state", str(state)]
-    ctx = {"arith-expect": args.arith_expect,
-           "movc-switch": vm.get("identity", {}).get("environment", {}).get("CAPSTONE_MOVC_NULL_SCALAR", "0")}
+    ctx = {"movc-switch": vm.get("identity", {}).get("environment", {}).get("CAPSTONE_MOVC_NULL_SCALAR", "0"),
+           "profile": vm.get("identity", {}).get("profile", "physical")}
     native = args.work / "init-fini.native.txt"
     ctx["init-fini-native"] = native.read_text() if native.exists() else ""
     stage = Path(tempfile.mkdtemp(prefix="runtime-probes-", dir=share))
@@ -470,7 +477,7 @@ def run(args, config, built):
             "sdk": str(args.sdk), "cc": config["cc"], "state": str(state),
             "vm_files": {k: v.get("sha256") for k, v in vm.get("identity", {}).get("files", {}).items()},
             "qemu_environment": vm.get("identity", {}).get("environment", {}),
-            "arith_expect": args.arith_expect, "results": results}, indent=1) + "\n")
+            "profile": ctx["profile"], "results": results}, indent=1) + "\n")
     return 1 if failed or not results else 0
 
 
@@ -481,7 +488,7 @@ def self_test():
     segv = {"kind": "signal", "value": 11, "fault": "capstone-exec: domain fault cause=24 pc=0x1"}
     native = "CTOR p 1\nCTOR a 2 env=before-main\nCTOR b 3\nMAIN 4\nDTOR b 5\nDTOR a 6\nDTOR p 7\n"
     ctx = {"init-fini-native": native, "large-written": large_pattern(),
-           "big-stdout-file": big_stdout_expected(), "arith-expect": "trap"}
+           "big-stdout-file": big_stdout_expected()}
     exit_out = "EXIT-TEST before exit\nEXIT-TEST atexit handler ran\n"
     rf = "RETURN-FLUSH line 1\nRETURN-FLUSH line 2\nRETURN-FLUSH line 3\nRETURN-FLUSH atexit handler ran\n"
     movc = lambda c, v, got, n: (f"MOVC-PROBE b=5 c={c}\nMOVC-C32 {v} got={got} want=0x5000 called=1\n"
@@ -571,12 +578,25 @@ def self_test():
         ("intcap-uptr: faulted among the integers", check_intcap("uptr"), segv,
          "INTCAP uptr int ok\n", "", {}, False),
         ("arith-0", check_arith(0), ok_exit(0), "ARITH-CASE 0 cinc=1 scc=1\n", "", {}, True),
-        ("arith-1 trap", check_arith(1), segv, "", "", {}, True),
-        ("arith-1 trap: printed a result", check_arith(1), ok_exit(0), "ARITH-CASE 1 result=0x5008\n", "",
-         {}, False),
-        ("arith-2 cheri", check_arith(2), ok_exit(0), "ARITH-CASE 2 result=0x6000\n", "",
-         {"arith-expect": "cheri"}, True),
-        ("arith-2 cheri: trapped", check_arith(2), segv, "", "", {"arith-expect": "cheri"}, False),
+        ("arith-1 virtual", check_arith(1), ok_exit(0), "ARITH-CASE 1 result=0x5008\n", "",
+         {"profile": "virtual"}, True),
+        ("arith-1 virtual: trapped", check_arith(1), segv, "", "", {"profile": "virtual"}, False),
+        ("arith-1 virtual: wrong result", check_arith(1), ok_exit(0), "ARITH-CASE 1 result=0x0\n", "",
+         {"profile": "virtual"}, False),
+        ("arith-2 virtual", check_arith(2), ok_exit(0), "ARITH-CASE 2 result=0x6000\n", "",
+         {"profile": "virtual"}, True),
+        ("arith-2 virtual: trapped", check_arith(2), segv, "", "", {"profile": "virtual"}, False),
+        ("arith-1 physical", check_arith(1), segv, "", "", {"profile": "physical"}, True),
+        ("arith-1 physical: computed", check_arith(1), ok_exit(0), "ARITH-CASE 1 result=0x5008\n", "",
+         {"profile": "physical"}, False),
+        ("arith-1 physical: another cause", check_arith(1),
+         {**segv, "fault": "capstone-exec: domain fault cause=26 pc=0x1"}, "", "", {"profile": "physical"}, False),
+        ("arith-2 physical", check_arith(2), segv, "", "", {"profile": "physical"}, True),
+        ("arith-2 physical: computed", check_arith(2), ok_exit(0), "ARITH-CASE 2 result=0x6000\n", "",
+         {"profile": "physical"}, False),
+        ("arith-1, no profile recorded: judged as physical", check_arith(1), segv, "", "", {}, True),
+        ("arith-1, no profile recorded: computed", check_arith(1), ok_exit(0),
+         "ARITH-CASE 1 result=0x5008\n", "", {}, False),
     ]
     bad = 0
     for name, check, record, out, err, update, must_pass in cases:
@@ -594,8 +614,6 @@ def main():
     parser.add_argument("--work", type=Path, help="where the images and the references are built")
     parser.add_argument("--state", type=Path, help="capstone_vm state directory of a running guest")
     parser.add_argument("--only", nargs="*", default=[], choices=sorted(VARIANTS), metavar="NAME")
-    parser.add_argument("--arith-expect", choices=["trap", "cheri"], default="trap",
-                        help="untagged-cap-arith: today's ISA (cause 24) or CHERI's rule")
     parser.add_argument("--timeout", type=float, default=120)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--build-only", action="store_true")
