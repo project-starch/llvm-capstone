@@ -32,11 +32,16 @@ same 8 readings).
 ## Controls
 
 - **Positive control, on the FP bitstream BEFORE the flash** (`caplifive_fpb_afcd19bea.bit`, resident): the same
-  `sublet-derive-kill.bin`. Its first CDERIVE is an undefined encoding there and must raise cause 2 (illegal
-  instruction); the test's trap handler records the cause and resumes, so the SV vector is NOT the one above and its
-  first fault-code reading is 0x2. The exact FP vector is not pre-registered; the criterion is "differs from the
-  Sublet vector, with 0x2 where the Sublet tree reads 0xe". A run that reads the Sublet vector on the FP bitstream
-  means the image or the board was not what it was supposed to be.
+  `sublet-derive-kill.bin`. Pre-registered as "0x2 where the Sublet tree reads 0xe"; CORRECTED after the run, from the
+  FP-tree simulation (snapshot fp-renorm, the test and the Sublet encodings copied in): the arm's trap handler resumes
+  every trap at the label in s10, and on the FP tree the first CDERIVE traps, the resume lands on the LCC of the
+  register CDERIVE never wrote, that traps too, and the arm loops between the two (33,318 traps to the cycle limit,
+  never reaching its first CAPPRINT). So the FP reading is **SUPTEST BEGIN and SB1 with NO SR/SV line, then the
+  timeout**, which is what the board read (23:48-23:51, 2026-10-15). The control still discriminates: the Sublet
+  bitstream prints SR 19 and the vector above; a Sublet vector on the FP bitstream, or no SR on the Sublet one, means
+  the image or the board was not what it was supposed to be. The sentence it replaces was written against the
+  Sublet tree's trap semantics, not checked on FP; the lesson is the standing one, a control's reading is run, not
+  reasoned.
 - **Negative controls inside the Sublet run**: derive-kill's refusals (0x1d, 0x1b, 0x19 at the recorded positions),
   the dead-child load denied by R-45's flush (0x19 after the kill), and mrev-orphan's 0x19 at #6 and #8 (the orphan
   that a tree without deepening lets live).
