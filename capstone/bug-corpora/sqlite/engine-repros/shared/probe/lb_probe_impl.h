@@ -40,15 +40,18 @@ static unsigned lb_req[LB_MAX_ATOMS];    /* at a block's first atom: bytes REQUE
 static unsigned char lb_freed[LB_MAX_ATOMS]; /* at a block's first atom: 1 = freed */
 static unsigned long lb_hits = 0, lb_bad = 0, lb_first_bad = 0;
 
-/* ---- hand-rolled output. No stdio: see the header comment. ---- */
-static void lb_puts(const char *s){ const char *e=s; while(*e) e++; (void)write(2, s, (size_t)(e-s)); }
-static void lb_putu(unsigned long v){
+/* ---- hand-rolled output. No stdio: see the header comment.
+ * Not static: a defect in an extension (sqlite3expert.c, spellfix.c) is compiled as its own
+ * translation unit, and a site there needs these to report what it saw. The implementation
+ * stays here, in the amalgamation, because it reads memsys5's own globals. ---- */
+void lb_puts(const char *s){ const char *e=s; while(*e) e++; (void)write(2, s, (size_t)(e-s)); }
+void lb_putu(unsigned long v){
   char b[24]; int i=24; if(!v){ lb_puts("0"); return; }
   while(v){ b[--i] = (char)('0' + (v%10)); v/=10; }
   (void)write(2, b+i, (size_t)(24-i));
 }
-static void lb_puti(long v){ if(v<0){ lb_puts("-"); lb_putu((unsigned long)(-v)); } else lb_putu((unsigned long)v); }
-static void lb_putx(unsigned long long v){
+void lb_puti(long v){ if(v<0){ lb_puts("-"); lb_putu((unsigned long)(-v)); } else lb_putu((unsigned long)v); }
+void lb_putx(unsigned long long v){
   char b[20]; int i=20; const char *h="0123456789abcdef";
   lb_puts("0x"); if(!v){ lb_puts("0"); return; }
   while(v){ b[--i] = h[v & 15]; v >>= 4; }

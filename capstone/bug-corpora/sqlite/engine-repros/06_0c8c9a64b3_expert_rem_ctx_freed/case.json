@@ -1,7 +1,7 @@
 {
   "case": 6,
   "upstream_fix": "0c8c9a64b3",
-  "title": "row19",
+  "title": "heap-use-after-free in idxRemFunc",
   "consumer": "sqlite3.c (idxRemFunc)",
   "live_in_pin": true,
   "live_proof": "inspection with line numbers in the pinned extension source: idxPopulateStat1() frees the context and returns without unregistering at sqlite3expert.c:1671, :1676 and :1719, leaving rem() and sample() registered on the user connection. Fixed upstream in 3.46.1",
@@ -42,5 +42,5 @@
   "fault_sites": [
     "idxRemFunc"
   ],
-  "fault_sites_why": "Calling rem() runs idxRemFunc over the freed IdxRemCtx (consumer; PROVENANCE.md, sqlite3expert.c:1671/1676/1719). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs."
+  "fault_sites_why": "Calling rem() runs idxRemFunc over the freed IdxRemCtx (consumer; PROVENANCE.md, sqlite3expert.c:1671/1676/1719). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs. Confirmed 2026-10-15 by probe site 21, the first load from the freed context (assert( iSlot<=p->nSlot ) at sqlite3expert.c:1429, p->nSlot being offset 0 of IdxRemCtx, which is where host ASan reports it). On every unprotected arm the load SUCCEEDS and returns garbage; only virtual-nested-pools rejects it, with cause 25 at that function. What each arm does afterwards is the extension's own assert, and the arms do not agree because they do not compile it the same way: ports/sqlite/cheribsd/build-corpus-cheri.sh puts -DNDEBUG in SQLITE_DEFINES and that reaches the extension translation unit, while repro322/build-virtual.py defines it nowhere (sqlite3.c's internal #define NDEBUG does not cross into a separately compiled extension). So on the virtual arms the assert is live and aborts on the garbage -- SIGABRT, which the judge reads as NO-READING:inconclusive, 'reached, then neither completed nor faulted' -- and on CheriBSD it is compiled out and the case runs to RETURNED rc=0. The garbage differs per platform (nSlot=-1 natively and on virtual Capstone, 14400 on CheriBSD, where iSlot=0<=14400 would have satisfied the assert anyway), so the abort is a property of what happened to be in the freed block, not a detection."
 }

@@ -20,6 +20,12 @@
 extern int lb_site;                                     /* armed site id, 0 = none */
 extern int lb_hit_slow(int id, const void *p, long n);  /* always returns 1 */
 extern void lb_report(void);                            /* hit count; safe in a fault handler */
+/* Output helpers, for a site that reports more than LB_HIT's verdict -- a site in an
+ * extension's own translation unit cannot reach the static ones. */
+extern void lb_puts(const char *s);
+extern void lb_putu(unsigned long v);
+extern void lb_puti(long v);
+extern void lb_putx(unsigned long long v);
 #define LB_HIT(id, p, n)  do{ if(lb_site==(id)) (void)lb_hit_slow((id),(const void*)(p),(long)(n)); }while(0)
 #define LB_CHK(id, p, n)  (lb_site==(id) ? lb_hit_slow((id),(const void*)(p),(long)(n)) : 1)
 #endif
