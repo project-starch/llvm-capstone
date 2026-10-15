@@ -313,6 +313,32 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
+## S-20 — `mmap-shm` fails two errno checks on dev's tip: a file mapping and a 1 GiB shared anonymous mapping return EINVAL, where the probe wants ENODEV and ENOMEM `OPEN — filed 2026-10-15; origin not established (a change on dev since 2026-09-30, or the platform)`
+
+**Behaviour.** `capstone/tests/runtime-qemu/mmap-shm/mmap_shm.c`, built as a virtual application, passes 24 of its 26 checks and exits 2 (`MMAP-SHM-DONE failures=2`):
+- `file-mapping-refused`: `mmap(0, 4096, PROT_READ, MAP_SHARED, 3, 0)` fails with errno 22 (EINVAL); the probe wants ENODEV (19).
+- `beyond-arena-enomem`: `mmap(0, 1 << 30, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0)` fails with errno 22; the probe wants ENOMEM (12).
+
+**Repro.** In a provisioned guest:
+`python3 capstone/tests/runtime-qemu/run-delegated-probes.py --sdk <virtual SDK> --work <dir> --state <capstone_vm state> --only mmap-shm`.
+A guest image without an SSH server can run it staged instead:
+1. build `mmap_shm.c` with the SDK's `capstone-cc -O2`;
+2. stage it with the adapter's `capstone-vexec` and `capstone_vm.ko`, and a `gate.sh` that loads the module and runs the image;
+3. boot it with `capstone/runtime/virtual/run-staged.py`.
+
+**Evidence (2026-10-15, staged, one boot per QEMU).** The probe's 26 lines are byte-identical in all four arms:
+- an SDK built from dev `207b061f82ab` (without `+movc-keeps-integer-source`), and one from llvm-capstone #238 merged into it;
+- each run on QEMU at dev's pin `2b6fbe3eaf07` (sha256 `9f8509c9247c`) and on capstone-qemu #27's head `f34aa445f3c5` (`50a657d4fd52`);
+- the adapter built from dev `7664a4805b3e` (module `33e7945d4b81`, launcher `1971d541eaca`);
+- the pinned platform's kernel, firmware and rootfs (Image `e58613598c89`, fw_jump `6f2b082cb677`, rootfs `9903242c37a7`).
+
+So neither #238's SDK flag nor #27's MOVC change causes it.
+
+**Not established.** dev's last recorded delegated-probe run (`tests/runtime-qemu/results/20260930-delegated-probes-stack.json`) has `mmap-shm: PASS`. That run was on the delegation stack's own platform (QEMU `ce85ea00eb15`, module `c8be95a5c5ff`, its own kernel and firmware). It is not known whether a change on dev since then or the platform difference moved these two errnos to EINVAL; nothing has been bisected.
+
+**Impact.** A program that branches on these errnos (ENODEV for an unsupported file mapping, ENOMEM for an oversize mapping) takes another path. No port has been checked for such a dependency.
+
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **2026-09-24: the emulator can now do what the RTL does here, on request.** capstone-qemu's
