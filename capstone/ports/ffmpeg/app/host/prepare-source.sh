@@ -7,12 +7,19 @@
 #                                 ffmpeg is built from this, so a wrong patch cannot hide by
 #                                 appearing on both sides of the comparison
 #   prepare-source.sh --pool      the patched tree PLUS FFmpeg's pools under the buffer-pool
-#                                 port's lifetime hooks, for the pool arms of the DOMAIN build
-#                                 only: this port's patches, then buffer-pool's 0001 and 0002
-#                                 unchanged, then patches-pool/ (the app's rework), plus
-#                                 buffer-pool's trace.h and this port's no-op recorder and
-#                                 observer (src/pool/) copied into libavutil/. Keyed by all of
-#                                 them. The native builds never read this tree.
+#                                 port's lifetime hooks, for the memory study's FFmpeg build
+#                                 (experiments/study/build-ffmpeg-capstone-reuse.py) only: this
+#                                 port's patches, then buffer-pool's 0001 and 0002 unchanged,
+#                                 then patches-pool/ (the app's rework), plus buffer-pool's
+#                                 trace.h and this port's no-op recorder and observer (src/pool/)
+#                                 copied into libavutil/. Keyed by all of them. The domain and
+#                                 native builds never read this tree; the domain build's pool
+#                                 arms, which did, were removed on 2026-10-11.
+#   prepare-source.sh --sublet    the patched tree PLUS FFmpeg's pools protected by the
+#                                 buffer-pool port's patch 0003 (build-domain.sh FFAPP_SUBLET=1):
+#                                 this port's patches, buffer-pool's 0001 (the event hooks 0003
+#                                 is written against) and 0003, and the same trace.h, recorder
+#                                 and observer as --pool. Keyed by all of them.
 #
 # The tree is keyed by the patch set's hash, so editing a patch produces a fresh tree
 # instead of silently reusing one prepared from the old patches.
@@ -47,37 +54,22 @@ if [ "${1:-}" = --pristine ]; then
   echo "$SRC"; exit 0
 fi
 
-# --sublet: the Sublet PORT of FFmpeg's own pools (ports/ffmpeg/sublet), on top of the app's
-# patches. Keyed by every file it applies or copies, so a change rebuilds instead of reusing.
-if [ "${1:-}" = --sublet ]; then
-  SP="$APP_DIR/../sublet"
-  SUBLET_FILES=("$APP_DIR"/patches/*.patch "$SP"/*.patch "$SP/ffsublet.h")
-  SUBLET_KEY=$(cat "${SUBLET_FILES[@]}" | sha256sum | cut -c1-12)
-  SRC="$WORK/src-$VERSION-sublet-$SUBLET_KEY"
-  if [ ! -f "$SRC/.ffapp-prepared" ]; then
-    rm -rf "$SRC" "$SRC.tmp"; mkdir -p "$SRC.tmp"
-    tar xf "$TARBALL" -C "$SRC.tmp" --strip-components=1
-    for p in "$APP_DIR"/patches/*.patch "$SP"/*.patch; do
-      patch -d "$SRC.tmp" -p1 --batch --forward --fuzz=0 < "$p" >/dev/null \
-        || { echo "prepare-source: $(basename "$p") does not apply at fuzz 0" >&2; exit 1; }
-    done
-    cp "$SP/ffsublet.h" "$SRC.tmp/libavutil/ffsublet.h"
-    touch "$SRC.tmp/.ffapp-prepared"; mv "$SRC.tmp" "$SRC"
-  fi
-  echo "$SRC"; exit 0
-fi
-
-if [ "${1:-}" = --pool ]; then
+if [ "${1:-}" = --pool ] || [ "${1:-}" = --sublet ]; then
   BP="$APP_DIR/../buffer-pool"
-  BP_PATCHES=("$BP"/patches/ffmpeg-9.0.1-0001-*.patch "$BP"/patches/ffmpeg-9.0.1-0002-*.patch)
-  POOL_FILES=("$APP_DIR"/patches/*.patch "${BP_PATCHES[@]}" "$APP_DIR"/patches-pool/*.patch
+  if [ "$1" = --pool ]; then
+    BP_PATCHES=("$BP"/patches/ffmpeg-9.0.1-0001-*.patch "$BP"/patches/ffmpeg-9.0.1-0002-*.patch
+                "$APP_DIR"/patches-pool/*.patch)
+  else
+    BP_PATCHES=("$BP"/patches/ffmpeg-9.0.1-0001-*.patch "$BP"/patches/ffmpeg-9.0.1-0003-*.patch)
+  fi
+  POOL_FILES=("$APP_DIR"/patches/*.patch "${BP_PATCHES[@]}"
               "$BP/src/shared/trace.h" "$APP_DIR/src/pool/ff2_record.c" "$APP_DIR/src/pool/ff2_observe.c")
   POOL_KEY=$(cat "${POOL_FILES[@]}" | sha256sum | cut -c1-12)
-  SRC="$WORK/src-$VERSION-pool-$POOL_KEY"
+  SRC="$WORK/src-$VERSION-${1#--}-$POOL_KEY"
   if [ ! -f "$SRC/.ffapp-prepared" ]; then
     rm -rf "$SRC" "$SRC.tmp"; mkdir -p "$SRC.tmp"
     tar xf "$TARBALL" -C "$SRC.tmp" --strip-components=1
-    for p in "$APP_DIR"/patches/*.patch "${BP_PATCHES[@]}" "$APP_DIR"/patches-pool/*.patch; do
+    for p in "$APP_DIR"/patches/*.patch "${BP_PATCHES[@]}"; do
       patch -d "$SRC.tmp" -p1 --batch --forward --fuzz=0 < "$p" >/dev/null \
         || { echo "prepare-source: $(basename "$p") does not apply at fuzz 0" >&2; exit 1; }
     done

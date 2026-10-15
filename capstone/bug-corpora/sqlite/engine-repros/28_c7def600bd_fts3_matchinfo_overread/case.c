@@ -2093,7 +2093,27 @@ static int run_case(void){
   rc = sqlite3_exec(db, "PRAGMA integrity_check;", 0, 0, &e);
   out_text("c7def600bd_0 s0_rc="); out_uint((unsigned long)(rc<0?-rc:rc)); out_text("\n");
   if(e){ sqlite3_free(e); e = 0; }
+  /* DIRTY THE ALLOCATOR. The overread is fts3EvalUpdateCounts reading the doclist's
+   * position list past its end: the buffer is the 5-byte doclist plus FTS3_VARINT_MAX+1
+   * bytes of UNINITIALISED padding (fts3TermSelectMerge), and the varint reader stops at
+   * the first zero byte. Host ASan fills every new allocation with 0xbe, so the read runs
+   * off the 16-byte buffer; with ASAN_OPTIONS=max_malloc_fill_size=0 the same binary
+   * completes, and so does every Capstone arm, whose heap starts zeroed. So hand the
+   * statement 16-byte blocks that hold ASan's fill byte: allocate them, fill them, and
+   * free every other one, so memsys5 reissues them first (freeing does not clear a
+   * block's bytes). Freeing all of them would let memsys5 coalesce each freed block with
+   * its buddy, and the statement would be served from a clean fragment instead; the
+   * other half stays allocated until the statement is done. */
+  enum { NDIRTY = 512 };
+  static void *dirty[NDIRTY];
+  int i;
+  for (i = 0; i < NDIRTY; i++) {
+    dirty[i] = sqlite3_malloc(16);
+    if (dirty[i]) memset(dirty[i], 0xbe, 16);
+  }
+  for (i = 1; i < NDIRTY; i += 2) { sqlite3_free(dirty[i]); dirty[i] = 0; }
   rc = sqlite3_exec(db, "SELECT quote(matchinfo(t1,'pcxybs'))==0 FROM t1 WHERE b MATCH 'e*';", 0, 0, &e);
+  for (i = 0; i < NDIRTY; i++) sqlite3_free(dirty[i]);
   out_text("c7def600bd_0 s1_rc="); out_uint((unsigned long)(rc<0?-rc:rc)); out_text("\n");
   if(e){ sqlite3_free(e); e = 0; }
   sqlite3_close(db);

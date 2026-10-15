@@ -1,0 +1,45 @@
+{
+  "application": "ffmpeg",
+  "application_abi": 2,
+  "profile": "virtual",
+  "virtual_vm_abi": 3,
+  "instrument": false,
+  "allocations": false,
+  "gc_gaps": false,
+  "reuse_gap": false,
+  "allocations_sha256": null,
+  "heap": "virtual",
+  "nested": "none",
+  "recipe_revision": "18ab68e6499fb6a28fa46d4c911f6105cd253168",
+  "runtime_revision": "18ab68e6499fb6a28fa46d4c911f6105cd253168",
+  "runtime_dirty": false,
+  "arena_bytes": 67108864,
+  "stack_bytes": 1048576,
+  "image_sha256": "385f958631d81b528f255b95549ce80a4940b945898761ddbd21b23998c20351",
+  "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "runtime_archive_sha256": "e5693f5cca2103dcd3fb722e68dfad967cdbebcb818f459044385414ccd2e545",
+  "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e",
+  "inputs": [
+    {
+      "path": "musl-build/libc-capstone.a",
+      "sha256": "a0f5c573ac5822c7276d31708a2ced5979cd30bb22af501abed5ab97812223a9"
+    },
+    {
+      "path": "domain/ffapp_decode.o",
+      "sha256": "2958bf70cf70241c39c61d4e0b6a97cf0e6a62cd4770fa32335fca231b32836e"
+    },
+    {
+      "path": "domain/ffmpeg-build/libavformat/libavformat.a",
+      "sha256": "12e26e1da5ad1d698f2fa5bc3d963b16cd0f43339dd83470ad9b7545185272f6"
+    },
+    {
+      "path": "domain/ffmpeg-build/libavcodec/libavcodec.a",
+      "sha256": "436ae0513da3fae303b3ac5dec95952613949eedd83b96207aa1fc90218bce75"
+    },
+    {
+      "path": "domain/ffmpeg-build/libavutil/libavutil.a",
+      "sha256": "9818f3374330a27876575bf101133ddf326003087958a3c67adc399247b880b7"
+    }
+  ],
+  "instrument_sha256": null
+}

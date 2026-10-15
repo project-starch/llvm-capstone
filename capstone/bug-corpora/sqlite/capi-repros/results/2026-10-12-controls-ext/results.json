@@ -1,0 +1,1121 @@
+{
+ "pre_registration": "capstone/docs/plans/2026-10-12-nested-lifetime-controls-extended.md (5d336c73931c); control definitions from capstone/docs/plans/2026-10-11-nested-lifetime-controls.md (53325bba0d5c)",
+ "application": "SQLite 3.22.0, nested allocator: the per-connection LOOKASIDE (sqlite3DbMallocRaw on a connection with the default lookaside enabled, released by sqlite3DbFree), over memsys5 (SQLITE_CONFIG_HEAP)",
+ "source_revision": {
+  "llvm_capstone_head": "5d336c73931cd87a3c50262648c88ac9688409d3",
+  "branch": "ports/nested-controls-extended",
+  "uncommitted": "the snapshot is git archive of HEAD (capstone, compiler-rt, xlang) plus these UNCOMMITTED files, byte-identical to the ones listed (sha256 compared on the build host)",
+  "uncommitted_files_sha256": {
+   "capstone/bug-corpora/sqlite/capi-repros/controls/lookaside/la_common.h": "674700a9ac83d79dfe18e16c896c0ed0836773befcd59ebb213b798cb431ce01",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/lookaside/control-parent/control.c": "39d2e3a5c551fc9e9a4c4fd7ad01474ed7671f9f3d75b52908a971d0b2d85b26",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/lookaside/control-sibling/control.c": "1d444d9deb9ef2133b58e367a98cdb21b06332c224585cc5bfd15ca069a21cb7",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/lookaside/control-successor/control.c": "ee1e963b75970b3bf6ae8505787cf65925a7c350c6cf9e14c2f63b70c593eefe",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/lookaside/build-controls.sh": "d3fa22ca18df65abf212cd29ca83cdb1447106a9559d78fcef2375cd6d7b55af",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/lookaside/run-controls.py": "94b81c227a6bfa32894d4e27975ca13261ee5129466b9ca5f7eb0542b289ca5a",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/lookaside/slot-check-negative/control.c": "28fb2ebc5cd6e51954866afb690bdfc0db383276c28534a2d28b43d2dd3972d2",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/lookaside/slot-check-negative.py": "a90fc5dd15c93dd347afb3fb84bf8663096f955a3425d407780c4536ae79d9cc"
+  },
+  "committed_inputs_sha256": {
+   "capstone/ports/sqlite/sublet/sublet-3220000-memsys5.patch": "3f16cf52933c20a93cbc860e90bd42f388710fc4c60f407227146ab60b5f9dd2",
+   "capstone/ports/sqlite/repro322/build-virtual.py": "2d6a26b0212ea17bde00a2eed9cbd75c157963f70db82025804c31da58e03973",
+   "capstone/ports/sqlite/repro322/repro322_common.h": "2774c9ea4777da0be5fc900fcb3b33bb6e44b1cb243800a87de532f6a2151120",
+   "capstone/runtime/virtual/run-staged.py": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/control_common.h": "4699b3873de1e240c2032d1d012306d42a762b945fe31b71ee6806016597cc25"
+  }
+ },
+ "platform": {
+  "profile": "virtual",
+  "exact_bounds": true,
+  "harts": 1,
+  "memory": "2G",
+  "build_and_run_host": "p12",
+  "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "compiler": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "libc-capstone-virtual.a": "a0f5c573ac5822c7276d31708a2ced5979cd30bb22af501abed5ab97812223a9",
+  "libapplication-runtime.a": "4748adbad8826b8d2f3b344d84b5951a0ed6db8bd92885e41f9c6469f62c438f",
+  "note": "each hash measured on the build host for this run; all equal the 2026-10-11 memsys5 controls. SDK rebuilt from this snapshot with runtime/virtual/build-sdk.sh"
+ },
+ "configuration": {
+  "amalgamation_sha256": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "heap": "SQLITE_CONFIG_HEAP over one static 1 MiB array, 64-byte minimum (repro322_common.h); the lookaside buffer is a memsys5 block (bMalloced=1)",
+  "lookaside": "SQLite default (SQLITE_DEFAULT_LOOKASIDE 1200,100), sz=1200 on both arms; nSlot=109 on release (sqlite3MallocSize = the 128 KiB memsys5 block), 100 on protected (the patch reports the 120000-byte request)",
+  "request_size": 128,
+  "flags": "-O0 -g -DREPRO322_VIRTUAL -DREPRO322_VIRTUAL_MEMSYS5 [-DREPRO322_VIRTUAL_SUBLET] -DHAVE_MALLOC_H=1 -DHAVE_MALLOC_USABLE_SIZE=1 -DSQLITE_ENABLE_MEMSYS5 -USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_COUNTOFVIEW_OPTIMIZATION; [-DCONTROL_STALE] for la-control-successor-stale",
+  "arms": {
+   "release": {
+    "builder": "build-virtual.py --memsys5",
+    "staged_engine_sha256": "19ceadb5d103cab190dc4a76b3a54f457495fa1cf28ec5befcd0d5c1fa0c4d66",
+    "cderive": 0,
+    "crevoke": 0
+   },
+   "protected": {
+    "builder": "build-virtual.py --sublet (sublet-3220000-memsys5.patch: memsys5 and lookaside halves)",
+    "staged_engine_sha256": "892dce7120747b9d8fbd007bfe41b6517d4f6069a693e3014bebf49db1e550c4",
+    "cderive": 2,
+    "crevoke": 1,
+    "cderive_crevoke_note": "counted by encoding (opcode 0x5b, funct3 1, funct7 0x51 = CDERIVE, 0x52 = CREVOKE) in each of the four images: 2/1 in every protected image, 0/0 in every release image. -O0: one out-of-line copy of each capability.h helper"
+   }
+  },
+  "image_sha256": {
+   "release": {
+    "stage/src/sqlite3-capstone.c": "19ceadb5d103cab190dc4a76b3a54f457495fa1cf28ec5befcd0d5c1fa0c4d66",
+    "la-control-parent.dom": "1e9ac29315e04687092f1d1155f26c187d072db0c3ac27f0fce46dcd4cdb0f53",
+    "la-control-sibling.dom": "5bd1741f937110fd5e6b67c99753c3e0682741fbc5642720848a2b8e1da306ba",
+    "la-control-successor.dom": "1e66e273715c2b478128716ad238dba5b55180ee84b8069c4a98fb644a62218e",
+    "la-control-successor-stale.dom": "649ee9ce4f95e03409e69b827a321c61584fb5b77c0fa586135a7189737615e9"
+   },
+   "protected": {
+    "stage/src/sqlite3-capstone.c": "892dce7120747b9d8fbd007bfe41b6517d4f6069a693e3014bebf49db1e550c4",
+    "la-control-parent.dom": "6c7e0020bd9dcda6c2eca9aeaebb169470a6435dfa68df7abfec13bbf8dcab85",
+    "la-control-sibling.dom": "ead8cfd35b76b1fdc8bf7a7027b0f1789b74454e7288633c6f8ca7884e72b83b",
+    "la-control-successor.dom": "1063bb9a91e4c2b0a19f8cf717fc4a07aaf178790b4c091bb0ee3f2aea251e83",
+    "la-control-successor-stale.dom": "85d31156ece7a13865c7770ac44a07fc13f9a962e21af4b4b07f5bc410e91756"
+   }
+  }
+ },
+ "lookaside_slot_evidence": {
+  "how": "la_alloc() (la_common.h) records for every block a control takes: address in [db->lookaside.pStart, pEnd); offset from pStart a multiple of lookaside.sz; the lookaside hit counter anStat[0] up by exactly 1 across the sqlite3DbMallocRaw call; sqlite3DbMallocSize(db, p) == lookaside.sz. CHECK <name>-is-lookaside-slot is ok only if all four hold. On the protected arm the block's capability bounds are also exactly the slot, [p, p+1200), as lookasideIssue derives them.",
+  "positive_control": {
+   "program": "controls/lookaside/slot-check-negative/control.c, run by slot-check-negative.py (one boot per arm, same platform, compiled with the exact command recorded for la-control-parent); not part of the pre-registered set",
+   "expected": {
+    "small (128 B, lookaside on)": "ok",
+    "oversize (2000 B > sz)": "FAILED",
+    "disabled (128 B, bDisable++)": "FAILED"
+   },
+   "held": true,
+   "arms": {
+    "release": {
+     "image_sha256": "665e84c1d27bb2457c781bba0d941774a976d5fd0f3f8449fb5b453999d3cf43",
+     "lines": [
+      "SLOT small addr=0x3fafb60df0 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "CHECK small-is-lookaside-slot ok",
+      "SLOT oversize addr=0x3fafb713b0 offset=196608 index=0 rem=0 within=0 hit_delta=0 dbmallocsize=2048",
+      "CHECK oversize-is-lookaside-slot FAILED",
+      "SLOT disabled addr=0x3fafb7adb0 offset=236032 index=0 rem=0 within=0 hit_delta=0 dbmallocsize=128",
+      "CHECK disabled-is-lookaside-slot FAILED",
+      "CONTROL la-slot-check-negative failures=2 (2 expected)",
+      "PORT_END:la-slot-check-negative:0"
+     ]
+    },
+    "protected": {
+     "image_sha256": "6c5d9fcbea8d4a955cabdb92432476a548e8dd1ffcce7123f67b8acffb301a43",
+     "lines": [
+      "SLOT small addr=0x3f9735e940 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "CHECK small-is-lookaside-slot ok",
+      "SLOT oversize addr=0x3f9736b130 offset=169984 index=0 rem=0 within=0 hit_delta=0 dbmallocsize=2000",
+      "CHECK oversize-is-lookaside-slot FAILED",
+      "SLOT disabled addr=0x3f9736ad30 offset=168960 index=0 rem=0 within=0 hit_delta=0 dbmallocsize=128",
+      "CHECK disabled-is-lookaside-slot FAILED",
+      "CONTROL la-slot-check-negative failures=2 (2 expected)",
+      "PORT_END:la-slot-check-negative:0"
+     ]
+    }
+   }
+  }
+ },
+ "run_of_record": "r1",
+ "run_of_record_total_wall_s": 9.2,
+ "runs": [
+  {
+   "arm": "release",
+   "image": "la-control-parent",
+   "image_sha256": "1e9ac29315e04687092f1d1155f26c187d072db0c3ac27f0fce46dcd4cdb0f53",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-parent/control.c:39",
+     "line": 39,
+     "addr": "0x3fbe362a60",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-read",
+     "op": "read",
+     "at": "control-parent/control.c:52",
+     "line": 52,
+     "addr": "0x3fbe362a60",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-link-read",
+     "op": "read",
+     "at": "control-parent/control.c:54",
+     "line": 54,
+     "addr": "0x3fbe362a60",
+     "len": 16,
+     "done": true
+    },
+    {
+     "label": "parent-write",
+     "op": "write",
+     "at": "control-parent/control.c:63",
+     "line": 63,
+     "addr": "0x3fbe362a60",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-readback",
+     "op": "read",
+     "at": "control-parent/control.c:64",
+     "line": 64,
+     "addr": "0x3fbe362a60",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-restore",
+     "op": "write",
+     "at": "control-parent/control.c:66",
+     "line": 66,
+     "addr": "0x3fbe362a60",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-restore-link",
+     "op": "write",
+     "at": "control-parent/control.c:67",
+     "line": 67,
+     "addr": "0x3fbe362a60",
+     "len": 16,
+     "done": true
+    }
+   ],
+   "checks": {
+    "lookaside-enabled": "ok",
+    "A-is-lookaside-slot": "ok",
+    "D-is-lookaside-slot": "ok",
+    "setup-D-heads-free-list-before-A": "ok",
+    "setup-A-heads-free-list": "ok",
+    "parent-read-is-lookaside-link": "ok",
+    "parent-read-link-bytes-not-A-bytes": "ok",
+    "parent-read-rest-is-A-bytes": "ok",
+    "parent-write-read-back": "ok",
+    "lookaside-reissues-A-then-D": "ok",
+    "close-ok": "ok"
+   },
+   "lines": [
+    "repro allocator=memsys5 heap_bytes=1048576",
+    "LA open rc=0",
+    "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3fbe343020 pEnd=0x3fbe362f10 hits=0 ptr_bytes=16",
+    "BLOCK lookaside-pStart addr=0x3fbe343020 base=0x3fbe283020 end=0x3fbe383020",
+    "SLOT A addr=0x3fbe362a60 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK A addr=0x3fbe362a60 base=0x3fbe283020 end=0x3fbe383020",
+    "SLOT D addr=0x3fbe3625b0 offset=128400 index=107 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK D addr=0x3fbe3625b0 base=0x3fbe283020 end=0x3fbe383020",
+    "FREED D addr=0x3fbe3625b0, then A addr=0x3fbe362a60; pFree before A=0x3fbe3625b0 after=0x3fbe362a60",
+    "PARENT ref=0x3fbe362a60 (lookaside.pStart + 129600)",
+    "BLOCK parent addr=0x3fbe362a60 base=0x3fbe283020 end=0x3fbe383020",
+    "LINK read next=0x3fbe3625b0 tag=1, the lookaside wrote next=0x3fbe3625b0 (D)",
+    "AGAIN addr=0x3fbe362a60 then 0x3fbe3625b0",
+    "LA close rc=0"
+   ],
+   "allocator": "allocator=memsys5",
+   "boot_wall_s": 8.5,
+   "boot_completed": true
+  },
+  {
+   "arm": "release",
+   "image": "la-control-sibling",
+   "image_sha256": "5bd1741f937110fd5e6b67c99753c3e0682741fbc5642720848a2b8e1da306ba",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-sibling/control.c:36",
+     "line": 36,
+     "addr": "0x3f993620d0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "B-fill",
+     "op": "write",
+     "at": "control-sibling/control.c:37",
+     "line": 37,
+     "addr": "0x3f99361c20",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-read",
+     "op": "read",
+     "at": "control-sibling/control.c:42",
+     "line": 42,
+     "addr": "0x3f99361c20",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-write",
+     "op": "write",
+     "at": "control-sibling/control.c:45",
+     "line": 45,
+     "addr": "0x3f99361c20",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-readback",
+     "op": "read",
+     "at": "control-sibling/control.c:46",
+     "line": 46,
+     "addr": "0x3f99361c20",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "lookaside-enabled": "ok",
+    "A-is-lookaside-slot": "ok",
+    "B-is-lookaside-slot": "ok",
+    "sibling-B-intact": "ok",
+    "sibling-write-read-back": "ok",
+    "close-ok": "ok"
+   },
+   "lines": [
+    "repro allocator=memsys5 heap_bytes=1048576",
+    "LA open rc=0",
+    "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3f99342690 pEnd=0x3f99362580 hits=0 ptr_bytes=16",
+    "BLOCK lookaside-pStart addr=0x3f99342690 base=0x3f99282690 end=0x3f99382690",
+    "SLOT A addr=0x3f993620d0 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK A addr=0x3f993620d0 base=0x3f99282690 end=0x3f99382690",
+    "SLOT B addr=0x3f99361c20 offset=128400 index=107 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK B addr=0x3f99361c20 base=0x3f99282690 end=0x3f99382690",
+    "SIBLING B-A=-1200 slot_size=1200 adjacent=1",
+    "FREED A addr=0x3f993620d0 pFree=0x3f993620d0",
+    "LA close rc=0"
+   ],
+   "allocator": "allocator=memsys5",
+   "boot_wall_s": 8.3,
+   "boot_completed": true
+  },
+  {
+   "arm": "release",
+   "image": "la-control-successor",
+   "image_sha256": "1e66e273715c2b478128716ad238dba5b55180ee84b8069c4a98fb644a62218e",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-successor/control.c:43",
+     "line": 43,
+     "addr": "0x3f88b62090",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-write",
+     "op": "write",
+     "at": "control-successor/control.c:66",
+     "line": 66,
+     "addr": "0x3f88b62090",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-read",
+     "op": "read",
+     "at": "control-successor/control.c:67",
+     "line": 67,
+     "addr": "0x3f88b62090",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "lookaside-enabled": "ok",
+    "A-is-lookaside-slot": "ok",
+    "C-try-is-lookaside-slot": "ok",
+    "C-start-equals-A-start": "ok",
+    "C-write-read-back": "ok",
+    "close-ok": "ok"
+   },
+   "lines": [
+    "repro allocator=memsys5 heap_bytes=1048576",
+    "LA open rc=0",
+    "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3f88b42650 pEnd=0x3f88b62540 hits=0 ptr_bytes=16",
+    "BLOCK lookaside-pStart addr=0x3f88b42650 base=0x3f88a82650 end=0x3f88b82650",
+    "SLOT A addr=0x3f88b62090 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK A addr=0x3f88b62090 base=0x3f88a82650 end=0x3f88b82650",
+    "FREED A addr=0x3f88b62090",
+    "SLOT C-try addr=0x3f88b62090 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK C-try addr=0x3f88b62090 base=0x3f88a82650 end=0x3f88b82650",
+    "TRY 1 addr=0x3f88b62090",
+    "SUCCESSOR A=0x3f88b62090 C=0x3f88b62090 tries=1",
+    "BLOCK C addr=0x3f88b62090 base=0x3f88a82650 end=0x3f88b82650",
+    "LA close rc=0"
+   ],
+   "allocator": "allocator=memsys5",
+   "boot_wall_s": 8.3,
+   "boot_completed": true
+  },
+  {
+   "arm": "release",
+   "image": "la-control-successor-stale",
+   "image_sha256": "649ee9ce4f95e03409e69b827a321c61584fb5b77c0fa586135a7189737615e9",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-successor/control.c:43",
+     "line": 43,
+     "addr": "0x3fbbf62320",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-write",
+     "op": "write",
+     "at": "control-successor/control.c:66",
+     "line": 66,
+     "addr": "0x3fbbf62320",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-read",
+     "op": "read",
+     "at": "control-successor/control.c:67",
+     "line": 67,
+     "addr": "0x3fbbf62320",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "stale-A-read",
+     "op": "read",
+     "at": "control-successor/control.c:71",
+     "line": 71,
+     "addr": "0x3fbbf62320",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "lookaside-enabled": "ok",
+    "A-is-lookaside-slot": "ok",
+    "C-try-is-lookaside-slot": "ok",
+    "C-start-equals-A-start": "ok",
+    "C-write-read-back": "ok",
+    "stale-read-returns-C-bytes": "ok",
+    "close-ok": "ok"
+   },
+   "lines": [
+    "repro allocator=memsys5 heap_bytes=1048576",
+    "LA open rc=0",
+    "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3fbbf428e0 pEnd=0x3fbbf627d0 hits=0 ptr_bytes=16",
+    "BLOCK lookaside-pStart addr=0x3fbbf428e0 base=0x3fbbe828e0 end=0x3fbbf828e0",
+    "SLOT A addr=0x3fbbf62320 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK A addr=0x3fbbf62320 base=0x3fbbe828e0 end=0x3fbbf828e0",
+    "FREED A addr=0x3fbbf62320",
+    "SLOT C-try addr=0x3fbbf62320 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK C-try addr=0x3fbbf62320 base=0x3fbbe828e0 end=0x3fbbf828e0",
+    "TRY 1 addr=0x3fbbf62320",
+    "SUCCESSOR A=0x3fbbf62320 C=0x3fbbf62320 tries=1",
+    "BLOCK C addr=0x3fbbf62320 base=0x3fbbe828e0 end=0x3fbbf828e0",
+    "LA close rc=0"
+   ],
+   "allocator": "allocator=memsys5",
+   "boot_wall_s": 8.2,
+   "boot_completed": true
+  },
+  {
+   "arm": "protected",
+   "image": "la-control-parent",
+   "image_sha256": "6c7e0020bd9dcda6c2eca9aeaebb169470a6435dfa68df7abfec13bbf8dcab85",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-parent/control.c:39",
+     "line": 39,
+     "addr": "0x3f90f605d0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-read",
+     "op": "read",
+     "at": "control-parent/control.c:52",
+     "line": 52,
+     "addr": "0x3f90f605d0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-link-read",
+     "op": "read",
+     "at": "control-parent/control.c:54",
+     "line": 54,
+     "addr": "0x3f90f605d0",
+     "len": 16,
+     "done": true
+    },
+    {
+     "label": "parent-write",
+     "op": "write",
+     "at": "control-parent/control.c:63",
+     "line": 63,
+     "addr": "0x3f90f605d0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-readback",
+     "op": "read",
+     "at": "control-parent/control.c:64",
+     "line": 64,
+     "addr": "0x3f90f605d0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-restore",
+     "op": "write",
+     "at": "control-parent/control.c:66",
+     "line": 66,
+     "addr": "0x3f90f605d0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-restore-link",
+     "op": "write",
+     "at": "control-parent/control.c:67",
+     "line": 67,
+     "addr": "0x3f90f605d0",
+     "len": 16,
+     "done": true
+    }
+   ],
+   "checks": {
+    "lookaside-enabled": "ok",
+    "A-is-lookaside-slot": "ok",
+    "D-is-lookaside-slot": "ok",
+    "setup-D-heads-free-list-before-A": "ok",
+    "setup-A-heads-free-list": "ok",
+    "parent-read-is-lookaside-link": "ok",
+    "parent-read-link-bytes-not-A-bytes": "ok",
+    "parent-read-rest-is-A-bytes": "ok",
+    "parent-write-read-back": "ok",
+    "lookaside-reissues-A-then-D": "ok",
+    "close-ok": "ok"
+   },
+   "lines": [
+    "repro allocator=memsys5-sublet heap_bytes=1048576",
+    "LA open rc=0",
+    "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3f90f435c0 pEnd=0x3f90f60a80 hits=0 ptr_bytes=16",
+    "BLOCK lookaside-pStart addr=0x3f90f435c0 base=0x3f90f435c0 end=0x3f90f60a80",
+    "BLOCK lookaside-pBlock addr=0x3f90f435c0 base=0x3f90f435c0 end=0x3f90f60a80",
+    "BLOCK lookaside-pLife addr=0x3f90f435c0 base=0x3f90f435c0 end=0x3f90f60a80",
+    "SLOT A addr=0x3f90f605d0 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK A addr=0x3f90f605d0 base=0x3f90f605d0 end=0x3f90f60a80",
+    "SLOT D addr=0x3f90f60120 offset=117600 index=98 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK D addr=0x3f90f60120 base=0x3f90f60120 end=0x3f90f605d0",
+    "FREED D addr=0x3f90f60120, then A addr=0x3f90f605d0; pFree before A=0x3f90f60120 after=0x3f90f605d0",
+    "PARENT ref=0x3f90f605d0 (lookaside.pStart + 118800)",
+    "BLOCK parent addr=0x3f90f605d0 base=0x3f90f435c0 end=0x3f90f60a80",
+    "LINK read next=0x3f90f60120 tag=1, the lookaside wrote next=0x3f90f60120 (D)",
+    "AGAIN addr=0x3f90f605d0 then 0x3f90f60120",
+    "LA close rc=0"
+   ],
+   "allocator": "allocator=memsys5-sublet",
+   "boot_wall_s": 8.4,
+   "boot_completed": true
+  },
+  {
+   "arm": "protected",
+   "image": "la-control-sibling",
+   "image_sha256": "ead8cfd35b76b1fdc8bf7a7027b0f1789b74454e7288633c6f8ca7884e72b83b",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-sibling/control.c:36",
+     "line": 36,
+     "addr": "0x3fa7b5fc40",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "B-fill",
+     "op": "write",
+     "at": "control-sibling/control.c:37",
+     "line": 37,
+     "addr": "0x3fa7b5f790",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-read",
+     "op": "read",
+     "at": "control-sibling/control.c:42",
+     "line": 42,
+     "addr": "0x3fa7b5f790",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-write",
+     "op": "write",
+     "at": "control-sibling/control.c:45",
+     "line": 45,
+     "addr": "0x3fa7b5f790",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-readback",
+     "op": "read",
+     "at": "control-sibling/control.c:46",
+     "line": 46,
+     "addr": "0x3fa7b5f790",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "lookaside-enabled": "ok",
+    "A-is-lookaside-slot": "ok",
+    "B-is-lookaside-slot": "ok",
+    "sibling-B-intact": "ok",
+    "sibling-write-read-back": "ok",
+    "close-ok": "ok"
+   },
+   "lines": [
+    "repro allocator=memsys5-sublet heap_bytes=1048576",
+    "LA open rc=0",
+    "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3fa7b42c30 pEnd=0x3fa7b600f0 hits=0 ptr_bytes=16",
+    "BLOCK lookaside-pStart addr=0x3fa7b42c30 base=0x3fa7b42c30 end=0x3fa7b600f0",
+    "BLOCK lookaside-pBlock addr=0x3fa7b42c30 base=0x3fa7b42c30 end=0x3fa7b600f0",
+    "BLOCK lookaside-pLife addr=0x3fa7b42c30 base=0x3fa7b42c30 end=0x3fa7b600f0",
+    "SLOT A addr=0x3fa7b5fc40 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK A addr=0x3fa7b5fc40 base=0x3fa7b5fc40 end=0x3fa7b600f0",
+    "SLOT B addr=0x3fa7b5f790 offset=117600 index=98 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK B addr=0x3fa7b5f790 base=0x3fa7b5f790 end=0x3fa7b5fc40",
+    "SIBLING B-A=-1200 slot_size=1200 adjacent=1",
+    "FREED A addr=0x3fa7b5fc40 pFree=0x3fa7b5fc40",
+    "LA close rc=0"
+   ],
+   "allocator": "allocator=memsys5-sublet",
+   "boot_wall_s": 8.3,
+   "boot_completed": true
+  },
+  {
+   "arm": "protected",
+   "image": "la-control-successor",
+   "image_sha256": "1063bb9a91e4c2b0a19f8cf717fc4a07aaf178790b4c091bb0ee3f2aea251e83",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-successor/control.c:43",
+     "line": 43,
+     "addr": "0x3faa35fc00",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-write",
+     "op": "write",
+     "at": "control-successor/control.c:66",
+     "line": 66,
+     "addr": "0x3faa35fc00",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-read",
+     "op": "read",
+     "at": "control-successor/control.c:67",
+     "line": 67,
+     "addr": "0x3faa35fc00",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "lookaside-enabled": "ok",
+    "A-is-lookaside-slot": "ok",
+    "C-try-is-lookaside-slot": "ok",
+    "C-start-equals-A-start": "ok",
+    "C-write-read-back": "ok",
+    "close-ok": "ok"
+   },
+   "lines": [
+    "repro allocator=memsys5-sublet heap_bytes=1048576",
+    "LA open rc=0",
+    "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3faa342bf0 pEnd=0x3faa3600b0 hits=0 ptr_bytes=16",
+    "BLOCK lookaside-pStart addr=0x3faa342bf0 base=0x3faa342bf0 end=0x3faa3600b0",
+    "BLOCK lookaside-pBlock addr=0x3faa342bf0 base=0x3faa342bf0 end=0x3faa3600b0",
+    "BLOCK lookaside-pLife addr=0x3faa342bf0 base=0x3faa342bf0 end=0x3faa3600b0",
+    "SLOT A addr=0x3faa35fc00 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK A addr=0x3faa35fc00 base=0x3faa35fc00 end=0x3faa3600b0",
+    "FREED A addr=0x3faa35fc00",
+    "SLOT C-try addr=0x3faa35fc00 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK C-try addr=0x3faa35fc00 base=0x3faa35fc00 end=0x3faa3600b0",
+    "TRY 1 addr=0x3faa35fc00",
+    "SUCCESSOR A=0x3faa35fc00 C=0x3faa35fc00 tries=1",
+    "BLOCK C addr=0x3faa35fc00 base=0x3faa35fc00 end=0x3faa3600b0",
+    "LA close rc=0"
+   ],
+   "allocator": "allocator=memsys5-sublet",
+   "boot_wall_s": 8.5,
+   "boot_completed": true
+  },
+  {
+   "arm": "protected",
+   "image": "la-control-successor-stale",
+   "image_sha256": "85d31156ece7a13865c7770ac44a07fc13f9a962e21af4b4b07f5bc410e91756",
+   "predicted": "fault-25-at-stale-A-read",
+   "outcome": "fault",
+   "prediction_held": true,
+   "exit_code": 139,
+   "returned": false,
+   "fault": {
+    "cause": 25,
+    "pc": "0x3fb14573b0",
+    "address": "0x3fb175fe90",
+    "code_start": "0x3fb1400000",
+    "image_offset": "0x673b0",
+    "function": "run_case",
+    "file": "control.c",
+    "line": 71,
+    "qemu_line": "[CAPSTONE] Cap mem access on revoked capability: pc = 3fb14573b0, rs1 = x10, imm = 0, cursor = 3fb175fe90, bounds = (3fb175fe90, 3fb1760340)"
+   },
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-successor/control.c:43",
+     "line": 43,
+     "addr": "0x3fb175fe90",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-write",
+     "op": "write",
+     "at": "control-successor/control.c:66",
+     "line": 66,
+     "addr": "0x3fb175fe90",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-read",
+     "op": "read",
+     "at": "control-successor/control.c:67",
+     "line": 67,
+     "addr": "0x3fb175fe90",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "stale-A-read",
+     "op": "read",
+     "at": "control-successor/control.c:71",
+     "line": 71,
+     "addr": "0x3fb175fe90",
+     "len": 128,
+     "done": false
+    }
+   ],
+   "checks": {
+    "lookaside-enabled": "ok",
+    "A-is-lookaside-slot": "ok",
+    "C-try-is-lookaside-slot": "ok",
+    "C-start-equals-A-start": "ok",
+    "C-write-read-back": "ok"
+   },
+   "lines": [
+    "repro allocator=memsys5-sublet heap_bytes=1048576",
+    "LA open rc=0",
+    "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3fb1742e80 pEnd=0x3fb1760340 hits=0 ptr_bytes=16",
+    "BLOCK lookaside-pStart addr=0x3fb1742e80 base=0x3fb1742e80 end=0x3fb1760340",
+    "BLOCK lookaside-pBlock addr=0x3fb1742e80 base=0x3fb1742e80 end=0x3fb1760340",
+    "BLOCK lookaside-pLife addr=0x3fb1742e80 base=0x3fb1742e80 end=0x3fb1760340",
+    "SLOT A addr=0x3fb175fe90 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK A addr=0x3fb175fe90 base=0x3fb175fe90 end=0x3fb1760340",
+    "FREED A addr=0x3fb175fe90",
+    "SLOT C-try addr=0x3fb175fe90 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+    "BLOCK C-try addr=0x3fb175fe90 base=0x3fb175fe90 end=0x3fb1760340",
+    "TRY 1 addr=0x3fb175fe90",
+    "SUCCESSOR A=0x3fb175fe90 C=0x3fb175fe90 tries=1",
+    "BLOCK C addr=0x3fb175fe90 base=0x3fb175fe90 end=0x3fb1760340"
+   ],
+   "allocator": "allocator=memsys5-sublet",
+   "boot_wall_s": 8.9,
+   "boot_completed": true
+  }
+ ],
+ "repeats": [
+  {
+   "run": "r2",
+   "total_wall_s": 9.2,
+   "same_outcome_as_r1": true,
+   "runs": [
+    {
+     "arm": "release",
+     "image": "la-control-parent",
+     "image_sha256": "1e9ac29315e04687092f1d1155f26c187d072db0c3ac27f0fce46dcd4cdb0f53",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.3,
+     "lines": [
+      "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3fb0b43020 pEnd=0x3fb0b62f10 hits=0 ptr_bytes=16",
+      "SLOT A addr=0x3fb0b62a60 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3fb0b62a60 base=0x3fb0a83020 end=0x3fb0b83020",
+      "SLOT D addr=0x3fb0b625b0 offset=128400 index=107 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK D addr=0x3fb0b625b0 base=0x3fb0a83020 end=0x3fb0b83020",
+      "PARENT ref=0x3fb0b62a60 (lookaside.pStart + 129600)",
+      "LINK read next=0x3fb0b625b0 tag=1, the lookaside wrote next=0x3fb0b625b0 (D)",
+      "AGAIN addr=0x3fb0b62a60 then 0x3fb0b625b0"
+     ]
+    },
+    {
+     "arm": "release",
+     "image": "la-control-sibling",
+     "image_sha256": "5bd1741f937110fd5e6b67c99753c3e0682741fbc5642720848a2b8e1da306ba",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.3,
+     "lines": [
+      "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3f98b42690 pEnd=0x3f98b62580 hits=0 ptr_bytes=16",
+      "SLOT A addr=0x3f98b620d0 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3f98b620d0 base=0x3f98a82690 end=0x3f98b82690",
+      "SLOT B addr=0x3f98b61c20 offset=128400 index=107 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK B addr=0x3f98b61c20 base=0x3f98a82690 end=0x3f98b82690",
+      "SIBLING B-A=-1200 slot_size=1200 adjacent=1"
+     ]
+    },
+    {
+     "arm": "release",
+     "image": "la-control-successor",
+     "image_sha256": "1e66e273715c2b478128716ad238dba5b55180ee84b8069c4a98fb644a62218e",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.4,
+     "lines": [
+      "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3fbbf42650 pEnd=0x3fbbf62540 hits=0 ptr_bytes=16",
+      "SLOT A addr=0x3fbbf62090 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3fbbf62090 base=0x3fbbe82650 end=0x3fbbf82650",
+      "SUCCESSOR A=0x3fbbf62090 C=0x3fbbf62090 tries=1",
+      "BLOCK C addr=0x3fbbf62090 base=0x3fbbe82650 end=0x3fbbf82650"
+     ]
+    },
+    {
+     "arm": "release",
+     "image": "la-control-successor-stale",
+     "image_sha256": "649ee9ce4f95e03409e69b827a321c61584fb5b77c0fa586135a7189737615e9",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.3,
+     "lines": [
+      "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3f977428e0 pEnd=0x3f977627d0 hits=0 ptr_bytes=16",
+      "SLOT A addr=0x3f97762320 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3f97762320 base=0x3f976828e0 end=0x3f977828e0",
+      "SUCCESSOR A=0x3f97762320 C=0x3f97762320 tries=1",
+      "BLOCK C addr=0x3f97762320 base=0x3f976828e0 end=0x3f977828e0"
+     ]
+    },
+    {
+     "arm": "protected",
+     "image": "la-control-parent",
+     "image_sha256": "6c7e0020bd9dcda6c2eca9aeaebb169470a6435dfa68df7abfec13bbf8dcab85",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.4,
+     "lines": [
+      "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3f9ef435c0 pEnd=0x3f9ef60a80 hits=0 ptr_bytes=16",
+      "BLOCK lookaside-pLife addr=0x3f9ef435c0 base=0x3f9ef435c0 end=0x3f9ef60a80",
+      "SLOT A addr=0x3f9ef605d0 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3f9ef605d0 base=0x3f9ef605d0 end=0x3f9ef60a80",
+      "SLOT D addr=0x3f9ef60120 offset=117600 index=98 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK D addr=0x3f9ef60120 base=0x3f9ef60120 end=0x3f9ef605d0",
+      "PARENT ref=0x3f9ef605d0 (lookaside.pStart + 118800)",
+      "LINK read next=0x3f9ef60120 tag=1, the lookaside wrote next=0x3f9ef60120 (D)",
+      "AGAIN addr=0x3f9ef605d0 then 0x3f9ef60120"
+     ]
+    },
+    {
+     "arm": "protected",
+     "image": "la-control-sibling",
+     "image_sha256": "ead8cfd35b76b1fdc8bf7a7027b0f1789b74454e7288633c6f8ca7884e72b83b",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.3,
+     "lines": [
+      "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3fb6342c30 pEnd=0x3fb63600f0 hits=0 ptr_bytes=16",
+      "BLOCK lookaside-pLife addr=0x3fb6342c30 base=0x3fb6342c30 end=0x3fb63600f0",
+      "SLOT A addr=0x3fb635fc40 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3fb635fc40 base=0x3fb635fc40 end=0x3fb63600f0",
+      "SLOT B addr=0x3fb635f790 offset=117600 index=98 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK B addr=0x3fb635f790 base=0x3fb635f790 end=0x3fb635fc40",
+      "SIBLING B-A=-1200 slot_size=1200 adjacent=1"
+     ]
+    },
+    {
+     "arm": "protected",
+     "image": "la-control-successor",
+     "image_sha256": "1063bb9a91e4c2b0a19f8cf717fc4a07aaf178790b4c091bb0ee3f2aea251e83",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.4,
+     "lines": [
+      "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3fbef42bf0 pEnd=0x3fbef600b0 hits=0 ptr_bytes=16",
+      "BLOCK lookaside-pLife addr=0x3fbef42bf0 base=0x3fbef42bf0 end=0x3fbef600b0",
+      "SLOT A addr=0x3fbef5fc00 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3fbef5fc00 base=0x3fbef5fc00 end=0x3fbef600b0",
+      "SUCCESSOR A=0x3fbef5fc00 C=0x3fbef5fc00 tries=1",
+      "BLOCK C addr=0x3fbef5fc00 base=0x3fbef5fc00 end=0x3fbef600b0"
+     ]
+    },
+    {
+     "arm": "protected",
+     "image": "la-control-successor-stale",
+     "image_sha256": "85d31156ece7a13865c7770ac44a07fc13f9a962e21af4b4b07f5bc410e91756",
+     "outcome": "fault",
+     "prediction_held": true,
+     "fault": {
+      "cause": 25,
+      "pc": "0x3fb28573b0",
+      "address": "0x3fb2b5fe90",
+      "code_start": "0x3fb2800000",
+      "image_offset": "0x673b0",
+      "function": "run_case",
+      "file": "control.c",
+      "line": 71,
+      "qemu_line": "[CAPSTONE] Cap mem access on revoked capability: pc = 3fb28573b0, rs1 = x10, imm = 0, cursor = 3fb2b5fe90, bounds = (3fb2b5fe90, 3fb2b60340)"
+     },
+     "boot_wall_s": 9.0,
+     "lines": [
+      "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3fb2b42e80 pEnd=0x3fb2b60340 hits=0 ptr_bytes=16",
+      "BLOCK lookaside-pLife addr=0x3fb2b42e80 base=0x3fb2b42e80 end=0x3fb2b60340",
+      "SLOT A addr=0x3fb2b5fe90 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3fb2b5fe90 base=0x3fb2b5fe90 end=0x3fb2b60340",
+      "SUCCESSOR A=0x3fb2b5fe90 C=0x3fb2b5fe90 tries=1",
+      "BLOCK C addr=0x3fb2b5fe90 base=0x3fb2b5fe90 end=0x3fb2b60340"
+     ]
+    }
+   ]
+  },
+  {
+   "run": "r3",
+   "total_wall_s": 9.5,
+   "same_outcome_as_r1": true,
+   "runs": [
+    {
+     "arm": "release",
+     "image": "la-control-parent",
+     "image_sha256": "1e9ac29315e04687092f1d1155f26c187d072db0c3ac27f0fce46dcd4cdb0f53",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.1,
+     "lines": [
+      "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3facb43020 pEnd=0x3facb62f10 hits=0 ptr_bytes=16",
+      "SLOT A addr=0x3facb62a60 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3facb62a60 base=0x3faca83020 end=0x3facb83020",
+      "SLOT D addr=0x3facb625b0 offset=128400 index=107 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK D addr=0x3facb625b0 base=0x3faca83020 end=0x3facb83020",
+      "PARENT ref=0x3facb62a60 (lookaside.pStart + 129600)",
+      "LINK read next=0x3facb625b0 tag=1, the lookaside wrote next=0x3facb625b0 (D)",
+      "AGAIN addr=0x3facb62a60 then 0x3facb625b0"
+     ]
+    },
+    {
+     "arm": "release",
+     "image": "la-control-sibling",
+     "image_sha256": "5bd1741f937110fd5e6b67c99753c3e0682741fbc5642720848a2b8e1da306ba",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.1,
+     "lines": [
+      "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3f8bf42690 pEnd=0x3f8bf62580 hits=0 ptr_bytes=16",
+      "SLOT A addr=0x3f8bf620d0 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3f8bf620d0 base=0x3f8be82690 end=0x3f8bf82690",
+      "SLOT B addr=0x3f8bf61c20 offset=128400 index=107 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK B addr=0x3f8bf61c20 base=0x3f8be82690 end=0x3f8bf82690",
+      "SIBLING B-A=-1200 slot_size=1200 adjacent=1"
+     ]
+    },
+    {
+     "arm": "release",
+     "image": "la-control-successor",
+     "image_sha256": "1e66e273715c2b478128716ad238dba5b55180ee84b8069c4a98fb644a62218e",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.5,
+     "lines": [
+      "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3fb1f42650 pEnd=0x3fb1f62540 hits=0 ptr_bytes=16",
+      "SLOT A addr=0x3fb1f62090 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3fb1f62090 base=0x3fb1e82650 end=0x3fb1f82650",
+      "SUCCESSOR A=0x3fb1f62090 C=0x3fb1f62090 tries=1",
+      "BLOCK C addr=0x3fb1f62090 base=0x3fb1e82650 end=0x3fb1f82650"
+     ]
+    },
+    {
+     "arm": "release",
+     "image": "la-control-successor-stale",
+     "image_sha256": "649ee9ce4f95e03409e69b827a321c61584fb5b77c0fa586135a7189737615e9",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.3,
+     "lines": [
+      "LA sz=1200 nSlot=109 bDisable=0 bMalloced=1 pStart=0x3fa7b428e0 pEnd=0x3fa7b627d0 hits=0 ptr_bytes=16",
+      "SLOT A addr=0x3fa7b62320 offset=129600 index=108 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3fa7b62320 base=0x3fa7a828e0 end=0x3fa7b828e0",
+      "SUCCESSOR A=0x3fa7b62320 C=0x3fa7b62320 tries=1",
+      "BLOCK C addr=0x3fa7b62320 base=0x3fa7a828e0 end=0x3fa7b828e0"
+     ]
+    },
+    {
+     "arm": "protected",
+     "image": "la-control-parent",
+     "image_sha256": "6c7e0020bd9dcda6c2eca9aeaebb169470a6435dfa68df7abfec13bbf8dcab85",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.5,
+     "lines": [
+      "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3f8a7435c0 pEnd=0x3f8a760a80 hits=0 ptr_bytes=16",
+      "BLOCK lookaside-pLife addr=0x3f8a7435c0 base=0x3f8a7435c0 end=0x3f8a760a80",
+      "SLOT A addr=0x3f8a7605d0 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3f8a7605d0 base=0x3f8a7605d0 end=0x3f8a760a80",
+      "SLOT D addr=0x3f8a760120 offset=117600 index=98 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK D addr=0x3f8a760120 base=0x3f8a760120 end=0x3f8a7605d0",
+      "PARENT ref=0x3f8a7605d0 (lookaside.pStart + 118800)",
+      "LINK read next=0x3f8a760120 tag=1, the lookaside wrote next=0x3f8a760120 (D)",
+      "AGAIN addr=0x3f8a7605d0 then 0x3f8a760120"
+     ]
+    },
+    {
+     "arm": "protected",
+     "image": "la-control-sibling",
+     "image_sha256": "ead8cfd35b76b1fdc8bf7a7027b0f1789b74454e7288633c6f8ca7884e72b83b",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.2,
+     "lines": [
+      "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3f97b42c30 pEnd=0x3f97b600f0 hits=0 ptr_bytes=16",
+      "BLOCK lookaside-pLife addr=0x3f97b42c30 base=0x3f97b42c30 end=0x3f97b600f0",
+      "SLOT A addr=0x3f97b5fc40 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3f97b5fc40 base=0x3f97b5fc40 end=0x3f97b600f0",
+      "SLOT B addr=0x3f97b5f790 offset=117600 index=98 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK B addr=0x3f97b5f790 base=0x3f97b5f790 end=0x3f97b5fc40",
+      "SIBLING B-A=-1200 slot_size=1200 adjacent=1"
+     ]
+    },
+    {
+     "arm": "protected",
+     "image": "la-control-successor",
+     "image_sha256": "1063bb9a91e4c2b0a19f8cf717fc4a07aaf178790b4c091bb0ee3f2aea251e83",
+     "outcome": "completed",
+     "prediction_held": true,
+     "fault": null,
+     "boot_wall_s": 8.4,
+     "lines": [
+      "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3f9cf42bf0 pEnd=0x3f9cf600b0 hits=0 ptr_bytes=16",
+      "BLOCK lookaside-pLife addr=0x3f9cf42bf0 base=0x3f9cf42bf0 end=0x3f9cf600b0",
+      "SLOT A addr=0x3f9cf5fc00 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3f9cf5fc00 base=0x3f9cf5fc00 end=0x3f9cf600b0",
+      "SUCCESSOR A=0x3f9cf5fc00 C=0x3f9cf5fc00 tries=1",
+      "BLOCK C addr=0x3f9cf5fc00 base=0x3f9cf5fc00 end=0x3f9cf600b0"
+     ]
+    },
+    {
+     "arm": "protected",
+     "image": "la-control-successor-stale",
+     "image_sha256": "85d31156ece7a13865c7770ac44a07fc13f9a962e21af4b4b07f5bc410e91756",
+     "outcome": "fault",
+     "prediction_held": true,
+     "fault": {
+      "cause": 25,
+      "pc": "0x3f94c573b0",
+      "address": "0x3f94f5fe90",
+      "code_start": "0x3f94c00000",
+      "image_offset": "0x673b0",
+      "function": "run_case",
+      "file": "control.c",
+      "line": 71,
+      "qemu_line": "[CAPSTONE] Cap mem access on revoked capability: pc = 3f94c573b0, rs1 = x10, imm = 0, cursor = 3f94f5fe90, bounds = (3f94f5fe90, 3f94f60340)"
+     },
+     "boot_wall_s": 9.2,
+     "lines": [
+      "LA sz=1200 nSlot=100 bDisable=0 bMalloced=1 pStart=0x3f94f42e80 pEnd=0x3f94f60340 hits=0 ptr_bytes=16",
+      "BLOCK lookaside-pLife addr=0x3f94f42e80 base=0x3f94f42e80 end=0x3f94f60340",
+      "SLOT A addr=0x3f94f5fe90 offset=118800 index=99 rem=0 within=1 hit_delta=1 dbmallocsize=1200",
+      "BLOCK A addr=0x3f94f5fe90 base=0x3f94f5fe90 end=0x3f94f60340",
+      "SUCCESSOR A=0x3f94f5fe90 C=0x3f94f5fe90 tries=1",
+      "BLOCK C addr=0x3f94f5fe90 base=0x3f94f5fe90 end=0x3f94f60340"
+     ]
+    }
+   ]
+  }
+ ],
+ "judge_negative_test": "run-controls.py --rejudge on r1: as recorded, all 8 held. With --swap-arms the stale pair (release and protected la-control-successor-stale) came out held=False; the other six stayed held=True, since their predictions are the same on both arms. Edited copies of the protected la-control-sibling log each came out held=False: one CHECK FAILED (outcome completed), a probe without done, exit 1, no RETURNED (outcome neither for each of the last three)."
+}

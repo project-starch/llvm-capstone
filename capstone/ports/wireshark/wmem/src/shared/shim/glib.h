@@ -1,5 +1,5 @@
-/* Freestanding stand-in for the GLib surface that wmem's core and its four
- * allocators use. Anything wider than this is deliberately absent. */
+/* Stand-in for the GLib surface that wmem's core and its four allocators
+ * use. Anything wider than this is deliberately absent. */
 #ifndef WM_SHIM_GLIB_H
 #define WM_SHIM_GLIB_H
 #include <stdbool.h>
@@ -19,6 +19,6 @@
 #define g_assert_not_reached() wm_fail(102)
 #define g_warning(...) ((void)0)
 /* Each pool's allocator is chosen explicitly by the port; there is no
- * environment override, and the domain has no environment at all. */
+ * environment override. */
 #define getenv(name) wm_getenv(name)
 #endif

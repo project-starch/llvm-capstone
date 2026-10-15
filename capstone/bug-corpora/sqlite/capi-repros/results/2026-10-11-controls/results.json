@@ -1,0 +1,730 @@
+{
+ "pre_registration": "capstone/docs/plans/2026-10-11-nested-lifetime-controls.md (53325bba0d5c)",
+ "application": "SQLite 3.22.0, nested allocator memsys5 (sqlite3_malloc / sqlite3_free over SQLITE_CONFIG_HEAP)",
+ "source_revision": {
+  "llvm_capstone_head": "53325bba0d5c9e6696a1da5c069276abfa5c9088",
+  "branch": "ports/nested-lifetime-controls",
+  "uncommitted": "the snapshot is git archive of HEAD (capstone, compiler-rt, xlang) plus these UNCOMMITTED files, byte-identical to the ones listed",
+  "uncommitted_files_sha256": {
+   "capstone/bug-corpora/sqlite/capi-repros/controls/control_common.h": "4699b3873de1e240c2032d1d012306d42a762b945fe31b71ee6806016597cc25",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/control-parent/control.c": "ebba9d4bd46f0e5940bd8050d84aad788d2dc72f9eb7e8f0793b50ae502f16bf",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/control-sibling/control.c": "95ea532bc8d6ba1a86d5399e23cbc3703f7a6903f1e16b781112dcc6582d88fb",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/control-successor/control.c": "5ba3c63ae5db6aa2b16ad0f6ad2a77f042e0ef4417b54a36d8d934ddcca393c4",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/build-controls.sh": "6cde93da297e556d091ff04978f7e79e5d98dd0c62b63d4ce131485303f95d74",
+   "capstone/bug-corpora/sqlite/capi-repros/controls/run-controls.py": "45567fc9a506d9ec125c5d215ad3852a823e3b0ac07690a20bc30cbaf1ab7d3d"
+  },
+  "committed_inputs_sha256": {
+   "capstone/ports/sqlite/sublet/sublet-3220000-memsys5.patch": "3f16cf52933c20a93cbc860e90bd42f388710fc4c60f407227146ab60b5f9dd2",
+   "capstone/ports/sqlite/repro322/build-virtual.py": "2d6a26b0212ea17bde00a2eed9cbd75c157963f70db82025804c31da58e03973",
+   "capstone/ports/sqlite/repro322/repro322_common.h": "2774c9ea4777da0be5fc900fcb3b33bb6e44b1cb243800a87de532f6a2151120",
+   "capstone/runtime/virtual/run-staged.py": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c"
+  }
+ },
+ "platform": {
+  "profile": "virtual",
+  "exact_bounds": true,
+  "harts": 1,
+  "memory": "2G",
+  "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "compiler": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "libc-capstone-virtual.a": "a0f5c573ac5822c7276d31708a2ced5979cd30bb22af501abed5ab97812223a9",
+  "libapplication-runtime.a": "4748adbad8826b8d2f3b344d84b5951a0ed6db8bd92885e41f9c6469f62c438f"
+ },
+ "configuration": {
+  "amalgamation_sha256": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "heap": "SQLITE_CONFIG_HEAP over one static 1 MiB array, 64-byte minimum (repro322_common.h)",
+  "flags": "-O0 -g -DREPRO322_VIRTUAL -DREPRO322_VIRTUAL_MEMSYS5 [-DREPRO322_VIRTUAL_SUBLET] -DHAVE_MALLOC_H=1 -DHAVE_MALLOC_USABLE_SIZE=1 -DSQLITE_ENABLE_MEMSYS5 -USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_COUNTOFVIEW_OPTIMIZATION; [-DCONTROL_STALE] for control-successor-stale",
+  "arms": {
+   "release": {
+    "builder": "build-virtual.py --memsys5",
+    "staged_engine_sha256": "19ceadb5d103cab190dc4a76b3a54f457495fa1cf28ec5befcd0d5c1fa0c4d66",
+    "cderive": 0,
+    "crevoke": 0
+   },
+   "protected": {
+    "builder": "build-virtual.py --sublet (sublet-3220000-memsys5.patch)",
+    "staged_engine_sha256": "892dce7120747b9d8fbd007bfe41b6517d4f6069a693e3014bebf49db1e550c4",
+    "cderive": 2,
+    "crevoke": 1,
+    "cderive_crevoke_note": "instruction counts in control-successor-stale.dom; at -O0 each of the patch's two inline helpers is one out-of-line copy (capstone_cap_derive has a CDERIVE on each of its two paths)"
+   }
+  }
+ },
+ "run_of_record": "r2",
+ "run_of_record_total_wall_s": 24.5,
+ "runs": [
+  {
+   "arm": "release",
+   "image": "control-parent",
+   "image_sha256": "e378fc0541f20f5af2fddae21f292ae1ab22b2d392b86766d1b88cd7322e4aa2",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-parent/control.c:43",
+     "line": 43,
+     "addr": "0x3f9377dfe0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-read",
+     "op": "read",
+     "at": "control-parent/control.c:58",
+     "line": 58,
+     "addr": "0x3f9377dfe0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-write",
+     "op": "write",
+     "at": "control-parent/control.c:69",
+     "line": 69,
+     "addr": "0x3f9377dfe0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-readback",
+     "op": "read",
+     "at": "control-parent/control.c:70",
+     "line": 70,
+     "addr": "0x3f9377dfe0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-restore",
+     "op": "write",
+     "at": "control-parent/control.c:72",
+     "line": 72,
+     "addr": "0x3f9377dfe0",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "setup-A-not-coalesced": "ok",
+    "setup-A-heads-free-list": "ok",
+    "parent-read-is-memsys5-link": "ok",
+    "parent-read-rest-is-A-bytes": "ok",
+    "parent-write-read-back": "ok",
+    "memsys5-reissues-A-block": "ok"
+   },
+   "lines": [
+    "BLOCK pool addr=0x3f93681fe0 base=0x3f93681fe0 end=0x3f93781fe0",
+    "BLOCK A addr=0x3f9377dfe0 base=0x3f93681fe0 end=0x3f93781fe0",
+    "BLOCK G addr=0x3f93779fe0 base=0x3f93681fe0 end=0x3f93781fe0",
+    "MEM5 szAtom=64 A.index=16128 A.logsize=1 buddy.index=16130 G.index=15872",
+    "FREED A addr=0x3f9377dfe0 freelist[1] head before=15874 after=16128",
+    "PARENT ref=0x3f9377dfe0 (mem5.zPool + 1032192)",
+    "LINK read next=15874 prev=-1, memsys5 wrote next=15874 prev=-1",
+    "AGAIN addr=0x3f9377dfe0"
+   ],
+   "allocator": "allocator=memsys5",
+   "boot_wall_s": 22.0,
+   "boot_completed": true
+  },
+  {
+   "arm": "release",
+   "image": "control-sibling",
+   "image_sha256": "32a893b22c0da1f7ac40b8292813e7f45ecb5af49720c640220ec113a2458bd9",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-sibling/control.c:41",
+     "line": 41,
+     "addr": "0x3f9237d860",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "B-fill",
+     "op": "write",
+     "at": "control-sibling/control.c:42",
+     "line": 42,
+     "addr": "0x3f92379860",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-read",
+     "op": "read",
+     "at": "control-sibling/control.c:47",
+     "line": 47,
+     "addr": "0x3f92379860",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-write",
+     "op": "write",
+     "at": "control-sibling/control.c:50",
+     "line": 50,
+     "addr": "0x3f92379860",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-readback",
+     "op": "read",
+     "at": "control-sibling/control.c:51",
+     "line": 51,
+     "addr": "0x3f92379860",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "sibling-B-intact": "ok",
+    "sibling-write-read-back": "ok"
+   },
+   "lines": [
+    "BLOCK pool addr=0x3f92281860 base=0x3f92281860 end=0x3f92381860",
+    "BLOCK A addr=0x3f9237d860 base=0x3f92281860 end=0x3f92381860",
+    "BLOCK B addr=0x3f92379860 base=0x3f92281860 end=0x3f92381860",
+    "MEM5 A.index=16128 B.index=15872 logsize=1 buddies=0 B-A=-16384",
+    "FREED A addr=0x3f9237d860"
+   ],
+   "allocator": "allocator=memsys5",
+   "boot_wall_s": 22.3,
+   "boot_completed": true
+  },
+  {
+   "arm": "release",
+   "image": "control-successor",
+   "image_sha256": "5554beed5af6281c2c2c206a336fd7210a18cca2210d5384701d1c8ef1483023",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-successor/control.c:45",
+     "line": 45,
+     "addr": "0x3f8e37d790",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-write",
+     "op": "write",
+     "at": "control-successor/control.c:68",
+     "line": 68,
+     "addr": "0x3f8e37d790",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-read",
+     "op": "read",
+     "at": "control-successor/control.c:69",
+     "line": 69,
+     "addr": "0x3f8e37d790",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "C-start-equals-A-start": "ok",
+    "C-write-read-back": "ok"
+   },
+   "lines": [
+    "BLOCK pool addr=0x3f8e281790 base=0x3f8e281790 end=0x3f8e381790",
+    "BLOCK A addr=0x3f8e37d790 base=0x3f8e281790 end=0x3f8e381790",
+    "FREED A addr=0x3f8e37d790",
+    "TRY 1 addr=0x3f8e37d790",
+    "SUCCESSOR A=0x3f8e37d790 C=0x3f8e37d790 tries=1",
+    "BLOCK C addr=0x3f8e37d790 base=0x3f8e281790 end=0x3f8e381790"
+   ],
+   "allocator": "allocator=memsys5",
+   "boot_wall_s": 19.7,
+   "boot_completed": true
+  },
+  {
+   "arm": "release",
+   "image": "control-successor-stale",
+   "image_sha256": "4ff2b868a6e44e0e17fa08e16bfe926f8f5377750f8e52afc8541da1f6a906c2",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-successor/control.c:45",
+     "line": 45,
+     "addr": "0x3f9df7da10",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-write",
+     "op": "write",
+     "at": "control-successor/control.c:68",
+     "line": 68,
+     "addr": "0x3f9df7da10",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-read",
+     "op": "read",
+     "at": "control-successor/control.c:69",
+     "line": 69,
+     "addr": "0x3f9df7da10",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "stale-A-read",
+     "op": "read",
+     "at": "control-successor/control.c:73",
+     "line": 73,
+     "addr": "0x3f9df7da10",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "C-start-equals-A-start": "ok",
+    "C-write-read-back": "ok",
+    "stale-read-returns-C-bytes": "ok"
+   },
+   "lines": [
+    "BLOCK pool addr=0x3f9de81a10 base=0x3f9de81a10 end=0x3f9df81a10",
+    "BLOCK A addr=0x3f9df7da10 base=0x3f9de81a10 end=0x3f9df81a10",
+    "FREED A addr=0x3f9df7da10",
+    "TRY 1 addr=0x3f9df7da10",
+    "SUCCESSOR A=0x3f9df7da10 C=0x3f9df7da10 tries=1",
+    "BLOCK C addr=0x3f9df7da10 base=0x3f9de81a10 end=0x3f9df81a10"
+   ],
+   "allocator": "allocator=memsys5",
+   "boot_wall_s": 19.7,
+   "boot_completed": true
+  },
+  {
+   "arm": "protected",
+   "image": "control-parent",
+   "image_sha256": "86b841fa28db7571ad0a949f382080c941882aba5c1657ef18b4dfc5b4eb25dd",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-parent/control.c:43",
+     "line": 43,
+     "addr": "0x3fa176fad0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-read",
+     "op": "read",
+     "at": "control-parent/control.c:58",
+     "line": 58,
+     "addr": "0x3fa176fad0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-write",
+     "op": "write",
+     "at": "control-parent/control.c:69",
+     "line": 69,
+     "addr": "0x3fa176fad0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-readback",
+     "op": "read",
+     "at": "control-parent/control.c:70",
+     "line": 70,
+     "addr": "0x3fa176fad0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "parent-restore",
+     "op": "write",
+     "at": "control-parent/control.c:72",
+     "line": 72,
+     "addr": "0x3fa176fad0",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "setup-A-not-coalesced": "ok",
+    "setup-A-heads-free-list": "ok",
+    "parent-read-is-memsys5-link": "ok",
+    "parent-read-rest-is-A-bytes": "ok",
+    "parent-write-read-back": "ok",
+    "memsys5-reissues-A-block": "ok"
+   },
+   "lines": [
+    "BLOCK pool addr=0x3fa16824d0 base=0x3fa16824d0 end=0x3fa17824d0",
+    "BLOCK A addr=0x3fa176fad0 base=0x3fa176fad0 end=0x3fa176fb50",
+    "BLOCK G addr=0x3fa176fb50 base=0x3fa176fb50 end=0x3fa176fbd0",
+    "MEM5 szAtom=64 A.index=15192 A.logsize=1 buddy.index=15194 G.index=15194",
+    "FREED A addr=0x3fa176fad0 freelist[1] head before=-1 after=15192",
+    "PARENT ref=0x3fa176fad0 (mem5.zPool + 972288)",
+    "LINK read next=-1 prev=-1, memsys5 wrote next=-1 prev=-1",
+    "AGAIN addr=0x3fa176fad0"
+   ],
+   "allocator": "allocator=memsys5-sublet",
+   "boot_wall_s": 22.6,
+   "boot_completed": true
+  },
+  {
+   "arm": "protected",
+   "image": "control-sibling",
+   "image_sha256": "c96f3fb81b814eae9f7cfdc4c773b587f951b0b5b559293f31802b30c11078d7",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-sibling/control.c:41",
+     "line": 41,
+     "addr": "0x3fbbf6f350",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "B-fill",
+     "op": "write",
+     "at": "control-sibling/control.c:42",
+     "line": 42,
+     "addr": "0x3fbbf6f3d0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-read",
+     "op": "read",
+     "at": "control-sibling/control.c:47",
+     "line": 47,
+     "addr": "0x3fbbf6f3d0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-write",
+     "op": "write",
+     "at": "control-sibling/control.c:50",
+     "line": 50,
+     "addr": "0x3fbbf6f3d0",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "sibling-readback",
+     "op": "read",
+     "at": "control-sibling/control.c:51",
+     "line": 51,
+     "addr": "0x3fbbf6f3d0",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "sibling-B-intact": "ok",
+    "sibling-write-read-back": "ok"
+   },
+   "lines": [
+    "BLOCK pool addr=0x3fbbe81d50 base=0x3fbbe81d50 end=0x3fbbf81d50",
+    "BLOCK A addr=0x3fbbf6f350 base=0x3fbbf6f350 end=0x3fbbf6f3d0",
+    "BLOCK B addr=0x3fbbf6f3d0 base=0x3fbbf6f3d0 end=0x3fbbf6f450",
+    "MEM5 A.index=15192 B.index=15194 logsize=1 buddies=1 B-A=128",
+    "FREED A addr=0x3fbbf6f350"
+   ],
+   "allocator": "allocator=memsys5-sublet",
+   "boot_wall_s": 23.5,
+   "boot_completed": true
+  },
+  {
+   "arm": "protected",
+   "image": "control-successor",
+   "image_sha256": "ced6750303596473d874111a60d34671bf7211d802f80fcbd2b2a101ff7f3cd2",
+   "predicted": "completed",
+   "outcome": "completed",
+   "prediction_held": true,
+   "exit_code": 0,
+   "returned": true,
+   "fault": null,
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-successor/control.c:45",
+     "line": 45,
+     "addr": "0x3fbb36f280",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-write",
+     "op": "write",
+     "at": "control-successor/control.c:68",
+     "line": 68,
+     "addr": "0x3fbb36f280",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-read",
+     "op": "read",
+     "at": "control-successor/control.c:69",
+     "line": 69,
+     "addr": "0x3fbb36f280",
+     "len": 128,
+     "done": true
+    }
+   ],
+   "checks": {
+    "C-start-equals-A-start": "ok",
+    "C-write-read-back": "ok"
+   },
+   "lines": [
+    "BLOCK pool addr=0x3fbb281c80 base=0x3fbb281c80 end=0x3fbb381c80",
+    "BLOCK A addr=0x3fbb36f280 base=0x3fbb36f280 end=0x3fbb36f300",
+    "FREED A addr=0x3fbb36f280",
+    "TRY 1 addr=0x3fbb36f280",
+    "SUCCESSOR A=0x3fbb36f280 C=0x3fbb36f280 tries=1",
+    "BLOCK C addr=0x3fbb36f280 base=0x3fbb36f280 end=0x3fbb36f300"
+   ],
+   "allocator": "allocator=memsys5-sublet",
+   "boot_wall_s": 20.3,
+   "boot_completed": true
+  },
+  {
+   "arm": "protected",
+   "image": "control-successor-stale",
+   "image_sha256": "8549d2dfa549be4233719df4b5a2acac6a340e596cdbb79ee50f0ad880f2b3f1",
+   "predicted": "fault-25-at-stale-A-read",
+   "outcome": "fault",
+   "prediction_held": true,
+   "exit_code": 139,
+   "returned": false,
+   "fault": {
+    "cause": 25,
+    "pc": "0x3fa20572a4",
+    "address": "0x3fa236f510",
+    "code_start": "0x3fa2000000",
+    "image_offset": "0x672a4",
+    "function": "run_case",
+    "file": "control.c",
+    "line": 73
+   },
+   "probes": [
+    {
+     "label": "A-fill",
+     "op": "write",
+     "at": "control-successor/control.c:45",
+     "line": 45,
+     "addr": "0x3fa236f510",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-write",
+     "op": "write",
+     "at": "control-successor/control.c:68",
+     "line": 68,
+     "addr": "0x3fa236f510",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "C-read",
+     "op": "read",
+     "at": "control-successor/control.c:69",
+     "line": 69,
+     "addr": "0x3fa236f510",
+     "len": 128,
+     "done": true
+    },
+    {
+     "label": "stale-A-read",
+     "op": "read",
+     "at": "control-successor/control.c:73",
+     "line": 73,
+     "addr": "0x3fa236f510",
+     "len": 128,
+     "done": false
+    }
+   ],
+   "checks": {
+    "C-start-equals-A-start": "ok",
+    "C-write-read-back": "ok"
+   },
+   "lines": [
+    "BLOCK pool addr=0x3fa2281f10 base=0x3fa2281f10 end=0x3fa2381f10",
+    "BLOCK A addr=0x3fa236f510 base=0x3fa236f510 end=0x3fa236f590",
+    "FREED A addr=0x3fa236f510",
+    "TRY 1 addr=0x3fa236f510",
+    "SUCCESSOR A=0x3fa236f510 C=0x3fa236f510 tries=1",
+    "BLOCK C addr=0x3fa236f510 base=0x3fa236f510 end=0x3fa236f590"
+   ],
+   "allocator": "allocator=memsys5-sublet",
+   "boot_wall_s": 24.2,
+   "boot_completed": true
+  }
+ ],
+ "repeat": {
+  "run": "r3",
+  "total_wall_s": 18.5,
+  "same_outcome_as_r2": true,
+  "runs": [
+   {
+    "arm": "release",
+    "image": "control-parent",
+    "outcome": "completed",
+    "prediction_held": true,
+    "fault": null,
+    "boot_wall_s": 14.9,
+    "lines": [
+     "BLOCK A addr=0x3f88f7dfe0 base=0x3f88e81fe0 end=0x3f88f81fe0"
+    ]
+   },
+   {
+    "arm": "release",
+    "image": "control-sibling",
+    "outcome": "completed",
+    "prediction_held": true,
+    "fault": null,
+    "boot_wall_s": 17.6,
+    "lines": [
+     "BLOCK A addr=0x3fb677d860 base=0x3fb6681860 end=0x3fb6781860",
+     "BLOCK B addr=0x3fb6779860 base=0x3fb6681860 end=0x3fb6781860"
+    ]
+   },
+   {
+    "arm": "release",
+    "image": "control-successor",
+    "outcome": "completed",
+    "prediction_held": true,
+    "fault": null,
+    "boot_wall_s": 18.2,
+    "lines": [
+     "BLOCK A addr=0x3fa837d790 base=0x3fa8281790 end=0x3fa8381790",
+     "SUCCESSOR A=0x3fa837d790 C=0x3fa837d790 tries=1",
+     "BLOCK C addr=0x3fa837d790 base=0x3fa8281790 end=0x3fa8381790"
+    ]
+   },
+   {
+    "arm": "release",
+    "image": "control-successor-stale",
+    "outcome": "completed",
+    "prediction_held": true,
+    "fault": null,
+    "boot_wall_s": 12.1,
+    "lines": [
+     "BLOCK A addr=0x3fab37da10 base=0x3fab281a10 end=0x3fab381a10",
+     "SUCCESSOR A=0x3fab37da10 C=0x3fab37da10 tries=1",
+     "BLOCK C addr=0x3fab37da10 base=0x3fab281a10 end=0x3fab381a10"
+    ]
+   },
+   {
+    "arm": "protected",
+    "image": "control-parent",
+    "outcome": "completed",
+    "prediction_held": true,
+    "fault": null,
+    "boot_wall_s": 15.2,
+    "lines": [
+     "BLOCK A addr=0x3fa4f6fad0 base=0x3fa4f6fad0 end=0x3fa4f6fb50"
+    ]
+   },
+   {
+    "arm": "protected",
+    "image": "control-sibling",
+    "outcome": "completed",
+    "prediction_held": true,
+    "fault": null,
+    "boot_wall_s": 17.4,
+    "lines": [
+     "BLOCK A addr=0x3f8476f350 base=0x3f8476f350 end=0x3f8476f3d0",
+     "BLOCK B addr=0x3f8476f3d0 base=0x3f8476f3d0 end=0x3f8476f450"
+    ]
+   },
+   {
+    "arm": "protected",
+    "image": "control-successor",
+    "outcome": "completed",
+    "prediction_held": true,
+    "fault": null,
+    "boot_wall_s": 17.5,
+    "lines": [
+     "BLOCK A addr=0x3fabf6f280 base=0x3fabf6f280 end=0x3fabf6f300",
+     "SUCCESSOR A=0x3fabf6f280 C=0x3fabf6f280 tries=1",
+     "BLOCK C addr=0x3fabf6f280 base=0x3fabf6f280 end=0x3fabf6f300"
+    ]
+   },
+   {
+    "arm": "protected",
+    "image": "control-successor-stale",
+    "outcome": "fault",
+    "prediction_held": true,
+    "fault": {
+     "cause": 25,
+     "pc": "0x3fb50572a4",
+     "address": "0x3fb536f510",
+     "code_start": "0x3fb5000000",
+     "image_offset": "0x672a4",
+     "function": "run_case",
+     "file": "control.c",
+     "line": 73
+    },
+    "boot_wall_s": 16.6,
+    "lines": [
+     "BLOCK A addr=0x3fb536f510 base=0x3fb536f510 end=0x3fb536f590",
+     "SUCCESSOR A=0x3fb536f510 C=0x3fb536f510 tries=1",
+     "BLOCK C addr=0x3fb536f510 base=0x3fb536f510 end=0x3fb536f590"
+    ]
+   }
+  ]
+ },
+ "discarded": {
+  "run": "r1",
+  "reason": "runner defect, not a measurement: the judge compared the per-arm prediction dict with a string, so every completes-predicted run was printed held=False. Same images; outcomes, checks and the fault identical in kind to r2 (rejudged with the fixed runner: all held). Fixed before r2; the fixed judge was negative-tested by judging each log against the other arm's prediction (the stale pair then comes out not held) and by edited copies of a log (one CHECK FAILED, a probe without done, exit 1, no RETURNED: each not held)."
+ }
+}

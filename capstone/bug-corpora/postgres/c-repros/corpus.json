@@ -10,7 +10,6 @@
   "case_macro": "PGCLIENT",
   "required_arms": [
     "spatial",
-    "sublet",
     "cheribsd-revocation",
     "virtual-malloc"
   ],
@@ -44,12 +43,10 @@
   ],
   "arm_configurations": {
     "spatial": "app-level0",
-    "virtual-malloc": "virtual-mallocng",
-    "sublet": "app-sublet"
+    "virtual-malloc": "virtual-mallocng"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-    "spatial": "results/20261010-150616-qemu/spatial",
-    "sublet": "results/20261011-034640-qemu/sublet"
+    "spatial": "results/20261010-150616-qemu/spatial"
   }
 }

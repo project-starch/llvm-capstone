@@ -1,0 +1,5 @@
+# pgcorpus_lifetime extension
+comment = 'parent, sibling and successor controls at the memory contexts'
+default_version = '1.0'
+module_pathname = '$libdir/pgcorpus_lifetime'
+relocatable = true

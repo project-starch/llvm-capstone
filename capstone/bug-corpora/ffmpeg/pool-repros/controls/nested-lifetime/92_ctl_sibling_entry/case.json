@@ -1,0 +1,13 @@
+{
+  "case": 92,
+  "title": "CONTROL 2 (sibling): A and B from the same AVBufferPool, A returned, B read and written through B->data with its contents intact",
+  "control_for": "patch 0003 (FFPOOL_SUBLET=ON): revoking A's child leaves another entry's hand-out alone",
+  "pre_registration": "capstone/docs/plans/2026-10-11-nested-lifetime-controls.md",
+  "release_operation": "av_buffer_unref -> pool_release_buffer, where patch 0003 revokes (CREVOKE)",
+  "argv": ["run", "92"],
+  "probes": ["read_probe", "write_probe"],
+  "arms": {
+    "release": {"oracle": "complete: B reads 0xB2 intact, its write reads back"},
+    "protected": {"oracle": "complete: B reads 0xB2 intact, its write reads back"}
+  }
+}

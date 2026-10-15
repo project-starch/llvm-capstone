@@ -1,0 +1,50 @@
+sv.c: S_glob_assign_glob reads what it needs of its source before LEAVE may free it.
+
+S_glob_assign_glob protects its source glob with ENTER/SAVEFREESV around gp_free, because
+freeing the destination's GP may free the source (upstream's own comment names `*x = $x`).
+The protection ends at LEAVE, and upstream then still reads the source: SvTAINTED(ssv), and
+GvAV(ssv) when @ISA changes. For `$x = *foo; *x = $x` the LEAVE frees ssv, so both are reads of
+a freed SV head. Upstream Perl tolerates it because a freed head stays in its arena. A native
+ASan build with poisoned released heads reports it (ports/perl/sv-heads, op/gv.t, 2026-09-28),
+and the Sublet-protected port faults on it (cause 25), since the head's lifetime has ended.
+Present unchanged in 5.36.3, 5.38.2 and blead (checked 2026-10-11).
+
+Both values are now read before LEAVE. When ssv survives LEAVE, nothing between LEAVE and the
+uses changes them (ssv and dsv share one GP from gp_ref on), so behaviour is unchanged. When
+it does not survive, the stale reads are gone.
+
+--- a/sv.c
++++ b/sv.c
+@@ -3674,6 +3674,7 @@
+ {
+     I32 mro_changes = 0; /* 1 = method, 2 = isa, 3 = recursive isa */
+     HV *old_stash = NULL;
++    bool ssv_tainted, ssv_has_av;
+ 
+     PERL_ARGS_ASSERT_GLOB_ASSIGN_GLOB;
+ 
+@@ -3759,9 +3760,14 @@
+     gp_free(MUTABLE_GV(dsv));
+     GvINTRO_off(dsv);		/* one-shot flag */
+     GvGP_set(dsv, gp_ref(GvGP(ssv)));
++    /* capstone: LEAVE may free ssv, so read what is needed of it first.
++       Upstream read SvTAINTED(ssv) and GvAV(ssv) after LEAVE, a read of a
++       freed head for *x = $x. */
++    ssv_tainted = cBOOL(SvTAINTED(ssv));
++    ssv_has_av = cBOOL(GvAV((const GV *)ssv));
+     LEAVE;
+ 
+-    if (SvTAINTED(ssv))
++    if (ssv_tainted)
+         SvTAINT(dsv);
+     if (GvIMPORTED(dsv) != GVf_IMPORTED
+         && CopSTASH_ne(PL_curcop, GvSTASH(dsv)))
+@@ -3770,7 +3776,7 @@
+         }
+     GvMULTI_on(dsv);
+     if(mro_changes == 2) {
+-      if (GvAV((const GV *)ssv)) {
++      if (ssv_has_av) {
+         MAGIC *mg;
+         SV * const sref = (SV *)GvAV((const GV *)dsv);
+         if (SvSMAGICAL(sref) && (mg = mg_find(sref, PERL_MAGIC_isa))) {

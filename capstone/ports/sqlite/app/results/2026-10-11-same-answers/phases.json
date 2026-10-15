@@ -1,0 +1,988 @@
+{
+ "program": "SQLite 3.22.0 speedtest1 main --size 1",
+ "native": {
+  "exit": 0,
+  "phases": [
+   {
+    "phase": 100,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 110,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 120,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 130,
+    "rows": 25,
+    "hash": "86f7643d251c40ef"
+   },
+   {
+    "phase": 140,
+    "rows": 10,
+    "hash": "0c7b7e747ae91a62"
+   },
+   {
+    "phase": 142,
+    "rows": 1050,
+    "hash": "359b7f1ecbeaaff8"
+   },
+   {
+    "phase": 145,
+    "rows": 100,
+    "hash": "a0d680adf09a4a75"
+   },
+   {
+    "phase": 150,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 160,
+    "rows": 100,
+    "hash": "df2ea006eed925a5"
+   },
+   {
+    "phase": 161,
+    "rows": 100,
+    "hash": "24d182f082f52e7c"
+   },
+   {
+    "phase": 170,
+    "rows": 100,
+    "hash": "7e14902b1948dce8"
+   },
+   {
+    "phase": 180,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 190,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 200,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 210,
+    "rows": 1,
+    "hash": "78a5f1150135b920"
+   },
+   {
+    "phase": 230,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 240,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 250,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 260,
+    "rows": 1,
+    "hash": "0c3a0c3404ffd068"
+   },
+   {
+    "phase": 270,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 280,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 290,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 300,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 310,
+    "rows": 900,
+    "hash": "5f60bc2cdcb89e99"
+   },
+   {
+    "phase": 320,
+    "rows": 1,
+    "hash": "9b7e48527050edfe"
+   },
+   {
+    "phase": 400,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 410,
+    "rows": 700,
+    "hash": "649813fe025d510b"
+   },
+   {
+    "phase": 500,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 510,
+    "rows": 700,
+    "hash": "7e30b42e2404cc90"
+   },
+   {
+    "phase": 520,
+    "rows": 512,
+    "hash": "07aa5d31c6064a19"
+   },
+   {
+    "phase": 980,
+    "rows": 1,
+    "hash": "b8835f20872ee7fa"
+   },
+   {
+    "phase": 990,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   }
+  ]
+ },
+ "heap_8MiB": {
+  "speedtest1_args": "--heap 8388608 64 --size 1 st.db",
+  "arms": {
+   "stock": {
+    "exit": 0,
+    "guest_wall_s": 23,
+    "phases": [
+     {
+      "phase": 100,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 110,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 120,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 130,
+      "rows": 25,
+      "hash": "86f7643d251c40ef"
+     },
+     {
+      "phase": 140,
+      "rows": 10,
+      "hash": "0c7b7e747ae91a62"
+     },
+     {
+      "phase": 142,
+      "rows": 1050,
+      "hash": "359b7f1ecbeaaff8"
+     },
+     {
+      "phase": 145,
+      "rows": 100,
+      "hash": "a0d680adf09a4a75"
+     },
+     {
+      "phase": 150,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 160,
+      "rows": 100,
+      "hash": "df2ea006eed925a5"
+     },
+     {
+      "phase": 161,
+      "rows": 100,
+      "hash": "24d182f082f52e7c"
+     },
+     {
+      "phase": 170,
+      "rows": 100,
+      "hash": "7e14902b1948dce8"
+     },
+     {
+      "phase": 180,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 190,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 200,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 210,
+      "rows": 1,
+      "hash": "78a5f1150135b920"
+     },
+     {
+      "phase": 230,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 240,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 250,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 260,
+      "rows": 1,
+      "hash": "0c3a0c3404ffd068"
+     },
+     {
+      "phase": 270,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 280,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 290,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 300,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 310,
+      "rows": 900,
+      "hash": "5f60bc2cdcb89e99"
+     },
+     {
+      "phase": 320,
+      "rows": 1,
+      "hash": "9b7e48527050edfe"
+     },
+     {
+      "phase": 400,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 410,
+      "rows": 700,
+      "hash": "649813fe025d510b"
+     },
+     {
+      "phase": 500,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 510,
+      "rows": 700,
+      "hash": "7e30b42e2404cc90"
+     },
+     {
+      "phase": 520,
+      "rows": 512,
+      "hash": "07aa5d31c6064a19"
+     },
+     {
+      "phase": 980,
+      "rows": 1,
+      "hash": "b8835f20872ee7fa"
+     },
+     {
+      "phase": 990,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     }
+    ],
+    "domain_fault": false,
+    "last_line": "       TOTAL.......................................................   19.474s"
+   },
+   "protected": {
+    "exit": 0,
+    "guest_wall_s": 23,
+    "phases": [
+     {
+      "phase": 100,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 110,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 120,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 130,
+      "rows": 25,
+      "hash": "86f7643d251c40ef"
+     },
+     {
+      "phase": 140,
+      "rows": 10,
+      "hash": "0c7b7e747ae91a62"
+     },
+     {
+      "phase": 142,
+      "rows": 1050,
+      "hash": "359b7f1ecbeaaff8"
+     },
+     {
+      "phase": 145,
+      "rows": 100,
+      "hash": "a0d680adf09a4a75"
+     },
+     {
+      "phase": 150,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 160,
+      "rows": 100,
+      "hash": "df2ea006eed925a5"
+     },
+     {
+      "phase": 161,
+      "rows": 100,
+      "hash": "24d182f082f52e7c"
+     },
+     {
+      "phase": 170,
+      "rows": 100,
+      "hash": "7e14902b1948dce8"
+     },
+     {
+      "phase": 180,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 190,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 200,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 210,
+      "rows": 1,
+      "hash": "78a5f1150135b920"
+     },
+     {
+      "phase": 230,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 240,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 250,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 260,
+      "rows": 1,
+      "hash": "0c3a0c3404ffd068"
+     },
+     {
+      "phase": 270,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 280,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 290,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 300,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 310,
+      "rows": 900,
+      "hash": "5f60bc2cdcb89e99"
+     },
+     {
+      "phase": 320,
+      "rows": 1,
+      "hash": "9b7e48527050edfe"
+     },
+     {
+      "phase": 400,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 410,
+      "rows": 700,
+      "hash": "649813fe025d510b"
+     },
+     {
+      "phase": 500,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 510,
+      "rows": 700,
+      "hash": "7e30b42e2404cc90"
+     },
+     {
+      "phase": 520,
+      "rows": 512,
+      "hash": "07aa5d31c6064a19"
+     },
+     {
+      "phase": 980,
+      "rows": 1,
+      "hash": "b8835f20872ee7fa"
+     },
+     {
+      "phase": 990,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     }
+    ],
+    "domain_fault": false,
+    "last_line": "       TOTAL.......................................................   19.725s"
+   },
+   "native_memsys5_precheck": {
+    "exit": 0,
+    "phases": [
+     {
+      "phase": 100,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 110,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 120,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 130,
+      "rows": 25,
+      "hash": "86f7643d251c40ef"
+     },
+     {
+      "phase": 140,
+      "rows": 10,
+      "hash": "0c7b7e747ae91a62"
+     },
+     {
+      "phase": 142,
+      "rows": 1050,
+      "hash": "359b7f1ecbeaaff8"
+     },
+     {
+      "phase": 145,
+      "rows": 100,
+      "hash": "a0d680adf09a4a75"
+     },
+     {
+      "phase": 150,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 160,
+      "rows": 100,
+      "hash": "df2ea006eed925a5"
+     },
+     {
+      "phase": 161,
+      "rows": 100,
+      "hash": "24d182f082f52e7c"
+     },
+     {
+      "phase": 170,
+      "rows": 100,
+      "hash": "7e14902b1948dce8"
+     },
+     {
+      "phase": 180,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 190,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 200,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 210,
+      "rows": 1,
+      "hash": "78a5f1150135b920"
+     },
+     {
+      "phase": 230,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 240,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 250,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 260,
+      "rows": 1,
+      "hash": "0c3a0c3404ffd068"
+     },
+     {
+      "phase": 270,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 280,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 290,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 300,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 310,
+      "rows": 900,
+      "hash": "5f60bc2cdcb89e99"
+     },
+     {
+      "phase": 320,
+      "rows": 1,
+      "hash": "9b7e48527050edfe"
+     },
+     {
+      "phase": 400,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 410,
+      "rows": 700,
+      "hash": "649813fe025d510b"
+     },
+     {
+      "phase": 500,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 510,
+      "rows": 700,
+      "hash": "7e30b42e2404cc90"
+     },
+     {
+      "phase": 520,
+      "rows": 512,
+      "hash": "07aa5d31c6064a19"
+     },
+     {
+      "phase": 980,
+      "rows": 1,
+      "hash": "b8835f20872ee7fa"
+     },
+     {
+      "phase": 990,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     }
+    ]
+   }
+  },
+  "comparison": {
+   "stock": {
+    "phases": 32,
+    "equal_native": true,
+    "equal_stock": true
+   },
+   "protected": {
+    "phases": 32,
+    "equal_native": true,
+    "equal_stock": true
+   },
+   "native_memsys5_precheck": {
+    "phases": 32,
+    "equal_native": true,
+    "equal_stock": true
+   }
+  },
+  "launcher_stats_after_both": {
+   "version": 1,
+   "live_domains": 0,
+   "live_regions": 0,
+   "live_bytes": 0,
+   "cached_bytes": 0,
+   "poisoned_blocks": 0,
+   "nodes_high_water": 4862,
+   "nodes_live": 0,
+   "nodes_retired": 0,
+   "nodes_allocated_total": 28277,
+   "tag_pages": 0,
+   "node_capacity": 1024,
+   "node_bytes": 28672,
+   "collections": 6,
+   "nodes_reclaimed": 27923
+  },
+  "completed": true
+ },
+ "heap_1MiB": {
+  "speedtest1_args": "--heap 1048576 64 --size 1 st.db",
+  "arms": {
+   "stock": {
+    "exit": 1,
+    "guest_wall_s": 18,
+    "phases": [
+     {
+      "phase": 100,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 110,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 120,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 130,
+      "rows": 25,
+      "hash": "86f7643d251c40ef"
+     },
+     {
+      "phase": 140,
+      "rows": 10,
+      "hash": "0c7b7e747ae91a62"
+     },
+     {
+      "phase": 142,
+      "rows": 1050,
+      "hash": "359b7f1ecbeaaff8"
+     },
+     {
+      "phase": 145,
+      "rows": 100,
+      "hash": "a0d680adf09a4a75"
+     },
+     {
+      "phase": 150,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 160,
+      "rows": 100,
+      "hash": "df2ea006eed925a5"
+     },
+     {
+      "phase": 161,
+      "rows": 100,
+      "hash": "24d182f082f52e7c"
+     },
+     {
+      "phase": 170,
+      "rows": 100,
+      "hash": "7e14902b1948dce8"
+     },
+     {
+      "phase": 180,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 190,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     }
+    ],
+    "domain_fault": false,
+    "last_line": "VACUUM"
+   },
+   "protected": {
+    "exit": 1,
+    "guest_wall_s": 9,
+    "phases": [
+     {
+      "phase": 100,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 110,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 120,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 130,
+      "rows": 25,
+      "hash": "86f7643d251c40ef"
+     },
+     {
+      "phase": 140,
+      "rows": 10,
+      "hash": "0c7b7e747ae91a62"
+     },
+     {
+      "phase": 142,
+      "rows": 1050,
+      "hash": "359b7f1ecbeaaff8"
+     },
+     {
+      "phase": 145,
+      "rows": 100,
+      "hash": "a0d680adf09a4a75"
+     },
+     {
+      "phase": 150,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 160,
+      "rows": 100,
+      "hash": "df2ea006eed925a5"
+     },
+     {
+      "phase": 161,
+      "rows": 100,
+      "hash": "24d182f082f52e7c"
+     },
+     {
+      "phase": 170,
+      "rows": 100,
+      "hash": "7e14902b1948dce8"
+     },
+     {
+      "phase": 180,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 190,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     }
+    ],
+    "domain_fault": false,
+    "last_line": "VACUUM"
+   },
+   "native_memsys5_precheck": {
+    "exit": 1,
+    "phases": [
+     {
+      "phase": 100,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 110,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 120,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 130,
+      "rows": 25,
+      "hash": "86f7643d251c40ef"
+     },
+     {
+      "phase": 140,
+      "rows": 10,
+      "hash": "0c7b7e747ae91a62"
+     },
+     {
+      "phase": 142,
+      "rows": 1050,
+      "hash": "359b7f1ecbeaaff8"
+     },
+     {
+      "phase": 145,
+      "rows": 100,
+      "hash": "a0d680adf09a4a75"
+     },
+     {
+      "phase": 150,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 160,
+      "rows": 100,
+      "hash": "df2ea006eed925a5"
+     },
+     {
+      "phase": 161,
+      "rows": 100,
+      "hash": "24d182f082f52e7c"
+     },
+     {
+      "phase": 170,
+      "rows": 100,
+      "hash": "7e14902b1948dce8"
+     },
+     {
+      "phase": 180,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     },
+     {
+      "phase": 190,
+      "rows": 0,
+      "hash": "cbf29ce484222325"
+     }
+    ]
+   }
+  },
+  "comparison": {
+   "stock": {
+    "phases": 13,
+    "equal_native": false,
+    "equal_stock": true
+   },
+   "protected": {
+    "phases": 13,
+    "equal_native": false,
+    "equal_stock": true
+   },
+   "native_memsys5_precheck": {
+    "phases": 13,
+    "equal_native": false,
+    "equal_stock": true
+   }
+  },
+  "launcher_stats_after_both": {
+   "version": 1,
+   "live_domains": 0,
+   "live_regions": 0,
+   "live_bytes": 0,
+   "cached_bytes": 0,
+   "poisoned_blocks": 0,
+   "nodes_high_water": 4862,
+   "nodes_live": 0,
+   "nodes_retired": 0,
+   "nodes_allocated_total": 14432,
+   "tag_pages": 0,
+   "node_capacity": 1024,
+   "node_bytes": 28672,
+   "collections": 3,
+   "nodes_reclaimed": 14034
+  },
+  "completed": true
+ },
+ "sha256": {
+  "stock/speedtest1.dom": "385a7fbb38fcbbd6d2558e9491b4d5e0609ef658132853c0ee280c53c18a37a0",
+  "protected/speedtest1.dom": "9981f0bef468e8002dcb021ee65be2cd75ad414673532768c47a46c41760d405",
+  "stock/sqlite3.dom": "e7d426ee261b89327bd0118c5449aacc5a51b2b4104b5eb3c180691d47d3f1b8",
+  "protected/sqlite3.dom": "4410cf28edbb50fa6a123901e0035b8b3adc9dc417f87d6464bccbd83efec478",
+  "stock/src/sqlite3-capstone.c": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "protected/src/sqlite3-capstone.c": "b297fc3c83c69af8cd9409ff5c3faec230b4c9b719eadb3984465099782cbb40",
+  "prepared sqlite3.c": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "prepared speedtest1.c": "16750ede41d01935a1f423298b7676027048ddc0ce7951cc828b9f1760407291",
+  "sublet-3220000-memsys5.patch": "3f16cf52933c20a93cbc860e90bd42f388710fc4c60f407227146ab60b5f9dd2",
+  "native/speedtest1": "19a766546cd1a1b6aaceb71b430559fedee0c7ef323a90b320b180ab2086d1be",
+  "qemu-system-riscv64": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "clang": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "libapplication-runtime.a": "4748adbad8826b8d2f3b344d84b5951a0ed6db8bd92885e41f9c6469f62c438f",
+  "libc-capstone-virtual.a": "a0f5c573ac5822c7276d31708a2ced5979cd30bb22af501abed5ab97812223a9",
+  "gate.sh (8 MiB)": "8be861eb9751ea14691dbecec8100f8a396cde6f8e07851e636a6929524b6667",
+  "gate.sh (1 MiB)": "778eec33284e89ee18a4aad737e54b3e298fed9b22a7685af1bbdb7c617bdd96"
+ }
+}

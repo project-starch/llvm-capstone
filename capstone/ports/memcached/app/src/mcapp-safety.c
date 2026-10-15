@@ -63,7 +63,24 @@
  *                     a new item of the same shape takes both back; reads the old chunk's data
  *                     through the old pointer. Added with the slabsublet arm, whose oracle never
  *                     frees a chunked item, so this is the only run of that release path.
+ *  22 mover_floating  upstream a836eab (2015, shipped 1.4.23-1.4.24) REVERSED: the page mover takes
+ *                     an item that is allocated but not yet linked (its upload in progress, at its
+ *                     page's first chunk) for
+ *                     cleared, so the page is wiped and handed to another class under its holder.
+ *                     The holder then writes its next byte, and a live item of the other class reads
+ *                     it back. The reversal is patch 0005's run-time flag in slabs_mover.c.
+ *  23 mover_waits     the same sequence as shipped at the pin: the mover waits for the upload, so
+ *                     the page never moves while it is held.
+ *  24 mover_chunk     upstream c0e5a99 (2020, shipped 1.5.20-1.5.21) REVERSED: an expired CHUNKED
+ *                     item's header is freed header-only when its page moves, orphaning its data
+ *                     chunks with a dangling head. A later move of a data chunk's page reads that
+ *                     head. The reversal is patch 0005's mcapp_reverse_c0e5a99 in slabs_mover.c.
+ *                     The stale read is in the mover thread, at the header's it_flags, the printed
+ *                     target. The plain arm has no per-chunk revocation, so the head still names
+ *                     live (reused) storage and the read does not fault; its mark is not fixed.
+ *  25 mover_chunk_ok  the same as shipped: the full chunked free runs, no orphan, the page moves.
  */
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,6 +88,12 @@
 #define MCAPP_MARK(n, v) (0x100000 * (n) + ((v) & 0xFFFFF))
 
 unsigned char mcapp_fix_global[64];
+
+/* Read by slabs_mover.c (patch 0005): set only by fixture 22, to reverse a836eab. */
+volatile int mcapp_reverse_a836eab;
+
+/* Read by slabs_mover.c (patch 0005): set only by fixture 24, to reverse c0e5a99. */
+volatile int mcapp_reverse_c0e5a99;
 
 static unsigned long mcapp_cur(const volatile void *p) { return __builtin_capstone_cap_get_cursor((void *)p); }
 static unsigned long mcapp_end(const volatile void *p) { return __builtin_capstone_cap_get_end((void *)p); }
@@ -735,6 +758,231 @@ static int mcapp_fixture(int n)
         v = mcapp_fix_touch(after, 0);
         printf("MCAPP-FIX 21 returned after[0]=%02x (0x5b untouched, 0x00 overwritten)\n", v);
         return MCAPP_MARK(n, v);
+    }
+    case 22:
+    case 23: {
+        /* a836eab "fix memory corruption in slab page mover": an item with neither ITEM_SLABBED nor
+           ITEM_LINKED -- allocated by item_alloc, its value still being read from the client -- fell
+           through the mover's checks as MOVE_PASS, so the mover counted its chunk as clear, wiped the
+           page and gave it to another class while the uploading connection still held the item.
+           The fix is the MOVE_BUSY_FLOATING branch: wait until the upload links or frees the item.
+           22 runs with that branch reversed (mcapp_reverse_a836eab), 23 as shipped. The page move
+           is the real one: slabs_reassign signals the server's page-mover thread. */
+        const int len_a = 1500, len_b = 150000;
+        /* The class's first page hands out its chunks from the top down, so the LAST of its
+           perslab allocations is the page's first chunk. a must be that one: the dst class's chunks
+           need not reach the page's tail (1 MiB is not a multiple of their size), so only an a near
+           the page's start is guaranteed to lie under a dst item. (First run, 2026-10-11: a was the
+           page's top chunk, in that tail, and both arms returned 0xE0016.) */
+        unsigned char *a = NULL, *d0;
+        item *probe = mcapp_item(n, "probe", len_a, &d0);
+        if (!probe)
+            return MCAPP_MARK(n, 0xE0016);
+        unsigned src = ITEM_clsid(probe), dst = slabs_clsid((size_t)len_b + 200), perslab = 0;
+        slabs_available_chunks(src, NULL, &perslab);
+        printf("MCAPP-FIX %d src=%u perslab=%u pages=%d dst=%u\n", n, src, perslab, slabs_page_count(src), dst);
+        if (slabs_page_count(src) != 1 || perslab < 2 || dst == src) {
+            printf("MCAPP-FIX %d triggering condition not created (class not fresh)\n", n);
+            return MCAPP_MARK(n, 0xE0016);
+        }
+        /* the probe was the page's top chunk; perslab - 1 more fill the page down to its first chunk
+           (a), and one more opens a second page, so the class has a page to spare */
+        item **fill = malloc(sizeof(item *) * (perslab + 1));
+        if (!fill)
+            return MCAPP_MARK(n, 0xE0016);
+        fill[0] = probe;
+        unsigned made = 1;
+        for (; made <= perslab; made++) {
+            char key[32];
+            int nkey = snprintf(key, sizeof key, "mcapp-fill-%u", made);
+            if (!(fill[made] = item_alloc(key, (size_t)nkey, 0, 0, len_a + 2)))
+                break;
+        }
+        int pages = slabs_page_count(src);
+        item *ia = made > perslab ? fill[perslab - 1] : NULL;  /* the page's first chunk */
+        if (ia) {
+            a = (unsigned char *)ITEM_data(ia);
+            mcapp_show(n, "a", a);
+        }
+        /* free every filler but a: a stays allocated and never linked (upload in progress) */
+        for (unsigned i = 0; i < made; i++)
+            if (fill[i] != ia)
+                item_remove(fill[i]);
+        free(fill);
+        printf("MCAPP-FIX %d fillers=%u pages=%d\n", n, made, pages);
+        if (!ia || made != perslab + 1 || pages != 2) {
+            printf("MCAPP-FIX %d triggering condition not created (no second page)\n", n);
+            return MCAPP_MARK(n, 0xE0016);
+        }
+        mcapp_fill(a, 0xA0, 64);                    /* the upload has begun */
+        unsigned long a_addr = mcapp_cur(a);
+        mcapp_reverse_a836eab = (n == 22);
+        int r = (int)slabs_reassign(settings.slab_rebal, (int)src, (int)dst, 0);
+        printf("MCAPP-FIX %d reassign result=%d reversed=%d\n", n, r, mcapp_reverse_a836eab);
+        if (r != REASSIGN_OK)
+            return MCAPP_MARK(n, 0xE0016);
+        int moved = 0;
+        for (int w = 0; w < 300 && !moved; w++) {
+            usleep(10000);
+            moved = slabs_page_count(src) == 1;
+        }
+        printf("MCAPP-FIX %d page-moved=%d\n", n, moved);
+        if (!moved)
+            return MCAPP_MARK(n, 0x7);              /* the mover waited for the upload */
+        /* a's page now belongs to dst: allocate dst items until one covers a's address */
+        unsigned long chunk = slabs_size((int)dst);
+        item *ib = NULL;
+        for (int k = 0; k < 64 && !ib; k++) {
+            unsigned char *d;
+            char tag[16];
+            snprintf(tag, sizeof tag, "b%d", k);
+            item *it = mcapp_item(n, tag, len_b, &d);
+            if (!it)
+                break;
+            if (ITEM_clsid(it) != dst) {
+                printf("MCAPP-FIX %d item b%d is class %u, not %u\n", n, k, (unsigned)ITEM_clsid(it), dst);
+                break;
+            }
+            if (mcapp_cur(it) <= a_addr && a_addr < mcapp_cur(it) + chunk)
+                ib = it;
+        }
+        if (!ib) {
+            printf("MCAPP-FIX %d no item of class %u covers a's address\n", n, dst);
+            return MCAPP_MARK(n, 0xE0016);
+        }
+        unsigned long off = a_addr - mcapp_cur(ib);
+        printf("MCAPP-FIX %d new-owner class=%u covers a at offset %lu\n", n, dst, off);
+        mcapp_touching(n, a_addr);
+        mcapp_fix_poke(a, 0, 0xEE);                 /* the uploader writes its next byte */
+        v = mcapp_fix_touch((unsigned char *)ib, (long)off);
+        printf("MCAPP-FIX %d returned new-owner[%lu]=%02x (0xee = the write landed in the new owner)\n",
+               n, off, v);
+        return MCAPP_MARK(n, (1 << 8) | v);
+    }
+    case 24:
+    case 25: {
+        /* Two real page moves in the running server. A chunked item (header in a small class, one
+           data chunk in the largest class) is linked and expired. The header's page is moved first:
+           with c0e5a99 reversed (fixture 24) the expired header is freed header-only, so its data
+           chunk is orphaned with head still pointing at the (now revoked, under patch 0006) header.
+           The data chunk's page is moved next; the mover reads the orphan's head. ia and three more
+           big items fill both classes to two pages; all four are linked+expired so none blocks the
+           header-page move, and plain fillers bring the header class to two pages. */
+        const int big = 700000;   /* > slab_chunk_size_max (512 KiB): a chunked item */
+        item *big_it[4]; item_chunk *big_ch[4];
+        for (int k = 0; k < 4; k++) {
+            char key[32]; int nkey = snprintf(key, sizeof key, "mcapp-fix-c%d", k);
+            big_it[k] = item_alloc(key, (size_t)nkey, 0, 0, big + 2);
+            if (!big_it[k] || !(big_it[k]->it_flags & ITEM_CHUNKED)) {
+                printf("MCAPP-FIX %d item_alloc c%d FAILED or not chunked\n", n, k);
+                return MCAPP_MARK(n, 0xE0018);
+            }
+            big_ch[k] = do_item_alloc_chunk((item_chunk *)ITEM_schunk(big_it[k]), (size_t)big);
+            if (!big_ch[k]) { printf("MCAPP-FIX %d alloc_chunk c%d FAILED\n", n, k); return MCAPP_MARK(n, 0xE0018); }
+        }
+        item *ia = big_it[0];
+        /* a chunked item's slabs_clsid is the big ACCOUNTING class; the header physically sits in
+           the small class the schunk records as orig_clsid (as fixture 11 reads it) */
+        unsigned hdr_cls = ((item_chunk *)ITEM_schunk(ia))->orig_clsid;
+        unsigned chk_cls = big_ch[0]->slabs_clsid;
+        unsigned hdr_perslab = 0, chk_perslab = 0;
+        slabs_available_chunks(hdr_cls, NULL, &hdr_perslab);
+        slabs_available_chunks(chk_cls, NULL, &chk_perslab);
+        printf("MCAPP-FIX %d hdr_cls=%u (perslab %u, pages %d) chk_cls=%u (perslab %u, pages %d)\n",
+               n, hdr_cls, hdr_perslab, slabs_page_count(hdr_cls), chk_cls, chk_perslab, slabs_page_count(chk_cls));
+        /* the chunk class is the largest: two chunks per 1 MiB page, so four items = two pages,
+           ia's chunk the first chunk of page 0 */
+        if (chk_cls == hdr_cls || slabs_page_count(chk_cls) != 2) {
+            printf("MCAPP-FIX %d triggering condition not created (chunk class not two pages)\n", n);
+            return MCAPP_MARK(n, 0xE0018);
+        }
+        /* bring the header class to two pages with plain items of its own class, then free them:
+           their slots are on the free list (ITEM_SLABBED) and do not block the header-page move */
+        /* plain fillers must land in hdr_cls (a mid-size class), so search for a value size that
+           does: a tiny value lands in the smallest class, not hdr_cls (first run, class 3 stayed
+           one page). Grow nbytes until item_alloc gives hdr_cls. */
+        int fv = (int)slabs_size(hdr_cls);
+        unsigned fv_cls = 0;
+        for (int tries = 0; tries < 64 && fv_cls != hdr_cls; tries++) {
+            item *pr = item_alloc("mcapp-hp", 8, 0, 0, fv);
+            if (!pr) { fv -= 16; continue; }
+            fv_cls = ITEM_clsid(pr);
+            item_remove(pr);
+            if (fv_cls < hdr_cls) fv += 16;
+            else if (fv_cls > hdr_cls) fv -= 16;
+        }
+        if (fv_cls != hdr_cls) {
+            printf("MCAPP-FIX %d no filler value lands in hdr_cls %u\n", n, hdr_cls);
+            return MCAPP_MARK(n, 0xE0018);
+        }
+        item **fill = malloc(sizeof(item *) * (hdr_perslab + 1));
+        if (!fill) return MCAPP_MARK(n, 0xE0018);
+        unsigned made = 0;
+        for (; made <= hdr_perslab; made++) {
+            char key[32]; int nkey = snprintf(key, sizeof key, "mcapp-hf-%u", made);
+            item *it = item_alloc(key, (size_t)nkey, 0, 0, fv);
+            if (!it || ITEM_clsid(it) != hdr_cls) { if (it) item_remove(it); break; }
+            fill[made] = it;
+        }
+        for (unsigned i = 0; i < made; i++) item_remove(fill[i]);
+        free(fill);
+        printf("MCAPP-FIX %d filler value=%d class=%u\n", n, fv, fv_cls);
+        printf("MCAPP-FIX %d hdr fillers=%u hdr pages=%d\n", n, made, slabs_page_count(hdr_cls));
+        if (slabs_page_count(hdr_cls) < 2) {
+            printf("MCAPP-FIX %d triggering condition not created (header class not two pages)\n", n);
+            return MCAPP_MARK(n, 0xE0018);
+        }
+        /* link and expire all four big items, so each takes the header-only free path and none is a
+           floating (upload-in-progress) item that would stall the move */
+        for (int k = 0; k < 4; k++) {
+            /* link through the real locked path: the pin has no item_link() wrapper, the server
+               calls do_item_link under the item lock it holds (proto_parser.c) */
+            uint32_t hv = hash(ITEM_key(big_it[k]), big_it[k]->nkey);
+            item_lock(hv);
+            do_item_link(big_it[k], hv, 0);       /* refcount 1 -> 2, ITEM_LINKED, assoc + LRU */
+            item_unlock(hv);
+            item_remove(big_it[k]);               /* the storing client lets go -> 1 */
+            big_it[k]->exptime = 1;               /* 1 < current_time: expired */
+        }
+        if ((ia->it_flags & ITEM_LINKED) == 0) {
+            printf("MCAPP-FIX %d ia not linked\n", n);
+            return MCAPP_MARK(n, 0xE0018);
+        }
+        unsigned long hdr_flags_addr = (unsigned long)(void *)&ia->it_flags;
+        unsigned hdr_dst = 0;
+        for (unsigned c = POWER_SMALLEST; c <= 63; c++)
+            if (c != hdr_cls && c != chk_cls && slabs_page_count(c) == 0) { hdr_dst = c; break; }
+        unsigned chk_dst = 0;
+        for (unsigned c = POWER_SMALLEST; c <= 63; c++)
+            if (c != hdr_cls && c != chk_cls && c != hdr_dst && slabs_page_count(c) == 0) { chk_dst = c; break; }
+        printf("MCAPP-FIX %d hdr_dst=%u chk_dst=%u hdr_flags_addr=%lx\n", n, hdr_dst, chk_dst, hdr_flags_addr);
+        if (!hdr_dst || !chk_dst) return MCAPP_MARK(n, 0xE0018);
+        mcapp_reverse_c0e5a99 = (n == 24);
+        /* first move: the header's page. After it, under 24 the chunks are orphaned. The mover
+           thread is shared, so a reassign can return REASSIGN_RUNNING until it is idle; retry. */
+        enum reassign_result_type r1 = REASSIGN_RUNNING;
+        for (int w = 0; w < 300 && r1 == REASSIGN_RUNNING; w++) {
+            r1 = slabs_reassign(settings.slab_rebal, (int)hdr_cls, (int)hdr_dst, 0);
+            if (r1 == REASSIGN_RUNNING) usleep(10000);
+        }
+        if (r1 != REASSIGN_OK) { printf("MCAPP-FIX %d header reassign=%d\n", n, (int)r1); return MCAPP_MARK(n, 0xE0018); }
+        int hdr_moved = 0;
+        for (int w = 0; w < 300 && !hdr_moved; w++) { usleep(10000); hdr_moved = slabs_page_count(hdr_cls) == 1; }
+        printf("MCAPP-FIX %d header-page-moved=%d reversed=%d\n", n, hdr_moved, mcapp_reverse_c0e5a99);
+        if (!hdr_moved) return MCAPP_MARK(n, 0x7);     /* the mover waited: header page not moved */
+        /* second move: a data chunk's page. The mover reads the orphan chunk's head here. */
+        mcapp_touching(n, hdr_flags_addr);
+        enum reassign_result_type r2 = REASSIGN_RUNNING;
+        for (int w = 0; w < 300 && r2 == REASSIGN_RUNNING; w++) {
+            r2 = slabs_reassign(settings.slab_rebal, (int)chk_cls, (int)chk_dst, 0);
+            if (r2 == REASSIGN_RUNNING) usleep(10000);
+        }
+        int chk_moved = 0;
+        for (int w = 0; w < 300 && !chk_moved; w++) { usleep(10000); chk_moved = slabs_page_count(chk_cls) < 2; }
+        printf("MCAPP-FIX %d chunk-reassign=%d chunk-page-moved=%d\n", n, (int)r2, chk_moved);
+        /* On the lifetimes arm the mover faulted at hdr_flags_addr and never got here. Reaching this
+           line means no fault: the plain arm, or the shipped arm (25) with no orphan. */
+        return MCAPP_MARK(n, (chk_moved ? 0x20 : 0x10) | (mcapp_reverse_c0e5a99 ? 1 : 0));
     }
     default:
         printf("MCAPP-FIX %d unknown\n", n);

@@ -12,30 +12,14 @@
   "allocator_layer": "aset",
   "fidelity": "model-consumer, real allocator",
   "arms": {
-    "spatial": {
-      "oracle": "complete"
-    },
-    "sublet": {
-      "oracle": "fault at the labelled read probe"
-    },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "complete"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "oracle": "SIGPROT at the labelled read probe",
-      "signal": 34,
-      "si_code": 2
-    },
     "native-detect": {
       "status": "not written"
     },
     "cheribsd-revocation": {
       "oracle": "completes with no capability fault; the case's own PG_DEFECT probe prints twice, so the defective sequence provably executed -- REACHED-SILENT (2026-10-05, plain purecap, revocation=1 every_free=0). A use-after-free between two palloc chunks never crosses a malloc boundary, so there is nothing for a malloc-granular revoker to reclaim.",
-      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts with PG_POISONCAP off"
+      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts"
     }
   },
-  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case.",
+  "status": "retired at the 17.5 pin (corpus.json note); the arms above are its record",
   "sibling_issue": "01_3549ffb6af_vacuum_dead_items_stale_struct"
 }

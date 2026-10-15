@@ -2,7 +2,7 @@
 """Build the SQLite 3.22.0 engine corpus for the VIRTUAL address space.
 
     build-virtual-sqlite322.py --sdk <virtual SDK> --amalgamation <dir with
-        sqlite3.c and sqlite3.h> --out <new dir> [--memsys5] [--only 00,07]
+        sqlite3.c and sqlite3.h> --out <new dir> [--memsys5 | --sublet] [--only 00,07]
 
 WHY THIS CORPUS NEEDS ITS OWN BUILDER. The other C corpora are one translation
 unit plus a driver, or one call into a port's CMake seam. These 33 cases are
@@ -37,16 +37,17 @@ WHAT IT CHANGES AGAINST THE PHYSICAL ARM, and why:
     Without it SQLite allocates through the platform -- here the virtual
     runtime's own allocator, one bounded object per allocation and a revoke on
     every free. That pair IS the experiment; see repro322_common.h.
-  * `--sublet` selects the THIRD arm: memsys5 again, under its own Sublet port.
-    The amalgamation is copied, `ports/sqlite/sublet/sublet-3220000-memsys5.patch`
-    is applied to the copy with `-F0` so a source it was not written for is
-    refused rather than patched somewhere near, and the pool is borrowed from
-    the system allocator as one linear capability instead of being a static
-    array. Two include roots join here and the ORDER IS LOAD-BEARING:
-    `capstone/runtime/include` must precede `capstone/`, because two different
-    headers are both reachable as `sublet/sublet.h` and only the first declares
-    the `capstone_cap_slot` type this patch uses. The same ordering is spelled
-    out in ports/sqlite/build-sqlite-capstone.sh.
+  * `--sublet` selects the THIRD arm: memsys5 again, over the same static
+    array, under its own Sublet port. The amalgamation is copied and
+    `ports/sqlite/sublet/sublet-3220000-memsys5.patch` is applied to the copy
+    with `-F0`, so a source it was not written for is refused rather than
+    patched somewhere near. The patch issues every block as a child lifetime
+    of the pool (CDERIVE) and revokes it on free (CREVOKE); it includes
+    <capstone/capability.h> from `capstone/runtime/include`.
+  * `--pagecache` adds the THIRD nested allocator on top of `--sublet`: the page
+    cache, whose pins are lifetimes (`sublet/sublet-3220000-pagecache.patch`).
+    A page is unpinned without being freed or reassigned, so that end is one no
+    malloc-level mechanism can see.
 
 -O0 for both the amalgamation and the case, as corpus322.sh uses: these are
 defects that turn on one specific access, and an optimiser that moves it moves
@@ -126,6 +127,11 @@ def main():
     p.add_argument('--memsys5', action='store_true', help='The nested arm')
     p.add_argument('--sublet', action='store_true',
                    help='The nested arm with memsys5 under its own Sublet port')
+    p.add_argument('--pagecache', action='store_true',
+                   help="--sublet plus SQLite's THIRD nested allocator, the page cache, on its "
+                        "own Sublet port: a page's data is a child lifetime of the pin, revoked "
+                        "when the last reference goes away. The page is neither freed nor "
+                        "reassigned there, so no malloc-level mechanism can see that end")
     p.add_argument('--no-lookaside', action='store_true',
                    help="With --sublet: turn SQLite's SECOND nested allocator off, so "
                         "the small allocations it would take go to memsys5, which this "
@@ -153,15 +159,19 @@ def main():
     if not cases:
         sys.exit('no cases selected')
 
+    if a.pagecache:
+        a.sublet = True
     if a.sublet:
         a.memsys5 = True
-    arm = ('memsys5-sublet' if a.sublet else 'memsys5' if a.memsys5 else 'platform')
+    arm = ('memsys5-sublet-pagecache' if a.pagecache else
+           'memsys5-sublet' if a.sublet else 'memsys5' if a.memsys5 else 'platform')
     if a.no_lookaside:
         arm += '-no-lookaside'
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / 'obj').mkdir(exist_ok=True)
-    # Every arm compiles a COPY carrying the same source fixes the physical build applies after
-    # adapt-sqlite-322.sh (build-sqlite-row322.sh): today that is fts5-azarg-patch.py. Without it
+    # Every arm compiles a COPY carrying the same source fixes: fts5-azarg-patch.py, which the
+    # physical build also applies after adapt-sqlite-322.sh (build-sqlite-row322.sh), and
+    # fts3-doclist-null-patch.py, the same NULL-plus-offset class in fts3EvalDlPhraseNext. Without the first
     # FTS5's default-tokenizer path computes &azArg[1] with azArg == NULL, which is CINCOFFSET on a
     # NULL capability and traps (cause 24) at CREATE VIRTUAL TABLE -- before any FTS5 case reaches
     # its defect. The virtual arms ran without it until 2026-10-10 and every FTS5 row faulted there
@@ -176,17 +186,25 @@ def main():
         if fixed.returncode:
             sys.exit(f'fts5-azarg-patch.py failed: {fixed.stdout}{fixed.stderr}')
         print('  applied fts5-azarg-patch.py to the copy')
+    if 'pDL->aAll ? &pDL->aAll[pDL->nAll] : 0' not in source.read_text(errors='replace'):
+        fixed = subprocess.run([sys.executable, str(REPO / 'capstone/ports/sqlite/fts3-doclist-null-patch.py'),
+                                str(source)], capture_output=True, text=True)
+        if fixed.returncode:
+            sys.exit(f'fts3-doclist-null-patch.py failed: {fixed.stdout}{fixed.stderr}')
+        print('  applied fts3-doclist-null-patch.py to the copy')
     sublet_includes = []
     if a.sublet:
-        patch = REPO / 'capstone/ports/sqlite/sublet/sublet-3220000-memsys5.patch'
-        done = subprocess.run(['patch', '-s', '-F0', '-p1', '-d', str(staged)],
-                              stdin=patch.open('rb'), capture_output=True, text=True)
-        if done.returncode:
-            sys.exit(f'the Sublet patch did not apply: {done.stdout}{done.stderr}')
-        print(f'  patched {source.name} with {patch.name}')
-        sublet_includes = [f'-I{REPO}/capstone/runtime/include',
-                           f'-I{REPO}/capstone/sublet', f'-I{REPO}/capstone',
-                           f'-I{patch.parent}']
+        patches = ['sublet/sublet-3220000-memsys5.patch']
+        if a.pagecache:
+            patches.append('sublet/sublet-3220000-pagecache.patch')
+        for name in patches:
+            patch = REPO / 'capstone/ports/sqlite' / name
+            done = subprocess.run(['patch', '-s', '-F0', '-p1', '-d', str(staged)],
+                                  stdin=patch.open('rb'), capture_output=True, text=True)
+            if done.returncode:
+                sys.exit(f'{patch.name} did not apply: {done.stdout}{done.stderr}')
+            print(f'  patched {source.name} with {patch.name}')
+        sublet_includes = [f'-I{REPO}/capstone/runtime/include']
     engine = {}
     for group in sorted({g for _, g, _ in cases.values()}):
         if group not in flags:
@@ -217,15 +235,6 @@ def main():
         if configures_heap and not a.memsys5:
             print(f'  {case.name:<52} not-applicable (reaches for sqlite_heap, '
                   f'which only the memsys5 arm has)')
-            skipped.append(case.name)
-            continue
-        if configures_heap and a.sublet:
-            # Under the port the pool is a grant, not an array: there is nothing
-            # named sqlite_heap to reach for, and the case's way of forcing OOM
-            # is to fill that array. Rewriting it to fill the pool through
-            # allocations would be a different case.
-            print(f'  {case.name:<52} not-applicable (configures the heap itself '
-                  f'from sqlite_heap; under the Sublet port the pool is a grant)')
             skipped.append(case.name)
             continue
         sources = [str(case / 'case.c')]

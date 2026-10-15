@@ -1,26 +1,18 @@
 #!/bin/bash
 # run-cheribsd-revocation.sh BUILD OUT: the twenty pymalloc defects under the
-# platform's own libc revocation, with no PoisonCap adapter.
+# platform's own libc revocation, with pymalloc stock.
 #
-# WHY THIS ARM AND WHAT IT IS EXPECTED TO SHOW. The corpus already declares two
-# CheriBSD arms, poisoncap-spatial and poisoncap-protected, which measure the
-# port's own lifetime adapter. This arm measures something else: CheriBSD's libc
-# revocation exactly as the platform ships it, which is the arm the
-# allocator-boundary corpus uses, so the two corpora become comparable on it.
+# WHAT THIS ARM IS AND WHAT IT IS EXPECTED TO SHOW: CheriBSD's libc revocation
+# exactly as the platform ships it, which is the arm the allocator-boundary
+# corpus uses, so the two corpora are comparable on it.
 #
 # The expected result is that NOTHING is caught, and that is the point. libc
 # revocation acts on libc's own free; pymalloc does not return a freed block to
 # libc, it links it onto its own pool free list, so there is no free for the
 # platform to revoke. A 0/20 here is the measurement that says the nested
-# allocator makes the platform's defence inert -- the same shape as the Capstone
-# `spatial` arm's 0/20. If instead something IS caught, that is a finding and
-# the reason has to be established before the number is used.
-#
-# PoisonCap is switched OFF. cmake/Replay.cmake defaults PYMALLOC_POISONCAP to
-# OFF and the poisoncap build.sh forces it ON, but passes "$@" after its own
-# flags, so -DPYMALLOC_POISONCAP=OFF here wins. The build is verified below
-# rather than assumed: a binary still carrying the adapter would measure the
-# adapter and report it as the platform.
+# allocator makes the platform's defence inert. If instead something IS caught,
+# that is a finding and the reason has to be established before the number is
+# used.
 set -u
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CORPUS=$(cd -- "$HERE/../.." && pwd)
@@ -35,20 +27,9 @@ P() { scp -q $K -P "$PORT_G" "$1" root@localhost:"$2" 2>/dev/null; }
 
 n=$(ls "$BUILD"/bin/defect-?? 2>/dev/null | wc -l)
 [ "$n" -gt 0 ] || { echo "no $BUILD/bin/defect-NN -- build first:" >&2
-  echo "  bash $CORPUS/shared/build-cases.sh cheribsd $BUILD -DPYMALLOC_POISONCAP=OFF" >&2
+  echo "  bash $CORPUS/shared/build-cases.sh cheribsd $BUILD" >&2
   exit 2; }
 mkdir -p "$OUT"
-
-# ---- the binaries must NOT carry the adapter -----------------------------
-# Checked, not assumed: the whole arm is void if PoisonCap is still in.
-leak=0
-for b in "$BUILD"/bin/defect-??; do
-  if strings "$b" 2>/dev/null | grep -qi poisoncap; then
-    echo "REFUSING: $(basename "$b") still mentions PoisonCap" >&2; leak=1
-  fi
-done
-[ "$leak" -eq 0 ] || { echo "  rebuild with -DPYMALLOC_POISONCAP=OFF" >&2; exit 2; }
-echo "no PoisonCap in any of the $n binaries"
 
 G true || { echo "guest on port $PORT_G is not reachable" >&2; exit 2; }
 G "sysctl security.cheri 2>/dev/null" > "$OUT/sysctl-before.txt"

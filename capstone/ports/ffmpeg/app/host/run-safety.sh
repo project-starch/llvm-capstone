@@ -5,10 +5,9 @@
 # corpus's cases, whose fault is named by source line: bug-corpora/ffmpeg/pool-repros/runners/).
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-ARM=${1:?level0, shrink, sublet, pool0, pool2, poolsublet or poolstock}; shift
+ARM=${1:?level0 or shrink}; shift
 case $ARM in
- level0) DOMAIN=domain ;; shrink|sublet) DOMAIN=domain-$ARM ;;
- pool0|pool2|poolsublet|poolstock) DOMAIN=domain-sublet-$ARM ;;
+ level0) DOMAIN=domain ;; shrink) DOMAIN=domain-$ARM ;;
  *) echo "unknown arm: $ARM" >&2; exit 2 ;;
 esac
 WORK=${FFAPP_WORK:-/tmp/capstone/ffmpeg-app}

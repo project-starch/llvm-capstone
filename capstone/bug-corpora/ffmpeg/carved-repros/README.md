@@ -39,7 +39,7 @@ Vorbis I spec says to truncate -- see its `live_proof`; it has not been demonstr
 ## Arms
 
 The block is the platform's calloc/malloc, so every arm whose bound is the ALLOCATION -- Capstone
-level0 and Sublet, CheriBSD with revocation, PoisonCap in both modes, ASan's redzones -- is in
+level0 and Sublet, CheriBSD with revocation, ASan's redzones -- is in
 bounds for every crossing here. Field bounds (`capstone-subobject`, `cheribsd-subobject`) narrow a
 pointer to a struct member, and a carved region is not one. The remedy is at the carving code:
 `shared/driver.c`'s `ffc_carve()` narrows each region to its own extent under
@@ -48,5 +48,5 @@ the `*-carve-bounds` arms. Their fixed arms run under the same narrowing, so a r
 wrong would fault a FIXED arm instead of reading as a catch.
 
 Runners: `runners/run-native.sh` (fix differential), `runners/run-asan.sh` (ASan with positive
-controls), `runners/run-cheribsd.sh <arm>` (stock CheriBSD and PoisonCap, with a carve control in
+controls), `runners/run-cheribsd.sh <arm>` (stock CheriBSD, with a carve control in
 every boot), and `tools/run-capstone-domain.py` (Capstone arms).
