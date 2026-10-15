@@ -1224,21 +1224,27 @@ allocators migrated to CDERIVE do not rely on the refusal. On the RTL their larg
 would get bounds rounded outward instead of exact ones. This is the exact-bounds question of
 `docs/plans/virtual-capstone-rtl-feasibility.md`, now for CDERIVE as well.
 
-**Decode.** capstone-qemu decodes CDERIVE and CREVOKE only with `x-capstone-u-mode` (`trans_csderive`,
-`trans_cskill`, 5fb78e41a3); the physical profile raises illegal instruction 2, because the deployed RTL
-implements neither. The `capstone-sublet` RTL implements both. The QEMU gate must change in the same
-step as a bitstream that carries them, or the physical QEMU traps on code the board executes.
+**Decode.** Until acbad0f7ec82, capstone-qemu decoded CDERIVE and CREVOKE only with `x-capstone-u-mode`
+(`trans_csderive`, `trans_cskill`, 5fb78e41a3). The physical profile raised illegal instruction 2, because the RTL
+then deployed implemented neither. The `capstone-sublet` RTL implements both. The QEMU gate had to change in the
+same step as the bitstream that carries them, or the physical QEMU would trap on code the board executes.
 
-The flip is ready and held on capstone-qemu branch `physical-sublet-decode` (9739f6e415, based on
-7dbfdd534eea). It merges with the flash that carries capstone-sublet, not before. The branch:
+**The flip landed on 2026-10-16**, with the flash of `caplifive_sublet_d93a8d66b.bit` (2026-10-15 23:54):
+- capstone-qemu `virtual-capstone` acbad0f7ec82; dev's pin moved to it in the commit that records this;
+- it is the held branch `physical-sublet-decode`'s two commits (0e75adb8a3, 9739f6e415) squashed onto 2b6fbe3eaf07,
+  patch-identical (patch-id 8adc396f2df243fa).
+
+The change:
 - removes the profile check from both decoders (CREVOKE with rd ≠ x0 stays illegal);
 - adds five physical-profile arms: untagged operands → 24, rd ≠ x0 → 2, and a CREVOKE-ended
   grandchild → 25, paired with the same arm without the CREVOKE;
 - runs the gate's 37 cases on the physical profile.
 
 All 37 give the virtual cause at the same fault site, except two that differ by design: case 34
-(24, Q-11) and case 35 (29 at the CDERIVE: no exact bounds). The gate reads 119/119 on the branch,
-and 78/119 on the gated build, where every physical case stops with 2.
+(24, Q-11) and case 35 (29 at the CDERIVE: no exact bounds). The gate reads 119/119 on acbad0f7ec82, and
+78/119 on 2b6fbe3eaf07, where every physical case stops with 2. The 11 physical-profile suites (authority, BEEBS,
+coremark, the revoke probes, trusted-linux-u-access and the rest) are identical between the two, as are all 118
+built artifacts.
 
 **Fault order: agrees.** As the RTL lane reports it, the RTL follows `helper_csderive` and `helper_cskill`:
 CDERIVE raises 24, 26, 25, 29, then 30 or 25 from the node unit; CREVOKE raises 24, 26, 25, 27, then 29
