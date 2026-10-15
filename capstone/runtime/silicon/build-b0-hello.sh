@@ -152,8 +152,11 @@ ls -la "$OUT/$APP.dom"
 # B0_CAP_FORMAT names the bitstream's bounds encoding: cursorless (0568f93a9 and earlier) or full (capstone-sublet).
 # Under full the gate also fails on OVERLAP; accepting that is a decision, so this script never passes --allow-overlap.
 # B0_CAP_RENORM=1 adds --renorm: the FP bitstreams and the Sublet tree renormalise (R-54), and their encoder is full.
-python3 "$CAP/tests/runtime-qemu/silicon-ladder/check-repr.py" --self-test --format "${B0_CAP_FORMAT:-cursorless}" \
-  ${B0_CAP_RENORM:+--renorm} "$OUT/$APP.dom" ||
+# The defaults are the resident encoder's, full + renorm, since the FP flash (2026-10-15): a cursorless default checked
+# every B0 build against a bitstream no longer on the board. B0_CAP_FORMAT=cursorless B0_CAP_RENORM= for 0568f93a9.
+CAPFMT=${B0_CAP_FORMAT:-full}; CAPRENORM=${B0_CAP_RENORM-1}
+python3 "$CAP/tests/runtime-qemu/silicon-ladder/check-repr.py" --self-test --format "$CAPFMT" \
+  ${CAPRENORM:+--renorm} "$OUT/$APP.dom" ||
   { echo "check-repr: $APP.dom is AT RISK or could not be checked (ISSUES R-11); see above" >&2; exit 3; }
 # No floating point (B5): a domain starts with mstatus.FS Off and the switcher saves no FP state, so one F/D
 # instruction traps to a monitor that cannot serve it, which wedges the board. Every build is soft-float; this
