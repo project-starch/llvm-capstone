@@ -2460,6 +2460,78 @@ reading the transcript.
 3. Isolation: remainders still overlap carved pieces. The PMP masks the monitor's own range.
 4. QEMU's physical profile keeps exact SPLIT bases, so none of this is visible before silicon.
 
+## B5 pre-registered (2026-10-15, before the boot): mruby 4.0.0-rc2 on silicon, caplifive_fpb_afcd19bea
+The lead asked for a benchmark "based on virtual Capstone" on the FP respin. Virtual-profile images cannot run on this
+RTL (no C-mode translation, lifetime tables, CSRUNV/srevroot, exact bounds or per-domain FP;
+virtual-capstone-rtl-feasibility.md), so one of the virtual profile's applications is ported to the silicon ABI, as
+memcached was (B2/B3). The lead chose to port one; mruby was picked: no threads or fork, and a native-identical oracle.
+
+**The build** (lane 903fb4ed27da, 38b9e1d741b8, cf7b041dbbcd):
+- `build-b5-mruby.sh`: mruby's rake compiles every object with build-b0-hello.sh's own flags, and build-b0-hello.sh
+  does the full-LTO link.
+  - Gems: stdlib, stdlib-ext, math, metaprog, io, errno, dir; level0 heap.
+  - Gates: check-repr under full+renorm with the pool carve, and the new `no-fp-gate.py`.
+- Two defects found on the way, both in QEMU, both fixed before any board run:
+  1. **`setjmp.S` (38b9e1d741b8).** Under the gp-captable ABI, longjmp called its C helper at gp + the helper's
+     address. mruby's first `raise` faulted with cause 2 at a pc outside the code. No silicon program had called
+     longjmp before.
+  2. **level0's first-fit list is O(live blocks) per malloc and per free.** smoke.rb's GC step took about 4.5
+     minutes of QEMU. `silicon-alloc.c` now serves mruby's allocator from size classes (O(1)); large blocks stay
+     on level0.
+     - Matched pair, the allocator alone: smoke 249.9 s → 16.9 s host, with byte-identical output up to the
+       setjmp fault.
+     - bench's ao_render: 57.2 s → 10.7 s.
+
+**Native oracle and QEMU** (silicon-mimic: CAPSTONE_GP_FABRICATE=0, CAPSTONE_MOVC_NULL_SCALAR=1, firmware
+d5c57ee765c9). Every step's stdout is byte-identical to the native build's (x86 gcc -O2), with exit status 0:
+
+| step | what | stdout sha (16) | bytes | QEMU host s | slab pages / small allocs |
+|---|---|---|---|---|---|
+| e | `mruby -e 'p 1+1'` | 53c234e5e8472b6a | 2 | 5.7 | 27 / 678 |
+| stdin | the program on stdin | 5476dba1f4bd59f1 | 4 | 5.8 | 27 / 695 |
+| smoke | smoke.rb: core classes, GC, raise/rescue, floats, a file written and read back, Dir.entries | 791d0649e254c15e | 270 | 11.1 | 822 / 40897 |
+| bench | b5-bench.rb: mandel_term, fib(24), so_lists 3x1000, so_mandelbrot 32, ao_render 8 | 8d1539bc79e2b630 | 297 | 50.2 | 139 / 83453 |
+
+QEMU's per-benchmark times (stderr, not compared): mandel_term 21.1 s, fib 7.1 s, so_lists 0.3 s, so_mandelbrot
+4.7 s, ao_render 10.7 s.
+
+**The boot.**
+- Images by hash:
+  - mruby.dom a7ac283d7050a5d8;
+  - b5-hello.dom 0042544c7ec7e2cf: b0-hello with B5's flags and pool carve, mruby's pair;
+  - b0-hello.dom db4385ff32deddf6: the frozen control, which passed boot C+F on this bitstream.
+- Private image: Image bd1efb37a5ab80fe. Its gzip initramfs was extracted and every B5 file checked by hash, b0run.sh
+  b55bb6e79a71c58a included.
+- Firmware 9ae0dd55b3397e96: build-fpga-fw.sh on wrapper d7489e3 + monitor 7361e1c with boot C+F's supervised-call
+  defines; gate PASS. The shared tree stays at df0e9a8 / 93440d5.
+- PREFLIGHT=0 (private image). board-watchdog.sh runs beside the driver, with ABORT_ON_ENTRY_STALL=1 and
+  ENTRY_STALL_S=420.
+- Rungs, in order: b0-stats, b0-hello, b5-hello, b5-mruby-e, b5-mruby-stdin, b5-mruby-smoke, b5-mruby-bench,
+  b0-stats2.
+  - That is six launches. Boot C+F ran six launches plus a minted context inside the 96-slot region table (R-43 a2,
+    R-55).
+
+**Predictions:**
+1. Every rung retval 0.
+2. Each `MRUBY <step> sha` equals the table's hash, and the five `B5o BENCH` lines equal native's.
+3. Each `B5e B5 alloc:` line equals QEMU's: pages and small counts as in the table, fallback 0. The allocation
+   sequence does not depend on time.
+4. Wall times are NOT predicted, since no board/QEMU ratio for this kind of code is measured. They are the benchmark
+   result; the watchdogs (600 / 600 / 900 / 2400 s) are set for a board up to ~20x slower than QEMU.
+
+**What a failure would say:**
+- b0-hello fails: the boot is VOID.
+- b5-hello fails with b0-hello passing: today's runtime (merged since the Oct 14 image: #225, #233, the sublet_heap
+  removal, #240) or the pool carve on a launch. The mruby rows are collateral.
+- e fails with b5-hello passing: mruby's size or shape on silicon (2.0 MB code, 40 MiB data, 2,622 globals). R-55's
+  family is the first suspect, although check-repr reads OK and OVERLAP 0 at all 193 bases.
+- stdin or smoke fail with e passing: a delegated path that no silicon rung has used before (a read from stdin; open,
+  write, read back and getdents), or longjmp on silicon. smoke's B5o lines name the last M-step.
+- bench reads 910 with smoke passing: a computation differs, and the BENCH line names the benchmark (soft-float and
+  musl's libm are the first suspects for ao_render and so_mandelbrot).
+- 912: slower than its budget. That is not a correctness failure; re-size.
+- A full region table (`RGNF 0000E00C`): R-55 a2, not counted against mruby.
+
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
 sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one
