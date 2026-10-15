@@ -10,9 +10,9 @@ FPGA_BITSTREAM = the resident name); the report is the UART's `SR <count>` / `SV
 
 | image | sha256 | board_rec | SR | readings (SV, in order), from the simulation of the committed tree |
 |---|---|---|---|---|
-| `images/sublet-derive-kill.bin` | `6b6eb589929a2d9003277582ae751fc40a985d1a92249a0f8304fc3ab718eea3` | 0x80003080 | 19 | 0xe 0x100 0x300 0x1 0x1234 0xe 0x1d 0x1b 0x0 0x19 0x19 0x1d 0x1d 0x0 0x19 0xe 0x5678 0x1a 0x18 |
-| `images/sublet-split-shares-node.bin` | `029dff8faf069d6e68079a576c277415e5e1b60228835f57203176c422cb0a80` | 0x80003080 | 7 | 0x1111 0x2222 0x0 0x19 0x19 0x0 0x19 |
-| `images/sublet-mrev-orphan.bin` | `22989ae01b40f4dca02044a613b0ab6114201bd144aa4f3832db6b629de3bf92` | 0x80003080 | 8 | 0x0 0x0 0x0 0x0 0x0 0x19 0x19 0x19 |
+| `images/sublet-derive-kill.bin` | `6b6eb589929a2d9003277582ae751fc40a985d1a92249a0f8304fc3ab718eea3` | 0x80004100 | 19 | 0xe 0x100 0x300 0x1 0x1234 0xe 0x1d 0x1b 0x0 0x19 0x19 0x1d 0x1d 0x0 0x19 0xe 0x5678 0x1a 0x18 |
+| `images/sublet-split-shares-node.bin` | `029dff8faf069d6e68079a576c277415e5e1b60228835f57203176c422cb0a80` | 0x80004000 | 7 | 0x1111 0x2222 0x0 0x19 0x19 0x0 0x19 |
+| `images/sublet-mrev-orphan.bin` | `22989ae01b40f4dca02044a613b0ab6114201bd144aa4f3832db6b629de3bf92` | 0x80005000 | 8 | 0x0 0x0 0x0 0x0 0x0 0x19 0x19 0x19 |
 
 The vectors are the operands of the tests' CAPPRINTs in retirement order on the Sublet tip (snapshot sublet-renorm,
 RTL d93a8d66b, the same on every step since each arm was added); the simulation's trace also shows the trap handler's
