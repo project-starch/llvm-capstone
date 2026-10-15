@@ -60,7 +60,9 @@ if [[ ! -f "$PATCHED" ]]; then
   #   Reversed (or previously applied) patch detected!  ... 28 out of 28 hunks ignored
   # and the build fails. It fires only when $PATCHED is MISSING -- a cold or cleared
   # CAPSTONE_TMP_ROOT -- which is why a warm tree never showed it.
-  env -u SQLITE_SUBLET_PATCH OUT_DIR="$(dirname "$PATCHED")" \
+  # -u DOMAIN_SRC / DOMAIN_EXTRA_DEFS likewise: a caller that sets them for THIS build (the measure flow does) would
+  # otherwise hand the bootstrap a domain source it does not build, and the cold path fails.
+  env -u SQLITE_SUBLET_PATCH -u DOMAIN_SRC -u DOMAIN_EXTRA_DEFS OUT_DIR="$(dirname "$PATCHED")" \
     bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
 fi
 [[ -f "$PATCHED" ]] || { echo "still no $PATCHED" >&2; exit 1; }
