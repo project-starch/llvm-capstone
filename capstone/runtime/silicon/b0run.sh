@@ -38,7 +38,9 @@ case "$rung" in
     echo "B0: capstone-exec --stats rc=$rc"
     if [ $rc -eq 0 ]; then echo "RESULT $rung retval=0"; else echo "RESULT $rung retval=902"; fi
     ;;
-  b0-hello)
+  b0-hello|b5-hello)
+    # b5-hello is b0-hello built from B5's tree with B5's flags (full+renorm, the pool carve): mruby's pair, which
+    # differs from it only in the application.
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     echo "B0: process-ABI module loaded"
     /usr/bin/capstone-exec --stats || { echo "RESULT $rung retval=902"; exit 1; }
@@ -117,6 +119,57 @@ case "$rung" in
     echo "B2: client rc=$crc memcached rc=$mrc job $(cat /tmp/b2-job.json 2>/dev/null)"
     cat /tmp/b2.out; cat /tmp/b2.err
     echo "RESULT $rung retval=$((crc * 10 + (mrc != 0)))"
+    ;;
+  b5-mruby-e|b5-mruby-stdin|b5-mruby-smoke|b5-mruby-bench)
+    # B5: mruby 4.0.0-rc2 as a gp-captable delegated application (build-b5-mruby.sh). Each step's stdout is compared
+    # with the native build's (/test-domains/mruby/native.sha: "<step> <first 16 hex of sha256>"):
+    #   e      mruby -e 'p 1+1'
+    #   stdin  the program on standard input (stdin.rb)
+    #   smoke  smoke.rb: core classes, GC, recursion, exceptions, floats, a file written and read back, a directory
+    #   bench  b5-bench.rb: five of mruby's benchmarks, sized for the board; the wall time of each on stderr
+    # The scripts run from /tmp/b5, a copy, since smoke.rb writes there. retval: 0 the stdout hash equals the native
+    # one and the exit status is 0; 910 the hash differs and the status is 0; 911 the files could not be staged;
+    # 912 the watchdog ended a capstone-exec Linux was still running; 1000 + the exit status otherwise.
+    # One image serves the four steps (the driver names /test-domains/<rung>.dom; four 2.9 MB copies would cost the
+    # JTAG upload ~70 s for nothing).
+    dom=/test-domains/mruby.dom
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    step=${rung#b5-mruby-}
+    # Only the scripts are copied: smoke.rb lists this directory (M12), so it must hold exactly what QEMU's did --
+    # the eight .rb files -- or the allocator's counts, which the pre-registration predicts, would differ by an entry.
+    rm -rf /tmp/b5 /tmp/b5.wd; mkdir -p /tmp/b5 && cp /test-domains/mruby/*.rb /tmp/b5/ || { echo "RESULT $rung retval=911"; exit 1; }
+    want=$(awk -v s="$step" '$1 == s { print $2 }' /test-domains/mruby/native.sha)
+    [ -n "$want" ] || { echo "B5: no native hash for $step"; echo "RESULT $rung retval=911"; exit 1; }
+    # Watchdogs from QEMU's times (e/stdin 6 s, smoke 11 s, bench 50 s, launch included) with room for a board of
+    # unknown speed relative to QEMU: generous, since a watchdog ending a slow but correct run would void it.
+    case $step in smoke) limit=900 ;; bench) limit=2400 ;; *) limit=600 ;; esac
+    ( i=0; while [ $i -lt $((limit / 10 + 2)) ]; do sleep 10; i=$((i+1)); echo "B5: hb $i"; done ) &
+    hb=$!
+    t0=$(cut -d' ' -f1 /proc/uptime)
+    case $step in
+      e)     /usr/bin/capstone-exec "$dom" -e 'p 1+1' ;;
+      stdin) /usr/bin/capstone-exec "$dom" < /tmp/b5/stdin.rb ;;
+      smoke) /usr/bin/capstone-exec "$dom" /tmp/b5/smoke.rb /tmp/b5 ;;
+      bench) /usr/bin/capstone-exec "$dom" /tmp/b5/b5-bench.rb /tmp/b5 ;;
+    esac > /tmp/b5.out 2> /tmp/b5.err &
+    cx=$!
+    ( sleep $limit
+      if kill -0 $cx 2>/dev/null; then
+        echo watchdog > /tmp/b5.wd
+        echo "B5: watchdog: capstone-exec still running at $limit s; SIGTERM"; kill -TERM $cx; sleep 5; kill -KILL $cx 2>/dev/null
+      fi ) &
+    wd=$!
+    wait $cx
+    rc=$?
+    t1=$(cut -d' ' -f1 /proc/uptime)
+    kill $hb $wd 2>/dev/null
+    sed 's/^/B5o /' /tmp/b5.out; sed 's/^/B5e /' /tmp/b5.err
+    got=$(sha256sum < /tmp/b5.out | cut -c1-16)
+    echo "MRUBY $step sha $got bytes $(wc -c < /tmp/b5.out) want $want rc $rc secs $(awk -v a="$t0" -v b="$t1" 'BEGIN { printf "%.2f", b - a }')"
+    if [ -e /tmp/b5.wd ]; then echo "RESULT $rung retval=912"
+    elif [ $rc -ne 0 ]; then echo "RESULT $rung retval=$((1000 + rc))"
+    elif [ "$got" = "$want" ]; then echo "RESULT $rung retval=0"
+    else echo "RESULT $rung retval=910"; fi
     ;;
   b3-setclock)
     # B3w: the board's wall clock, read and then set for the b3-oracle rung that follows. memcached's negative
