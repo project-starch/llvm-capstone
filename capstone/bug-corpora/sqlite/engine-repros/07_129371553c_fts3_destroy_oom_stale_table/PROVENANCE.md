@@ -65,3 +65,45 @@ new-4 / sqlite-129371553c -- fts3DestroyMethod() dereferences a freed Fts3Table
  * case does its own init instead of calling repro_init().
  * NOTE: -DSQLITE_DQS=0, so SQL string literals must be single-quoted.
 ```
+
+## Where an address-based oracle stops working (reviewed 2026-10-15)
+
+The Sublet verdict stands, and establishing that took two probes rather than one, because this is
+the case where judging a pointer by its address gives the wrong answer.
+
+**The fault is this defect's.** Probe site 44, at the `sqlite3_free` in `fts3DisconnectMethod`,
+records each `Fts3Table` the sweep frees. On `virtual-nested-pools` the last one before the fault
+is `p=0x3fa6bcf000`, and the fault address is `0x3fa6bcf050` -- 80 bytes into that same 592-byte
+object, with cause 25, the lifetime check, in `fts3DestroyMethod`. Host ASan reports the read at
+offset 40 of the same object; the offsets differ because capability pointers change the layout.
+
+**And an address check cannot see it.** Probe site 9 judges the same pointer against memsys5's own
+free state, the way host ASan judges against its shadow map, and reports **no witness on either
+virtual arm** in 70 reaches of the defect site. memsys5 reissues the freed block to the next
+allocation before the stale read happens, so by the time the read occurs the address belongs to a
+live object. That is not a gap in the probe: it is the same blindness that makes
+`results/2026-10-11-host-asan` score this case only because `run-host-asan.py` replaces the
+memsys5 configuration so every object is its own allocation, and the same blindness CheriBSD's
+revocation has here. Sublet rejects the access because the reissued block carries a fresh colour
+while the stale pointer keeps the revoked one.
+
+So for this case the probe's `witnesses=0` is not evidence that nothing happened. Where a block is
+reissued before the stale access, only an identity check can answer, and the site-44 address match
+is what stands in for a witness.
+
+## The arms do not reach the same occurrence
+
+The trigger sweeps an OOM injection point over every allocation the DROP makes, so what it finds
+depends on the allocation sequence -- and that differs per allocator:
+
+| configuration | `drop_allocs` | what the sweep does |
+|---|---:|---|
+| host ASan variant (system allocator) | 296 | the recorded host oracle says 292, window 167-184 and 259-280 |
+| `virtual-malloc` (stock memsys5) | 68 | full sweep of 76 points completes, 70 reaches, no fault |
+| `virtual-nested-pools` (Sublet memsys5) | 70 | faults at about iteration 24 |
+
+The Sublet port's memsys5 reports requested sizes rather than block sizes, which is the documented
+reason its sequence differs from stock memsys5's. The consequence for this case is that
+`virtual-malloc`'s MISSED is not a silent miss of the event Sublet caught: on that arm the sweep
+ran to the end and the defect did not occur. A reader taking the two cells as the same defect seen
+by two mechanisms would be reading more than the measurement supports.

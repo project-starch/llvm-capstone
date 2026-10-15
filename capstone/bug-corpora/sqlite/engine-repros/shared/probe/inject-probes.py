@@ -19,6 +19,16 @@ the defect is the question, a site can instead test the object itself (see site 
 probe-sites.tsv). Armed at run time by LB_SITE=<id>; LB_ARMED is printed at start and LB_SUMMARY
 at exit, so a log without LB_ARMED is a build without the probe, not a site never reached.
 
+WHAT AN ADDRESS JUDGEMENT CANNOT SEE. LB_HIT asks memsys5 whether the block the pointer came
+from is free RIGHT NOW. If the allocator has already reissued that block -- which memsys5 does
+immediately, by design -- the answer is no, and the probe reports nothing even though the access
+is stale. Case 07 is the measured instance: the Fts3Table is freed, the block is reissued, and
+`witnesses=0` on both virtual arms while Sublet rejects the access by identity, with the fault
+address 80 bytes inside the object a site at the free had just recorded. Host ASan has the same
+blindness here and only scores that case because its runner replaces memsys5 entirely. So a
+witness is evidence that the access was stale; the ABSENCE of one is not evidence that it was
+not, and a case whose block may be reissued needs a site at the free to pair with it.
+
 Sites are located by function, then by anchor text inside that function's body, never by line
 number: the amalgamations the arms build from are offset from one another, and a line number that
 drifts still points at a line, just the wrong one. Every anchor, hook and marker must match
