@@ -77,7 +77,7 @@ static void *mapping_group(sublet_cap *grant, size_t bytes)
 }
 void *__capstone_malloc_map(size_t bytes)
 {
-    if (!bytes || bytes > CAP_VM_MAX_BYTES) { errno = ENOMEM; return MAP_FAILED; }
+    if (!bytes || bytes > CV_MAX_REGION_BYTES) { errno = ENOMEM; return MAP_FAILED; }
     bytes = (bytes + 4095) & -4096UL;
     if (cap_vm_acquire(&pending_mapping, bytes, 4096,
                        PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP)) return MAP_FAILED;
