@@ -1,7 +1,7 @@
 {
   "case": 5,
   "upstream_fix": "6397a78b2b",
-  "title": "row04",
+  "title": "heap-use-after-free in findElementWithHash",
   "consumer": "sqlite3.c",
   "live_in_pin": true,
   "live_proof": "inspection in the 3.22.0 tree: detachFunc frees the auxiliary btree and schema in attach.c while a TEMP TRIGGER in aDb[1] keeps pTabSchema pointing at it, and sqlite3DropTriggerPtr -> tableOfTrigger reads pTrigger->pTabSchema->tblHash in trigger.c. Fixed upstream in 3.30.0",
@@ -39,10 +39,7 @@
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021300c8; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1020a8f18; cheribsd-revocation run 2026-10-04/05: no verdict: detachtrig before drop",
   "fault_sites": [
-    "sqlite3DropTriggerPtr",
-    "tableOfTrigger",
-    "sqlite3HashFind",
     "findElementWithHash"
   ],
-  "fault_sites_why": "PROVENANCE.md names the chain that reads the freed auxiliary schema: sqlite3DropTriggerPtr -> tableOfTrigger -> sqlite3HashFind(&pTrigger->pTabSchema->tblHash, ...). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs. host ASan (results/2026-10-11-host-asan, shared/run-host-asan.py: every SQLite object its own malloc) reports the heap-use-after-free in findElementWithHash, which sqlite3HashFind calls with &pTrigger->pTabSchema->tblHash: tableOfTrigger only forms that address, the first load from the freed schema is pH->ht. Added 2026-10-11. The Sublet run 09a9cbc9 faulted there first and read NO-READING against the sites above; this entry rests on the ASan report, which is independent of it."
+  "fault_sites_why": "The stale access is the first load from the freed auxiliary schema: sqlite3DropTriggerPtr calls tableOfTrigger, which only forms the address &pTrigger->pTabSchema->tblHash, and sqlite3HashFind passes it on; the first load is pH->ht in findElementWithHash. Host ASan agrees -- its access stack is findElementWithHash <- sqlite3HashFind <- tableOfTrigger <- sqlite3DropTriggerPtr, 24 bytes inside a 120-byte region freed by sqlite3DbFreeNN <- sqlite3BtreeClose (results/2026-10-11-host-asan). NARROWED 2026-10-15, from [sqlite3DropTriggerPtr, tableOfTrigger, sqlite3HashFind, findElementWithHash] to this one: the other three are the call chain, and listing them made any fault along it count as a catch, including the NULL dereference this defect causes downstream. Probe site 43 measures the difference -- on stock memsys5, natively and on virtual Capstone and CheriBSD purecap alike, the stale load SUCCEEDS (kind=UAF witnessed, no fault) and returns ht=0 htsize=0 count=0 first=0, so findElementWithHash returns &nullElement, sqlite3HashFind returns NULL, and sqlite3DropTriggerPtr then dereferences that NULL (its assert(pTable) is compiled out by NDEBUG). Those arms fault at address 0x0 in sqlite3DropTriggerPtr, and CheriBSD reports si_code=2, PROT_CHERI_TAG, an untagged dereference -- the consequence of the defect, not a rejection of the invalid access."
 }
