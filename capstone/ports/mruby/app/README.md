@@ -6,6 +6,13 @@ configuration built natively. The goal is a real allocator-heavy interpreter in 
 domain, as the ground on which the Sublet corpus rows for mruby can later run on
 the real program rather than on extracted reproducers.
 
+The shared entry for a virtual build is
+[`ports/common/application/build-virtual.sh`](../../common/application/README.md)
+(`build-virtual.sh mruby <fresh dir>`), which runs this recipe with an SDK it builds, and
+`CAPSTONE_VIRTUAL_LIFETIMES=1` for `MRBD_SUBLET=1`. This
+port's own recipe stays the source of truth for what gets built, and still
+takes its own variables directly.
+
 ## mruby-task, and the GC-slot corpus (2026-09-30)
 
 The build also takes `mruby-task`, at 4.0.0-rc2 through `hal-posix-task` and at

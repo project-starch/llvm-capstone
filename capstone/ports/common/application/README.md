@@ -29,14 +29,15 @@ passes 46/46 checks with SQLite, mruby and Perl. These results qualify the
 existing configured ports on one hart; broader upstream features remain
 separate work.
 
-CPython, PostgreSQL, FFmpeg and tshark now accept
-`CAPSTONE_APPLICATION_PROFILE=virtual` in their source recipes. Select the
-gp-free/image-gp compiler before sourcing `capstone/tests/capstone-test-env.sh`.
-Use fresh output directories: relinking physically compiled objects cannot
-convert their addressing convention. Physical remains the default profile.
+All eight ports with a nested allocator build on the virtual profile through
+one entry, `build-virtual.sh`: CPython, PostgreSQL, FFmpeg, tshark, memcached,
+Perl, mruby and SQLite. Select the gp-free/image-gp compiler before sourcing
+`capstone/tests/capstone-test-env.sh`. Use fresh output directories: relinking
+physically compiled objects cannot convert their addressing convention.
+Physical remains the default profile.
 
-For the normal variants, the shared wrapper builds upstream objects and a
-matching VM-service v5 SDK, then records input and image hashes:
+The entry builds upstream objects and a matching VM-service v5 SDK, then
+records input and image hashes:
 
 ```sh
 export CAPSTONE_LLVM_BUILD_DIR=/path/to/qualified/compiler-build
@@ -46,14 +47,31 @@ bash capstone/ports/common/application/build-virtual.sh cpython \
   "$CAPSTONE_TMP_ROOT/cpython-virtual"
 ```
 
-Replace `cpython` with `postgres`, `ffmpeg` or `tshark`. The image is
+Replace `cpython` with any of the other seven. The image is
 `OUTPUT/image/APP.dom`; run it with `capstone-vexec`, not the physical launcher.
 The existing source recipes retain their dependency requirements, including
 the PostgreSQL source archive and host Meson for GLib. CPython's distribution
 library and PostgreSQL's cluster/share files must accompany their images.
+`--dry-run` resolves the pipeline and builds nothing; every run leaves the
+resolved pipeline in `OUTPUT/pipeline.json`.
 
-`CPY_SUBLET=1` and `PGSU_NESTED=sublet` select their protected inner allocator
-variants through the wrapper. FFmpeg's pools are protected by the buffer-pool
+**One selector for all eight.** `CAPSTONE_VIRTUAL_LIFETIMES=1` gives the
+port's nested allocator managed lifetimes -- `CDERIVE` on handout, `CREVOKE` on
+release -- and `0`, the default, builds it as released, its blocks from virtual
+mallocng. The entry translates that into the variable the port's own recipe
+reads (`CPY_SUBLET`, `PGSU_NESTED`, `FFAPP_SUBLET`, `TSAPP_SUBLET`,
+`PERLD_SUBLET`, `MRBD_SUBLET`, `SQLITE_HEAP`); those still work, and one that
+contradicts the selector is refused rather than silently losing. memcached is
+the exception: its recipe builds every arm into one output directory, so it
+takes no selector.
+
+Two of the eight -- mruby and SQLite -- have recipes that take an SDK rather
+than building one, and the entry builds it for them, so every image under one
+output directory shares one SDK identity. The other six still build an SDK
+inside their own recipe; `pipeline.json`'s `shared_sdk` says which, because
+that is the remaining difference between the eight.
+
+FFmpeg's pools are protected by the buffer-pool
 port's patch 0003 and measured as a component (`bug-corpora/ffmpeg/pool-repros`).
 Historical memory-study observers remain outside this virtual qualification.
 The inner CPython image (`CPY_SUBLET=1`) revokes every pymalloc block on free:

@@ -24,6 +24,12 @@ compiler configured. Use a fresh directory under `/tmp/capstone`:
 bash capstone/ports/memcached/app/host/build-virtual.sh /tmp/capstone/memcached-virtual
 ```
 
+The shared entry for a virtual build is
+[`ports/common/application/build-virtual.sh`](../../common/application/README.md)
+(`build-virtual.sh memcached <fresh dir>`), which runs this recipe. This
+port's own recipe stays the source of truth for what gets built, and still
+takes its own variables directly.
+
 This rebuilds musl/runtime, libevent, the server, native controls, worker-marker
 and safety variants, and the pthread contract. `CAPSTONE_APPLICATION_PROFILE`
 is set to `virtual`; physical objects cannot be converted by relinking.
