@@ -774,6 +774,166 @@ Both arms' controls behaved as `arms.json` declares, and the fault arm's fired *
 The 18 temporal cases are not in Phase A's scope and this run says nothing about them — not
 MISSED, nothing. That is the allocator seam, and it is next.
 
+## Phase B — BUILD RESULT (2026-10-15): real PHP builds, links and runs, 145 TUs, nothing dropped
+
+`app/build-virtual.sh realphp` builds **PHP**, not an engine with a SAPI of ours standing in for
+it: the Makefile's own `PHP_GLOBAL_OBJS` + `PHP_CLI_OBJS`, **145 translation units** — `main/`
+(26), `main/streams/` (9), `sapi/cli` (2), `TSRM/` (3), `regex/` (4), all 65 of `ext/standard`
+and 39 of `Zend/`. The `php` case keeps working beside it and remains Phase A's column.
+
+It runs. `php -n hello.php` in the guest produces output **byte-identical** to native glibc
+PHP 5.0.0 from the corpus's own pristine build, `print_r` indentation included (`diff` clean,
+12 lines each), with `phpversion()` = 5.0.0, `php_sapi_name()` = cli, and `count`, `print_r`,
+`parse_url` coming from `basic_functions.c`'s real registration rather than a table of ours.
+`php -n -v` exits **1**, and native PHP 5.0.0 exits 1 too — the build reproduces PHP's own
+quirk rather than papering over it.
+
+**The whole PHP-side change is one compiler flag and two configure answers.** Measured, not
+estimated: 143 of 143 TUs compiled on the *first* attempt, and the one failure was neither a
+capability problem nor PHP's.
+
+| what | why | cost |
+|---|---|---|
+| `-D__off64_t=off_t` | `php_config.h` sets `COOKIE_SEEKER_USES_OFF64_T`, whose branch in `main/streams/cast.c:100` declares the seeker as `(void *, __off64_t *, int)` — a POINTER, which is *exactly* musl's `cookie_seek_function_t`. musl simply has no glibc-INTERNAL `__off64_t`, and defines `off64_t` as `off_t`. | none; the alias is type-correct and `fopencookie` is USED, not disabled |
+| `HAVE_RES_NMKQUERY 0`, `HAVE_RES_NSEND 0` | musl 1.2.5 has `res_init`/`res_mkquery`/`res_send`/`res_query`/`res_search` and `dn_expand`/`dn_comp`, but not the reentrant `res_n*`. `ext/standard/dns.h:26` derives `HAVE_DNS_FUNCS` from exactly these two. | `dns_get_record()` and `PHP_MINIT_FUNCTION(dns)` drop out, the way PHP already does on any platform without a reentrant resolver. No corpus case uses them. |
+
+### Four things the plan got wrong, and the plan said to settle them in code
+
+1. **`-UHAVE_MMAP` would have done nothing.** `php_config.h` defines every `HAVE_` *un*conditionally
+   and carries not one `#ifndef` guard, so a `-U` on the command line is overridden by the header.
+   The flag would have been silently ineffective — and it was not needed anyway: **the SDK has
+   `mmap` and `munmap`.** `build-virtual.sh` now asserts the ten symbols the config claims,
+   against the archives, so an SDK that loses one fails at build rather than at link.
+2. **`mail.c` and `proc_open.c` did not need dropping.** The SDK has `fork`, `vfork`,
+   `posix_spawn`, `popen` and `system` — this profile is a Linux process. Dropping them also
+   does not work: `basic_functions.c` references `zif_proc_open`, `zm_startup_proc_open` and
+   `zm_info_mail`, so the exclusion breaks the function table. **Nothing is dropped.**
+3. **`fopencookie` is present too**, so the filtered-stream `FILE*` cast is kept.
+4. **The include path cannot correct the config.** `Zend/zend_config.h:1` and
+   `TSRM/tsrm_config.h:1` include it as `"../main/php_config.h"` — relative to the including
+   FILE, which bypasses every `-I`.
+
+So the tree is a **full mirror**: real directories, symlinked leaves, with `main/php_config.h`
+(and, in seam mode, `Zend/zend_alloc.c`) the only real files. "Byte-identical to the corpus" is
+then not a claim to audit — it is the filesystem, and the build asserts no other real file
+exists. Mirroring only the *top* level does **not** work and fails quietly: with `$T/Zend` a
+symlink to the corpus directory, `zend_config.h`'s own `"../main/php_config.h"` resolves against
+the link TARGET and walks back out to the pristine config, so the correction is ignored and only
+the link tells you. That cost one debugging cycle and is recorded so it costs no more.
+
+### A real toolchain limitation: `-fcommon` crashes the Capstone backend
+
+PHP 5.0.0's Makefile compiles with **`-fcommon`** (`CFLAGS_CLEAN`), and `-fcommon` aborts clang
+on 8 TUs: *"Unknown section kind"*, `UNREACHABLE` at `TargetLoweringObjectFileImpl.cpp:631`,
+reached from `CapstoneAsmPrinter::emitGlobalVariable` (`CapstoneAsmPrinter.cpp:1492`) through
+`SelectSectionForGlobal`. There is no ELF section kind for a **common** symbol, which makes
+sense for this target: a common symbol has no definite size or section until link, and a
+capability bound needs both.
+
+**Not a stale toolchain** — checked rather than assumed: there is no commit touching
+`llvm/lib/Target/Capstone/` or `TargetLoweringObjectFileImpl.cpp` since this clang was built,
+so the staleness the env gate reports is unrelated churn. (The gate still cannot tell a
+revision-only drift from a source drift; that remains open.)
+
+Consequence: `-fno-common`, which turns every tentative definition PHP relied on into a hard
+duplicate. There is exactly **one**, and it is dead: `yytext`, defined in both generated flex
+scanners. In each file line 16 maps `yytext` to the prefixed name, line 349 `#undef`s it (which
+also wipes any `-Dyytext=` from the command line — that attempt failed), line 478 emits a bare
+`char *yytext;`, and line 501 redefines `yytext` as `SCNG(yy_text)`, so every real USE goes to
+the scanner globals and the bare word is never read. `llvm-nm` confirms **no object references
+it undefined**. It is localized with `llvm-objcopy --localize-symbol` in the INI scanner, so the
+file left untouched is PHP's lexer — the one whose codegen the corpus cases exercise — and the
+build asserts the no-cross-reference property first. Not `--allow-multiple-definition`, which
+would also hide the next duplicate, and that one might be real. (`__llvm_static_cap_gct_begin`
+and `_end` appear in four objects but are `W`, so they were never a problem.)
+
+### One image, every arm
+
+`zend_cap_mode()` reads `PHP_CAP_MODE` from the environment, so the seam composes with real
+`sapi/cli` without a line of ours — Phase A's SAPI took the mode as `argv[3]`, which `sapi/cli`
+owns. `run-virtual.py` grew per-run `NAME=VALUE` assignments (and an `--env`), so the spatial
+pair and the three temporal columns are runtime modes over **one 5.08 MB image**, and an arm
+cannot differ in anything but the mode word. All four modes complete `hello.php` and report
+distinct mode lines — the revocation-sanity control, on real PHP:
+
+```
+ZEND_CAP_MODE 0 exact=0 revoke=0     ZEND_CAP_MODE 4 exact=0 revoke=0
+ZEND_CAP_MODE 6 exact=0 revoke=1     ZEND_CAP_MODE 7 exact=1 revoke=1
+```
+
+The image is **5.08 MB**, which is why the physical column could never have run this: the domain
+ceiling was `code + .bss + declared ≤ ~4 MiB`.
+
+### First look at the 7 OS-dependent cases — NOT yet a scored measurement
+
+Pre-registration has **not** been pushed for Phase B, so these are attribution checks against
+ASAN's own recorded sites, not judged verdicts. The scored run with per-arm controls out of
+`arms.json` is the next step, and it is what the numbers in any table must come from.
+
+Six cases, each at `PHP_CAP_MODE=0` (control) and `7` (bound exact, revocation on), argv exactly
+the corpus's own `php -d memory_limit=512M <case>.php`:
+
+| case | ASAN's site | this run | reading |
+|---|---|---|---|
+| CRASH-110 | `ext/standard/url.c:132` | `url.c:132`, cause 28 | Phase A's spatial catch REPRODUCES on real PHP |
+| CRASH-086 | `ext/standard/basic_functions.c:2135` | `basic_functions.c:2135`, cause 24 | newly reachable; same line |
+| CRASH-099 | `Zend/zend_execute_API.c:389` | `zend_execute_API.c:389`, cause 24 | newly reachable; same line |
+| CRASH-112 | `Zend/zend_execute_API.c:389` | `zend_execute_API.c:389`, cause 24 | newly reachable; same line, and its `requires: writable /tmp` is satisfied |
+| CRASH-008 | `ext/standard/datetime.c:440` | `__stpcpy+44`, cause 28 | fault is real but NOT attributed — see below |
+| CRASH-084 | `ext/standard/basic_functions.c:1381` | completed on BOTH arms | out of the denominator — see below |
+
+Every control completed. CRASH-086 landing in `basic_functions.c` is the point of the exercise:
+that file is PHP's function-table registration, and the physical port could not link it at all.
+
+**099 and 112 share a line, and that is correct rather than suspicious.** Two cases faulting at
+one instruction is the signature of a port artefact — it is how the physical port produced four
+false CAUGHTs — so it was checked against the oracle before being believed: **ASAN reports
+`_zval_ptr_dtor Zend/zend_execute_API.c:389` for both**, because both are zval use-after-frees
+that surface at `(*zval_ptr)->refcount--`. The suspicion was right to raise and wrong in fact.
+
+**CRASH-008 is the CRASH-073 category, not a miss.** `datetime.c:440` is
+`strcat(Z_STRVAL_P(return_value), tmp_buff)`, so the over-write is performed BY a shared copy
+primitive, and the pc lands in musl-capstone's bounds-safe `__stpcpy` with no line info. The
+harness already has the mechanism for this — `COPYCASE` plus a diagnostic audit arm that halts
+at the allocator boundary with the requested length and what the source capability authorises —
+and CRASH-008 needs it. Until then it is `NO-READING unattributed`, which is the gate working.
+
+**CRASH-084 is out of the denominator on a libc behavioural difference**, and this is a finding
+rather than a failure. The case is bug #67399: `putenv("=")` then `putenv("=foo")`. The chain
+needs the first call to install a string with an EMPTY variable name into `environ`, so that the
+second call's `zend_hash_del` → `php_putenv_destructor` → `efree(pe->putenv_string)`
+(`basic_functions.c:922`) leaves `environ` pointing at freed memory for the scan at
+`basic_functions.c:1381` to read. glibc's `putenv` finds `'='` at index 0 and calls
+`__add_to_environ`, which installs it. **musl's does not** — `src/env/putenv.c`:
+
+```c
+int putenv(char *s) {
+    size_t l = __strchrnul(s, '=') - s;
+    if (!l || !s[l]) return unsetenv(s);     /* "=" gives l == 0 */
+    return __putenv(s, l, 0);
+}
+```
+
+so `"="` is routed to `unsetenv` and never enters `environ`. The precondition for the
+use-after-free does not exist on this libc, so there is nothing to catch — not a Capstone miss
+and not a port defect. Native pristine PHP also exits 0 silently here, which is consistent with
+the population being ASAN-blind. This is the same KIND of resolution as CRASH-057: out of the
+denominator on evidence, named, with the evidence cited.
+
+### What Phase B has not done yet
+
+- **The scored measurement.** Pre-register to the lane branch, then run all 31 through
+  `run-cases.py` with the arms and controls `arms.json` declares, and judge with `verdicts.py`.
+  Nothing above is a verdict.
+- **CRASH-008's audit arm** (the `COPYCASE` route), and **CRASH-092 / CRASH-100**, which need a
+  second process in the guest; CRASH-100 additionally needs shrink-stack.
+- **`PHP_VIRTUAL_SHRINK_STACK=1` measured.** The flag is wired and off by default. It is its own
+  variable and the 23 known cases get re-measured with it on before anything is said about the
+  stack class.
+- **The 24 cases Phase A measured, re-measured on real PHP.** Phase A's verdicts were taken
+  with our SAPI; agreement on real PHP is what makes the two columns comparable, and CRASH-110
+  is the only one checked so far.
+
 ## Phase B — real PHP
 
 The corpus tree is **already configured** (`main/php_config.h`, `main/build-defs.h`,

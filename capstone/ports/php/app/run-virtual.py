@@ -36,13 +36,29 @@ MARK = "VM_EXIT"
 KERNEL_LINE = re.compile(r"^\[\s*\d+\.\d+\]")
 
 
-def guest_script(runs):
-    """runs: list of (name, argv-string). One capstone-vexec invocation each."""
+def guest_script(runs, env=()):
+    """runs: list of (name, argv-string). One capstone-vexec invocation each.
+
+    env: NAME=VALUE pairs exported before the runs. This is how an arm that is a RUNTIME mode
+    reaches the application when the application is real PHP: Phase A's SAPI took the seam mode
+    as argv[3], but sapi/cli owns argv, so zend_cap_mode()'s other source -- PHP_CAP_MODE in the
+    environment -- is the only route. One guest per arm, so the exports cannot leak across arms.
+    """
     lines = ["#!/bin/sh", "cd /mnt/vm || exit 1", "insmod capstone_vm.ko || exit 1",
              "export CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1"]
+    for pair in env:
+        lines.append(f"export {pair}")
     for name, argv in runs:
+        # Leading NAME=VALUE tokens in the argv become a per-RUN environment, the way they
+        # would in any shell. Needed because an arm can be a runtime mode (PHP_CAP_MODE) while
+        # the image is shared, and without this every arm would need its own 30 s boot.
+        assignments = []
+        words = argv.split()
+        while words and re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*=[^ ]*", words[0]):
+            assignments.append(words.pop(0))
+        prefix = ("env " + " ".join(assignments) + " ") if assignments else ""
         lines += [f"echo {MARK}_BEGIN:{name}",
-                  f"./capstone-vexec {argv} 2>&1",
+                  f"{prefix}./capstone-vexec {' '.join(words)} 2>&1",
                   f"echo {MARK}:{name}:$?"]
     lines += ["echo PHP_VIRTUAL_RUNNER_DONE", ""]
     return "\n".join(lines)
@@ -60,6 +76,8 @@ def main():
                    help="a run: NAME=<argv passed to capstone-vexec>, repeatable, in order")
     p.add_argument("--extra", type=Path, action="append", default=[],
                    help="extra file to stage into /mnt/vm (e.g. a .php trigger)")
+    p.add_argument("-e", "--env", action="append", default=[], metavar="NAME=VALUE",
+                   help="exported in the guest before every run (e.g. PHP_CAP_MODE=6)")
     p.add_argument("--memory", default="2G")
     p.add_argument("--timeout", type=int, default=600)
     p.add_argument("--record", type=Path)
@@ -95,7 +113,10 @@ def main():
         (stage / img.name).chmod(0o755)
     for extra in a.extra:
         shutil.copyfile(extra, stage / extra.name)
-    (stage / "gate.sh").write_text(guest_script(runs))
+    for pair in a.env:
+        if "=" not in pair:
+            sys.exit(f"--env wants NAME=VALUE, got {pair!r}")
+    (stage / "gate.sh").write_text(guest_script(runs, a.env))
 
     disk = work / "stage.ext4"
     with disk.open("wb") as f:

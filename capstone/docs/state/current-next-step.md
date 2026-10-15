@@ -1,3 +1,62 @@
+2026-10-15 — **Phase B: real PHP builds, links and runs on virtual Capstone — 145 translation
+units, nothing dropped, and the whole PHP-side change is one compiler flag and two configure
+answers.**
+
+`app/build-virtual.sh realphp` builds the Makefile's own `PHP_GLOBAL_OBJS` + `PHP_CLI_OBJS`:
+`main/` (26 TUs, PHP's runtime host), `main/streams/` (9), `sapi/cli` (2), `TSRM/`, `regex/`,
+ALL 65 of `ext/standard` and 39 of `Zend/`. The ~360-line SAPI of ours is gone; PHP's own
+`main()` runs. Output is BYTE-IDENTICAL to native glibc PHP 5.0.0 from the corpus's pristine
+build (`diff` clean), and `php -n -v` exits 1 exactly as native PHP does.
+
+The PHP-side change: `-D__off64_t=off_t` (musl's `cookie_seek_function_t` IS the pointer form
+PHP's `COOKIE_SEEKER_USES_OFF64_T` branch declares; only the glibc-internal typedef name is
+missing) plus `HAVE_RES_NMKQUERY`/`HAVE_RES_NSEND` set to 0 (musl has no reentrant resolver).
+143 of 143 TUs compiled on the FIRST attempt.
+
+FOUR PLAN ASSUMPTIONS WERE WRONG, all now settled in code. `-UHAVE_MMAP` would have done
+nothing — `php_config.h` defines every HAVE_ unconditionally with no `#ifndef` guard, so the
+header overrides the command line; and the SDK HAS `mmap`, `fork`, `vfork`, `posix_spawn`,
+`popen`, `system` and `fopencookie`, so `mail.c` and `proc_open.c` are NOT dropped (dropping
+them also breaks `basic_functions.c`'s function table). The include path cannot correct the
+config either: `Zend/zend_config.h:1` includes it as `"../main/php_config.h"`, relative to the
+including file. Hence a full MIRROR of the tree — real directories, symlinked leaves, only
+`php_config.h` and (in seam mode) `zend_alloc.c` real, asserted. A TOP-LEVEL-ONLY symlink farm
+fails QUIETLY: `../main/php_config.h` resolves against the link target and walks back out to
+the pristine config.
+
+A REAL TOOLCHAIN LIMITATION: PHP's own `-fcommon` crashes clang on 8 TUs — "Unknown section
+kind", UNREACHABLE at `TargetLoweringObjectFileImpl.cpp:631`, from
+`CapstoneAsmPrinter::emitGlobalVariable`. There is no ELF section kind for a COMMON symbol, and
+a capability bound needs the definite size and section a common symbol lacks until link. Not
+staleness: no commit touches `llvm/lib/Target/Capstone/` since this clang was built. So
+`-fno-common`, which leaves exactly ONE duplicate — `yytext`, a DEAD global in both flex
+scanners (line 349 `#undef`s it, which is also why `-Dyytext=` silently failed; line 501 sends
+every real use to `SCNG(yy_text)`). Localized with `llvm-objcopy` in the INI scanner, after
+asserting no object references it across a TU boundary.
+
+ONE IMAGE SERVES EVERY ARM now: `zend_cap_mode()` reads `PHP_CAP_MODE` from the environment, so
+the seam composes with real `sapi/cli` untouched, and `run-virtual.py` gained per-run
+`NAME=VALUE` assignments. All four modes complete and report distinct mode lines on real PHP.
+The image is 5.08 MB — which is why the physical column could never have run this at all.
+
+FIRST LOOK AT THE 7, AND IT IS NOT A SCORED MEASUREMENT: no pre-registration has been pushed,
+so these are attribution checks against ASAN's own recorded sites, not verdicts. CRASH-086
+(`basic_functions.c:2135`), CRASH-099 and CRASH-112 (both `zend_execute_API.c:389`) each fault
+at ASAN's own line, and CRASH-110 reproduces Phase A's `url.c:132` on real PHP; every control
+completed. 099 and 112 sharing a line was checked against the oracle before being believed —
+ASAN reports that same line for both, because both surface at `(*zval_ptr)->refcount--`.
+CRASH-008 faults in musl-capstone's `__stpcpy` because `datetime.c:440` is a `strcat`: the
+CRASH-073 category, needing the `COPYCASE` audit arm, `unattributed` until then. CRASH-084 is
+OUT OF THE DENOMINATOR on a libc difference — musl's `putenv("=")` has `l == 0` and routes to
+`unsetenv`, so the empty-named string never enters `environ` and the use-after-free has no
+precondition; glibc installs it. Evidence: `musl-1.2.5/src/env/putenv.c`.
+
+Next, in order: push the Phase B pre-registration to the lane branch, then the scored run of all
+31 through `run-cases.py` against `arms.json`'s arms and controls; CRASH-008's audit arm;
+CRASH-092 and CRASH-100 (a second process in the guest); `PHP_VIRTUAL_SHRINK_STACK=1` measured
+as its own variable; and the 24 Phase A cases re-measured on real PHP, which is what makes the
+two columns comparable rather than merely adjacent.
+
 2026-10-13 — **The Sublet allocator seam is built and measured: 23 of the 23 reachable PHP cases
 are caught on virtual Capstone, and 9 of them need per-object revocation specifically.**
 

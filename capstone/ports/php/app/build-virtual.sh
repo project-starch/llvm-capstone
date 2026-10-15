@@ -369,5 +369,228 @@ case "$WHAT" in
     fi
     sha256sum "$IMG"
     ;;
-  *) echo "usage: build-virtual.sh [probe|hier-probe|seam-probe|inert|php]" >&2; exit 2 ;;
+  realphp)
+    # ---- PHASE B: REAL PHP -------------------------------------------------------------
+    #
+    # Everything the Makefile builds: PHP_GLOBAL_OBJS + PHP_CLI_OBJS, 145 translation units,
+    # including main/ (PHP's runtime host), main/streams/, sapi/cli, TSRM/, regex/ and ALL 65
+    # of ext/standard. The `php` case above links 34 Zend TUs, 8 of ext/standard and a ~360-line
+    # SAPI of ours standing in for main/'s 12,828; this case links PHP.
+    #
+    # NOTHING IS DROPPED AND NOTHING IS STUBBED. The plan expected to exclude ext/standard's
+    # mail.c and proc_open.c as the only fork() users and to pass -UHAVE_MMAP; neither is
+    # needed, because this profile is a Linux process and the SDK's musl has fork, vfork,
+    # posix_spawn, popen, system, mmap, munmap AND fopencookie. Those are asserted below rather
+    # than assumed -- an SDK that loses one should fail here, not at link.
+    P=${PHP_SRC:-/corpus/build/php-5.0.0}
+    [ -d "$P/Zend" ] || { echo "PHP source not at $P -- corpus not mounted?" >&2; exit 2; }
+    [ -f "$P/Makefile" ] || { echo "no $P/Makefile -- the TU list has no source of truth" >&2; exit 2; }
+    SEAM="$R/capstone/ports/php/zend-alloc/sublet"
+    PATCHES="$R/capstone/ports/php/zend-alloc/patches"
+    MODE=${PHP_REALPHP_ALLOC:-seam}
+    case "$MODE" in
+      seam|stock) ;;
+      *) echo "  PHP_REALPHP_ALLOC=$MODE? (seam|stock)" >&2; exit 2 ;;
+    esac
+    B="$OUT/realphp/$MODE"
+    OBJ="$B/obj"; LOG="$B/log"; T="$B/tree"
+    rm -rf "$B"; mkdir -p "$OBJ" "$LOG" "$T"
+
+    # ---- the SDK really does have what real PHP needs --------------------------------
+    # Checked against the archives, not against a memory of what musl carries. Each of these
+    # is a configure answer php_config.h asserts, and a missing one changes the TU list.
+    : > "$B/libc-syms.txt"
+    find "$OUT" -name '*.a' -print 2>/dev/null | while read -r _a; do
+      "$CAPSTONE_LLVM_BIN/llvm-nm" --defined-only "$_a" 2>/dev/null | awk '$1!="U"{print $NF}'
+    done | sort -u > "$B/libc-syms.txt"
+    for _s in fork vfork posix_spawn popen system mmap munmap fopencookie dn_expand dn_skipname; do
+      grep -qx "$_s" "$B/libc-syms.txt" \
+        || { echo "  the SDK has no '$_s' -- php_config.h claims it; re-check the TU list" >&2; exit 2; }
+    done
+
+    # ---- the source overlay ----------------------------------------------------------
+    # php_config.h is configure OUTPUT, produced against the host's GLIBC. It defines every
+    # HAVE_ unconditionally and carries not one #ifndef guard, so -U/-D on the command line is
+    # OVERRIDDEN by the header and does nothing at all -- which is why the plan's -UHAVE_MMAP
+    # would have been silently ineffective. Nor can the include path intercept it:
+    # Zend/zend_config.h:1 and TSRM/tsrm_config.h:1 include it as "../main/php_config.h", a
+    # path relative to the including FILE, which bypasses every -I. The only way PHP sees a
+    # corrected answer is for the file at that path to be ours.
+    #
+    # So: a full MIRROR of the tree -- real directories, symlinked leaves. Mirroring only the
+    # top level does NOT work and fails quietly: with $T/Zend a symlink to the corpus
+    # directory, zend_config.h's own "../main/php_config.h" resolves against the link TARGET
+    # and walks back out to the pristine config, so the correction is ignored and only the
+    # link tells you. With real directories every relative include stays inside $T.
+    #
+    # Because the leaves are symlinks, "byte-identical to the corpus" is not a claim to audit.
+    # It is the filesystem, and the assertion below holds it that way.
+    while IFS= read -r _d; do mkdir -p "$T/${_d#$P/}"; done < <(find "$P" -mindepth 1 -type d)
+    while IFS= read -r _f; do ln -s "$_f" "$T/${_f#$P/}"; done < <(find "$P" -mindepth 1 -type f)
+
+    # THE CROSS-CONFIGURE DELTA, and it is two answers. musl 1.2.5 has res_init, res_mkquery,
+    # res_send, res_query, res_search, dn_expand and dn_comp, but NOT the reentrant res_n*
+    # variants glibc carries. ext/standard/dns.h:26 derives HAVE_DNS_FUNCS from exactly these
+    # two, so correcting them drops dns_get_record() and PHP_MINIT_FUNCTION(dns) the way PHP
+    # already does on any platform without a reentrant resolver -- a configuration PHP
+    # supports, not a stub of ours. Each is defined FOUR times in the generated config.
+    rm "$T/main/php_config.h"
+    sed -e 's|^#define HAVE_RES_NMKQUERY 1$|#define HAVE_RES_NMKQUERY 0  /* musl 1.2.5: no reentrant resolver */|' \
+        -e 's|^#define HAVE_RES_NSEND 1$|#define HAVE_RES_NSEND 0  /* musl 1.2.5: no reentrant resolver */|' \
+        "$P/main/php_config.h" > "$T/main/php_config.h"
+    _delta=$(diff "$P/main/php_config.h" "$T/main/php_config.h" | grep -c '^<' || true)
+    [ "$_delta" -eq 8 ] || { echo "  php_config.h: corrected $_delta answers, expected 8 (4 duplicate defines each) -- the config's shape changed" >&2; exit 2; }
+    echo "  php_config.h: 2 configure answers corrected (8 defines), everything else symlinked"
+
+    # ---- the allocator seam ----------------------------------------------------------
+    # The seam patches Zend/zend_alloc.c, which in the mirror means replacing one symlink with
+    # the patched copy. ONE IMAGE SERVES EVERY ARM: zend_cap_mode() reads PHP_CAP_MODE from the
+    # environment, so the spatial pair (bound rounded vs exact) and the three temporal columns
+    # (nothing revoked / per block / per object) are all runtime modes over these same bytes.
+    # Phase A needed a different image per spatial arm; this does not, so an arm cannot differ
+    # in anything but the mode word.
+    SUP=()
+    if [ "$MODE" = seam ]; then
+      rm "$T/Zend/zend_alloc.c"
+      cp "$P/Zend/zend_alloc.c" "$T/Zend/zend_alloc.c"
+      patch -s -p1 -d "$T" < "$PATCHES/php-5.0.0-0001-zend-alloc-sublet-hooks.patch" \
+        || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
+      SUP=("$SEAM/zend-cap-blocks.c" "$SEAM/zend-cap-backing.c" "$HERE/php_virtual_lower.c")
+      echo "  allocator: SEAM -- zend_alloc.c patched (8 guarded hunks), per-emalloc lifetimes"
+    else
+      echo "  allocator: STOCK -- pristine zend_alloc.c over mallocng, the honest-gap column"
+    fi
+    # Only the files we deliberately replaced may be real; everything else must still BE the
+    # corpus file. Without this the overlay could silently become a fork of PHP.
+    _reals=$(find "$T" -type f ! -name php_config.h ! -name zend_alloc.c | wc -l)
+    [ "$_reals" -eq 0 ] || { echo "  overlay has $_reals real files beyond the two replaced:" >&2
+                             find "$T" -type f ! -name php_config.h ! -name zend_alloc.c >&2; exit 2; }
+
+    # ---- the TU list, from the Makefile ----------------------------------------------
+    # PHP_GLOBAL_OBJS and PHP_CLI_OBJS are what `make` builds. Read, not retyped: a list of
+    # real PHP that lives in our repo would drift from real PHP and the drift would be invisible.
+    { sed -n '/^PHP_GLOBAL_OBJS *=/p' "$P/Makefile"; sed -n '/^PHP_CLI_OBJS *=/p' "$P/Makefile"; } \
+      | grep -o '[A-Za-z_0-9/]*\.lo' | sed 's/\.lo$/.c/' | sort -u > "$B/tus.txt"
+    TU_N=$(wc -l < "$B/tus.txt")
+    [ "$TU_N" -ge 140 ] || { echo "  only $TU_N TUs read from the Makefile -- PHP_GLOBAL_OBJS moved" >&2; exit 2; }
+    # The point of this case is that PHP's own host is linked. If these are absent we are
+    # building the Phase A engine again under a new name.
+    for _r in sapi/cli/php_cli.c main/main.c main/php_ini.c main/streams/streams.c \
+              ext/standard/basic_functions.c ext/standard/datetime.c TSRM/TSRM.c; do
+      grep -qx "$_r" "$B/tus.txt" \
+        || { echo "  the Makefile's list has no $_r -- this is not real PHP" >&2; exit 2; }
+    done
+    while IFS= read -r _f; do
+      [ -f "$T/$_f" ] || { echo "  no source for $_f" >&2; exit 2; }
+    done < "$B/tus.txt"
+    echo "  TUs: $TU_N (the Makefile's own list, nothing dropped)"
+
+    # ---- flags -----------------------------------------------------------------------
+    # -D__off64_t=off_t is the ONLY PHP-side compiler change, and it is type-correct rather
+    # than a workaround. php_config.h sets COOKIE_SEEKER_USES_OFF64_T, whose branch in
+    # main/streams/cast.c declares the seeker as (void *, __off64_t *, int) -- a POINTER, which
+    # is exactly musl's cookie_seek_function_t; musl simply has no glibc-INTERNAL __off64_t
+    # typedef, and it defines off64_t as off_t. So fopencookie is used, not disabled.
+    #
+    # -fno-common, NOT PHP's own -fcommon, and this is forced. PHP 5.0.0's Makefile compiles
+    # with -fcommon, but -fcommon CRASHES this backend: CapstoneAsmPrinter::emitGlobalVariable
+    # routes every global through SelectSectionForGlobal, and there is no ELF section kind for
+    # a common symbol -- "Unknown section kind", UNREACHABLE at
+    # TargetLoweringObjectFileImpl.cpp:631, on 8 TUs. That is a real limitation and not a stale
+    # toolchain: there is no commit touching llvm/lib/Target/Capstone since this clang was
+    # built. It also makes sense -- a common symbol has no definite size or section until link,
+    # and a capability bound needs both.
+    #
+    # -Wno-implicit-int -Wno-implicit-function-declaration -Wno-format-security come from the
+    # Makefile's own CFLAGS_CLEAN. They are warnings, so they change no codegen; they are here
+    # so PHP's pre-C99 source is not read as our build being broken.
+    CF=(-O0 -std=gnu89 -fno-common -gline-tables-only
+        -D__off64_t=off_t
+        -Wno-implicit-int -Wno-implicit-function-declaration -Wno-format-security
+        -I"$T" -I"$T/Zend" -I"$T/main" -I"$T/TSRM" -I"$T/ext" -I"$T/ext/standard"
+        -I"$T/regex" -I"$T/sapi/cli")
+    if [ "$MODE" = seam ]; then CF+=(-DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone"); fi
+    # SHRINK-STACK: its own variable, as the plan requires. The 4 MiB domain ceiling that
+    # forced it off physically is gone, and it is what makes a stack-object defect (CRASH-100,
+    # stack-use-after-return) catchable at all -- but it is not free and must be measured
+    # against the known cases before anything is claimed about the stack class.
+    if [ "${PHP_VIRTUAL_SHRINK_STACK:-0}" = 1 ]; then
+      echo "  shrink-stack: ON (stack objects bounded)"
+    else
+      CF+=(-mllvm -capstone-shrink-stack=false)
+      echo "  shrink-stack: off (the comparison build)"
+    fi
+    # shellcheck disable=SC2206
+    [ -n "${EXTRA_CF:-}" ] && CF+=(${EXTRA_CF})
+
+    # ---- compile ---------------------------------------------------------------------
+    OBJS=(); fails=0
+    echo "  compiling $TU_N PHP TUs${SUP[0]+ plus ${#SUP[@]} support} ..."
+    while IFS= read -r _f; do
+      _o="$OBJ/$(echo "$_f" | tr '/' '_' | sed 's/\.c$/.o/')"
+      if "$CC" "${CF[@]}" -c "$T/$_f" -o "$_o" 2>"$LOG/$(echo "$_f" | tr '/' '_').log"
+      then OBJS+=("$_o")
+      else echo "    FAILED $_f"; fails=$((fails + 1)); fi
+    done < "$B/tus.txt"
+    for _s in ${SUP[0]+"${SUP[@]}"}; do
+      _b=$(basename "$_s" .c)
+      if "$CC" "${CF[@]}" -c "$_s" -o "$OBJ/sup_$_b.o" 2>"$LOG/sup_$_b.log"
+      then OBJS+=("$OBJ/sup_$_b.o")
+      else echo "    FAILED $_b"; fails=$((fails + 1)); fi
+    done
+    echo "  compiled ${#OBJS[@]} objects, $fails failed"
+    if [ "$fails" -gt 0 ]; then
+      grep -l "error:" "$LOG"/*.log 2>/dev/null | head -8 | while read -r _l; do
+        echo "    == $(basename "$_l" .log)" >&2
+        grep "error:" "$_l" | head -4 | sed 's/^/       /' >&2
+      done
+      exit 1
+    fi
+
+    # ---- the one duplicate symbol ----------------------------------------------------
+    # flex emits yytext as a plain global in BOTH generated scanners. In each file line 16 maps
+    # yytext to the prefixed name, line 349 #undefs it (which also wipes any -Dyytext= from the
+    # command line), line 478 then emits a bare `char *yytext;`, and line 501 redefines yytext
+    # as SCNG(yy_text) -- so every real USE goes to the scanner globals and the bare word is
+    # dead. PHP's own build merges the two via -fcommon, which this backend cannot do.
+    #
+    # It is localized in the INI scanner, so the file left untouched is PHP's lexer -- the one
+    # whose codegen the corpus cases actually exercise. NOT --allow-multiple-definition, which
+    # would also hide the next duplicate, and that one might be real. The assertion first: if
+    # any object ever references yytext across a TU boundary, localizing it would break the
+    # link, and we want to hear that here rather than debug it in the guest.
+    _refs=$("$CAPSTONE_LLVM_BIN/llvm-nm" --undefined-only "${OBJS[@]}" 2>/dev/null | awk '$2=="yytext"' | wc -l)
+    [ "$_refs" -eq 0 ] || { echo "  yytext is referenced across a TU boundary now ($_refs refs) -- do not localize it" >&2; exit 2; }
+    "$CAPSTONE_LLVM_BIN/llvm-objcopy" --localize-symbol=yytext "$OBJ/Zend_zend_ini_scanner.o" \
+      || { echo "  could not localize the ini scanner's dead yytext" >&2; exit 1; }
+
+    # ---- link ------------------------------------------------------------------------
+    IMG="$OUT/realphp/php-real-$MODE.dom"
+    echo "  linking ..."
+    "$CC" "${CF[@]}" "${OBJS[@]}" -lm -o "$IMG" 2>"$LOG/link.log" \
+      || { echo "  LINK FAILED"; grep -o "undefined symbol: [A-Za-z_0-9]*" "$LOG/link.log" \
+             | sed 's/undefined symbol: //' | sort -u | sed 's/^/    U /' >&2
+           grep -i error "$LOG/link.log" | grep -v "undefined symbol" | sort -u | head >&2; exit 1; }
+    echo "  built $IMG"
+    "$CAPSTONE_LLVM_BIN/llvm-objdump" -h "$IMG" 2>/dev/null \
+      | awk '$2==".text"||$2==".rodata"||$2==".data"||$2==".bss"{printf "    %-10s %d\n",$2,strtonum("0x" $3)}'
+    ls -l "$IMG" | awk '{print "    image bytes: " $5}'
+    # C-56: run-domain-smoke.py refuses an image referencing an undefined weak symbol, and it
+    # refuses it AFTER a boot. Cheaper here.
+    undef_weak=$("$CAPSTONE_LLVM_BIN/llvm-nm" --undefined-only "$IMG" 2>/dev/null | awk '$1=="w"{print $2}')
+    if [ -n "$undef_weak" ]; then
+      echo "  UNDEFINED WEAK symbols (C-56 will refuse this image):" >&2
+      printf '    %s\n' $undef_weak >&2; exit 1
+    fi
+    # The seam is a runtime mode, so the image must at least CONTAIN the revoke encoding --
+    # otherwise every temporal column would read the same and all three would look like
+    # "nothing revoked". The same gate run-cases.py applies before it believes a pair.
+    if [ "$MODE" = seam ]; then
+      _rev=$("$CAPSTONE_LLVM_BIN/llvm-objdump" -d "$IMG" 2>/dev/null | grep -c '\brevoke\b')
+      [ "$_rev" -gt 0 ] || { echo "  the seam image contains NO revoke instruction" >&2; exit 1; }
+      echo "    revoke instructions: $_rev"
+    fi
+    sha256sum "$IMG"
+    ;;
+  *) echo "usage: build-virtual.sh [probe|hier-probe|seam-probe|inert|php|realphp]" >&2; exit 2 ;;
 esac
