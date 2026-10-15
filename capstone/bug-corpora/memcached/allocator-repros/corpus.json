@@ -16,7 +16,9 @@
     "native-detect",
     "native-fix-differential",
     "virtual-malloc",
-    "virtual-nested-pools"
+    "virtual-nested-pools",
+    "silicon-mc-stock",
+    "silicon-mc-sublet"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -48,10 +50,14 @@
   "inventory": "capstone/docs/ref/memcached-allocator-defect-triage.md",
   "arm_configurations": {
     "virtual-malloc": "virtual-memcached-stock",
-    "virtual-nested-pools": "virtual-memcached-sublet"
+    "virtual-nested-pools": "virtual-memcached-sublet",
+    "silicon-mc-stock": "silicon-memcached-stock",
+    "silicon-mc-sublet": "silicon-memcached-sublet"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
+    "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools",
+    "silicon-mc-stock": "results/2026-10-16-silicon/silicon-mc-stock",
+    "silicon-mc-sublet": "results/2026-10-16-silicon/silicon-mc-sublet"
   }
 }

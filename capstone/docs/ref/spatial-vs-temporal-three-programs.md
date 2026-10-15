@@ -527,11 +527,11 @@ How each mechanism reads, and why it misses what it misses:
   faults with **cause 24** at the labelled probe. **QEMU only:** capstone-qemu reloads a revoked
   capability untagged (ISSUES Q-11), hence cause 24. On silicon an access through a revoked capability
   traps with cause 25 (the stale-access arm on `caplifive_sublet_d93a8d66b`, 2026-10-16). These 48 are
-  the emulator's readings. On silicon, 30 of the cases have since run under allocators that also revoke
+  the emulator's readings. On silicon, 35 of the cases have since run under allocators that also revoke
   (the 26 plain-temporal ones on level0 with per-object lifetimes, FFmpeg's 4 pool cases on the
-  protected pools), and all 30 trap with cause 25 at the labelled probe (`bug-corpora` arms
-  `silicon-lifetimes` and `silicon-pool-sublet`, 2026-10-16). memcached's allocator cases and wmem's have
-  not been read on silicon as of 2026-10-16.
+  protected pools, memcached's 5 slab and cache cases under patch 0006), and all 35 trap with cause 25
+  at the labelled probe (`bug-corpora` arms `silicon-lifetimes`, `silicon-pool-sublet` and
+  `silicon-mc-sublet`, 2026-10-16). wmem's have not been read on silicon as of 2026-10-16.
   wmem case 12 is caught by the chunk port
   (`sublet-chunks`); the region-granular `sublet` build completes it.
 - **Capstone + Sublet, spatial 57/70 — the same 57 as bounds only.** Revocation has nothing to fire

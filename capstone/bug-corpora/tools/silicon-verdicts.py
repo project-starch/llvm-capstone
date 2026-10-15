@@ -21,7 +21,10 @@ case with tools/verdicts.py exactly as the QEMU arms are judged. It writes one b
 
 Per case:
 - The image's sha256 must equal the matrix row's.
-- The fixed run must print `VERDICT FIXED` and exit 0. Otherwise the case is NO-READING control-failed.
+- The fixed run must print `VERDICT FIXED` and exit 0. Otherwise the case is NO-READING control-failed, and the note
+  names the fixed run's fault if it had one.
+- A buggy run that exits 75 refused its own setup (the case's CHECK printed CONTROL-FAILED): NO-READING control-failed,
+  as tools/run-virtual-cases.py reads the same exit.
 - The buggy run's `case=N arm=buggy` line (optionally followed by more fields) is the reach marker.
 - Its capstone-exec fault line is resolved with the image's own symbols (verdicts.Symbols), and attributed to the
   labelled probe (the corpus PROBE rule) or to a function the case declares (`fault_sites`).
@@ -44,7 +47,10 @@ import verdicts as v  # noqa: E402
 
 PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
 BLOCK = re.compile(r"^CORPUS-RUN (\S+) BEGIN$(.*?)^CORPUS-RUN \1 END kind=(\w+) value=(-?\d+)$", re.M | re.S)
-MATRIX_VERDICT = {"CAUGHT": v.CAUGHT, "DEFECT-REPRODUCED": v.MISSED}
+# FIXED-ARM-FAILED (the fixed run did not read FIXED) and CONTROL-FAILED (the buggy run refused its own setup, exit
+# 75) are the board's names for runs that are not readings.
+MATRIX_VERDICT = {"CAUGHT": v.CAUGHT, "DEFECT-REPRODUCED": v.MISSED, "FIXED-ARM-FAILED": v.NO_READING,
+                  "CONTROL-FAILED": v.NO_READING}
 
 
 def blocks(transcript):
@@ -63,7 +69,9 @@ def control_observed(block, symbols):
     if fault:
         return "fault", f"cause={fault.cause} pc={fault.pc:#x} in {fault.symbol}+{fault.offset:#x}"
     if kind == "exit" and value == 0:
-        line = next((l for l in body.splitlines() if l.startswith("CONTROL ")), "exit 0")
+        # The control's result line (`CONTROL clean RETURNED 1`), not its opening `CONTROL clean BEGIN`.
+        lines = [l for l in body.splitlines() if l.startswith("CONTROL ")]
+        line = next((l for l in lines if "RETURNED" in l), lines[-1] if lines else "exit 0")
         return "complete", line.strip()
     return "none", f"end kind={kind} value={value}"
 
@@ -138,7 +146,14 @@ def main():
         fbody, fkind, fval = fixed
         if not ("VERDICT FIXED" in fbody and fkind == "exit" and fval == 0):
             obs.infra = "control-failed"
-            obs.notes = f"the fixed run did not print VERDICT FIXED and exit 0 (end kind={fkind} value={fval})"
+            ffault = v.domain_fault(fbody, v.Symbols(a.llvm_bin, image))
+            obs.notes = (f"the fixed run did not print VERDICT FIXED and exit 0 (end kind={fkind} value={fval})"
+                         + (f"; it faulted cause={ffault.cause} pc={ffault.pc:#x} in {ffault.symbol}+{ffault.offset:#x}"
+                            if ffault else ""))
+        elif buggy[1] == "exit" and buggy[2] == 75:
+            obs.infra = "control-failed"
+            obs.notes = next((l.strip() for l in buggy[0].splitlines() if "CONTROL-FAILED" in l),
+                             "exit 75: the case refused its own setup (a CHECK)") + "; buggy run end kind=exit value=75"
         else:
             body, kind, value = buggy
             marker = re.search(r"^case=(\d+) arm=buggy(?: .*)?$", body, re.M)  # the carved driver appends carve=<mode>

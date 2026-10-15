@@ -181,13 +181,13 @@ for it. (What ran on the board, and what it read, is section 7.)
 - **(c) Order.** The plain corpora first, then the nested ones (proposed). Or both together, now that CDERIVE/CREVOKE
   are on silicon.
 
-## 7. Read on silicon (sets 1-3, 2026-10-16)
+## 7. Read on silicon (sets 1-4, 2026-10-16)
 
-The board lane ran three sets on `caplifive_sublet_d93a8d66b`, each pre-registered before its boot:
-`bug-corpora/silicon-runs/2026-10-16-plain` (`ffd2a5173d1c`), `-subobject-pool` (`2c53d5641b72`) and `-carved`
-(`39d21c614605`). `tools/silicon-verdicts.py` re-reads each run from the board transcript, checks every image's
+The board lane ran four sets on `caplifive_sublet_d93a8d66b`, each pre-registered before its boot:
+`bug-corpora/silicon-runs/2026-10-16-plain` (`ffd2a5173d1c`), `-subobject-pool` (`2c53d5641b72`), `-carved`
+(`39d21c614605`) and `-nested` (`06f0b29f0463`). `tools/silicon-verdicts.py` re-reads each run from the board transcript, checks every image's
 hash against the board matrix, and judges it as the QEMU arms are judged. The verdicts are in each corpus's
-`case.json`, from the bundles under `results/2026-10-16-silicon/`. Every row read as pre-registered.
+`case.json`, from the bundles under `results/2026-10-16-silicon/`. Every row read as pre-registered (set 4: every outcome and site; one cause differs, below).
 
 | corpus | rows | `silicon-level0` (bounds only) | revoking arm | further arm |
 |---|---:|---|---|---|
@@ -196,9 +196,21 @@ hash against the board matrix, and judges it as the QEMU arms are judged. The ve
 | ffmpeg/subobject-repros | 9 | 9 MISSED | `silicon-lifetimes`: 9 MISSED | `silicon-subobject` (member bounds): 7 CAUGHT, 2 MISSED |
 | ffmpeg/pool-repros | 4 | | `silicon-pool-sublet` (protected pools): 4 CAUGHT, cause 25 | `silicon-pool-stock`: 4 MISSED |
 | ffmpeg/carved-repros | 13 | 13 MISSED | `silicon-carve-sublet` (CDERIVE carve): 13 CAUGHT, cause 28 | `silicon-carve-bounds` (SHRINK carve): 13 CAUGHT, cause 28 |
+| memcached/allocator-repros | 9 | | `silicon-mc-sublet` (patch 0006): 00-04 CAUGHT, cause 25; 06-07 CAUGHT, cause 28; 05 and 08 no reading | `silicon-mc-stock`: 00-07 MISSED; 08 CAUGHT, cause 28 at its declared site |
+| ffmpeg/plane-repros | 1 | 1 MISSED | | `silicon-carve-bounds` (SHRINK per plane): CAUGHT, cause 28 |
 
 - Cause 28 is the RTL's OUT_OF_BOUNDS, and 25 its stale access. QEMU reads 5/7 and 24 for the same cases.
 - The plain spatial column is section 5's first column, the child at the request size. The five predicted misses
   under rounding to 16 remain predictions.
-- **Not read on silicon as of 2026-10-16:** memcached's allocator-repros (9), wmem-repros (23) and plane-repros (1).
-  Plane links FFmpeg's own `libavutil`, which has not been built for the silicon ABI.
+- **Set 4's heap.** The memcached arms run on level0 as changed in `06f0b29f0463`: under
+  `CAPSTONE_LEVEL0_LIFETIMES` a request of 4 KiB or more is placed on the granule of its padded size and derived at
+  that size, so its child is exact and base == cursor. Patch 0006's `slabs_take_back` computes
+  `gen + (ptr - base(gen))` and needs that; on the earlier placement it faulted in `do_slabs_free` (set 3's QEMU
+  stage). Sets 1-3 ran the earlier placement.
+- **memcached 05 has no reading on any Sublet build.** Its sentinel byte (`memset(next, 0x5a, 1)`) lands on the next
+  item's `sublet_parent`, the first field under patch 0006, so the FIXED run's next free hands CREVOKE an untagged
+  operand (24 on silicon, where the rule-based mapping predicted 25: the operand was never a capability).
+- **memcached 08 has no reading under patch 0006.** Its 16,400-byte cache.c child rounds up 16 bytes at its 32-byte
+  granule, so the all-spaces scan stops in the slack and the case refuses its premise (CONTROL-FAILED 785). That is
+  decision (a)'s pre-registered spatial difference. The plane case links 14 units of FFmpeg's libavutil.
+- **Not read on silicon as of 2026-10-16:** wmem-repros (23), the board lane's set 5.

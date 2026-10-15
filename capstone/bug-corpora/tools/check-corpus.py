@@ -135,6 +135,8 @@ ARM_ORACLES = {
     "silicon-pool-sublet": {"oracle"},
     "silicon-carve-bounds": {"oracle"},
     "silicon-carve-sublet": {"oracle"},
+    "silicon-mc-stock": {"oracle"},
+    "silicon-mc-sublet": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),

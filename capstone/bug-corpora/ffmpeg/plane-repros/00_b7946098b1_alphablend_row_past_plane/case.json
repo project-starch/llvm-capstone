@@ -77,6 +77,18 @@
       "verdict": "NOT CAUGHT",
       "measured": "2026-10-09",
       "preregistered": "03c471feabcc"
+    },
+    "silicon-carve-bounds": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b, one boot of set 4), -DFFP_CARVE_BOUNDS over level0, each plane SHRINK-narrowed to its own rows (tools/arms.json silicon-ffmpeg-plane-bounds). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls behaved as tools/arms.json declares. A fixed run that fails, or a buggy run that exits 75 (the case refusing its own setup), is NO-READING. Pre-registered by the board lane (lane 02105a6f4c96, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac102a7c in ffp_read_probe; by probe: the fault is at the labelled probe ffp_read_probe",
+      "verdict_from": "results/2026-10-16-silicon/silicon-carve-bounds"
+    },
+    "silicon-level0": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b, one boot of set 4), level0 bounds only, the case linked with 14 units of FFmpeg's libavutil (tools/arms.json silicon-ffmpeg-plane-level0). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls behaved as tools/arms.json declares. A fixed run that fails, or a buggy run that exits 75 (the case refusing its own setup), is NO-READING. Pre-registered by the board lane (lane 02105a6f4c96, before the boot): MISSED.",
+      "verdict": "MISSED",
+      "verdict_note": "reached (case=0 arm=buggy) and completed with no fault; silicon; buggy run end kind=exit value=0",
+      "verdict_from": "results/2026-10-16-silicon/silicon-level0"
     }
   },
   "status": "built and measured natively 2026-10-06 (both native arms two-sided, results/20261006-native-plane/); CheriBSD measured 2026-10-08 (results/20261008-cheribsd/, completes -- prediction confirmed). The Capstone and PoisonCap arms remain declared predictions: this corpus has no domain runner, a discriminating Capstone reading would need a plane-narrowing adapter that does not exist, and PoisonCap is absent from this host. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-carve-bounds/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT.",
