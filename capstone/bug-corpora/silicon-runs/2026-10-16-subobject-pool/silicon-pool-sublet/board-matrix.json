@@ -1,0 +1,85 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3948 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac080f88 address=0xac0e3930 in ctl_read_probe+0x20 (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-pool-00",
+   "case": "00_461fb22053_af_join_dedup_bound",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101cc4 address=0xb40c4020 in ff2_case_run+0x288 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "aed6d5c37dd99881b80877500865b7a51139d441660980f8b5d55799511a6a55",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-pool-01",
+   "case": "01_1886c3269d_h264_refs_partial_clear",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101ba4 address=0xb40c4fa0 in ff2_case_run+0x1dc (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "385de4f19712941fed071641ca6e2b490780716ae09c2ddf8472e5b608f31bcd",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-pool-02",
+   "case": "02_316531e61c_vidstab_parked_plane_pointer",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101ab4 address=0xb40c3e20 in ff2_case_run+0xec (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "0011650c90386a99c0ea3466ea216ed933f7afb9b6f2aa39e974eb6a0746ce8a",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-pool-03",
+   "case": "03_5c66a3ab51_vvc_nonref_output_releases_tabs",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101ba8 address=0xb40c41c0 in ff2_case_run+0x1dc (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "f1c38b267bbb32bcbc16103f357371f409ac4441c14f2e139ffbc18fb62fbc04",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-pool-controls-virtual-90",
+   "case": "90_ctl_buffer_returned_to_pool",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/virtual",
+   "kind": "pool-control",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac1019dc address=0xb40c3e20 in read_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "6720a534afac4ecc1242324ed5985808a669e13b9378d111d35acf0a31e0b710",
+   "as_predicted": true
+  }
+ ]
+}

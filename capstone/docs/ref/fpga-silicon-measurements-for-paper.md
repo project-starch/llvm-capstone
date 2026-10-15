@@ -6200,3 +6200,35 @@ This covers 72 case directories: 46 plain-heap (FFmpeg 13 is a duplicate of 02) 
 - The lifetimes arm is level0 with a CDERIVE child per object. A request that is not exact at its placement would keep
   plain bounds and no lifetime; none in this corpus does.
 - It is not the virtual profile's mallocng.
+
+## FFmpeg's sub-object and buffer-pool corpora on silicon: field bounds catch 7 of 9 member crossings, and the pool's own lifetimes catch all 4 reuses (caplifive_sublet_d93a8d66b, 2026-10-16)
+Five arms in one boot (05:51-06:46): firmware 37ae782f7718b018, the exact-regions supervised-call monitor, the
+127-slot process-ABI module, 94 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-subobject-pool (lane 1ef381aaa812), from the silicon-mimic
+  QEMU's reading of the same images.
+- Results: RESULTS.md there.
+
+| arm | heap and allocator | rows | controls |
+|---|---|---|---|
+| silicon-subobject | level0, plus field bounds (`-Xclang -fcapstone-subobject-bounds`) | sub-object 9: 7 CAUGHT 28 at the probe or a declared site, 04 and 06 MISSED | subobj CAUGHT 28 |
+| silicon-level0 | level0, bounds only | sub-object 9: 9 MISSED | subobj, uaf return |
+| silicon-lifetimes | level0 + per-object lifetimes | sub-object 9: 9 MISSED | uaf CAUGHT 25 |
+| silicon-pool-stock | lifetimes heap, FFmpeg 9.0.1's AVBufferPool stock (patch 0001) | pool 4: 4 MISSED; control 90 completes | uaf CAUGHT 25 |
+| silicon-pool-sublet | lifetimes heap, the pool with patch 0003 (each hand-out a CDERIVE child, CREVOKEd at release) | pool 4: **4 CAUGHT 25**; control 90 CAUGHT 25 | uaf CAUGHT 25 |
+
+- **Every row and control is as pre-registered,** by outcome, cause and site, on the pre-registered image: 37 of 37
+  rows and 20 of 20 controls.
+- **The two field-bounds misses (04, 06)** have images byte-identical to the level0 arm's. Field bounds change nothing
+  in them.
+- **The pool arm** is the first application allocator on silicon whose CDERIVE nests inside the lifetimes heap:
+  - the pool's child sits inside the entry's lifetime, which sits inside level0's object;
+  - its catches are at `ff2_case_run`, a fault site the cases declared before any run, as on QEMU.
+
+**Scope, before quoting:**
+- Sub-object crossings stay inside one allocation, so per-object bounds and lifetimes miss them by construction.
+  - Field bounds narrow a pointer to a member.
+  - 04 and 06 cross in ways that no member bound sees.
+- The pool cases are temporal: a returned entry is used through a stale reference. Stock FFmpeg reissues it, and patch
+  0003 revokes the user's child at release.
+- **These images need 88 MiB domains,** because the sub-object driver takes 64 MiB of payload up front. They launched
+  without a CMA failure; one launch read 1.66 s.
