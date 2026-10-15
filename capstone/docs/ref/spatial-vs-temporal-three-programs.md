@@ -525,8 +525,10 @@ How each mechanism reads, and why it misses what it misses:
 - **Capstone + Sublet, temporal 48/48.** `free` (or the inner allocator's release, on the Sublet
   ports of FFmpeg's pools, wmem and memcached's slabs) revokes the object, and the stale access
   faults with **cause 24** at the labelled probe. **QEMU only:** capstone-qemu reloads a revoked
-  capability untagged (ISSUES Q-11); deployed silicon lets such a data access retire, so these are
-  detections on the emulator, not a silicon claim. wmem case 12 is caught by the chunk port
+  capability untagged (ISSUES Q-11), hence cause 24. On silicon an access through a revoked capability
+  traps with cause 25 (the stale-access arm on `caplifive_sublet_d93a8d66b`, 2026-10-16), but none of
+  these cases has run on silicon, so these are detections on the emulator, not a silicon claim.
+  wmem case 12 is caught by the chunk port
   (`sublet-chunks`); the region-granular `sublet` build completes it.
 - **Capstone + Sublet, spatial 57/70 — the same 57 as bounds only.** Revocation has nothing to fire
   on while the object is alive; every spatial catch on this arm is the inherited per-object bound.

@@ -81,8 +81,14 @@ Two sets of results already exist.
   - a child parked with STC and reloaded with LDC after the kill. The LDC itself does not fault; the use does.
 
   Exactly the six probed accesses trapped, and no stale store landed. So R-35's fix holds, and the plain-temporal
-  `case.json` disclaimer "deployed silicon lets such a data access retire" is stale, for this bitstream and the FP
-  respin alike. The silicon reading of the same arm is one bare boot away.
+  `case.json` disclaimer that "deployed silicon lets such a data access retire" was stale, in simulation for this
+  bitstream and the FP respin alike.
+  - **Read on silicon on 2026-10-16:** `caplifive_sublet_d93a8d66b`, bare image c0c635e5acf09bfc, the
+    pre-registered vector exactly (`0x19 0x19 0x19 0x19 0x0 0x19 0x19 0x77 0x6`).
+  - The 26 `case.json` sentences now say so, and keep "not a silicon claim", because no corpus case has run on
+    silicon yet.
+  - Prediction: where QEMU reads 24 (Q-11, the reload untags), silicon should read 25 (the reload keeps the tag,
+    and the use faults).
 - **Rounding, not truncation.** R-11 (a top truncated past a 2 MiB window) belonged to the cursorless scheme, which
   capstone-ariane `4a4261bb4` removed. On `d93a8d66b` no capability has a truncated top (RTL lane, 2026-10-16). The
   heap sees over-coverage instead, which is the CDERIVE model's slack: malloc(65535) at a 16-byte cursor covers 113
@@ -124,7 +130,7 @@ The oracle is the virtual one (`tools/verdicts.py`), with the fault read from th
 ## 5. Asks
 
 **RTL lane.** All four asks were answered on 2026-10-16: stale access, the CDERIVE model, R-11 and R-12. The
-answers are in section 3. Still open: the bare-boot silicon reading of `stale-access.S`.
+answers are in section 3. The stale-access arm was confirmed on silicon on 2026-10-16.
 
 **Board lane.**
 1. The plain corpora first (80 defects). Each case is a small `case.c` + `shared/driver.c` + probe harness, not an

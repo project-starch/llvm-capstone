@@ -175,7 +175,17 @@ See the [runtime mechanism and reproduction commands](../../runtime/virtual/READ
 
 ## 2026-10-04, evening — the S-16 fix bitstream on silicon: S-16 fixed, the R-43 list unchanged, and the real workload preempts 1,277 times at +0.69 %
 
-- **The resident bitstream is `caplifive_fpb_afcd19bea.bit` since 2026-10-15 01:31** (sha256 d8d2b641da70207c74d41a69ef60a561426fc573b6767fd03bd6d3c28a5fb3f8; routed WNS -15.310, outside the -13.335..-5.855 band, and it runs: every FP acceptance row as pre-registered). It carries fp-fixes afcd19bea: R-53, the R-52 residual, R-54's renormalisation in residue form, the encoder without the cursorless scheme. The full-scheme encoder needs the R-55 monitor (caplifive-opensbi df0e9a8 / capstone-sbi 6dad416 on the board line): explicit cursors after every carve. Registered fallback: `caplifive_r51r52_0568f93a9.bit` (resident 2026-10-11 to 10-15). The paragraph below describes the earlier resident 715bdd1fe and is kept for its workaround history.
+- **The resident bitstream is `caplifive_sublet_d93a8d66b.bit` since 2026-10-15 23:54** (sha256
+  89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430; routed WNS -15.856, outside the band, and it runs:
+  the S-16 bare set identical to the FP respin's). It carries the Sublet extension on top of fp-fixes 4a4261bb4: the
+  capability word {revnode_id 30 | perm 4 | cap_type 3 | bounds 27} (MANAGE = perm bit 3), CDERIVE / CREVOKE with the
+  node parent link, MREV deepening, CREVOKE in R-45's flush, the non-linear SPLIT keeping its node. Its decoder does
+  not read the old word: FP-era images need rebuilding under the full format. Confirmed on silicon 2026-10-16 by the
+  bare floor (capstone/tests/rtl-smoke/sublet-bare-2026-10-15, five arms, every reading as pre-registered): the Sublet
+  instructions and their refusal causes, deepening, the shared-node split, a supervised domain deriving and ending
+  children, and that every load and store through a revoked capability is refused with cause 25. It needs the R-55
+  monitor (explicit cursors after every carve) like the FP respin. Registered fallback: `caplifive_fpb_afcd19bea.bit`.
+- **Earlier resident: `caplifive_fpb_afcd19bea.bit`, 2026-10-15 01:31 to 23:54** (sha256 d8d2b641da70207c74d41a69ef60a561426fc573b6767fd03bd6d3c28a5fb3f8; routed WNS -15.310, outside the -13.335..-5.855 band, and it runs: every FP acceptance row as pre-registered). It carries fp-fixes afcd19bea: R-53, the R-52 residual, R-54's renormalisation in residue form, the encoder without the cursorless scheme. The full-scheme encoder needs the R-55 monitor (caplifive-opensbi df0e9a8 / capstone-sbi 6dad416 on the board line): explicit cursors after every carve. Registered fallback: `caplifive_r51r52_0568f93a9.bit` (resident 2026-10-11 to 10-15). The paragraph below describes the earlier resident 715bdd1fe and is kept for its workaround history.
 - **Earlier resident: `caplifive_supcall_715bdd1fe.bit`.**
   - capstone-ariane sup-call 715bdd1fe: R-49, R-50 and the S-17 apertures 219..222.
   - Flashed 18:41-18:43 on the lead's direct word with `drivers/flash-bitstream.py`. The sha256 matched the sealed
