@@ -6064,3 +6064,52 @@ domain differs in:
 
 ao_render, the FP-heaviest benchmark, has the smallest ratio.
 
+## Sublet's child lifetimes run on silicon: CDERIVE / CREVOKE, MREV deepening, a supervised domain, and stale accesses trapping 25, each read exactly as simulated (caplifive_sublet_d93a8d66b, 2026-10-16)
+The bitstream is capstone-ariane capstone-sublet d93a8d66b: the FP tree plus the capability word
+`{revnode_id 30 | perm 4 | cap_type 3 | bounds 27}`, CDERIVE (0x51) and CREVOKE (0x52), the node parent link, MREV
+deepening, and CREVOKE in R-45's commit flush.
+- sha256 89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430, routed WNS -15.856.
+- Flashed 2026-10-15 23:54 on the lead's word, and read back.
+- Every arm below is a bare M-mode JTAG image: no monitor and no Linux. Each ran on its own power cycle, with
+  control-call-retpc reading its 8 values identically. The pre-registrations are on lane b0-silicon-runtime
+  (7b36092c8d3e) and in tests/rtl-smoke/sublet-bare-2026-10-15/PREREG.md.
+
+**Timing control.** The S-16 set reads 18 arms and 98 readings, identical to caplifive_fpb_afcd19bea's. R-51 reads
+0x1c 0x1c and 0 0x1c 0x1c; s10b reads 8 1. Both are identical to FP.
+
+**The Sublet arms.** Every reading equals the RTL simulation's vector by position. Images are given by sha256/16.
+
+| arm | image | SR | what it shows on silicon |
+|---|---|---|---|
+| sublet-derive-kill | 6b6eb589929a2d90 | 19 | A child is minted with perm 0xe (RW+MANAGE) over [buf+256, buf+768), and stores and loads through it. Refusals read 29 (not a direct child), 27 (no MANAGE), 29 (size 0, window outside the parent). Loads through a killed child and grandchild trap 25. A CINCOFFSET copy shares the node. Freed slots are reused. A LINEAR parent reads 26, and a capability as the size reads 24. |
+| sublet-split-shares-node | 029dff8faf069d6e | 7 | A non-linear SPLIT keeps its node. Both halves die with one CREVOKE (25, 25). |
+| sublet-mrev-orphan | 22989ae01b40f4dc | 8 | MREV deepens its subtree. The would-be orphan reads 25 at #6 and #8, where a tree without deepening reads 0. |
+| sup-sublet | d7b3e3f811aa582d | 26 | CDERIVE and CREVOKE inside a supervised domain. Arm 0 returns, with 0x77 / 0xe / 0x5a5a stored through the inherited LINEAR. Arms 1-4 escape with CSUPSTATUS 5 and CSUPCAUSE 25 / 27 / 29 / 26 at offset 0, with the stub left SEALED. mcause 0. |
+| stale-access | c0c635e5acf09bfc | 9 | A data load and a data store through a revoked capability each trap 25, on three paths: a CREVOKE'd child, a LINEAR piece under a revoked MREV handle, and a killed child reloaded with LDC (the LDC itself does not fault). No stale store landed: the base reads 0x77. Exactly 6 traps. |
+
+**The FP positive control** ran on afcd19bea before the flash.
+- derive-kill printed SUPTEST BEGIN and SB1 and no reading: its first CDERIVE raises 2 there, and the handler loops
+  between it and the following LCC (24). The RTL lane reproduced this in simulation.
+- The pre-registered "0x2 at #1" was reasoned from the handler and never run on the FP tree; the corrected
+  PREREG says so.
+- The image reads nothing on FP and its full vector on Sublet.
+
+**R1's revoke constant, FP against Sublet, on the same image** (s1-revoke-gap-2026-10-14).
+- Revoke cycles at k = 1..4. FP is one run; Sublet is three.
+
+  | arm | FP | Sublet run 1 / 2 / 3 |
+  |---|---|---|
+  | close (REVOKE right after MREV) | 58 33 49 73 | 58 33 45 71 / 58 33 45 71 / 58 33 45 71 |
+  | far (~4,000 cycles later) | 66 33 45 71 | 69 33 45 71 / 66 33 45 77 / 67 33 45 71 |
+
+- The simulation's +8 at close k = 1 does not appear on silicon: 58 on both bitstreams in all four runs. That is
+  outcome A: the published 76 cycles at 2 nodes and 22.7 per node are predicted to hold on the Sublet bitstream.
+- Silicon's run-to-run spread is up to 6 cycles on one reading (far k = 1: 66-69; far k = 4: 71-77). With FP read
+  once, close k = 3 / 4 (45 / 71 on Sublet, 49 / 73 on FP) are not attributed to the bitstream.
+
+**Scope, before quoting:**
+- These are directed RTL tests run on silicon: they read the instructions' semantics, not an application.
+- The application-level rows on this bitstream (Linux, SQLite, R1, the cell 6 pair for the sublet-runtime fix) are
+  pre-registered (lane dfbe4f93d433) and recorded separately.
+- CDERIVE rounds a child's bounds outward where physical QEMU refuses with 29 (ISSUES Q-15); no arm here
+  reads that.

@@ -2894,6 +2894,24 @@ cursorless words. Before its pre-registration, this lane owes:
 The exact-regions a2, the process-ABI boot and B5 on this bitstream follow. Each is pre-registered in its own
 section before it runs.
 
+## Sublet acceptance RESULT, the bare half (2026-10-15 23:55 to 2026-10-16 00:30, caplifive_sublet_d93a8d66b): every pre-registered reading holds
+The full table is in fpga-silicon-measurements-for-paper.md ("Sublet's child lifetimes run on silicon").
+- **S-16:** 18 arms and 98 readings, identical to FP. **R-51** and **s10b** are identical to FP.
+- **The RTL lane's floor:** five of five as pre-registered, by position.
+  - derive-kill 19, split-shares-node 7, mrev-orphan 8 and sup-sublet 26.
+  - stale-access 9: every stale load and store traps 25, and no stale store landed.
+  - control-call-retpc reads its 8 values identically in every bare session.
+- **s1gap:** outcome A. Close k = 1 revokes in 58 cycles on both bitstreams, in all four runs.
+  - The far arm is equal to FP within silicon's run-to-run spread, which is up to 6 cycles.
+  - Close k = 3 / 4 read 45 / 71 on all three Sublet runs, against FP's single 49 / 73. They are not attributed:
+    FP was read once.
+- **The FP positive control did not read its pre-registered 0x2.** It read nothing, a trap loop that the RTL lane
+  reproduced in simulation, as recorded in the pre-registration's amendment.
+- **One void attempt.** chain-bare.sh's first pass of the floor (00:10:54-00:11:27) never reached the board:
+  - the loop did not export FPGA_URL, and every runner exited with "FPGA_URL not set";
+  - floor.sh re-ran it at 00:18 with the URL exported. No board time was spent on the void pass.
+  - Its outputs are kept in accept-sublet/floor-void-nourl.
+
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
 longer separates globals.
