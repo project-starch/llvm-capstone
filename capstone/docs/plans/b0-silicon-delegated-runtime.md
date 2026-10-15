@@ -2912,6 +2912,43 @@ The full table is in fpga-silicon-measurements-for-paper.md ("Sublet's child lif
   - floor.sh re-ran it at 00:18 with the URL exported. No board time was spent on the void pass.
   - Its outputs are kept in accept-sublet/floor-void-nourl.
 
+## Sublet acceptance RESULT, the Linux half (2026-10-16 00:29-03:10, caplifive_sublet_d93a8d66b): every pre-registered row holds, and the cell 6 pair confirms the sublet-runtime fix on silicon
+Shared tree d04bd83 / df0e9a8 / 93440d5. The respin's fw3 firmwares, by hash: s06agg 8b4cbb4b4dff, boot C+F
+060d6566c956, boot W 69895472f098. C5u ran dccb46a3fd0f. Each row ran on its own cold boot, with R-43 tags s10*.
+- **s06agg:** k800 4, s06agg 64, `sched_clock` [0.000167]. Linux boots on the Sublet bitstream.
+- **Boot C+F:** every rung's retval equals the respin's, and r54-bounds reads 64. The detail lines are identical apart
+  from clock values and one involuntary context switch in B3i, with its registers all I:
+  - B3j: 0 of 40,000 wrong, and the checker control passes;
+  - B3f: every variant 0 of 12;
+  - the b3-oracle transcript reads e0a254c47e7ee28c.
+- **R-43,** read from each row's own extracted R1 lines:
+  - a1: `R1 m1 end arm=drop stop=target alloc=160 minted=191 revoked=160`, speedtest1-ran 1320222911, k800 4;
+  - a3: 12 wide points, ok 12, speedtest1-ran 1320264012;
+  - a4 / a5 / a6: live-sweep 544 / 4352 / 17408, trap log seen 0. R-43's fix holds at 512 live.
+- **a7, the ladder:** 17 of 17 retval == oracle; retval and instret identical to the respin's on all 17; cycles within
+  0.74%.
+- **a8, P1 cell 5:** `112006 38bb59fd`, lookasides 25010, 1,156,968,951 cycles (the respin read 1,157,815,881).
+- **C5u** on its corrected firmware (supcall line + exact regions, the classic-supervision defines):
+  - 1,282 SUPK, 1,279 SUPA and 4 SUPM (0568f93a9: 1,283 / 1,280 / 4);
+  - four speedtests at `112006 38bb59fd`, k800 4 twice;
+  - quiet +0.70% and quiet-fence +0.71% over plain 2,550,801,325 (0568f93a9: +0.67%);
+  - no RGNF, EXCT or EXCS, so the exact-regions monitor's first silicon run held;
+  - not pre-registered: loud reads +7.33%, against +13.8% on 0568f93a9 under a different monitor.
+- **Boot W:** cw-align 8, cw-pool 0.
+- **The cell 6 pair** (the sublet-runtime fix; the private driver's no-result check armed):
+  - **fixed** 4bfe3b0ec8494385: completes with `112006 38bb59fd`, sublet `split=5568 mrev=37970 delin=32569
+    revoke=37970 init=5401` (QEMU's exactly), lookasides 25010, 1,292,584,693 cycles (CPI 3.756 against QEMU's
+    344,110,502);
+  - **unfixed** b029b33c879495e9: does NOT complete, as predicted. The private driver ended it `no-result` (no SPEEDTEST1-CYCLES).
+    - trap log 0x9a: mcause 26;
+    - mepc DBAS+0x3b6e0, which is VA 0x4b6e0, `revoke t0` in sqlite3DbNNFreeNN, on a capability just loaded
+      from the sublet slot table. (The frozen image's a9 on the respin maps the same way: DBAS+0x3a170 is
+      VA 0x4a170, the same revoke);
+    - tval 0xac11a8c0, the respin a9's value.
+  - The two images differ only by sublet_split's SHRINK (lane fd16ea507fef), so the matched pair attributes
+    the wedge to the runtime's carve and shows the fix removes it on silicon.
+- **a10:** mcause 25 (trap log 0x99), mepc DBAS+0x4354 (DBAS 0x81A00000), tval 0xac100000, as pre-registered.
+
 ## B6 pre-registered (2026-10-16, before the boot): CDERIVE / CREVOKE from a delegated application, caplifive_sublet_d93a8d66b
 The bare floor showed the instructions on silicon with nothing between the test and the core. B6 issues them from a
 Linux-hosted domain, through the runtime's own helpers (`capstone_cap_derive`, `capstone_cap_revoke_child` in

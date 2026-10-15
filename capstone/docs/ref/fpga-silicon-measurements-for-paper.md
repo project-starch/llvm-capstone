@@ -6113,3 +6113,23 @@ deepening, and CREVOKE in R-45's commit flush.
   pre-registered (lane dfbe4f93d433) and recorded separately.
 - CDERIVE rounds a child's bounds outward where physical QEMU refuses with 29 (ISSUES Q-15); no arm here
   reads that.
+
+### The application rows on the same bitstream: Linux, SQLite, R1, the ladder and the sublet-runtime fix (2026-10-16 00:29-03:10)
+Every row reads as pre-registered (lane dfbe4f93d433), each on its own cold boot. The firmwares, monitor and module are
+the FP respin's (shared tree d04bd83 / df0e9a8 / 93440d5).
+- **Linux:** boots, with k800 4 and s06agg 64.
+- **Boot C+F:** every rung equal to the respin, r54-bounds 64.
+- **R1** (R-43 a1, a3): `alloc=160 minted=191 revoked=160`; 12 wide points ok.
+- **R-43's live sweeps:** 544 / 4352 / 17408.
+- **The 17-rung ladder:** retval and instret identical to the respin's, cycles within 0.74%.
+- **P1 cell 5:** `112006 38bb59fd`, 1,156,968,951 cycles.
+- **Supervised SQLite (C5u, on the exact-regions monitor line):** 1,282 preemptions, four hashes correct, quiet
+  overhead +0.70%.
+- **The R-55 stale probe (a10):** refused with 25 at its recorded pc.
+- **The sublet-runtime fix, as a matched pair of P1 cell 6 images** that differ only by sublet_split's SHRINK:
+  - the fixed image completes with QEMU's hash and exact sublet counters (5568/37970/32569/37970/5401), CPI 3.756;
+  - the unfixed image wedges with mcause 26 at `revoke` in sqlite3DbNNFreeNN, the R-55 signature the frozen image
+    showed on the respin.
+- Images: fixed 4bfe3b0ec8494385, unfixed b029b33c879495e9 (capstone-artifacts/c6-sublet-fix-2026-10-15).
+
+QEMU's physical profile keeps exact SPLIT bases and cannot tell the two apart.
