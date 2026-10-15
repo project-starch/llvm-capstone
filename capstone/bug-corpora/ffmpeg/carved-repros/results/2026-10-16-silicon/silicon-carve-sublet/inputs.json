@@ -1,0 +1,20 @@
+{
+  "arm": "silicon-carve-sublet",
+  "bitstream": "caplifive_sublet_d93a8d66b (sha256 89ba6d81...)",
+  "cases": 13,
+  "configuration": "silicon-ffmpeg-carve-sublet",
+  "contract": "verdicts-v1",
+  "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+  "platform": {
+    "compiler": "unrecorded in the board bundle; images built by runtime/silicon/build-b0-hello.sh through tools/run-silicon-cases.py build (gp-captable, full LTO, soft float, pool carve, check-repr full+renorm)",
+    "firmware": "124238b7d5b41abd: set 2's exact-regions supervised-call monitor (wrapper 1269c77, monitor ebe0a25) with the 127-slot process-ABI module; one boot for three arms",
+    "kernel": "Image 0bba51e9baec9816",
+    "qemu": "none: silicon. The same images, by sha256, first passed the silicon-mimic capstone-qemu silicon/cderive-round ce1be0c642 (d35af47 + R-54's renormalisation + CAPSTONE_CDERIVE_ROUND=1; silicon-runs/2026-10-16-carved/silicon-carve-sublet/qemu-and-predictions.json)",
+    "runner": "b0run.sh, one corpus rung per arm in one boot (board lane); summarised in silicon-runs/2026-10-16-carved/silicon-carve-sublet/board-matrix.json and re-read here from the board transcript"
+  },
+  "pre_registration": "the board's README, lane e4f15d4b7a32 (before the boot)",
+  "source_bundle": "capstone/bug-corpora/silicon-runs/2026-10-16-carved/silicon-carve-sublet",
+  "tally": {
+    "CAUGHT": 13
+  }
+}

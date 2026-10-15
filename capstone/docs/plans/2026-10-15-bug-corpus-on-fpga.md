@@ -85,8 +85,8 @@ Two sets of results already exist.
   bitstream and the FP respin alike.
   - **Read on silicon on 2026-10-16:** `caplifive_sublet_d93a8d66b`, bare image c0c635e5acf09bfc, the
     pre-registered vector exactly (`0x19 0x19 0x19 0x19 0x0 0x19 0x19 0x77 0x6`).
-  - The 26 `case.json` sentences now say so, and keep "not a silicon claim", because no corpus case has run on
-    silicon yet.
+  - The 26 `case.json` sentences now say so. The cases themselves have since run on silicon (section 7): 26
+    CAUGHT with cause 25 under per-object lifetimes, as predicted.
   - Prediction: where QEMU reads 24 (Q-11, the reload untags), silicon should read 25 (the reload keeps the tag,
     and the use faults).
 - **Rounding, not truncation.** R-11 (a top truncated past a 2 MiB window) belonged to the cursorless scheme, which
@@ -160,7 +160,7 @@ tool from the recorded verdicts and the RTL lane's models in section 3 (`cderive
 - **Subobject (9).** MISSED.
 
 So decision (b) decides the spatial column too: the request size against the rounded size. The nested corpora wait
-for it.
+for it. (What ran on the board, and what it read, is section 7.)
 
 ## 6. LEAD decisions
 
@@ -175,5 +175,30 @@ for it.
   virtual), ported to the silicon ABI; or the silicon Sublet runtime (`runtime/include/sublet/sublet.h`), whose
   `sublet_carve` the board lane is fixing for R-55. The silicon runtime's own allocator is level0 (per-object
   bounds, no temporal safety), so it cannot carry the temporal arms.
+  - What ran (section 7): level0, and for the arms that revoke, level0 built with `CAPSTONE_LEVEL0_LIFETIMES`
+    (dev `a9405e5bd711`; free reworked in `2c53d5641b72`): every object whose bounds are exact at its placement is a
+    CDERIVE child of one group over the arena, and free CREVOKEs it.
 - **(c) Order.** The plain corpora first, then the nested ones (proposed). Or both together, now that CDERIVE/CREVOKE
   are on silicon.
+
+## 7. Read on silicon (sets 1-3, 2026-10-16)
+
+The board lane ran three sets on `caplifive_sublet_d93a8d66b`, each pre-registered before its boot:
+`bug-corpora/silicon-runs/2026-10-16-plain` (`ffd2a5173d1c`), `-subobject-pool` (`2c53d5641b72`) and `-carved`
+(`39d21c614605`). `tools/silicon-verdicts.py` re-reads each run from the board transcript, checks every image's
+hash against the board matrix, and judges it as the QEMU arms are judged. The verdicts are in each corpus's
+`case.json`, from the bundles under `results/2026-10-16-silicon/`. Every row read as pre-registered.
+
+| corpus | rows | `silicon-level0` (bounds only) | revoking arm | further arm |
+|---|---:|---|---|---|
+| plain-heap, 3 programs | 46 (45 + FFmpeg 13, a duplicate) | 46 CAUGHT, cause 28 | `silicon-lifetimes`: 46 CAUGHT, cause 28 | |
+| plain-temporal, 3 programs | 26 | 26 MISSED | `silicon-lifetimes`: 26 CAUGHT, cause 25 | |
+| ffmpeg/subobject-repros | 9 | 9 MISSED | `silicon-lifetimes`: 9 MISSED | `silicon-subobject` (member bounds): 7 CAUGHT, 2 MISSED |
+| ffmpeg/pool-repros | 4 | | `silicon-pool-sublet` (protected pools): 4 CAUGHT, cause 25 | `silicon-pool-stock`: 4 MISSED |
+| ffmpeg/carved-repros | 13 | 13 MISSED | `silicon-carve-sublet` (CDERIVE carve): 13 CAUGHT, cause 28 | `silicon-carve-bounds` (SHRINK carve): 13 CAUGHT, cause 28 |
+
+- Cause 28 is the RTL's OUT_OF_BOUNDS, and 25 its stale access. QEMU reads 5/7 and 24 for the same cases.
+- The plain spatial column is section 5's first column, the child at the request size. The five predicted misses
+  under rounding to 16 remain predictions.
+- **Not read on silicon as of 2026-10-16:** memcached's allocator-repros (9), wmem-repros (23) and plane-repros (1).
+  Plane links FFmpeg's own `libavutil`, which has not been built for the silicon ABI.

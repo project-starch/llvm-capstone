@@ -275,7 +275,7 @@
     },
     "silicon-level0-lifetimes": {
       "target": "capstone-silicon",
-      "summary": "the case built for the silicon ABI (runtime/silicon/build-b0-hello.sh: gp-captable, full LTO, soft float, the pool carve) and run on the FPGA as a delegated application through capstone-exec, its heap level0 built with CAPSTONE_LEVEL0_LIFETIMES: every object is a CDERIVE child of one MANAGE group over the arena, at exactly its request size on a 16-byte placement, and free CREVOKEs it, so a stale capability's next use traps 25; inexact requests keep plain bounds and no lifetime. First measured on caplifive_sublet_d93a8d66b (silicon-runs/2026-10-16-plain)",
+      "summary": "the case built for the silicon ABI (runtime/silicon/build-b0-hello.sh: gp-captable, full LTO, soft float, the pool carve) and run on the FPGA as a delegated application through capstone-exec, its heap level0 built with CAPSTONE_LEVEL0_LIFETIMES: every object is a CDERIVE child of one MANAGE group over the arena, at exactly its request size on a 16-byte placement, and free CREVOKEs it, so a stale capability's next use traps 25; inexact requests keep plain bounds and no lifetime. First measured on caplifive_sublet_d93a8d66b (silicon-runs/2026-10-16-plain); since dev 2c53d5641b72 free finds the block by address and revokes the child recorded in its header (the plain corpora's 2026-10-16 bundles ran the earlier free, and read the same on QEMU after it)",
       "mechanism": "per-object exact bounds and a CDERIVE/CREVOKE lifetime per object in level0, on silicon",
       "controls": {
         "clean": "complete",
@@ -301,6 +301,111 @@
       "controls_for_missed": [
         "oob",
         "uaf"
+      ]
+    },
+    "silicon-level0-subobject": {
+      "target": "capstone-silicon",
+      "summary": "silicon-level0 with every case, driver and pool source and the controls compiled with -Xclang -fcapstone-subobject-bounds: a pointer to a struct member is bounded to that member, so a crossing that stays inside one allocation can fault; level0 revokes nothing",
+      "mechanism": "struct-field bounds from the compiler over level0's per-object bounds, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "complete",
+        "subobj": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "subobj"
+      ]
+    },
+    "silicon-ffmpeg-pool-stock": {
+      "target": "capstone-silicon",
+      "summary": "FFmpeg's pool-repros on silicon over the silicon-level0-lifetimes heap, its AVBufferPool stock with the port's event tracing (patch 0001): a buffer returned to the pool stays reachable through a stale pointer, so pool control 90 completes",
+      "mechanism": "per-object lifetimes in malloc; the nested pool stock",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "pool-return-90": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "pool-return-90"
+      ]
+    },
+    "silicon-ffmpeg-pool-sublet": {
+      "target": "capstone-silicon",
+      "summary": "the same over the silicon-level0-lifetimes heap with the protected pools (patch 0003): every pooled buffer is a CDERIVE child of its pool entry, CREVOKEd when it returns to the pool, so pool control 90 faults with cause 25 at read_probe",
+      "mechanism": "per-object lifetimes in malloc and a lifetime per pooled buffer",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "pool-return-90": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "pool-return-90"
+      ]
+    },
+    "silicon-ffmpeg-carve-level0": {
+      "target": "capstone-silicon",
+      "summary": "FFmpeg's carved-repros on silicon over level0 as it ships, with no carve narrowing: a crossing that stays inside the carved block is invisible to the block's own bound. The carve control (shared/carve-control.c, case 99: one byte past a 16-byte carve inside its 64-byte block) completes",
+      "mechanism": "per-object bounds in level0; carves unbounded inside their block, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "subobj": "complete",
+        "uaf": "complete",
+        "carve-99": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "carve-99"
+      ]
+    },
+    "silicon-ffmpeg-carve-bounds": {
+      "target": "capstone-silicon",
+      "summary": "the carved corpus built with -DFFC_CARVE_BOUNDS over level0: every carve is a capability narrowed to its region with SHRINK (__builtin_capstone_cap_shrink), so a crossing out of the region faults; bounds only, no lifetimes. The carve control faults",
+      "mechanism": "SHRINK-narrowed carves over level0, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "subobj": "complete",
+        "uaf": "complete",
+        "carve-99": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "carve-99"
+      ]
+    },
+    "silicon-ffmpeg-carve-sublet": {
+      "target": "capstone-silicon",
+      "summary": "the carved corpus built with -DFFC_SUBLET_CARVE over the silicon-level0-lifetimes heap: the driver CDERIVEs a group over each block and every carve is a CDERIVE child of that group, CREVOKEd on re-carve. The RTL rounds a CDERIVE child outward rather than refusing it, so a carve is not guaranteed exact. In this corpus every region is at most 2,048 B, below the 4 KiB where bounds become inexact; case 00's group over its 35,840 B block is inexact, and its regions sit 48 B below the case's arithmetic on silicon as on the silicon-mimic QEMU (docs/ref/fpga-silicon-measurements-for-paper.md, the carved corpus). The carve control faults. The re-carve control (shared/carve-recarve-control.c, case 98) completes when the region is used live (live-carve) and faults when used after its re-carve (uaf-carve)",
+      "mechanism": "a CDERIVE child per carve with CREVOKE on re-carve, over per-object lifetimes, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "subobj": "complete",
+        "uaf": "fault",
+        "carve-99": "fault",
+        "live-carve": "complete",
+        "uaf-carve": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "carve-99",
+        "live-carve",
+        "uaf-carve"
       ]
     }
   }
