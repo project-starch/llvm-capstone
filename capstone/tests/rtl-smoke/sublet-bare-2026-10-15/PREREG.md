@@ -14,6 +14,7 @@ FPGA_BITSTREAM = the resident name); the report is the UART's `SR <count>` / `SV
 | `images/sublet-split-shares-node.bin` | `029dff8faf069d6e68079a576c277415e5e1b60228835f57203176c422cb0a80` | 0x80004000 | 7 | 0x1111 0x2222 0x0 0x19 0x19 0x0 0x19 |
 | `images/sublet-mrev-orphan.bin` | `22989ae01b40f4dca02044a613b0ab6114201bd144aa4f3832db6b629de3bf92` | 0x80005000 | 8 | 0x0 0x0 0x0 0x0 0x0 0x19 0x19 0x19 |
 | `images/sup-sublet.bin` | `d7b3e3f811aa582d6d943b47498799c20d877ae2c67623d023e0a132bc72c7d0` | 0x80007c40 | 26 | 0x0 0x1 0x77 0xe 0x5a5a 0x0 0x5 0x19 0x0 0x4 0x0 0x5 0x1b 0x0 0x4 0x0 0x5 0x1d 0x0 0x4 0x0 0x5 0x1a 0x0 0x4 0x0 |
+| `images/stale-access.bin` | `c0c635e5acf09bfc28ec88fc5112b7ea2f9996fef06c2dfec8651cdef144b037` | 0x80003540 | 9 | 0x19 0x19 0x19 0x19 0x0 0x19 0x19 0x77 0x6 |
 
 The vectors are the operands of the tests' CAPPRINTs in retirement order on the Sublet tip (snapshot sublet-renorm,
 RTL d93a8d66b, the same on every step since each arm was added); the simulation's trace also shows the trap handler's
@@ -53,7 +54,11 @@ minus the domain's 0xe, 0x77 and 0, 26 values, with the monitor's reads of 0x77 
 the same information. It uses the monitor's CSSUPERVISE and CALL, so it runs after the three bare arms, and it is the
 first supervised domain on the Sublet bitstream: a trap anywhere ends it with mcause as the last reading. On the FP
 bitstream it is a second positive control: the domain's first CDERIVE escapes with CSUPCAUSE 2 instead of completing.
-The SDK-level witness
+stale-access (the bug corpus's ask 1, docs/plans/2026-10-15-bug-corpus-on-fpga.md): a data load and a data store
+through a revoked capability on three paths (a crevoke'd child; a split piece under a revoke'd handle; the stale child
+reloaded with ldc), each expected to raise 25, the ldc itself 0, the base re-reading 0x77 (no stale store landed), and
+exactly 6 traps. Any 0 at a load's or store's position means the access RETIRED on silicon and #8 then shows whether
+the store landed; that single reading decides every temporal verdict in the corpus. The SDK-level witness
 (a physical image calling the runtime's derive and revoke) waits for the runtime's sublet_carve fix (R-55 family) and
 the full-format SDK defaults. The s1-revoke-gap pair runs on this bitstream as is, for the FP-against-Sublet
 comparison its PREREG records.
