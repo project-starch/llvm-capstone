@@ -135,8 +135,10 @@ case "$rung" in
     dom=/test-domains/mruby.dom
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     step=${rung#b5-mruby-}
-    rm -rf /tmp/b5 /tmp/b5.wd; mkdir -p /tmp/b5 && cp /test-domains/mruby/* /tmp/b5/ || { echo "RESULT $rung retval=911"; exit 1; }
-    want=$(awk -v s="$step" '$1 == s { print $2 }' /tmp/b5/native.sha)
+    # Only the scripts are copied: smoke.rb lists this directory (M12), so it must hold exactly what QEMU's did --
+    # the eight .rb files -- or the allocator's counts, which the pre-registration predicts, would differ by an entry.
+    rm -rf /tmp/b5 /tmp/b5.wd; mkdir -p /tmp/b5 && cp /test-domains/mruby/*.rb /tmp/b5/ || { echo "RESULT $rung retval=911"; exit 1; }
+    want=$(awk -v s="$step" '$1 == s { print $2 }' /test-domains/mruby/native.sha)
     [ -n "$want" ] || { echo "B5: no native hash for $step"; echo "RESULT $rung retval=911"; exit 1; }
     # Watchdogs from QEMU's times (e/stdin 6 s, smoke 11 s, bench 50 s, launch included) with room for a board of
     # unknown speed relative to QEMU: generous, since a watchdog ending a slow but correct run would void it.

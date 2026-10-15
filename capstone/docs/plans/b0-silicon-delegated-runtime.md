@@ -2500,10 +2500,19 @@ QEMU's per-benchmark times (stderr, not compared): mandel_term 21.1 s, fib 7.1 s
   - mruby.dom a7ac283d7050a5d8;
   - b5-hello.dom 0042544c7ec7e2cf: b0-hello with B5's flags and pool carve, mruby's pair;
   - b0-hello.dom db4385ff32deddf6: the frozen control, which passed boot C+F on this bitstream.
-- Private image: Image bd1efb37a5ab80fe. Its gzip initramfs was extracted and every B5 file checked by hash, b0run.sh
-  b55bb6e79a71c58a included.
-- Firmware 9ae0dd55b3397e96: build-fpga-fw.sh on wrapper d7489e3 + monitor 7361e1c with boot C+F's supervised-call
+- Private image: Image eae0dfbadfa87a6f. Its gzip initramfs was extracted and every B5 file checked by hash, b0run.sh
+  fc926af6bd742936 included.
+- Firmware 7d9f274ffd1114a2: build-fpga-fw.sh on wrapper d7489e3 + monitor 7361e1c with boot C+F's supervised-call
   defines; gate PASS. The shared tree stays at df0e9a8 / 93440d5.
+- Amended before the boot: the first bake (Image bd1efb37a5ab80fe, firmware 9ae0dd55b3397e96) copied
+  /test-domains/mruby/* into /tmp/b5, native.sha included. smoke.rb lists that directory, so its allocation count
+  would have differed from QEMU's, which had the eight .rb files only. The rung now copies `*.rb` and reads the hashes
+  in place.
+- Capacity: the board's CMA pool is 256 MiB (`linux,cma@ac000000`) and the module's process cache 384 MiB, against
+  mruby's 64 MiB domain, the largest process-ABI domain yet on silicon. check-repr covers all 193 of its 1 MiB-aligned
+  placements in that pool.
+- Entry VA: all three images enter at 0x10000. R-3 concerns classic `lpc` domains. Boots C+F and W each ran several
+  0x10000 process-ABI images in one boot.
 - PREFLIGHT=0 (private image). board-watchdog.sh runs beside the driver, with ABORT_ON_ENTRY_STALL=1 and
   ENTRY_STALL_S=420.
 - Rungs, in order: b0-stats, b0-hello, b5-hello, b5-mruby-e, b5-mruby-stdin, b5-mruby-smoke, b5-mruby-bench,
@@ -2531,6 +2540,8 @@ QEMU's per-benchmark times (stderr, not compared): mandel_term 21.1 s, fib 7.1 s
   musl's libm are the first suspects for ao_render and so_mandelbrot).
 - 912: slower than its budget. That is not a correctness failure; re-size.
 - A full region table (`RGNF 0000E00C`): R-55 a2, not counted against mruby.
+- e fails with a launcher error (ENOMEM/ENOSPC before any domain marker): CMA could not supply 64 MiB contiguous.
+  That is a size result, not R-55; shrink B0_DATA, since QEMU's peaks are 822 slab pages of 4,096.
 
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
