@@ -372,7 +372,7 @@
     },
     "silicon-ffmpeg-carve-bounds": {
       "target": "capstone-silicon",
-      "summary": "the carved corpus built with -DFFC_CARVE_BOUNDS over level0: every carve is a capability narrowed to exactly its region (__builtin_capstone_cap_shrink), so a crossing out of the region faults; bounds only, no lifetimes. The carve control faults",
+      "summary": "the carved corpus built with -DFFC_CARVE_BOUNDS over level0: every carve is a capability narrowed to its region with SHRINK (__builtin_capstone_cap_shrink), so a crossing out of the region faults; bounds only, no lifetimes. The carve control faults",
       "mechanism": "SHRINK-narrowed carves over level0, on silicon",
       "controls": {
         "clean": "complete",
