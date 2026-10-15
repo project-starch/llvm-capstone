@@ -182,7 +182,13 @@ def main():
                 guest.kill(); guest.wait()
 
     text = out.decode(errors="replace")
-    lines = [s.strip() for s in text.splitlines()]
+    # rstrip, NOT strip: the leading whitespace is DATA. var_dump and print_r indent their
+    # output, and app/run-realphp.py establishes that a case's trigger ran by comparing the
+    # control arm's output against the corpus's recorded pristine stdout -- a comparison that
+    # silently fails for every indented case if the console path eats the indentation. Only the
+    # trailing \r of the serial line is noise. The MARK and kernel-line matches below are
+    # anchored at the start of a line and are unaffected, because both are emitted at column 0.
+    lines = [s.rstrip() for s in text.splitlines()]
     results = {}
     for name, _ in runs:
         hits = [s for s in lines if s.startswith(f"{MARK}:{name}:")]
