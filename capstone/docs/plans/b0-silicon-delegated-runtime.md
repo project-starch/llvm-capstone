@@ -2873,8 +2873,26 @@ cursorless words. Before its pre-registration, this lane owes:
    arm's overhead near 0568f93a9's +0.67%. This is the firmware's first silicon run, so it comes after the known rows.
 5. **Boot W:** cw-align 8, cw-pool 0.
 
-The cell 6 pair, the exact-regions a2, the process-ABI boot and B5 on this bitstream follow. Each is pre-registered in
-its own section before it runs.
+6. **The cell 6 matched pair**, the test of the sublet-runtime fix. It runs after boot W, with fixed first, then
+   unfixed, then a10 last.
+   - Staging: ~/capstone-artifacts/c6-sublet-fix-2026-10-15 (README, SHA256SUMS, qemu-pass records).
+   - The respin a9's invocation: `--stats`, 2 MiB arena, tables 1750285, rr host 2c9e82d101b48160, relinked k800.
+   - The private board-c6var.sh copy changes two things:
+     - a run with no SPEEDTEST1-CYCLES ends `no-result`, rc 3, instead of `done`. This is the respin's
+       instrument defect, negative-tested: the respin a9's log writes no-result, and two completed cell 6 logs
+       do not;
+     - the default-arena record is waived (`C6_QEMU_DEFAULT=none`), because this pair was measured at the boot's
+       2 MiB only.
+   - **fixed** 4bfe3b0ec8494385 (lane fd16ea507fef): completes with `112006 38bb59fd`, sublet
+     5568/37970/32569/37970/5401, lookasides 25010, cycles = 344,110,502 x CPI 3.2..4.9.
+   - **unfixed** b029b33c879495e9 (dev 9efa92875356): does NOT complete. Predicted: mcause 26 or 25 in the sublet free
+     path, as the frozen image did on the respin.
+   - The pair separates the hypotheses:
+     - if unfixed completes, the fix is not shown necessary on silicon, and R-55's sublet mechanism is in doubt;
+     - if fixed fails, the fix is not sufficient.
+
+The exact-regions a2, the process-ABI boot and B5 on this bitstream follow. Each is pre-registered in its own
+section before it runs.
 
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
