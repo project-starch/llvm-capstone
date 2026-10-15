@@ -6002,3 +6002,37 @@ boot, and each board image is named by hash.
   - These are bounds READ BACK with lcc. No access was made through a short capability, so no fault is claimed.
   - QEMU reads every value exact: it keeps fat bounds.
   - The fixes are pending: the renormalisation for R-54, and the format move for R-11.
+
+## mruby 4.0.0-rc2 runs on silicon as a delegated application, byte-identical to the native build on four steps (B5, caplifive_fpb_afcd19bea, 2026-10-15)
+mruby is the second application of the virtual profile ported to the silicon ABI, after memcached. Details, the
+pre-registration and the matched pairs are in plans/b0-silicon-delegated-runtime.md (B5).
+
+**The result:**
+- **Correctness.** One boot ran `-e`, a program on stdin, the port's smoke.rb (GC, raise/rescue, floats, a file
+  written and read back, a directory listing) and five of mruby's own benchmarks.
+  - Each stdout's sha256 equals the x86 gcc build's: 53c234e5e8472b6a, 5476dba1f4bd59f1, 791d0649e254c15e and
+    8d1539bc79e2b630.
+  - Each step's allocation count equals QEMU's.
+  - Images: mruby.dom a7ac283d7050a5d8; firmware 7d9f274ffd11; controls b0-hello db4385ff and b5-hello 0042544c.
+- **Wall time on the board,** in seconds, from Time.now inside the domain; sizes reduced for the board:
+
+  | benchmark | size | board s |
+  |---|---|---|
+  | mandel_term | as shipped | 138.18 |
+  | fib | 24 | 45.52 |
+  | so_lists | 3 x 1000 | 2.46 |
+  | so_mandelbrot | 32 | 30.67 |
+  | ao_render | 8 x 8, 4 AO samples | 81.99 |
+
+  Per launch: 45.5 s cold and 24.6 s cached. Board / QEMU host time is 6.4-7.6 per benchmark.
+- **Build:**
+  - gp-captable, full LTO, `-O1`, soft-float `+m +a`; 2.0 MB code, 2,622 globals, a 64 MiB domain.
+  - check-repr OK at all 193 placements under the full bounds scheme (pool carve); zero FP instructions in the image.
+  - mruby's allocator on size classes (silicon-alloc.c). level0's first-fit list made the GC test take minutes.
+
+**Scope, before quoting:**
+- There is no unprotected baseline yet: the QEMU column is not one. Native mruby on the same board's Linux is the
+  baseline still to run.
+- The sizes are the board's, not the benchmarks' published ones.
+- No per-object spatial claim: GC heap pages carry one capability for 1,024 objects. No temporal claim. R-55's
+  isolation caveat applies to every domain on this bitstream.

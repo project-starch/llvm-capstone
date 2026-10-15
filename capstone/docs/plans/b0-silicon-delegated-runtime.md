@@ -2543,6 +2543,58 @@ QEMU's per-benchmark times (stderr, not compared): mandel_term 21.1 s, fib 7.1 s
 - e fails with a launcher error (ENOMEM/ENOSPC before any domain marker): CMA could not supply 64 MiB contiguous.
   That is a size result, not R-55; shrink B0_DATA, since QEMU's peaks are 822 slab pages of 4,096.
 
+## B5 RESULT (2026-10-15 19:09-19:22, caplifive_fpb_afcd19bea, firmware 7d9f274ffd11): mruby runs on silicon, every pre-registered reading as predicted
+One boot, eight rungs, every retval 0 against its oracle. The images were checked by hash inside the image before the
+boot (pre-registration b224758891fe).
+
+| rung | result | stdout sha (16) | allocator line | board s |
+|---|---|---|---|---|
+| b0-stats | retval 0 | | | |
+| b0-hello (frozen control db4385ff) | retval 0, byte-exact | | | |
+| b5-hello (0042544c) | retval 0, byte-exact | | | |
+| b5-mruby-e | retval 0 | 53c234e5e8472b6a = native | pages=27/4096 small=678 fallback=0 = QEMU | 45.49 |
+| b5-mruby-stdin | retval 0, prints `385` | 5476dba1f4bd59f1 = native | 27 / 695 / 0 = QEMU | 24.59 |
+| b5-mruby-smoke | retval 0, M1-M13 and SMOKE_DONE | 791d0649e254c15e = native | 822 / 40897 / 0 = QEMU | 65.85 |
+| b5-mruby-bench | retval 0, the five BENCH lines = native's | 8d1539bc79e2b630 = native | 139 / 83453 / 0 = QEMU | 326.46 |
+| b0-stats2 | retval 0; live_domains 0, cached_bytes 67796992 (QEMU's value) | | | |
+
+- No region-table refusal: six launches fit, as boot C+F's did.
+- board-watchdog.sh ran (53 lines, no abort).
+- The bench rung's heartbeat kept the console live through its 326 s.
+
+**What is now established on silicon** (each a first):
+- a 2.0 MB-code, 2,622-global application on the gp-captable ABI under the full bounds scheme;
+- longjmp (`raise`/`rescue`, after the setjmp.S fix);
+- file delegation: a file created, written, closed and read back, and a directory listed;
+- standard input;
+- a 64 MiB process-ABI domain (CMA and the process cache held it; the cache retained it between launches);
+- soft-float and musl's libm through ao_render and so_mandelbrot, byte-identical to x86 glibc's results at these
+  sizes.
+
+**The benchmark.** Wall time per benchmark, from mruby's Time.now inside the domain (stderr, not compared):
+
+| benchmark (size) | board s | QEMU host s | board / QEMU |
+|---|---|---|---|
+| mandel_term (as shipped) | 138.18 | 21.07 | 6.56 |
+| fib(24) | 45.52 | 7.09 | 6.42 |
+| so_lists (3 x 1000) | 2.46 | 0.34 | 7.18 |
+| so_mandelbrot (32) | 30.67 | 4.67 | 6.57 |
+| ao_render (8 x 8, 4 AO samples) | 81.99 | 10.74 | 7.64 |
+| total | 298.82 | 43.91 | 6.81 |
+
+The board's per-launch overhead, read from step e (`p 1+1`): 45.5 s. That covers the 2.9 MB image, the 64 MiB
+domain's regions and mrb_open with every gem. With the image cached (step stdin), it is 24.6 s.
+
+**What this does NOT establish:**
+- Overhead against an unprotected baseline: the QEMU column is host time, a consistency check, not a baseline. The
+  baseline is mruby as a native Linux process on the same board.
+- Bounds on every object: the allocator narrows each block to its request, but mruby's GC heap pages are level0
+  blocks of 1,024 objects each, and an object's capability is derived from its page's, so it carries the page's
+  bounds. Spatial safety for each Ruby object is not claimed.
+- Temporal safety: none, as level0.
+- R-55's isolation caveat holds for every domain on this bitstream: a carve's remainder can overlap its neighbour,
+  and the PMP masks only the monitor's range.
+
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
 sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one
