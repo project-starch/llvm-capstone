@@ -175,6 +175,9 @@ void *zend_cap_block_alloc(size_t bytes)
     struct zend_cap_block *r;
     unsigned long want, base;
 
+    /* On real PHP this is the only place the seam is guaranteed to be entered before exit. */
+    zend_cap_report_at_exit();
+
     /* PHP asks for 48 + REAL_SIZE(n). The payload must be a whole number of capabilities or
      * sublet_give_to cannot write through it before init, so round the request up; 48 is itself
      * a multiple of the grain, so this rounds the payload and nothing else. */
@@ -356,6 +359,75 @@ void zend_cap_retire(void *p)
     r->issued = 0;
     r->alias = (void *)0;
     ++st_retires;
+}
+
+/* THE REVOKE COUNT HAS TO LEAVE THE PROCESS, AND ON REAL PHP THERE IS NOWHERE ELSE TO PRINT IT
+ * FROM. The measurement's strongest gate is that the arms report a strictly ordered revoke
+ * count -- stock 0, block 0, object more than 0 -- because without it a temporal catch cannot
+ * be attributed to this seam rather than to the allocator underneath, and a pair whose arms
+ * were secretly identical would report a clean sweep. It is the gate that would have caught
+ * the physical port's four false CAUGHTs cheaply.
+ *
+ * In Phase A app/php_virtual_main.c printed these two lines at the end of its own main(). Real
+ * PHP owns main(), that SAPI is not linked, and nothing else calls zend_cap_stats -- so the
+ * first scored run on real PHP reported `revokes=None` on every arm and the gate had no data
+ * at all. A gate with no input is not a gate that passed.
+ *
+ * So the seam prints its own counters, through atexit, in the SAME format the runner already
+ * parses. Three properties worth stating:
+ *
+ *   It is registered lazily, at the first block, so a run that never allocates prints nothing
+ *   and no static initialiser ordering is involved.
+ *
+ *   A run killed by a capability fault prints NOTHING, because atexit handlers do not run on a
+ *   fatal signal. That is correct rather than unfortunate: the gate reads the counters from the
+ *   revocation-sanity control, which completes by construction, and a faulting case has already
+ *   said what it had to say.
+ *
+ *   It is in the seam, not in PHP. No PHP source file is touched, which is the property the
+ *   whole experiment rests on.
+ */
+static void cap_report_stats(void)
+{
+    unsigned long cs[8], bs[4];
+    zend_cap_stats(cs);
+    zend_cap_backing_stats(bs);
+    /* stderr, not stdout: by the time this runs PHP has shut its own machinery down, and the
+     * seam's other diagnostics (zend_cap_fail, the mode line) already use stderr for the same
+     * reason. The runner reads both streams -- 2>&1 in the guest script. */
+    fprintf(stderr, "PHP_VIRTUAL SEAM blocks=%lu frees=%lu issues=%lu retires=%lu revokes=%lu "
+            "splits=%lu reallocs=%lu live=%lu\n",
+            cs[0], cs[1], cs[2], cs[3], cs[4], cs[5], cs[6], cs[7]);
+    fprintf(stderr, "PHP_VIRTUAL SEAM records_live=%lu records_peak=%lu slabs=%lu lookups=%lu\n",
+            bs[0], bs[1], bs[2], bs[3]);
+    fflush(stderr);
+}
+
+/* Belt AND braces, because the first attempt at this printed nothing and the reason was not
+ * obvious from the image: the call is at the top of zend_cap_block_alloc and app/probe-atexit.c
+ * shows this platform running atexit handlers, destructors, stdout, stderr and raw write(2) at
+ * exit. Both routes are therefore armed and both say which one spoke, so the next reader gets
+ * the answer instead of the question. The destructor runs through __libc_exit_fini, a different
+ * mechanism from the atexit list, so one failing does not silence the other. */
+static int cap_reported;
+
+static void cap_report_once(void)
+{
+    if (cap_reported) { return; }
+    cap_reported = 1;
+    cap_report_stats();
+}
+
+__attribute__((destructor))
+static void cap_report_dtor(void) { cap_report_once(); }
+
+void zend_cap_report_at_exit(void)
+{
+    static int armed;
+    if (armed) { return; }
+    armed = 1;
+    fprintf(stderr, "PHP_VIRTUAL SEAM armed rc=%d\n", atexit(cap_report_once));
+    fflush(stderr);
 }
 
 void zend_cap_stats(unsigned long out[8])

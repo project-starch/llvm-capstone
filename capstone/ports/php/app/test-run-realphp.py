@@ -32,7 +32,13 @@ def check(name, got, want):
 FAULT = ("capstone-exec: domain fault cause=24 pc=0x3f904e7f90 address=0x3f909c8074 "
          "entry=0x3f904009a0 code=0x3f90400000-0x3f90800000 last=0x39 preparing=0x39 "
          "sha256=%s image=php-real-seam.dom")
+# The same fault line with the RESOURCE cause: the node table ran out, which lands at an
+# arbitrary pc and must never be read as a catch.
+FAULT30 = FAULT.replace("cause=24", "cause=30")
 SHA = "a" * 64
+# The bound probe is a DIFFERENT image by design, so its transcript carries its own
+# sha and the guard has to know that without being blinded to a stale probe.
+PROBE_SHA = "b" * 64
 STATS = ("CAPSTONE_VM_STATS arenas=16 pages=1778 peak=1994 nodes=%d steps=1943 faults=664 "
          "collections=0 reclaimed=0 rounds=54 bytes_in=544 bytes_out=21229 node_bytes=225280 "
          "node_capacity=%d node_growths=3 launch_ns=1 elapsed_ns=2")
@@ -119,11 +125,22 @@ def observation_cases():
     check("silence on a broken arm is control-failed",
           verdicts.judge(obs, arms["php-real-stock"])[1], "control-failed")
 
-    # The node table came close to capacity: a cause-30 fault is indistinguishable from a catch.
+    # The node table ran out. The fault SAYS so, on the line the pc comes from, so this is
+    # keyed on the cause and not on a threshold over a counter -- see CAUSE_RESOURCE on why
+    # the counter the pre-registration named is neither printed nor comparable to capacity.
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
-                    FAULT % SHA + "\n" + STATS % (9000, 9216), 139, controls(), True, "/x", "/y")
+                    FAULT30 % SHA + "\n" + STATS % (9000, 9216), 139, controls(), True, "/x", "/y")
     v, reason, _ = verdicts.judge(obs, exact)
-    check("node pressure refuses the reading", reason, "infra")
+    check("a cause-30 resource fault is refused", (v, reason), (verdicts.NO_READING, "infra"))
+
+    # AND THE COUNTERS DO NOT REFUSE ANYTHING ON THEIR OWN. nodes= is cumulative, so it exceeds
+    # the capacity on healthy runs; the old threshold fired on about twenty good runs of this
+    # measurement, catches included.
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
+                    FAULT % SHA + "\n" + STATS % (13480, 13312), 139, controls(), True, "/x", "/y")
+    check("nodes over capacity is reported, not gated",
+          verdicts.judge(obs, exact)[0], verdicts.CAUGHT)
+    check("and the counters are in the notes", "cumulative, not a high-water" in obs.notes, True)
 
     # The seam itself failed: an instrument failure, never a verdict.
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
@@ -275,7 +292,7 @@ def population_cases():
 
 
 def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=True,
-                 stdout="done", sha=SHA):
+                 stdout="done", sha=SHA, probe_sha=PROBE_SHA):
     seam = f"ZEND_CAP_MODE {mode} exact={1 if mode & 1 else 0} revoke={1 if mode & 2 else 0}"
     stats = STATS % (100, 9216)
     out, exits = {}, {}
@@ -284,7 +301,7 @@ def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=
     exits[R.SANITY] = 0 if sanity_ok else 139
     if probe is not None:
         out[R.BOUND_PROBE] = ["S7 rounded arm read index 9 = 0x00 -- the slack is reachable",
-                              FAULT % sha] if probe else ["S7 rounded arm read index 9 = 0x00"]
+                              FAULT % probe_sha] if probe else ["S7 rounded arm read index 9 = 0x00"]
         exits[R.BOUND_PROBE] = 139 if probe else 0
     for c in cases:
         if c in case_faults:
@@ -319,7 +336,7 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
         prog = str(cmd[0])
         text = ""
         if "sha256sum" in prog:
-            text = SHA + "  x\n"
+            text = (PROBE_SHA if str(cmd[1]).endswith("p.dom") else SHA) + "  x\n"
         elif "objdump" in prog:
             text = "revoke\nrevoke\n"
         elif "clang" in prog:
@@ -401,8 +418,17 @@ def main_path_cases():
         check("GATE: a mode word disagreeing with arms.json is refused", rc != 0, True)
 
 
-def stale_image_case():
-    print("\n-- the stale-transcript guard --")
+def stale_guard(label, *, sha=SHA, probe_sha=PROBE_SHA, want_refused=True):
+    # Asserted on the REASON, not on the exit status: these records trip other gates too (the
+    # synthetic arms all report the same revoke count), so "it exited non-zero" would pass
+    # whether or not the sha guard was the thing that fired.
+    """Drive the stale-transcript guard with the shas the stored runs claim.
+
+    Parameterised rather than copied because the guard now has two sides and a bug on either
+    is silent: the CASE runs must match the PHP image and the bound probe must match the
+    PROBE image, which is a different file on purpose. The measurement found this the
+    expensive way -- the guard refused the probe's own honest transcript and killed the run
+    after three arms, because it compared every run against the PHP image."""
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
         root = tmp / "corpus-root"; fake_corpus(root)
@@ -410,26 +436,38 @@ def stale_image_case():
         for arm in R.ARMS:
             probe = True if R.BOUND_PROBE in verdicts.load_arms()[arm]["controls"] else None
             rec = synth_record(["CRASH-086", "CRASH-110"], verdicts.load_arms()[arm]["mode"], 77,
-                               case_faults=("CRASH-086",), probe=probe, sha="b" * 64)
+                               case_faults=("CRASH-086",), probe=probe, sha=sha,
+                               probe_sha=probe_sha)
             (out / f"{arm}-run.json").write_text(json.dumps(rec))
         img = tmp / "php-real-seam.dom"; img.write_bytes(b"\x7fELF")
         real_run, real_call = subprocess.run, subprocess.call
         subprocess.run = lambda cmd, *a, **k: types.SimpleNamespace(
-            stdout=(SHA + "  x\n") if "sha256sum" in str(cmd[0]) else "revoke\n", stderr="",
-            returncode=0)
+            stdout=((PROBE_SHA if str(cmd[1]).endswith("p.dom") else SHA) + "  x\n")
+            if "sha256sum" in str(cmd[0]) else "revoke\n", stderr="", returncode=0)
         subprocess.call = lambda *a, **k: 0
         argv = sys.argv
         sys.argv = ["x", "--qemu", "/q", "--images", str(tmp), "--adapter", str(tmp),
-                    "--image", str(img), "--probe", str(tmp / "p"), "--corpus", str(root),
+                    "--image", str(img), "--probe", str(tmp / "p.dom"), "--corpus", str(root),
                     "--out", str(out), "--llvm-bin", str(tmp), "--from-record"]
+        why = ""
         try:
-            R.main(); rc = 0
+            R.main()
         except SystemExit as e:
-            rc = e.code if isinstance(e.code, int) else 1
+            why = "" if isinstance(e.code, int) else str(e.code or "")
         finally:
             sys.argv = argv
             subprocess.run, subprocess.call = real_run, real_call
-        check("a transcript from another image is refused", rc != 0, True)
+        check(label, "the stored transcript is from image" in why, want_refused)
+
+
+def stale_image_case():
+    print("\n-- the stale-transcript guard --")
+    # A case transcript from another PHP image.
+    stale_guard("a transcript from another image is refused", sha="c" * 64)
+    # The probe's OWN transcript, carrying the probe image's sha, is what it should be.
+    stale_guard("the probe's own sha is not treated as stale", want_refused=False)
+    # ...and the exemption is not a hole: a probe transcript from a THIRD image is refused.
+    stale_guard("a stale PROBE transcript is still refused", probe_sha="c" * 64)
 
 
 def lint():

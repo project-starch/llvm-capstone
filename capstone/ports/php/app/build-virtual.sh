@@ -89,6 +89,27 @@ case "$WHAT" in
       || { echo "hier probe build FAILED" >&2; exit 1; }
     echo "  built $IMG"
     ;;
+  atexit-probe)
+    # Does an exit hook run here, and on which stream? The seam's revoke counters have no other
+    # way off the machine once PHP owns main(), and the first attempt printed nothing.
+    IMG="$OUT/probe-atexit.dom"
+    echo "  compiling the atexit probe ..."
+    "$CC" -O1 "$HERE/probe-atexit.c" -o "$IMG" \
+      || { echo "atexit probe build FAILED" >&2; exit 1; }
+    echo "  built $IMG"
+    ;;
+  select-probe)
+    # Is select() usable on this profile at all? CRASH-092 hangs, and PHP 5.0.0's
+    # php_sock_stream_wait_for_data turns one persistent select() error into an infinite loop,
+    # so the hang alone does not say which of the two is at fault. The probe does.
+    IMG="$OUT/probe-select.dom"
+    echo "  compiling the select probe ..."
+    # No seam sources and no capability builtins: the question is about ordinary blocking I/O
+    # through CSRUNV, and anything else linked in would be a second explanation for a failure.
+    "$CC" -O1 "$HERE/probe-select.c" -o "$IMG" \
+      || { echo "select probe build FAILED" >&2; exit 1; }
+    echo "  built $IMG"
+    ;;
   inert)
     # PATCH INERTNESS (the plan's Verification 4). The patched zend_alloc.c, compiled WITHOUT
     # -DZEND_CAP_SUBLET, must produce the same object as the pristine source. If it does, then
@@ -592,5 +613,5 @@ case "$WHAT" in
     fi
     sha256sum "$IMG"
     ;;
-  *) echo "usage: build-virtual.sh [probe|hier-probe|seam-probe|inert|php|realphp]" >&2; exit 2 ;;
+  *) echo "usage: build-virtual.sh [probe|hier-probe|atexit-probe|select-probe|seam-probe|inert|php|realphp]" >&2; exit 2 ;;
 esac

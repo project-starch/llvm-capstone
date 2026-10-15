@@ -106,10 +106,22 @@ ALLOCATOR_SITE = "Zend/zend_alloc.c"
 # program can produce an exit code and only that loop can produce the marker.
 WATCHDOG = re.compile(r"VM_EXIT_TIMEOUT:")
 
-# The node table GROWS on this profile, so exhaustion is not a hard ceiling -- but a cause-30
-# resource fault lands at an arbitrary pc and is otherwise indistinguishable from a catch, so a
-# run that came close to capacity is refused rather than read.
-NODE_RESERVE_FRACTION = 0.90
+# WHAT THE NODE-TABLE GATE IS FOR, AND WHY IT IS NOT A NODE COUNT. The hazard is real: the
+# node table running out produces a cause-30 fault at an arbitrary pc, which is otherwise
+# indistinguishable from a catch and would be the most likely way this port invents a false
+# positive. The pre-registration at 692e9d79a244 promised to refuse any run whose node
+# high-water came within a reserve of capacity.
+#
+# That gate was implemented against the wrong field and could not have worked. The printed
+# `nodes=` is cumulative allocations, not a high-water (see node_pressure), so it is not
+# bounded by the capacity -- and the counter the pre-registration named is not printed at all.
+# As written the check fired on roughly twenty perfectly good runs of this measurement and
+# would have refused them as `infra`, catches included.
+#
+# The replacement is not a better proxy, it is the thing itself: a cause-30 fault SAYS it is a
+# cause-30 fault, on the same line the pc comes from. Keying on it is strictly stronger than
+# any threshold over a counter, needs no reserve to tune, and cannot fire on a healthy run.
+CAUSE_RESOURCE = 30
 
 ASAN_FRAME = re.compile(
     r"#\d+ 0x[0-9a-f]+ in (\S+) [^ ]*?((?:Zend|main|ext|sapi|TSRM|regex)/[\w./]+):(\d+)")
@@ -189,8 +201,27 @@ def same_as_oracle(observed, expected):
     return observed.strip("\n") == expected.strip("\n")
 
 
+def note(obs, text):
+    """Append a note. Notes ACCUMULATE: a run can be worth several remarks at once -- its node
+    counters, an unconfirmed precondition, output that diverged from the oracle -- and an
+    assignment would keep only whichever happened to be written last."""
+    obs.notes = (obs.notes + "; " + text) if obs.notes else text
+
+
 def node_pressure(text):
-    """(nodes, capacity) high-water for a run, or None if the VM printed no stats."""
+    """(nodes allocated, capacity) for a run, or None if the VM printed no stats.
+
+    READ THE NAME CAREFULLY: this is NOT a high-water. runtime/virtual/exec.c:554 prints
+    `stats.nodes`, and the module sets that from `c->table[3]`, which it calls
+    `nodes_allocated` where it aggregates (module/capstone_vm.c:673, :704) -- a CUMULATIVE
+    count of nodes ever minted. The high-water is a different field, `c->table[1] - 2`, and
+    so are `nodes_live` and `nodes_retired`. None of those three is printed.
+
+    That matters because a cumulative count is not bounded by the capacity and routinely
+    exceeds it: this measurement has runs reading nodes=13480 against node_capacity=13312, and
+    one reading 127102 against 103424 with collections=2 and reclaimed=50557. Comparing them
+    is meaningless, so this value is REPORTED and never gated on. See the comment on
+    CAUSE_RESOURCE for what replaced the gate."""
     best = None
     for m in STATS_LINE.finditer(text or ""):
         nodes, cap = int(m.group(1)), int(m.group(2))
@@ -267,14 +298,17 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         obs.infra = "setup-fault"
         obs.notes = f"the seam failed: code={fail.group(1)} {fail.group(2)[:90]}"
         return obs
-    pressure = node_pressure(text)
-    if pressure and pressure[1] and pressure[0] >= NODE_RESERVE_FRACTION * pressure[1]:
-        obs.infra = "infra"
-        obs.notes = (f"node high-water {pressure[0]} of capacity {pressure[1]}: a cause-30 "
-                     f"resource fault is indistinguishable from a catch, so this is not a reading")
-        return obs
-
     fault = verdicts.domain_fault(text, None)
+    if fault is not None and fault.cause == CAUSE_RESOURCE:
+        obs.infra = "infra"
+        obs.notes = (f"cause-{CAUSE_RESOURCE} resource fault at pc {fault.pc:#x}: the node table "
+                     f"ran out, which lands at an arbitrary pc and is not a reading about the "
+                     f"program")
+        return obs
+    pressure = node_pressure(text)
+    if pressure:
+        note(obs, f"nodes allocated {pressure[0]}, table capacity {pressure[1]} "
+                  f"(cumulative, not a high-water: reported, not gated)")
     said = strip_seam_noise(text)
     obs.completed = (exit_code == 0 and fault is None)
     # TWO ROUTES TO `reached`, AND THE SECOND IS NOT A CONCESSION -- IT IS THE RULE THE FIRST
@@ -309,8 +343,8 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         # listener and then echoes "done" WHETHER OR NOT the listener came up, so a silence here
         # cannot be told apart from a platform that caught nothing. Refusing it is the only
         # honest option; a MISSED would be a claim about revocation drawn from a socket.
-        obs.notes = (f"declared precondition {spec['requires']!r} was not confirmed met by any "
-                     f"arm in this run, so a silence here is not a reading")
+        note(obs, f"declared precondition {spec['requires']!r} was not confirmed met by any "
+                  f"arm in this run, so a silence here is not a reading")
 
     if fault is not None:
         obs.fault = fault
@@ -342,8 +376,9 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         return obs
 
     if said.strip() and not same_as_oracle(said, spec["pristine_stdout"]):
-        obs.notes = (f"completed but its output differs from the corpus's pristine record "
-                     f"({len(said.splitlines())} lines vs {len(spec['pristine_stdout'].splitlines())})")
+        note(obs, f"completed but its output differs from the corpus's pristine record "
+                  f"({len(said.splitlines())} lines vs "
+                  f"{len(spec['pristine_stdout'].splitlines())})")
     return obs
 
 
@@ -472,6 +507,12 @@ def main():
 
     image_sha = subprocess.run(["sha256sum", str(args.image)], capture_output=True,
                                text=True).stdout.split()[0]
+    # The bound probe is a DIFFERENT image on purpose -- probe-seam.dom, built from the seam's
+    # sources without PHP -- so its transcript reports its own sha256 and must be checked
+    # against its own file. Exempting it instead would make the guard unable to notice a stale
+    # probe transcript, which is the one run in the session whose image can change on its own.
+    probe_sha = subprocess.run(["sha256sum", str(args.probe)], capture_output=True,
+                               text=True).stdout.split()[0]
     if not args.from_record:
         stage_inputs(args, cases)
 
@@ -488,12 +529,15 @@ def main():
             rec = json.loads(record.read_text())
         else:
             _, rec = run_arm(args, arm, mode, cases, record, serial, wants_probe)
-        # A stored run from a DIFFERENT image must not be re-judged as this one's.
+        # A stored run from a DIFFERENT image must not be re-judged as this one's. Each run is
+        # checked against the image it was supposed to be, which for the bound probe is the
+        # probe's own.
         for name, lines in rec["output"].items():
+            want = probe_sha if name == BOUND_PROBE else image_sha
             got = re.search(r"sha256=([0-9a-f]{64})", "\n".join(lines))
-            if got and got.group(1) != image_sha:
+            if got and got.group(1) != want:
                 sys.exit(f"{arm}/{name}: the stored transcript is from image {got.group(1)[:12]}, "
-                         f"not {image_sha[:12]}")
+                         f"not {want[:12]}")
         texts[arm] = {n: app_output(l) for n, l in rec["output"].items()}
         sanity_text = texts[arm].get(SANITY, "")
         sanity_ok = (rec["exits"].get(SANITY) == 0
@@ -584,9 +628,8 @@ def main():
                           controls, stock_reached[case], args.llvm_bin, args.image,
                           precondition_met[case], site_licensed[case])
             if case in output_diverged:
-                obs.notes = ((obs.notes + "; ") if obs.notes else "") + (
-                    "the stock arm's output differs from the corpus's pristine record "
-                    "(reported, not gated: see the module docstring on the deviation)")
+                note(obs, "the stock arm's output differs from the corpus's pristine record "
+                          "(reported, not gated: see the module docstring on the deviation)")
             judged = verdicts.judge(obs, arms[arm])
             rows[arm].append((obs, judged))
             table[(case, arm)] = judged

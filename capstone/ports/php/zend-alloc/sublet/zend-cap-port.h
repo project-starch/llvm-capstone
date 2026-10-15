@@ -166,6 +166,10 @@ void  zend_cap_retire(void *p);                        /* ZEND_CAP_RETIRE(p) */
  * the control. sublet_stats is static per translation unit (sublet.h:46-48), so heap.c's
  * counters do not see this layer's -- it needs its own. */
 void zend_cap_stats(unsigned long out[8]);
+/* Arm the atexit printer for the two PHP_VIRTUAL SEAM lines. Idempotent, and called
+ * from the first block allocation: on real PHP nothing else is in a position to print
+ * the revoke count, and the measurement's arm-ordering gate is built on it. */
+void zend_cap_report_at_exit(void);
 #define ZEND_CAP_STAT_BLOCKS   0
 #define ZEND_CAP_STAT_FREES    1
 #define ZEND_CAP_STAT_ISSUES   2
