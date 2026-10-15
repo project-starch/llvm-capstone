@@ -36,6 +36,22 @@ tests `reached` BEFORE attribution, exactly so that a fault during startup is re
 Because one image serves every arm, (2) transfers across arms: the bytes that ran the trigger
 under mode 0 are the bytes running it under mode 7.
 
+(2) HAS A SECOND ROUTE, and it is needed for a case the first route structurally cannot
+describe: one the platform catches even on the stock arm. Such a case has no completing control
+arm by construction, so the rule above makes it un-`reached` on every arm and the judge reports
+`setup-fault` -- the instrument blamed for the clearest result the instrument can produce. This
+is not hypothetical and it is not hindsight: the pre-registration at 692e9d79a244 predicts
+CRASH-022 CAUGHT on all three temporal arms, the weakest included, so the apparatus could not
+have expressed its own prediction. CRASH-022 and CRASH-102 both faulted on the stock arm, at
+ext/standard/array.c:546 and ext/standard/string.c:1332 -- ASAN's own recorded line for each.
+
+So a fault at the case's OWN ASAN-recorded site also establishes `reached`, because that line
+cannot be executed without the trigger having run. That is the same argument this file already
+makes below for cases with an environmental precondition, applied where it is just as true, and
+each Observation records WHICH route licensed it. The honest cost: for such a case the reading
+no longer carries the independent check that a control arm reproduced the oracle's output. It
+is named in the results rather than left to be discovered.
+
 DEVIATION FROM THE PRE-REGISTRATION, stated here because it weakens a stated criterion. The
 pre-registration said the control arm's stdout would have to equal the corpus's recorded
 pristine stdout BYTE FOR BYTE. That cannot be required, and the reason is PHP's own output, not
@@ -230,7 +246,7 @@ def arm_controls(arm, sanity_ok, probe_ok, arms):
 
 
 def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached, llvm_bin,
-            image, precondition_met=True):
+            image, precondition_met=True, site_licensed=False):
     obs = verdicts.Observation(case=case, arm=arm, image_sha256=image_sha, controls=controls)
     # NO DATA IS AN ERROR, NOT A ZERO. Both of these say the harness never got a reading, and
     # both would otherwise fall through to `completed=False, reached=False` -- which the judge
@@ -261,10 +277,32 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     fault = verdicts.domain_fault(text, None)
     said = strip_seam_noise(text)
     obs.completed = (exit_code == 0 and fault is None)
-    obs.reached = bool(stock_reached) and bool(precondition_met)
-    obs.reach_evidence = ("the stock arm ran this case to its normal end, the corpus's pristine "
-                          "record says it completes, and revocation-sanity completed on this arm"
-                          ) if obs.reached else ""
+    # TWO ROUTES TO `reached`, AND THE SECOND IS NOT A CONCESSION -- IT IS THE RULE THE FIRST
+    # ONE IS A PROXY FOR. The question is only ever "did the trigger run", and the control arm
+    # completing with the oracle's output is evidence for that, not the definition of it.
+    #
+    # Derived from the control arm alone, the rule is unable to express a prediction the
+    # pre-registration at 692e9d79a244 actually made: CRASH-022 is predicted CAUGHT on ALL
+    # THREE temporal arms, the weakest included. A case the platform catches even at mode 0 has
+    # no completing control arm by construction, so `reached` would be false on every arm and
+    # the judge would report `setup-fault` -- a fault blamed on the instrument -- for the one
+    # shape of case the platform handles best. CRASH-022 and CRASH-102 both did exactly that.
+    #
+    # The second route is the argument already written below for `requires` cases, applied
+    # where it is just as true: a fault at the case's OWN ASAN-recorded source line cannot be
+    # reached without the trigger having run. Which route licensed a given reading is recorded
+    # in reach_evidence rather than left for a reader to reconstruct.
+    obs.reached = bool(site_licensed) or (bool(stock_reached) and bool(precondition_met))
+    if site_licensed:
+        obs.reach_evidence = (f"some arm of this run faulted at {spec['asan_file']}, the case's "
+                              f"own ASAN-recorded site, which cannot be reached without the "
+                              f"trigger having run")
+    elif obs.reached:
+        obs.reach_evidence = ("the stock arm ran this case to its normal end, the corpus's "
+                              "pristine record says it completes, and revocation-sanity "
+                              "completed on this arm")
+    else:
+        obs.reach_evidence = ""
     if stock_reached and not precondition_met:
         # A case with a declared environmental precondition that NOTHING in this measurement
         # confirmed was met. CRASH-092 is the shape of the problem: it creates its own loopback
@@ -508,11 +546,8 @@ def main():
     # reach that line otherwise -- and that proof then licenses reading a SILENCE on the other
     # arms of the same case. Without it, every `requires` case would be refused on every arm,
     # including the ones that plainly caught it.
-    precondition_met = {}
+    precondition_met, site_licensed = {}, {}
     for case, spec in cases.items():
-        if not spec["requires"]:
-            precondition_met[case] = True
-            continue
         hit = False
         for arm in ARMS:
             text = texts[arm].get(case, "")
@@ -523,10 +558,21 @@ def main():
             if path.endswith(spec["asan_file"]):
                 hit = True
                 break
-        precondition_met[case] = hit
-        print(f"    {case}: precondition {spec['requires']!r} "
-              + ("confirmed by a fault at ASAN's own site" if hit
-                 else "NOT confirmed -- a silence on this case is not a reading"))
+        # THE LICENCE ANSWERS "DID THE TRIGGER RUN", NOT "IS THERE A PAIR TO READ". Those are
+        # different questions and folding them together is wrong in a way the offline suite
+        # caught: CRASH-057's pristine record is SIGNAL:11, so native PHP crashes on it with no
+        # capability platform anywhere near, and a fault of ours is not evidence of a catch
+        # whatever line it lands on. The oracle's premise is kept as a separate conjunct.
+        site_licensed[case] = hit and spec["pristine_outcome"] == "OK"
+        precondition_met[case] = hit if spec["requires"] else True
+        if spec["requires"]:
+            print(f"    {case}: precondition {spec['requires']!r} "
+                  + ("confirmed by a fault at ASAN's own site" if hit
+                     else "NOT confirmed -- a silence on this case is not a reading"))
+        elif hit and not stock_reached[case]:
+            # The case the control-arm rule cannot describe: caught even on the weakest arm.
+            print(f"    {case}: the stock arm did not complete it, but an arm faulted at "
+                  f"{spec['asan_file']} -- the trigger ran")
 
     rows, table = {arm: [] for arm in ARMS}, {}
     for arm in ARMS:
@@ -536,7 +582,7 @@ def main():
             obs = observe(case, spec, arm, image_sha, text,
                           per_arm[arm]["rec"]["exits"].get(case),
                           controls, stock_reached[case], args.llvm_bin, args.image,
-                          precondition_met[case])
+                          precondition_met[case], site_licensed[case])
             if case in output_diverged:
                 obs.notes = ((obs.notes + "; ") if obs.notes else "") + (
                     "the stock arm's output differs from the corpus's pristine record "

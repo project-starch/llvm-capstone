@@ -47,8 +47,13 @@ def fake_symbolize(path, line):
 
 
 def controls(sanity="complete", probe="fault"):
-    return [verdicts.Control(name=R.SANITY, observed=sanity),
-            verdicts.Control(name=R.BOUND_PROBE, observed=probe)]
+    """The declared controls. probe=None for a temporal arm, which declares no bound probe --
+    the judge RAISES on a control an arm does not declare, which is the behaviour that keeps a
+    control from being borrowed from an arm that has one."""
+    out = [verdicts.Control(name=R.SANITY, observed=sanity)]
+    if probe is not None:
+        out.append(verdicts.Control(name=R.BOUND_PROBE, observed=probe))
+    return out
 
 
 def observation_cases():
@@ -124,6 +129,44 @@ def observation_cases():
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
                     "ZEND_CAP_FAIL code=3 unknown key 0x40\n", 139, controls(), True, "/x", "/y")
     check("a seam failure is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
+
+    # Caught on the STOCK arm, so no control arm completed and stock_reached is False. Without
+    # the site licence this is `setup-fault` -- the instrument blamed for the platform's
+    # clearest result -- which is what CRASH-022 and CRASH-102 actually did.
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
+    obs = R.observe("CRASH-022", SPEC, "php-real-stock", SHA, FAULT % SHA, 139,
+                    controls(probe=None), False, "/x", "/y", True, False)
+    check("no licence: a stock-arm catch reads as setup-fault",
+          verdicts.judge(obs, arms["php-real-stock"])[1], "setup-fault")
+    obs = R.observe("CRASH-022", SPEC, "php-real-stock", SHA, FAULT % SHA, 139,
+                    controls(probe=None), False, "/x", "/y", True, True)
+    check("a fault at ASAN's own site licenses reach",
+          verdicts.judge(obs, arms["php-real-stock"])[0], verdicts.CAUGHT)
+    check("and says which route licensed it",
+          "own ASAN-recorded site" in obs.reach_evidence, True)
+
+    # THE LICENCE MUST NOT RESCUE A FAULT SOMEWHERE ELSE. It is granted by a fault at the
+    # case's own site on SOME arm; an arm that faulted in the seam, or at an unrelated line,
+    # still reports unattributed on its own account.
+    R.symbolize = fake_symbolize("ext/standard/url.c", 132)
+    obs = R.observe("CRASH-022", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), False, "/x", "/y", True, True)
+    check("the licence does not attribute a fault elsewhere",
+          verdicts.judge(obs, exact)[1], "unattributed")
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
+
+    # AND THE LICENCE DOES NOT CREATE A PREMISE. A case the pristine build itself crashes on
+    # has no pair to read; where the trigger got to is beside the point. main() withholds the
+    # licence for those, and the offline suite drives that path in main_path_cases().
+
+    # A `requires` case still needs the precondition: the licence and the precondition are the
+    # same fact, so a case with neither is refused exactly as before.
+    req = dict(SPEC, requires="network: working loopback")
+    obs = R.observe("CRASH-092", req, "php-real-stock", SHA, "done\n" + STATS % (100, 9216), 0,
+                    [verdicts.Control(name=R.SANITY, observed="complete")], True, "/x", "/y",
+                    False, False)
+    check("an unconfirmed precondition is still not a reading",
+          verdicts.judge(obs, arms["php-real-stock"])[1], "not-reached")
 
     # The per-run watchdog fired. A killed run is the harness giving up, never a statement
     # about the program -- and in particular never the `not-reached` it would decay to if the
