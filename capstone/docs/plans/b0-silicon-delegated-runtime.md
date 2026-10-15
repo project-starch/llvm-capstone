@@ -2388,6 +2388,78 @@ today.
 **Outputs:** under /tmp/capstone/accept-fpb-r55, with R-43 tags `s8*`, so the first run's `s7*` records and
 0568f93a9's saved records stay intact.
 
+## FP respin acceptance RESULT with the R-55 fixes (2026-10-15, caplifive_fpb_afcd19bea): the FP fixes hold on silicon; R-55's family stops two rows
+Firmwares fw3 (s06agg 8b4cbb4b4dff, boot C+F 060d6566c956, boot W 69895472f098, C5u 1f971278fd42). The shared tree was
+at df0e9a8 / 93440d5, and every R-43 bake carried "R-55 (bounds)". The runs: attempt 3 (13:33-14:02), then attempt 4
+(14:04-16:37), each row its own cold boot.
+
+**Verdict.**
+- **The FP fixes hold on silicon, every reading as pre-registered:** R-52's residual (B3j) and R-53 (B3i, B3f, b3-clock),
+  and R-54 (r54-bounds 64 under (b)).
+- R-51, R-43 and R-29 are unchanged.
+- No row failed in a way the out-of-band WNS explains. Every failure below is attributed to software that assumes
+  SPLIT keeps exact bases (R-55's family).
+- **Two rows fail on that family:** a2 (the monitor's region table) and a9 (the sublet runtime inside a frozen image).
+- C5u's supervision was not exercised.
+
+**Rows run before the monitor mattered** (the first run, bare, before the fixes): S-16 18/18 with 98 readings
+identical; R-51 0x1C/0x1C and 0/0x1C/0x1C; s10b 8/1; s1gap recorded for the RTL lane.
+
+**Linux rows:**
+- **s06agg, three times:** k800 4, s06agg 64, `sched_clock` [0.000165].
+- **a1:** `speedtest1-ran=1320222911`; `R1 m1 end alloc=160 minted=191 revoked=160 retained=0 released=0`; k800 4,
+  instret 1089. Identical to 0568f93a9.
+- **a2: FAIL** at invocation 8 of 12. create_region reports `RGNF:0000E00C RGNN:00000060`: the 96-slot region table
+  is full.
+  - The respin used about 11 slots per invocation (r1/r2 = 18/20, 29/31, ...). 0568f93a9 used about 6 (14/15, 21/22,
+    ...), reaching 81/82 by invocation 12.
+  - Cause: split_out_cap decides head or tail carve on the DECODED bounds, which the full scheme rounds. Nearly every
+    carve becomes a middle carve and leaves an extra fragment.
+- **a3:** 12 wide points, ok 12, bad 0, refused 0; `speedtest1-ran=1320264012`. Identical.
+- **a4, a5, a6:** live-sweep 544, 4352 and 17408 (R-43 stays fixed).
+- **a7, the ladder:** 17 of 17 retval == oracle; instret identical to 0568f93a9's run on all 17; cycles within ±1.6%.
+  - The first cold boot hit a JTAG/USB error (`LIBUSB_ERROR_NO_DEVICE`), and the driver retried.
+- **a8, P1 cell 5:** `112006 38bb59fd`; SPEEDTEST1-CYCLES 1157815881 / 855987678 (+0.02% / -0.05%).
+- **a9, P1 cell 6: FAIL** (a wedge, recorded by its driver as rc 0; see below).
+  - The domain entered (`ENT0`) and never returned. The trap log reads mcause 26 (UNEXPECTED_CAPABILITY_TYPE), mepc
+    DBAS+0x3a170, tval 0xac11a8c0.
+  - The faulting instruction is `revoke t0` in `sqlite3DbNNFreeNN`, on a capability loaded from the sublet slot
+    table.
+  - Mechanism (model, not traced per slot): `sublet_carve` (runtime/include/sublet/sublet.h) hands out the lower piece
+    of `split(from, end)`, at `from`'s decoded start. Under the full scheme every allocation after the first starts
+    below its own start, with its cursor there: on a 2 MiB arena the second 64 B allocation's cursor sits on the
+    first's. That corrupts the slot table. 0568f93a9 ran this frozen image to the end (1241480977 cycles).
+- **a10:** mcause 25, mepc DBAS+0x4354, tval 0xac100000, refusal latched. As pre-registered. The refusal id reads 0x63
+  against 0x5f, a node id that shifts with allocation history.
+- **C5u: functional only.** Its 2026-10-03 monitor cannot be regenerated, so it ran the current supervised-call line.
+  - Four supervised-mode speedtests, hash `112006 38bb59fd` each, k800 4.
+  - But no SUP* trace tag appeared, and all four read about 2.552 G cycles. On 0568f93a9 the same four read 2.552 G
+    baseline, 2.569 G and 2.570 G quiet (+0.67%), and 2.905 G loud.
+  - So supervised preemption was not exercised. This row does not test it on this firmware.
+- **Boot C+F: every row as pre-registered.**
+  - B3j: A-D 0 of 40,000 wrong, and the checker control passes.
+  - B3i: all I, except k's fs5 (`?`), as predicted.
+  - B3f: every variant 0 of 12, and v7 exactly 1.
+  - b3-clock: arith 0 of 200,000; self-test 1; hold-native and hold-domain 0; now() in the hundreds of seconds beside
+    the integer clock.
+  - stop_seconds 4.52 / 5.20: above the soft QEMU-based expectation of 1.1-1.5 s, not a refutation.
+  - b3-oracle transcript `e0a254c47e7ee28c`, 1,931,207 bytes; b1-thread 124; b2 VERSION/STORED/VALUE.
+  - r54-bounds 64, with all four arms covering.
+- **Boot W:** cw-align rc 8 (every global BEYOND) and cw-pool rc 0 (every global its own storage). As pre-registered,
+  so the pool carve is confirmed on silicon.
+
+**Instrument note.** board-c6var.sh ended a wedged cell 6 with rc 0 ("done") and no SPEEDTEST1-CYCLES. Its verdict did
+not require the result line it exists to read. The chain read the row through that rc, and the wedge was caught by
+reading the transcript.
+
+**Open, R-55's family:**
+1. The region table: split_out_cap's head/tail tests read decoded bounds. The fix is nominal bounds per region, which
+   on the board line needs a larger boot stack. Raising the 96-slot limit only postpones it.
+2. The sublet runtime: `sublet_carve` (and `sublet_take_linear`'s `capstone_cap_base`) must not take a lower piece's
+   decoded start for its carve point. Frozen images built on it cannot pass on a full-scheme bitstream.
+3. Isolation: remainders still overlap carved pieces. The PMP masks the monitor's own range.
+4. QEMU's physical profile keeps exact SPLIT bases, so none of this is visible before silicon.
+
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
 sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one

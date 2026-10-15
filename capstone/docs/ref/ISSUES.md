@@ -2072,7 +2072,7 @@ everything inside delegated domains, are unaffected.
 >   take E+1. Verified in the lane's model over 400,000 regions x three cursors: 0 not covering, against 519 without.
 >   check-repr will model it from the commit.
 
-### R-55 — under the full bounds scheme the FPGA monitor's boot-time carves land their cursors below the carve point; `mtime` reads the CLINT's msip, S-mode time is 0 and Linux hangs in start_kernel `OBSERVED ON SILICON 2026-10-15 (caplifive_fpb_afcd19bea; option (b) 4a4261bb4 and the Sublet build carry the same encoder change); CONFIRMED by a one-cursor firmware change that boots Linux on the same bitstream (boot M); the fix is a monitor change, which the lead decides`
+### R-55 — under the full bounds scheme the FPGA monitor's boot-time carves land their cursors below the carve point; `mtime` reads the CLINT's msip, S-mode time is 0 and Linux hangs in start_kernel `OBSERVED ON SILICON 2026-10-15 (caplifive_fpb_afcd19bea; option (b) 4a4261bb4 and the Sublet build carry the same encoder change); CONFIRMED by a one-cursor firmware change that boots Linux on the same bitstream (boot M). PARTLY FIXED 2026-10-15 in the monitor (lane branches, not yet on capstone-bootstrap): Linux, R-43 a1/a3-a6/a10, the ladder, P1 cell 5 and the B-series and FP probes pass on the respin. OPEN: the region table (R-43 a2) and the sublet runtime (P1 cell 6)`
 
 > **The symptom.** On caplifive_fpb_afcd19bea, every Linux boot stops right after the `sched_clock` line.
 > - That line is itself stamped `[0.000000]` (on 0568f93a9: `[0.000168]`). It is followed by `[ cut here ]`, which is
@@ -2144,6 +2144,22 @@ everything inside delegated domains, are unaffected.
 > **Why the gate missed it.** check-repr's monitor model replayed create_domain only, and judged each piece's bounds
 > (SHORT/OVERLAP), never the cursor the monitor dereferences. The RTL lane's option (b) recommendation also did not
 > ask who relies on a lower piece's cursor landing on the carve point.
+>
+> **The fix and what it reached on the board (2026-10-15).** These pieces carry the fix:
+> - caplifive-opensbi df0e9a8 / d7489e3: cap_env_init's MMIO cursors;
+> - capstone-sbi 6dad416 / fc5e3c6: explicit cursors in create_domain's copy, create_region and share_child_region;
+> - capstone-sbi 93440d5 / 7361e1c: split_out_cap SHRINKs its piece to exactly [base, base + len). Without it a CMA
+>   REGION_CREATE decoded from 0x80000000 (about 700 MiB) and libcapstone refused to map it.
+>
+> All FPGA only, with QEMU's assembly byte-identical. On caplifive_fpb_afcd19bea, Linux, the R-43 list, the ladder,
+> P1 cell 5 and boot C+F (the B-series and the FP probes) now read as on 0568f93a9 (plan doc, "FP respin acceptance
+> RESULT with the R-55 fixes"). Two rows still fail on the same family:
+> - **the region table:** split_out_cap decides head or tail on DECODED bounds. Nearly every carve leaves an extra
+>   fragment, about 11 slots per invocation against 6, so R-43 a2 fills the 96-slot table at invocation 8 of 12.
+> - **the sublet runtime:** `sublet_carve` hands out SPLIT's lower piece at `from`'s decoded start. Under the full
+>   scheme every allocation after the first starts, and points, below its own start (model: the second 64 B allocation
+>   of a 2 MiB arena points at the first). The frozen P1 cell-6 image wedges with mcause 26 at `revoke t0` in
+>   sqlite3DbNNFreeNN. It ran to the end on 0568f93a9.
 >
 > **The fix space (the lead's).** The RTL lane recommends no RTL change: a carve sets its cursor explicitly. The
 > alternatives are:
