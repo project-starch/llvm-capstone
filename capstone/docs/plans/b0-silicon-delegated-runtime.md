@@ -2686,6 +2686,95 @@ Launch:
   CAPSTONE_EXEC_DIAGNOSTICS, so the split between the 2.9 MB image, the 64 MiB domain's regions and mrb_open is not
   measured. The domain's size is the first suspect, since B0_DATA (40 MiB) is far above QEMU's peak use.
 
+## R-55 (regions) pre-registered (2026-10-15, before the boot): a nominal-bounds region table with exact remainders, R-43 a2 on caplifive_fpb_afcd19bea
+**The change** (all FPGA; QEMU's monitor assembly byte-identical, plain and supervised):
+- **The monitor** (capstone-sbi r55/board-exact eb88326 on the board line, the same change as r55/exact-regions
+  ebe0a25 on the supcall line):
+  - every slot carries its nominal bounds;
+  - with exact_regions, coverage and head/tail are decided on them;
+  - after boot every remainder is cut into pieces whose decoded bounds equal their nominal ones (SPLIT, then SHRINK,
+    then a read-back that reports EXCT if a piece is still inexact);
+  - a cut the decoded bounds do not allow is reported (EXCS), never executed;
+  - CAPSTONE_MAX_REGION_N is 127, the most capstone-c's dom_init can carve.
+- **The wrapper** (caplifive-opensbi r55/board-exact a8bdc90; supcall line 1269c77):
+  - exact_regions turns on only when the encoder rounds (region 1's decoded base is not _cap_text_end);
+  - Linux's region ends at 0xC0000000 (every remainder <= 1 GiB, granule <= 1 MiB);
+  - the boot's slots are cut exact;
+  - the plain dom_stack is 16 KiB (gate: 8336 B carved).
+- **Module and libcapstone:** MAX_REGION_N 127 (caplifive-buildroot r55/region-limit-127 211d48a). The rr host is
+  rebuilt against it: 0a5c9025e8e6f5db, by the recipe that reproduces 2c9e82d101b48160 byte for byte.
+
+**The instrument** (tests/runtime-qemu/silicon-ladder/r55-regions/): a replay of the region table.
+- It uses check-repr's literal port of the RTL encoder and the monitor's carve algorithm, under the recorded a2 carve
+  sequences.
+- Controls:
+  - it reproduces every slot id of 0568f93a9's a2 under cursorless (14 tests) and of the respin's under the full
+    scheme (9 tests, table full at 96);
+  - its OVERLAP metric reads 0 on 0568f93a9 and 508 pairs over 47 carved ranges on the respin.
+- Under the new policy: 111 slots for 0568f93a9's twelve invocations plus the closing k800, OVERLAP 0, no inexact
+  piece.
+
+**The boot** (board line, plain build through the shared buildroot):
+- The shared checkout was moved from buildroot d04bd83 / opensbi df0e9a8 / capstone-sbi 93440d5 to 211d48a / a8bdc90
+  / eb88326.
+- The runner is the R-43 a2 list unchanged (r1_slots_pools 1b7a04fe237e1580, relinked k800 589ceee3), output tag s9a2.
+
+**Predictions:**
+1. **As a2's own pre-registration:**
+   - RESULT k800 retval=4 twice, from the relinked control;
+   - 12 x speedtest1-ran=0x4EB1xxxx;
+   - every R1 point line ok=1 bad=0;
+   - 12 x released pool rc=1;
+   - no cause-25.
+   So Linux boots on the new boot carve, and the twelfth invocation completes. On the respin the table filled at
+   invocation 8.
+2. **No RGNF, RGNO, EXCT or EXCS line.**
+3. **Region ids:**
+   - If every DBAS/BASE equals 0568f93a9's sequence (the respin's first eight did), the ids are:
+     - opening k800: [24];
+     - invocations: [28,29,31,32,34], [36,37,38,39,41], [42,43,44,45,47], [49,50,51,52,53],
+       [55,56,58,59,61], [63,64,65,66,68], [69,70,71,72,74], [76,77,78,79,81], [82,83,84,85,86],
+       [88,90,92,93,95], [96,97,98,99,101], [103,104,105,106,108];
+     - closing k800: [110].
+   - Whatever the addresses, the replay of the board's own recorded sequence must reproduce every id it reads, and
+     report OVERLAP 0.
+
+**What a failure would say:**
+- Linux does not boot: the boot carve (the DRAM split or the post-boot cutting) is wrong. The fallback is the
+  shared checkout's previous pins (a firmware load, no reflash).
+- RGNF: the slot budget is wrong.
+- EXCT: the granule rule mispredicts exactness on silicon.
+- Ids that differ while the addresses equal the record: the C and the replay disagree. Diff the two algorithms
+  before anything else.
+
+**Amended 2026-10-16, before the boot: a2 runs on caplifive_sublet_d93a8d66b instead.** The FP respin is no longer
+flashed. The predictions above are unchanged:
+- d93a8d66b's encoder makes the same E decision as afcd19bea's on every representable region (RTL lane,
+  2026-10-16);
+- its one SPLIT change (a non-linear SPLIT keeps its node) changes node consumption, not the monitor's region table;
+- the Sublet acceptance's Linux rows passed on this bitstream with the previous monitor.
+The run is run-accept-exact.sh a2 with tag s9a2. The shared checkout moves to buildroot 211d48a, opensbi a8bdc90 and
+capstone-sbi eb88326 for the boot, and an EXIT trap restores d04bd83 / df0e9a8 / 93440d5.
+## R-55 (regions) RESULT (2026-10-16 03:22-03:40, caplifive_sublet_d93a8d66b, firmware 98d83e4ea98d): every prediction holds
+The board line with exact regions ran R-43 a2: wrapper a8bdc90, monitor eb88326, module and libcapstone at 127 slots
+(buildroot 211d48a), host 0a5c9025e8e6f5db, tag s9a2. The shared checkout returned to d04bd83 / df0e9a8 / 93440d5
+afterwards.
+- **First attempt, 03:20:** refused by the preflight before any boot. The Sublet name is in dev's preflight table but
+  not in the shared checkout's older copy. It was re-run with PREFLIGHT_DTS_NODES=65536 declared.
+- **Prediction 1 holds:**
+  - all 12 invocations complete, where the respin's table filled at 8;
+  - 60 of 60 R1 point lines ok=1 bad=0, and 12 x released pool rc=1;
+  - k800 4 twice from the relinked control;
+  - speedtest1-ran 1320222720 at the first invocation.
+- **Prediction 2 holds:** no RGNF, RGNO, EXCT or EXCS line in the transcript.
+- **Prediction 3 holds, by its second clause.** The CMA placed the shares elsewhere than 0568f93a9's record (first share
+  0x8125f000 against 0x818c0000), so the conditional id list does not apply.
+  - extract.py turns the board's own sequence into r55-regions/a2-sublet-d93a8d66b.json.
+  - replay.py --format full --policy exact --region2-end 0xC0000000 reproduces every id: 0 of 14 tests differ.
+  - It reports OVERLAP 0 and 0 inexact pieces, with 115 slots used and 104 live.
+- With C5u's clean run of the supcall line's same change (no EXCT, EXCS or RGNF; 1,282 supervised preemptions), the
+  region-table half of R-55 is fixed on silicon. It awaits landing on capstone-bootstrap.
+
 ## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
 The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
 sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one
@@ -2974,6 +3063,64 @@ change.
   - CREVOKE ends a child and its grandchild (the subtree) and leaves the group live with the bytes in place;
   - the range is reusable by a fresh child.
 - This is the allocator pattern the bug corpus's malloc arms need. It runs with no monitor change.
+
+## Boot P pre-registered (2026-10-16, before the boot): the process ABI on the exact-regions supcall line, and where B5's launch goes
+The last silicon row the R-55 plan owes:
+- the process ABI on the exact-regions monitor, with the 127-slot module;
+- an attribution of B5's 45.5 s cold launch.
+It runs on caplifive_sublet_d93a8d66b.
+
+- **Firmware 1b44a465d96753b2:** wrapper 1269c77 + monitor ebe0a25 (r55/exact-regions, the change a2 just read on the
+  board line), with boot C+F's supervised-call defines.
+- **Private Image ae58cf97765442da,** carrying:
+  - the 127-slot process-ABI module f2a2645cc570dcc6, as /capstone.ko and capstone-proc.ko;
+  - B5's mruby.dom a7ac283d7050a5d8 and its scripts;
+  - b0-hello, b5-hello, r54-bounds, cw-pool 24b8a8f477942e2d and b6-sublet d989874aa2ca0161;
+  - b0run.sh 726913dd4ed8d239.
+- **b0run.sh's new rungs,** b5-mruby-e-stats and b5-mruby-stdin-stats: B5's e and stdin steps with
+  CAPSTONE_DELEGATE_STATS=1. capstone-exec then prints `launch ticks image= hash= spawner= device= domain= regions=
+  seccomp= total=` (rdtime at each stage boundary, exec.c report_stats) and its delegate counters. The hash check and
+  the retvals are the plain steps'.
+- **Rungs:** b0-stats b0-hello b5-hello b5-mruby-e-stats b5-mruby-stdin-stats b5-mruby-bench r54-bounds cw-pool
+  b6-sublet b0-stats2.
+
+**Predictions:**
+- every rung's retval 0, except r54-bounds 64;
+- mruby e 53c234e5e8472b6a, stdin 5476dba1f4bd59f1, bench 8d1539bc79e2b630;
+- bench times within a few percent of B5's (same image and bitstream family);
+- b6-sublet 0 under this monitor, cw-pool 0;
+- no EXCT, EXCS or RGNF line.
+
+**Exploratory, no prediction:** the launch-tick split, and whether e (the first launch in the boot) and stdin read
+B5's cold 45.5 s and cached 24.6 s.
+
+**What a failure would say:** the boot differs from B5's only in the monitor (exact regions) and in the module (127
+slots), so a refused launch, a fault or a differing hash points at one of those two.
+
+## Boot P RESULT (2026-10-16 03:42-03:55, caplifive_sublet_d93a8d66b, firmware 1b44a465d967): every rung as pre-registered
+The exact-regions supcall monitor (ebe0a25) and the 127-slot process-ABI module run every B-series rung.
+- **Rungs:** b0-stats 0, b0-hello 0, b5-hello 0; b5-mruby-e-stats 0, b5-mruby-stdin-stats 0, b5-mruby-bench 0; r54-bounds
+  64; cw-pool 0; **b6-sublet 0**; b0-stats2 0.
+- **mruby's hashes:** 53c234e5e8472b6a, 5476dba1f4bd59f1, 8d1539bc79e2b630, as B5.
+- **Wall times:** e 45.74 s, stdin 24.99 s and bench 326.51 s. B5 read 45.5 s cold and 24.6 s cached.
+- No EXCT, EXCS or RGNF.
+
+**Where B5's launch goes** (capstone-exec's launch ticks: rdtime at each stage boundary; timebase 12.5 MHz, the board
+DTS's `timebase-frequency = <0xbebc20>`):
+
+| launch | image | spawner | device | domain | regions | seccomp | launch total | wall |
+|---|---|---|---|---|---|---|---|---|
+| mruby -e, first launch (cold) | 2.37 s | 0.11 | 0.12 | **22.93 s** | **9.12 s** | 0.44 | 35.09 s | 45.74 s |
+| mruby stdin, second launch | 2.29 s | 0.11 | 0.12 | 2.18 s | **9.16 s** | 0.43 | 14.29 s | 24.99 s |
+| b0-hello (128 KiB image, 256 KiB domain) | 0.17 s | 0.11 | 0.13 | 0.36 s | 0.43 s | 0.44 | 1.64 s | |
+
+- The cold launch's extra 20.7 s is all in the domain stage (from the device open to the domain's creation). A second
+  launch pays 2.2 s there.
+- Mapping the domain's regions costs 9.1 s on every launch of the 64 MiB mruby domain, against 0.43 s for b0-hello's.
+  That scales with the domain's size, not its image.
+- After the launch, about 10.7 s remains on both runs (the program and its exit), which these ticks do not split.
+- Exploratory, not a prediction. The stage boundaries are exec.c's launch_mark calls. What happens inside the domain and
+  regions stages (the monitor's create_domain and the CMA mapping of the regions) is not split by them.
 
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
