@@ -248,6 +248,31 @@ static inline unsigned long capstone_cap_end(capstone_cap_slot *slot) {
   return v;
 }
 
+/* The cursor of the capability in [slot]. Sublet keeps a region's NOMINAL base there (sublet/sublet.h): under a
+ * full-scheme bounds encoder the decoded base of a long region rounds down below it (ISSUES R-55). */
+static inline unsigned long capstone_cap_cursor(capstone_cap_slot *slot) {
+  unsigned long v;
+  __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n"
+                   ".insn r 0x5b, 0x1, 0x04, %0, t0, x2\n"
+                   ".insn s 0x5b, 0x4, t0, 0(%1)\n"
+                   : "=&r"(v)
+                   : "r"(slot)
+                   : "t0", "memory");
+  return v;
+}
+
+/* Narrow [slot] to [base, end) in place (SHRINK). Both must lie within its decoded bounds and base < end, or SHRINK
+ * traps. The node is kept, and the cursor is clamped into [base, end]. The new bounds are exact when the range is
+ * representable; otherwise the encoder rounds them outward again. */
+static inline void capstone_cap_shrink(capstone_cap_slot *slot, unsigned long base, unsigned long end) {
+  __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%0)\n"
+                   ".insn r 0x5b, 0x1, 0x01, t0, %1, %2\n"
+                   ".insn s 0x5b, 0x4, t0, 0(%0)\n"
+                   :
+                   : "r"(slot), "r"(base), "r"(end)
+                   : "t0", "memory");
+}
+
 /* Clear storage whose authority is dead or has moved; this does not revoke. */
 static inline void capstone_cap_clear(capstone_cap_slot *slot) {
   __asm__ volatile(".insn s 0x5b, 0x4, x0, 0(%0)\n" : : "r"(slot) : "memory");
