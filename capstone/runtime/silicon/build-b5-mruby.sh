@@ -74,11 +74,15 @@ PY
 # patch 0009's delegated IO.popen calls capstone_mruby_spawn, which the port keeps in spawn-shell.c (the virtual
 # build links it as MRBD_SPAWN_OBJECT): compiled here with the same silicon flags.
 "$W/bin/silicon-cc" -c "$CAP/ports/mruby/app/spawn-shell.c" -o "$W/spawn-shell.o"
-OBJS="$OBJS $W/spawn-shell.o"
+# silicon-alloc.c: mruby's allocator (mrb_basic_alloc_func) on size classes, since level0's first-fit list is
+# O(live blocks) per call. It goes FIRST: lld then never extracts allocf.o from libmruby.a, whose definition would
+# otherwise collide with it (a duplicate-symbol error, not a silent choice).
+"$W/bin/silicon-cc" -c "$CAP/ports/mruby/app/silicon-alloc.c" -o "$W/silicon-alloc.o" -DB5_SLAB_BYTES=${B5_SLAB:-$((16 << 20))}
+OBJS="$W/silicon-alloc.o $OBJS $W/spawn-shell.o"
 echo "silicon mruby: $(echo $OBJS | wc -w) objects/archives from rake; native $(ls -la "$M/build/native/bin/mruby" | awk '{print $5}') bytes"
 
 export B0_APP=mruby B0_APP_OBJS="$OBJS"
-export B0_STACK=${B0_STACK:-$((1 << 20))} B0_DATA=${B0_DATA:-$((40 << 20))} B0_ARENA=${B0_ARENA:-$((32 << 20))}
+export B0_STACK=${B0_STACK:-$((1 << 20))} B0_DATA=${B0_DATA:-$((40 << 20))} B0_ARENA=${B0_ARENA:-$((16 << 20))}
 export B0_CAP_FORMAT=${B0_CAP_FORMAT:-full} B0_CAP_RENORM=${B0_CAP_RENORM-1} B0_GLUE_CARVE=${B0_GLUE_CARVE:-pool}
 export OUT_DIR=${OUT_DIR:-$W/out}
 exec bash "$HERE/build-b0-hello.sh"
