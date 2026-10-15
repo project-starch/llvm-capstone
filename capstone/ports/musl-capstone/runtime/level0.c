@@ -49,6 +49,8 @@ struct l0_block {
 	char _pad[L0_ALIGN - (sizeof(int) % L0_ALIGN)];
 };
 
+/* With CAPSTONE_LEVEL0_LIFETIMES the arena is the parent of one CDERIVE group, which must be exact: the pool carve
+   (B0_GLUE_CARVE=pool) places every global on its own full-scheme granule, so it is. */
 static char l0_arena[CAPSTONE_LEVEL0_ARENA_BYTES] __attribute__((aligned(L0_ALIGN)));
 static struct l0_block *l0_head;
 
@@ -89,6 +91,9 @@ static size_t l0_round(size_t n)
 #ifndef CAPSTONE_LEVEL0_OBJECT_BOUNDS
 #define CAPSTONE_LEVEL0_OBJECT_BOUNDS 1
 #endif
+#ifndef CAPSTONE_LEVEL0_LIFETIMES
+#define CAPSTONE_LEVEL0_LIFETIMES 0
+#endif
 #if CAPSTONE_LEVEL0_OBJECT_BOUNDS
 static void *l0_narrow(void *p, size_t n)
 {
@@ -106,8 +111,55 @@ static size_t l0_readable(void *p, size_t block)
 	unsigned long have = __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_cursor(p);
 	return have < block ? have : block;
 }
+#if CAPSTONE_LEVEL0_LIFETIMES
+/* CAPSTONE_LEVEL0_LIFETIMES (off by default): temporal safety on the Sublet bitstream, the bug corpus's silicon-malloc
+ * arm. Every object is a CDERIVE child of one group over the arena, at exactly its request size, and free ends it with
+ * CREVOKE, so every copy of a freed pointer dies before the block is reused (a later load or store traps 25; the
+ * stale-access arm on caplifive_sublet_d93a8d66b). B6 measured the pattern on silicon: a perm-7 block derives a group
+ * with MANAGE, and the group derives and revokes its children (capstone_dyn_unit.anvil:272 / :306). The header stays
+ * below the payload and is reached through the arena, as with object bounds. Needs CAPSTONE_LEVEL0_OBJECT_BOUNDS. */
+#include <capstone/capability.h>
+static void *l0_group;
+/* A child is derived only where its bounds are EXACT at this placement: below 4 KiB always, above when base and
+ * length are multiples of the full scheme's granule 2^(hb(n) - 9). QEMU's physical profile refuses an inexact child
+ * (29) and the RTL would round it outward over the neighbouring header, so such a request (the runtime's own 44 KiB
+ * startup buffer is one) keeps level0's plain narrowing and no lifetime. Every corpus object is exact at its 16-byte
+ * placement (silicon-predictions/2026-10-16-plain). free tells the two apart by MANAGE, which only CDERIVE mints. */
+static size_t l0_unexact;
+size_t __capstone_level0_unexact(void) { return l0_unexact; }
+static int l0_exact(unsigned long base, size_t n)
+{
+	if (n < 4096)
+		return 1;
+	unsigned long g = 1ul << (63 - __builtin_clzl(n) - 9);
+	return base % g == 0 && n % g == 0;
+}
+static void *l0_child(void *p, size_t n)
+{
+	if (!l0_group)
+		l0_group = capstone_cap_derive(l0_arena, 0, CAPSTONE_LEVEL0_ARENA_BYTES);
+	if (!l0_exact(__builtin_capstone_cap_get_cursor(p), n)) {
+		l0_unexact++;
+		return l0_narrow(p, n);
+	}
+	return capstone_cap_derive(l0_group, __builtin_capstone_cap_get_cursor(p) -
+	                                     __builtin_capstone_cap_get_cursor(l0_arena), n);
+}
+static void l0_end_lifetime(void *p)
+{
+	unsigned long perm;
+	__asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x5" : "=r"(perm) : "r"(p));
+	if (perm & CAPSTONE_PERM_MANAGE)
+		capstone_cap_revoke_child(l0_group, p);
+}
+#define L0_RETURN(p, n) l0_child((p), (n))
+#define L0_REALLOC_IN_PLACE(p, b, n) (l0_end_lifetime(p), l0_child((char *)(b) + sizeof(struct l0_block), (n)))
+#define L0_END_LIFETIME(p) l0_end_lifetime(p)
+#else
 #define L0_RETURN(p, n) l0_narrow((p), (n))
 #define L0_REALLOC_IN_PLACE(p, b, n) l0_narrow((char *)(b) + sizeof(struct l0_block), (n))
+#define L0_END_LIFETIME(p) ((void)0)
+#endif
 #else
 static struct l0_block *l0_header(void *p)
 {
@@ -115,7 +167,11 @@ static struct l0_block *l0_header(void *p)
 }
 #define L0_RETURN(p, n) (p)
 #define L0_REALLOC_IN_PLACE(p, b, n) (p)
+#define L0_END_LIFETIME(p) ((void)0)
 #define l0_readable(p, block) (block)
+#if CAPSTONE_LEVEL0_LIFETIMES
+#error "CAPSTONE_LEVEL0_LIFETIMES needs CAPSTONE_LEVEL0_OBJECT_BOUNDS"
+#endif
 #endif
 
 /* CAPSTONE_LEVEL0_STATS: what a port needs to size CAPSTONE_LEVEL0_ARENA_BYTES, opt-in and
@@ -192,6 +248,7 @@ static void *l0_malloc(size_t n)
 static void l0_free(void *p)
 {
 	struct l0_block *b = l0_header(p);
+	L0_END_LIFETIME(p);
 	L0_NOTE_FREE(b);
 	b->free = 1;
 	/* Coalesce forward. One pass is enough because every free does it, so a
