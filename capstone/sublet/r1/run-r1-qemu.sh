@@ -28,4 +28,6 @@ if [ "$rc" -eq 0 ] && grep -aq 'R1_RC=0' "$OUT/boot.log"; then
   echo "image $(sha256sum "$R1_DOM" | cut -d' ' -f1) host $(sha256sum "$R1_HOST" | cut -d' ' -f1) $(date -u +%FT%TZ) args: $ARGS" \
     > "$PASSDIR/$(sha256sum "$R1_DOM" | cut -d' ' -f1)"
 fi
-grep -aoE 'R1 [^\r\n]*|SQ: speedtest1-ran=[0-9]+|SQ: [a-z -]*(fault|abort|did not run|trap)[^\r\n]{0,80}|R1_RC=[0-9]+|domain halted[^\r\n]{0,120}|cause = [0-9]+, pc = 0x[0-9a-f]+[^\r\n]{0,60}' "$OUT/boot.log" | sed 's/^/  /'
+# [^[:cntrl:]], not [^\r\n]: inside an ERE bracket \r is a backslash and an r, so the old class cut every line at its
+# first 'r' or 'n' (R1 lines printed as 'R1 m1 e').
+grep -aoE 'R1 [^[:cntrl:]]*|SQ: speedtest1-ran=[0-9]+|SQ: [a-z -]*(fault|abort|did not run|trap)[^[:cntrl:]]{0,80}|R1_RC=[0-9]+|domain halted[^[:cntrl:]]{0,120}|cause = [0-9]+, pc = 0x[0-9a-f]+[^[:cntrl:]]{0,60}' "$OUT/boot.log" | sed 's/^/  /'
