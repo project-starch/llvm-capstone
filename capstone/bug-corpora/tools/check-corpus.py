@@ -130,6 +130,9 @@ ARM_ORACLES = {
     # transcript by tools/silicon-verdicts.py. tools/arms.json says what each configuration is.
     "silicon-lifetimes": {"oracle"},
     "silicon-level0": {"oracle"},
+    "silicon-subobject": {"oracle"},
+    "silicon-pool-stock": {"oracle"},
+    "silicon-pool-sublet": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),

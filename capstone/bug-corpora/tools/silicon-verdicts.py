@@ -3,6 +3,11 @@
 
   silicon-verdicts.py --arm ARM --configuration CONFIG --matrix board-matrix.json --transcript board-corpus.txt
                       --images DIR --llvm-bin DIR --stamp STAMP --platform KEY=VALUE... [--extra KEY=VALUE...]
+                      [--prefix ARM:] [--row-control ROW=CONTROL...]
+
+--prefix is for a boot that ran several arms: its blocks are named `<arm>:<run>`. --row-control turns a matrix row
+that is a control rather than a case (FFmpeg pool-repros' controls/virtual/90, for example) into the configuration's
+named control: its buggy run's fault means `fault`, and a clean exit means `complete`.
 
 The board lane's matrix is a REPORT. This tool re-reads the run itself from the board transcript, and judges every
 case with tools/verdicts.py exactly as the QEMU arms are judged. It writes one bundle per corpus, at
@@ -71,6 +76,8 @@ def main():
     p.add_argument("--stamp", required=True)
     p.add_argument("--platform", action="append", default=[])
     p.add_argument("--extra", action="append", default=[])
+    p.add_argument("--prefix", default="")
+    p.add_argument("--row-control", action="append", default=[])
     p.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
     arms = v.load_arms()
@@ -80,14 +87,30 @@ def main():
     matrix = json.loads(a.matrix.read_text())
     runs = blocks(a.transcript)
 
+    pre = a.prefix
+    row_controls = dict(kv.split("=", 1) for kv in a.row_control)
     ctl_symbols = v.Symbols(a.llvm_bin, a.images / "controls.dom")
     controls = []
     for name in spec["controls"]:
-        observed, evidence = control_observed(runs.get(f"control-{name}"), ctl_symbols)
+        if name in row_controls.values():
+            continue
+        observed, evidence = control_observed(runs.get(f"{pre}control-{name}"), ctl_symbols)
         controls.append(v.Control(name=name, observed=observed, evidence=evidence))
+    for row in matrix["rows"]:
+        if row["name"] in row_controls:
+            image = a.images / f"{row['name']}.dom"
+            if v.sha256(image) != row["image_sha256"]:
+                raise SystemExit(f"{row['name']}: image sha256 is not the matrix's")
+            observed, evidence = control_observed(runs.get(f"{pre}{row['name']}-buggy"), v.Symbols(a.llvm_bin, image))
+            controls.append(v.Control(name=row_controls[row["name"]], observed=observed, evidence=evidence))
+    missing = sorted(set(spec["controls"]) - {c.name for c in controls})
+    if missing:
+        raise SystemExit(f"controls {missing} of {a.configuration} have no run in this transcript")
 
     per_corpus, disagree = {}, []
     for row in matrix["rows"]:
+        if row["name"] in row_controls:
+            continue
         name, case = row["name"], row["case"]
         corpus = REPO / row["corpus"]
         image = a.images / f"{name}.dom"
@@ -96,7 +119,7 @@ def main():
         digest = v.sha256(image)
         if digest != row["image_sha256"]:
             raise SystemExit(f"{name}: image sha256 {digest[:16]} is not the matrix's {row['image_sha256'][:16]}")
-        fixed, buggy = runs.get(f"{name}-fixed"), runs.get(f"{name}-buggy")
+        fixed, buggy = runs.get(f"{pre}{name}-fixed"), runs.get(f"{pre}{name}-buggy")
         if fixed is None or buggy is None:
             raise SystemExit(f"{name}: the transcript has no {'fixed' if fixed is None else 'buggy'} run")
         obs = v.Observation(case=case, arm=a.arm, controls=controls, image_sha256=digest)

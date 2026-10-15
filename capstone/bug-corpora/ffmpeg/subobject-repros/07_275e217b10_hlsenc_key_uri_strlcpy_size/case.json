@@ -74,6 +74,24 @@
       "verdict": "MISSED",
       "verdict_note": "reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault",
       "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "silicon-level0": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), level0 as it ships (tools/arms.json silicon-level0). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls behaved as tools/arms.json declares. Pre-registered by the board lane (lane 1ef381aaa812, before the boot): MISSED.",
+      "verdict": "MISSED",
+      "verdict_note": "reached (case=7 arm=buggy) and completed with no fault; silicon; buggy run end kind=exit value=0",
+      "verdict_from": "results/2026-10-16-silicon/silicon-level0"
+    },
+    "silicon-lifetimes": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), level0 with CAPSTONE_LEVEL0_LIFETIMES (tools/arms.json silicon-level0-lifetimes). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls behaved as tools/arms.json declares. Pre-registered by the board lane (lane 1ef381aaa812, before the boot): MISSED.",
+      "verdict": "MISSED",
+      "verdict_note": "reached (case=7 arm=buggy) and completed with no fault; silicon; buggy run end kind=exit value=0",
+      "verdict_from": "results/2026-10-16-silicon/silicon-lifetimes"
+    },
+    "silicon-subobject": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), level0 with every source compiled with -Xclang -fcapstone-subobject-bounds (tools/arms.json silicon-level0-subobject). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls behaved as tools/arms.json declares. Pre-registered by the board lane (lane 1ef381aaa812, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac10be10 in memcpy; by function: memcpy is a fault site declared in case.json",
+      "verdict_from": "results/2026-10-16-silicon/silicon-subobject"
     }
   },
   "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. ASan measured blind two-sided with a firing positive control (results/20261006-native-subobject-7/). The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell. CheriBSD MEASURED 2026-10-06, revocation on: completes, NOT caught, 22/22 arms with both platform controls firing (results/20261006-cheribsd/); built -O0, which is load-bearing. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial NOT CAUGHT, sublet NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT.",

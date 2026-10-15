@@ -17,7 +17,9 @@
     "native-fix-differential",
     "backing",
     "virtual-malloc",
-    "virtual-nested-pools"
+    "virtual-nested-pools",
+    "silicon-pool-stock",
+    "silicon-pool-sublet"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -48,10 +50,14 @@
   "shape_table": true,
   "arm_configurations": {
     "virtual-malloc": "virtual-ffmpeg-pool-stock",
-    "virtual-nested-pools": "virtual-ffmpeg-pool-sublet"
+    "virtual-nested-pools": "virtual-ffmpeg-pool-sublet",
+    "silicon-pool-stock": "silicon-ffmpeg-pool-stock",
+    "silicon-pool-sublet": "silicon-ffmpeg-pool-sublet"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
+    "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools",
+    "silicon-pool-stock": "results/2026-10-16-silicon/silicon-pool-stock",
+    "silicon-pool-sublet": "results/2026-10-16-silicon/silicon-pool-sublet"
   }
 }
