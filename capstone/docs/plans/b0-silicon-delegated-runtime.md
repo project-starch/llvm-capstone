@@ -3097,6 +3097,31 @@ B5's cold 45.5 s and cached 24.6 s.
 **What a failure would say:** the boot differs from B5's only in the monitor (exact regions) and in the module (127
 slots), so a refused launch, a fault or a differing hash points at one of those two.
 
+## Boot P RESULT (2026-10-16 03:42-03:55, caplifive_sublet_d93a8d66b, firmware 1b44a465d967): every rung as pre-registered
+The exact-regions supcall monitor (ebe0a25) and the 127-slot process-ABI module run every B-series rung.
+- **Rungs:** b0-stats 0, b0-hello 0, b5-hello 0; b5-mruby-e-stats 0, b5-mruby-stdin-stats 0, b5-mruby-bench 0; r54-bounds
+  64; cw-pool 0; **b6-sublet 0**; b0-stats2 0.
+- **mruby's hashes:** 53c234e5e8472b6a, 5476dba1f4bd59f1, 8d1539bc79e2b630, as B5.
+- **Wall times:** e 45.74 s, stdin 24.99 s and bench 326.51 s. B5 read 45.5 s cold and 24.6 s cached.
+- No EXCT, EXCS or RGNF.
+
+**Where B5's launch goes** (capstone-exec's launch ticks: rdtime at each stage boundary; timebase 12.5 MHz, the board
+DTS's `timebase-frequency = <0xbebc20>`):
+
+| launch | image | spawner | device | domain | regions | seccomp | launch total | wall |
+|---|---|---|---|---|---|---|---|---|
+| mruby -e, first launch (cold) | 2.37 s | 0.11 | 0.12 | **22.93 s** | **9.12 s** | 0.44 | 35.09 s | 45.74 s |
+| mruby stdin, second launch | 2.29 s | 0.11 | 0.12 | 2.18 s | **9.16 s** | 0.43 | 14.29 s | 24.99 s |
+| b0-hello (128 KiB image, 256 KiB domain) | 0.17 s | 0.11 | 0.13 | 0.36 s | 0.43 s | 0.44 | 1.64 s | |
+
+- The cold launch's extra 20.7 s is all in the domain stage (from the device open to the domain's creation). A second
+  launch pays 2.2 s there.
+- Mapping the domain's regions costs 9.1 s on every launch of the 64 MiB mruby domain, against 0.43 s for b0-hello's.
+  That scales with the domain's size, not its image.
+- After the launch, about 10.7 s remains on both runs (the program and its exit), which these ticks do not split.
+- Exploratory, not a prediction. The stage boundaries are exec.c's launch_mark calls. What happens inside the domain and
+  regions stages (the monitor's create_domain and the CMA mapping of the regions) is not split by them.
+
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
 longer separates globals.
