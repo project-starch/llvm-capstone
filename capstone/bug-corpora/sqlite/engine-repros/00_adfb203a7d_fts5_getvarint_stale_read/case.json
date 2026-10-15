@@ -1,14 +1,14 @@
 {
   "case": 0,
   "upstream_fix": "adfb203a7d",
-  "title": "heap-use-after-free in sqlite3Fts5GetVarint",
+  "title": "heap-buffer-overflow in sqlite3Fts5GetVarint",
   "consumer": "sqlite3.c (sqlite3Fts5GetVarint)",
   "live_in_pin": true,
-  "live_proof": "backport filter: upstream fix adfb203a7d removes code still present in 3.22.0, and its own regression database (decoded from the fix's hex dump) reproduces on stock 3.22.0 under host ASan as heap-use-after-free in sqlite3Fts5GetVarint",
+  "live_proof": "backport filter: upstream fix adfb203a7d (\"Fix a buffer overread in fts5 ... ORDER BY rowid DESC ... corrupt database records\") removes code still present in 3.22.0, and its own regression database (decoded from the fix's hex dump) reproduces on stock 3.22.0 under host ASan as heap-buffer-overflow in sqlite3Fts5GetVarint (results/2026-10-11-host-asan). Recorded as heap-use-after-free until 2026-10-15: the over-read lands in a freed neighbour of the page, and an earlier heap layout put it inside that block, which ASan names a use-after-free (PROVENANCE.md)",
   "allocator_layer": "memsys5",
-  "object": "an fts5 leaf-page buffer held by the segment iterator",
-  "lifetime_ender": "the page is released while an iterator still refers to it, then the varint decoder reads it",
-  "shape": "free / stale read",
+  "object": "the fts5 leaf-page buffer fts5SegIterReverse keeps as pLast, live at the access",
+  "lifetime_ender": "not a lifetime defect: a corrupt leaf's header carries a first-rowid offset past the end of the page (iOff=148 on a 24-byte page), and fts5SegIterReverse hands it to the varint decoder unchecked",
+  "shape": "read past the end of the record",
   "fidelity": "real consumer, real allocator: upstream's own regression image, run statement by statement through stock 3.22.0. Served from repro322_memfs.c rather than a real file -- ext/misc/memvfs.c cannot be used, it serves only the main database so the pager cannot create a rollback journal, and it takes its buffer as an integer in the URI, which on a capability machine is an untagged forged pointer",
   "arms": {
     "spatial": {

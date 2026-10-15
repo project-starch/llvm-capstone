@@ -7,16 +7,16 @@ in this corpus.
 
 | arm | detected | not detected | temporal | spatial |
 |---|---:|---:|---:|---:|
-| `spatial` | **8** | 25 | 6/25 | 2/8 |
-| `sublet` | **31** | 2 | 24/25 | 7/8 |
-| `cheribsd-revocation` | **5** | 28 | 5/25 | 0/8 |
+| `spatial` | **8** | 25 | 6/24 | 2/9 |
+| `sublet` | **31** | 2 | 23/24 | 8/9 |
+| `cheribsd-revocation` | **5** | 28 | 5/24 | 0/9 |
 
 All 33 are clients of **memsys5**, SQLite's arena allocator, so all 33 are
 nested by the allocator that serves them. That is the point of the comparison:
 the three arms run the same defects from the same sources with the same
 triggers, and differ only in what sits underneath.
 
-**The temporal row is the result.** Sublet reports 24 of 25 where base
+**The temporal row is the result.** Sublet reports 23 of 24 where base
 Capstone reports 6 and CheriBSD 5. A use-after-free between two memsys5 chunks
 never crosses a `malloc` boundary, so a mechanism that knows only `malloc`
 blocks has nothing to check; Sublet bounds each sub-allocation, and sees them.

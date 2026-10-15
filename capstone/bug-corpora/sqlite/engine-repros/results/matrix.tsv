@@ -1,7 +1,7 @@
 case	directory	axis	arm	verdict	oracle
-0	00_adfb203a7d_fts5_getvarint_stale_read	temporal	cheribsd-revocation	not-detected	completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran
-0	00_adfb203a7d_fts5_getvarint_stale_read	temporal	spatial	not-detected	completes
-0	00_adfb203a7d_fts5_getvarint_stale_read	temporal	sublet	detected	VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4
+0	00_adfb203a7d_fts5_getvarint_stale_read	spatial	cheribsd-revocation	not-detected	completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran
+0	00_adfb203a7d_fts5_getvarint_stale_read	spatial	spatial	not-detected	completes
+0	00_adfb203a7d_fts5_getvarint_stale_read	spatial	sublet	detected	VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4
 1	01_5e4233a9e4_agginfo_stale_after_realloc	temporal	cheribsd-revocation	not-detected	completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran
 1	01_5e4233a9e4_agginfo_stale_after_realloc	temporal	spatial	not-detected	completes
 1	01_5e4233a9e4_agginfo_stale_after_realloc	temporal	sublet	detected	VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4

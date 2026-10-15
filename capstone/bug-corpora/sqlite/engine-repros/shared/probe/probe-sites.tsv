@@ -1,0 +1,7 @@
+# Probe sites for inject-probes.py. Columns (tab-separated):
+#   site_id  case  function-definition-line-prefix  anchor  kind(before|sub)  payload
+# site_id continues the CheriBSD arm's numbering (1-32, by host-ASan report line); 33 on are new.
+# A site either hands LB_HIT the pointer host ASan reported (an address judgement), or tests the
+# object itself and prints LB_OBJECT (site 33: the offset against the page it indexes).
+20	00	static u8 sqlite3Fts5GetVarint(const unsigned char *p, u64 *v){	a = *p;	before	  LB_HIT(20, p, 1);
+33	00	static void fts5SegIterReverse(Fts5Index *p, Fts5SegIter *pIter){	    iOff += fts5GetVarint(&pLast->p[iOff], (u64*)&pIter->iRowid);	before	    if( lb_site==33 ){ (void)lb_hit_slow(33, pLast, 1); lb_puts("LB_OBJECT site=33 iOff="); lb_puti(iOff); lb_puts(" nn="); lb_puti(pLast->nn); lb_puts(" szLeaf="); lb_puti(pLast->szLeaf); lb_puts(" oob="); lb_putu((unsigned long)(iOff > pLast->nn)); lb_puts("\n"); }
