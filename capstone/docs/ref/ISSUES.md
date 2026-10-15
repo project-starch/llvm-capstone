@@ -2099,15 +2099,31 @@ everything inside delegated domains, are unaffected.
 > - read `MTMB:02000000 MTMC:02000000` before the change and `MTMF:0200BFF8` after it, as predicted;
 > - stamped `sched_clock` `[0.000166]`, booted to a login, and read k800 4 and s06agg 64.
 >
-> **The rest of the boot carve.** RETRACTED 2026-10-15, the same day. The first version of this entry listed the boot
-> stack, the interrupt-handler stack and the interrupt-handler seal beside mtime as displaced carves that might matter.
-> Lane messages also said a blanket cursor fix in split_out_cap would break interrupts. Neither holds. The model does
-> displace those cursors under the full scheme (`tests/runtime-qemu/silicon-ladder/monitor-boot-carve.py`), but only
-> mtime's is ever dereferenced (claim-auditor):
-> - dom_init resets the boot stack's cursor (`scc(sp, sp, t1)`, sbi_capstone_dom.c.S);
-> - cap_env_init resets the interrupt-handler stack's cursor (`__setcursor` to its end);
-> - this silicon never reads the seal: `cap_cih : '0` (ex_stage.sv:860/873), and the decoder's `cih_i` is
->   "To be enabled".
+> **The rest of the boot carve, and beyond it.** CORRECTED TWICE on 2026-10-15.
+> - **First version:** the boot stack, the interrupt-handler stack and its seal were listed as displaced carves that
+>   might matter.
+> - **The first correction** said that of those, "only mtime's is ever dereferenced". That is ALSO wrong
+>   (claim-auditor, then checked here at the source):
+>   - cap_env_init writes the seal: 88 B at its displaced cursor 0x8008a000, inside the top of the interrupt stack.
+>     This silicon never reads the seal (`cap_cih : '0`) and never enters the interrupt-handler domain, so that write
+>     is inert today. It stops being inert the day CIH is wired.
+>   - dom_init resets the boot stack's cursor (`scc(sp, sp, t1)`), and cap_env_init resets the interrupt stack's.
+> - **The runtime carves, which boot M did not exercise.** Each uses a SPLIT's lower piece at its cursor, which is the
+>   parent's decoded start:
+>   - **create_domain's globals copy:** `dom_data[ci] = dom_code[gpoff_c + ci]`, after
+>     `dom_seal = __split(dom_code, base + split_size)` (board build sbi_capstone.c:1020/1099, supervised-call build
+>     :1830/1925). Under the full scheme, when the block is carved from a long region, dom_code decodes from below the
+>     block (the auditor's model, for Linux's tail piece: from 0x80000000). The copy then reads below the block, and
+>     the application gets silently wrong initialized globals.
+>     - Boot M's k800 and s06agg sit under the glue's 256 B copy threshold, so they never took this path. SQLite,
+>       memcached and the B-series do.
+>   - **share_child_region** hands `body` over after `tail = __split(body, cend)` (:1565), so at body's decoded start.
+>   - **shared_region_annotated** hands a region over at its decoded start.
+>   - The domain glue uses the argument's cursor as its pointer.
+> - **The same rounding widens the BOUNDS** of every such piece: domain isolation from Linux. That is a carve-policy
+>   question (granule-aligned carve points, or SHRINK), not a cursor fix.
+> - **Why check-repr missed all of it:** its monitor model starts from an exact split_out_cap
+>   (`writeback(base, base + tot, base)`, check-repr.py monitor_splits), and judges bounds, never cursors.
 >
 > **What does matter beyond mtime: the region table.** The model replays cap_env_init's region table.
 > - **Under cursorless,** the region covering Linux (0x80200000) is [0x8008a780, 2^40), above all of the monitor's
