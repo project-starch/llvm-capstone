@@ -123,18 +123,29 @@ static size_t l0_readable(void *p, size_t block)
  * below the payload and is reached through the arena, as with object bounds. Needs CAPSTONE_LEVEL0_OBJECT_BOUNDS. */
 #include <capstone/capability.h>
 static void *l0_group;
-/* A child is derived only where its bounds are EXACT at this placement: below 4 KiB always, above when base and
- * length are multiples of the full scheme's granule 2^(hb(n) - 9). QEMU's physical profile refuses an inexact child
- * (29) and the RTL would round it outward over the neighbouring header, so such a request (the runtime's own 44 KiB
- * startup buffer is one) keeps level0's plain narrowing and no lifetime. Every corpus object is exact at its 16-byte
- * placement (silicon-predictions/2026-10-16-plain). free tells the two apart by MANAGE, which only CDERIVE mints. */
+/* A child is derived only where its bounds are EXACT: below 4 KiB always, above when base and length are multiples
+ * of the full scheme's granule 2^(hb(n) - 9). QEMU's physical profile refuses an inexact child (29) and the RTL would
+ * round it outward over the neighbouring header. So l0_malloc places a request of 4 KiB or more on the granule of its
+ * PADDED size (l0_pad: the request rounded up to its granule, which is then a multiple of its own granule) and the
+ * child covers the padded size: up to one granule minus one byte past the request is inside the child, the outward
+ * rounding the RTL would apply anyway, now on a placement where it covers no other block. Where a block cannot be
+ * placed so (realloc in place, which keeps its address) the request keeps level0's plain narrowing and no lifetime,
+ * counted by __capstone_level0_unexact. Every corpus object below 4 KiB is exact at its 16-byte placement
+ * (silicon-predictions/2026-10-16-plain) and is placed as before. free tells the two apart by the header's child. */
 static size_t l0_unexact;
 size_t __capstone_level0_unexact(void) { return l0_unexact; }
+static unsigned long l0_granule(size_t n)
+{
+	return n < 4096 ? 1 : 1ul << (63 - __builtin_clzl(n) - 9);
+}
+static size_t l0_pad(size_t n)
+{
+	unsigned long g = l0_granule(n);
+	return (n + g - 1) & ~(size_t)(g - 1);
+}
 static int l0_exact(unsigned long base, size_t n)
 {
-	if (n < 4096)
-		return 1;
-	unsigned long g = 1ul << (63 - __builtin_clzl(n) - 9);
+	unsigned long g = l0_granule(n);
 	return base % g == 0 && n % g == 0;
 }
 static struct l0_block *l0_header(void *p);
@@ -143,13 +154,14 @@ static void *l0_child(void *p, size_t n)
 	struct l0_block *b = l0_header(p);
 	if (!l0_group)
 		l0_group = capstone_cap_derive(l0_arena, 0, CAPSTONE_LEVEL0_ARENA_BYTES);
-	if (!l0_exact(__builtin_capstone_cap_get_cursor(p), n)) {
+	size_t span = l0_pad(n);
+	if (span > b->size || !l0_exact(__builtin_capstone_cap_get_cursor(p), span)) {
 		l0_unexact++;
 		b->child = 0;
 		return l0_narrow(p, n);
 	}
 	b->child = capstone_cap_derive(l0_group, __builtin_capstone_cap_get_cursor(p) -
-	                                         __builtin_capstone_cap_get_cursor(l0_arena), n);
+	                                         __builtin_capstone_cap_get_cursor(l0_arena), span);
 	return b->child;
 }
 /* free finds the block by ADDRESS and ends the child recorded in its header, as the virtual heap's free does: a
@@ -226,6 +238,31 @@ static void l0_init(void)
 	l0_head->free = 1;
 }
 
+#if CAPSTONE_LEVEL0_OBJECT_BOUNDS && CAPSTONE_LEVEL0_LIFETIMES
+/* A free block that can hold `want` bytes at a payload address aligned to `align`, with any gap in front split off
+ * as a free block of its own (a header and at least L0_ALIGN bytes), or 0. Alignment is of the ADDRESS, the cursor,
+ * which is what the encoder sees. */
+static struct l0_block *l0_place(struct l0_block *b, size_t want, unsigned long align)
+{
+	unsigned long arena = __builtin_capstone_cap_get_cursor(l0_arena);
+	unsigned long s = arena + (unsigned long)((char *)b - l0_arena) + sizeof(struct l0_block);
+	unsigned long at = (s + align - 1) & ~(align - 1);
+	while (at != s && at - s < sizeof(struct l0_block) + L0_ALIGN)
+		at += align;
+	if (at + want > s + b->size)
+		return 0;
+	if (at == s)
+		return b;
+	struct l0_block *nb = (struct l0_block *)((char *)b + (at - s));
+	nb->size = b->size - (at - s);
+	nb->next = b->next;
+	nb->free = 1;
+	b->size = (at - s) - sizeof(struct l0_block);
+	b->next = nb;
+	return nb;
+}
+#endif
+
 static void *l0_malloc(size_t n)
 {
 	if (!l0_head)
@@ -233,10 +270,23 @@ static void *l0_malloc(size_t n)
 	if (n == 0)
 		n = 1;
 	size_t want = l0_round(n);
+#if CAPSTONE_LEVEL0_OBJECT_BOUNDS && CAPSTONE_LEVEL0_LIFETIMES
+	unsigned long align = l0_granule(l0_pad(n));
+	if (align > L0_ALIGN)
+		want = l0_pad(n);
+#endif
 
 	for (struct l0_block *b = l0_head; b; b = b->next) {
 		if (!b->free || b->size < want)
 			continue;
+#if CAPSTONE_LEVEL0_OBJECT_BOUNDS && CAPSTONE_LEVEL0_LIFETIMES
+		if (align > L0_ALIGN) {
+			struct l0_block *at = l0_place(b, want, align);
+			if (!at)
+				continue;
+			b = at;
+		}
+#endif
 		/* Split only when the tail can hold a header and something useful. */
 		if (b->size >= want + sizeof(struct l0_block) + L0_ALIGN) {
 			struct l0_block *tail =

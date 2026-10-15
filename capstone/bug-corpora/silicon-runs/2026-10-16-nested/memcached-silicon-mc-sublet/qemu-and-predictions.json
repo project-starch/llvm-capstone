@@ -1,0 +1,197 @@
+{
+ "arm": "silicon-mc-sublet",
+ "build": {
+  "defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+  "app_cflags": "",
+  "carve": {},
+  "corpus_defs": {
+   "allocator-repros": "-DMC_CARVE_BOUNDS -DMC_CAPSTONE_SUBLET"
+  },
+  "driver": "driver-virtual.c",
+  "extra_cflags": "-std=c11 -fno-inline -DNDEBUG -DCHUNK_ALIGN_BYTES=16 -I/tmp/capstone/wt-b0/capstone/ports/memcached/allocators/src/shared -I/tmp/capstone/wt-b0/capstone/ports/memcached/adapted -I/tmp/capstone/wt-b0/capstone/runtime/include -Wno-unused-parameter -Wno-sign-compare -I/tmp/capstone/corpus-sil/mc/src-protected",
+  "extra_src": [
+   "slabs.c",
+   "cache.c",
+   "services.c"
+  ]
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "CAUGHT",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "memcached-allocator-00",
+   "case": "00_7af02b0c87_rbuf_copied_after_cache_free",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "image_sha256": "703794c139ceb4dfc28cac0199c3224717f90da97ca8f7f64d247817b147aeae",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "read_probe"
+   }
+  },
+  {
+   "name": "memcached-allocator-01",
+   "case": "01_0ad4de66ae_io_walk_reads_freed_link",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "image_sha256": "50e26ec7e801e3ff7db54e547f4d4d99d3acba0517655b861f2b1ec69d63b8d0",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "read_probe"
+   }
+  },
+  {
+   "name": "memcached-allocator-02",
+   "case": "02_59bd02ce29_tail_repair_frees_referenced_item",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "image_sha256": "5fe109cde9eafe9a2c3e056d2707b63e9875c14a8cc0ec99236c1e2c7a049004",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "read_probe"
+   }
+  },
+  {
+   "name": "memcached-allocator-03",
+   "case": "03_a8c4a82787_refcount_overflow_frees_linked_item",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "image_sha256": "83b8e727405f82f1d8ff5142894e6663d1e6b2ad5eb70ccb5ee716c40dd7e300",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "read_probe"
+   }
+  },
+  {
+   "name": "memcached-allocator-04",
+   "case": "04_152ddb68f7_unlocked_refcount_drift",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "image_sha256": "b565e6a2537bc41b9c146b5ddf7552a9681d4c1368d5b4644016330c8d31f66a",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "read_probe"
+   }
+  },
+  {
+   "name": "memcached-allocator-05",
+   "case": "05_2d61f18_item_data_one_past",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "image_sha256": "d69afdaa9e78b97a7ed69aa44f68d8562508b66e98339951fd503b223669a713",
+   "qemu": {
+    "outcome": "FIXED-ARM-FAILED",
+    "cause": 24,
+    "site": "capstone_cap_revoke_child"
+   },
+   "predicted_board": {
+    "outcome": "FIXED-ARM-FAILED",
+    "cause": 25,
+    "site": "capstone_cap_revoke_child"
+   }
+  },
+  {
+   "name": "memcached-allocator-06",
+   "case": "06_78eb770_suffix_write_no_space",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "image_sha256": "f3580074aa67d42ebff9631534648dc91e22bddea0a2d9fd7eaccb90f1d7e6a2",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "write_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "write_probe"
+   }
+  },
+  {
+   "name": "memcached-allocator-07",
+   "case": "07_ecdb011_unterminated_key_read",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "image_sha256": "e0bfe718df0b104fd1ef53273256852bb59212f7ab80da4006df1e500cfc2af4",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "read_probe"
+   }
+  },
+  {
+   "name": "memcached-allocator-08",
+   "case": "08_e8364b5_ascii_all_spaces_scan_past_rbuf",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "image_sha256": "dacb6f553f9486973f060a135a9d0cbc6988845636034571e5239b299488371d",
+   "qemu": {
+    "outcome": "CONTROL-FAILED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "CONTROL-FAILED",
+    "cause": null,
+    "site": null
+   },
+   "qemu_differs_from_tool_prediction": "CAUGHT"
+  },
+  {
+   "name": "memcached-allocator-controls-virtual-90",
+   "case": "90_ctl_chunk_freed_to_slab",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/virtual",
+   "kind": "mc-control",
+   "image_sha256": "2f64f760e300d16103db374a781b5df4d9ed527b35c56926d6741241989d3d6a",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "read_probe"
+   }
+  }
+ ]
+}

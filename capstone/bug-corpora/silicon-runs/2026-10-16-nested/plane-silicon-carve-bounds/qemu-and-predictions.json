@@ -1,0 +1,55 @@
+{
+ "arm": "silicon-carve-bounds",
+ "build": {
+  "defs": "",
+  "app_cflags": "",
+  "carve": {
+   "carved-repros": "-DFFC_CARVE_BOUNDS",
+   "plane-repros": "-DFFP_CARVE_BOUNDS"
+  },
+  "corpus_defs": {},
+  "driver": "driver.c",
+  "extra_cflags": "-DHAVE_AV_CONFIG_H -I/tmp/capstone/ffmpeg-app/src-9.0.1-f7e8b586f7b4 -I/tmp/capstone/ffmpeg-app/domain/ffmpeg-build -Wno-everything",
+  "extra_src": [
+   "frame.c",
+   "buffer.c",
+   "mem.c",
+   "imgutils.c",
+   "pixdesc.c",
+   "log.c",
+   "error.c",
+   "dict.c",
+   "bprint.c",
+   "channel_layout.c",
+   "samplefmt.c",
+   "refstruct.c",
+   "time.c",
+   "side_data.c"
+  ]
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "RETURNED",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-plane-00",
+   "case": "00_b7946098b1_alphablend_row_past_plane",
+   "corpus": "capstone/bug-corpora/ffmpeg/plane-repros",
+   "kind": "plane",
+   "image_sha256": "2b8fb52828525562e5e653f1345b9e85c5e33ad299c82fed735dc020800cd0a8",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ffp_read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "ffp_read_probe"
+   }
+  }
+ ]
+}
