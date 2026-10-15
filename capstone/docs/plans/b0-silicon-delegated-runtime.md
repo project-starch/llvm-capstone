@@ -3122,6 +3122,27 @@ DTS's `timebase-frequency = <0xbebc20>`):
 - Exploratory, not a prediction. The stage boundaries are exec.c's launch_mark calls. What happens inside the domain and
   regions stages (the monitor's create_domain and the CMA mapping of the regions) is not split by them.
 
+## The board's checkout on capstone-bootstrap, pre-registered (2026-10-16, before the boots)
+The board's shared checkout still runs the acceptance pins d04bd83 / df0e9a8 / 93440d5. capstone-bootstrap now carries
+R-55's every half: buildroot 549d686 (25 commits past d04bd83: the module and libcapstone at 127, the supervision line),
+opensbi 3ab5655 and capstone-sbi 234ee66, whose tree is the supervised-call line with exact regions.
+- C5u and boot P ran that monitor through private firmwares.
+- Never on silicon: the classic R-43 path baked from that tree, with the module, wrapper and monitor all from
+  capstone-bootstrap.
+
+Three rows settle it. Each is baked from the shared tree moved to the bootstrap pins, on its own cold boot on
+caplifive_sublet_d93a8d66b, with tags s12*. The acceptance pins come back in an EXIT trap.
+
+**Predictions** (as the Sublet acceptance's rows on the old pins, and as a2 on the board line):
+- **a1:** `R1 m1 end arm=drop stop=target alloc=160 minted=191 revoked=160`, k800 4 twice, one speedtest1-ran.
+- **a4:** `live-sweep ok live=16 reads=32 sum=544 expect=544`, k800 4 twice.
+- **a2** (host 0a5c9025e8e6f5db, built with libcapstone at 127): all 12 invocations complete; no RGNF, RGNO, EXCT or EXCS;
+  the replay of the board's own sequence reproduces every id with OVERLAP 0.
+
+**What a failure would say:** the bootstrap tree differs from the validated pins in the supervised-call monitor line
+(classic path untested on silicon) and in 25 buildroot commits. A failure keeps the board on the acceptance pins and
+is attributed by diffing the two trees, not by guessing.
+
 ## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
 Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
 longer separates globals.
