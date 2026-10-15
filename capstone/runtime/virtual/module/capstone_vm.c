@@ -10,6 +10,7 @@
 #include <linux/slab.h>
 #include <linux/list.h>
 #include <linux/wait.h>
+#include <linux/ktime.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
@@ -61,6 +62,10 @@ static unsigned long node_max_pages;
 module_param(node_initial_pages, ulong, 0444);
 module_param(node_batch_pages, ulong, 0444);
 module_param(node_max_pages, ulong, 0444);
+/* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
+ * arena, the VMA and the first page already pinned. 1 pins only the page. */
+static unsigned long pin_ahead_pages = 1;
+module_param(pin_ahead_pages, ulong, 0444);
 
 static unsigned long node_capacity(const struct context *c)
 { return c->table[0] & ~CAP_REV_TABLE_FLAGS; }
@@ -620,7 +625,155 @@ static int remap_end(struct context *c, const struct cv_remap *r)
     return 0;
 }
 
-static int resolve(struct context *c, struct cv_thread *t)
+/* CV_STEP resolves faults and resumes for at most one supervisor quantum;
+ * CV_RESOLVE gives its pin-ahead window the same bound. */
+#define CV_STEP_BUDGET_NS (5 * NSEC_PER_MSEC)
+
+#ifdef CV_TEST_HOOKS
+/* Test build only (make CV_TEST_HOOKS=1; run-step-hooks.py). The production
+ * module compiles none of this. A hook injects the condition cv_step_stop()
+ * must catch, at a chosen point of CV_STEP; counters say whether CSRUNV was
+ * entered while an injection was pending, and what GUP was asked for. */
+static unsigned long test_inject;       /* 1 resched, 2 signal, 3 deadline, 4 SIGKILL */
+static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an entry, 3 before an ioctl's first entry,
+                                           4 after CSRUNV returns a fault, before resolve() */
+static unsigned long test_inject_every = 1;
+static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a batch */
+module_param(test_inject, ulong, 0444);
+module_param(test_inject_at, ulong, 0444);
+module_param(test_inject_every, ulong, 0444);
+module_param(test_short_gup, ulong, 0444);
+static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
+static u64 test_consumed, test_checks, test_checks_irqs_on, test_entries;
+static u64 test_gup_requests, test_gup_max, test_short_results, test_gup_pending;
+static bool test_pending, test_expired, test_in_step;
+
+static void test_hook(unsigned long at)
+{
+    if (!test_inject || !test_in_step || test_inject_at != at || test_pending ||
+        ++test_events % test_inject_every)
+        return;
+    ++test_injections;
+    test_pending = true;
+    if (test_inject == 1) set_tsk_need_resched(current);
+    else if (test_inject == 2) set_tsk_thread_flag(current, TIF_NOTIFY_SIGNAL);
+    else if (test_inject == 3) test_expired = true;
+    else if (test_inject == 4) send_sig(SIGKILL, current, 1);
+}
+/* Is the injected condition still there? A reschedule inside GUP consumes
+ * an injected need_resched: entering CSRUNV after it is no violation. */
+static bool test_condition(void)
+{
+    return test_inject == 1 ? need_resched() : test_inject == 2 ? signal_pending(current) :
+           test_inject == 3 ? test_expired : fatal_signal_pending(current);
+}
+static void test_entry(void)
+{
+    if (!test_pending) return;
+    if (test_condition()) ++test_violations;
+    else ++test_consumed;
+    test_pending = false;
+}
+static void test_gup(unsigned long pages)
+{
+    /* GUP may sleep and fault in memory: no stop condition may be pending. */
+    if (test_pending && test_condition()) ++test_gup_pending;
+    ++test_gup_requests;
+    test_gup_max = max(test_gup_max, (u64)pages);
+}
+static void test_report(const char *why)
+{
+    pr_info("capstone_vm test %s: injections=%llu stops=%llu initial_stops=%llu "
+            "violations=%llu consumed=%llu gup_requests=%llu gup_max=%llu short_results=%llu "
+            "gup_pending=%llu checks=%llu checks_irqs_on=%llu entries=%llu\n",
+            why, test_injections, test_stops, test_initial_stops, test_violations,
+            test_consumed, test_gup_requests, test_gup_max, test_short_results,
+            test_gup_pending, test_checks, test_checks_irqs_on, test_entries);
+}
+#define TEST_HOOK(at) test_hook(at)
+#define TEST_GUP(pages) test_gup(pages)
+#define TEST_EXPIRED() test_expired
+#define TEST_ENTRY() do { test_entry(); ++test_entries; } while (0)
+#define TEST_CHECK() do { ++test_checks; if (!irqs_disabled()) ++test_checks_irqs_on; } while (0)
+#define TEST_STOPPED(initial) do { if (test_pending) { ++test_stops; \
+        if (initial) ++test_initial_stops; } } while (0)
+#define TEST_STEP_BEGIN() do { test_in_step = true; } while (0)
+#define TEST_IOCTL_DONE() do { test_pending = test_expired = test_in_step = false; } while (0)
+#else
+#define TEST_HOOK(at) do { } while (0)
+#define TEST_GUP(pages) do { } while (0)
+#define TEST_EXPIRED() false
+#define TEST_ENTRY() do { } while (0)
+#define TEST_CHECK() do { } while (0)
+#define TEST_STOPPED(initial) do { } while (0)
+#define TEST_STEP_BEGIN() do { } while (0)
+#define TEST_IOCTL_DONE() do { } while (0)
+#endif
+
+/* Pending work for this task, or the end of its budget: return to the
+ * launcher (and release vm_lock) instead of entering the domain again. */
+static bool cv_step_stop(u64 deadline)
+{
+    return signal_pending(current) || need_resched() ||
+           ktime_get_ns() >= deadline || TEST_EXPIRED();
+}
+
+/* A pin-ahead window is pinned PIN_AHEAD_BATCH pages at a time; before each
+ * batch it stops on cv_step_stop(), so the extra work under vm_lock and
+ * mmap_lock stays bounded whatever the window. */
+#define PIN_AHEAD_BATCH 16
+
+/* Called with mmap_read_lock held, after the faulting page passed resolve()'s
+ * checks in VMA v. Each further page is pinned exactly as a fault on it
+ * would pin it, in the same VMA, so it gets the same policy; one that fails
+ * a check ends the window unpinned and faults later as it does today. */
+static void pin_ahead(struct context *c, struct arena *a,
+                      struct vm_area_struct *v, unsigned first, u64 deadline)
+{
+    unsigned long start = a->address + (unsigned long)first * PAGE_SIZE;
+    unsigned long count = 0, done;
+    while (count + 1 < pin_ahead_pages && first + count < a->count &&
+           start + count * PAGE_SIZE < v->vm_end && !a->pages[first + count])
+        ++count;
+    for (done = 0; done < count;) {
+        unsigned long batch = min(count - done, (unsigned long)PIN_AHEAD_BATCH);
+        struct page **pages = a->pages + first + done;
+        long n;
+        if (cv_step_stop(deadline))
+            return;
+        TEST_GUP(batch);
+#ifdef CV_TEST_HOOKS
+        /* A short result, as when GUP stops at a page it cannot fault in:
+         * only the first half of the batch is faulted in and pinned. */
+        n = pin_user_pages_remote(c->mm, start + done * PAGE_SIZE,
+                                  test_short_gup && batch > 1 ? batch / 2 : batch,
+                                  FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
+                                  pages, NULL, NULL);
+        if (n >= 0 && n < batch) ++test_short_results;
+#else
+        n = pin_user_pages_remote(c->mm, start + done * PAGE_SIZE, batch,
+                                  FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
+                                  pages, NULL, NULL);
+#endif
+        for (long j = max(n, 0L); j < batch; ++j)
+            pages[j] = NULL;
+        for (long j = 0; j < max(n, 0L); ++j) {
+            if (!PageAnon(pages[j]) || page_mapcount(pages[j]) != 1) {
+                for (long k = j; k < n; ++k) {
+                    unpin_user_page(pages[k]);
+                    pages[k] = NULL;
+                }
+                return;
+            }
+            ++c->stats.pinned_pages;
+        }
+        if (n != batch)
+            return;
+        done += batch;
+    }
+}
+
+static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
     struct page *page;
@@ -644,14 +797,18 @@ static int resolve(struct context *c, struct cv_thread *t)
         /* Check actual PTE policy first. FORCE then materializes private
          * anonymous backing even for a read-only zero-page first touch. The
          * application still sees its original VMA/PTE protection. */
+        TEST_GUP(1);
         n = pin_user_pages_remote(c->mm, address & PAGE_MASK, 1,
                                   FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
                                   &page, NULL, NULL);
-        mmap_read_unlock(c->mm);
-        if (n != 1) return -EFAULT;
+        if (n != 1) { mmap_read_unlock(c->mm); return -EFAULT; }
+        TEST_HOOK(1);
         if (!PageAnon(page) || page_mapcount(page) != 1) {
-            unpin_user_page(page); return -EACCES;
+            mmap_read_unlock(c->mm); unpin_user_page(page); return -EACCES;
         }
+        if (!a->pages[index])
+            pin_ahead(c, a, v, index + 1, deadline);
+        mmap_read_unlock(c->mm);
         if (a->pages[index]) {
             /* mprotect may leave a write fault for Linux to resolve. It must
              * resolve to the same backing: tag-preserving moves are not part
@@ -781,6 +938,8 @@ retry:
     } else if (op == CV_STEP) {
         struct cv_step r;
         struct cv_thread *t;
+        u64 budget_end;
+        bool resolved = false;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
@@ -789,16 +948,64 @@ retry:
         if (r.reply && !t->reply_cap) {
             t->frame[28] = r.result; t->frame[29] = 0;
         }
-        preempt_disable(); local_irq_save(flags);
-        if (!t->started) {
-            t->frame[0] = csr_read(CSR_SATP);
-            t->frame[1] = virt_to_phys(c->table);
-            t->frame[7] = 3;
+        /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
+         * faulting would never be preempted: bound the resolved faults by
+         * one quantum of this ioctl, then return and release vm_lock. */
+        budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
+        TEST_STEP_BEGIN();
+        TEST_HOOK(3);
+        for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
+             action = 0, ++entries) {
+            if (entries) TEST_HOOK(2);
+            preempt_disable(); local_irq_save(flags);
+            /* Checked with interrupts and preemption off, immediately before
+             * CSRUNV: no interrupt can set need_resched or a signal between
+             * this check and the entry. Before the first entry nothing has
+             * changed, so the launcher simply repeats the same CV_STEP (its
+             * loop retries EINTR and EAGAIN; the reply above is rewritten
+             * identically). Before a later one the fault just resolved goes
+             * back as it was, already counted. */
+            TEST_CHECK();
+            if (cv_step_stop(budget_end)) {
+                local_irq_restore(flags); preempt_enable();
+                TEST_STOPPED(!entries);
+                if (!entries) {
+                    rc = signal_pending(current) ? -EINTR : -EAGAIN;
+                    goto out;
+                }
+                resolved = true;
+                break;
+            }
+            TEST_ENTRY();
+            if (!t->started) {
+                t->frame[0] = csr_read(CSR_SATP);
+                t->frame[1] = virt_to_phys(c->table);
+                t->frame[7] = 3;
+            }
+            t->event = run(t->frame_pa, action);
+            t->started = true; t->reply_cap = false;
+            local_irq_restore(flags); preempt_enable();
+            ++c->stats.steps;
+            if (t->event != 4)
+                break;
+            /* Resolve a page fault here, as CV_RESOLVE would, and resume
+             * without the two system calls a return through the launcher
+             * costs. resolve() can sleep in mmap_lock and GUP while vm_lock
+             * is held, so a stop condition already raised (or a quantum
+             * already spent) returns the fault unresolved, as without this
+             * loop. A fault resolve() refuses goes back to the launcher,
+             * whose own CV_RESOLVE fails the same way and delivers it. A
+             * fault resolved here but stopped before the next entry is
+             * resolved again, idempotently, by the launcher's CV_RESOLVE. */
+            TEST_HOOK(4);
+            if (cv_step_stop(budget_end)) {
+                TEST_STOPPED(false);
+                break;
+            }
+            if (resolve(c, t, budget_end))
+                break;
+            ++c->stats.faults;
         }
-        t->event = run(t->frame_pa, r.reply ? 2 : 0);
-        t->started = true; t->reply_cap = false;
-        local_irq_restore(flags); preempt_enable();
-        ++c->stats.steps;
         if (t->event == 5) {
             int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
             /* Return through Linux between retries. Refuse endless retries
@@ -810,7 +1017,7 @@ retry:
         memcpy(r.args, t->frame + 72, sizeof(r.args));
         r.thread = t->id;
         t->terminal = r.kind == 2;
-        if (r.kind == 4) ++c->stats.faults;
+        if (r.kind == 4 && !resolved) ++c->stats.faults;
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
         if (rc) t->terminal = true;
     } else if (op == CV_RESOLVE) {
@@ -818,7 +1025,7 @@ retry:
         struct cv_thread *t;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
-        rc = t ? resolve(c, t) : -ESRCH;
+        rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
     } else if (op == CV_RETIRE) {
         u64 id;
         if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
@@ -829,6 +1036,7 @@ retry:
         rc = copy_to_user((void __user *)arg, &c->stats, sizeof(c->stats)) ? -EFAULT : 0;
     } else rc = -ENOTTY;
 out:
+    TEST_IOCTL_DONE();
     mutex_unlock(&vm_lock);
     return rc;
 }
@@ -949,7 +1157,11 @@ static struct miscdevice device = {
     .minor = MISC_DYNAMIC_MINOR, .name = "capstone-vm", .fops = &ops, .mode = 0600,
 };
 static int __init init(void) { return misc_register(&device); }
+#ifdef CV_TEST_HOOKS
+static void __exit done(void) { test_report("unload"); misc_deregister(&device); }
+#else
 static void __exit done(void) { misc_deregister(&device); }
+#endif
 module_init(init); module_exit(done);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Private virtual Capstone execution adapter");
