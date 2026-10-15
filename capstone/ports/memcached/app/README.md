@@ -10,7 +10,8 @@ The original virtual port started from `memcached-app` at `c839e7294e23`.
 This review slice preserves current dev’s additional slab/cache adapters,
 corpus fixtures and pre-registered safety predictions.
 The physical build/oracle/safety recipes and their `level0` and `shrink` heap
-arms remain available. The physical `sublet` arm was removed on 2026-10-11 with
+arms remain available with `CAPSTONE_APPLICATION_PROFILE=physical` (the default
+is virtual); the oracle, safety and probe runners boot a physical VM. The physical `sublet` arm was removed on 2026-10-11 with
 the physical Sublet heap; its recorded results stay in `results/`. The virtual recipes use the common revoking heap and actual musl
 pthread/TLS/mutex/condition support. They need no new processor instruction,
 kernel module change, Linux-core patch or firmware change.

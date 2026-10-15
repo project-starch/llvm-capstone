@@ -7,7 +7,8 @@
 #   CAPSTONE_LLVM_BUILD_DIR=<llvm build> [RUNTIME_REPO=<llvm-capstone tree>] \
 #     bash build-perl-domain.sh
 #
-# Outputs, under $PERLD_ROOT (default $CAPSTONE_TMP_ROOT/perl-domain):
+# Outputs, under $PERLD_ROOT (default $CAPSTONE_TMP_ROOT/perl-domain-virtual, or
+# $CAPSTONE_TMP_ROOT/perl-domain with PERLD_PROFILE=physical):
 #   src/perl-<version>/perl          the interpreter, a domain image
 #   native/bin/perl                  the same release built natively, the reference
 #
@@ -18,10 +19,11 @@
 # (its Makefile's miniperl rule), so no target binary is ever executed. That is the
 # same host/target split the PostgreSQL port uses for its build tools.
 #
-# Knobs: PERLD_FROM=musl|runtime|perl starts at that stage. The domain's malloc is
-# level0 on the physical profile and musl mallocng on the virtual one.
+# Knobs: PERLD_FROM=musl|runtime|perl starts at that stage. PERLD_PROFILE=virtual (the
+# default) or physical; the domain's malloc is musl mallocng on the virtual profile and
+# level0 on the physical one.
 # PERL_MIRROR=<dir with the tarballs> and PERL_CROSS_MIRROR=<a perl-cross clone>
-# avoid the network. PERLD_SV_HEADS=1 builds the study variant: SV heads come
+# avoid the network. PERLD_SV_HEADS=1 (physical profile) builds the study variant: SV heads come
 # from the lifetime adapter in ../sv-heads (its patch, -DPERL_SV_HEAD_ADAPTER,
 # and link/perl-sv-heads.o for ../../common/application/build.py --nested perl,
 # which is what grants the adapter its region; the image this script leaves behind
@@ -42,7 +44,7 @@ VIRTUAL_BLOCKS=${PERLD_VIRTUAL_BLOCKS:-65536}
 VIRTUAL_ARENAS=${PERLD_VIRTUAL_ARENAS:-256}
 JOBS=${JOBS:-16}
 FROM=${PERLD_FROM:-all}
-PROFILE=${PERLD_PROFILE:-physical}
+PROFILE=${PERLD_PROFILE:-virtual}
 case "$PROFILE" in physical|virtual) ;; *) echo "PERLD_PROFILE=$PROFILE? (physical, virtual)" >&2; exit 2;; esac
 if [[ $PROFILE == virtual && -z ${PERLD_ROOT:-} ]]; then
   ROOT=$CAPSTONE_TMP_ROOT/perl-domain-virtual
@@ -52,7 +54,7 @@ fi
 SV_HEADS=${PERLD_SV_HEADS:-0}
 case "$SV_HEADS" in 0|1) ;; *) echo "PERLD_SV_HEADS=$SV_HEADS? (0, 1)" >&2; exit 2 ;; esac
 if [[ $PROFILE == virtual && $SV_HEADS == 1 ]]; then
-  echo "virtual SV-head arena integration is not qualified; use PERLD_SV_HEADS=0" >&2
+  echo "virtual SV-head arena integration is not qualified; use PERLD_SV_HEADS=0, or PERLD_PROFILE=physical" >&2
   exit 2
 fi
 
@@ -113,7 +115,8 @@ if [[ $PROFILE == virtual ]]; then
   printf '%s\n' "$SDK_STAMP" > "$O/.heap"
 else
   if stage musl; then
-    OUT_DIR=$ROOT/musl-build bash "$MUSL_PORT/build-musl-capstone.sh" >/dev/null
+    OUT_DIR=$ROOT/musl-build CAPSTONE_APPLICATION_PROFILE=physical \
+      bash "$MUSL_PORT/build-musl-capstone.sh" >/dev/null
   fi
   ARCHIVE=$ROOT/musl-build/libc-capstone.a
   O=$ROOT/runtime
@@ -135,7 +138,8 @@ if stage runtime; then
   if [[ -n ${PERLD_SDK_CFLAGS:-} ]]; then
     EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${PERLD_SDK_CFLAGS}")
   fi
-  bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
+  CAPSTONE_APPLICATION_PROFILE=physical \
+    bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
     -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
     -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
   printf '%s\n' "$SDK_STAMP" > "$O/.heap"

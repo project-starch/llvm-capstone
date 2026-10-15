@@ -34,7 +34,10 @@ one entry, `build-virtual.sh`: CPython, PostgreSQL, FFmpeg, tshark, memcached,
 Perl, mruby and SQLite. Select the gp-free/image-gp compiler before sourcing
 `capstone/tests/capstone-test-env.sh`. Use fresh output directories: relinking
 physically compiled objects cannot convert their addressing convention.
-Physical remains the default profile.
+Virtual is the default profile of every builder here and of the port recipes
+(`build-sdk.sh`, `build.py`, `build-musl-capstone.sh`); the physical one takes
+`CAPSTONE_APPLICATION_PROFILE=physical`, `PERLD_PROFILE=physical` or
+`build.py --profile physical`.
 
 The entry builds upstream objects and a matching VM-service v5 SDK, then
 records input and image hashes:
@@ -185,7 +188,8 @@ keyed dependency builds). SQLite needs `--include` pointing at `sqlite3.h`.
 `--nested cpython|mruby|postgres|perl`
 retains the existing nested allocator adapters and requests their static backing
 from the v2 descriptor. The study entry point in `experiments/applications/`
-uses this builder with `--instrument`; normal applications need no study wrapper.
+uses this builder with `--instrument` and the physical profile, the only one
+its observers exist for; normal applications need no study wrapper.
 
 ## Run
 

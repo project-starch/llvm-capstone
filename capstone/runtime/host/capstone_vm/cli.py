@@ -313,12 +313,15 @@ def start(args: argparse.Namespace, state: Path) -> int:
                 files[key] = require_file(getattr(args, key))
         if "launcher" in files and "job_helper" not in files:
             files["job_helper"] = require_file(files["launcher"].with_name("capstone-job"))
-        profile = getattr(args, "profile", "physical")
+        profile = getattr(args, "profile", "virtual")
         if profile == "virtual" and not {"launcher", "module"} <= files.keys():
-            raise VMError("Virtual profile requires its launcher and module")
-        # The local-mallocng virtual ABI needs QEMU's exact-bounds profile (runtime/virtual/README.md);
-        # run-staged.py turns it on for the qualified gates, and a persistent VM must be able to as well.
-        exact_bounds = bool(getattr(args, "exact_bounds", False))
+            raise VMError("Virtual profile requires its launcher and module "
+                          "(--launcher, --module; --profile physical for the physical profile)")
+        # The local-mallocng virtual ABI needs QEMU's exact-bounds profile (runtime/virtual/README.md),
+        # so a virtual VM has it unless --no-exact-bounds asks otherwise, as in run-staged.py.
+        exact_bounds = getattr(args, "exact_bounds", None)
+        if exact_bounds is None:
+            exact_bounds = profile == "virtual"
         if exact_bounds and profile != "virtual":
             raise VMError("--exact-bounds is a virtual-profile QEMU option")
         share = args.share.resolve(strict=True)
@@ -500,9 +503,10 @@ def main(argv: list[str] | None = None) -> int:
     up = sub.add_parser("up", help="Boot and provision one persistent guest")
     for option in ("qemu", "kernel", "firmware", "rootfs", "share"):
         up.add_argument("--" + option, type=Path, required=True)
-    up.add_argument("--profile", choices=("physical", "virtual"), default="physical")
-    up.add_argument("--exact-bounds", action="store_true",
-                    help="Virtual profile: QEMU's exact-bounds mode, which the local-mallocng ABI needs")
+    up.add_argument("--profile", choices=("physical", "virtual"), default="virtual")
+    up.add_argument("--exact-bounds", action=argparse.BooleanOptionalAction, default=None,
+                    help="Virtual profile: QEMU's exact-bounds mode, which the local-mallocng ABI "
+                         "needs (on by default there)")
     for option in ("launcher", "ssh-server", "module", "job-helper"):
         up.add_argument("--" + option, type=Path, help="Override the installed guest component")
     up.add_argument("--port", type=int, default=0)
@@ -540,6 +544,7 @@ def main(argv: list[str] | None = None) -> int:
                         raise VMError("VM did not stop after QMP quit")
                     time.sleep(0.05)
             settings = {key: Path(value["path"]) for key, value in config["files"].items()}
+            # A record without "profile" predates the field: those VMs were all physical.
             settings.update(share=Path(config["share"]), memory=config["memory"],
                             cma_mib=config.get("cma_mib", 512),
                             process_cache_mib=config.get("process_cache_mib", 384),

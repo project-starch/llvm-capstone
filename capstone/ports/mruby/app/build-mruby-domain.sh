@@ -15,9 +15,10 @@
 # MRBD_PIN picks the mruby: head (default, 2026-09-17, every known defect fixed)
 # or 4.0.0-rc2 (2026-03-12, the Sublet evaluation's pin: temporal defects on
 # mruby's own allocators, fixed later). Each pin has its own patches/<pin>/.
-# The physical domain's malloc, which mruby's mrb_malloc sits on, is level0 (the
-# first-fit heap). With MRBD_SDK naming a virtual-profile SDK it is the SDK's musl
-# mallocng instead.
+# CAPSTONE_APPLICATION_PROFILE=virtual (the default) or physical picks the profile of the
+# musl archive and SDK this script builds; mruby's mrb_malloc sits on musl mallocng on the
+# virtual profile and on level0 (the first-fit heap) on the physical one. With MRBD_SDK
+# naming an existing SDK, that SDK's profile is the build's.
 # MRBD_SUBLET=1 (4.0.0-rc2, virtual SDK only) makes every GC object slot a Sublet
 # child lifetime of its heap page (patches/4.0.0-rc2/0008, MRB_CAPSTONE_SUBLET):
 # handed out by CDERIVE, revoked by CREVOKE when the sweep frees it.
@@ -37,7 +38,10 @@ JOBS=${JOBS:-16}
 FROM=${MRBD_FROM:-all}
 BOXING=${MRBD_BOXING:-no}
 PIN=${MRBD_PIN:-head}
-SDK_STAMP="level0 ${MRBD_SDK_CFLAGS:-}"
+PROFILE=${CAPSTONE_APPLICATION_PROFILE:-virtual}
+case "$PROFILE" in physical|virtual) ;; *) echo "CAPSTONE_APPLICATION_PROFILE=$PROFILE? (physical, virtual)" >&2; exit 2 ;; esac
+[[ $PROFILE == virtual ]] && SDK_STAMP="mallocng ${MRBD_SDK_CFLAGS:-}" \
+  || SDK_STAMP="level0 ${MRBD_SDK_CFLAGS:-}"
 if [[ ${MRBD_SUBLET:-0} == 1 ]]; then
   [[ -f "$SCRIPT_DIR/patches/$PIN/0008-gc-slots-as-sublet-lifetimes.patch" ]] \
     || { echo "MRBD_SUBLET=1 needs patches/$PIN/0008-gc-slots-as-sublet-lifetimes.patch" >&2; exit 2; }
@@ -78,7 +82,8 @@ mkdir -p "$MUSL_CACHE_ROOT"
   || cp "$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5.tar.gz" "$MUSL_CACHE_ROOT/"
 MUSL=$(bash "$MUSL_PORT/prepare-musl-capstone.sh" | tail -1)
 if stage musl; then
-  OUT_DIR=$ROOT/musl-build bash "$MUSL_PORT/build-musl-capstone.sh" >/dev/null
+  OUT_DIR=$ROOT/musl-build CAPSTONE_APPLICATION_PROFILE=$PROFILE \
+    bash "$MUSL_PORT/build-musl-capstone.sh" >/dev/null
 fi
 ARCHIVE=$ROOT/musl-build/libc-capstone.a
 [[ -f "$ARCHIVE" ]] || { echo "no $ARCHIVE" >&2; exit 2; }
@@ -97,7 +102,8 @@ if stage runtime; then
   if [[ -n ${MRBD_SDK_CFLAGS:-} ]]; then
     EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${MRBD_SDK_CFLAGS}")
   fi
-  bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
+  CAPSTONE_APPLICATION_PROFILE=$PROFILE \
+    bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
     -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
   printf '%s\n' "$SDK_STAMP" > "$O/.heap"
 fi

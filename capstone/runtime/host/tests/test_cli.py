@@ -121,6 +121,69 @@ class TransportTests(unittest.TestCase):
                     share=Path(directory), profile="physical", exact_bounds=True, memory="2G",
                     cma_mib=512, process_cache_mib=384, port=0, boot_timeout=1), Path(directory))
 
+    def test_up_defaults_to_the_virtual_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            platform = [f"--{name}={directory}/{name}" for name in ("qemu", "kernel", "firmware", "rootfs")]
+            for extra, profile, exact_bounds in (([], "virtual", None),
+                                                 (["--profile", "physical"], "physical", None),
+                                                 (["--no-exact-bounds"], "virtual", False)):
+                with patch.object(cli, "start", return_value=0) as start:
+                    self.assertEqual(cli.main(["--state", directory, "up", *platform,
+                                               f"--share={directory}", *extra]), 0)
+                    args, _ = start.call_args.args
+                    self.assertEqual((args.profile, args.exact_bounds), (profile, exact_bounds))
+
+    def test_restart_reads_a_record_without_profile_as_physical(self):
+        # Records written before the profile field existed were all physical VMs.
+        with tempfile.TemporaryDirectory() as directory:
+            identity = {"files": {k: {"path": "/tmp/" + k, "sha256": "old"}
+                        for k in ("qemu", "kernel", "firmware", "rootfs")},
+                        "share": "/tmp/share", "memory": "2G", "environment": {}}
+            Path(directory, "config.json").write_text(json.dumps({"identity": identity}))
+            with patch.object(cli, "running", return_value=False), patch.object(cli, "start", return_value=0) as start:
+                self.assertEqual(cli.main(["--state", directory, "restart"]), 0)
+                args, _ = start.call_args.args
+                self.assertEqual((args.profile, args.exact_bounds), ("physical", False))
+
+    def virtual_start(self, directory, **settings):
+        for name in ("qemu", "kernel", "firmware", "rootfs", "launcher", "capstone-job", "module"):
+            Path(directory, name).write_text(name)
+        return cli.argparse.Namespace(
+            qemu=Path(directory, "qemu"), kernel=Path(directory, "kernel"),
+            firmware=Path(directory, "firmware"), rootfs=Path(directory, "rootfs"),
+            share=Path(directory), memory="2G", environment={},
+            cma_mib=512, process_cache_mib=384, port=0, boot_timeout=1, **settings)
+
+    def test_virtual_start_needs_its_launcher_and_module(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args = self.virtual_start(directory)
+            with self.assertRaisesRegex(cli.VMError, "launcher and module"):
+                cli.start(args, Path(directory))
+
+    def test_virtual_start_has_exact_bounds_unless_turned_off(self):
+        # A running VM with the same identity is reused, so the identity start() computes is
+        # compared without booting: exact_bounds is in it exactly when the VM gets the mode.
+        for setting, recorded in ((None, True), (True, True), (False, False)):
+            with tempfile.TemporaryDirectory() as directory:
+                args = self.virtual_start(directory, launcher=Path(directory, "launcher"),
+                                          module=Path(directory, "module"), exact_bounds=setting)
+                files = {name: Path(directory, file).resolve() for name, file in
+                         (("qemu", "qemu"), ("kernel", "kernel"), ("firmware", "firmware"),
+                          ("rootfs", "rootfs"), ("launcher", "launcher"), ("module", "module"),
+                          ("job_helper", "capstone-job"))}
+                identity = {"files": {name: {"path": str(path), "sha256": cli.fingerprint(path)}
+                                      for name, path in files.items()},
+                            "share": str(Path(directory).resolve()), "memory": "2G", "cma_mib": 512,
+                            "process_cache_mib": 384,
+                            "environment": {"CAPSTONE_GP_NONLIN": "1", "CAPSTONE_REV_NODES": "65536"},
+                            "profile": "virtual"}
+                if recorded:
+                    identity["exact_bounds"] = True
+                Path(directory, "config.json").write_text(json.dumps({"port": 1, "identity": identity}))
+                with patch.object(cli, "running", return_value=True), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(cli.start(args, Path(directory)), 0)
+
     def test_qmp_events_and_partial_messages(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)

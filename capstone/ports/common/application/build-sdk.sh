@@ -6,7 +6,7 @@ source "$HERE/../../../tests/capstone-test-env.sh" >/dev/null
 [[ $# -ge 3 ]] || { echo "usage: build-sdk.sh OUT MUSL_SOURCE LIBC_ARCHIVE [CMAKE_OPTION...]" >&2; exit 2; }
 SDK=$1 MUSL=$2 LIBC=$3
 shift 3
-PROFILE=${CAPSTONE_APPLICATION_PROFILE:-physical}
+PROFILE=${CAPSTONE_APPLICATION_PROFILE:-virtual}
 case "$PROFILE" in
   physical) VIRTUAL=OFF ;;
   virtual) VIRTUAL=ON ;;
