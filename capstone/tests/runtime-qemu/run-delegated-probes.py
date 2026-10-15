@@ -38,8 +38,9 @@ built twice: movc-rule with the compiler's live-source copy rule (C-32's fix,
 movc-keep with +movc-keeps-integer-source, a plain movc for every copy. The
 override reaches only the probe's own file. An SDK whose sdk.json codegen has
 the feature (the virtual SDK since Q-04) built its runtime and libc for Q-04's
-MOVC, so movc-rule in a guest with the switch on is reported as a failure
-naming that cause. Qualify the old MOVC with an SDK built without the feature.
+MOVC, so movc-rule, and intcap, which keeps the SDK's codegen, are reported as
+failures naming that cause in a guest whose MOVC nulls an untagged source.
+Qualify the old MOVC with an SDK built without the feature.
 With the switch on, keep must lose C-32's two values (the positive control)
 and rule must not. The build refuses (exit 2) a toolchain that lacks either,
 because a keep built without the feature is a duplicate of rule and a rule
@@ -191,6 +192,19 @@ def check_tls_overrun(record, out, err, ctx):
     return problems
 
 
+# An SDK whose codegen has +movc-keeps-integer-source (the virtual SDK since
+# Q-04) built its runtime, libc and builtins, and every probe file that keeps
+# its default, for Q-04's MOVC. Where MOVC nulls an untagged source (the
+# switch, or the physical profile) such an image mixes two MOVC rules, so its
+# result proves nothing either way.
+def q04_sdk_under_old_movc(ctx, what):
+    if ctx.get("sdk-movc-keeps") and (ctx.get("movc-switch") == "1" or ctx.get("profile") != "virtual"):
+        return [f"the SDK compiles its runtime and libc with +movc-keeps-integer-source (Q-04); a guest "
+                f"whose MOVC nulls an untagged source (CAPSTONE_MOVC_NULL_SCALAR=1 or the physical "
+                f"profile) cannot qualify {what} against it: use an SDK built without the feature"]
+    return []
+
+
 def check_movc(variant):
     def check(record, out, err, ctx):
         problems = exits(record, 0)
@@ -205,14 +219,10 @@ def check_movc(variant):
         physical = ctx.get("profile") != "virtual"
         on = switch or physical
         b, c, got, n = probe.group(1), probe.group(2), c32.group(1), int(iconv.group(1))
-        if on and variant == "rule" and ctx.get("sdk-movc-keeps"):
+        if variant == "rule":
             # The probe's own file is built without the feature, but the
-            # runtime, libc and builtins it links assume Q-04's MOVC. Under the
-            # old MOVC that image mixes two rules, so a pass would prove nothing.
-            problems.append("the SDK compiles its runtime and libc with +movc-keeps-integer-source "
-                            "(Q-04); a guest whose MOVC nulls an untagged source (CAPSTONE_MOVC_NULL_SCALAR=1 "
-                            "or the physical profile) cannot qualify movc-rule against it: use an SDK built "
-                            "without the feature")
+            # runtime, libc and builtins it links assume Q-04's MOVC.
+            problems += q04_sdk_under_old_movc(ctx, "movc-rule")
         if on and (b, c) == ("5", "5"):
             problems.append("physical profile kept an untagged source: this QEMU predates the Q-04 split"
                             if physical else
@@ -248,7 +258,9 @@ def check_intcap(variant):
         bad = lines(out, rf"INTCAP {variant} [a-z]+ BAD")
         end = lines(out, rf"INTCAP {variant} END ")
         if variant == "intcap":
-            problems = exits(record, 0)
+            # Built with the SDK's codegen: a plain movc for every copy. The
+            # control (uptr) still runs, as movc-keep does.
+            problems = exits(record, 0) + q04_sdk_under_old_movc(ctx, "intcap")
             if ok != sorted(INTCAP_INTEGER + INTCAP_POINTER):
                 problems.append(f"ok for {ok}, want all nine cases")
             if end != ["INTCAP intcap END bad=0"]:
@@ -623,6 +635,17 @@ def self_test():
          intcap("intcap", ALL).replace("shift ok", "shift BAD got=0x0 want=0x10")
          + "INTCAP intcap END bad=1\n", "", {}, False),
         ("intcap-uptr", check_intcap("uptr"), segv, intcap("uptr", INT), "", {}, True),
+        ("intcap with a Q-04 SDK, switch off", check_intcap("intcap"), ok_exit(0),
+         intcap("intcap", ALL) + "INTCAP intcap END bad=0\n", "",
+         {"movc-switch": "0", "profile": "virtual", "sdk-movc-keeps": True}, True),
+        ("intcap with a Q-04 SDK, switch on: even a pass proves nothing", check_intcap("intcap"), ok_exit(0),
+         intcap("intcap", ALL) + "INTCAP intcap END bad=0\n", "",
+         {"movc-switch": "1", "profile": "virtual", "sdk-movc-keeps": True}, False),
+        ("intcap with a Q-04 SDK on the physical profile", check_intcap("intcap"), ok_exit(0),
+         intcap("intcap", ALL) + "INTCAP intcap END bad=0\n", "",
+         {"movc-switch": "0", "profile": "physical", "sdk-movc-keeps": True}, False),
+        ("intcap-uptr with a Q-04 SDK, switch on", check_intcap("uptr"), segv, intcap("uptr", INT), "",
+         {"movc-switch": "1", "profile": "virtual", "sdk-movc-keeps": True}, True),
         ("intcap-uptr: the pointer cases passed", check_intcap("uptr"), ok_exit(0),
          intcap("uptr", ALL) + "INTCAP uptr END bad=0\n", "", {}, False),
         ("intcap-uptr: faulted among the integers", check_intcap("uptr"), segv,
