@@ -86,6 +86,19 @@ attempt 06:12 UTC after the guard's 240 s window aborted the first during the 46
   bounds and fill the region table at invocation 8 of 12) and P1 cell 6 (the runtime's sublet_carve hands out a
   SPLIT's lower piece at its decoded start; mcause 26 at revoke in sqlite3DbNNFreeNN). The s1gap pair's FP readings
   are in its PREREG; the simulation's close-arm "drain" does not appear on silicon.
+- **2026-10-15: a benchmark on the resident respin (B5/B5n, the board lane; dev 45efea21c167, 7049b13d969e,
+  cfb9820fa191).** Virtual-profile images cannot run on this RTL, so mruby 4.0.0-rc2, a virtual-profile application,
+  was ported to the silicon ABI.
+  - Two pre-registered boots, every reading as predicted. `-e`, stdin, smoke.rb and five benchmarks are byte-identical
+    to native.
+  - Domain against native mruby on the same board at the same -O1: 1.18-1.37x per benchmark, 1.24x in total; against
+    native -O2, 1.49x. These are upper bounds: the domain is also soft-float, clang/musl and delegated.
+  - Launch is the outlier: 45.5 s against under 4 s, not attributed.
+  - Found and fixed on the way:
+    - `setjmp.S` called its helpers at gp + address under the gp-captable ABI, so longjmp faulted on any silicon
+      image;
+    - level0 is O(live blocks) per malloc/free, so an allocation-heavy silicon app needs its own allocator
+      (mruby: silicon-alloc.c).
 - **Next:** the Sublet bitstream inherits every R-55 item (the full scheme on every capability), so before its flash:
   the carve policy in the monitor (granule-aligned points or SHRINK plus explicit cursor, OVERLAP 0 under
   --format full --renorm), the runtime's sublet_carve fix, and the lockstep list as recorded. Then the lead's word.

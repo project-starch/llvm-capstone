@@ -2656,8 +2656,8 @@ One boot, eight rungs, every retval 0 against its oracle (pre-registration 372e0
 | ao_render (8) | 81.99 | 81.90 | -0.11% | 59.71 | 69.69 | 1.37 | 1.18 |
 | total | 298.82 | 298.73 | | 200.62 | 240.26 | 1.49 | 1.24 |
 
-Launch, from step `e` (`p 1+1`):
-- domain: 45.49 s cold and 24.59 s with the image cached;
+Launch:
+- domain: 45.49 s for step `e` (`p 1+1`, cold) and 24.59 s for step stdin (the next launch, image cached);
 - native: 3.85 s at -O2 and 3.59 s at -O1.
 
 **Reading it:**

@@ -6024,7 +6024,7 @@ pre-registration and the matched pairs are in plans/b0-silicon-delegated-runtime
   | so_mandelbrot | 32 | 30.67 |
   | ao_render | 8 x 8, 4 AO samples | 81.99 |
 
-  Per launch: 45.5 s cold and 24.6 s cached. Board / QEMU host time is 6.4-7.6 per benchmark.
+  Per launch: 45.5 s cold (`p 1+1`) and 24.6 s cached (the stdin step). Board / QEMU host time is 6.4-7.6 per benchmark.
 - **Build:**
   - gp-captable, full LTO, `-O1`, soft-float `+m +a`; 2.0 MB code, 2,622 globals, a 64 MiB domain.
   - check-repr OK at all 193 placements under the full bounds scheme (pool carve); zero FP instructions in the image.
@@ -6051,7 +6051,8 @@ B5's on four benchmarks and 0.9% on the 2.4 s so_lists.
 | ao_render (8) | 81.95 | 59.71 | 69.69 | 1.37 | 1.18 |
 | total | 298.78 | 200.62 | 240.26 | 1.49 | 1.24 |
 
-Launch (`p 1+1`): the domain takes 45.5 s cold and 24.6 s cached; native takes 3.6-3.9 s. The domain's split between
+Launch: the domain takes 45.5 s for its first launch (`p 1+1`) and 24.6 s for the next, with the image cached
+(the stdin step); native takes 3.6-3.9 s for `p 1+1`. The domain's split between
 image, regions and interpreter start is not measured.
 
 **Quote it as an upper bound.** These ratios are not the cost of capabilities alone. Besides the protection, the
