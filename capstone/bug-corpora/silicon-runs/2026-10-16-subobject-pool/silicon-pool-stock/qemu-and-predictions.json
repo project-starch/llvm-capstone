@@ -1,0 +1,108 @@
+{
+ "arm": "silicon-pool-stock",
+ "build": {
+  "defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+  "app_cflags": "",
+  "extra_cflags": "-fno-inline -std=gnu11 -DFF2_SYSTEM_MEMORY -I/tmp/capstone/wt-b0/capstone/ports/ffmpeg/buffer-pool/src/shared -I/tmp/capstone/ffmpeg-sublet/ffmpeg-traced -I/tmp/capstone/wt-b0/capstone/ports/ffmpeg/buffer-pool/cmake/replay-config -I/tmp/capstone/wt-b0/capstone/runtime/include",
+  "extra_src": [
+   "buffer.c",
+   "refstruct.c",
+   "observe-pool-events.c",
+   "system-memory.c",
+   "level0-memalign.c"
+  ]
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "CAUGHT",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-pool-00",
+   "case": "00_461fb22053_af_join_dedup_bound",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "image_sha256": "d5747e6d10daf0d1b6681871378d8ce9d2a03441f86906377ae8f1b34f2820ab",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-pool-01",
+   "case": "01_1886c3269d_h264_refs_partial_clear",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "image_sha256": "dfadc7892fdc81ca73e2734eb98452c3a468ff7b4aad446195bb2a91ba93a0e1",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-pool-02",
+   "case": "02_316531e61c_vidstab_parked_plane_pointer",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "image_sha256": "f7dcc9854c5d4beac3523958ff01bfabb4562dcb1fedb67a54f6a3a1b4f30007",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-pool-03",
+   "case": "03_5c66a3ab51_vvc_nonref_output_releases_tabs",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "image_sha256": "f7ef3a52d12ad7299692177b31d9bbd580e74561bdeef9c6c2e4b6b3d94cac49",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-pool-controls-virtual-90",
+   "case": "90_ctl_buffer_returned_to_pool",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/virtual",
+   "kind": "pool-control",
+   "image_sha256": "867dc0f63e71b76acad12f87199efaa55bd5e4323d4d01238446e407c504bbf4",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  }
+ ]
+}

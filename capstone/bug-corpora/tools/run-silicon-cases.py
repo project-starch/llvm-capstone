@@ -44,12 +44,38 @@ ARMS = {
     "silicon-lifetimes": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
                           "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT",
                                        "subobj": "RETURNED"}},
+    # FFmpeg's AVBufferPool corpus over the lifetimes heap, its pools stock (the "traced" FFmpeg variant, patch 0001)
+    # or as Sublet lifetimes (the "protected" variant, patch 0003): which FFmpeg tree is passed with --extra-src
+    "silicon-pool-stock": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+                           "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    "silicon-pool-sublet": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+                            "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    # level0's bounds plus field bounds (the cc1 form; the driver spelling is accepted and ignored, run-capstone-domain.py)
+    "silicon-subobject": {"defs": "", "app_cflags": "-Xclang -fcapstone-subobject-bounds",
+                          "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "RETURNED",
+                                       "subobj": "CAUGHT"}},
 }
 PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
 CTL_PROBE = re.compile(r"^ctl_(read|write)_probe$")
 
 
-def predicted(kind, arm):
+def kind_of(corpus):
+    """The corpus kinds this tool scores: run-capstone-domain.py's, plus the AVBufferPool corpus and its control 90."""
+    rel = corpus.relative_to(REPO / "capstone/bug-corpora").parts
+    if rel[1] == "pool-repros":
+        return "pool-control" if "controls" in rel else "pool"
+    return rcd.corpus_kind(corpus)
+
+
+def predicted(kind, arm, case_dir=None):
+    if kind in ("pool", "pool-control"):
+        # stock pools reissue an entry with no revocation (virtual-malloc MISSED; control 90 completes); patch 0003
+        # revokes the user's child on release (virtual-nested-pools CAUGHT; control 90 faults)
+        return "CAUGHT" if arm == "silicon-pool-sublet" else "DEFECT-REPRODUCED"
+    if arm == "silicon-subobject" and kind == "interior" and case_dir is not None:
+        # field bounds catch what QEMU's capstone-subobject arm caught, on the same compiler option
+        v = json.loads((case_dir / "case.json").read_text()).get("arms", {}).get("capstone-subobject", {}).get("verdict")
+        return "CAUGHT" if v == "CAUGHT" else "DEFECT-REPRODUCED"
     if kind == "spatial":
         return "CAUGHT"
     if kind == "temporal":
@@ -62,9 +88,13 @@ def sha256(p):
 
 
 def build_one(job):
-    name, srcs, cflags, defs, out = job
+    name, srcs, cflags, defs, out, data, arena = job
     env = dict(os.environ, B0_APP=name, B0_APP_SRCS=" ".join(srcs), B0_APP_CFLAGS=cflags, B0_GLUE_CARVE="pool",
                B0_CFLAGS_EXTRA=defs, OUT_DIR=str(out / "build" / name))
+    if data:
+        env["B0_DATA"] = str(data)
+    if arena:
+        env["B0_ARENA"] = str(arena)
     log = out / "build" / f"{name}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w") as f:
@@ -85,23 +115,27 @@ def cmd_build(a):
     out.mkdir(parents=True)
     ctl = out / "controls.c"
     ctl.write_text(rcd.CONTROL_C)
-    jobs, cases = [("controls", [str(ctl)], "-O0", arm["defs"], out)], {}
+    appf = arm.get("app_cflags", "")
+    jobs, cases = [("controls", [str(ctl)], f"-O0 {appf}".strip(), arm["defs"], out, None, None)], {}
     for corpus in a.corpus:
         corpus = corpus.resolve()
-        kind = rcd.corpus_kind(corpus)
+        kind = kind_of(corpus)
         shared = corpus / "shared"
-        tag = f"{corpus.parent.name}-{corpus.name.split('-')[1]}"     # e.g. memcached-heap, ffmpeg-temporal
+        rel = corpus.relative_to(REPO / "capstone/bug-corpora").parts   # memcached-heap, ffmpeg-subobject, ffmpeg-pool
+        tag = f"{rel[0]}-{'-'.join(rel[1:]).replace('-repros', '').replace('plain-', '')}"
         for d in sorted(x for x in corpus.glob("[0-9][0-9]_*") if (x / "case.c").is_file()):
             name = f"{tag}-{d.name[:2]}"
             cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind=kind, n=str(int(d.name[:2])))
-            jobs.append((name, [str(d / "case.c"), str(shared / "driver.c")], f"-O0 -I{shared}", arm["defs"], out))
+            jobs.append((name, [str(d / "case.c"), str(shared / "driver.c"), *a.extra_src],
+                         f"{a.opt} -I{shared} {a.extra_cflags} {appf}".strip(), arm["defs"], out, a.data, a.arena))
     built = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
         for name, rc, img in ex.map(build_one, jobs):
             print(f"  {name:<28} {'ok ' + sha256(img)[:16] if img else 'BUILD-FAILED rc=' + str(rc)}", flush=True)
             if img:
                 built[name] = dict(image=str(img), sha256=sha256(img))
-    manifest = dict(arm=a.arm, defs=arm["defs"], controls=built.get("controls"), cases={
+    manifest = dict(arm=a.arm, defs=arm["defs"], app_cflags=appf, extra_src=a.extra_src, extra_cflags=a.extra_cflags,
+                    controls=built.get("controls"), cases={
         n: dict(cases[n], **built[n]) if n in built else dict(cases[n], image=None) for n in cases})
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
     bad = [n for n in manifest["cases"] if not manifest["cases"][n]["image"]]
@@ -142,7 +176,7 @@ def score(a, runs):
         fixed_ok = fo == "FIXED" and fr.get("kind") == "exit" and fr.get("value") == 0
         outcome, detail = (bo, bd) if fixed_ok else ("FIXED-ARM-FAILED", f"fixed read {fo}: {fd}")
         site = outcome == "CAUGHT" and "(the labelled probe)" not in detail and rcd.at_declared_site(REPO / c["corpus"] / c["case"], detail)
-        want = predicted(c["kind"], a.arm)
+        want = predicted(c["kind"], a.arm, REPO / c["corpus"] / c["case"])
         rows.append(dict(name=name, case=c["case"], corpus=c["corpus"], kind=c["kind"], outcome=outcome, detail=detail,
                          predicted=want, image_sha256=c["sha256"],
                          as_predicted=outcome == want and (outcome != "CAUGHT" or "(the labelled probe)" in detail or bool(site))))
@@ -195,6 +229,9 @@ def cmd_board(a):
         fault = rcd.FAULT.search(body)
         result = dict(kind=kind, value=value, fault=fault.group(0) if fault else "")
         runs[key] = (body, result)
+    pre = f"{a.arm}:"
+    if any(k.startswith(pre) for k in runs):          # a boot that carried several arms: this arm's keys only
+        runs = {k[len(pre):]: v for k, v in runs.items() if k.startswith(pre)}
     if not runs:
         sys.exit(f"CONTROL-FAILED no CORPUS-RUN blocks in {a.transcript}")
     controls, rows, ok = score(a, runs)
@@ -213,14 +250,15 @@ def cmd_stage(a):
     st.mkdir()
     lines = []
     (st / "controls.dom").write_bytes(Path(m["controls"]["image"]).read_bytes())
+    pre = f"{a.arm}:" if a.prefix_keys else ""   # several arms in one boot: keys must not collide
     for which in ARMS[a.arm]["controls"]:
-        lines.append(f"control-{which} controls.dom {which}")
+        lines.append(f"{pre}control-{which} controls.dom {which}")
     for name, c in m["cases"].items():
         if not c["image"]:
             continue
         (st / f"{name}.dom").write_bytes(Path(c["image"]).read_bytes())
-        lines.append(f"{name}-fixed {name}.dom fixed {c['n']}")
-        lines.append(f"{name}-buggy {name}.dom buggy {c['n']}")
+        lines.append(f"{pre}{name}-fixed {name}.dom fixed {c['n']}")
+        lines.append(f"{pre}{name}-buggy {name}.dom buggy {c['n']}")
     (st / "runs.txt").write_text("\n".join(lines) + "\n")
     sums = "".join(f"{sha256(f)}  {f.name}\n" for f in sorted(st.glob("*.dom")))
     (st / "SHA256SUMS").write_text(sums)
@@ -233,12 +271,18 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build"); b.add_argument("--arm", choices=ARMS, required=True)
     b.add_argument("--out", type=Path, required=True); b.add_argument("--jobs", type=int, default=6)
+    b.add_argument("--extra-src", action="append", default=[], help="a source every case links (subobject: the pool core)")
+    b.add_argument("--extra-cflags", default="", help="flags every case's sources get")
+    b.add_argument("--data", type=int, default=None, help="B0_DATA for the cases (the pool core's arenas need more)")
+    b.add_argument("--arena", type=int, default=None, help="B0_ARENA (level0's heap) for the cases")
+    b.add_argument("--opt", default="-O0", help="the cases' optimisation level (the pool corpus builds at -O1)")
     b.add_argument("corpus", type=Path, nargs="+")
     q = sub.add_parser("qemu"); q.add_argument("--arm", choices=ARMS, required=True)
     q.add_argument("--out", type=Path, required=True); q.add_argument("--state", type=Path, required=True)
     q.add_argument("--share", required=True)
     s = sub.add_parser("stage"); s.add_argument("--arm", choices=ARMS, required=True)
     s.add_argument("--out", type=Path, required=True)
+    s.add_argument("--prefix-keys", action="store_true", help="prefix every run key with the arm (several arms per boot)")
     r = sub.add_parser("board"); r.add_argument("--arm", choices=ARMS, required=True)
     r.add_argument("--out", type=Path, required=True); r.add_argument("--transcript", required=True)
     a = ap.parse_args()

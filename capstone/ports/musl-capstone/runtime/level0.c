@@ -47,6 +47,9 @@ struct l0_block {
 	struct l0_block *next;   /* next block in address order */
 	int free;
 	char _pad[L0_ALIGN - (sizeof(int) % L0_ALIGN)];
+#if defined(CAPSTONE_LEVEL0_LIFETIMES) && CAPSTONE_LEVEL0_LIFETIMES
+	void *child;             /* the CDERIVE child this block was handed out as; 0 when it has none */
+#endif
 };
 
 /* With CAPSTONE_LEVEL0_LIFETIMES the arena is the parent of one CDERIVE group, which must be exact: the pool carve
@@ -134,23 +137,33 @@ static int l0_exact(unsigned long base, size_t n)
 	unsigned long g = 1ul << (63 - __builtin_clzl(n) - 9);
 	return base % g == 0 && n % g == 0;
 }
+static struct l0_block *l0_header(void *p);
 static void *l0_child(void *p, size_t n)
 {
+	struct l0_block *b = l0_header(p);
 	if (!l0_group)
 		l0_group = capstone_cap_derive(l0_arena, 0, CAPSTONE_LEVEL0_ARENA_BYTES);
 	if (!l0_exact(__builtin_capstone_cap_get_cursor(p), n)) {
 		l0_unexact++;
+		b->child = 0;
 		return l0_narrow(p, n);
 	}
-	return capstone_cap_derive(l0_group, __builtin_capstone_cap_get_cursor(p) -
-	                                     __builtin_capstone_cap_get_cursor(l0_arena), n);
+	b->child = capstone_cap_derive(l0_group, __builtin_capstone_cap_get_cursor(p) -
+	                                         __builtin_capstone_cap_get_cursor(l0_arena), n);
+	return b->child;
 }
+/* free finds the block by ADDRESS and ends the child recorded in its header, as the virtual heap's free does: a
+ * program may free through a pointer derived from the one it was given (FFmpeg's refstruct frees obj - offset, a
+ * pointer derived from a pool's own child). The pointer is validated by a load first, so a stale one -- whose child
+ * is already dead -- traps 25 here instead of ending whoever holds the block now. */
 static void l0_end_lifetime(void *p)
 {
-	unsigned long perm;
-	__asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x5" : "=r"(perm) : "r"(p));
-	if (perm & CAPSTONE_PERM_MANAGE)
-		capstone_cap_revoke_child(l0_group, p);
+	struct l0_block *b = l0_header(p);
+	if (!b->child)
+		return;
+	(void)*(volatile const char *)p;
+	capstone_cap_revoke_child(l0_group, b->child);
+	b->child = 0;
 }
 #define L0_RETURN(p, n) l0_child((p), (n))
 #define L0_REALLOC_IN_PLACE(p, b, n) (l0_end_lifetime(p), l0_child((char *)(b) + sizeof(struct l0_block), (n)))
