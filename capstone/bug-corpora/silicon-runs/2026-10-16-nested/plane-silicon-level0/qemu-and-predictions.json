@@ -1,0 +1,52 @@
+{
+ "arm": "silicon-level0",
+ "build": {
+  "defs": "",
+  "app_cflags": "",
+  "carve": {},
+  "corpus_defs": {},
+  "driver": "driver.c",
+  "extra_cflags": "-DHAVE_AV_CONFIG_H -I/tmp/capstone/ffmpeg-app/src-9.0.1-f7e8b586f7b4 -I/tmp/capstone/ffmpeg-app/domain/ffmpeg-build -Wno-everything",
+  "extra_src": [
+   "frame.c",
+   "buffer.c",
+   "mem.c",
+   "imgutils.c",
+   "pixdesc.c",
+   "log.c",
+   "error.c",
+   "dict.c",
+   "bprint.c",
+   "channel_layout.c",
+   "samplefmt.c",
+   "refstruct.c",
+   "time.c",
+   "side_data.c"
+  ]
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "RETURNED",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-plane-00",
+   "case": "00_b7946098b1_alphablend_row_past_plane",
+   "corpus": "capstone/bug-corpora/ffmpeg/plane-repros",
+   "kind": "plane",
+   "image_sha256": "c5c7a7f850ff57072655c2de0d055548a2b1433059cb0fa50e30d3cf7f35ad74",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  }
+ ]
+}

@@ -26,6 +26,13 @@ THE ARMS.
                      the corpus's driver-virtual.c: virtual-nested-pools' configuration on the silicon ABI.
   silicon-mc-stock   the same allocators stock (patches 0001 + 0002) on the stock-malloc ledger (MCP_ADAPTER_BACKING):
                      virtual-malloc's configuration. The prepared sources and the ledger come with --extra-src.
+  silicon-wm-sublet  wireshark's wmem with the port's patch 0001 (block and block_fast objects are CDERIVE children
+                     of their block, revoked at free and at the pool reset) over the lifetimes heap: virtual-nested-
+                     pools' configuration. The buggy run is the plain sequence (`0 N`).
+  silicon-wm-stock   wmem as released over the lifetimes heap: virtual-malloc's. The buggy run is the fix
+                     differential (`0 N buggy`), whose temporal cases assert the stale chunk was reoccupied.
+wmem's fixed run is `0 N fixed` on both; its three controls run once as `0 N` (never the differential, whose verdict
+line would judge a control by a case's observation) and gate the arm.
 The carved corpus also runs its own controls as rows: 99 (one byte past a 16-byte carve, inside its block) on every
 arm, and 98 (a re-carved region's old alias) on the Sublet carve. They gate the arm like the four tool controls.
 
@@ -83,12 +90,20 @@ ARMS = {
                          "corpus_defs": {"allocator-repros": "-DMCP_ADAPTER_BACKING"},
                          "virtual": "virtual-malloc",
                          "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    # wireshark/wmem-repros and its controls: which wmem source the image links is the arm (--extra-src)
+    "silicon-wm-sublet": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-nested-pools",
+                          "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    "silicon-wm-stock": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-malloc", "wm_differential": True,
+                         "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
 }
+# wmem's controls, as controls/README.md declares them per arm: 00 uaf-chunk, 01 uaf-jumbo, 02 bounds-chunk
+WM_CONTROLS = {"silicon-wm-sublet": {"00": "CAUGHT", "01": "CAUGHT", "02": "CAUGHT"},
+               "silicon-wm-stock": {"00": "DEFECT-REPRODUCED", "01": "CAUGHT", "02": "DEFECT-REPRODUCED"}}
 CARVE_SWITCHES = ("FFC_SUBLET_CARVE", "FFC_CARVE_BOUNDS", "FFP_CARVE_BOUNDS", "MC_CARVE_BOUNDS", "MC_CAPSTONE_SUBLET",
                   "MCP_ADAPTER_BACKING")
 # corpus controls that gate their arm like the four tool controls (pool-control predates this and stays a plain row,
 # as set 2 was pre-registered with it)
-CONTROL_ROWS = ("carve-control", "mc-control")
+CONTROL_ROWS = ("carve-control", "mc-control", "wmem-control")
 PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
 CTL_PROBE = re.compile(r"^ctl_(read|write)_probe$")
 
@@ -98,6 +113,8 @@ def kind_of(corpus):
     rel = corpus.relative_to(REPO / "capstone/bug-corpora").parts
     if rel[1] == "pool-repros":
         return "pool-control" if "controls" in rel else "pool"
+    if rel[1] == "wmem-repros":
+        return "wmem-control" if "controls" in rel else "wmem"
     if rel[1] == "allocator-repros":
         return "mc-control" if "controls" in rel else "mc"
     if rel[1] in ("carved-repros", "plane-repros"):
@@ -114,7 +131,9 @@ def predicted(kind, arm, case_dir=None):
     if kind == "mc-control":
         # control 90: slabs_free revokes the chunk under patch 0006, and keeps it in its page otherwise
         return "CAUGHT" if arm == "silicon-mc-sublet" else "DEFECT-REPRODUCED"
-    if kind == "mc":
+    if kind == "wmem-control":
+        return WM_CONTROLS[arm][case_dir.name[:2]]
+    if kind in ("mc", "wmem"):
         # the virtual arm with the same mechanism, as recorded in case.json; NO-READING there was its fixed run failing
         v = json.loads((case_dir / "case.json").read_text())["arms"][ARMS[arm]["virtual"]]["verdict"]
         return {"CAUGHT": "CAUGHT", "MISSED": "DEFECT-REPRODUCED"}.get(v, "FIXED-ARM-FAILED")
@@ -131,6 +150,45 @@ def predicted(kind, arm, case_dir=None):
     if kind == "temporal":
         return "CAUGHT" if arm == "silicon-lifetimes" else "DEFECT-REPRODUCED"
     return "DEFECT-REPRODUCED"
+
+
+def argv_for(arm, kind, n, which):
+    """The program's arguments for one run, or None when the row has no such run (wmem's controls: no fixed run)."""
+    if kind == "wmem":
+        if which == "fixed":
+            return ["0", n, "fixed"]
+        return ["0", n] + (["buggy"] if ARMS[arm].get("wm_differential") else [])
+    if kind == "wmem-control":
+        return None if which == "fixed" else ["0", n]
+    return [which, n]
+
+
+WM_DONE = "WM_DEFECT case={n} mode=0 completed"
+
+
+def wm_probe(case_dir):
+    """run-virtual-cases.py's rule: the probe function the case's own case.c calls (wm_probe or wm_write_probe), or
+    None for a case that calls neither and declares fault_sites (judged against those)."""
+    text = (case_dir / "case.c").read_text()
+    reads, writes = "WM_READ" in text or "wm_probe(" in text, "WM_WRITE" in text or "wm_write_probe(" in text
+    if not reads and not writes and json.loads((case_dir / "case.json").read_text()).get("fault_sites"):
+        return None
+    if reads == writes:
+        sys.exit(f"CONTROL-FAILED {case_dir.name} calls {'both' if reads else 'no'} labelled probe")
+    return "wm_probe" if reads else "wm_write_probe"
+
+
+def classify_run(c, case_dir, text, result, syms):
+    """run-capstone-domain.py's classify, plus wmem's protocol: its probe is the case's own function, and a buggy run
+    of the plain sequence prints no VERDICT -- `WM_DEFECT case=N mode=0 completed` with exit 0 is its completion."""
+    if c["kind"] not in ("wmem", "wmem-control"):
+        return rcd.classify(text, result, syms, PROBE)
+    probe = wm_probe(case_dir)
+    outcome, detail = rcd.classify(text, result, syms, re.compile(rf"^{probe}$") if probe else re.compile(r"(?!)"))
+    if outcome == "OTHER" and result.get("kind") == "exit" and result.get("value") == 0 \
+            and WM_DONE.format(n=c["n"]) in text and not re.search(r"^VERDICT", text, re.M):
+        return "DEFECT-REPRODUCED", f"completed: `{WM_DONE.format(n=c['n'])}`, exit 0, no fault"
+    return outcome, detail
 
 
 def sha256(p):
@@ -233,11 +291,15 @@ def score(a, runs):
             rows.append(dict(name=name, outcome="BUILD-FAILED", as_predicted=False))
             continue
         syms = rcd.Symbols(llvm, c["image"])
-        ft, fr = runs.get(f"{name}-fixed", ("", {}))
-        fo, fd = rcd.classify(ft, fr, syms, PROBE)
+        case_dir = REPO / c["corpus"] / c["case"]
         bt, br = runs.get(f"{name}-buggy", ("", {}))
-        bo, bd = rcd.classify(bt, br, syms, PROBE)
-        fixed_ok = fo == "FIXED" and fr.get("kind") == "exit" and fr.get("value") == 0
+        bo, bd = classify_run(c, case_dir, bt, br, syms)
+        if argv_for(a.arm, c["kind"], c["n"], "fixed") is None:
+            fixed_ok = True     # a control with no fixed run
+        else:
+            ft, fr = runs.get(f"{name}-fixed", ("", {}))
+            fo, fd = classify_run(c, case_dir, ft, fr, syms)
+            fixed_ok = fo == "FIXED" and fr.get("kind") == "exit" and fr.get("value") == 0
         outcome, detail = (bo, bd) if fixed_ok else ("FIXED-ARM-FAILED", f"fixed read {fo}: {fd}")
         site = outcome == "CAUGHT" and "(the labelled probe)" not in detail and c["kind"] not in CONTROL_ROWS \
             and rcd.at_declared_site(REPO / c["corpus"] / c["case"], detail)     # a control has no declared sites
@@ -282,8 +344,10 @@ def cmd_qemu(a):
         run(m["controls"]["image"], [which], f"control-{which}")
     for name, c in m["cases"].items():
         if c["image"]:
-            run(c["image"], ["fixed", c["n"]], f"{name}-fixed")
-            run(c["image"], ["buggy", c["n"]], f"{name}-buggy")
+            for which in ("fixed", "buggy"):
+                argv = argv_for(a.arm, c["kind"], c["n"], which)
+                if argv is not None:
+                    run(c["image"], argv, f"{name}-{which}")
     controls, rows, ok = score(a, runs)
     (out / "qemu-matrix.json").write_text(json.dumps(dict(controls=controls, rows=rows), indent=1) + "\n")
     return 0 if ok else 75
@@ -327,8 +391,10 @@ def cmd_stage(a):
         if not c["image"]:
             continue
         (st / f"{name}.dom").write_bytes(Path(c["image"]).read_bytes())
-        lines.append(f"{pre}{name}-fixed {name}.dom fixed {c['n']}")
-        lines.append(f"{pre}{name}-buggy {name}.dom buggy {c['n']}")
+        for which in ("fixed", "buggy"):
+            argv = argv_for(a.arm, c["kind"], c["n"], which)
+            if argv is not None:
+                lines.append(f"{pre}{name}-{which} {name}.dom {' '.join(argv)}")
     (st / "runs.txt").write_text("\n".join(lines) + "\n")
     sums = "".join(f"{sha256(f)}  {f.name}\n" for f in sorted(st.glob("*.dom")))
     (st / "SHA256SUMS").write_text(sums)

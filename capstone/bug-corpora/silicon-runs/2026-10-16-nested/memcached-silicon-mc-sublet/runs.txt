@@ -1,0 +1,24 @@
+silicon-mc-sublet:control-clean controls.dom clean
+silicon-mc-sublet:control-oob controls.dom oob
+silicon-mc-sublet:control-uaf controls.dom uaf
+silicon-mc-sublet:control-subobj controls.dom subobj
+silicon-mc-sublet:memcached-allocator-00-fixed memcached-allocator-00.dom fixed 0
+silicon-mc-sublet:memcached-allocator-00-buggy memcached-allocator-00.dom buggy 0
+silicon-mc-sublet:memcached-allocator-01-fixed memcached-allocator-01.dom fixed 1
+silicon-mc-sublet:memcached-allocator-01-buggy memcached-allocator-01.dom buggy 1
+silicon-mc-sublet:memcached-allocator-02-fixed memcached-allocator-02.dom fixed 2
+silicon-mc-sublet:memcached-allocator-02-buggy memcached-allocator-02.dom buggy 2
+silicon-mc-sublet:memcached-allocator-03-fixed memcached-allocator-03.dom fixed 3
+silicon-mc-sublet:memcached-allocator-03-buggy memcached-allocator-03.dom buggy 3
+silicon-mc-sublet:memcached-allocator-04-fixed memcached-allocator-04.dom fixed 4
+silicon-mc-sublet:memcached-allocator-04-buggy memcached-allocator-04.dom buggy 4
+silicon-mc-sublet:memcached-allocator-05-fixed memcached-allocator-05.dom fixed 5
+silicon-mc-sublet:memcached-allocator-05-buggy memcached-allocator-05.dom buggy 5
+silicon-mc-sublet:memcached-allocator-06-fixed memcached-allocator-06.dom fixed 6
+silicon-mc-sublet:memcached-allocator-06-buggy memcached-allocator-06.dom buggy 6
+silicon-mc-sublet:memcached-allocator-07-fixed memcached-allocator-07.dom fixed 7
+silicon-mc-sublet:memcached-allocator-07-buggy memcached-allocator-07.dom buggy 7
+silicon-mc-sublet:memcached-allocator-08-fixed memcached-allocator-08.dom fixed 8
+silicon-mc-sublet:memcached-allocator-08-buggy memcached-allocator-08.dom buggy 8
+silicon-mc-sublet:memcached-allocator-controls-virtual-90-fixed memcached-allocator-controls-virtual-90.dom fixed 90
+silicon-mc-sublet:memcached-allocator-controls-virtual-90-buggy memcached-allocator-controls-virtual-90.dom buggy 90

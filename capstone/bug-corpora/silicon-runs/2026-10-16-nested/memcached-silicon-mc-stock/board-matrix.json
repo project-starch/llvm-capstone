@@ -1,0 +1,140 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3998 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac080f88 address=0xac0e3980 in ctl_read_probe+0x20 (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "memcached-allocator-00",
+   "case": "00_7af02b0c87_rbuf_copied_after_cache_free",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED the command bytes copied out of the freed buffer are the free list's link",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "8c480167ee2fb7ee7d7d25e4f402ed89f5c84b4ce68e94b3821997aeb1c03108",
+   "as_predicted": true
+  },
+  {
+   "name": "memcached-allocator-01",
+   "case": "01_0ad4de66ae_io_walk_reads_freed_link",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED the loop read the next link out of an IO that had been returned and reissued",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "ede1091551fdeff0b1c6874b22f4f49ba0c418032243cf5c67482f868b7f30f2",
+   "as_predicted": true
+  },
+  {
+   "name": "memcached-allocator-02",
+   "case": "02_59bd02ce29_tail_repair_frees_referenced_item",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED tail repair discarded a live reference; the chunk came back as another item",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "ea829cefc7711f3d5ca6720680f73066b59e0ce4dc0e8c0c908f68cd49eae7d3",
+   "as_predicted": true
+  },
+  {
+   "name": "memcached-allocator-03",
+   "case": "03_a8c4a82787_refcount_overflow_frees_linked_item",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED the count wrapped past the holders; the first release freed an item 65536 clients were holding",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "28cbf6bc9880be0be24b41e2f256a47d9c36604fc1cae439f3c32c1319ab2c5b",
+   "as_predicted": true
+  },
+  {
+   "name": "memcached-allocator-04",
+   "case": "04_152ddb68f7_unlocked_refcount_drift",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED an unlocked decrement lost another client's get; the next release freed an item still held",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "363c979b1e6ef1b70dcadddcc4773e4e88845354ca904b776aa01c9d587c6e30",
+   "as_predicted": true
+  },
+  {
+   "name": "memcached-allocator-05",
+   "case": "05_2d61f18_item_data_one_past",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED the three-byte copy of a two-byte terminator wrote one byte past the item's data, into the next chunk of the slab page",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "bea5e1d0b0dccef82a71e55d15fe33ad6e2b5e6c97c99c1e543170f84db7d441",
+   "as_predicted": true
+  },
+  {
+   "name": "memcached-allocator-06",
+   "case": "06_78eb770_suffix_write_no_space",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED the four-byte flags copy overwrote the value's storage, because with nsuffix = 0 the suffix field has no room of its own",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "9e283386872ce81ad236c009642bd6791118479812728409bc0f5d4c0321ce09",
+   "as_predicted": true
+  },
+  {
+   "name": "memcached-allocator-07",
+   "case": "07_ecdb011_unterminated_key_read",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED the formatter read past the key, because nothing terminated it",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "780fb6e461d54388af99ffd5720488f114186e5b3ac123ec963fd0590e0384e5",
+   "as_predicted": true
+  },
+  {
+   "name": "memcached-allocator-08",
+   "case": "08_e8364b5_ascii_all_spaces_scan_past_rbuf",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros",
+   "kind": "mc",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac901310 address=0xb04d4040 in mc_case_body+0x15c (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "1d8a07c40017c47330f2c7000425c4928424249a01d57fa29e0ef286a4688169",
+   "as_predicted": true
+  },
+  {
+   "name": "memcached-allocator-controls-virtual-90",
+   "case": "90_ctl_chunk_freed_to_slab",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/virtual",
+   "kind": "mc-control",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED control: the freed chunk was read through its old pointer",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "0667ab43d1d0ed1bbc3769098dd80aa0161176b6620dcee4a929dea79e520dc7",
+   "as_predicted": true
+  }
+ ]
+}

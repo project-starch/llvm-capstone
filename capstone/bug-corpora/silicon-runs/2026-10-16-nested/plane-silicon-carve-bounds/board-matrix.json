@@ -1,0 +1,41 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3918 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL uaf RETURNED observed=0xaa reissued=1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-plane-00",
+   "case": "00_b7946098b1_alphablend_row_past_plane",
+   "corpus": "capstone/bug-corpora/ffmpeg/plane-repros",
+   "kind": "plane",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac102a7c address=0xac6f1ee0 in ffp_read_probe+0x20 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "2b8fb52828525562e5e653f1345b9e85c5e33ad299c82fed735dc020800cd0a8",
+   "as_predicted": true
+  }
+ ]
+}
