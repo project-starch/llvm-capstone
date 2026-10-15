@@ -179,7 +179,13 @@ def main() -> int:
 
     flags = compile_flags(musl)
     if args.virtual:
-        flags += ["-mllvm", "-capstone-gp-free", "-mllvm", "-capstone-image-gp", "-DCAPSTONE_MUSL_MALLOC=1"]
+        # The virtual code generation of runtime/cmake/VirtualCodegen.cmake: libm
+        # and the rest run F and D in hardware under the lp64 calling convention.
+        flags += ["-mllvm", "-capstone-gp-free", "-mllvm", "-capstone-image-gp",
+                  "-Xclang", "-target-feature", "-Xclang", "+f",
+                  "-Xclang", "-target-feature", "-Xclang", "+d",
+                  "-Xclang", "-target-abi", "-Xclang", "lp64",
+                  "-DCAPSTONE_MUSL_MALLOC=1"]
 
     objdir = pathlib.Path(args.objects).resolve() if args.objects else None
 

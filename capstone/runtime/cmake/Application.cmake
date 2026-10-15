@@ -36,10 +36,14 @@ function(capstone_configure_application target)
   get_filename_component(capstone "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../.." ABSOLUTE)
   set(musl "${capstone}/ports/musl-capstone/runtime")
   set(startup "${musl}/start-musl.S")
+  # In the function, not at the module's top: the caller may be a parent
+  # directory that never saw the module's variables.
+  include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/VirtualCodegen.cmake")
+  list(JOIN CAPSTONE_VIRTUAL_CODEGEN " " virtual_codegen)
   if(CAPSTONE_APPLICATION_VIRTUAL)
     set(startup "${capstone}/runtime/virtual/start.S")
     target_compile_options(${target} PRIVATE
-      "$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")
+      "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
     target_compile_definitions(${target} PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
   endif()
   if(NOT TARGET capstone-application-core)
@@ -51,10 +55,11 @@ function(capstone_configure_application target)
     if(CAPSTONE_APPLICATION_VIRTUAL)
       target_sources(capstone-application-core PRIVATE
         "${capstone}/runtime/virtual/thread.c"
-        "${capstone}/runtime/virtual/pthread.c")
+        "${capstone}/runtime/virtual/pthread.c"
+        "${capstone}/runtime/virtual/fenv.c")
       target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
       target_compile_options(capstone-application-core PRIVATE
-        "$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")
+        "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
     else()
       target_sources(capstone-application-core PRIVATE "${musl}/context.c")
     endif()
@@ -88,6 +93,10 @@ function(capstone_configure_application target)
     endforeach()
     target_compile_options(capstone-application-builtins PRIVATE
       -ffunction-sections -fdata-sections -fno-jump-tables)
+    if(CAPSTONE_APPLICATION_VIRTUAL)
+      target_compile_options(capstone-application-builtins PRIVATE
+        "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
+    endif()
   endif()
   # The heap: musl mallocng on the virtual profile, level0 on the physical one.
   set(heap_bytes 0)

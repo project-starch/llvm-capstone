@@ -86,9 +86,11 @@ export CC="$CAPSTONE_TMP_ROOT/application-sdk/capstone-cc"
 compiler builtins. The driver preserves source/library order and normal
 compile/preprocessor modes; unknown options and unresolved symbols fail.
 Configuration checks the compiler's direct-call capability codegen and refuses
-the old C-46 backend. `capstone-cc --check-toolchain` repeats that check when an
-existing SDK is reused; source freshness checks alone cannot establish what an
-older compiler binary actually emits.
+the old C-46 backend; for the virtual profile, whose code generation includes
+hardware F and D, it also requires the compiler to compile floating-point
+constants (C-80) and to emit FP instructions. `capstone-cc --check-toolchain`
+repeats those checks when an existing SDK is reused; source freshness checks
+alone cannot establish what an older compiler binary actually emits.
 It does not claim C++ runtime, dynamic-linker or arbitrary GCC-driver support.
 The standalone CMake project defaults to the currently verified `-O1` runtime;
 compiler regression work may override that explicitly. The imported upstream

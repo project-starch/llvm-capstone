@@ -73,10 +73,13 @@ if [[ ! -f "$MUSL_CACHE_ROOT/musl-1.2.5.tar.gz" && -f "$CAPSTONE_TMP_ROOT/musl-s
 fi
 MUSL=$(bash "$MUSL_PORT/prepare-musl-capstone.sh" | tail -1)
 ARCHIVE=$WORK/musl-build/libc-capstone.a
+# The key also covers musl's compile flags (survey-musl-capstone.py: the virtual
+# profile's F/D code generation), as the hard-float SDK needs.
 LIBC_KEY=$({
   sha256sum "$CLANG"
   printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-physical}"
-  cat "$MUSL_PORT"/{build-musl-capstone,prepare-musl-capstone}.sh "$MUSL_PORT"/musl-patches/*.patch
+  cat "$MUSL_PORT"/{build-musl-capstone,prepare-musl-capstone}.sh "$MUSL_PORT/survey-musl-capstone.py" \
+      "$MUSL_PORT"/musl-patches/*.patch
   find "$MUSL_PORT/arch-capstone64" -type f -print0 | sort -z | xargs -0 cat
 } | sha256sum | cut -d' ' -f1)
 if [[ ! -f "$ARCHIVE" || $(cat "$WORK/musl-build/source.sha256" 2>/dev/null) != "$LIBC_KEY" ]]; then
@@ -96,7 +99,9 @@ INC=(-nostdinc -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
 FLAGS=("${TARGET[@]}" -ffreestanding -fno-builtin -fno-jump-tables -ffunction-sections
        -fdata-sections -O1 -Wno-int-conversion -D_GNU_SOURCE "${INC[@]}")
 if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
-  FLAGS+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+  FLAGS+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp
+          -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d
+          -Xclang -target-abi -Xclang lp64)
 fi
 
 # --- shared application SDK ------------------------------------------------

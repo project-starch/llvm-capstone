@@ -115,7 +115,8 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -Xclang -target-feature -Xclang +a -ffreestanding -fno-builtin -fno-jump-tables
     -ffunction-sections -fdata-sections -std=c99 -O1 -w -Wno-int-conversion
     -D_XOPEN_SOURCE=700 "${INC[@]}")
-CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp
+     -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d -Xclang -target-abi -Xclang lp64)
 # compiler-rt's generic builtins, as an ARCHIVE so the linker takes only what is
 # referenced -- which is what a toolchain's libclang_rt.builtins.a is. The
 # benchmarks' hand-picked soft-float list would make configure report a libc
@@ -123,7 +124,8 @@ CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
 COMPILER_RT=$REPO_ROOT/compiler-rt/lib/builtins
 BF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w -I"$COMPILER_RT")
-BF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+BF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp
+     -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d -Xclang -target-abi -Xclang lp64)
 rm -f "$CPY_ROOT/builtins"/*.o "$CPY_ROOT/builtins/failed.txt"
 built=0; failed=0
 for f in "$COMPILER_RT"/*.c; do

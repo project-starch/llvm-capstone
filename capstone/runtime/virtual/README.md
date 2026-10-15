@@ -226,6 +226,85 @@ The gp-free application's ordinary scalar-return call convention retains its
 image PCC. General JIT calls between separately bounded code mappings need a
 capability call/return ABI and are not claimed by the executable-context test.
 
+## Floating point
+
+Virtual-C applications run the F and D extensions in hardware. The compiler
+must address the constant pool through a capability (C-80, capstone fix
+7ce213020f87); SDK configuration and `capstone-cc --check-toolchain` refuse
+one that does not. The SDK compiles applications, the runtime, musl and the
+compiler builtins with `+f,+d` under the `lp64` calling convention
+(`cmake/VirtualCodegen.cmake`; `capstone-cc` reads the same flags from
+`sdk.json`): floating-point arguments and results still travel in integer
+registers, and only long double (binary128) stays in software. There is no
+soft-float variant of the virtual SDK. FP loads and stores are checked through
+their capability like integer ones.
+
+QEMU's supervisor gives each context its own f registers and `fcsr`: CSRUNV
+starts an application with FS Initial, zero registers and the default
+environment, and every escape and resume saves and restores them
+(capstone-qemu `tests/virtual-capstone-runtime/fp.sh`). A QEMU without that
+start leaves FS Off, and the first FP instruction faults. This is a property
+of the virtual platform: the RTL's physical domain switcher saves no FP state,
+and its firmware starts domains with FS Off.
+
+`fenv.c` implements musl's environment functions on `fcsr` (musl's riscv64
+assembly is selected by `__riscv_flen`, which this target does not define),
+and gives compiler-rt's long double addition the dynamic rounding mode and the
+inexact flag. A new
+thread starts with its creator's environment (C11 7.6), and a signal handler
+that returns leaves the interrupted code's environment as it was, as Linux's
+sigreturn does; a handler left by `longjmp` keeps its changes, and handlers
+still receive no FP register image. `fp-contract.c` checks rounding modes,
+exception flags, `fegetenv`/`fesetenv`/`feholdexcept`, libm under the dynamic
+rounding mode, long double, thread inheritance and isolation, and signal
+handlers:
+
+```sh
+"$out/sdk/capstone-cc" -O2 capstone/runtime/virtual/fp-contract.c -o "$out/fp.dom"
+python3 capstone/runtime/virtual/run-fp.py --qemu /path/to/qemu-system-riscv64 \
+  --images /path/to/images --adapter "$out/adapter" --application "$out/fp.dom" \
+  --work "$out/fp-gate"
+```
+
+**Long double (binary128) is not fenv-correct; known and deferred.** Its
+addition and subtraction use the dynamic rounding mode for ordinary finite
+results, but: exact cancellation and opposite-sign zero sums have the wrong
+zero sign under downward rounding; an early exponent overflow returns infinity
+whatever the rounding mode and raises neither overflow nor inexact; overflow
+in the final rounding raises inexact but not overflow; signaling NaNs and
+opposite infinities raise no invalid. Multiplication, division and narrowing
+round to nearest and raise no flags. (compiler-rt `fp_add_impl.inc`; a fix
+needs invalid and overflow hooks beside the inexact one.) With the default
+rounding mode the results are correct; only the flags are missing. The SPEC
+CPU2017 C benchmarks in scope call no `<fenv.h>` function, and the one whose
+types could select long double (538.imagick_r, `MagickRealType`) is configured
+for float.
+
+**The profile is fixed.** `sdk.json` names its profile (`physical` or
+`virtual`), and `capstone-cc` refuses an SDK whose codegen is not that
+profile's, and any caller argument that would change it: another FP or vector
+feature or ABI (`-Xclang -target-feature/-target-abi`, `-march=`, `-mabi=`,
+`-mfloat-abi=`, assembler `-Wa,-march=` and the like), another target or CPU,
+a configuration file, LTO, or a gp option against the profile. Repeating a
+profile setting is allowed. Every link then checks each object and archive
+member it can read, the SDK's own runtime, libc and builtins included: a C
+object's `.capstone.attributes` ISA must have F and D under virtual (and no
+other FP or vector extension) and none of them under physical; no object may
+use a hardware-float calling convention (ELF flags); and under virtual no
+object may call the binary32/binary64 soft-float helpers (`__adddf3` ...).
+Thin archives, bitcode, shared libraries, objects naming dependent libraries
+(`.deplibs`; the link also runs with `--no-dependent-libraries`) and linker
+options outside a short allowlist (`--wrap`, `--undefined`, `--defsym`,
+`-Map`, `--gc-sections` and the like; never scripts, response files or
+library aliases that could add unchecked inputs) are refused, as is a
+`CCC_OVERRIDE_OPTIONS` environment that would edit the compiler's arguments. This catches stale and mismatched
+builds (a C object from a physical or an older soft-float virtual SDK fails a
+virtual link on its ISA), not every incompatible object: assembly records no
+ISA, and neither the capability calling convention nor the gp choice is
+recorded, so a C object built with F and D but without the virtual profile's
+gp-free code generation passes a virtual link, and an old soft-float virtual
+object passes a physical one.
+
 ## Build and run
 
 Use a compiler built from this branch, including `clang`, `lld`, `llvm-ar`
