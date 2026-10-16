@@ -106,5 +106,12 @@ Arms, measured 2026-10-16 on this platform:
 | cheribsd-revocation | MISSED | positive control traps; `rows=5`, RETURNED rc=0, with the probe witness above |
 
 Every run reached the mid-scan state (`mid-scan inserts ok=24`). No verdict changes; the base
-arm's cell in the study's tables does, from detected to reached-and-silent, which narrows the gap
-the study reports.
+arm's cell in the study's tables does, from detected to reached-and-silent.
+
+**Correction, same day.** The sentence that stood here, and the commit message of `06486823`,
+said this change "narrows the gap the study reports" and called it "a correction against the
+result". Both have the direction backwards. Taking a detection away from the BASE arm makes the
+contrast between Sublet and base **wider**, so this correction is in the study's favour and
+belongs with cases 11 and 13 among the ones to check hardest -- not with case 05, where the gap
+also widened but for the opposite bookkeeping reason, nor with 09, which removes a row outright.
+The commit message cannot be rewritten without a force-push, so the record is corrected here.
