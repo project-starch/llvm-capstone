@@ -151,6 +151,45 @@ silicon enforces, so it waits for the project lead.
    - every other step is reported, not predicted.
    If growth clears, the model is wrong somewhere, and that is reported as such.
 
+## Pre-registered again (2026-10-17, before the revision exists): the `add()` change, both halves
+
+This section replaces the withdrawn one above. It is based on the compiler lane's lane commit fe1a12fe7c74.
+- **The refusal has two operative halves.** The launcher, instrumented, prints `CAPSTONE_VM_ADD_REFUSED` with
+  `add()`'s disjuncts at each CV_ADD refusal.
+  - **The size half:** every printed refusal has `pow2=0`, at 28672 and 49152 bytes, including two that satisfy
+    alignment. So non-power-of-two arenas are refused wherever they land.
+  - **The alignment half:** the same predicate arm reads NULL on one run, with its refusal at 8192, and ALLOCATED on
+    the next, with 8192 admitted. 8192 is a power of two, so only the natural-alignment disjunct remains. The
+    launcher requests only max(granule, 4096) alignment.
+  - The board lane's four boots of bundle 5 confirm this independently. malloc(6144), group 8192, was admitted in 1
+    of 4 boots; calloc(1, 34816) and calloc(1, 35840) were refused in all 4.
+- **The change:** `capstone_repr_ok(r->address, r->bytes)` in `add()`'s exact-bounds-off branch. It loosens the length
+  to a granule multiple and the base to granule alignment. heap.c already asks for max(granule, 4096), so this also
+  removes the nondeterminism. `remap_begin()` is left alone. It waits for the project lead, because it reaches
+  silicon.
+
+**The prediction, verbatim from the compiler lane:**
+- the five allocation markers clear;
+- non-power-of-two groups (34816, 35840, 200003, the population array, 6 MiB) clear DETERMINISTICALLY;
+- malloc(6144), group 8192, clears on EVERY boot rather than 1 in 4 — run it at least 3 boots, because 1 of 4 would
+  otherwise read as a pass;
+- CAPSTONE_VM_ADD_REFUSED absent from the logs;
+- heap growth/zero and real_linux_mremap_growth_and_shrink STILL FAIL, not addressed;
+- bounds still fails, request rounding puts +200003 inside the object.
+
+**The board lane's runs on that revision.** The kit is rebuilt from the revision with the same toolchain, QEMU and
+guest images.
+1. **Positive control for the absence check, first:** cases 00 and 10 of bundle 5 on a kit built from fe1a12fe7c74,
+   the instrumented pre-fix launcher. The serial must show at least one `CAPSTONE_VM_ADD_REFUSED` line, because case
+   00 is refused on every boot. If it shows none, the absence below means nothing and the instrument is fixed first.
+2. **Bundle 5 in full, once:** 13 of 13 equal to the record, with cases 00 and 10 CAUGHT at cause 28 at their
+   labelled probes, and no `CAPSTONE_VM_ADD_REFUSED` line.
+3. **Cases 00 and 10 in three more fresh boots** (`--only 00,10`): both CAUGHT in every boot, and no refusal line.
+   One NULL in any boot means the alignment half still bites.
+4. **Bundles 13 and 14 as must-not-move controls:** 9/9 and 3/3, cell by cell as before.
+5. **run.py `--timeout 1500`:** `normal` still exits 1 on `heap growth/zero`. Every other step is reported, not
+   predicted.
+
 ## Status of the pipeline proof
 
 - On dev's runtime 4798dcab2d52 with the October 10 compiler (bd372e25f5fb), the SDK step fails: 101 of 1,361 musl
