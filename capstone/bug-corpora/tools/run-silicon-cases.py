@@ -37,6 +37,10 @@ The nested-lifetime controls (docs/plans/2026-10-11-nested-lifetime-controls.md:
 memcached's slabs and cache, FFmpeg's AVBufferPool and wmem's block and block_fast allocators) are their own kind: each
 control program has a list of runs, every one of which must complete, except the successor's stale read on a Sublet
 arm, which must fault at the family's probe. Pass the family's directory as the corpus.
+postgres/c-repros: each case runs as `<image> N` against the real upstream functions (shared/upstream_*.c), announces
+`PG_DEFECT case=N expect_fault_in=<function>` before its access, and prints `case N RETURNED` if nothing faulted. A
+fault counts in that function or in a case.json fault site. Each case is also built with -DPGCLIENT_NEGATIVE_CONTROL,
+which moves one value to the safe side of the boundary; that image must complete and gates the arm.
 The carved corpus also runs its own controls as rows: 99 (one byte past a 16-byte carve, inside its block) on every
 arm, and 98 (a re-carved region's old alias) on the Sublet carve. They gate the arm like the four tool controls.
 
@@ -134,13 +138,20 @@ LIFETIME = {
 }
 
 
+# Families whose rows are runs with their own completion marker. c-repros names its expected function in its output.
+PGC = ("postgres", "c-repros")
+RUNFAM = dict(LIFETIME)
+RUNFAM[PGC] = dict(probe_from=r"PG_DEFECT case=\d+ expect_fault_in=([A-Za-z_][\w.$]*)@", done="case {n} RETURNED",
+                   virtual={"silicon-level0": "spatial", "silicon-lifetimes": "virtual-malloc"})
+
+
 def sublet_arm(arm):
     return arm.endswith("-sublet")
 
 
 # corpus controls that gate their arm like the four tool controls (pool-control predates this and stays a plain row,
 # as set 2 was pre-registered with it)
-CONTROL_ROWS = ("carve-control", "mc-control", "wmem-control")
+CONTROL_ROWS = ("carve-control", "mc-control", "wmem-control", "pg-c-control")
 PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
 CTL_PROBE = re.compile(r"^ctl_(read|write)_probe$")
 
@@ -150,6 +161,8 @@ def kind_of(corpus):
     rel = corpus.relative_to(REPO / "capstone/bug-corpora").parts
     if rel in LIFETIME:
         return "lifetime-control"
+    if rel == PGC:
+        return "pg-c"
     if rel[1] == "pool-repros":
         return "pool-control" if "controls" in rel else "pool"
     if rel[1] == "wmem-repros":
@@ -275,6 +288,24 @@ def cmd_build(a):
         carve = arm.get("carve", {}).get(rel[1], "")
         flags = f"{a.opt} -I{shared} {carve} {arm.get('corpus_defs', {}).get(rel[1], '')} {a.extra_cflags} {appf}".split()
         driver = shared / arm.get("driver", "driver.c")
+        if rel == PGC:
+            ups = sorted(str(f) for f in shared.glob("upstream_*.c"))
+            v = RUNFAM[PGC]["virtual"].get(a.arm)
+            if v is None:
+                sys.exit(f"CONTROL-FAILED c-repros has no recorded arm to predict {a.arm} from")
+            for d in sorted(x for x in corpus.glob("[0-9][0-9]_*") if (x / "case.c").is_file()):
+                name, n = f"{tag}-{d.name[:2]}", int(d.name[:2])
+                verdict = json.loads((d / "case.json").read_text())["arms"][v]["verdict"]
+                cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind="pg-c", n=str(n),
+                                   runs=[dict(variant="case", argv=[str(n)],
+                                              expect="CAUGHT" if verdict == "CAUGHT" else "COMPLETED")])
+                jobs.append((name, [str(d / "case.c"), str(driver), *ups, *a.extra_src], " ".join(flags), arm["defs"],
+                             out, a.data, a.arena))
+                cases[f"{name}-ctl"] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind="pg-c-control",
+                                            n=str(n), runs=[dict(variant="control", argv=[str(n)], expect="COMPLETED")])
+                jobs.append((f"{name}-ctl", [str(d / "case.c"), str(driver), *ups, *a.extra_src],
+                             " ".join(flags + ["-DPGCLIENT_NEGATIVE_CONTROL"]), arm["defs"], out, a.data, a.arena))
+            continue
         fam = LIFETIME.get(rel)
         if fam:
             driver = (corpus / fam["driver"]).resolve()
@@ -339,18 +370,27 @@ def score(a, runs):
         if not c["image"]:
             rows.append(dict(name=name, outcome="BUILD-FAILED", as_predicted=False))
             continue
-        if c.get("runs") is not None:       # a nested-lifetime control: one row per run
-            fam = LIFETIME[tuple(Path(c["corpus"]).relative_to("capstone/bug-corpora").parts)]
+        if c.get("runs") is not None:       # a run-based row: a nested-lifetime control, or a c-repros case/control
+            fam = RUNFAM[tuple(Path(c["corpus"]).relative_to("capstone/bug-corpora").parts)]
             syms = rcd.Symbols(llvm, c["image"])
             for r in c["runs"]:
                 text, result = runs.get(f"{name}-{r['variant']}", ("", {}))
-                outcome, detail = rcd.classify(text, result, syms, re.compile(fam["probe"]))
+                if "probe_from" in fam:
+                    m_fn = re.search(fam["probe_from"], text)
+                    probe_re = re.compile(rf"^{re.escape(m_fn.group(1))}$" if m_fn else r"(?!)")
+                else:
+                    probe_re = re.compile(fam["probe"])
+                outcome, detail = rcd.classify(text, result, syms, probe_re)
+                if outcome == "CAUGHT" and "(the labelled probe)" not in detail and c["kind"] == "pg-c" \
+                        and rcd.at_declared_site(REPO / c["corpus"] / c["case"], detail):
+                    detail += " (a declared fault site)"
                 if outcome != "CAUGHT" and result.get("kind") == "exit" and result.get("value") == 0 \
                         and fam["done"].format(n=int(c["n"]), v=r["variant"]) in text:
                     outcome, detail = "COMPLETED", f"completed: `{fam['done'].format(n=int(c['n']), v=r['variant'])}`, exit 0"
                 rows.append(dict(name=f"{name}-{r['variant']}", case=c["case"], corpus=c["corpus"], kind=c["kind"],
                                  outcome=outcome, detail=detail, predicted=r["expect"], image_sha256=c["sha256"],
-                                 as_predicted=outcome == r["expect"] and (outcome != "CAUGHT" or "(the labelled probe)" in detail)))
+                                 as_predicted=outcome == r["expect"] and (outcome != "CAUGHT" or "(the labelled probe)" in detail
+                                                                          or "(a declared fault site)" in detail)))
             continue
         syms = rcd.Symbols(llvm, c["image"])
         case_dir = REPO / c["corpus"] / c["case"]
