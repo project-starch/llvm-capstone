@@ -6375,3 +6375,19 @@ Two arms in one boot (16:33-16:41): firmware 1d2bbbf37f63f435, 28 runs, each end
 
 **Scope:** these are the PostgreSQL corpus's malloc-backed cases. Its server-level (`sql-repros`) and
 memory-context (`mmgr-repros`) corpora are separate.
+
+## PostgreSQL's memory-context corpus on silicon: patch 0003 catches all five use-after-frees and double frees, stock managers none (caplifive_sublet_d93a8d66b, 2026-10-16)
+Two arms in one boot (16:41-16:53): firmware 9dc96b2345000482, 30 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-postgres-mmgr (lane a13fe2ed2cbd).
+- Results: RESULTS.md there.
+
+| arm | 5 cases | 5 negative controls | corpus control |
+|---|---|---|---|
+| stock managers (patches 0001 + 0002) | 5 complete, the stale access unseen | complete | completes |
+| Sublet managers (+ patch 0003: chunks CDERIVE children, CREVOKEd at pfree and context death) | 5 CAUGHT 25: 4 at pg_probe, the double free in GetMemoryChunkMethodID (declared) | complete | CAUGHT 25 |
+
+- 21 of 22 rows are as pre-registered, by outcome, cause and site, on the pre-registered image.
+- The exception is case 00's site, which RESULTS.md attributes from the disassembly. QEMU faulted at the pointer
+  arithmetic on the untagged child. Silicon keeps the revoked child tagged (ISSUES Q-11), so it faults at the first read
+  through it, the case's other declared site.
+- The managers are PostgreSQL 17.0's own aset, mcxt, generation, slab and bump.

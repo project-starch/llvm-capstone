@@ -1,0 +1,162 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3998 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac080f88 address=0xac0e3980 in ctl_read_probe+0x20 (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "postgres-mmgr-00-case",
+   "case": "00_1f5b6a5e5d_tuplestore_double_free",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+   "kind": "pg-mmgr",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=0 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "980839e97455dcd86624a8c1bd7b559b65b8fe32592f60aeae5962e0e51c59be",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-mmgr-00-ctl-control",
+   "case": "00_1f5b6a5e5d_tuplestore_double_free",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+   "kind": "pg-mmgr-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=0 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "427705ac04e870d145c821e2d93ccc0948e9c5fdf641ce413e3dd8d197cf311c",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-mmgr-01-case",
+   "case": "01_3549ffb6af_vacuum_dead_items_stale_struct",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+   "kind": "pg-mmgr",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=1 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "e93bb39aa342378e69f5c47aaa4d4ab8fba9b3976c4aeda490c655f745cf8627",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-mmgr-01-ctl-control",
+   "case": "01_3549ffb6af_vacuum_dead_items_stale_struct",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+   "kind": "pg-mmgr-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=1 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "f7f58891bcdf98693916d7d98659bfe3d793d369d89c4eb74c506a41c14c8304",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-mmgr-02-case",
+   "case": "02_ed394c4bdf_live_parts_stale_alias",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+   "kind": "pg-mmgr",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=2 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "32cf0b0c8e320f00669b5cca65529cb030916f1389458e330639e4da566de728",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-mmgr-02-ctl-control",
+   "case": "02_ed394c4bdf_live_parts_stale_alias",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+   "kind": "pg-mmgr-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=2 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "55134664b3270f4b1ee25e785f10cf2d4c9070dc5b5b0f728cb16e1041e5a502",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-mmgr-03-case",
+   "case": "03_a61592253e_pgoutput_entry_cxt_teardown",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+   "kind": "pg-mmgr",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=3 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "a9fe5ddd8ec2d3c88b94c7d2dfd2dcddfa7c8b64aba67f7d3041762d97382def",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-mmgr-03-ctl-control",
+   "case": "03_a61592253e_pgoutput_entry_cxt_teardown",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+   "kind": "pg-mmgr-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=3 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "f98b51e28f2d1f96ff1dc5b924a825bf205074776d9473f1bf01daf49096312e",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-mmgr-04-case",
+   "case": "04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+   "kind": "pg-mmgr",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=4 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "2e2e6ef69b2f27090768fa4ad209e37c4942beb3b5ca49aa6412c940919529dc",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-mmgr-04-ctl-control",
+   "case": "04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+   "kind": "pg-mmgr-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=4 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "5bb7e0b3f3e6c88af4a37e05d8de2bd0edcc43b244d201ad60dc5b7d1b6767e9",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-mmgr-controls-00-control",
+   "case": "00_control_uaf_chunk",
+   "corpus": "capstone/bug-corpora/postgres/mmgr-repros/controls",
+   "kind": "pg-mmgr-corpus-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PG_DEFECT case=0 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "b539843f98845558758fe26ca39a49c13c9a2f94c5eb042b6c5f016f330e39a8",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  }
+ ]
+}

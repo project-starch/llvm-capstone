@@ -258,6 +258,11 @@ Each item cost a QEMU pass or a prediction, and each will recur in any nested-al
 - **Map QEMU's cause 24 to the RTL's 25 only where Q-11's mechanism holds,** a revoked capability that QEMU untags and
   the RTL keeps. memcached 05's fixed run read 24 on silicon too. The case's sentinel byte overwrites the next item's
   `sublet_parent`, patch 0006's first field, so CREVOKE gets a value that was never a capability on any platform.
+  - **Where it holds, the site moves too, unless QEMU's faulting instruction is an access.**
+    - PostgreSQL mmgr 00 read 24 on QEMU at a `cincoffsetimm` on the untagged child, in SubletRelease.
+    - Silicon's child is still tagged there, so the arithmetic passes and the first load refuses it with 25, in
+      GetMemoryChunkMethodID.
+    - So disassemble QEMU's fault pc before pre-registering a site.
 - **`-fno-inline` keeps probes attributable under full LTO, and moves a declared site.** The runtime's `static inline`
   CREVOKE helper becomes a function of its own, so wmem 22's fault was attributed to it instead of the declared
   `wmem_block_sublet_free`. Use it only where a corpus's probes need it (FFmpeg's pool, memcached). wmem's probes are
