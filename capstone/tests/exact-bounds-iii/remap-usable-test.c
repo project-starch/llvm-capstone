@@ -11,7 +11,12 @@
 /* the decision, as heap.c defines it */
 static int usable(unsigned long base, unsigned long bytes)
 {
-	return capstone_repr_ok(base, capstone_repr_round(bytes ? bytes : 1));
+	/* A COPY of heap.c's __capstone_malloc_remap_usable, which cannot be included here: it is
+	 * capability code. remap-usable-agreement.py pins the two together, because this copy
+	 * silently drifted once already -- it kept `capstone_repr_round(bytes)` after heap.c was
+	 * tightened to check the length ACTUALLY mapped, so this test went on passing while no
+	 * longer testing the predicate it is named for. */
+	return bytes && capstone_repr_ok(base, bytes);
 }
 
 static int fails;
