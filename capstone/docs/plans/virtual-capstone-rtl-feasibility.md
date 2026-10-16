@@ -289,6 +289,25 @@ CPMP compares physical addresses (`pmp_data_if.sv:127-128,149-151`), the rev-nod
 test corpus writes `satp`, so a bare test under the flag needs page tables nothing currently builds (the first B test
 builds them). The Anvil units contain no privilege or capmode term; every such decision is in the surrounding RTL.
 
+**B's first simulation (2026-10-16, `virtual-profile` 16345658f).** The flag is `csupctl.virt`, effective only while a
+context is active and dropped while the switcher moves registers; it enters the two translation enables and the
+MMU's permission privilege, nothing else. Six arms (`vb-trans.S`) read as pre-registered: identity under
+translation, a store landing at the physical page of a remapped virtual one (inverted with the flag off and on the
+old tree), a load page fault escaping with cause 13 and resuming, a store page fault 15, a consuming ldc refused 15
+on a read-only page and clearing its source once the page is writable, and a bounds violation 28 with translation on.
+Three facts the runs established that the audit did not have:
+- **the page-table walker's accesses are PMP-checked as supervisor** (cva6_ptw.sv:237 hard-wires S for its PMP
+  instance), so with no PMP entry programmed the first translated fetch reads an instruction ACCESS fault; the
+  monitor must program one all-permitting entry before the first virtual context, as OpenSBI does before Linux
+  (Tier 1 requirement);
+- **a page fault raised at a capability load's translation was dropped on the way to writeback** (R-56): an LDC's
+  result is routed through the DYN unit, whose result packet carries only the capability cause; fixed in ex_stage
+  by carrying the LSU's exception beside the DYN result for that trans_id;
+- **the consuming ldc's clear under translation** is handled by translating an ldc through a capability with write
+  permission as a STORE, so a page without W or D faults at translation (Q-19 records the one case stricter than
+  QEMU); a first cut that refused at the clear itself wedged the store buffer's commit queue behind the escape's
+  save stores, which is the kind of interaction only the full pipeline model shows.
+
 ## 4. The capability data path today (what the exact-bounds costing is done against)
 
 - Two parallel register files: the 64-bit data (cursor) file and a 65-bit {tag, metadata} file

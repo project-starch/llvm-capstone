@@ -1359,6 +1359,17 @@ emits DROP implicitly. Options: refuse DROP on a node with children (status 3 ->
 make DROP register-only for NONLIN as QEMU does. Directed test: derive, DROP the parent, load through the child
 (retires today), CREVOKE (refused 25 today).
 
+## Q-19 — under the virtual-context flag the RTL translates a consuming-capable LDC as a STORE, so a non-consuming ldc through a writable capability from a read-only page faults 15 where QEMU succeeds `OPEN — RTL divergence by design, filed 2026-10-16 with item B; the consuming case agrees`
+
+QEMU's `capstone_ldc_granule` (op_helper.c:2165-2227 at d35af47b163c) probes the store side only after the loaded
+value turns out tagged and linear-family. The RTL (virtual-profile 16345658f, load_unit.sv `ldc_store_probe_o`) decides
+at translation from the authorizing capability's write permission, because the clear is a deferred store-buffer write
+and a refusal at the clear wedged the store buffer behind the escape's save stores. Both refuse the consuming case on a
+page without W or D with STORE_PAGE_FAULT; the RTL additionally refuses a NONLIN load through an RW capability from a
+read-only page. Reachable only with capability-bearing read-only pages (mprotect after a store); the launcher's grants
+are RW by construction (capstone_vm.c:193-194). Directed test: vb-trans.S arm 4 (the consuming case); the non-consuming
+case is not yet an arm.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
@@ -2279,6 +2290,14 @@ everything inside delegated domains, are unaffected.
 > alternatives are:
 > - flash back to 0568f93a9 (cursorless, without the FP fixes);
 > - build the (a) tree 2a3a87dfc (cursorless kept, R-11's truncated tops back).
+
+### R-56 — a page fault raised at a capability LOAD's translation was dropped on the way to writeback, because an LDC's result is routed through the DYN unit whose result packet carries only the capability cause `LATENT ON EVERY BITSTREAM, UNREACHABLE THERE (capability loads were never translated); FIXED on virtual-profile 16345658f (ex_stage.sv carries the LSU's exception beside the DYN result for that trans_id; cva6.sv lets it replace the capability port's exception record)`
+
+Found by vb-trans.S arm 4 on 2026-10-16: the load unit's own result line read `ex=1` in state WAIT_TRANSLATION and
+the writeback `ex=0`; `ex_stage.sv:1243` forwards `load_exception` only with `forward_normal_load_valid`, which an LDC
+never raises. Unreachable before item B since the physical profile runs capability loads bare; under the virtual
+profile every page fault on an ldc would have retired the load with a zero result. Directed test: vb-trans.S arms 2
+and 4 (a load page fault on a plain load and on an ldc).
 
 ### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `NOT REPRODUCED on caplifive_supcall_715bdd1fe (arm12-ldc 3/3), mechanism unknown, apertures 219..222 armed; was: OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
 

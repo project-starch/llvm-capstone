@@ -234,7 +234,7 @@ waits for the lead's own word.
 | re-baseline addendum | RTL lane | DONE 2026-10-16: `virtual-capstone-rtl-feasibility.md` "Addendum, 2026-10-16"; Q-17 and Q-18 filed; reference pinned at d35af47b163c |
 | exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`. DECIDED the same day: (ii) dense, the format frozen as proposed, the helper lane owning the semantics |
 | C' exact bounds: the shared core widening, then the side store and the L1 bounds array; first the memory map for 1 GiB | RTL lane | to do |
-| B translation in C mode | RTL lane | IN SIMULATION 2026-10-16: capstone-ariane branch `virtual-profile` 31c8ebe17 (the flag csupctl.virt, the two translation enables, the MMU permission privilege, the consuming-LDC store check; vb-trans.S with six pre-registered arms and its flag-off control); lint by name, the two arms, the old-tree control and the flag-off sweep are the gates before any synthesis request |
+| B translation in C mode | RTL lane | SIMULATION GREEN 2026-10-16: capstone-ariane `virtual-profile` 16345658f; all six vb-trans arms and the flag-off control read as pre-registered, the old-tree control inverted where predicted; lint at baseline with the 40 loop names identical (`verif/sim/lint-loop-names.py`); two latent RTL gaps found and fixed on the way (R-56, Q-19); the flag-off neutrality sweep (95 tests, then the sup lists) is running; synthesis request after it, with the pre-registered WNS prediction |
 | A lifetime table | RTL lane | to do |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
 | E policy list | RTL lane | to do, folded into D |
