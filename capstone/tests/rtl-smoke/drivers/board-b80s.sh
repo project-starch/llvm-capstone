@@ -13,6 +13,11 @@
 # SQLITE_HOST_HASH / NATIVE_HASH / NATIVE_QEMU pin the host, the native image and its QEMU BASELINE-WARM figure; the
 # defaults are the sw80a pieces (2af56927aaf907e9, b36eb3814c3cefce, 240654449). A rebuilt baseline or a different host
 # re-pins all three here rather than in a copy of this file, and every check below reads the same three values.
+# CELL_HOSTARGS (default empty) are host arguments put before the speedtest1 ones, and C5_QEMU_HEAP (default 2097152) is the
+# HEAP token the cell's QEMU record must carry: with `--arena 2097152 --tables 1750285` and 1344064 they run P1's cell 6
+# (the Sublet build, whose HEAP token is its tables length) in the cell slot. With both unset this file runs cell 5 as before.
+# MEMINFO=1 stages drivers/meminfo.sh as /test-domains/meminfo and reads /proc/meminfo first and last in the boot (not a
+# verdict arm; removed again by the restore).
 set -u; R=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); U=${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/unify
 B=$R/capstone/caplifive-system/sw/buildroot; BM=$B/components/opensbi/lib/sbi/capstone-sbi
 FW=${CAPSTONE_BR_FW:-$B/build-fpga/build/opensbi-custom/build/platform/fpga/ariane/firmware}
@@ -40,7 +45,7 @@ export SQLITE_HOST_HASH NATIVE_HASH NATIVE_QEMU
 [ "$(sha256sum $RRH|cut -c1-16)" = "$SQLITE_HOST_HASH" ] || fail "host is not the readback build $SQLITE_HOST_HASH"
 NAT=${NATIVE_BASELINE:?set NATIVE_BASELINE=<path to speedtest1_baseline>}
 [ "$(sha256sum $NAT|cut -c1-16)" = "$NATIVE_HASH" ] || fail "native -O2 baseline is not $NATIVE_HASH"
-grep -aq "SPEEDTEST1-CYCLES $C5_QEMU HIGHWATER n/a HEAP 2097152" "$C5_QEMU_LOG" || fail "the QEMU run of the cell 5 image ($C5_QEMU) is not on record in $C5_QEMU_LOG"
+grep -aq "SPEEDTEST1-CYCLES $C5_QEMU HIGHWATER n/a HEAP ${C5_QEMU_HEAP:-2097152}" "$C5_QEMU_LOG" || fail "the QEMU run of the cell 5 image ($C5_QEMU) is not on record in $C5_QEMU_LOG"
 grep -aq "BASELINE-WARM CYCLES $NATIVE_QEMU " ${QEMU_LOG_BASELINE:?} || fail "the -O2 QEMU run of the baseline ($NATIVE_QEMU) is not on record in $QEMU_LOG_BASELINE"
 LPC=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}/lpc
 [ "$(sha256sum $LPC|cut -c1-16)" = 3b93a2b6e2adfa36 ] || fail "lpc on the overlay is not 3b93a2b6e2adfa36"
@@ -65,12 +70,14 @@ for s in speedtest1.dom sqlite_host.user speedtest1_baseline k800.dom; do cp -f 
 cp -f $IMG "$T/speedtest1.dom" || fail "stage the cell 5 image"
 cp -f $RRH "$T/sqlite_host.user" || fail "stage host"
 cp -f $NAT "$T/speedtest1_baseline" && chmod 0755 "$T/speedtest1_baseline" || fail "stage native -O2"
+if [ "${MEMINFO:-0}" = 1 ]; then cp -f "$(dirname "${BASH_SOURCE[0]}")/meminfo.sh" "$T/meminfo" && chmod 0755 "$T/meminfo" && cp -f "$T/meminfo" "$TT/meminfo" || fail "stage meminfo"; fi
 if [ -n "${K800_IMG:-}" ]; then cp -f "$K800_IMG" "$T/k800.dom" || fail "stage relinked k800"; fi
 STASH=$OUT/retired; mkdir -p $STASH; RESTORED=0
 RETIRE="rtpc bigregion.user trapctl.dom fillsd.dom fillwarm.dom fillcost.dom fillnop.dom speedtest1_seven.dom sqlite_host_rr.user"
 restore(){ [ "$RESTORED" = 1 ] && return 0; RESTORED=1
   for s in speedtest1.dom sqlite_host.user speedtest1_baseline k800.dom; do [ -f $OUT/$s.before ] && { cp -f $OUT/$s.before "$T/$s"; cp -f $OUT/$s.before "$TT/$s"; }; done
   for f in $RETIRE; do [ -f "$STASH/$f" ] && { cp -f "$STASH/$f" "$T/$f"; cp -f "$STASH/$f" "$TT/$f"; }; done
+  [ "${MEMINFO:-0}" = 1 ] && rm -f "$T/meminfo" "$TT/meminfo"
   bake restore && say "rebaked with the retired set back" || say "WARN: restore rebake failed -- the next boot MUST rebake"; }
 trap restore EXIT
 for f in $RETIRE; do [ -f "$T/$f" ] && cp -f "$T/$f" "$STASH/$f"; done
@@ -98,6 +105,7 @@ KO=${CAPSTONE_KO:-$(ls -t ${CAPSTONE_BR_BUILD:-$B/build-fpga}/build/modcapstone*
 [ "$(strings $KO|grep -c 'domain declares dom_data')" -ge 1 ] || fail "the baked .ko lacks the #3 marker"
 [ "$(sha256sum $B/build/target/capstone.ko|cut -c1-16)" = "$(sha256sum $KO|cut -c1-16)" ] || fail "target capstone.ko is not the built one"
 H=$(sha256sum $FW/fw_payload.bin|cut -d' ' -f1); echo $H > $OUT/fw.sha
+cp -f $FW/fw_payload.bin $OUT/fw_payload.bin   # kept, so image membership stays checkable against the boot's own payload
 say "fw_payload ${H:0:12} (monitor $(git -C $BM rev-parse --short HEAD), buildroot $(git -C $B rev-parse --short HEAD))"
 python3 - "$B" <<'PY' | tee -a $LOG
 import sys,hashlib,os
@@ -131,9 +139,11 @@ export ENTRY_STALL_S=420 EARLY_HALT_CONTROL=0 WEDGE_TRACER=0 HALT_MUX_READS=0
 export SQLITE_HOST=/test-domains/sqlite_host.user
 BUDGET=900; export SQLITE_STAGE_TIMEOUT=$BUDGET SQLITE_IDLE_S=$BUDGET
 D="/test-domains/lpc|k800:/test-domains/k800.dom"
-D="$D,/test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify --stats"
+[ "${MEMINFO:-0}" = 1 ] && D="/test-domains/meminfo|idle:after-boot,$D"
+D="$D,/test-domains/speedtest1.dom:--speedtest1${CELL_HOSTARGS:+ $CELL_HOSTARGS} --testset main --size 1 --verify --stats"
 D="$D,/test-domains/lpc|k800:/test-domains/k800.dom"
 D="$D,/test-domains/speedtest1_baseline|warm:--testset main --size 1 --verify --stats"
+[ "${MEMINFO:-0}" = 1 ] && D="$D,/test-domains/meminfo|last:after-native"
 export SQLITE_STAGE_DOMS="$D" PROBE_SCOPED_OUT=$OUT/boot.txt PROBE_RAW_OUT=$OUT/boot-raw.txt
 say "=== boot sw8x-b80s-$C5_TAG = cell 5 variant $C5_TAG ($C5_HASH) with --stats: control, cell 5 --stats, control, native -O2 warm --stats ==="
 say "=== pre-registered: retval=4 twice; cell 5 $C5_TAG: 112006 38bb59fd, HEAP 2097152 DROPPED 0; $C5_EXPECT; cycles = $C5_QEMU x CPI 3.2..4.9; native -O2: 112006 38bb59fd, Successful lookasides 25122, BASELINE-WARM cycles = $NATIVE_QEMU x CPI ==="
