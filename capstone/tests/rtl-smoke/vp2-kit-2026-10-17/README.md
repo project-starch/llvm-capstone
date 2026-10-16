@@ -127,10 +127,35 @@ target/riscv/capstone_table.c:218-283` at d35af47b163c, is the reference for eve
 6. Store the capability, with its tag, to the slot through S's translation.
 7. Set rd to the ancestor's id and advance mepc.
 
-**Still needed from the RTL lane before this can be written:**
-- the Q-entry with CSNODE's encoding and semantics;
-- the trap cause of an S-mode CSMINT on vp2;
-- how the monitor stores a tagged capability through S's translation in capability mode.
+**The RTL lane's answers (2026-10-17; the Q-entry id follows when the runtime lane files it):**
+- **CSNODE rd, rs1:** opcode 0x5b, funct3 1, funct7 0x54 (0x50 stays CSMINT, which traps; 0x53 is CSRETIRE),
+  R-type with rs2 = x0.
+  - rs1 is a capability register, the LINEAR capability just minted.
+  - With fewer than two identities left it raises 30 before any write.
+  - Otherwise it allocates the child (depth 0, valid, linear), then an MREV ancestor, and re-parents the child under
+    the ancestor at depth 1.
+  - It re-nodes rs1 onto the child and returns the ANCESTOR id in rd.
+  - It is legal from S outside a context, and from M when `csupctl` bit 3 (the "table" bit) is set. The emulation
+    sets that bit around it. It is illegal from U and inside a context.
+- **The trap:** an S-mode CSMINT raises illegal instruction (2) to M, with mtval = the instruction bits. So the
+  monitor decodes from mtval and needs no read at mepc.
+- **The store: not STC under MPRV.** An STC's address is a physically bounded capability, and only the DYN unit
+  checks it, which knows nothing of MPRV.
+  - The descriptor's three words are read as scalar loads under MPRV. CPMP at S must cover that page, and Linux's
+    RAM entry does.
+  - The slot's VA is translated in software, by reading the page tables as the walker does.
+  - The minted capability is then stored with STC through a physical capability over the slot's page, as the
+    monitor stores into a domain's context today. No CPMP condition applies to that M-mode store.
+  - Slot alignment (cause 6), descriptor alignment (cause 4) and the unrepresentable descriptor (29) are the
+    emulation's checks, made before CSNODE runs.
+
+**Open before code, asked of the RTL lane:**
+- **Where the monitor gets the authority to mint.** The descriptor's [base, end) is a range in the virtual
+  context's address space. Today the monitor mints only by splitting a physical region it owns.
+- **What the software walk enforces for the slot.** QEMU's `probe_access_full` applies S-mode write permission (V,
+  W, and U with SUM), and A/D handling is still to settle.
+- **How the emulation is tested before vp2.** QEMU has no M-mode CSNODE, so either QEMU gains it, or the RTL
+  simulation runs the monitor path.
 
 ## Pre-registered (2026-10-17, before the revision exists): the v6 module's `add()` change
 
