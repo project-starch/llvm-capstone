@@ -182,6 +182,14 @@ This section replaces the withdrawn one above. It is based on the compiler lane'
   surviving pow2=1 aligned=0 row means the alignment half still bites; any surviving pow2=0 row means the size
   half does.
 
+- **Note on the growth row, added before the revision exists** (compiler lane ad72c3583446): the growth failure now
+  has a known cause. On the exact-bounds-on arm, the only profile whose 6 MiB setup succeeds, the launcher
+  refuses the 12 MiB growth with `CAPSTONE_VM_REMAP_REFUSED stage=granule bytes=12587008 align=16384`. realloc
+  rounds `needed` to a page, not to the granule, and the lane's own representability check in remap_mapping
+  refuses the remainder. That check is a lane-only change, not on dev. So the growth row still predicts FAIL for
+  the `add()` change, and a surviving growth failure is that check, not a second site. Its own fix is domain-side,
+  in realloc.c. `real_linux_mremap_growth_and_shrink` reaches neither a refusal nor a remap, and stays open.
+
 **The board lane's runs on that revision.** The kit is rebuilt from the revision with the same toolchain, QEMU and
 guest images.
 0. **Amended before the revision exists (compiler lane 561b8b2cd692): the refusal line now prints unconditionally.**
