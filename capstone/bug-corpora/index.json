@@ -790,7 +790,8 @@
         "sysalloc-bounds",
         "cheribsd-revocation",
         "virtual-malloc",
-        "virtual-nested-pools"
+        "virtual-nested-pools",
+        "silicon-mruby-bounds"
       ],
       "evidence": [
         "capstone/bug-corpora/mruby/release-differential/results/20261006",
@@ -800,7 +801,8 @@
       "runners": [
         "capstone/ports/mruby/app/build-mruby-domain.sh",
         "capstone/ports/mruby/cheribsd/build.sh",
-        "capstone/bug-corpora/mruby/release-differential/probe/run-virtual.py"
+        "capstone/bug-corpora/mruby/release-differential/probe/run-virtual.py",
+        "capstone/bug-corpora/mruby/release-differential/probe/fold-silicon.py"
       ],
       "expect_live_in_pin": {
         "true": 23
@@ -2112,7 +2114,7 @@
     }
   ],
   "issues": {
-    "open": 117,
+    "open": 119,
     "resolved": 77
   },
   "fixtures": [

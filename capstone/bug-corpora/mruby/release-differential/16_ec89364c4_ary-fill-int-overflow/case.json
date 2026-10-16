@@ -31,6 +31,12 @@
       "verdict": "CAUGHT",
       "verdict_note": "capability fault, cause 28, in ary_fill_exec",
       "verdict_from": "results/2026-10-11-virtual/virtual-nested-pools/matrix.tsv 16"
+    },
+    "silicon-mruby-bounds": {
+      "oracle": "silicon, bounds only: B5's mruby.dom over silicon-alloc.c, every object narrowed to its request, nothing revoked. A capability fault is CAUGHT (per-object bounds; cause 28 is the RTL's out-of-bounds trap), a run that completes is MISSED",
+      "verdict": "CAUGHT",
+      "verdict_note": "capability fault, cause 28, in ary_fill_exec",
+      "verdict_from": "results/2026-10-16-silicon/silicon-mruby-bounds/matrix.tsv 16"
     }
   },
   "status": "sysalloc-none and sysalloc-bounds measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default; virtual-malloc and virtual-nested-pools measured 2026-10-11 on the virtual profile. The sublet-gc arm left the case with the Sublet heap and the GC-slot adapter on 2026-10-11; its readings stay in results/20261006.",
