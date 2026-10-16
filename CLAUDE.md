@@ -77,8 +77,9 @@ names, no FPGA token, never push the paper.
   is genuinely one line.
 - **Shared branches receive only squashed, logically complete commits.** A shared branch is `dev`
   here, and in every other repo the branch other lanes build on. Today that means `capstone-bootstrap`
-  in `caplifive-buildroot` and `caplifive-system`, and `c128-qemu-merge` in `capstone-qemu`; for any
-  other submodule, the branch the parent's pointer tracks.
+  in `caplifive-buildroot` and `caplifive-system`, and `virtual-capstone` in `capstone-qemu` (dev's pointer
+  has tracked it since 2026-10-08; `c128-qemu-merge` stopped at 2026-10-01); for any other submodule, the
+  branch the parent's pointer tracks.
   - Work on your own branch, named for the lane or the task (no prefix scheme), and push it as often as you like.
     That is what "push at stable points" means.
   - Land on the shared branch once per logical change, as ONE commit:
@@ -104,6 +105,9 @@ names, no FPGA token, never push the paper.
   never by whom. So when other lanes may be active: before committing a shared file read `git diff`
   on the path and look for hunks you did not write, and afterwards read `git show`, **not**
   `git show --stat` — the stat shows a plausible file list and hides the foreign hunks inside it.
+  Read it BEFORE the push: never chain `git push` into the commit command. On 2026-10-05 a landing checked
+  only that dev's tree equalled the lane head, then pushed in the same command, and an unlanded lane section
+  reached dev under a message that does not describe it (2590f3afdf9c).
 - Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
 - Active plans live in `capstone/docs/plans/` (committed, portable across machines and agents).
 - Manager-facing summaries go under `/tmp/capstone/`, not into the repo.
@@ -314,7 +318,17 @@ Before spending board time or building an instrument, search the **issue registr
 repro folders including archived ones, the commit history, and the other ports' adapter headers
 and patch commentary** — not only `docs/`. A
 whole session went into re-deriving a fault whose exact shape was already recorded, in the folder
-of a bug believed to be fixed.
+of a bug believed to be fixed. **Search by the NAME of the construct you are about to change, not only
+by the symptom** — `grep -rn <signal, module or compare> docs/history/ docs/ref/ISSUES.md` — because a
+prior attempt on that exact line is filed under its own issue, not yours: on 2026-10-05 half a session
+validated a widened `store_buffer` compare that `docs/history/21-08-2026_…_s10b-is-not-synthesizable.md`
+had already shown to form a LUT loop in synthesis.
+
+**This binds pre-registration too.** Before pre-registering a run on a new bitstream, read every row of
+that bitstream's open ISSUES entries, and check each row against every image and list the run reuses. On
+2026-10-16 two results were lost to rows of R-55's own entry: the classic region table caps a boot at
+seven R1-harness invocations, and pre-fix Sublet images mis-carve. H1's REVOKE finding had to be
+retracted.
 
 **Read past the root-cause box.** A fixed issue's folder records what its fix did *not* cover:
 individual instances, residuals, and "what would settle it" lists. Reading only the headline root
@@ -339,10 +353,22 @@ takes, each of which has produced a published claim that had to be retracted:
 * a check **keyed to one function, shape or packing** that silently misses another;
 * a **gate whose condition the mandated control always satisfies**, so it can never fire;
 * a run **parameterised by the wrong variable name**, printing a pass having checked nothing;
-* a tool that renders **"no data" as a zero result**, which reads like a finding;
+* a tool that renders **"no data" as a zero result**, or **a prediction as a reading**, which reads like a
+  finding (the bug-corpus table generator read an arm's oracle TEXT as its verdict until 2026-10-10);
+* a suite that **passes while covering a SUBSET**, because its case list is hardcoded and the
+  corpus has since grown — 4 of 25 cases measured, PASS printed, controls fired (2026-10-08);
+* a check satisfied by a **PREVIOUS run's artifacts**, because the output directory survives —
+  "controls fired" for a boot that never happened. Stamp a marker and require newer files.
 * **directed tests that come back clean without ever creating the triggering condition;**
 * a check that **fires correctly and still under-determines** — proven to work, and unable
-  to tell apart the two hypotheses actually on the table.
+  to tell apart the two hypotheses actually on the table;
+* a count taken over a **population that was filtered to exclude the very class being counted**.
+  This one is not about the check at all — the check works, and is pointed at the wrong input. On
+  2026-10-05 "0 spatial defects of 27" was published from a hunt whose own filter 1 read *"a
+  lifetime defect … **and not as an overflow**"*; re-running the three programs for the excluded
+  class found 19 (15 over tshark's full history, 4 in FFmpeg). **Before reporting an absence, read the search's OWN inclusion criteria and ask
+  what they threw away.** A filter that names a class as a disqualifier can never produce evidence
+  about that class.
 
 The incident log these were drawn from is in `docs/`; it is evidence, not rules.
 
@@ -355,6 +381,10 @@ Cheap habits that catch all of the above:
   the table. Both retractions on 2026-08-19 were available to that question in advance: a
   tag-only detector obviously cannot see corrupt metadata, and a trap PC obviously names the
   faulting instruction rather than the one that produced its operand.
+  **A fix for WRONG VALUES is confirmed by checking the values against an independent reference,
+  never by an anomaly detector built around the old symptom.** "R-52 fixed on silicon" (2026-10-11)
+  rested on a finite-and-monotone count, while the same boot printed `now()` = 0.24 s beside a 240 s
+  integer clock. It was retracted the same evening (23213fb4a701).
 * **Never filter between a gate and its exit status.** A pipe replaces `$?` with the last stage's,
   so `gate | tail && commit` commits what the gate rejected. Redirect, never pipe. And invoke a
   gate by **ABSOLUTE PATH**: one that fails to START exits 127 and reads exactly like one that ran
@@ -383,7 +413,12 @@ Cheap habits that catch all of the above:
   clearing only those two registers, which *was* the asymmetry being hypothesised; it clears six.
   The same day a `trans_id` read at `[2:0]`, taken from the field's position in the struct
   declaration, would have counted events on arbitrary capability cursor bits — the generated code
-  reads it at `[255 +: 3]`.
+  reads it at `[255 +: 3]`. **And check it is the right ARTIFACT, not just the right pattern: a hit
+  in the file a commit is believed to touch is not evidence about that commit.** A candidate was
+  dispositioned "`g_strdup` of a string literal" off the only `g_strdup` in `libpcap.c`, while
+  `git show --stat` gave a reported-length underflow across two files and no `g_strdup` at all —
+  in a session that had just retracted four rows for this exact shape (2026-10-05). A commit's
+  disposition comes from `git show` on that commit.
 * When a result is *surprisingly* clean, suspect the instrument before the subject.
 * **Cite a board result by its image hash, never by its label.** A `board-results` row's label can
   name a different program: the S-06 folder's "acceptance passed" for `s06agg` cited a row whose image
