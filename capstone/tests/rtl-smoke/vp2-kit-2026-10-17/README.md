@@ -171,6 +171,25 @@ target/riscv/capstone_table.c:218-283` at d35af47b163c, is the reference for eve
   - QEMU is unchanged, and the board's prediction for CSMINT comes from QEMU's own CSMINT.
   - D4 follows the RTL lane's E and D5 arms. The monitor code waits for it.
 
+**D4 is in the RTL** (capstone-ariane virtual-profile-2-d 41fa120bf, 2026-10-17).
+- CSNODE (0x54) and CSRETIRE (0x53) are admitted to trusted S and to M under `csupctl.table`, outside a context. Both
+  are illegal from U, and escape with cause 2 inside a context.
+- CSNODE allocates QEMU's pair, child first and then the ancestor. It re-nodes rs1 onto the child and returns the
+  ancestor.
+- CSRETIRE returns 0 on success and 1 on rejection, and never faults.
+- Arms: va-runv6 (CSNODE and CSRETIRE from M and trusted S) and va-runv7 (both illegal inside a context).
+- The arms exercise CSNODE, not the whole emulation path from the trapped S-mode CSMINT through the MPRV read, the
+  walk and the physical STC. That handler is the board lane's to write, and is tested as its own arm.
+
+**Two vp2 facts that move readings, from the RTL lane:**
+- **Item E refuses RETURN inside a virtual context**, as QEMU's virtual-C filter does. A `csupctl.virt` domain that
+  ends with RETURN escapes with cause 2 (csupstatus 5) instead of returning. CSRUNV contexts are unaffected.
+- **Every allocation inside a context keeps a reserve of 256 identities** (CDERIVE, SPLIT, MREV, INIT), as QEMU's
+  `capstone_require_node`. A context's table needs more than 256 free identities before its first derive, or it
+  reads node pressure (kind 5, cause 30). Trusted S and M outside a context allocate down to the last identity.
+- Both are QEMU's behaviour, so the Tier 1 and Tier 2 predictions already carry them. Only a reading taken from a
+  vp1-era image would move.
+
 ## Pre-registered (2026-10-17, before the revision exists): the v6 module's `add()` change
 
 > **WITHDRAWN (2026-10-17, the same morning, before any run against it).** The predicate below is refuted by the
