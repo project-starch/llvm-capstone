@@ -29,3 +29,61 @@ a783931794_0 -- upstream corrupt-database regression image, backported to 3.22.0
  * should reach the defect means SQLite rejected the image first -- a real negative, not a
  * silent pass.
 ```
+
+## Review 2026-10-16 -- holds in full, and host ASan could be re-run this time
+
+### The four readings
+
+| reading | result |
+|---|---|
+| host ASan | **re-run**: `heap-buffer-overflow`, 0 bytes after an 8-byte region, `sqlite3Fts3GetVarint <- fts3GetDeltaVarint <- fts3PoslistPhraseMerge <- fts3EvalIncrPhraseNext`, allocated by `sqlite3_malloc <- fts3EvalIncrPhraseNext` -- identical to the 2026-10-11 bundle |
+| virtual-malloc | **MISSED**, `RETURNED`, controls as declared |
+| virtual-nested-pools | **CAUGHT**, `cause=28` offset 1048 in `sqlite3Fts3GetVarint`, fault address `0x3f96bd0ee8` |
+| cheribsd-revocation | **MISSED**, `RETURNED rc=0`, every statement `rc=0`, over-read witnessed |
+
+`cause 28` is CAP_OOB, the **bounds** check -- the right code for a spatial over-read, where the
+temporal cases turn on `cause 25`. No verdict changes and no count moves.
+
+### The defect has no bound to check at all
+
+```c
+static void fts3GetDeltaVarint(char **pp, sqlite3_int64 *pVal){
+  sqlite3_int64 iVal;
+  *pp += sqlite3Fts3GetVarint(*pp, &iVal);
+  *pVal += iVal;
+}
+```
+
+There is no end pointer in scope: the caller is expected to have stopped first.
+`fts3EvalIncrPhraseNext` allocates the buffer that is walked --
+`char *aDoclist = sqlite3_malloc(nByte+1)` -- and passes it to `fts3PoslistPhraseMerge` as `pR`.
+
+### The probe gives allocation-and-bound identity
+
+Site 62 prints the buffer at the allocation and hands the decoder's pointer to the address
+judgement at the read, so the witness names the same block:
+
+```
+LB_OBJECT site=62 ALLOC   aDoclist=0x2433c0 bytes=2
+LB_WITNESS site=62 kind=OOB off=2 n=1 req=2 blk=0x2433c0 tag=1 cb=0x204a00+262144 ca=0x2433c2
+LB_SUMMARY site=62 hits=14 witnesses=1 first_witness_at_hit=2
+```
+
+`ca = blk + 2` on a 2-byte request: exactly one byte past the end, on the block the ALLOC hook
+had just recorded. **`kind=OOB` is the correct classification here**, unlike case 25 where the
+same judgement reported `kind=UAF` because the over-read crossed into a freed neighbour. The
+witnessed allocation is 2 bytes where host ASan reports an 8-byte region -- the case allocates
+several and the two builds witness different ones; same line, same defect.
+
+### The quietest case in the corpus
+
+On CheriBSD every statement returns `rc=0` and nothing downstream complains: the over-read feeds
+a varint whose value is simply wrong, and no wrong answer ever surfaces. Cases 21, 23 and 24
+each produce a visible wrong result -- a rewritten row, a failed scan, a malformed-image error --
+and this one produces none. Worth keeping as the other end of that range: a defect that is
+invisible without a memory-safety mechanism in the strongest sense.
+
+Why both non-Sublet arms are silent is case 23's reason: what is read is **bytes**, inside the
+arena, through a capability with `tag=1` and whole-arena bounds, and no pointer is forged, so
+there is nothing for the baseline tag check to fire on. Sublet rejects it because the
+sub-allocation's **bounds** are what it checks.
