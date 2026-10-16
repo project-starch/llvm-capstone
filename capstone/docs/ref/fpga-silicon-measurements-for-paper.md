@@ -6332,3 +6332,29 @@ Six arms in one boot (08:26-08:52): firmware a43fcda381219db6, 63 runs, each end
 
 **Scope, before quoting:** three controls per allocator (block_fast has no sibling control), driven through each
 allocator's API in the corpus's own builds. These show the absence of false positives on these shapes, not in general.
+
+## mruby's benchmarks on the Sublet bitstream: the silicon ABI costs 1.25x native at the same -O1 and 1.50x against native -O2, both arms in one boot (caplifive_sublet_d93a8d66b, 2026-10-16)
+The board campaign's benchmark 5 (`docs/plans/2026-10-16-board-campaign-all.md`). It is the B5 pair: mruby 4.0.0-rc2
+as a capstone-exec domain (image a7ac283d7050a5d8) and as a native Linux process (gcc 12.3, glibc, -O2 and -O1), in
+one boot.
+- Pre-registered: `docs/plans/b0-silicon-delegated-runtime.md`, "B5 pair" (lane 1d9a1b9b5d5d).
+- Firmware 2edb66370270cdab. Every stdout byte-identical to x86 native.
+
+| benchmark | domain | native -O2 | native -O1 | domain / -O2 | domain / -O1 |
+|---|---|---|---|---|---|
+| mandel_term | 138.34 | 90.59 | 109.37 | 1.53 | 1.26 |
+| fib(24) | 45.49 | 29.75 | 36.04 | 1.53 | 1.26 |
+| so_lists (3 x 1000) | 2.46 | 1.67 | 1.93 | 1.47 | 1.28 |
+| so_mandelbrot (32) | 30.67 | 18.36 | 22.24 | 1.67 | 1.38 |
+| ao_render (8) | 81.89 | 59.42 | 69.60 | 1.38 | 1.18 |
+| total | 298.85 | 199.79 | 239.16 | 1.50 | 1.25 |
+
+Seconds, Time.now inside each process. The domain and -O2 are each the mean of two runs in the boot, which agree within
+0.20% and 0.50%.
+
+**Scope, before quoting:**
+- The ratio is an UPPER BOUND on the cost of capabilities: the domain also differs in soft-float, clang/musl, full
+  LTO, its size-class allocator and the delegation of every system call.
+- The 2026-10-15 B5n boot read the same ratios on the FP bitstream (`caplifive_fpb_afcd19bea`). Both arms' times
+  agree across the two bitstreams within 1.4%.
+- Launch is excluded: 45 s for the domain's cold launch, against 4 s natively.

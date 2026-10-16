@@ -3269,3 +3269,72 @@ It is the board's first direct reading of per-global separation.
   fallback.
 - Untagged function pointers under gp-captable are acceptable for the hello path. This is the prior-art sweep's
   assumption; check it in B0.5's disassembly.
+
+## B5 pair pre-registered (2026-10-16, before the boot): mruby's domain and native builds in one boot on caplifive_sublet_d93a8d66b
+The board campaign's wave 2 (`docs/plans/2026-10-16-board-campaign-all.md`, benchmark 5). B5n's native baseline
+ran on caplifive_fpb_afcd19bea (2026-10-15), and boot P ran the domain on the Sublet bitstream. A ratio across two
+bitstreams is not a measurement, so this boot runs both arms, each twice for the domain and native -O2, once for -O1.
+
+**The images,** all unchanged:
+- B5's mruby.dom a7ac283d7050a5d8, the image boot P ran;
+- B5n's native mruby-rv64-O2 99af8bde1e36acf8 and -O1 1e6246f22c06055b;
+- the scripts and native.sha of `/tmp/capstone/b5m/board`;
+- b0run.sh 38f8dcf9b1823daa. Its b5 rungs are unchanged since boot P (bc621df72268): the only change is the corpus
+  rung.
+
+**The boot:**
+- private image fa4d625d3d165cb2 (18 files, each checked by hash in the initramfs), firmware 2edb66370270cdab;
+- the exact-regions supcall line (wrapper 1269c77, monitor ebe0a25) with the 127-slot module.
+- Rungs, interleaved so a drift during the boot touches both arms: b0-stats, b0-hello, b5-native-O2-e,
+  b5-native-O2-bench, b5-mruby-e, b5-mruby-bench, b5-native-O2-bench, b5-mruby-bench, b5-native-O1-e,
+  b5-native-O1-bench, b0-stats2.
+
+**Predictions,** from the two records (boot P's and B5n's transcripts):
+1. Every retval 0: each step's stdout hash equals native.sha (`e` 53c234e5e8472b6a, bench 8d1539bc79e2b630).
+2. Both domain benches repeat boot P:
+   - allocator 139/83453/0;
+   - each benchmark within ±2% of boot P's 138315, 45514, 2458, 30708, 81907 ms.
+3. Native repeats B5n within ±2% per benchmark, the bitstream notwithstanding:
+   - -O2: 90847, 29921, 1677, 18464, 59712 ms;
+   - -O1: 109745, 36530, 1922, 22371, 69695 ms.
+   B5's domain times agreed across the two bitstreams within 0.1%.
+4. The two repeats of each arm agree within ±1% per benchmark (so_lists, at 2.4 s the shortest, within ±2%).
+5. The domain/native ratios per benchmark are the result and are NOT predicted. If 2 and 3 hold, they equal B5n's
+   (1.18-1.37x at -O1, 1.37-1.66x at -O2) within the noise. Unlike B5n's, they come from one boot on the bitstream
+   the paper's Sublet rows use.
+
+**What a failure would say:**
+- A native hash differs (910): a native hard-float computation is wrong on this bitstream (the R-52/R-53 family).
+  It voids the baseline, not the domain.
+- A domain repeat differs in hash or allocator count: boot P does not repeat, so re-examine before reading anything.
+- A time outside its band: run-to-run or bitstream variance is larger than assumed, and the ratio is quoted with
+  its spread instead.
+
+No wedge is expected: every image and rung has run on this bitstream or on its predecessor.
+
+## B5 pair RESULT (2026-10-16 16:03-16:33, caplifive_sublet_d93a8d66b, firmware 2edb66370270): every pre-registered reading holds; mruby's domain costs 1.25x native at the same -O1, 1.50x against native -O2
+One boot, eleven rungs, every retval 0 against its oracle (pre-registration 1d9a1b9b5d5d).
+
+**Every prediction held,** computed from the transcript, not by hand:
+1. every stdout hash equals native.sha;
+2. both domain benches repeat boot P within 0.20% per benchmark, and the allocator reads 139/83453/0 both times;
+3. native repeats B5n's FP-bitstream times within 0.74% at -O2 and 1.35% at -O1;
+4. repeats within one boot agree within 0.20% (domain) and 0.50% (native -O2).
+
+**Times** (seconds, Time.now inside the process; the domain and -O2 are means of two runs in this boot):
+
+| benchmark | domain | native -O2 | native -O1 | domain / -O2 | domain / -O1 |
+|---|---|---|---|---|---|
+| mandel_term | 138.34 | 90.59 | 109.37 | 1.53 | 1.26 |
+| fib(24) | 45.49 | 29.75 | 36.04 | 1.53 | 1.26 |
+| so_lists (3 x 1000) | 2.46 | 1.67 | 1.93 | 1.47 | 1.28 |
+| so_mandelbrot (32) | 30.67 | 18.36 | 22.24 | 1.67 | 1.38 |
+| ao_render (8) | 81.89 | 59.42 | 69.60 | 1.38 | 1.18 |
+| total | 298.85 | 199.79 | 239.16 | 1.50 | 1.25 |
+
+**Reading it:**
+- These are B5n's ratios again, now from one boot on the bitstream the paper's Sublet rows use. Both arms' times
+  are the same on the FP and Sublet bitstreams within 1.4%.
+- They remain UPPER BOUNDS on the cost of capabilities, for B5n's reasons: soft-float, clang/musl, full LTO, the
+  size-class allocator and the delegation of every system call, against gcc/glibc native.
+- Launch: 45.13 s for the domain's cold `e`, against 3.89 s / 3.67 s natively, as B5n read it.
