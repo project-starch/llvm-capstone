@@ -57,7 +57,7 @@ its `fw_payload.bin`):
 **Not established here:** one bitstream; the same images as 2026-09-21/22, so the comparison is across silicon
 only.
 
-## Amended after warm boot 1 (2026-10-16 22:50): at most six invocations per boot on this line
+## Amended after warm boot 1 (2026-10-16 22:40): at most six invocations per boot on this line
 
 **Warm boot 1 (r1ws16-b1, 22:22-22:35) completed invocations 1-7 and stopped at the 8th.**
 - What the 8th read: `SQ: D/mapped`, then `create_region failed -- above 4 MiB this needs a CMA area`, obs=65536, and
@@ -71,8 +71,7 @@ only.
 - The run stopped there, so warm boots 2-8 and cold reps 2-5 have not run.
 
 **The rest runs in boots of at most six invocations, list order unchanged:**
-- r1ws16s-01 is lines 8-12;
-- r1ws16s-02 … r1ws16s-14 are lines 13-90 in sixes;
+- lines 8-90 in sixes from line 8: r1ws16s-01 is lines 8-13, r1ws16s-02 lines 14-19, …, r1ws16s-14 lines 86-90;
 - then cold reps 2-5 as above (one invocation per boot).
 - Each invocation is a fresh domain and a fresh arena, so lines 1-7 of boot 1 stand.
 - What changes is the boot composition: six invocations before a point instead of up to eleven. The slopes are

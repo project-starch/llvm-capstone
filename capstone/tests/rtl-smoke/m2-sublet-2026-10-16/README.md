@@ -56,7 +56,7 @@ The rise at N ≥ 1024 is the data cache's, common to all three arms.
 **Not established:** the node cache's capacity on this bitstream is taken from §7t's 2,048. The knee's position, if any,
 is the measurement.
 
-## Amended while boot 1 ran (2026-10-16 22:50): what a boot cannot reach runs in boots of at most six
+## Amended while boot 1 ran (2026-10-16 22:40): what a boot cannot reach runs in boots of at most six
 
 R1 warm boot 1, on the same image, host and line, stopped at its 8th invocation (ISSUES R-55's region table; see
 `../r1-sublet-2026-10-16`). So each 12-invocation boot here is expected to end the same way.
