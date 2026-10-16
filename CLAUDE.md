@@ -692,9 +692,10 @@ Not for routine passes, mechanical rebuilds, or anything already verified. And n
 weakest link in the prompt ("the gap I want you to attack hardest is X") -- generic "check this"
 produced thin reports; naming the soft spot produced every one of the refutations.
 
-**Treat every subagent report as a claim, not a fact.** Findings that will be acted on,
-committed, or published must be verified against the primary source — a quoted `file:line`
-you can re-read, or a command you re-run. A confident subagent report is exactly as
+**Treat every subagent report as a claim, not a fact — and a PEER LANE's report the same way.** Findings that
+will be acted on, committed, or published must be verified against the primary source — a quoted `file:line`
+you can re-read, a log you open yourself, or a command you re-run. On 2026-10-17 a peer's "confirmed two-sided"
+went into a dev commit within minutes, and its own control arm, unread, was failing (retracted at a7305555fb05). A confident subagent report is exactly as
 trustworthy as a confident guess by this session, which the history in `ISSUES.md` shows
 is not very. Agents are instructed to quote evidence and to say UNRESOLVED; hold them to
 it, and treat a conclusion with no quoted evidence as unverified.
