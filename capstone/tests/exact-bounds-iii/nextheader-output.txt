@@ -1,0 +1,110 @@
+================================================================================================
+INPUTS   UNIT=16  IB=4  MMAP_THRESHOLD=131052  48 size classes, max 8191 units = 131056 bytes
+         granule: 1 below 4096, else 2^(ilog2(L)-9);  lengths needing a 2nd rounding pass: 0
+================================================================================================
+
+### SMALL PATH (n < MMAP_THRESHOLD): does repr_round(n) stay inside the slot?
+
+sc     units   stride     n_max gran@nmax fits off=0 fits worst
+24       146     2336      2332         1       yes       yes
+25       170     2720      2716         1       yes       yes
+26       204     3264      3260         1       yes       yes
+27       255     4080      4076         1       yes       yes
+28       292     4672      4668         8        NO        NO
+29       340     5440      5436         8        NO        NO
+30       409     6544      6540         8        NO        NO
+31       511     8176      8172         8        NO        NO
+32       584     9344      9340        16        NO        NO
+33       682    10912     10908        16        NO        NO
+34       818    13088     13084        16        NO        NO
+35      1023    16368     16364        16        NO        NO
+36      1169    18704     18700        32        NO        NO
+37      1364    21824     21820        32        NO        NO
+38      1637    26192     26188        32        NO        NO
+39      2047    32752     32748        32        NO        NO
+40      2340    37440     37436        64        NO        NO
+41      2730    43680     43676        64        NO        NO
+42      3276    52416     52412        64        NO        NO
+43      4095    65520     65516        64        NO        NO
+44      4680    74880     74876       128        NO        NO
+45      5460    87360     87356       128        NO        NO
+46      6552   104832    104828       128        NO        NO
+47      8191   131056    131051       128        NO        NO
+
+classes where repr_round(n_max) leaves the slot:  off=0 -> 20 of 48,  worst off -> 20 of 48
+first affected class (worst off): sc=28
+individual n in 1..131051 affected:  off=0 -> 735 (max overshoot 68 B),  worst off -> 115695 (max 116 B)
+
+### FIX (a): classify on repr_round(n) instead of n
+
+n values promoted to a larger class: 628 of 131051 (0.48%)
+extra bytes: total 8090432 over the swept range, max 26224 for one allocation
+worst single-allocation overhead: 25.1% at n=13073
+n values still not fitting after (a), at the worst slot offset: 0
+n values pushed off the size-class table onto the mmap path by rounding: 107
+
+### FIX (b): keep classification, pin off=0 for classes with stride >= 4096
+
+n values still not fitting under (b): 735
+classes that would lose offset cycling (the double-free trap): 20 of 48
+
+### BIG PATH (n >= MMAP_THRESHOLD): individually mmapped
+
+           n  maplen     stride   repr_rnd     gran  room_best   room_wst fits best/worst
+      131052      32     131056     131072      128     131052     131052  NO/NO
+      131053      33     135152     131072      128     135148     131068  yes/NO
+      262144      65     266224     262144      512     266220     262156  yes/yes
+     1048575     257    1052656    1048576     1024    1052652    1048588  yes/yes
+     1048576     257    1052656    1048576     2048    1052652    1048588  yes/yes
+     4194304    1025    4198384    4194304     8192    4198380    4194316  yes/yes
+     4198400    1026    4202480    4202496     8192    4202476    4198412  NO/NO
+     4198400    1026    4202480    4202496     8192    4202476    4198412  NO/NO
+    16777216    4097   16781296   16777216    32768   16781292   16777228  yes/yes
+
+sampled every 4096 B from 131052 to 64 MiB (16353 points):
+  rounded bound exceeds the MAPPING: 13312 points, max overshoot 61440 B
+  fix: size the mapping from repr_round(n). extra pages needed, by count: {1: 3041, 2: 2048, 3: 1536, 4: 1536, 5: 1024, 6: 1024, 7: 1024, 8: 1024, 9: 512, 10: 512, 11: 512, 12: 512, 13: 512, 14: 512, 15: 512, 16: 512}
+
+mallocng.md:96 says mappings are a 'page-rounded requested length'.
+  smallest page-rounded length that is NOT representable: 1025 pages = 4198400 bytes
+  of the first 16383 page counts, 13312 are not representable (81.3%)
+================================================================================================
+POSITIVE CONTROL: the ORIGINAL table with a 16-byte header must show escapes
+================================================================================================
+  escapes 90016, next-header hits 35160, of 252704 checks
+
+================================================================================================
+REPAIRED geometry, NO length fix -- the peer lane's finding
+================================================================================================
+  escapes from the SLOT:            0 of 252736
+  reaching the NEXT SLOT's HEADER:  94088
+
+  sc     stride  granule       hits
+  28       4672        8        144
+  29       5440        8        192
+  30       6544        8        276
+  31       8176        8        408
+  32       9344       16        868
+  33      10912       16       1176
+  34      13088       16       1632
+  35      16368       16       2460
+  36      18720       32       2056
+  37      21824       32       2716
+  38      26208       32       3836
+  39      32768       64       2884
+  40      37440       64       4380
+  41      43712       64       5880
+  42      52416       64       8160
+  43      65536      128       6180
+  44      74880      128       9052
+  45      87424      128      12152
+  46     104832      128      16864
+  47     131072      256      12772
+  per-class total: 94088  (hits are the sizes with n > stride - granule)
+
+================================================================================================
+REPAIRED geometry WITH the length fix (classify repr_round(n) against stride - IB)
+================================================================================================
+  escapes from the SLOT:            0 of 252488
+  reaching the NEXT SLOT's HEADER:  0
+  sizes promoted one class:         912

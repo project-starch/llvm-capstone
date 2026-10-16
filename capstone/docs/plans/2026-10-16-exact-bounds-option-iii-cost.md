@@ -382,3 +382,53 @@ expressions — but the geometry change costs +0.022% of slot space, a per-group
 double-free entropy on 12 classes, against (ii)'s side store, 496 MiB of map, 1.9x capability
 traffic and one to two bitstream cycles. On these numbers (iii) remains much the cheaper option;
 the decision does not turn on the correction.
+
+## Correction to the containment test: the slot's last 4 bytes are the NEXT slot's header
+
+**My containment test was wrong, and the peer lane caught it.** It asked whether the decoded bound
+stays inside the slot. It must stay inside the slot's *usable* region: `enframe`
+(`meta.h:196-201`) places slot `idx` at `storage + stride*idx` and ends its usable region at
+`p + stride - IB`, so the final 4 bytes of each slot are `p'[-4..-1]` for the next slot
+`p' = storage + stride*(idx+1)` — the check byte, index and offset bits that `enframe` itself
+reads. A rounded end reaching them gives an object authority over its **neighbour's allocator
+header**, which exact bounds never permitted. The correct limit is `slot + stride - IB`.
+
+**Measured on the repaired geometry** (`capstone/tests/exact-bounds-iii/nextheader.py`), at the
+lowest *and* highest surviving offset — the peer lane ran offset 0 only:
+
+| | escapes the slot | reaches the next header |
+|---|---|---|
+| original table, 16-byte header (positive control) | 90,016 | 35,160 |
+| repaired geometry, no length fix | **0** | **94,088** of 252,736 |
+| repaired geometry **with** the length fix | **0** | **0** |
+
+**The exposure is much wider than the near-capacity sizes.** At offset 0 only the sizes with
+`n > stride - granule` reach the header, which is where the figure of 912 comes from. But offset
+cycling exists precisely to move the object within its slot, and at the highest surviving offset
+`p + n` sits within one `UNIT` of the usable end for *every* request — so about 37% of all
+(request, offset) combinations in the affected classes reach the neighbour's header, not a few
+hundred sizes. The fix is the same either way; the scope is not.
+
+**The fix is the first estimate's rule, restored:** classify on `repr_round(n)` against
+`stride - IB`. **912 sizes move up one class** — which matches the peer lane's count exactly. It
+works at every offset because the slack is then computed from the rounded length and both the base
+and the length are granule multiples, so the end is exact and at or below `stride - IB`.
+
+**The per-class breakdown is not `granule - IB`.** That rule gives 1,136 and does not match its own
+total; the granule has to be taken per *request* rather than per class, because within one class
+the requests straddle a renormalisation boundary. Measured per class, summing to 912:
+
+    sc 28-31  (g=8)     4 each        sc 39  (g=64)    28   <- not 60
+    sc 32-35  (g=16)   12 each        sc 43  (g=128)   60   <- not 124
+    sc 36-38  (g=32)   28 each        sc 47  (g=256)  124   <- not 252
+    sc 40-42  (g=64)   60 each
+    sc 44-46  (g=128) 124 each
+
+The three exceptions are exactly the renormalised classes, whose repaired strides are the clean
+powers of two 32768, 65536 and 131072.
+
+**The slot's own footer stays reachable, and that is accepted.** `get_nominal_size`
+(`meta.h:159-175`) keeps `reserved` bytes between `p + n` and `end`, and the rounded bound spans
+them. No neighbour's data and no neighbour's header is reachable, and mallocng validates that
+footer at `free`, so the exposure is to the object's own allocator metadata only. This is recorded
+as a deliberate acceptance rather than an oversight.
