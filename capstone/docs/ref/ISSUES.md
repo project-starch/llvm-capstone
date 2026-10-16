@@ -8603,15 +8603,44 @@ to it. From `capstone-cc -S` of the probe and the faulting image (fault pc 0x1d2
   itself and its other three bytes lie past the one-byte bound: cause 5 at the byte's address.
 - **-O2:** GlobalMerge puts `lone_byte` into `.L_MergedGlobals` (`lone_byte = .L_MergedGlobals`, 48
   bytes, with `word32` and the others). The capability is shrunk to the merged block, the word lies
-  inside it, and the same loop succeeds. The -O2 pass is GlobalMerge's luck, not a fix.
+  inside it, and the same loop succeeds. The -O2 pass is GlobalMerge's luck, not a fix, and the
+  arithmetic is now known: the block is `.comm .L_MergedGlobals,48,16` and `lone_byte` is at
+  offset 0, so its aligned word is [B, B+4) inside a bound of [B, B+48). A merged block whose
+  size is a multiple of 4 protects every byte in it; the luck is that merging happens at all.
 
-So any object smaller than 4 bytes whose capability is bounded to it alone (a static or global
-`uint8_t`/`uint16_t` at -O0, and at any level once it is not merged, or one allocated alone) cannot
-be the target of an 8- or 16-bit atomic. The expansion cannot repair it: it only has the narrow
-capability, and nothing widens one. The fix belongs where the bound is set: an object smaller than
-4 bytes gets 4-byte alignment and padding and a bound of the containing word, at least when its
-address can reach an atomic. Not decided and not implemented. Relevant for CPython: `PyMutex` is
-one byte; a standalone static one is exposed wherever it is bounded alone.
+**The scope above was RETRACTED and widened on 2026-10-16** (it read "any object smaller than 4
+bytes whose capability is bounded to it alone"). The condition is not the object's size but
+whether the aligned word fits the bound: a sub-word atomic on byte `k` of an object bounded
+`[b, b+s)` faults iff the 4-byte-aligned word containing `b+k` is not contained in `[b, b+s)`.
+That happens whenever `s` is not a multiple of 4 and `k` lies in the object's final partial word
+— **at any object size, not only `s < 4`** — or whenever `b` is not 4-aligned, where the rounding
+reaches below `b`. A lone object smaller than 4 bytes is the special case in which every byte
+lies in the final partial word, so a byte inside a larger object is NOT safe by construction.
+Measured, with identical code but for the bound immediate: a byte at offset 4 of a 5-byte
+4-aligned array gets bound [b, b+5), cursor b+4 and a word-wide `lr.w` reading [b+4, b+8), three
+bytes past the bound; the same byte of an 8-byte array gets [b, b+8) and the access fits.
+
+Two further corrections. **Raising alignment does not fix it**: clang propagates the object's
+alignment onto the `cmpxchg`, AtomicExpand then takes its low-bits-known-zero path and skips the
+`ptrmask` (`AtomicExpandPass.cpp:861`), and the access stays word-wide because the cmpxchg granule
+is 32 — so a lone *aligned* byte still overruns, with no rounding visible in the output, which is
+harder to diagnose rather than safer. And **the `andi -4` is not the symptom**: the arms that
+carry it are the safe ones. Confirmed for globals (`CapstoneISelDAGToDAG.cpp:1717`),
+thread-locals (`CapstoneISelLowering.cpp:9901`) and stack locals, which settles the "or one
+allocated alone" clause. The heap is UNRESOLVED: the exactly-n narrowing it was first costed
+against was retired by 7901153f10fa, and the live path bounds by a musl group stride
+(`capstone/runtime/virtual/heap.c:66-69`, `:108-109`).
+
+Three fixes are costed, with a recommendation, in
+[the options doc](../plans/2026-10-16-c74-subword-atomic-bounds.md): native byte/halfword atomics
+need **no compiler work at all** (`setMinCmpXchgSizeInBits` already drops to 8 under Zabha plus
+Zacas, taking AtomicExpand's no-widening early exit), so their whole cost is RTL and a bitstream;
+padding and aligning the object needs BOTH halves to be sufficient and must answer which objects,
+which is undecidable for an escaping global; routing to the generic libcall is bound-exact for
+every storage class by construction and already linked into every application, but needs a
+pre-AtomicExpand rewrite rather than a hook and costs lock-freedom. Not decided and not
+implemented. Relevant for CPython: `PyMutex` is one byte; a standalone static one is exposed
+wherever it is bounded alone.
 
 ### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `OPEN — COMPILER, observed 2026-09-29; port workaround qualified; not reduced`
 
