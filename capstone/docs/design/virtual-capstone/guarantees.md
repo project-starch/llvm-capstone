@@ -66,24 +66,28 @@ it is not universally converted into recoverable `malloc` failure.
 
 ## Encoding work still matters
 
-QEMU uses a different 128-bit field split from deployed RTL and keeps extra
-uncompressed bounds in its physical tag shadow. The opt-in exact-bounds
-profile makes those bounds authoritative during minting and context restore
-as well as normal spill/reload; from ABI v6 the virtual runtime does not select
-it. Local mallocng instead ADJUSTS upstream slot geometry slightly -- 7 of 48
+QEMU and the RTL share the 128-bit field split, frozen on 2026-10-16
+({revnode_id 30 | perm 4 | cap_type 3 | bounds 27}: `ariane_pkg.sv` `cap_metadata_t`
+against `cap_compress.c`'s bounds at bits 0-26, `ty` 27-29, `perms` 30-33 and
+`revnode_id` 34-63). The opt-in exact-bounds profile additionally keeps uncompressed
+bounds in its physical tag shadow and makes them authoritative during minting and
+context restore as well as normal spill/reload; from ABI v6 the virtual runtime does
+not select it. Local mallocng instead ADJUSTS upstream slot geometry slightly -- 7 of 48
 size-class entries, granule-sized group headers, granule-aligned slot offsets,
 and mappings above 4 MiB aligned to their granule rather than to a page -- so
 that every object's bounds are representable and a rounded end never reaches the
 next slot's in-band header. Every Sublet derive site likewise produces only
-representable children, since under the virtual-context flag an inexact CDERIVE
-is refused with cause 29 (Q-15). What this gives up, plainly: above 4 KiB an
+representable children, because an inexact CDERIVE is refused with cause 29 in
+the compact profile, and under the RTL's virtual-context flag (Q-15). What this
+gives up, plainly: above 4 KiB an
 overflow into the granule slack, at most 1/512 of the object, is not trapped; a
 slot's own mallocng footer bytes are reachable through the rounded bound; and the
 offset cycling that backs mallocng's double-free trap is reduced on 12 size
 classes. The default profile continues to reject inexact CSMINT descriptors,
 which is now a production requirement rather than a fallback. A future
-tag-bit-only implementation must not widen authority during a round trip. Reconcile the formats and test
-representability before claiming ISA/RTL equivalence or freezing the format.
+tag-bit-only implementation must not widen authority during a round trip. The
+format is frozen; proving the two encoders bit-identical against the shared model
+still needs QEMU to take R-54's exponent renormalisation (Q-16).
 
 Other remaining interface decisions include permanent opcode/CSR allocations,
 portable context storage and resource-failure behavior. A second OS adapter
