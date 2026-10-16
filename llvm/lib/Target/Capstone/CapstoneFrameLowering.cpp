@@ -2239,9 +2239,13 @@ bool CapstoneFrameLowering::spillCalleeSavedRegisters(
       // Insert the spill to the stack frame.
       MCRegister Reg = CS.getReg();
       const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
-      TII.storeRegToStackSlot(MBB, MI, Reg, !MBB.isLiveIn(Reg),
-                              CS.getFrameIdx(), RC, TRI, Register(),
-                              MachineInstr::FrameSetup);
+      // The spill stores a capability register, C1 for ra, while a function
+      // that reads its return address (lowerRETURNADDR) has the address half,
+      // X1, as its live-in. Killing C1 here would end X1 before that read.
+      bool IsLiveIn = llvm::any_of(TRI->subregs_inclusive(Reg),
+                                   [&](MCPhysReg R) { return MBB.isLiveIn(R); });
+      TII.storeRegToStackSlot(MBB, MI, Reg, !IsLiveIn, CS.getFrameIdx(), RC,
+                              TRI, Register(), MachineInstr::FrameSetup);
     }
   };
   storeRegsToStackSlots(UnmanagedCSI);
