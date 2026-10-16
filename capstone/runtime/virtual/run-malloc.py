@@ -77,7 +77,9 @@ echo MALLOC_POPULATION_EXIT:$?
 '''
     if not a.skip_churn:
         gate += 'CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom churn\necho MALLOC_CHURN_EXIT:$?\n'
-    gate += '''CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom remap-align
+    gate += '''CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom predicate
+echo MALLOC_PREDICATE_EXIT:$?
+CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom remap-align
 echo MALLOC_REMAP_ALIGN_EXIT:$?
 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot
 echo MALLOC_HOT_EXIT:$?
@@ -114,6 +116,10 @@ echo VIRTUAL_STAGED_DONE
         # asserted -- mremap returns page-aligned addresses, so the copy is the expected path and
         # the number is the input to whether an aligned-remap ABI change is worth making.
         'remap_align_contents_survive': 'MALLOC_REMAP_ALIGN_EXIT:0\n' in log,
+        # A READING, not a pass/fail: both outcomes are informative, so the check only asserts
+        # that the arm reported at all. Reading it as a verdict would be the error it exists to fix.
+        'predicate_arms_reported': (log.count('MALLOC_PRED pow2_above=') == 1 and
+                                    log.count('MALLOC_PRED nonpow2_below=') == 1),
     }
     remap_counts = [int(n) for n in re.findall(r'MALLOC_REMAP_UNALIGNED (\d+)', log)]
     checks['remap_align_reported'] = len(remap_counts) == 1

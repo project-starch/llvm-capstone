@@ -208,6 +208,33 @@ static void remap_align(void)
     free(q);
 }
 
+#ifdef __CAPSTONE_PURECAP__
+extern unsigned long __capstone_malloc_map_ok[2];
+extern unsigned long __capstone_malloc_map_admitted;
+#endif
+/* Separates is_power_of_2(bytes) from "bytes > 16384" as the module's arena predicate. Both score
+ * identically on every size measured so far, because each one falls the same side of both. These
+ * two invert the predictions. No require(): a failure here is a READING, not a fault, and both
+ * readings must survive into one run. */
+static void predicate(void)
+{
+    /* group needs 32768 -- a power of two, ABOVE 16384 */
+    void *a = malloc(9341);
+    printf("MALLOC_PRED pow2_above=%s\n", a ? "ALLOCATED" : "NULL");
+    fflush(stdout);
+    if (a) { memset(a, 0x11, 9341); free(a); }
+    /* group needs 12288 -- NOT a power of two, BELOW 16384 */
+    void *b = malloc(2029);
+    printf("MALLOC_PRED nonpow2_below=%s\n", b ? "ALLOCATED" : "NULL");
+    fflush(stdout);
+    if (b) { memset(b, 0x22, 2029); free(b); }
+#ifdef __CAPSTONE_PURECAP__
+    printf("MALLOC_PRED admitted=%lu last_ok_bytes=%lu last_ok_align=%lu\n",
+           __capstone_malloc_map_admitted, __capstone_malloc_map_ok[0],
+           __capstone_malloc_map_ok[1]);
+#endif
+    fflush(stdout);
+}
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
@@ -216,6 +243,7 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "population")) { population(); return 0; }
     if (!strcmp(mode, "churn")) { churn(); return 0; }
     if (!strcmp(mode, "remap-align")) { remap_align(); return 0; }
+    if (!strcmp(mode, "predicate")) { predicate(); return 0; }
     if (!strcmp(mode, "ok")) { basic(); tagged(); return 0; }
     if (!strcmp(mode, "reuse-stale") || !strcmp(mode, "reuse-free")) {
         /* Let upstream offset cycling choose reuse; never force its policy. */

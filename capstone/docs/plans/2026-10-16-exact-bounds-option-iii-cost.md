@@ -1820,3 +1820,77 @@ turning the profile on disables the very gate whose behaviour is in question:
 - and **record `last_bytes` on the SUCCESSFUL acquire too**, not only in the failure branch
   (`heap.c:143-146`). That is the one empirical hole: nothing currently shows a non-power-of-two
   mapping being *admitted* while the gate is on.
+
+
+## The predicate is settled by MEASUREMENT: it is `is_power_of_2`, not a size threshold
+
+Domain `a20249b9d909b5ec`, exact bounds OFF (the profile must stay off — turning it on disables the
+gate under test). Two requests chosen so the two surviving predicates make **opposite** calls, and
+neither is on the single-slot path, so the Cause A fix cannot confound them:
+
+| request | group needs | `is_power_of_2` predicts | `needed > 16384` predicts | MEASURED |
+|---|---|---|---|---|
+| `malloc(9341)` | 32768 — a power of two, **above** 16384 | ALLOCATED | NULL | **ALLOCATED** |
+| `malloc(2029)` | 12288 — **not** a power of two, below 16384 | NULL | ALLOCATED | **NULL** |
+
+    MALLOC_PRED pow2_above=ALLOCATED
+    MALLOC_PRED nonpow2_below=NULL
+    MALLOC_PRED admitted=2 last_ok_bytes=32768 last_ok_align=4096
+    MALLOC_PREDICATE_EXIT:0
+
+**2 of 2 for `is_power_of_2`; 0 of 2 for the threshold.** My `needed > 16384` is now refuted by
+measurement as well as by source, and `capstone_vm.c:466` is confirmed as the operative condition
+rather than merely the plausible one.
+
+`last_ok_bytes=32768` also closes the empirical hole the audit identified: nothing until now showed
+a mapping **above** the old threshold being *admitted* while the gate was armed, because the
+exact-bounds-ON arm structurally cannot show it. Recording the success path, not only the refusal,
+is what produced it — one array write.
+
+The arm is a **reading, not a verdict**: `predicate_arms_reported` asserts only that both lines
+appeared. Scoring it pass/fail would reintroduce exactly the error it was built to remove.
+
+## Revision: what is now established, and what is NOT
+
+**Established, with the launcher excluded and the predicate measured:**
+`capstone_vm.c:466`'s `!is_power_of_2(r->bytes)` is the first true disjunct for every measured
+refusal — errno 22 at 28672, 200704, 1126400 and 6307840 — and the heap meets that gate only
+because `exec.c:266` sets `bytes = visible` for the v6 local-malloc heap, where every other path
+grants a naturally aligned power of two and passes.
+
+**NOT established, and deliberately out of the proposed fix:** why heap growth never completes.
+`CAPSTONE_VM_REMAP_OK` is 0 in **every** arm including exact-bounds-ON, with the instrument proven
+live, and `real_linux_mremap_growth_and_shrink` is False in all three arms. So `remap_begin`'s
+`!c->exact_bounds` refusal has no positive control and is not shown to fire. **Relaxing it is not
+justified by anything measured**, and there is a second, unidentified reason growth does not
+complete. That is its own investigation, and the launcher growth fix in `09e1896f6bb3` remains
+latent until it is done.
+
+**So the fix narrows to one gate:** `add()`'s exact-bounds-off branch uses
+`capstone_repr_ok(r->address, r->bytes)` instead of power-of-two-plus-natural-alignment, keeping the
+module's page checks, the region and total limits and the overlap test. `remap_begin` is left alone.
+
+`representable.h` is shared rather than duplicated — it has no `#include` and uses only
+`__builtin_clzl`, `_Static_assert` and `unsigned long`, all valid in kernel C — copied into the
+module build dir by `build-adapter.sh` beside `cap_rev_table_abi.h`, from the same tree being built,
+so a kit cannot pair a module and an SDK across revisions and there is no second predicate that
+could drift from the silicon encoder.
+
+**Prediction for the add()-only change, to be pre-registered before it runs:**
+
+| | predicted |
+|---|---|
+| the five `MALLOC_FAIL` allocation markers | **clear** |
+| the board lane's NULLs at 6144, 34816, 35840 | **clear** |
+| `malloc(2029)` (group 12288, non-pow2) | **ALLOCATED**, where it is NULL today |
+| `malloc(9341)` (group 32768, pow2) | still ALLOCATED |
+| `heap growth/zero`, `real_linux_mremap_growth_and_shrink` | **still FAIL** — not addressed |
+| `bounds` | still FAIL: the request rounding puts `+200003` inside the object |
+
+The sixth row is the point of stating the prediction: a fix that cleared the allocation failures and
+left growth broken would otherwise read as a partial success, when it is exactly what the evidence
+predicts.
+
+**This is not landed.** The same `capstone_vm.c` builds the board module and the board runs this
+profile with exact bounds off, so relaxing a capability-bounds check there changes what the silicon
+enforces, not only what QEMU does.
