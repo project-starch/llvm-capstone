@@ -38,6 +38,17 @@ contract binary passes normal execution, stale-access denial (cause 25,
 exit 139), and module cleanup.
 Allocator migration, full workload measurements and RTL remain separate.
 
+Re-measured on 2026-10-16 at capstone-qemu `virtual-capstone` d35af47b163c, by the RTL lane for its directed
+tests (`docs/plans/2026-10-16-virtual-profile-on-silicon.md`). The suites have grown since the counts above:
+- `sublet-lifetimes`: 119/119, now including the physical-profile cases;
+- `virtual-capstone-m1`: 69/69;
+- `virtual-capstone-runtime`: 69/69, and `exact-bounds.sh` 4/4;
+- `capstone-x0-writes`: 24/24;
+- `capstone-untagged-arith`: 6/6.
+dev's `runtime/tests/sublet-lifetimes` now has 20 wrapper checks (two optimisation levels, its variants, and the
+flat and paged layouts), not eight. Its 20/20 ran on an SDK from 2026-10-10, not a fresh build. Only `exact-bounds.sh`
+and one `sublet-lifetimes` case run with `x-capstone-exact-bounds=true`.
+
 ## Repositories and profiles
 
 | Component | Integration/review location |

@@ -7,6 +7,18 @@ wave 5 the same day. This answers the first of the three questions in the RTL la
 [`virtual-capstone-rtl-feasibility.md`](virtual-capstone-rtl-feasibility.md) (3fe4541c1299, 2026-10-10). That
 audit's verdict is "partly, and not as a port". Its item list (A-H) and its order of work are the starting point here.
 
+**The target, as the lead put it on 2026-10-16: the final, fully virtual Capstone/Sublet bitstream.** It is reached
+through intermediate bitstreams, each synthesised and then flashed on the lead's word. It carries:
+- B, translation in C mode;
+- A, the per-context lifetime table, flat and paged;
+- C', exact bounds as decided below;
+- D, `CSRUNV`, `CSMINT`/`CSRETIRE` and the event kinds;
+- E, the policy list;
+- H, the collection flush;
+- the Sublet instructions as the virtual profile defines them (Q-17, Q-18).
+The physical profile stays underneath. Removing it would cost work, not save it, and it carries every recorded
+silicon result.
+
 Today's bitstream, `caplifive_sublet_d93a8d66b`, implements the physical profile plus CDERIVE/CREVOKE. Every silicon
 result so far is a physical-profile result: the bug corpus was rebuilt for the silicon ABI, not run from its virtual
 images ([`2026-10-15-bug-corpus-on-fpga.md`](2026-10-15-bug-corpus-on-fpga.md) §1).
@@ -74,18 +86,35 @@ the runtime rather than the hardware, so it is not the full profile. That leaves
 - **(i)** a wider capability format: two granules per capability;
 - **(ii)** a side store of 24 bytes per capability-bearing granule.
 
-**The choice is the lead's. Second deliverable: what the lead decides it from.** A costed comparison of (i) and (ii):
-- what each changes, unit by unit: LSU, write buffer, forwarding, the D-cache metadata lane, the tag region, the
-  rev-node unit;
-- what each changes in the compiler and runtime (pointer size, for (i));
-- memory traffic per capability load and store;
-- which cones on the standing UNOPTFLAT list each one touches;
-- an estimate in bitstream cycles;
-- a recommendation.
-
-With it, a proposal for the format freeze: 27 or 28 bounds bits, 31 or 30 node-id bits, generations or none. The
-RTL's numbers have been fixed since April, and QEMU's can still move. Who owns the model's semantics is the lead's to
-name. Propose an owner.
+**Decided 2026-10-16.** The lead delegated the decision to the lanes, and it rests on the RTL lane's costed comparison
+[`2026-10-16-exact-bounds-options.md`](2026-10-16-exact-bounds-options.md) (955851735f4f) and the compiler lane's
+measurements:
+- **(ii), the side store.** It is maintained by hardware alone and authoritative under the virtual-context flag. Each
+  granule has a 16-byte {base, end} entry, with an L1 bounds array beside the tag array.
+  - Both options cost the same in bitstream cycles (3) and in traffic: 5 transactions per capability access against 3
+    today.
+  - (i) would also double `sizeof(void*)`. The compiler lane measured 27 instructions per intcap add against 6, and
+    3-5 weeks to audit the ports' 16-byte assumptions. That amounts to re-porting the whole virtual stack.
+  - (ii) leaves the compiler, the runtime and every acceptance image unchanged, and it is the reference QEMU's model,
+    whose store also keeps the cursor (24 bytes per granule).
+- **Dense provisioning, not a per-page directory.** A directory adds a second dependent walk on the path that carries
+  the WNS. The cost of dense is RAM:
+  - the board is a Genesys2 with 1 GiB of DDR (`ariane_soc_pkg.sv:50`);
+  - a 1:1 bounds region leaves about 0.5 GiB for data, beside the tag region and the rev-node pool.
+  The RTL lane writes down the memory map, and the board lane confirms that the acceptance set fits it. If it does
+  not, the directory is reopened.
+- **The format freeze, as the RTL lane proposed:**
+  - the in-memory word as both sides have it today: {revnode_id 30 | perm 4 | cap_type 3 | bounds 27};
+  - 27 bounds bits;
+  - 30 node bits, which mean a flat index under the virtual-context flag;
+  - no generation bits in the word on either profile;
+  - the RTL's compress_bounds with renormalisation as the reference encoder until QEMU lands Q-16's block. After
+    that the two are proven bit-identical by the shared model;
+  - the exact pair {base, end} without the cursor;
+  - QEMU's 16-byte record as the virtual table's layout.
+- **Owner of the model's semantics: the helper lane**, which owns capstone-qemu's `virtual-capstone` branch and the
+  guide. A semantic change lands in QEMU, the guide and a Q-entry before the RTL follows. The RTL lane owns
+  conformance: the Q-entries and the directed tests that read each one on both sides.
 
 ## Work that does not wait for the decision
 
@@ -131,7 +160,8 @@ The audit estimated four to five bitstream cycles, plus the format decision. Opt
 | item | owner | state |
 |---|---|---|
 | re-baseline addendum | RTL lane | DONE 2026-10-16: `virtual-capstone-rtl-feasibility.md` "Addendum, 2026-10-16"; Q-17 and Q-18 filed; reference pinned at d35af47b163c |
-| exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`; the lead decides from it |
+| exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`. DECIDED the same day: (ii) dense, the format frozen as proposed, the helper lane owning the semantics |
+| C' exact bounds: the shared core widening, then the side store and the L1 bounds array; first the memory map for 1 GiB | RTL lane | to do |
 | B translation in C mode | RTL lane | IN SIMULATION 2026-10-16: capstone-ariane branch `virtual-profile` 31c8ebe17 (the flag csupctl.virt, the two translation enables, the MMU permission privilege, the consuming-LDC store check; vb-trans.S with six pre-registered arms and its flag-off control); lint by name, the two arms, the old-tree control and the flag-off sweep are the gates before any synthesis request |
 | A lifetime table | RTL lane | to do |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
