@@ -1309,6 +1309,21 @@ shape: DELIN clears the node's `linear` flag (`cap_rev_delin`), and a node named
 has no derived children unless a copy exists. Whether MREV should refuse such a node is undecided and
 untested.
 
+**Read on silicon, 2026-10-16 (board lane, bug corpus sets 3-5).** The RTL's outward rounding is what the board does.
+- Carved case 00's group over a 35,840-byte block is an inexact CDERIVE child. Its fixed run prints `base_eq=0` on
+  `caplifive_sublet_d93a8d66b`, exactly as predicted (`bug-corpora/silicon-runs/2026-10-16-carved`).
+- **The child's CURSOR stays at the requested start while its BASE rounds down.** The RTL builds [cursor, cursor+size)
+  and compresses every capability result at writeback (`ex_stage.sv:1515` / `:1528` at d93a8d66b), so the rounding is
+  immediate.
+- Code that offsets from the parent's base is therefore off by the rounding. That includes `capstone_cap_derive`
+  itself and memcached patch 0006's `slabs_take_back`. Patch 0006 faulted in `do_slabs_free` until level0 placed
+  4 KiB+ blocks on their granule (dev `06f0b29f0463`), so that only tops round.
+- To predict silicon from QEMU, use capstone-qemu `silicon/cderive-round` (ce1be0c642): d35af47b163c plus R-54's
+  renormalisation, plus `CAPSTONE_CDERIVE_ROUND=1`, under which an inexact child takes its decoded bounds instead of 29.
+  Default off; the refusal described above is unchanged without the switch.
+  - Its codec matches the RTL lane's `bounds-model.py` `cderive_child` on 200,018 random triples, where d35af47's
+    misses 43,591, every one an R-54 shape.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
