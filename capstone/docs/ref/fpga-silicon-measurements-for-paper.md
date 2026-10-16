@@ -6391,3 +6391,20 @@ Two arms in one boot (16:41-16:53): firmware 9dc96b2345000482, 30 runs, each end
   arithmetic on the untagged child. Silicon keeps the revoked child tagged (ISSUES Q-11), so it faults at the first read
   through it, the case's other declared site.
 - The managers are PostgreSQL 17.0's own aset, mcxt, generation, slab and bump.
+
+## The SQLite 3.22.0 engine-repros control arm on the Sublet bitstream: every cell as on the emulator and as on R-43 v2, with the corrected input (caplifive_sublet_d93a8d66b, 2026-10-16)
+Three boots on the classic line (firmware 5db66334e5404751, 662157e243dc2c77, c6cde9ac856624d5).
+- Folder: `tests/rtl-smoke/repro322-silicon-2026-10-16/`. Pre-registered at lane 423d3a56d0bb (boots 1-2) and
+  40256f289171 (boot 3). RESULTS.md and `results/` there.
+- It repeats the 2026-10-01 section above on the new bitstream. The images are rebuilt from the adapted input that
+  carries the sorter's 16-byte alignment (7fc92e19).
+
+| | cells | silicon |
+|---|---|---|
+| returning | base322, wschema, blobwrite, mem5design, blobclose, jsonstatic, jsonroot | every one returned, its output identical to the emulator's line for line |
+| FAULT | backupattach, detachtrig | wedged, mcause 24, each at the emulator's instruction (`sqlite3BtreeUpdateMeta+0x48`, `sqlite3DropTriggerPtr+0x154`), tval 0 |
+| boot 3 | blobclose03 (corpus case 03), the corpus's uaf-mem5 and bounds-mem5 controls, the review branch's case 02 | every one returned, as on the emulator |
+
+- Both FAULT cells are null-pointer faults of the unprotected control arm, not detections.
+- The refusal record read EMPTY at both wedges. It was not readable in boot 3, which had no wedge.
+- Lookaside is off in these images (`sqlite3Config` szLookaside 0, nLookaside 0), and memsys5's heap is 256 KiB.
