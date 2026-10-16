@@ -1156,3 +1156,49 @@ Re-verified on a tree built from the new chain: all nine patches reverse-apply i
 **Not parallelised with subagents, deliberately.** CLAUDE.md keeps "compiler/codegen and
 capability-ABI changes" in the main session, and changing how an allocator derives a capability is
 exactly that. The read-only half — bounding each site's maximum length — was delegated and is done.
+
+## The SDK build: the 10-10 toolchain cannot do it, and musl cannot reach the runtime headers
+
+Two findings from the first SDK attempt, both from the build's own controls rather than from reading.
+
+### The 2026-10-10 toolchain is a dead end for the SDK
+
+It is the only build on this machine with `capstone-image-gp` (`bd372e25f5fb`), so it looked like the
+fast path. It **ICEs on 101 files** — every one under `src/math/` or `src/complex/` —
+
+    clang: .../LegalizeDAG.cpp:1352: ... Assertion `(Res.getValueType() == Node->getValueType(0)
+    || Node->getValueType(0) == MVT::Glue) && "Type mismatch for custom legalized operation"' failed.
+
+triggered by the virtual profile's `+f`/`+d`/`lp64` flags, not by the sources: `src/math/trunc.c`
+compiles fine on all three available builds with the base flags. The survey expects **1361** files
+to compile for the virtual profile and got **1254**. The arithmetic closes exactly:
+**1361 − 1254 = 107 = the 101 ICEs + the 6 mallocng files** that were failing for my own reason
+below. So with my reason fixed the shortfall is precisely the ICEs, and **no SDK can be built with
+that compiler**. The dev-current build is the only path; it is running.
+
+### musl cannot include the runtime's headers, so the granule is deliberately duplicated
+
+My `meta.h` change included `<capstone/representable.h>`. The survey compiles musl with
+`-nostdinc` and **only musl's own include directories** (`survey-musl-capstone.py:91-99`), so that
+header is unreachable, and widening the flag set would let musl reach arbitrary runtime headers.
+
+The established bridge is the arch overlay: `ports/musl-capstone/arch-capstone64/malloc_capstone.h`,
+a self-contained declaration header that `prepare-musl-capstone.sh` copies into
+`arch/capstone64/`. `enframe` needs the granule on **every allocation**, so a cross-TU call would
+cost one per `malloc`; the arithmetic is therefore defined **inline there**, duplicating
+`representable.h`.
+
+**Two copies can drift, so a test makes that safe rather than a comment claiming it is.**
+`capstone/tests/exact-bounds-iii/granule-agree-test.c` compiles both headers and compares them over
+**1,048,772 lengths** — every value to 1 MiB, plus every power of two to 2^40 with its neighbours
+and granule boundaries: **0 disagreements**. Negative-tested by perturbing one copy's exponent by
+one, which fails at 4096 (`granule 8 vs 16`).
+
+### A control worth naming, because it did its job
+
+`survey-musl-capstone.py:71` and `:253`: `src/malloc/mallocng/malloc.c` is `CONTROL_MUST_FAIL` in
+the non-virtual profile and must **PASS** in the virtual one — a two-sided control on the harness
+itself. It is what caught my breakage, with the right words: *"The harness is not measuring what it
+claims. If this is an intended improvement, retire the control deliberately."* My failure was two
+things, neither of them the code: my private musl tree never had the `arch-capstone64/` overlay
+applied (so `malloc_capstone.h` was absent), and then the unreachable runtime header above.

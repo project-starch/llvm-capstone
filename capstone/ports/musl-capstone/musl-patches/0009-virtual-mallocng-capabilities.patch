@@ -23,7 +23,6 @@ check-mallocng-policy.py pins the seven entries and their values and refuses any
 These live here rather than in a sibling patch because build-sdk.sh checks currency by requiring
 every patch to reverse-apply INDEPENDENTLY, and a patch editing the lines this one adds makes this
 one un-reversible -- the SDK build then refuses with "musl source is not current".
-
 --- a/src/malloc/mallocng/aligned_alloc.c
 +++ b/src/malloc/mallocng/aligned_alloc.c
 @@ -29,7 +29,10 @@
@@ -315,17 +314,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  }
 --- a/src/malloc/mallocng/meta.h
 +++ b/src/malloc/mallocng/meta.h
-@@ -5,6 +5,9 @@
- #include <errno.h>
- #include <limits.h>
- #include "glue.h"
-+#ifdef CAPSTONE_MUSL_MALLOC
-+#include <capstone/representable.h>
-+#endif
- 
- __attribute__((__visibility__("hidden")))
- extern const uint16_t size_classes[];
-@@ -15,9 +18,17 @@
+@@ -15,9 +15,17 @@
  #define IB 4
  
  struct group {
@@ -344,7 +333,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	unsigned char storage[];
  };
  
-@@ -29,8 +40,16 @@
+@@ -29,8 +37,16 @@
  	uintptr_t freeable:1;
  	uintptr_t sizeclass:6;
  	uintptr_t maplen:8*sizeof(uintptr_t)-12;
@@ -361,7 +350,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  struct meta_area {
  	uint64_t check;
  	struct meta_area *next;
-@@ -121,17 +140,37 @@
+@@ -121,17 +137,37 @@
  	return m->avail_mask = mask & act;
  }
  
@@ -402,7 +391,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  		assert(!offset);
  		offset = *(uint32_t *)(p - 8);
  		assert(offset > 0xffff);
-@@ -154,11 +193,12 @@
+@@ -154,11 +190,12 @@
  		assert(offset <= meta->maplen*4096UL/UNIT - 1);
  	}
  	return (struct meta *)meta;
@@ -416,14 +405,14 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	if (reserved >= 5) {
  		assert(reserved == 5);
  		reserved = *(const uint32_t *)(end-4);
-@@ -190,19 +230,51 @@
+@@ -190,19 +227,51 @@
  		end[-5] = 0;
  		reserved = 5;
  	}
 -	p[-3] = (p[-3]&31) + (reserved<<5);
 +	cap_prefix(p)[1] = (cap_prefix(p)[1]&31) + (reserved<<5);
-+}
-+
+ }
+ 
 +#ifdef CAPSTONE_MUSL_MALLOC
 +/* Option (iii): a slot's base must be a multiple of its own bounds granule, or the capability the
 + * runtime derives over an object in it is not exactly representable -- the compressed encoder
@@ -440,7 +429,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
 + */
 +static inline size_t cap_hdr_pad(size_t stride)
 +{
-+	size_t gr = capstone_repr_granule(stride > IB ? stride - IB : 1);
++	size_t gr = __capstone_malloc_granule(stride > IB ? stride - IB : 1);
 +	return gr > UNIT ? gr - UNIT : 0;
 +}
 +static inline int cap_hdr_fits(size_t size, int cnt, size_t pagesize)
@@ -448,11 +437,11 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
 +	size_t needed = size*(size_t)cnt + UNIT;
 +	size_t slack = -needed & (pagesize-1);
 +	return slack >= cap_hdr_pad(size);
- }
++}
 +#else
 +#define cap_hdr_pad(stride) ((size_t)0)
 +#endif
- 
++
  static inline void *enframe(struct meta *g, int idx, size_t n, int ctr)
  {
  	size_t stride = get_stride(g);
@@ -472,7 +461,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	if (off > slack) {
  		size_t m = slack;
  		m |= m>>1; m |= m>>2; m |= m>>4;
-@@ -210,19 +282,43 @@
+@@ -210,19 +279,43 @@
  		if (off > slack) off -= slack+1;
  		assert(off <= slack);
  	}
@@ -487,7 +476,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
 +	 * cycle keeps 1 offset in granule/UNIT. The slot's own base is granule-aligned by the
 +	 * seven raised stride entries plus the group's granule-sized header. */
 +	{
-+		size_t cap_g = capstone_repr_granule(n);
++		size_t cap_g = __capstone_malloc_granule(n);
 +		if (cap_g > UNIT) {
 +			uintptr_t want = (uintptr_t)p + UNIT*(size_t)off;
 +			size_t back = (size_t)(want & (cap_g - 1));
