@@ -16,6 +16,9 @@
 #include <asm/pgtable.h>
 #include "wire.h"
 #include "cap_rev_table_abi.h"
+/* One rule, shared with the launcher and the allocator. No #include of its own and only
+ * __builtin_clzl and unsigned long, so it is valid kernel C. */
+#include "representable.h"
 _Static_assert(CV_NODE_RESERVE == CAP_REV_TABLE_RESERVE, "processor reserve ABI");
 
 struct arena {
@@ -463,7 +466,22 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     long n;
     if (!r->bytes || r->bytes > CV_MAX_REGION_BYTES ||
         ((r->address | r->bytes) & (PAGE_SIZE - 1)) ||
-        (!c->exact_bounds && (!is_power_of_2(r->bytes) || (r->address & (r->bytes - 1)))) ||
+        /* With exact bounds off the encoder quantises both edges, so an arena must be exactly
+         * REPRESENTABLE. This used to demand a naturally aligned power of two, which is a much
+         * smaller subset: it refused 371,780 of 400,000 of the allocator's real mapping shapes
+         * (admitting 7.1%), and for the power-of-two ones the outcome depended on where mmap
+         * landed, so part of the failure was nondeterministic across boots.
+         *
+         * The predicate is now the encoder's own condition, audited against QEMU's encoder
+         * directly (cap_compress.c:40-57: E = msb(len) - 12 floored at 12, both edges quantised
+         * by 8 << E) with 0 disagreements over 300,004 lengths, and cross-checked against the RTL
+         * model by tests/exact-bounds-iii/repr-cross-check.py.
+         *
+         * The REFUSAL stays. QEMU's encoder has no refusal path -- it truncates the base down and
+         * rounds the end up, silently widening the capability -- and that silent widening is the
+         * hole exact bounds exists to close. So the model is followed for WHAT is representable,
+         * not for what to do when a range is not. */
+        (!c->exact_bounds && !capstone_repr_ok(r->address, r->bytes)) ||
         r->address > ULONG_MAX - r->bytes ||
         !access_ok((void __user *)r->address, r->bytes) ||
         r->permissions > 7 || r->linear > 1 || r->reg > 31 ||

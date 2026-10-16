@@ -2242,3 +2242,82 @@ design call.
 **What would make it safe to take, if the answer is A:** the board lane has the prediction
 registered row by row and rebuilds both modules from the revision, so a wrong relaxation shows up
 as a failed row rather than as silence.
+
+
+## DECIDED: Option A, after auditing the predicate against QEMU's own encoder
+
+The lead delegated the choice with a steer — *"maybe like in current qemu model"* — and asked for an
+audit first. The audit changes how the steer reads, so it is recorded before the change.
+
+### The audit: what QEMU's model actually does
+
+**Its representability rule is identical to ours.** Read from `cap_compress.c:40-57`:
+`lz = msb(len)` floored at 12, `E = lz - 12`, `B = (base >> E) & ~7`, `T` likewise with `+8` when
+the end has bits below `1 << (E+3)`. So the quantum on **both** edges is `8 << E` = 2^(msb(len)-9),
+with an exact branch below 4 KiB — which is exactly `capstone_repr_granule`. Compared over 300,004
+lengths: **0 disagreements**, and the positive control fires (a granule off by one power of two
+disagrees on 295,904 of 299,999). This is a *new* check: `repr-cross-check.py` pins the header to
+the **RTL** model, and nothing had pinned it to QEMU.
+
+**But QEMU has no refusal path.** `B = (base >> E) & ~7` truncates the base **down** and `T += 8`
+rounds the end **up**, so an unrepresentable range is silently **widened** — the capability gains
+authority below the object. That is the hole exact bounds exists to close.
+
+**So the steer resolves cleanly, and not the way it first sounds:** follow QEMU's model for *what
+is representable*, and not for *what to do when a range is not*. Copying its behaviour would
+reintroduce silent widening.
+
+*(An earlier attempt at this audit built a compress/uncompress round-trip oracle and reported 4051
+then 6788 disagreements. Both were artefacts of my transcription — first missing that `B` is packed
+into 14 bits and `T` into 12, then a wrong `msb`/`carry_out` in `cap_uncompress`, which I had
+transcribed from line 100 without its preceding lines. The encode path is short and unambiguous and
+is all the decision needs, so the round-trip model was discarded rather than debugged further. Its
+numbers are not evidence of anything.)*
+
+### The change
+
+`capstone_vm.c` `add()`, exact-bounds-off branch:
+`!is_power_of_2(r->bytes) || (r->address & (r->bytes - 1))` becomes
+`!capstone_repr_ok(r->address, r->bytes)`. `representable.h` is **shared** into the module build by
+`build-adapter.sh`, beside `cap_rev_table_abi.h` and from the tree being built, so the module, the
+launcher's `grant()` and the allocator agree on one oracle-checked rule and a kit cannot pair a
+module and an SDK across revisions. Verified that the header compiles `-ffreestanding -nostdinc
+-Werror`, which is how the module will see it. `is_power_of_2` now has 0 uses in the module.
+
+**The refusal stays**, which was the condition that mattered: an unrepresentable arena is still
+refused, and the launcher prints `CAPSTONE_VM_ADD_REFUSED` with the base, size, errno and both
+disjuncts on that path unconditionally.
+
+### Why this is a loosening of a bounds check, and what bounds it
+
+The alignment half is **not** dropped — it becomes granule alignment instead of natural alignment to
+the size, and it still binds wherever the granule exceeds a page, i.e. at and above 4 MiB. Below
+that the granule is small (16 for an 8192-byte mapping), so every page-aligned base satisfies it —
+**which is precisely why the change removes the boot-to-boot nondeterminism** rather than merely
+widening the accepted set.
+
+`module-arena-test.c` states that as cases rather than as a claim: the four shapes
+`grant-repr-test.c` guards stay refused, the launcher's own arena shapes still pass, nine real
+mallocng mapping sizes are newly admitted *and* asserted to have been refused by the old rule, and
+the two halves are separated by a case each. Three negative controls, all firing: dropping the
+alignment half gives 4 failures, dropping the length half 1, reverting to the old power-of-two rule
+11.
+
+Two defects in my own test found while controlling it, both recorded in it: an assertion that 8192
+at `0x40001000` is refused (wrong — `granule(8192)` is 16, so every page-aligned base satisfies it),
+and a missing case for an *aligned* base with a non-granule-multiple length, without which a
+base-only predicate passed the whole test. A third was in the control harness: one arm failed to
+compile and, because I had redirected stderr and not checked the status, ran a **stale binary** and
+reported a pass.
+
+### What is NOT done here, and why it is not an assumption
+
+**The module is not built or run.** It needs a prepared kernel tree, and there is none on this host:
+the module's own `.capstone_vm.o.cmd` records only paths relative to the make's `-C` directory, the
+session transcript has no literal `KERNEL_BUILD`, and no `arch/riscv/include/generated` exists under
+any of the scratch, offload or buildroot build directories that were searched. Tried and recorded, not
+assumed. The board lane builds both modules and has the prediction registered row by row, so the
+verification happens there.
+
+**The landing commit must state** that the board module's enforcement changes from "naturally
+aligned power of two" to "representable", because the same `capstone_vm.c` builds both profiles.
