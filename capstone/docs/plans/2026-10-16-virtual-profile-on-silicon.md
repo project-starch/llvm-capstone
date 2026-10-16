@@ -141,6 +141,52 @@ suites, before it goes to synthesis:
 
 The audit estimated four to five bitstream cycles, plus the format decision. Options (i) and (ii) add to that.
 
+## The 1 GiB memory map with a dense bounds region (the first C' item, RTL lane, 2026-10-16)
+
+Today (every bitstream since April, `ariane_pkg.sv:602-608`, `wt_axi_adapter.sv:161-162`): data `[0x8000_0000,
+0xBC2D_2D2D)` = 963 MiB; the tag region at one byte per 16-byte granule, `tag = 0xBC2D_2D2D + ((paddr - 0x8000_0000)
+>> 4)`, which ends exactly at `0xBFF0_0000`; the rev-node pool `[0xBFF0_0000, 0xC000_0000)` = 1 MiB (65,536 records
+x 16 B). The Genesys2 DDR is 1 GiB at `0x8000_0000`.
+
+A dense {base 64 | end 64} pair per granule is a region the size of the data it covers, so with D bytes of data the
+regions sum to D + D/16 + D + 1 MiB = 1 GiB, D = 496 MiB. Proposed map, every boundary a multiple of 1 MiB and the
+pool unmoved:
+
+| region | range | size | addressing |
+|---|---|---|---|
+| data (firmware, Linux, initramfs, the virtual tables at srevroot, every image) | `[0x8000_0000, 0x9F00_0000)` | 496 MiB | as today |
+| tags (1 B per granule) | `[0x9F00_0000, 0xA0F0_0000)` | 31 MiB | `0x9F00_0000 + ((paddr - 0x8000_0000) >> 4)` |
+| bounds (16 B per granule, authoritative under the virtual-context flag) | `[0xA0F0_0000, 0xBFF0_0000)` | 496 MiB | `0xA0F0_0000 + (paddr - 0x8000_0000)` |
+| rev-node pool (the physical profile's table) | `[0xBFF0_0000, 0xC000_0000)` | 1 MiB | unchanged |
+
+The sum is `0x1F00_0000 + 0x1F0_0000 + 0x1F00_0000 + 0x10_0000 = 0x4000_0000`. `CAP_TAG_MEM_BASE` moves from
+`0xBC2D_2D2D` to `0x9F00_0000` and `MEMORY_TOP` with it; a new `CAP_BOUNDS_MEM_BASE = 0xA0F0_0000` joins them, and
+the three are the only constants the adapter needs. Costs to state plainly: the physical profile on the final
+bitstream also sees 496 MiB of data, not 963, because one bitstream carries both profiles; firmware, the device tree
+and the test harness's memory size follow the new top. **The board lane confirms the acceptance set fits 496 MiB**
+(the current initramfs is ~28 MB; the virtual tables grow with the number of live nodes); if it does not, the
+directory comes back and costs a dependent walk on the WNS path. The bounds region is written only by capability
+stores and read only by capability loads, so an image that never stores a capability into a page never touches
+its slice; dense provisioning costs RAM, not traffic.
+
+## The bitstream sequence (RTL lane's proposal, 2026-10-16)
+
+Batched so that each bitstream answers questions the previous one cannot, and no reflash is spent on an observation
+the simulation already gives:
+1. **B + Q-17**: the virtual-context flag with translation and the resumable page fault (in simulation on
+   `virtual-profile` now), the CDERIVE check-order fix (one Anvil reorder), and E's untagged-arithmetic rule (#25)
+   if its flu change lints at baseline. Reads on the board: the six vb-trans arms as bare JTAG arms, then Tier 1's
+   launcher smoke without exact bounds (the launcher refuses, which is itself the reading until C').
+2. **C' + A flat**: the common core widening (exact bounds in the register lanes), the side store with its L1
+   array and adapter leg, the new memory map, and the srevroot table in its flat form with the flat 30-bit id.
+   Reads: exact-bounds.sh's four cases as arms, Tier 1 with the launcher running, the first virtual runtime suite.
+3. **D + A paged + E + H + Q-18**: CSRUNV with its frame, actions and kinds, FP state per context, the paged table,
+   the policy list, the collection flush, and DROP's virtual rule. Reads: Tier 1 and Tier 2 in full.
+4. **Integration**: whatever 1 to 3 leave open, and Tier 3's corpus. The physical regression (S-16, the Sublet arms,
+   one corpus set) is read on every one of the four.
+Every bitstream is pre-registered before its handoff and carries its lint and loop-name numbers; every reflash
+waits for the lead's own word.
+
 ## Constraints
 
 - **No reflash without the lead's own word.** The board campaign is running on d93a8d66b and a reflash interrupts it,
