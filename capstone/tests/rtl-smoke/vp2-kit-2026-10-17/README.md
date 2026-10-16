@@ -101,6 +101,37 @@ region being split is rewritten with the piece that remains. The carved piece be
 which `swap_cpmp` loads on its first access fault. So Linux's code is always either under the resident slot or one
 fault away from being swapped in.
 
+## Monitor item for vp2, decided by the runtime and RTL lanes: CSMINT emulated in the monitor
+
+**This one is a monitor change**, unlike the walker PMP and the CPMP coverage above, which needed none. It is not for
+the current bitstream.
+
+**What the monitor does when an S-mode CSMINT traps to it.** QEMU's `helper_csmint`, `capstone-qemu
+target/riscv/capstone_table.c:218-283` at d35af47b163c, is the reference for every step and every refusal:
+1. Decode rd, rs1 (the slot) and rs2 (the descriptor) from the trapping instruction:
+   `csmint 1010000 rs2 rs1 001 rd 1011011` (`insn32.decode:982`).
+2. Read the descriptor `{u64 base; u64 end; u64 perms}` through S's translation (MPRV), as three aligned
+   doublewords.
+   - desc & 7 raises load-misaligned.
+   - A slot that is not 16-byte aligned raises store-misaligned.
+   - A slot with no writable translation raises a store access fault.
+3. Refuse before any write, where QEMU does:
+   - base >= end or perms > ALL: 29;
+   - a descriptor that is not representable (option (iii); the round trip through the encoder must give back base,
+     end and cursor): 29;
+   - fewer than two free identities: 30.
+4. Mint the LINEAR capability [base, end), with cursor base and the descriptor's perms, as the monitor mints for
+   domains today.
+5. Run the new table op CSNODE under the S table namespace. It creates the child node and its MREV ancestor, as
+   `cap_rev_create` plus `cap_rev_mrev` do.
+6. Store the capability, with its tag, to the slot through S's translation.
+7. Set rd to the ancestor's id and advance mepc.
+
+**Still needed from the RTL lane before this can be written:**
+- the Q-entry with CSNODE's encoding and semantics;
+- the trap cause of an S-mode CSMINT on vp2;
+- how the monitor stores a tagged capability through S's translation in capability mode.
+
 ## Pre-registered (2026-10-17, before the revision exists): the v6 module's `add()` change
 
 > **WITHDRAWN (2026-10-17, the same morning, before any run against it).** The predicate below is refuted by the
