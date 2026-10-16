@@ -134,15 +134,19 @@ Over the repaired geometry (offset 0, slots 0 and 1, every request each large cl
   - ~~The promotion count is 1,024 of 131,051, not 912.~~ **Withdrawn by its author the same day**
     (`lane/compiler-exact-bounds-iii` 30d6ddfc5274). 1,024 is the worst case over all bases, but the repaired geometry
     puts every slot on a granule-aligned base. With both edges granule multiples, R-54's renormalisation cannot fire:
-    `tg - bg` is `len/g`, which is below 1024. So the base-dependent case never occurs, and the count is **912 of
-    131,051 (0.70%)**, as first measured. No class in the repaired table renormalises.
+    `tg - bg` is `len/g`, which is below 1024. So the base-dependent case never occurs. No class in the repaired table renormalises. **The count, CORRECTED
+    2026-10-16 by the semantics owner's audit** (`capstone/tests/exact-bounds-iii-audit/`): "912" counted, against the
+    edited table, 17 sizes at or above `MMAP_THRESHOLD` (131052), which never use a slot. Below the threshold, 895
+    sizes reach the next header against the edited table. Measured against upstream behaviour, the figure that
+    matters, **735 of 131,051 requests (0.56%) end in a different class than upstream, 107 of them on the mmap
+    path**. Some of the 895 sit in the 16-byte band the table edit adds and return to their upstream class.
   - The arithmetic now lives in one header, `runtime/include/capstone/representable.h` (`capstone_repr_ok`,
     `capstone_repr_round` and two more), on that branch. `repr-cross-check.py` compiles it and compares it with the RTL
     oracle over 24,168 cases, with 0 disagreements. A mutant that ignores the base disagrees 46 times.
   - Slots 0, 1 and 31 read 0 escapes and 0 header hits with the fix.
 So the runtime keeps the first estimate's classification rule as well: classify on `repr_round(n)`, with the
 granule its slot base gives, against the class's usable size `stride - IB`. The rounded end then stays at or below
-the next slot's header, at the cost of 912 sizes moving up one class.
+the next slot's header. Against upstream, 735 requests change class, 107 of them onto the mmap path.
 
 **The cost omits the nested allocators: CORRECTED 2026-10-16 by the semantics owner.** QEMU's compact profile, the
 reference once exact bounds are off, refuses an inexact CDERIVE child with 29 (`op_helper.c:1239-1247` at d35af47b163c:
