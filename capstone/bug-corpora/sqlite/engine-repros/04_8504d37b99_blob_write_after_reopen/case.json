@@ -35,6 +35,12 @@
       "verdict": "MISSED",
       "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
+    },
+    "silicon-sqlite-stock": {
+      "oracle": "silicon, classic line, memsys5 stock over its static arena, lookaside 0,0 (tools/arms.json silicon-sqlite-memsys5): a trap in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case ran and printed its own lines; no marker at the access on this harness: blobwrite write rc=0 / blobwrite NOTRAP done) and completed with no fault",
+      "verdict_from": "results/2026-10-16-silicon/silicon-sqlite-stock"
     }
   },
   "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",

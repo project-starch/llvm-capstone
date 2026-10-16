@@ -35,6 +35,12 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=25 pc=0x3f86e30198 in memcmp; by function: memcmp is where host ASan reported it",
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
+    },
+    "silicon-sqlite-stock": {
+      "oracle": "silicon, classic line, memsys5 stock over its static arena, lookaside 0,0 (tools/arms.json silicon-sqlite-memsys5): a trap in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case ran and printed its own lines; no marker at the access on this harness: jsoneachroot rows=1 / jsoneachroot NOTRAP done) and completed with no fault",
+      "verdict_from": "results/2026-10-16-silicon/silicon-sqlite-stock"
     }
   },
   "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=10)",

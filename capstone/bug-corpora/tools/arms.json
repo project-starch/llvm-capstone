@@ -547,6 +547,19 @@
         "uaf",
         "mmgr-ctl-00"
       ]
+    },
+    "silicon-sqlite-memsys5": {
+      "target": "capstone-silicon",
+      "summary": "SQLite 3.22.0 on silicon, classic line: one translation unit per case, the engine-repros case.c through ports/sqlite/build-sqlite-silicon.sh (gp-captable, interp glue, -O0) from the virtual arms' adapted input 7fc92e19..., with the corpus group defines, run in a domain by sqlite_host.user. memsys5 stock over its static arena (SQLITE_HEAP_SIZE 262144) and lookaside 0,0, both measured in the images: every SQLite allocation is an offset inside that arena. It differs from virtual-sqlite-memsys5 in lookaside (on there) and in the build (build-virtual.py, with its FTS source patches). The controls are cells of the same set, on the same bitstream, input and flags, and may run in another boot of it",
+      "mechanism": "none below the arena, on silicon",
+      "controls": {
+        "uaf-mem5": "complete",
+        "bounds-mem5": "complete"
+      },
+      "controls_for_missed": [
+        "uaf-mem5",
+        "bounds-mem5"
+      ]
     }
   }
 }

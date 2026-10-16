@@ -35,6 +35,10 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=25 pc=0x3faa81ff64 in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
+    },
+    "silicon-sqlite-stock": {
+      "status": "not written",
+      "note": "not in the silicon control arm's batch: tests/rtl-smoke/repro322-silicon-2026-10-16 runs the eight cases of the 2026-10-01 batch, whose README gives why the others were left out"
     }
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b65c0; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; clean exit, no defect-site probe in that run",
