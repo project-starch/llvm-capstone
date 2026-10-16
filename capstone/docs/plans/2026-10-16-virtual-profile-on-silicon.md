@@ -149,8 +149,21 @@ patch that derives children of 4 KiB or more must place them representably, as m
 - Wireshark's wmem jumbo blocks (0001);
 - PostgreSQL's large chunks (0003);
 - SQLite's memsys5 blocks.
-pymalloc, mruby's GC slots and Perl's SV heads derive only small children. The compiler lane re-costs this work; the
-comparison with (ii) is reopened if it changes the answer. The Tier 3 nested arms depend on it. What remains reachable through the rounding is the slot's own footer bytes,
+~~pymalloc, mruby's GC slots and Perl's SV heads derive only small children.~~ **CORRECTED the same day by the compiler
+lane** (`lane/compiler-exact-bounds-iii` ac7898060694, probe `capstone/tests/exact-bounds-iii/mrbpage.c`). The
+per-object children are small in all three, but each also derives a parent lifetime:
+- **mruby's page derive is refused under (iii).** Patch 0008 derives the page's `objects` array, at least 16 KiB, at
+  offset 16464 (compiled with the capability toolchain). That is 16 mod 32 against a granule of at least 32,
+  whatever `sizeof(RVALUE)` is. The patch's own `issued[]` array moved it there. The repair is padding plus a
+  `_Static_assert`, under 1% of a page.
+- pymalloc's arena derive is 1 MiB at offset 0 on an mmap base, so it is representable and needs no change.
+- Perl's arena is `PERL_ARENA_SIZE` 4080, below 4096, so it is exact at any base. It enters scope if raised to
+  4096.
+
+The audit is bounded: a child shorter than 4096 bytes is exact at any base and any offset, so only derive sites that
+can produce a child of 4 KiB or more need checking, which in practice means the parent-lifetime derives. The compiler
+lane re-costs these sites port by port; the comparison with (ii) is reopened if the total changes the answer. The
+Tier 3 nested arms depend on it. What remains reachable through the rounding is the slot's own footer bytes,
 stated above.
 
 The original estimate follows, kept for the record:
