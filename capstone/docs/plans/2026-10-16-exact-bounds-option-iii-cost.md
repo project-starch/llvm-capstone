@@ -2032,3 +2032,30 @@ inversion and the board lane's 1-of-4 — is now corroboration rather than the b
   `add()` — that is what the fix's own run will show.
 - Why heap growth never completes. `remap_begin` is still not shown to fire, so it stays out of the
   fix and remains open.
+
+
+## The refusal diagnostic was itself trace-gated, so its absence proved nothing
+
+Found by the board lane's positive control, and it applied to **this suite too**, not only to the
+corpus harness. `CAPSTONE_VM_ADD_REFUSED` was printed under `if (trace)`, and an audit of this
+suite's own gate script found **four of its invocations run without `CAPSTONE_VM_TRACE`** —
+`population`, `churn`, `remap-align`, and the denial-case loop. Those are exactly the stages where
+refusals occur, so the "ADD_REFUSED absent" row of the fix prediction would have been an unproven
+zero over most of the run.
+
+**Turning the trace on globally is not the fix.** `churn` alone performs 70,000 allocations and
+would bury the serial in boundary lines; that is presumably why the flag is selective in the first
+place. The print is now **unconditional**: a refusal is rare, so it cannot flood anything, and
+gating a rare error-path diagnostic behind a verbosity flag is precisely what made its absence
+unreadable.
+
+**Positive-controlled, two-sided on the same images.** Stage regions that contributed **zero**
+refusal rows before now contribute them — the denial loop 9, `basic` 2, `predicate` 2,
+`population` 1, `hot-control` 1 — and the total rose from 420 to 432. (The per-stage attribution is
+keyed to the preceding `EXIT` marker, so a label names the stage before the one that emitted the
+row; the robust claim is that previously-silent regions now report, not the exact split.)
+
+So the prediction's `ADD_REFUSED absent` row is only now a claim that can be falsified, on this
+suite and on the kit. This is the "a gate that has never blocked anything is not a passing gate,
+it is an unproven one" rule applied to a diagnostic rather than a gate — and it was caught by
+someone else's control, not by mine.

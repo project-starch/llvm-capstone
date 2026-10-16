@@ -200,14 +200,18 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
         /* Evaluate add()'s two disjuncts on the REAL values the module saw. The domain cannot do
          * this: cap_vm_acquire clears its slot on failure, so the base never reaches it, and a
          * power-of-two size refused with EINVAL is then indistinguishable from a misaligned one. */
-        if (trace) {
-            int err = errno;
-            fprintf(stderr, "CAPSTONE_VM_ADD_REFUSED base=0x%lx bytes=%zu errno=%d"
-                            " pow2=%d naturally_aligned=%d\n",
-                    (unsigned long)r.address, bytes, err,
-                    (bytes & (bytes - 1)) == 0, (r.address & (bytes - 1)) == 0);
-            errno = err;
-        }
+        /* NOT gated on `trace`. A refusal is rare, so this cannot flood anything, and gating
+         * it is what made its absence unprovable: four of this suite's own invocations
+         * (population, churn, remap-align, the denial loop) run without CAPSTONE_VM_TRACE, so an
+         * "ADD_REFUSED absent" check over them was an unproven zero. Turning the trace on
+         * globally is not the fix -- churn alone performs 70,000 allocations and would bury the
+         * serial in boundary lines. A diagnostic on an error path does not need a verbosity flag. */
+        int err = errno;
+        fprintf(stderr, "CAPSTONE_VM_ADD_REFUSED base=0x%lx bytes=%zu errno=%d"
+                        " pow2=%d naturally_aligned=%d\n",
+                (unsigned long)r.address, bytes, err,
+                (bytes & (bytes - 1)) == 0, (r.address & (bytes - 1)) == 0);
+        errno = err;
         return -1;
     }
     maps[i] = (struct mapping){.address = base, .bytes = bytes, .visible = bytes,
