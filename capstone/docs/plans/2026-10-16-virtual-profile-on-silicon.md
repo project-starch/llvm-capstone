@@ -11,7 +11,8 @@ audit's verdict is "partly, and not as a port". Its item list (A-H) and its orde
 through intermediate bitstreams, each synthesised and then flashed on the lead's word. It carries:
 - B, translation in C mode;
 - A, the per-context lifetime table, flat and paged;
-- C', exact bounds as decided below;
+- C', bounds as decided below: representable bounds that the allocator enforces (option (iii)). The RTL keeps its
+  compressed format, so there is no side store;
 - D, `CSRUNV`, `CSMINT`/`CSRETIRE` and the event kinds;
 - E, the policy list;
 - H, the collection flush;
@@ -41,19 +42,18 @@ images ([`2026-10-15-bug-corpus-on-fpga.md`](2026-10-15-bug-corpus-on-fpga.md) Â
       - dev's `runtime/tests/sublet-lifetimes`.
       Their counts are re-measured on the pin before porting.
    2. **On the board, the guide's Linux smoke** (`docs/design/virtual-capstone/development.md`):
-      - `capstone_vm.ko` and `capstone-vexec` print `VIRTUAL_APPLICATION_OK` for `contract.dom`, with `scapctl` bit 8
-        (exact bounds) set;
+      - `capstone_vm.ko` and `capstone-vexec` print `VIRTUAL_APPLICATION_OK` for `contract.dom`, under the option-(iii)
+        runtime (no exact-bounds bit);
       - a stale access is denied with cause 25 (exit 139).
    3. **The runtime's `run.py` gate.** It needs the SQLite and mruby images.
    4. **The bug corpus's virtual arms.** The selection is every verdicts-v1 bundle whose configuration's target is
       `capstone-virtual`: 26 bundles, 382 cells and 304 distinct images at 44d82a9eb3f3. Each cell reads the verdict
-      recorded for it on QEMU, taken from the bundles by that rule rather than from a copied list. Only 91 of the 304
-      images survive. They cover seven bundles: FFmpeg carved (both arms), plain-heap and subobject; memcached
-      plain-heap; Wireshark plain-heap and plain-temporal. They are copied, with a SHA256SUMS, to
-      `/mnt/hdd/<user>/capstone/virtual-corpus-images-2026-10-16` on apollo, and run as built. The other 213 were not
-      found: the search stopped at 15 minutes, and many were built on a-p13, whose setup is gone. Each of those is
-      rebuilt from its bundle's recorded inputs with the current virtual SDK, and its prediction is that rebuild's
-      reading on QEMU's virtual profile.
+      recorded for it on QEMU, taken from the bundles by that rule rather than from a copied list. Under option (iii)
+      every image is rebuilt from its bundle's recorded inputs with the option-(iii) virtual SDK. Today's images
+      require the exact-bounds bit, and the launcher refuses to run them without it. Each rebuild's reading on QEMU's
+      virtual profile, with exact bounds off, is its prediction. A verdict that moves between the recorded bundle and
+      the rebuild is a measured cost of (iii), not a silicon finding. 91 of the 304 old images survive, copied with a
+      SHA256SUMS to `/mnt/hdd/<user>/capstone/virtual-corpus-images-2026-10-16` on apollo, as references.
    This is the payoff: the corpus runs on silicon as built for the virtual profile, not rebuilt for the silicon ABI.
 4. **The physical regression holds:** the S-16 bare set, the Sublet directed arms and one corpus set read the same on
    the new bitstream as on d93a8d66b.
@@ -78,43 +78,58 @@ The audit read the virtual spec as of 2026-10-07/08 and QEMU 1a6dd20732. Since t
 Write an addendum to the audit that says, item by item, what changed. Include where d93a8d66b's CDERIVE/CREVOKE
 differ from the virtual profile's. The known case is rounding: silicon rounds an inexact CDERIVE's base down.
 
-## The decision that gates qualification: exact bounds (audit item C')
+## Bounds (audit item C'): option (iii), representable bounds that the allocator enforces
 
-The full profile needs exact bounds. ABI v5 and local mallocng run only under `scapctl` bit 8 (`CPONVVM5`), and the
-launcher runs nothing without it. The audit's option (iii), representable bounds enforced by the allocator, changes
-the runtime rather than the hardware, so it is not the full profile. That leaves:
-- **(i)** a wider capability format: two granules per capability;
-- **(ii)** a side store of 24 bytes per capability-bearing granule.
+**Decided 2026-10-16, superseding the same day's choice of (ii).** The lead delegated the choice to the lanes, then
+asked whether exact bounds are needed at all. The answer is that the hardware does not need them; only the landed
+runtime's choices did. The guide states that dependency: "Local mallocng requires this profile to retain upstream
+slot geometry and expose only requested object bounds". QEMU marks its shadow store as a prototype: `cap_mem_map.h:20`
+"we hack this to prevent precision loss for now", and 24b1e95b1dac "does not specify an RTL encoding".
 
-**Decided 2026-10-16.** The lead delegated the decision to the lanes, and it rests on the RTL lane's costed comparison
-[`2026-10-16-exact-bounds-options.md`](2026-10-16-exact-bounds-options.md) (955851735f4f) and the compiler lane's
-measurements:
-- **(ii), the side store.** It is maintained by hardware alone and authoritative under the virtual-context flag. Each
-  granule has a 16-byte {base, end} entry, with an L1 bounds array beside the tag array.
-  - Both options cost the same in bitstream cycles (3) and in traffic: 5 transactions per capability access against 3
-    today.
-  - (i) would also double `sizeof(void*)`. The compiler lane measured 27 instructions per intcap add against 6, and
-    3-5 weeks to audit the ports' 16-byte assumptions. That amounts to re-porting the whole virtual stack.
-  - (ii) leaves the compiler, the runtime and every acceptance image unchanged, and it is the reference QEMU's model,
-    whose store also keeps the cursor (24 bytes per granule).
-- **Dense provisioning, not a per-page directory.** A directory adds a second dependent walk on the path that carries
-  the WNS. The cost of dense is RAM:
-  - the board is a Genesys2 with 1 GiB of DDR (`ariane_soc_pkg.sv:50`);
-  - a 1:1 bounds region leaves about 0.5 GiB for data, beside the tag region and the rev-node pool.
-  The RTL lane writes down the memory map, and the board lane confirms that the acceptance set fits it. If it does
-  not, the directory is reopened.
-- **The format freeze, as the RTL lane proposed:**
-  - the in-memory word as both sides have it today: {revnode_id 30 | perm 4 | cap_type 3 | bounds 27};
-  - 27 bounds bits;
-  - 30 node bits, which mean a flat index under the virtual-context flag;
-  - no generation bits in the word on either profile;
-  - the RTL's compress_bounds with renormalisation as the reference encoder until QEMU lands Q-16's block. After
-    that the two are proven bit-identical by the shared model;
-  - the exact pair {base, end} without the cursor;
-  - QEMU's 16-byte record as the virtual table's layout.
-- **Owner of the model's semantics: the helper lane**, which owns capstone-qemu's `virtual-capstone` branch and the
-  guide. A semantic change lands in QEMU, the guide and a Q-entry before the RTL follows. The RTL lane owns
-  conformance: the Q-entries and the directed tests that read each one on both sides.
+**What (iii) costs.** The compiler lane computed it (`lane/compiler-exact-bounds-iii` 91d5b48e4c23,
+`docs/plans/2026-10-16-exact-bounds-option-iii-cost.md`): 3-5 days in the runtime, and nothing in the RTL.
+- mallocng changes in two expressions: it classifies on `repr_round(n)` and sizes the big-path mapping from it. Its
+  size classes, slot and group layout, and alignment do not change.
+- 628 of 131,051 small sizes (0.48%) move to a larger class. These are the sizes in the last 16 bytes below a class's
+  capacity, and no power of two or page multiple is among them. The worst is n = 13073, 25.1% more. 107 sizes near
+  the mmap threshold move to the mmap path. No distribution of application sizes exists, so these figures are over
+  the size space and not weighted by use.
+- The CSMINT descriptors the launcher and the image path build must be representable. probe.S builds one that is not
+  today. That audit, 1-2 days, is the largest item.
+- Mechanically: the ABI's exact-bounds requirement statements, the launcher's profile gate (exec.c:697-699, probe.S),
+  seven runners, and the documents.
+
+**What (iii) gives up, stated rather than hidden:**
+- Above 4 KiB, a bound rounds outward to the granule: 8 bytes at 4 KiB, 128 at 64 KiB, at most 1/512 of the size.
+  An overflow into that slack is not trapped. It cannot reach a neighbour: the allocator keeps the rounded bound
+  inside the slot.
+- The slack can span mallocng's own footer bytes for that slot, so the slot's in-band footer becomes writable through
+  the user pointer.
+- One recorded verdict flips: allocator.json `bounds`. malloc-contract.c stores at `saved+200003` for
+  `malloc(200003)`, which rounds to 200192. The test needs a trigger past `repr_round(n)`.
+- exact-bounds.sh changes meaning: its profile-off arms become the production configuration.
+- On the bug corpus, rounding touched one silicon reading of 130 (memcached 08, 16 extra bytes).
+- The four ports' recorded functional verdicts do not change, because a wider bound can only remove a fault.
+
+**What it saves:**
+- the side store and its L1 bounds array;
+- the shared core widening;
+- the 496 MiB memory map, so the map stays at 963 MiB of data and the CMA and monitor conditions for moving it lapse;
+- about 1.9x capability traffic;
+- one to two bitstream cycles.
+
+**Still in force from the 33cd17910a37 decision:**
+- the format freeze (the word as it is, 27 bounds bits, 30 node bits as a flat index under the flag, no generation
+  bits in the word). The exact pair is no longer stored;
+- the owner of the model's semantics: the helper lane, with the RTL lane owning conformance.
+
+**Owners:**
+- the compiler lane does the runtime change on its lane branch, re-records what it moves, and the re-run;
+- the semantics owner states (iii) in the guide and in QEMU's default profile;
+- the RTL lane drops C' from the sequence.
+
+The superseded record (the costed (i) against (ii), and the dense map with its RAM budget) stays below and in
+`2026-10-16-exact-bounds-options.md` as the evidence the choice was weighed.
 
 ## Work that does not wait for the decision
 
@@ -141,7 +156,7 @@ suites, before it goes to synthesis:
 
 The audit estimated four to five bitstream cycles, plus the format decision. Options (i) and (ii) add to that.
 
-## The 1 GiB memory map with a dense bounds region (the first C' item, RTL lane, 2026-10-16)
+## SUPERSEDED by option (iii): the 1 GiB memory map with a dense bounds region (RTL lane, 2026-10-16)
 
 Today (every bitstream since April, `ariane_pkg.sv:602-608`, `wt_axi_adapter.sv:161-162`): data `[0x8000_0000,
 0xBC2D_2D2D)` = 963 MiB; the tag region at one byte per 16-byte granule, `tag = 0xBC2D_2D2D + ((paddr - 0x8000_0000)
@@ -195,7 +210,7 @@ Conditions for the flash that moves the map:
 - the monitor programs an all-permitting PMP entry before the first virtual context, because the page-table
   walker's accesses are PMP-checked as supervisor (the RTL lane's B simulation).
 
-## The bitstream sequence (RTL lane's proposal, 2026-10-16)
+## The bitstream sequence (RTL lane's proposal, 2026-10-16; under option (iii) its C' half drops out, and the RTL lane re-plans 2 to 4)
 
 Batched so that each bitstream answers questions the previous one cannot, and no reflash is spent on an observation
 the simulation already gives:
@@ -233,7 +248,8 @@ waits for the lead's own word.
 |---|---|---|
 | re-baseline addendum | RTL lane | DONE 2026-10-16: `virtual-capstone-rtl-feasibility.md` "Addendum, 2026-10-16"; Q-17 and Q-18 filed; reference pinned at d35af47b163c |
 | exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`. DECIDED the same day: (ii) dense, the format frozen as proposed, the helper lane owning the semantics |
-| C' exact bounds: the shared core widening, then the side store and the L1 bounds array; first the memory map for 1 GiB | RTL lane | to do |
+| C' bounds | RTL lane | DROPPED 2026-10-16: option (iii) needs nothing in the RTL |
+| option (iii) in the runtime: mallocng `repr_round`, the CSMINT descriptor audit, the ABI and launcher gate, runners, documents, re-records | compiler lane | to do, 3-5 days (estimate in `2026-10-16-exact-bounds-option-iii-cost.md`) |
 | B translation in C mode | RTL lane | SIMULATION GREEN 2026-10-16: capstone-ariane `virtual-profile` 16345658f; all six vb-trans arms and the flag-off control read as pre-registered, the old-tree control inverted where predicted; lint at baseline with the 40 loop names identical (`verif/sim/lint-loop-names.py`); two latent RTL gaps found and fixed on the way (R-56, Q-19); the flag-off neutrality sweep (95 tests, then the sup lists) is running; synthesis request after it, with the pre-registered WNS prediction |
 | A lifetime table | RTL lane | to do |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
