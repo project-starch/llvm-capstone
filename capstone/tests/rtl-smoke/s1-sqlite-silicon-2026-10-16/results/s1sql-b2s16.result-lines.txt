@@ -1,0 +1,16 @@
+## s1sql-b2s16: S1 boot 2 of 3, memsys5 41f9b021371b4b66 @0x810000 and Sublet 445d93b331cd3ba2 @0xc10000, stock k800, on caplifive_sublet_d93a8d66b.bit
+# fw_payload 159dcc9c0498cb0b; host 2c9e82d101b48160; cells.tsv; pre-registered at lane 930bd30d1060; judged by arm segment of the run-scoped transcript
+# the freed-slot bytes of m5p1/m5p2 are non-ASCII; the capture stores each as U+FFFD, so the byte value is not recoverable from it
+S1 boot 2: 11 arms (expect 11)
+  k800  returned=True k800 retval=4 ok
+  m5p1  returned=True __CAPSTONE_SPEEDTEST1_UAF_NOTRAP__ lookaside name[0]=<U+FFFD> ok
+  m5p2  returned=True __CAPSTONE_SPEEDTEST1_UAF_NOTRAP__ memsys5 p[0]=<U+FFFD> ok
+  m5p3  returned=True __CAPSTONE_SPEEDTEST1_SIBLING__ memsys5 b[0]=b after a was freed ok
+  m5p4  returned=True __CAPSTONE_SPEEDTEST1_SIBLING__ lookaside n2[0]=t after s1 was finalized ok
+  m5p5  returned=True __CAPSTONE_SPEEDTEST1_BOUNDS__ p[127] read ok
+  m5p6  returned=True __CAPSTONE_SPEEDTEST1_BOUNDS_NOTRAP__ p[128] read ok
+  sbp3  returned=True __CAPSTONE_SPEEDTEST1_SIBLING__ memsys5 b[0]=b after a was freed ok
+  sbp4  returned=True __CAPSTONE_SPEEDTEST1_SIBLING__ lookaside n2[0]=t after s1 was finalized ok
+  sbp5  returned=True __CAPSTONE_SPEEDTEST1_BOUNDS__ p[127] read ok
+  sbp2  returned=False trap-log=0x99 cause=25 mepc=0x000000008401df18 (+0x1df18) tval=0x00000000ace00000 refusal=LATCHED arm=hit-dead id=0x000300e2 = generation 3 index 226 (id[29:16], id[15:0]) want FAULT 25 +0x1df18 (emulator 24) ok
+S1 boot 2: MATCHES

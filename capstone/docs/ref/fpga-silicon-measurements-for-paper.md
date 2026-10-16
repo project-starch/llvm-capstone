@@ -6494,3 +6494,32 @@ da9c54e578845735. Folder: `tests/rtl-smoke/h1-sublet-2026-10-16/` (pre-registere
     722-725 / 2,873-2,897 / 11,106-11,293 on v2;
   - about 18.5 cycles per destroyed node at n = 256, against 22.0;
   - the fixed part halves.
+
+## S1 on the Sublet bitstream: SQLite's use-after-free refused at the access, as on R-43 v2 (caplifive_sublet_d93a8d66b, 2026-10-16)
+Three boots (s1sql-b1s16-b3s16, 20:17-21:40) on the classic line. They repeat "S1 on R-43 v2" with images rebuilt on
+dev's port and runtime, which carry the sublet-runtime fix:
+- memsys5, unprotected: `41f9b021371b4b66` at 0x810000;
+- Sublet: `445d93b331cd3ba2` at 0xc10000.
+Folder: `tests/rtl-smoke/s1-sqlite-silicon-2026-10-16/` (pre-registered at lane 930bd30d1060; RESULTS.md and
+`results/`).
+
+**Every pre-registered reading holds, in every boot:**
+- k800 returned 4.
+- The six memsys5 cells and the three returning Sublet cells printed the emulator's markers. memsys5 reads the
+  freed lookaside slot and the freed 4,096 B block, and the byte past a 128 B block.
+- **The Sublet cells:**
+  - p1, the lookaside slot after `sqlite3_finalize`: **cause 25** at the probe's `lbu` (+0x1e46c), record LATCHED,
+    hit-dead;
+  - p2, the 4,096 B block after `sqlite3_free`: **cause 25** at its `lbu` (+0x1df18), record LATCHED, hit-dead;
+  - p6, the byte past a 128 B block: **cause 28** at its `lbu` (+0x1e9b0), record EMPTY.
+- The emulator reads 24 for p1 and p2, because it untags a revoked capability (Q-11), and 5 for p6, as pre-registered.
+
+**The refusal ids**, recorded and not attributed to the probe (ten invocations ran first), read as generation
+id[29:16] and index id[15:0]:
+- boot 1: generation 1 at index 386;
+- boot 2: generation 3 at index 226.
+
+**Limits, as on R-43 v2:**
+- the fault cells are N = 1;
+- before-reuse only;
+- the survivors ran before the fault.
