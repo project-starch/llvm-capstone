@@ -45,4 +45,16 @@ REVOKE (`rv`) in the nodes regression, cycles:
   changed it is not established here. The R1 warm and cold campaigns pre-registered next
   (`../r1-sublet-2026-10-16`) measure the per-node slope across the node table's range.
 
+**Boot history and pieces, compared with 2026-09-29:**
+- The session composition is the same: a fresh boot, then control, list lines 1-12 of the same list (six
+  invocations, same order), then control.
+- The image, host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36 and buildroot d04bd83 are the same.
+- One firmware piece differs. The monitor was 2dcd3a5 then and is 93440d5 now: 2dcd3a5 plus the R-55 carve fixes a
+  full-format bitstream needs.
+- The `rv` bracket is the REVOKE instruction between two `mcycle` reads inside the domain
+  (`sublet/r1/r1_slots_pools.c`), so the monitor is not inside it. It could act only indirectly, through where nodes
+  and regions sit.
+- The RTL lane's diff of `capstone_rev_node.anvil` (8f6a0af98 against d93a8d66b) finds the same three queries per
+  node in the REVOKE walk. So nothing in the RTL is yet shown to explain the drop, and it stays an open finding.
+
 **Not established:** N = 3, as 2026-09-29.

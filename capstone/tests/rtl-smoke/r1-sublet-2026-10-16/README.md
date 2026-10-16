@@ -43,7 +43,13 @@ its `fw_payload.bin`):
 **What this bitstream is expected to change:**
 - H1's nodes regression on this bitstream, boot h1s16r1, already reads REVOKE lower than on R-43 v2 at every n:
   71 / 145 / 623 / 2,369 / 9,692 cycles for n = 1…256, against 145 / 193 / 724 / 2,880 / 11,274.
-- So the warm slope is expected below 22.91. The size of the change is the result. The node record's parent link
+- So the warm slope is expected below 22.91. Amended before the first R1 boot: the prediction is taken from this
+  bitstream's own point, not from a cause.
+  - H1's nodes regression is R1 warm's shared series at nd = 512, on the same image family.
+  - Its three boots read rv = 9,354-9,692 there, so 18.3-18.9 cycles per destroyed node.
+  - The predicted warm shared slope is therefore about 18.5 cycles/node, against 22.91 on 054cea69b (whose own H1-shape
+    point was 22.0 per node on v2).
+  - The combined and cold slopes are reported, not predicted. The size of the change is the result. The node record's parent link
   and CREVOKE in R-45's flush are this bitstream's revocation path.
 - The cold constant and the ramp's shape are not predicted beyond that. The two campaigns together give the warm
   and cold per-node cost on this silicon.
