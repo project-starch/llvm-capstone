@@ -14,6 +14,7 @@ virtual-profile-2-d 41fa120bf).
 
 | step | what it does | refusal |
 |---|---|---|
+| 0 | decode: from mtval; if mtval is 0, from the instruction at mepc, read under MPRV and MXR | — |
 | 1 | check the descriptor's alignment | `desc & 7` → 4, tval desc |
 | 2 | read `{base, end, perms}` with three plain `ld` under `mstatus.MPRV`, MPP = S from the trap | — |
 | 3 | check the slot's alignment | `slot & 15` → 6, tval slot |
@@ -77,3 +78,16 @@ It assembles with the in-tree clang, and the disassembly is checked:
 - the 9 CSMINT words are `0xa0b5165b` (funct7 0x50, rd a2, rs1 a0, rs2 a1);
 - the one CSNODE is `0xa80a985b`, with rd a6 and rs1 s5;
 - the window is exactly `csrsi 0x7c4,8; csnode; csrci 0x7c4,8`.
+
+## First run, and one change before the second (2026-10-17)
+
+**The first run (the RTL lane, D4 + Q-15)** read 0xbad1 on every row. That is the arm's guard against an illegal
+instruction that is not CSMINT, and it fired correctly:
+- CSMINT's funct7 0x50 fell into the decoder's empty default arm, so it issued as an unknown op and raised the illegal
+  instruction at execute, with **mtval 0**;
+- the ruling's "mtval = the bits" is the decoder's illegal path, which the RTL lane is fixing;
+- row 1's table read 3 / 0 / 0, consistent with nothing having been minted.
+
+Silicon built today would read mtval 0 the same way, so the emulation now decodes from the instruction at mepc when
+mtval is 0. The fallback is exercised only on a decoder that leaves mtval 0. The pre-registered readings are
+unchanged.

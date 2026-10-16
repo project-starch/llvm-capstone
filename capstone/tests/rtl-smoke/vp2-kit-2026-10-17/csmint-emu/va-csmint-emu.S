@@ -6,7 +6,8 @@
 #-----------------------------------------------------------------------------
 #
 # S runs under Sv39 page tables (identity over the first 2 MiB of DRAM, 4 KiB supervisor pages) and issues csmint. On
-# vp2 csmint traps to M as an illegal instruction (cause 2, mtval = the bits). M's handler is the EMULATION the monitor
+# vp2 csmint traps to M as an illegal instruction (cause 2, mtval = the bits; when mtval reads 0, the handler reads
+# the instruction at mepc under MPRV and MXR). M's handler is the EMULATION the monitor
 # will carry (between "csmint_emulate:" and "csmint_done"), written against QEMU's helper_csmint (capstone-qemu
 # target/riscv/capstone_table.c:218-283 at d35af47b163c), in QEMU's order, every refusal before any write:
 #   desc & 7 -> 4 (tval desc); read {base, end, perms} with three plain loads under mstatus.MPRV (MPP = S);
@@ -229,6 +230,15 @@ trap_handler:
   j skip
 maybe_csmint:
   csrr t0, mtval
+  bnez t0, 1f
+  # mtval 0: a decoder that raises this illegal instruction at execute leaves tval 0 (the D4+Q-15 tree's first run);
+  # read the instruction at mepc through S's translation instead (MPRV, MXR for an execute-only page)
+  li t1, 0xA0000
+  csrs mstatus, t1
+  csrr t2, mepc
+  lwu t0, 0(t2)
+  csrc mstatus, t1
+1:
   li t1, 0xfe00707f
   and t2, t0, t1
   li t1, 0xa000105b
