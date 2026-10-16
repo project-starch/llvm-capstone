@@ -118,3 +118,46 @@ dbuf 0x8000c000.
   report this better: an untagged read-back currently produces a cascade of 2s rather than one clear reading.
 - **Still unread:** LDC through a NONLIN capability, and CAPBOUND's cursor. They come from the re-run on the flushing
   RTL.
+
+## Third run: validated end to end on the RTL (capstone-ariane virtual-profile-2-d bf3db3175, 2026-10-17)
+
+**The setup.** bf3db3175 flushes the pipeline on `csupctl` and `srevroot` writes, and carries this arm, at
+5a43dd463da4, as `verif/tests/custom/capstone/va-csmint-emu.S` with a testlist entry. It runs in 62,309 cycles and
+passes. The board lane read the 32 CAPPRINT operands itself, from that run's retirement trace (the RTL lane's
+`vp7-wt/.sup/flush/va-csmint-emu.*.log`):
+
+    0 4 | 5 0x3000000100000001 0x3000000000000000 | 4 0x80009004 | 6 0x8000a018 | 29 0 | 29 0 | 29 0 |
+    15 0x8000b000 | 0 6 | 7 0x3000000180000001 0x3000000000000000 | 30 0 |
+    0 0x8000c200 0x8000c300 0x8000c200 4 | 0 0 0
+
+**31 of the 32 readings are as pre-registered**, with the build's addresses one page later (desc 0x80009000, slotA
+0x8000a000, slotB 0x8000a010, slotnod 0x8000b000, dbuf 0x8000c000):
+- row 1 mints child 3 and ancestor 4, and the records are as QEMU's `cap_rev_create` then `cap_rev_mrev`;
+- rows 2-7 refuse in QEMU's order, with QEMU's causes;
+- row 8's re-mint overwrites slotA, as QEMU does;
+- row 9's 30 is CSNODE's own fault inside the window, caught by the handler, and nothing is written;
+- the read-back gives the LINEAR child [dbuf+512, dbuf+768), with CAPBOUND's cursor at the base and perms RO.
+
+**The 32nd, the read-back's type, reads 0 where I pre-registered 1. The prediction was wrong, not the reading.**
+- I took 1 from `asm_insn.h`'s CAP_TYPE_LIN, which is CAPTYPE's INPUT encoding, where NOT_CAP is 0.
+- LCC returns the spec's numbering, which has no NOT_CAP. QEMU's `CAP_TYPE_LIN` is 0 (`target/riscv/cap.h:29`), and
+  the RTL computes `cap_type - 3'd1` (`capstone_dyn_unit.anvil:403`, "see spec").
+- So QEMU and the RTL agree on 0 for LINEAR.
+
+**What this settles.** The monitor's CSMINT emulation is validated on the RTL, in every step and every refusal row:
+- the MPRV descriptor reads;
+- the software Sv39 walk and its A/D refusal;
+- the representability rule;
+- the mint with CAPCREATE/CAPBOUND;
+- the csupctl.table window, with CSNODE and its own 30;
+- the physical STC;
+- the decode, from mtval or from the instruction at mepc.
+
+All three unknowns are read: MPRV `ld` works, LDC through a NONLIN capability returns the tagged LINEAR, and
+CAPBOUND leaves the cursor at the base. The RTL needed two changes along the way: an unknown custom encoding is now
+illegal at decode, with mtval carrying the bits, and the pipeline now flushes on csupctl and srevroot writes.
+
+**Still to do:**
+- port the routine into the board monitor (capstone-sbi), where its caller injects the status into S instead of
+  printing it;
+- handle a page fault on the MPRV descriptor read, which this arm does not create.
