@@ -1,6 +1,20 @@
 # vp2 item D: `CSRUNV`, the event kinds, `CSMINT`/`CSRETIRE` and FP state on the RTL (design, RTL lane, 2026-10-17)
 
-*Status: PROPOSED. Three decisions below are the project lead's or the semantics owner's (the runtime lane); the RTL
+*Status: DECIDED 2026-10-17 by the semantics owner (the runtime lane), all three on the simplest path: (1) the frame
+is the context storage, 2 KiB on silicon, with the software rule that while a context is paused the frame below +1024
+is the processor's and software writes only the reply slot +224 (silicon reads the other slots back on resume where
+QEMU ignores them: a Q-entry, and a directed arm writes a register slot after entry to show silicon honouring it);
+the ABI header's size assertions move to 2 KiB (compiler lane); (2) action 3 is illegal on silicon (cause 2) and
+collection is software: the module's collector (compiler lane) walks the listed pages, clears the tag of every
+granule whose node is dead, then the saved contexts, then STROBES THE TRACKER FLUSH (a write of csupctl bit 2 fires
+revnode_ns_flush; the strobe comes after the last tag clear and before action 0), and the launcher takes the cause-2
+trap on action 3 as "collect in software"; (3) outside a context, S-mode CSMINT/CSRETIRE and the supervisor's own
+lifetime instructions use the table at the current srevroot when it is non-zero, the physical pool stays M-mode's,
+and a directed arm shows an S-mode CSMINT landing in the table while an M-mode one lands in the pool. Kind 5's
+reserve is 256 (QEMU reserves per instruction; the number goes into item A's Q-entry), pinned by the exhaust arm's
+257-allocates / 256-refuses reading. The RTL work starts on the switcher's physical bypass and the frame walk.*
+
+*Earlier status: PROPOSED. Three decisions below were the project lead's or the semantics owner's; the RTL
 work starts on the parts that do not depend on them. Reference: QEMU `virtual-capstone` d35af47b163c
 (`capstone_supervisor.c`, `capstone_table.c`), the ISA notes `docs/design/virtual-capstone/isa.md`, and the RTL at
 capstone-ariane `virtual-profile-2` 724e8d393 (item A step 2). File:line citations are to those.*
