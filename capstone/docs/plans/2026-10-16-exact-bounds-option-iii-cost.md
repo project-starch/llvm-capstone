@@ -702,3 +702,59 @@ compile-time constant, since the arena size is a build parameter.
 **So exactly one offset-0 site needs an explicit alignment**; the rest inherit it from mallocng
 once the geometry and the big-path trim are in. PostgreSQL's is the separate non-zero-offset case
 already listed.
+
+## The mallocng policy guard forbids the cheap geometry, and the alternative costs 100x more
+
+`capstone/ports/musl-capstone/check-mallocng-policy.py` is a release gate on mallocng's decision
+code: it hashes the verified musl 1.2.5 archive and requires token-identical text for
+
+* `UNIT`, `IB`, `MMAP_THRESHOLD`;
+* **`size_classes`**, `small_cnt_tab`, `med_cnt_tab`;
+* **`size_to_class`**, `size_overflows`, `step_seq`, `record_seq`, `account_bounce`,
+  `decay_bounces`, `is_bouncing`, `try_avail`, `alloc_slot`, `okay_to_free`, `nontrivial_free`;
+* `alloc_group`'s group size/count/mmap decisions, and `malloc.c` from `sc = size_to_class(n);` to
+  `success:`.
+
+**So the 7-entry stride edit this document has been costing is not permitted**, and neither is
+changing `size_to_class`.
+
+**What IS permitted, checked function by function rather than assumed.** None of the slot-base
+arithmetic sites falls inside a locked function: `free.c:108` is in `free()`, not the locked
+`nontrivial_free` (which ends at line 100); `realloc.c:15` precedes the locked moving-realloc
+region; `aligned_alloc.c` and `malloc_usable_size.c` are not locked at all; and `enframe` is not in
+`meta.h`'s locked set. The `n >= MMAP_THRESHOLD` block precedes `sc = size_to_class(n);` and is
+therefore editable. And the request can be rounded in **our** `heap.c` `malloc()` wrapper, which is
+outside musl entirely — so no classification change is needed inside the locked region.
+
+**But the stride cannot be made a granule multiple, and that is what the geometry needed.** A slot
+base is `storage + pad + i*stride`; for every `i` to be granule-aligned the stride must be a
+granule multiple. With the table frozen, **13 of the 20 large classes qualify and 7 do not** —
+sc 36, 38, 39, 41, 43, 45 and 47, whose strides are `16 x odd` and so guarantee only 16-byte
+alignment, while their own capacities need granules of 32 to 128.
+
+The compliant alternative is to round each request up into a class that both holds
+`repr_round(n)` **and** has a granule-multiple stride. Measured over every request:
+
+| | the forbidden design (7 stride edits) | the policy-compliant design |
+|---|---|---|
+| requests promoted | **912** (0.70%) | **45,420** (34.66%) |
+| pushed onto the mmap path | 107 | **26,347** |
+| total slot bytes | **+0.022%** | **+2.13%** |
+| worst single allocation | +25.1% at n=13073 | **+71.7% at n=21793** |
+
+**That is roughly a hundredfold difference in allocator memory**, and it comes entirely from seven
+table values changing by one to four units each.
+
+**This is a question for whoever owns that guard, not a line to weaken.** The guard exists so that
+mallocng's allocation *decisions* stay those of verified upstream, and seven stride values are
+exactly what it is built to catch. What can be said for relaxing it narrowly: `size_to_class` would
+not change at all (the rounding lives in our wrapper), the structure of every decision is
+unchanged, the edits move each stride by at most 64 bytes, and the edited table was measured to
+preserve the allocator's own invariant — monotone, 0 of 131,051 requests mis-sized, with a positive
+control that reports 112 when the table is deliberately broken. What can be said against: the
+qualification argument is "token-identical to a verified archive", and a narrower lock is a weaker
+claim than the one the port currently makes.
+
+**Not blocked meanwhile.** The big-path granule trim, the `mremap` path, the per-class storage
+offset, memsys5's static-arena alignment and item 2's checker are all outside the locked regions
+and proceed either way.
