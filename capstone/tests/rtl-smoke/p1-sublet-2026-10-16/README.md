@@ -66,3 +66,20 @@ boot's `fw_payload.bin`.
 - The driver's own band is CPI 3.2-4.9.
 
 **Not established:** N = 1 per cell; size 1 only; P1's other arms.
+
+## Amended before the rerun (2026-10-16 22:35): the first boot stopped at the meminfo arm
+
+**Boot p1s16-c5 (22:16-22:22) produced no reading.** The driver HARD STOPPED at the first arm, `meminfo|idle`, with
+"idle produced no RESULT retval= marker, not a staged marker". `meminfo.sh` printed `/proc/meminfo` and nothing the
+stage driver accepts as a host-binary arm's result. It was never run through the driver before this boot. So no
+cell, control or native ran. Its record stays under `board-b80s-p1s16-c5`.
+
+**The fix, in `drivers/meminfo.sh` only:**
+- it now ends with `BASELINE-PROBE memfree_kb = <MemFree>`, the form `run_sqlite_stages_fpga.py` accepts for a
+  host-binary arm (as for boot sw52's probe arms);
+- the value is read with a plain `sh` loop, not awk;
+- tested under busybox `sh` against the driver's own regex (`BASELINE-PROBE (\S+) = (\d+)`). The old output does not
+  match it, the new one does.
+
+The rerun's boots are **p1s16b-c5** and **p1s16b-c6**, with arms, images and readings exactly as pre-registered above.
+They run after SLT, because R1's boots were already under way.
