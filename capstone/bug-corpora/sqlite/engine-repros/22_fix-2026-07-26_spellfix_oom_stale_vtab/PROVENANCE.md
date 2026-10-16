@@ -191,3 +191,33 @@ with no `PROBE` branch, unlike `expertrem` beside it. This case's defect is in t
 without that branch the arm could never place a site at it -- which is what the old `status`
 line meant by "no defect-site probe in that run". The branch is now there, and the CheriBSD
 trace above is the first probe reading this case has had on that arm.
+
+### Why the chain reaches step (3) at all, and who wrote the forged pointer
+
+Three details decide this, and they are worth stating because they are what makes the pattern
+possible rather than incidental to this case.
+
+**Loading an untagged value is not a fault.** Step (2) is an `lc` -- a capability load -- of the
+sixteen bytes at offset 16. Those bytes were written as ordinary character data by whoever now
+owns the block, so they carry no tag, and the loaded value is a non-capability. Neither
+architecture objects: the tag is checked on **dereference**, not on load. That is why execution
+gets as far as step (3), where the `lw` through that value is what traps.
+
+**The writer can only have been the block's new owner, not the allocator.** `a` sits at offset
+16, and memsys5's `Mem5Link{next,prev}` is eight bytes at offset 0 -- so the allocator's own
+metadata cannot reach this field. That distinguishes this row from cases 19 and 20, where the
+clobbered pointer was the struct's first member and `Mem5Link` was the writer. The probe's bytes
+confirm it: decoded, `nLang_read` is `6b 69 74 74` and `a_read` is `6e 27 2c 27 73 69 74 74`,
+ASCII fragments of the trigger's own SQL word list -- which for an edit-distance test is words
+like `'kitten'` and `'sitting'`.
+
+**The reissue is what CREATES the fault here, and that is the opposite of cases 07, 14 and 17.**
+At the free the fields are `nLang=0` and `a=NULL`; with the block left alone, `nLang` reads back
+0, the loop is never entered, and both non-Sublet arms complete in silence. It is the foreign
+bytes that make `nLang` large enough to enter the loop and give step (3) something to
+dereference. In cases 07, 14 and 17 a reissue did the reverse -- offset 0 came back holding a
+live object's properly tagged pointer, and the arms went silent. Same allocator behaviour,
+opposite effect on what these two arms report, which is the sharpest available statement of the
+point: **what base Capstone and CheriBSD report on a nested use-after-free is decided by what
+memsys5 happened to do with the block, not by the defect.** Sublet's reading does not move with
+it, because the lifetime of the sub-allocation is the thing it checks.
