@@ -6102,8 +6102,16 @@ deepening, and CREVOKE in R-45's commit flush.
   | close (REVOKE right after MREV) | 58 33 49 73 | 58 33 45 71 / 58 33 45 71 / 58 33 45 71 |
   | far (~4,000 cycles later) | 66 33 45 71 | 69 33 45 71 / 66 33 45 77 / 67 33 45 71 |
 
-- The simulation's +8 at close k = 1 does not appear on silicon: 58 on both bitstreams in all four runs. That is
-  outcome A: the published 76 cycles at 2 nodes and 22.7 per node are predicted to hold on the Sublet bitstream.
+- Outcome A, as pre-registered (PREREG.md, "Silicon predictions": close k = 1 never higher on Sublet, far equal at
+  every k). Close k = 1 reads 58 on both bitstreams in all four runs, and the far arm agrees within the run-to-run
+  spread. So the published 76 cycles at 2 nodes and 22.7 per node are predicted to hold on the Sublet bitstream.
+  - The prediction also expected close k = 1 LOWER on Sublet, by FP's MREV drain. It reads equal because silicon shows
+    no such drain.
+  - What silicon does not show is the simulation's penalty for a revoke right behind an MREV: 150 cycles at
+    S12_MEM_DELAY=12, against close 58 and far 66 on silicon (PREREG.md, "On the board").
+  - The "+8" belongs to a different shape, r12-s1's ladder: the handle in a register, eight or more MREVs. This pair
+    does not reproduce it and does not claim to explain it (PREREG.md, "Read before the board run"). This bullet
+    first attributed the +8 to this pair (021adf5423af); corrected 2026-10-16.
 - Silicon's run-to-run spread is up to 6 cycles on one reading (far k = 1: 66-69; far k = 4: 71-77). With FP read
   once, close k = 3 / 4 (45 / 71 on Sublet, 49 / 73 on FP) are not attributed to the bitstream.
 

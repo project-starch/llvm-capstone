@@ -124,3 +124,8 @@ claim (`lifetime.h`, `wm_ctl_arm`).
 * `block_fast` is not covered. Its free is a no-op, so the only release it has is the reset.
 * The runs used the snapshot's `run-staged.py` and the platform kit's images, as the corpus's
   2026-10-11 virtual runs did. They did not use a persistent `capstone_vm` VM.
+
+## On silicon
+
+The same controls ran on silicon on 2026-10-16 (board set 6, `caplifive_sublet_d93a8d66b`). Their readings sit beside
+this record's in `../2026-10-16-silicon-controls/`: every silicon run reads as the same control does here.

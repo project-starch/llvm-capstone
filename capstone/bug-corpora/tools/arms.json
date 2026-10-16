@@ -275,7 +275,7 @@
     },
     "silicon-level0-lifetimes": {
       "target": "capstone-silicon",
-      "summary": "the case built for the silicon ABI (runtime/silicon/build-b0-hello.sh: gp-captable, full LTO, soft float, the pool carve) and run on the FPGA as a delegated application through capstone-exec, its heap level0 built with CAPSTONE_LEVEL0_LIFETIMES: every object is a CDERIVE child of one MANAGE group over the arena, at exactly its request size on a 16-byte placement, and free CREVOKEs it, so a stale capability's next use traps 25; inexact requests keep plain bounds and no lifetime. First measured on caplifive_sublet_d93a8d66b (silicon-runs/2026-10-16-plain); since dev 2c53d5641b72 free finds the block by address and revokes the child recorded in its header (the plain corpora's 2026-10-16 bundles ran the earlier free, and read the same on QEMU after it)",
+      "summary": "the case built for the silicon ABI (runtime/silicon/build-b0-hello.sh: gp-captable, full LTO, soft float, the pool carve) and run on the FPGA as a delegated application through capstone-exec, its heap level0 built with CAPSTONE_LEVEL0_LIFETIMES: every object is a CDERIVE child of one MANAGE group over the arena, at exactly its request size on a 16-byte placement, and free CREVOKEs it, so a stale capability's next use traps 25; inexact requests keep plain bounds and no lifetime. Since dev 06f0b29f0463 (set 4) a request of 4 KiB or more is placed on the granule of its padded size and derived at that size, so its child is exact with base == cursor; only a block that cannot be placed so (realloc in place) keeps plain narrowing. Sets 1-3 ran the earlier placement. First measured on caplifive_sublet_d93a8d66b (silicon-runs/2026-10-16-plain); since dev 2c53d5641b72 free finds the block by address and revokes the child recorded in its header (the plain corpora's 2026-10-16 bundles ran the earlier free, and read the same on QEMU after it)",
       "mechanism": "per-object exact bounds and a CDERIVE/CREVOKE lifetime per object in level0, on silicon",
       "controls": {
         "clean": "complete",
@@ -406,6 +406,112 @@
         "carve-99",
         "live-carve",
         "uaf-carve"
+      ]
+    },
+    "silicon-memcached-stock": {
+      "target": "capstone-silicon",
+      "summary": "memcached's allocator-repros on silicon with slabs.c and cache.c stock (patches 0001 + 0002) on the stock-malloc ledger (MCP_ADAPTER_BACKING, src/cheribsd/malloc-leases.c), shared/driver.c, at -O1 with -fno-inline, over the silicon-level0-lifetimes heap as set 4 builds it (a request of 4 KiB or more placed on the granule of its padded size and derived at that size, so its child is exact with base == cursor): a chunk freed to its slab is reissued with nothing to stop a stale reader, so chunk control 90 (controls/virtual/90) completes. Each 16 KiB read buffer is its own malloc",
+      "mechanism": "per-object bounds and lifetimes on every malloc; none per chunk or cache object, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "chunk-free-90": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "chunk-free-90"
+      ]
+    },
+    "silicon-memcached-sublet": {
+      "target": "capstone-silicon",
+      "summary": "the same corpus with the application's patch 0006 in slabs.c and cache.c (-DMC_CARVE_BOUNDS -DMC_CAPSTONE_SUBLET, shared/driver-virtual.c), over the same heap: every chunk and cache object is a CDERIVE child that slabs_free / cache_free CREVOKEs, and 06/07's key and suffix regions are narrowed. Chunk control 90 faults. A cache.c child of 16,400 B is inexact at its 32-byte granule and rounds up 16 B (case 08)",
+      "mechanism": "per-chunk and per-object CDERIVE children with CREVOKE in the allocators, over per-object lifetimes, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "chunk-free-90": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "chunk-free-90"
+      ]
+    },
+    "silicon-ffmpeg-plane-level0": {
+      "target": "capstone-silicon",
+      "summary": "FFmpeg's plane-repros on silicon over level0 as it ships (bounds only), the case linked with 14 units of FFmpeg 9.0.1's libavutil (frame, buffer, mem, imgutils and ten more; silicon-runs/2026-10-16-nested lists them) at -O0: av_frame_get_buffer carves every plane out of one buffer, so a read one row past a plane stays inside it",
+      "mechanism": "per-object bounds in level0; planes unbounded inside their buffer, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "complete",
+        "subobj": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf"
+      ]
+    },
+    "silicon-ffmpeg-plane-bounds": {
+      "target": "capstone-silicon",
+      "summary": "the same with -DFFP_CARVE_BOUNDS: the case hands the consumer each plane narrowed with SHRINK to its own rows (linesize x height), what frame.c would do if it narrowed at the carve; bounds only, no lifetimes",
+      "mechanism": "SHRINK-narrowed planes over level0, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "complete",
+        "subobj": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf"
+      ]
+    },
+    "silicon-wmem-stock": {
+      "target": "capstone-silicon",
+      "summary": "wireshark's wmem-repros on silicon with wmem as released (the port's reference source from cmake/prepare-source.py, the six wmem units plus system.c, compat.c and scopes.c, at the port's Release flags -O3 -DNDEBUG), over the silicon-level0-lifetimes heap as set 4 builds it (a block of 4 KiB or more placed on its granule, so wmem's 2 MiB blocks and its jumbo get a lifetime). The buggy run is the fix differential `0 N buggy`, whose temporal cases assert that the stale chunk was reoccupied before the read; the fixed run is `0 N fixed`. The packet pool keeps its block across the reset, so wmem controls 00 (uaf-chunk) and 02 (bounds-chunk) complete, and 01 (uaf-jumbo, a block wmem hands to g_free) faults",
+      "mechanism": "per-object bounds and lifetimes on every malloc; none per wmem object, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "uaf-chunk": "complete",
+        "uaf-jumbo": "fault",
+        "bounds-chunk": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "uaf-chunk",
+        "uaf-jumbo",
+        "bounds-chunk"
+      ]
+    },
+    "silicon-wmem-sublet": {
+      "target": "capstone-silicon",
+      "summary": "the same corpus with the port's patch 0001 source at the same flags: every block and block_fast object is a CDERIVE child of its block, bounded to the request and CREVOKEd at free, at realloc and at the reset that ends its pool, which revokes the block's generation and derives a new one. The buggy run is `0 N`, the fixed run `0 N fixed`. All three wmem controls fault",
+      "mechanism": "per-object CDERIVE children with CREVOKE inside wmem's block and block_fast allocators, over per-object lifetimes, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "uaf-chunk": "fault",
+        "uaf-jumbo": "fault",
+        "bounds-chunk": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "uaf-chunk",
+        "uaf-jumbo",
+        "bounds-chunk"
       ]
     }
   }

@@ -150,3 +150,8 @@ claim (`lifetime.h`, `wm_ctl_arm`).
   to the system allocator rather than renewing, are not exercised. Each program uses one block.
 * The runs used the snapshot's `run-staged.py` and the platform kit's images on the remote
   host, as the 2026-10-11 controls did. They did not use a persistent `capstone_vm` VM.
+
+## On silicon
+
+The same controls ran on silicon on 2026-10-16 (board set 6, `caplifive_sublet_d93a8d66b`). Their readings sit beside
+this record's in `../2026-10-16-silicon-controls/`: every silicon run reads as the same control does here.

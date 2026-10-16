@@ -310,7 +310,9 @@
         "capstone-subobject",
         "capstone-carve-bounds",
         "cheribsd-subobject",
-        "cheribsd-carve-bounds"
+        "cheribsd-carve-bounds",
+        "silicon-level0",
+        "silicon-carve-bounds"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -338,6 +340,14 @@
       "shape_table": true,
       "note": "The third FFmpeg corpus and the one the inventory's nested-spatial cell needed. pool-repros holds storage an AVBufferPool handed out and took back (temporal); subobject-repros holds a bound between two MEMBERS of one av_malloc (spatial, NOT nested, because av_refstruct_alloc_ext is called directly); this one holds a bound between two PLANES of one AVBuffer, which is spatial AND nested. That every plane comes from a single buffer is measured rather than assumed: a YUVA420P frame reports buf[1] == NULL with 1024 bytes of slack after the alpha plane inside that one buffer, so a read leaving the plane stays inside the allocation exactly as a wmem chunk overread stays inside its block. ASan is SILENT here and reports the memcached plain-heap row; the two readings side by side are the project's axis, measured rather than argued. The declared port is the app port rather than buffer-pool: buffer-pool compiles only libavutil/buffer.c and refstruct.c, while this case needs frame.c, imgutils.c and pixdesc.c, so the app port (whole libavutil) is the only one that could host a domain build of it. Today the corpus is native-only.",
       "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
+      "arm_configurations": {
+        "silicon-level0": "silicon-ffmpeg-plane-level0",
+        "silicon-carve-bounds": "silicon-ffmpeg-plane-bounds"
+      },
+      "verdict_bundles": {
+        "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
+        "silicon-carve-bounds": "results/2026-10-16-silicon/silicon-carve-bounds"
+      },
       "where": "capstone/bug-corpora/ffmpeg/plane-repros"
     },
     {
@@ -564,7 +574,9 @@
         "native-detect",
         "native-fix-differential",
         "virtual-malloc",
-        "virtual-nested-pools"
+        "virtual-nested-pools",
+        "silicon-mc-stock",
+        "silicon-mc-sublet"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -596,11 +608,15 @@
       "inventory": "capstone/docs/ref/memcached-allocator-defect-triage.md",
       "arm_configurations": {
         "virtual-malloc": "virtual-memcached-stock",
-        "virtual-nested-pools": "virtual-memcached-sublet"
+        "virtual-nested-pools": "virtual-memcached-sublet",
+        "silicon-mc-stock": "silicon-memcached-stock",
+        "silicon-mc-sublet": "silicon-memcached-sublet"
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools"
+        "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools",
+        "silicon-mc-stock": "results/2026-10-16-silicon/silicon-mc-stock",
+        "silicon-mc-sublet": "results/2026-10-16-silicon/silicon-mc-sublet"
       },
       "where": "capstone/bug-corpora/memcached/allocator-repros"
     },
@@ -1222,7 +1238,9 @@
         "native-detect",
         "cheribsd-revocation",
         "virtual-malloc",
-        "virtual-nested-pools"
+        "virtual-nested-pools",
+        "silicon-wm-stock",
+        "silicon-wm-sublet"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -1260,11 +1278,15 @@
       "inventory": "capstone/docs/ref/wireshark-wmem-defect-triage.md",
       "arm_configurations": {
         "virtual-malloc": "virtual-wmem",
-        "virtual-nested-pools": "virtual-wmem-pools"
+        "virtual-nested-pools": "virtual-wmem-pools",
+        "silicon-wm-stock": "silicon-wmem-stock",
+        "silicon-wm-sublet": "silicon-wmem-sublet"
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-11-virtual-23/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-11-virtual-23/virtual-nested-pools"
+        "virtual-nested-pools": "results/2026-10-11-virtual-23/virtual-nested-pools",
+        "silicon-wm-stock": "results/2026-10-16-silicon/silicon-wm-stock",
+        "silicon-wm-sublet": "results/2026-10-16-silicon/silicon-wm-sublet"
       },
       "where": "capstone/bug-corpora/wireshark/wmem-repros"
     },

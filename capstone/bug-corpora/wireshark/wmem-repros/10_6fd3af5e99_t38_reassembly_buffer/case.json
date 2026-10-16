@@ -43,6 +43,18 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=25 pc=0x3f8f4911bc in wm_probe; by probe: the pc lies in wm_probe, the labelled read",
       "verdict_from": "results/2026-10-11-virtual-23/virtual-nested-pools"
+    },
+    "silicon-wm-stock": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b, one boot of set 5), wmem as released at the port's Release flags over set 4's lifetimes heap; the buggy run is the fix differential `0 N buggy` (tools/arms.json silicon-wmem-stock). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. After the fixed run `0 N fixed` printed VERDICT FIXED and exited 0, a fault after the driver's `WM_DEFECT case=N ready` mark at wm_probe, wm_write_probe or a declared fault site is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls, wmem's uaf-chunk, uaf-jumbo and bounds-chunk included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane 8bb5542ed567, before the boot): MISSED.",
+      "verdict": "MISSED",
+      "verdict_note": "reached (WM_DEFECT case=10 ready) and completed with no fault; silicon; buggy run end kind=exit value=0",
+      "verdict_from": "results/2026-10-16-silicon/silicon-wm-stock"
+    },
+    "silicon-wm-sublet": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b, one boot of set 5), the port's patch 0001: every block and block_fast object a CDERIVE child of its block, CREVOKEd at free, realloc and the pool reset, over set 4's lifetimes heap (tools/arms.json silicon-wmem-sublet). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. After the fixed run `0 N fixed` printed VERDICT FIXED and exited 0, a fault after the driver's `WM_DEFECT case=N ready` mark at wm_probe, wm_write_probe or a declared fault site is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls, wmem's uaf-chunk, uaf-jumbo and bounds-chunk included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane 8bb5542ed567, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0xac101574 in wm_probe; by probe: the fault is at the labelled probe wm_probe",
+      "verdict_from": "results/2026-10-16-silicon/silicon-wm-sublet"
     }
   },
   "status": "measured natively (native-detect, native-fix-differential) and on stock CheriBSD (cheribsd-revocation); on virtual Capstone (virtual-malloc, virtual-nested-pools; each arm's verdict_from names its bundle). The Capstone domain arms (spatial, sublet, sublet-chunks, sublet-malloc) and PoisonCap left the case on 2026-10-11 with their builds; their bundles stay in results/.",

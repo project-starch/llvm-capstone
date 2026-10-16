@@ -224,3 +224,8 @@ addresses were A + 0x10 each time. The release stale run read 0xc3 in all three 
   * They do not call `cache_destroy`.
   * The hand-out derive also runs on the malloc path, but A is always taken from the free list. That is
     the cache's own storage, as the pre-registration asks.
+
+## On silicon
+
+The same controls ran on silicon on 2026-10-16 (board set 6, `caplifive_sublet_d93a8d66b`). Their readings sit beside
+this record's in `../2026-10-16-silicon-controls/`: every silicon run reads as the same control does here.
