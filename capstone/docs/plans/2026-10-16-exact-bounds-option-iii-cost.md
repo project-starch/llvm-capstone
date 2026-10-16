@@ -2059,3 +2059,54 @@ So the prediction's `ADD_REFUSED absent` row is only now a claim that can be fal
 suite and on the kit. This is the "a gate that has never blocked anything is not a passing gate,
 it is an unproven one" rule applied to a diagnostic rather than a gate — and it was caught by
 someone else's control, not by mine.
+
+
+## Why heap growth never completes: my own Defect-2 fix refuses it
+
+Instrumenting `remap_mapping`'s refusal paths — unconditionally, for the same reason as the
+`CV_ADD` one — answered this in two runs, and the answer is a regression I introduced in
+`09e1896f6bb3`.
+
+**The exact-bounds-OFF arm cannot answer it at all:** `remap-align` exits 1 on its *setup*
+`malloc(6 MiB)`, refused by the module gate, so the `realloc` never runs and **zero** REMAP lines
+appear. Growth is unreachable there, behind the `add()` defect. The ON arm is the only profile
+where the setup succeeds, and there it says:
+
+    CAPSTONE_VM_REMAP_REFUSED stage=args base=0x3f8fd4f000 old=200704 bytes=536875008 page_ok=1
+    CAPSTONE_VM_REMAP_REFUSED stage=granule bytes=12587008 align=16384
+
+- The first is **CORRECT and expected**: `malloc-contract.c:72` deliberately requires
+  `!realloc(p, 512UL<<20) && errno == ENOMEM` ("failed VM growth preserves original"), and
+  512 MiB + 4096 exceeds `CV_MAX_REGION_BYTES`. Not a defect.
+- The second is **mine**. `realloc.c:38` computes `needed = (n + base + UNIT + IB + 4095) & -4096`
+  — page-rounded and **never granule-rounded**. For the 12 MiB growth that is 12 MiB + 4096 =
+  12587008, whose granule is 16384 and `12587008 % 16384 = 4096`. My `if (bytes % align) return
+  -ERANGE` therefore refuses it, `realloc` falls through to malloc-plus-copy, and the growth never
+  reaches the launcher.
+
+**So the Defect-2 fix traded a use-after-move for a silent refusal of every large growth.** The
+refusal is the safer of the two — it cannot corrupt — but it disables the functionality, and it is
+why `CAPSTONE_VM_REMAP_OK` reads 0 in every arm of every profile.
+
+**And it makes that commit's own claim false.** `09e1896f6bb3` says "a nonzero
+`__capstone_malloc_remap_unaligned` now means a launcher bug, not a measurement". The counter in
+fact reads 0 because my check fires *before* anything can set it. That is a clean zero from a check
+that cannot fire — the class this project names as its most expensive — in a sentence I wrote while
+fixing an instance of it.
+
+**The fix mirrors the single-slot sizing, and must be domain-side for the same reason.** `needed`
+has to be granule-rounded where `maplen` is computed, i.e. in `realloc.c`, so mallocng's accounting
+equals what the launcher maps; rounding it up inside `remap_mapping` would leave `maplen*4096`
+disagreeing with the mapping, which is the trap `cap_single_slot_bytes` was made bounds-stable to
+avoid. It also touches two regions the policy gate pins (`moving realloc sequence`,
+`realloc g->sizeclass>=48`), so it needs the same pinned-allowance treatment and narrowing test as
+the `alloc_group` edit. Not written yet.
+
+### Still open after this
+
+`real_linux_mremap_growth_and_shrink` (the `realloc(p, 400000)` growth and `200000` shrink at
+`malloc-contract.c:76-77`) produces **neither** a refusal nor a `REMAP_OK`, so `remap_mapping` is
+never called for it. Its `needed` of ~405504 has granule 512 and `405504 % 512 == 0`, so my check
+would pass it — meaning `realloc` itself decided not to ask, most likely via
+`g->maplen*4096UL == needed ? g->mem : ...` at `realloc.c:39` reusing the mapping outright. Why
+that check fails is not yet measured, and I am not going to model it.

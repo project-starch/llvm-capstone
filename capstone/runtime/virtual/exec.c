@@ -300,8 +300,19 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
 {
     uintptr_t base = step->args[0];
     size_t old = step->args[1], bytes = step->args[2];
+    /* Unconditional, for the same reason the CV_ADD refusal is: heap growth has never been
+     * observed to COMPLETE in any arm of any profile -- CAPSTONE_VM_REMAP_OK reads 0 everywhere,
+     * including with exact bounds on -- and remap_begin's own gate is not shown to fire. So the
+     * question is which of these refusals happens, and a trace-gated print cannot answer it in the
+     * stages that run without the trace. */
     if (!local_malloc || !bytes || bytes > CV_MAX_REGION_BYTES ||
-        ((base | old | bytes) & 4095)) return -EINVAL;
+        ((base | old | bytes) & 4095)) {
+        fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=args local_malloc=%d base=0x%lx"
+                        " old=%zu bytes=%zu page_ok=%d\n",
+                (int)local_malloc, (unsigned long)base, old, bytes,
+                ((base | old | bytes) & 4095) == 0);
+        return -EINVAL;
+    }
     for (unsigned i=0; i<CV_MAX_ARENAS; ++i) {
         struct mapping *m = &maps[i];
         if ((uintptr_t)m->address != base || m->visible != old || m->bytes != old ||
@@ -323,7 +334,11 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
          * release. */
         size_t align = capstone_repr_granule(bytes);
         if (align < 4096) align = 4096;
-        if (bytes % align) return -ERANGE;
+        if (bytes % align) {
+            fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=granule bytes=%zu align=%zu\n",
+                    bytes, align);
+            return -ERANGE;
+        }
         void *dest = NULL;
         if (align > 4096) {
             dest = reserve_aligned(bytes, align);
@@ -348,6 +363,17 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
         m->address = p; m->bytes = m->visible = bytes;
         if (trace) fprintf(stderr, "CAPSTONE_VM_REMAP_OK old=%zu bytes=%zu\n", old, bytes);
         return 0;
+    }
+    /* No arena matched. Report what the candidates looked like, because the match is on four
+     * fields at once and "no match" alone cannot say which one differed. */
+    fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=nomatch base=0x%lx old=%zu bytes=%zu\n",
+            (unsigned long)base, old, bytes);
+    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
+        struct mapping *m = &maps[i];
+        if (!m->address) continue;
+        if ((uintptr_t)m->address != base) continue;   /* only the arena at this base matters */
+        fprintf(stderr, "CAPSTONE_VM_REMAP_CAND base=0x%lx visible=%zu bytes=%zu heap=%d kind=%d\n",
+                (unsigned long)(uintptr_t)m->address, m->visible, m->bytes, m->heap, m->kind);
     }
     return -EINVAL;
 }
