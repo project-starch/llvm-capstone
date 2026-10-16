@@ -398,8 +398,10 @@ The recipes, read from the recorded runner blob:
   - malloc(6144), case 10's fixed arm;
   - calloc(1, 34816) and calloc(1, 35840), both arms of case 00.
   Sizes from 64 to 12288 B succeeded in the same boot, 3072 and 12288 among them, so it is not a size threshold.
-  This is the same heap that fails run.py's `heap growth/zero` contract (`../RESULTS.md`). The compiler lane has the
-  sizes, and these two cells wait on its fix.
+  This is the same heap that fails run.py's `heap growth/zero` contract (`../RESULTS.md`). The cause is located
+  there. With exact bounds off, the v6 module refuses every arena that is not a naturally aligned power of two. Each
+  of these requests needs a 20480- or 36864-byte group mapping. The succeeding sizes need 16384 at most. These two
+  cells wait on the module fix.
 - **Tool note:** the compiler lane's toolchain copy has `llvm-readobj` but no `llvm-readelf`, which the judge
   calls. The pilot used a bin directory of symlinks to that toolchain, with `llvm-readelf` pointing at
   `llvm-readobj`. So the recorded compiler hash is still that clang's (`ba603a57...`).
