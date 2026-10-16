@@ -6443,3 +6443,31 @@ upstream regression test.
   earlier sets' 24 -> 25 being Q-11's revoked-capability case only.
 - Every faulting case outlived the corpus rung's 120 s watchdog after printing its fault line, which no earlier set
   showed. Not explained here.
+
+## Two capability/native pairs already measured on the Sublet bitstream by its acceptance boots, recorded here (caplifive_sublet_d93a8d66b, 2026-10-16 01:31-01:53)
+The Sublet acceptance (Linux half, dev d5fe0b4092f7) ran both pairs below on the classic line (d04bd83 / df0e9a8 /
+93440d5) and reported only their capability halves. Each pair ran in one boot.
+
+**P1 cell 5 beside the native -O2 baseline** (boot sw8x-b80s-s10-p1o2-c5, firmware 58cea02e55e5b7d7, 01:43-01:53):
+- the images are cell 5 `5f4b44257c933477` (memsys5 + lookaside 1200,40, 2 MiB heap, -O2) and the native -O2
+  `speedtest1_baseline` `9a80c1cd2a576ed2`, with the relinked k800 `589ceee3853c6092` and host `2c9e82d101b48160`;
+- k800 returned 4 twice, both arms read `112006 38bb59fd`, lookasides 25,010 and 25,122, and there was one boot banner.
+
+| arm | cycles | CPI against its QEMU count |
+|---|---:|---:|
+| cell 5, `--size 1 --stats` | 1,156,968,951 | 3.498 (330,731,081) |
+| native -O2, `warm --size 1 --stats` | 856,160,837 | 3.557 (240,714,705) |
+
+**cell 5 / native -O2 = 1.3513.**
+- The same images read 1.3510 on R-42 (boot p1o2-c5, 2026-09-29).
+- The native arm reproduces across the two bitstreams within 0.005 % (856,120,199 then).
+- P1's cell 6 still needs an -O2 build carrying the sublet-runtime fix. It needs its own boot beside a native,
+  because both cells enter at 0x10000.
+
+**The 17-rung ladder at K = 0, both halves** (boot s10, 01:31-01:42): the capability half, then the bare-metal sweep.
+- Paired by `ladder-revival-2026-09-22/pair-halves.py`, unchanged. The control passes all three gates: instruction
+  ratio 1.00002, baseline CPI 1.2000, a 15/15 floor.
+- 17 admissible rows, cycle ratios 0.981× (`beebs_cover`) to 2.227× (`beebs_insertsort`).
+- Records: `tests/rtl-smoke/ladder-sublet-2026-10-16/results/K0-s10.*`.
+- This is one layout draw. Layouts K = 1..3 are pre-registered there (lane bc200ac88bd3), for the median over
+  K = 0..3.
