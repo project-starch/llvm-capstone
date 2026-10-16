@@ -305,6 +305,10 @@ static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *s
             memcpy(v, raw + sh[i].sh_offset, 8);
             virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_V2 || v[0] == CV_IMAGE_MAGIC_V3;
             local_malloc = v[0] == CV_IMAGE_MAGIC;
+            /* v5 is refused rather than run: its mallocng hands out exact object bounds, which
+             * this profile's encoder rounds outward, so its slots would reach the neighbouring
+             * slot's in-band header. Rebuilding is the only fix. */
+            if (v[0] == CV_IMAGE_MAGIC_V5) virtual = 0;
         }
         if (!strcmp(names + sh[i].sh_name, ".capstone_domreq") && sh[i].sh_size == 24) {
             memcpy(v, raw + sh[i].sh_offset, 24);
@@ -693,10 +697,9 @@ int main(int argc, char **argv)
     host.private_fds[host.private_count++] = fd;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
     if (device < 0) { munmap(image, image_bytes); return die("open"); }
-    uint64_t profile = 0;
-    if (local_malloc && (ioctl(device, CV_PROFILE, &profile) || !(profile & 0x100))) {
-        munmap(image, image_bytes); errno = ENOTSUP; return die("exact-bounds CPU profile required");
-    }
+    /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
+     * construction -- the allocator's geometry keeps every rounded bound inside its own slot --
+     * so the launcher runs on the default profile. The bit may still be set; it is not read. */
     if (grant(image, image_bytes, 3, 7, entry, 0, 0)) { munmap(image, image_bytes); return die("image grant"); }
     void *stack = reserve(stack_bytes);
     meta = reserve(CAPSTONE_DELEGATE_META_BYTES);

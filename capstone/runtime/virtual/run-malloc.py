@@ -24,6 +24,9 @@ def main():
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=1800)
     p.add_argument('--skip-churn', action='store_true')
+    p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
+                   help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
+                        "it is kept so a suite can be run both ways as a two-sided control.")
     a = p.parse_args()
     nm = Path(os.environ.get('CAPSTONE_LLVM_BIN', '')) / 'llvm-nm'
     symbols = {name: int(value, 16) for value, _, name in
@@ -75,8 +78,8 @@ echo VIRTUAL_STAGED_DONE
     (stage / 'gate.sh').write_text(gate)
     run = subprocess.run([sys.executable, str(HERE / 'run-staged.py'), '--qemu', str(a.qemu.resolve()),
                           '--images', str(a.images.resolve()), '--stage', str(stage.resolve()),
-                          '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout),
-                          '--exact-bounds'])
+                          '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout)
+                          ] + (['--exact-bounds'] if a.exact_bounds else ['--no-exact-bounds']))
     log = (a.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
     checks = {
         'native_reference': 'MALLOC_NATIVE_EXIT:0\n' in log,

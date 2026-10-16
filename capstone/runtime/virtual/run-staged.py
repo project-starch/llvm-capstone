@@ -17,7 +17,8 @@ def main():
     p.add_argument('--timeout', type=int, default=600)
     p.add_argument('--disk-mib', type=int, default=1024)
     p.add_argument('--work', type=Path, required=True, help='New output directory')
-    p.add_argument("--exact-bounds", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--exact-bounds", action=argparse.BooleanOptionalAction, default=False,
+                   help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept so a suite can be run both ways as a two-sided control.")
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     disk = a.work / 'stage.ext4'

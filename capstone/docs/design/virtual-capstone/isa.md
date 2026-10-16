@@ -72,7 +72,10 @@ It requires `base < end`, permissions at most 15, two available IDs, and an
 exact compress/decompress round trip of the initial bounds and cursor in the
 default profile. With `x-capstone-exact-bounds=true`, the existing physical
 shadow bounds are authoritative, and the round-trip restriction is lifted.
-Context restoration also loads those shadow bounds. This opt-in QEMU profile
+Context restoration also loads those shadow bounds. The virtual runtime no longer
+selects this mode: from ABI v6 it runs on the default profile and makes its bounds
+representable in the allocator instead (option iii). The option is retained so a
+suite can be run both ways as a two-sided control. This opt-in QEMU profile
 supports mallocng object geometry without allocator-specific instructions;
 it requires more metadata than a tag bit and is not an RTL encoding.
 All checks precede table and slot mutation. Success creates a private senior

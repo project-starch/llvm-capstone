@@ -90,6 +90,9 @@ def main():
     p.add_argument('--perl-smoke', type=Path)
     p.add_argument('--legacy-application', type=Path)
     p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
+    p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
+                   help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept "
+                        'so the suite can be run both ways as a two-sided control.')
     p.add_argument('--record', type=Path, required=True)
     p.add_argument('--timeout', type=int, default=300)
     p.add_argument('--omit-application', action='store_true')
@@ -127,7 +130,8 @@ def main():
            '-device', 'virtio-blk-device,drive=hd0',
            '-drive', f'file={disk},format=raw,id=gate,readonly=on',
            '-device', 'virtio-blk-device,drive=gate', '-cpu',
-           'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true']
+           'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true'
+           + (',x-capstone-exact-bounds=true' if a.exact_bounds else '')]
     with open(os.environ['CAPSTONE_QEMU_LOCK'], 'a+b') as lock, (work/'serial.log').open('wb') as log:
         fcntl.flock(lock, fcntl.LOCK_EX)
         guest = subprocess.Popen(cmd, env=dict(os.environ, TMPDIR=str(work)), stdin=subprocess.PIPE, stdout=subprocess.PIPE,

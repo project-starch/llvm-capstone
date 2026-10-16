@@ -77,8 +77,11 @@ Linux mapping -> mallocng group -> linear slots -> bounded object lifetimes
 
 The allocator port preserves upstream's UNIT=16, IB=4, size classes, group
 counts, offset cycling and realloc decisions. Its internal metadata gains
-capabilities and an out-of-line slot-prefix representation. ABI v5 requires
-QEMU's explicit exact-bounds shadow-storage profile; this is not an RTL proof.
+capabilities and an out-of-line slot-prefix representation. ABI v6 runs on the
+DEFAULT compact profile (option iii): the allocator's slot geometry keeps every
+outward-rounded bound inside its own slot, short of the neighbouring slot's in-band
+header, so no exact-bounds shadow storage is needed. ABI v5, which required that
+profile, is refused rather than run.
 The old block-count ceiling and custom allocator are removed. See the
 [local mallocng contract](../../../runtime/virtual/mallocng.md).
 
