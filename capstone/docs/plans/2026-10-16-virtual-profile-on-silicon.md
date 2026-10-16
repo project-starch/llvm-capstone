@@ -409,10 +409,10 @@ the flag-off sweep and the sup lists readings-identical, the vp1 arms unchanged)
 request 2026-10-28**, in parallel with its last sweep as vp1's was. Board acceptance of vp1 runs in that window and
 does not gate it.
 
-## Synthesis of `virtual-profile` 4b958dc3f, bitstream 1 of the virtual profile (B + Q-17), pre-registered 2026-10-16 BEFORE the handoff
+## Synthesis of `virtual-profile` 9ed9a2594, bitstream 1 of the virtual profile (B + Q-17), pre-registered 2026-10-16 BEFORE the handoff
 
-Tree: capstone-sublet b7e3287e4 (= the resident d93a8d66b's RTL) + 31c8ebe17 + 16345658f (item B) + ea88d8e5d (Q-19 as ruled) + 4b958dc3f (Q-17).
-Name `caplifive_vp1_4b958dc3f.bit`. Gates on the committed tree before the handoff: lint 52/3/0/0/40/0/2/25/894/2/100
+Tree: capstone-sublet b7e3287e4 (= the resident d93a8d66b's RTL) + 31c8ebe17 + 16345658f (item B) + ea88d8e5d (Q-19 as ruled) + 9ed9a2594 (Q-17).
+Name `caplifive_vp1_9ed9a2594.bit`. Gates on the committed tree before the handoff: lint 52/3/0/0/40/0/2/25/896/2/100
 with the 40 UNOPTFLAT names identical (`lint-loop-names.py`), the 95-test sweep readings-identical to the tip sweep
 of b7e3287e4 (sweep-compare.py), every testlist_sup.yaml entry readings-identical on the two trees, vb-trans's seven
 arms and its flag-off control as pre-registered, Q-17's arm reading 25 (29 on the old tree). The flow untouched;
@@ -433,10 +433,15 @@ Predictions (refutation keys in brackets), written before the build:
 Readings the bitstream must answer (bare JTAG arms, pre-registered values from the simulation): the six vb-trans arms
 and the flag-off control; Q-17's arm; the S-16 set, the Sublet arms and one corpus set identical to d93a8d66b (the
 physical regression). What the resident fallback stays: caplifive_sublet_d93a8d66b.
-Gate results on 4b958dc3f at the time of this commit: lint and loop names as above; the seven arms, the flag-off control and
-the Q-17 arm as pre-registered; the 95-test sweep with the flag off 92 identical to b7e3287e4's tip sweep in
-exceptions, readings and retired counts, 0 differ, 3 missing (the sourceless entries, as in every sweep). The sup
-lists on both trees are running; the handoff waits for their comparison.
+Gate results on 9ed9a2594 at the handoff (2026-10-17): lint 52/3/0/0/40/0/2/25/896/2/100 with the 40 loop names
+identical (UNUSEDSIGNAL 894 -> 896: seven anonymous thread wires appear and five disappear in the regenerated
+capstone_dyn_unit.anvil.sv, no hand-written file moved; the reference moved by name as every Sublet step did); the
+seven vb-trans arms, the flag-off control and the Q-17 arm as pre-registered; the Sublet subset (12 tests) identical
+to b7e3287e4. On the predecessor 4b958dc3f the flag-off 95-test sweep read 92 identical, 0 differ, 3 missing, and the
+full sup list REFUSED it (40 Sublet entries: the reordered CDERIVE read the request's operands after the query's
+cycle boundary), the defect fixed in 9ed9a2594. The 95-test sweep and the full sup list rerun on 9ed9a2594 with
+their comparisons; synthesis runs in parallel with them on the lead's word of 2026-10-17; the flash waits for both
+comparisons and the lead's own word to the board lane.
 
 ## Constraints
 
@@ -464,7 +469,7 @@ lists on both trees are running; the handoff waits for their comparison.
 | exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`. DECIDED the same day: (ii) dense, the format frozen as proposed, the helper lane owning the semantics |
 | C' bounds | RTL lane | DROPPED 2026-10-16: option (iii), re-decided on the corrected cost, needs nothing in the RTL |
 | option (iii) in the runtime: mallocng `repr_round`, the CSMINT descriptor audit, the ABI and launcher gate, runners, documents, re-records | compiler lane | to do, 4-6 days: the re-costed geometry (7 table entries, granule group header, granule offset steps) plus classification on `repr_round(n)` against `stride - IB`, so no rounded end reaches the next slot's header |
-| B translation in C mode | RTL lane | GATES GREEN 2026-10-16 on capstone-ariane `virtual-profile` 4b958dc3f (bitstream 1's RTL: B, R-56, Q-19 as ruled, Q-17): seven arms, the flag-off control and the Q-17 arm as pre-registered; lint at baseline, the 40 loop names identical; the flag-off sweep 92/95 identical, 0 differ; the sup lists on both trees running, then the handoff to the synth lane as `caplifive_vp1_4b958dc3f.bit` with the pre-registration below |
+| B translation in C mode | RTL lane | GATES GREEN 2026-10-17 on capstone-ariane `virtual-profile` 9ed9a2594 (vp1's RTL: B, R-56, Q-19 as ruled, Q-17 with its operand copy): seven arms, the flag-off control and the Q-17 arm as pre-registered; lint 52/3/0/0/40/0/2/25/896/2/100 with the 40 loop names identical (+2 anonymous generated wires, attributed by name in 9ed9a2594); the Sublet subset identical to b7e3287e4; the flag-off sweep and the full sup list rerunning on this commit with their comparisons (4b958dc3f's sup-list comparison refused its predecessor, 40 Sublet entries, which is what the gate is for); synthesis handed off in parallel on the lead's word; the flash waits for both comparisons and the lead's own word to the board lane |
 | A lifetime table | RTL lane | to do |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
 | E policy list | RTL lane | to do, folded into D |
