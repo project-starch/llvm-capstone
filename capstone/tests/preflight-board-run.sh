@@ -91,7 +91,7 @@ if [[ -f "$FW" ]]; then
     # bitstream, capstone-sublet) changes the node RECORD (a parent link in the b word) but not the pool: INIT_STAGE
     # still sets head := 3 and REVNODE_SENTINEL stays 65535, so it is the same DTS. Added before either flash, so a
     # run on the new silicon cannot fall through to the unknown-name block below.
-    *65536*|*_r20*|*supcall*|*r51r52*|*_fpb_*|*_sublet_*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
+    *65536*|*_r20*|*supcall*|*r51r52*|*_fpb_*|*_sublet_*|*_vp1_*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
         && ok "DTS matches $BITSTREAM (0x3c2d2000)" \
         || bad "DTS/bitstream MISMATCH: $BITSTREAM needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
     # An unknown name BLOCKS (the lead, 2026-10-04). It used to warn, and _r20 and supcall both fell through that warn

@@ -377,11 +377,50 @@ Three bitstreams, batched so each answers what the simulation cannot:
    reserved ids and the header (the generation path leaves the id under the flag); CSRUNV's frame addressing, actions
    0-3 and the page-fault, node-pressure and service-ECALL kinds over the existing switcher. Reads: Tier 1's launcher
    smoke (contract.dom reading VIRTUAL_APPLICATION_OK and the stale access denied 25), the first virtual runtime suite.
+   **Q-15 under the flag (ruled 2026-10-16, f224649773ee; in this bitstream):** a CDERIVE child the compact format
+   cannot hold exactly is refused with 29 before any mutation, QEMU's compact rule; the physical profile keeps
+   rounding outward. Mechanism: not a round trip through compress_cap (a decode in series after one of the three
+   instances that set the WNS) but the equivalent mask test in the dyn unit before derive_req: exact iff len < 4096
+   (the iE = 0 branch, `E == 0 && !len[12]`), or both start and end are multiples of 2^(E0 + 3) with E0 from the
+   length's priority encode and no renormalisation term (aligned ends have zero residues, so the R-54 step never fires
+   on an exact region). The runtime lane checked the rule against bounds-model.py at d93a8d66b on 200,000 random
+   regions with 0 mispredictions (an 8 KiB exemption would mispredict 749). Directed arm, three cases: a 5,000-byte
+   child at an odd base (29 under the flag, rounded on the physical profile), the same child 8-aligned (exact on both),
+   len 4095 at an odd base (exact on both).
 3. **A paged + the rest of D + E + H + Q-18**: the paged table, FP state per context (#30), CSMINT/CSRETIRE over the
    new table, the policy list with #25's untagged-arithmetic rule, the collection flush, and DROP's virtual rule.
    Reads: Tier 1 and Tier 2 in full, then Tier 3's corpus; integration of whatever 1 and 2 leave open.
 Every bitstream is pre-registered before its handoff and carries its lint and loop-name numbers; every reflash
 waits for the lead's own word; the physical regression is read on every one.
+
+## Synthesis of `virtual-profile` 4b958dc3f, bitstream 1 of the virtual profile (B + Q-17), pre-registered 2026-10-16 BEFORE the handoff
+
+Tree: capstone-sublet b7e3287e4 (= the resident d93a8d66b's RTL) + 31c8ebe17 + 16345658f (item B) + ea88d8e5d (Q-19 as ruled) + 4b958dc3f (Q-17).
+Name `caplifive_vp1_4b958dc3f.bit`. Gates on the committed tree before the handoff: lint 52/3/0/0/40/0/2/25/894/2/100
+with the 40 UNOPTFLAT names identical (`lint-loop-names.py`), the 95-test sweep readings-identical to the tip sweep
+of b7e3287e4 (sweep-compare.py), every testlist_sup.yaml entry readings-identical on the two trees, vb-trans's seven
+arms and its flag-off control as pre-registered, Q-17's arm reading 25 (29 on the old tree). The flow untouched;
+DTS 65536 unchanged (the pool is unmoved); the capability word unchanged, so every image built for d93a8d66b runs.
+
+Predictions (refutation keys in brackets), written before the build:
+- Routed WNS within the noise band of d93a8d66b's -15.856 (the same compress_bounds path sets the slack; this
+  change adds no term to any compress or forwarding cone). [WNS worse by more than the noise band: the worst path
+  is read; the discriminator is a failing endpoint inside cva6_mmu (the two 2:1 privilege muxes feed the
+  permission compares) or at ex_stage's new flops (the kept LSU exception, ~130 bits + trans_id); either names B.]
+- Loop membership by stem unchanged; LUTLP-1 0; the 40 UNOPTFLAT names identical (the MMU is in none of them; the
+  load unit's new term is a 3-input AND on the request path, not in a loop cone). [a new stem through cva6_mmu or
+  load_unit: the translation enable OR'd at the ex_stage boundary entered a cone]
+- Area: csr_regfile +1 flop and a 2-bit read mux; cva6_mmu two priv muxes (tens of LUT); ex_stage +~140 flops and
+  a 2:1 exception mux at the capability writeback port; load_unit a few LUT; everything else flat. [any module
+  moving by hundreds of LUT: a synthesis duplication the model does not see, read the hierarchy report]
+- Route time: no prediction; recorded for the spread.
+Readings the bitstream must answer (bare JTAG arms, pre-registered values from the simulation): the six vb-trans arms
+and the flag-off control; Q-17's arm; the S-16 set, the Sublet arms and one corpus set identical to d93a8d66b (the
+physical regression). What the resident fallback stays: caplifive_sublet_d93a8d66b.
+Gate results on 4b958dc3f at the time of this commit: lint and loop names as above; the seven arms, the flag-off control and
+the Q-17 arm as pre-registered; the 95-test sweep with the flag off 92 identical to b7e3287e4's tip sweep in
+exceptions, readings and retired counts, 0 differ, 3 missing (the sourceless entries, as in every sweep). The sup
+lists on both trees are running; the handoff waits for their comparison.
 
 ## Constraints
 
@@ -405,7 +444,7 @@ waits for the lead's own word; the physical regression is read on every one.
 | exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`. DECIDED the same day: (ii) dense, the format frozen as proposed, the helper lane owning the semantics |
 | C' bounds | RTL lane | DROPPED 2026-10-16: option (iii), re-decided on the corrected cost, needs nothing in the RTL |
 | option (iii) in the runtime: mallocng `repr_round`, the CSMINT descriptor audit, the ABI and launcher gate, runners, documents, re-records | compiler lane | to do, 4-6 days: the re-costed geometry (7 table entries, granule group header, granule offset steps) plus classification on `repr_round(n)` against `stride - IB`, so no rounded end reaches the next slot's header |
-| B translation in C mode | RTL lane | SIMULATION GREEN 2026-10-16, bitstream 1's RTL FINAL at capstone-ariane `virtual-profile` 4b958dc3f (B, R-56, Q-19 as ruled, Q-17): seven vb-trans arms, the flag-off control and the Q-17 arm as pre-registered, lint at baseline with the 40 loop names identical; the flag-off neutrality sweep and the sup lists on both trees are running on that tree; the synthesis request follows their comparison, with the pre-registered prediction |
+| B translation in C mode | RTL lane | GATES GREEN 2026-10-16 on capstone-ariane `virtual-profile` 4b958dc3f (bitstream 1's RTL: B, R-56, Q-19 as ruled, Q-17): seven arms, the flag-off control and the Q-17 arm as pre-registered; lint at baseline, the 40 loop names identical; the flag-off sweep 92/95 identical, 0 differ; the sup lists on both trees running, then the handoff to the synth lane as `caplifive_vp1_4b958dc3f.bit` with the pre-registration below |
 | A lifetime table | RTL lane | to do |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
 | E policy list | RTL lane | to do, folded into D |
