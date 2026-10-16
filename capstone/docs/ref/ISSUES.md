@@ -1359,7 +1359,7 @@ emits DROP implicitly. Options: refuse DROP on a node with children (status 3 ->
 make DROP register-only for NONLIN as QEMU does. Directed test: derive, DROP the parent, load through the child
 (retires today), CREVOKE (refused 25 today).
 
-## Q-19 — under the virtual-context flag the RTL translates a consuming-capable LDC as a STORE, so a non-consuming ldc through a writable capability from a read-only page faults 15 where QEMU succeeds `OPEN — RTL divergence by design, filed 2026-10-16 with item B; the consuming case agrees`
+## Q-19 — under the virtual-context flag the RTL translates a consuming-capable LDC as a STORE, so a non-consuming ldc through a writable capability from a read-only page faults 15 where QEMU succeeds `RULED 2026-10-16 by the model's semantics owner: QEMU's rule stands and the RTL conforms, because landed software depends on it; filed 2026-10-16 with item B; the consuming case agrees`
 
 QEMU's `capstone_ldc_granule` (op_helper.c:2165-2227 at d35af47b163c) probes the store side only after the loaded
 value turns out tagged and linear-family. The RTL (virtual-profile 16345658f, load_unit.sv `ldc_store_probe_o`) decides
@@ -1369,6 +1369,24 @@ page without W or D with STORE_PAGE_FAULT; the RTL additionally refuses a NONLIN
 read-only page. Reachable only with capability-bearing read-only pages (mprotect after a store); the launcher's grants
 are RW by construction (capstone_vm.c:193-194). Directed test: vb-trans.S arm 4 (the consuming case); the non-consuming
 case is not yet an arm.
+
+**Ruling, 2026-10-16, by the model's semantics owner** (the helper lane, named in
+`docs/plans/2026-10-16-virtual-profile-on-silicon.md`). QEMU's rule stands: a non-consuming ldc from a read-only page
+through a writable capability succeeds. Only a load that consumes (a tagged, linear-family value) needs the page's
+store permission.
+- The case is reachable by landed software, not only by mprotect experiments. `runtime/virtual/contract.c`'s
+  `sparse-stale` mode (lines 223-224 at dev 32e7edb2b6f1) does exactly this:
+  - it makes the page holding a collected pointer `PROT_READ`;
+  - it loads the pointer back through the slot's RW capability (`void *p = *slot;`);
+  - it expects the fault at the next instruction, the labelled `cap_vm_fault_collected` lbu.
+  Under the RTL's rule that load faults 15 first, so the mode fails on silicon.
+- The RTL conforms; the semantics do not change. The store-buffer wedge that motivated the rule needs a different
+  mechanism, and that is the RTL lane's design. One shape that keeps the refusal out of the store buffer: the load's
+  translation already returns the PTE, so carry its store permission (W and D) with the load. Decide at writeback,
+  once the loaded value is known to be consuming. A consuming value on a page without store permission raises
+  STORE_PAGE_FAULT there, before the clear is queued. A non-consuming value completes.
+- The directed test needs the missing arm: a non-consuming ldc from a read-only page through an RW capability completes
+  on both sides. The `sparse-stale` contract mode is the Tier 2 check on the board.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
