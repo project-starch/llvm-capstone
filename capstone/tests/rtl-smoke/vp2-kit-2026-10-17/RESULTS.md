@@ -77,6 +77,22 @@ The compiler lane states this SDK "builds and produces v6 domains; not yet verif
 that lane. It does not separate the v6 runtime from the bounds profile, since both differ from the passing run
 above; the lane's own on/off control does.
 
+**The cause, located the same morning.** Two checks in `runtime/virtual/module/capstone_vm.c` are keyed on the
+context's `exact_bounds`, which the module reads from CSR 0x5c0 bit 0x100 and which option (iii) turns off:
+- `add()` refuses any arena that is not a naturally aligned power of two:
+  `!c->exact_bounds && (!is_power_of_2(r->bytes) || (r->address & (r->bytes - 1)))` → -EINVAL;
+- `remap_begin()` refuses every heap remap when exact bounds are off.
+
+How a NULL arises:
+- below 4 MiB the heap asks the launcher for a granule-rounded size at page alignment (`heap.c`
+  `__capstone_malloc_map`);
+- so every mapping that is not a power of two is refused, and malloc returns NULL without printing anything;
+- every NULL in the run.py contract and in the Tier 3 pilot needs such a mapping (20480, 28672, 36864 B and up).
+
+The compiler lane confirmed it two-sided: on the same v6 kit, its `--exact-bounds` arm clears all four failing
+contract markers. The predicate the module enforces is stricter than option (iii)'s representability, and the fix
+belongs in the module. vp2's board runs with exact bounds off, so the fix also applies to the board module.
+
 ## Defects found on the way, and where they went
 
 - **dev's app-port SQLite could not be prepared** after 423d13f5b81f, which moved the sorter rewrite into

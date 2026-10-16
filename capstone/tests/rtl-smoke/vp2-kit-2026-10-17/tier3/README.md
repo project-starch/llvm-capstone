@@ -386,7 +386,22 @@ The recipes, read from the recorded runner blob:
 - The case.c rebuild path (9 of the 26 bundles, 107 of the 304 images) works end to end on the v6 SDK. That covers
   build, one boot, the judge, and a comparison cell by cell.
 - It does not show the v6 heap is sound. run.py's contract FAILS on the same kit (`../RESULTS.md`), and these 9
-  cases are spatial. A temporal bundle is the next pilot.
+  cases are spatial.
+- **The second pilot, a temporal bundle (bundle 14, `memcached/plain-temporal-repros`, 3 cases, same kit and
+  SDK):** CAUGHT 3 of 3, the recorded tally. Every cell reads cause 25 at its labelled probe (`mct_read_probe` /
+  `mct_write_probe`), attribution `probe`, reached, equal to the record. The controls faulted as expected.
+- **The third pilot, a Sublet bundle (bundle 5, `ffmpeg/carved-repros` `virtual-nested-pools`, 13 cases, the
+  recorded `cc_args` `-DFFC_SUBLET_CARVE` and the runtime include):** 11 of 13 cells equal the record (CAUGHT, cause 28
+  at the labelled probe). The four controls read as expected, including the live re-carve (complete) and the stale
+  carve (25). **Cases 00 and 10 read NO-READING control-failed instead of CAUGHT.** In both, the v6 heap returned
+  NULL to the case's allocation:
+  - malloc(6144), case 10's fixed arm;
+  - calloc(1, 34816) and calloc(1, 35840), both arms of case 00.
+  Sizes from 64 to 12288 B succeeded in the same boot, 3072 and 12288 among them, so it is not a size threshold.
+  This is the same heap that fails run.py's `heap growth/zero` contract (`../RESULTS.md`). The cause is located
+  there. With exact bounds off, the v6 module refuses every arena that is not a naturally aligned power of two. Each
+  of these requests needs a 20480- or 36864-byte group mapping. The succeeding sizes need 16384 at most. These two
+  cells wait on the module fix.
 - **Tool note:** the compiler lane's toolchain copy has `llvm-readobj` but no `llvm-readelf`, which the judge
   calls. The pilot used a bin directory of symlinks to that toolchain, with `llvm-readelf` pointing at
   `llvm-readobj`. So the recorded compiler hash is still that clang's (`ba603a57...`).
