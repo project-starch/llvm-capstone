@@ -6461,8 +6461,14 @@ The Sublet acceptance (Linux half, dev d5fe0b4092f7) ran both pairs below on the
 **cell 5 / native -O2 = 1.3513.**
 - The same images read 1.3510 on R-42 (boot p1o2-c5, 2026-09-29).
 - The native arm reproduces across the two bitstreams within 0.005 % (856,120,199 then).
-- P1's cell 6 still needs an -O2 build carrying the sublet-runtime fix. It needs its own boot beside a native,
-  because both cells enter at 0x10000.
+- **Corrected the same day.** This section first said P1's cell 6 "still needs an -O2 build carrying the
+  sublet-runtime fix". It does not.
+  - The acceptance's "fixed" cell 6 `4bfe3b0ec8494385`, the c6pair boot, is that build. Its disassembly is identical to
+    an -O2 rebuild with the fix (612b3ec514c0, lane HEAD), and its `CPDOMREQ` (data 0x135de0, stack 0x100000) equals P1's
+    own cell 6 `df484d98b489aeab`.
+  - The "-O1" in that boot's log is the driver's label text, not the image's level.
+  - It read 1,292,584,693 cycles here (CPI 3.756 against its QEMU 344,110,502).
+  - What is missing is a native beside it in one boot. It needs its own boot, because both cells enter at 0x10000.
 
 **The 17-rung ladder at K = 0, both halves** (boot s10, 01:31-01:42): the capability half, then the bare-metal sweep.
 - Paired by `ladder-revival-2026-09-22/pair-halves.py`, unchanged. The control passes all three gates: instruction
