@@ -1,0 +1,173 @@
+================================================================================================
+INPUTS   UNIT=16  IB=4  MMAP_THRESHOLD=131052  48 size classes, max 8191 units = 131056 bytes
+         granule: 1 below 4096, else 2^(ilog2(L)-9);  lengths needing a 2nd rounding pass: 0
+================================================================================================
+
+### SMALL PATH (n < MMAP_THRESHOLD): does repr_round(n) stay inside the slot?
+
+sc     units   stride     n_max gran@nmax fits off=0 fits worst
+24       146     2336      2332         1       yes       yes
+25       170     2720      2716         1       yes       yes
+26       204     3264      3260         1       yes       yes
+27       255     4080      4076         1       yes       yes
+28       292     4672      4668         8        NO        NO
+29       340     5440      5436         8        NO        NO
+30       409     6544      6540         8        NO        NO
+31       511     8176      8172         8        NO        NO
+32       584     9344      9340        16        NO        NO
+33       682    10912     10908        16        NO        NO
+34       818    13088     13084        16        NO        NO
+35      1023    16368     16364        16        NO        NO
+36      1169    18704     18700        32        NO        NO
+37      1364    21824     21820        32        NO        NO
+38      1637    26192     26188        32        NO        NO
+39      2047    32752     32748        32        NO        NO
+40      2340    37440     37436        64        NO        NO
+41      2730    43680     43676        64        NO        NO
+42      3276    52416     52412        64        NO        NO
+43      4095    65520     65516        64        NO        NO
+44      4680    74880     74876       128        NO        NO
+45      5460    87360     87356       128        NO        NO
+46      6552   104832    104828       128        NO        NO
+47      8191   131056    131051       128        NO        NO
+
+classes where repr_round(n_max) leaves the slot:  off=0 -> 20 of 48,  worst off -> 20 of 48
+first affected class (worst off): sc=28
+individual n in 1..131051 affected:  off=0 -> 735 (max overshoot 68 B),  worst off -> 115695 (max 116 B)
+
+### FIX (a): classify on repr_round(n) instead of n
+
+n values promoted to a larger class: 628 of 131051 (0.48%)
+extra bytes: total 8090432 over the swept range, max 26224 for one allocation
+worst single-allocation overhead: 25.1% at n=13073
+n values still not fitting after (a), at the worst slot offset: 0
+n values pushed off the size-class table onto the mmap path by rounding: 107
+
+### FIX (b): keep classification, pin off=0 for classes with stride >= 4096
+
+n values still not fitting under (b): 735
+classes that would lose offset cycling (the double-free trap): 20 of 48
+
+### BIG PATH (n >= MMAP_THRESHOLD): individually mmapped
+
+           n  maplen     stride   repr_rnd     gran  room_best   room_wst fits best/worst
+      131052      32     131056     131072      128     131052     131052  NO/NO
+      131053      33     135152     131072      128     135148     131068  yes/NO
+      262144      65     266224     262144      512     266220     262156  yes/yes
+     1048575     257    1052656    1048576     1024    1052652    1048588  yes/yes
+     1048576     257    1052656    1048576     2048    1052652    1048588  yes/yes
+     4194304    1025    4198384    4194304     8192    4198380    4194316  yes/yes
+     4198400    1026    4202480    4202496     8192    4202476    4198412  NO/NO
+     4198400    1026    4202480    4202496     8192    4202476    4198412  NO/NO
+    16777216    4097   16781296   16777216    32768   16781292   16777228  yes/yes
+
+sampled every 4096 B from 131052 to 64 MiB (16353 points):
+  rounded bound exceeds the MAPPING: 13312 points, max overshoot 61440 B
+  fix: size the mapping from repr_round(n). extra pages needed, by count: {1: 3041, 2: 2048, 3: 1536, 4: 1536, 5: 1024, 6: 1024, 7: 1024, 8: 1024, 9: 512, 10: 512, 11: 512, 12: 512, 13: 512, 14: 512, 15: 512, 16: 512}
+
+mallocng.md:96 says mappings are a 'page-rounded requested length'.
+  smallest page-rounded length that is NOT representable: 1025 pages = 4198400 bytes
+  of the first 16383 page counts, 13312 are not representable (81.3%)
+====================================================================================================
+STEP 0  instrument check: the oracle must show BOTH containment and escape
+====================================================================================================
+  exact small (base 256 MiB, n=64):        decoded ('0x10000000', '0x10000040')  width 64
+  large at a 16-byte offset (n=131052):    decoded ('0x10000000', '0x10020000')  width 131072
+  -> the oracle distinguishes the two cases
+
+====================================================================================================
+STEP 1  TODAY's geometry: does the decoded bound stay inside its slot?
+====================================================================================================
+sc     stride     n_max granule  base esc   end esc verdict
+28       4672      4668       8         0         0 contained
+29       5440      5436       8         0         0 contained
+30       6544      6540       8         0         0 contained
+31       8176      8172       8         0         0 contained
+32       9344      9340      16         0         0 contained
+33      10912     10908      16         0         0 contained
+34      13088     13084      16         0         0 contained
+35      16368     16364      16         0         0 contained
+36      18704     18700      32        16         0 ESCAPES
+37      21824     21820      32        16        16 ESCAPES
+38      26192     26188      32        16         0 ESCAPES
+39      32752     32748      64        16         0 ESCAPES
+40      37440     37436      64        16        48 ESCAPES
+41      43680     43676      64        16        16 ESCAPES
+42      52416     52412      64        16        48 ESCAPES
+43      65520     65516     128        16         0 ESCAPES
+44      74880     74876     128        16       112 ESCAPES
+45      87360     87356     128        16        48 ESCAPES
+46     104832    104828     128        16       112 ESCAPES
+47     131056    131052     256        16         0 ESCAPES
+
+classes whose BEST case (slot 0, offset 0) already escapes: 12 of 20
+
+====================================================================================================
+STEP 2  the MINIMAL geometry that contains every slot and offset
+====================================================================================================
+Requirement, from the encoder: base truncates DOWN to a granule multiple and the end rounds
+UP to one, so containment needs  HDR, stride and UNIT*off all granule multiples; then
+slot_base and slot_base+stride are granule-aligned and the decoded range cannot leave the slot.
+
+sc     stride granule      HDR'   stride'   +bytes        +%   off step
+28       4672       8        16      4672        0      0.00     1 in 1
+29       5440       8        16      5440        0      0.00     1 in 1
+30       6544       8        16      6544        0      0.00     1 in 1
+31       8176       8        16      8176        0      0.00     1 in 1
+32       9344      16        16      9344        0      0.00     1 in 1
+33      10912      16        16     10912        0      0.00     1 in 1
+34      13088      16        16     13088        0      0.00     1 in 1
+35      16368      16        16     16368        0      0.00     1 in 1
+36      18704      32        32     18720       16      0.09     1 in 2
+37      21824      32        32     21824        0      0.00     1 in 2
+38      26192      32        32     26208       16      0.06     1 in 2
+39      32752      64        64     32768       16      0.05     1 in 4
+40      37440      64        64     37440        0      0.00     1 in 4
+41      43680      64        64     43712       32      0.07     1 in 4
+42      52416      64        64     52416        0      0.00     1 in 4
+43      65520     128       128     65536       16      0.02     1 in 8
+44      74880     128       128     74880        0      0.00     1 in 8
+45      87360     128       128     87424       64      0.07     1 in 8
+46     104832     128       128    104832        0      0.00     1 in 8
+47     131056     256       256    131072       16      0.01    1 in 16
+
+slot-size cost, summed over the 20 affected classes: 795632 -> 795808 bytes (+0.022%)
+group-header cost: 16 -> up to 256 bytes, once per group (not per slot)
+
+====================================================================================================
+STEP 3  verify the proposed geometry CONTAINS every slot and every surviving offset
+====================================================================================================
+  checked 80 (class, slot, offset) combinations; escapes: 0
+  -> the geometry contains every case
+
+====================================================================================================
+STEP 4  does publish() need more than the geometry?
+====================================================================================================
+swept 254304 (class, request, offset) combinations across every repaired class
+requests whose decoded bound escapes its slot: 0
+  -> publish needs NO change beyond the geometry
+
+====================================================================================================
+STEP 5  the group-header cost in context (it is per GROUP, not per slot)
+====================================================================================================
+sc     stride' granule     hdr' hdr cost if 1 slot/group
+28        4672       8       16      0.000%
+29        5440       8       16      0.000%
+30        6544       8       16      0.000%
+31        8176       8       16      0.000%
+32        9344      16       16      0.000%
+33       10912      16       16      0.000%
+34       13088      16       16      0.000%
+35       16368      16       16      0.000%
+36       18720      32       32      0.085%
+37       21824      32       32      0.073%
+38       26208      32       32      0.061%
+39       32768      64       64      0.146%
+40       37440      64       64      0.128%
+41       43712      64       64      0.110%
+42       52416      64       64      0.092%
+43       65536     128      128      0.171%
+44       74880     128      128      0.150%
+45       87424     128      128      0.128%
+46      104832     128      128      0.107%
+47      131072     256      256      0.183%

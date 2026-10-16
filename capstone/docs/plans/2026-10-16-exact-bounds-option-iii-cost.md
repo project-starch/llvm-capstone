@@ -297,3 +297,88 @@ here either way rather than resolved in favour of the estimate.
 **What this does not change.** The big-path mapping result, the `mallocng.md:96` page-rounding
 result, the flipped `bounds` verdict, the `exact-bounds.sh` re-scoping, the ports' monotonicity
 argument and the corpora addendum all concern lengths and are unaffected.
+
+## Re-cost of item 1 WITH the layout change (2026-10-16)
+
+The open question is settled against the collapse, and the retraction stands: there is one
+scheme, so a derived child of 4 KiB or more is inexact from the moment it exists. Verified in the
+submodule's own tree at `capstone-ariane d93a8d66b` — `compress_bounds` no longer takes a `cursor`
+argument and its first line reads "capstone-sublet: one scheme for every capability (the
+cursorless branch for start == cursor is gone)". The main checkout's `062f4453b`, which this
+analysis first read, still has that branch; `4a4261bb4` removed it.
+
+**The encoder is now measured, not modelled.** These numbers come from the project's own
+validated oracle — `verif/tests/custom/capstone/bounds-model.py` at `d93a8d66b`, "a literal port of
+the RTL's 27-bit bounds encoder and decoder ... bit-identical to capstone-qemu's cap_compress" —
+loaded by revision rather than copied, so it cannot drift from the RTL
+(`capstone/tests/exact-bounds-iii/load_model.py`, which errors rather than returning a zero if the
+revision or the file is missing; negative-tested with a bad path). Its own self-check reproduces
+the R-54 comment's figures exactly: 1,050 of 400,000 random regions decode short without the
+renormalisation step, 0 with it. That is the positive control for everything below.
+
+It also **corrects the granule rule upward** in some cases: the R-54 renormalisation
+(`if ((tg - bg) >= 64'd1024) E = E + 1;`) can make the granule one step *coarser* than
+`2^(msb(L)-9)`. The re-cost takes the granule from the oracle instead of assuming it.
+
+### Today's geometry, measured
+
+With `HDR = 16` and a page-aligned group base, taking each class's largest request at slot 0 and
+offset 0 — the cheapest case there is:
+
+**12 of the 20 classes with stride >= 4 KiB escape their slot even in that best case**, from sc=36
+(stride 18704, granule 32) through sc=47 (stride 131056, granule 256). The base escapes downward by
+16 bytes in every one of the twelve, and the end escapes upward by up to 112 bytes.
+
+### The minimal geometry, and it is cheap
+
+Containment needs `HDR`, the stride, and `UNIT*off` to be granule multiples; then the slot's base
+and end are both granule-aligned and the decoded range cannot leave the slot. Concretely:
+
+* **7 of 48 size-class entries change**, each by 1 to 4 units — and mostly to round numbers:
+  `size_classes[36] 1169->1170`, `[38] 1637->1638`, `[39] 2047->2048`, `[41] 2730->2732`,
+  `[43] 4095->4096`, `[45] 5460->5464`, `[47] 8191->8192`.
+* **Slot-space cost: +0.022%** — 795,632 to 795,808 bytes summed across the 20 affected classes.
+  Twelve of the twenty need no stride change at all.
+* **Group header: 16 bytes to the class's granule**, so 32/64/128/256 bytes for the affected
+  classes — **once per group, not per slot**, which is at most 0.183% of a single slot (sc=47) and
+  less everywhere else.
+* **Offset cycling: reduced on 12 classes, untouched on 8.** Usable offsets go from all to 1-in-2
+  (granule 32), 1-in-4 (64), 1-in-8 (128) and 1-in-16 (256). The 8 classes with granule <= 16 keep
+  every offset.
+
+**Verified, not asserted.** Over the repaired geometry, **254,304 (class, request, offset)
+combinations were swept — every request each class serves, at the lowest and highest surviving
+offset — with 0 escapes.** An earlier version of this check looked only at the top 64 bytes of each
+class, which is a narrowed view that would have shown exactly what it went looking for; the wide
+sweep replaces it.
+
+### `publish()` needs nothing beyond the geometry
+
+The same 254,304-case sweep answers this: with a granule-aligned base and a granule-multiple
+stride, a derive over the *requested* `n` is contained for every `n` the class serves. No length
+round-up is needed in `heap.c publish`, and the 0.48% class-promotion cost from the original
+estimate disappears with it — the geometry does that work instead.
+
+### The table edit is safe, and the check that says so can fail
+
+`size_to_class` finds the octave with a bit trick and refines with two comparisons against the
+table, so the question is whether the edited table still satisfies the allocator's invariant.
+Measured: monotonicity preserved, **0 of 131,051 requests mis-sized** by the new table, 128
+requests change class, and the chosen class is the smallest fitting one for 18,718 of 18,722
+sampled requests (one class of slack for the other 4; never too small). **Positive control:** with
+`size_classes[43]` deliberately shrunk by 8 units the same check reports **112** mis-sized
+requests, so the zero is a result rather than a dead check.
+
+### Effort, revised
+
+**4-6 days**, from 3-5. Only item 1 moves, from half a day to about one day: a 7-entry table edit,
+a per-class granule-sized group header, a granule step in `enframe`'s offset cycling, the big-path
+mapping sizing, and the `mallocng.md:96` sentence. Items 2-5 are unchanged — the CSMINT audit at
+1-2 days is still the largest, and the re-record now carries the 430-row corpora question as a
+deliverable rather than an assumption.
+
+**What this means for the choice.** The retraction was real — item 1 is a geometry change, not two
+expressions — but the geometry change costs +0.022% of slot space, a per-group header, and some
+double-free entropy on 12 classes, against (ii)'s side store, 496 MiB of map, 1.9x capability
+traffic and one to two bitstream cycles. On these numbers (iii) remains much the cheaper option;
+the decision does not turn on the correction.
