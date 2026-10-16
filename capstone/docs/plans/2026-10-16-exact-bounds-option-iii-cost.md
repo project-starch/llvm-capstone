@@ -1244,3 +1244,44 @@ high-water mark is 13,054, both far below 65,534.
 **Not compile-tested here:** the module needs kernel headers and `cap_rev_table_abi.h`, which comes
 from a submodule a worktree does not have. The three C files that can be checked on the host are
 clean; the module's build will check the rest.
+
+## The ABI v6 SDK exists and builds v6 domains — 2026-10-17
+
+**Toolchain.** `/tmp/capstone/llvm-dev-current-20261017/bin`, clang `85b1daddf230`. That is my lane
+branch, but the compiler is **dev's**: `git diff origin/dev..HEAD -- llvm/ clang/ lld/` is 0 files,
+and of the 26 commits on dev since my base, **0** touch the compiler. A standalone `bin` + `lib`
+copy (867 MB) made out of the session scratchpad so it survives the session, with `ldd` confirming
+**zero** libraries resolve back to the original build directory — the RUNPATH is `$ORIGIN/../lib`
+with an absolute fallback, so a partial copy would silently keep using it.
+
+**C-80's ICE is gone, measured two-sided.** Of the six files that ICE on the 10-10 build under the
+full virtual flag set: **6 compile here, 0 compile there.** The test discriminates the compilers
+rather than merely passing.
+
+**The musl survey is clean: 1,361 compiled, 0 failed, 100.0%** — against an expected 1,361. The
+earlier 1,254 was 101 C-80 ICEs plus the 6 mallocng files my own tree-prep and include had broken.
+The policy guard passes, including `size_classes` with exactly the seven authorised entries verified
+by value in the canonically prepared tree.
+
+**Verified end to end, not inferred:** a domain built with the SDK's own `capstone-cc` carries
+`.capstone_virtual = 0x364d56564e4f5043` — `CPONVVM6`, **ABI v6**. v5 was `0x354d…`.
+
+**Three configuration traps, each of which cost a build, recorded so nobody repeats them:**
+
+1. **`BUILD_SHARED_LIBS=ON` is required.** Capstone is a RISCV fork and both targets export the same
+   non-static symbols (`getPredicatedOpcode` at `CapstoneInstrInfo.cpp:1799` and
+   `RISCVInstrInfo.cpp:1640`, `isRegImmLoadOrStore`, the `isTune*Fusion` family). With static
+   archives, linking `bin/lld` pulls both in and dies with pages of `multiple definition`. Not a dev
+   regression — those symbols date from the original rename, and all three existing builds link
+   `lld` fine. Copy the flags from an existing `CMakeCache.txt`.
+2. **`-DLLVM_USE_LINKER=lld` fails at configure**: the host compiler cannot use lld.
+3. **`CAPSTONE_LLVM_BUILD_DIR`, not `CAPSTONE_LLVM_BIN`,** is what `capstone-domain.cmake` derives
+   `CMAKE_C_COMPILER`, `CMAKE_AR` and `CMAKE_LINKER` from. Setting only the latter leaves the
+   compiler unset, cmake dies at `${CMAKE_C_COMPILER} -print-resource-dir` with "No such file or
+   directory", and then reports a **misleading** "CMake was unable to find a build program
+   corresponding to Ninja" — ninja was on `PATH` the whole time.
+
+**NOT YET DONE, and the board lane has been told so explicitly:** the two-sided suite run. The SDK
+exists and produces v6 domains; it has **not** been through `run-malloc.py`, `run.py`, `run-fp.py`,
+`run-pthreads.py` or `run-hosted.py` with the profile off as production and on as control. Landing
+waits on that, as does any claim that ABI v6 works rather than merely builds.
