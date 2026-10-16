@@ -169,6 +169,32 @@ directory comes back and costs a dependent walk on the WNS path. The bounds regi
 stores and read only by capability loads, so an image that never stores a capability into a page never touches
 its slice; dense provisioning costs RAM, not traffic.
 
+**The board lane's answer, 2026-10-16: 496 MiB holds the acceptance set, with about 250 MiB to spare,** so dense stands.
+The figures, measured unless marked:
+- today Linux gets 962.8 MiB (DT memory@80000000, 0x3c2d2000). The kernel, firmware and memblock take 30-34 MiB,
+  and CMA is 256 MiB at 0xAC000000;
+- the built-in initramfs stays resident: 5.3 MB of rootfs plus at most about 9 MB of staged images in any corpus set
+  (set 9: 8.8 MB);
+- the largest physical region is one 128 MiB CMA region: set 9's pymalloc and set 4's memcached;
+- virtual-profile peaks per process (the 2026-10-11 memory-behaviour READMEs): Wireshark about 54 MB, CPython about
+  33.7 MB, Perl 29.1 MB, mruby 28.4 MB, PostgreSQL 27.3 MiB, memcached 14.3 MB, SQLite 11.7 MiB, FFmpeg 7.3 MB;
+- the budget: about 34 MiB reserved, 15-20 MiB initramfs, about 20 MiB kernel runtime (an estimate), and CMA of at
+  least 160 MiB. CMA is reusable, so virtual pages and a physical region overlap rather than add. The peak is about
+  230-240 MiB.
+
+Still open:
+- the peak RSS of the corpus's own virtual PostgreSQL server (postgres/sql-repros) and CPython interpreter
+  (cpython/allocator-boundary-repros). It is measured when Tier 3 rebuilds those images on QEMU's virtual profile,
+  and the margin holds if each is within 2x of its program's figure above;
+- the idle kernel figure, which the board lane reads from /proc/meminfo on its next classic boot.
+
+Conditions for the flash that moves the map:
+- CMA moves inside `[0x8000_0000, 0x9F00_0000)`, 4 MiB aligned, as the DTS requires;
+- the exact-regions monitor's bound on Linux's region (0xC0000000, R-55) follows the new top;
+- the monitor's boot-carve replay is re-run on the new map before the flash;
+- the monitor programs an all-permitting PMP entry before the first virtual context, because the page-table
+  walker's accesses are PMP-checked as supervisor (the RTL lane's B simulation).
+
 ## The bitstream sequence (RTL lane's proposal, 2026-10-16)
 
 Batched so that each bitstream answers questions the previous one cannot, and no reflash is spent on an observation
