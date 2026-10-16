@@ -205,11 +205,23 @@ the compiler lane, after an audit.
 **The compiler lane's run-malloc rows** (its own run on this kit's QEMU adapter; its lane eeb083159e2e):
 - these held: the five allocation markers, the align-probe at **600 of 600** (413 failed before), 0 refusal lines,
   `REMAP_OK` 0, and both predicate arms ALLOCATED;
-- the aggregate did not hold: **18 / 5** where 21 / 2 was predicted.
-  - The three extra failures are one event. `basic` now allocates, runs further, and dies on a previously unreachable
-    fault: cause 29 at address 0, after a kind 2 boundary.
-  - That lane reports no cause 28 and no out-of-bounds line in that arm. It is investigating the fault as a separate
-    thread, not as a defect of the change.
+- the aggregate did not hold: **18 / 5** where 21 / 2 was predicted. The three extra failures are one event:
+  - `basic` dies with cause 29 at address 0 inside `capstone_launch_unpack`, at `lw a3, 0x14(a4)`, where a4 comes from
+    a `shrink` two instructions earlier. It prints nothing first.
+  - **It appears only with the change.** Same domain and images, exact bounds off, only the module differing: the
+    power-of-two module reads 0 such faults, and `basic` exits 1 on a refused allocation (445 refusals). The
+    representability module reads 2 of them, and `basic` exits 139 (0 refusals).
+  - **Whether the change creates the fault, or only lets the path run, is not established.** Both readings predict
+    those numbers.
+  - **What is established:** it is not a bounds failure. That arm has no cause 28 and no out-of-bounds line, and
+    run.py's two cause-28 denials read the same before and after.
+  - None of the board lane's rows shows it.
+
+> **RETRACTED (2026-10-17, the same morning), from this section's first version (dev fa22c4592250):** "`basic` now
+> allocates, runs further, and dies on a previously unreachable fault", and the fault being investigated "not as a
+> defect of the change". That was the compiler lane's first interpretation. It withdrew it once its single-variable
+> control showed the fault only with the new module. The board lane recorded the interpretation without the
+> evidence for it.
 
 ## Defects found on the way, and where they went
 
