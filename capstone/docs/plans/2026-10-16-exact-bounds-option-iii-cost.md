@@ -1706,3 +1706,117 @@ And one gap is under audit rather than settled: `EINVAL` is **also** what the la
 refusal came from `add()` rather than from the launcher before it. `grant()`'s representability
 check returns `ERANGE`, which separates one path but not all three. That audit is the gate on
 recording this as the root cause.
+
+
+## The audit of 502ca09f0e87: one limb SUPPORTED, two REFUTED
+
+`claim-auditor` was run over the previous section before it should have been pushed — the commit
+502ca09f0e87 says "that audit gates recording this as the root cause" and then recorded it anyway,
+which is the defect, not the audit's finding. The corrections below supersede it.
+
+### SUPPORTED, and more strongly than I had it
+
+**`add()`'s power-of-two gate is what refuses mallocng's group mappings, and the launcher is
+EXCLUDED, not merely unlikely.** The gap I asked to be attacked hardest did not survive the attack:
+
+- For all **four** measured `(visible, alignment)` pairs, **no** `acquire_mapping` EINVAL disjunct
+  fires (`exec.c:243-253`), evaluated numerically rather than by hand.
+- `grant()`'s representability check returns **ERANGE**, not EINVAL (`exec.c:197`), and computes
+  `repr_ok = True` for all four anyway.
+- `madvise`'s EINVAL is explicitly tolerated (`exec.c:131`); an mmap failure gives ENOMEM.
+- The `CV_ADD` ioctl branch has no EINVAL pre-check — only `copy_from_user` (EFAULT) and
+  `find_thread` (ESRCH) (`capstone_vm.c:902-907`).
+- Inside `add()`, every disjunct before line 466 is false for all four, so
+  **`!is_power_of_2(r->bytes)` is the first true disjunct in each case**.
+
+**An internal control that was already in my own data and I did not use:**
+`map_calls - map_acquire - map_early` is 1 or 2, so in the *same process* as each refusal at least
+one `cap_vm_acquire` **succeeded**. That proves the launcher, module and thread state all work
+there, and the only thing differing on the failing calls is the size — which closes the two
+state-dependent EINVAL residuals (`capstone_vm.c:472`, and the overlap test at `:479-481`) that no
+amount of input arithmetic could reach.
+
+**One clause the claim was missing, and it matters for where the fix belongs.** The non-heap path
+grants a naturally aligned power of two — `rounded()` doubles to one (`exec.c:123-129`) and
+`reserve()` natural-aligns to it (`exec.c:149`) — and so *passes* line 466. The gate bites only
+because `exec.c:266` deliberately sets `bytes = visible` for the v6 local-malloc heap. The module
+predicate is the refusal; that line is why the heap meets it.
+
+### RETRACTED: "`remap_begin()` refuses ALL heap growth when exact bounds are off"
+
+The source text is real (`capstone_vm.c:562`). **Nothing shows it executed, and opening the gate
+does not restore growth**, which is evidence against the causal half:
+
+- `CAPSTONE_VM_REMAP_OK` is **0 in all three arms, including exact-bounds-ON**. The instrument is
+  proven live — it is gated by the same `static int trace` as `CAPSTONE_VM_BOUNDARY` and
+  `CAPSTONE_VM_SERVICE`, which fire hundreds of times in every log — so that zero is meaningful:
+  **no heap growth completed anywhere, gate open or shut.** The gate has no positive control.
+- `real_linux_mremap_growth_and_shrink` is False in **off, ctl AND on**. If `!c->exact_bounds` were
+  what refuses growth, it should pass with the profile on. It does not.
+- In the OFF arm the only growth test never reaches a remap at all: `remap_align`
+  (`malloc-contract.c:183-207`) dies on its *setup* `malloc(6u<<20)`, an `add()` refusal, before the
+  `realloc`.
+- **"`remap_begin` is run.py's `heap growth/zero` directly" is unsupported.** run.py's only growth
+  token is `run.py:207`, a `VIRTUAL_HEAP_THREADS_OK ...` line count; nothing ties its value to
+  `remap_begin`.
+
+### RETRACTED: the two-sided control, as I stated it
+
+I wrote that the exact-bounds-ON arm "shows zero occurrences of all four `MALLOC_FAIL` markers".
+That is true of those four strings and **false as a control**:
+
+- the ON arm's own verdict is **FAIL**, with 5 of 8 failures surviving;
+- **only 3 of 22 checks change** when the profile is flipped (`simultaneously_live_objects`,
+  `remap_align_contents_survive`, `remap_align_reported`);
+- two of the four markers were **replaced by different failures, not by passes** — `aligned
+  allocation` becomes a `Cap mem access OOB` and `MALLOC_BASIC_EXIT:139`, and `precise allocation`
+  becomes **`MALLOC_FAIL:denial survived`**, i.e. a *safety* failure where an access that should
+  have been denied was not;
+- flipping the profile is not a single-variable change: `c->exact_bounds` comes from CSR `0x5c0`
+  bit `0x100`, so the **hardware encoder changes too**, and the ON log carries a fault class absent
+  from OFF (`[CAPSTONE] SHRINK illegal operand value`).
+
+Grepping four marker strings was a narrowed view that excluded the ON arm's own fifth `MALLOC_FAIL`
+and its segfault. This is the project's own "a positive finding from a narrowed view needs the same
+suspicion as a clean zero", and the unfiltered artifact was the result JSON I had already parsed.
+
+### Factual corrections to the previous section
+
+- **Five markers, not four.** I omitted `MALLOC_FAIL:remap stale setup`.
+- **All FIVE readings show errno 22**, not four. The fifth was interleaved with serial output, not
+  lost — its tail reassembles to `last_bytes=28672 last_align=4096 last_errno=22`, and 28672 is also
+  not a power of two. Reassemble an interleaved line rather than discarding it.
+- **The mapping list mixed measured with modelled and contained a wrong number.** Measured: 28672,
+  200704, 1126400, **6307840**. `6295552` was wrong by one page; `20480` and `36864` were modelled
+  and never measured. The 1122304-vs-1126400 slip I had already caught is the reason not to print
+  modelled sizes as readings.
+- **"93% stricter" is withdrawn from the headline.** The 7.1%/100% table cites no script, unlike
+  every other table in this doc, and the 100% row is **circular as stated**: `capstone_repr_ok`
+  takes a base, and the base is granule-aligned by construction because `heap.c:137-138` asks for
+  granule alignment and `reserve_aligned` honours it. It is a property of the current launcher's
+  alignment, not an independent finding — and it does not carry to `remap_end`, which checks only
+  page alignment (`capstone_vm.c:597`).
+- **RETRACTED: "that is why dev's v5 run passed".** `exec.c:376-378` refuses a v5 image outright
+  (`ENOEXEC` at `:385`), so this launcher cannot run one and that sentence cannot be the
+  explanation. I never examined that run.
+- **The `ctl` arm belongs in the record** and was unmentioned: domain `2c1daf0f` with
+  `--no-exact-bounds`, identical to `off` in all 22 checks, which is the evidence that the Cause A
+  fix is latent.
+- `last_bytes` records the **last** refusal in a process, not necessarily the one that produced the
+  reported failure. Harmless here, since both refusals in each process fall the same side of the
+  predicate, but the wording should not imply otherwise.
+
+### Still source-only, and the two cheap runs that finish it
+
+The *mechanism* is established. The **predicate** is not: `is_power_of_2(needed)` and my withdrawn
+`needed > 16384` are still only separated by reading the source, because every size measured so far
+is on the same side of both. Two arms settle it in one run, and the ON arm can never do it, because
+turning the profile on disables the very gate whose behaviour is in question:
+
+- **`malloc(9341)`** — its group needs 32768, a power of two **above** 16384. Power-of-two predicts
+  it SUCCEEDS; the threshold predicts it is refused.
+- a request whose group needs **12288** — not a power of two, **below** 16384. Power-of-two predicts
+  it is REFUSED; the threshold predicts it succeeds.
+- and **record `last_bytes` on the SUCCESSFUL acquire too**, not only in the failure branch
+  (`heap.c:143-146`). That is the one empirical hole: nothing currently shows a non-power-of-two
+  mapping being *admitted* while the gate is on.
