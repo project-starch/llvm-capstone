@@ -1894,3 +1894,90 @@ predicts.
 **This is not landed.** The same `capstone_vm.c` builds the board module and the board runs this
 profile with exact bounds off, so relaxing a capability-bounds check there changes what the silicon
 enforces, not only what QEMU does.
+
+
+## SETTLED: both disjuncts of `add():466` are operative, and one makes the failure NONDETERMINISTIC
+
+Two independent instruments, built by two lanes without coordination, agree.
+
+### Launcher-side, printing add()'s own disjuncts on the real values
+
+`grant()` now prints on a `CV_ADD` refusal. The domain cannot do this — `cap_vm_acquire` clears its
+slot on failure, so the base never reaches it, which is why a power-of-two size refused with EINVAL
+was indistinguishable from a misaligned one:
+
+    CAPSTONE_VM_ADD_REFUSED base=0x3f8aeb4000 bytes=49152 errno=22 pow2=0 naturally_aligned=1
+    CAPSTONE_VM_ADD_REFUSED base=0x3f8af01000 bytes=28672 errno=22 pow2=0 naturally_aligned=1
+    CAPSTONE_VM_ADD_REFUSED base=0x3f9483c000 bytes=49152 errno=22 pow2=0 naturally_aligned=0
+
+**Every recorded refusal has `pow2=0`,** and two were refused while satisfying alignment — so the
+SIZE half refuses non-power-of-two mappings whatever the address.
+
+*Caveat on my own print:* `naturally_aligned` is computed as `address & (bytes-1)`, which is
+meaningless when `bytes` is not a power of two (the mask is not a mask). That is precisely why
+`add()` tests `is_power_of_2` first. So the field carries information only on the pow2 rows, and I
+am not reading the `naturally_aligned=1` on a 49152 row as anything.
+
+### The same arm gave OPPOSITE results on consecutive runs
+
+| run | `nonpow2_below` | admitted | refused |
+|---|---|---|---|
+| `pred2` | **NULL** | last 32768 | last **8192** |
+| `pred4` | **ALLOCATED** | last **8192** | last 49152 |
+
+Same domain source, same images, same launcher behaviour — and an 8192 mapping is refused in one
+run and admitted in the next. 8192 **is** a power of two, so the size half cannot explain it: the
+only remaining disjunct is `address & (bytes - 1)`, and the launcher requests only
+`max(granule, 4096)` alignment, so an 8 KiB mapping lands 8 KiB-aligned about half the time.
+
+### Independent confirmation from the board lane, with no new instrument
+
+Four boots of the Tier 3 pilot, unchanged kit, images and binaries:
+
+- `malloc(6144)` — group 8192 — **admitted in 1 of 4 boots**, NULL in 3. Same binary, same input,
+  both outcomes. 1 in 4 is within chance of the ~1 in 2 an 8 KiB-aligned landing gives.
+- `calloc(1, 34816)` and `calloc(1, 35840)` — non-power-of-two groups — **NULL in all 4 boots**,
+  8 refusals.
+
+One case varies with the boot, one never varies. That is exactly what the conjunction predicts, and
+it was measured without reference to my launcher print.
+
+### What this means, beyond the fix
+
+**A class of allocation failures here is NONDETERMINISTIC, keyed on where `mmap` happens to land.**
+Any power-of-two group is refused or admitted depending on the boot. That is why the earlier
+attempts to fit a size rule kept almost working: the data was a mixture of a deterministic
+mechanism (non-power-of-two sizes, always refused) and a stochastic one (power-of-two sizes,
+refused about half the time). Both the "needed > 16384" fit and the "predicate is
+`is_power_of_2`, 2 of 2" reading were averaging over two mechanisms, which is why each matched its
+sample and neither survived a purpose-built arm.
+
+It also means **N=1 was never enough here**, and the project rule about N=1 on a system with known
+nondeterminism applied the whole time without anyone knowing the nondeterminism existed.
+
+### The fix, now fully justified on both halves
+
+`capstone_repr_ok(r->address, r->bytes)` loosens **both** disjuncts to the encoder's actual
+condition:
+
+- **length**: a granule multiple, instead of a power of two;
+- **base**: granule-aligned, instead of naturally aligned to the size.
+
+And the second half is satisfiable as the launcher already stands: `heap.c` requests
+`max(granule, 4096)`, so at these sizes `repr_ok` accepts a 4096-aligned 8192 mapping — which
+removes the nondeterminism rather than merely widening the accepted set. `remap_begin` stays out:
+it is still not shown to fire.
+
+### Prediction for the add()-only change
+
+| | predicted |
+|---|---|
+| the five allocation markers | clear |
+| non-power-of-two groups (34816, 35840, 200003, population, 6 MiB) | clear, **deterministically** |
+| power-of-two groups (`malloc(6144)` → 8192) | clear **on every boot**, not 1 in 4 |
+| `CAPSTONE_VM_ADD_REFUSED` | **absent** |
+| `heap growth/zero`, `real_linux_mremap_growth_and_shrink` | still FAIL — not addressed |
+| `bounds` | still FAIL — the request rounding puts `+200003` inside the object |
+
+The boot-to-boot row is the sharpest test: a fix that cleared the deterministic failures and left
+`malloc(6144)` varying between boots would mean the alignment half is still biting.

@@ -196,7 +196,20 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
      * tests/exact-bounds-iii/grant-repr-test.c. */
     if (!capstone_repr_ok((uintptr_t)base, bytes)) { errno = ERANGE; return -1; }
     struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0};
-    if (ioctl(device, CV_ADD, &r)) return -1;
+    if (ioctl(device, CV_ADD, &r)) {
+        /* Evaluate add()'s two disjuncts on the REAL values the module saw. The domain cannot do
+         * this: cap_vm_acquire clears its slot on failure, so the base never reaches it, and a
+         * power-of-two size refused with EINVAL is then indistinguishable from a misaligned one. */
+        if (trace) {
+            int err = errno;
+            fprintf(stderr, "CAPSTONE_VM_ADD_REFUSED base=0x%lx bytes=%zu errno=%d"
+                            " pow2=%d naturally_aligned=%d\n",
+                    (unsigned long)r.address, bytes, err,
+                    (bytes & (bytes - 1)) == 0, (r.address & (bytes - 1)) == 0);
+            errno = err;
+        }
+        return -1;
+    }
     maps[i] = (struct mapping){.address = base, .bytes = bytes, .visible = bytes,
                                .id = r.id, .heap = linear,
                                .kind = linear ? CV_MAP_HEAP : -1};

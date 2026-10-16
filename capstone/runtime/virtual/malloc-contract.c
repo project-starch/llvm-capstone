@@ -211,6 +211,10 @@ static void remap_align(void)
 #ifdef __CAPSTONE_PURECAP__
 extern unsigned long __capstone_malloc_map_ok[2];
 extern unsigned long __capstone_malloc_map_admitted;
+extern unsigned long __capstone_malloc_map_last[4];
+extern unsigned long __capstone_malloc_map_refused_acquire;
+extern unsigned long __capstone_malloc_map_ok_base;
+extern unsigned long __capstone_malloc_map_last_base;
 #endif
 /* Separates is_power_of_2(bytes) from "bytes > 16384" as the module's arena predicate. Both score
  * identically on every size measured so far, because each one falls the same side of both. These
@@ -229,9 +233,18 @@ static void predicate(void)
     fflush(stdout);
     if (b) { memset(b, 0x22, 2029); free(b); }
 #ifdef __CAPSTONE_PURECAP__
-    printf("MALLOC_PRED admitted=%lu last_ok_bytes=%lu last_ok_align=%lu\n",
+    /* The REFUSED mapping's own size, so the NULL arm is a measurement rather than a
+     * prediction from the group model -- which is all the admitted-side figure made it. */
+    printf("MALLOC_PRED admitted=%lu last_ok_bytes=%lu last_ok_align=%lu"
+           " refused=%lu last_refused_bytes=%lu last_refused_align=%lu last_refused_errno=%lu\n",
            __capstone_malloc_map_admitted, __capstone_malloc_map_ok[0],
-           __capstone_malloc_map_ok[1]);
+           __capstone_malloc_map_ok[1], __capstone_malloc_map_refused_acquire,
+           __capstone_malloc_map_last[0], __capstone_malloc_map_last[1],
+           __capstone_malloc_map_last[2]);
+    /* The decisive reading: if an ADMITTED mapping's base is not naturally aligned to its own
+     * size, add()'s alignment disjunct cannot be what refuses the others. */
+    printf("MALLOC_PRED ok_base=%lu ok_base_misaligned_vs_size=%lu\n",
+           __capstone_malloc_map_ok_base, __capstone_malloc_map_last_base);
 #endif
     fflush(stdout);
 }

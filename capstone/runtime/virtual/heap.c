@@ -83,6 +83,11 @@ unsigned long __capstone_malloc_map_calls;
 unsigned long __capstone_malloc_map_refused_early;
 unsigned long __capstone_malloc_map_refused_acquire;
 unsigned long __capstone_malloc_map_last[4];   /* bytes, align, errno, rounded request */
+/* The BASE, which is what add()'s second disjunct tests: (address & (bytes - 1)). Without it a
+ * power-of-two size refused with EINVAL cannot be told from a misaligned one -- the reading that
+ * refuted "the predicate is is_power_of_2". */
+unsigned long __capstone_malloc_map_last_base;
+unsigned long __capstone_malloc_map_ok_base;
 /* The last ADMITTED mapping. The exact-bounds-ON arm cannot show a non-power-of-two mapping being
  * accepted while the gate is armed -- turning the profile on disables the gate -- so the only way
  * to see an admission is to record it on the success path. */
@@ -153,6 +158,11 @@ void *__capstone_malloc_map(size_t bytes)
     __capstone_malloc_map_admitted++;
     __capstone_malloc_map_ok[0] = bytes;
     __capstone_malloc_map_ok[1] = align;
+    __capstone_malloc_map_ok_base = sublet_base(&pending_mapping);
+    /* Does the ADMITTED mapping satisfy add()'s second disjunct? If a mapping is admitted whose
+     * base is NOT naturally aligned to its own size, the alignment half cannot be what refuses. */
+    __capstone_malloc_map_last_base =
+        (__capstone_malloc_map_ok_base & (bytes - 1)) ? 1UL : 0UL;
     /* A scalar placeholder crosses only the private backend, until attach.
      * The linear grant remains in its consuming slot throughout alloc_meta. */
     return (void *)sublet_base(&pending_mapping);
