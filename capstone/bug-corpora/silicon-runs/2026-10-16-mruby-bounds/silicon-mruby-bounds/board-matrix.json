@@ -1,0 +1,282 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3918 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL uaf RETURNED observed=0xaa reissued=1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "mruby-smoke-control",
+   "case": "ports/mruby/app/scripts/smoke.rb",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-control",
+   "outcome": "COMPLETED",
+   "detail": "SMOKE_DONE, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "mruby-release-differential-01-case",
+   "case": "01_13e017c2f_opgetidx0-stale-regs",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=24 pc=0xac13e710 address=0x10 in mrb_vformat+0x5e8 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-02-case",
+   "case": "02_39aecc143_openter-block-collected",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=24 pc=0xac181278 address=0x1604 in mrb_vm_exec+0x718 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-03-case",
+   "case": "03_59552ecb8_sprintf-format-mutated",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "WRONG-ANSWER",
+   "detail": "exit 0, the harness's failures: [\"sprintf with to_s mutating format string\", \"NOT_EQUAL\", \"\\\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+   "predicted": "WRONG-ANSWER",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "mruby-release-differential-04-case",
+   "case": "04_606d9a6b2_merge-pair-collected",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "WRONG-ANSWER",
+   "detail": "exit 0, the harness's failures: [\"Hash scans that carry a pair into a set the hash no longer holds\", \"NOT_EQUAL\", \"\\\"the value only that entry holds\\\"\", \"\\\"the value on\\\\xb0:\\\\x0e\\\\xaf\\\\x00\\\\x00\\\\x00\\\\x00d\\\\x1dZ\\\\xd4m\\\\x01$\\\\x00lds\\",
+   "predicted": "WRONG-ANSWER",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "WRONG-ANSWER"
+  },
+  {
+   "name": "mruby-release-differential-06-case",
+   "case": "06_84cc5aa60_khash-freed-buckets",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1e19d8 address=0xae0ce080 in kh_get_set_val+0x138 (NOT the labelled probe) (a declared fault site)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-07-case",
+   "case": "07_eb7693857_vacated-slot-read",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=24 pc=0xac13e710 address=0x10 in mrb_vformat+0x5e8 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-08-case",
+   "case": "08_fb4974528_hash-ext-walk-carries",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "WRONG-ANSWER",
+   "detail": "exit 0, the harness's failures: [\"Hash#key keeps the key it answers with across the comparison\", \"NOT_EQUAL\", \"\\\"the key only that entry holds\\\"\", \"\\\"the key only@<\\\\x0e\\\\xaf\\\\x00\\\\x00\\\\x00\\\\x00d\\\\x1dZ\\\\xd4a\\\\x010\\\\x00s\\\"\"]; [\"Hash#",
+   "predicted": "WRONG-ANSWER",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "WRONG-ANSWER"
+  },
+  {
+   "name": "mruby-release-differential-09-case",
+   "case": "09_0cf969a2b_shaped-iv-reshaped",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "COMPLETED",
+   "detail": "completed: `[\"PASS\"]`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "mruby-release-differential-10-case",
+   "case": "10_7c5915799_struct-member-storage",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "WRONG-ANSWER",
+   "detail": "exit 0, the harness's failures: [\"Struct#== and #eql? with a member that replaces the storage\", \"NOT_FALSE\", \"true\"]; [\"Struct#== and #eql? with a member that replaces the storage\", \"NOT_FALSE\", \"true\"]; [\"Struct#== and #eql? with a",
+   "predicted": "WRONG-ANSWER",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "WRONG-ANSWER"
+  },
+  {
+   "name": "mruby-release-differential-12-case",
+   "case": "12_4663fef45_eql-delete-past-entries",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1477b0 address=0xae0a83d0 in ar_get+0x7c (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-13-case",
+   "case": "13_4a386f80e_pack-uu-signed-overflow",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac20f328 address=0xae0a6441 in mrb_pack_pack+0x16a0 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-14-case",
+   "case": "14_93eb74a59_case-splat-stale-count",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1511d0 address=0xae0ba800 in mrb_obj_ceqq+0x378 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-15-case",
+   "case": "15_af6f23ddb_prepend-self-reference",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1f2fb0 address=0xae0a83ad in str_prepend+0x250 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-16-case",
+   "case": "16_ec89364c4_ary-fill-int-overflow",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1ff1ec address=0xae0a61e0 in ary_fill_exec+0x178 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-17-case",
+   "case": "17_bef45e223_pat-values-stale-ptr-and-len",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=24 pc=0xac14e4c8 address=0x30274e0b65a71c20 in mrb_func_basic_p+0x60 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-18-case",
+   "case": "18_03f242d09_mod-visibility-null-mt",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=24 pc=0xac11bc48 address=0x0 in mt_put+0x4c (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-19-case",
+   "case": "19_77d1d928f_method-defined-null-mt",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=24 pc=0xac11bc48 address=0x0 in mt_put+0x4c (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-20-case",
+   "case": "20_94993eede_visibility-unprepared-mt",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=24 pc=0xac11bc48 address=0x0 in mt_put+0x4c (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-21-case",
+   "case": "21_ff047f5fe_method-defined-inherit-null-mt",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=24 pc=0xac11bc48 address=0x0 in mt_put+0x4c (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "mruby-release-differential-22-case",
+   "case": "22_d8911416c_alias-mid-as-irep",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "outcome": "CAUGHT",
+   "detail": "cause=24 pc=0xac2061b8 address=0x7d8000 in mrb_proc_parameters+0xcc (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  }
+ ]
+}
