@@ -13,7 +13,7 @@ B=$SUB/capstone/caplifive-system/sw/buildroot; BM=$B/components/opensbi/lib/sbi/
 FW=${CAPSTONE_BR_FW:-$B/build-fpga/build/opensbi-custom/build/platform/fpga/ariane/firmware}
 CC=$SUB/capstone/capstone-c
 [ -f $B/Makefile ] || { echo "no FPGA buildroot at $B (a worktree? set CAPSTONE_SUBMODULE_ROOT)" >&2; exit 1; }
-F=$(cd "$(dirname "${BASH_SOURCE[0]}")/../s1-sqlite-silicon-2026-10-01" && pwd)
+F=${S1_FOLDER:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../s1-sqlite-silicon-2026-10-01" && pwd)}   # the cells, SHA256SUMS
 E=${S1_DIR:-${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/s1-sqlite-silicon}   # <arm>/sqlite_silicon.dom
 MEMLOCK=${MEMLOCK:-$HOME/bin/logs/machine-memory.lock}
 BOOT=${BOOT:?boot 1..3}; TAG=${RUNTAG:-a}
@@ -92,6 +92,7 @@ PY
 [ ${PIPESTATUS[0]} -eq 0 ] || fail "two staged images share an entry VA"
 bake run || fail "bake after staging"
 H=$(sha256sum $FW/fw_payload.bin|cut -d' ' -f1); echo $H > $OUT/fw.sha
+cp -f $FW/fw_payload.bin $OUT/fw_payload.bin   # kept, so image membership stays checkable against the boot's own payload
 say "fw_payload ${H:0:12} (monitor $(git -C $BM rev-parse --short HEAD), buildroot $(git -C $B rev-parse --short HEAD))"
 python3 - "$B" "$STAGED" <<'PY' | tee -a $LOG
 import sys
