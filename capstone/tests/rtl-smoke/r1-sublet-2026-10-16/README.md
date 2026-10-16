@@ -56,3 +56,25 @@ its `fw_payload.bin`):
 
 **Not established here:** one bitstream; the same images as 2026-09-21/22, so the comparison is across silicon
 only.
+
+## Amended after warm boot 1 (2026-10-16 22:50): at most six invocations per boot on this line
+
+**Warm boot 1 (r1ws16-b1, 22:22-22:35) completed invocations 1-7 and stopped at the 8th.**
+- What the 8th read: `SQ: D/mapped`, then `create_region failed -- above 4 MiB this needs a CMA area`, obs=65536, and
+  the driver's HARD STOP.
+- Invocations 1-7 read as pre-registered: 35 point lines, all ok=1 bad=0; 7 `R1 end` and 7 `released pool rc=1`;
+  no refusal.
+- **This is ISSUES R-55's region-table row, on the line this campaign uses.** Monitor 93440d5 decides head or tail
+  on decoded bounds, so each invocation leaves about 11 slots instead of 6, and "R-43 a2 fills the 96-slot table at
+  invocation 8 of 12". R-43 a2 is this list's lines 1-12. The exact-regions monitor completes them 12 of 12. This
+  pre-registration should have counted that; the SLT one, written the same evening, did.
+- The run stopped there, so warm boots 2-8 and cold reps 2-5 have not run.
+
+**The rest runs in boots of at most six invocations, list order unchanged:**
+- r1ws16s-01 is lines 8-12;
+- r1ws16s-02 … r1ws16s-14 are lines 13-90 in sixes;
+- then cold reps 2-5 as above (one invocation per boot).
+- Each invocation is a fresh domain and a fresh arena, so lines 1-7 of boot 1 stand.
+- What changes is the boot composition: six invocations before a point instead of up to eleven. The slopes are
+  per invocation, and the composition is recorded beside them.
+- The readings are as pre-registered above.
