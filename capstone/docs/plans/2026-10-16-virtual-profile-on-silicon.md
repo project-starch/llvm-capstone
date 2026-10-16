@@ -424,8 +424,12 @@ lists on both trees are running; the handoff waits for their comparison.
 
 ## Constraints
 
-- **No reflash without the lead's own word.** The board campaign is running on d93a8d66b and a reflash interrupts it,
-  so agree the timing with the board lane.
+- **No reflash without the lead's own word.** On 2026-10-16 (evening) the lead set the priority: the full virtual
+  Capstone comes first, and the physical campaign yields to it. The lead gave their word for the vp1 flash as soon
+  as its synthesis passes the gates and matches the pre-registered prediction (39bf2e4938ae). The board lane stops
+  its chain at the next boot boundary when the handoff arrives. A synthesis outside the prediction is a new
+  question for the lead. After vp1's physical regression reads identical to d93a8d66b, the campaign's remaining
+  items continue on vp1, with the bitstream recorded in every result.
 - **CLAUDE.md "Simulation green is not synthesis clean" applies in full:**
   - the lint gate and claim-auditor on every change;
   - a predicted reading written down before synthesis, and used as the go/no-go;
