@@ -99,9 +99,13 @@ def place(lines, sites, fail):
 
 
 def function_body(lines, func):
-    """(start, end) line indexes of the one function whose definition line starts with FUNC;
-    the body ends at the first line that is exactly '}' after it."""
-    starts = [k for k, l in enumerate(lines) if l.startswith(func)]
+    """(start, end) line indexes of the one function whose definition line is FUNC, or failing
+    that starts with it; the body ends at the first line that is exactly '}' after it. The exact
+    match comes first because a forward declaration and the definition it declares share a prefix:
+    'SQLITE_PRIVATE void sqlite3Fts3Offsets(' is the whole of the definition's line and the start
+    of the prototype's."""
+    starts = [k for k, l in enumerate(lines) if l == func] or \
+            [k for k, l in enumerate(lines) if l.startswith(func)]
     if len(starts) != 1:
         return None, f"definition {func!r} matched {len(starts)} lines, expected 1"
     for k in range(starts[0] + 1, len(lines)):
