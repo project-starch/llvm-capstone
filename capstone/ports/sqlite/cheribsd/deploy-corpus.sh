@@ -14,6 +14,14 @@ K="-i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o User
 C=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
 WORK=${SQLITE_CHERI_WORK:-$HOME/arms/sqlite/cheribsd}
 mkdir -p "$WORK"
+# The corrupt-database images this arm's cases open live only in the guest, and the
+# `rm -rf /root/corpus` below destroys them. Nothing in the repository used to create
+# them, so a redeploy left every image case running against a database sqlite3_open had
+# just made EMPTY -- which does not fail: the first statement returns "no such table",
+# the case prints RETURNED rc=0, and the run scores as a clean completion. Found
+# 2026-10-16 when a probe on case 26 reported hits=0. Regenerate them from the corpus
+# sources first, so what is shipped below restores them.
+python3 "$C/make-db-images.py" --work "$WORK" || exit 1
 tar czf /tmp/corpus.tgz -C "$WORK/out" . || exit 1
 echo "tgz $(stat -c %s /tmp/corpus.tgz) bytes  ($(ls "$WORK/out" | wc -l) files, $(ls "$WORK/out" | grep -c _sys) of them _sys)"
 scp $K -P 10086 /tmp/corpus.tgz root@localhost:/tmp/ || { echo "scp FAILED"; exit 1; }
