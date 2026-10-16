@@ -946,3 +946,49 @@ takes an address, an old length and a new one — **no alignment parameter**, un
 remapped base and return `MAP_FAILED` when it is misaligned: `realloc.c` already falls through to
 its `malloc` + copy path on a failed `mremap`, so the behaviour degrades to a copy rather than to a
 wrong bound. Extending the VM service ABI would avoid the copy and is the larger change.
+
+## The group header: where the pad goes is settled, how to pay for it is not
+
+Tracing it through the patched tree made the change **smaller than the eleven sites I listed**, and
+then hit one constraint that needs a decision.
+
+**Smaller, because 0009 already routes every consumer through our slot capability.** `free.c:119`,
+`realloc.c:15`, `aligned_alloc.c:31` and `malloc_usable_size.c:10` each compute
+`start = storage + stride*idx` and then, under `#ifdef CAPSTONE_MUSL_MALLOC`, immediately replace it
+with `__capstone_malloc_slot_start(&g->cap_slots[idx])`. And `get_meta` takes its capability branch —
+`__capstone_malloc_find(p)` returning `s->group` — so the stored slot offset, the
+`base = p - UNIT*offset - UNIT` reconstruction and the `size_classes[sizeclass]*index` asserts are
+all **compiled out** in this build. (Those asserts would otherwise have fired: `glue.h:42` defines
+`assert` as `a_crash()`, so they are always live.)
+
+So the pad has exactly **two** homes: `bind_slots` in our `heap.c`, which is where a slot's
+capability bounds are actually set, and `enframe`'s `p = storage + stride*idx`, which must agree
+with it. The remaining `storage` use, `enframe`'s stored offset at `:287`, is only a cycling seed in
+this build (`enframe` reads it back masked `& 255`), so a pad perturbs the cycle and nothing else.
+
+**The constraint: the group must grow by the pad, and that sizing is locked.** Slots would occupy
+`UNIT + pad + cnt*stride`, so the last slot's end overruns a group allocated for
+`UNIT + cnt*stride`. The sizing lives in `alloc_group`, whose prefix up to the first
+`#ifdef CAPSTONE_MUSL_MALLOC` the guard holds token-identical ("group size/count/mmap decisions").
+The options, with what each costs:
+
+1. **Over-map in our own `__capstone_malloc_group_map`** — add `pad` to the bytes we ask for, leaving
+   musl's `needed` and `maplen` untouched. Needs checking whether the release path uses musl's
+   `maplen` (`free.c`'s `mi.len = g->maplen*4096UL`) or our VM record; if musl's, up to one granule
+   per group is never released — 0.1% of a 128 KiB group, but a genuine leak that would need saying
+   out loud.
+2. **Grow `struct group`'s `pad[]` to the maximum granule** (256 bytes) for every group. Simple and
+   leak-free, but it taxes the small classes, which are the numerous ones, by 240 bytes a group for
+   a problem only the large classes have.
+3. **Widen the guard's `alloc_group` exception** so the sizing can take the pad per class. Smallest
+   runtime cost, largest process cost — it is a second narrowing of a gate that has just been
+   narrowed once, and it touches the decision code rather than a table of constants.
+4. **Shorten the last slot by the pad** and teach `enframe` its reduced capacity. No extra memory and
+   no guard change, but it makes one slot's capacity differ from its class's, which is exactly the
+   invariant `size_to_class` is built on.
+
+I am not picking between these. (1) trades a small leak for no process cost, (3) trades process cost
+for no runtime cost, and the choice depends on how much the narrowed guard is meant to hold — which
+is the question the lead already answered once. **Everything else in item 1 is implemented**; the
+measured consequence of leaving the header alone is the 1,497-of-6,060 figure above, so this is the
+last correctness gap in the allocator.
