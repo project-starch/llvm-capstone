@@ -6554,3 +6554,20 @@ at lane bc200ac88bd3; `results/`).
   - `beebs_janne` (1.993 → 2.072, identical instructions) is inside its 13.2 % boot-to-boot band (phase 11).
 - **Layout bands:** `beebs_janne` 7.7 %, `beebs_bs` 5.7 %, `beebs_insertsort` 4.7 %; every other kernel 1.4 % or less.
 - Table: `results/K0-3.summary.txt`.
+
+## SQLLogicTest on the Sublet bitstream: all seven files identical to native, 10,809 records (caplifive_sublet_d93a8d66b, 2026-10-16/17)
+One file per boot (23:16-02:12). Each boot runs the relinked k800 first, then the SQLite domain, on the classic line.
+The images were rebuilt with dev147 and validated under QEMU against a native baseline rebuilt from the same tree.
+Folder: `tests/rtl-smoke/slt-sublet-2026-10-16/` (pre-registered at lane 0d68d03ea85c; RESULTS.md and `results/`).
+- **All seven files match native on silicon, k800 4 in every boot:**
+  - negctl and aggfunc reproduce their deliberate failures exactly, 2 + 5 plus one parse error and 1 + 10;
+  - select1 and select2: 1,000 queries each;
+  - select3: 3,320;
+  - select4: 2,648 queries plus 184 skipped for size;
+  - select5: 732 queries and 704 statements.
+- **Against §7c (`caplifive_s12fix_5097eb166`):** the same verdict on every file, with two differences in the inputs.
+  - The negative control gained two arms (23 records), and select4 now compares the 31 empty results §7c's runner
+    skipped. Both come from the 2026-09-30 runner fix.
+  - Three region/heap classes run with reduced stacks (1,507,328 / 458,752 B), because today's code no longer fits the
+    order-10 allocation beside the old ones.
+- select4 ran 4,621 s, against about 78 min on s12fix. That is a correctness run, not a timing.
