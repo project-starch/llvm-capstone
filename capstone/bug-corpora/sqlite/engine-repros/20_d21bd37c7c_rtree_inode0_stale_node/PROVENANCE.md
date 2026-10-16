@@ -145,10 +145,17 @@ consequence.
 
 | class | what actually faults | cases | signature |
 |---|---|---|---|
-| A. downstream NULL dereference | the stale read returns 0 and the program dereferences it | 02, 05 | fault at a NULL-ish address, in a function downstream of the defect |
+| A. downstream NULL dereference | the stale read returns 0 or a zeroed structure and the program dereferences it | 02, 05 | fault at a NULL-ish address, in a function downstream of the defect |
 | A'. capability arithmetic over a non-capability | nothing is even loaded: `return &z[1]` with `z` NULL | 12 | `cause 24 address=0x0` |
 | B. the allocator's own in-band metadata read back as a pointer | `memsys5Link` writes `Mem5Link{next=-1,prev=-1}` over the first 8 bytes of the freed block; a pointer field living there is dereferenced | 19, 20 | `cause 24` / SIGPROT `si_code=2` at `nodeRelease`, fault **address `0x17`** = (-1)+24 |
-| C. not a capability fault at all | the program's own `assert()` aborts on base; CheriBSD compiles it out under `-DNDEBUG` and completes | 06 | abort, not a fault; recorded `NO-READING:inconclusive` |
+
+CORRECTION, same day: an earlier version of this table carried a fourth class and put case 06
+in it, as "the program's own assert aborts on base". That is wrong as a false positive -- case
+06's base and cheribsd-revocation rows were recorded `not-detected` in the first place, so no
+cell was removed there. What the review added for case 06 is why each arm is silent, and that
+the two reasons differ: on base the program aborts on its own `assert()` and produces no
+reading at all, while CheriBSD compiles the assert out under `-DNDEBUG` and completes. That
+belongs next to this table, as the other way the arms fail to be comparable, not in it.
 
 Class B is specific to a struct whose **first** field is a pointer that the freeing path later
 dereferences, which is why it shows up twice in the rtree family and nowhere else so far. It is
@@ -156,7 +163,13 @@ also the phenomenon case 18 was withdrawn for demonstrating -- in-band metadata 
 caller data -- turning up inside real cases as a false positive for the two arms that are
 supposed to be blind to this layer.
 
-After cases 19 and 20, three rows in the SQLite table still carry a base or CheriBSD
-detection, none of them reviewed yet: **22** (`fix-2026-07-26`, temporal, base and CheriBSD),
-**29** (`fz02`, spatial, base) and **31** (`fz10`, spatial, base). Case 22 is the remaining
-`D D D` row and the first one to check for class B.
+Counted from `results/matrix.tsv`, the physical campaign recorded **eight** base detections
+(02 05 12 19 20 22 29 31) and **five** CheriBSD detections (02 05 19 20 22). Of those, every
+one that has been reviewed has turned out not to be a detection: **5 of 5 on base, 4 of 4 on
+CheriBSD**. The three still standing are the three not yet looked at -- **22**
+(`fix-2026-07-26`, temporal, on both arms' lists, and the last `D D D` row), **29** (`fz02`,
+spatial, base only) and **31** (`fz10`, spatial, base only). Case 22 is the first to check for
+class B.
+
+A standalone version of this record, with the per-case detail and the commit for each
+correction, is kept outside the repository alongside the three-arm tables.
