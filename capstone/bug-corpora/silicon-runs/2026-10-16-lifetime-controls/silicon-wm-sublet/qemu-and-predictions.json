@@ -1,0 +1,149 @@
+{
+ "arm": "silicon-wm-sublet",
+ "build": {
+  "defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+  "app_cflags": "",
+  "carve": {},
+  "corpus_defs": {},
+  "driver": "driver.c",
+  "extra_cflags": "-DNDEBUG -std=gnu11 -I/tmp/capstone/wt-b0/capstone/ports/wireshark/wmem/src/shared/shim -I/tmp/capstone/wt-b0/capstone/ports/wireshark/wmem/src/shared -I/tmp/capstone/corpus-sil/wm/src-sublet/wsutil/wmem -I/tmp/capstone/wt-b0/capstone/runtime/include",
+  "extra_src": [
+   "wmem_core.c",
+   "wmem_user_cb.c",
+   "wmem_allocator_simple.c",
+   "wmem_allocator_block.c",
+   "wmem_allocator_block_fast.c",
+   "wmem_allocator_strict.c",
+   "system.c",
+   "compat.c",
+   "scopes.c"
+  ]
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "CAUGHT",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "wireshark-wmem-controls-lifetime-00-parent",
+   "case": "00_control_parent_block",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "190350021e228e82a26863e1c0f40935d5bccfba7f91827b7f5708f599f383e4",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-01-sibling",
+   "case": "01_control_sibling_intact",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "f40c1ec7abdec5358b2577327d38998f8e2be67b51d65c483b3dffa4a1eb445f",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-02-successor",
+   "case": "02_control_successor_reuse",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "dcfde812d112f154fc0f74e4f534a3bc8505e609eedb0cd8e017763581580b88",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-03-stale",
+   "case": "03_control_successor_stale",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "519fa0de70e1c301d5bbe7b686b9ec85f50296d7331efda8bd02157c4aef68f4",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wm_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wm_probe"
+   }
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-block-fast-00-parent",
+   "case": "00_control_parent_block",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast",
+   "kind": "lifetime-control",
+   "image_sha256": "80b970b3135810965a7266b601539bfd2e22da1d54928cc3214f2ce8e824ffd9",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-block-fast-01-successor",
+   "case": "01_control_successor_reuse",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast",
+   "kind": "lifetime-control",
+   "image_sha256": "5c5be74612465c5bdb65c2dcbcf60be996acca1f3623e2058841adb73f18e101",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-block-fast-02-stale",
+   "case": "02_control_successor_stale",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast",
+   "kind": "lifetime-control",
+   "image_sha256": "0185365e35e47064ef3029ee2b5e7eb7cfb7556cfdf3d1a8d5b7cad870a654b8",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wm_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wm_probe"
+   }
+  }
+ ]
+}

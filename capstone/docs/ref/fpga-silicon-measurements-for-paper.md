@@ -6305,3 +6305,22 @@ Two arms in one boot (07:43-08:26): firmware 6cbb3a4494fcdc73, the line of sets 
 - The jumbo control faults on both arms because the jumbo is returned to `g_free`. That needs level0 to place a 2 MiB
   block on its granule (dev `06f0b29f0463`).
 - Built with the port's Release flags (`-O3 -DNDEBUG`).
+
+## The nested-lifetime controls on silicon: every permitted access completes, and only the stale reference faults (caplifive_sublet_d93a8d66b, 2026-10-16)
+Six arms in one boot (08:26-08:52): firmware a43fcda381219db6, 63 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-lifetime-controls (lane 75ce44a1ceeb), from
+  `docs/plans/2026-10-11-nested-lifetime-controls.md`'s registered prediction.
+- Results: RESULTS.md there.
+
+| port | patch | parent, sibling and successor runs | the successor's stale read: Sublet arm / stock arm |
+|---|---|---|---|
+| FFmpeg AVBufferPool (91-93) | 0003 | all complete on both arms | CAUGHT 25 / completes |
+| memcached slabs (91-93) and cache.c (94-96) | 0006 | all complete on both arms (the Sublet arm also through the page's generation) | CAUGHT 25 (93, 96) / completes |
+| wmem block (00-03) and block_fast (00-02) | 0001 | all complete on both arms | CAUGHT 25 / completes |
+
+- **All 39 control runs are as pre-registered,** by outcome, cause and site, on the pre-registered image.
+- **On silicon, these lifetime patches reject no permitted access.** They reject the stale reference only, at its
+  labelled probe.
+
+**Scope, before quoting:** three controls per allocator (block_fast has no sibling control), driven through each
+allocator's API in the corpus's own builds. These show the absence of false positives on these shapes, not in general.

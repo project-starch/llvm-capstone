@@ -1,0 +1,114 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3998 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac080f88 address=0xac0e3980 in ctl_read_probe+0x20 (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "wireshark-wmem-controls-lifetime-00-parent",
+   "case": "00_control_parent_block",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `WM_DEFECT case=0 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "4a932c513ddcc0bbab5107a820cb340e3685a50c44581ca8105da044d9fb2192",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-01-sibling",
+   "case": "01_control_sibling_intact",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `WM_DEFECT case=1 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "fddd1719ff057c31ba09836e39b8866a358d27954fd68f8172ea45de56fda307",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-02-successor",
+   "case": "02_control_successor_reuse",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `WM_DEFECT case=2 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "b9a50babf9c2d4c42cea7167fe690ce6328170950a3ba71fd5bda294ca00e16e",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-03-stale",
+   "case": "03_control_successor_stale",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `WM_DEFECT case=3 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "2c5dd515a79042b979305f0f6b99602cc543b8153c2df909e1487739feb3843f",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-block-fast-00-parent",
+   "case": "00_control_parent_block",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast",
+   "kind": "lifetime-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `WM_DEFECT case=0 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "4ae4987ff6b5518f046cec1210bfe1afcace35cc919d1cfda1a85f61980fb230",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-block-fast-01-successor",
+   "case": "01_control_successor_reuse",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast",
+   "kind": "lifetime-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `WM_DEFECT case=1 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "e39fa7db779ed14e9bf74b6e0ea29a45ad9a96bfd7f1ca83aed93d000a8e147a",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "wireshark-wmem-controls-lifetime-block-fast-02-stale",
+   "case": "02_control_successor_stale",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls/lifetime-block-fast",
+   "kind": "lifetime-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `WM_DEFECT case=2 mode=0 completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "1a40d081889a730c22a3b791c1793bf49477694eddf31ef277061966b987e404",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  }
+ ]
+}

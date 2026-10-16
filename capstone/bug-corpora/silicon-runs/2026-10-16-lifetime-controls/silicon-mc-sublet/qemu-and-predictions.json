@@ -1,0 +1,179 @@
+{
+ "arm": "silicon-mc-sublet",
+ "build": {
+  "defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+  "app_cflags": "",
+  "carve": {},
+  "corpus_defs": {
+   "allocator-repros": "-DMC_CARVE_BOUNDS -DMC_CAPSTONE_SUBLET"
+  },
+  "driver": "driver-virtual.c",
+  "extra_cflags": "-std=c11 -fno-inline -DNDEBUG -DCHUNK_ALIGN_BYTES=16 -I/tmp/capstone/wt-b0/capstone/ports/memcached/allocators/src/shared -I/tmp/capstone/wt-b0/capstone/ports/memcached/adapted -I/tmp/capstone/wt-b0/capstone/runtime/include -Wno-unused-parameter -Wno-sign-compare -I/tmp/capstone/corpus-sil/mc/src-protected",
+  "extra_src": [
+   "slabs.c",
+   "cache.c",
+   "services.c"
+  ]
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "CAUGHT",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "memcached-allocator-controls-lifetime-91-page",
+   "case": "91_ctl_parent_page_reference",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "35f189cf8dec07110b54d27141dc17bf677c1a940f2436b5d5415ac8b52bd8eb",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "memcached-allocator-controls-lifetime-91-generation",
+   "case": "91_ctl_parent_page_reference",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "35f189cf8dec07110b54d27141dc17bf677c1a940f2436b5d5415ac8b52bd8eb",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "memcached-allocator-controls-lifetime-92-sibling",
+   "case": "92_ctl_sibling_same_page",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "68a52bb6e8b457cff4ca05067d4e4169731ac69576e0ac6f840baed863c3a0d5",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "memcached-allocator-controls-lifetime-93-through-c",
+   "case": "93_ctl_successor_reuses_chunk",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "5bbb77b02dfe2b7a523d8966405ed9667d008a565600e237286b412a026dea41",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "memcached-allocator-controls-lifetime-93-stale",
+   "case": "93_ctl_successor_reuses_chunk",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "5bbb77b02dfe2b7a523d8966405ed9667d008a565600e237286b412a026dea41",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "read_probe"
+   }
+  },
+  {
+   "name": "memcached-allocator-controls-lifetime-cache-94-list-head",
+   "case": "94_ctl_parent_cache_list_reference",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache",
+   "kind": "lifetime-control",
+   "image_sha256": "c9ba87b73383990741fbd72a1ad071698377074faae6d7985395cc47753d681f",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "memcached-allocator-controls-lifetime-cache-95-sibling",
+   "case": "95_ctl_sibling_same_cache",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache",
+   "kind": "lifetime-control",
+   "image_sha256": "91cd34f6a11f16c943ade7314e0f28d7151c5336258d75d5004ba0bbd2abbdd9",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "memcached-allocator-controls-lifetime-cache-96-through-c",
+   "case": "96_ctl_successor_reuses_object",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache",
+   "kind": "lifetime-control",
+   "image_sha256": "196e6874644e7d031ef4f3520d80e771e3a56a3a0c8b303c9f649bb459c920d8",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "memcached-allocator-controls-lifetime-cache-96-stale",
+   "case": "96_ctl_successor_reuses_object",
+   "corpus": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache",
+   "kind": "lifetime-control",
+   "image_sha256": "196e6874644e7d031ef4f3520d80e771e3a56a3a0c8b303c9f649bb459c920d8",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "read_probe"
+   }
+  }
+ ]
+}

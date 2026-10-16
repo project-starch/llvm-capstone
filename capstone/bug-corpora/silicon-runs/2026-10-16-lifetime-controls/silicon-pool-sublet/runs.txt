@@ -1,0 +1,8 @@
+silicon-pool-sublet:control-clean controls.dom clean
+silicon-pool-sublet:control-oob controls.dom oob
+silicon-pool-sublet:control-uaf controls.dom uaf
+silicon-pool-sublet:control-subobj controls.dom subobj
+silicon-pool-sublet:ffmpeg-pool-controls-nested-lifetime-91-run ffmpeg-pool-controls-nested-lifetime-91.dom run 91
+silicon-pool-sublet:ffmpeg-pool-controls-nested-lifetime-92-run ffmpeg-pool-controls-nested-lifetime-92.dom run 92
+silicon-pool-sublet:ffmpeg-pool-controls-nested-lifetime-93-run ffmpeg-pool-controls-nested-lifetime-93.dom run 93
+silicon-pool-sublet:ffmpeg-pool-controls-nested-lifetime-93-stale ffmpeg-pool-controls-nested-lifetime-93.dom stale 93
