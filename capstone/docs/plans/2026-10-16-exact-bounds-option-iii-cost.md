@@ -203,3 +203,38 @@ physical profile.
 * **The QEMU-side citations are at dev's submodule pointer**, not the working tree's.
 * One of my own checks was vacuous on first writing and is called out above; the replacement is
   negative-tested both ways.
+
+## Addendum: the bug-corpora virtual arms are the at-risk population, and the recorded data cannot settle them
+
+The section above cleared `ports.json` and `allocator.json`. It did not account for a much larger
+body of recorded virtual-profile results: **57 `verdicts.jsonl` files under
+`capstone/bug-corpora/*/*/results/*virtual*/`, 825 judged rows, of which 430 are `CAUGHT`** — in
+the arms `virtual-malloc` (447 rows), `virtual-nested-pools` (336) and `virtual-pg-pools` (42).
+
+A `CAUGHT` verdict is a *detected fault*, so unlike a functional-equivalence check it can flip.
+The flip condition is precise: the detecting access must lie inside the outward-rounding slack of
+the object it overruns.
+
+**The recorded data cannot decide this, and it is worth saying why rather than estimating.** A row
+records `{cause, pc, symbol, offset}`. The `offset` field is **not** an overrun distance: it is the
+faulting PC's offset into its function symbol — `verdicts.py:186-193` builds the `Fault` from
+`symbols.lookup(pc, code)`, which returns `name, pc - addr` (`:182`). Nothing in a row carries the
+allocation size or the distance past the object end. An earlier version of this analysis bounded
+the risk from those offsets; that was measuring a code offset and the bound is withdrawn.
+
+What can still be said without a run, and it is not nothing:
+
+* **Rounding is zero below 4 KiB**, so only repros that overrun an object of 4 KiB or more are
+  candidates at all.
+* **The slack is at most `size/512`** (granule `2^(ilog2(L)-9)`), so a repro whose overrun distance
+  exceeds a five-hundredth of its object's size cannot be swallowed. Heap-overflow repros
+  typically overrun by one element, not by 0.2% of the buffer, so the expected number of flips is
+  small — but that is a prior, not a measurement, and it is not the same claim as "none".
+* **The flip is one-directional.** Outward rounding can only turn `CAUGHT` into a miss, never the
+  reverse, so the 351 `MISSED` rows are unaffected and (iii) can only lower the corpus's detection
+  rate, never raise it.
+
+Settling it needs either the repro sources read case by case for the allocation size and overrun
+distance, or a re-run of the virtual arms with the profile off. The re-run is the cheaper and more
+honest of the two and is already inside the 1-2 days costed for re-running the suites — but it
+should be counted as a *deliverable* of that re-run rather than assumed to come out clean.
