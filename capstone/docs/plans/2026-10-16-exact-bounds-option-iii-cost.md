@@ -1981,3 +1981,54 @@ it is still not shown to fire.
 
 The boot-to-boot row is the sharpest test: a fix that cleared the deterministic failures and left
 `malloc(6144)` varying between boots would mean the alignment half is still biting.
+
+
+## Both disjuncts now have PRINTED rows, and the fourth cell is empty
+
+The board lane pointed out a real gap in the record above: **none of the three printed
+`ADD_REFUSED` rows had a power-of-two size**, so the alignment half rested on the same arm giving
+opposite answers across two runs plus a 1-in-4 board result — behavioural inference, not a measured
+disjunct.
+
+That row did not need a lucky boot. A power-of-two mapping is refused whenever `mmap` does not land
+it on its own size, so forcing many group mappings in one process makes it near-certain: each class
+holds only `cnt` slots, so keeping every object live forces a fresh mapping every `cnt`
+allocations. The `align-probe` mode does that across a spread of classes and is deliberately
+**model-free** — it does not assume which group a request lands in, since assuming that is what made
+the earlier `malloc(2029)` arm measure the wrong thing.
+
+    MALLOC_ALIGN_PROBE attempted=600 ok=187 failed=413
+
+420 refusal rows, classified by the two disjuncts `add():466` actually evaluates:
+
+| `pow2` | `naturally_aligned` | rows | what it establishes |
+|---|---|---|---|
+| 0 | 1 | **109** | refused *while satisfying alignment* — the SIZE half, directly |
+| 1 | 0 | **87** | a power of two refused with a misaligned base — the ALIGNMENT half, directly |
+| 0 | 0 | 224 | both conditions fail |
+| 1 | 1 | **0** | nothing satisfying BOTH was ever refused |
+
+Examples of the row that was missing, with the arithmetic spelled out:
+
+    base=0x3f9c1dd000 bytes=8192  errno=22  base mod bytes = 4096
+    base=0x3f9c1d2000 bytes=16384 errno=22  base mod bytes = 8192
+    base=0x3f9c1a1000 bytes=16384 errno=22  base mod bytes = 4096
+
+**The empty fourth cell is the confirming negative.** The conjunction predicts that a mapping which
+is a power of two AND naturally aligned can never be refused by line 466; across 420 refusals, none
+was. Had that cell been populated, a third disjunct would be in play and the account would be
+incomplete.
+
+So neither half is inference any more, and the earlier behavioural evidence — the pred2/pred4
+inversion and the board lane's 1-of-4 — is now corroboration rather than the basis.
+
+**Severity, measured rather than estimated:** 413 of 600 allocations fail in this profile, 69%.
+
+### What still rests on inference, stated plainly
+
+- That the module is enforcing an invariant the hardware does not require. `capstone_repr_ok` is
+  validated against the encoder oracle by `repr-cross-check.py`, so the *predicate* is grounded, but
+  no run here has exercised a granule-aligned, non-power-of-two arena through the proposed relaxed
+  `add()` — that is what the fix's own run will show.
+- Why heap growth never completes. `remap_begin` is still not shown to fire, so it stays out of the
+  fix and remains open.

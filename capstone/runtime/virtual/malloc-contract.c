@@ -248,6 +248,38 @@ static void predicate(void)
 #endif
     fflush(stdout);
 }
+/* Produce the one row the record is missing: a POWER-OF-TWO mapping refused with
+ * naturally_aligned=0. The alignment half of add():466 currently rests on the same arm giving
+ * opposite answers across runs plus a 1-in-4 board result, which is behavioural inference, not a
+ * printed disjunct.
+ *
+ * It does not need a lucky boot. A power-of-two mapping is refused whenever mmap does not land it
+ * on its own size, roughly half the time, so FORCING many group mappings in one process makes the
+ * row near-certain. Each size class holds only cnt slots, so keeping every object live forces a
+ * fresh mapping every cnt allocations.
+ *
+ * Deliberately model-free: it does not assume which group a request lands in -- that assumption is
+ * what made the earlier arm measure the wrong thing. It allocates across a spread of classes and
+ * lets the launcher's CAPSTONE_VM_ADD_REFUSED rows report the real sizes and bases.
+ */
+static void align_probe(void)
+{
+    enum { KEEP = 600 };
+    static void *live[KEEP];
+    static const size_t sizes[] = {520, 1000, 2029, 3000, 4100, 6144, 9000, 12000};
+    unsigned n = 0, ok = 0, failed = 0;
+    for (unsigned round = 0; round < KEEP / (sizeof sizes / sizeof *sizes); ++round) {
+        for (unsigned i = 0; i < sizeof sizes / sizeof *sizes && n < KEEP; ++i, ++n) {
+            live[n] = malloc(sizes[i]);
+            if (live[n]) { ok++; memset(live[n], 0x5A, 1); } else failed++;
+        }
+    }
+    printf("MALLOC_ALIGN_PROBE attempted=%u ok=%u failed=%u\n", n, ok, failed);
+    fflush(stdout);
+    for (unsigned i = 0; i < n; ++i) if (live[i]) free(live[i]);
+    puts("MALLOC_ALIGN_PROBE_DONE");
+    fflush(stdout);
+}
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
@@ -257,6 +289,7 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "churn")) { churn(); return 0; }
     if (!strcmp(mode, "remap-align")) { remap_align(); return 0; }
     if (!strcmp(mode, "predicate")) { predicate(); return 0; }
+    if (!strcmp(mode, "align-probe")) { align_probe(); return 0; }
     if (!strcmp(mode, "ok")) { basic(); tagged(); return 0; }
     if (!strcmp(mode, "reuse-stale") || !strcmp(mode, "reuse-free")) {
         /* Let upstream offset cycling choose reuse; never force its policy. */

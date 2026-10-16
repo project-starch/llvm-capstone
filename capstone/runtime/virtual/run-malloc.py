@@ -77,7 +77,9 @@ echo MALLOC_POPULATION_EXIT:$?
 '''
     if not a.skip_churn:
         gate += 'CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom churn\necho MALLOC_CHURN_EXIT:$?\n'
-    gate += '''CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom predicate
+    gate += '''CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom align-probe
+echo MALLOC_ALIGN_PROBE_EXIT:$?
+CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom predicate
 echo MALLOC_PREDICATE_EXIT:$?
 CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom remap-align
 echo MALLOC_REMAP_ALIGN_EXIT:$?
