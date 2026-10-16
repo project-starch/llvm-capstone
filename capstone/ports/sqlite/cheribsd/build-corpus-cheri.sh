@@ -291,7 +291,12 @@ build_group() {
     esac
     local xsrc=() xinc=()
     case "$tag" in
-      spellfixoom) xsrc=("$SRC/spellfix.c"); xinc=(-DSQLITE_CORE -I"$EXT/misc") ;;
+      # PROBE=1 needs the probed copy, as expertrem does: this case's defect is in the
+      # extension, so without this branch the arm can never put a site at it. Found
+      # 2026-10-16; before it, case 22 had no defect-site probe on this arm at all.
+      spellfixoom) if [ -n "$PROBE" ]; then xsrc=("$SRC/spellfix-probe.c");
+                   else xsrc=("$SRC/spellfix.c"); fi
+                   xinc=(-DSQLITE_CORE -I"$EXT/misc") ;;
       expertrem)   if [ -n "$PROBE" ]; then xsrc=("$SRC/sqlite3expert-probe.c");
                    else xsrc=("$EXT/expert/sqlite3expert.c"); fi
                    xinc=(-DSQLITE_CORE -I"$EXT/expert") ;;
