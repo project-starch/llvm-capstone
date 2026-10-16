@@ -1,0 +1,15 @@
+silicon-pg-sublet:control-clean controls.dom clean
+silicon-pg-sublet:control-oob controls.dom oob
+silicon-pg-sublet:control-uaf controls.dom uaf
+silicon-pg-sublet:control-subobj controls.dom subobj
+silicon-pg-sublet:postgres-mmgr-00-case postgres-mmgr-00.dom 0 0
+silicon-pg-sublet:postgres-mmgr-00-ctl-control postgres-mmgr-00-ctl.dom 0 0
+silicon-pg-sublet:postgres-mmgr-01-case postgres-mmgr-01.dom 0 1
+silicon-pg-sublet:postgres-mmgr-01-ctl-control postgres-mmgr-01-ctl.dom 0 1
+silicon-pg-sublet:postgres-mmgr-02-case postgres-mmgr-02.dom 0 2
+silicon-pg-sublet:postgres-mmgr-02-ctl-control postgres-mmgr-02-ctl.dom 0 2
+silicon-pg-sublet:postgres-mmgr-03-case postgres-mmgr-03.dom 0 3
+silicon-pg-sublet:postgres-mmgr-03-ctl-control postgres-mmgr-03-ctl.dom 0 3
+silicon-pg-sublet:postgres-mmgr-04-case postgres-mmgr-04.dom 0 4
+silicon-pg-sublet:postgres-mmgr-04-ctl-control postgres-mmgr-04-ctl.dom 0 4
+silicon-pg-sublet:postgres-mmgr-controls-00-control postgres-mmgr-controls-00.dom 0 0
