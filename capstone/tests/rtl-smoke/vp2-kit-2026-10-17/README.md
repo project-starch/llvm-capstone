@@ -45,8 +45,16 @@ module and the emulator agree.
 - **The arm's last line:** `BASELINE-PROBE vm_steps = <n>`, the form the stage driver accepts for a host-binary arm
   (board-run skill, after the PHANTOM guard).
 - **The comparison:** each step's status against the QEMU record.
-- **To settle before the arm is written:** whether the board's own `capstone.ko` (#3), which the drivers `insmod`
-  before the first rung, can be loaded beside `capstone_vm.ko`.
+- **Settled from the sources (2026-10-17): the board's `capstone.ko` (#3), which the drivers `insmod` before the
+  first rung, can be loaded beside `capstone_vm.ko`.**
+  - They register different misc devices: `capstone` (modcapstone `module/capstone.c:654-656`) and `capstone-vm`
+    (`runtime/virtual/module/capstone_vm.c:1156-1157`).
+  - `capstone_vm.ko` exports no symbol, so the two cannot collide at load.
+  - The virtual CSRs (`0x5c0` profile, `0x5c1` the rev-node root, `0xcc0` the available-node count) are touched only
+    by `capstone_vm.ko`. It saves and restores `0x5c1` around each use, with interrupts off.
+  - Neither `capstone.c` nor the classic monitor (capstone-sbi 93440d5) names those CSRs. The positive control: the
+    same `git grep` over the monitor finds its 26 `csrr`/`csrw` lines (sbi_capstone.S 18, sbi_capstone.c 7, sbi_capstone.h 1).
+  - This is a reading of the sources. The first QEMU kit run loads both modules and shows it.
 
 ## The page-table walker's PMP entry: no monitor change
 

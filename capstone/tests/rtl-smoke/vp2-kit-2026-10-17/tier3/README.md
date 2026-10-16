@@ -319,6 +319,16 @@ The recipes, read from the recorded runner blob:
    - The plan's statement that today's images need the exact-bounds bit is therefore not checkable from those bundles'
      records.
 
+9. **The compiler of 7 bundles is the October 10 build, and it predates C-80's fix.**
+   - `platform.compiler` `7977ad4b...` is the sha256 of `/tmp/capstone/virt-stack/llvm-build/bin/clang`, which is
+     bd372e25f5fb, Release with assertions on. Read 2026-10-17 by hashing the clang binaries on this host.
+     `4c6135fe...` matches none of the four found, so it stays UNRESOLVED.
+   - C-80 (fixed on dev by 7ce213020f87) passes a type mismatch silently in a release build without assertions,
+     where an assertions build stops. An assertions build that compiled an image did not take that path. A build
+     without assertions may have miscompiled non-immediate FP constants under the virtual `+f`/`+d`.
+   - The rebuild uses a compiler carrying the fix in every bundle, so this is a reason to rebuild rather than
+     relink. It is also one more reason a moved verdict is not attributable to silicon alone.
+
 ## Checks that were made to fire
 
 - **Zero bundles.** A scratch repo whose one corpus.json has no `verdict_bundles` exits 2 with "NO DATA: zero bundles
@@ -353,3 +363,30 @@ The recipes, read from the recorded runner blob:
   it is a summary, not a script that has been run. No rebuild was attempted.
 - **The `r6-raw` `controls.dom` (`e60cc469afb0...`)** is a candidate controls reference for the seven survivor bundles.
   It is not proven, because no bundle records a controls hash for them.
+
+## The pilot: one bundle rebuilt and run on the ABI v6 kit (2026-10-17, not a final image)
+
+**What ran:** bundle 13, `memcached/plain-heap-repros` `virtual-malloc`.
+- The runner is the compiler lane's revision of `tools/run-virtual-cases.py` (`lane/compiler-exact-bounds-iii`
+  85b1daddf230; runner sha256 `5ff1997e...`).
+- The SDK is the kit's ABI v6 SDK (`../RESULTS.md`), byte-identical in its built files to the compiler lane's.
+  The compiler lane's status line for it is: "builds and produces v6 domains; not yet verified to work".
+- The kit is the v6 QEMU adapter (launcher `32f79ca8...`, module `97334f0f...`), the reference QEMU
+  (`40264f5d...`) and the guest images. The firmware, kernel and rootfs equal the hashes the original bundle recorded.
+- The output went to `/tmp/capstone/vp2-prep/tier3-pilot`, not to the corpus's `results/`.
+
+**What it read:**
+- **CAUGHT 9 of 9, the recorded tally.**
+- All 9 images were rebuilt; every image hash differs from the recorded one.
+- For each case, the verdict, the fault cause (28), the faulting symbol (`mch_write_probe` / `mch_read_probe`) and
+  the attribution (`probe`) equal the recorded cell's.
+- Both configuration controls, bounds-malloc and uaf-malloc, faulted as expected.
+
+**What this shows and what it does not:**
+- The case.c rebuild path (9 of the 26 bundles, 107 of the 304 images) works end to end on the v6 SDK. That covers
+  build, one boot, the judge, and a comparison cell by cell.
+- It does not show the v6 heap is sound. run.py's contract FAILS on the same kit (`../RESULTS.md`), and these 9
+  cases are spatial. A temporal bundle is the next pilot.
+- **Tool note:** the compiler lane's toolchain copy has `llvm-readobj` but no `llvm-readelf`, which the judge
+  calls. The pilot used a bin directory of symlinks to that toolchain, with `llvm-readelf` pointing at
+  `llvm-readobj`. So the recorded compiler hash is still that clang's (`ba603a57...`).
