@@ -89,6 +89,29 @@ static int by_address(const void *x, const void *y)
  * file ends, as on Linux; the runtime must not stop at its exchange region.
  * The pipe control must still return what is available at once: there a short
  * count is the kernel's answer, and waiting for the rest would block forever. */
+/* alloca(0): the result is bounded to a region of its own, and SHRINK refuses
+ * an empty range, so a zero-byte allocation still takes stack space. The size
+ * comes through a volatile so the allocations stay dynamic, and the helper is
+ * not inlined so they are not hoisted into a fixed frame. */
+static char *volatile alloca_sink;
+
+static __attribute__((noinline)) void zero_size_allocas(void)
+{
+    volatile size_t zero = 0, one = 1;
+    char *a = __builtin_alloca(zero);
+    BARRIER();
+    char *b = __builtin_alloca(zero);
+    BARRIER();
+    char *c = __builtin_alloca(one);
+    c[0] = 'c';
+    alloca_sink = c; /* keeps the one-byte allocation and its store */
+    BARRIER();
+    check(a && b && alloca_sink[0] == 'c', "alloca_zero_survives");
+#ifdef __CAPSTONE_PURECAP__
+    check(a != b && TAG(a) && TAG(b) && TAG(alloca_sink), "alloca_zero_distinct_tagged");
+#endif
+}
+
 static void transfers(void)
 {
     enum { BIG = (1 << 20) + 123 };
@@ -210,6 +233,7 @@ int main(void)
 #endif
 
     transfers();
+    zero_size_allocas();
 
     printf("HOSTED_RESULT:%d/%d\n", checks - failures, checks);
     return failures != 0;
