@@ -6128,6 +6128,13 @@ the FP respin's (shared tree d04bd83 / df0e9a8 / 93440d5).
 - **Linux:** boots, with k800 4 and s06agg 64.
 - **Boot C+F:** every rung equal to the respin, r54-bounds 64.
 - **R1** (R-43 a1, a3): `alloc=160 minted=191 revoked=160`; 12 wide points ok.
+  - Both images, a1's `079b1f3a` and a3's `46f99c7b`, and a2's `1b7a04fe` below, predate the sublet-runtime fix
+    (2026-10-16 23:20, `tests/rtl-smoke/r1-sublet-2026-10-16`), so their carves alias on this bitstream.
+  - a1 and a3 were completion checks, and no figure here is cited from them.
+  - a2's verdict below is the monitor's region ids and OVERLAP 0, carved outside the domain, so it does not depend on
+    the domain's runtime.
+  - R1's warm and cold figures on this bitstream are pre-registered on the fixed-runtime image `66764b0e` (same
+    folder).
 - **R-43's live sweeps:** 544 / 4352 / 17408.
 - **The 17-rung ladder:** retval and instret identical to the respin's, cycles within 0.74%.
 - **P1 cell 5:** `112006 38bb59fd`, 1,156,968,951 cycles.
@@ -6589,3 +6596,26 @@ with the sublet-runtime fix (14 SHRINK words), the defaults and 0x410000. Folder
   - It is not outcome (a), v2's values.
 - **So the retraction of H1's attribution (783fb0f93f7e) is resolved:** the drop is not the unfixed carve.
 - **Bitstream or monitor** (93440d5 against v2's 2dcd3a5) is still open.
+
+## P1 cells 5 and 6 beside the native -O2 baseline on the Sublet bitstream: cell 6 / native 1.509, cell 5 / native 1.418 (caplifive_sublet_d93a8d66b, 2026-10-17)
+Two cold boots (p1s16b-c5, p1s16b-c6, 02:55-03:22) on the classic line. Each runs one cell and the native -O2 warm
+baseline `9a80c1cd2a576ed2` between two k800 controls. Folder: `tests/rtl-smoke/p1-sublet-2026-10-16/`
+(pre-registered at lane 83ce50f019b4, amended at 5131d25ce2eb; RESULTS.md and `results/`).
+- **Every identity reading as pre-registered:** k800 4 twice, `112006 38bb59fd` on every arm, HEAP DROPPED 0,
+  lookasides 25,010 / 25,122, and cell 6's sublet line 5568/37970/32569/37970/5401.
+
+| arm | image | cycles | CPI against QEMU |
+|---|---|---:|---:|
+| cell 5 (memsys5 + lookaside, 2 MiB) | `21f4b2659074511c` | 1,213,784,631 | 3.636 |
+| cell 6 (the Sublet port, fixed runtime) | `4bfe3b0ec8494385` | 1,292,707,481 | 3.757 |
+| native -O2 warm (the two boots) | `9a80c1cd2a576ed2` | 856,244,108 / 856,627,547 | 3.557 / 3.559 |
+
+- **cell 6 / native = 1.5091** (pre-registered ≈ 1.510). The cell reads within 0.01 % of the same image's c6pair
+  boot (2026-10-16).
+- **cell 5 / native = 1.4176**, against the pre-registered ≈ 1.364. Today's cell 5 is a new build: same geometry,
+  different code, from dev's tree and dev147. It runs at CPI 3.636, where the 09-30 image `5f4b44257c933477` ran at
+  3.498. The earlier 1.3513 is that image's ratio.
+- **cell 6 / cell 5 = 1.065** across the boots, 1.0645 normalised by each boot's own native.
+- **The board's idle MemFree** is 940,924 / 941,680 kB after Linux and 938,032 / 934,332 kB at the end of the boot.
+  This is the virtual-profile plan's memory figure.
+- **Not established:** N = 1 per cell, at size 1; why the new cell 5 build runs at a higher CPI.
