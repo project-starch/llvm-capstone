@@ -1113,3 +1113,46 @@ its address is a multiple of each.
 Remaining port work: the eleven offset-0 sites (round the allocation with `capstone_repr_round` and
 derive over the rounded length — the parent's alignment now comes free from item 1), and the nine
 non-zero-offset sites, which need granule-aligned chunk placement in each allocator's own geometry.
+
+## A sibling patch would have broken the SDK build: the changes belong in 0009
+
+`0010-mallocng-representable-bounds.patch` is **withdrawn** and its content folded into
+`0009-virtual-mallocng-capabilities.patch`.
+
+**Why, found by running the gate rather than by reading it.** `build-sdk.sh:9-14` establishes that
+the musl tree is current by requiring **every** patch to reverse-apply *independently*:
+
+    for patchfile in .../musl-patches/*.patch; do
+        if ! patch -d "$musl" -p1 -R --dry-run -s -f < "$patchfile" >/dev/null 2>&1; then
+            echo "musl source is not current: run prepare-musl-capstone.sh (missing ...)" >&2
+            exit 2
+
+0010 edited lines that 0009 *adds* — the `enframe` slot-base expression and the line beside
+`__capstone_malloc_group_map`. With 0010 on top, **0009 no longer reverses**, so the check reports
+`0009 ... MISSING` and the SDK build refuses outright. Confirmed both ways: on a 0001-0009 tree 0009
+reverses cleanly, and with 0010 applied it does not.
+
+So the chain's structure is a constraint, not a convention: **two patches must not touch the same
+region.** Representable bounds is part of the same concern as mallocng's capability representation,
+so it belongs in 0009, whose header now records it.
+
+Re-verified on a tree built from the new chain: all nine patches reverse-apply independently
+(**currency gate PASS**) and `check-mallocng-policy.py` reports **22 PASS, no FAIL**.
+
+## Critical path, as of 2026-10-17
+
+1. **SDK build** from the prepared musl — `build-sdk.sh` then the application SDK. Not yet run.
+2. **The two-sided suite run**, profile off as production and on as control: `run-malloc.py`,
+   `run.py`, `run-fp.py`, `run-pthreads.py`, `run-hosted.py`. **This is the long pole** — it is
+   serialized on the shared QEMU lock, and `run-malloc.py`'s own default timeout is 1800 s. It also
+   produces the first `remap_unaligned_fallbacks` number, which decides whether the aligned-remap
+   ABI change is worth making.
+3. **Land the SDK** once mallocng and the launcher pass, before the ports are finished, and tell the
+   board lane so Tier 3's rebuild can start — today's images require the exact-bounds bit and are
+   refused without it.
+4. **The ports**, one at a time in this session: the eleven offset-0 sites, then the nine needing
+   granule-aligned placement. memsys5's static arena is done.
+
+**Not parallelised with subagents, deliberately.** CLAUDE.md keeps "compiler/codegen and
+capability-ABI changes" in the main session, and changing how an allocator derives a capability is
+exactly that. The read-only half — bounding each site's maximum length — was delegated and is done.
