@@ -190,6 +190,18 @@ This section replaces the withdrawn one above. It is based on the compiler lane'
   the `add()` change, and a surviving growth failure is that check, not a second site. Its own fix is domain-side,
   in realloc.c. `real_linux_mremap_growth_and_shrink` reaches neither a refusal nor a remap, and stays open.
 
+- **Amended again before the revision exists** (compiler lane b61f56b10c06, the growth fix):
+  - **The finding:** a granule-sized group header makes in-place growth across a granule boundary unsound. The
+    header grows with the mapping while mremap keeps bytes in place, so the payload moves. It showed as
+    corrupted contents with the growth reporting success. realloc now refuses such a remap and copies instead.
+  - **So `CAPSTONE_VM_REMAP_OK` must read 0.** Both of the suite's growths cross a granule boundary. A non-zero
+    count would mean the unsound path was taken.
+  - `real_linux_mremap_growth_and_shrink` counts completed remaps (`run-malloc.py:153`), so it fails by design
+    now. It is a check to re-scope, not a defect.
+  - **The fix run's revision will carry b61f56b10c06 as well as the `add()` change.** So the growth rows above
+    were stated for an earlier base. The prediction is to be re-stated, row by row, against that exact revision
+    before the run.
+
 **The board lane's runs on that revision.** The kit is rebuilt from the revision with the same toolchain, QEMU and
 guest images.
 0. **Amended before the revision exists (compiler lane 561b8b2cd692): the refusal line now prints unconditionally.**
