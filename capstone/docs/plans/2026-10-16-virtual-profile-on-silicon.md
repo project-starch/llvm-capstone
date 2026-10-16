@@ -210,23 +210,24 @@ Conditions for the flash that moves the map:
 - the monitor programs an all-permitting PMP entry before the first virtual context, because the page-table
   walker's accesses are PMP-checked as supervisor (the RTL lane's B simulation).
 
-## The bitstream sequence (RTL lane's proposal, 2026-10-16; under option (iii) its C' half drops out, and the RTL lane re-plans 2 to 4)
+## The bitstream sequence (RTL lane, re-planned 2026-10-16 after option (iii))
 
-Batched so that each bitstream answers questions the previous one cannot, and no reflash is spent on an observation
-the simulation already gives:
-1. **B + Q-17**: the virtual-context flag with translation and the resumable page fault (in simulation on
-   `virtual-profile` now), the CDERIVE check-order fix (one Anvil reorder), and E's untagged-arithmetic rule (#25)
-   if its flu change lints at baseline. Reads on the board: the six vb-trans arms as bare JTAG arms, then Tier 1's
-   launcher smoke without exact bounds (the launcher refuses, which is itself the reading until C').
-2. **C' + A flat**: the common core widening (exact bounds in the register lanes), the side store with its L1
-   array and adapter leg, the new memory map, and the srevroot table in its flat form with the flat 30-bit id.
-   Reads: exact-bounds.sh's four cases as arms, Tier 1 with the launcher running, the first virtual runtime suite.
-3. **D + A paged + E + H + Q-18**: CSRUNV with its frame, actions and kinds, FP state per context, the paged table,
-   the policy list, the collection flush, and DROP's virtual rule. Reads: Tier 1 and Tier 2 in full.
-4. **Integration**: whatever 1 to 3 leave open, and Tier 3's corpus. The physical regression (S-16, the Sublet arms,
-   one corpus set) is read on every one of the four.
+With exact bounds dropped there is no C' bitstream, no side store, no core widening, and the map stays at 963 MiB.
+Three bitstreams, batched so each answers what the simulation cannot:
+1. **B + Q-17 + R-56 + Q-19**: the virtual-context flag with translation and the resumable page fault, the CDERIVE
+   check order, the dropped page fault on a translated capability load, and the consuming-ldc rule as ruled. Reads on
+   the board: vb-trans's seven arms and its flag-off control, Q-17's arm, the S-16 set, the Sublet arms and one corpus
+   set identical to d93a8d66b. With the option-(iii) runtime the launcher no longer refuses for want of scapctl bit 8,
+   but its first full run needs A and D, so bitstream 1's Tier 1 reading is the bare arms plus the launcher's refusal.
+2. **A flat + the CSRUNV front end of D**: the srevroot register, QEMU's 16-byte record with the flat 30-bit id, the
+   reserved ids and the header (the generation path leaves the id under the flag); CSRUNV's frame addressing, actions
+   0-3 and the page-fault, node-pressure and service-ECALL kinds over the existing switcher. Reads: Tier 1's launcher
+   smoke (contract.dom reading VIRTUAL_APPLICATION_OK and the stale access denied 25), the first virtual runtime suite.
+3. **A paged + the rest of D + E + H + Q-18**: the paged table, FP state per context (#30), CSMINT/CSRETIRE over the
+   new table, the policy list with #25's untagged-arithmetic rule, the collection flush, and DROP's virtual rule.
+   Reads: Tier 1 and Tier 2 in full, then Tier 3's corpus; integration of whatever 1 and 2 leave open.
 Every bitstream is pre-registered before its handoff and carries its lint and loop-name numbers; every reflash
-waits for the lead's own word.
+waits for the lead's own word; the physical regression is read on every one.
 
 ## Constraints
 
@@ -250,7 +251,7 @@ waits for the lead's own word.
 | exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`. DECIDED the same day: (ii) dense, the format frozen as proposed, the helper lane owning the semantics |
 | C' bounds | RTL lane | DROPPED 2026-10-16: option (iii) needs nothing in the RTL |
 | option (iii) in the runtime: mallocng `repr_round`, the CSMINT descriptor audit, the ABI and launcher gate, runners, documents, re-records | compiler lane | to do, 3-5 days (estimate in `2026-10-16-exact-bounds-option-iii-cost.md`) |
-| B translation in C mode | RTL lane | SIMULATION GREEN 2026-10-16: capstone-ariane `virtual-profile` 16345658f; all six vb-trans arms and the flag-off control read as pre-registered, the old-tree control inverted where predicted; lint at baseline with the 40 loop names identical (`verif/sim/lint-loop-names.py`); two latent RTL gaps found and fixed on the way (R-56, Q-19); the flag-off neutrality sweep (95 tests, then the sup lists) is running; synthesis request after it, with the pre-registered WNS prediction |
+| B translation in C mode | RTL lane | SIMULATION GREEN 2026-10-16: capstone-ariane `virtual-profile` ea88d8e5d (the Q-19 ruling implemented: the consuming ldc decides at writeback from the captured page permission, a non-consuming ldc completes, arm 6 added); seven arms and the flag-off control as pre-registered; lint at baseline, the 40 loop names identical; Q-17's reorder and arm joining, then the flag-off neutrality sweep and the sup lists, then the synthesis request with the pre-registered prediction |
 | A lifetime table | RTL lane | to do |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
 | E policy list | RTL lane | to do, folded into D |
