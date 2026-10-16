@@ -6478,7 +6478,7 @@ The Sublet acceptance (Linux half, dev d5fe0b4092f7) ran both pairs below on the
 - This is one layout draw. Layouts K = 1..3 are pre-registered there (lane bc200ac88bd3), for the median over
   K = 0..3.
 
-## H1 calibration on the Sublet bitstream: the instrument reads as on R-43 v2, and revocation is 14-51 % cheaper at every node count (caplifive_sublet_d93a8d66b, 2026-10-16)
+## H1 calibration on the Sublet bitstream: the instrument reads as on R-43 v2; REVOKE read 14-51 % lower, on an image whose Sublet carve predates the R-55 fix (attribution RETRACTED) (caplifive_sublet_d93a8d66b, 2026-10-16)
 Three cold boots (h1s16r1-r3, 19:36-20:17), each running `h1-v2-calibration.txt` on the 2026-09-29 image
 da9c54e578845735. Folder: `tests/rtl-smoke/h1-sublet-2026-10-16/` (pre-registered at lane 21e38145c053; RESULTS.md and
 `results/`).
@@ -6494,6 +6494,18 @@ da9c54e578845735. Folder: `tests/rtl-smoke/h1-sublet-2026-10-16/` (pre-registere
     722-725 / 2,873-2,897 / 11,106-11,293 on v2;
   - about 18.5 cycles per destroyed node at n = 256, against 22.0;
   - the fixed part halves.
+
+> **RETRACTED (2026-10-16 23:10): the attribution of this drop to the bitstream.**
+> - **The image predates the fix.** H1's image `da9c54e578845735` was built on 2026-09-29, before the sublet-runtime fix
+>   a07a11194fa0. It contains no SHRINK, the instruction that fix adds to `sublet_split`; fixed builds of the same
+>   runtime carry four.
+> - **So its carves are wrong here.** Its `sublet_split` gives the lower piece its parent's decoded start, and under
+>   this bitstream's full bounds scheme that rounds below the nominal base (ISSUES R-55, the runtime half).
+> - **A sibling image showed it.** `1b7a04fe237e1580`, same harness and vintage, faulted at M2's first chase on this
+>   bitstream (boot m2s16-b1): mcause 6 storing to address 1, the address the carves' aliasing predicts.
+> - **What is withdrawn:** "revocation is cheaper on this bitstream". The REVOKE figures below are readings of this
+>   image on this bitstream, and they stand as readings; the drop's attribution waits for a fixed-runtime image.
+> - **What stays, as readings of the same image:** latency, timer, node counts and linear types.
 
 ## S1 on the Sublet bitstream: SQLite's use-after-free refused at the access, as on R-43 v2 (caplifive_sublet_d93a8d66b, 2026-10-16)
 Three boots (s1sql-b1s16-b3s16, 20:17-21:40) on the classic line. They repeat "S1 on R-43 v2" with images rebuilt on

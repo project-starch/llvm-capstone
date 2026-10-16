@@ -134,15 +134,19 @@ Over the repaired geometry (offset 0, slots 0 and 1, every request each large cl
   - ~~The promotion count is 1,024 of 131,051, not 912.~~ **Withdrawn by its author the same day**
     (`lane/compiler-exact-bounds-iii` 30d6ddfc5274). 1,024 is the worst case over all bases, but the repaired geometry
     puts every slot on a granule-aligned base. With both edges granule multiples, R-54's renormalisation cannot fire:
-    `tg - bg` is `len/g`, which is below 1024. So the base-dependent case never occurs, and the count is **912 of
-    131,051 (0.70%)**, as first measured. No class in the repaired table renormalises.
+    `tg - bg` is `len/g`, which is below 1024. So the base-dependent case never occurs. No class in the repaired table renormalises. **The count, CORRECTED
+    2026-10-16 by the semantics owner's audit** (`capstone/tests/exact-bounds-iii-audit/`): "912" counted, against the
+    edited table, 17 sizes at or above `MMAP_THRESHOLD` (131052), which never use a slot. Below the threshold, 895
+    sizes reach the next header against the edited table. Measured against upstream behaviour, the figure that
+    matters, **735 of 131,051 requests (0.56%) end in a different class than upstream, 107 of them on the mmap
+    path**. Some of the 895 sit in the 16-byte band the table edit adds and return to their upstream class.
   - The arithmetic now lives in one header, `runtime/include/capstone/representable.h` (`capstone_repr_ok`,
     `capstone_repr_round` and two more), on that branch. `repr-cross-check.py` compiles it and compares it with the RTL
     oracle over 24,168 cases, with 0 disagreements. A mutant that ignores the base disagrees 46 times.
   - Slots 0, 1 and 31 read 0 escapes and 0 header hits with the fix.
 So the runtime keeps the first estimate's classification rule as well: classify on `repr_round(n)`, with the
 granule its slot base gives, against the class's usable size `stride - IB`. The rounded end then stays at or below
-the next slot's header, at the cost of 912 sizes moving up one class.
+the next slot's header. Against upstream, 735 requests change class, 107 of them onto the mmap path.
 
 **The cost omits the nested allocators: CORRECTED 2026-10-16 by the semantics owner.** QEMU's compact profile, the
 reference once exact bounds are off, refuses an inexact CDERIVE child with 29 (`op_helper.c:1239-1247` at d35af47b163c:
@@ -181,6 +185,46 @@ lane re-costed these sites port by port; the Tier 3 nested arms depend on them.
   practice.
 - No site has a caller-controlled length with no ceiling at an offset the port does not choose.
 - The total for (iii) is 6-9 days of software.
+
+**The size_classes lock: option (a) chosen, 2026-10-16, after an independent audit.** The lead asked the semantics
+owner to audit and choose. `ports/musl-capstone/check-mallocng-policy.py`, the port's guard (adc891bb920c), requires
+the `size_classes` tables and the decision functions to be token-identical to musl 1.2.5. That forbids the 7 stride
+edits. Three ways out were measured with `capstone/tests/exact-bounds-iii-audit/audit-abc.py`:
+- musl 1.2.5's own `size_to_class` (archive sha256 a9a118bb..., the guard's);
+- the RTL's `bounds-model.py` read from capstone-ariane d93a8d66b by revision;
+- every request n in [1, MMAP_THRESHOLD), against upstream as the baseline.
+
+| | requests whose class differs from upstream | of them onto mmap | slot bytes vs upstream | worst request |
+|---|---|---|---|---|
+| (a) edit the 7 entries, narrow the guard | 735 (0.56%) | 107 | +0.110% | +25.1% |
+| (b) keep the table, skip the 7 classes whose stride is not a granule multiple | 71,752 (54.75%) | 26,347 | +2.129% | +71.6% |
+| (b') keep the table, shift each object to a granule-aligned offset inside its slot | 1,215 (0.93%) | 235 | +0.132% | +25.1% |
+
+These agree with the compiler lane's (b) (26,347 onto mmap, +2.13%, worst +71.7% at n=21793), and the in-class part
+of (a) is its first estimate's 628. Every option keeps bounds representable and no rounded end reaches a neighbour's
+header.
+
+**(a) is chosen:**
+- It is the cheapest, and it moves the allocator's behaviour least.
+- It is the only one in which an object's nominal size equals its capability's length. In (b'), the wrapper inflates
+  a request so the slot has room for the alignment shift. `set_size` would then record more than the capability
+  covers, so `malloc_usable_size` and in-place `realloc` would report bytes the pointer cannot reach, needing more
+  changes outside musl.
+- (b) keeps the guard verbatim, but it sends more than half of all large requests to another class.
+
+The guard is narrowed, not removed:
+- `size_classes` must equal upstream except exactly entries 36, 38, 39, 41, 43, 45 and 47, each at its named new value
+  (1170, 1638, 2048, 2732, 4096, 5464, 8192). Any other difference still fails.
+- The decision functions stay token-identical.
+- The guard gains a positive control: a table with an eighth entry changed is refused.
+
+The port's qualification claim becomes: mallocng's decision code is token-identical to musl 1.2.5, and its size-class
+table differs in exactly seven entries, each raised by 1-4 units so that every large class's stride is a multiple of
+its bounds granule. heap.c derives each capability over `repr_round(n)`, the nominal size it passes, so the two
+agree.
+
+The guard and the principle it encodes, keeping upstream allocation policy, are the external collaborator's work on
+the port (adc891bb920c). The lead authorised this narrowing; the landing commit says so.
 
 **Two base alignments the re-cost has to include**, found by the semantics owner with the RTL's bounds model.
 "The base comes free" holds only for parents that mallocng placed:
@@ -320,29 +364,109 @@ Conditions for the flash that moves the map:
 - the monitor programs an all-permitting PMP entry before the first virtual context, because the page-table
   walker's accesses are PMP-checked as supervisor (the RTL lane's B simulation).
 
-## The bitstream sequence (RTL lane, re-planned 2026-10-16 after option (iii))
+## The bitstream sequence: TWO bitstreams (the lead, 2026-10-17: the simplest path to the full virtual profile)
 
-With exact bounds dropped there is no C' bitstream, no side store, no core widening, and the map stays at 963 MiB.
-Three bitstreams, batched so each answers what the simulation cannot:
-1. **B + Q-17 + R-56 + Q-19**: the virtual-context flag with translation and the resumable page fault, the CDERIVE
-   check order, the dropped page fault on a translated capability load, and the consuming-ldc rule as ruled. Reads on
-   the board: vb-trans's seven arms and its flag-off control, Q-17's arm, the S-16 set, the Sublet arms and one corpus
-   set identical to d93a8d66b. With the option-(iii) runtime the launcher no longer refuses for want of scapctl bit 8,
-   but its first full run needs A and D, so bitstream 1's Tier 1 reading is the bare arms plus the launcher's refusal.
-2. **A flat + the CSRUNV front end of D**: the srevroot register, QEMU's 16-byte record with the flat 30-bit id, the
-   reserved ids and the header (the generation path leaves the id under the flag); CSRUNV's frame addressing, actions
-   0-3 and the page-fault, node-pressure and service-ECALL kinds over the existing switcher. Reads: Tier 1's launcher
-   smoke (contract.dom reading VIRTUAL_APPLICATION_OK and the stale access denied 25), the first virtual runtime suite.
-3. **A paged + the rest of D + E + H + Q-18**: the paged table, FP state per context (#30), CSMINT/CSRETIRE over the
-   new table, the policy list with #25's untagged-arithmetic rule, the collection flush, and DROP's virtual rule.
-   Reads: Tier 1 and Tier 2 in full, then Tier 3's corpus; integration of whatever 1 and 2 leave open.
-Every bitstream is pre-registered before its handoff and carries its lint and loop-name numbers; every reflash
-waits for the lead's own word; the physical regression is read on every one.
+1. **vp1 = B + R-56 + Q-19 as ruled + Q-17**: capstone-ariane `virtual-profile` (the commit named in the status row
+   below and in the pre-registration). Synthesis requested on 2026-10-17 in parallel with the last sweep; the flash
+   waits for both comparisons and for the lead's own word to the board lane. Reads on the board: vb-trans's seven arms
+   and its flag-off control, Q-17's arm, then the physical regression (the S-16 bare set, the Sublet arms, one corpus
+   set) identical to d93a8d66b.
+2. **vp2 = the full profile in its minimal form, one bitstream, on top of vp1:**
+   - A, the per-context lifetime table at `srevroot`, FLAT only (QEMU's 16-byte record, the flat 30-bit id, the
+     reserved ids and the header; the generation path leaves the id under the flag); the paged format deferred;
+   - D, `CSRUNV` with its frame, actions 0-3 and every event kind (page fault, node pressure, service ECALL),
+     `CSMINT`/`CSRETIRE` over the new table, ONE saved context (the spec leaves context storage open; 32 deferred);
+   - **FP state per context: included.** Tier 2 (SQLite's REAL arithmetic, mruby's floats) and Tier 3 (FFmpeg,
+     Wireshark) execute hard-float code inside the context, the virtual QEMU saves fpr/frm/fp_status per context
+     (#30), and the RTL's switcher saves no FP state today, so without it any FP use across an escape reads back
+     stale registers (S-19's shape, now R-53, inside a domain);
+   - E, the policy list with #25's untagged-arithmetic rule;
+   - H, the collection flush of the R-35 cache and the CPMP/PC trackers; the sweep stays in software;
+   - Q-15's mask check and Q-18's DROP rule.
+   Deferred as follow-ups only if acceptance needs them: the paged table, 32 contexts. Not done: exact bounds in
+   hardware (option (iii) stands), removing the physical profile.
+   Acceptance on vp2: Tier 1 (the launcher with the ABI v6 runtime), Tier 2, Tier 3.
+   **What cannot share one bitstream without real risk: nothing in this list.** Two items are the high-risk class the
+   synthesis rule names and are proven alone in simulation before they join the batch: A (the rev-node unit's memory
+   interface, which sits in the standing loop cone; the 2026-08-21 arbiter lesson) and D's frame traffic through the
+   switcher and the LSU. Each item is verified independently (its own directed arms and a lint-by-name run at
+   baseline) before the next is added, so a gate failure names its item. vp2 depends on no vp1 board reading: if
+   vp1's translation reads wrong on silicon, vp2 inherits the same fix, and its synthesis request is not held for it.
+   **Q-15 under the flag (ruled 2026-10-16, f224649773ee; in this bitstream):** a CDERIVE child the compact format
+   cannot hold exactly is refused with 29 before any mutation, QEMU's compact rule; the physical profile keeps
+   rounding outward. Mechanism: not a round trip through compress_cap (a decode in series after one of the three
+   instances that set the WNS) but the equivalent mask test in the dyn unit before derive_req: exact iff len < 4096
+   (the iE = 0 branch, `E == 0 && !len[12]`), or both start and end are multiples of 2^(E0 + 3) with E0 from the
+   length's priority encode and no renormalisation term (aligned ends have zero residues, so the R-54 step never fires
+   on an exact region). The runtime lane checked the rule against bounds-model.py at d93a8d66b on 200,000 random
+   regions with 0 mispredictions (an 8 KiB exemption would mispredict 749). Directed arm, three cases: a 5,000-byte
+   child at an odd base (29 under the flag, rounded on the physical profile), the same child 8-aligned (exact on both),
+   len 4095 at an odd base (exact on both).
+
+**Critical path (RTL lane's estimate, 2026-10-17):** A flat with its arms 2026-10-18..21; D with CSRUNV, the kinds,
+CSMINT/CSRETIRE and the FP save 2026-10-21..25; E, H, Q-15, Q-18 2026-10-25..27; integration gates (lint by name,
+the flag-off sweep and the sup lists readings-identical, the vp1 arms unchanged) 2026-10-27..28; **vp2's synthesis
+request 2026-10-28**, in parallel with its last sweep as vp1's was. Board acceptance of vp1 runs in that window and
+does not gate it.
+
+## Synthesis of `virtual-profile` 9ed9a2594, bitstream 1 of the virtual profile (B + Q-17), pre-registered 2026-10-16 BEFORE the handoff
+
+Tree: capstone-sublet b7e3287e4 + 31c8ebe17 + 16345658f (item B) + ea88d8e5d (Q-19 as ruled) + 4b958dc3f + 9ed9a2594 (Q-17).
+**Base correction (2026-10-17, from the synth lane's check):** b7e3287e4's core/ is NOT identical to the resident
+d93a8d66b's: `git diff d93a8d66b b7e3287e4 -- core` is ariane_pkg.sv +29/-4 with 14 non-comment lines, the residue-form
+compress_bounds (af7fe9738 carried onto the Sublet tree, the same change built on FP as caplifive_fpb_afcd19bea). So
+against the resident bitstream this build changes EIGHT core files and the compress cone, and the WNS arm below
+carries two variables: the virtual profile and the residue form. The residue form's effect was measured alone on FP
+(afcd19bea against 4a4261bb4: WNS +0.050, TNS better by 13%, the critical path moved to the ra_data compress
+instance, carry halved and LUT depth up). b7e3287e4 itself was never built. The handoff's sentence "whose core/ is
+identical to the resident" is withdrawn.
+Name `caplifive_vp1_9ed9a2594.bit`. Gates on the committed tree before the handoff: lint 52/3/0/0/40/0/2/25/896/2/100
+with the 40 UNOPTFLAT names identical (`lint-loop-names.py`), the 95-test sweep readings-identical to the tip sweep
+of b7e3287e4 (sweep-compare.py), every testlist_sup.yaml entry readings-identical on the two trees, vb-trans's seven
+arms and its flag-off control as pre-registered, Q-17's arm reading 25 (29 on the old tree). The flow untouched;
+DTS 65536 unchanged (the pool is unmoved); the capability word unchanged, so every image built for d93a8d66b runs.
+
+Predictions (refutation keys in brackets), written before the build:
+- Routed WNS within the noise band of d93a8d66b's -15.856, with the residue form's measured contribution (+0.050 on
+  FP, within noise) as the second variable: the compress_bounds path still sets the slack, and the VIRTUAL-PROFILE
+  half adds no term to any compress or forwarding cone. [WNS worse by more than the noise band: the worst path is
+  read and the two halves are told apart by its endpoint: inside cva6_mmu (the two 2:1 privilege muxes feed the
+  permission compares) or at ex_stage's new flops (the kept LSU exception, ~130 bits + trans_id) names B; a path
+  through a compress_cap instance whose cells show the residue form's shape (carry halved, LUT depth up, the ra_data
+  instance) names the residue form, and the next build then reverts the residue form on this branch to isolate it.]
+- Loop membership by stem unchanged; LUTLP-1 0; the 40 UNOPTFLAT names identical (the MMU is in none of them; the
+  load unit's new term is a 3-input AND on the request path, not in a loop cone). [a new stem through cva6_mmu or
+  load_unit: the translation enable OR'd at the ex_stage boundary entered a cone]
+- Area: csr_regfile +1 flop and a 2-bit read mux; cva6_mmu two priv muxes (tens of LUT); ex_stage +~140 flops and
+  a 2:1 exception mux at the capability writeback port; load_unit a few LUT; everything else flat. [any module
+  moving by hundreds of LUT: a synthesis duplication the model does not see, read the hierarchy report]
+- Route time: no prediction; recorded for the spread.
+Readings the bitstream must answer (bare JTAG arms, pre-registered values from the simulation): the six vb-trans arms
+and the flag-off control; Q-17's arm; the S-16 set, the Sublet arms and one corpus set identical to d93a8d66b (the
+physical regression). What the resident fallback stays: caplifive_sublet_d93a8d66b.
+Gate results on 9ed9a2594 at the handoff (2026-10-17): lint 52/3/0/0/40/0/2/25/896/2/100 with the 40 loop names
+identical (UNUSEDSIGNAL 894 -> 896: seven anonymous thread wires appear and five disappear in the regenerated
+capstone_dyn_unit.anvil.sv, no hand-written file moved; the reference moved by name as every Sublet step did); the
+seven vb-trans arms, the flag-off control and the Q-17 arm as pre-registered; the Sublet subset (12 tests) identical
+to b7e3287e4. On the predecessor 4b958dc3f the flag-off 95-test sweep read 92 identical, 0 differ, 3 missing, and the
+full sup list REFUSED it (40 Sublet entries: the reordered CDERIVE read the request's operands after the query's
+cycle boundary), the defect fixed in 9ed9a2594. The 95-test sweep and the full sup list rerun on 9ed9a2594 with
+their comparisons; synthesis runs in parallel with them on the lead's word of 2026-10-17; the flash waits for both
+comparisons and the lead's own word to the board lane.
+**Read on 2026-10-17 (both gates):** the flag-off 95-test sweep on 9ed9a2594 `SUMMARY 95 tests: 92 identical (exceptions,
+readings, retired), 0 differ, 3 missing` (the three the sourceless entries of every sweep); the full sup list against
+b7e3287e4's run of the same 152 entries `SUMMARY 152 tests: 152 identical, 0 differ, 0 missing`. Every gate on the RTL
+side is green; the flash waits for synthesis inside the prediction, the board lane's controls on the resident bitstream,
+and the lead's own word to the board lane.
 
 ## Constraints
 
-- **No reflash without the lead's own word.** The board campaign is running on d93a8d66b and a reflash interrupts it,
-  so agree the timing with the board lane.
+- **No reflash without the lead's own word.** On 2026-10-16 (evening) the lead set the priority: the full virtual
+  Capstone comes first, and the physical campaign yields to it. The lead gave their word for the vp1 flash as soon
+  as its synthesis passes the gates and matches the pre-registered prediction (39bf2e4938ae). The board lane stops
+  its chain at the next boot boundary when the handoff arrives. A synthesis outside the prediction is a new
+  question for the lead. After vp1's physical regression reads identical to d93a8d66b, the campaign's remaining
+  items continue on vp1, with the bitstream recorded in every result.
 - **CLAUDE.md "Simulation green is not synthesis clean" applies in full:**
   - the lint gate and claim-auditor on every change;
   - a predicted reading written down before synthesis, and used as the go/no-go;
@@ -361,8 +485,8 @@ waits for the lead's own word; the physical regression is read on every one.
 | exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`. DECIDED the same day: (ii) dense, the format frozen as proposed, the helper lane owning the semantics |
 | C' bounds | RTL lane | DROPPED 2026-10-16: option (iii), re-decided on the corrected cost, needs nothing in the RTL |
 | option (iii) in the runtime: mallocng `repr_round`, the CSMINT descriptor audit, the ABI and launcher gate, runners, documents, re-records | compiler lane | to do, 4-6 days: the re-costed geometry (7 table entries, granule group header, granule offset steps) plus classification on `repr_round(n)` against `stride - IB`, so no rounded end reaches the next slot's header |
-| B translation in C mode | RTL lane | SIMULATION GREEN 2026-10-16, bitstream 1's RTL FINAL at capstone-ariane `virtual-profile` 4b958dc3f (B, R-56, Q-19 as ruled, Q-17): seven vb-trans arms, the flag-off control and the Q-17 arm as pre-registered, lint at baseline with the 40 loop names identical; the flag-off neutrality sweep and the sup lists on both trees are running on that tree; the synthesis request follows their comparison, with the pre-registered prediction |
-| A lifetime table | RTL lane | to do |
+| B translation in C mode | RTL lane | ALL GATES GREEN 2026-10-17 on capstone-ariane `virtual-profile` 9ed9a2594 (vp1's RTL): seven arms, the flag-off control and the Q-17 arm as pre-registered; lint 52/3/0/0/40/0/2/25/896/2/100 with the 40 loop names identical; the flag-off sweep 92/95 identical (3 sourceless), the full sup list 152/152 identical; synthesis handed off as `caplifive_vp1_9ed9a2594.bit`; the flash waits for synthesis inside the prediction and the lead's own word to the board lane |
+| A lifetime table | RTL lane | STEP 1 GREEN 2026-10-17 on capstone-ariane `virtual-profile-2` fbc67c26b: srevroot (CSR 0x5c1) and QEMU's flat record layout at the execute-stage glue under the flag, the unit untouched (its generation in the record's spare parent bits as a simulation-only scaffold), index 0/1 shielded as the sentinel and the header; va-flat.S reads as pre-registered with the flag-off control; lint at baseline by name. Step 2 next: the unit's allocator from the table's header (root+8, root+16/24) per cap_rev_table.c, dropping the generation; capacity 65,534 per context (the measured peaks are under 13,100) |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
 | E policy list | RTL lane | to do, folded into D |
 | board acceptance (done-means 3, 4) | board lane | after the first virtual bitstream |
