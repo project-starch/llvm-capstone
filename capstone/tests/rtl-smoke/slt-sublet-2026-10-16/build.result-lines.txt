@@ -1,0 +1,32 @@
+compiler: clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 612b3ec514c03255eaa2181c9894c5c6a576ac0d)
+qemu: capstone-qemu/build/qemu-system-riscv64 (the main clone, deb7d75756) sha256 6e5e136a070b0ee9
+== 20:58:47 1m on select2: heap 262144 stack 2097152 region 1048576
+   rc=0 match_native=yes dom=c3ad302bf07931d8 host=d511aada7085e5df :: SLT-SUMMARY records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+   staged sqslt1m.dom sqlite_host_1m.user
+== 21:01:45 1m on negctl: heap 262144 stack 2097152 region 1048576
+   rc=0 match_native=yes dom=c3ad302bf07931d8 host=d511aada7085e5df :: SLT-SUMMARY records=23 stmt_pass=9 stmt_fail=2 query_pass=7 query_fail=5 skip_big=0 oom=0 skip_cond=2 parse_err=1 completed=1
+== 21:02:55 1m on aggfunc: heap 262144 stack 2097152 region 1048576
+   rc=0 match_native=yes dom=c3ad302bf07931d8 host=d511aada7085e5df :: SLT-SUMMARY records=80 stmt_pass=12 stmt_fail=1 query_pass=57 query_fail=10 skip_big=0 oom=0 skip_cond=1 parse_err=0 completed=1
+== 21:04:26 1m on select1: heap 262144 stack 2097152 region 1048576
+   rc=0 match_native=yes dom=c3ad302bf07931d8 host=d511aada7085e5df :: SLT-SUMMARY records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+== 21:06:30 s3 on select3: heap 1048576 stack 2097152 region 2097152
+   rc=1 match_native=no dom=d877f8bd1006766c host= :: 
+== 21:07:28 s5 on select5: heap 2097152 stack 1048576 region 2097152
+   rc=1 match_native=no dom=61b1114aafbe4a80 host= :: 
+== 21:08:27 s4 on select4: heap 1048576 stack 2097152 region 4194304
+   rc=1 match_native=no dom=a4ddf54b12a97711 host= :: 
+compiler: clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 612b3ec514c03255eaa2181c9894c5c6a576ac0d)
+qemu: capstone-qemu/build/qemu-system-riscv64 (the main clone, deb7d75756) sha256 6e5e136a070b0ee9
+== 21:10:06 s3 on select3: heap 1048576 stack 1507328 region 2097152
+   rc=0 match_native=yes dom=9c439f97400fe092 host=99255c63bf641860 :: SLT-SUMMARY records=3351 stmt_pass=31 stmt_fail=0 query_pass=3320 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+   staged sqslt3.dom sqlite_host_2m.user
+== 21:12:51 s5 on select5: heap 2097152 stack 458752 region 2097152
+   rc=0 match_native=yes dom=4f32d97ca1078825 host=99255c63bf641860 :: SLT-SUMMARY records=1436 stmt_pass=704 stmt_fail=0 query_pass=732 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+   staged sqslt5.dom sqlite_host_2m5.user
+== 21:16:49 s4 on select4: heap 1048576 stack 1507328 region 4194304
+   rc=1 match_native=no dom=6550d406a2c41193 host=c14ac0bb9589ce39 :: 
+compiler: clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 612b3ec514c03255eaa2181c9894c5c6a576ac0d)
+qemu: capstone-qemu/build/qemu-system-riscv64 (the main clone, deb7d75756) sha256 6e5e136a070b0ee9
+== 22:03:00 s4 on select4: heap 1048576 stack 1507328 region 4194304
+   rc=0 match_native=yes dom=6550d406a2c41193 host=c14ac0bb9589ce39 :: SLT-SUMMARY records=3857 stmt_pass=1025 stmt_fail=0 query_pass=2648 query_fail=0 skip_big=184 oom=0 skip_cond=0 parse_err=0 completed=1
+   staged sqslt4.dom sqlite_host_4m.user
