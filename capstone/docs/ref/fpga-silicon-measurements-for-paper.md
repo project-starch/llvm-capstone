@@ -6471,3 +6471,20 @@ The Sublet acceptance (Linux half, dev d5fe0b4092f7) ran both pairs below on the
 - Records: `tests/rtl-smoke/ladder-sublet-2026-10-16/results/K0-s10.*`.
 - This is one layout draw. Layouts K = 1..3 are pre-registered there (lane bc200ac88bd3), for the median over
   K = 0..3.
+
+## H1 calibration on the Sublet bitstream: the instrument reads as on R-43 v2, and revocation is 14-51 % cheaper at every node count (caplifive_sublet_d93a8d66b, 2026-10-16)
+Three cold boots (h1s16r1-r3, 19:36-20:17), each running `h1-v2-calibration.txt` on the 2026-09-29 image
+da9c54e578845735. Folder: `tests/rtl-smoke/h1-sublet-2026-10-16/` (pre-registered at lane 21e38145c053; RESULTS.md and
+`results/`).
+- **As on R-43 v2, in every boot:**
+  - latency 9 / 9 / 40 / 48 / 48 cycles per load at 4 KiB-1 MiB;
+  - the timer `cyc_cyc=2 ret_ret=1`;
+  - the nodes regression nd = 2n with ok=1 bad=0;
+  - the linear types 7,1,7,7,7,1,7,1,0,1,0,1.
+- **One pre-registered threshold exceeded:** boot 3's 64 KiB traversals spread 0.117 cycles per load (limit 0.1). The
+  value stays 40.
+- **REVOKE:**
+  - 71 / 145 / 608-634 / 2,336-2,370 / 9,354-9,692 cycles at n = 1 / 4 / 16 / 64 / 256, against 144-146 / 193 /
+    722-725 / 2,873-2,897 / 11,106-11,293 on v2;
+  - about 18.5 cycles per destroyed node at n = 256, against 22.0;
+  - the fixed part halves.
