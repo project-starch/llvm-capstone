@@ -364,19 +364,34 @@ Conditions for the flash that moves the map:
 - the monitor programs an all-permitting PMP entry before the first virtual context, because the page-table
   walker's accesses are PMP-checked as supervisor (the RTL lane's B simulation).
 
-## The bitstream sequence (RTL lane, re-planned 2026-10-16 after option (iii))
+## The bitstream sequence: TWO bitstreams (the lead, 2026-10-17: the simplest path to the full virtual profile)
 
-With exact bounds dropped there is no C' bitstream, no side store, no core widening, and the map stays at 963 MiB.
-Three bitstreams, batched so each answers what the simulation cannot:
-1. **B + Q-17 + R-56 + Q-19**: the virtual-context flag with translation and the resumable page fault, the CDERIVE
-   check order, the dropped page fault on a translated capability load, and the consuming-ldc rule as ruled. Reads on
-   the board: vb-trans's seven arms and its flag-off control, Q-17's arm, the S-16 set, the Sublet arms and one corpus
-   set identical to d93a8d66b. With the option-(iii) runtime the launcher no longer refuses for want of scapctl bit 8,
-   but its first full run needs A and D, so bitstream 1's Tier 1 reading is the bare arms plus the launcher's refusal.
-2. **A flat + the CSRUNV front end of D**: the srevroot register, QEMU's 16-byte record with the flat 30-bit id, the
-   reserved ids and the header (the generation path leaves the id under the flag); CSRUNV's frame addressing, actions
-   0-3 and the page-fault, node-pressure and service-ECALL kinds over the existing switcher. Reads: Tier 1's launcher
-   smoke (contract.dom reading VIRTUAL_APPLICATION_OK and the stale access denied 25), the first virtual runtime suite.
+1. **vp1 = B + R-56 + Q-19 as ruled + Q-17**: capstone-ariane `virtual-profile` (the commit named in the status row
+   below and in the pre-registration). Synthesis requested on 2026-10-17 in parallel with the last sweep; the flash
+   waits for both comparisons and for the lead's own word to the board lane. Reads on the board: vb-trans's seven arms
+   and its flag-off control, Q-17's arm, then the physical regression (the S-16 bare set, the Sublet arms, one corpus
+   set) identical to d93a8d66b.
+2. **vp2 = the full profile in its minimal form, one bitstream, on top of vp1:**
+   - A, the per-context lifetime table at `srevroot`, FLAT only (QEMU's 16-byte record, the flat 30-bit id, the
+     reserved ids and the header; the generation path leaves the id under the flag); the paged format deferred;
+   - D, `CSRUNV` with its frame, actions 0-3 and every event kind (page fault, node pressure, service ECALL),
+     `CSMINT`/`CSRETIRE` over the new table, ONE saved context (the spec leaves context storage open; 32 deferred);
+   - **FP state per context: included.** Tier 2 (SQLite's REAL arithmetic, mruby's floats) and Tier 3 (FFmpeg,
+     Wireshark) execute hard-float code inside the context, the virtual QEMU saves fpr/frm/fp_status per context
+     (#30), and the RTL's switcher saves no FP state today, so without it any FP use across an escape reads back
+     stale registers (S-19's shape, now R-53, inside a domain);
+   - E, the policy list with #25's untagged-arithmetic rule;
+   - H, the collection flush of the R-35 cache and the CPMP/PC trackers; the sweep stays in software;
+   - Q-15's mask check and Q-18's DROP rule.
+   Deferred as follow-ups only if acceptance needs them: the paged table, 32 contexts. Not done: exact bounds in
+   hardware (option (iii) stands), removing the physical profile.
+   Acceptance on vp2: Tier 1 (the launcher with the ABI v6 runtime), Tier 2, Tier 3.
+   **What cannot share one bitstream without real risk: nothing in this list.** Two items are the high-risk class the
+   synthesis rule names and are proven alone in simulation before they join the batch: A (the rev-node unit's memory
+   interface, which sits in the standing loop cone; the 2026-08-21 arbiter lesson) and D's frame traffic through the
+   switcher and the LSU. Each item is verified independently (its own directed arms and a lint-by-name run at
+   baseline) before the next is added, so a gate failure names its item. vp2 depends on no vp1 board reading: if
+   vp1's translation reads wrong on silicon, vp2 inherits the same fix, and its synthesis request is not held for it.
    **Q-15 under the flag (ruled 2026-10-16, f224649773ee; in this bitstream):** a CDERIVE child the compact format
    cannot hold exactly is refused with 29 before any mutation, QEMU's compact rule; the physical profile keeps
    rounding outward. Mechanism: not a round trip through compress_cap (a decode in series after one of the three
@@ -387,11 +402,12 @@ Three bitstreams, batched so each answers what the simulation cannot:
    regions with 0 mispredictions (an 8 KiB exemption would mispredict 749). Directed arm, three cases: a 5,000-byte
    child at an odd base (29 under the flag, rounded on the physical profile), the same child 8-aligned (exact on both),
    len 4095 at an odd base (exact on both).
-3. **A paged + the rest of D + E + H + Q-18**: the paged table, FP state per context (#30), CSMINT/CSRETIRE over the
-   new table, the policy list with #25's untagged-arithmetic rule, the collection flush, and DROP's virtual rule.
-   Reads: Tier 1 and Tier 2 in full, then Tier 3's corpus; integration of whatever 1 and 2 leave open.
-Every bitstream is pre-registered before its handoff and carries its lint and loop-name numbers; every reflash
-waits for the lead's own word; the physical regression is read on every one.
+
+**Critical path (RTL lane's estimate, 2026-10-17):** A flat with its arms 2026-10-18..21; D with CSRUNV, the kinds,
+CSMINT/CSRETIRE and the FP save 2026-10-21..25; E, H, Q-15, Q-18 2026-10-25..27; integration gates (lint by name,
+the flag-off sweep and the sup lists readings-identical, the vp1 arms unchanged) 2026-10-27..28; **vp2's synthesis
+request 2026-10-28**, in parallel with its last sweep as vp1's was. Board acceptance of vp1 runs in that window and
+does not gate it.
 
 ## Synthesis of `virtual-profile` 4b958dc3f, bitstream 1 of the virtual profile (B + Q-17), pre-registered 2026-10-16 BEFORE the handoff
 
