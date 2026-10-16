@@ -184,7 +184,11 @@ This section replaces the withdrawn one above. It is based on the compiler lane'
 
 **The board lane's runs on that revision.** The kit is rebuilt from the revision with the same toolchain, QEMU and
 guest images.
-0. **Every run below sets `VIRTUALVM_TRACE=1`.** The launcher prints `CAPSTONE_VM_ADD_REFUSED` only under
+0. **Amended before the revision exists (compiler lane 561b8b2cd692): the refusal line now prints unconditionally.**
+   The runs below therefore use the unmodified harness, without `VIRTUALVM_TRACE`. The positive control (run 1)
+   is repeated on a kit built from 561b8b2cd692 without the switch, and it must print the line on case 00. The
+   paragraph that follows describes the earlier, traced arrangement. It is kept for the record.
+   **Earlier: every run below sets `VIRTUALVM_TRACE=1`.** The launcher prints `CAPSTONE_VM_ADD_REFUSED` only under
    `CAPSTONE_VM_TRACE` (`exec.c:203`, `:763`), which the corpus harness never sets. A first control run without it
    read 0 lines while case 00 was refused, so it proved nothing. `virtualvm-trace.patch` (3 lines, the board
    lane's private copy of `tools/virtualvm.py`) exports it when `VIRTUALVM_TRACE` is set. The control and the

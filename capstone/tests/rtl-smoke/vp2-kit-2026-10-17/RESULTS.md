@@ -132,6 +132,13 @@ group needs 32768, and one whose group needs 12288.
 - **Case 10's malloc(6144)** was admitted in this boot. That makes 2 of 5 boots on pre-fix launchers, and every
   other boot read NULL.
 
+**The positive control repeated untraced** on a kit from 561b8b2cd692, where the compiler lane made the refusal
+line unconditional:
+- gate.sh exports no trace;
+- case 00 prints **10 lines** (49152 B, all `pow2=0`);
+- case 10 is admitted, making 3 of 6 boots on pre-fix launchers.
+So the post-fix absence check runs on the unmodified harness, and the trace switch is not needed for this line.
+
 **run.py at `--timeout 1500`:** completes, with status FAIL.
 - `normal` exits 1 on `heap growth/zero`.
 - `heap-threads` exits 1 on `child malloc` (twice).

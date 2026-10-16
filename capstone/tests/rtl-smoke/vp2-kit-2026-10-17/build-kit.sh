@@ -71,6 +71,7 @@ main() {
   local vm; vm=$($BF/host/bin/riscv64-buildroot-linux-gnu-readelf -p .modinfo $KO 2>/dev/null | grep -o 'vermagic=[^ ]*' | head -1)
   log "BOARD-GATES ko 16-bit instructions=$rvc (must be 0); $vm (kernel $(cat $BF/build/linux-6.4.14/include/config/kernel.release)); vexec: $(file -b $O/out/adapter-board/capstone-vexec | cut -c1-60)"
   # the QEMU prediction: run.py's gate on the QEMU kit (the guest's own kernel and adapter)
+  if [ -n "${KIT_SKIP_RUNPY:-}" ]; then log "RUNPY skipped (KIT_SKIP_RUNPY)"; log KIT-DONE; return 0; fi
   python3 $S/capstone/runtime/virtual/run.py --qemu $QREF/build/qemu-system-riscv64 --images $IMGS \
     --adapter $O/out/adapter-qemu --application $O/out/contract.dom --sqlite $O/out/sqlite/sqlite3.dom \
     --mruby $O/out/mruby/src/mruby/build/capstone/bin/mruby --record $O/out/result.json --timeout ${RUNPY_TIMEOUT:-1500} > $O/runpy.log 2>&1
