@@ -225,12 +225,15 @@ M
     fts3)  cat <<M
 case_fts3_static_bind.c staticbind
 case_fts3_destroy_oom.c fts3destroyoom
-case_fts3_offsets.c     fts3offsets
 case_fts3_snippet.c     fts3snip
 case_fts3_zterm.c       fts3zterm
 M
 ;;
-    fts3P) echo "case_fts3_snippet_or.c fts3snipor" ;;
+    fts3P) cat <<M
+case_fts3_snippet_or.c fts3snipor
+case_fts3_offsets.c     fts3offsets
+M
+;;
     rtree) cat <<M
 case_rtree_static_bind.c rtreestatic
 case_rtree_cursor.c      rtreecursor
