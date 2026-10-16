@@ -226,6 +226,18 @@ agree.
 The guard and the principle it encodes, keeping upstream allocation policy, are the external collaborator's work on
 the port (adc891bb920c). The lead authorised this narrowing; the landing commit says so.
 
+**The module's arena rule, decided 2026-10-17 by the semantics owner under the lead's delegation.** With exact
+bounds off, `capstone_vm.c:466` refused any arena that was not a naturally aligned power of two. That rule was a
+conservative stand-in for representability, moot under the exact-bounds profile and wrong under (iii): mallocng's
+group mappings are page multiples, so 413 of 600 allocations failed, and it is the 16384-byte threshold the v6
+malloc-contract investigation found. The module's test becomes the representability predicate itself,
+`capstone_repr_ok(address, bytes)` from `representable.h`, shared into the module build, and nothing stricter: the
+encoder is the authority on representability, and the same predicate already guards the launcher's `grant()` and the
+CSMINT audit. The alternative, rounding every arena to a naturally aligned power of two, costs 46% more mapped memory
+over 400,000 sizes for no safety gain. Both profiles build the module from `capstone_vm.c`, so the board module's
+enforcement changes from "naturally aligned power of two" to "representable"; the landing commit says so, the refusal
+path and its errno stay, and the negative test feeds the four refused shapes.
+
 **Two base alignments the re-cost has to include**, found by the semantics owner with the RTL's bounds model.
 "The base comes free" holds only for parents that mallocng placed:
 - **mallocng's big path at 4 MiB and up.** There the granule (8 KiB and up) exceeds the page, and `mmap` guarantees
