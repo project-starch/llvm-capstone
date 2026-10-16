@@ -167,8 +167,31 @@ per-object children are small in all three, but each also derives a parent lifet
 
 The audit is bounded: a child shorter than 4096 bytes is exact at any base and any offset, so only derive sites that
 can produce a child of 4 KiB or more need checking, which in practice means the parent-lifetime derives. The compiler
-lane re-costs these sites port by port; the comparison with (ii) is reopened if the total changes the answer. The
-Tier 3 nested arms depend on it. What remains reachable through the rounding is the slot's own footer bytes,
+lane re-costed these sites port by port; the Tier 3 nested arms depend on them.
+
+**The ports, re-costed 2026-10-16; the comparison with (ii) does not reopen** (`lane/compiler-exact-bounds-iii`
+9cd5fb63cfb1, sites extracted from the patches by `capstone/tests/exact-bounds-iii/derives.py`):
+- Twenty derive sites across FFmpeg 0003, memcached 0006, wmem 0001, PostgreSQL 0003 and SQLite memsys5.
+- At the eleven offset-0 sites, the site ALLOCATES `repr_round(size)` and derives over it. CDERIVE checks
+  containment against the parent's exact bounds (`capstone_dyn_unit.anvil:250`), so the parent has to hold the
+  rounded length. The cost is at most 1/512 of the size: a measured maximum of 0.1953% over 4 KiB-4 MiB, and zero
+  for powers of two and page multiples.
+- At the nine non-zero-offset sites, the offset must also be granule-aligned. The fixes are a startup assertion for
+  memsys5's atom stride, the mruby-style placement of a sub-object, and an assertion where `cursor - base` is zero in
+  practice.
+- No site has a caller-controlled length with no ceiling at an offset the port does not choose.
+- The total for (iii) is 6-9 days of software.
+
+**Two base alignments the re-cost has to include**, found by the semantics owner with the RTL's bounds model.
+"The base comes free" holds only for parents that mallocng placed:
+- **mallocng's big path at 4 MiB and up.** There the granule (8 KiB and up) exceeds the page, and `mmap` guarantees
+  only a page. With a page-aligned but not granule-aligned base, a region is unrepresentable even with its length
+  rounded: 4, 16, 64 and 88 MiB all read inexact in the model, and 2 MiB and 4 MiB-4 KiB read exact. The virtual
+  workloads allocate 8, 16 and 64 MiB (the pymalloc replay). The mapping must be granule-aligned: over-map by a
+  granule and trim.
+- **Parents that mallocng did not place.** memsys5's arena is a static array in the virtual build, so its base
+  alignment comes from the linker and needs an explicit `aligned` of its granule. The same applies to any other
+  static or mmap-backed parent. What remains reachable through the rounding is the slot's own footer bytes,
 stated above.
 
 The original estimate follows, kept for the record:
