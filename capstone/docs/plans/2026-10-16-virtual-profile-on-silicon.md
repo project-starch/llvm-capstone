@@ -411,7 +411,15 @@ does not gate it.
 
 ## Synthesis of `virtual-profile` 9ed9a2594, bitstream 1 of the virtual profile (B + Q-17), pre-registered 2026-10-16 BEFORE the handoff
 
-Tree: capstone-sublet b7e3287e4 (= the resident d93a8d66b's RTL) + 31c8ebe17 + 16345658f (item B) + ea88d8e5d (Q-19 as ruled) + 9ed9a2594 (Q-17).
+Tree: capstone-sublet b7e3287e4 + 31c8ebe17 + 16345658f (item B) + ea88d8e5d (Q-19 as ruled) + 4b958dc3f + 9ed9a2594 (Q-17).
+**Base correction (2026-10-17, from the synth lane's check):** b7e3287e4's core/ is NOT identical to the resident
+d93a8d66b's: `git diff d93a8d66b b7e3287e4 -- core` is ariane_pkg.sv +29/-4 with 14 non-comment lines, the residue-form
+compress_bounds (af7fe9738 carried onto the Sublet tree, the same change built on FP as caplifive_fpb_afcd19bea). So
+against the resident bitstream this build changes EIGHT core files and the compress cone, and the WNS arm below
+carries two variables: the virtual profile and the residue form. The residue form's effect was measured alone on FP
+(afcd19bea against 4a4261bb4: WNS +0.050, TNS better by 13%, the critical path moved to the ra_data compress
+instance, carry halved and LUT depth up). b7e3287e4 itself was never built. The handoff's sentence "whose core/ is
+identical to the resident" is withdrawn.
 Name `caplifive_vp1_9ed9a2594.bit`. Gates on the committed tree before the handoff: lint 52/3/0/0/40/0/2/25/896/2/100
 with the 40 UNOPTFLAT names identical (`lint-loop-names.py`), the 95-test sweep readings-identical to the tip sweep
 of b7e3287e4 (sweep-compare.py), every testlist_sup.yaml entry readings-identical on the two trees, vb-trans's seven
@@ -419,10 +427,13 @@ arms and its flag-off control as pre-registered, Q-17's arm reading 25 (29 on th
 DTS 65536 unchanged (the pool is unmoved); the capability word unchanged, so every image built for d93a8d66b runs.
 
 Predictions (refutation keys in brackets), written before the build:
-- Routed WNS within the noise band of d93a8d66b's -15.856 (the same compress_bounds path sets the slack; this
-  change adds no term to any compress or forwarding cone). [WNS worse by more than the noise band: the worst path
-  is read; the discriminator is a failing endpoint inside cva6_mmu (the two 2:1 privilege muxes feed the
-  permission compares) or at ex_stage's new flops (the kept LSU exception, ~130 bits + trans_id); either names B.]
+- Routed WNS within the noise band of d93a8d66b's -15.856, with the residue form's measured contribution (+0.050 on
+  FP, within noise) as the second variable: the compress_bounds path still sets the slack, and the VIRTUAL-PROFILE
+  half adds no term to any compress or forwarding cone. [WNS worse by more than the noise band: the worst path is
+  read and the two halves are told apart by its endpoint: inside cva6_mmu (the two 2:1 privilege muxes feed the
+  permission compares) or at ex_stage's new flops (the kept LSU exception, ~130 bits + trans_id) names B; a path
+  through a compress_cap instance whose cells show the residue form's shape (carry halved, LUT depth up, the ra_data
+  instance) names the residue form, and the next build then reverts the residue form on this branch to isolate it.]
 - Loop membership by stem unchanged; LUTLP-1 0; the 40 UNOPTFLAT names identical (the MMU is in none of them; the
   load unit's new term is a 3-input AND on the request path, not in a loop cone). [a new stem through cva6_mmu or
   load_unit: the translation enable OR'd at the ex_stage boundary entered a cone]
