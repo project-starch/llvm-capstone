@@ -64,3 +64,38 @@ These are launcher and module work, so they land after the two allocation fixes 
 the `add()` relaxation (with the project lead, because it changes what the silicon enforces) and the
 granule rounding of `realloc.c`'s `needed`. Item 1 in particular touches the same module as the
 `add()` change, so it should not be interleaved with it.
+
+
+## Board-facing constraint from option (iii): in-place growth cannot cross a granule boundary
+
+Recorded here, in the vp2 doc, because it constrains the **silicon** profile as much as QEMU and a
+board-facing note needs it without reading the whole option (iii) costing. Full evidence and the
+four measurement iterations are in `2026-10-16-exact-bounds-option-iii-cost.md`; this is the
+constraint alone.
+
+**The rule.** Under option (iii) a group's header is granule-sized, and the granule follows the
+mapping's size. `mremap` leaves bytes at their original offsets. So a growth that crosses a granule
+boundary moves the header, shifts the slot base, and leaves every byte of the payload at a different
+offset from where the slot now says it is. Growing 6 MiB to 12 MiB moves the header from 8192 to
+16384 and displaces the payload by 8192 bytes.
+
+**How it presents, and why it matters for the board.** Not as a refusal. The growth reports
+**success** and the data is silently wrong — measured as `MALLOC_FAIL:remap-align contents` with no
+error anywhere in the path. On silicon that is silent corruption rather than a fault, so nothing
+would stop it, and the first symptom would be a wrong answer in a workload.
+
+**What the runtime now does.** `realloc` refuses an in-place remap whose header would change size
+and falls through to malloc-plus-copy, which relocates the payload correctly. The cost is one copy
+on growths that cross a granule boundary.
+
+**Consequences to carry into any vp2 work that touches mappings:**
+
+- **`CAPSTONE_VM_REMAP_OK` reading 0 is CORRECT** under option (iii) for any growth crossing a
+  granule boundary. A non-zero count on such a growth means the unsound in-place path was taken.
+  Do not treat a rising count as progress.
+- Any new code that grows or re-registers a mapping must either keep the header size fixed for the
+  mapping's lifetime or relocate the payload; changing the header in place is not an option.
+- `real_linux_mremap_growth_and_shrink` in `run-malloc.py` asserts
+  `log.count('CAPSTONE_VM_REMAP_OK') >= 2`, so it **requires the unsound path** and cannot pass
+  under a correct implementation. It needs re-scoping to accept either a completed remap or a
+  correct copy. Flagged, not edited.
