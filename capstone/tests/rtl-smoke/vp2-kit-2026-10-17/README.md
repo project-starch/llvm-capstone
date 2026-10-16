@@ -87,10 +87,19 @@ board that coverage already exists. Read 2026-10-17 from the classic line, opens
 So no monitor change is needed for coverage, as with the walker's PMP entry above. Every board boot already runs
 Linux under it.
 
-**One thing to confirm with the RTL lane before vp2:** `swap_cpmp` runs only on those three standard access-fault
-causes. If a CPMP miss in capability mode raises a different cause, a miss on a carved region would not be swapped
-in and would be fatal. The genesis entry covering Linux's RAM is resident from boot. Whether Linux's code stays
-covered by a resident entry once the monitor carves regions out of it is not read here.
+**The RTL lane's answer (2026-10-17):** a capability-PMP miss in capability mode raises exactly the three standard
+causes.
+- A fetch raises 1 (`core/pmp/src/pmp_data_if.sv:224,246`, through the frontend's FE_INSTR_ACCESS_FAULT).
+- A load raises 5 and a store 7 (`pmp_data_if.sv:291-293, 310-311`).
+- Observed in simulation too: the D1 arm's S-mode code faulted with cause 1 while CPMP0 was empty, and ran once
+  CPMP0 covered its image.
+- So `swap_cpmp`'s trigger set covers every miss. The CSRUNV context itself runs at M privilege, so no CPMP check
+  applies to it; its protection is the page tables.
+
+**The monitor's bookkeeping when it carves** (`create_region`'s split, `sbi_capstone.c:745-830`): the CPMP slot of the
+region being split is rewritten with the piece that remains. The carved piece becomes a new, non-resident region,
+which `swap_cpmp` loads on its first access fault. So Linux's code is always either under the resident slot or one
+fault away from being swapped in.
 
 ## Status of the pipeline proof
 
