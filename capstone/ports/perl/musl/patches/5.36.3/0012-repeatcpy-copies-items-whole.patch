@@ -1,0 +1,26 @@
+util.c: Perl_repeatcpy copies each item with memcpy, not byte by byte.
+
+The list form of x (pp_repeat, OPpREPEAT_DOLIST) repeats the stack's SV pointers
+through repeatcpy, whose first PERL_REPEATCPY_LINEAR copies were a byte loop.
+A byte copy drops a capability's tag: the repeated SV pointers are untagged and
+the first use faults, cause 24 in pp_mapwhile for 'map chop(+()), ("")x20' or
+'map { $_ } (1) x 100000' (found on SPEC's perlbench, op/chop.t, 2026-10-15).
+The doubling copies after it already use memcpy. Behaviour unchanged elsewhere.
+
+--- a/util.c
++++ b/util.c
+@@ -3558,10 +3558,10 @@
+ 
+         linear = count < PERL_REPEATCPY_LINEAR ? count : PERL_REPEATCPY_LINEAR;
+         for (items = 0; items < linear; ++items) {
+-            const char *q = from;
+-            IV todo;
+-            for (todo = len; todo > 0; todo--)
+-                *p++ = *q++;
++            /* capstone: memcpy, not a byte loop: the list form of x copies SV
++               pointers, and a byte copy drops a capability's tag. */
++            memcpy(p, from, len);
++            p += len;
+         }
+ 
+         half = count / 2;
