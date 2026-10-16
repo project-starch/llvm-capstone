@@ -6423,3 +6423,23 @@ Two arms in one boot (18:11-18:54): firmware 5049ca43f7595b41, 50 runs, each end
 - The cases are the corpus's twenty CPython 3.13.7 defects. Each is the port's replay around CPython's own
   `Objects/obmalloc.c`, in 128 MiB domains.
 - The emulator reads 24 for each refusal and silicon reads 25 (ISSUES Q-11).
+
+## mruby's release-differential corpus on silicon, bounds only: per-object bounds refuse all five spatial defects (28), the temporal ones manifest as on the emulator (caplifive_sublet_d93a8d66b, 2026-10-16)
+One boot (18:55-19:36): firmware 6bf139245abaabc1, 25 runs. B5's interpreter mruby.dom a7ac283d7050a5d8 runs each case's
+upstream regression test.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-mruby-bounds (lane 13f97a853606, 3bff031359fd).
+- Results: RESULTS.md there.
+
+| class | cases | silicon |
+|---|---|---|
+| spatial | 12-16 | 5 CAUGHT 28 at the overflowing access |
+| temporal | 01-04, 06-10 | 01, 02, 07: CAUGHT 24 at a null/integer pointer; 06: CAUGHT 28; 03, 04, 08, 10: wrong answer; 09: silent |
+| spatial + temporal | 17 | CAUGHT 24 |
+| null dereference, type confusion | 18-22 | CAUGHT 24 |
+
+- 21 of 21 rows as pre-registered by outcome, cause and site, with the port's smoke.rb control completing.
+- The arm revokes nothing, so its temporal rows are not detections. The five spatial rows are.
+- QEMU's 5 / 7 read 28 and its 24 reads 24. This is the first no-revocation arm, and its reading is consistent with the
+  earlier sets' 24 -> 25 being Q-11's revoked-capability case only.
+- Every faulting case outlived the corpus rung's 120 s watchdog after printing its fault line, which no earlier set
+  showed. Not explained here.
