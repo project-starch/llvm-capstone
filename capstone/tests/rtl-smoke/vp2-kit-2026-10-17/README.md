@@ -149,13 +149,27 @@ target/riscv/capstone_table.c:218-283` at d35af47b163c, is the reference for eve
   - Slot alignment (cause 6), descriptor alignment (cause 4) and the unrepresentable descriptor (29) are the
     emulation's checks, made before CSNODE runs.
 
-**Open before code, asked of the RTL lane:**
-- **Where the monitor gets the authority to mint.** The descriptor's [base, end) is a range in the virtual
-  context's address space. Today the monitor mints only by splitting a physical region it owns.
-- **What the software walk enforces for the slot.** QEMU's `probe_access_full` applies S-mode write permission (V,
-  W, and U with SUM), and A/D handling is still to settle.
-- **How the emulation is tested before vp2.** QEMU has no M-mode CSNODE, so either QEMU gains it, or the RTL
-  simulation runs the monitor path.
+**The three settled by the RTL lane (2026-10-17):**
+- **The authority to mint** is the monitor's existing capability-mode mint primitive. CAPCREATE, CAPTYPE, CAPBOUND
+  and CAPPERM (opcode 0x7b) are legal from M and illegal only under supervision.
+  - Checked at d93a8d66b: `core/decoder.sv`, the funct3 000 block at about line 1137 sets `illegal_instr` only when
+    `sup_active_i`.
+  - CAPBOUND(base, end) over the descriptor's VA range gives the VA-bounded LINEAR capability. CAPCREATE gives it
+    node 2, which CSNODE re-nodes onto the child.
+  - No genesis capability is needed. The monitor must never dereference that capability itself, because its cursor
+    is a VA.
+- **The slot walk** faults rather than set A or D, as the RTL's walker does (the RTL lane cites `cva6_ptw.sv:453,
+  468, 478` and `cva6_mmu.sv:142` on the virtual-profile branch).
+  - It requires V, W and R, U with SUM, A and D.
+  - If any is missing it raises store page fault 15 to S with tval = the slot VA, as QEMU's `probe_access_full`
+    does. It never sets A or D on the module's behalf.
+- **The test path is the RTL simulation's D4 arm**, which runs the whole monitor sequence as its M-mode trap handler.
+  - The sequence: the CSMINT trap, the MPRV descriptor read, the mint, CSNODE under `csupctl.table`, the physical
+    walk and the physical STC.
+  - So the arm is the executable specification. The monitor code is written against it, and reads the rd and the
+    tagged slot that QEMU's helper gives.
+  - QEMU is unchanged, and the board's prediction for CSMINT comes from QEMU's own CSMINT.
+  - D4 follows the RTL lane's E and D5 arms. The monitor code waits for it.
 
 ## Pre-registered (2026-10-17, before the revision exists): the v6 module's `add()` change
 
