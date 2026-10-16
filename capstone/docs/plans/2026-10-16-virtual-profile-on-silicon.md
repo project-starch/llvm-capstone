@@ -2,7 +2,8 @@
 
 **The lead's decision, 2026-10-16:** silicon is to run the **full** virtual Capstone profile. The landed virtual stack
 is to run on the board as it runs on QEMU's virtual profile: ABI v5, local mallocng and the virtual application ports.
-This answers the first of the three questions in the RTL lane's audit,
+Applications are ported after it lands, not before: the lead paused the silicon-ABI ports of the board campaign's
+wave 5 the same day. This answers the first of the three questions in the RTL lane's audit,
 [`virtual-capstone-rtl-feasibility.md`](virtual-capstone-rtl-feasibility.md) (3fe4541c1299, 2026-10-10). That
 audit's verdict is "partly, and not as a port". Its item list (A-H) and its order of work are the starting point here.
 
@@ -17,13 +18,31 @@ images ([`2026-10-15-bug-corpus-on-fpga.md`](2026-10-15-bug-corpus-on-fpga.md) Â
    ([`2026-10-16-board-campaign-all.md`](2026-10-16-board-campaign-all.md)) and every recorded silicon result run on it.
 2. **The reference is QEMU.** capstone-qemu `virtual-capstone`, at d35af47b163c or its head when work starts, with the
    guide `docs/design/virtual-capstone/*`. Where the RTL and QEMU disagree, the disagreement goes into an ISSUES
-   Q-entry; it is never settled silently.
-3. **Acceptance on the board, in this order:**
-   1. the landed virtual launcher runs, with `scapctl` bit 8 (exact bounds) set;
-   2. the virtual runtime suites run unmodified;
-   3. the bug corpus's virtual images (`virtual-malloc`, `virtual-nested-pools`, by sha256) read the verdicts
-      recorded for them on QEMU.
-   The third is the payoff: the corpus then runs on silicon as built, not rebuilt.
+   Q-entry; it is never settled silently. The first is Q-16 (fa38c2520b85).
+3. **Acceptance, in this order:**
+   1. **In the RTL harness:** the directed tests ported from capstone-qemu's own suites at the reference:
+      - `tests/virtual-capstone-model`;
+      - `tests/sublet-lifetimes`;
+      - `tests/virtual-capstone-m1`;
+      - `tests/virtual-capstone-runtime` and its `exact-bounds.sh`;
+      - `tests/capstone-x0-writes` and `tests/capstone-untagged-arith`;
+      - dev's `runtime/tests/sublet-lifetimes`.
+      Their counts are re-measured on the pin before porting.
+   2. **On the board, the guide's Linux smoke** (`docs/design/virtual-capstone/development.md`):
+      - `capstone_vm.ko` and `capstone-vexec` print `VIRTUAL_APPLICATION_OK` for `contract.dom`, with `scapctl` bit 8
+        (exact bounds) set;
+      - a stale access is denied with cause 25 (exit 139).
+   3. **The runtime's `run.py` gate.** It needs the SQLite and mruby images.
+   4. **The bug corpus's virtual arms.** The selection is every verdicts-v1 bundle whose configuration's target is
+      `capstone-virtual`: 26 bundles, 382 cells and 304 distinct images at 44d82a9eb3f3. Each cell reads the verdict
+      recorded for it on QEMU, taken from the bundles by that rule rather than from a copied list. Only 91 of the 304
+      images survive. They cover seven bundles: FFmpeg carved (both arms), plain-heap and subobject; memcached
+      plain-heap; Wireshark plain-heap and plain-temporal. They are copied, with a SHA256SUMS, to
+      `/mnt/hdd/<user>/capstone/virtual-corpus-images-2026-10-16` on apollo, and run as built. The other 213 were not
+      found: the search stopped at 15 minutes, and many were built on a-p13, whose setup is gone. Each of those is
+      rebuilt from its bundle's recorded inputs with the current virtual SDK, and its prediction is that rebuild's
+      reading on QEMU's virtual profile.
+   This is the payoff: the corpus runs on silicon as built for the virtual profile, not rebuilt for the silicon ABI.
 4. **The physical regression holds:** the S-16 bare set, the Sublet directed arms and one corpus set read the same on
    the new bitstream as on d93a8d66b.
 
