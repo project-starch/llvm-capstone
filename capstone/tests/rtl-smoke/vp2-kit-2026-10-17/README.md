@@ -103,6 +103,18 @@ fault away from being swapped in.
 
 ## Pre-registered (2026-10-17, before the revision exists): the v6 module's `add()` change
 
+> **WITHDRAWN (2026-10-17, the same morning, before any run against it).** The predicate below is refuted by the
+> compiler lane's next measurement. It added the refused mapping's size to the arm, and `malloc(2029)`'s refusal
+> was an **8192**-byte mapping, a power of two, refused with errno 22 at 4096 alignment. So `is_power_of_2` is not
+> the operative condition by itself. The arm's NULL came from a different mapping than the 12288 it was designed
+> around.
+> - The live candidate is the natural-alignment disjunct of `add()`:466, `r->address & (r->bytes - 1)`. That
+>   would make refusals depend on the address mmap returns, not only on size. It is not established, because
+>   errno 22 is shared by every EINVAL in `add()`. The lane is recording the refused base next.
+> - So the change below, and the prediction downstream of it, are withdrawn. A new prediction will be
+>   registered against the revision that follows. The rerun plan (bundle 5; bundles 13 and 14 as controls;
+>   run.py at `--timeout 1500`) stays.
+
 **The change, from the compiler lane** (narrowed at lane 2691b60cbb69). It is not written yet: it changes what the
 silicon enforces, so it waits for the project lead.
 - `add()`: in the exact-bounds-off branch, `capstone_repr_ok(r->address, r->bytes)` replaces the test for a
