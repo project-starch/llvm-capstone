@@ -142,6 +142,8 @@ ARM_ORACLES = {
     "silicon-pg-stock": {"oracle"},
     "silicon-pg-sublet": {"oracle"},
     "silicon-sqlite-stock": {"oracle"},
+    "silicon-pym-stock": {"oracle"},
+    "silicon-pym-sublet": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),

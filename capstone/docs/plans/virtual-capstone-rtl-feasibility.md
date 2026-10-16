@@ -174,3 +174,172 @@ and the format decision before the first.
 - On exact bounds: widen the capability format, add a side store, or require representable bounds from the allocator?
 - Who owns the model's semantics (which lane), so that the open encoding questions (27/28 bits, 31/30 ids,
   generations) get one answer?
+
+---
+
+# Addendum, 2026-10-16: re-baseline after the lead's decision that silicon runs the full virtual profile
+
+*RTL lane. The lead decided on 2026-10-16 (`docs/plans/2026-10-16-virtual-profile-on-silicon.md`, 44d82a9eb3f3) that
+silicon runs the FULL virtual profile, one bitstream with both profiles under a per-context flag, the physical profile
+kept. This addendum re-reads the audit above against what moved since it was written. Reference pinned here:
+capstone-qemu `virtual-capstone` at **d35af47b163c**, verified on 2026-10-16 to be the branch head (`git log -1
+origin/virtual-capstone`), which is also llvm-capstone dev's submodule pin. RTL side: caplifive_sublet_d93a8d66b (the
+resident bitstream), tree capstone-sublet b7e3287e4. Four read-only strands fed this section (QEMU merges, the
+CDERIVE/CREVOKE divergence, the capability data path, the M-privilege assumptions); every claim acted on here was
+re-read at the quoted line.*
+
+## 0. What moved on the RTL side (the audit above read 0568f93a9)
+
+- **The capability word is now {revnode_id 30 | perm 4 | cap_type 3 | bounds 27}** (d34c26002), not the {30 | 3 | 3 | 28}
+  the audit's item C describes. The fourth permission bit is MANAGE (Sublet). QEMU virtual's word is 27 bounds / 31
+  node (guide); the two formats now agree on the bounds width and differ on how the 31st bit is spent: the RTL's
+  MANAGE against QEMU's node bit. Re-read on both sides on 2026-10-16: QEMU's word at the pin is bounds [26:0] (bE 0-2, b 3-13, tE 14-16, t 17-25, iE 26),
+  type [29:27], perms [33:30] with MANAGE = 8, node [63:34] (`cap_compress.c:30-37`, `cap.h:13-24`), and the RTL's
+  packed `cap_metadata_t` is {revnode_id 30 | perm 4 {MANAGE, R, W, X} | cap_type 3 | bounds 27 {iE, T 12, B 14}}
+  (`ariane_pkg.sv:638-642`): **the two in-memory words have the same layout bit for bit.** Item C's open check is
+  therefore the two compression FUNCTIONS, not the field split, and they are known to differ in one place (Q-16, the
+  renormalisation). What the 30-bit node field MEANS still differs: the RTL packs {generation 14 | index 16} into it
+  (`capstone_rev_node.anvil:346`, `generation = nid[16+:14]`), QEMU uses it as a flat 2^30 index with no generation
+  (`cap_rev_tree.h:29`); that is item A's question, settled by the freeze proposal in the exact-bounds document.
+- **The encoder renormalises and has no cursorless scheme** (2a3a87dfc, 4a4261bb4): every capability rounds OUTWARD,
+  R-11 cannot occur, R-54 cannot occur. The pinned QEMU does not renormalise (Q-16, filed 2026-10-16); under exact bounds
+  the stored bounds bypass the encoder, so that gap bites the physical profile only.
+- **CDERIVE and CREVOKE exist on silicon** (b330433fe..d93a8d66b): the node record carries a parent link, CREVOKE's kill
+  walk is REVOKE_NODE in kill mode, MREV deepens the subtree. Item A's "the depth-ordered list algorithm is the same one
+  QEMU uses" now extends to derive/kill; the differences are in section 2.
+- **The exception encoder reads the spec's 24..29** (R-24, since 054cea69b): item F's MATCH is now a silicon fact.
+
+## 1. QEMU and the runtime since 1a6dd20732 (item by item)
+
+Reference: capstone-qemu 1a6dd20732..d35af47b163c (nine merges and acbad0f7ec), the guide at 3fe4541c1299..origin/dev,
+and the dev runtime commits b02ddf9043cc, cbbc2ca958af, 6576dca09c37, 601c8d52c260, 7901153f10fa. Agent-sourced
+(general-purpose, read-only), the word layout and the CDERIVE/DROP semantics re-read here; file:line at d35af47b163c.
+
+| merge / commit | what changed (ISA-visible) | audit item, direction |
+|---|---|---|
+| #21 7dbfdd534e Sublet lifetimes | CDERIVE 0x5b/0x51 and CREVOKE 0x52 (rd = x0) in the virtual profile; child = RWX of parent + MANAGE, NONLIN, depth + 1, inserted after the parent; checks 24, 26, 25, 29, compact-profile representability 29 (`op_helper.c:1212-1263`); the word gains the MANAGE bit and the node shrinks to 30 (`cap_compress.c:30-37`); record word1 = depth[29:0] / parent[59:30] / flags[62:60], NODPAGE2, 4:9:9:8 directory, 16 root pointers (`cap_rev_table_abi.h:8-30`); MREV deepens the subtree and records the parent; NONLIN SPLIT allocates no sibling (`:1430-1475`); **virtual-only stale-reload rule**: a reloaded revoked NONLIN keeps its tag, use faults 25 (`:2144-2149`) | A further on format (new record layout, paged directory), closer on algorithm (the RTL has the same tree rules since 464abe2ce); C closer (30-bit node, MANAGE: now identical); C' new requirement; E two new unprivileged ops, the SPLIT/MREV relaxation no longer needed by mallocng |
+| #22 9c7218cd52 | PCC checked once per translation block; no ISA effect (blocks end before a PCC-refusing instruction); the guide's "one instruction per block" (isa.md:242-244) is stale | none |
+| #23 4497dba0b2 | tag clearing moved to the TLB slow path; one semantic correction: a FAILED SC no longer stores, so the granule keeps its tag (`trans_rva.c.inc`) | G edge; UNRESOLVED whether the RTL's failed SC clears the tag |
+| #25 9306a3d182 | untagged CINCOFFSET / CINCOFFSETIMM / SCC compute an untagged integer result in the virtual profile instead of raising 24 (`op_helper.c:817-930`); both profiles: a tagged rs2 raises 24, UNINIT/SEALED rs1 raises 26 | **E new divergence**: the RTL raises 24 (`capstone_flu_unit.anvil`); the virtual SDK's SPEC programs depend on the CHERI rule; the lead decided it 2026-10-14 |
+| #26 70e98dd390 | LDC/STC single helpers, clz encoder, lockless tag map; no ISA effect; LDC of a tagged granule takes its bounds from the tag map `:2133-2135` | none; see C' |
+| #27 d35af47b16 MOVC | virtual: MOVC nulls rs1 only if tagged non-NONLIN; physical: an untagged source is nulled as the RTL does (`:660-690`) | E: Q-04 option 1; the RTL half Q-04 (b) has no commit (C-32) |
+| #28 ed3e1b1de4 | every capability helper writes rd through one path; rd = x0 discards (`capstone_helper.h:85-92`) | fidelity toward the RTL; none |
+| #29 b8e73e0986 | own MMU index for virtual C, decoded as single-stage USER (`internals.h:49`); SFENCE.VMA by address | B: confirms USER-permission translation of virtual-C data and fetch (`index8.S`) |
+| #30 2b6fbe3eaf | F/D in virtual C: CSRUNV starts FS Initial with zeroed f registers; per-context save carries fpr, frm, fp_status (`capstone_supervisor.c:31-54, 916-930`); FP loads and stores go through the capability path with causes 24-28; CSRUNV refuses V = 1 | **D new storage requirement**: 32 fpr + fcsr per context; the RTL's switcher saves no FP state |
+| acbad0f7ec | CDERIVE/CREVOKE decoded on the physical profile too; CREVOKE rd != x0 stays illegal | lands the physical half the Sublet bitstream needed |
+| guide (5 files, +186/-35) | isa.md: the Sublet section, MANAGE = 8, the compact alignment rule (L >= 4 KiB needs base and end aligned to 2^(msb(L)-9)), record word1, 4:9:9:8, "27 bounds, 3 type, 4 permission, 30-bit node", the stale-reload rule with Q-11 named; ownership.md: mallocng delinearizes the grant once then CDERIVEs; guarantees.md: disjointness and scrubbing are allocator duties; unchanged: scapctl bit 0 / read-only bit 8, CSRUNV actions 0..3, events 0..4, frame 576/640/656, the policy list, no generations; stale against d35: isa.md:43-45 (physical decode) and :242-244 | C, E, H as above |
+| dev 6576dca09c37 | `heap.c`: the grant is `ldc; delin` once; one CDERIVE per group over the mapping; slot parents are SHRINK copies at base + 16 + i*stride (no node); **every public object is a CDERIVE at the REQUESTED size** (`heap.c:167-178`), freed by CREVOKE; nested groups at the parent's key | C': the dependence is on arbitrary (key, size) children reaching hardware unrounded |
+| dev b02ddf9043cc | `capability.h:36-64`: `capstone_cap_derive` probes the parent with three LCCs then issues the CDERIVE with cursor = base + offset; `capstone_cap_revoke_child`; `without_manage` (4-bit TIGHTEN) called only by the wrapper tests | E, C' |
+| dev 7901153f10fa | the representable-bounds heap deleted (sublet_heap.c, 472 lines): the audit's option (iii) has no living implementation | C' |
+| dev 601c8d52c260, cbbc2ca958af | qualification under `x-capstone-exact-bounds=true`; linear operand refused intact | none |
+
+Where the exact-bounds requirement actually sits (file:line at origin/dev): `runtime/virtual/exec.c:697-698` (a v5 image
+refuses to start without scapctl bit 8), `module/capstone_vm.c:452, 548, 1089-1091` (grants must be power-of-two
+aligned without it; mremap needs it), `heap.c:167-178, 105-111, 62-70` (objects at requested sizes, nested groups at
+arbitrary keys, SHRINK slot parents that QEMU never round-trips), every virtual gate's CPU string (`run.py:130`,
+`run-malloc.py:79`, `cli.py:319-323`). In QEMU the flag only advertises bit 8 and lifts two refusals; **LDC takes the
+shadow bounds unconditionally** (`op_helper.c:2135`), so even QEMU's compact profile is not a tag-bit-only model. The
+per-workload count of mallocng objects whose bounds are unrepresentable in 27 bits is UNRESOLVED (Q-16's 43,591 is codec
+divergence on random triples, not an allocator census); the guide's alignment rule says every object >= 4 KiB whose key
+or size is not aligned to 2^(msb(L)-9) is one.
+
+## 2. Where d93a8d66b's CDERIVE/CREVOKE differ from the virtual profile's
+
+Agent-sourced (rtl-oracle), the two divergences re-read here at the quoted lines. Reference: the virtual profile under the
+CPU string the runtime actually uses (`run.py:130`: `x-capstone-u-mode=true,x-capstone-exact-bounds=true`).
+
+| aspect | silicon d93a8d66b | QEMU virtual d35af47b163c | verdict |
+|---|---|---|---|
+| CDERIVE check order | **24, 26, 29, 25** (`capstone_dyn_unit.anvil:246-259`: the size/window test at :251 runs before the liveness query at :257) while the unit's own comment at :238 claims "checks in QEMU's order ... 25, 29" | 24, 26, **25, 29** (`op_helper.c:1221-1235`) | **DIVERGENT, new (Q-17)**: a dead parent AND a window outside it reads 29 on silicon, 25 on QEMU; reachable from `capstone_cap_derive`, whose three LCC probes check no liveness on either side (RTL `:376` queries only for zimm 0; QEMU `helper_cslcc` has no `cap_rev_live`). Q-15's "fault order: agrees" is wrong for this pair. Fix: move the query before the size test, one Anvil reorder, next bitstream |
+| child bounds | compressed, rounded OUTWARD unconditionally (`ariane_pkg.sv` compress_bounds: B truncated, T rounded up), no check that the rounded child fits the parent (`:238` "No representability check") | exact under the runtime's flag (the representability refusal at `:1243-1247` is skipped); refused 29 under the compact profile | **DIVERGENT, the C' requirement**: silicon can hand back a child wider than requested, up to a granule, invisible to the QEMU run the port is qualified against; bounds-model.py `cderive_child` predicts the slack (exact below ~4 KiB at a 16-byte key, tens to hundreds of bytes above) |
+| child permissions, type, cursor | RWX of parent + MANAGE (`:264`), NONLIN, cursor = parent cursor = child start (`:265`) | `(perms & RWX) | MANAGE` (`:1238`), NONLIN, cursor = base | MATCH |
+| node record | inserted after the parent at depth + 1 (`capstone_rev_node.anvil:346`); generation 14 bits in the id; depth 17 bits (max 131071 -> 30) | inserted after the parent at depth + 1 (`cap_rev_tree.c:143-146`); no generation; depth max 2^30 - 1 | insertion MATCH; resource model differs (A) |
+| CREVOKE | 24, 26, 25 (parent), 25 (child), 27 (MANAGE on rs1), then 29 (not a direct non-linear child, or self) / 25 (stale between query and kill); kill walk retires the child's subtree (`capstone_rev_node.anvil:368-407`); rd != x0 illegal (`decoder.sv:1278-1282`) | 24, 26, 25 (either dead), 27, 29 (`op_helper.c:1264-1289`, `cap_rev_tree.c:162-176`); subtree retired; rd != x0 illegal | MATCH, including order |
+| stale reload (LDC of a capability on a dead node) | tag kept for every type; the fault is at use, 25 (`load_unit.sv:217-220` clears only the linear family on a consuming load) | virtual + NONLIN: tag kept, use faults 25 (`:2144-2149`); physical or non-NONLIN: tag cleared, use faults 24 | MATCH for the virtual profile's NONLIN children; the physical-profile difference is Q-11 |
+| R-45 flush | REVOKE, DROP, CREVOKE flush at commit (`commit_stage.sv:716-720`) | sequential | same observable result |
+| DROP of a NONLIN with children | `drop_req` clears the node's `valid` globally without freeing it (`capstone_rev_node.anvil:217-233, 649-651`): every alias dies, the slot leaks, children become unendable (audit F-B) | `helper_csdrop` (`op_helper.c:1127-1163`) nulls the register only, touches no table: other aliases and children live on | **DIVERGENT, new (Q-18)**: not reached by `heap.c` (no DROP emitted; `sublet_clear` is an STC of zero); UNRESOLVED whether the compiler ever emits DROP implicitly |
+| CSMINT / CSRETIRE | absent by design (the physical arms debug-mint) | the table bootstrap of the virtual profile | no RTL counterpart; item D |
+
+## 3. Item B re-read: MPRV is not the mechanism
+
+The audit said B needs "a virtual-context flag that turns `en_translation_o`/`en_ld_st_translation_o` on under M
+privilege with USER permission checking". The RTL already has a data-side mechanism that does half of this, and it is
+wired into the wrong place:
+- `csr_regfile.sv:2385,2399`: `ld_st_priv_lvl_o = (mprv) ? mstatus_q.mpp : priv_lvl_o`. MPRV with mpp = U gives
+  translated data accesses with USER PTE permissions while the privilege stays M.
+- The same signal gates the ENTIRE capability check: `load_store_unit.sv:1304-1305` requires
+  `ld_st_priv_lvl_i == PRIV_LVL_M` for the bounds/tag/revocation check (causes 24-28), and `pmp_data_if.sv:299` turns
+  the CPMP bypass OFF when it is not M. So MPRV + mpp = U buys data translation and silently disarms the capability
+  check on exactly that data.
+- Fetch has no MPRV path at all: `cva6_mmu.sv:77` has `flag_mprv_i` commented out, and `csr_regfile.sv:3048-3051`
+  forces `en_translation_o = 0` whenever the privilege is M, independent of satp.
+Consequence for the design: the virtual-context flag must (a) enable data AND fetch translation under M with user PTE
+permissions as its own term in `en_translation_o` / `en_ld_st_translation_o`, and (b) the capability check's gate must
+be re-keyed on capability mode (`capmode_i`) and not on the privilege signal, so it stays armed with translation on.
+Two hazards that are unreachable today and become live the moment translation turns on:
+- **the consuming LDC's deferred clear re-uses the read's physical address** (`load_unit.sv:490-496`, `cap_clear_addr_q`)
+  with no re-translation and no writable-PTE check; QEMU's `capstone_ldc_granule` (op_helper.c:2165-2227) re-probes the
+  store side, compares physical addresses and fails closed with a store access fault, and checks the PTE's W bit;
+- **the escape machinery has no terminal-versus-resumable kind**: `esc_kind` carries RETURN/PREEMPT/FAULT and every
+  escape saves and restores; QEMU gives a page fault its own resumable kind (4) distinct from the terminal synchronous
+  fault (kind 2). This is item D's gap and B's page-fault escape depends on it.
+What the audit got right and stands: the bounds check is on the virtual cursor (`load_store_unit.sv:336-339,1339-1342`),
+CPMP compares physical addresses (`pmp_data_if.sv:127-128,149-151`), the rev-node table is physical by construction
+(`ex_stage.sv:1375`, D-cache ports 2/3, no MMU), `offsetmmu` 0x803 has no consumer, and nothing in the boot ROM or the
+test corpus writes `satp`, so a bare test under the flag needs page tables nothing currently builds (the first B test
+builds them). The Anvil units contain no privilege or capmode term; every such decision is in the surrounding RTL.
+
+## 4. The capability data path today (what the exact-bounds costing is done against)
+
+- Two parallel register files: the 64-bit data (cursor) file and a 65-bit {tag, metadata} file
+  (`issue_read_operands.sv:1748`, `i_ariane_cap_metadata_regfile_fpga`); every scoreboard entry carries a 65-bit
+  capability lane beside the 64-bit result (`cva6.sv:111-134`).
+- The LSU checks DECODED bounds: `decompress_cap_tagged` at `load_store_unit.sv:336` feeds the compare at `:1339-1340`.
+  Exact bounds remove that decode from the access path.
+- The AXI user sideband is OFF (`DataUserEn = 0`, config pkg :42); a capability's metadata travels as a SECOND 64-bit
+  data beat (`wt_axi_adapter.sv:217-221`, `axi_wr_data[1] = is_cap_req ? user : 0`, a two-beat burst). The line is one
+  granule (`DcacheLineWidth = 128`), the cache is write-through.
+- The tag bit is cached in L1 (`cap_tag_q`, `wt_dcache_mem.sv:146`); an L1 hit costs no AXI traffic for the tag. Every
+  access that reaches AXI, capability or not, also issues a serialised one-byte TAG_WR/TAG_RD transaction to the shadow
+  tag region (`wt_axi_adapter.sv:156-157, 445-480`).
+- Traffic today: STC = 2 data beats + 1 tag transaction on EVERY store (write-through); LDC miss = 2 + 1; LDC hit = 0.
+- CPMP holds 16 compressed entries (128 bits each, `pmp_data_if.sv:44`) and decompresses all of them every cycle in
+  `cpmp_check` (`:125-130`); the switcher's save slot is 129 bits logical (`capstone_dom_switcher.anvil:21-24`).
+- compress/decompress sites in core/: 6 compress, 9 decompress (the "three compress_cap instances" of the synthesis
+  reports are the three on the worst timing paths, not a count).
+- 8 of the 40 standing UNOPTFLAT loops sit in load_store_unit / load_unit / wt_dcache_ctrl / wt_dcache_wbuffer /
+  wt_dcache, one of them `rd_ctag` (`wt_dcache.sv:144`), the tag ring itself. Any memory-format change enters those cones.
+
+## 5. The acceptance set (from the runtime lane, 2026-10-16; the plan carries the authoritative copy)
+
+Tier 0, the directed suites to port into the RTL harness, all at d35af47b163c: tests/virtual-capstone-model (model.py,
+8 directed traces per storage backend), tests/sublet-lifetimes (119 at acbad0f7ec), tests/virtual-capstone-m1 (60),
+tests/virtual-capstone-runtime (69) plus exact-bounds.sh (4), tests/capstone-x0-writes (24), tests/capstone-untagged-arith,
+and dev's runtime/tests/sublet-lifetimes. Re-measured on 2026-10-16 on a fresh build of the pin (serial, one QEMU at a time): sublet-lifetimes 119/119,
+virtual-capstone-m1 69/69 (development.md says 60), virtual-capstone-runtime 69/69, exact-bounds.sh 4/4,
+capstone-x0-writes 24/24, capstone-untagged-arith 6/6, model.py's lines as development.md:30-31 print them, and dev's
+runtime/tests/sublet-lifetimes 20/20 (development.md says eight; this one ran against the pre-existing 2026-10-10 SDK
+under /tmp/capstone/virt-stack, not a fresh build, so it is a non-canonical pass). No failures. On the exact-bounds
+axis only exact-bounds.sh and one sublet-lifetimes case run with `x-capstone-exact-bounds=true`; every other suite
+leaves it at QEMU's default false, so Tier 0 does not exercise the board's stated feature set on that axis, and the
+directed RTL arms ported from it say per test which setting they model. Tier 1:
+the guide's Linux smoke (capstone_vm.ko, capstone-vexec contract.dom reading VIRTUAL_APPLICATION_OK, the stale access
+denied 25 / exit 139), feature set `x-capstone-u-mode=true,x-capstone-exact-bounds=true`. Tier 2: run.py with the SQLite
+and mruby images. Tier 3: every verdicts-v1 bundle with target capstone-virtual (26 bundles, 382 cells, 304 images at
+44d82a9eb3f3; 91 images survive under /mnt/hdd/<user>/capstone/virtual-corpus-images-2026-10-16).
+
+## 6. What this changes in the order of work
+
+1. The two new Q-rows (Q-17 check order, Q-18 DROP) and the E divergences (#25 untagged arithmetic, Q-04 (b)) are
+   one-line RTL changes each; they go into the first virtual bitstream's batch, not into separate cycles.
+2. B stays first and is now specified: a virtual-context flag as its own term in `en_translation_o` and
+   `en_ld_st_translation_o` (fetch and data, USER PTE permissions), the capability check re-keyed on `capmode_i`, the
+   LDC clear re-translated and PTE-W-checked, a resumable page-fault escape kind. The first bare test under the flag
+   builds its own Sv39 tables.
+3. The exact-bounds core widening (the part common to (i) and (ii), see the costing document) can be designed with B
+   and synthesised in the same cycle, since both reach the issue/forwarding and LSU cones; the memory-format half waits
+   for the lead's choice.
+4. A (the srevroot table) follows with the flat 30-bit id: the generation bits leave the id under the flag.
+5. D grows: FP state per context (#30) joins the frame, the page-fault and node-pressure kinds, CSMINT/CSRETIRE.
+6. The audit's four-to-five cycles become five to six: B (+ the common widening), the memory format, A, D, plus the
+   batch above folded into whichever is first. Each is pre-registered before synthesis as the plan requires.

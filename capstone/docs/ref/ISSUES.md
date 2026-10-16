@@ -1338,6 +1338,27 @@ needed ce1be0c642 with `CAPSTONE_CDERIVE_ROUND=1`, and Q-15's box records 43,591
 R-54 shape. Under the virtual profile with exact bounds (scapctl bit 8) the encoder is bypassed for the stored bounds,
 so this divergence is a physical-profile one. Fix: land the renormalisation on the QEMU shared branch and bump the pin
 (helper lane); until then every physical-profile differential cites which encoder it ran against.
+## Q-17 — CDERIVE's check order: silicon tests the size window (29) BEFORE the parent's liveness (25), QEMU the reverse `OPEN — RTL divergence, filed 2026-10-16 by the virtual-profile re-baseline; one Anvil reorder, batched into the next bitstream`
+
+`capstone_dyn_unit.anvil:246-259` (d93a8d66b): operands 24, type 26, then the size/window test (29) at :251, and only then
+the node liveness query (25) at :257. QEMU `helper_csderive` (`op_helper.c:1221-1235` at d35af47b163c): 24, 26, 25, 29.
+The unit's own comment at :238 claims QEMU's order. A CDERIVE whose parent is dead AND whose window lies outside it reads
+29 on silicon and 25 on QEMU. Reachable from `capstone_cap_derive` (capability.h:36-52): its three LCC probes check no
+liveness on either side (RTL :376 queries only for selector 0; QEMU `helper_cslcc` has no `cap_rev_live`). Q-15's
+"fault order: agrees" is wrong for this pair. Directed test: derive, CREVOKE the child, CDERIVE from the dead child with
+a size larger than it; expect 25 after the fix, 29 today.
+
+## Q-18 — DROP of a NON-LINEAR capability kills the node for every alias and leaks it on silicon; QEMU clears the register only `OPEN — RTL divergence, filed 2026-10-16 (the audit's F-B); design decision for the lead with the helper lane's QEMU rule as tie-breaker`
+
+RTL `DROP` (`capstone_dyn_unit.anvil:24-40`) sends `drop_req` for any tagged type; the handler
+(`capstone_rev_node.anvil:217-233`, `:649-651`) clears `valid` without setting `free` or unlinking: every alias of the
+node reads dead, the slot never returns to the free list, and CDERIVE children of the node can no longer be ended by
+CREVOKE (which needs a live parent). QEMU `helper_csdrop` (`op_helper.c:1127-1163`) nulls x[rs1] and touches no table.
+Not reached by `runtime/virtual/heap.c` (no DROP; `sublet_clear` is an STC of zero); UNRESOLVED whether the compiler
+emits DROP implicitly. Options: refuse DROP on a node with children (status 3 -> 29), make DROP walk like CREVOKE, or
+make DROP register-only for NONLIN as QEMU does. Directed test: derive, DROP the parent, load through the child
+(retires today), CREVOKE (refused 25 today).
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
@@ -8582,15 +8603,44 @@ to it. From `capstone-cc -S` of the probe and the faulting image (fault pc 0x1d2
   itself and its other three bytes lie past the one-byte bound: cause 5 at the byte's address.
 - **-O2:** GlobalMerge puts `lone_byte` into `.L_MergedGlobals` (`lone_byte = .L_MergedGlobals`, 48
   bytes, with `word32` and the others). The capability is shrunk to the merged block, the word lies
-  inside it, and the same loop succeeds. The -O2 pass is GlobalMerge's luck, not a fix.
+  inside it, and the same loop succeeds. The -O2 pass is GlobalMerge's luck, not a fix, and the
+  arithmetic is now known: the block is `.comm .L_MergedGlobals,48,16` and `lone_byte` is at
+  offset 0, so its aligned word is [B, B+4) inside a bound of [B, B+48). A merged block whose
+  size is a multiple of 4 protects every byte in it; the luck is that merging happens at all.
 
-So any object smaller than 4 bytes whose capability is bounded to it alone (a static or global
-`uint8_t`/`uint16_t` at -O0, and at any level once it is not merged, or one allocated alone) cannot
-be the target of an 8- or 16-bit atomic. The expansion cannot repair it: it only has the narrow
-capability, and nothing widens one. The fix belongs where the bound is set: an object smaller than
-4 bytes gets 4-byte alignment and padding and a bound of the containing word, at least when its
-address can reach an atomic. Not decided and not implemented. Relevant for CPython: `PyMutex` is
-one byte; a standalone static one is exposed wherever it is bounded alone.
+**The scope above was RETRACTED and widened on 2026-10-16** (it read "any object smaller than 4
+bytes whose capability is bounded to it alone"). The condition is not the object's size but
+whether the aligned word fits the bound: a sub-word atomic on byte `k` of an object bounded
+`[b, b+s)` faults iff the 4-byte-aligned word containing `b+k` is not contained in `[b, b+s)`.
+That happens whenever `s` is not a multiple of 4 and `k` lies in the object's final partial word
+— **at any object size, not only `s < 4`** — or whenever `b` is not 4-aligned, where the rounding
+reaches below `b`. A lone object smaller than 4 bytes is the special case in which every byte
+lies in the final partial word, so a byte inside a larger object is NOT safe by construction.
+Measured, with identical code but for the bound immediate: a byte at offset 4 of a 5-byte
+4-aligned array gets bound [b, b+5), cursor b+4 and a word-wide `lr.w` reading [b+4, b+8), three
+bytes past the bound; the same byte of an 8-byte array gets [b, b+8) and the access fits.
+
+Two further corrections. **Raising alignment does not fix it**: clang propagates the object's
+alignment onto the `cmpxchg`, AtomicExpand then takes its low-bits-known-zero path and skips the
+`ptrmask` (`AtomicExpandPass.cpp:861`), and the access stays word-wide because the cmpxchg granule
+is 32 — so a lone *aligned* byte still overruns, with no rounding visible in the output, which is
+harder to diagnose rather than safer. And **the `andi -4` is not the symptom**: the arms that
+carry it are the safe ones. Confirmed for globals (`CapstoneISelDAGToDAG.cpp:1717`),
+thread-locals (`CapstoneISelLowering.cpp:9901`) and stack locals, which settles the "or one
+allocated alone" clause. The heap is UNRESOLVED: the exactly-n narrowing it was first costed
+against was retired by 7901153f10fa, and the live path bounds by a musl group stride
+(`capstone/runtime/virtual/heap.c:66-69`, `:108-109`).
+
+Three fixes are costed, with a recommendation, in
+[the options doc](../plans/2026-10-16-c74-subword-atomic-bounds.md): native byte/halfword atomics
+need **no compiler work at all** (`setMinCmpXchgSizeInBits` already drops to 8 under Zabha plus
+Zacas, taking AtomicExpand's no-widening early exit), so their whole cost is RTL and a bitstream;
+padding and aligning the object needs BOTH halves to be sufficient and must answer which objects,
+which is undecidable for an escaping global; routing to the generic libcall is bound-exact for
+every storage class by construction and already linked into every application, but needs a
+pre-AtomicExpand rewrite rather than a hook and costs lock-freedom. Not decided and not
+implemented. Relevant for CPython: `PyMutex` is one byte; a standalone static one is exposed
+wherever it is bounded alone.
 
 ### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `OPEN — COMPILER, observed 2026-09-29; port workaround qualified; not reduced`
 

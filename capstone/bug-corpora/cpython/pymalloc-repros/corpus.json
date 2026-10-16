@@ -12,7 +12,9 @@
   "required_arms": [
     "cheribsd-revocation",
     "virtual-malloc",
-    "virtual-nested-pools"
+    "virtual-nested-pools",
+    "silicon-pym-stock",
+    "silicon-pym-sublet"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -30,7 +32,8 @@
     "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control",
     "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd",
     "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-virtual",
-    "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-patch0003"
+    "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-patch0003",
+    "capstone/bug-corpora/silicon-runs/2026-10-16-pymalloc"
   ],
   "advisories": [],
   "shape_table": true,
@@ -41,10 +44,14 @@
   "note": "The inventory states this is the whole reachable set at the pin, not a sample.",
   "arm_configurations": {
     "virtual-malloc": "virtual-pymalloc",
-    "virtual-nested-pools": "virtual-pymalloc-pools"
+    "virtual-nested-pools": "virtual-pymalloc-pools",
+    "silicon-pym-stock": "silicon-pymalloc-stock",
+    "silicon-pym-sublet": "silicon-pymalloc-sublet"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-10-patch0003/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-10-patch0003/virtual-nested-pools"
+    "virtual-nested-pools": "results/2026-10-10-patch0003/virtual-nested-pools",
+    "silicon-pym-stock": "results/2026-10-16-silicon/silicon-pym-stock",
+    "silicon-pym-sublet": "results/2026-10-16-silicon/silicon-pym-sublet"
   }
 }

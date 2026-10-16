@@ -560,6 +560,40 @@
         "uaf-mem5",
         "bounds-mem5"
       ]
+    },
+    "silicon-pymalloc-stock": {
+      "target": "capstone-silicon",
+      "summary": "CPython 3.13.7's pymalloc corpus on silicon: the port's hosted replay (ports/cpython/pymalloc/src/native/main.c) around each case's PYC_CASE body, over CPython's own Objects/obmalloc.c and the port's src/shared/backing.c, built as the port's cmake/Replay.cmake `defects` target through the B0 pipeline (gnu11, -O0), over the silicon-level0-lifetimes heap, with runners/silicon/aligned-alloc.c because level0 has no aligned_alloc. One 128 MiB region: 104 MiB of data over a 100 MiB level0 arena, the replay's 64 MiB pymalloc backing one block of it. Each case runs `<fixture> /tmp/pym-report.bin` once; its stale access is the labelled read_probe. obmalloc.c is the port's `ported` variant (patches 0001 + 0002), pymalloc as released: a block taken back by pymalloc stays reachable through a stale pointer, so corpus control 00 completes",
+      "mechanism": "per-object lifetimes on every malloc; none per pymalloc block, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "pym-ctl-00": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "pym-ctl-00"
+      ]
+    },
+    "silicon-pymalloc-sublet": {
+      "target": "capstone-silicon",
+      "summary": "CPython 3.13.7's pymalloc corpus on silicon: the port's hosted replay (ports/cpython/pymalloc/src/native/main.c) around each case's PYC_CASE body, over CPython's own Objects/obmalloc.c and the port's src/shared/backing.c, built as the port's cmake/Replay.cmake `defects` target through the B0 pipeline (gnu11, -O0), over the silicon-level0-lifetimes heap, with runners/silicon/aligned-alloc.c because level0 has no aligned_alloc. One 128 MiB region: 104 MiB of data over a 100 MiB level0 arena, the replay's 64 MiB pymalloc backing one block of it. Each case runs `<fixture> /tmp/pym-report.bin` once; its stale access is the labelled read_probe. obmalloc.c is the port's `protected` variant, + patch 0003: every pymalloc block a CDERIVE child of its arena, CREVOKEd when pymalloc takes it back, so corpus control 00 faults at read_probe",
+      "mechanism": "per-object lifetimes on every malloc, and a lifetime per pymalloc block (patch 0003), on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "pym-ctl-00": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "pym-ctl-00"
+      ]
     }
   }
 }

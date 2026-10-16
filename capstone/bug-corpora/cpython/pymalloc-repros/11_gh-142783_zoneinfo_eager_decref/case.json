@@ -30,6 +30,18 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=25 pc=0x3fa4718044 in read_probe; by probe: the pc lies in read_probe (pyc_defect_read)",
       "verdict_from": "results/2026-10-10-patch0003/virtual-nested-pools"
+    },
+    "silicon-pym-stock": {
+      "oracle": "silicon, pymalloc as released over the level0 lifetimes heap (tools/arms.json silicon-pymalloc-stock): a fault at read_probe, the labelled stale load, or the case completes (`PYM completed=1`) and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (PYM completed=1, after the case's read_probe) and completed with no fault; silicon; run end kind=exit value=0",
+      "verdict_from": "results/2026-10-16-silicon/silicon-pym-stock"
+    },
+    "silicon-pym-sublet": {
+      "oracle": "silicon, pymalloc with patch 0003 over the level0 lifetimes heap (tools/arms.json silicon-pymalloc-sublet): a fault at read_probe, the labelled stale load, or the case completes (`PYM completed=1`) and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0xac101e3c in read_probe; by probe: the pc lies in read_probe, the labelled probe",
+      "verdict_from": "results/2026-10-16-silicon/silicon-pym-sublet"
     }
   },
   "status": "measured on virtual Capstone (virtual-malloc, virtual-nested-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle"
