@@ -107,3 +107,28 @@ reason its sequence differs from stock memsys5's. The consequence for this case 
 `virtual-malloc`'s MISSED is not a silent miss of the event Sublet caught: on that arm the sweep
 ran to the end and the defect did not occur. A reader taking the two cells as the same defect seen
 by two mechanisms would be reading more than the measurement supports.
+
+## CheriBSD, and why the virtual arms are the outliers (2026-10-16)
+
+Measured rather than inferred: on `cheribsd-revocation` this case completes, `RETURNED rc=0`, with
+`drop_allocs=288`, a sweep of 296 points, and probe site 9 reporting no witness in 257 reaches.
+The positive control faults under revocation in the same boot. So the address blindness described
+above holds on that arm too, and the claim that CheriBSD's revocation cannot see this -- which was
+an inference when first written -- is now a reading.
+
+The four `drop_allocs` figures are 296 (host ASan variant), 288 (CheriBSD), 68 (`virtual-malloc`)
+and 70 (`virtual-nested-pools`). The virtual arms are the outliers by a factor of four, and the
+reason is not the allocator:
+
+| configuration | lookaside | why |
+|---|---|---|
+| host ASan | OFF | `run-host-asan.py` sets `-DSQLITE_DEFAULT_LOOKASIDE=0,0` |
+| CheriBSD | OFF | `cheribsd/build-corpus-cheri.sh:111` sets the same |
+| both virtual arms | **ON** | `build-virtual.py` sets it nowhere; `REPRO322_NO_LOOKASIDE` exists but only for the `--no-lookaside` probe, which its own help calls "a probe, not an arm" |
+
+With lookaside on, a connection's small allocations are served from its lookaside pool and never
+reach the memsys5 wrapper this trigger counts, which is the whole of the four-fold difference.
+That is not specific to this case: lookaside is SQLite's second nested allocator, the Sublet port
+covers it and the stock arm does not, so on the virtual arms a small object's lifetime is a
+lookaside slot's rather than a memsys5 block's. Recorded here because this case is where it became
+visible; it bears on every case with small objects.
