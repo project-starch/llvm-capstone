@@ -471,6 +471,48 @@
         "oob",
         "uaf"
       ]
+    },
+    "silicon-wmem-stock": {
+      "target": "capstone-silicon",
+      "summary": "wireshark's wmem-repros on silicon with wmem as released (the port's reference source from cmake/prepare-source.py, the six wmem units plus system.c, compat.c and scopes.c, at the port's Release flags -O3 -DNDEBUG), over the silicon-level0-lifetimes heap as set 4 builds it (a block of 4 KiB or more placed on its granule, so wmem's 2 MiB blocks and its jumbo get a lifetime). The buggy run is the fix differential `0 N buggy`, whose temporal cases assert that the stale chunk was reoccupied before the read; the fixed run is `0 N fixed`. The packet pool keeps its block across the reset, so wmem controls 00 (uaf-chunk) and 02 (bounds-chunk) complete, and 01 (uaf-jumbo, a block wmem hands to g_free) faults",
+      "mechanism": "per-object bounds and lifetimes on every malloc; none per wmem object, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "uaf-chunk": "complete",
+        "uaf-jumbo": "fault",
+        "bounds-chunk": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "uaf-chunk",
+        "uaf-jumbo",
+        "bounds-chunk"
+      ]
+    },
+    "silicon-wmem-sublet": {
+      "target": "capstone-silicon",
+      "summary": "the same corpus with the port's patch 0001 source at the same flags: every block and block_fast object is a CDERIVE child of its block, bounded to the request and CREVOKEd at free, at realloc and at the reset that ends its pool, which revokes the block's generation and derives a new one. The buggy run is `0 N`, the fixed run `0 N fixed`. All three wmem controls fault",
+      "mechanism": "per-object CDERIVE children with CREVOKE inside wmem's block and block_fast allocators, over per-object lifetimes, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "uaf-chunk": "fault",
+        "uaf-jumbo": "fault",
+        "bounds-chunk": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "uaf-chunk",
+        "uaf-jumbo",
+        "bounds-chunk"
+      ]
     }
   }
 }

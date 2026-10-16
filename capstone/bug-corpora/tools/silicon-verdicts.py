@@ -25,7 +25,8 @@ Per case:
   names the fixed run's fault if it had one.
 - A buggy run that exits 75 refused its own setup (the case's CHECK printed CONTROL-FAILED): NO-READING control-failed,
   as tools/run-virtual-cases.py reads the same exit.
-- The buggy run's `case=N arm=buggy` line (optionally followed by more fields) is the reach marker.
+- The buggy run's `case=N arm=buggy` line (optionally followed by more fields), or wmem's `WM_DEFECT case=N ready`,
+  is the reach marker.
 - Its capstone-exec fault line is resolved with the image's own symbols (verdicts.Symbols), and attributed to the
   labelled probe (the corpus PROBE rule) or to a function the case declares (`fault_sites`).
 - A run that printed `VERDICT DEFECT-REPRODUCED` and exited 0 COMPLETED.
@@ -45,7 +46,11 @@ REPO = TOOLS.parents[2]
 sys.path.insert(0, str(TOOLS))
 import verdicts as v  # noqa: E402
 
-PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
+# The corpus PROBE rule, plus wmem's two probe functions (wireshark/wmem-repros/shared/run-defects.py PROBES).
+PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$|^wm_probe$")
+# A buggy run's reach mark: the corpus drivers' `case=N arm=buggy` (the carved driver appends carve=<mode>), or
+# wmem's hosted driver's `WM_DEFECT case=N ready`.
+REACH = re.compile(r"^(?:case=(\d+) arm=buggy(?: .*)?|WM_DEFECT case=(\d+) ready)$", re.M)
 BLOCK = re.compile(r"^CORPUS-RUN (\S+) BEGIN$(.*?)^CORPUS-RUN \1 END kind=(\w+) value=(-?\d+)$", re.M | re.S)
 # FIXED-ARM-FAILED (the fixed run did not read FIXED) and CONTROL-FAILED (the buggy run refused its own setup, exit
 # 75) are the board's names for runs that are not readings.
@@ -156,7 +161,7 @@ def main():
                              "exit 75: the case refused its own setup (a CHECK)") + "; buggy run end kind=exit value=75"
         else:
             body, kind, value = buggy
-            marker = re.search(r"^case=(\d+) arm=buggy(?: .*)?$", body, re.M)  # the carved driver appends carve=<mode>
+            marker = REACH.search(body)
             obs.reached = bool(marker)
             obs.reach_evidence = marker.group(0) if marker else ""
             obs.fault = v.domain_fault(body, v.Symbols(a.llvm_bin, image))

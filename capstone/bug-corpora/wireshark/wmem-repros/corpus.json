@@ -13,7 +13,9 @@
     "native-detect",
     "cheribsd-revocation",
     "virtual-malloc",
-    "virtual-nested-pools"
+    "virtual-nested-pools",
+    "silicon-wm-stock",
+    "silicon-wm-sublet"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -51,10 +53,14 @@
   "inventory": "capstone/docs/ref/wireshark-wmem-defect-triage.md",
   "arm_configurations": {
     "virtual-malloc": "virtual-wmem",
-    "virtual-nested-pools": "virtual-wmem-pools"
+    "virtual-nested-pools": "virtual-wmem-pools",
+    "silicon-wm-stock": "silicon-wmem-stock",
+    "silicon-wm-sublet": "silicon-wmem-sublet"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-11-virtual-23/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-11-virtual-23/virtual-nested-pools"
+    "virtual-nested-pools": "results/2026-10-11-virtual-23/virtual-nested-pools",
+    "silicon-wm-stock": "results/2026-10-16-silicon/silicon-wm-stock",
+    "silicon-wm-sublet": "results/2026-10-16-silicon/silicon-wm-sublet"
   }
 }

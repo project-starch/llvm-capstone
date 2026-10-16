@@ -139,6 +139,13 @@ How the three columns read:
 - **Temporal, Sublet in nested 49 of 49.** The port revokes on the allocator's own release, so the
   23 fault -- case 22 at the allocator's own handback probe, where its second free hands back a revoked chunk;
   the 26 plain ones read as in column 2.
+- **On silicon, column 3's temporal 49 of 49 holds** (`caplifive_sublet_d93a8d66b`, 2026-10-16, board sets 1-5).
+  The 26 plain cases ran on level0 with per-object lifetimes and the 23 nested under their ports' patches (FFmpeg's
+  pools 0003, memcached 0006, wmem 0001). Every one traps with cause 25, the RTL's stale access, where
+  capstone-qemu reads 24 (ISSUES Q-11). 44 trap at the labelled probe, and 5 in a function their case declares
+  (FFmpeg's 4 pool cases in `ff2_case_run`, wmem 22 in `wmem_block_sublet_free`). The arms are `bug-corpora`'s
+  `silicon-lifetimes`, `silicon-pool-sublet`, `silicon-mc-sublet` and `silicon-wm-sublet`. Every row is in
+  `docs/plans/2026-10-15-bug-corpus-on-fpga.md` section 7.
 - **Spatial, Sublet in malloc 46 of 81** is the Sublet heap's per-object bound: all 45 plain
   cases that leave their allocation, and memcached 8 (its rbuf object is its own allocation); nothing inside a block.
 - **Spatial, Sublet in nested 71 of 81.** The chunk and slab ports bound each chunk (wmem 9/9, slab
@@ -527,11 +534,7 @@ How each mechanism reads, and why it misses what it misses:
   faults with **cause 24** at the labelled probe. **QEMU only:** capstone-qemu reloads a revoked
   capability untagged (ISSUES Q-11), hence cause 24. On silicon an access through a revoked capability
   traps with cause 25 (the stale-access arm on `caplifive_sublet_d93a8d66b`, 2026-10-16). These 48 are
-  the emulator's readings. On silicon, 35 of the cases have since run under allocators that also revoke
-  (the 26 plain-temporal ones on level0 with per-object lifetimes, FFmpeg's 4 pool cases on the
-  protected pools, memcached's 5 slab and cache cases under patch 0006), and all 35 trap with cause 25:
-  31 at the labelled probe, and FFmpeg's 4 pool cases in `ff2_case_run`, the fault site each declares
-  (`bug-corpora` arms `silicon-lifetimes`, `silicon-pool-sublet` and `silicon-mc-sublet`, 2026-10-16). wmem's have not been read on silicon as of 2026-10-16.
+  the emulator's readings. The silicon readings, 49 of 49 once wmem 22 was added, are in section 0.
   wmem case 12 is caught by the chunk port
   (`sublet-chunks`); the region-granular `sublet` build completes it.
 - **Capstone + Sublet, spatial 57/70 — the same 57 as bounds only.** Revocation has nothing to fire
