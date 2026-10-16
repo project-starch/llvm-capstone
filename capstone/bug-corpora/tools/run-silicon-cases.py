@@ -684,7 +684,8 @@ def cmd_stage(a):
             if argv is not None:
                 lines.append(f"{pre}{name}-{which} {name}.dom {' '.join(argv)}")
     (st / "runs.txt").write_text("\n".join(lines) + "\n")
-    sums = "".join(f"{sha256(f)}  {f.name}\n" for f in sorted(p for p in st.iterdir() if p.suffix in (".dom", ".bin")))
+    # every staged input: images, fixtures and scripts (runs.txt is the record itself)
+    sums = "".join(f"{sha256(f)}  {f.name}\n" for f in sorted(p for p in st.iterdir() if p.name not in ("runs.txt", "SHA256SUMS")))
     (st / "SHA256SUMS").write_text(sums)
     print(f"staged {len(list(st.glob('*.dom')))} images, {len(lines)} runs, {sum(f.stat().st_size for f in st.glob('*.dom'))} bytes")
     return 0
