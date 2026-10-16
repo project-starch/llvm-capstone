@@ -6408,3 +6408,18 @@ Three boots on the classic line (firmware 5db66334e5404751, 662157e243dc2c77, c6
 - Both FAULT cells are null-pointer faults of the unprotected control arm, not detections.
 - The refusal record read EMPTY at both wedges. It was not readable in boot 3, which had no wedge.
 - Lookaside is off in these images (`sqlite3Config` szLookaside 0, nLookaside 0), and memsys5's heap is 256 KiB.
+
+## CPython's pymalloc corpus on silicon: patch 0003 refuses all twenty use-after-frees at the stale load, pymalloc as released none (caplifive_sublet_d93a8d66b, 2026-10-16)
+Two arms in one boot (18:11-18:54): firmware 5049ca43f7595b41, 50 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-pymalloc (lane 9aa15f58c846).
+- Results: RESULTS.md there.
+
+| arm | 20 cases | corpus control (a freed block read through the probe) |
+|---|---|---|
+| pymalloc as released (patches 0001 + 0002) | 20 complete, every stale access unseen | completes |
+| + patch 0003 (every block a CDERIVE child of its arena, CREVOKEd when taken back) | 20 CAUGHT 25 at `read_probe` | CAUGHT 25 at `read_probe` |
+
+- 42 of 42 rows are as pre-registered, by outcome, cause and site, on the pre-registered image.
+- The cases are the corpus's twenty CPython 3.13.7 defects. Each is the port's replay around CPython's own
+  `Objects/obmalloc.c`, in 128 MiB domains.
+- The emulator reads 24 for each refusal and silicon reads 25 (ISSUES Q-11).

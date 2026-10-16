@@ -1,0 +1,282 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3998 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac080f88 address=0xac0e3980 in ctl_read_probe+0x20 (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "cpython-pymalloc-00-case",
+   "case": "00_gh-143543_groupby_reentrant_eq",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "8d5fd12f46327fdd9539a608a766ecae0f2397dfe662750af3bf04c28225719f",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-01-case",
+   "case": "01_gh-146613_grouper_parent_key",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "bc5ce1437f8315de333cb85f4b04719b19a9fa162fe0b49f06dbc3571f549c33",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-02-case",
+   "case": "02_gh-142829_hamt_eq_interior_cursor",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "947ace5acdd62232cff32220c36736fc293c865a4f79dae86d75043b0901be79",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-03-case",
+   "case": "03_gh-142831_json_encoder_list_item",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "be0103159a75cce9b8b4c40a0b1514dcd46bd24090f88a81e4010ecdc7c180c9",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-04-case",
+   "case": "04_gh-145244_json_encoder_dict_key",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "e29d12da2b1a2f8db873045090eacd5cdd018b34c4315d0c3e2cddf37b4c193d",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-05-case",
+   "case": "05_gh-148660_odict_copy_stale_link",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "ab1be50860133906c272c0ac75e83011c9b94afadd6431c886143ab70f67df18",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-06-case",
+   "case": "06_gh-151295_bytes_join_reentrant_buffer",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "c1c66fa455166190608bc16e7d6988a53d597629d3f1c63e9e2892d787b6c89c",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-07-case",
+   "case": "07_gh-148395_decompressor_next_in",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "4b1981cc92d68c14e46b85b38a64c63eca2425be8a274aebc4bd5742b9ac01b3",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-08-case",
+   "case": "08_gh-112127_atexit_unregister_borrowed_tuple",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "eb729775dcd56a4efc7581055139da36925a8c96309570a37bc4be4ab7c7b7be",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-09-case",
+   "case": "09_gh-139210_iterparse_event_name",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "293c670e1cc73cfdb106f69cc4b9fa8e450bbd0c59779773c0ecd8193841d57a",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-10-case",
+   "case": "10_gh-142560_bytearray_search_realloc",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "6657f8ffeb9946e1916e0c71c34e27bce00d227f99d96fa2cdb43a3b21b94a8d",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-11-case",
+   "case": "11_gh-142783_zoneinfo_eager_decref",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "590fed4c9f9a0efa55996fe859ffaf112e45301a3fed214774f9aa0ba91628e7",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-12-case",
+   "case": "12_gh-143004_counter_update_borrowed_value",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "85ea06d5b0a357616fd28d77a48f806149a199939de4b0b24df94606383c158c",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-13-case",
+   "case": "13_gh-144833_ssl_decref_self_then_read",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "a52905d287edddb8a220e4880eb87e2742ee4176c43040d320b22388f7dcba83",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-14-case",
+   "case": "14_gh-146011_decimal_signaldict_outlives_context",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "ac02342cf9982d97c5d698e9c9165a654466eea41ab956fcdc7f959f224ed1f6",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-15-case",
+   "case": "15_gh-149449_unicodedata_capi_cached",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "d849f06de56c945db8ffc6bcebf247e7206e9cd7b993d39b689370d28650539e",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-16-case",
+   "case": "16_gh-151403_fork_exec_fspath",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "e226a8118227f94806474888ef9ad88d6e9d3b629f6bd91e720935596b238d99",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-17-case",
+   "case": "17_gh-151416_spawnv_fspath",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "c6a3c2fab8cdbafb16b48ae3eb09703baf165872ecdb4405db200390088fbb64",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-18-case",
+   "case": "18_gh-151695_curses_screen_encoding_global",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "4037697da863309c80db97a7e7aa9217ad03264e20041eaa6f22ac05e5e82c98",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-19-case",
+   "case": "19_gh-153539_textio_tell_reentrant_decoder",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+   "kind": "pym",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "24a1747a3b502bd05934f959bcb822fa64e25436aaca98a9f48ffe13270ef2a9",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "cpython-pymalloc-controls-00-control",
+   "case": "00_control_uaf_block",
+   "corpus": "capstone/bug-corpora/cpython/pymalloc-repros/controls",
+   "kind": "pym-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `PYM completed=1`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "449a6b6172391bb41e66963815ed0e0876d8d6868be9dfc362c06fea86aa4325",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  }
+ ]
+}
