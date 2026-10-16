@@ -1230,7 +1230,7 @@ stays open for the permission check and the cause number. Follow-up 674cdab03c r
 unsigned-overflow acceptance at the upper edge of the sealed-return window and from the general
 bounds check.
 
-## Q-15 — CDERIVE and CREVOKE across the QEMU profiles and the RTL: representability and decode differ `OPEN — for the format cycle; recorded 2026-10-13 from the RTL lane's capstone-sublet work`
+## Q-15 — CDERIVE and CREVOKE across the QEMU profiles and the RTL: representability and decode differ `REPRESENTABILITY RULED 2026-10-16 by the model's semantics owner: under the virtual-context flag an inexact CDERIVE child is refused with 29, and the physical profile keeps rounding outward; recorded 2026-10-13 from the RTL lane's capstone-sublet work`
 
 **Representability.** A CDERIVE child whose bounds the compact format cannot hold is treated three ways.
 capstone-qemu's compact profile refuses it with cause 29: `helper_csderive` compresses the child and
@@ -1242,6 +1242,21 @@ runtime's ABI v5 requires the exact-bounds profile (`capstone/runtime/virtual/RE
 allocators migrated to CDERIVE do not rely on the refusal. On the RTL their large, unaligned children
 would get bounds rounded outward instead of exact ones. This is the exact-bounds question of
 `docs/plans/virtual-capstone-rtl-feasibility.md`, now for CDERIVE as well.
+
+**Ruling, 2026-10-16, by the model's semantics owner** (the helper lane; `docs/plans/2026-10-16-virtual-profile-on-silicon.md`).
+Silicon's virtual profile has no exact bounds: option (iii) was decided the same day. Its rule is therefore the compact
+profile's: **under the virtual-context flag, a CDERIVE child that the compact format cannot hold exactly is refused
+with 29**, as `helper_csderive` does (`op_helper.c:1239-1247` at d35af47b163c: "Never silently widen a new object's
+authority in the compact profile").
+- Rounding outward is not acceptable there. The RTL checks containment against the parent's exact bounds BEFORE
+  compression widens the child (`capstone_dyn_unit.anvil:240-242`), and nothing re-checks the widened result. So an
+  unaligned child can come out wider than its parent.
+- The RTL conforms in its virtual bitstreams, by the same round-trip comparison QEMU makes.
+- The physical profile keeps its measured behaviour: rounding outward, which every recorded silicon reading rests on,
+  predicted by capstone-qemu `silicon/cderive-round` with `CAPSTONE_CDERIVE_ROUND=1`.
+- Consequence for software: every virtual port's Sublet patch derives only representable children. For children of
+  4 KiB and up this means a granule-aligned base and a granule-multiple length, as mallocng's repaired geometry does.
+  The compiler lane carries that work, re-costed in the plan.
 
 **Decode.** Until acbad0f7ec82, capstone-qemu decoded CDERIVE and CREVOKE only with `x-capstone-u-mode`
 (`trans_csderive`, `trans_cskill`, 5fb78e41a3). The physical profile raised illegal instruction 2, because the RTL
