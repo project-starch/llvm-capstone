@@ -26,7 +26,20 @@ The result lines are in `results/`. Each boot kept its `fw_payload.bin`.
 - So it is a wider band at the one size that straddles the cache, not a moved figure. Reported as a new reading,
   as pre-registered.
 
-## The finding: revocation is cheaper on this bitstream, at every node count
+## REVOKE read lower than on R-43 v2, at every node count (attribution RETRACTED)
+
+> **RETRACTED (2026-10-16 23:10): the attribution of this drop to the bitstream.**
+> - **The image predates the fix.** H1's image `da9c54e578845735` was built on 2026-09-29, before the sublet-runtime fix
+>   a07a11194fa0. It contains no SHRINK, the instruction that fix adds to `sublet_split`; fixed builds of the same
+>   runtime carry four.
+> - **So its carves are wrong here.** Its `sublet_split` gives the lower piece its parent's decoded start, and under
+>   this bitstream's full bounds scheme that rounds below the nominal base (ISSUES R-55, the runtime half).
+> - **A sibling image showed it.** `1b7a04fe237e1580`, same harness and vintage, faulted at M2's first chase on this
+>   bitstream (boot m2s16-b1): mcause 6 storing to address 1, the address the carves' aliasing predicts.
+> - **What is withdrawn:** "revocation is cheaper on this bitstream". The REVOKE figures below are readings of this
+>   image on this bitstream, and they stand as readings; the drop's attribution waits for a fixed-runtime image.
+> - **What stays, as readings of the same image:** latency, timer, node counts and linear types.
+
 
 REVOKE (`rv`) in the nodes regression, cycles:
 
