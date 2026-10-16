@@ -124,12 +124,33 @@ self-check reproduces R-54's 1,050 of 400,000.
 Mallocng's in-band header for slot i+1 is the last 4 bytes of slot i: `p[-4..-1]` with `p = storage + stride*(i+1)`.
 Over the repaired geometry (offset 0, slots 0 and 1, every request each large class serves):
 - no request leaves its slot;
-- but for 912 near-capacity request sizes the rounded end covers those 4 bytes. An object's capability would then
-  reach its neighbour's allocator header, which exact bounds never do. Requests within (granule - 4) of the class's
-  capacity are affected: 4 sizes per class at granule 8, up to 124 at sc 47.
-So the runtime keeps the first estimate's classification rule as well: classify on `repr_round(n)` against the
-class's usable size, `stride - IB`, so that the rounded end stays at or below the next slot's header. The cost is
-those 912 sizes moving up one class. What remains reachable through the rounding is the slot's own footer bytes,
+- but the rounded end can cover those 4 bytes, so an object's capability would reach its neighbour's allocator
+  header, which exact bounds never do.
+- **CORRECTED the same day by the compiler lane** (`lane/compiler-exact-bounds-iii` 2dd6f5f2cb92). The figure first
+  given here, 912 near-capacity sizes, was measured at offset 0 and one fixed base, which is too narrow a view.
+  - Offset cycling moves the object to the end of its slot. Over the lowest and highest surviving offsets, 94,088 of
+    252,736 (request, offset) combinations in the affected classes reach the next header without the fix, and 0 with
+    it.
+  - `size_to_class` runs before the object has an address, so the granule must be the worst case over every base.
+    R-54's renormalisation makes it base-dependent for 72 sizes, so the promotion count is 1,024 of 131,051 (0.78%),
+    not 912.
+  - Slots 0, 1 and 31 read 0 escapes and 0 header hits with the fix.
+So the runtime keeps the first estimate's classification rule as well: classify on `repr_round(n)`, with the
+worst-case granule, against the class's usable size `stride - IB`. The rounded end then stays at or below the next
+slot's header, at the cost of 1,024 sizes moving up one class.
+
+**The cost omits the nested allocators: CORRECTED 2026-10-16 by the semantics owner.** QEMU's compact profile, the
+reference once exact bounds are off, refuses an inexact CDERIVE child with 29 (`op_helper.c:1239-1247` at d35af47b163c:
+"Never silently widen a new object's authority in the compact profile"). ISSUES Q-15 records that the allocators
+migrated to CDERIVE do not handle this, because ABI v5 required exact bounds. Under (iii) every virtual port's Sublet
+patch that derives children of 4 KiB or more must place them representably, as mallocng now does. Candidates:
+- FFmpeg's pools (0003, frame buffers);
+- memcached (0006, slab chunks up to the item size);
+- Wireshark's wmem jumbo blocks (0001);
+- PostgreSQL's large chunks (0003);
+- SQLite's memsys5 blocks.
+pymalloc, mruby's GC slots and Perl's SV heads derive only small children. The compiler lane re-costs this work; the
+comparison with (ii) is reopened if it changes the answer. The Tier 3 nested arms depend on it. What remains reachable through the rounding is the slot's own footer bytes,
 stated above.
 
 The original estimate follows, kept for the record:
