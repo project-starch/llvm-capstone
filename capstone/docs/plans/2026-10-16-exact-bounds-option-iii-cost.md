@@ -530,3 +530,58 @@ bytes has granule 1, so it is exactly representable at *any* base and *any* offs
 sites that can produce a child of 4 KiB or more need auditing at all — which is why the per-object
 derives in all of these allocators are safe by construction and only the parent-lifetime derives
 matter.
+
+## RETRACTION of the 1,024 figure: it is 912, and the renormalisation cannot fire at all
+
+**Withdrawn: "the promotion count is 1,024, not 912".** It is 912 — the figure the peer lane gave
+originally. My correction was an over-correction, and the cross-check below caught it.
+
+**What I got right and what I got wrong.** Right: `size_to_class` runs before the object has an
+address, so it cannot evaluate a base-dependent granule. Wrong: I concluded it must therefore
+assume the worst case over *all* bases. The repaired geometry places every slot on a granule-aligned
+base, so the misaligned case the worst-case granule accounts for **cannot occur**.
+
+**And the renormalisation cannot fire on any range the predicate accepts.** The condition is
+`(tg - bg) >= 1024` with `tg = roundup(end, g)/g` and `bg = floor(start/g)`. If the base and the
+length are both granule multiples then `tg - bg` is exactly `len/g`, and since `len < 2^(msb(len)+1)`
+with `g = 2^(msb(len)-9)`, that is `len/g < 1024`. So it is never met. The renormalisation fires only
+for ranges that are *already* unrepresentable — which is precisely what we are eliminating.
+
+A pleasing consequence: with the repaired strides the three classes that used to renormalise
+(32752, 65520, 131056 → 32768, 65536, 131072) no longer do, so **no class in the repaired table
+renormalises at all**. The granules become the plain 32, 64 and 128 rather than 64, 128 and 256.
+
+**Re-measured with the predicate as shipped:** 7 of 48 size-class entries change (unchanged),
+**912 of 131,051 sizes (0.70%) promote one class**, and containment is re-verified over slots 0, 1
+and 31 at both the lowest and the highest surviving offset — 6,036 checks, **0 slot escapes and 0
+next-header hits**.
+
+### The predicate, and how it is held to the encoder
+
+`capstone/runtime/include/capstone/representable.h` is the one place this arithmetic now lives:
+`capstone_repr_granule`, `capstone_repr_round`, `capstone_repr_ok(base, len)` and
+`capstone_repr_base_down`. Every (iii) item needs it — the allocator geometry, the CSMINT audit and
+the ports' derive sites — so it is a header rather than four copies.
+
+It is checked against the encoder rather than against reasoning:
+`capstone/tests/exact-bounds-iii/repr-cross-check.py` compiles the **real header** into a host
+driver and compares its answers to the RTL oracle over 24,168 cases — every length below 5,000 at
+four bases, 4,000 random large ranges, and the renormalisation band explicitly. **0 disagreements**,
+and the header accepts 16,902 of the 24,168, so it is not trivially accepting. The same header is
+separately asserted to compile for `capstone64`, because "it builds for the target" and "it computes
+the right thing" are two claims and one run cannot cover both.
+
+**The check is two-sided.** A mutant predicate that ignores the base — the exact mistake the first
+cost estimate made — disagrees with the encoder 46 times and fails the check. Without that control
+the 0 above would be unproven.
+
+**An earlier version of the header was wrong in the safe direction and the check still caught it:**
+it doubled the granule inside a supposed renormalisation band and so *rejected* exactly
+representable ranges, `len = 16368` at an aligned base among them. A predicate that is too strict
+costs memory rather than safety, which is exactly the kind of error that survives a one-sided test.
+
+**Also checked and NOT a defect:** the kernel's own `capstone_repr_granule` (`capstone.c:274`) omits
+the renormalisation step. For the LENGTH that is benign — rounding up with the finer granule inside
+the affected band lands on the next power of two, which is a multiple of the coarser granule too,
+measured over the first 2,000 affected lengths with 0 decoding short. I checked before reporting it
+as a bug; it isn't one.
