@@ -146,6 +146,19 @@ How the three columns read:
   (FFmpeg's 4 pool cases in `ff2_case_run`, wmem 22 in `wmem_block_sublet_free`). The arms are `bug-corpora`'s
   `silicon-lifetimes`, `silicon-pool-sublet`, `silicon-mc-sublet` and `silicon-wm-sublet`. Every row is in
   `docs/plans/2026-10-15-bug-corpus-on-fpga.md` section 7.
+- **On silicon, the other cells: temporal column 2 reads 26 of 49, spatial 46 of 81 in column 2 and 69 of 81
+  in column 3**, against physical's 26, 46 and 71. They are counted from `case.json` by this table's own
+  spatial/temporal rule.
+  - Column 2 is the lifetimes heap with each nested allocator stock. The carved and plane corpora use
+    `silicon-level0`, whose per-object bounds are the same.
+  - Column 3 is each port's Sublet arm. Plain cases read as in column 2.
+  - The two spatial rows short of physical are memcached 05 and 08, which have no reading on silicon:
+    - 05: its sentinel byte clears patch 0006's `sublet_parent`, and it has no reading on the virtual arm either;
+    - 08: its 16,400-byte cache.c child rounds up 16 bytes at its 32-byte granule, so the case refuses its
+      premise. That is pre-registered: decision (a)'s accepted spatial difference.
+  - The plane case has no Sublet carve on silicon, and physical column 3 reads it NOT CAUGHT.
+  - The separate bounds remedies, also on silicon: field bounds catch 7 of 9 sub-object cases, plane bounds 1 of
+    1, and carve bounds 13 of 13.
 - **Spatial, Sublet in malloc 46 of 81** is the Sublet heap's per-object bound: all 45 plain
   cases that leave their allocation, and memcached 8 (its rbuf object is its own allocation); nothing inside a block.
 - **Spatial, Sublet in nested 71 of 81.** The chunk and slab ports bound each chunk (wmem 9/9, slab

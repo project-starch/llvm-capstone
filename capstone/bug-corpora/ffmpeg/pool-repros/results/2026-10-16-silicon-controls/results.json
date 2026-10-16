@@ -1,0 +1,142 @@
+{
+  "what": "the nested-lifetime controls on silicon, beside their virtual readings (tools/silicon-controls.py)",
+  "pre_registration": [
+    "capstone/docs/plans/2026-10-11-nested-lifetime-controls.md",
+    "the board lane's silicon-runs/2026-10-16-lifetime-controls/README.md and qemu-and-predictions.json, lane 75ce44a1ceeb (before the boot)"
+  ],
+  "source_bundle": "capstone/bug-corpora/silicon-runs/2026-10-16-lifetime-controls",
+  "platform": {
+    "bitstream": "caplifive_sublet_d93a8d66b (sha256 89ba6d81...)",
+    "firmware": "a43fcda381219db6, the exact-regions supervised-call line of sets 2-5; one boot, six arms",
+    "kernel": "Image b90a6b8de26be0df",
+    "builds": "each arm's corpus configuration (sets 2, 4, 5: silicon-ffmpeg-pool-*, silicon-memcached-*, silicon-wmem-* in tools/arms.json) with its control sources; the FFmpeg pool controls with -DCTL_PROTECTED=0/1"
+  },
+  "tool_controls": {
+    "silicon-pool-stock": {
+      "clean": "RETURNED",
+      "oob": "CAUGHT",
+      "uaf": "CAUGHT",
+      "subobj": "RETURNED"
+    },
+    "silicon-pool-sublet": {
+      "clean": "RETURNED",
+      "oob": "CAUGHT",
+      "uaf": "CAUGHT",
+      "subobj": "RETURNED"
+    }
+  },
+  "rows": [
+    {
+      "family": "nested-lifetime",
+      "control": "91",
+      "run": "run",
+      "arm": "silicon-pool-stock",
+      "side": "stock",
+      "image": "ffmpeg-pool-controls-nested-lifetime-91.dom",
+      "image_sha256": "1694c29015d0378dd407f841a0cfa749cd0d5e10ef3849ddc503dc59d56d4059",
+      "silicon": "completes",
+      "silicon_evidence": "`CTL-RESULT completed`, exit 0",
+      "virtual": "completes",
+      "virtual_record": "ffmpeg/pool-repros/results/2026-10-11-controls",
+      "same_as_virtual": true
+    },
+    {
+      "family": "nested-lifetime",
+      "control": "92",
+      "run": "run",
+      "arm": "silicon-pool-stock",
+      "side": "stock",
+      "image": "ffmpeg-pool-controls-nested-lifetime-92.dom",
+      "image_sha256": "b3777d053e2c4ed63eb32feffb21bdb81e0ba06f4dd91b8a16fd5bed2bcb33b4",
+      "silicon": "completes",
+      "silicon_evidence": "`CTL-RESULT completed`, exit 0",
+      "virtual": "completes",
+      "virtual_record": "ffmpeg/pool-repros/results/2026-10-11-controls",
+      "same_as_virtual": true
+    },
+    {
+      "family": "nested-lifetime",
+      "control": "93",
+      "run": "run",
+      "arm": "silicon-pool-stock",
+      "side": "stock",
+      "image": "ffmpeg-pool-controls-nested-lifetime-93.dom",
+      "image_sha256": "012e60d85946479b4014f3489386d3dc79531a6de97530ca6dd1e07d23af0f4e",
+      "silicon": "completes",
+      "silicon_evidence": "`CTL-RESULT completed`, exit 0",
+      "virtual": "completes",
+      "virtual_record": "ffmpeg/pool-repros/results/2026-10-11-controls",
+      "same_as_virtual": true
+    },
+    {
+      "family": "nested-lifetime",
+      "control": "93",
+      "run": "stale",
+      "arm": "silicon-pool-stock",
+      "side": "stock",
+      "image": "ffmpeg-pool-controls-nested-lifetime-93.dom",
+      "image_sha256": "012e60d85946479b4014f3489386d3dc79531a6de97530ca6dd1e07d23af0f4e",
+      "silicon": "completes",
+      "silicon_evidence": "`CTL-RESULT completed`, exit 0",
+      "virtual": "completes",
+      "virtual_record": "ffmpeg/pool-repros/results/2026-10-11-controls",
+      "same_as_virtual": true
+    },
+    {
+      "family": "nested-lifetime",
+      "control": "91",
+      "run": "run",
+      "arm": "silicon-pool-sublet",
+      "side": "protected",
+      "image": "ffmpeg-pool-controls-nested-lifetime-91.dom",
+      "image_sha256": "2f3802f821196d4f4925594911d68a855c76825eda9fd246453507ff524a3f4a",
+      "silicon": "completes",
+      "silicon_evidence": "`CTL-RESULT completed`, exit 0",
+      "virtual": "completes",
+      "virtual_record": "ffmpeg/pool-repros/results/2026-10-11-controls",
+      "same_as_virtual": true
+    },
+    {
+      "family": "nested-lifetime",
+      "control": "92",
+      "run": "run",
+      "arm": "silicon-pool-sublet",
+      "side": "protected",
+      "image": "ffmpeg-pool-controls-nested-lifetime-92.dom",
+      "image_sha256": "308f8100bdf572609d8d152617bf7c148cb6ca009bf49adbf2f961a35b7b7012",
+      "silicon": "completes",
+      "silicon_evidence": "`CTL-RESULT completed`, exit 0",
+      "virtual": "completes",
+      "virtual_record": "ffmpeg/pool-repros/results/2026-10-11-controls",
+      "same_as_virtual": true
+    },
+    {
+      "family": "nested-lifetime",
+      "control": "93",
+      "run": "run",
+      "arm": "silicon-pool-sublet",
+      "side": "protected",
+      "image": "ffmpeg-pool-controls-nested-lifetime-93.dom",
+      "image_sha256": "e6afd2c03b0c7d898dd60e2ab5c2218ca29e63bb7ecbb82b35be4387240d11f2",
+      "silicon": "completes",
+      "silicon_evidence": "`CTL-RESULT completed`, exit 0",
+      "virtual": "completes",
+      "virtual_record": "ffmpeg/pool-repros/results/2026-10-11-controls",
+      "same_as_virtual": true
+    },
+    {
+      "family": "nested-lifetime",
+      "control": "93",
+      "run": "stale",
+      "arm": "silicon-pool-sublet",
+      "side": "protected",
+      "image": "ffmpeg-pool-controls-nested-lifetime-93.dom",
+      "image_sha256": "e6afd2c03b0c7d898dd60e2ab5c2218ca29e63bb7ecbb82b35be4387240d11f2",
+      "silicon": "CAUGHT 25 at stale_read_probe",
+      "silicon_evidence": "cause=25 pc=0xac101a40 in stale_read_probe+0x24",
+      "virtual": "CAUGHT 25 at stale_read_probe",
+      "virtual_record": "ffmpeg/pool-repros/results/2026-10-11-controls",
+      "same_as_virtual": true
+    }
+  ]
+}

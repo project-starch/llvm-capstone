@@ -181,11 +181,12 @@ for it. (What ran on the board, and what it read, is section 7.)
 - **(c) Order.** The plain corpora first, then the nested ones (proposed). Or both together, now that CDERIVE/CREVOKE
   are on silicon.
 
-## 7. Read on silicon (sets 1-5, 2026-10-16)
+## 7. Read on silicon (sets 1-6, 2026-10-16)
 
-The board lane ran five sets on `caplifive_sublet_d93a8d66b`, each pre-registered before its boot:
+The board lane ran six sets on `caplifive_sublet_d93a8d66b`, each pre-registered before its boot:
 `bug-corpora/silicon-runs/2026-10-16-plain` (`ffd2a5173d1c`), `-subobject-pool` (`2c53d5641b72`), `-carved`
-(`39d21c614605`), `-nested` (`06f0b29f0463`) and `-wmem` (`93914e732c46`). `tools/silicon-verdicts.py` re-reads each run from the board transcript, checks every image's
+(`39d21c614605`), `-nested` (`06f0b29f0463`), `-wmem` (`93914e732c46`) and `-lifetime-controls`
+(`46fcc2b27e5a`). `tools/silicon-verdicts.py` re-reads each run from the board transcript, checks every image's
 hash against the board matrix, and judges it as the QEMU arms are judged. The verdicts are in each corpus's
 `case.json`, from the bundles under `results/2026-10-16-silicon/`. Every row read as pre-registered (set 4: every outcome and site; one cause differs, below).
 
@@ -221,7 +222,14 @@ hash against the board matrix, and judges it as the QEMU arms are judged. The ve
 - **Every corpus has now been read on silicon.** All 49 temporal defects are CAUGHT with cause 25 under an
   allocator that revokes: the 26 plain on the lifetimes heap and the 23 nested under their ports' patches. 44 are at
   the labelled probe, and 5 in a fault site their case declares (FFmpeg's 4 pool cases, wmem 22).
-  memcached 05 and 08 are the only rows without a reading. The nested-lifetime controls are the board lane's set 6.
+  memcached 05 and 08 are the only rows without a reading.
+- **The nested-lifetime controls (set 6)** are controls, not defects, so they are recorded beside their virtual
+  readings rather than in `case.json`: `results/2026-10-16-silicon-controls/` in the pool, memcached and wmem
+  corpora, made by `tools/silicon-controls.py`.
+  - All 39 runs read as on the virtual profile. Every permitted access (parent, sibling, successor) completes on
+    both arms.
+  - The successor's stale read is CAUGHT with cause 25 at its labelled probe with the lifetime patch, and completes
+    without it.
 
 ## 8. What silicon taught the predictions (board lane, sets 1-5, 2026-10-16)
 

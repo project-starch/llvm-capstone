@@ -94,3 +94,8 @@ and each with its own lock: 17 s wall per VM, 10.4-10.9 s inside the boot, 18 s 
   launcher's hash was checked against the image.
 - **The stale probe reads 64 bytes.** On protected it faults at the first load, at A's base address.
   On release all 64 bytes equal C's 0x77.
+
+## On silicon
+
+The same controls ran on silicon on 2026-10-16 (board set 6, `caplifive_sublet_d93a8d66b`). Their readings sit beside
+this record's in `../2026-10-16-silicon-controls/`: every silicon run reads as the same control does here.

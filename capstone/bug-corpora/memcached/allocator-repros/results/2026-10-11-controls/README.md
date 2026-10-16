@@ -184,3 +184,8 @@ The bounds the programs printed show what each arm gives A:
 * **What these controls do not exercise.** They use one class and one thread. They do not exercise
   the page mover (`slabs_finalize_page_move`, which is not built in this port) or cache.c's half of
   patch 0006.
+
+## On silicon
+
+The same controls ran on silicon on 2026-10-16 (board set 6, `caplifive_sublet_d93a8d66b`). Their readings sit beside
+this record's in `../2026-10-16-silicon-controls/`: every silicon run reads as the same control does here.
