@@ -1,0 +1,472 @@
+{
+ "arm": "silicon-wm-stock",
+ "build": {
+  "defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+  "app_cflags": "",
+  "carve": {},
+  "corpus_defs": {},
+  "driver": "driver.c",
+  "extra_cflags": "-DNDEBUG -std=gnu11 -I/tmp/capstone/wt-b0/capstone/ports/wireshark/wmem/src/shared/shim -I/tmp/capstone/wt-b0/capstone/ports/wireshark/wmem/src/shared -I/tmp/capstone/corpus-sil/wm/src-reference/wsutil/wmem -I/tmp/capstone/wt-b0/capstone/runtime/include",
+  "extra_src": [
+   "wmem_core.c",
+   "wmem_user_cb.c",
+   "wmem_allocator_simple.c",
+   "wmem_allocator_block.c",
+   "wmem_allocator_block_fast.c",
+   "wmem_allocator_strict.c",
+   "system.c",
+   "compat.c",
+   "scopes.c"
+  ]
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "CAUGHT",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "wireshark-wmem-00",
+   "case": "00_3c8be14c82_rpcrdma_write_offsets_global",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "3860137849ca386aa830b2f019b912346a7363d32ffb44050379d63c3f0b4390",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-01",
+   "case": "01_c14d731e45_cms_oid_global",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "adc8ce94d3a97e6609a0f363c86b3130aa488d9468dcb51aa827a669e5ce12a5",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-02",
+   "case": "02_99da8c2cdc_mdb_address_column",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "738bc19f79a9cdd0febd2667035041b2e7ed94a3132e6de3556956f09008dd48",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-03",
+   "case": "03_6eab9f83ab_cola_info_column",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "ca3d2171bd29b445d0a511f42028474ef5064836a6034d27d80d31272b8df685",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-04",
+   "case": "04_b48759e4a4_qnet6_col_set_str",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "64efcf8b38700ef06760b68c1c14dcfff3e55c41f98a47fc2a3d377d946d5920",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-05",
+   "case": "05_5a109265a6_usbll_address_struct",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "66a7fb5d89d32bb83a46a668a9ec9adc2b285fa020961fdf141f861a47d00ce1",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-06",
+   "case": "06_a8b16d74e1_x509if_last_dn_static",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "f0e77b0a3e0e7132301f68366da75b42b0afc75f3350cc11a2332ba990429812",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-07",
+   "case": "07_fb504bc76c_mysql_auth_method",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "aa19163f4e689649a5b64d7f22c5afbd54ab1ed3d23e6d58d6ad5b45c1eef8a6",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-08",
+   "case": "08_31ab1a0a17_sip_cseq_method",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "8d93ab70446a2b6dc590b07040ff2f12b2e30b7d0bad845632ab9f592b157a93",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-09",
+   "case": "09_693dc40936_geonw_proto_data_tvb",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "b516a44c07cb3406dbbbd4c6e7fdb44e63c245f24ae5625254ddbc3c07208182",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-10",
+   "case": "10_6fd3af5e99_t38_reassembly_buffer",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "692317f04ca20c287dcf01b34bc9b60403c88d16eb682580c8d4492e04ac5b29",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-11",
+   "case": "11_3a5f82dfb5_http_header_map",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "80833ad125aea88287b25afd81b3e27d3b68ec441b829c0e95fbff94ad2d1d30",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-12",
+   "case": "12_90bb3a5c9e_xml_root_name_recycled",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "8abdf1fb289ad9e362bcff56ce0f65767a3bfd2a3898e1ede721f41f192d4548",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-13",
+   "case": "13_0261fd7da6_http_range_cursor_past_chunk",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "2dd7cb2fa2a37d8fc4d05b842ec15d4c317571c39b6ec6c5d32561009a5f5583",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-14",
+   "case": "14_1d8acb21ab_solaredge_payload_six_past",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "6b14326a1ea2cdde702a3db3e92a5ac260bea8c2ea61fbfeb60a25e5ff3765b5",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-15",
+   "case": "15_d24613c461_opcua_padding_below_chunk",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "11ddadb59f140031c530db6a8a60c41b213e70bd2f75a84eaee7f6fa5150d708",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-16",
+   "case": "16_e8ef9df09d_dcp_etsi_rs_parity_write",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "2d21de3700e0529dfd4ab8f67021447ddd77a03af9974e98cd111a64a61ac5ee",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-17",
+   "case": "17_5a560f3f6a_dns_one_byte_write",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "3210173e025cd5e2f2b4a6202d8f7c64fdfc62aac995aa300c2e4f8fdd1ecaa4",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-18",
+   "case": "18_716a200295_rtps_batch_sample_info_unguarded",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "db17f4d53143dfef4b0a1574f4db70e5cef6a3a451bc06ad5965345ae51feaef",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-19",
+   "case": "19_4a4871a831_ntlmssp_blob_length_before_check",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "0d187abd53bae1d7ca74f70656709341ab648a36cdbbcfac5bd2e9f88fbcb690",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-20",
+   "case": "20_ed20250c13_proto_undecoded_bitmap_unbounded",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "b6b52db5fe41f17a28a2783c99e06bad6760407a4689e67dfe3beb9edabc32ed",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-21",
+   "case": "21_69dac89280_tcp_flags_str_sixteen_bytes",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "97b30ad2b2075517e508d6ededa061f4c4484135f56b0a5dd668d7380fd84cc5",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-22",
+   "case": "22_c702b44a01_usbhid_output_usages_freed_twice",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "image_sha256": "d27599163338b48887ab5d4a3f35a934b5e68388644f5d360b2a80c7110f82a5",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-controls-00",
+   "case": "00_control_uaf_chunk",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls",
+   "kind": "wmem-control",
+   "image_sha256": "3180cff6f7e35e455695c7386ff1d58c7342fb00e50185ee8b457b9ff3de26f7",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "wireshark-wmem-controls-01",
+   "case": "01_control_uaf_jumbo",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls",
+   "kind": "wmem-control",
+   "image_sha256": "3653b6cb20affb9e11151782a36e67a3943699cdb086bd38bbabab746b329a4d",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "wm_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "wm_probe"
+   }
+  },
+  {
+   "name": "wireshark-wmem-controls-02",
+   "case": "02_control_bounds_chunk",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls",
+   "kind": "wmem-control",
+   "image_sha256": "a47a5160fca1205a3ed3522a35cf450ddab50698e1bd6e3bfcc31cd34683ac3b",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  }
+ ]
+}

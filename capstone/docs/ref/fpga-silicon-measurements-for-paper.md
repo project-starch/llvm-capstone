@@ -6283,3 +6283,25 @@ itself.
 - 05 has no reading on any Sublet build, virtual included.
 - 08's buffer is a 16,400-byte child that rounds up 16 bytes at its granule: a predicted spatial difference on
   silicon, where the scan stops in the slack.
+
+## wireshark's wmem corpus on silicon: patch 0001 catches all 23 (14 temporal, 9 spatial), stock wmem none (caplifive_sublet_d93a8d66b, 2026-10-16)
+Two arms in one boot (07:43-08:26): firmware 6cbb3a4494fcdc73, the line of sets 2-4, 106 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-wmem (lane 8bb5542ed567).
+- Results: RESULTS.md there.
+
+| arm | 14 temporal | 9 spatial | controls (uaf-chunk / uaf-jumbo / bounds-chunk) |
+|---|---|---|---|
+| wmem as released, lifetimes heap | 14 MISSED | 9 MISSED | completes / CAUGHT 25 / completes |
+| wmem with patch 0001 (every object a CDERIVE child of its block, CREVOKE at free and at the pool reset) | **14 CAUGHT 25** | **9 CAUGHT 28** | CAUGHT 25 / CAUGHT 25 / CAUGHT 28 |
+
+- **Every row and control is as pre-registered,** by outcome, cause and site, on the pre-registered image: 26 of 26
+  per arm.
+- **The catches are at each case's labelled probe,** except the double free (22), which faults in its declared
+  `wmem_block_sublet_free`.
+
+**Scope, before quoting:**
+- These cases are wmem's packet-pool defects: a reset ends every packet-scope object while the pool's first 2 MiB
+  block stays allocated. So a malloc-level defence cannot see them, and the stock arm's 23 MISSED says so on silicon.
+- The jumbo control faults on both arms because the jumbo is returned to `g_free`. That needs level0 to place a 2 MiB
+  block on its granule (dev `06f0b29f0463`).
+- Built with the port's Release flags (`-O3 -DNDEBUG`).

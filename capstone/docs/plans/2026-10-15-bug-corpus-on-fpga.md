@@ -214,3 +214,37 @@ hash against the board matrix, and judges it as the QEMU arms are judged. The ve
   granule, so the all-spaces scan stops in the slack and the case refuses its premise (CONTROL-FAILED 785). That is
   decision (a)'s pre-registered spatial difference. The plane case links 14 units of FFmpeg's libavutil.
 - **Not read on silicon as of 2026-10-16:** wmem-repros (23), the board lane's set 5.
+
+## 8. What silicon taught the predictions (board lane, sets 1-5, 2026-10-16)
+
+Each item cost a QEMU pass or a prediction, and each will recur in any nested-allocator corpus on this RTL.
+
+- **Predict on a QEMU that rounds CDERIVE as the RTL does.**
+  - capstone-qemu d35af47b163c refuses an inexact CDERIVE child with 29 (Q-15), and lacks R-54's renormalisation,
+    which the flashed RTL carries.
+  - `silicon/cderive-round` ce1be0c642 adds both, the rounding behind `CAPSTONE_CDERIVE_ROUND=1`.
+  - Its codec matches bounds-model.py's `cderive_child` on 200,018 random triples, where d35af47's misses 43,591.
+  - The RTL compresses every capability result at writeback (`ex_stage.sv:1515` / `:1528` at d93a8d66b), so the
+    rounding is immediate, as the switch models.
+- **An inexact CDERIVE child keeps its CURSOR at the requested start while its BASE rounds down.**
+  - Arithmetic that offsets from the parent's base is then off by the rounding. This includes `capstone_cap_derive`
+    itself and memcached patch 0006's `slabs_take_back` (`gen + (ptr - base(gen))`).
+  - Carved case 00 shows it harmlessly (`base_eq=0`, regions 48 bytes low, on the board as on QEMU). memcached's patch
+    faulted in `do_slabs_free` until level0 changed.
+- **level0 under `CAPSTONE_LEVEL0_LIFETIMES` now places a request of 4 KiB or more on its granule** and derives it at
+  its padded size (set 4's landing, `06f0b29f0463`). Base == cursor, and only a top rounds. This is also what gives a
+  freed 2 MiB block a lifetime, which wmem's jumbo control needs. Below 4 KiB nothing changed (the plain corpora read
+  72 of 72 on it).
+- **A child that is inexact by its own size keeps slack whatever the placement.** memcached 08's cache.c child over
+  slot + object is 16,400 bytes, which rounds up 16 at 32-byte granules. The case's all-spaces scan stops in the slack
+  before the bound, and the case refuses its premise (exit 75). This is decision (a)'s accepted spatial difference:
+  pre-register it.
+- **Map QEMU's cause 24 to the RTL's 25 only where Q-11's mechanism holds,** a revoked capability that QEMU untags and
+  the RTL keeps. memcached 05's fixed run read 24 on silicon too. The case's sentinel byte overwrites the next item's
+  `sublet_parent`, patch 0006's first field, so CREVOKE gets a value that was never a capability on any platform.
+- **`-fno-inline` keeps probes attributable under full LTO, and moves a declared site.** The runtime's `static inline`
+  CREVOKE helper becomes a function of its own, so wmem 22's fault was attributed to it instead of the declared
+  `wmem_block_sublet_free`. Use it only where a corpus's probes need it (FFmpeg's pool, memcached). wmem's probes are
+  `noinline` asm labels, so it builds with the port's Release flags.
+- **A sub-object driver that takes 64 MiB up front needs an 88 MiB domain.** Sets 2 and 4 launched them without a CMA
+  failure.
