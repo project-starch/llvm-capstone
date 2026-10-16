@@ -35,6 +35,10 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=25 pc=0x3fbc4020f8 in memcpy; by function: memcpy is where host ASan reported it",
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
+    },
+    "silicon-sqlite-stock": {
+      "status": "not written",
+      "note": "not in the silicon control arm's batch: tests/rtl-smoke/repro322-silicon-2026-10-16 runs the eight cases of the 2026-10-01 batch, whose README gives why the others were left out"
     }
   },
   "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1022154c0; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=289, witnesses=1)",

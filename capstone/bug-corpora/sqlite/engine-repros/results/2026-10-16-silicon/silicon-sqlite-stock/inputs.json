@@ -1,0 +1,70 @@
+{
+  "arm": "silicon-sqlite-stock",
+  "bitstream": "caplifive_sublet_d93a8d66b (sha256 89ba6d81...)",
+  "boots": [
+    {
+      "cells": [
+        "backupattach",
+        "base322",
+        "blobclose",
+        "blobwrite",
+        "jsonroot",
+        "jsonstatic",
+        "mem5design",
+        "wschema"
+      ],
+      "dir": "board-r322-b1s16",
+      "firmware_sha256": "5db66334e5404751c948acfaaf2618173a6e386338c86e0c709e0c3e50018770",
+      "wedged": [
+        "backupattach"
+      ]
+    },
+    {
+      "cells": [
+        "base322",
+        "detachtrig"
+      ],
+      "dir": "board-r322-b2s16",
+      "firmware_sha256": "662157e243dc2c7702e10896884f186498b2568197338ce6bcd5090b25fbcb38",
+      "wedged": [
+        "detachtrig"
+      ]
+    },
+    {
+      "cells": [
+        "backupattachrev",
+        "base322",
+        "blobclose03",
+        "ctlboundsmem5",
+        "ctluafmem5"
+      ],
+      "dir": "board-r322-b3s16",
+      "firmware_sha256": "c6cde9ac856624d5d4a7da2efccd2dae0e6d178c3a18a16192ec719610c01838",
+      "wedged": []
+    }
+  ],
+  "cases": 8,
+  "cells_left_out": {
+    "backupattachrev": "the external review's case 02 (branch sqlite-review), not on dev",
+    "base322": "the 3.22.0 base domain",
+    "blobclose": "the legacy standalone domain, not case 03's case.c"
+  },
+  "configuration": "silicon-sqlite-memsys5",
+  "contract": "verdicts-v1",
+  "corpus": "capstone/bug-corpora/sqlite/engine-repros",
+  "note_02_05": "02 and 05 read CAUGHT under the corpus's current fault_sites, as on virtual-malloc. Both trapping loads use a null base: the emulator's tval for the same instruction is 0x80 and 0x0, the field offsets; the RTL reports tval 0 for both. Neither is a detection. The external review on origin/sqlite-review, unlanded, replaces 02's trigger (b13a97161628) and narrows 05's fault_sites to findElementWithHash (8dc3099548cb). Its 02 ran here as cell backupattachrev and returned (step-to-done rc=101, NOTRAP done); it is not folded",
+  "note_24": "24 completes here (insert rc=11, database disk image is malformed) where virtual-malloc faults, cause 24 in sqlite3OpenTable. The silicon-mimic emulator reads these images as silicon does, so the difference is not the silicon. The two arms differ in build and in platform: lookaside is off here (0,0) and on there; the image comes from build-sqlite-silicon.sh here and from build-virtual.py there; and it runs as a classic domain here and as a virtual-profile process there. Which difference is responsible is not established",
+  "platform": {
+    "compiler": "clang 22.0.0git (llvm-capstone 612b3ec514c0); each image build-sqlite-silicon.sh (one TU, gp-captable, interp glue, -O0) from the corpus case.c, through tests/rtl-smoke/repro322-silicon-2026-10-16/build-corpus-images.sh; the adapted input 7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2. Every image rebuilt byte-identically from a fresh adapted input before this bundle was written",
+    "firmware": "classic line: buildroot d04bd83, opensbi df0e9a8, capstone-sbi 93440d5, one fw_payload per boot (boots[].firmware_sha256), host sqlite_host.user 2c9e82d101b48160",
+    "kernel": "the classic line's, with the #3 module (buildroot d04bd83)",
+    "qemu": "none: silicon. The same images, by sha256, first ran on the silicon-mimic capstone-qemu silicon/cderive-round ce1be0c642 (CAPSTONE_GP_FABRICATE=0) with the board's host, and read as here (the folder's README)",
+    "runner": "fpga_driver/run_sqlite_stages_fpga.py through drivers/board-r322.sh (board lane); the result lines are the folder's results/*.result-lines.txt, and this bundle re-reads each boot's console capture"
+  },
+  "pre_registration": "the folder's README and cells.tsv: boots 1-2 at lane 423d3a56d0bb, boot 3 at lane 40256f289171, each before its boot",
+  "source_folder": "capstone/tests/rtl-smoke/repro322-silicon-2026-10-16",
+  "tally": {
+    "CAUGHT": 2,
+    "MISSED": 6
+  }
+}
