@@ -27,14 +27,37 @@ One adapter serves both profiles, keyed on **which trap it gets** rather than on
 **Corrected from an earlier 2 KiB figure.** It is a page, because the caller's snapshot at
 +1024..+1967 leaves no room below 2 KiB for the caller's FP state.
 
-| offset | contents |
-|---|---|
-| +64..+575 | the paused context's registers |
-| +224 | the reply slot — **the only slot software writes while a context is paused** |
-| +656..+919 | the paused context's FP state |
-| +928.. | its CSRs |
-| +1024..+1967 | the caller's snapshot |
-| +2048..+2311 | the caller's FP state, 32 x 8 bytes plus `fcsr` |
+Field-level, from the RTL lane's D3. `frame[]` indices are given because that is how the module
+addresses it:
+
+| offset | `frame[]` | contents |
+|---|---|---|
+| +64..+575 | 8..71 | the paused context's integer registers |
+| +224 | 28 | the reply slot — **the only slot software writes while a context is paused** |
+| +640, +648 | 80, 81 | *(the module's own collect chain — see the collision check below)* |
+| +656..+911 | 82..113 | the context's `fpr0..31` |
+| +912 | 114 | the context's `fcsr` — `{fprec, frm, fflags}` |
+| +928.. | 116.. | its CSRs |
+| +1024..+1967 | 128..245 | the caller's integer snapshot |
+| +2048..+2303 | 256..287 | the caller's `fpr0..31` |
+| +2304 | 288 | the caller's `fcsr` |
+
+Total 4096 bytes, **16-byte aligned**.
+
+**Behaviour, not just layout:** a fresh context starts with `fpr` and `fcsr` zero, i.e. RNE; a
+resume restores its FP state from its own words; and the caller's FP state returns with its
+snapshot at **every** escape, not only on a normal return.
+
+**This refines the earlier coarse ranges rather than correcting them.** An earlier revision of this
+doc recorded the context FP block as +656..+919 and the caller's as +2048..+2311; both are the
+`fpr` block plus its 8-byte `fcsr` (656+256 = 912, +8 = 920; 2048+256 = 2304, +8 = 2312), so the
+numbers agreed — they were simply not at field level. Checked arithmetically rather than assumed.
+
+**Collision check, re-run against the field-level layout.** The module writes `frame[80]` and
+`frame[81]` for the collect chain (`capstone_vm.c:351-352`), which is +640 and +648. The integer
+register block ends at +575 (`frame[71]`) and the context's `fpr` begins at +656 (`frame[82]`), so
+the chain sits in the gap `frame[72..81]` and touches neither. The software collector of item 1 can
+therefore use those words as it already does.
 
 **Checked against the tree, and it holds.** `capstone_vm.c:918` already validates a frame as
 `find_arena(c, r.frame, PAGE_SIZE)`, i.e. a page, and **no 2048-byte assertion exists anywhere** in
