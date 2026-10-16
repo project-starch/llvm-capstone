@@ -798,3 +798,87 @@ refused: a non-power-of-two length at a page-aligned base, a length that is not 
 a base one byte off (`exact-bounds.sh`'s `edge=1` descriptor), and a 16-byte-aligned static arena
 (memsys5's case). Negative-tested: against a predicate that ignores the base, the test fails with
 exactly those three base-dependent cases.
+
+## Port audit completed: three corrections to my own cost, and the port estimate rises
+
+The per-port maxima came back from a delegated search. Its numbers are recorded below as **its**
+findings with its quoted evidence; the two that contradict what I had already reported I verified
+myself first, and one of them is a retraction.
+
+### RETRACTED: CPython's pymalloc arena is NOT free
+
+I wrote that the 1 MiB arena derive needs no change because "the arena comes from
+`_PyObject_Arena.alloc`, which is mmap-backed and therefore page-aligned". **That is wrong, and
+the port's own build refutes it.** `capstone/ports/cpython/app/prepare-cpython-capstone.sh:192`
+sets `ac_cv_func_mmap=no`, and `:188-189` says why — "With HAVE_MMAP obmalloc maps its arenas
+directly (`_PyMem_ArenaAlloc`, 3 calls at startup measured natively), and every one would fail;
+without it obmalloc takes them from malloc" — with a hard abort at `:281-282` if configure finds
+mmap anyway.
+
+So `_PyMem_ArenaAlloc` returns `malloc(size)`, and a 1 MiB arena's base comes from **mallocng's
+large-allocation path**. Its alignment is therefore not free: it is exactly what the big-path
+granule trim above has to provide. CPython's arena moves from "no change needed" to "covered by
+item 1's big-path fix, and only by it".
+
+### The audit is wider than the CDERIVE sites: 7 files use SPLIT/SHRINK instead
+
+My table counted 20 `capstone_cap_derive` sites across five ports. Seven further files set bounds
+with `sublet_split` / `sublet_carve` + `SHRINK` and never call CDERIVE at all —
+`sublet-3530300.patch`, both nginx patches, `ngx_subpool.c`, both APR lease files, whisper's
+`regions.c`, and FFmpeg's `payload-capabilities.c`. The same representability rule applies, and
+`capstone/runtime/include/sublet/sublet.h` says so in its own `sublet_split` comment: bounds
+"become exact whenever the piece is representable: always below 4 KiB, and a 2^(E+3)-aligned block
+above".
+
+### QUALIFIED: "nothing is in the unfixable shape" — fixable, but not by one call
+
+I wrote that no site has "a caller-controlled length with no ceiling AND an offset the port does
+not choose". The shape I should have described is narrower than I made it sound: several sites
+*do* combine a request-driven length with an offset that is only 16- or 64-byte aligned, which is
+more than a `capstone_repr_round()` on the length can fix. They remain fixable **locally**, because
+the allocator chooses its own chunk positions — but the fix is granule-aligned *placement*, not a
+rounded length, and that is a different amount of work per site.
+
+Reported by the search, with its own quoted bounds (not re-verified by me):
+
+* **wmem `wmem_sublet_issue`** — length is the caller's request and the jumbo path allocates "a
+  new block of exactly the right size" with no clamp it could find; offset is the chunk position,
+  aligned to `2 * sizeof(size_t)`. Its worst site.
+* **SQLite `pcache1Issue`** — `szPage` **defaults to exactly 4096** and is read from the database
+  file header (bytes 16-17) up to 65536; the bulk-pool offset is `k * szAlloc` where
+  `szAlloc = szPage + szExtra + ROUND8(sizeof(PgHdr1))`, not a power of two.
+* **PostgreSQL `MemoryChunkIssue`** — ≥4096 with **no configuration change** (an 8224-byte small
+  chunk at the default `allocChunkLimit` of 8192), up to `MaxAllocSize`/`MaxAllocHugeSize` on the
+  large path, at offset `ALLOC_BLOCKHDRSZ` = 112, 16-aligned only.
+* **whisper `wg_region_create`** — up to `WG_PAYLOAD_BYTES` 384 MiB with a 16-byte-aligned base and
+  16-byte-multiple length, and no granule rounding anywhere on the path.
+* **FFmpeg `ff2_payload_carve`** — up to 64 MiB, 64-byte granular, and the representable-alignment
+  correction in `pool-allocator.c:121-129` is `#ifdef FFPOOL_CHERI` only — **the CHERI arm already
+  rounds to a representable length and the Capstone arm does not.** `ff2_payload_issue_pointer`
+  also shrinks to `b->requested` exactly, with no rounding.
+* **memcached `do_slabs_alloc`** — up to 1 MiB by configuration, 512 KiB default, at offset
+  `k * p->size` where the class sizes are 8-byte-aligned ×1.25 products.
+
+Independent corroboration of the mruby result: the search computed
+`offsetof(mrb_heap_page, objects) = 16464` from the struct layout, matching the **16464 I measured
+with the capability-ABI compiler**, and `sizeof(RVALUE) = 80`, giving a length of 81920 — inside
+the 16-to-128-byte range my sweep had already shown unrepresentable at every value.
+
+Perl's 4080 is confirmed, though it lives in `sv_inline.h` rather than `perl.h`, and it is
+configurable through the `#ifndef` guard, so a build that raises it enters scope.
+
+**UNRESOLVED and recorded as such:** APR's `SMALL_NODE_SIZE` and `APR_MEMNODE_T_SIZE` (upstream
+apr-1.7.4 / apr-util-1.6.3 are not on this machine), the 3530300 memsys5 pool size (a host-granted
+runtime region), and whether a 1 MiB `malloc` is page-aligned today — which is now a question about
+mallocng's big path rather than about CPython.
+
+### Revised effort
+
+**Port changes 4-6 days, from 2-3.** The rise is the offset-alignment work: a length round is one
+call, but granule-aligned chunk *placement* touches each allocator's own geometry, and there are
+seven more SPLIT/SHRINK files than the CDERIVE table showed. **Total for (iii): 8-12 days**, from
+6-9.
+
+**The comparison still does not reopen.** Eight to twelve days of software against the side store,
+496 MiB of map, 1.9x capability traffic and one to two bitstream cycles is the same call as before,
+with more days on one side and nothing new on the other.
