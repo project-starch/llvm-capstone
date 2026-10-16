@@ -2321,3 +2321,59 @@ verification happens there.
 
 **The landing commit must state** that the board module's enforcement changes from "naturally
 aligned power of two" to "representable", because the same `capstone_vm.c` builds both profiles.
+
+
+## SCORED: the allocation rows all held, the suite-total row did not
+
+Run against the board lane's kit built from `89ee98be99e5` — their launcher and, for the first time,
+their compile of the **module** change — with this lane's verified domain `aa9f98535ff98f07`, exact
+bounds **OFF**, which is the profile the gate applies in.
+
+| registered row | result |
+|---|---|
+| the five allocation markers clear | **held** — only `denial survived` remains, which is the predicted `bounds` mode |
+| `align-probe` `failed=0 of 600` | **held** — `attempted=600 ok=600 failed=0`, against 413 failed before |
+| `CAPSTONE_VM_ADD_REFUSED` absent | **held** — 0, and the print is unconditional, so this is falsifiable |
+| `CAPSTONE_VM_REMAP_OK` 0 | **held** — 0 |
+| both predicate arms ALLOCATED | **held** — `pow2_above=ALLOCATED nonpow2_below=ALLOCATED` |
+| **suite 21 true / 2 false** | **FAILED — 18 true / 5 false** |
+
+So the module change does what it was predicted to do on every allocation measure, and my
+*aggregate* prediction was wrong. Both halves matter.
+
+### The three extra failures are one event, and it is a defect the allocation failure was masking
+
+`basic_inplace_mremap_failure`, `nonlinear_and_linear_tag_transfer` and `remap-stale` all fail
+because `basic` now dies: `MALLOC_BASIC_EXIT:139`, from
+
+    domain fault cause=29 pc=0x3fb2d1133c address=0x0 last=0xc0de0001
+
+Before the change `basic` exited early on `MALLOC_FAIL:aligned allocation` — a clean NULL from a
+refused arena. Now the allocation succeeds, execution runs further, and a fault appears that was
+previously unreachable. `MALLOC_TAG_COPY_OK` prints once instead of twice for the same reason.
+This is the "a fix that fails further on may have exposed an older defect" shape, and the right
+reading is that the three rows are one new finding rather than three regressions.
+
+### Ruling out the dangerous reading, which is the one that mattered
+
+A relaxed bounds predicate could in principle admit an arena whose bounds are **wrong**, and that
+would show as a bounds violation. It does not:
+
+- **0 `Cap mem access OOB` lines** in the entire arm;
+- **0 `SHRINK illegal operand` lines**;
+- **cause 28, which `run-malloc.py:134` uses as the bounds class, does not appear at all.** The
+  causes present are one 2, five 25 (the expected use-after-free denials) and two 29.
+
+So the evidence that would indicate a widened capability is absent, and the predicate is not
+implicated in the new fault. That is the check worth doing before calling a loosening safe, and it
+is a negative result with a known positive form — cause 28 does fire in this suite, for the
+`bounds` mode, which is how we know the class is observable.
+
+### The new thread, stated as a lead and not a conclusion
+
+`cause=29` with `address=0x0` immediately after a `kind=2` boundary matches the shape the RTL lane
+described for a refused `CSRUNV`: a terminal event `{kind 2, cause 29, pc = the entry PCC's cursor,
+addr 0}`, where QEMU raises a synchronous 29. That is suggestive and unverified — `last=0xc0de0001`
+says the last service was the acquire, not an entry — so the next step is to instrument it rather
+than to reason further, which is the pattern that has worked every time in this investigation and
+failed every time it was skipped.
