@@ -118,3 +118,38 @@ on purpose rather than by luck, and both rows are marked.
 attribution cannot work for this case, because the defective read and the consequence of
 letting it succeed are both inside that one function, and that the discriminators are the pc
 offset and the fault address.
+
+### Why the two arms saw different bytes, and why that settles what the fault means
+
+`tabFlags` sits at offset **120**, and `Mem5Link{next,prev}` is eight bytes at offset 0, so the
+allocator's own metadata cannot reach it. Its value at the read is therefore whatever the block
+happens to hold: the Table's own last state if nothing has reused the block, or a new owner's
+bytes if something has.
+
+* **CheriBSD: not reused.** `tabFlags=0x0` is the Table's **own** value. `sqlite3StartTable`
+  allocates with `sqlite3DbMallocZero`, and the CREATE fails in `sqlite3AddColumn` with
+  *duplicate column name* before any flag is ever set, so zero is what was there. The
+  neighbouring fields agree -- `tnum=0`, `nCol=0`, `pIndex=0x0`, all still zero -- and only the
+  first eight bytes have changed, to `zName=0x100000001`, which is `Mem5Link`.
+* **base: reused and partly overwritten.** `tabFlags=0xce0c6828` and `tnum=-2118687248` are
+  somebody else's data.
+
+The two arms are different builds with different feature flags, and the virtual arms are the
+only ones with the lookaside on, so memsys5's free list is in a different state when the Table
+is released. That is a build and timing difference, not a difference in what either mechanism
+can check.
+
+**The decisive form of that argument is inside the base arm itself.** The physical campaign
+recorded this arm as `completes` -- that is the `·` in `matrix.tsv` and in the three-arm table --
+while the virtual build of the same arm faults with `cause 24` at `0xb0`, in the 2026-10-11
+bundle and again when re-measured on 2026-10-16. **One mechanism, one case, two builds, opposite
+outcomes.** A detection capability does not flip with the build; a dependence on what the
+allocator left in a struct field does.
+
+So "base caught what CheriBSD missed" is not what happened. Base was led down a branch it should
+not have taken by a stale flag word and then crashed on a NULL a helper returned. Had that field
+been zero on base too, base would have completed exactly as CheriBSD did; had CheriBSD's block
+been reused, CheriBSD would have faulted, which is what it does in cases 19, 20 and 22. For
+either arm to count as a detection it would have to refuse the stale read itself -- which is what
+Sublet does, at `sqlite3OpenTable+268`, on the first read of the dead Table, at a fault address
+inside the arena, and that reading does not move with the allocator state.
