@@ -38,6 +38,12 @@ does. The reach mark, the completion line and the probe are the family's (TWO_IM
 it expects to fault in (`expect_fault_in=<fn>`), mmgr-repros faults in pg_probe / pg_write_probe. A corpus control
 row whose run key is its own row name (`--row-control ROW=CONTROL`) is read under that key.
 
+Single-run families (SINGLE_RUN; pymalloc's `pym`) run each case once, as `<name>`, and are judged as their virtual
+runner judges them: a fault counts only at the labelled probe (anywhere else it is a fault before the case's access),
+completion is the family's done line after the probe, and a refusal line or a non-zero exit is no reading. Their
+corpus control (a `pym-control` row, given with --row-control) faults only AT the probe and completes only on the
+done line.
+
 The judge's verdict must agree with the matrix's outcome (CAUGHT, or DEFECT-REPRODUCED = MISSED) on every row.
 Otherwise the tool writes nothing and says which rows disagree. A transcript with no blocks, or a row with no run,
 is an error, not a NO-READING.
@@ -69,6 +75,13 @@ TWO_IMAGE = {
                  probe_from=r"PG_DEFECT case=\d+ expect_fault_in=([A-Za-z_][\w.$]*)@"),
     "pg-mmgr": dict(reach=r"^PG_DEFECT case={n} ready$", done="PG_DEFECT case={n} mode=0 completed",
                     probe=r"^pg_(write_)?probe$"),
+}
+
+# Single-run families, by matrix row kind: one run per case, `<name>`, of the image `<case name>.dom`. pymalloc's
+# replay (cpython/pymalloc-repros/runners/virtual/run-virtual.py's rules): it prints `PYM completed=1` only after the
+# case body, whose stale access is the labelled read_probe, and `PYM failed=N` when it refuses before or during it.
+SINGLE_RUN = {
+    "pym": dict(done=r"PYM completed=1\b", failed=r"PYM failed=(\d+)", probe=r"^read_probe$"),
 }
 
 
@@ -164,6 +177,55 @@ def two_image(row, by_name, runs, pre, images, a, controls, spec):
     return obs, v.judge(obs, spec)
 
 
+def single_run(row, runs, pre, images, a, controls, spec):
+    """One case of a single-run family, judged as its virtual runner judges it."""
+    fam = SINGLE_RUN[row["kind"]]
+    name, case = row["name"], row["case"]
+    if not name.endswith("-case"):
+        raise SystemExit(f"{name}: a {row['kind']} row should be named <case>-case")
+    image = images.get(name[: -len("-case")], row["image_sha256"])
+    blk = runs.get(f"{pre}{name}")
+    if blk is None:
+        raise SystemExit(f"{name}: the transcript has no run")
+    body, kind, value = blk
+    obs = v.Observation(case=case, arm=a.arm, controls=controls, image_sha256=row["image_sha256"])
+    obs.fault = v.domain_fault(body, v.Symbols(a.llvm_bin, image))
+    if obs.fault:
+        obs.reached = bool(obs.fault.symbol and re.search(fam["probe"], obs.fault.symbol))
+        if obs.reached:
+            obs.reach_evidence = "the fault is the labelled read itself"
+            obs.attribution, obs.attribution_evidence = "probe", f"the pc lies in {obs.fault.symbol}, the labelled probe"
+        else:
+            obs.attribution_evidence = f"in {obs.fault.symbol or 'no known function'}, not the labelled probe"
+    else:
+        failed = re.search(fam["failed"], body)
+        if failed or not (kind == "exit" and value == 0):
+            obs.infra = "infra"
+            obs.notes = (failed.group(0) if failed else f"end kind={kind} value={value}") + \
+                " -- the program refused before or during the case; not a statement about the arm"
+        else:
+            obs.completed = obs.reached = bool(re.search(fam["done"], body))
+            obs.reach_evidence = "PYM completed=1, after the case's read_probe" if obs.reached else ""
+    if not obs.infra:
+        obs.notes = f"silicon; run end kind={kind} value={value}"
+    return obs, v.judge(obs, spec)
+
+
+def single_run_control(kind, block, symbols):
+    """A corpus control of a single-run family: fault only AT the probe, complete only on the done line."""
+    fam = SINGLE_RUN[kind]
+    if block is None:
+        return "none", "no run"
+    body, ekind, value = block
+    fault = v.domain_fault(body, symbols)
+    if fault:
+        where = f"cause={fault.cause} pc={fault.pc:#x} in {fault.symbol}+{fault.offset:#x}"
+        return ("fault", where) if fault.symbol and re.search(fam["probe"], fault.symbol) else ("none", where)
+    if ekind == "exit" and value == 0 and re.search(fam["done"], body):
+        return "complete", re.search(fam["done"], body).group(0)
+    return "none", f"end kind={ekind} value={value}"
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--arm", required=True)
@@ -209,7 +271,11 @@ def main():
             raise SystemExit(f"--row-control {rname}: no such matrix row")
         image = images.get(rname, row["image_sha256"])
         block = runs.get(f"{pre}{rname}-{run}") or runs.get(f"{pre}{rname}")
-        observed, evidence = control_observed(block, v.Symbols(a.llvm_bin, image))
+        fam = row.get("kind", "")[: -len("-control")] if row.get("kind", "").endswith("-control") else None
+        if fam in SINGLE_RUN:
+            observed, evidence = single_run_control(fam, block, v.Symbols(a.llvm_bin, image))
+        else:
+            observed, evidence = control_observed(block, v.Symbols(a.llvm_bin, image))
         controls.append(v.Control(name=control, observed=observed, evidence=evidence))
     missing = sorted(set(spec["controls"]) - {c.name for c in controls})
     if missing:
@@ -222,8 +288,9 @@ def main():
         kind = row.get("kind", "")
         if kind.endswith("-control") and kind[:-len("-control")] in TWO_IMAGE:
             continue        # a negative control: read with its case
-        if kind in TWO_IMAGE:
-            obs, verdict = two_image(row, by_name, runs, pre, images, a, controls, spec)
+        if kind in TWO_IMAGE or kind in SINGLE_RUN:
+            fn = two_image if kind in TWO_IMAGE else (lambda r, _b, *rest: single_run(r, *rest))
+            obs, verdict = fn(row, by_name, runs, pre, images, a, controls, spec)
             want = MATRIX_VERDICT.get(row["outcome"])
             if verdict[0] != want:
                 disagree.append(f"{row['name']}: judged {verdict[0]} ({verdict[1]}: {verdict[2]}), matrix {row['outcome']}")
