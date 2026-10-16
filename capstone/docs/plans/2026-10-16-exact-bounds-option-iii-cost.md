@@ -585,3 +585,68 @@ the renormalisation step. For the LENGTH that is benign — rounding up with the
 the affected band lands on the next power of two, which is a multiple of the coarser granule too,
 measured over the first 2,000 affected lengths with 0 decoding short. I checked before reporting it
 as a bug; it isn't one.
+
+## The ports' derive sites: the fix is a rounded length per site, and the comparison does NOT reopen
+
+Offsets and lengths extracted from the patches themselves
+(`capstone/tests/exact-bounds-iii/derives.py`, which balances parentheses rather than grepping
+line by line, because the calls span lines). Twenty derive sites across the five ports the
+comparison turns on:
+
+| port / patch | offset 0 | non-zero offset | the length |
+|---|---|---|---|
+| FFmpeg `0003` pools | 2 | 1 | `FFMAX(pool->size,1)`, `REFCOUNT_OFFSET + pool->size`, `size` |
+| memcached `0006` slabs | 2 | 1 | `cache->bufsize`, `size` |
+| wmem `0001` | 3 | 1 | `size` |
+| PostgreSQL `0003` contexts | 2 | 2 | `size` |
+| SQLite memsys5 | 2 | 4 | `mem5.aReq[i]`, `nByte`, `db->lookaside.sz`, `(u64)sz*cnt` |
+
+**Offset-0 sites need only the LENGTH rounded, because the base comes free.** The parent is an
+allocation mallocng has already placed on a granule-aligned base, and the child's granule is at
+most the parent's (its length is no larger), so an aligned base for the parent is aligned for the
+child. One `capstone_repr_round()` at the site is the whole change.
+
+**With one condition that is easy to miss:** `CDERIVE` checks containment against the parent's
+*exact* bounds *before* compression — `capstone_dyn_unit.anvil:250` refuses when
+`rs2.cursor > rs1.end - rs1.cursor` — so the parent has to hold the **rounded** length. The site
+must therefore *allocate* `repr_round(size)`, not merely derive over it.
+
+**That costs under 0.2%.** The overhead is `(granule-1)/size`, bounded by `1/512`; measured maximum
+over 4 KiB to 4 MiB is **0.1953%**, and it is 0 for every power of two and every page multiple —
+`1048576` costs nothing, `1048577` costs 2,047 bytes.
+
+**Non-zero-offset sites additionally need a granule-aligned offset.** Three shapes appear, each
+with a local fix:
+
+* a slot index times a power-of-two stride (`i * mem5.szAtom`): aligned whenever the stride is a
+  power of two at least the granule — a startup assertion, since memsys5's atom size is a runtime
+  configuration;
+* a pointer difference inside a parent (`p - base(parent)`): needs the sub-object placed on a
+  granule boundary, i.e. the containing allocator's own geometry, which is the mruby-style repair;
+* `cursor(p) - base(p)` on a fresh allocation: zero in practice but not by construction, so it
+  wants an assertion rather than an assumption.
+
+**Nothing is in the shape that cannot be fixed site-locally** — a caller-controlled length with no
+ceiling *and* an offset the port does not choose. None of the twenty sites is in that shape on the
+patch side.
+
+### Effort, and the comparison
+
+**Port changes: 2-3 days** — twenty sites across eight ports, each a `capstone_repr_round()` on an
+allocation plus an assertion on an offset, against a shared header that is already written and
+cross-checked. Plus mruby's struct padding. The ports' re-qualification is the dominant remaining
+cost and overlaps item 4's re-run rather than adding to it.
+
+**Total for (iii): 6-9 days**, from 4-6.
+
+**The comparison with (ii) does not reopen, and the margin is not close.** (iii) now costs
+6-9 days of runtime and port work, +0.022% of mallocng slot space, under 0.2% on the affected port
+allocations, a per-group header, and reduced double-free entropy on twelve size classes. (ii) costs
+the hardware side store with its L1 array and the shared-core widening, 496 MiB of memory map with
+the CMA and monitor conditions that follow, 1.9x capability traffic, and one to two bitstream
+cycles — each of which is roughly ninety minutes of synthesis plus a reflash, and a reflash needs
+the lead. Days of software against silicon area, memory bandwidth and bitstream cycles is not a
+close call.
+
+The per-port **maxima** still to be quoted decide *which* sites are in scope. They do not change
+the cost shape: a site in scope costs a rounded allocation, and a site out of scope costs nothing.
