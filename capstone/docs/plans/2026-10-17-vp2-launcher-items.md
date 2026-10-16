@@ -27,48 +27,53 @@ One adapter serves both profiles, keyed on **which trap it gets** rather than on
 **Corrected from an earlier 2 KiB figure.** It is a page, because the caller's snapshot at
 +1024..+1967 leaves no room below 2 KiB for the caller's FP state.
 
-Field-level, from the RTL lane's D3. `frame[]` indices are given because that is how the module
-addresses it:
+Field-level, from the RTL lane's D3, including which side owns each word. `frame[]` indices are
+given because that is how the module addresses it.
 
-| offset | `frame[]` | contents |
-|---|---|---|
-| +64..+575 | 8..71 | the paused context's integer registers |
-| +224 | 28 | the reply slot — **the only slot software writes while a context is paused** |
-| +640, +648 | 80, 81 | *(the module's own collect chain — see the collision check below)* |
-| +656..+911 | 82..113 | the context's `fpr0..31` |
-| +912 | 114 | the context's `fcsr` — `{fprec, frm, fflags}` |
-| +928.. | 116.. | its CSRs |
-| +1024..+1967 | 128..245 | the caller's integer snapshot |
-| +2048..+2303 | 256..287 | the caller's `fpr0..31` |
-| +2304 | 288 | the caller's `fcsr` |
+| offset | `frame[]` | contents | owner |
+|---|---|---|---|
+| +0..+63 | 0..7 | not described by D3 | — |
+| +64..+575 | 8..71 | the context's integer registers | switcher |
+| +224 | 28 | the reply slot — **the only slot software writes while a context is paused** | software |
+| +576..+639 | 72..79 | the `a0..a7` views — written by the **switcher at every escape** of a context whose options word is non-zero (as QEMU's `escape()` does) and **never read**. Software may read or overwrite them, and they are rewritten at the next escape. | switcher |
+| +640..+655 | 80..81 | **software's** — the switcher never reads or writes these | software |
+| +656..+911 | 82..113 | the context's `fpr0..31` | switcher |
+| +912 | 114 | the context's `fcsr` — `{fprec, frm, fflags}` | switcher |
+| +920 | 115 | the context's `mstatus` | switcher |
+| +928 | 116 | its `satp` | switcher |
+| +936 | 117 | its `srevroot` | switcher |
+| +944 | 118 | its `options` | switcher |
+| +952..+1023 | 119..127 | unused by the switcher | — |
+| +1024..+1967 | 128..245 | the caller's integer snapshot | switcher |
+| +1968..+2047 | 246..255 | unused by the switcher | — |
+| +2048..+2303 | 256..287 | the caller's `fpr0..31` | switcher |
+| +2304 | 288 | the caller's `fcsr` | switcher |
+| +2312..+4095 | 289..511 | unused by the switcher | — |
 
-Total 4096 bytes, **16-byte aligned**.
+Total 4096 bytes, **16-byte aligned**. `satp`, `srevroot` and `options` are saved at the escape and
+read back at a resume — the processor's, while the context is paused.
+
+**Coverage checked, not assumed:** the table above accounts for all 4096 bytes with **0 overlapping
+and 0 unaccounted**, every range 8-byte aligned. That check is the point of writing it as a table —
+it is what would catch a transcription slip in a layout nobody can test from here.
 
 **Behaviour, not just layout:** a fresh context starts with `fpr` and `fcsr` zero, i.e. RNE; a
 resume restores its FP state from its own words; and the caller's FP state returns with its
 snapshot at **every** escape, not only on a normal return.
 
-**This refines the earlier coarse ranges rather than correcting them.** An earlier revision of this
-doc recorded the context FP block as +656..+919 and the caller's as +2048..+2311; both are the
-`fpr` block plus its 8-byte `fcsr` (656+256 = 912, +8 = 920; 2048+256 = 2304, +8 = 2312), so the
-numbers agreed — they were simply not at field level. Checked arithmetically rather than assumed.
+### Two places earlier revisions of this doc were too loose
 
-**Collision check, re-run against the field-level layout.** The module writes `frame[80]` and
-`frame[81]` for the collect chain (`capstone_vm.c:351-352`), which is +640 and +648. The integer
-register block ends at +575 (`frame[71]`) and the context's `fpr` begins at +656 (`frame[82]`), so
-the chain sits in the gap `frame[72..81]` and touches neither. The software collector of item 1 can
-therefore use those words as it already does.
+Both narrow the text rather than contradict it, and both are recorded because someone may have
+built against the looser version.
 
-**Checked against the tree, and it holds.** `capstone_vm.c:918` already validates a frame as
-`find_arena(c, r.frame, PAGE_SIZE)`, i.e. a page, and **no 2048-byte assertion exists anywhere** in
-`vm-abi.h` or `wire.h` — so the 4 KiB correction agrees with the code rather than requiring a
-change to it. Also checked for collision: the module writes `frame[80]` and `frame[81]` (the
-collect chain, `capstone_vm.c:351-352`), which at 8 bytes per slot is +640 and +648 — between the
-register block's end at +575 and the FP block's start at +656, so it does not overlap either.
-
-To do: confirm the ABI v6 headers carry an explicit 4096 size assertion rather than relying on
-`PAGE_SIZE` at the one call site, and audit that nothing in the launcher writes any slot other than
-+224 after entry.
+1. **"CSRs at +928.."** began one word late. `mstatus` is at **+920**; `satp`, `srevroot` and
+   `options` are +928, +936 and +944.
+2. **"the collect chain sits in the gap `frame[72..81]`"** was too broad. Only `frame[80..81]` is
+   software's. `frame[72..79]` is written by the **switcher at every escape**, so nothing software
+   leaves there survives. The non-collision conclusion for the collect chain holds — D3 now states
+   those two words are software's and the switcher never touches them, which confirms what had been
+   an inference from the module's current use — but the reason is narrower than first given, and
+   any future software use of that region must stay inside `frame[80..81]`.
 
 ## 3. A bad-frame `CSRUNV` is refused as a terminal event, not a synchronous trap
 
