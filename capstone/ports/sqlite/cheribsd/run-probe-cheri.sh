@@ -48,14 +48,14 @@ declare -A SITE=(
   [fts3destroyoom]=9 [c7def600bd_0]=10 [2c7a73eaea_0]=11 [fts3snipor]=12
   [fts5vocabeof]=13 [fts5structwrite]=14 [fts5inplace]=15 [634ac14488_0]=16
   [33cf194218_0]=17 [bfe33f80dd_0]=18 [8f5b14a5c2_0]=19 [415540ddaa_0]=20
-  [adfb203a7d_0]=20 [expertrem]=21 [rtreecursor]=54
+  [adfb203a7d_0]=20 [expertrem]=21 [rtreecursor]=54 [rtreeinode0]=55
 )
 # memsys5 arm, then the system-allocator arm for the images that have one.
 # Overridable so a gap can be filled without editing the list: MEM5="a b" SYS="" ./run-probe-cheri.sh
 MEM5=${MEM5:-"mem5design blobclose fts5rank staticbind rtreestatic wschema fz09 jsoneachroot
       jsoneachstatic a783931794_0 fts3destroyoom c7def600bd_0 2c7a73eaea_0 fts3snipor
       fts5vocabeof fts5structwrite fts5inplace 634ac14488_0 33cf194218_0 bfe33f80dd_0
-      8f5b14a5c2_0 415540ddaa_0 adfb203a7d_0 expertrem rtreecursor"}
+      8f5b14a5c2_0 415540ddaa_0 adfb203a7d_0 expertrem rtreecursor rtreeinode0"}
 SYS=${SYS-"634ac14488_0 a783931794_0 bfe33f80dd_0 c7def600bd_0 fz09 2c7a73eaea_0 8f5b14a5c2_0
      33cf194218_0 415540ddaa_0 adfb203a7d_0"}
 

@@ -47,3 +47,116 @@ new-16 / sqlite-d21bd37c7c -- an rtree node inserted into the node hash with
  * the connection has ever set a rowid, keeping last_insert_rowid() at 0.
  * NOTE: -DSQLITE_DQS=0, so SQL string literals must be single-quoted.
 ```
+
+## Review 2026-10-16 -- the defect is worse than recorded, and two of the three detections are not
+
+### The defect, measured as a boolean
+
+Probe site 55 puts a hook at each step of the mechanism the header describes. One run:
+
+```
+HASHINS p=0x20d000 iNode=0 bucket=0 <- iNode==0, linked anyway
+HASHINS p=0x20d400 iNode=0 bucket=0 <- iNode==0, linked anyway
+DELSKIP p=0x20d000 iNode=0 <- NOT unlinked (iNode==0)
+FREE    p=0x20d000 iNode=0 still_in_bucket=0
+DELSKIP p=0x20d400 iNode=0 <- NOT unlinked (iNode==0)
+FREE    p=0x20d400 iNode=0 still_in_bucket=1
+DELSKIP p=0x20cc00 iNode=1 unlinked
+FREE    p=0x20cc00 iNode=1 still_in_bucket=0
+```
+
+`still_in_bucket=1` is the defect: the block returns to the pool while it is still the head of
+`aHash[0]`. The third line is the control within the run -- a node with a real `iNode` is
+unlinked normally.
+
+### It is not only a stale read
+
+```
+before dangling-hash query
+LB_WITNESS kind=UAF off=0 n=8 req=1024 blk=0x20d400 tag=1 cb=0x1e5c00+262144
+LOOKUP  want=0 bucket=0 head=0x20d400 head_iNode=0
+LB_WITNESS kind=UAF off=0 n=4 req=1024 blk=0x20d400 tag=1 cb=0x1e5c00+262144
+HANDOUT p=0x20d400 iNode=0 nRef_read=0 <- returned as live
+```
+
+The bucket walk matches the dead node, because its `iNode` is 0 and 0 is what is being looked
+up, and `nodeAcquire` then hands it back out as a live node -- which also **writes** `nRef++`
+into the freed block. From there the program is operating on a freed object as if it were
+alive. The record's "reads `p->iNode` out of freed memory" understates it.
+
+### Why neither non-Sublet arm can see any of that
+
+Under the 16-byte-pointer layout `iNode` is at offset 16 and `nRef` at offset 24, and
+`Mem5Link` is 8 bytes at offset 0, so the free touches neither field. Both witnesses above
+carry `tag=1` and `cb=0x1e5c00+262144`: a capability bounded to the whole 256 KiB
+`sqlite_heap[]`. There is no tag to check and no bound to cross, on either arm.
+
+### What they do fault on: case 19's artifact, reached by a longer route
+
+| arm | verdict | cause | pc | fault address |
+|---|---|---|---|---|
+| virtual-malloc | NO-READING:unattributed | 24 | `nodeRelease+144` | **`0x17`** |
+| virtual-nested-pools | CAUGHT | 25 | `nodeHashLookup+240` | `0x3fafb1fe20` |
+| cheribsd-revocation | -- | SIGPROT(34) si_code=2 | `nodeRelease+0x2e` | -- |
+
+The dead node, now held with `nRef=1`, is eventually released. `nodeRelease` does `nRef--` to
+0; `iNode` is 0 so the `iNode==1` branch is skipped; then `if( pNode->pParent )` reads offset
+0 -- the one field `Mem5Link` overwrote, tag cleared -- and recurses into it. Base Capstone's
+fault address is `0x17`, which is `(-1) + 24`: the same value, the same instruction and the
+same pc offset as case 19. CheriBSD's pc resolves to `nodeRelease+0x2e`, also the same
+instruction. Site 55 does not print `pParent`; `0x17` admits no other reading, and site 54
+printed the `0xffffffffffffffff` directly in case 19.
+
+Two things make the contingency explicit:
+
+* `nodeAcquire` would have removed even that fault had the terminator been 0. Its hash-hit
+  path is `if( pParent && !pNode->pParent ){ ... pNode->pParent = pParent; }`, and `-1` is
+  non-zero, so the assignment is skipped and the `-1` survives into the release. With a `0`
+  terminator both arms would have completed silently.
+* `nodeRelease` is deliberately **not** in this case's `fault_sites`, so the judge already
+  calls the base arm `NO-READING:unattributed` -- and did so in the 2026-10-11 bundle. The
+  `cheribsd-revocation` cell was never held to the same rule, and `results/matrix.tsv` has
+  recorded it as `detected` ever since. That disagreement between the physical matrix and the
+  virtual verdicts went unflagged.
+
+### Records corrected
+
+* `base`: **detected -> not a detection**, which only brings `matrix.tsv` into line with the
+  verdict the pipeline already produced.
+* `cheribsd-revocation`: **detected -> not a detection.**
+* `sublet`: holds, on the virtual arm. The physical row is one of the 28 halts at kernel pc
+  0x800239e4 and is marked.
+* All preconditions were confirmed in every run: `inserted=39`, `nodes before=1`,
+  `trigger rc=0`, `split insert rc=0`, `db2 nodes after=1`.
+
+Host ASan could not be re-run (no x86 ASan runtime on this host); `case.c` is unchanged since
+`7517a8c2fd5e` and the amalgamation is the same `sha256 7fc92e19`.
+
+---
+
+## Cross-case: the non-Sublet arms' false positives in this corpus
+
+Recorded here because case 20 is the second instance of the same mechanism and the pattern is
+now the thing a reader needs, not the individual row. Every entry has the same shape: **the
+defective access itself succeeds on base Capstone and on CheriBSD**, because it is inside the
+`memsys5` arena -- in bounds, and through a capability whose tag is intact -- and what trips is
+a *later consequence* of having let it succeed. The cells were being credited for the
+consequence.
+
+| class | what actually faults | cases | signature |
+|---|---|---|---|
+| A. downstream NULL dereference | the stale read returns 0 and the program dereferences it | 02, 05 | fault at a NULL-ish address, in a function downstream of the defect |
+| A'. capability arithmetic over a non-capability | nothing is even loaded: `return &z[1]` with `z` NULL | 12 | `cause 24 address=0x0` |
+| B. the allocator's own in-band metadata read back as a pointer | `memsys5Link` writes `Mem5Link{next=-1,prev=-1}` over the first 8 bytes of the freed block; a pointer field living there is dereferenced | 19, 20 | `cause 24` / SIGPROT `si_code=2` at `nodeRelease`, fault **address `0x17`** = (-1)+24 |
+| C. not a capability fault at all | the program's own `assert()` aborts on base; CheriBSD compiles it out under `-DNDEBUG` and completes | 06 | abort, not a fault; recorded `NO-READING:inconclusive` |
+
+Class B is specific to a struct whose **first** field is a pointer that the freeing path later
+dereferences, which is why it shows up twice in the rtree family and nowhere else so far. It is
+also the phenomenon case 18 was withdrawn for demonstrating -- in-band metadata overwriting
+caller data -- turning up inside real cases as a false positive for the two arms that are
+supposed to be blind to this layer.
+
+After cases 19 and 20, three rows in the SQLite table still carry a base or CheriBSD
+detection, none of them reviewed yet: **22** (`fix-2026-07-26`, temporal, base and CheriBSD),
+**29** (`fz02`, spatial, base) and **31** (`fz10`, spatial, base). Case 22 is the remaining
+`D D D` row and the first one to check for class B.
