@@ -54,7 +54,7 @@ None of these gives a capability/native ratio on this bitstream.
 | 6 | R1 warm (8 boots) and cold (5 boots) | classic | `drivers/chain-r1.sh` | a1, a3 only | 3 | board | queued |
 | 7 | M1 node reclamation | classic | `drivers/board-m1v2.sh`, `drivers/chain-m1.sh` | no | 3 | board | queued |
 | 8 | M2 dependent chase | classic | `drivers/board-r1e4.sh` + `drivers/lists/f5-chase.txt` (4 boots) | no | 3 | board | queued |
-| 9 | SQLLogicTest, 7 files | classic | `tests/rtl-smoke/slt-corpus/run-slt-corpus-fpga.sh`, `build-slt-corpus-images.sh` | no | 3 | board | queued. Check its 1-4 MiB region carves under the exact-regions monitor first |
+| 9 | SQLLogicTest, 7 files | classic | `tests/rtl-smoke/slt-corpus/run-slt-corpus-fpga.sh`, `build-slt-corpus-images.sh` | no | 3 | board | DONE (tests/rtl-smoke/slt-sublet-2026-10-16, 7 boots): all seven files match native on silicon, both positive controls reproduce their failures exactly; images rebuilt with dev147, three classes at reduced stacks (today's code no longer fits beside the old ones) |
 | 10 | speedtest1 domain vs native, size 100 | classic | the 2026-09-14 driver (`board-b73.sh`) was never committed; it is rebuilt from `run_sqlite_baked_fpga.py` | no | 3 | board | queued, one overnight boot (about 8.5 h) |
 | 11 | memcached performance | process ABI | no driver exists | no | — | — | needs a workload definition first |
 | 12 | Primitive and borrow cost (the paper's July tables) | classic | `tests/rtl-smoke/build-borrow-breakdown-fpga-nogp.sh`; the board run was driven by hand | no | 5 | compiler (rebuild), then board | needs work |
