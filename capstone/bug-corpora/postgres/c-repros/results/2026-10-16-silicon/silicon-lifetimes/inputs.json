@@ -1,0 +1,20 @@
+{
+  "arm": "silicon-lifetimes",
+  "bitstream": "caplifive_sublet_d93a8d66b (sha256 89ba6d81...)",
+  "cases": 5,
+  "configuration": "silicon-level0-lifetimes",
+  "contract": "verdicts-v1",
+  "corpus": "capstone/bug-corpora/postgres/c-repros",
+  "platform": {
+    "compiler": "clang 22.0.0git (llvm-capstone 612b3ec514c0), per the board lane; images built by runtime/silicon/build-b0-hello.sh through tools/run-silicon-cases.py build; PostgreSQL 17.5 client code: case.c + shared/driver.c + shared/upstream_*.c, -O0, CAPSTONE_LEVEL0_LIFETIMES; each case also built with -DPGCLIENT_NEGATIVE_CONTROL",
+    "firmware": "1d2bbbf37f63f435: the exact-regions supervised-call line of sets 2-6; one boot for two arms",
+    "kernel": "Image 0d9e05403ad6aeba",
+    "qemu": "none: silicon. The same images, by sha256, first passed the silicon-mimic capstone-qemu silicon/cderive-round ce1be0c642 (CAPSTONE_CDERIVE_ROUND=1; silicon-runs/2026-10-16-postgres-c/silicon-lifetimes/qemu-and-predictions.json)",
+    "runner": "b0run.sh, one corpus rung per arm (board lane); summarised in silicon-runs/2026-10-16-postgres-c/silicon-lifetimes/board-matrix.json and re-read here from the board transcript"
+  },
+  "pre_registration": "the board's README and qemu-and-predictions.json, lane 61f0433d704c (before the boot)",
+  "source_bundle": "capstone/bug-corpora/silicon-runs/2026-10-16-postgres-c/silicon-lifetimes",
+  "tally": {
+    "CAUGHT": 5
+  }
+}

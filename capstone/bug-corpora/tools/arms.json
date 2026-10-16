@@ -513,6 +513,40 @@
         "uaf-jumbo",
         "bounds-chunk"
       ]
+    },
+    "silicon-postgres-mmgr-stock": {
+      "target": "capstone-silicon",
+      "summary": "PostgreSQL's mmgr-repros on silicon: case.c + shared/driver.c against PostgreSQL 17.0's own memory-context managers (aset, mcxt, generation, slab, bump, alignedalloc, memdebug), built as the port's cmake/Replay.cmake, -O0, over the silicon-level0-lifetimes heap. Each case runs `0 N`; its -DPG_NEGATIVE_CONTROL image must print `PG_DEFECT case=N mode=0 completed` and exit 0, and gates the case. The managers are the port's `spatial` variant (patches 0001 + 0002): a chunk pfree'd and reused stays reachable through a stale pointer, so corpus control 00 completes",
+      "mechanism": "per-object lifetimes on every malloc; none per memory-context chunk, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "mmgr-ctl-00": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "mmgr-ctl-00"
+      ]
+    },
+    "silicon-postgres-mmgr-sublet": {
+      "target": "capstone-silicon",
+      "summary": "PostgreSQL's mmgr-repros on silicon: case.c + shared/driver.c against PostgreSQL 17.0's own memory-context managers (aset, mcxt, generation, slab, bump, alignedalloc, memdebug), built as the port's cmake/Replay.cmake, -O0, over the silicon-level0-lifetimes heap. Each case runs `0 N`; its -DPG_NEGATIVE_CONTROL image must print `PG_DEFECT case=N mode=0 completed` and exit 0, and gates the case. The managers carry patch 0003: every chunk is a CDERIVE child of its block, CREVOKEd at pfree and when its context dies, so corpus control 00 faults at pg_probe",
+      "mechanism": "per-chunk CDERIVE children with CREVOKE in PostgreSQL's memory contexts, over per-object lifetimes, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "mmgr-ctl-00": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "mmgr-ctl-00"
+      ]
     }
   }
 }

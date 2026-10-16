@@ -50,7 +50,7 @@ None of these gives a capability/native ratio on this bitstream.
 | 2 | P1 native baseline in the same boot as cell 5 and cell 6 (fixed) | classic | `tests/rtl-smoke/drivers/board-c6var.sh` | cells 5 and 6, no native | 1 | board | queued |
 | 3 | H1 calibration | classic | `drivers/board-r1e4.sh` + `drivers/lists/h1-v2-calibration.txt` | no | 1 | board | queued |
 | 4 | S1-SQLite use-after-free (lookaside, memsys5) | classic | `drivers/board-s1sql.sh` | no | 1 | board | queued |
-| 5 | mruby B5n (native) beside B5, per-benchmark times | process ABI | `runtime/silicon/build-b5-mruby.sh`, `b0run.sh` b5 rungs | B5 only | 2 | board | first in the board's order. The FP-era B5n cannot form a ratio with boot P, so both run in one boot |
+| 5 | mruby B5n (native) beside B5, per-benchmark times | process ABI | `runtime/silicon/build-b5-mruby.sh`, `b0run.sh` b5 rungs | B5 only | 2 | board | DONE (a5da26aae1b1, firmware 2edb66370270cdab). The domain costs 1.25x native -O1 and 1.50x native -O2; per benchmark 1.18-1.38 and 1.38-1.67. Totals 298.85 s (domain, two runs), 239.16 s (-O1, one run), 199.79 s (-O2, two runs), recomputed from the transcript's TIME lines. These are upper bounds on the cost of capabilities: soft-float, musl, LTO, the allocator and syscall delegation differ too |
 | 6 | R1 warm (8 boots) and cold (5 boots) | classic | `drivers/chain-r1.sh` | a1, a3 only | 3 | board | queued |
 | 7 | M1 node reclamation | classic | `drivers/board-m1v2.sh`, `drivers/chain-m1.sh` | no | 3 | board | queued |
 | 8 | M2 dependent chase | classic | `drivers/board-r1e4.sh` + `drivers/lists/f5-chase.txt` (4 boots) | no | 3 | board | queued |
@@ -65,12 +65,12 @@ None of these gives a capability/native ratio on this bitstream.
 
 **Already on silicon:** memcached, FFmpeg and tshark. That is 12 corpora, 130 defects and the lifetime controls (§7 of `2026-10-15-bug-corpus-on-fpga.md`).
 
-**The rest:** 194 cases in 13 corpora, plus 3 corpora with nothing to run. Counts are from `bug-corpora/index.json`.
+**The rest:** 194 cases in 13 corpora (10 of them now read, sets 7-8), plus 3 corpora with nothing to run. Counts are from `bug-corpora/index.json`.
 
 | Corpus | Cases | What a case needs | Wave | Owner | Status |
 |---|---:|---|---|---|---|
-| postgres/c-repros | 5 | `case.c` + `shared/driver.c` + `shared/upstream_*.c`. The `<N>` protocol, `PG_DEFECT` markers, and a second image per case built with `-DPGCLIENT_NEGATIVE_CONTROL` | 4 | board (new kind) | next, after wave 2 |
-| postgres/mmgr-repros | 5 | `case.c` + the memory-context sources, with and without patch 0003 (CDERIVE/CREVOKE). The `0 N` protocol, like wmem | 4 | board (new kind) | next, after c-repros |
+| postgres/c-repros | 5 | `case.c` + `shared/driver.c` + `shared/upstream_*.c`. The `<N>` protocol, `PG_DEFECT` markers, and a second image per case built with `-DPGCLIENT_NEGATIVE_CONTROL` | 4 | board (new kind) | DONE, set 7 (1ec88e30a300): 5/5 CAUGHT with cause 28 on level0 and on lifetimes, every negative control completes; folded into case.json |
+| postgres/mmgr-repros | 5 | `case.c` + the memory-context sources, with and without patch 0003 (CDERIVE/CREVOKE). The `0 N` protocol, like wmem | 4 | board (new kind) | DONE, set 8 (51bf1b392a40): stock 0/5 (all complete), patch 0003 5/5 CAUGHT with cause 25 (00 at its declared GetMemoryChunkMethodID; SubletRelease was pre-registered), corpus control 00 completes on stock and faults on 0003; folded |
 | httpd/apr-pool-repros | 1 | `case.c` + `shared/driver.c` (the corpus protocol already) + APR pools + the lease adapter | 4 | board (new kind) | queued. Whether `sublet.h` works in a process-ABI app is open: check it on QEMU first |
 | httpd/bucket-repros | 8 | the same, + apr-util buckets | 4 | board (new kind) | queued, with apr-pool |
 | cpython/pymalloc-repros | 20 | pymalloc + patch 0003 through B0. The replay opens a fixture file (`ports/cpython/pymalloc/src/native/main.c:8-12`), so the rung needs file staging and a writable output path | 4 | board (new kind + staging) | after postgres |
