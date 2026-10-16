@@ -6358,3 +6358,20 @@ Seconds, Time.now inside each process. The domain and -O2 are each the mean of t
 - The 2026-10-15 B5n boot read the same ratios on the FP bitstream (`caplifive_fpb_afcd19bea`). Both arms' times
   agree across the two bitstreams within 1.4%.
 - Launch is excluded: 45 s for the domain's cold launch, against 4 s natively.
+
+## PostgreSQL's c-repros on silicon: per-object bounds catch all five frontend defects at the function the case names (caplifive_sublet_d93a8d66b, 2026-10-16)
+Two arms in one boot (16:33-16:41): firmware 1d2bbbf37f63f435, 28 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-postgres-c (lane 61f0433d704c).
+- Results: RESULTS.md there.
+
+| arm | 5 cases | 5 negative controls |
+|---|---|---|
+| level0, per-object bounds | 5 CAUGHT 28: 3 at the function the case names, 2 at a declared site | complete |
+| level0 + per-object lifetimes | 5 CAUGHT 28, at the same sites | complete |
+
+- Every row and control is as pre-registered, by outcome, cause and site, on the pre-registered image.
+- The cases drive PostgreSQL 17.5's real upstream functions (libpq, pg_dump, ecpg, saslprep, the tar streamer),
+  compiled from the pin.
+
+**Scope:** these are the PostgreSQL corpus's malloc-backed cases. Its server-level (`sql-repros`) and
+memory-context (`mmgr-repros`) corpora are separate.
