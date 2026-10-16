@@ -126,7 +126,8 @@ group needs 32768, and one whose group needs 12288.
 - Without `VIRTUALVM_TRACE` the serial held 0 refusal lines while case 00 was refused, so that run proved nothing.
 - With it: **10 `CAPSTONE_VM_ADD_REFUSED` lines**, all from case 00.
   - The sizes are 36864 and 49152. 36864 is the group size the compiler lane modelled.
-  - All have `pow2=0`, and one of them satisfies alignment, so the size half refuses it whatever the address.
+  - All have `pow2=0`, so the size half refuses them. Their `naturally_aligned` field carries no information:
+    `address & (bytes - 1)` is not an alignment test when bytes is not a power of two.
 - So the line fires through this harness.
 - **Case 10's malloc(6144)** was admitted in this boot. That makes 2 of 5 boots on pre-fix launchers, and every
   other boot read NULL.
