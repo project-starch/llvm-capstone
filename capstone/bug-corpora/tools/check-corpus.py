@@ -144,6 +144,7 @@ ARM_ORACLES = {
     "silicon-sqlite-stock": {"oracle"},
     "silicon-pym-stock": {"oracle"},
     "silicon-pym-sublet": {"oracle"},
+    "silicon-mruby-bounds": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),
