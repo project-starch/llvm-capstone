@@ -226,12 +226,12 @@ M
 case_fts3_static_bind.c staticbind
 case_fts3_destroy_oom.c fts3destroyoom
 case_fts3_snippet.c     fts3snip
-case_fts3_zterm.c       fts3zterm
 M
 ;;
     fts3P) cat <<M
 case_fts3_snippet_or.c fts3snipor
 case_fts3_offsets.c     fts3offsets
+case_fts3_zterm.c       fts3zterm
 M
 ;;
     rtree) cat <<M
@@ -259,7 +259,14 @@ build_group() {
   # It used to be "sqlite3-$g$SUF.o" alone, and when SYSALLOC_FLAGS gained the
   # purecap alignment fix (-DSQLITE_MALLOCSIZE) the stale object from before the
   # fix was silently relinked -- the binaries looked rebuilt and still had the bug.
-  local key; key=$(printf %s "${SQLITE_DEFINES[*]} ${SQLITE_RESTORE[*]:-} ${SYSALLOC_FLAGS[*]:-} ${PROBE_FLAGS[*]:-} $AMALG $cf" | sha256sum | cut -c1-10)
+  # It must also include the amalgamation's CONTENTS, not just its name. $AMALG is
+  # a bare file name, so two different probe sources at different SQLITE_AMALGAMATION
+  # paths hashed to the same key: on 2026-10-16 a build against a site-47 probe
+  # amalgamation printed "sqlite3.o cached" and relinked the site-46 object, and the
+  # case ran with LB_ARMED and not one probe line. Same class as the flags bug above,
+  # and it cost a CheriBSD boot to find.
+  local key src_hash; src_hash=$(sha256sum "$SRC/$AMALG" | cut -c1-16)
+  key=$(printf %s "${SQLITE_DEFINES[*]} ${SQLITE_RESTORE[*]:-} ${SYSALLOC_FLAGS[*]:-} ${PROBE_FLAGS[*]:-} $AMALG $src_hash $cf" | sha256sum | cut -c1-10)
   local so="$OBJ/sqlite3-$g$SUF-$key.o"
   if [ ! -f "$so" ]; then
     # shellcheck disable=SC2086
