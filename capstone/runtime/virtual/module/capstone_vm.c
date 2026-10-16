@@ -62,6 +62,18 @@ static unsigned long node_max_pages;
 module_param(node_initial_pages, ulong, 0444);
 module_param(node_batch_pages, ulong, 0444);
 module_param(node_max_pages, ulong, 0444);
+/* vp2: the first virtual bitstream with a lifetime table keeps the RTL's 16-bit node index, so a
+ * FLAT table holds at most 65534 usable ids (0 and 1 are reserved). Setting this to 65536 makes
+ * the module refuse to allocate any id above 16 bits, through the ordinary ENOMEM/resource path
+ * rather than by truncating one. 0 means no cap beyond the namespace size, which is the
+ * pre-vp2 behaviour and the default, so a build that does not set it is unchanged.
+ * The 30-bit widening arrives with the paged table; this is the flat table's ceiling.
+ * Every measured workload is far below it: the runtime gates peak at 6372 live nodes and the
+ * ports' high-water mark is 13054. */
+static unsigned long node_max_records;
+module_param(node_max_records, ulong, 0444);
+MODULE_PARM_DESC(node_max_records,
+    "vp2: cap the flat lifetime table at this many records (65536 for a 16-bit node index); 0 = no cap");
 /* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
 static unsigned long pin_ahead_pages = 1;
@@ -361,6 +373,8 @@ static int ensure_nodes(struct context *c, unsigned long required)
     bool collected = false;
     int error;
     if (required > CAP_REV_TABLE_NAMESPACE_SIZE) return -ENOMEM;
+    /* vp2's 16-bit node index: refuse growth past the flat table's ceiling. */
+    if (node_max_records && required > node_max_records) return -ENOMEM;
     if (available >= required) return 0;
     list_for_each_entry(t, &c->threads, link)
         if (t->started && !t->terminal) { owner = t; break; }
@@ -882,6 +896,8 @@ retry:
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
         if (r.available > CAP_REV_TABLE_NAMESPACE_SIZE - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
+        if (node_max_records &&
+            r.available > node_max_records - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
         rc = ensure_nodes(c, r.available + CAP_REV_TABLE_RESERVE);
     } else if (op == CV_ADD) {
         struct cv_map r;

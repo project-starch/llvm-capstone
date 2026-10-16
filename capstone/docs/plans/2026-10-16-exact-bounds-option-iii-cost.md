@@ -1202,3 +1202,45 @@ itself. It is what caught my breakage, with the right words: *"The harness is no
 claims. If this is an intended improvement, retire the control deliberately."* My failure was two
 things, neither of them the code: my private musl tree never had the `arch-capstone64/` overlay
 applied (so `malloc_capstone.h` was absent), and then the unreachable runtime header above.
+
+## vp2's 16-bit node index: a module cap and a parameterised contract count
+
+The semantics owner's constraint: the first virtual bitstream with a lifetime table keeps the
+RTL's 16-bit node index, so a **flat** table holds at most 65,534 usable ids (0 and 1 reserved).
+The 30-bit widening arrives with the paged table.
+
+**The module refuses growth past the ceiling.** `node_max_records` is a new `module_param`,
+defaulting to **0 = no cap beyond the namespace size**, so a build that does not set it behaves
+exactly as before. Set to 65,536 under vp2, no id above 16 bits is ever allocated. It is checked in
+both places that can grow the table — `ensure_nodes` beside the existing
+`required > CAP_REV_TABLE_NAMESPACE_SIZE` test, and the `CV_NODES` ioctl beside its own — so the
+refusal travels the ordinary ENOMEM/resource path rather than truncating an id.
+
+**The two contract counts are parameters.** `node-contract.c`'s `NODES` and
+`malloc-contract.c`'s `COUNT` were both a literal 70,000, which exceeds the cap by construction.
+They now read `CAPSTONE_NODE_COUNT` / `CAPSTONE_MALLOC_COUNT`, **default 70,000 unchanged**, and
+each prints the count it used (`NODE_COUNT_USED`, `MALLOC_COUNT_USED`).
+
+**The runners record it, and one of them needed it more than it looked.**
+`run-nodes.py:77` had the count hardcoded *inside a check* —
+`log.count('NODE_LIVE:0:70000') == 2` — so a different count would have made that check compare
+nothing while still reporting a verdict. It is now built from `--node-count`, and `run-malloc.py`'s
+check name `70000_simultaneously_live_objects` is renamed off the literal. Both record the count in
+`result.json`, and both assert the domain printed it, so a missing count **fails** rather than
+reading as a zero.
+
+**The substitution is asserted, because without it the parameter would have been silently inert.**
+Both runners write the count into their gate script by replacing a placeholder; the first version
+of this change added the placeholder and never substituted it, which would have exported
+`CAPSTONE_NODE_COUNT=__NODE_COUNT__`, failed `strtoul`, and fallen back to 70,000 — working
+perfectly at the default and ignoring every other value. There is now an
+`assert '__NODE_COUNT__' not in gate_text`, the hash recorded as `gate_sha256` is taken from the
+substituted text so the record describes the script that ran, and both substitutions are verified
+to produce `70000` and `60000`.
+
+**Headroom, from the owner's figures:** the runtime gates peak at 6,372 live nodes and the ports'
+high-water mark is 13,054, both far below 65,534.
+
+**Not compile-tested here:** the module needs kernel headers and `cap_rev_table_abi.h`, which comes
+from a submodule a worktree does not have. The three C files that can be checked on the host are
+clean; the module's build will check the rest.

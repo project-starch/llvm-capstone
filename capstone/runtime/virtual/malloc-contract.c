@@ -85,7 +85,16 @@ static void tagged(void)
 }
 static void population(void)
 {
-    enum { COUNT = 70000 };
+    /* vp2 caps the flat lifetime table at 65536 records (a 16-bit node index), which 70000
+     * exceeds by construction. Parameterised so the same source runs at 70000 under QEMU and at
+     * 60000 on silicon; the default is unchanged. The count used is printed and recorded. */
+    unsigned long COUNT = 70000UL;
+    {
+        const char *e = getenv("CAPSTONE_MALLOC_COUNT");
+        if (e && *e) { char *end = 0; unsigned long n = strtoul(e, &end, 10);
+                       if (end && !*end && n) COUNT = n; }
+    }
+    printf("MALLOC_COUNT_USED %lu\n", COUNT); fflush(stdout);
     char **p = malloc(COUNT * sizeof(*p)); require(p != NULL, "population array");
     for (unsigned i = 0; i < COUNT; ++i) {
         p[i] = malloc(17); require(p[i] != NULL, "population allocation"); p[i][0] = i % 127;
