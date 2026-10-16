@@ -1230,7 +1230,7 @@ stays open for the permission check and the cause number. Follow-up 674cdab03c r
 unsigned-overflow acceptance at the upper edge of the sealed-return window and from the general
 bounds check.
 
-## Q-15 — CDERIVE and CREVOKE across the QEMU profiles and the RTL: representability and decode differ `OPEN — for the format cycle; recorded 2026-10-13 from the RTL lane's capstone-sublet work`
+## Q-15 — CDERIVE and CREVOKE across the QEMU profiles and the RTL: representability and decode differ `REPRESENTABILITY RULED 2026-10-16 by the model's semantics owner: under the virtual-context flag an inexact CDERIVE child is refused with 29, and the physical profile keeps rounding outward; recorded 2026-10-13 from the RTL lane's capstone-sublet work`
 
 **Representability.** A CDERIVE child whose bounds the compact format cannot hold is treated three ways.
 capstone-qemu's compact profile refuses it with cause 29: `helper_csderive` compresses the child and
@@ -1242,6 +1242,21 @@ runtime's ABI v5 requires the exact-bounds profile (`capstone/runtime/virtual/RE
 allocators migrated to CDERIVE do not rely on the refusal. On the RTL their large, unaligned children
 would get bounds rounded outward instead of exact ones. This is the exact-bounds question of
 `docs/plans/virtual-capstone-rtl-feasibility.md`, now for CDERIVE as well.
+
+**Ruling, 2026-10-16, by the model's semantics owner** (the helper lane; `docs/plans/2026-10-16-virtual-profile-on-silicon.md`).
+Silicon's virtual profile has no exact bounds: option (iii) was decided the same day. Its rule is therefore the compact
+profile's: **under the virtual-context flag, a CDERIVE child that the compact format cannot hold exactly is refused
+with 29**, as `helper_csderive` does (`op_helper.c:1239-1247` at d35af47b163c: "Never silently widen a new object's
+authority in the compact profile").
+- Rounding outward is not acceptable there. The RTL checks containment against the parent's exact bounds BEFORE
+  compression widens the child (`capstone_dyn_unit.anvil:240-242`), and nothing re-checks the widened result. So an
+  unaligned child can come out wider than its parent.
+- The RTL conforms in its virtual bitstreams, by the same round-trip comparison QEMU makes.
+- The physical profile keeps its measured behaviour: rounding outward, which every recorded silicon reading rests on,
+  predicted by capstone-qemu `silicon/cderive-round` with `CAPSTONE_CDERIVE_ROUND=1`.
+- Consequence for software: every virtual port's Sublet patch derives only representable children. For children of
+  4 KiB and up this means a granule-aligned base and a granule-multiple length, as mallocng's repaired geometry does.
+  The compiler lane carries that work, re-costed in the plan.
 
 **Decode.** Until acbad0f7ec82, capstone-qemu decoded CDERIVE and CREVOKE only with `x-capstone-u-mode`
 (`trans_csderive`, `trans_cskill`, 5fb78e41a3). The physical profile raised illegal instruction 2, because the RTL
@@ -1338,7 +1353,7 @@ needed ce1be0c642 with `CAPSTONE_CDERIVE_ROUND=1`, and Q-15's box records 43,591
 R-54 shape. Under the virtual profile with exact bounds (scapctl bit 8) the encoder is bypassed for the stored bounds,
 so this divergence is a physical-profile one. Fix: land the renormalisation on the QEMU shared branch and bump the pin
 (helper lane); until then every physical-profile differential cites which encoder it ran against.
-## Q-17 — CDERIVE's check order: silicon tests the size window (29) BEFORE the parent's liveness (25), QEMU the reverse `OPEN — RTL divergence, filed 2026-10-16 by the virtual-profile re-baseline; one Anvil reorder, batched into the next bitstream`
+## Q-17 — CDERIVE's check order: silicon tested the size window (29) BEFORE the parent's liveness (25), QEMU the reverse `FIXED on virtual-profile 4b958dc3f (2026-10-16): the liveness query precedes the window test; q17-order.S reads 25 on the fixed tree and 29 on capstone-sublet b7e3287e4 in simulation (the positive control), the window-inside case 25 on both; carried by bitstream 1 of the virtual profile, not yet on silicon`
 
 `capstone_dyn_unit.anvil:246-259` (d93a8d66b): operands 24, type 26, then the size/window test (29) at :251, and only then
 the node liveness query (25) at :257. QEMU `helper_csderive` (`op_helper.c:1221-1235` at d35af47b163c): 24, 26, 25, 29.
@@ -1358,6 +1373,35 @@ Not reached by `runtime/virtual/heap.c` (no DROP; `sublet_clear` is an STC of ze
 emits DROP implicitly. Options: refuse DROP on a node with children (status 3 -> 29), make DROP walk like CREVOKE, or
 make DROP register-only for NONLIN as QEMU does. Directed test: derive, DROP the parent, load through the child
 (retires today), CREVOKE (refused 25 today).
+
+## Q-19 — the consuming ldc under the virtual-context flag: the RTL first translated a consuming-capable ldc as a STORE (stricter than QEMU for a non-consuming ldc from a read-only page); RULED and CONFORMANT `CLOSED 2026-10-16 — the model's semantics owner ruled for QEMU's rule (dev 49ad7c2413c3; runtime/virtual/contract.c:223-224 reaches the case); the RTL conforms on virtual-profile ea88d8e5d: the page's store permission is captured with the clear address at the read's translation, the decision is at writeback once the value is known to be consuming, a consuming value on a page without W or D retires with STORE_PAGE_FAULT and the clear is never queued, a non-consuming value completes (vb-trans.S arms 4 and 6)`
+
+QEMU's `capstone_ldc_granule` (op_helper.c:2165-2227 at d35af47b163c) probes the store side only after the loaded
+value turns out tagged and linear-family. The RTL (virtual-profile 16345658f, load_unit.sv `ldc_store_probe_o`) decides
+at translation from the authorizing capability's write permission, because the clear is a deferred store-buffer write
+and a refusal at the clear wedged the store buffer behind the escape's save stores. Both refuse the consuming case on a
+page without W or D with STORE_PAGE_FAULT; the RTL additionally refuses a NONLIN load through an RW capability from a
+read-only page. Reachable only with capability-bearing read-only pages (mprotect after a store); the launcher's grants
+are RW by construction (capstone_vm.c:193-194). Directed test: vb-trans.S arm 4 (the consuming case); the non-consuming
+case is not yet an arm.
+
+**Ruling, 2026-10-16, by the model's semantics owner** (the helper lane, named in
+`docs/plans/2026-10-16-virtual-profile-on-silicon.md`). QEMU's rule stands: a non-consuming ldc from a read-only page
+through a writable capability succeeds. Only a load that consumes (a tagged, linear-family value) needs the page's
+store permission.
+- The case is reachable by landed software, not only by mprotect experiments. `runtime/virtual/contract.c`'s
+  `sparse-stale` mode (lines 223-224 at dev 32e7edb2b6f1) does exactly this:
+  - it makes the page holding a collected pointer `PROT_READ`;
+  - it loads the pointer back through the slot's RW capability (`void *p = *slot;`);
+  - it expects the fault at the next instruction, the labelled `cap_vm_fault_collected` lbu.
+  Under the RTL's rule that load faults 15 first, so the mode fails on silicon.
+- The RTL conforms; the semantics do not change. The store-buffer wedge that motivated the rule needs a different
+  mechanism, and that is the RTL lane's design. One shape that keeps the refusal out of the store buffer: the load's
+  translation already returns the PTE, so carry its store permission (W and D) with the load. Decide at writeback,
+  once the loaded value is known to be consuming. A consuming value on a page without store permission raises
+  STORE_PAGE_FAULT there, before the clear is queued. A non-consuming value completes.
+- The directed test needs the missing arm: a non-consuming ldc from a read-only page through an RW capability completes
+  on both sides. The `sparse-stale` contract mode is the Tier 2 check on the board.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
@@ -2279,6 +2323,14 @@ everything inside delegated domains, are unaffected.
 > alternatives are:
 > - flash back to 0568f93a9 (cursorless, without the FP fixes);
 > - build the (a) tree 2a3a87dfc (cursorless kept, R-11's truncated tops back).
+
+### R-56 — a page fault raised at a capability LOAD's translation was dropped on the way to writeback, because an LDC's result is routed through the DYN unit whose result packet carries only the capability cause `LATENT ON EVERY BITSTREAM, UNREACHABLE THERE (capability loads were never translated); FIXED on virtual-profile 16345658f (ex_stage.sv carries the LSU's exception beside the DYN result for that trans_id; cva6.sv lets it replace the capability port's exception record)`
+
+Found by vb-trans.S arm 4 on 2026-10-16: the load unit's own result line read `ex=1` in state WAIT_TRANSLATION and
+the writeback `ex=0`; `ex_stage.sv:1243` forwards `load_exception` only with `forward_normal_load_valid`, which an LDC
+never raises. Unreachable before item B since the physical profile runs capability loads bare; under the virtual
+profile every page fault on an ldc would have retired the load with a zero result. Directed test: vb-trans.S arms 2
+and 4 (a load page fault on a plain load and on an ldc).
 
 ### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `NOT REPRODUCED on caplifive_supcall_715bdd1fe (arm12-ldc 3/3), mechanism unknown, apertures 219..222 armed; was: OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
 
