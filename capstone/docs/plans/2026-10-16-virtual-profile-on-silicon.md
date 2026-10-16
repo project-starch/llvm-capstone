@@ -7,6 +7,18 @@ wave 5 the same day. This answers the first of the three questions in the RTL la
 [`virtual-capstone-rtl-feasibility.md`](virtual-capstone-rtl-feasibility.md) (3fe4541c1299, 2026-10-10). That
 audit's verdict is "partly, and not as a port". Its item list (A-H) and its order of work are the starting point here.
 
+**The target, as the lead put it on 2026-10-16: the final, fully virtual Capstone/Sublet bitstream.** It is reached
+through intermediate bitstreams, each synthesised and then flashed on the lead's word. It carries:
+- B, translation in C mode;
+- A, the per-context lifetime table, flat and paged;
+- C', exact bounds as decided below;
+- D, `CSRUNV`, `CSMINT`/`CSRETIRE` and the event kinds;
+- E, the policy list;
+- H, the collection flush;
+- the Sublet instructions as the virtual profile defines them (Q-17, Q-18).
+The physical profile stays underneath. Removing it would cost work, not save it, and it carries every recorded
+silicon result.
+
 Today's bitstream, `caplifive_sublet_d93a8d66b`, implements the physical profile plus CDERIVE/CREVOKE. Every silicon
 result so far is a physical-profile result: the bug corpus was rebuilt for the silicon ABI, not run from its virtual
 images ([`2026-10-15-bug-corpus-on-fpga.md`](2026-10-15-bug-corpus-on-fpga.md) §1).
@@ -74,18 +86,35 @@ the runtime rather than the hardware, so it is not the full profile. That leaves
 - **(i)** a wider capability format: two granules per capability;
 - **(ii)** a side store of 24 bytes per capability-bearing granule.
 
-**The choice is the lead's. Second deliverable: what the lead decides it from.** A costed comparison of (i) and (ii):
-- what each changes, unit by unit: LSU, write buffer, forwarding, the D-cache metadata lane, the tag region, the
-  rev-node unit;
-- what each changes in the compiler and runtime (pointer size, for (i));
-- memory traffic per capability load and store;
-- which cones on the standing UNOPTFLAT list each one touches;
-- an estimate in bitstream cycles;
-- a recommendation.
-
-With it, a proposal for the format freeze: 27 or 28 bounds bits, 31 or 30 node-id bits, generations or none. The
-RTL's numbers have been fixed since April, and QEMU's can still move. Who owns the model's semantics is the lead's to
-name. Propose an owner.
+**Decided 2026-10-16.** The lead delegated the decision to the lanes, and it rests on the RTL lane's costed comparison
+[`2026-10-16-exact-bounds-options.md`](2026-10-16-exact-bounds-options.md) (955851735f4f) and the compiler lane's
+measurements:
+- **(ii), the side store.** It is maintained by hardware alone and authoritative under the virtual-context flag. Each
+  granule has a 16-byte {base, end} entry, with an L1 bounds array beside the tag array.
+  - Both options cost the same in bitstream cycles (3) and in traffic: 5 transactions per capability access against 3
+    today.
+  - (i) would also double `sizeof(void*)`. The compiler lane measured 27 instructions per intcap add against 6, and
+    3-5 weeks to audit the ports' 16-byte assumptions. That amounts to re-porting the whole virtual stack.
+  - (ii) leaves the compiler, the runtime and every acceptance image unchanged, and it is the reference QEMU's model,
+    whose store also keeps the cursor (24 bytes per granule).
+- **Dense provisioning, not a per-page directory.** A directory adds a second dependent walk on the path that carries
+  the WNS. The cost of dense is RAM:
+  - the board is a Genesys2 with 1 GiB of DDR (`ariane_soc_pkg.sv:50`);
+  - a 1:1 bounds region leaves about 0.5 GiB for data, beside the tag region and the rev-node pool.
+  The RTL lane writes down the memory map, and the board lane confirms that the acceptance set fits it. If it does
+  not, the directory is reopened.
+- **The format freeze, as the RTL lane proposed:**
+  - the in-memory word as both sides have it today: {revnode_id 30 | perm 4 | cap_type 3 | bounds 27};
+  - 27 bounds bits;
+  - 30 node bits, which mean a flat index under the virtual-context flag;
+  - no generation bits in the word on either profile;
+  - the RTL's compress_bounds with renormalisation as the reference encoder until QEMU lands Q-16's block. After
+    that the two are proven bit-identical by the shared model;
+  - the exact pair {base, end} without the cursor;
+  - QEMU's 16-byte record as the virtual table's layout.
+- **Owner of the model's semantics: the helper lane**, which owns capstone-qemu's `virtual-capstone` branch and the
+  guide. A semantic change lands in QEMU, the guide and a Q-entry before the RTL follows. The RTL lane owns
+  conformance: the Q-entries and the directed tests that read each one on both sides.
 
 ## Work that does not wait for the decision
 
@@ -112,6 +141,78 @@ suites, before it goes to synthesis:
 
 The audit estimated four to five bitstream cycles, plus the format decision. Options (i) and (ii) add to that.
 
+## The 1 GiB memory map with a dense bounds region (the first C' item, RTL lane, 2026-10-16)
+
+Today (every bitstream since April, `ariane_pkg.sv:602-608`, `wt_axi_adapter.sv:161-162`): data `[0x8000_0000,
+0xBC2D_2D2D)` = 963 MiB; the tag region at one byte per 16-byte granule, `tag = 0xBC2D_2D2D + ((paddr - 0x8000_0000)
+>> 4)`, which ends exactly at `0xBFF0_0000`; the rev-node pool `[0xBFF0_0000, 0xC000_0000)` = 1 MiB (65,536 records
+x 16 B). The Genesys2 DDR is 1 GiB at `0x8000_0000`.
+
+A dense {base 64 | end 64} pair per granule is a region the size of the data it covers, so with D bytes of data the
+regions sum to D + D/16 + D + 1 MiB = 1 GiB, D = 496 MiB. Proposed map, every boundary a multiple of 1 MiB and the
+pool unmoved:
+
+| region | range | size | addressing |
+|---|---|---|---|
+| data (firmware, Linux, initramfs, the virtual tables at srevroot, every image) | `[0x8000_0000, 0x9F00_0000)` | 496 MiB | as today |
+| tags (1 B per granule) | `[0x9F00_0000, 0xA0F0_0000)` | 31 MiB | `0x9F00_0000 + ((paddr - 0x8000_0000) >> 4)` |
+| bounds (16 B per granule, authoritative under the virtual-context flag) | `[0xA0F0_0000, 0xBFF0_0000)` | 496 MiB | `0xA0F0_0000 + (paddr - 0x8000_0000)` |
+| rev-node pool (the physical profile's table) | `[0xBFF0_0000, 0xC000_0000)` | 1 MiB | unchanged |
+
+The sum is `0x1F00_0000 + 0x1F0_0000 + 0x1F00_0000 + 0x10_0000 = 0x4000_0000`. `CAP_TAG_MEM_BASE` moves from
+`0xBC2D_2D2D` to `0x9F00_0000` and `MEMORY_TOP` with it; a new `CAP_BOUNDS_MEM_BASE = 0xA0F0_0000` joins them, and
+the three are the only constants the adapter needs. Costs to state plainly: the physical profile on the final
+bitstream also sees 496 MiB of data, not 963, because one bitstream carries both profiles; firmware, the device tree
+and the test harness's memory size follow the new top. **The board lane confirms the acceptance set fits 496 MiB**
+(the current initramfs is ~28 MB; the virtual tables grow with the number of live nodes); if it does not, the
+directory comes back and costs a dependent walk on the WNS path. The bounds region is written only by capability
+stores and read only by capability loads, so an image that never stores a capability into a page never touches
+its slice; dense provisioning costs RAM, not traffic.
+
+**The board lane's answer, 2026-10-16: 496 MiB holds the acceptance set, with about 250 MiB to spare,** so dense stands.
+The figures, measured unless marked:
+- today Linux gets 962.8 MiB (DT memory@80000000, 0x3c2d2000). The kernel, firmware and memblock take 30-34 MiB,
+  and CMA is 256 MiB at 0xAC000000;
+- the built-in initramfs stays resident: 5.3 MB of rootfs plus at most about 9 MB of staged images in any corpus set
+  (set 9: 8.8 MB);
+- the largest physical region is one 128 MiB CMA region: set 9's pymalloc and set 4's memcached;
+- virtual-profile peaks per process (the 2026-10-11 memory-behaviour READMEs): Wireshark about 54 MB, CPython about
+  33.7 MB, Perl 29.1 MB, mruby 28.4 MB, PostgreSQL 27.3 MiB, memcached 14.3 MB, SQLite 11.7 MiB, FFmpeg 7.3 MB;
+- the budget: about 34 MiB reserved, 15-20 MiB initramfs, about 20 MiB kernel runtime (an estimate), and CMA of at
+  least 160 MiB. CMA is reusable, so virtual pages and a physical region overlap rather than add. The peak is about
+  230-240 MiB.
+
+Still open:
+- the peak RSS of the corpus's own virtual PostgreSQL server (postgres/sql-repros) and CPython interpreter
+  (cpython/allocator-boundary-repros). It is measured when Tier 3 rebuilds those images on QEMU's virtual profile,
+  and the margin holds if each is within 2x of its program's figure above;
+- the idle kernel figure, which the board lane reads from /proc/meminfo on its next classic boot.
+
+Conditions for the flash that moves the map:
+- CMA moves inside `[0x8000_0000, 0x9F00_0000)`, 4 MiB aligned, as the DTS requires;
+- the exact-regions monitor's bound on Linux's region (0xC0000000, R-55) follows the new top;
+- the monitor's boot-carve replay is re-run on the new map before the flash;
+- the monitor programs an all-permitting PMP entry before the first virtual context, because the page-table
+  walker's accesses are PMP-checked as supervisor (the RTL lane's B simulation).
+
+## The bitstream sequence (RTL lane's proposal, 2026-10-16)
+
+Batched so that each bitstream answers questions the previous one cannot, and no reflash is spent on an observation
+the simulation already gives:
+1. **B + Q-17**: the virtual-context flag with translation and the resumable page fault (in simulation on
+   `virtual-profile` now), the CDERIVE check-order fix (one Anvil reorder), and E's untagged-arithmetic rule (#25)
+   if its flu change lints at baseline. Reads on the board: the six vb-trans arms as bare JTAG arms, then Tier 1's
+   launcher smoke without exact bounds (the launcher refuses, which is itself the reading until C').
+2. **C' + A flat**: the common core widening (exact bounds in the register lanes), the side store with its L1
+   array and adapter leg, the new memory map, and the srevroot table in its flat form with the flat 30-bit id.
+   Reads: exact-bounds.sh's four cases as arms, Tier 1 with the launcher running, the first virtual runtime suite.
+3. **D + A paged + E + H + Q-18**: CSRUNV with its frame, actions and kinds, FP state per context, the paged table,
+   the policy list, the collection flush, and DROP's virtual rule. Reads: Tier 1 and Tier 2 in full.
+4. **Integration**: whatever 1 to 3 leave open, and Tier 3's corpus. The physical regression (S-16, the Sublet arms,
+   one corpus set) is read on every one of the four.
+Every bitstream is pre-registered before its handoff and carries its lint and loop-name numbers; every reflash
+waits for the lead's own word.
+
 ## Constraints
 
 - **No reflash without the lead's own word.** The board campaign is running on d93a8d66b and a reflash interrupts it,
@@ -131,7 +232,8 @@ The audit estimated four to five bitstream cycles, plus the format decision. Opt
 | item | owner | state |
 |---|---|---|
 | re-baseline addendum | RTL lane | DONE 2026-10-16: `virtual-capstone-rtl-feasibility.md` "Addendum, 2026-10-16"; Q-17 and Q-18 filed; reference pinned at d35af47b163c |
-| exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`; the lead decides from it |
+| exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`. DECIDED the same day: (ii) dense, the format frozen as proposed, the helper lane owning the semantics |
+| C' exact bounds: the shared core widening, then the side store and the L1 bounds array; first the memory map for 1 GiB | RTL lane | to do |
 | B translation in C mode | RTL lane | IN SIMULATION 2026-10-16: capstone-ariane branch `virtual-profile` 31c8ebe17 (the flag csupctl.virt, the two translation enables, the MMU permission privilege, the consuming-LDC store check; vb-trans.S with six pre-registered arms and its flag-off control); lint by name, the two arms, the old-tree control and the flag-off sweep are the gates before any synthesis request |
 | A lifetime table | RTL lane | to do |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
