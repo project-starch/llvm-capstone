@@ -432,3 +432,46 @@ powers of two 32768, 65536 and 131072.
 them. No neighbour's data and no neighbour's header is reachable, and mallocng validates that
 footer at `free`, so the exposure is to the object's own allocator metadata only. This is recorded
 as a deliberate acceptance rather than an oversight.
+
+## Correction: the promotion count is 1,024, not 912 — classification cannot see the base
+
+**912 was computed at one particular base.** `size_to_class` runs at `malloc(n)` entry, before the
+object has an address, so the granule it must assume is the worst case over every base the repaired
+geometry can produce — not the granule at some chosen base. The three figures, all measured:
+
+| granule evaluated at | promotions |
+|---|---|
+| base `G0 + class granule` (what the earlier sweep used) | 912 |
+| base `G0 + UNIT` | 960 |
+| **worst case over granule-aligned bases (what classification must use)** | **1,024** |
+
+The spread is the R-54 renormalisation: for 72 request sizes the trip condition depends on the
+base's alignment, so the same length encodes with granule 16 at one base and 32 at another. A
+classification rule that picks the smaller one under-promotes and leaves the neighbour's header
+reachable for those sizes.
+
+**So the implementable rule is `repr_round_classify(n)` using the base-free worst-case granule, and
+1,024 of 131,051 sizes (0.78%) move up one class.** That is the number to cost and the number the
+change implements; 912 and 960 are artifacts of a fixed base and should not be quoted.
+
+**Slot coverage widened.** The earlier sweep checked slot 1 only. Slot 0's base alignment depends
+on the header pad and the last slot abuts the group's tail, so both are now included: slots 0, 1
+and 31 (the largest index a 32-bit `avail_mask` allows), **0 slot escapes and 0 next-header hits**
+with the fix in place.
+
+## Implementation note: offset `storage`, not `mem`
+
+The cheap-looking repair — place `g->mem` inside its mapping so `storage` lands granule-aligned —
+**is wrong**, and would have failed at runtime rather than in a check. `g->mem` is the mapping base:
+`realloc.c:34` passes it to `mremap(g->mem, g->maplen*4096UL, ...)` and `free.c:21-25,148` unmaps
+`mi.len = g->maplen*4096UL` from it. An offset `mem` is not page-aligned, so `mremap`/`munmap`
+return EINVAL, or unmap from the wrong base.
+
+The repair is a per-class **storage** offset instead, applied where slots are addressed:
+`meta.h:200` (`enframe`) and `:223`, `free.c:108`, `realloc.c:15,38,39`,
+`aligned_alloc.c:31,32,40`, `donate.c:30` — with the group's allocated size grown to match at
+`malloc.c:254`, `malloc.c:326`, `realloc.c:32` and `donate.c`'s `(size_classes[sc]+1)*UNIT`.
+
+**`donate.c` is in scope**, which is not obvious: `donate.c:17` is
+`for (int sc=47; sc>0 && b>a; sc-=4)`, so donated memory hosts sc 47, 43, 39, 35 and 31 — the
+largest classes, and five of the twenty affected ones.
