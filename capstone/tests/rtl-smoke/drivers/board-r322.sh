@@ -14,7 +14,7 @@ B=$SUB/capstone/caplifive-system/sw/buildroot; BM=$B/components/opensbi/lib/sbi/
 FW=${CAPSTONE_BR_FW:-$B/build-fpga/build/opensbi-custom/build/platform/fpga/ariane/firmware}
 CC=$SUB/capstone/capstone-c
 [ -f $B/Makefile ] || { echo "no FPGA buildroot at $B (a worktree? set CAPSTONE_SUBMODULE_ROOT)" >&2; exit 1; }
-F=$(cd "$(dirname "${BASH_SOURCE[0]}")/../repro322-silicon-2026-10-01" && pwd)
+F=${R322_FOLDER:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../repro322-silicon-2026-10-01" && pwd)}   # the cells, SHA256SUMS
 E=${R322_DIR:-${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/r322-silicon}   # <tag>/r322-<tag>.dom
 MEMLOCK=${MEMLOCK:-$HOME/bin/logs/machine-memory.lock}
 BOOT=${BOOT:?boot 1..2}; TAG=${RUNTAG:-a}

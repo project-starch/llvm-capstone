@@ -1,0 +1,9 @@
+# boot r322-b2s16, 2026-10-16 17:37-17:55, caplifive_sublet_d93a8d66b.bit, REFUSAL_RECORD=1
+# fw_payload 662157e243dc2c77 (monitor 93440d5, buildroot d04bd83), host sqlite_host.user 2c9e82d101b48160; one boot banner
+control: RESULT k800 retval=4                                        (k800.dom b2d60e525f807ea4)
+base322      a958958b0d8d5101 @0x410000:  returned; rows alpha 11 / beta 22 / gamma 33, EXTENDED_PASSED, MEMORY_PASSED
+detachtrig   02ca19e2f6f5affe @0x2410000: WEDGED, as pre-registered
+    trap log 0x98 -> mcause 24
+    trap mepc 0x828a7d7c, domain base 0x82800000 -> offset 0xa7d7c -> VA 0x24b7d7c = sqlite3DropTriggerPtr+0x154
+    (ldc a3, 0x0(a1)), the emulator's fault instruction exactly; trap tval 0x0 (emulator: 0x0);
+    refusal record EMPTY [204:02 205-208:00]
