@@ -1,0 +1,3 @@
+(a) 7 table edits                  requests whose class differs from upstream    735 ( 0.56%), onto mmap    107, slot bytes +0.110% vs upstream, worst +25.1% at n=26177
+(b) skip the 7 bad classes         requests whose class differs from upstream  71752 (54.75%), onto mmap  26347, slot bytes +2.129% vs upstream, worst +71.6% at n=21793
+(b') aligned offset in the slot    requests whose class differs from upstream   1215 ( 0.93%), onto mmap    235, slot bytes +0.132% vs upstream, worst +25.1% at n=13073

@@ -186,6 +186,46 @@ lane re-costed these sites port by port; the Tier 3 nested arms depend on them.
 - No site has a caller-controlled length with no ceiling at an offset the port does not choose.
 - The total for (iii) is 6-9 days of software.
 
+**The size_classes lock: option (a) chosen, 2026-10-16, after an independent audit.** The lead asked the semantics
+owner to audit and choose. `ports/musl-capstone/check-mallocng-policy.py`, the port's guard (adc891bb920c), requires
+the `size_classes` tables and the decision functions to be token-identical to musl 1.2.5. That forbids the 7 stride
+edits. Three ways out were measured with `capstone/tests/exact-bounds-iii-audit/audit-abc.py`:
+- musl 1.2.5's own `size_to_class` (archive sha256 a9a118bb..., the guard's);
+- the RTL's `bounds-model.py` read from capstone-ariane d93a8d66b by revision;
+- every request n in [1, MMAP_THRESHOLD), against upstream as the baseline.
+
+| | requests whose class differs from upstream | of them onto mmap | slot bytes vs upstream | worst request |
+|---|---|---|---|---|
+| (a) edit the 7 entries, narrow the guard | 735 (0.56%) | 107 | +0.110% | +25.1% |
+| (b) keep the table, skip the 7 classes whose stride is not a granule multiple | 71,752 (54.75%) | 26,347 | +2.129% | +71.6% |
+| (b') keep the table, shift each object to a granule-aligned offset inside its slot | 1,215 (0.93%) | 235 | +0.132% | +25.1% |
+
+These agree with the compiler lane's (b) (26,347 onto mmap, +2.13%, worst +71.7% at n=21793), and the in-class part
+of (a) is its first estimate's 628. Every option keeps bounds representable and no rounded end reaches a neighbour's
+header.
+
+**(a) is chosen:**
+- It is the cheapest, and it moves the allocator's behaviour least.
+- It is the only one in which an object's nominal size equals its capability's length. In (b'), the wrapper inflates
+  a request so the slot has room for the alignment shift. `set_size` would then record more than the capability
+  covers, so `malloc_usable_size` and in-place `realloc` would report bytes the pointer cannot reach, needing more
+  changes outside musl.
+- (b) keeps the guard verbatim, but it sends more than half of all large requests to another class.
+
+The guard is narrowed, not removed:
+- `size_classes` must equal upstream except exactly entries 36, 38, 39, 41, 43, 45 and 47, each at its named new value
+  (1170, 1638, 2048, 2732, 4096, 5464, 8192). Any other difference still fails.
+- The decision functions stay token-identical.
+- The guard gains a positive control: a table with an eighth entry changed is refused.
+
+The port's qualification claim becomes: mallocng's decision code is token-identical to musl 1.2.5, and its size-class
+table differs in exactly seven entries, each raised by 1-4 units so that every large class's stride is a multiple of
+its bounds granule. heap.c derives each capability over `repr_round(n)`, the nominal size it passes, so the two
+agree.
+
+The guard and the principle it encodes, keeping upstream allocation policy, are the external collaborator's work on
+the port (adc891bb920c). The lead authorised this narrowing; the landing commit says so.
+
 **Two base alignments the re-cost has to include**, found by the semantics owner with the RTL's bounds model.
 "The base comes free" holds only for parents that mallocng placed:
 - **mallocng's big path at 4 MiB and up.** There the granule (8 KiB and up) exceeds the page, and `mmap` guarantees
