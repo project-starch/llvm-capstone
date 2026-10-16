@@ -113,6 +113,14 @@ Proposed, for the lead to freeze and the model's owner to hold:
 - **The exact pair under (ii)**: {base 64 | end 64}, cursor NOT stored (it is in the word), authoritative when the
   virtual-context flag is set, ignored by the physical profile; written on every capability store, read on every
   capability load; base region reserved by firmware.
+- **The cursor stays in the word: a compiler requirement, not a density result** (the compiler lane, 2026-10-16). The
+  compiler reads a capability's cursor with `PseudoTRUNC_CAP`, an `ADDI rd, rs, 0` that works because the cursor is
+  the low 64 bits of the capability in the register file and the word (`CapstoneInstrInfo.td:2582-2585`); it does NOT
+  use `lcc rd, rs, 2`, which traps on an untagged operand and brought back C-19 (a null-pointer comparison killing the
+  domain at entry). Base and end are read with `lcc` selectors 3 and 4, so they can live behind the LSU; the cursor
+  cannot. Any later revision tempted to move the cursor out of the word to free bits breaks this. The register-side
+  tag-plus-metadata lane is unchanged under (ii), so reading a tagged register as an integer still raises
+  UNEXPECTED_OPERAND, which the pseudo exists to avoid.
 - **The record (item A)**: QEMU's word0 prev[31:0] / next[63:32], word1 depth[29:0] / parent[59:30] / flags[62:60]
   (`cap_rev_table_abi.h:8-30`) as the virtual-profile layout; the physical pool's 110-bit record stays as is.
 

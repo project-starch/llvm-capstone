@@ -315,8 +315,14 @@ builds them). The Anvil units contain no privilege or capmode term; every such d
 Tier 0, the directed suites to port into the RTL harness, all at d35af47b163c: tests/virtual-capstone-model (model.py,
 8 directed traces per storage backend), tests/sublet-lifetimes (119 at acbad0f7ec), tests/virtual-capstone-m1 (60),
 tests/virtual-capstone-runtime (69) plus exact-bounds.sh (4), tests/capstone-x0-writes (24), tests/capstone-untagged-arith,
-and dev's runtime/tests/sublet-lifetimes. The counts are the runtime lane's of 2026-10-15; they are re-measured on a
-build of the pin before any port (build under way on 2026-10-16, /mnt/hdd/<user>/capstone/qemu-pin-d35af47b). Tier 1:
+and dev's runtime/tests/sublet-lifetimes. Re-measured on 2026-10-16 on a fresh build of the pin (serial, one QEMU at a time): sublet-lifetimes 119/119,
+virtual-capstone-m1 69/69 (development.md says 60), virtual-capstone-runtime 69/69, exact-bounds.sh 4/4,
+capstone-x0-writes 24/24, capstone-untagged-arith 6/6, model.py's lines as development.md:30-31 print them, and dev's
+runtime/tests/sublet-lifetimes 20/20 (development.md says eight; this one ran against the pre-existing 2026-10-10 SDK
+under /tmp/capstone/virt-stack, not a fresh build, so it is a non-canonical pass). No failures. On the exact-bounds
+axis only exact-bounds.sh and one sublet-lifetimes case run with `x-capstone-exact-bounds=true`; every other suite
+leaves it at QEMU's default false, so Tier 0 does not exercise the board's stated feature set on that axis, and the
+directed RTL arms ported from it say per test which setting they model. Tier 1:
 the guide's Linux smoke (capstone_vm.ko, capstone-vexec contract.dom reading VIRTUAL_APPLICATION_OK, the stale access
 denied 25 / exit 139), feature set `x-capstone-u-mode=true,x-capstone-exact-bounds=true`. Tier 2: run.py with the SQLite
 and mruby images. Tier 3: every verdicts-v1 bundle with target capstone-virtual (26 bundles, 382 cells, 304 images at

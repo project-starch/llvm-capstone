@@ -132,7 +132,7 @@ The audit estimated four to five bitstream cycles, plus the format decision. Opt
 |---|---|---|
 | re-baseline addendum | RTL lane | DONE 2026-10-16: `virtual-capstone-rtl-feasibility.md` "Addendum, 2026-10-16"; Q-17 and Q-18 filed; reference pinned at d35af47b163c |
 | exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`; the lead decides from it |
-| B translation in C mode | RTL lane | to do (simulation first) |
+| B translation in C mode | RTL lane | IN SIMULATION 2026-10-16: capstone-ariane branch `virtual-profile` 31c8ebe17 (the flag csupctl.virt, the two translation enables, the MMU permission privilege, the consuming-LDC store check; vb-trans.S with six pre-registered arms and its flag-off control); lint by name, the two arms, the old-tree control and the flag-off sweep are the gates before any synthesis request |
 | A lifetime table | RTL lane | to do |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
 | E policy list | RTL lane | to do, folded into D |
