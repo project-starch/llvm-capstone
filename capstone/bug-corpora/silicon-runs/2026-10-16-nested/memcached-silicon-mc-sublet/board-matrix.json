@@ -35,7 +35,8 @@
    "detail": "cause=25 pc=0xac901520 address=0xb38c8490 in read_probe+0x14 (the labelled probe)",
    "predicted": "CAUGHT",
    "image_sha256": "703794c139ceb4dfc28cac0199c3224717f90da97ca8f7f64d247817b147aeae",
-   "as_predicted": true
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
   },
   {
    "name": "memcached-allocator-01",
@@ -46,7 +47,8 @@
    "detail": "cause=25 pc=0xac9014cc address=0xb38cc490 in read_probe+0x14 (the labelled probe)",
    "predicted": "CAUGHT",
    "image_sha256": "50e26ec7e801e3ff7db54e547f4d4d99d3acba0517655b861f2b1ec69d63b8d0",
-   "as_predicted": true
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
   },
   {
    "name": "memcached-allocator-02",
@@ -57,7 +59,8 @@
    "detail": "cause=25 pc=0xac900f48 address=0xb39cc700 in read_probe+0x14 (the labelled probe)",
    "predicted": "CAUGHT",
    "image_sha256": "5fe109cde9eafe9a2c3e056d2707b63e9875c14a8cc0ec99236c1e2c7a049004",
-   "as_predicted": true
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
   },
   {
    "name": "memcached-allocator-03",
@@ -68,7 +71,8 @@
    "detail": "cause=25 pc=0xac900f48 address=0xb39cc700 in read_probe+0x14 (the labelled probe)",
    "predicted": "CAUGHT",
    "image_sha256": "83b8e727405f82f1d8ff5142894e6663d1e6b2ad5eb70ccb5ee716c40dd7e300",
-   "as_predicted": true
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
   },
   {
    "name": "memcached-allocator-04",
@@ -79,7 +83,8 @@
    "detail": "cause=25 pc=0xac900f48 address=0xb39cc700 in read_probe+0x14 (the labelled probe)",
    "predicted": "CAUGHT",
    "image_sha256": "b565e6a2537bc41b9c146b5ddf7552a9681d4c1368d5b4644016330c8d31f66a",
-   "as_predicted": true
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
   },
   {
    "name": "memcached-allocator-05",
@@ -90,7 +95,8 @@
    "detail": "fixed read CAUGHT: cause=24 pc=0xac9029d0 address=0xb38cc85a in capstone_cap_revoke_child+0x14 (NOT the labelled probe)",
    "predicted": "FIXED-ARM-FAILED",
    "image_sha256": "d69afdaa9e78b97a7ed69aa44f68d8562508b66e98339951fd503b223669a713",
-   "as_predicted": true
+   "as_predicted": true,
+   "predicted_tool": "FIXED-ARM-FAILED"
   },
   {
    "name": "memcached-allocator-06",
@@ -101,7 +107,8 @@
    "detail": "cause=28 pc=0xac900f4c address=0xb39cc761 in write_probe+0x18 (the labelled probe)",
    "predicted": "CAUGHT",
    "image_sha256": "f3580074aa67d42ebff9631534648dc91e22bddea0a2d9fd7eaccb90f1d7e6a2",
-   "as_predicted": true
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
   },
   {
    "name": "memcached-allocator-07",
@@ -112,7 +119,8 @@
    "detail": "cause=28 pc=0xac900f48 address=0xb39cc769 in read_probe+0x14 (the labelled probe)",
    "predicted": "CAUGHT",
    "image_sha256": "e0bfe718df0b104fd1ef53273256852bb59212f7ab80da4006df1e500cfc2af4",
-   "as_predicted": true
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
   },
   {
    "name": "memcached-allocator-08",
@@ -121,9 +129,10 @@
    "kind": "mc",
    "outcome": "CONTROL-FAILED",
    "detail": "CONTROL-FAILED 785",
-   "predicted": "CAUGHT",
+   "predicted": "CONTROL-FAILED",
    "image_sha256": "dacb6f553f9486973f060a135a9d0cbc6988845636034571e5239b299488371d",
-   "as_predicted": false
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
   },
   {
    "name": "memcached-allocator-controls-virtual-90",
@@ -134,7 +143,8 @@
    "detail": "cause=25 pc=0xac900f48 address=0xb39cc760 in read_probe+0x14 (the labelled probe)",
    "predicted": "CAUGHT",
    "image_sha256": "2f64f760e300d16103db374a781b5df4d9ed527b35c56926d6741241989d3d6a",
-   "as_predicted": true
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
   }
  ]
 }

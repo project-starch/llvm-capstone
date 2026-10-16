@@ -33,6 +33,10 @@ THE ARMS.
                      differential (`0 N buggy`), whose temporal cases assert the stale chunk was reoccupied.
 wmem's fixed run is `0 N fixed` on both; its three controls run once as `0 N` (never the differential, whose verdict
 line would judge a control by a case's observation) and gate the arm.
+The nested-lifetime controls (docs/plans/2026-10-11-nested-lifetime-controls.md: parent, sibling and successor at
+memcached's slabs and cache, FFmpeg's AVBufferPool and wmem's block and block_fast allocators) are their own kind: each
+control program has a list of runs, every one of which must complete, except the successor's stale read on a Sublet
+arm, which must fault at the family's probe. Pass the family's directory as the corpus.
 The carved corpus also runs its own controls as rows: 99 (one byte past a 16-byte carve, inside its block) on every
 arm, and 98 (a re-carved region's old alias) on the Sublet carve. They gate the arm like the four tool controls.
 
@@ -101,6 +105,39 @@ WM_CONTROLS = {"silicon-wm-sublet": {"00": "CAUGHT", "01": "CAUGHT", "02": "CAUG
                "silicon-wm-stock": {"00": "DEFECT-REPRODUCED", "01": "CAUGHT", "02": "DEFECT-REPRODUCED"}}
 CARVE_SWITCHES = ("FFC_SUBLET_CARVE", "FFC_CARVE_BOUNDS", "FFP_CARVE_BOUNDS", "MC_CARVE_BOUNDS", "MC_CAPSTONE_SUBLET",
                   "MCP_ADAPTER_BACKING")
+# The nested-lifetime control families, by their path under bug-corpora: the driver (relative to the family), extra
+# include directories, each run as (control number, variant, argv), the completion marker, and the stale run's probe.
+LIFETIME = {
+    ("memcached", "allocator-repros", "controls", "lifetime"): dict(
+        driver="driver-controls.c", inc=[], probe=r"^read_probe$", done="CTL-COMPLETED control={n} variant={v}",
+        runs=lambda sublet: [(91, "page"), *([(91, "generation")] if sublet else []), (92, "sibling"),
+                             (93, "through-c"), (93, "stale")],
+        argv=lambda n, v: [str(n), v]),
+    ("memcached", "allocator-repros", "controls", "lifetime-cache"): dict(
+        driver="../lifetime/driver-controls.c", inc=["../lifetime", "../../shared"], probe=r"^read_probe$",
+        done="CTL-COMPLETED control={n} variant={v}",
+        runs=lambda sublet: [(94, "list-head"), (95, "sibling"), (96, "through-c"), (96, "stale")],
+        argv=lambda n, v: [str(n), v]),
+    ("ffmpeg", "pool-repros", "controls", "nested-lifetime"): dict(
+        driver="shared/driver.c", inc=[], probe=r"^stale_read_probe$", done="CTL-RESULT completed",
+        defs=lambda sublet: f"-DCTL_PROTECTED={1 if sublet else 0}",
+        runs=lambda sublet: [(91, "run"), (92, "run"), (93, "run"), (93, "stale")],
+        argv=lambda n, v: [v, str(n)]),
+    ("wireshark", "wmem-repros", "controls", "lifetime"): dict(
+        driver="shared/driver.c", inc=[], probe=r"^wm_probe$", done="WM_DEFECT case={n} mode=0 completed",
+        runs=lambda sublet: [(0, "parent"), (1, "sibling"), (2, "successor"), (3, "stale")],
+        argv=lambda n, v: ["0", str(n)]),
+    ("wireshark", "wmem-repros", "controls", "lifetime-block-fast"): dict(
+        driver="shared/driver.c", inc=[], probe=r"^wm_probe$", done="WM_DEFECT case={n} mode=0 completed",
+        runs=lambda sublet: [(0, "parent"), (1, "successor"), (2, "stale")],
+        argv=lambda n, v: ["0", str(n)]),
+}
+
+
+def sublet_arm(arm):
+    return arm.endswith("-sublet")
+
+
 # corpus controls that gate their arm like the four tool controls (pool-control predates this and stays a plain row,
 # as set 2 was pre-registered with it)
 CONTROL_ROWS = ("carve-control", "mc-control", "wmem-control")
@@ -111,6 +148,8 @@ CTL_PROBE = re.compile(r"^ctl_(read|write)_probe$")
 def kind_of(corpus):
     """The corpus kinds this tool scores: run-capstone-domain.py's, plus the AVBufferPool corpus and its control 90."""
     rel = corpus.relative_to(REPO / "capstone/bug-corpora").parts
+    if rel in LIFETIME:
+        return "lifetime-control"
     if rel[1] == "pool-repros":
         return "pool-control" if "controls" in rel else "pool"
     if rel[1] == "wmem-repros":
@@ -236,9 +275,19 @@ def cmd_build(a):
         carve = arm.get("carve", {}).get(rel[1], "")
         flags = f"{a.opt} -I{shared} {carve} {arm.get('corpus_defs', {}).get(rel[1], '')} {a.extra_cflags} {appf}".split()
         driver = shared / arm.get("driver", "driver.c")
+        fam = LIFETIME.get(rel)
+        if fam:
+            driver = (corpus / fam["driver"]).resolve()
+            flags += [f"-I{corpus}"] + [f"-I{(corpus / i).resolve()}" for i in fam["inc"]]
+            flags += fam["defs"](sublet_arm(a.arm)).split() if "defs" in fam else []
         for d in sorted(x for x in corpus.glob("[0-9][0-9]_*") if (x / "case.c").is_file()):
             name = f"{tag}-{d.name[:2]}"
             cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind=kind, n=str(int(d.name[:2])))
+            if fam:
+                n = int(d.name[:2])
+                cases[name]["runs"] = [dict(variant=v, argv=fam["argv"](n, v),
+                                            expect="CAUGHT" if v == "stale" and sublet_arm(a.arm) else "COMPLETED")
+                                       for m, v in fam["runs"](sublet_arm(a.arm)) if m == n]
             jobs.append((name, [str(d / "case.c"), str(driver), *a.extra_src],
                          " ".join(flags), arm["defs"], out, a.data, a.arena))
         if kind == "carved":   # the corpus's own carve controls, built and run like a case
@@ -289,6 +338,19 @@ def score(a, runs):
     for name, c in m["cases"].items():
         if not c["image"]:
             rows.append(dict(name=name, outcome="BUILD-FAILED", as_predicted=False))
+            continue
+        if c.get("runs") is not None:       # a nested-lifetime control: one row per run
+            fam = LIFETIME[tuple(Path(c["corpus"]).relative_to("capstone/bug-corpora").parts)]
+            syms = rcd.Symbols(llvm, c["image"])
+            for r in c["runs"]:
+                text, result = runs.get(f"{name}-{r['variant']}", ("", {}))
+                outcome, detail = rcd.classify(text, result, syms, re.compile(fam["probe"]))
+                if outcome != "CAUGHT" and result.get("kind") == "exit" and result.get("value") == 0 \
+                        and fam["done"].format(n=int(c["n"]), v=r["variant"]) in text:
+                    outcome, detail = "COMPLETED", f"completed: `{fam['done'].format(n=int(c['n']), v=r['variant'])}`, exit 0"
+                rows.append(dict(name=f"{name}-{r['variant']}", case=c["case"], corpus=c["corpus"], kind=c["kind"],
+                                 outcome=outcome, detail=detail, predicted=r["expect"], image_sha256=c["sha256"],
+                                 as_predicted=outcome == r["expect"] and (outcome != "CAUGHT" or "(the labelled probe)" in detail)))
             continue
         syms = rcd.Symbols(llvm, c["image"])
         case_dir = REPO / c["corpus"] / c["case"]
@@ -343,7 +405,10 @@ def cmd_qemu(a):
     for which in ARMS[a.arm]["controls"]:
         run(m["controls"]["image"], [which], f"control-{which}")
     for name, c in m["cases"].items():
-        if c["image"]:
+        if c["image"] and c.get("runs") is not None:
+            for r in c["runs"]:
+                run(c["image"], r["argv"], f"{name}-{r['variant']}")
+        elif c["image"]:
             for which in ("fixed", "buggy"):
                 argv = argv_for(a.arm, c["kind"], c["n"], which)
                 if argv is not None:
@@ -369,6 +434,19 @@ def cmd_board(a):
     if not runs:
         sys.exit(f"CONTROL-FAILED no CORPUS-RUN blocks in {a.transcript}")
     controls, rows, ok = score(a, runs)
+    if a.prereg:
+        # the pre-registered prediction, not the tool's rule, is what a board row is read against
+        pre = {r["name"]: r for r in json.loads(Path(a.prereg).read_text())["rows"]}
+        for r in rows:
+            p = pre.get(r["name"], {}).get("predicted_board")
+            if p is None:
+                continue
+            r["predicted_tool"], r["predicted"] = r.get("predicted"), p["outcome"]
+            site = re.search(r" in ([A-Za-z_][\w.$]*)\+0x", r.get("detail", ""))
+            r["as_predicted"] = r["outcome"] == p["outcome"] and (p["outcome"] != "CAUGHT" or
+                                                                 (site and site.group(1)) == p.get("site"))
+        n = [r for r in rows if r["outcome"] != "BUILD-FAILED"]
+        print(f"against the pre-registration: {sum(r['as_predicted'] for r in n)} of {len(n)} rows by outcome and site")
     (a.out / a.arm / "board-matrix.json").write_text(json.dumps(dict(controls=controls, rows=rows), indent=1) + "\n")
     return 0 if ok else 75
 
@@ -391,6 +469,10 @@ def cmd_stage(a):
         if not c["image"]:
             continue
         (st / f"{name}.dom").write_bytes(Path(c["image"]).read_bytes())
+        if c.get("runs") is not None:
+            for r in c["runs"]:
+                lines.append(f"{pre}{name}-{r['variant']} {name}.dom {' '.join(r['argv'])}")
+            continue
         for which in ("fixed", "buggy"):
             argv = argv_for(a.arm, c["kind"], c["n"], which)
             if argv is not None:
@@ -421,6 +503,7 @@ def main():
     s.add_argument("--prefix-keys", action="store_true", help="prefix every run key with the arm (several arms per boot)")
     r = sub.add_parser("board"); r.add_argument("--arm", choices=ARMS, required=True)
     r.add_argument("--out", type=Path, required=True); r.add_argument("--transcript", required=True)
+    r.add_argument("--prereg", help="the arm's committed qemu-and-predictions.json: rows are read against it")
     a = ap.parse_args()
     return {"build": cmd_build, "qemu": cmd_qemu, "stage": cmd_stage, "board": cmd_board}[a.cmd](a)
 
