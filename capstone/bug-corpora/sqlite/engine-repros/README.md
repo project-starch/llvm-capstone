@@ -43,6 +43,10 @@ judged by `tools/verdicts.py`; the current bundles are `results/2026-10-11-virtu
 (memsys5 and the lookaside on CDERIVE/CREVOKE, each memsys5 block bounded to its request), verdicts
 derived into each `case.json`. Before any case each arm runs `controls/` -- a memsys5 block used after free and
 written 1 KiB past its start -- which complete on the stock arm and fault on the port, as declared.
+The adapted amalgamation the bundles record (`amalgamation_sha256` 7fc92e19…) is stock 3.22.0
+(sha256 7991acd0…) through `ports/sqlite/adapt-sqlite-322.sh` as of 423d13f5b81f. Before that commit
+the script lacked the sorter's 16-byte alignment line and produced b446615b…, so the bundles' input is
+reproducible only from that commit on.
 
 A fault counts only in a function the case justifies (`fault_sites`): where host ASan reported it,
 or what the source and `PROVENANCE.md` name as the stale access.
