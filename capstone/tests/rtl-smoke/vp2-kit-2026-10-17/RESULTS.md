@@ -149,6 +149,29 @@ So the post-fix absence check runs on the unmodified harness, and the trace swit
 - The record still says `virtual_vm_abi` 5. That field was hard-coded at this revision, and the compiler lane has
   fixed it since.
 
+## run.py on b61f56b10c06 without the `add()` change: sqlite_write's NOMEM is `add()` refusals, not the refused growth (2026-10-17 05:59-06:10)
+
+Pre-registered at the lane's README ("run.py on b61f56b10c06 WITHOUT the add() change"). Kit: QEMU module
+`6dce3015bfe8566d`, headers as before, exact bounds off, `--timeout 1500`. Status FAIL.
+- **Computed row, held:** `normal`, `parallel_one` and `parallel_two` exit 1 on `heap growth/zero`. Each step's own
+  output carries a 135168-byte `CAPSTONE_VM_ADD_REFUSED` (`pow2=0`).
+- **The question, answered:** `sqlite_write` still exits 7. So its NOMEM is not the growth that b61f56b10c06
+  fixes.
+- **Every failing step's own output carries `add()` refusals.** The guest script prints each step's `VM_EXIT`
+  line before that step's captured output, so these are the lines after each exit line:
+
+  | step | refusals |
+  |---|---|
+  | normal | 49152 and 135168 |
+  | heap-threads | 1 |
+  | sqlite_write | 49152, 28672, 122880, 94208, and 8192 with `pow2=1 naturally_aligned=0` (the alignment half) |
+  | sqlite_read | 5, all `pow2=0` |
+  | mruby | 49152 and 40960 |
+
+- So, before the `add()` change, every remaining run.py failure has `add()` refusals in its own output. The
+  pre-registered inferred rows (heap-threads, sqlite_write, sqlite_read and mruby clear) are now each backed by an
+  observed refusal in their step. Whether they clear is still the fix run's question.
+
 ## Defects found on the way, and where they went
 
 - **dev's app-port SQLite could not be prepared** after 423d13f5b81f, which moved the sorter rewrite into
