@@ -26,7 +26,7 @@ The result lines are in `results/`. Each boot kept its `fw_payload.bin`.
 - So it is a wider band at the one size that straddles the cache, not a moved figure. Reported as a new reading,
   as pre-registered.
 
-## REVOKE read lower than on R-43 v2, at every node count (attribution RETRACTED)
+## REVOKE reads lower than on R-43 v2, at every node count: the retraction below is RESOLVED, and the drop is the bitstream's or its monitor's
 
 > **RETRACTED (2026-10-16 23:10): the attribution of this drop to the bitstream.**
 > - **The image predates the fix.** H1's image `da9c54e578845735` was built on 2026-09-29, before the sublet-runtime fix
@@ -39,6 +39,12 @@ The result lines are in `results/`. Each boot kept its `fw_payload.bin`.
 > - **What is withdrawn:** "revocation is cheaper on this bitstream". The REVOKE figures below are readings of this
 >   image on this bitstream, and they stand as readings; the drop's attribution waits for a fixed-runtime image.
 > - **What stays, as readings of the same image:** latency, timer, node counts and linear types.
+>
+> **RESOLVED (2026-10-17 02:53) by the fixed-runtime test (`../h1f-sublet-2026-10-16`):** three boots of a rebuild
+> carrying the fix (66764b0e, 14 SHRINK) read the same drop. At n >= 16 it reads 0.84-0.86 of v2, against this image's
+> 0.82-0.86; the fixed part (n = 1) reads 0.47. So the drop is a property of this bitstream and its classic-line
+> monitor, not of the image's runtime. Whether the bitstream or the monitor (93440d5 against 2dcd3a5) causes it is
+> still open.
 
 
 REVOKE (`rv`) in the nodes regression, cycles:
