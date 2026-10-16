@@ -882,3 +882,67 @@ seven more SPLIT/SHRINK files than the CDERIVE table showed. **Total for (iii): 
 **The comparison still does not reopen.** Eight to twelve days of software against the side store,
 496 MiB of map, 1.9x capability traffic and one to two bitstream cycles is the same call as before,
 with more days on one side and nothing new on the other.
+
+## Item 1 implemented in part, with what remains measured rather than estimated
+
+**Landed on the lane branch.** The 912 figure is corrected first: it counted 17 requests at or
+above `MMAP_THRESHOLD` (sc 47's repaired capacity runs to 131068 while the threshold is 131052),
+which never reach a slot. Verified by reproducing my own loop: 912 − 17 = 895 against the edited
+table, and against **upstream behaviour** the honest figure is **735 changing class — 628 in-class
+plus 107 onto the mmap path**. 628 was my first estimate, before I started correcting in the wrong
+direction. The peer lane's independent audit matches on all of it.
+
+**The guard, narrowed and pinned.** `check-mallocng-policy.py` now accepts a `size_classes` table
+that differs from upstream in **exactly** entries 36, 38, 39, 41, 43, 45 and 47, at **exactly**
+1170, 1638, 2048, 2732, 4096, 5464 and 8192. It is a pin, not a relaxation: an eighth edit, a wrong
+value, a missing entry, a lowered entry, a swapped pair and a wrong table length all still fail.
+Everything else the guard holds — `size_to_class`, `try_avail`, `alloc_slot`, `okay_to_free`,
+`nontrivial_free`, the group size/count/mmap decisions, the slot/class selection, the moving-realloc
+sequence, `UNIT`, `IB`, `MMAP_THRESHOLD` — is untouched.
+
+**The guard is proven two-sided against the real tree, not a synthetic table:** on a tree with
+0001-0009 applied it reports `FAIL size_classes` and exits 1; with the seven entries raised it
+reports `PASS size_classes` and exits 0. `test-mallocng-policy-narrowing.py` adds the unit-level
+control: one accepted table, seven refused near misses.
+
+**`0010-mallocng-representable-bounds.patch`** carries the seven entries and the `enframe` change
+that steps each object's base **down** to a granule-aligned offset — down and never up, so it can
+never exceed `slack` and overrun the slot, and a no-op for any granule at or below `UNIT`, which is
+every length below 8 KiB, so the double-free offset cycling is untouched there. Applies cleanly to
+a 0001-0009 tree and reverse-applies to a patched one, so `prepare-musl-capstone.sh` skips it when
+it is already in.
+
+**`heap.c`** does the two things that must live outside musl: `malloc()` rounds the request with
+`capstone_repr_round` and passes **the same value** to mallocng and to `publish()`, so `set_size`
+records exactly what the capability covers and neither `malloc_usable_size` nor an in-place
+`realloc` can report unreachable bytes; and `__capstone_malloc_map` now asks `cap_vm_acquire` for
+**granule** alignment rather than 4096 and rounds its length to the granule. That last one needed
+no over-map and trim after all — `cap_vm_acquire`'s third parameter is already an alignment.
+
+### What remains, with the number that says why
+
+Simulated against the RTL bounds oracle over 6,060 (class, request, slot, offset-cycle) cases,
+modelling the code exactly as now written:
+
+| group header | cases failing |
+|---|---|
+| 16 bytes, as today | **1,497 of 6,060** |
+| granule-sized | **0 of 6,060** |
+
+So **the per-class granule-sized group header is required** — the `enframe` step-down cannot rescue
+`off = 0`, where the user pointer is `storage + stride*idx` and `storage` is `mem + 16`, i.e. 16 mod
+the granule. The first failure the simulation reports is sc=36, n=16480, slot 0, offset 0: base
+`0x400000010` decoding as `[0x400000000, 0x400004080)`, truncated 16 bytes below the object. That
+change touches the eleven `storage + stride*idx` sites — `meta.h` `enframe` and `:223`, `free.c:108`,
+`realloc.c:15,38,39`, `aligned_alloc.c:31,32,40`, `donate.c:30` — none of which is inside a locked
+function, plus the group sizing at `malloc.c:254`, `:326`, `realloc.c:32` and `donate.c`'s
+`(size_classes[sc]+1)*UNIT`. **`donate.c` is in scope**: its loop is
+`for (int sc=47; sc>0 && b>a; sc-=4)`, so donated memory hosts sc 47, 43, 39, 35 and 31.
+
+**And one gap with no local fix.** `__capstone_vm_remap(unsigned long, unsigned long, unsigned long)`
+takes an address, an old length and a new one — **no alignment parameter**, unlike
+`cap_vm_acquire`. So a remapped mapping can land page-aligned but not granule-aligned, and
+`__capstone_malloc_group_remap` cannot ask for better. The cheap correct answer is to verify the
+remapped base and return `MAP_FAILED` when it is misaligned: `realloc.c` already falls through to
+its `malloc` + copy path on a failed `mremap`, so the behaviour degrades to a copy rather than to a
+wrong bound. Extending the VM service ABI would avoid the copy and is the larger change.

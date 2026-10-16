@@ -31,6 +31,38 @@ def body(text, name):
     raise ValueError('unterminated function: ' + name)
 
 
+# The ONE narrowing of this guard, authorised by the project lead for option (iii).
+#
+# Every large class's stride must be a multiple of its own bounds granule, or the capability the
+# allocator derives over an object is not exactly representable: the compressed encoder truncates
+# an unaligned base DOWNWARD, so the object would gain authority below itself. Seven strides are
+# 16 x odd and so guarantee only 16-byte alignment while their capacities need 32 to 128. Raising
+# those seven entries by 1 to 4 units each is the whole change; `size_to_class` is untouched, and
+# the rounding that drives requests into the right class lives in the runtime's own malloc wrapper,
+# outside musl.
+#
+# This is deliberately NOT a relaxation to "the table may differ". It pins the seven indices AND
+# their values, so an eighth edit, a different value, or a reverted entry all still FAIL. The guard
+# itself is the external collaborator's work; only this exception is ours.
+ALLOWED_SIZE_CLASS_EDITS = {36: 1170, 38: 1638, 39: 2048, 41: 2732, 43: 4096, 45: 5464, 47: 8192}
+
+
+def size_class_values(text):
+    pattern = r'\bsize_classes\[.*?\]\s*=\s*\{(.*?)\};'
+    body = re.search(pattern, text, re.S)[1]
+    return [int(v) for v in re.findall(r'\d+', body)]
+
+
+def size_classes_ok(original, current, allowed=None):
+    """Upstream's table except exactly the authorised entries, at exactly their authorised values."""
+    allowed = ALLOWED_SIZE_CLASS_EDITS if allowed is None else allowed
+    old, new = size_class_values(original), size_class_values(current)
+    if len(old) != len(new):
+        return False
+    differ = {i: new[i] for i in range(len(old)) if old[i] != new[i]}
+    return differ == allowed
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('tree', type=Path)
@@ -53,10 +85,11 @@ def main():
         old = re.findall(pattern, original['meta.h'], re.M)
         new = re.findall(pattern, current['meta.h'], re.M)
         checks[name] = len(old) == len(new) == 1 and old == new
-    for name in ('size_classes', 'small_cnt_tab', 'med_cnt_tab'):
+    for name in ('small_cnt_tab', 'med_cnt_tab'):
         pattern = r'\b' + name + r'\[.*?\]\s*=\s*(\{.*?\});'
         same(name, re.search(pattern, original['malloc.c'], re.S)[1],
              re.search(pattern, current['malloc.c'], re.S)[1])
+    checks['size_classes'] = size_classes_ok(original['malloc.c'], current['malloc.c'])
     functions = {'meta.h': ('size_to_class', 'size_overflows', 'step_seq',
                             'record_seq', 'account_bounce', 'decay_bounces', 'is_bouncing'),
                  'malloc.c': ('try_avail', 'alloc_slot'),

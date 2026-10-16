@@ -1,0 +1,69 @@
+mallocng: representable object bounds for the virtual profile (option iii)
+
+Seven size-class strides raised by 1-4 units each so that every large class's stride is a
+multiple of its own bounds granule, and enframe placing each object on a granule-aligned
+base. Without both, the compressed encoder truncates an unaligned base DOWNWARD and the
+object gains authority below itself; measured against the RTL bounds model, 1497 of 6060
+(class, request, slot, cycle) cases decode wrong without this and 0 with it, once the
+group header is granule-sized as well.
+
+size_to_class and the slot/class selection are untouched: the request is rounded in the
+runtime's own malloc wrapper (runtime/virtual/heap.c), outside musl, so mallocng's
+set_size records exactly what the capability covers. check-mallocng-policy.py pins these
+seven entries and their values and still refuses any other difference.
+
+--- a/src/malloc/mallocng/malloc.c
++++ b/src/malloc/mallocng/malloc.c
+@@ -18,9 +18,9 @@
+ 	146, 170, 204, 255,
+ 	292, 340, 409, 511,
+ 	584, 682, 818, 1023,
+-	1169, 1364, 1637, 2047,
+-	2340, 2730, 3276, 4095,
+-	4680, 5460, 6552, 8191,
++	1170, 1364, 1638, 2048,
++	2340, 2732, 3276, 4096,
++	4680, 5464, 6552, 8192,
+ };
+ 
+ static const uint8_t small_cnt_tab[][3] = {
+--- a/src/malloc/mallocng/meta.h
++++ b/src/malloc/mallocng/meta.h
+@@ -5,6 +5,9 @@
+ #include <errno.h>
+ #include <limits.h>
+ #include "glue.h"
++#ifdef CAPSTONE_MUSL_MALLOC
++#include <capstone/representable.h>
++#endif
+ 
+ __attribute__((__visibility__("hidden")))
+ extern const uint16_t size_classes[];
+@@ -250,6 +253,27 @@
+ 		if (off > slack) off -= slack+1;
+ 		assert(off <= slack);
+ 	}
++#ifdef CAPSTONE_MUSL_MALLOC
++	/* Option (iii): the capability the runtime derives over this object must have a
++	 * granule-aligned BASE, because the compressed encoder truncates an unaligned base
++	 * downward and the object would gain authority below itself. The user pointer is
++	 * p + UNIT*off, so only offsets that keep it a granule multiple are usable. Step DOWN to
++	 * the nearest such offset -- never up, which could exceed slack and overrun the slot.
++	 * For a granule of UNIT or less (every length below 8 KiB) every offset qualifies and
++	 * this is a no-op, so the double-free offset cycling is untouched there; above it the
++	 * cycle keeps 1 offset in granule/UNIT. The slot's own base is granule-aligned by the
++	 * seven raised stride entries plus the group's granule-sized header. */
++	{
++		size_t cap_g = capstone_repr_granule(n);
++		if (cap_g > UNIT) {
++			uintptr_t want = (uintptr_t)p + UNIT*(size_t)off;
++			size_t back = (size_t)(want & (cap_g - 1));
++			off -= (int)(back / UNIT);
++			if (off < 0) off = 0;
++			assert(off <= (int)slack);
++		}
++	}
++#endif
+ 	if (off) {
+ 		// store offset in unused header at offset zero
+ 		// if enframing at non-zero offset.

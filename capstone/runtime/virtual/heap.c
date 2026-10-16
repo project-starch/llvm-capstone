@@ -8,6 +8,7 @@
 #include <malloc_capstone.h>
 #include <capstone/capability.h>
 #include "vm.h"
+#include <capstone/representable.h>
 
 #define INDEX_BUCKETS 4096U
 static struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
@@ -79,7 +80,16 @@ void *__capstone_malloc_map(size_t bytes)
 {
     if (!bytes || bytes > CAP_VM_MAX_BYTES) { errno = ENOMEM; return MAP_FAILED; }
     bytes = (bytes + 4095) & -4096UL;
-    if (cap_vm_acquire(&pending_mapping, bytes, 4096,
+    /* Option (iii): above 4 MiB the bounds granule EXCEEDS a page (8 KiB at 4 MiB, 128 KiB at
+     * 64 MiB), so a page-aligned mapping is not enough -- the encoder truncates an unaligned base
+     * downward and the object would gain authority below itself. Measured: 4, 8, 16, 64 and 88 MiB
+     * all decode inexact at a page-aligned base, while 2 MiB and 4 MiB - 4 KiB decode exact.
+     * cap_vm_acquire already takes an alignment, so this is the alignment argument rather than an
+     * over-map and trim, and `bytes` is rounded to the granule so both edges are multiples. */
+    bytes = capstone_repr_round(bytes);
+    size_t align = capstone_repr_granule(bytes);
+    if (align < 4096UL) align = 4096UL;
+    if (cap_vm_acquire(&pending_mapping, bytes, align,
                        PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP)) return MAP_FAILED;
     /* A scalar placeholder crosses only the private backend, until attach.
      * The linear grant remains in its consuming slot throughout alloc_meta. */
@@ -179,8 +189,17 @@ static void *publish(void *p, size_t n)
 }
 void *malloc(size_t n)
 {
+    /* Option (iii): publish() derives the child over the nominal size, so that size has to be
+     * representable -- a granule multiple, at a granule-aligned base. Rounding HERE rather than
+     * inside mallocng keeps musl's own decision code untouched (check-mallocng-policy.py holds
+     * size_to_class and the slot/class selection token-identical to upstream), and it means
+     * mallocng's set_size records exactly what the capability covers, so malloc_usable_size and
+     * an in-place realloc never report bytes the program cannot reach. The seven raised stride
+     * entries are what make the resulting slot's base granule-aligned. */
+    size_t want = capstone_repr_round(n ? n : 1);
+    if (want < n) { errno = ENOMEM; return NULL; }   /* overflow on a hostile size */
     lock_heap();
-    void *p = ensure_ids(256) ? NULL : publish(__capstone_mallocng_malloc(n), n);
+    void *p = ensure_ids(256) ? NULL : publish(__capstone_mallocng_malloc(want), want);
     unlock_heap(); return p;
 }
 void *__libc_malloc(size_t n) { return malloc(n); }
