@@ -8,7 +8,7 @@
 set -euo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$APP/deps/env.sh"
-if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual ]]; then
   arms=(); default=virtual
 else
   arms=(level0); default=shrink

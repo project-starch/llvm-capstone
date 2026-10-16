@@ -141,8 +141,10 @@ def bucket(message: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("musl_dir")
-    parser.add_argument("--virtual", action="store_true",
-                        help="use representable gp and within-PCC calls for virtual C")
+    parser.add_argument("--profile", choices=("physical", "virtual"), default="virtual",
+                        help="virtual (the default): representable gp, within-PCC calls and "
+                             "hardware F and D, as virtual C compiles; physical: the "
+                             "physical profile's code")
     parser.add_argument("--expect-ok", type=int, default=None)
     parser.add_argument("--jobs", type=int, default=min(16, (os.cpu_count() or 4)))
     parser.add_argument("--list-failures", action="store_true")
@@ -152,8 +154,9 @@ def main() -> int:
                              "file set then have exactly one definition, here.")
     args = parser.parse_args()
 
+    virtual = args.profile == "virtual"
     if args.expect_ok is None:
-        args.expect_ok = 1361 if args.virtual else BASELINE_OK
+        args.expect_ok = 1361 if virtual else BASELINE_OK
     musl = pathlib.Path(args.musl_dir).resolve()
     clang = os.environ.get("CAPSTONE_CLANG")
     if not clang or not pathlib.Path(clang).exists():
@@ -178,7 +181,7 @@ def main() -> int:
         return 2
 
     flags = compile_flags(musl)
-    if args.virtual:
+    if virtual:
         # The virtual code generation of runtime/cmake/VirtualCodegen.cmake: libm
         # and the rest run F and D in hardware under the lp64 calling convention,
         # and MOVC keeps an untagged source (+movc-keeps-integer-source, Q-04).
@@ -250,7 +253,7 @@ def main() -> int:
             print(f"  {r[0]}\n      {r[2]}")
 
     status = 0
-    for control, must_pass in ((CONTROL_MUST_PASS, True), (CONTROL_MUST_FAIL, args.virtual)):
+    for control, must_pass in ((CONTROL_MUST_PASS, True), (CONTROL_MUST_FAIL, virtual)):
         got = by_path.get(control)
         if got is None:
             print(f"\nERROR: control {control} was not surveyed at all", file=sys.stderr)

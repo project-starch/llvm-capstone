@@ -37,7 +37,8 @@ keeps the four-arm study incomplete when a protected process lacks its oracle.
 Source `capstone/tests/capstone-test-env.sh` first. Use the existing per-port
 recipes to build upstream objects outside the repository. `build.py` takes
 those objects without modifying them and relinks through the common
-application SDK. It refuses to overwrite an output directory. For example:
+application SDK, for the physical profile unless `--profile` says otherwise
+(the observers are level0's). It refuses to overwrite an output directory. For example:
 
 ```sh
 source capstone/tests/capstone-test-env.sh

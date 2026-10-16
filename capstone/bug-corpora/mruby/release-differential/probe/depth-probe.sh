@@ -13,7 +13,7 @@ OUT=$K/results; mkdir -p $OUT
 export PYTHONPATH=$RT/host CAPSTONE_QEMU_LOCK=$K/qemu.lock
 ROOT=/tmp/capstone/step-one-ecall; S=$K/vm-depth
 python3 -m capstone_vm --state $S down >/dev/null 2>&1; rm -rf $S
-python3 -m capstone_vm --state $S up --qemu $ROOT/qemu-build/qemu-system-riscv64 \
+python3 -m capstone_vm --state $S up --profile physical --qemu $ROOT/qemu-build/qemu-system-riscv64 \
   --kernel /tmp/capstone/delegation-binfmt-linux/arch/riscv/boot/Image \
   --firmware $ROOT/new2/opensbi/platform/generic/firmware/fw_jump.elf --rootfs /tmp/capstone/cheap/rootfs.ext2 \
   --share $K/share --module /tmp/capstone/launch-cost/module/module/capstone.ko \

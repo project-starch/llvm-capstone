@@ -59,7 +59,7 @@ manifests pin the patch's hash.
 
 ```sh
 # Capstone: the study variant, then the measured image with its grant.
-CAPSTONE_LLVM_BUILD_DIR=<llvm build with C-46 and C-48> PERLD_SV_HEADS=1 PERLD_OPT=-O1 \
+CAPSTONE_LLVM_BUILD_DIR=<llvm build with C-46 and C-48> PERLD_PROFILE=physical PERLD_SV_HEADS=1 PERLD_OPT=-O1 \
   PERLD_ROOT=$CAPSTONE_TMP_ROOT/perl-svh-capstone bash ../musl/build-perl-domain.sh
 python3 capstone/experiments/applications/build.py --app perl --nested perl \
   --root $CAPSTONE_TMP_ROOT/perl-svh-capstone --libc-root $CAPSTONE_TMP_ROOT/perl-svh-capstone \

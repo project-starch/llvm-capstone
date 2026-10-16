@@ -17,7 +17,8 @@
 #   server, native and domain alike.
 #   --alternate runs odd-numbered runs under STOCK-EXEC and even-numbered ones under FIXED-EXEC (two
 #   capstone-exec binaries copied to the share), so a launcher pair is compared within one boot.
-# Env: MC_WORK (build-native.sh, build-domain.sh outputs), CAPSTONE_VM_UP_ARGS (capstone-vm up platform
+# Env: MC_WORK (build-native.sh, build-domain.sh outputs of the physical profile: the level0 and shrink
+# arms; the guest boots with --profile physical), CAPSTONE_VM_UP_ARGS (capstone-vm up platform
 # arguments), capstone-vm on PATH, CAPSTONE_BUILDROOT_DIR (the guest cross compiler).
 # Port 21299, not memcached's 11211: on a shared host 11211 may belong to someone else's server.
 set -uo pipefail
@@ -95,7 +96,7 @@ trap 'capstone-vm --state "$VM" down > /dev/null 2>&1' EXIT
 for attempt in $(seq 1 2400); do
   rm -rf "$VM"
   # shellcheck disable=SC2086
-  capstone-vm --state "$VM" up $CAPSTONE_VM_UP_ARGS --share "$R/share" --boot-timeout 600 > "$R/up.log" 2>&1 && break
+  capstone-vm --state "$VM" up $CAPSTONE_VM_UP_ARGS --profile physical --share "$R/share" --boot-timeout 600 > "$R/up.log" 2>&1 && break
   grep -q "Another Capstone VM owns" "$R/up.log" || { tail -3 "$R/up.log"; exit 4; }
   sleep 3
 done
