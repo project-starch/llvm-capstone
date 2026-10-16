@@ -6639,7 +6639,9 @@ Cycles per access, the median of 15 runs.
 - **D and P equal r30r31's §7y to 0.05 cycles** (41.84 / 49.25 and 61.37 / 88.45 there). S/P was 1.0000-1.0003 there.
 - **So the pre-registered outcome is (a):** an access through a record capability costs S about 12 cycles more at
   N = 256, and 35-38 more at N ≥ 1024.
-- **The rise starts at 516 live nodes, below the 2,048 the pre-registration assumed for the node cache.** The knee
-  lies between N = 64 and 256, and is not located further.
-- **Not established:** the node cache's capacity here, and whether the surcharge is the node query or the nodes'
-  data-cache footprint.
+- **The rise starts between 132 and 516 live nodes.** That is the LSU's revocation validity cache: 64 sets × 4
+  ways = 256 ids, indexed by the id's low 6 bits (capstone-ariane d93a8d66b `core/load_store_unit.sv:258-260`).
+  The pre-registration had assumed §7t's 2,048. A hit costs nothing, so S equals P up to N = 64. Per the RTL lane,
+  a miss is the rev-node probe (R-43's query-on-miss).
+- **Not established:** the knee's exact position, and how the surcharge at N ≥ 1024 splits between the probe and
+  the D-cache misses of the node records.

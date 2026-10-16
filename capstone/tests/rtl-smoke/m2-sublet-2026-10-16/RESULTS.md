@@ -45,9 +45,18 @@ N ≥ 1024 it is up to 0.23 (D), 1.14 (P) and 2.35 (S). The minima and maxima ar
 - So on this bitstream something between 132 and 516 live nodes, or their data-cache footprint beside the records,
   already costs S per access. Which of the two it is, is not separated here.
 
+**Where the knee comes from (added 2026-10-17, after the boots):**
+- The LSU's revocation validity cache on this bitstream is 64 sets × 4 ways, 256 ids. Its set index is the node id's
+  low 6 bits (capstone-ariane d93a8d66b, `core/load_store_unit.sv:258-260`: `RVC_SETS = 64`, `RVC_WAYS = 4`,
+  `RVC_IDX_BITS = 6`). The 2,048 the pre-registration used was §7t's figure, not this cache's.
+- S's 132 live ids at N = 64 fit, about two per set. Its 516 at N = 256 do not. That is where S/P leaves 1.000.
+- The RTL lane's account of the cost: a hit is a same-cycle compare, so S equals P while the ids are resident. A miss
+  is R-43's query-on-miss probe to the rev-node unit, which reads the node's 16-byte record through the D-cache: the
+  +12 cycles at N = 256. At N ≥ 1024 that record read itself starts missing the D-cache. That account is the RTL
+  lane's reading of the design. This run does not separate the two costs.
+
 **Not established:**
-- The node cache's capacity or organisation on this bitstream. The knee lies between N = 64 and N = 256, and this run
-  has no point between them.
+- The knee's exact position between 132 and 516 live ids. This run has no point between N = 64 and 256.
 - Why S/P falls from 1.66 to 1.40 as N grows. P's own data-cache cost rises faster than S's surcharge, so the ratio
   falls while S − P stays at 35-38 cycles.
 - The comparison crosses the image, tree and toolchain as well as the silicon. r30r31's build9 is gone.
