@@ -28,3 +28,46 @@ fz11 -- R2 fuzz-corpus diff image, trigger re-derived 2026-10-03.
  * statement that should reach the defect means SQLite rejected the image first
  * -- a real negative, not a silent pass.
 ```
+
+## Review 2026-10-16 -- holds in full, and it is the control for what CheriBSD can see
+
+### The four readings
+
+| reading | result |
+|---|---|
+| host ASan | re-run: `heap-buffer-overflow` in `statDecodePage` at the free-block chain line, via `statNext <- statNext` -- identical to the recorded bundle |
+| virtual-malloc | **MISSED**, `RETURNED` |
+| virtual-nested-pools | **CAUGHT**, `cause=28` in `statDecodePage` |
+| cheribsd-revocation | **MISSED**, and this time measured: the image is loaded, the defect is reached, and the arm is silent |
+
+The earlier CheriBSD reading for this case was taken without the image present and was therefore
+a NO-READING; this one is a miss that was actually measured. The run then ends in `SQLITE_NOMEM`
+because the 256 KiB arena cannot complete the dbstat scan, which happens **after** the defect
+site is reached.
+
+### The defect, and what separates it from case 31
+
+```c
+iOff = get2byte(&aHdr[1]);
+while( iOff ){
+  nUnused += get2byte(&aData[iOff+2]);
+  iOff = get2byte(&aData[iOff]);
+}
+```
+
+No bound on `iOff` and no cycle detection. Probe site 64 hooks all three unchecked reads in
+`statDecodePage`, and this image takes the **chain**: one call with `iOff=17234`, while its
+cell-pointer walk stays within range at 506. Case 31 is the mirror -- the cell walk to 64768,
+the chain never entered.
+
+### This case is the control for the CheriBSD column
+
+Both are over-reads in one function; what differs is how far they go. Case 31's walk leaves the
+**whole 256 KiB arena**, so CheriBSD's `malloc`-granularity bounds catch it. This case's stays
+inside the arena, and that arm is silent. Sublet catches both, because it bounds each
+sub-allocation rather than the pool.
+
+So the two arms are not separated here by the class of the defect but by the **distance** of the
+over-read, which is a property of the corrupt input. That is the honest form of the claim the
+spatial half of this corpus supports: CheriBSD sees a nested over-read only when it happens to
+leave the arena, and nothing in the defect decides whether it does.
