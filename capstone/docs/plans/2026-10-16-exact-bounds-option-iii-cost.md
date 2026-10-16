@@ -650,3 +650,55 @@ close call.
 
 The per-port **maxima** still to be quoted decide *which* sites are in scope. They do not change
 the cost shape: a site in scope costs a rounded allocation, and a site out of scope costs nothing.
+
+## Two base alignments my "the base comes free" claim did not cover — both CONFIRMED
+
+That claim holds only for parents **mallocng placed**. Two cases fall outside it.
+
+### 1. The big path above 4 MiB: a page is not a granule
+
+Confirmed with the oracle, two-sided. The granule exceeds a page exactly from 4 MiB up
+(`granule(L) > 4096` iff `msb(L) > 21`), and `mmap` guarantees only a page:
+
+| length | granule | page-aligned base, length already rounded |
+|---|---|---|
+| 2 MiB | 4096 | exact |
+| 4 MiB − 4 KiB | 4096 | exact |
+| 4 MiB | 8192 | **inexact** |
+| 8 MiB | 16384 | **inexact** |
+| 16 MiB | 32768 | **inexact** |
+| 64 MiB | 131072 | **inexact** |
+| 88 MiB | 131072 | **inexact** |
+
+Those are the peer lane's figures reproduced independently, including the two exact cases they
+named. The check yields both outcomes, so it is not a one-sided pass. **My earlier "size the
+mapping from `repr_round(n)`" covered the length only** and left this open.
+
+**Fix: over-map one granule and trim the base up to it.** Verified: 6 of 6 exact after trimming,
+including 100 MiB + 7. Cost is one granule — **0.195% at 4 MiB, 0.1953% at 64 MiB**, the same
+1/512 bound as everything else here. `realloc.c`'s `mremap` path needs the same treatment, because
+a moved mapping can land page-aligned but not granule-aligned.
+
+This matters in practice rather than in principle: the virtual workloads allocate 8, 16 and 64 MiB
+in the pymalloc replay, and all three are in the inexact column.
+
+### 2. Parents mallocng did not place — one site, and it is the static arena
+
+Every offset-0 derive's parent traced to its origin:
+
+| site | parent | placed by |
+|---|---|---|
+| FFmpeg `buf->sublet_life`, `ref->sublet_life` | `buf->data` from the pool allocator | mallocng |
+| wmem `s->life` | a wmem block from `g_malloc` | mallocng |
+| memcached `ret` | the slab/cache allocation | mallocng |
+| PostgreSQL `b->life` | "the malloc'd object `alloc`" (the patch's own comment) | mallocng, **at a non-zero offset** |
+| **SQLite memsys5 `mem5.pHeap`** | `zByte`, **one static array** | **the linker** |
+
+`arms.json`'s `virtual-sqlite-memsys5` says it outright: "memsys5 stock over **one static array**
+… every SQLite allocation is an offset inside that arena". So its base alignment is the linker's,
+and the arena needs an explicit `__attribute__((aligned(g)))` for its own size's granule — a
+compile-time constant, since the arena size is a build parameter.
+
+**So exactly one offset-0 site needs an explicit alignment**; the rest inherit it from mallocng
+once the geometry and the big-path trim are in. PostgreSQL's is the separate non-zero-offset case
+already listed.

@@ -48,6 +48,11 @@ tests (`docs/plans/2026-10-16-virtual-profile-on-silicon.md`). The suites have g
 dev's `runtime/tests/sublet-lifetimes` now has 20 wrapper checks (two optimisation levels, its variants, and the
 flat and paged layouts), not eight. Its 20/20 ran on an SDK from 2026-10-10, not a fresh build. Only `exact-bounds.sh`
 and one `sublet-lifetimes` case run with `x-capstone-exact-bounds=true`.
+`exact-bounds.sh` is re-scoped for option (iii): its profile-off arms are
+production behaviour, and its `edge=1` arm -- a CSMINT descriptor based at
+`DATA+1` -- becomes the refusal arm, which the compact profile must reject.
+Every virtual suite is run both ways, with the profile off as production and on
+as a two-sided control, and both results recorded.
 
 ## Repositories and profiles
 

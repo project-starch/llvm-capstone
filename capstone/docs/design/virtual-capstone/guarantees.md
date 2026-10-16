@@ -13,7 +13,7 @@ RTL/FPGA result.
 | Mechanism | Protection | Condition or limit |
 |---|---|---|
 | Tag and type checks | Scalar bits cannot manufacture a usable capability | Trusted minting and tag-preserving transfers remain part of the contract |
-| Bounds and rights | Access stays within the authority carried by the pointer | Authority must have been narrowed to the intended object; ABI v5 uses exact shadow bounds in QEMU |
+| Bounds and rights | Access stays within the authority carried by the pointer | Authority must have been narrowed to the intended object; from ABI v6 the allocator makes those bounds representable rather than relying on exact shadow bounds |
 | User PTE permissions | VM protection restricts permitted accesses further | `mprotect` does not revoke an object's lifetime |
 | Lifetime revocation | Old aliases cannot access a retired object even at a reused VA | Allocator must revoke before reuse; nested objects need nested lifetimes |
 | Consuming transfers | Moving linear authority does not duplicate its source | All fault checks precede mutation and use the same translation |
@@ -69,10 +69,20 @@ it is not universally converted into recoverable `malloc` failure.
 QEMU uses a different 128-bit field split from deployed RTL and keeps extra
 uncompressed bounds in its physical tag shadow. The opt-in exact-bounds
 profile makes those bounds authoritative during minting and context restore
-as well as normal spill/reload. Local mallocng requires this profile to retain
-upstream slot geometry and expose only requested object bounds. The default
-profile continues to reject inexact CSMINT descriptors. A future tag-bit-only implementation
-must not widen authority during a round trip. Reconcile the formats and test
+as well as normal spill/reload; from ABI v6 the virtual runtime does not select
+it. Local mallocng instead ADJUSTS upstream slot geometry slightly -- 7 of 48
+size-class entries, granule-sized group headers, granule-aligned slot offsets,
+and mappings above 4 MiB aligned to their granule rather than to a page -- so
+that every object's bounds are representable and a rounded end never reaches the
+next slot's in-band header. Every Sublet derive site likewise produces only
+representable children, since under the virtual-context flag an inexact CDERIVE
+is refused with cause 29 (Q-15). What this gives up, plainly: above 4 KiB an
+overflow into the granule slack, at most 1/512 of the object, is not trapped; a
+slot's own mallocng footer bytes are reachable through the rounded bound; and the
+offset cycling that backs mallocng's double-free trap is reduced on 12 size
+classes. The default profile continues to reject inexact CSMINT descriptors,
+which is now a production requirement rather than a fallback. A future
+tag-bit-only implementation must not widen authority during a round trip. Reconcile the formats and test
 representability before claiming ISA/RTL equivalence or freezing the format.
 
 Other remaining interface decisions include permanent opcode/CSR allocations,
