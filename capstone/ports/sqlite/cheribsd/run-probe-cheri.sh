@@ -43,7 +43,7 @@ mkdir -p "$OUT"
 # here: there is nothing to arm, and a run with LB_SITE=0 would print hits=0, which
 # is exactly the reading ("never reached") that must not be produced by accident.
 declare -A SITE=(
-  [mem5design]=1 [blobclose]=2 [fts5rank]=3 [staticbind]=4 [rtreestatic]=56
+  [mem5design]=1 [blobclose]=2 [fts5rank]=3 [staticbind]=58 [rtreestatic]=56
   [wschema]=5 [fz09]=6 [jsoneachroot]=7 [jsoneachstatic]=7 [a783931794_0]=8
   [fts3destroyoom]=9 [c7def600bd_0]=10 [2c7a73eaea_0]=11 [fts3snipor]=12
   [fts5vocabeof]=13 [fts5structwrite]=14 [fts5inplace]=15 [634ac14488_0]=16
