@@ -26,7 +26,7 @@ The result lines are in `results/`. Each boot kept its `fw_payload.bin`.
 - So it is a wider band at the one size that straddles the cache, not a moved figure. Reported as a new reading,
   as pre-registered.
 
-## REVOKE read lower than on R-43 v2, at every node count (attribution RETRACTED)
+## REVOKE reads lower than on R-43 v2, at every node count: the retraction below is RESOLVED, and the drop is the bitstream's or its monitor's
 
 > **RETRACTED (2026-10-16 23:10): the attribution of this drop to the bitstream.**
 > - **The image predates the fix.** H1's image `da9c54e578845735` was built on 2026-09-29, before the sublet-runtime fix
@@ -39,6 +39,12 @@ The result lines are in `results/`. Each boot kept its `fw_payload.bin`.
 > - **What is withdrawn:** "revocation is cheaper on this bitstream". The REVOKE figures below are readings of this
 >   image on this bitstream, and they stand as readings; the drop's attribution waits for a fixed-runtime image.
 > - **What stays, as readings of the same image:** latency, timer, node counts and linear types.
+>
+> **RESOLVED (2026-10-17 02:53) by the fixed-runtime test (`../h1f-sublet-2026-10-16`):** three boots of a rebuild
+> carrying the fix (66764b0e, 14 SHRINK) read the same drop. At n >= 16 it reads 0.84-0.86 of v2, against this image's
+> 0.82-0.86; the fixed part (n = 1) reads 0.47. So the drop is a property of this bitstream and its classic-line
+> monitor, not of the image's runtime. Whether the bitstream or the monitor (93440d5 against 2dcd3a5) causes it is
+> still open.
 
 
 REVOKE (`rv`) in the nodes regression, cycles:
@@ -57,5 +63,17 @@ REVOKE (`rv`) in the nodes regression, cycles:
 - This bitstream's revocation path carries the Sublet node record's parent link and CREVOKE in R-45's flush. What
   changed it is not established here. The R1 warm and cold campaigns pre-registered next
   (`../r1-sublet-2026-10-16`) measure the per-node slope across the node table's range.
+
+**Boot history and pieces, compared with 2026-09-29:**
+- The session composition is the same: a fresh boot, then control, list lines 1-12 of the same list (six
+  invocations, same order), then control.
+- The image, host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36 and buildroot d04bd83 are the same.
+- One firmware piece differs. The monitor was 2dcd3a5 then and is 93440d5 now: 2dcd3a5 plus the R-55 carve fixes a
+  full-format bitstream needs.
+- The `rv` bracket is the REVOKE instruction between two `mcycle` reads inside the domain
+  (`sublet/r1/r1_slots_pools.c`), so the monitor is not inside it. It could act only indirectly, through where nodes
+  and regions sit.
+- The RTL lane's diff of `capstone_rev_node.anvil` (8f6a0af98 against d93a8d66b) finds the same three queries per
+  node in the REVOKE walk. So nothing in the RTL is yet shown to explain the drop, and it stays an open finding.
 
 **Not established:** N = 3, as 2026-09-29.

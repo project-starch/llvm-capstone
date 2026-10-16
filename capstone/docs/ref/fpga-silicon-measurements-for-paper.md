@@ -6478,7 +6478,7 @@ The Sublet acceptance (Linux half, dev d5fe0b4092f7) ran both pairs below on the
 - This is one layout draw. Layouts K = 1..3 are pre-registered there (lane bc200ac88bd3), for the median over
   K = 0..3.
 
-## H1 calibration on the Sublet bitstream: the instrument reads as on R-43 v2; REVOKE read 14-51 % lower, on an image whose Sublet carve predates the R-55 fix (attribution RETRACTED) (caplifive_sublet_d93a8d66b, 2026-10-16)
+## H1 calibration on the Sublet bitstream: the instrument reads as on R-43 v2, and REVOKE reads 12-53 % lower, also on a fixed-runtime image (caplifive_sublet_d93a8d66b, 2026-10-16/17)
 Three cold boots (h1s16r1-r3, 19:36-20:17), each running `h1-v2-calibration.txt` on the 2026-09-29 image
 da9c54e578845735. Folder: `tests/rtl-smoke/h1-sublet-2026-10-16/` (pre-registered at lane 21e38145c053; RESULTS.md and
 `results/`).
@@ -6506,6 +6506,12 @@ da9c54e578845735. Folder: `tests/rtl-smoke/h1-sublet-2026-10-16/` (pre-registere
 > - **What is withdrawn:** "revocation is cheaper on this bitstream". The REVOKE figures below are readings of this
 >   image on this bitstream, and they stand as readings; the drop's attribution waits for a fixed-runtime image.
 > - **What stays, as readings of the same image:** latency, timer, node counts and linear types.
+>
+> **RESOLVED (2026-10-17 02:53) by the fixed-runtime test (`tests/rtl-smoke/h1f-sublet-2026-10-16`):** three boots of a
+> rebuild carrying the fix (66764b0e, 14 SHRINK) read the same drop. At n >= 16 it reads 0.84-0.86 of v2, against the old
+> image's 0.82-0.86; the fixed part (n = 1) reads 0.47. So the drop is a property of this bitstream and its classic-line
+> monitor, not of the image's runtime. Whether the bitstream or the monitor (93440d5 against 2dcd3a5) causes it is
+> still open.
 
 ## S1 on the Sublet bitstream: SQLite's use-after-free refused at the access, as on R-43 v2 (caplifive_sublet_d93a8d66b, 2026-10-16)
 Three boots (s1sql-b1s16-b3s16, 20:17-21:40) on the classic line. They repeat "S1 on R-43 v2" with images rebuilt on
@@ -6571,3 +6577,15 @@ Folder: `tests/rtl-smoke/slt-sublet-2026-10-16/` (pre-registered at lane 0d68d03
   - Three region/heap classes run with reduced stacks (1,507,328 / 458,752 B), because today's code no longer fits the
     order-10 allocation beside the old ones.
 - select4 ran 4,621 s, against about 78 min on s12fix. That is a correctness run, not a timing.
+
+## H1 on a fixed-runtime image: the REVOKE drop holds, so it is the Sublet bitstream's or its monitor's (caplifive_sublet_d93a8d66b, 2026-10-17)
+Three cold boots (h1fs16r1-r3, 02:12-02:53) of H1's list on `66764b0e62075e57`: the R1 harness rebuilt from the lane
+with the sublet-runtime fix (14 SHRINK words), the defaults and 0x410000. Folder: `tests/rtl-smoke/h1f-sublet-2026-10-16/`
+(pre-registered at lane 3e021fae4070 with both outcomes written down; RESULTS.md and `results/`).
+- **Every instrument reading as R-43 v2 in all three boots:** latency 9/9/40/48/48, the timer 2/2/1, nd = 2n ok=1,
+  the linear types, k800 4 twice.
+- **REVOKE at n = 1/4/16/64/256:** 64-92 / 145-183 / 616-652 / 2,399-2,437 / 9,432-9,523 cycles.
+  - That is outcome (b), the old image's drop: 0.84-0.86 of v2 at n >= 16 and 0.47 at n = 1.
+  - It is not outcome (a), v2's values.
+- **So the retraction of H1's attribution (783fb0f93f7e) is resolved:** the drop is not the unfixed carve.
+- **Bitstream or monitor** (93440d5 against v2's 2dcd3a5) is still open.
