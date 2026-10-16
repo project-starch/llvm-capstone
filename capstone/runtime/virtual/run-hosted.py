@@ -72,6 +72,11 @@ echo VIRTUAL_STAGED_DONE
     tests['noreturn:exit_zero'] = exits.get('noreturn') == '0'
     tests['noreturn:ran'] = 'HOSTED_NORETURN:41' in log
     tests['module_unloaded'] = 'HOSTED_CLEANUP:0' in log
+    # The zero-size alloca checks, by name: an image built before them would
+    # otherwise pass on the remaining checks.
+    tests['virtual_alloca_checks_parsed'] = {
+        'alloca_zero_survives', 'alloca_zero_distinct_tagged'} <= set(arms['virtual'])
+    tests['native_alloca_checks_parsed'] = 'alloca_zero_survives' in arms['native']
     tests['virtual_tag_control_fired'] = arms['virtual'].get('control_byte_copy_drops_tag') is True
     tests['virtual_pipe_control_fired'] = arms['virtual'].get('control_pipe_read_returns_available') is True
     # No checks parsed is a failed run, never an empty pass.
