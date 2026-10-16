@@ -48,7 +48,7 @@ echo VIRTUAL_STAGED_DONE
     checks = {name: log.count('VIRTUAL_FP_OK ' + name) == 1 for name in
               ('hardware_fresh_environment', 'rounding_modes', 'exception_flags_and_environment',
                'libm_follows_hardware', 'thread_inherits_then_keeps_its_own',
-               'signal_handler_leaves_environment')}
+               'signal_handler_leaves_environment', 'split_results_through_pointers')}
     checks['no_failure'] = 'VIRTUAL_FP_FAIL' not in log and log.count('VIRTUAL_FP_DONE failures=0') == 1
     checks['exit'] = log.count('FP_EXIT:0') == 1
     checks['cleanup'] = run.returncode == 0 and log.count('FP_CLEANUP:0') == 1

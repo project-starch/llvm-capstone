@@ -8344,6 +8344,55 @@ and passes against the patched one, and libc-test's `pthread_cond` passes
 libc; objects compiled against the old headers that embed a `pthread_cond_t` must be recompiled
 (perl and mruby embed none).
 
+### C-82 — `modf`, `modff`, `modfl` and `frexp` expanded from their intrinsics pass the output pointer as an integer, so the callee faults storing through it `FIXED 2026-10-16 on compiler/modf-capability-pointer — COMPILER; found 2026-10-16 by SPEC CPU2017 500.perlbench_r (op/pack.t's unpack checksums call modf)`
+
+**What happens.** clang turns `modf` into `llvm.modf`, and SelectionDAG expands that (and
+`llvm.frexp`) back into a library call that writes one result through a pointer to a stack
+temporary: `SelectionDAG::expandMultipleResultFPLibCall`, and for softened types (`long double`
+is binary128, and `double` without D) `DAGTypeLegalizer::SoftenFloatRes_UnaryWithTwoFPResults`
+and `SoftenFloatRes_FFREXP`. All three typed that pointer `PointerType::getUnqual`, address space
+0, which is a 64-bit integer on this target, so the call moved the frame capability into `a1`
+with `mv`. musl's `modf` then faulted at `fsd fa5, 0(a1)` (cause 24, "Cap mem access requires
+capability", `value_hi = 0`). It hits even when the caller passes its own pointer, because the
+expansion always writes a temporary and copies the result out. perlbench's op/pack.t reaches it
+through `unpack`'s `%` checksums. Same class as C-18 (the `memcpy` libcall's arguments).
+
+**Fix.** Each output pointer is typed in the address space it lives in: the alloca address
+space for a stack temporary, the store's own for a folded store (always 0: only address-space-0
+stores are folded). A target whose allocas are in address space 0 is unchanged. Two more
+stack-temporary libcall arguments are typed the same old way, the remainder pointer of a combined
+divrem libcall (`ExpandDivRemLibCall`) and the overflow flag of `__mulo[dt]i4`
+(`ExpandIntRes_XMULO`); neither is reached here: Capstone's runtime-libcall table
+(`RuntimeLibcalls.td`, `CapstoneSystemLibrary`) has no combined divrem and leaves out the
+compiler-rt-only `__mulodi4`/`__muloti4`, and capstone64 indeed emits `__divdi3`/`__moddi3` and an
+inline 128-bit overflow multiply. They are left as they are. `getMemcmp` takes `getUnqual` too,
+but only PowerPC calls it.
+
+**Still open, same class, not reached from C (found by the Codex review):** the element-wise
+atomic memcpy/memmove/memset libcalls (`getAtomicMemcpy` and its siblings) type their pointers as
+`getIntPtrType`, an integer; and the `llvm.get.fpenv`/`llvm.set.fpenv` stack-temporary fallback
+types its pointer from the value type, `i128` for a capability. Neither intrinsic is emitted for
+the C we build.
+
+**Measured (2026-10-16, assertions-ON build of this branch on dev e78797da4371, p12).**
+- Lit: `fp-libcall-output-pointer.ll` checks after instruction selection that the calls take the
+  pointer in `$c11` (`$c12` for binary128), in the virtual, gp-captable and default profiles. With
+  `getUnqual` restored in `expandMultipleResultFPLibCall` the four `double`/`float` functions take
+  `$x11` and fail; restored in the two soft-float sites the two binary128 functions fail. The
+  Capstone tests in `llvm/test/CodeGen/Capstone`, `clang/test/CodeGen`, `llvm/test/MC/Capstone`
+  and `llvm/test/Transforms` pass (`shared-patches-present.test` needs a git checkout and passes
+  in one); the shared-patch manifest is re-baselined for the two files.
+- `runtime/virtual/fp-contract.c` gains `split_results_through_pointers` (modf, modff, modfl,
+  frexp, frexpl). It sits outside the file's `FENV_ACCESS ON`: under it clang keeps `modf` a plain
+  call and the expansion is never reached, and the first version of the check passed with both
+  compilers for that reason. Virtual SDKs from this tree, dev platform: with the previous compiler
+  the program faults in that check (cause 24); with this one the FP gate passes.
+- Gates with the new SDK and the four ports rebuilt by it: hosted (48 of 48), runtime, nodes and
+  malloc pass; memcached passes 104 and fails fixture 24, the known flaky one.
+- perlbench rebuilt with this fix and C-81 (#246) together: op/pack.t, with the four checks that
+  need a tag in a byte-reordered pointer (C-81) replaced by `pass()` in a staged copy, passes all
+  14708 tests; unmodified it still dies on the first of those four.
+
 ### C-80 — with F/D enabled, every FP constant that is not an immediate gets an address-space-0 constant-pool address, which Capstone's lowering cannot honour `FIXED 2026-10-14 on compiler/select-fp-constants-capability — COMPILER; found 2026-10-14 building SPEC CPU2017 544.nab_r with +f,+d`
 
 **What happens.** Generic SelectionDAG code that puts a constant into the constant pool types the
