@@ -1,0 +1,108 @@
+R1 start arm=D series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=D N=16 seed=1 cyc=97 per=6 cycle_ok=1
+R1 chase arm=D N=16 seed=1 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=750000 chk_ok=1
+R1 chase-cold arm=D N=64 seed=1 cyc=337 per=5 cycle_ok=1
+R1 chase arm=D N=64 seed=1 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=3150039 chk_ok=1
+R1 chase-cold arm=D N=256 seed=1 cyc=1297 per=5 cycle_ok=1
+R1 chase arm=D N=256 seed=1 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=12750873 chk_ok=1
+R1 chase-cold arm=D N=1024 seed=1 cyc=5137 per=5 cycle_ok=1
+R1 chase arm=D N=1024 seed=1 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=51154965 chk_ok=1
+R1 chase-cold arm=D N=4096 seed=1 cyc=20497 per=5 cycle_ok=1
+R1 chase arm=D N=4096 seed=1 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=204826544 chk_ok=1
+R1 end minted=0 split=15 mrev=15 revoke=0 init=0 out=1128 lines=13
+R1 start arm=D series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=D N=16 seed=2 cyc=97 per=6 cycle_ok=1
+R1 chase arm=D N=16 seed=2 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=750000 chk_ok=1
+R1 chase-cold arm=D N=64 seed=2 cyc=337 per=5 cycle_ok=1
+R1 chase arm=D N=64 seed=2 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=3149908 chk_ok=1
+R1 chase-cold arm=D N=256 seed=2 cyc=1297 per=5 cycle_ok=1
+R1 chase arm=D N=256 seed=2 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=12750699 chk_ok=1
+R1 chase-cold arm=D N=1024 seed=2 cyc=5137 per=5 cycle_ok=1
+R1 chase arm=D N=1024 seed=2 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=51147149 chk_ok=1
+R1 chase-cold arm=D N=4096 seed=2 cyc=20497 per=5 cycle_ok=1
+R1 chase arm=D N=4096 seed=2 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=204726945 chk_ok=1
+R1 end minted=0 split=15 mrev=15 revoke=0 init=0 out=1128 lines=13
+R1 start arm=D series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=D N=16 seed=3 cyc=97 per=6 cycle_ok=1
+R1 chase arm=D N=16 seed=3 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=750000 chk_ok=1
+R1 chase-cold arm=D N=64 seed=3 cyc=337 per=5 cycle_ok=1
+R1 chase arm=D N=64 seed=3 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=3150001 chk_ok=1
+R1 chase-cold arm=D N=256 seed=3 cyc=1297 per=5 cycle_ok=1
+R1 chase arm=D N=256 seed=3 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=12750602 chk_ok=1
+R1 chase-cold arm=D N=1024 seed=3 cyc=5137 per=5 cycle_ok=1
+R1 chase arm=D N=1024 seed=3 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=51145342 chk_ok=1
+R1 chase-cold arm=D N=4096 seed=3 cyc=20497 per=5 cycle_ok=1
+R1 chase arm=D N=4096 seed=3 rep=1 loads=100000 cyc=600020 per100=600 instret=600019 touched=0 minted=6 chk=204723554 chk_ok=1
+R1 end minted=0 split=15 mrev=15 revoke=0 init=0 out=1128 lines=13
+R1 start arm=P series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=P N=16 seed=1 cyc=108 per=6 cycle_ok=1
+R1 chase arm=P N=16 seed=1 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=750000 chk_ok=1
+R1 chase-cold arm=P N=64 seed=1 cyc=396 per=6 cycle_ok=1
+R1 chase arm=P N=64 seed=1 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=3150039 chk_ok=1
+R1 chase-cold arm=P N=256 seed=1 cyc=1548 per=6 cycle_ok=1
+R1 chase arm=P N=256 seed=1 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=12750873 chk_ok=1
+R1 chase-cold arm=P N=1024 seed=1 cyc=6156 per=6 cycle_ok=1
+R1 chase arm=P N=1024 seed=1 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=51154965 chk_ok=1
+R1 chase-cold arm=P N=4096 seed=1 cyc=24588 per=6 cycle_ok=1
+R1 chase arm=P N=4096 seed=1 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=204826544 chk_ok=1
+R1 end minted=0 split=15 mrev=15 revoke=0 init=0 out=1129 lines=13
+R1 start arm=P series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=P N=16 seed=2 cyc=108 per=6 cycle_ok=1
+R1 chase arm=P N=16 seed=2 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=750000 chk_ok=1
+R1 chase-cold arm=P N=64 seed=2 cyc=396 per=6 cycle_ok=1
+R1 chase arm=P N=64 seed=2 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=3149908 chk_ok=1
+R1 chase-cold arm=P N=256 seed=2 cyc=1548 per=6 cycle_ok=1
+R1 chase arm=P N=256 seed=2 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=12750699 chk_ok=1
+R1 chase-cold arm=P N=1024 seed=2 cyc=6156 per=6 cycle_ok=1
+R1 chase arm=P N=1024 seed=2 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=51147149 chk_ok=1
+R1 chase-cold arm=P N=4096 seed=2 cyc=24588 per=6 cycle_ok=1
+R1 chase arm=P N=4096 seed=2 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=204726945 chk_ok=1
+R1 end minted=0 split=15 mrev=15 revoke=0 init=0 out=1129 lines=13
+R1 start arm=P series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=P N=16 seed=3 cyc=108 per=6 cycle_ok=1
+R1 chase arm=P N=16 seed=3 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=750000 chk_ok=1
+R1 chase-cold arm=P N=64 seed=3 cyc=396 per=6 cycle_ok=1
+R1 chase arm=P N=64 seed=3 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=3150001 chk_ok=1
+R1 chase-cold arm=P N=256 seed=3 cyc=1548 per=6 cycle_ok=1
+R1 chase arm=P N=256 seed=3 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=12750602 chk_ok=1
+R1 chase-cold arm=P N=1024 seed=3 cyc=6156 per=6 cycle_ok=1
+R1 chase arm=P N=1024 seed=3 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=51145342 chk_ok=1
+R1 chase-cold arm=P N=4096 seed=3 cyc=24588 per=6 cycle_ok=1
+R1 chase arm=P N=4096 seed=3 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1 minted=6 chk=204723554 chk_ok=1
+R1 end minted=0 split=15 mrev=15 revoke=0 init=0 out=1129 lines=13
+R1 start arm=S series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=S N=16 seed=1 cyc=108 per=6 cycle_ok=1
+R1 chase arm=S N=16 seed=1 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=16 minted=36 chk=750000 chk_ok=1
+R1 chase-cold arm=S N=64 seed=1 cyc=396 per=6 cycle_ok=1
+R1 chase arm=S N=64 seed=1 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=64 minted=132 chk=3150039 chk_ok=1
+R1 chase-cold arm=S N=256 seed=1 cyc=1548 per=6 cycle_ok=1
+R1 chase arm=S N=256 seed=1 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=256 minted=516 chk=12750873 chk_ok=1
+R1 chase-cold arm=S N=1024 seed=1 cyc=6156 per=6 cycle_ok=1
+R1 chase arm=S N=1024 seed=1 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1024 minted=2052 chk=51154965 chk_ok=1
+R1 chase-cold arm=S N=4096 seed=1 cyc=24588 per=6 cycle_ok=1
+R1 chase arm=S N=4096 seed=1 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=4096 minted=8196 chk=204826544 chk_ok=1
+R1 end minted=0 split=5466 mrev=5466 revoke=0 init=0 out=1154 lines=13
+R1 start arm=S series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=S N=16 seed=2 cyc=108 per=6 cycle_ok=1
+R1 chase arm=S N=16 seed=2 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=16 minted=36 chk=750000 chk_ok=1
+R1 chase-cold arm=S N=64 seed=2 cyc=396 per=6 cycle_ok=1
+R1 chase arm=S N=64 seed=2 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=64 minted=132 chk=3149908 chk_ok=1
+R1 chase-cold arm=S N=256 seed=2 cyc=1548 per=6 cycle_ok=1
+R1 chase arm=S N=256 seed=2 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=256 minted=516 chk=12750699 chk_ok=1
+R1 chase-cold arm=S N=1024 seed=2 cyc=6156 per=6 cycle_ok=1
+R1 chase arm=S N=1024 seed=2 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1024 minted=2052 chk=51147149 chk_ok=1
+R1 chase-cold arm=S N=4096 seed=2 cyc=24588 per=6 cycle_ok=1
+R1 chase arm=S N=4096 seed=2 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=4096 minted=8196 chk=204726945 chk_ok=1
+R1 end minted=0 split=5466 mrev=5466 revoke=0 init=0 out=1154 lines=13
+R1 start arm=S series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=S N=16 seed=3 cyc=108 per=6 cycle_ok=1
+R1 chase arm=S N=16 seed=3 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=16 minted=36 chk=750000 chk_ok=1
+R1 chase-cold arm=S N=64 seed=3 cyc=396 per=6 cycle_ok=1
+R1 chase arm=S N=64 seed=3 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=64 minted=132 chk=3150001 chk_ok=1
+R1 chase-cold arm=S N=256 seed=3 cyc=1548 per=6 cycle_ok=1
+R1 chase arm=S N=256 seed=3 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=256 minted=516 chk=12750602 chk_ok=1
+R1 chase-cold arm=S N=1024 seed=3 cyc=6156 per=6 cycle_ok=1
+R1 chase arm=S N=1024 seed=3 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=1024 minted=2052 chk=51145342 chk_ok=1
+R1 chase-cold arm=S N=4096 seed=3 cyc=24588 per=6 cycle_ok=1
+R1 chase arm=S N=4096 seed=3 rep=1 loads=100000 cyc=700016 per100=700 instret=700015 touched=4096 minted=8196 chk=204723554 chk_ok=1
+R1 end minted=0 split=5466 mrev=5466 revoke=0 init=0 out=1154 lines=13
