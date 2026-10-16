@@ -1319,3 +1319,118 @@ and both hashes are recorded so a future disagreement can be attributed.
 fix for the app-port SQLite breakage my `423d13f5b81f` caused. Without it `run.py`'s
 `sqlite_write`/`sqlite_read` steps have no `sqlite3.dom`. Merged rather than rebased, on a tree
 other lanes share.
+
+
+## Two launcher defects, and a RETRACTED attribution for the failures that found them
+
+The v6 malloc contract fails. Two real defects were found in the launcher while chasing it, both
+fixed; **neither of them explains the failures**, and the attribution that said they did is
+withdrawn here. The failures are in the ALLOCATION path and are still open.
+
+### Defect 1: a heap of 4 MiB or more could never grow
+
+`acquire_mapping` had an exact-size mapping path keyed on `alignment == 4096`, and it is the only
+path that sets `bytes = visible`; everything else takes `reserve(rounded(visible))`, which pads to a
+power of two. `remap_mapping` matches a heap on `m->visible == old && m->bytes == old`. Option
+(iii) made `__capstone_malloc_map` request the bounds granule, which exceeds a page at and above
+4 MiB, so every heap that large silently left the exact-size path, got padded, and from then on
+`remap_mapping` refused it unconditionally.
+
+The condition conflated two things: *the heap needs a mapping of exactly its visible size* (its
+growth contract) with *4096 is the alignment `mmap` gives for free*. It is now keyed on the heap,
+and the requested alignment is honoured by `reserve_aligned()` — over-map by `alignment - 4096`,
+align up, trim both ends — which at 4096 has zero slack and reduces exactly to the previous
+`mmap`.
+
+### Defect 2: the domain-side representability refusal was a use-after-move
+
+`remap_mapping` grew a heap with `mremap(MREMAP_MAYMOVE)`, whose result is only page-aligned, so a
+grown heap's base can be unrepresentable; in-place growth alone trips it, since 2 MiB -> 4 MiB keeps
+the base and moves the granule from 4096 to 8192.
+
+`__capstone_malloc_group_remap` was written to absorb that, and **cannot**: it runs after
+`__capstone_vm_remap` has already moved the mapping and re-registered it through
+`CV_REMAP_BEGIN`/`END`. Returning `MAP_FAILED` there sends `realloc.c` down a malloc-plus-copy path
+that reads from an address which no longer maps. So the commit message of `5326e1026189` and this
+document both claimed "the cost is a copy and never a widened bound", and that is **withdrawn**: a
+nonzero `__capstone_malloc_remap_unaligned` was a correctness bug, not a cost.
+
+The launcher now reserves a granule-aligned destination and uses `MREMAP_MAYMOVE|MREMAP_FIXED`, with
+everything that can fail done before the source is touched — `mremap` fails atomically, so an error
+leaves the old mapping intact and only the reservation to release. The counter and its contract mode
+stay, as an assertion: nonzero now means a launcher bug.
+
+**The generalisable shape, which is why this is written down rather than just fixed:** a guard that
+runs after the state it guards has already changed is not a guard. The design said "refuse and fall
+back"; nobody asked *where does the refusal run relative to the move?* That question is cheap and it
+is the one that settles whether a fallback exists at all.
+
+### RETRACTED: that these defects cause the observed contract failures
+
+They do not, and my own negative control is what refuted it. A pre-fix launcher
+(`539fa80816c490b3`) and the fixed one (`54581b7c0930a21e`) were run against the same domain and
+images: **all 22 checks identical.** The condition also provably cannot bite below 4 MiB, because
+`__capstone_malloc_map` clamps the requested alignment to 4096 and `granule(n)` only exceeds that at
+n >= 4 MiB — while the first failure is a 5001-byte `posix_memalign`.
+
+**The question that was available in advance and not asked: what can this control not tell apart?**
+The remap-family checks cannot distinguish anything, because their *setup allocation* fails and the
+remap code never runs. One reading of the contract source would have shown that before the arm was
+spent.
+
+A second misreading, corrected: the `exit:139` lines are the **expected** denial faults
+(`domain fault cause=25`, then SIGSEGV), i.e. those checks PASS. They were reported as a collapse.
+
+### Where the failures actually are
+
+Every real failure is an explicit `exit:1` with a reason, and all of them are allocations:
+
+| marker | the call |
+|---|---|
+| `MALLOC_FAIL:aligned allocation` | `posix_memalign(&p, 4096, 5001)` returns nonzero |
+| `MALLOC_FAIL:population array` | an array allocation returns NULL |
+| `MALLOC_FAIL:remap-align setup` | the 6 MiB allocation, before any remap |
+| `MALLOC_FAIL:remap stale setup` | same shape |
+| `MALLOC_FAIL:precise allocation` | `malloc(200003)` returns NULL |
+
+The board lane's independent Tier 3 readings are the same family: NULL at `malloc(6144)`,
+`calloc(1, 34816)` and `calloc(1, 35840)`, each the **first** allocation in a fresh process, while
+`malloc(3072)` and `calloc(1, 12288)` succeed as first allocations in theirs. So it is deterministic
+and history-independent, which makes it reproducible without the board and without a boot.
+
+Not an arena exhaustion: `CAPSTONE_VM_STATS` reads `arenas=9` at the failing basic test and
+`arenas=12` at the churn test, which passes.
+
+Two live suspects, both of which I wrongly ruled out when first asked:
+- **the request rounding in `malloc()`** (`capstone_repr_round` on the requested size);
+- **the granule-sized group header** in `bind_slots`/`enframe`. This one only grows above a stride
+  of 16388, which fits 34816 and 35840 but **not** 6144 — so there are plausibly two distinct
+  causes in that table, and treating it as one is how the next wrong attribution happens.
+
+`aligned_alloc` is the sharpest lead for the 5001 case: it over-allocates and then **re-bases the
+object inside its slot**, adjusting the offset field, and option (iii) requires the re-based
+base/length pair to be representable. That re-basing is exactly what the `0009` patch touches.
+
+### Reporting defects fixed in `run-malloc.py`, found while reading its output
+
+Three, all of the same shape — a constant or an input echoed where a reading belongs:
+- `virtual_vm_abi` was a hard-coded `5`, so **every v6 run reported "ABI 5"**. It now reads the
+  magic off the image and errors if it cannot identify it.
+- `malloc_count` echoed the **requested** count; the collapsed arm published `malloc_count: 70000`
+  beside `malloc_count_reported: false`. Now reported only when the domain echoes it back.
+- My own three-arm wrapper recorded `rc=0` for arms whose status was `FAIL`, because `rc=$?` was
+  inlined into an `echo` containing `$(date -Is)` and the command substitution resets `$?`. The
+  project rule is "branch on a gate's status, never echo it"; this is that, in the harness, one turn
+  after fixing two reporting defects in the same file.
+
+### `stub.S` reproducibility, and how nearly it was dismissed
+
+`capstone-vexec` was not bit-reproducible: with no `.file` directive the assembler records the
+driver's randomly named temporary. Fixed with `.file "stub.S"`.
+
+Worth recording **how** it was confirmed. A byte-scan of the shipped binary for `ccXXXXXX.s` and for
+`/tmp/` paths found **zero** of each, which reads as "does not reproduce" and would have discarded a
+correct report. The build-twice test settles it: without the directive, two builds of identical
+source give `73ce7b1bc0411029` and `b1b9c8a5670e137a`; with it, `54581b7c0930a21e` twice. A probe
+keyed to one spelling of a symptom is the narrowed view the house rules warn about, and the
+unfiltered artifact here is the second build, not a better grep.

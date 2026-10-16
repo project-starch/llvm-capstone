@@ -176,7 +176,10 @@ unsigned long __capstone_malloc_remap_unaligned;
 /* Is a remapped mapping usable, i.e. will every bound derived inside it be representable? */
 int __capstone_malloc_remap_usable(unsigned long base, size_t bytes)
 {
-    return capstone_repr_ok(base, capstone_repr_round(bytes ? bytes : 1));
+    /* Check the length ACTUALLY mapped, not a rounded-up one: repr_round(bytes) can be
+     * representable while `bytes` itself is not, which would pass a mapping whose real end the
+     * encoder cannot express. */
+    return bytes && capstone_repr_ok(base, bytes);
 }
 
 void *__capstone_malloc_group_remap(struct capstone_malloc_slot *slots,
@@ -189,9 +192,14 @@ void *__capstone_malloc_group_remap(struct capstone_malloc_slot *slots,
     unsigned long result;
     __asm__ volatile("ld %0, 0(%1)" : "=r"(result) : "r"(&root) : "memory");
     if ((long)result < 0) { errno = -(long)result; sublet_clear(&root); return MAP_FAILED; }
-    /* Refuse an unrepresentable mapping rather than derive a widened bound inside it. realloc.c
-     * falls through to its malloc-plus-copy path on a failed mremap, so this costs a copy and
-     * never a wrong bound. */
+    /* CORRECTION (2026-10-17): this was written as a safe fallback -- "costs a copy and never a
+     * wrong bound" -- and it is not one. __capstone_vm_remap() above has ALREADY moved the
+     * mapping and re-registered it by the time we get here, so returning MAP_FAILED sends
+     * realloc.c down a malloc-plus-copy path that reads from an address which no longer maps.
+     * The launcher's remap_mapping() now guarantees a granule-aligned destination, which makes
+     * this an ASSERTION rather than a fallback: a nonzero counter is a launcher bug to fix, not
+     * a cost to measure. It is kept, and kept counted, precisely so that bug would be visible
+     * rather than silent. */
     if (!__capstone_malloc_remap_usable(sublet_base(&root), bytes)) {
         __capstone_malloc_remap_unaligned++;
         sublet_clear(&root);

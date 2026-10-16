@@ -155,6 +155,24 @@ static void *reserve(size_t bytes)
     if (tail) munmap((void *)(base + bytes), tail);
     return private_pages((void *)base, bytes);
 }
+static void *reserve_aligned(size_t bytes, size_t alignment)
+{
+    /* mmap() promises page alignment only. Over-map by the worst-case distance to the next
+     * alignment boundary -- the raw base is already page-aligned, so that is alignment - 4096
+     * -- then trim both ends, leaving EXACTLY `bytes` mapped. Mapping exactly `bytes` is the
+     * point: remap_mapping() below matches a heap on m->bytes == m->visible, so a padded heap
+     * can never grow. At alignment == 4096 the slack is zero and this reduces to a plain
+     * mmap() of `bytes`, which is what the heap path used to do. */
+    size_t slack = alignment - 4096;
+    char *raw = mmap(NULL, bytes + slack, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (raw == MAP_FAILED) return NULL;
+    uintptr_t base = ((uintptr_t)raw + alignment - 1) & ~(uintptr_t)(alignment - 1);
+    if (base != (uintptr_t)raw) munmap(raw, base - (uintptr_t)raw);
+    size_t tail = (uintptr_t)raw + bytes + slack - (base + bytes);
+    if (tail) munmap((void *)(base + bytes), tail);
+    return private_pages((void *)base, bytes);
+}
 static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
                  uintptr_t cursor, int linear, uint64_t thread)
 {
@@ -164,17 +182,18 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
     /* Option (iii): refuse to mint an arena whose bounds the encoder cannot represent, rather
      * than hand the domain a capability silently widened below its base or above its end.
      *
-     * THIS CANNOT FIRE TODAY, and that is worth stating rather than leaving to be discovered.
-     * Every size reaching a grant is a power of two of at least 4096 -- rounded() doubles from
-     * 4096 until it covers its argument, and CAPSTONE_DELEGATE_META_BYTES and
-     * CAPSTONE_LAUNCH_BYTES are 16384 and 65536 -- and reserve() aligns the base to `bytes`,
-     * which for a power of two implies granule alignment, since the granule is bytes/512 at
-     * most. So the launcher's arenas are representable by construction.
+     * CORRECTION (2026-10-17): an earlier version of this comment claimed the check "cannot
+     * fire today", on the grounds that every size reaching a grant is a power of two. That was
+     * wrong in the case that matters most. The local-malloc heap grants `visible` bytes, which
+     * is page-rounded and granule-rounded but NOT a power of two -- a 6 MiB heap grants
+     * 6291456 -- so this check is load-bearing for exactly the path option (iii) changed, and
+     * it is COUPLED to the alignment heap.c requests: it passes only because acquire_mapping()
+     * now aligns that mapping to the granule. The two must land together.
      *
-     * The check is here because that construction is an invariant of three separate pieces of
-     * code, none of which says so, and a future size that is not a power of two would otherwise
-     * hand the domain a silently widened capability. Every arena the launcher grants passes
-     * through this one function. Negative-tested in tests/exact-bounds-iii/grant-repr-test.c. */
+     * It is also not true that every arena passes through this function: remap_mapping() grows
+     * a heap through CV_REMAP_BEGIN/END and never calls grant(), which is why that function
+     * carries its own alignment guarantee. Negative-tested in
+     * tests/exact-bounds-iii/grant-repr-test.c. */
     if (!capstone_repr_ok((uintptr_t)base, bytes)) { errno = ERANGE; return -1; }
     struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0};
     if (ioctl(device, CV_ADD, &r)) return -1;
@@ -234,11 +253,15 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         (kind == CV_MAP_APPLICATION && rights != 7)) return -EINVAL;
     if (bytes < alignment) bytes = alignment;
     void *p;
-    if (local_malloc && kind == CV_MAP_HEAP && alignment == 4096) {
+    if (local_malloc && kind == CV_MAP_HEAP) {
+        /* Keyed on the HEAP, not on the alignment value. What requires bytes == visible is the
+         * heap's growth contract -- remap_mapping() matches on m->bytes == m->visible == old --
+         * and the old `alignment == 4096` spelling conflated that with the alignment mmap()
+         * happens to provide for free. Option (iii) asks for the bounds granule, which exceeds
+         * a page above 4 MiB, so every heap of 4 MiB or more silently left this path, got
+         * padded to a power of two by reserve(), and could no longer grow at all. */
         bytes = visible;
-        p = mmap(NULL, bytes, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        if (p == MAP_FAILED) return -errno;
-        p = private_pages(p, bytes);
+        p = reserve_aligned(bytes, alignment);
     } else p = reserve(bytes);
     if (!p) return -errno;
     /* Padding remains inaccessible, including after later mprotect calls.
@@ -266,12 +289,41 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
         struct mapping *m = &maps[i];
         if ((uintptr_t)m->address != base || m->visible != old || m->bytes != old ||
             !m->heap || m->kind != CV_MAP_HEAP) continue;
+        /* Option (iii): the GROWN mapping's base must still be a granule multiple, and mremap()
+         * promises only page alignment. Above 4 MiB the granule exceeds a page, so even an
+         * in-place growth can leave the base unrepresentable (2 MiB -> 4 MiB keeps the base and
+         * moves the granule from 4096 to 8192).
+         *
+         * This has to be guaranteed HERE and not refused in the domain. The domain's
+         * __capstone_malloc_group_remap() checks representability only after this ioctl pair
+         * has already moved the memory and re-registered it, so refusing there is a
+         * use-after-move, not a fallback -- realloc's malloc-plus-copy path would read from an
+         * address that no longer maps. A nonzero __capstone_malloc_remap_unaligned therefore
+         * means a bug in this function, not a measurement.
+         *
+         * Everything that can fail is done BEFORE the source is touched: mremap() fails
+         * atomically, so an error leaves the old mapping intact and only the reservation to
+         * release. */
+        size_t align = capstone_repr_granule(bytes);
+        if (align < 4096) align = 4096;
+        if (bytes % align) return -ERANGE;
+        void *dest = NULL;
+        if (align > 4096) {
+            dest = reserve_aligned(bytes, align);
+            if (!dest) return -errno;
+        }
         struct cv_remap r = {tid, m->id, bytes, 0};
-        if (ioctl(device, CV_REMAP_BEGIN, &r)) return -errno;
-        void *p = mremap(m->address, old, bytes, MREMAP_MAYMOVE);
+        if (ioctl(device, CV_REMAP_BEGIN, &r)) {
+            int e = errno;
+            if (dest) munmap(dest, bytes);
+            return -e;
+        }
+        void *p = dest ? mremap(m->address, old, bytes, MREMAP_MAYMOVE | MREMAP_FIXED, dest)
+                       : mremap(m->address, old, bytes, MREMAP_MAYMOVE);
         if (p == MAP_FAILED) {
             int e = errno;
             if (ioctl(device, CV_REMAP_END, &r)) abort();
+            if (dest) munmap(dest, bytes);
             return -e;
         }
         r.address = (uintptr_t)p;

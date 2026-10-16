@@ -18,6 +18,16 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def image_abi(path):
+    """Read the ABI off the image instead of asserting it. A hard-coded 5 here reported "ABI 5"
+    for every v6 run -- a printed constant that reads exactly like a measurement."""
+    data = open(path, 'rb').read()
+    found = [v for v, m in ((5, b'CPONVVM5'), (6, b'CPONVVM6')) if data.count(m) == 1]
+    if len(found) != 1:
+        raise SystemExit(f'{path}: cannot identify the VM ABI magic (matched {found})')
+    return found[0]
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     for name in ('adapter', 'application', 'native', 'qemu', 'images', 'work'):
@@ -134,8 +144,10 @@ echo VIRTUAL_STAGED_DONE
                                                 'MALLOC_HOT_CONTROL_EXIT:0\n' in log)
     checks['real_linux_mremap_growth_and_shrink'] = log.count('CAPSTONE_VM_REMAP_OK') >= 2
     record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks,
-                  virtual_vm_abi=5, harts=1, allocator='Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy',
-                  malloc_count=a.malloc_count,
+                  virtual_vm_abi=image_abi(a.application), harts=1, allocator='Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy',
+                  # The REQUESTED count is not a result. Report it only when the domain
+                  # echoed it back, so a collapsed run cannot publish a figure it never reached.
+                  malloc_count=(a.malloc_count if checks['malloc_count_reported'] else None),
                   remap_unaligned_fallbacks=(remap_counts[0] if remap_counts else None),
                   exact_bounds='physical shadow metadata; QEMU prototype', skipped=['churn'] if a.skip_churn else [],
                   input_sha256={name: sha(path) for name, path in inputs.items()},
