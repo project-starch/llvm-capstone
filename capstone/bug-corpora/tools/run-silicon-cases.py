@@ -52,6 +52,14 @@ silicon-pym-sublet. A run is `<fixture> <report>`: the fixture is run-virtual.py
 staged beside the images (argv carries it as @DIR@, resolved per platform: /mnt/host on QEMU, --board-dir on the board).
 A fault counts only in read_probe; completion is `PYM completed=1`. The corpus control 00 (controls/) completes on
 stock and faults at read_probe on Sublet.
+mruby/release-differential: each case is upstream's own regression test (trigger.rb) run by one interpreter image
+(build --image: B5's mruby.dom, silicon-alloc.c's exact per-object bounds, no revocation) as `<image> <trigger.rb>`,
+the script staged beside it. The image is staged once and shared. A run reads CAUGHT on any capability fault (the
+corpus's bounds-arm oracle is the cause, not a probe), COMPLETED when the harness prints ["PASS"], and WRONG-ANSWER
+when it prints its failures and exits 0. The port's scripts/smoke.rb is the arm's control (SMOKE_DONE). Cases the
+image cannot run are skipped with the reason: a C-API case (its own build), a case that needs mruby-task (not in
+the silicon build), and a case whose recorded reading is a watchdog (it does not terminate). smoke.rb writes its file
+into /tmp, writable on both platforms (its M12 then reads false on both: smoke.rb is not in /tmp).
 The carved corpus also runs its own controls as rows: 99 (one byte past a 16-byte carve, inside its block) on every
 arm, and 98 (a re-carved region's old alias) on the Sublet carve. They gate the arm like the four tool controls.
 
@@ -122,6 +130,9 @@ ARMS = {
                           "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
     "silicon-pym-sublet": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-nested-pools",
                            "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    # mruby/release-differential on one interpreter image (--image), the corpus's sysalloc-bounds configuration
+    "silicon-mruby-bounds": {"defs": "", "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "RETURNED",
+                                                     "subobj": "RETURNED"}},
     "silicon-wm-stock": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-malloc", "wm_differential": True,
                          "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
 }
@@ -172,6 +183,20 @@ PYM_CTL = ("cpython", "pymalloc-repros", "controls")
 PYM_MAIN = REPO / "capstone/ports/cpython/pymalloc/src/native/main.c"
 RUNFAM[PYM] = dict(probe=r"^read_probe$", done="PYM completed=1")
 RUNFAM[PYM_CTL] = RUNFAM[PYM]
+MRB = ("mruby", "release-differential")
+MRB_SMOKE = REPO / "capstone/ports/mruby/app/scripts/smoke.rb"
+RUNFAM[MRB] = dict(probe=r"(?!)", done='["PASS"]')
+
+
+def mrb_expect(oracle):
+    """The corpus's recorded bounds-arm reading (case.json arms.sysalloc-bounds.oracle) as this tool's outcome."""
+    if oracle.startswith("capability fault"):
+        return "CAUGHT"
+    if "reports PASS" in oracle:
+        return "COMPLETED"
+    if "wrong answer" in oracle:
+        return "WRONG-ANSWER"
+    return None
 
 
 def pym_fixture(n):
@@ -197,7 +222,7 @@ def sublet_arm(arm):
 # corpus controls that gate their arm like the four tool controls (pool-control predates this and stays a plain row,
 # as set 2 was pre-registered with it)
 CONTROL_ROWS = ("carve-control", "mc-control", "wmem-control", "pg-c-control", "pg-mmgr-control",
-                "pg-mmgr-corpus-control", "pym-control")
+                "pg-mmgr-corpus-control", "pym-control", "mruby-control")
 PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
 CTL_PROBE = re.compile(r"^ctl_(read|write)_probe$")
 
@@ -213,6 +238,8 @@ def kind_of(corpus):
         return "pg-mmgr-corpus-control"
     if rel in (PYM, PYM_CTL):
         return "pym" if rel == PYM else "pym-control"
+    if rel == MRB:
+        return "mruby-rb"
     if rel[1] == "pool-repros":
         return "pool-control" if "controls" in rel else "pool"
     if rel[1] == "wmem-repros":
@@ -327,6 +354,7 @@ def cmd_build(a):
     ctl.write_text(rcd.CONTROL_C)
     appf = arm.get("app_cflags", "")
     jobs, cases = [("controls", [str(ctl)], f"-O0 {appf}".strip(), arm["defs"], out, None, None)], {}
+    skipped_all = {}     # cases a corpus cannot run on this arm, with the reason (recorded in the manifest)
     if any(f"-D{sw}" in a.extra_cflags for sw in CARVE_SWITCHES):
         sys.exit("CONTROL-FAILED a carve switch comes from the arm (ARMS[...]['carve']), never from --extra-cflags")
     for corpus in a.corpus:
@@ -380,6 +408,39 @@ def cmd_build(a):
                 jobs.append((name, [str(PYM_MAIN), str(d / "case.c"), *a.extra_src], " ".join(flags), arm["defs"],
                              out, a.data, a.arena))
             continue
+        if rel == MRB:          # one interpreter image, a script per case; nothing is compiled
+            if not a.image:
+                sys.exit("CONTROL-FAILED mruby/release-differential needs --image (the interpreter .dom)")
+            img = Path(a.image).resolve()
+            files = out / "files"
+            files.mkdir(exist_ok=True)
+            (files / "smoke.rb").write_bytes(MRB_SMOKE.read_bytes())
+            cases["mruby-smoke"] = dict(corpus=str(corpus.relative_to(REPO)), case="ports/mruby/app/scripts/smoke.rb",
+                                        kind="mruby-control", n="0", files=[str(files / "smoke.rb")],
+                                        stage_image=img.name, image=str(img), sha256=sha256(img),
+                                        runs=[dict(variant="control", argv=["@DIR@/smoke.rb", "/tmp"], expect="COMPLETED")])
+            skipped = {}
+            for d in sorted(x for x in corpus.glob("[0-9][0-9]_*") if (x / "case.json").is_file()):
+                cj = json.loads((d / "case.json").read_text())
+                trig = d / cj.get("trigger", "")
+                oracle = cj["arms"].get("sysalloc-bounds", {}).get("oracle", "")
+                why = ("a C-API case, which needs its own build" if trig.suffix != ".rb" else
+                       "needs mruby-task, which the silicon build does not carry" if re.search(r"\bTask\b", trig.read_text()) else
+                       "its recorded reading is the watchdog: it does not terminate" if "watchdog" in oracle else
+                       f"no outcome for the recorded oracle {oracle!r}" if mrb_expect(oracle) is None else None)
+                if why:
+                    skipped[d.name] = why
+                    continue
+                name, n = f"{tag}-{d.name[:2]}", int(d.name[:2])
+                fx = files / f"{d.name[:2]}-trigger.rb"
+                fx.write_bytes(trig.read_bytes())
+                cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind="mruby-rb", n=str(n),
+                                   files=[str(fx)], stage_image=img.name, image=str(img), sha256=sha256(img),
+                                   runs=[dict(variant="case", argv=[f"@DIR@/{fx.name}"], expect=mrb_expect(oracle))])
+            for k, why in skipped.items():
+                print(f"  skipped {k}: {why}")
+            skipped_all.update(skipped)
+            continue
         if rel == PGM_CTL:      # the corpus's own control: completes on stock, faults at the probe on Sublet
             for d in sorted(x for x in corpus.glob("[0-9][0-9]_*") if (x / "case.c").is_file()):
                 name, n = f"{tag}-{d.name[:2]}", int(d.name[:2])
@@ -417,9 +478,12 @@ def cmd_build(a):
             print(f"  {name:<28} {'ok ' + sha256(img)[:16] if img else 'BUILD-FAILED rc=' + str(rc)}", flush=True)
             if img:
                 built[name] = dict(image=str(img), sha256=sha256(img))
+    for n, c in cases.items():          # cases that run a prebuilt image (mruby's interpreter) need no build
+        if c.get("image") and n not in built:
+            built[n] = dict(image=c["image"], sha256=c["sha256"])
     manifest = dict(arm=a.arm, defs=arm["defs"], app_cflags=appf, carve=arm.get("carve", {}),
                     corpus_defs=arm.get("corpus_defs", {}), driver=arm.get("driver", "driver.c"), extra_src=a.extra_src,
-                    extra_cflags=a.extra_cflags,
+                    extra_cflags=a.extra_cflags, skipped=skipped_all,
                     controls=built.get("controls"), cases={
         n: dict(cases[n], **built[n]) if n in built else dict(cases[n], image=None) for n in cases})
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
@@ -470,10 +534,20 @@ def score(a, runs):
                 if outcome != "CAUGHT" and result.get("kind") == "exit" and result.get("value") == 0 \
                         and fam["done"].format(n=int(c["n"]), v=r["variant"]) in text:
                     outcome, detail = "COMPLETED", f"completed: `{fam['done'].format(n=int(c['n']), v=r['variant'])}`, exit 0"
+                if c["kind"] == "mruby-control" and outcome != "CAUGHT":
+                    ok_smoke = result.get("kind") == "exit" and result.get("value") == 0 and "SMOKE_DONE" in text
+                    outcome, detail = ("COMPLETED", "SMOKE_DONE, exit 0") if ok_smoke else (outcome, detail)
+                if c["kind"] == "mruby-rb" and outcome not in ("CAUGHT", "COMPLETED") and result.get("kind") == "exit" \
+                        and result.get("value") == 0 and re.search(r'^\["', text, re.M):
+                    fails = [l for l in text.splitlines() if l.startswith('["')]
+                    outcome, detail = "WRONG-ANSWER", f"exit 0, the harness's failures: {'; '.join(fails)[:200]}"
+                if c["kind"] == "mruby-rb" and outcome == "CAUGHT" and rcd.at_declared_site(REPO / c["corpus"] / c["case"], detail):
+                    detail += " (a declared fault site)"
                 rows.append(dict(name=f"{name}-{r['variant']}", case=c["case"], corpus=c["corpus"], kind=c["kind"],
                                  outcome=outcome, detail=detail, predicted=r["expect"], image_sha256=c["sha256"],
                                  as_predicted=outcome == r["expect"] and (outcome != "CAUGHT" or "(the labelled probe)" in detail
-                                                                          or "(a declared fault site)" in detail)))
+                                                                          or "(a declared fault site)" in detail
+                                                                          or c["kind"] == "mruby-rb")))
             continue
         syms = rcd.Symbols(llvm, c["image"])
         case_dir = REPO / c["corpus"] / c["case"]
@@ -593,7 +667,9 @@ def cmd_stage(a):
     for name, c in m["cases"].items():
         if not c["image"]:
             continue
-        (st / f"{name}.dom").write_bytes(Path(c["image"]).read_bytes())
+        img_name = c.get("stage_image", f"{name}.dom")     # a shared image (mruby's interpreter) is staged once
+        if not (st / img_name).exists():
+            (st / img_name).write_bytes(Path(c["image"]).read_bytes())
         for f in c.get("files", []):
             if not a.board_dir:
                 sys.exit(f"CONTROL-FAILED {name} stages files: pass --board-dir, the directory the stage is baked to")
@@ -601,7 +677,7 @@ def cmd_stage(a):
         if c.get("runs") is not None:
             for r in c["runs"]:
                 argv = [x.replace("@DIR@", a.board_dir) if a.board_dir else x for x in r["argv"]]
-                lines.append(f"{pre}{name}-{r['variant']} {name}.dom {' '.join(argv)}")
+                lines.append(f"{pre}{name}-{r['variant']} {img_name} {' '.join(argv)}")
             continue
         for which in ("fixed", "buggy"):
             argv = argv_for(a.arm, c["kind"], c["n"], which)
@@ -624,6 +700,7 @@ def main():
     b.add_argument("--data", type=int, default=None, help="B0_DATA for the cases (the pool core's arenas need more)")
     b.add_argument("--arena", type=int, default=None, help="B0_ARENA (level0's heap) for the cases")
     b.add_argument("--opt", default="-O0", help="the cases' optimisation level (the pool corpus builds at -O1)")
+    b.add_argument("--image", help="a prebuilt image every case runs (mruby/release-differential: the interpreter)")
     b.add_argument("corpus", type=Path, nargs="+")
     q = sub.add_parser("qemu"); q.add_argument("--arm", choices=ARMS, required=True)
     q.add_argument("--out", type=Path, required=True); q.add_argument("--state", type=Path, required=True)

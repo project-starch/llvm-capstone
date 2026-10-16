@@ -1,0 +1,25 @@
+silicon-mruby-bounds:control-clean controls.dom clean
+silicon-mruby-bounds:control-oob controls.dom oob
+silicon-mruby-bounds:control-uaf controls.dom uaf
+silicon-mruby-bounds:control-subobj controls.dom subobj
+silicon-mruby-bounds:mruby-smoke-control mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/smoke.rb /tmp
+silicon-mruby-bounds:mruby-release-differential-01-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/01-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-02-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/02-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-03-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/03-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-04-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/04-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-06-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/06-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-07-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/07-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-08-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/08-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-09-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/09-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-10-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/10-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-12-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/12-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-13-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/13-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-14-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/14-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-15-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/15-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-16-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/16-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-17-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/17-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-18-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/18-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-19-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/19-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-20-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/20-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-21-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/21-trigger.rb
+silicon-mruby-bounds:mruby-release-differential-22-case mruby.dom /test-domains/corpus/c10-mrb-silicon-mruby-bounds/22-trigger.rb
