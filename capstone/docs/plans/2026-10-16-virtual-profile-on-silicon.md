@@ -80,7 +80,7 @@ differ from the virtual profile's. The known case is rounding: silicon rounds an
 
 ## Bounds (audit item C'): option (iii), representable bounds that the allocator enforces
 
-**HELD 2026-10-16, pending a re-cost:** the cost below was RETRACTED by its author the same day; see the next paragraph. Neither (iii) nor (ii) is being built meanwhile. **Decided 2026-10-16, superseding the same day's choice of (ii).** The lead delegated the choice to the lanes, then
+**RE-DECIDED 2026-10-16 on the corrected cost: (iii) stands.** The first estimate was retracted (below). The re-cost with the layout change does not turn the choice. **Decided 2026-10-16, superseding the same day's choice of (ii).** The lead delegated the choice to the lanes, then
 asked whether exact bounds are needed at all. The answer is that the hardware does not need them; only the landed
 runtime's choices did. The guide states that dependency: "Local mallocng requires this profile to retain upstream
 slot geometry and expose only requested object bounds". QEMU marks its shadow store as a prototype: `cap_mem_map.h:20`
@@ -107,6 +107,30 @@ child exact. It does not exist on the bitstream: 4a4261bb4 removed it ("one sche
 `ariane_pkg.sv:778` at d93a8d66b). The author read the main checkout's older capstone-ariane, 062f4453b. The same
 author also counts 430 CAUGHT rows among the corpus's 825 judged virtual-arm rows that could flip under (iii).
 `fault.offset` is a pc offset, not an overrun distance, so the recorded rows cannot settle it; Tier 3's re-run does.
+
+**The re-cost** (the compiler lane, `lane/compiler-exact-bounds-iii` 3d7f5128a961) was measured against the RTL's own
+encoder model, `verif/tests/custom/capstone/bounds-model.py` at capstone-ariane d93a8d66b, loaded by revision. Its
+self-check reproduces R-54's 1,050 of 400,000.
+- 7 of the 48 size-class entries change, by 1-4 units, mostly to round numbers: [36] 1170, [38] 1638, [39] 2048,
+  [41] 2732, [43] 4096, [45] 5464, [47] 8192. Slot space grows by 0.022%.
+- Each group's header grows from 16 bytes to the class's granule (32-256), once per group.
+- Offset cycling keeps only granule-aligned offsets. Mallocng's double-free entropy is untouched on 8 of the 20 large
+  classes and falls to 1 in 2 through 1 in 16 on 12.
+- 0 of 254,304 (class, request, offset) combinations escape their slot.
+- The table edit mis-sizes 0 of 131,051 requests. Shrinking [43] by 8 units, the positive control, mis-sizes 112.
+- The effort is 4-6 days.
+
+**One requirement the re-cost's containment check does not cover, found by the semantics owner with the same model.**
+Mallocng's in-band header for slot i+1 is the last 4 bytes of slot i: `p[-4..-1]` with `p = storage + stride*(i+1)`.
+Over the repaired geometry (offset 0, slots 0 and 1, every request each large class serves):
+- no request leaves its slot;
+- but for 912 near-capacity request sizes the rounded end covers those 4 bytes. An object's capability would then
+  reach its neighbour's allocator header, which exact bounds never do. Requests within (granule - 4) of the class's
+  capacity are affected: 4 sizes per class at granule 8, up to 124 at sc 47.
+So the runtime keeps the first estimate's classification rule as well: classify on `repr_round(n)` against the
+class's usable size, `stride - IB`, so that the rounded end stays at or below the next slot's header. The cost is
+those 912 sizes moving up one class. What remains reachable through the rounding is the slot's own footer bytes,
+stated above.
 
 The original estimate follows, kept for the record:
 
@@ -273,8 +297,8 @@ waits for the lead's own word; the physical regression is read on every one.
 |---|---|---|
 | re-baseline addendum | RTL lane | DONE 2026-10-16: `virtual-capstone-rtl-feasibility.md` "Addendum, 2026-10-16"; Q-17 and Q-18 filed; reference pinned at d35af47b163c |
 | exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`. DECIDED the same day: (ii) dense, the format frozen as proposed, the helper lane owning the semantics |
-| C' bounds | RTL lane | DROPPED 2026-10-16 for option (iii), which is now HELD pending a re-cost (the first estimate was retracted). The RTL lane does not restart C' until the decision is re-made |
-| option (iii) in the runtime: mallocng `repr_round`, the CSMINT descriptor audit, the ABI and launcher gate, runners, documents, re-records | compiler lane | HELD: the 3-5-day estimate was retracted by its author. A re-cost with the layout change (granule-aligned group header and large-class strides, the memory cost, the offset-entropy loss) comes first |
+| C' bounds | RTL lane | DROPPED 2026-10-16: option (iii), re-decided on the corrected cost, needs nothing in the RTL |
+| option (iii) in the runtime: mallocng `repr_round`, the CSMINT descriptor audit, the ABI and launcher gate, runners, documents, re-records | compiler lane | to do, 4-6 days: the re-costed geometry (7 table entries, granule group header, granule offset steps) plus classification on `repr_round(n)` against `stride - IB`, so no rounded end reaches the next slot's header |
 | B translation in C mode | RTL lane | SIMULATION GREEN 2026-10-16: capstone-ariane `virtual-profile` ea88d8e5d (the Q-19 ruling implemented: the consuming ldc decides at writeback from the captured page permission, a non-consuming ldc completes, arm 6 added); seven arms and the flag-off control as pre-registered; lint at baseline, the 40 loop names identical; Q-17's reorder and arm joining, then the flag-off neutrality sweep and the sup lists, then the synthesis request with the pre-registered prediction |
 | A lifetime table | RTL lane | to do |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
