@@ -2377,3 +2377,62 @@ addr 0}`, where QEMU raises a synchronous 29. That is suggestive and unverified 
 says the last service was the acquire, not an entry — so the next step is to instrument it rather
 than to reason further, which is the pattern that has worked every time in this investigation and
 failed every time it was skipped.
+
+
+## The relaxation is validated, AND it brings a cause-29 fault in `capstone_launch_unpack`
+
+### Validated, by the board lane's full set on `89ee98be99e5`
+
+`run.py` **PASS, 41/41** — `normal`, `parallel_one` and `parallel_two` clear `heap growth/zero`
+(the computed row), and `heap-threads`, `sqlite_write`, `sqlite_read` and `mruby` all exit 0 (the
+inferred rows). `CAPSTONE_VM_ADD_REFUSED` 0, against **35** in the `b61` before. Tier 3 bundle 5
+**13/13** cell for cell; cases 00 and 10 **CAUGHT in 4 of 4 boots**, against 3 of 6 pre-fix, which
+is the nondeterminism row and it held; bundles 13 and 14 unchanged. The board module compiles —
+`07ba2c4f7425310f`, 0 RVC, vermagic 6.4.14, with `representable.h` `7c41a409acb7a897` copied beside
+it.
+
+**And the fault profile is identical before and after:** `13 ×2, 15, 24, 25 ×3, 28 ×2`, every one an
+expected denial, with QEMU's six capability-violation classes unchanged. In particular **cause 28
+fires twice in `run.py` both before and after**, so the bounds class is observably live and the
+relaxation did not move it. That is the strongest available evidence that the predicate is not
+handing out widened capabilities.
+
+### And a fault that appears only with the change
+
+This lane's `ok` mode now dies at `MALLOC_BASIC_EXIT:139` from
+
+    domain fault cause=29 pc=... address=0x0 last=0xc0de0001
+
+Located: **both cause-29 faults are inside `capstone_launch_unpack`**, not in the contract's
+allocation code. The instruction is `lw a3, 0x14(a4)` at ELF `0x1133c`, where `a4` comes from
+`shrink a4, a0, a0+0x58` two instructions earlier — so the derived capability is invalid and the
+load faults at address 0. Nothing prints beforehand, not even `MALLOC_BASIC_OK`.
+
+**Single-variable control, same domain and images, bounds OFF, differing only in the module:**
+
+| module | cause-29 | `basic` | `ADD_REFUSED` |
+|---|---|---|---|
+| old, power-of-two | **0** | exit 1 on `MALLOC_FAIL:aligned allocation` | 445 |
+| new, representability | **2**, in `capstone_launch_unpack` | exit 139 | 0 |
+
+### What the control cannot settle, stated rather than resolved in my favour
+
+It **cannot separate** "the change created this fault" from "the fault was always in that path and
+the refused allocation stopped it being reached". `last=0xc0de0001` says the fault follows an
+acquire service, and with the old module that acquire was refused, so the unpack never ran. **Both
+readings predict exactly what was measured.** That is the same under-determination that cost three
+attributions earlier in this investigation, so it is recorded as open.
+
+**A framing I gave the board lane and have retracted:** that "a step which now gets further and then
+faults is the masked-defect shape". I sent that before locating the fault, and `capstone_launch_unpack`
+is startup code — so "further" is not supportable. The revised discriminator is the fault CLASS, not
+the progress: a 28 or an OOB line implicates the predicate, a 29 at address 0 is this thread.
+
+### The lead worth taking next
+
+The fault does not appear in any of `run.py`'s steps or Tier 3's, so the faulting path is something
+this contract's `ok` mode exercises and those do not — the board lane's pointer at the allocation
+sizes diverging between `contract.c` and `malloc-contract.c` is the right place to look. The
+instruction sequence narrows to an 88-byte window and reads two words at `+0x10` and `+0x14` which
+it compares as negatives of one another, so there is a descriptor-layout question underneath it.
+Instrument it; do not reason about it.
