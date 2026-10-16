@@ -87,6 +87,14 @@ Each of these has cost real board time when skipped.
    ```
    Not a preflight gate on purpose: whether a `delin` is safe depends on its operand's type, which a
    static scan cannot see, and images that run correctly on silicon have one in `sublet_take`.
+7. **A reused image is only as fixed as its build.** "The same image as last time" keeps a run
+   comparable, but it also keeps every bug that image was built with. When the resident bitstream
+   needs a runtime fix, check that the fix is in the image itself before reusing a frozen one. The
+   check is the fix's own instruction in the image's text, not the build date. Under the full bounds
+   scheme (fpb_*, sublet_*), a Sublet-runtime image must carry a07a11194fa0's SHRINK
+   (`(w & 0xfe00707f) == 0x0200105b`, four in a fixed build). Without it, carves alias. On 2026-10-16
+   H1, R1, M1 and M2 reran September images that had 0, and H1's REVOKE finding had to be
+   retracted (dev 783fb0f93f7e).
 
 ## 1. Bake it in — never UART
 
