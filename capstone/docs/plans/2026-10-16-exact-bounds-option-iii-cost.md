@@ -238,3 +238,62 @@ Settling it needs either the repro sources read case by case for the allocation 
 distance, or a re-run of the virtual arms with the profile off. The re-run is the cheaper and more
 honest of the two and is already inside the 1-2 days costed for re-running the suites — but it
 should be counted as a *deliverable* of that re-run rather than assumed to come out clean.
+
+## RETRACTION (2026-10-16, same day): "no alignment change" is wrong
+
+**The claim withdrawn.** This document said option (iii) needs "no size-class table change, no slot
+geometry change, no alignment change, no padding", and the decision commit `1cb732b55054` quotes
+it as "mallocng changes in two expressions ... with no change to its size classes, layout or
+alignment". **That is wrong.** Item 1 is not two expressions; it needs the group header and the
+size-class strides to be granule-aligned, which is a layout and size-class change.
+
+**Why it was wrong.** The estimate costed the LENGTH requirement and never checked the BASE.
+Representability needs both: `modcapstone` `capstone.c:338` states it — "A region is representable
+only if BOTH its length and its base are granule multiples" — enforces it at `:344`, and
+`process.c:124` applies the same test to a DMA base.
+
+**Confirmed in the encoder rather than in the kernel's description of it.**
+`capstone/capstone-ariane/core/include/ariane_pkg.sv:786-845`. The granule rule this document used
+is correct: the full scheme takes `leading_zeros = max(12, msb(len))`, `E = leading_zeros - 12`,
+and the granule is `2^(E+3) = 2^(msb(L)-9)`. But the two edges are not treated alike:
+
+    B[13:3] = {bounds.start >> E}[13:3];                     // base: TRUNCATED, no compensation
+    T[11:3] = {bounds.base  >> E}[11:3];
+    if (((bounds.base >> (E+3)) << (E+3)) != bounds.base)
+        T[11:3] += 1;                                        // end: rounded UP
+
+Only the end rounds up. A base that is not a `2^(E+3)` multiple is shifted and truncated, so the
+capability **gains authority below the object** — up to 240 bytes for the largest class, past the
+4-byte in-band header and into the previous slot. QEMU's physical profile refuses the same request
+with 29 instead of widening it (`capstone/runtime/silicon/b6-sublet.c:19` records the divergence:
+QEMU refuses an unrepresentable child, the RTL rounds outward). Either behaviour breaks the current
+geometry — silent authority below the object, or `malloc` failing.
+
+**Computed over mallocng's real geometry** (`capstone/tests/exact-bounds-iii/base.py`). The derive
+is `heap.c` `publish:167-180`, `cap_derive(parent, key - base(parent), n)` — in our code, not
+mallocng's — and `bind_slots` (`heap.c:64-69`) puts a slot at `group_base + 16 + i*stride`:
+
+* **12 of the 20 classes with stride >= 4096 have an unrepresentable base for their first slot.**
+  The `+ 16` group header plus strides that are not granule multiples does it, from sc=36 up. For
+  sc=47 (stride 131056, granule 256), `(16 + i*stride) mod 256` is `[16, 0, 240, 224]` for i=0..3.
+* **Rounding the length up and the base down fits the slot for only 8 of 20 classes.** For the
+  other 12 the rounded range exceeds the stride — sc=47 needs 131328 against a 131056 stride.
+* **Offset cycling is reduced, not preserved.** Only granule-aligned offsets remain usable, so
+  mallocng's double-free entropy drops to 1-in-2 (granule 32) through 1-in-16 (granule 256) on
+  those classes. This document said the cycling was untouched by (a); that applied only to the
+  length.
+
+**One part is still open, and it could cut the other way.** `compress_bounds` has a second,
+*cursorless* branch, taken when `bounds.start == cursor`, which encodes the end relative to the
+cursor in 21 bits with `E = max(20, msb(cursor XOR end)) - 20` — granule 1, i.e. **exact**, for
+lengths below about 1 MiB. A freshly derived child has its cursor at its base, so it begins exactly
+bounded. The reading this document now rests on is that the encoding reverts to the coarse full
+scheme as soon as the program advances the cursor, which is what matters both for overrun detection
+and for the base truncation above. If that reading is wrong, most mallocng objects are exactly
+bounded under (iii) and the cost collapses. `rtl-oracle` has been asked to settle which scheme
+applies to a CDERIVE child and what the first pointer increment does; the answer will be recorded
+here either way rather than resolved in favour of the estimate.
+
+**What this does not change.** The big-path mapping result, the `mallocng.md:96` page-rounding
+result, the flipped `bounds` verdict, the `exact-bounds.sh` re-scoping, the ports' monotonicity
+argument and the corpora addendum all concern lengths and are unaffected.
