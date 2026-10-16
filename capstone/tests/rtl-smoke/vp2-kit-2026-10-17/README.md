@@ -176,6 +176,11 @@ This section replaces the withdrawn one above. It is based on the compiler lane'
 - CAPSTONE_VM_ADD_REFUSED absent from the logs;
 - heap growth/zero and real_linux_mremap_growth_and_shrink STILL FAIL, not addressed;
 - bounds still fails, request rounding puts +200003 inside the object.
+- **Added by the compiler lane before the revision exists** (lane ea37cbd801e6): its align-probe mode reads
+  attempted=600 ok=187 failed=413 today. 420 refusal rows split pow2=0 aligned=1: 109, pow2=1 aligned=0: 87,
+  both failing: 224, and pow2=1 aligned=1: 0. On the fixed revision it should read **failed=0 of 600**. Any
+  surviving pow2=1 aligned=0 row means the alignment half still bites; any surviving pow2=0 row means the size
+  half does.
 
 **The board lane's runs on that revision.** The kit is rebuilt from the revision with the same toolchain, QEMU and
 guest images.
