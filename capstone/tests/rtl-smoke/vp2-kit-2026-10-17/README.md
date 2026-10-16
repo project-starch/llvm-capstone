@@ -204,7 +204,7 @@ This section replaces the withdrawn one above. It is based on the compiler lane'
 
 **THE PREDICTION, re-stated by the compiler lane against b61f56b10c06 plus the `add()` relaxation, verbatim. It
 supersedes every earlier row in this section.** The lane marks each row computed or inferred. The constraint behind
-the REMAP_OK row is recorded at dev-bound 67e4368f6331, `capstone/docs/plans/2026-10-17-vp2-launcher-items.md`.
+the REMAP_OK row is recorded at the compiler lane's 67e4368f6331, `capstone/docs/plans/2026-10-17-vp2-launcher-items.md`.
 
 run-malloc, exact bounds OFF:
 - the five allocation markers (aligned allocation, population array, remap-align setup, remap stale setup, precise allocation): CLEAR
@@ -244,6 +244,19 @@ guest images.
 4. **Bundles 13 and 14 as must-not-move controls:** 9/9 and 3/3, cell by cell as before.
 5. **run.py `--timeout 1500`:** `normal` still exits 1 on `heap growth/zero`. Every other step is reported, not
    predicted.
+
+## Pre-registered (2026-10-17): run.py on b61f56b10c06 WITHOUT the `add()` change, to separate sqlite_write's NOMEM
+
+The question: does sqlite_write's exit 7 (NOMEM) come from a growth refused before the growth fix, or from an
+`add()` refusal? This run has the growth fix and not the `add()` relaxation, with exact bounds off and
+`--timeout 1500`.
+- **Computed:** `normal`, `parallel_one` and `parallel_two` still exit 1 on `heap growth/zero`. Their 135168-byte
+  large-path mapping is not a power of two, and `add()` refuses it on every boot.
+- **The reading:**
+  - sqlite_write exits 0 here: its NOMEM was the refused growth, which b61f56b10c06 fixes;
+  - it still exits 7: it is an `add()` refusal, or a further site.
+- Every other step is reported, not predicted. The pre-fix run on fe1a12fe7c74, above in RESULTS.md, is the
+  comparison.
 
 ## Status of the pipeline proof
 
