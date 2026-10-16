@@ -202,6 +202,27 @@ This section replaces the withdrawn one above. It is based on the compiler lane'
     were stated for an earlier base. The prediction is to be re-stated, row by row, against that exact revision
     before the run.
 
+**THE PREDICTION, re-stated by the compiler lane against b61f56b10c06 plus the `add()` relaxation, verbatim. It
+supersedes every earlier row in this section.** The lane marks each row computed or inferred. The constraint behind
+the REMAP_OK row is recorded at dev-bound 67e4368f6331, `capstone/docs/plans/2026-10-17-vp2-launcher-items.md`.
+
+run-malloc, exact bounds OFF:
+- the five allocation markers (aligned allocation, population array, remap-align setup, remap stale setup, precise allocation): CLEAR
+- align-probe: failed=0 of 600, where it is 413 of 600 today
+- CAPSTONE_VM_ADD_REFUSED: absent, and now genuinely falsifiable since the print is unconditional
+- malloc(6144), group 8192: ALLOCATED on EVERY boot, not 1 in 4 — please run at least 3 boots, since 1 of 4 would otherwise read as a pass
+- CAPSTONE_VM_REMAP_OK: 0
+- remap_align_contents_survive, remap_align_reported, basic_inplace_mremap_failure: True
+- real_linux_mremap_growth_and_shrink: STILL FALSE — a check to re-scope, not a defect
+- bounds / MALLOC_FAIL:denial survived: STILL FALSE — request rounding puts +200003 inside the object
+- the suite overall: the OFF arm should converge on what the ON arm already reads at b61f56b10c06, namely 21 true / 2 false, with the same two checks failing for the same two reasons. If OFF lands anywhere short of 21, something other than add() is still biting.
+
+run.py, --timeout 1500:
+- heap growth/zero, on normal and both parallel steps: CLEARS. This row is GROUNDED rather than inferred: contract.c:312 is require(p[i] && !p[i][131071], "heap growth/zero"), so it allocates at least 131072 bytes, which is above MMAP_THRESHOLD and takes the large path. Its mapping computes to 135168 bytes, which is NOT a power of two, so add() refuses it on every boot today. Despite its name it is an allocation refusal, not a growth failure.
+- heap-threads child malloc: expected to clear, INFERRED not grounded — I have not computed its allocation sizes, so if it survives treat it as a second site.
+- sqlite_write exit 7 NOMEM: expected to clear, also inferred. Your watch on it stands, and it now has a third candidate: a growth that crossed a granule boundary and was refused before b61f56b10c06 would also have shown as NOMEM. If it clears at b61f56b10c06 WITHOUT the add() change, that was it.
+- sqlite_read and mruby exit 1: expected to clear if they are downstream of an allocation refusal; otherwise second sites. Inferred.
+
 **The board lane's runs on that revision.** The kit is rebuilt from the revision with the same toolchain, QEMU and
 guest images.
 0. **Amended before the revision exists (compiler lane 561b8b2cd692): the refusal line now prints unconditionally.**
