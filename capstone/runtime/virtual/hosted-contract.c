@@ -70,6 +70,29 @@ __attribute__((noinline)) static void copy_loop(int **d, int *const *s, size_t n
     for (size_t i = 0; i < n; ++i)
         d[i] = s[i];
 }
+/* External and never inlined: no caller's alignment reaches the copy, as in
+ * Perl's pack 'p', which stores a pointer with Copy(buf, cur, 16, char). Both
+ * buffers are aligned at run time, so every whole granule must keep its tag
+ * (C-81: the compiler used to inline these as byte loads and stores). */
+__attribute__((noinline)) void hosted_copy16(char *d, const char *s) { memcpy(d, s, 16); }
+__attribute__((noinline)) void hosted_copy24(char *d, const char *s) { memcpy(d, s, 24); }
+__attribute__((noinline)) void hosted_copy48(char *d, const char *s) { memcpy(d, s, 48); }
+__attribute__((noinline)) void hosted_move32(char *d, const char *s) { memmove(d, s, 32); }
+/* A constant aggregate holding pointers, passed by value: the caller copies it
+ * into its frame with memcpy (C-77: the call passed both operands untagged and
+ * memcpy faulted on the source). The zero constant is the reported shape. */
+struct byval_ptrs { int *a, *b, *c, *d, *e; unsigned long off; _Bool lex; };
+static const struct byval_ptrs byval_zero = { 0 };
+static const struct byval_ptrs byval_cells = { &cells[11], &cells[12], &cells[13], &cells[14],
+                                               &cells[15], 5, 1 };
+__attribute__((noinline)) int hosted_byval_zero(struct byval_ptrs c)
+{
+    return !c.a && !c.e && c.off == 0 && !c.lex;
+}
+__attribute__((noinline)) int hosted_byval_cells(struct byval_ptrs c)
+{
+    return good(c.a, 11) && good(c.c, 13) && good(c.e, 15) && c.off == 5 && c.lex;
+}
 #ifdef __CAPSTONE_PURECAP__
 __attribute__((noinline)) static void copy_bytes(void *d, const void *s, size_t n)
 {
@@ -174,6 +197,45 @@ int main(void)
     memcpy(&head, head_dst, sizeof head);
     check(good(head, 4) && head_dst[23] == 0x5a, "builtin_memcpy_24_capability_head");
 
+    /* Constant-size copies whose alignment the compiler cannot see. */
+    static _Alignas(16) char opaque_src[64], opaque_dst[64];
+    int *got, *got2;
+    memset(opaque_src, 0, sizeof opaque_src);
+    memset(opaque_dst, 0, sizeof opaque_dst);
+    memcpy(opaque_src, &src[7], sizeof src[7]);
+    hosted_copy16(opaque_dst, opaque_src);
+    BARRIER();
+    memcpy(&got, opaque_dst, sizeof got);
+    check(good(got, 7), "memcpy_16_unknown_alignment");
+
+    memset(opaque_dst, 0, sizeof opaque_dst);
+    memset(opaque_src + 16, 0x6b, 8);
+    hosted_copy24(opaque_dst, opaque_src);
+    BARRIER();
+    memcpy(&got, opaque_dst, sizeof got);
+    check(good(got, 7) && opaque_dst[23] == 0x6b && opaque_dst[24] == 0,
+          "memcpy_24_unknown_alignment");
+
+    /* Plain data around a capability in the middle granule. */
+    memset(opaque_src, 0x3c, 48);
+    memcpy(opaque_src + 16, &src[8], sizeof src[8]);
+    memset(opaque_dst, 0, sizeof opaque_dst);
+    hosted_copy48(opaque_dst, opaque_src);
+    BARRIER();
+    memcpy(&got, opaque_dst + 16, sizeof got);
+    check(good(got, 8) && opaque_dst[0] == 0x3c && opaque_dst[47] == 0x3c && opaque_dst[48] == 0,
+          "memcpy_48_unknown_alignment_interior");
+
+    /* Overlapping, forwards by one granule: both capabilities move intact. */
+    memset(opaque_dst, 0, sizeof opaque_dst);
+    memcpy(opaque_dst, &src[9], sizeof src[9]);
+    memcpy(opaque_dst + 16, &src[10], sizeof src[10]);
+    hosted_move32(opaque_dst + 16, opaque_dst);
+    BARRIER();
+    memcpy(&got, opaque_dst + 16, sizeof got);
+    memcpy(&got2, opaque_dst + 32, sizeof got2);
+    check(good(got, 9) && good(got2, 10), "memmove_32_unknown_alignment_overlap");
+
     int **grown = malloc(4 * sizeof *grown);
     for (int i = 0; i < 4; ++i)
         grown[i] = &cells[10 + i];
@@ -210,6 +272,10 @@ int main(void)
 #endif
 
     transfers();
+
+    /* Last: before C-77 was fixed the first one faulted. */
+    check(hosted_byval_zero(byval_zero), "byval_const_zero_aggregate");
+    check(hosted_byval_cells(byval_cells), "byval_const_pointer_aggregate");
 
     printf("HOSTED_RESULT:%d/%d\n", checks - failures, checks);
     return failures != 0;
