@@ -101,6 +101,95 @@ region being split is rewritten with the piece that remains. The carved piece be
 which `swap_cpmp` loads on its first access fault. So Linux's code is always either under the resident slot or one
 fault away from being swapped in.
 
+## Monitor item for vp2, decided by the runtime and RTL lanes: CSMINT emulated in the monitor
+
+**This one is a monitor change**, unlike the walker PMP and the CPMP coverage above, which needed none. It is not for
+the current bitstream.
+
+**What the monitor does when an S-mode CSMINT traps to it.** QEMU's `helper_csmint`, `capstone-qemu
+target/riscv/capstone_table.c:218-283` at d35af47b163c, is the reference for every step and every refusal:
+1. Decode rd, rs1 (the slot) and rs2 (the descriptor) from the trapping instruction:
+   `csmint 1010000 rs2 rs1 001 rd 1011011` (`insn32.decode:982`).
+2. Read the descriptor `{u64 base; u64 end; u64 perms}` through S's translation (MPRV), as three aligned
+   doublewords.
+   - desc & 7 raises load-misaligned.
+   - A slot that is not 16-byte aligned raises store-misaligned.
+   - A slot with no writable translation raises a store access fault.
+3. Refuse before any write, where QEMU does:
+   - base >= end or perms > ALL: 29;
+   - a descriptor that is not representable (option (iii); the round trip through the encoder must give back base,
+     end and cursor): 29;
+   - fewer than two free identities: 30.
+4. Mint the LINEAR capability [base, end), with cursor base and the descriptor's perms, as the monitor mints for
+   domains today.
+5. Run the new table op CSNODE under the S table namespace. It creates the child node and its MREV ancestor, as
+   `cap_rev_create` plus `cap_rev_mrev` do.
+6. Store the capability, with its tag, to the slot through S's translation.
+7. Set rd to the ancestor's id and advance mepc.
+
+**The RTL lane's answers (2026-10-17; the Q-entry id follows when the runtime lane files it):**
+- **CSNODE rd, rs1:** opcode 0x5b, funct3 1, funct7 0x54 (0x50 stays CSMINT, which traps; 0x53 is CSRETIRE),
+  R-type with rs2 = x0.
+  - rs1 is a capability register, the LINEAR capability just minted.
+  - With fewer than two identities left it raises 30 before any write.
+  - Otherwise it allocates the child (depth 0, valid, linear), then an MREV ancestor, and re-parents the child under
+    the ancestor at depth 1.
+  - It re-nodes rs1 onto the child and returns the ANCESTOR id in rd.
+  - It is legal from S outside a context, and from M when `csupctl` bit 3 (the "table" bit) is set. The emulation
+    sets that bit around it. It is illegal from U and inside a context.
+- **The trap:** an S-mode CSMINT raises illegal instruction (2) to M, with mtval = the instruction bits. So the
+  monitor decodes from mtval and needs no read at mepc.
+- **The store: not STC under MPRV.** An STC's address is a physically bounded capability, and only the DYN unit
+  checks it, which knows nothing of MPRV.
+  - The descriptor's three words are read as scalar loads under MPRV. CPMP at S must cover that page, and Linux's
+    RAM entry does.
+  - The slot's VA is translated in software, by reading the page tables as the walker does.
+  - The minted capability is then stored with STC through a physical capability over the slot's page, as the
+    monitor stores into a domain's context today. No CPMP condition applies to that M-mode store.
+  - Slot alignment (cause 6), descriptor alignment (cause 4) and the unrepresentable descriptor (29) are the
+    emulation's checks, made before CSNODE runs.
+
+**The three settled by the RTL lane (2026-10-17):**
+- **The authority to mint** is the monitor's existing capability-mode mint primitive. CAPCREATE, CAPTYPE, CAPBOUND
+  and CAPPERM (opcode 0x7b) are legal from M and illegal only under supervision.
+  - Checked at d93a8d66b: `core/decoder.sv`, the funct3 000 block at about line 1137 sets `illegal_instr` only when
+    `sup_active_i`.
+  - CAPBOUND(base, end) over the descriptor's VA range gives the VA-bounded LINEAR capability. CAPCREATE gives it
+    node 2, which CSNODE re-nodes onto the child.
+  - No genesis capability is needed. The monitor must never dereference that capability itself, because its cursor
+    is a VA.
+- **The slot walk** faults rather than set A or D, as the RTL's walker does (the RTL lane cites `cva6_ptw.sv:453,
+  468, 478` and `cva6_mmu.sv:142` on the virtual-profile branch).
+  - It requires V, W and R, U with SUM, A and D.
+  - If any is missing it raises store page fault 15 to S with tval = the slot VA, as QEMU's `probe_access_full`
+    does. It never sets A or D on the module's behalf.
+- **The test path is the RTL simulation's D4 arm**, which runs the whole monitor sequence as its M-mode trap handler.
+  - The sequence: the CSMINT trap, the MPRV descriptor read, the mint, CSNODE under `csupctl.table`, the physical
+    walk and the physical STC.
+  - So the arm is the executable specification. The monitor code is written against it, and reads the rd and the
+    tagged slot that QEMU's helper gives.
+  - QEMU is unchanged, and the board's prediction for CSMINT comes from QEMU's own CSMINT.
+  - D4 follows the RTL lane's E and D5 arms. The monitor code waits for it.
+
+**D4 is in the RTL** (capstone-ariane virtual-profile-2-d 41fa120bf, 2026-10-17).
+- CSNODE (0x54) and CSRETIRE (0x53) are admitted to trusted S and to M under `csupctl.table`, outside a context. Both
+  are illegal from U, and escape with cause 2 inside a context.
+- CSNODE allocates QEMU's pair, child first and then the ancestor. It re-nodes rs1 onto the child and returns the
+  ancestor.
+- CSRETIRE returns 0 on success and 1 on rejection, and never faults.
+- Arms: va-runv6 (CSNODE and CSRETIRE from M and trusted S) and va-runv7 (both illegal inside a context).
+- The arms exercise CSNODE, not the whole emulation path from the trapped S-mode CSMINT through the MPRV read, the
+  walk and the physical STC. That handler is the board lane's to write, and is tested as its own arm.
+
+**Two vp2 facts that move readings, from the RTL lane:**
+- **Item E refuses RETURN inside a virtual context**, as QEMU's virtual-C filter does. A `csupctl.virt` domain that
+  ends with RETURN escapes with cause 2 (csupstatus 5) instead of returning. CSRUNV contexts are unaffected.
+- **Every allocation inside a context keeps a reserve of 256 identities** (CDERIVE, SPLIT, MREV, INIT), as QEMU's
+  `capstone_require_node`. A context's table needs more than 256 free identities before its first derive, or it
+  reads node pressure (kind 5, cause 30). Trusted S and M outside a context allocate down to the last identity.
+- Both are QEMU's behaviour, so the Tier 1 and Tier 2 predictions already carry them. Only a reading taken from a
+  vp1-era image would move.
+
 ## Pre-registered (2026-10-17, before the revision exists): the v6 module's `add()` change
 
 > **WITHDRAWN (2026-10-17, the same morning, before any run against it).** The predicate below is refuted by the

@@ -172,6 +172,45 @@ Pre-registered at the lane's README ("run.py on b61f56b10c06 WITHOUT the add() c
   pre-registered inferred rows (heap-threads, sqlite_write, sqlite_read and mruby clear) are now each backed by an
   observed refusal in their step. Whether they clear is still the fix run's question.
 
+## The v6 `add()` fix (lane/compiler-exact-bounds-iii 89ee98be99e5): every registered board-lane row holds (2026-10-17 07:34-07:47)
+
+The change is "Option A". In `add()`'s exact-bounds-off branch, `!capstone_repr_ok(r->address, r->bytes)` replaces
+the power-of-two test. `representable.h` is shared into the module build. The project lead delegated the choice to
+the compiler lane, after an audit.
+- Its runtime differs from b61f56b10c06 in `capstone_vm.c` and `build-adapter.sh` only. So the b61 run above is a
+  single-variable "before".
+- The runs are as pre-registered in README.md: the unmodified corpus harness, QEMU `40264f5de09ef153`, the same guest
+  images, exact bounds off.
+
+**The kit; the module's first build:**
+- QEMU module `d24d036ec8c4edc3`, board module `07ba2c4f7425310f`;
+- 0 16-bit instructions, vermagic 6.4.14;
+- MODULE-HEADERS now lists `representable.h` (`7c41a409acb7a897`) beside `cap_rev_table_abi.h` and the module's own
+  headers.
+
+| registered row | reading | held |
+|---|---|---|
+| run.py `normal` and both parallel steps: `heap growth/zero` clears (computed) | `normal` 0, `parallel_one` 0, `parallel_two` 0 | yes |
+| heap-threads, sqlite_write, sqlite_read, mruby clear (inferred) | 0, 0, 0, 0 | yes |
+| run.py overall | **PASS, 41 of 41** (record `c2e0bfa7901e1c76`). Every step's status is the dev-runtime table's. | — |
+| `CAPSTONE_VM_ADD_REFUSED` absent | **0** in run.py's serial, against 35 in the b61 "before". The untraced positive control on 561b8b2cd692 showed the line fires. | yes |
+| Tier 3 bundle 5 in full: 13/13 equal to the record; cases 00 and 10 CAUGHT at cause 28 | 13 of 13 equal, cell by cell (verdict, cause, faulting symbol, attribution, reached); 0 refusal lines | yes |
+| cases 00 and 10 CAUGHT in every one of ≥ 3 more fresh boots | CAUGHT in all 3, and in the full run: 4 of 4 boots. Pre-fix, case 10 was admitted in 3 of 6. | yes |
+| bundles 13 and 14 do not move | 9/9 and 3/3 equal to the record, cell by cell | yes |
+
+**No new out-of-bounds access.** In run.py's serial the domain-fault causes are the same before and after:
+- 13 ×2, 15, 24, 25 ×3 and 28 ×2, every one an expected denial step;
+- QEMU's capability-violation lines are the same 6 classes: 3 revoked, 2 out-of-bounds, 1 "requires capability".
+
+**The compiler lane's run-malloc rows** (its own run on this kit's QEMU adapter; its lane eeb083159e2e):
+- these held: the five allocation markers, the align-probe at **600 of 600** (413 failed before), 0 refusal lines,
+  `REMAP_OK` 0, and both predicate arms ALLOCATED;
+- the aggregate did not hold: **18 / 5** where 21 / 2 was predicted.
+  - The three extra failures are one event. `basic` now allocates, runs further, and dies on a previously unreachable
+    fault: cause 29 at address 0, after a kind 2 boundary.
+  - That lane reports no cause 28 and no out-of-bounds line in that arm. It is investigating the fault as a separate
+    thread, not as a defect of the change.
+
 ## Defects found on the way, and where they went
 
 - **dev's app-port SQLite could not be prepared** after 423d13f5b81f, which moved the sorter rewrite into
