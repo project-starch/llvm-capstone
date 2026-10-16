@@ -75,6 +75,14 @@ static size_t group_header(size_t bytes)
 unsigned long __capstone_malloc_bind_refused;
 unsigned long __capstone_malloc_bind_first[6];
 unsigned long __capstone_malloc_ng_null;
+/* Split from __capstone_malloc_ng_null, which conflated them and left the first run ambiguous. */
+unsigned long __capstone_malloc_ids_failed;
+/* The choke point. map_calls not advancing across a failed malloc means mallocng never asked for
+ * a mapping, which no errno can tell you. */
+unsigned long __capstone_malloc_map_calls;
+unsigned long __capstone_malloc_map_refused_early;
+unsigned long __capstone_malloc_map_refused_acquire;
+unsigned long __capstone_malloc_map_last[4];   /* bytes, align, errno, rounded request */
 static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
                         size_t stride, unsigned count)
 {
@@ -113,7 +121,12 @@ static void *mapping_group(sublet_cap *grant, size_t bytes)
 }
 void *__capstone_malloc_map(size_t bytes)
 {
-    if (!bytes || bytes > CAP_VM_MAX_BYTES) { errno = ENOMEM; return MAP_FAILED; }
+    __capstone_malloc_map_calls++;
+    __capstone_malloc_map_last[3] = bytes;
+    if (!bytes || bytes > CAP_VM_MAX_BYTES) {
+        __capstone_malloc_map_refused_early++;
+        errno = ENOMEM; return MAP_FAILED;
+    }
     bytes = (bytes + 4095) & -4096UL;
     /* Option (iii): above 4 MiB the bounds granule EXCEEDS a page (8 KiB at 4 MiB, 128 KiB at
      * 64 MiB), so a page-aligned mapping is not enough -- the encoder truncates an unaligned base
@@ -125,7 +138,13 @@ void *__capstone_malloc_map(size_t bytes)
     size_t align = capstone_repr_granule(bytes);
     if (align < 4096UL) align = 4096UL;
     if (cap_vm_acquire(&pending_mapping, bytes, align,
-                       PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP)) return MAP_FAILED;
+                       PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP)) {
+        __capstone_malloc_map_refused_acquire++;
+        __capstone_malloc_map_last[0] = bytes;
+        __capstone_malloc_map_last[1] = align;
+        __capstone_malloc_map_last[2] = (unsigned long)errno;
+        return MAP_FAILED;
+    }
     /* A scalar placeholder crosses only the private backend, until attach.
      * The linear grant remains in its consuming slot throughout alloc_meta. */
     return (void *)sublet_base(&pending_mapping);
@@ -272,8 +291,9 @@ void *malloc(size_t n)
     size_t want = capstone_repr_round(n ? n : 1);
     if (want < n) { errno = ENOMEM; return NULL; }   /* overflow on a hostile size */
     lock_heap();
-    void *raw = ensure_ids(256) ? NULL : __capstone_mallocng_malloc(want);
-    if (!raw) __capstone_malloc_ng_null++;
+    void *raw;
+    if (ensure_ids(256)) { __capstone_malloc_ids_failed++; raw = NULL; }
+    else { raw = __capstone_mallocng_malloc(want); if (!raw) __capstone_malloc_ng_null++; }
     void *p = publish(raw, want);
     unlock_heap(); return p;
 }

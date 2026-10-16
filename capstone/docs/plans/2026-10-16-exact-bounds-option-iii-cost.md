@@ -1606,3 +1606,103 @@ the same: no measurement said which step refused. The probe added this round is 
 does, and it answered in a single run. **The lesson is to instrument the choke point before
 modelling the mechanism**, because a model of the wrong step is indistinguishable from a model of
 the right one until something measures.
+
+
+## The mechanism: the module enforces a predicate far stricter than representability
+
+Found by the board lane reading `capstone_vm.c` on this branch, verified here in source and by an
+arm already on disk. Two gates, both keyed on `c->exact_bounds`, which option (iii) deliberately
+runs with **OFF**:
+
+- **`add()`** — `(!c->exact_bounds && (!is_power_of_2(r->bytes) || (r->address & (r->bytes - 1))))`
+  returns `-EINVAL`. With exact bounds off, every arena must be a **naturally aligned power of
+  two**.
+- **`remap_begin()`** — `if (!c->exact_bounds || ...) return -EINVAL`. With exact bounds off, **no
+  heap growth is permitted at all.**
+- `c->exact_bounds` comes from CSR `0x5c0` bit `0x100` (`capstone_vm.c` ~1107).
+
+mallocng's group mappings are page multiples and usually **not** powers of two — 20480, 28672,
+36864, 200704, 1126400, 6295552 — so `CV_ADD` refuses them and `malloc` returns NULL, printing
+nothing. That is the whole failure set, and `remap_begin` is `heap growth/zero` directly.
+
+### The confirming run, pre-registered, 7 of 7
+
+Domain `de4da05131662957`, exact bounds OFF, with the choke point instrumented:
+
+    map_calls=3  map_acquire=2  map_early=0
+    last_bytes=1126400  last_align=4096  last_errno=22 (EINVAL)
+    bind_refused=0  ng_null=2  ids_failed=0
+
+All four well-formed readings show errno 22, and 1126400 is not a power of two. `map_calls`
+advancing also corrects my earlier reading that mallocng never requested a mapping — it did; the
+absence of a `CAPSTONE_VM_SERVICE nr=0xC0DE0001` line at the failure was not the evidence I took it
+for.
+
+**Two-sided, from an arm already paid for:** the same suite with exact bounds **ON** shows **zero**
+occurrences of all four `MALLOC_FAIL` markers, against the off arm failing every one. That is what
+makes the `exact_bounds` keying established rather than inferred, and it is also why dev's v5 run
+passed — both gates are skipped when the profile is on.
+
+### Why my own "needed > 16384" was withdrawn
+
+It and `is_power_of_2(needed)` both score 20/20 on the same 20 observations and are
+**indistinguishable on that data**, because every size that succeeded is BOTH a power of two AND at
+most 16384. The source decides, and it says `is_power_of_2` literally. The empirical separator, if
+one is ever wanted, is `malloc(9341)`: its group needs 32768, a power of two above 16384.
+
+This is the third time this session a fit over real data named the wrong mechanism. The pattern is
+now explicit enough to state as a rule: **a predicate inferred from a sample is a hypothesis about
+the sample, not about the code — go and read the condition.**
+
+### How bad the current predicate is, measured
+
+Over 400,000 request sizes, for the mapping each one actually produces:
+
+| predicate | admits | refuses |
+|---|---|---|
+| `is_power_of_2(bytes)` (what the module enforces today) | **28,220 (7.1%)** | 371,780 |
+| `capstone_repr_ok(base, bytes)` (actual representability) | **400,000 (100%)** | 0 |
+
+So the module is refusing 93% of the allocator's mappings to enforce an invariant the hardware does
+not require. Power-of-two-plus-natural-alignment is a small subset of representability, not a
+restatement of it.
+
+### The proposed fix, and why Cause A's fix is a prerequisite rather than dead weight
+
+- **`add()`**: replace the exact-bounds-off branch with `capstone_repr_ok(r->address, r->bytes)`.
+  Strictly more permissive and still sound — it is the encoder's actual condition. The module keeps
+  its own page checks, the `CV_MAX_REGION_BYTES` and total-bytes limits, and the overlap test;
+  `capstone_repr_ok` returns granule 1 below 4 KiB and so adds no page rule of its own.
+- **`remap_begin()`**: replace the blanket `!c->exact_bounds` refusal with the same predicate on the
+  post-growth base and length, so growth is allowed exactly when the result is representable.
+
+**One predicate, shared, not duplicated.** `include/capstone/representable.h` has no `#include` at
+all and uses only `__builtin_clzl`, `_Static_assert` and `unsigned long`, every one valid in kernel
+C, and `build-adapter.sh:10` already copies `cap_rev_table_abi.h` out of the QEMU tree into the
+module build dir. Copying `representable.h` the same way gives the module the same predicate that
+`repr-cross-check.py` validates against the encoder oracle — so there is no module-side copy that
+could drift from the silicon encoder, which is the failure mode that would hand out a widened
+capability on the board with no QEMU signal. Copying it from the tree being built also stops a kit
+pairing a module and an SDK from different revisions.
+
+**And this is where Cause A's fix stops being latent.** The relaxed predicate needs the mapping
+LENGTH to be a granule multiple. `granule > 4096` only happens at 4 MiB and above, which is exactly
+the single-slot path — and the Cause A fix is what made that path's size granule-stable. Multi-slot
+groups are capped at `65536*UNIT` = 1 MiB by mallocng's own `size*cnt >= 65536*UNIT` guard, so
+their granule is at most 2048 and a page multiple always satisfies it. Measured: 0 of 400,000
+mapping lengths fail the granule test. The two changes are a pair.
+
+**Not proposed:** rounding every arena up to a power of two. It would also pass `add()` as it
+stands and would waste up to half of every mapping.
+
+### Still open before this is written
+
+The module reaches silicon — the board runs option (iii) with exact bounds off, so both gates refuse
+the heap there too and the same `capstone_vm.c` builds both modules. So this is not a QEMU-only fix
+and it is not this lane's to land unannounced.
+
+And one gap is under audit rather than settled: `EINVAL` is **also** what the launcher's
+`acquire_mapping` returns for its own validation failures, so the errno alone does not prove the
+refusal came from `add()` rather than from the launcher before it. `grant()`'s representability
+check returns `ERANGE`, which separates one path but not all three. That audit is the gate on
+recording this as the root cause.

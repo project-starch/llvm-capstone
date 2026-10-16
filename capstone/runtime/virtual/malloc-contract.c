@@ -21,6 +21,11 @@ __attribute__((noinline)) static void fault_store(volatile char *p)
 extern unsigned long __capstone_malloc_bind_refused;
 extern unsigned long __capstone_malloc_bind_first[6];
 extern unsigned long __capstone_malloc_ng_null;
+extern unsigned long __capstone_malloc_ids_failed;
+extern unsigned long __capstone_malloc_map_calls;
+extern unsigned long __capstone_malloc_map_refused_early;
+extern unsigned long __capstone_malloc_map_refused_acquire;
+extern unsigned long __capstone_malloc_map_last[4];
 #endif
 static void require(int ok, const char *what)
 {
@@ -28,9 +33,15 @@ static void require(int ok, const char *what)
     fprintf(stderr, "MALLOC_FAIL:%s\n", what);
 #ifdef __CAPSTONE_PURECAP__
     /* Which step refused. Without this a NULL from malloc says only "out of memory". */
-    fprintf(stderr, "MALLOC_WHY bind_refused=%lu ng_null=%lu"
-                    " first_slot=%lu start=%lu end=%lu stride=%lu group_base=%lu group_end=%lu\n",
+    fprintf(stderr, "MALLOC_WHY bind_refused=%lu ng_null=%lu ids_failed=%lu"
+                    " map_calls=%lu map_early=%lu map_acquire=%lu"
+                    " last_bytes=%lu last_align=%lu last_errno=%lu asked=%lu\n",
             __capstone_malloc_bind_refused, __capstone_malloc_ng_null,
+            __capstone_malloc_ids_failed, __capstone_malloc_map_calls,
+            __capstone_malloc_map_refused_early, __capstone_malloc_map_refused_acquire,
+            __capstone_malloc_map_last[0], __capstone_malloc_map_last[1],
+            __capstone_malloc_map_last[2], __capstone_malloc_map_last[3]);
+    fprintf(stderr, "MALLOC_WHY2 first_slot=%lu start=%lu end=%lu stride=%lu base=%lu group_end=%lu\n",
             __capstone_malloc_bind_first[0], __capstone_malloc_bind_first[1],
             __capstone_malloc_bind_first[2], __capstone_malloc_bind_first[3],
             __capstone_malloc_bind_first[4], __capstone_malloc_bind_first[5]);
