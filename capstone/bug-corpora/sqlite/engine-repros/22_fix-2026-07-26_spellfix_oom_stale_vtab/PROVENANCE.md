@@ -168,8 +168,25 @@ and 21, not an over-read.
 
 * `base`: **detected -> not a detection.**
 * `cheribsd-revocation`: **detected -> not a detection.** The signal is real and reproduced; what
-  it means is not. With this row CheriBSD's SQLite column reaches **0 of 33**, and every one of
-  the five detections it had recorded has now been shown not to be one.
+  it means is not. Every one of the five detections this arm had recorded has now been shown not
+  to be one.
+
+  **RETRACTION, later the same day.** This paragraph originally continued "With this row
+  CheriBSD's SQLite column reaches **0 of 33**". That was wrong, and the commit carrying it was
+  `9ee8f131`. The column is **2 of 33**. The nine spatial cases were all recorded `not-detected`
+  on 2026-10-06, and those readings were taken **without their corrupt database images present**
+  -- the silent failure found while reviewing case 26 and fixed in `e9199203`, where
+  `sqlite3_open` creates an empty database, the first statement returns *no such table*, and the
+  case prints `RETURNED rc=0`. With the images restored, cases **29** and **31** fault on this
+  arm with `SIGPROT si_code=1`, `PROT_CHERI_BOUNDS` -- a bounds violation on a **valid**
+  capability, categorically different from the `si_code=2` tag faults every false positive in
+  this family turned out to be. Both are real: probe site 64 shows case 31's cell walk reaching
+  `iOff=52992` with the witness reporting `kind=CAP-OOB`, `cb=<arena>+262144`, `ca=0x21d120`,
+  past the arena's own end. A spatial over-read that leaves the whole 256 KiB arena is visible
+  even where bounds are at `malloc` granularity; one that stays inside it is not, which is why
+  the other six spatial cases are silent here. What this row establishes stands unchanged -- the
+  five **temporal** detections this arm recorded are not detections -- and the count it drew
+  from them does not.
 * `sublet`: holds, on the virtual arm. The physical row is one of the 28 kernel-pc halts and is
   marked.
 * The old `status` line said `cheribsd-revocation` completes with a clean exit. Stale: it faults.
