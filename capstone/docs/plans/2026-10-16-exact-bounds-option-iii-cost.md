@@ -2110,3 +2110,78 @@ never called for it. Its `needed` of ~405504 has granule 512 and `405504 % 512 =
 would pass it — meaning `realloc` itself decided not to ask, most likely via
 `g->maplen*4096UL == needed ? g->mem : ...` at `realloc.c:39` reusing the mapping outright. Why
 that check fails is not yet measured, and I am not going to model it.
+
+
+## Heap growth fixed, and the granule header turns out to forbid in-place growth
+
+Four iterations, each one measured rather than predicted-and-hoped. The suite went from
+**17 true / 6 false to 21 true / 2 false**, and both remaining failures are tests encoding the
+pre-option-(iii) behaviour rather than runtime defects.
+
+### The three defects, in the order the instrument found them
+
+1. **`needed` was page-rounded, never granule-rounded** (`realloc.c:38`), so my own
+   `remap_mapping` granule check refused every large growth and `realloc` fell silently through to
+   malloc-plus-copy. This is why `CAPSTONE_VM_REMAP_OK` read 0 in every arm of every profile.
+   Granule-rounding it produced the **first completed growth ever observed** here:
+   `CAPSTONE_VM_REMAP_OK old=200704 bytes=401408`.
+
+2. **`__capstone_malloc_group_remap` still passed `bytes - 16`** while its sibling
+   `group_attach` had been fixed to pass `bytes - group_header(bytes)`. On a 401408-byte mapping
+   that overruns the slot by 496 bytes. I had fixed one call site and missed the other, and it only
+   became visible once growth began completing at all.
+
+3. **Granule-rounding the page-rounded size still left no room for the header.** At 12 MiB it gave
+   a usable span of 12582908 against a request of 12582912 — short by exactly `IB` — so
+   `set_size`'s `reserved = end - p - n` went negative and `end[-reserved] = 0` stored one byte
+   past the object. Measured, not inferred: `Cap mem access OOB … addr = 0x3fbccf8000,
+   bounds = (0x3fbc0f8000, 0x3fbccf8000)`, i.e. `addr == bounds end`. `cap_single_slot_bytes`
+   reserves `IB` and the header and is already verified over the whole range, so the fix was to use
+   it here too rather than write a second sizing rule.
+
+### The finding that matters beyond this fix
+
+**A granule-sized group header makes in-place growth across a granule boundary unsound**, and this
+is a property of option (iii)'s design, not a coding slip. The header's size follows the mapping's
+size, `mremap` leaves the bytes at their original offsets, so growing 6 MiB to 12 MiB moves the
+header from 8192 to 16384, shifts the slot base by 8192, and every byte of the payload is then read
+8192 bytes from where it actually is. It presented as `MALLOC_FAIL:remap-align contents` **with the
+growth itself reporting success**, which is worse than any refusal.
+
+So `realloc` now refuses an in-place remap whose header would shift, and falls through to its
+malloc-plus-copy path, which relocates the payload correctly. The cost is a copy on growths that
+cross a granule boundary. The alternative — `memmove` the payload inside the mapping — is the same
+copy plus a window in which the slot bounds and the data disagree, so it is strictly worse.
+
+**The prediction for that change said the headline number would go DOWN, and it did:**
+`CAPSTONE_VM_REMAP_OK` 1 → 0, because both growths in the suite cross a granule boundary
+(256 → 512 at 200704 → 401408, and 8192 → 16384 at 6 → 12 MiB). Writing that down first is what
+kept a correct fix from reading as a regression.
+
+| prediction | measured |
+|---|---|
+| `REMAP_OK` 1 → 0 | **0** |
+| remap-align exits 0, not 139 | **0** |
+| `remap_align_contents_survive` | **True** |
+| OOB faults | **0** |
+
+### The two surviving failures are tests, not defects — and are NOT mine to quietly edit
+
+- `real_linux_mremap_growth_and_shrink` is `log.count('CAPSTONE_VM_REMAP_OK') >= 2`
+  (`run-malloc.py:153`). It requires the **launcher remap to complete twice**, which a correct
+  implementation now prevents whenever the header would shift. The check encodes the old, unsound
+  behaviour as its pass condition — the "a regression may be a test encoding the defect" shape. It
+  wants re-scoping to accept either a completed remap or a correct copy, and that is proposed here
+  rather than done, because silently making a failing check pass is the thing the house rules
+  forbid.
+- `bounds` expects a fault at exactly `+200003` with cause 28. The request rounding puts that
+  address inside the object, so no fault can occur. Same shape, already recorded above as a
+  consequence of option (iii).
+
+### Gate status
+
+`check-mallocng-policy.py` passes **22 of 22 with no new allowance**: the changes lie outside both
+regions it pins here — it pins the `g->sizeclass>=48` *condition* text and the moving-realloc region
+beginning at `new = malloc(n);`. Verified by running it, not by reading it. The
+`test-group-size-narrowing.py` suite still behaves 8 of 8, and the regenerated `0009` patch
+reverse-applies, which is `build-sdk.sh`'s currency check.

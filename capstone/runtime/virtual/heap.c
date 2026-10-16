@@ -277,7 +277,13 @@ void *__capstone_malloc_group_remap(struct capstone_malloc_slot *slots,
         return MAP_FAILED;
     }
     unindex(r);
-    void *header = bind_slots(slots, mapping_group(&root, bytes), bytes - 16, 1);
+    /* bytes - group_header(bytes), NOT bytes - 16, for the same reason as group_attach: the slot
+     * begins after a granule-sized header, so a stride measured from a 16-byte one runs past the
+     * end of the mapping. Missing it here while fixing the attach path cost a SIGSEGV that only
+     * appeared once growth began completing at all -- the overrun is 496 bytes on a 401408-byte
+     * mapping, and get_stride() (which realloc.c now uses) disagrees with it. */
+    void *header = bind_slots(slots, mapping_group(&root, bytes),
+                              bytes - group_header(bytes), 1);
     void *raw = (char *)r->parent + offset;
     __capstone_malloc_slot_key(r, raw, r->nominal);
     *(unsigned long *)header = (unsigned long)r->group;
