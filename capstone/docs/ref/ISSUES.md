@@ -8,7 +8,7 @@ Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = 
 software). An S-n is promoted to R-n/C-n only when the origin is demonstrated, never on suspicion.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-09-09 — the registry was split on this date: this file lists only what is still OPEN; resolved and retracted entries are in [`ISSUES-ARCHIVE.md`](ISSUES-ARCHIVE.md), verbatim and by ID. R-26 and R-27 archived 2026-09-09 (fixed in RTL, in the flashed bitstream 66c4e7517).
+Last updated 2026-10-16 (audit pass over the headings against caplifive_sublet_d93a8d66b; see docs/history/16-10-2026_07-00-00_rtl-audit-sublet.md). The registry was split on 2026-09-09: this file was meant to list only what is still OPEN, and now also carries FIXED entries whose evidence is recent; resolved and retracted entries are in [`ISSUES-ARCHIVE.md`](ISSUES-ARCHIVE.md), verbatim and by ID. R-26 and R-27 archived 2026-09-09 (fixed in RTL, in the flashed bitstream 66c4e7517).
 
 ---
 
@@ -458,7 +458,7 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 `capstone-academic-spec/parts/cap-man-insn.adoc` (MOVC): "If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`" — a NOT_CAP source qualifies, and the RTL does it (`capstone_flu_unit.anvil:13-26`, rtl-oracle 2026-09-04). QEMU's `helper_movc` nulls rs1 only under `rs1_v->tag && !captype_is_copyable(...)` (`op_helper.c:580-585`), so an untagged source survives a `movc` under QEMU and dies on silicon. Consequence: every copy of an integer-bridged pointer that stays live passes under QEMU and loses its value on the board (C-32, `c32-movc-untagged-live.ll` — no longer XFAIL: it was removed in `46c53b7b6ae2` and the test passes); QEMU is a permissive oracle for that whole class until this is aligned with the spec. Fix belongs in `capstone-qemu`; the compiler side is C-32.
 
 
-## Q-07 — QEMU's `INIT` requires `cursor == end` and aborts the host process otherwise; the spec and the RTL require `cursor > end` `OPEN — QEMU divergence, filed 2026-09-09 from the R-25 probe work`
+## Q-07 — QEMU's `RESOLVED IN BOTH MODELS (audit 2026-10-16): QEMU at the dev pin d35af47b163c traps and accepts cursor >= end (op_helper.c:1590-1615); the RTL accepts cursor >= end since R-30 (capstone_flu_unit.anvil:176). Was: OPEN, QEMU divergence, filed 2026-09-09 from the R-25 probe work`
 
 > **2026-09-10, SECOND PASS — THE QUESTION IS ANSWERED, AND NONE OF THE THREE OPTIONS ON THE TABLE
 > WAS THE RIGHT ONE.** The choice was posed as: amend the spec's `INIT` precondition, add a
@@ -547,7 +547,7 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 
 ## RTL / FPGA
 
-### R-42 — a speculatively fetched I-cache MISS that a taken-branch redirect kills is never refilled, so a loop whose taken branch ends a 16-byte line pays +1 cycle EVERY iteration `OPEN — performance, not correctness; found 2026-09-24 (ladder control, E2b); identical at 054cea69b and 4ad0df694; FIX SYNTHESIZED at capstone-ariane 6cbdaeeb4 (2026-09-24): no new combinational loop, bitstream written, routed WNS -10.615 against 4ad0df694's -8.341; not on silicon, and the flash is the lead's call`
+### R-42 — a speculatively fetched I-cache MISS that a taken-branch redirect kills is never refilled, so a loop whose taken branch ends a 16-byte line pays +1 cycle EVERY iteration `FIXED ON SILICON 2026-09-25 (capstone-ariane 6cbdaeeb4, caplifive_r42_6cbdaeeb4; ctrsanity 1.167x -> 1.0004x, measurements doc) and carried by every bitstream since, including caplifive_sublet_d93a8d66b (6cbdaeeb4 is an ancestor); audit 2026-10-16 corrected the heading, which still said 'not on silicon'. Was: OPEN, performance, found 2026-09-24 (ladder control, E2b); identical at 054cea69b and 4ad0df694; fix synthesised 2026-09-24 with routed WNS -10.615`
 
 **Symptom.** Search terms: cycle anomaly, loop alignment, layout-dependent CPI, 7 vs 6 cycles
 per iteration. The ladder control `ctrsanity` (identical code on both halves) read **1.167×**
@@ -1086,7 +1086,7 @@ reproducer: `cause = 6`.
 on which unit raised the fault, so a board-side cause number is not the same claim as an emulated
 one, fixed or not.
 
-## Q-10 — `CSSPLIT` with an out-of-range `mid` ABORTS the emulator instead of raising `OPEN — QEMU divergence, filed 2026-09-11; same class as Q-07, which was fixed by trapping`
+## Q-10 — `ABORT FIXED; RESIDUAL DIVERGENCE OPEN (audit 2026-10-16): QEMU at d35af47b163c raises 26 (UNEXP_CAP_TYPE) and refuses mid == start; the RTL raises 29 (capstone_dyn_unit.anvil:180-182) and accepts mid == start. Was: OPEN, QEMU divergence, filed 2026-09-11; same class as Q-07`
 
 `helper_cssplit` (`target/riscv/op_helper.c:1105-1131`) prints a good diagnostic and then
 `assert(mid > ...bounds.base && mid < ...bounds.end)`. The assert kills the host process. A reachable
@@ -1324,6 +1324,20 @@ untested.
   - Its codec matches the RTL lane's `bounds-model.py` `cderive_child` on 200,018 random triples, where d35af47's
     misses 43,591, every one an R-54 shape.
 
+
+## Q-16 — dev's pinned QEMU (capstone-qemu d35af47b163c, the head of `virtual-capstone`) does NOT renormalise compressed bounds; both resident bitstreams do (R-54) `OPEN — QEMU divergence, filed 2026-10-16 by the RTL audit; the fix exists on an unlanded branch`
+
+The RTL fix for R-54 (capstone-ariane 2a3a87dfc, sum form; afcd19bea, residue form) is in caplifive_sublet_d93a8d66b
+and caplifive_fpb_afcd19bea. The matching QEMU change exists only on capstone-qemu 4a21b485b01f (branch
+bounds-encoder-renormalise, aad781e15a): `git diff d35af47b163c 4a21b485b01f -- target/riscv/cap_compress.c` is +20
+lines, the block that takes E+1 when the rounded span reaches 1024 granules (q == 1023 with a non-zero residue, or
+q == 1022 with sr + lr > g). 4a21b485b01f is not an ancestor of the pin. So the physical-profile QEMU on dev decodes
+such a region about half its length short while silicon decodes it whole; a differential reads a divergence on every
+such region. The 2026-10-16 plain corpora agreed only because every object was exact below 4 KiB; the carved corpus
+needed ce1be0c642 with `CAPSTONE_CDERIVE_ROUND=1`, and Q-15's box records 43,591 misses on d35af47b163c, every one an
+R-54 shape. Under the virtual profile with exact bounds (scapctl bit 8) the encoder is bypassed for the stored bounds,
+so this divergence is a physical-profile one. Fix: land the renormalisation on the QEMU shared branch and bump the pin
+(helper lane); until then every physical-profile differential cites which encoder it ran against.
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
@@ -1552,7 +1566,7 @@ walks, read against the node pool and the retired-instruction trace. Owner: the 
 lane. Not to be conflated with R-27: that one is a deadlock, this one is a state divergence.
 
 
-### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Both the store-buffer account and the `.user = 0` account are REFUTED by traced arms that show their condition existed. SILICON: the window is ONE instruction wide -- boot sw49's distance ladder turns clean at a single intervening nop. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour). FIXED ON SILICON 2026-10-05 (caplifive_supcall_776d9d859.bit, sha256 3c91335a…; capstone-ariane `sup-call` 776d9d859, stall-only, lint-clean; the dated block below): b0-memcpy unguarded 94/96 -> 0/96, this folder's rung s06agg 66 -> 64, s10b-storebuf-primed 8 of 8 legs trap; the runtime memcpy guard and W-12 are no longer needed by the hardware for this hazard -- dropping them is the runtime lane's call`
+### R-29 — (repro folder: `FIXED ON SILICON 2026-10-05 (caplifive_supcall_776d9d859.bit, sha256 3c91335a…; capstone-ariane sup-call 776d9d859, stall-only, lint-clean; the dated block below): b0-memcpy unguarded 94/96 -> 0/96, this folder's rung s06agg 66 -> 64, s10b-storebuf-primed 8 of 8 legs trap; holds on caplifive_sublet_d93a8d66b (s06agg 64, s10b 8 1, 2026-10-16); the runtime memcpy guard and W-12 are no longer needed by the hardware for this hazard, dropping them is the runtime lane's call. History: DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load misses and takes the refill leg (wt_dcache_mem.sv:354-358) while the write-buffer entry holding the missing half is resident, because the overlay (:283/:335/:397) is gated at word granularity; the store-buffer and .user = 0 accounts refuted by traced arms; the silicon window is one instruction wide (boot sw49)`
 
 > **NEW SHAPE, REPRODUCED IN SIMULATION, SEEN ON SILICON (2026-10-05): the HIT shape with the granule's plain stores
 > still in the write buffer reads the high half as 0.** On caplifive_supcall_715bdd1fe.bit the delegated runtime wrote a
@@ -1936,7 +1950,7 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### S-19 — callee-saved FP registers that a native process loads in user mode read back as its PRE-LOAD FP state after a blocking wait of >= 10 ms or ~1 s of execution, on caplifive_r51r52_0568f93a9; thousands of traps do not lose them `CANDIDATE ROOT CAUSE 2026-10-11: commit_stage.sv's dirty_fp_state precedence (FP instructions never set mstatus.FS Dirty), the bug upstream CVA6 fixed in #2936 (2700d14); sim confirmation and fix branch with the RTL lane. Board: B3i (a signal frame and a fork child read the stale copy with ZERO context switches). Was: OPEN, observed 2026-10-11 (boots C, f, g, h, i; UNGATED, PREFLIGHT=0); QEMU does not show it`
+### R-53 (was S-19) — callee-saved FP registers that a native process loads in user mode read back as its PRE-LOAD FP state after a blocking wait of >= 10 ms or ~1 s of execution, on caplifive_r51r52_0568f93a9; thousands of traps do not lose them `FIXED ON SILICON as R-53 (capstone-ariane cc1159a51, 'R-53 (was S-19)': commit_stage.sv's dirty_fp_state precedence never set mstatus.FS Dirty on an FP instruction, upstream CVA6 #2936); on caplifive_fpb_afcd19bea (B3i) and caplifive_sublet_d93a8d66b ('Boot C+F: every rung equal', measurements doc). R-53 has no entry of its own; this heading is its record (audit 2026-10-16). Was: CANDIDATE ROOT CAUSE 2026-10-11; observed 2026-10-11 on caplifive_r51r52_0568f93a9 (boots C, f, g, h, i); QEMU does not show it`
 
 **What was seen.** b3-fphold-probe.c (runtime/silicon). Its asm `fphold` saves the caller's fs0..fs11, loads 12
 known values with fld (or an fadd chain), does ONE thing, stores fs0..fs11 to out[], then restores.
@@ -2000,7 +2014,7 @@ unaffected.
 > - Separate from R-52, whose wrong now() results involve no save at all.
 > - Record: llvm-capstone docs/plans/b0-silicon-delegated-runtime.md, "B3i".
 
-### R-52 (was S-18) — in a NATIVE Linux process on silicon, the value read back after fcvt.d.l / fdiv.d / fadd.d is the destination register's EARLIER value, not the result `ROOT-CAUSED IN RTL AND FIXED IN SIMULATION 2026-10-05 (capstone-ariane branch s18-fpr-clobber 546807884; SYNTHESIS APPROVED BY THE LEAD 2026-10-10 as part of next-bitstream-r51-r52 0568f93a9; a regression of the 2026-04-24 issue-stage commit, in every bitstream since): the issue stage never marked a floating-point destination as clobbered, so every FP consumer read its operand stale; rv64ud 11 of 12 FAIL -> 12 of 12 PASS; in the next bitstream 0568f93a9` -- observed observed 2026-10-05 on caplifive_supcall_776d9d859 (boot B3c, 200,000 of 200,000 evaluations, N = 1 boot); origin not established (write-back lost or a stale read; RTL, FPGA build or kernel FP state); delegated domains are soft-float and do not use the FPU`
+### R-52 (was S-18) — in a NATIVE Linux process on silicon, the value read back after fcvt.d.l / fdiv.d / fadd.d is the destination register's EARLIER value, not the result `FIXED ON SILICON 2026-10-11 (caplifive_r51r52_0568f93a9; the issue stage never marked an FP destination as clobbered, s18-fpr-clobber 546807884, rv64ud 11 of 12 FAIL -> 12 of 12 PASS); the residual (ae21e121e, a 5-bit rs3 source mux per issue port) is in caplifive_fpb_afcd19bea and caplifive_sublet_d93a8d66b, B3j 0 of 40,000. Was: observed 2026-10-05 on caplifive_supcall_776d9d859 (boot B3c, 200,000 of 200,000 evaluations); synthesis approved by the lead 2026-10-10`
 
 > **ROOT CAUSE AND FIX (the RTL lane, 2026-10-05).** Reproduced bit-exactly in the Verilator testharness with
 > `s18-fp-writeback.S` (sup list `s18-fp-capmode` / `s18-fp-nocap`): the loop body's `fmv.x.d` reads the fld's 1e9, on
@@ -2069,7 +2083,7 @@ computes correctly, then the same test bare on the board.
 printed by native programs, and native baselines that use doubles. Board results computed on the host, and
 everything inside delegated domains, are unaffected.
 
-### R-54 — the full bounds scheme does not renormalise: a capability whose rounded span reaches the next power of two decodes about HALF its length short `OBSERVED ON SILICON 2026-10-13 (B4, caplifive_r51r52_0568f93a9: r54-bounds retval 39, every reading as predicted); read at capstone-ariane 0568f93a9 (the resident bitstream), the capstone-sublet working tree of 2026-10-13 BEFORE 13:04, and capstone-qemu origin/isa/sublet-lifetimes d238f66e34. FIX IN PROGRESS: renormalise to E+1, in capstone-qemu aad781e15a (branch bounds-encoder-renormalise) and the RTL lane's capstone-sublet tree from 13:04, not yet committed there; sequencing is the lead's`
+### R-54 — the full bounds scheme does not renormalise: a capability whose rounded span reaches the next power of two decodes about HALF its length short `FIXED IN RTL ON SILICON: the renormalisation to E+1 (capstone-ariane 2a3a87dfc, sum form) is in caplifive_sublet_d93a8d66b and the residue form (afcd19bea) in the fallback caplifive_fpb_afcd19bea; r54-bounds reads 64 on both (2026-10-15/16). QEMU HALF NOT ON dev's PIN: see Q-16. Was: OBSERVED ON SILICON 2026-10-13 (B4, caplifive_r51r52_0568f93a9: r54-bounds retval 39); read at 0568f93a9 and capstone-qemu origin/isa/sublet-lifetimes d238f66e34`
 
 > **The defect.** `compress_bounds`' full branch (`ariane_pkg.sv`) chooses E from the length, then rounds the top up
 > with `if(((bounds.base >> (E+3))<<(E+3)) != bounds.base) T[11:3] += 1;` and never revisits E.
@@ -2669,7 +2683,7 @@ userspace binary die in M-mode will actually look; also in `fpga-debugging-recip
 handler, so only that invocation dies and the rest of the run still returns data — the "make every run
 RETURN" rule applied to privilege rather than to control flow.
 
-### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL nulls its source (silently: MOVC raises nothing) `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN A CHOSEN AND MERGED 2026-09-15 (46c53b7b6ae2, on dev at e3bb47b43680) AND MEASURED NOT TO FIX THIS SITE — the design choice is BACK WITH THE LEAD; still blocking P1's O2 arms; reproducer no longer an XFAIL, and a local reproducer of the surviving site is in capstone/tests/c32-sinkfold-repro/`
+### C-32 — `OPEN — LIVE ON SILICON until Q-04 (b) lands in the RTL: the lead decided Q-04 option 1 on 2026-10-14 (plan 2026-10-14-movc-untagged-source.md); capstone-qemu #27 fixes the virtual profile; no RTL commit exists yet (audit 2026-10-16). History: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (2026-09-15), so every optimised-image board number of that port is a lookaside-OFF run; DESIGN A merged 2026-09-15 (46c53b7b6ae2) and measured not to fix this site; reproducer in capstone/tests/c32-sinkfold-repro/`
 
 > **2026-10-14: RESOLVED FOR THE VIRTUAL PROFILE by the Q-04 decision; still open for the physical
 > profile until Q-04 (b) is on a bitstream.** The virtual-profile SDK now compiles every application,
@@ -4302,7 +4316,7 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > `SQ:` lines' transcript position is not time order (RCLM brackets the pool-release ecall).
 
 
-### R-34 — every exception the load/store unit generates ITSELF (the five capability causes 24–28 and the misaligned causes 4/6) is LOST when the access is granted in its request cycle, and delivered only if an exception is still being presented one cycle later `FIXED IN RTL SIMULATION 2026-09-15 on r34-r24-exception-delivery (c77c65324) — the MMU exception register upstream #2528 (23355d29f) deleted is restored exactly as deleted; delivery measured end to end at the ex_stage boundary for causes 4/6/24/27/28, load and store side, each ex_o.valid one cycle wide; lint at baseline. SHIPS WITH R-24 AND CANNOT SHIP WITHOUT IT. **SYNTHESISED 2026-09-17** as part of `m1-reclaimer` `054cea69b` (exit 0, WNS -8.307, loops 1, routed Total LUTs 168,757, bitstream written) -- the pair reached that build through the Phase 0 merge `f714d2a72`, verified by CONTENT not ancestry (`misaligned_ex_q` 0 -> 5, `DEBUG_REQUEST` 24 -> 32). **Never synthesised ALONE, so no pair-specific timing or area figure exists and none may be quoted**; what IS pair-specific is lint (the merged tree measured identical to the splice baseline, 52/3/40/2/25/717) and the sweep (12 explained deltas, all the RVTEST_PASS-after-CAPENTER class). NOT on the board as of this line, and the monitor faulted in its own trap handler until sbi_capstone.S:113 was fixed — D3 CLOSED 2026-09-16, capstone-sbi d3-monitor-capability-writeback 2dcd3a5, validated on this branch by a matched pair (old shape cause 24 and store refused, replacement cause 0 and store lands, cursor restored, 1 trap in the run); the branch is held off capstone-bootstrap so the drivers keep their pinned monitor — see WHAT THE FIX EXPOSES. Originally: demonstrated at f6ec6c198, mechanism from source, timing from a waveform, AUDITED (raised 21 times, delivered once); the stock rv64mi-p-ma_addr FAILS the same way with capmode never set, so the loss predates the capability check`
+### R-34 — every exception the load/store unit generates ITSELF (the five capability causes 24–28 and the misaligned causes 4/6) is LOST when the access is granted in its request cycle, and delivered only if an exception is still being presented one cycle later `FIXED ON SILICON since caplifive_m1_054cea69b (2026-09-17; c77c65324 and e97b7e7ab are ancestors); on caplifive_sublet_d93a8d66b 46/46 spatial cases CAUGHT with cause 28 at the probe and stale accesses read 25 (measurements doc, 2026-10-16); SHIPS WITH R-24. Audit 2026-10-16 corrected the heading, which still said 'NOT on the board'. History: fixed in RTL simulation 2026-09-15 on r34-r24-exception-delivery (the MMU exception register upstream #2528 deleted, restored as deleted; delivery measured at the ex_stage boundary for causes 4/6/24/27/28); synthesised 2026-09-17 inside m1-reclaimer 054cea69b, never alone, so no pair-specific timing figure exists; the D3 monitor fix (capstone-sbi 2dcd3a5) landed with it; originally demonstrated at f6ec6c198, the stock rv64mi-p-ma_addr failing the same way`
 
 > **Folder (the report):** `capstone/tests/fpga-repros/R34-lsu-exception-lost-on-immediate-grant/` — the directed
 > test `lsu-mmode-gate.S`, the runner, the three runs' result lines and the waveform extract.
@@ -6057,7 +6071,7 @@ ladder rung approaches it (bigmany: 65).~~
 
 
 
-### R-13 — `CINCOFFSET` duplicates a linear capability, untracked `OPEN`
+### R-13 — `CLOSED 2026-10-16 as R-21's resolved half: CINCOFFSET cnulls a LINEAR rs1 on the resident RTL (capstone_flu_unit.anvil:45-47) and was conformant on silicon 2026-09-15 (R-21's readings); the remaining LINEAR copies are TIGHTEN/SHRINKTO, under R-21`
 
 It writes the unmodified `rs1` back alongside `rd` with the same `revnode_id` and
 `CAP_TYPE_LINEAR` (`capstone_flu_unit.anvil:29-44`, `commit_stage.sv:278`), so one linear
@@ -6617,7 +6631,7 @@ undebuggable and takes the core with it.
 > where a probe may fault. Batch runs order known faulters last for this reason
 > (`libc-test/quarantine.txt`).
 
-### M-5 — the `REV_BORROWED` re-share path `C_INIT`s a revoke-derived `UNINIT` that cannot satisfy `INIT` on silicon `OPEN — LATENT on silicon, monitor; QEMU-validated only`
+### M-5 — the `OPEN — premise superseded: the box below hangs this on R-30/R-31, both FIXED ON SILICON 2026-09-12; whether the re-share path now works is UNRUN (audit 2026-10-16). Was: LATENT on silicon, monitor; QEMU-validated only`
 
 > # ⚠ 2026-09-10: FIVE monitor sites, not two — and the widest one is not a re-share at all.
 >
@@ -10299,7 +10313,7 @@ Fix: gate the WB forward on validity, and/or classify by opcode. Both need a bit
 the project lead's call.
 ---
 
-### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` COPY ON SILICON 2026-09-25 (boot r42e3b on R-42: R-21 CONFIRMED for both, box below); the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
+### R-21 — `PARTLY RESOLVED — cincoffset and scc CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls); tighten/shrinkto COPY ON SILICON 2026-09-25 (boot r42e3b) and STILL COPY on caplifive_sublet_d93a8d66b (dyn unit :416-417, flu unit :296-297; audit 2026-10-16); the INIT half is R-25 (fixed on silicon 2026-09-09). The copy is now load-bearing for Sublet: MREV deepening (464abe2ce) exists because of it, and CDERIVE's authority ordering fails while it stays open (Q-15), so it IS something to report to the hardware side`
 
 > **`tighten` and `shrinkto` COPY on silicon: R-21 CONFIRMED for both (2026-09-25, boot r42e3b,
 > `caplifive_r42_6cbdaeeb4.bit`, image `cbf8cb41eb56c477`).** R1 `--series linear`:
@@ -10480,7 +10494,7 @@ rule-B sites across the corpus. QEMU also omits this clear
 in-tree model currently distinguishes conformant from non-conformant behaviour** and a fix should
 land in both or note the divergence.
 
-### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `FIXED IN RTL SIMULATION 2026-09-15 on r34-r24-exception-delivery (c77c65324, residuals e97b7e7ab) — the REFUTATION below stands and was answered rather than overturned: the collision is real, and the fix is to move the DEBUG_REQUEST sentinel off 24 (to 32) so the capability causes can sit on the spec's 24..29. Measured, not argued: debug_mode_q stays 0 across four cause-24 deliveries. SHIPS WITH R-34 AND CANNOT SHIP WITHOUT IT. **SYNTHESISED 2026-09-17** inside `m1-reclaimer` `054cea69b`, never alone -- no pair-specific timing or area figure exists; lint and sweep for the merge ARE pair-specific and are recorded under R-34. NOT on the board as of this line`
+### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `FIXED ON SILICON since caplifive_m1_054cea69b (2026-09-17; c77c65324 an ancestor); caplifive_sublet_d93a8d66b reads the spec's 24..29 (derive-kill reads 24 for a capability as the size operand, 2026-10-16); SHIPS WITH R-34. Audit 2026-10-16 corrected the heading, which still said 'NOT on the board'. History: fixed in RTL simulation 2026-09-15 (c77c65324, residuals e97b7e7ab): the DEBUG_REQUEST sentinel moved off 24 to 32 so the capability causes sit on 24..29; debug_mode_q measured 0 across four cause-24 deliveries; synthesised inside 054cea69b, never alone`
 
 > # 2026-09-15 — THE RULING THE ENTRY ASKED FOR, AND THE FIX THAT FOLLOWS FROM IT
 >
