@@ -1338,6 +1338,27 @@ needed ce1be0c642 with `CAPSTONE_CDERIVE_ROUND=1`, and Q-15's box records 43,591
 R-54 shape. Under the virtual profile with exact bounds (scapctl bit 8) the encoder is bypassed for the stored bounds,
 so this divergence is a physical-profile one. Fix: land the renormalisation on the QEMU shared branch and bump the pin
 (helper lane); until then every physical-profile differential cites which encoder it ran against.
+## Q-17 — CDERIVE's check order: silicon tests the size window (29) BEFORE the parent's liveness (25), QEMU the reverse `OPEN — RTL divergence, filed 2026-10-16 by the virtual-profile re-baseline; one Anvil reorder, batched into the next bitstream`
+
+`capstone_dyn_unit.anvil:246-259` (d93a8d66b): operands 24, type 26, then the size/window test (29) at :251, and only then
+the node liveness query (25) at :257. QEMU `helper_csderive` (`op_helper.c:1221-1235` at d35af47b163c): 24, 26, 25, 29.
+The unit's own comment at :238 claims QEMU's order. A CDERIVE whose parent is dead AND whose window lies outside it reads
+29 on silicon and 25 on QEMU. Reachable from `capstone_cap_derive` (capability.h:36-52): its three LCC probes check no
+liveness on either side (RTL :376 queries only for selector 0; QEMU `helper_cslcc` has no `cap_rev_live`). Q-15's
+"fault order: agrees" is wrong for this pair. Directed test: derive, CREVOKE the child, CDERIVE from the dead child with
+a size larger than it; expect 25 after the fix, 29 today.
+
+## Q-18 — DROP of a NON-LINEAR capability kills the node for every alias and leaks it on silicon; QEMU clears the register only `OPEN — RTL divergence, filed 2026-10-16 (the audit's F-B); design decision for the lead with the helper lane's QEMU rule as tie-breaker`
+
+RTL `DROP` (`capstone_dyn_unit.anvil:24-40`) sends `drop_req` for any tagged type; the handler
+(`capstone_rev_node.anvil:217-233`, `:649-651`) clears `valid` without setting `free` or unlinking: every alias of the
+node reads dead, the slot never returns to the free list, and CDERIVE children of the node can no longer be ended by
+CREVOKE (which needs a live parent). QEMU `helper_csdrop` (`op_helper.c:1127-1163`) nulls x[rs1] and touches no table.
+Not reached by `runtime/virtual/heap.c` (no DROP; `sublet_clear` is an STC of zero); UNRESOLVED whether the compiler
+emits DROP implicitly. Options: refuse DROP on a node with children (status 3 -> 29), make DROP walk like CREVOKE, or
+make DROP register-only for NONLIN as QEMU does. Directed test: derive, DROP the parent, load through the child
+(retires today), CREVOKE (refused 25 today).
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than

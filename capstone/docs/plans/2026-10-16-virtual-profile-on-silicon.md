@@ -130,7 +130,7 @@ The audit estimated four to five bitstream cycles, plus the format decision. Opt
 
 | item | owner | state |
 |---|---|---|
-| re-baseline addendum | RTL lane | to do |
+| re-baseline addendum | RTL lane | DONE 2026-10-16: `virtual-capstone-rtl-feasibility.md` "Addendum, 2026-10-16"; Q-17 and Q-18 filed; reference pinned at d35af47b163c |
 | exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | to do; the lead decides from it |
 | B translation in C mode | RTL lane | to do (simulation first) |
 | A lifetime table | RTL lane | to do |
