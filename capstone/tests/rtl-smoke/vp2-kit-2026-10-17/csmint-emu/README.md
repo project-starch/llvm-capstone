@@ -91,3 +91,30 @@ instruction that is not CSMINT, and it fired correctly:
 Silicon built today would read mtval 0 the same way, so the emulation now decodes from the instruction at mepc when
 mtval is 0. The fallback is exercised only on a decoder that leaves mtval 0. The pre-registered readings are
 unchanged.
+
+## Second run: 5a43dd463da4 on the Q-15 tree, both decoders (the RTL lane, 2026-10-17)
+
+**The readings are identical on the pre-fix decoder (via the mtval-0 fallback) and on the fixed one (mtval carries
+the bits), 36 values:**
+
+    2 0 | 3 0 0 | 4 0x80009004 | 6 0x8000a018 | 29 0 | 29 0 | 29 0 | 15 0x8000b000 | 2 0 | 3 0 0 | 2 0 |
+    7 0x18 7 0x18 7 0x18 7 0x18 7 | 0 0 0 | pass
+
+The RTL lane's build is one page later: desc 0x80009000, slotA 0x8000a000, slotB 0x8000a010, slotnod 0x8000b000,
+dbuf 0x8000c000.
+- **Rows 2-7 read exactly as pre-registered:** 4 at desc+4, 6 at slotB+8, 29 three times, 15 at slotnod. So these
+  work on the RTL:
+  - the three plain `ld` under MPRV from M in capability mode (the first of the three unknowns, now read);
+  - both alignment checks;
+  - the representability rule;
+  - the software walk's A/D refusal.
+- **Rows 1, 8 and 9 read status 2, and the table stayed at 3 / 0 / 0:** CSNODE itself raised an illegal instruction.
+  - The cause is on the RTL side: a `csupctl` write did not flush the pipeline, so the `csnode` right after
+    `csrsi csupctl, 8` decoded under the stale flag. va-runv6 had three instructions between the two.
+  - The RTL lane's fix flushes on `csupctl` and `srevroot` writes, as `satp` and `fflags` writes already do.
+  - Nothing changes in the emulation.
+- **The final read-back's `7 0x18` pattern is downstream of that.** No mint reached the STC, so slotA held zeros. The
+  LDC read back an untagged word: LCC x1 gave 7, and selectors 2-5 on an untagged operand raised 2. The arm should
+  report this better: an untagged read-back currently produces a cascade of 2s rather than one clear reading.
+- **Still unread:** LDC through a NONLIN capability, and CAPBOUND's cursor. They come from the re-run on the flushing
+  RTL.
