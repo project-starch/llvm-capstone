@@ -1359,7 +1359,7 @@ emits DROP implicitly. Options: refuse DROP on a node with children (status 3 ->
 make DROP register-only for NONLIN as QEMU does. Directed test: derive, DROP the parent, load through the child
 (retires today), CREVOKE (refused 25 today).
 
-## Q-19 — under the virtual-context flag the RTL translates a consuming-capable LDC as a STORE, so a non-consuming ldc through a writable capability from a read-only page faults 15 where QEMU succeeds `RULED 2026-10-16 by the model's semantics owner: QEMU's rule stands and the RTL conforms, because landed software depends on it; filed 2026-10-16 with item B; the consuming case agrees`
+## Q-19 — the consuming ldc under the virtual-context flag: the RTL first translated a consuming-capable ldc as a STORE (stricter than QEMU for a non-consuming ldc from a read-only page); RULED and CONFORMANT `CLOSED 2026-10-16 — the model's semantics owner ruled for QEMU's rule (dev 49ad7c2413c3; runtime/virtual/contract.c:223-224 reaches the case); the RTL conforms on virtual-profile ea88d8e5d: the page's store permission is captured with the clear address at the read's translation, the decision is at writeback once the value is known to be consuming, a consuming value on a page without W or D retires with STORE_PAGE_FAULT and the clear is never queued, a non-consuming value completes (vb-trans.S arms 4 and 6)`
 
 QEMU's `capstone_ldc_granule` (op_helper.c:2165-2227 at d35af47b163c) probes the store side only after the loaded
 value turns out tagged and linear-family. The RTL (virtual-profile 16345658f, load_unit.sv `ldc_store_probe_o`) decides
