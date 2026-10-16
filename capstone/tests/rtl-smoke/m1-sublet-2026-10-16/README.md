@@ -7,9 +7,16 @@ five SERIES boots of 2026-10-01's M1 campaign on R-43 v2 (measurements doc "M1 o
 **Not repeated here:** the seven turnover-witness boots (m1tw-1…7). Their predictions are R-43 v2's node-id arithmetic:
 - generation 1,352 at index head − 1;
 - retirement at generation 16,383 for the 32 indices one ring arm drives.
-This bitstream's node record gains a parent link, and the RTL lane has not modelled its ids. S1's boot 1 here already
-latched an id of 65,922, outside the 65,532-index range that model assumes. Those boots wait for the RTL lane's
-prediction on this bitstream.
+This bitstream's node record gains a parent link, and the RTL lane has not modelled its ids. Those boots wait for the
+RTL lane's prediction on this bitstream.
+
+**Corrected after this file's first commit (0f3a221c015a):** that version added that S1's boot 1 "latched an id of
+65,922, outside the 65,532-index range". That reading was wrong.
+- It took the packed record as a bare index. The record holds `{generation, index}`, with generation in id[29:16] and
+  index in id[15:0] (`../m1v2-2026-10-01/extract.py:7`).
+- So 0x00010182 is generation 1 at index 386, and S1's boot 2 latched 0x000300e2, generation 3 at index 226. Both
+  are inside the pool.
+- The deferral rests on the unmodelled ids alone.
 
 ## What runs, one boot per row
 
