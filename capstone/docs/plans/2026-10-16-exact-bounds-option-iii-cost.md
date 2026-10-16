@@ -992,3 +992,38 @@ for no runtime cost, and the choice depends on how much the narrowed guard is me
 is the question the lead already answered once. **Everything else in item 1 is implemented**; the
 measured consequence of leaving the header alone is the 1,497-of-6,060 figure above, so this is the
 last correctness gap in the allocator.
+
+## The group header costs NOTHING, and the allocator geometry is complete
+
+**The fork above is moot.** None of the four options is needed: the pad fits inside the page
+rounding `alloc_group` already does. `malloc.c` computes `needed = size*cnt + UNIT` and then
+`needed += -needed & (pagesize-1)`, so there is slack after the last slot, and measured over **every
+large class and every reachable `cnt`** — the `med_cnt_tab` value, each halving the two loops can
+reach, 1, and the `cnt==1 -> 2` rule — that slack is **always at least the pad**. No over-map, no
+second guard narrowing, no leak, no reduced capacity.
+
+The margin is exact in places, which is why it is asserted rather than trusted: class 36 at `cnt` 7
+has **16 bytes of slack for a 16-byte pad**, and class 44 at `cnt` 7 has 112 for 112.
+`cap_hdr_fits(size, cnt, pagesize)` is checked in `alloc_group` — placed *after* the first
+`#ifdef CAPSTONE_MUSL_MALLOC` so the guard's locked prefix is untouched, confirmed by the guard
+still reporting 22 PASS and no FAIL.
+
+**The geometry is now complete and verified.** Re-simulated against the RTL bounds oracle with all
+three pieces as implemented — the seven strides, the granule-sized header in both `enframe` and
+`bind_slots`, and the step-down — over the same 6,060 (class, request, slot, offset-cycle) cases:
+
+| | failing |
+|---|---|
+| step-down alone, 16-byte header | 1,497 of 6,060 |
+| **all three, as implemented** | **0 of 6,060** |
+
+Every case is exactly representable *and* contained within its slot, short of the neighbouring
+slot's in-band header.
+
+**What is left in item 1 is only the remap fallback**, which the runtime lane has approved with two
+conditions: a counter for "remap landed unaligned, fell back to copy", reported from the suite runs
+and the Tier 2/3 workloads, and a negative test that forces an unaligned remap and checks both the
+`MAP_FAILED` return and that `realloc` yields a fresh, correctly bounded block with the old
+contents. `mremap` returns page-aligned addresses, so at a 128 KiB granule most huge reallocs will
+take the copy — which is exactly why the count has to be measured rather than assumed, and why an
+aligned-remap ABI change is the follow-up if the workloads hit it often.

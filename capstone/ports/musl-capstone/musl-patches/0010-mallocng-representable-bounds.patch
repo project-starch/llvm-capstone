@@ -1,16 +1,30 @@
 mallocng: representable object bounds for the virtual profile (option iii)
 
-Seven size-class strides raised by 1-4 units each so that every large class's stride is a
-multiple of its own bounds granule, and enframe placing each object on a granule-aligned
-base. Without both, the compressed encoder truncates an unaligned base DOWNWARD and the
-object gains authority below itself; measured against the RTL bounds model, 1497 of 6060
-(class, request, slot, cycle) cases decode wrong without this and 0 with it, once the
-group header is granule-sized as well.
+Three changes, each necessary and none sufficient alone. Seven size-class strides raised by
+1-4 units so every large class's stride is a multiple of its own bounds granule; a
+granule-sized group header so the first slot's base is a multiple of it too; and enframe
+stepping each object's base DOWN to a granule-aligned offset within its slot.
+
+Without them the compressed encoder truncates an unaligned base DOWNWARD and the object
+gains authority below itself. Measured against the RTL bounds model over 6060
+(class, request, slot, offset-cycle) cases: 1497 decode wrong with the step-down alone and
+a 16-byte header -- the first being class 36 at n=16480, slot 0, offset 0, whose base
+0x400000010 decodes as [0x400000000, 0x400004080), sixteen bytes below the object -- and 0
+with all three in place.
+
+The header costs nothing. alloc_group already rounds the group UP to a page, and over every
+class and every reachable cnt that rounding leaves at least the pad; the margin is exact in
+places (class 36 at cnt 7 has 16 bytes for a 16-byte pad), so cap_hdr_fits asserts it and a
+future table or count change fails loudly instead of overrunning the group.
+
+The step-down is down and never up, so it cannot exceed slack, and it is a no-op for any
+granule at or below UNIT -- every length below 8 KiB -- so the double-free offset cycling is
+untouched there and keeps 1 offset in granule/UNIT above it.
 
 size_to_class and the slot/class selection are untouched: the request is rounded in the
-runtime's own malloc wrapper (runtime/virtual/heap.c), outside musl, so mallocng's
-set_size records exactly what the capability covers. check-mallocng-policy.py pins these
-seven entries and their values and still refuses any other difference.
+runtime's own malloc wrapper, outside musl, so set_size records exactly what the capability
+covers. check-mallocng-policy.py pins the seven entries and their values and still refuses
+any other difference.
 
 --- a/src/malloc/mallocng/malloc.c
 +++ b/src/malloc/mallocng/malloc.c
@@ -27,6 +41,15 @@ seven entries and their values and still refuses any other difference.
  };
  
  static const uint8_t small_cnt_tab[][3] = {
+@@ -247,6 +247,8 @@
+ 		}
+ 
+ #ifdef CAPSTONE_MUSL_MALLOC
++		/* The granule-sized group header must fit in the page rounding above. */
++		assert(cap_hdr_fits(size, cnt, pagesize));
+ 		p = __capstone_malloc_group_map(m->cap_slots,
+ 		                                needed, cnt == 1 ? needed-UNIT : size, cnt);
+ #else
 --- a/src/malloc/mallocng/meta.h
 +++ b/src/malloc/mallocng/meta.h
 @@ -5,6 +5,9 @@
@@ -39,7 +62,49 @@ seven entries and their values and still refuses any other difference.
  
  __attribute__((__visibility__("hidden")))
  extern const uint16_t size_classes[];
-@@ -250,6 +253,27 @@
+@@ -230,11 +233,40 @@
+ 	cap_prefix(p)[1] = (cap_prefix(p)[1]&31) + (reserved<<5);
+ }
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++/* Option (iii): a slot's base must be a multiple of its own bounds granule, or the capability the
++ * runtime derives over an object in it is not exactly representable -- the compressed encoder
++ * truncates an unaligned base DOWNWARD and the object gains authority below itself. The seven
++ * raised stride entries make `stride*idx` a granule multiple; what is left is the group header,
++ * which upstream makes exactly UNIT. This pads it to the granule.
++ *
++ * It costs NOTHING. alloc_group computes `needed = size*cnt + UNIT` and then rounds UP to a page
++ * (malloc.c: `needed += -needed & (pagesize-1)`), so there is already slack after the last slot;
++ * measured over every class and every reachable cnt, that slack is always at least this pad. The
++ * margin is exact in places -- class 36 at cnt 7 has 16 bytes of slack for a 16-byte pad -- so
++ * cap_hdr_fits() asserts it rather than trusting it, and a future table or cnt change fails loudly
++ * instead of overrunning the group.
++ */
++static inline size_t cap_hdr_pad(size_t stride)
++{
++	size_t gr = capstone_repr_granule(stride > IB ? stride - IB : 1);
++	return gr > UNIT ? gr - UNIT : 0;
++}
++static inline int cap_hdr_fits(size_t size, int cnt, size_t pagesize)
++{
++	size_t needed = size*(size_t)cnt + UNIT;
++	size_t slack = -needed & (pagesize-1);
++	return slack >= cap_hdr_pad(size);
++}
++#else
++#define cap_hdr_pad(stride) ((size_t)0)
++#endif
++
+ static inline void *enframe(struct meta *g, int idx, size_t n, int ctr)
+ {
+ 	size_t stride = get_stride(g);
+ 	size_t slack = (stride-IB-n)/UNIT;
+-	unsigned char *p = g->mem->storage + stride*idx;
++	unsigned char *p = g->mem->storage + cap_hdr_pad(stride) + stride*idx;
+ #ifdef CAPSTONE_MUSL_MALLOC
+ 	p = __capstone_malloc_slot_take(&g->cap_slots[idx]);
+ #endif
+@@ -250,6 +282,27 @@
  		if (off > slack) off -= slack+1;
  		assert(off <= slack);
  	}

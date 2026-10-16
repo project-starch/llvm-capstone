@@ -63,9 +63,16 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
                         size_t stride, unsigned count)
 {
     size_t base = __builtin_capstone_cap_get_cursor(group);
+    /* Option (iii): the slot array starts after a GRANULE-sized group header, not a 16-byte one,
+     * so each slot's base is a multiple of its own bounds granule and the capability derived over
+     * an object in it is exactly representable. mallocng's enframe pads identically
+     * (meta.h cap_hdr_pad), and the pad fits in the page rounding alloc_group already does --
+     * asserted there, because the margin is exact for some class and count pairs. */
+    size_t granule = capstone_repr_granule(stride > 4 ? stride - 4 : 1);
+    size_t hdr = granule > 16 ? granule : 16;
     for (unsigned i = 0; i < count; ++i) {
-        size_t start = base + 16 + i * stride;
-        size_t end = base + 16 + (i + 1) * stride;
+        size_t start = base + hdr + i * stride;
+        size_t end = base + hdr + (i + 1) * stride;
         slots[i].parent = __builtin_capstone_cap_shrink(
             (char *)group + start - base, start, end);
         slots[i].issued = NULL;
