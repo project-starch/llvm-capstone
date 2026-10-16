@@ -9,12 +9,34 @@ slot, offset-cycle) cases, 1497 decode wrong with the step-down alone and a 16-b
 first being class 36 at n=16480 slot 0 offset 0, whose base 0x400000010 decodes as
 [0x400000000, 0x400004080), and 0 with all three in place.
 
-The header costs nothing: alloc_group already rounds the group UP to a page, and over every class
-and every reachable cnt that rounding leaves at least the pad. The margin is exact in places (class
-36 at cnt 7 has 16 bytes for a 16-byte pad), so cap_hdr_fits asserts it and a future table or count
-change fails loudly instead of overrunning the group. The step-down is down and never up, so it
-cannot exceed slack, and it is a no-op for any granule at or below UNIT -- every length below
-8 KiB -- so the double-free offset cycling is untouched there.
+The header costs nothing ON THE MULTI-SLOT PATH: alloc_group rounds the group UP to a page, and
+over every class and every reachable cnt that rounding leaves at least the pad. The margin is exact
+in places (class 36 at cnt 7 has 16 bytes for a 16-byte pad), so cap_hdr_fits asserts it and a
+future table or count change fails loudly instead of overrunning the group. Measured: 0 of 10,908
+multi-slot sizes overrun. The step-down is down and never up, so it cannot exceed slack, and it is
+a no-op for any granule at or below UNIT -- every length below 8 KiB -- so the double-free offset
+cycling is untouched there.
+
+CORRECTION (2026-10-17): an earlier version of this paragraph said the header costs nothing, full
+stop, and that was wrong for the two SINGLE-SLOT shapes, where it cost every allocation. They have
+no page-rounding slack at all: alloc_group's cnt==1 branch maps exactly pageround(n+IB+UNIT) and
+the >= MMAP_THRESHOLD path maps n+IB+UNIT, and each then binds one slot covering the whole mapping
+after the header -- so the slot ended granule-UNIT bytes PAST the mapping, bind_slots could not
+derive the shrink, and malloc returned NULL. Over 300,000 request sizes: 100% of the large path,
+from n=131052 up, and 95.5% of the single-slot group path, from n=16365 up. cap_hdr_fits was blind
+to all 114,687 of the group cases because it is evaluated on the CLASS stride and on
+needed = size*cnt+UNIT, neither of which those paths map -- an assert that could not fire for the
+shape that needed it.
+
+cap_single_slot_bytes now reserves the header for both, as a fixed point: the header depends on the
+stride, the stride on the mapping size. It is also made a fixed point of the BOUNDS rounding,
+because __capstone_malloc_map applies capstone_repr_round and a merely page-aligned size can be
+granted a larger mapping than maplen*4096 records (6303744 becomes 6307840 at a granule of 8192),
+which would leave get_stride and bind_slots disagreeing about where the slot ends. get_stride
+subtracts the granule header rather than UNIT for these groups, so enframe's slack, free's bounds
+check, realloc, malloc_usable_size and aligned_alloc all see the stride that was actually bound.
+Verified over 300,003 sizes, in the model and again in C: converges in at most 3 rounds, 0
+overruns, 0 capacity failures, 0 sizes where the granted mapping differs from maplen*4096.
 
 size_to_class and the slot/class selection are untouched: the request is rounded in the runtime's
 own malloc wrapper, outside musl, so set_size records exactly what the capability covers.
@@ -23,7 +45,7 @@ check-mallocng-policy.py pins the seven entries and their values and refuses any
 These live here rather than in a sibling patch because build-sdk.sh checks currency by requiring
 every patch to reverse-apply INDEPENDENTLY, and a patch editing the lines this one adds makes this
 one un-reversible -- the SDK build then refuses with "musl source is not current".
---- a/src/malloc/mallocng/aligned_alloc.c
+--- a/src/malloc/mallocng/aligned_alloc.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/aligned_alloc.c
 @@ -29,7 +29,10 @@
  	int idx = get_slot_index(p);
@@ -75,7 +97,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
 +#endif
  	return p;
  }
---- a/src/malloc/mallocng/donate.c
+--- a/src/malloc/mallocng/donate.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/donate.c
 @@ -20,7 +20,11 @@
  		m->avail_mask = 0;
@@ -99,7 +121,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	donate((void *)start, end-start);
 +#endif
  }
---- a/src/malloc/mallocng/free.c
+--- a/src/malloc/mallocng/free.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/free.c
 @@ -24,10 +24,18 @@
  		mi.base = g->mem;
@@ -150,7 +172,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  
  	// release any whole pages contained in the slot to be freed
  	// unless it's a single-slot group that will be unmapped.
---- a/src/malloc/mallocng/glue.h
+--- a/src/malloc/mallocng/glue.h	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/glue.h
 @@ -20,9 +20,18 @@
  #define is_allzero __malloc_allzerop
@@ -199,7 +221,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  		if (libc.auxv[i]==AT_RANDOM)
  			memcpy(&secret, (char *)libc.auxv[i+1]+8, sizeof secret);
  	return secret;
---- a/src/malloc/mallocng/malloc.c
+--- a/src/malloc/mallocng/malloc.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/malloc.c
 @@ -18,9 +18,9 @@
  	146, 170, 204, 255,
@@ -214,22 +236,40 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  };
  
  static const uint8_t small_cnt_tab[][3] = {
-@@ -246,7 +246,14 @@
+@@ -238,15 +238,32 @@
+ 		// bounce counter hasn't triggered, and either it saves memory
+ 		// or it avoids eagar slot allocation without wasting too much.
+ 		if (!nosmall && cnt<=7) {
++			size_t want = req;
+ 			req += IB + UNIT;
+ 			req += -req & (pagesize-1);
+ 			if (req<size+UNIT || (req>=4*pagesize && 2*cnt>usage)) {
+ 				cnt = 1;
++#ifdef CAPSTONE_MUSL_MALLOC
++				/* The path selection above stays on upstream's req; only the SIZE
++				 * changes, to leave room for the granule-sized group header that
++				 * this one slot would otherwise be pushed past the mapping by. */
++				needed = cap_single_slot_bytes(want, pagesize);
++				if (!needed) { free_meta(m); return 0; }
++#else
+ 				needed = req;
++#endif
  			}
  		}
  
 +#ifdef CAPSTONE_MUSL_MALLOC
 +		/* The granule-sized group header must fit in the page rounding above. */
 +		assert(cap_hdr_fits(size, cnt, pagesize));
-+		p = __capstone_malloc_group_map(m->cap_slots,
-+		                                needed, cnt == 1 ? needed-UNIT : size, cnt);
++		p = __capstone_malloc_group_map(m->cap_slots, needed,
++		                                cnt == 1 ? needed - cap_group_header(needed) : size,
++		                                cnt);
 +#else
  		p = mmap(0, needed, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
 +#endif
  		if (p==MAP_FAILED) {
  			free_meta(m);
  			return 0;
-@@ -266,17 +273,32 @@
+@@ -266,17 +283,32 @@
  		struct meta *g = ctx.active[j];
  		p = enframe(g, idx, UNIT*size_classes[j]-IB, ctx.mmap_counter);
  		m->maplen = 0;
@@ -263,26 +303,32 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	m->last_idx = cnt-1;
  	m->freeable = 1;
  	m->sizeclass = sc;
-@@ -307,8 +329,12 @@
+@@ -306,9 +338,19 @@
+ 	int ctr;
  
  	if (n >= MMAP_THRESHOLD) {
- 		size_t needed = n + IB + UNIT;
 +#ifdef CAPSTONE_MUSL_MALLOC
++		/* Reserve the granule-sized group header: this path binds ONE slot covering the
++		 * whole mapping after the header, so without the reservation the slot ends past
++		 * the mapping and the shrink cannot be derived. Every size on this path was
++		 * affected, from n = MMAP_THRESHOLD up. */
++		size_t needed = cap_single_slot_bytes(n, PGSZ);
++		if (!needed) return 0;
 +		void *p = __capstone_malloc_map(needed);
 +#else
+ 		size_t needed = n + IB + UNIT;
  		void *p = mmap(0, needed, PROT_READ|PROT_WRITE,
  			MAP_PRIVATE|MAP_ANON, -1, 0);
 +#endif
  		if (p==MAP_FAILED) return 0;
  		wrlock();
  		step_seq();
-@@ -318,8 +344,18 @@
+@@ -318,8 +360,17 @@
  			munmap(p, needed);
  			return 0;
  		}
 +#ifdef CAPSTONE_MUSL_MALLOC
-+		p = __capstone_malloc_group_attach(g->cap_slots, p,
-+		                                  (needed+4095)&-4096UL);
++		p = __capstone_malloc_group_attach(g->cap_slots, p, needed);
 +		g->cap_slots[0].group = g;
 +		g->cap_slots[0].index = 0;
 +#endif
@@ -295,12 +341,12 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  		g->last_idx = 0;
  		g->freeable = 1;
  		g->sizeclass = 63;
-@@ -385,3 +421,4 @@
+@@ -385,3 +436,4 @@
  	return g->sizeclass >= 48 ||
  		get_stride(g) < UNIT*size_classes[g->sizeclass];
  }
 +
---- a/src/malloc/mallocng/malloc_usable_size.c
+--- a/src/malloc/mallocng/malloc_usable_size.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/malloc_usable_size.c
 @@ -8,6 +8,9 @@
  	int idx = get_slot_index(p);
@@ -312,7 +358,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	unsigned char *end = start + stride - IB;
  	return get_nominal_size(p, end);
  }
---- a/src/malloc/mallocng/meta.h
+--- a/src/malloc/mallocng/meta.h	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/meta.h
 @@ -15,9 +15,17 @@
  #define IB 4
@@ -405,7 +451,36 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	if (reserved >= 5) {
  		assert(reserved == 5);
  		reserved = *(const uint32_t *)(end-4);
-@@ -190,19 +227,51 @@
+@@ -172,10 +209,28 @@
+ 	return end-reserved-p;
+ }
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++static inline size_t cap_group_header(size_t bytes)
++{
++	size_t g = __capstone_malloc_granule(bytes > IB ? bytes - IB : 1);
++	return g > UNIT ? g : UNIT;
++}
++#endif
+ static inline size_t get_stride(const struct meta *g)
+ {
+ 	if (!g->last_idx && g->maplen) {
++#ifdef CAPSTONE_MUSL_MALLOC
++		/* The single slot begins after a GRANULE-sized group header, not a 16-byte one,
++		 * so its stride is the mapping minus that. Every consumer of get_stride must see
++		 * the stride bind_slots actually bound, or it computes an end past the slot: this
++		 * is read by enframe's slack, free's bounds check, realloc, malloc_usable_size and
++		 * aligned_alloc. cap_single_slot_bytes keeps maplen*4096 equal to the mapping the
++		 * launcher granted, which is what makes this agree. */
++		size_t bytes = g->maplen*4096UL;
++		return bytes - cap_group_header(bytes);
++#else
+ 		return g->maplen*4096UL - UNIT;
++#endif
+ 	} else {
+ 		return UNIT*size_classes[g->sizeclass];
+ 	}
+@@ -190,19 +245,82 @@
  		end[-5] = 0;
  		reserved = 5;
  	}
@@ -431,6 +506,37 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
 +{
 +	size_t gr = __capstone_malloc_granule(stride > IB ? stride - IB : 1);
 +	return gr > UNIT ? gr - UNIT : 0;
++}
++/* The SINGLE-SLOT shapes have no slack at all, unlike the multi-slot path above: alloc_group's
++ * cnt==1 branch maps exactly pageround(n+IB+UNIT) and the >= MMAP_THRESHOLD path maps n+IB+UNIT,
++ * and both then bind one slot covering everything after the group header. cap_hdr_fits() cannot
++ * speak for them -- it is evaluated on the CLASS stride -- so the header has to be reserved in the
++ * mapping size instead. The header depends on the stride, which depends on the mapping size, so
++ * iterate; the granule is monotone in the stride so this converges, in at most 3 rounds for every
++ * size measured up to 256 MiB. Returns 0 if it does not, and the caller then refuses rather than
++ * overrunning. */
++static inline size_t cap_single_slot_bytes(size_t n, size_t pagesize)
++{
++	size_t hdr = UNIT;
++	for (int i = 0; i < 12; i++) {
++		size_t b = n + IB + hdr;
++		if (b < n) return 0;
++		b += -b & (pagesize-1);
++		/* Also a fixed point of the BOUNDS rounding. __capstone_malloc_map applies
++		 * capstone_repr_round, so a merely page-aligned size can be granted a larger
++		 * mapping than maplen*4096 records -- 6303744 becomes 6307840 at a granule of
++		 * 8192 -- and then get_stride() and bind_slots() disagree about the slot's end. */
++		for (int j = 0; j < 4; j++) {
++			size_t r = __capstone_malloc_repr_round(b);
++			r += -r & (pagesize-1);
++			if (r == b) break;
++			b = r;
++		}
++		size_t h = cap_group_header(b);
++		if (h == hdr) return b;
++		hdr = h;
++	}
++	return 0;
 +}
 +static inline int cap_hdr_fits(size_t size, int cnt, size_t pagesize)
 +{
@@ -461,7 +567,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	if (off > slack) {
  		size_t m = slack;
  		m |= m>>1; m |= m>>2; m |= m>>4;
-@@ -210,19 +279,43 @@
+@@ -210,19 +328,43 @@
  		if (off > slack) off -= slack+1;
  		assert(off <= slack);
  	}
@@ -510,7 +616,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	return p;
  }
  
---- a/src/malloc/mallocng/realloc.c
+--- a/src/malloc/mallocng/realloc.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/realloc.c
 @@ -13,6 +13,9 @@
  	int idx = get_slot_index(p);

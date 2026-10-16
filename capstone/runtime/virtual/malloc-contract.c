@@ -17,8 +17,27 @@ __attribute__((noinline)) static void fault_store(volatile char *p)
     *p = 0;
 #endif
 }
+#ifdef __CAPSTONE_PURECAP__
+extern unsigned long __capstone_malloc_bind_refused;
+extern unsigned long __capstone_malloc_bind_first[6];
+extern unsigned long __capstone_malloc_ng_null;
+#endif
 static void require(int ok, const char *what)
-{ if (!ok) { fprintf(stderr, "MALLOC_FAIL:%s\n", what); exit(1); } }
+{
+    if (ok) return;
+    fprintf(stderr, "MALLOC_FAIL:%s\n", what);
+#ifdef __CAPSTONE_PURECAP__
+    /* Which step refused. Without this a NULL from malloc says only "out of memory". */
+    fprintf(stderr, "MALLOC_WHY bind_refused=%lu ng_null=%lu"
+                    " first_slot=%lu start=%lu end=%lu stride=%lu group_base=%lu group_end=%lu\n",
+            __capstone_malloc_bind_refused, __capstone_malloc_ng_null,
+            __capstone_malloc_bind_first[0], __capstone_malloc_bind_first[1],
+            __capstone_malloc_bind_first[2], __capstone_malloc_bind_first[3],
+            __capstone_malloc_bind_first[4], __capstone_malloc_bind_first[5]);
+#endif
+    fflush(stderr);
+    exit(1);
+}
 static void basic(void)
 {
     char *p = calloc(23, 7);

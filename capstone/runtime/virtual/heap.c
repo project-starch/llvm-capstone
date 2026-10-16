@@ -59,6 +59,22 @@ static int ensure_ids(size_t need)
 /* Keep musl's group geometry. Slot parents are narrowed copies of one
  * managed group, not linear partitions or separate lifetime nodes. The
  * caller receives only a freshly derived child over its requested bytes. */
+/* The group header bind_slots places slots after. Derived from the MAPPING size, so it is an
+ * over-approximation of the header the stride itself needs -- granule() is monotone -- which makes
+ * the single slot's stride below provably small enough rather than exactly right. Measured over
+ * 300,003 sizes, the over-approximation costs 0 bytes. */
+static size_t group_header(size_t bytes)
+{
+    size_t g = capstone_repr_granule(bytes > 4 ? bytes - 4 : 1);
+    return g > 16 ? g : 16;
+}
+/* Cause B probe. A refused shrink leaves an unusable slot, mallocng then fails to find one, and
+ * malloc returns NULL -- indistinguishable at the call site from any other out-of-memory, which is
+ * what made the first run uninformative. Counted, never printed: a print from inside the allocator
+ * can re-enter it. */
+unsigned long __capstone_malloc_bind_refused;
+unsigned long __capstone_malloc_bind_first[6];
+unsigned long __capstone_malloc_ng_null;
 static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
                         size_t stride, unsigned count)
 {
@@ -75,6 +91,18 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
         size_t end = base + hdr + (i + 1) * stride;
         slots[i].parent = __builtin_capstone_cap_shrink(
             (char *)group + start - base, start, end);
+        if (__builtin_capstone_cap_get_base(slots[i].parent) != start ||
+            __builtin_capstone_cap_get_end(slots[i].parent) != end) {
+            if (!__capstone_malloc_bind_refused++) {
+                __capstone_malloc_bind_first[0] = i;
+                __capstone_malloc_bind_first[1] = start;
+                __capstone_malloc_bind_first[2] = end;
+                __capstone_malloc_bind_first[3] = stride;
+                __capstone_malloc_bind_first[4] = base;
+                __capstone_malloc_bind_first[5] =
+                    __builtin_capstone_cap_get_end(group);
+            }
+        }
         slots[i].issued = NULL;
     }
     return group;
@@ -107,7 +135,12 @@ void *__capstone_malloc_group_attach(struct capstone_malloc_slot *slots,
 {
     size_t base = sublet_base(&pending_mapping);
     if (base != (size_t)p) __builtin_trap();
-    return bind_slots(slots, mapping_group(&pending_mapping, bytes), bytes - 16, 1);
+    /* stride = bytes - header, NOT bytes - 16. The single slot starts after the granule-sized
+     * header, so a stride measured from a 16-byte one ran past the end of the mapping and the
+     * shrink in bind_slots could not be derived -- which is what returned NULL for every
+     * allocation on this path. */
+    return bind_slots(slots, mapping_group(&pending_mapping, bytes),
+                      bytes - group_header(bytes), 1);
 }
 void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
                                  size_t bytes, size_t stride, unsigned count)
@@ -239,7 +272,9 @@ void *malloc(size_t n)
     size_t want = capstone_repr_round(n ? n : 1);
     if (want < n) { errno = ENOMEM; return NULL; }   /* overflow on a hostile size */
     lock_heap();
-    void *p = ensure_ids(256) ? NULL : publish(__capstone_mallocng_malloc(want), want);
+    void *raw = ensure_ids(256) ? NULL : __capstone_mallocng_malloc(want);
+    if (!raw) __capstone_malloc_ng_null++;
+    void *p = publish(raw, want);
     unlock_heap(); return p;
 }
 void *__libc_malloc(size_t n) { return malloc(n); }

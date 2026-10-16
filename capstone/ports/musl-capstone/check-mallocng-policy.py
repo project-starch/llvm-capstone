@@ -47,6 +47,30 @@ def body(text, name):
 ALLOWED_SIZE_CLASS_EDITS = {36: 1170, 38: 1638, 39: 2048, 41: 2732, 43: 4096, 45: 5464, 47: 8192}
 
 
+# The single authorised edit inside alloc_group's size/count/mmap decision region, pinned as literal
+# text on BOTH sides. alloc_group's cnt==1 branch mapped exactly pageround(n+IB+UNIT), which leaves
+# no room for the granule-sized group header the capability representation needs; the one slot then
+# ended past the mapping and malloc returned NULL for 95.5% of single-slot sizes from n=16365 up.
+# The mapping SIZE therefore has to change. The policy -- which class, which count, whether this
+# branch is taken at all -- does not, and is why the condition below is still evaluated on upstream's
+# own `req`.
+#
+# Like the size-class exception, this is NOT a relaxation to "the region may differ": the old and new
+# texts are both exact, so a different expression, a second edit elsewhere in the region, or a revert
+# all still FAIL. Negative-tested in test-mallocng-policy-narrowing.py.
+ALLOWED_GROUP_SIZE_EDIT_OLD = '\t\tif (!nosmall && cnt<=7) {\n\t\t\treq += IB + UNIT;\n\t\t\treq += -req & (pagesize-1);\n\t\t\tif (req<size+UNIT || (req>=4*pagesize && 2*cnt>usage)) {\n\t\t\t\tcnt = 1;\n\t\t\t\tneeded = req;\n'
+ALLOWED_GROUP_SIZE_EDIT_NEW = "\t\tif (!nosmall && cnt<=7) {\n\t\t\tsize_t want = req;\n\t\t\treq += IB + UNIT;\n\t\t\treq += -req & (pagesize-1);\n\t\t\tif (req<size+UNIT || (req>=4*pagesize && 2*cnt>usage)) {\n\t\t\t\tcnt = 1;\n#ifdef CAPSTONE_MUSL_MALLOC\n\t\t\t\t/* The path selection above stays on upstream's req; only the SIZE\n\t\t\t\t * changes, to leave room for the granule-sized group header that\n\t\t\t\t * this one slot would otherwise be pushed past the mapping by. */\n\t\t\t\tneeded = cap_single_slot_bytes(want, pagesize);\n\t\t\t\tif (!needed) { free_meta(m); return 0; }\n#else\n\t\t\t\tneeded = req;\n#endif\n"
+
+
+def normalise_group_region(current_body):
+    """Substitute the ONE authorised edit back to upstream's text, so the comparison that follows
+    is against upstream. Returns the text unchanged if the authorised edit is not present verbatim,
+    which makes the comparison fail -- the behaviour we want for any unauthorised change."""
+    if ALLOWED_GROUP_SIZE_EDIT_NEW not in current_body:
+        return current_body
+    return current_body.replace(ALLOWED_GROUP_SIZE_EDIT_NEW, ALLOWED_GROUP_SIZE_EDIT_OLD, 1)
+
+
 def size_class_values(text):
     pattern = r'\bsize_classes\[.*?\]\s*=\s*\{(.*?)\};'
     body = re.search(pattern, text, re.S)[1]
@@ -98,7 +122,10 @@ def main():
         for name in names:
             same(name, body(original[file], name), body(current[file], name))
     old = body(original['malloc.c'], 'alloc_group').split('\t\tp = mmap(', 1)[0]
-    new = body(current['malloc.c'], 'alloc_group').split('#ifdef CAPSTONE_MUSL_MALLOC', 1)[0]
+    # Normalise the authorised size edit FIRST, so the only '#ifdef CAPSTONE_MUSL_MALLOC' left in
+    # the region is the mapping call the split below has always truncated at.
+    new = normalise_group_region(body(current['malloc.c'], 'alloc_group'))
+    new = new.split('#ifdef CAPSTONE_MUSL_MALLOC', 1)[0]
     same('group size/count/mmap decisions', old, new)
     for file, begin, end, label in (
         ('malloc.c', '\tsc = size_to_class(n);', '\nsuccess:', 'slot/class selection'),

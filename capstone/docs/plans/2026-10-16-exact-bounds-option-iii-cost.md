@@ -1434,3 +1434,96 @@ correct report. The build-twice test settles it: without the directive, two buil
 source give `73ce7b1bc0411029` and `b1b9c8a5670e137a`; with it, `54581b7c0930a21e` twice. A probe
 keyed to one spelling of a symptom is the narrowed view the house rules warn about, and the
 unfiltered artifact here is the second build, not a better grep.
+
+
+## Cause A found, fixed, and PRE-REGISTERED before the confirming run
+
+### What it was
+
+The granule-sized group header had nowhere to live on the two **single-slot** shapes.
+`alloc_group`'s `cnt<=7` branch maps exactly `pageround(n+IB+UNIT)` and the `>= MMAP_THRESHOLD`
+path maps `n+IB+UNIT`; each then binds ONE slot covering the whole mapping after the header. So the
+slot ended `granule - UNIT` bytes past the mapping, `bind_slots`' shrink could not be derived, and
+`malloc` returned NULL.
+
+Measured over 300,000 request sizes, by path actually taken:
+
+| path | sizes | overrun | first |
+|---|---|---|---|
+| multi-slot `group` | 10,908 | **0** | — |
+| `group`, cnt==1 branch | 120,143 | **114,687 (95.5%)** | n = 16,365 |
+| `>= MMAP_THRESHOLD` | 168,949 | **168,949 (100%)** | n = 131,052 |
+
+**`cap_hdr_fits` was blind to every one of them.** It is evaluated on the CLASS stride and on
+`needed = size*cnt + UNIT`, and neither is what those paths map — so it passed on all 114,687
+overrunning group cases. An assert that cannot fire for the shape that needs it is the
+"gate whose condition the mandated control always satisfies" pattern, in the allocator.
+
+This accounts for every failure in the suite and in the board lane's Tier 3 readings **except two**,
+and the two exceptions are both `cnt == 3` multi-slot allocations — `malloc(6144)` and the
+`malloc(9081)` behind `posix_memalign(4096, 5001)`. Those are **Cause B, still open**; the model
+says their geometry fits, so it is a different mechanism and must not be folded in.
+
+### The fix
+
+`cap_single_slot_bytes` reserves the header for both shapes, as a fixed point in two variables: the
+header depends on the stride, the stride on the mapping size. It is also a fixed point of the
+**bounds** rounding, because `__capstone_malloc_map` applies `capstone_repr_round` and a merely
+page-aligned size can be granted a larger mapping than `maplen*4096` records — 6,303,744 becomes
+6,307,840 at a granule of 8192 — which would leave `get_stride` and `bind_slots` disagreeing about
+where the slot ends. `get_stride` subtracts the granule header rather than `UNIT` for these groups,
+so enframe's slack, free's bounds check, realloc, `malloc_usable_size` and `aligned_alloc` all see
+the stride that was actually bound.
+
+Verified in the model and again in C over 300,003 sizes: converges in **at most 3 rounds**, 0
+overruns, 0 capacity failures, 0 sizes where the granted mapping differs from `maplen*4096`. Only
+4.8% of sizes need a larger mapping at all; the worst growth is 32 pages, at 64 MiB.
+
+### The gate had to be extended, and that is flagged deliberately
+
+`check-mallocng-policy.py` FAILED on "group size/count/mmap decisions", correctly: it freezes
+`alloc_group`'s decision region and the mapping SIZE is computed there. The size genuinely has to
+change, so the region cannot stay byte-identical.
+
+It is extended the way the seven size-class strides already are — `ALLOWED_GROUP_SIZE_EDIT`, pinned
+as exact text on BOTH sides — and **not** relaxed to "the region may differ". The path selection is
+untouched: the branch condition is still evaluated on upstream's own `req`, and only `needed`
+changes. `test-group-size-narrowing.py` proves the allowance is narrow, 8 of 8: the authorised edit
+passes, a revert to upstream passes (policy-identical — so a PASS there does **not** mean the fix is
+present, which the test says in its own output), and six near misses are all refused, including
+reserving for `req` instead of the original request, a second edit elsewhere in the region, a
+relaxed mmap-worthiness condition, the stock build losing upstream's sizing, the non-convergence
+check dropped, and the branch condition itself made Capstone-specific.
+
+Flagging it rather than burying it: this changes what the gate certifies. It still certifies
+upstream's allocation POLICY; it no longer certifies that the mapping size is upstream's.
+
+### A consequence of option (iii) that is not a bug and should not be discovered later
+
+`malloc()` rounds the request up to the granule and publishes a capability over the ROUNDED size,
+so an allocation can legitimately address up to **granule - 1 bytes past what the program asked
+for**: 189 bytes at `malloc(200003)`, whose granule is 256. A spatial overflow inside that slack is
+therefore NOT caught. The contract's own `bounds` mode is written to expect a fault at exactly
+`+200003` and so can no longer pass as written.
+
+This is the cost of option (iii) over a wider capability, it is measurable, and it belongs in the
+discussion of what exact bounds buy. Recording it here; the paper is not this lane's to edit.
+
+### PRE-REGISTRATION — written before the run, so it cannot be fitted afterwards
+
+Inputs: domain `01482e9dee66d862` (fixed), control domain `2c1daf0f0833a4fb` (pre-Cause-A),
+launcher `54581b7c0930a21e`, SDK runtime `24ebdd1f8b936e1f`, lane commit cited in the landing.
+
+| marker / check | pre-fix | predicted | why |
+|---|---|---|---|
+| `MALLOC_FAIL:precise allocation` — `malloc(200003)` | fails | **clears** | large path, Cause A |
+| `MALLOC_FAIL:population array` — `malloc(70000*16)` | fails | **clears** | 1,120,000 B, large path |
+| `MALLOC_FAIL:remap-align setup` — 6 MiB | fails | **clears** | large path |
+| `MALLOC_FAIL:remap stale setup` — `malloc(200000)` | fails | **clears** | large path |
+| `MALLOC_FAIL:aligned allocation` — `malloc(9081)` | fails | **STILL FAILS** | cnt==3, Cause B |
+| `bounds` | false | **still false, and NOT at "precise allocation"** | request rounded to 200192, so `+200003` is in bounds and cannot fault |
+| `remap_unaligned_fallbacks` | null | **0** | the launcher now lands growth granule-aligned |
+| `MALLOC_WHY` line | absent | **present at the aligned-allocation failure** | the new probe names which step refused |
+| control arm | — | **must still show the four Cause-A failures** | otherwise the attribution is void a second time |
+
+If the control arm does NOT reproduce them, this attribution goes the way of the last one.
