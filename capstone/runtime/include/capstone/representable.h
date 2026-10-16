@@ -75,4 +75,12 @@ static inline unsigned long capstone_repr_base_down(unsigned long base, unsigned
 	return base - (base % g);
 }
 
+/* The granule as a COMPILE-TIME constant, for __attribute__((aligned(...))), which cannot call a
+ * function. Valid only for a power-of-two length, where msb(n) = log2(n) and the granule is
+ * n/512; pair it with CAPSTONE_REPR_ASSERT_POW2 at the use site so a non-power-of-two size fails
+ * the build instead of under-aligning a static arena. */
+#define CAPSTONE_REPR_GRANULE_POW2(n) ((n) < 4096UL ? 1UL : (unsigned long)(n) / 512UL)
+#define CAPSTONE_REPR_ASSERT_POW2(n, what) \
+	_Static_assert(((n) & ((n) - 1)) == 0, what " must be a power of two for its bounds to be representable")
+
 #endif /* CAPSTONE_REPRESENTABLE_H */

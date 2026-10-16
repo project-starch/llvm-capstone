@@ -1068,3 +1068,48 @@ refusals and four acceptances, so the fallback is demonstrably not dead code.
 
 Next: the ports' derive sites, then the two-sided suite run with the profile off as production and
 on as control.
+
+## NOT COVERED — to carry verbatim into the landing commit
+
+Stated so that no claim in the landing commit overstates what the tests show.
+
+* **Forcing an unaligned remap is not tested end to end.** `remap-usable-test.c` proves the
+  *decision* two-sided (six refusals, four acceptances), and `malloc-contract.c`'s `remap-align`
+  mode proves the *contents survive whichever path was taken* and reports the fallback count. What
+  neither does is make the service return an unaligned mapping on demand — that needs a stub, and
+  it is a follow-up. So the claim is "the fallback's decision is correct and its use is counted",
+  **not** "the fallback has been exercised deliberately".
+* **No runtime run of any of this yet.** Every number in this document is static: compiler output,
+  code read on a ref, and simulation against the RTL bounds model. The two-sided QEMU suite run is
+  item 4 and has not happened.
+* **The ports' maxima for FFmpeg, memcached, wmem, PostgreSQL, SQLite, nginx, APR and whisper are a
+  delegated search's findings** with its quoted evidence, re-verified by me only where they
+  contradicted something I had already reported. APR's `SMALL_NODE_SIZE` and `APR_MEMNODE_T_SIZE`
+  and the 3530300 memsys5 pool size are UNRESOLVED.
+* **`mrbpage.c`'s `sizeof(RVALUE)` is a stand-in**, not mruby's real union. The offset result holds
+  for every value from 16 to 128 bytes, so the conclusion does not depend on it, but the figure 80
+  comes from a layout computation and not from a build with debug info.
+* **`enframe`'s offset cycling is reduced, not preserved**, on the twelve classes with a granule
+  above `UNIT`: 1 offset in granule/`UNIT`. The double-free trap is weaker there in proportion.
+
+## Ports, first site done: memsys5's static arena
+
+The only offset-0 parent not placed by mallocng. `arms.json`'s `virtual-sqlite-memsys5` runs
+"memsys5 stock over one static array", and memsys5 derives `mem5.pHeap` and `mem5.zPool` over the
+**whole** arena, so the arena's own base must be a multiple of its bounds granule. All three
+declarations were `__attribute__((aligned(16)))` — enough while QEMU kept exact shadow bounds, not
+enough under the compact profile.
+
+`CAPSTONE_REPR_GRANULE_POW2(n)` gives the granule as a compile-time constant usable in
+`aligned(...)`, which cannot call a function: for a power of two, `msb(n) = log2(n)` so the granule
+is `n/512`. Checked against the real function at 4096, 8192, 256 KiB, 1 MiB, 4 MiB and 64 MiB —
+**agrees at every one**. `CAPSTONE_REPR_ASSERT_POW2` pairs with it so a non-power-of-two size fails
+the build rather than silently under-aligning the arena; negative-tested with `-DSQLITE_HEAP_SIZE=3000000U`,
+which fails with the assertion's message.
+
+Measured, not assumed: at 4096, 256 KiB and 1 MiB the arena's `__alignof__` is 16, 512 and 2048 and
+its address is a multiple of each.
+
+Remaining port work: the eleven offset-0 sites (round the allocation with `capstone_repr_round` and
+derive over the rounded length — the parent's alignment now comes free from item 1), and the nine
+non-zero-offset sites, which need granule-aligned chunk placement in each allocator's own geometry.
