@@ -31,6 +31,18 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=25 pc=0x3fa6010fa0 in pg_probe; by probe: the pc lies in pg_probe, the labelled read",
       "verdict_from": "results/2026-10-11-virtual/virtual-pg-pools"
+    },
+    "silicon-pg-stock": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), set 8: PostgreSQL 17.0's memory-context managers as the port's spatial variant (patches 0001 + 0002), over the lifetimes heap (tools/arms.json silicon-postgres-mmgr-stock). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. The case's -DPG_NEGATIVE_CONTROL image must print `PG_DEFECT case=N mode=0 completed` and exit 0. Then a fault after `PG_DEFECT case=N ready` at pg_probe / pg_write_probe or a declared fault site is CAUGHT; completing is MISSED, provided the boot's controls, corpus control 00 included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane a13fe2ed2cbd, before the boot): MISSED.",
+      "verdict": "MISSED",
+      "verdict_note": "reached (PG_DEFECT case=1 ready) and completed with no fault; silicon; case run end kind=exit value=0; negative control completed",
+      "verdict_from": "results/2026-10-16-silicon/silicon-pg-stock"
+    },
+    "silicon-pg-sublet": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), set 8: the same managers with patch 0003, every chunk a CDERIVE child of its block, CREVOKEd at pfree and when its context dies (tools/arms.json silicon-postgres-mmgr-sublet). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. The case's -DPG_NEGATIVE_CONTROL image must print `PG_DEFECT case=N mode=0 completed` and exit 0. Then a fault after `PG_DEFECT case=N ready` at pg_probe / pg_write_probe or a declared fault site is CAUGHT; completing is MISSED, provided the boot's controls, corpus control 00 included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane a13fe2ed2cbd, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0xac105038 in pg_probe; by probe: the fault is in pg_probe, the labelled probe",
+      "verdict_from": "results/2026-10-16-silicon/silicon-pg-sublet"
     }
   },
   "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle",

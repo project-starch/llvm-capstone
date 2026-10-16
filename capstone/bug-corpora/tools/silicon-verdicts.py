@@ -31,6 +31,13 @@ Per case:
   labelled probe (the corpus PROBE rule) or to a function the case declares (`fault_sites`).
 - A run that printed `VERDICT DEFECT-REPRODUCED` and exited 0 COMPLETED.
 
+Two-image corpora (PostgreSQL's c-repros and mmgr-repros) build each case twice: the case, and a negative control
+(-DPGCLIENT_NEGATIVE_CONTROL / -DPG_NEGATIVE_CONTROL) that moves one value to the safe side and must complete. The
+matrix carries them as `<name>-case` and `<name>-ctl-control` rows; the control row gates its case as a fixed run
+does. The reach mark, the completion line and the probe are the family's (TWO_IMAGE): c-repros names the function
+it expects to fault in (`expect_fault_in=<fn>`), mmgr-repros faults in pg_probe / pg_write_probe. A corpus control
+row whose run key is its own row name (`--row-control ROW=CONTROL`) is read under that key.
+
 The judge's verdict must agree with the matrix's outcome (CAUGHT, or DEFECT-REPRODUCED = MISSED) on every row.
 Otherwise the tool writes nothing and says which rows disagree. A transcript with no blocks, or a row with no run,
 is an error, not a NO-READING.
@@ -54,8 +61,31 @@ REACH = re.compile(r"^(?:case=(\d+) arm=buggy(?: .*)?|WM_DEFECT case=(\d+) ready
 BLOCK = re.compile(r"^CORPUS-RUN (\S+) BEGIN$(.*?)^CORPUS-RUN \1 END kind=(\w+) value=(-?\d+)$", re.M | re.S)
 # FIXED-ARM-FAILED (the fixed run did not read FIXED) and CONTROL-FAILED (the buggy run refused its own setup, exit
 # 75) are the board's names for runs that are not readings.
-MATRIX_VERDICT = {"CAUGHT": v.CAUGHT, "DEFECT-REPRODUCED": v.MISSED, "FIXED-ARM-FAILED": v.NO_READING,
-                  "CONTROL-FAILED": v.NO_READING}
+MATRIX_VERDICT = {"CAUGHT": v.CAUGHT, "DEFECT-REPRODUCED": v.MISSED, "COMPLETED": v.MISSED,
+                  "FIXED-ARM-FAILED": v.NO_READING, "CONTROL-FAILED": v.NO_READING}
+# Two-image families, by matrix row kind: the reach mark, the completion line and the probe rule.
+TWO_IMAGE = {
+    "pg-c": dict(reach=r"^PG_DEFECT case={n} mark$", done="case {n} RETURNED",
+                 probe_from=r"PG_DEFECT case=\d+ expect_fault_in=([A-Za-z_][\w.$]*)@"),
+    "pg-mmgr": dict(reach=r"^PG_DEFECT case={n} ready$", done="PG_DEFECT case={n} mode=0 completed",
+                    probe=r"^pg_(write_)?probe$"),
+}
+
+
+class Images:
+    """The stage's images, found by name and checked by sha256, or found by sha256 alone."""
+    def __init__(self, root):
+        self.root, self._by_hash = root, None
+
+    def get(self, name, sha):
+        p = self.root / f"{name}.dom"
+        if p.is_file() and v.sha256(p) == sha:
+            return p
+        if self._by_hash is None:
+            self._by_hash = {v.sha256(q): q for q in sorted(self.root.glob("*.dom"))}
+        if sha in self._by_hash:
+            return self._by_hash[sha]
+        raise SystemExit(f"{name}: no image with the matrix's sha256 {sha[:16]} in {self.root}")
 
 
 def blocks(transcript):
@@ -79,6 +109,59 @@ def control_observed(block, symbols):
         line = next((l for l in lines if "RETURNED" in l), lines[-1] if lines else "exit 0")
         return "complete", line.strip()
     return "none", f"end kind={kind} value={value}"
+
+
+def two_image(row, by_name, runs, pre, images, a, controls, spec):
+    """One case of a two-image corpus: its negative control must complete; then the case is judged."""
+    fam = TWO_IMAGE[row["kind"]]
+    name, case = row["name"], row["case"]
+    if not name.endswith("-case"):
+        raise SystemExit(f"{name}: a {row['kind']} row should be named <case>-case")
+    base = name[: -len("-case")]
+    ctl_row = by_name.get(f"{base}-ctl-control")
+    if ctl_row is None:
+        raise SystemExit(f"{name}: no negative-control row {base}-ctl-control in the matrix")
+    image = images.get(base, row["image_sha256"])
+    ctl_image = images.get(f"{base}-ctl", ctl_row["image_sha256"])
+    blk, ctl_blk = runs.get(f"{pre}{name}"), runs.get(f"{pre}{ctl_row['name']}")
+    if blk is None or ctl_blk is None:
+        raise SystemExit(f"{name}: the transcript has no {'case' if blk is None else 'control'} run")
+    n = int(case[:2])
+    done = fam["done"].format(n=n)
+    obs = v.Observation(case=case, arm=a.arm, controls=controls, image_sha256=row["image_sha256"])
+    cbody, ckind, cval = ctl_blk
+    body, kind, value = blk
+    if not (ckind == "exit" and cval == 0 and done in cbody):
+        f = v.domain_fault(cbody, v.Symbols(a.llvm_bin, ctl_image))
+        obs.infra = "control-failed"
+        obs.notes = (f"the negative-control image did not print `{done}` and exit 0 (end kind={ckind} value={cval})"
+                     + (f"; it faulted cause={f.cause} pc={f.pc:#x} in {f.symbol}+{f.offset:#x}" if f else ""))
+    elif kind == "exit" and value == 75:
+        obs.infra = "control-failed"
+        obs.notes = next((l.strip() for l in body.splitlines() if "CONTROL-FAILED" in l),
+                         "exit 75: the case refused its own setup (a CHECK)") + "; case run end kind=exit value=75"
+    else:
+        marker = re.search(fam["reach"].format(n=n), body, re.M)
+        obs.reached = bool(marker)
+        obs.reach_evidence = marker.group(0) if marker else ""
+        obs.fault = v.domain_fault(body, v.Symbols(a.llvm_bin, image))
+        if obs.fault:
+            if "probe_from" in fam:
+                m = re.search(fam["probe_from"], body)
+                probe, how = (re.compile(rf"^{re.escape(m.group(1))}$") if m else None), "the function the case named before its access"
+            else:
+                probe, how = re.compile(fam["probe"]), "the labelled probe"
+            sites = json.loads((REPO / row["corpus"] / case / "case.json").read_text()).get("fault_sites") or ()
+            if probe and obs.fault.symbol and probe.search(obs.fault.symbol):
+                obs.attribution = "probe"
+                obs.attribution_evidence = f"the fault is in {obs.fault.symbol}, {how}"
+            elif obs.fault.symbol in sites:
+                obs.attribution = "function"
+                obs.attribution_evidence = f"{obs.fault.symbol} is a fault site declared in case.json"
+        elif kind == "exit" and value == 0 and done in body:
+            obs.completed = True
+        obs.notes = f"silicon; case run end kind={kind} value={value}; negative control completed"
+    return obs, v.judge(obs, spec)
 
 
 def main():
@@ -119,14 +202,14 @@ def main():
         observed, evidence = control_observed(runs.get(f"{pre}control-{name}"), ctl_symbols)
         controls.append(v.Control(name=name, observed=observed, evidence=evidence))
     by_name = {row["name"]: row for row in matrix["rows"]}
+    images = Images(a.images)
     for rname, run, control in row_controls:
         row = by_name.get(rname)
         if row is None:
             raise SystemExit(f"--row-control {rname}: no such matrix row")
-        image = a.images / f"{rname}.dom"
-        if v.sha256(image) != row["image_sha256"]:
-            raise SystemExit(f"{rname}: image sha256 is not the matrix's")
-        observed, evidence = control_observed(runs.get(f"{pre}{rname}-{run}"), v.Symbols(a.llvm_bin, image))
+        image = images.get(rname, row["image_sha256"])
+        block = runs.get(f"{pre}{rname}-{run}") or runs.get(f"{pre}{rname}")
+        observed, evidence = control_observed(block, v.Symbols(a.llvm_bin, image))
         controls.append(v.Control(name=control, observed=observed, evidence=evidence))
     missing = sorted(set(spec["controls"]) - {c.name for c in controls})
     if missing:
@@ -135,6 +218,16 @@ def main():
     per_corpus, disagree = {}, []
     for row in matrix["rows"]:
         if row["name"] in not_cases:
+            continue
+        kind = row.get("kind", "")
+        if kind.endswith("-control") and kind[:-len("-control")] in TWO_IMAGE:
+            continue        # a negative control: read with its case
+        if kind in TWO_IMAGE:
+            obs, verdict = two_image(row, by_name, runs, pre, images, a, controls, spec)
+            want = MATRIX_VERDICT.get(row["outcome"])
+            if verdict[0] != want:
+                disagree.append(f"{row['name']}: judged {verdict[0]} ({verdict[1]}: {verdict[2]}), matrix {row['outcome']}")
+            per_corpus.setdefault(row["corpus"], []).append((obs, verdict))
             continue
         name, case = row["name"], row["case"]
         corpus = REPO / row["corpus"]
