@@ -50,6 +50,7 @@ main() {
   # hangs the board in insmod, ISSUES/memory 'out-of-tree package build loses EXTRA_CFLAGS')
   KERNEL_BUILD=$BF/build/linux-6.4.14 CROSS_COMPILE=$BF/host/bin/riscv64-buildroot-linux-gnu- KCFLAGS="-march=rv64g -mabi=lp64d" \
     nice -n 10 bash $S/capstone/runtime/virtual/build-adapter.sh $O/out/adapter-board > $O/adapter-board.log 2>&1 || { log "FAIL-ADAPTER-BOARD"; return 1; }
+  log "MODULE-HEADERS $(cd $O/out/adapter-board/module && sha256sum *.h | cut -c1-16,65- | tr '\n' ' ')"
   log "ADAPTERS-DONE qemu-ko=$(sha256sum $O/out/adapter-qemu/module/capstone_vm.ko | cut -c1-16) board-ko=$(sha256sum $O/out/adapter-board/module/capstone_vm.ko | cut -c1-16) board-vexec=$(sha256sum $O/out/adapter-board/capstone-vexec | cut -c1-16)"
   # the corpus runners' kit (bug-corpora/tools/virtualvm.py FILES): the reference QEMU, the guest images, the QEMU adapter
   local K=$O/out/kit; rm -rf $K; mkdir -p $K/images $K/adapter/module
@@ -70,6 +71,7 @@ main() {
   local vm; vm=$($BF/host/bin/riscv64-buildroot-linux-gnu-readelf -p .modinfo $KO 2>/dev/null | grep -o 'vermagic=[^ ]*' | head -1)
   log "BOARD-GATES ko 16-bit instructions=$rvc (must be 0); $vm (kernel $(cat $BF/build/linux-6.4.14/include/config/kernel.release)); vexec: $(file -b $O/out/adapter-board/capstone-vexec | cut -c1-60)"
   # the QEMU prediction: run.py's gate on the QEMU kit (the guest's own kernel and adapter)
+  if [ -n "${KIT_SKIP_RUNPY:-}" ]; then log "RUNPY skipped (KIT_SKIP_RUNPY)"; log KIT-DONE; return 0; fi
   python3 $S/capstone/runtime/virtual/run.py --qemu $QREF/build/qemu-system-riscv64 --images $IMGS \
     --adapter $O/out/adapter-qemu --application $O/out/contract.dom --sqlite $O/out/sqlite/sqlite3.dom \
     --mruby $O/out/mruby/src/mruby/build/capstone/bin/mruby --record $O/out/result.json --timeout ${RUNPY_TIMEOUT:-1500} > $O/runpy.log 2>&1

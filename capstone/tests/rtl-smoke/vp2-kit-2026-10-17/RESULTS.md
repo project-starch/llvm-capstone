@@ -116,6 +116,62 @@ The fix to `add()` belongs in the module, and the board module carries the same 
 too. The compiler lane is running the two arms that separate the predicates, before any revision: a request whose
 group needs 32768, and one whose group needs 12288.
 
+## The pre-fix "before" readings on the instrumented launcher (lane/compiler-exact-bounds-iii fe1a12fe7c74, 2026-10-17 05:11-05:40)
+
+**Kit:**
+- QEMU module `5a3b57ec3873c273`, board module `dc0a0de0ea408a7b`;
+- module headers `cap_rev_table_abi.h` `257fbd0ea0ca8844`, `vm-abi.h` `67b18ae168ec2178`, `wire.h` `55debb3c71f3c92b`.
+
+**Positive control for "ADD_REFUSED absent", the pre-registration's run 1:** bundle 5's cases 00 and 10 on this kit.
+- Without `VIRTUALVM_TRACE` the serial held 0 refusal lines while case 00 was refused, so that run proved nothing.
+- With it: **10 `CAPSTONE_VM_ADD_REFUSED` lines**, all from case 00.
+  - The sizes are 36864 and 49152. 36864 is the group size the compiler lane modelled.
+  - All have `pow2=0`, so the size half refuses them. Their `naturally_aligned` field carries no information:
+    `address & (bytes - 1)` is not an alignment test when bytes is not a power of two.
+- So the line fires through this harness.
+- **Case 10's malloc(6144)** was admitted in this boot. That makes 2 of 5 boots on pre-fix launchers, and every
+  other boot read NULL.
+
+**The positive control repeated untraced** on a kit from 561b8b2cd692, where the compiler lane made the refusal
+line unconditional:
+- gate.sh exports no trace;
+- case 00 prints **10 lines** (49152 B, all `pow2=0`);
+- case 10 is admitted, making 3 of 6 boots on pre-fix launchers.
+So the post-fix absence check runs on the unmodified harness, and the trace switch is not needed for this line.
+
+**run.py at `--timeout 1500`:** completes, with status FAIL.
+- `normal` exits 1 on `heap growth/zero`.
+- `heap-threads` exits 1 on `child malloc` (twice).
+- `parallel_one` and `parallel_two` exit 1, each on `heap growth/zero`.
+- `sqlite_write` exits 7 (SQLite's NOMEM), `sqlite_read` 1, and `mruby` 1.
+- Every step that does not depend on heap allocation passes as on dev's runtime: threads, vm, nested, the 139
+  denials, preempt 143 and cleanup 0.
+- The record still says `virtual_vm_abi` 5. That field was hard-coded at this revision, and the compiler lane has
+  fixed it since.
+
+## run.py on b61f56b10c06 without the `add()` change: sqlite_write's NOMEM is `add()` refusals, not the refused growth (2026-10-17 05:59-06:10)
+
+Pre-registered at the lane's README ("run.py on b61f56b10c06 WITHOUT the add() change"). Kit: QEMU module
+`6dce3015bfe8566d`, headers as before, exact bounds off, `--timeout 1500`. Status FAIL.
+- **Computed row, held:** `normal`, `parallel_one` and `parallel_two` exit 1 on `heap growth/zero`. Each step's own
+  output carries a 135168-byte `CAPSTONE_VM_ADD_REFUSED` (`pow2=0`).
+- **The question, answered:** `sqlite_write` still exits 7. So its NOMEM is not the growth that b61f56b10c06
+  fixes.
+- **Every failing step's own output carries `add()` refusals.** The guest script prints each step's `VM_EXIT`
+  line before that step's captured output, so these are the lines after each exit line:
+
+  | step | refusals |
+  |---|---|
+  | normal | 49152 and 135168 |
+  | heap-threads | 1 |
+  | sqlite_write | 49152, 28672, 122880, 94208, and 8192 with `pow2=1 naturally_aligned=0` (the alignment half) |
+  | sqlite_read | 5, all `pow2=0` |
+  | mruby | 49152 and 40960 |
+
+- So, before the `add()` change, every remaining run.py failure has `add()` refusals in its own output. The
+  pre-registered inferred rows (heap-threads, sqlite_write, sqlite_read and mruby clear) are now each backed by an
+  observed refusal in their step. Whether they clear is still the fix run's question.
+
 ## Defects found on the way, and where they went
 
 - **dev's app-port SQLite could not be prepared** after 423d13f5b81f, which moved the sorter rewrite into

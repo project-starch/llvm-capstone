@@ -69,6 +69,195 @@ in Linux RAM. The rev-node and tag paths do not pass the LSU's PMP. The simulati
 with RWX, is the bare-board shorthand. It must not be copied to the board, because it would expose the M-mode
 firmware to S-mode.
 
+## The capability PMP over Linux's own code: already granted by the classic monitor
+
+The RTL lane's CSRUNV simulation found that S-mode code is confined by the capability PMP in capability mode. So the
+module's path that issues CSRUNV needs a CPMP entry over itself; the directed arm grants CPMP0 over its image. On the
+board that coverage already exists. Read 2026-10-17 from the classic line, opensbi df0e9a8 and capstone-sbi 93440d5:
+- **At boot:** `sbi_capstone_init.S` enters capability mode with `CAPENTER(_cap_text_start, _cap_text_end)` and splits
+  out the monitor's stack. `cap_env_init` (`sbi_capstone_dom.c:13-15`) then writes the three genesis regions into
+  `cpmp(0..2)`:
+  - `[0, _cap_text_start)`, which holds the UART and the CLINT;
+  - `[_cap_text_end, dom_stack)`;
+  - `[dom_stack_end, top)`, which holds Linux's RAM and so the module's code.
+- **After boot:** regions carved later are loaded into a CPMP slot on demand. Any load, store or fetch access fault
+  (causes 5, 7 and 1) enters `swap_cpmp` (`sbi_capstone.c:1975`), which installs the live region covering the
+  faulting address.
+
+So no monitor change is needed for coverage, as with the walker's PMP entry above. Every board boot already runs
+Linux under it.
+
+**The RTL lane's answer (2026-10-17):** a capability-PMP miss in capability mode raises exactly the three standard
+causes.
+- A fetch raises 1 (`core/pmp/src/pmp_data_if.sv:224,246`, through the frontend's FE_INSTR_ACCESS_FAULT).
+- A load raises 5 and a store 7 (`pmp_data_if.sv:291-293, 310-311`).
+- Observed in simulation too: the D1 arm's S-mode code faulted with cause 1 while CPMP0 was empty, and ran once
+  CPMP0 covered its image.
+- So `swap_cpmp`'s trigger set covers every miss. The CSRUNV context itself runs at M privilege, so no CPMP check
+  applies to it; its protection is the page tables.
+
+**The monitor's bookkeeping when it carves** (`create_region`'s split, `sbi_capstone.c:745-830`): the CPMP slot of the
+region being split is rewritten with the piece that remains. The carved piece becomes a new, non-resident region,
+which `swap_cpmp` loads on its first access fault. So Linux's code is always either under the resident slot or one
+fault away from being swapped in.
+
+## Pre-registered (2026-10-17, before the revision exists): the v6 module's `add()` change
+
+> **WITHDRAWN (2026-10-17, the same morning, before any run against it).** The predicate below is refuted by the
+> compiler lane's next measurement. It added the refused mapping's size to the arm, and `malloc(2029)`'s refusal
+> was an **8192**-byte mapping, a power of two, refused with errno 22 at 4096 alignment. So `is_power_of_2` is not
+> the operative condition by itself. The arm's NULL came from a different mapping than the 12288 it was designed
+> around.
+> - The live candidate is the natural-alignment disjunct of `add()`:466, `r->address & (r->bytes - 1)`. That
+>   would make refusals depend on the address mmap returns, not only on size. It is not established, because
+>   errno 22 is shared by every EINVAL in `add()`. The lane is recording the refused base next.
+> - So the change below, and the prediction downstream of it, are withdrawn. A new prediction will be
+>   registered against the revision that follows. The rerun plan (bundle 5; bundles 13 and 14 as controls;
+>   run.py at `--timeout 1500`) stays.
+
+**The change, from the compiler lane** (narrowed at lane 2691b60cbb69). It is not written yet: it changes what the
+silicon enforces, so it waits for the project lead.
+- `add()`: in the exact-bounds-off branch, `capstone_repr_ok(r->address, r->bytes)` replaces the test for a
+  naturally aligned power of two. The page checks, CV_MAX_REGION_BYTES, the total-bytes limit and the overlap test
+  are kept.
+- `representable.h` is shared, and `build-adapter.sh` copies it from the tree being built.
+- `remap_begin()` is left alone.
+
+**Why `add()`:**
+- The arena predicate today is `is_power_of_2`, measured in the lane's malloc-contract predicate arms (exact bounds
+  off): `malloc(9341)` reads ALLOCATED with `last_ok_bytes=32768`, a power of two above 16384, admitted while the gate
+  was armed. That refutes a size threshold by measurement.
+- `malloc(2029)` reads NULL. Its 12288-byte group is the lane's model, not a measurement.
+
+**The prediction, verbatim from the compiler lane, for the `add()`-only change:**
+- the five allocation markers clear (aligned allocation, population array, remap-align setup, remap stale setup,
+  precise allocation);
+- your NULLs at 6144, 34816 and 35840 clear, and cases 00 and 10 read CAUGHT at cause 28;
+- malloc(2029) becomes ALLOCATED where it is NULL today; malloc(9341) stays ALLOCATED;
+- heap growth/zero and real_linux_mremap_growth_and_shrink STILL FAIL — not addressed by this change;
+- bounds still fails, because the request rounding puts +200003 inside the object.
+
+**What the board lane runs on that revision, and reads against the prediction.** Same kit script, QEMU
+`40264f5de09ef153`, the same guest images:
+1. **Tier 3 bundle 5** (`ffmpeg/carved-repros` `virtual-nested-pools`, the recorded cc_args), unchanged from the
+   third pilot:
+   - no NULL at 6144, 34816 or 35840;
+   - cases 00 and 10 CAUGHT at cause 28 at their labelled probes;
+   - 13 of 13 equal to the record.
+2. **Bundles 13 and 14 again as controls:** CAUGHT 9/9 and 3/3, cell by cell as before. The change must not move a
+   cell that was already right.
+3. **run.py with `--timeout 1500`:**
+   - `normal` still exits 1 on `VM_CONTRACT_FAIL:heap growth/zero` (the growth row above);
+   - every other step is reported, not predicted.
+   If growth clears, the model is wrong somewhere, and that is reported as such.
+
+## Pre-registered again (2026-10-17, before the revision exists): the `add()` change, both halves
+
+This section replaces the withdrawn one above. It is based on the compiler lane's lane commit fe1a12fe7c74.
+- **The refusal has two operative halves.** The launcher, instrumented, prints `CAPSTONE_VM_ADD_REFUSED` with
+  `add()`'s disjuncts at each CV_ADD refusal.
+  - **The size half:** every printed refusal has `pow2=0`, at 28672 and 49152 bytes, including two that satisfy
+    alignment. So non-power-of-two arenas are refused wherever they land.
+  - **The alignment half:** the same predicate arm reads NULL on one run, with its refusal at 8192, and ALLOCATED on
+    the next, with 8192 admitted. 8192 is a power of two, so only the natural-alignment disjunct remains. The
+    launcher requests only max(granule, 4096) alignment.
+  - The board lane's four boots of bundle 5 confirm this independently. malloc(6144), group 8192, was admitted in 1
+    of 4 boots; calloc(1, 34816) and calloc(1, 35840) were refused in all 4.
+- **The change:** `capstone_repr_ok(r->address, r->bytes)` in `add()`'s exact-bounds-off branch. It loosens the length
+  to a granule multiple and the base to granule alignment. heap.c already asks for max(granule, 4096), so this also
+  removes the nondeterminism. `remap_begin()` is left alone. It waits for the project lead, because it reaches
+  silicon.
+
+**The prediction, verbatim from the compiler lane:**
+- the five allocation markers clear;
+- non-power-of-two groups (34816, 35840, 200003, the population array, 6 MiB) clear DETERMINISTICALLY;
+- malloc(6144), group 8192, clears on EVERY boot rather than 1 in 4 — run it at least 3 boots, because 1 of 4 would
+  otherwise read as a pass;
+- CAPSTONE_VM_ADD_REFUSED absent from the logs;
+- heap growth/zero and real_linux_mremap_growth_and_shrink STILL FAIL, not addressed;
+- bounds still fails, request rounding puts +200003 inside the object.
+- **Added by the compiler lane before the revision exists** (lane ea37cbd801e6): its align-probe mode reads
+  attempted=600 ok=187 failed=413 today. 420 refusal rows split pow2=0 aligned=1: 109, pow2=1 aligned=0: 87,
+  both failing: 224, and pow2=1 aligned=1: 0. On the fixed revision it should read **failed=0 of 600**. Any
+  surviving pow2=1 aligned=0 row means the alignment half still bites; any surviving pow2=0 row means the size
+  half does.
+
+- **Note on the growth row, added before the revision exists** (compiler lane ad72c3583446): the growth failure now
+  has a known cause. On the exact-bounds-on arm, the only profile whose 6 MiB setup succeeds, the launcher
+  refuses the 12 MiB growth with `CAPSTONE_VM_REMAP_REFUSED stage=granule bytes=12587008 align=16384`. realloc
+  rounds `needed` to a page, not to the granule, and the lane's own representability check in remap_mapping
+  refuses the remainder. That check is a lane-only change, not on dev. So the growth row still predicts FAIL for
+  the `add()` change, and a surviving growth failure is that check, not a second site. Its own fix is domain-side,
+  in realloc.c. `real_linux_mremap_growth_and_shrink` reaches neither a refusal nor a remap, and stays open.
+
+- **Amended again before the revision exists** (compiler lane b61f56b10c06, the growth fix):
+  - **The finding:** a granule-sized group header makes in-place growth across a granule boundary unsound. The
+    header grows with the mapping while mremap keeps bytes in place, so the payload moves. It showed as
+    corrupted contents with the growth reporting success. realloc now refuses such a remap and copies instead.
+  - **So `CAPSTONE_VM_REMAP_OK` must read 0.** Both of the suite's growths cross a granule boundary. A non-zero
+    count would mean the unsound path was taken.
+  - `real_linux_mremap_growth_and_shrink` counts completed remaps (`run-malloc.py:153`), so it fails by design
+    now. It is a check to re-scope, not a defect.
+  - **The fix run's revision will carry b61f56b10c06 as well as the `add()` change.** So the growth rows above
+    were stated for an earlier base. The prediction is to be re-stated, row by row, against that exact revision
+    before the run.
+
+**THE PREDICTION, re-stated by the compiler lane against b61f56b10c06 plus the `add()` relaxation, verbatim. It
+supersedes every earlier row in this section.** The lane marks each row computed or inferred. The constraint behind
+the REMAP_OK row is recorded at the compiler lane's 67e4368f6331, `capstone/docs/plans/2026-10-17-vp2-launcher-items.md`.
+
+run-malloc, exact bounds OFF:
+- the five allocation markers (aligned allocation, population array, remap-align setup, remap stale setup, precise allocation): CLEAR
+- align-probe: failed=0 of 600, where it is 413 of 600 today
+- CAPSTONE_VM_ADD_REFUSED: absent, and now genuinely falsifiable since the print is unconditional
+- malloc(6144), group 8192: ALLOCATED on EVERY boot, not 1 in 4 — please run at least 3 boots, since 1 of 4 would otherwise read as a pass
+- CAPSTONE_VM_REMAP_OK: 0
+- remap_align_contents_survive, remap_align_reported, basic_inplace_mremap_failure: True
+- real_linux_mremap_growth_and_shrink: STILL FALSE — a check to re-scope, not a defect
+- bounds / MALLOC_FAIL:denial survived: STILL FALSE — request rounding puts +200003 inside the object
+- the suite overall: the OFF arm should converge on what the ON arm already reads at b61f56b10c06, namely 21 true / 2 false, with the same two checks failing for the same two reasons. If OFF lands anywhere short of 21, something other than add() is still biting.
+
+run.py, --timeout 1500:
+- heap growth/zero, on normal and both parallel steps: CLEARS. This row is GROUNDED rather than inferred: contract.c:312 is require(p[i] && !p[i][131071], "heap growth/zero"), so it allocates at least 131072 bytes, which is above MMAP_THRESHOLD and takes the large path. Its mapping computes to 135168 bytes, which is NOT a power of two, so add() refuses it on every boot today. Despite its name it is an allocation refusal, not a growth failure.
+- heap-threads child malloc: expected to clear, INFERRED not grounded — I have not computed its allocation sizes, so if it survives treat it as a second site.
+- sqlite_write exit 7 NOMEM: expected to clear, also inferred. Your watch on it stands, and it now has a third candidate: a growth that crossed a granule boundary and was refused before b61f56b10c06 would also have shown as NOMEM. If it clears at b61f56b10c06 WITHOUT the add() change, that was it.
+- sqlite_read and mruby exit 1: expected to clear if they are downstream of an allocation refusal; otherwise second sites. Inferred.
+
+**The board lane's runs on that revision.** The kit is rebuilt from the revision with the same toolchain, QEMU and
+guest images.
+0. **Amended before the revision exists (compiler lane 561b8b2cd692): the refusal line now prints unconditionally.**
+   The runs below therefore use the unmodified harness, without `VIRTUALVM_TRACE`. The positive control (run 1)
+   is repeated on a kit built from 561b8b2cd692 without the switch, and it must print the line on case 00. The
+   paragraph that follows describes the earlier, traced arrangement. It is kept for the record.
+   **Earlier: every run below sets `VIRTUALVM_TRACE=1`.** The launcher prints `CAPSTONE_VM_ADD_REFUSED` only under
+   `CAPSTONE_VM_TRACE` (`exec.c:203`, `:763`), which the corpus harness never sets. A first control run without it
+   read 0 lines while case 00 was refused, so it proved nothing. `virtualvm-trace.patch` (3 lines, the board
+   lane's private copy of `tools/virtualvm.py`) exports it when `VIRTUALVM_TRACE` is set. The control and the
+   checks run through the same patched harness.
+1. **Positive control for the absence check, first:** cases 00 and 10 of bundle 5 on a kit built from fe1a12fe7c74,
+   the instrumented pre-fix launcher. The serial must show at least one `CAPSTONE_VM_ADD_REFUSED` line, because case
+   00 is refused on every boot. If it shows none, the absence below means nothing and the instrument is fixed first.
+2. **Bundle 5 in full, once:** 13 of 13 equal to the record, with cases 00 and 10 CAUGHT at cause 28 at their
+   labelled probes, and no `CAPSTONE_VM_ADD_REFUSED` line.
+3. **Cases 00 and 10 in three more fresh boots** (`--only 00,10`): both CAUGHT in every boot, and no refusal line.
+   One NULL in any boot means the alignment half still bites.
+4. **Bundles 13 and 14 as must-not-move controls:** 9/9 and 3/3, cell by cell as before.
+5. **run.py `--timeout 1500`:** `normal` still exits 1 on `heap growth/zero`. Every other step is reported, not
+   predicted.
+
+## Pre-registered (2026-10-17): run.py on b61f56b10c06 WITHOUT the `add()` change, to separate sqlite_write's NOMEM
+
+The question: does sqlite_write's exit 7 (NOMEM) come from a growth refused before the growth fix, or from an
+`add()` refusal? This run has the growth fix and not the `add()` relaxation, with exact bounds off and
+`--timeout 1500`.
+- **Computed:** `normal`, `parallel_one` and `parallel_two` still exit 1 on `heap growth/zero`. Their 135168-byte
+  large-path mapping is not a power of two, and `add()` refuses it on every boot.
+- **The reading:**
+  - sqlite_write exits 0 here: its NOMEM was the refused growth, which b61f56b10c06 fixes;
+  - it still exits 7: it is an `add()` refusal, or a further site.
+- Every other step is reported, not predicted. The pre-fix run on fe1a12fe7c74, above in RESULTS.md, is the
+  comparison.
+
 ## Status of the pipeline proof
 
 - On dev's runtime 4798dcab2d52 with the October 10 compiler (bd372e25f5fb), the SDK step fails: 101 of 1,361 musl

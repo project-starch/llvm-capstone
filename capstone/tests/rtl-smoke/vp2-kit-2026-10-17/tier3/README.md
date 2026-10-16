@@ -403,6 +403,15 @@ The recipes, read from the recorded runner blob:
   the compiler lane's model) were not measured. These two cells wait on the module fix. (Corrected 2026-10-17
   05:00: the first version stated the modelled sizes as fact, and called the cause confirmed two-sided; see
   `../RESULTS.md`.)
+- **Cases 00 and 10 rerun in three more fresh boots** (same kit, images and binaries; `--only 00,10`):
+  - case 10 fixed, malloc(6144), was admitted in 1 of 4 boots (block 6144, VERDICT FIXED; its buggy arm CAUGHT at
+    cause 28, as recorded) and NULL in the other 3;
+  - case 00, calloc(1, 34816) and calloc(1, 35840), was NULL in all 4 boots.
+  The same binary and input give both outcomes for case 10, so that refusal depends on something that varies per
+  boot. This fits `add()`:466 refusing a power-of-two arena that is not naturally aligned. The compiler lane measured
+  a refused 8192-byte mapping at 4096 alignment. Case 00's group is not a power of two, so it is refused at any
+  address. That the refusal is line 466 rather than another EINVAL is the compiler lane's next reading (the
+  refused base).
 - **Tool note:** the compiler lane's toolchain copy has `llvm-readobj` but no `llvm-readelf`, which the judge
   calls. The pilot used a bin directory of symlinks to that toolchain, with `llvm-readelf` pointing at
   `llvm-readobj`. So the recorded compiler hash is still that clang's (`ba603a57...`).
