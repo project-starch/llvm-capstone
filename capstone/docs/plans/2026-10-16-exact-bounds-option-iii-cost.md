@@ -475,3 +475,58 @@ The repair is a per-class **storage** offset instead, applied where slots are ad
 **`donate.c` is in scope**, which is not obvious: `donate.c:17` is
 `for (int sc=47; sc>0 && b>a; sc-=4)`, so donated memory hosts sc 47, 43, 39, 35 and 31 — the
 largest classes, and five of the twenty affected ones.
+
+## Per-port derive sites: mruby's page lifetime is REFUSED, and it was on the "small children only" list
+
+Under (iii) QEMU's compact profile refuses an inexact `CDERIVE` child with cause 29, so every port
+that derives a child of 4 KiB or more must place it representably. Three ports were expected to
+derive only small children. **One of them does not**, and the two-level structure is the reason:
+each of these allocators derives a *large parent lifetime* as well as small per-object children.
+
+**mruby — REFUSED, measured.** `patches/4.0.0-rc2/0008-gc-slots-as-sublet-lifetimes.patch:120`:
+
+    page->life = capstone_cap_derive(page,
+        cap_get_cursor(page->objects) - cap_get_base(page), sizeof(page->objects));
+
+with `#define MRB_HEAP_PAGE_SIZE 1024` and `RVALUE objects[MRB_HEAP_PAGE_SIZE]` in the same patch,
+so the child is `1024 * sizeof(RVALUE)` — at least 16 KiB — at an offset of
+`offsetof(mrb_heap_page, objects)`.
+
+Compiled with the capability-ABI toolchain rather than worked out on paper
+(`capstone/tests/exact-bounds-iii/mrbpage.c`, `clang ... -target capstone64-unknown-elf`):
+`sizeof(void *) = 16` and **`offsetof(objects) = 16464`**. Checked against every plausible
+`sizeof(RVALUE)` from 16 to 128 bytes: **unrepresentable in all nine cases** — 16464 is 16 mod 32,
+16 mod 64 and 80 mod 128, while the granule for those lengths is 32, 64, 128 or 256. The verdict
+does not depend on `sizeof(RVALUE)`: any length of 16 KiB or more gives a granule of at least 32,
+and the offset is 16 mod 32.
+
+The cause is the patch's own addition. `struct RBasic *issued[MRB_HEAP_PAGE_SIZE]` is 1024
+capability pointers — 16,384 bytes — inserted before `objects`, which moves it from roughly offset
+80 to 16,464. **The Sublet patch introduced the misalignment it now has to fix.**
+
+The repair is padding plus a compile-time assertion: `1024 * sizeof(RVALUE)` is known at compile
+time, so the granule is too, and `offsetof(objects)` can be padded up to a multiple of it with a
+`_Static_assert` that fails the build if it ever drifts. Cost: at most 240 bytes on a page of 32 KiB
+or more, under 1%.
+
+**CPython pymalloc — representable, no change.** `cpython-3.13.7-0014...patch:168` is
+`capstone_cap_derive(address, 0, ARENA_SIZE)`. The project's own pymalloc model records
+`#define ARENA_SIZE 1048576UL` (`ports/cpython/pymalloc/src/allocators/sublet/block-lifetimes.c:18`),
+so 1 MiB, granule 2048, **offset 0**, and the arena comes from `_PyObject_Arena.alloc`, which is
+mmap-backed and therefore page-aligned — so the base is 2048-aligned and 1 MiB is a 2048-multiple.
+The per-block children (`...:136`) are pymalloc blocks, at most 512 bytes, granule 1, so their
+non-zero offsets do not matter. The upstream `ARENA_SIZE` is still to be quoted from CPython 3.13.7
+itself rather than from our model.
+
+**Perl — safe by 16 bytes, and worth flagging as fragile.**
+`perl/sublet/patches/5.36.3/0001-sv-heads-as-sublet-lifetimes.patch:191` derives `PERL_ARENA_SIZE`
+bytes. Perl's documented default is 4080, which is **below** the 4096 threshold and therefore
+exactly representable with granule 1 at any offset. That is a 16-byte margin: raising
+`PERL_ARENA_SIZE` to 4096 or more puts this site in scope immediately. The value is upstream and not
+yet quoted here. The per-SV children (`...:132`, `sizeof(SV)`) are small and safe.
+
+**A simplification worth stating, because it bounds the whole audit:** a child shorter than 4096
+bytes has granule 1, so it is exactly representable at *any* base and *any* offset. Only derive
+sites that can produce a child of 4 KiB or more need auditing at all — which is why the per-object
+derives in all of these allocators are safe by construction and only the parent-lifetime derives
+matter.
