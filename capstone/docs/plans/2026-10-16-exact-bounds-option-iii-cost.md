@@ -1285,3 +1285,37 @@ by value in the canonically prepared tree.
 exists and produces v6 domains; it has **not** been through `run-malloc.py`, `run.py`, `run-fp.py`,
 `run-pthreads.py` or `run-hosted.py` with the profile off as production and on as control. Landing
 waits on that, as does any claim that ABI v6 works rather than merely builds.
+
+## Cross-checks from the board lane's kit, and what they settled
+
+**The module compiles.** The change I had flagged as never-compiled builds cleanly for both kernels
+— the QEMU guest's 6.1.0 (`97334f0fadd8ffd4`) and the board's 6.4.14 rv64g-no-RVC
+(`dc0a0de0ea408a7b`), no warnings in either log. The flagged risk did not materialise.
+
+**The SDK reproduces byte for byte.** All 89 built files — objects, the `.a` libraries, headers and
+`capstone-cc` — plus `libc-capstone-virtual.a` are byte-identical between an independent kit build
+and mine. The 13 files that differ are CMake/ninja bookkeeping and `sdk.json`, and every difference
+is an absolute path.
+
+**So the tree hash I published was the wrong instrument**, and the right one is now on record: a
+whole-tree sha256 over a *build directory* cannot match across two paths, because the build records
+its own location. `d0cddbb4…` is only useful for detecting a change to *my* copy. Comparing the
+**built artifacts** is what establishes reproducibility, which is what the kit did.
+
+**QEMU: two binaries at the same revision, and the difference is a configure option.** Both are
+`d35af47b163c`. Mine is 63,722,024 B (`562bdded…`) from
+`--target-list=riscv64-softmmu --disable-docs --disable-werror --enable-slirp`; the board lane's is
+41,925,792 B (`40264f5de09ef153`) from `--enable-slirp --enable-debug --target-list=riscv64-softmmu`.
+The material difference is **`--enable-debug`**, which theirs has and mine does not — QEMU
+assertions on, optimisation off. Mine matches the recipe the project's READMEs document.
+
+**Named binary: the board lane's.** Reasons, in order: it is already in use for the pilot and the
+board's predictions, so one binary spans both lanes without a re-run; and **assertions on is the
+safer side for results that feed a prediction** — C-80 is precisely a case where a release build
+"passed the mismatch on silently" while an assertions build stopped. Mine stays as the cross-check,
+and both hashes are recorded so a future disagreement can be attributed.
+
+**Also merged:** `origin/dev` into the lane branch (29 commits), which brings `e012dd105f00` — the
+fix for the app-port SQLite breakage my `423d13f5b81f` caused. Without it `run.py`'s
+`sqlite_write`/`sqlite_read` steps have no `sqlite3.dom`. Merged rather than rebased, on a tree
+other lanes share.
