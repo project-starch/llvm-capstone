@@ -131,6 +131,44 @@ static void hot(int force_service)
     puts("MALLOC_HOT_END"); fflush(stdout);
     for (unsigned i=0; i<64; ++i) free(anchor[i]);
 }
+/* Option (iii): a remapped mapping can come back page-aligned but not granule-aligned, which
+ * __capstone_vm_remap cannot be asked to avoid -- it takes an address and two lengths and no
+ * alignment. The runtime then refuses it and realloc falls through to malloc-plus-copy, so the
+ * cost is a copy and never a widened bound. This REPORTS how often that happened across one grow,
+ * and checks the contents survive whichever path was taken. mremap returns page-aligned addresses,
+ * so at these sizes (granule 8 KiB at 6 MiB, 16 KiB at 12 MiB) the copy is the expected path; the
+ * number is printed so the acceptance runs record it rather than anyone inferring it. */
+#ifdef __CAPSTONE_PURECAP__
+extern unsigned long __capstone_malloc_remap_unaligned;
+#endif
+static void remap_align(void)
+{
+    size_t small = 6u << 20, large = 12u << 20;
+#ifdef __CAPSTONE_PURECAP__
+    unsigned long before = __capstone_malloc_remap_unaligned;
+#else
+    unsigned long before = 0;
+#endif
+    char *p = malloc(small);
+    require(p != NULL, "remap-align setup");
+    memset(p, 0x5A, small);
+    char *q = realloc(p, large);
+    require(q != NULL, "remap-align growth");
+    /* every byte of the old object must still be there, copied or remapped */
+    for (size_t i = 0; i < small; i += 4096)
+        require((unsigned char)q[i] == 0x5A, "remap-align contents");
+    require((unsigned char)q[small - 1] == 0x5A, "remap-align last byte");
+    /* and the grown object must be writable to its end */
+    q[large - 1] = 0x3C;
+    require((unsigned char)q[large - 1] == 0x3C, "remap-align tail writable");
+#ifdef __CAPSTONE_PURECAP__
+    printf("MALLOC_REMAP_UNALIGNED %lu\n", __capstone_malloc_remap_unaligned - before);
+#else
+    printf("MALLOC_REMAP_UNALIGNED %lu\n", before);
+#endif
+    free(q);
+}
+
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
@@ -138,6 +176,7 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "hot-service-control")) { hot(1); return 0; }
     if (!strcmp(mode, "population")) { population(); return 0; }
     if (!strcmp(mode, "churn")) { churn(); return 0; }
+    if (!strcmp(mode, "remap-align")) { remap_align(); return 0; }
     if (!strcmp(mode, "ok")) { basic(); tagged(); return 0; }
     if (!strcmp(mode, "reuse-stale") || !strcmp(mode, "reuse-free")) {
         /* Let upstream offset cycling choose reuse; never force its policy. */

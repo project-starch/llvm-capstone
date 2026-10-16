@@ -163,6 +163,22 @@ void *__capstone_malloc_prepare_free(void *p)
 }
 /* A real Linux mremap is a VM slow path. The returned grant is new authority
  * over the retained physical frames; the old mapping's descendants are dead. */
+/* Option (iii): how often a remap had to fall back to a copy because the service returned a
+ * mapping that was page-aligned but not granule-aligned. __capstone_vm_remap takes an address and
+ * two lengths and has NO alignment parameter, unlike cap_vm_acquire, so this cannot be asked for.
+ * Read by malloc-contract.c and reported from the suite runs: mremap returns page-aligned
+ * addresses, so at a 128 KiB granule most huge reallocs are expected to take the copy, and that
+ * cost should be a measured number rather than an inference. If the acceptance workloads hit it
+ * often, an aligned remap (reserve an aligned range, then MREMAP_FIXED into it, inside the module)
+ * is the follow-up, decided on this count. */
+unsigned long __capstone_malloc_remap_unaligned;
+
+/* Is a remapped mapping usable, i.e. will every bound derived inside it be representable? */
+int __capstone_malloc_remap_usable(unsigned long base, size_t bytes)
+{
+    return capstone_repr_ok(base, capstone_repr_round(bytes ? bytes : 1));
+}
+
 void *__capstone_malloc_group_remap(struct capstone_malloc_slot *slots,
                                    void *p, size_t old, size_t bytes)
 {
@@ -173,6 +189,15 @@ void *__capstone_malloc_group_remap(struct capstone_malloc_slot *slots,
     unsigned long result;
     __asm__ volatile("ld %0, 0(%1)" : "=r"(result) : "r"(&root) : "memory");
     if ((long)result < 0) { errno = -(long)result; sublet_clear(&root); return MAP_FAILED; }
+    /* Refuse an unrepresentable mapping rather than derive a widened bound inside it. realloc.c
+     * falls through to its malloc-plus-copy path on a failed mremap, so this costs a copy and
+     * never a wrong bound. */
+    if (!__capstone_malloc_remap_usable(sublet_base(&root), bytes)) {
+        __capstone_malloc_remap_unaligned++;
+        sublet_clear(&root);
+        errno = ENOMEM;
+        return MAP_FAILED;
+    }
     unindex(r);
     void *header = bind_slots(slots, mapping_group(&root, bytes), bytes - 16, 1);
     void *raw = (char *)r->parent + offset;

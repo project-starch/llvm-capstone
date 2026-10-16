@@ -1027,3 +1027,44 @@ and the Tier 2/3 workloads, and a negative test that forces an unaligned remap a
 contents. `mremap` returns page-aligned addresses, so at a 128 KiB granule most huge reallocs will
 take the copy — which is exactly why the count has to be measured rather than assumed, and why an
 aligned-remap ABI change is the follow-up if the workloads hit it often.
+
+## Item 1 complete: the remap fallback, its counter, and its two-sided test
+
+`__capstone_vm_remap` takes an address and two lengths with **no alignment parameter**, unlike
+`cap_vm_acquire`, so a granule-aligned remap cannot be asked for. `__capstone_malloc_group_remap`
+now checks the returned base and refuses an unusable one:
+`__capstone_malloc_remap_usable(base, bytes)` is `capstone_repr_ok(base, repr_round(bytes))`, and on
+a refusal it increments a counter, clears the grant and returns `MAP_FAILED`. `realloc.c` falls
+through to its malloc-plus-copy path on a failed `mremap`, so **the cost is a copy and never a
+widened bound**.
+
+**The count is measured, not inferred**, because `mremap` returns page-aligned addresses and the
+granule is 8 KiB at 6 MiB — so the copy is the *expected* path and its frequency is the input to
+whether an aligned-remap ABI change (reserve an aligned range, then `MREMAP_FIXED` into it, in the
+module) is worth making. `__capstone_malloc_remap_unaligned` is read by `malloc-contract.c`'s new
+`remap-align` mode, which grows 6 MiB to 12 MiB, verifies **every page of the old contents
+survives** and that the grown object is writable to its last byte, and prints
+`MALLOC_REMAP_UNALIGNED <n>`. `run-malloc.py` runs the mode, checks its exit, records the number in
+the result JSON as `remap_unaligned_fallbacks`, and — importantly — asserts the line was printed at
+all (`remap_align_reported`), so a missing count fails the suite instead of recording nothing.
+
+**Two-sided, on the host.** `capstone/tests/exact-bounds-iii/remap-usable-test.c` exercises the
+decision: a page-aligned base is **accepted** at 1 and 2 MiB, where the granule is at most a page,
+and **refused** at 4, 8, 16 and 64 MiB, and accepted again once the base is granule-aligned. Six
+refusals and four acceptances, so the fallback is demonstrably not dead code.
+
+### Item 1 as landed
+
+| piece | where | verified by |
+|---|---|---|
+| 7 stride entries | `0010` patch, guard-pinned | guard `FAIL`→`PASS` on the real tree |
+| granule-sized group header | `enframe` + `bind_slots` | 1,497→0 of 6,060 against the oracle |
+| granule-aligned object placement | `enframe` step-down | the same simulation |
+| the header fits free | `cap_hdr_fits` assertion | slack ≥ pad for every class and `cnt` |
+| request rounding | `heap.c malloc()` | one value to mallocng and to `publish` |
+| big-path alignment | `cap_vm_acquire` alignment argument | 4/8/16/64/88 MiB measured |
+| remap fallback | `__capstone_malloc_group_remap` | 10-case host test, 6 refusals |
+| guard narrowing | `check-mallocng-policy.py` | 1 accepted table, 7 refused near misses |
+
+Next: the ports' derive sites, then the two-sided suite run with the profile off as production and
+on as control.
