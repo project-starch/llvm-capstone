@@ -2185,3 +2185,60 @@ regions it pins here — it pins the `g->sizeclass>=48` *condition* text and the
 beginning at `new = malloc(n);`. Verified by running it, not by reading it. The
 `test-group-size-narrowing.py` suite still behaves 8 of 8, and the regenerated `0009` patch
 reverse-applies, which is `build-sdk.sh`'s currency check.
+
+
+## DECISION REQUIRED: relax `add()`, or avoid the module change
+
+Written as a decision rather than a description, because it had been sitting in message history as
+"with the lead" without ever being put as an answerable question, and the lead decides from the
+plan. Everything below is measured; the choice is not a technical unknown, it is a question about
+what the module should enforce.
+
+**The situation in two lines.** `capstone_vm.c:466` refuses any arena that is not a naturally
+aligned power of two whenever exact bounds are off, which is the profile option (iii) runs in.
+mallocng's mappings are page multiples, so **413 of 600 allocations fail**, and power-of-two ones
+fail or succeed depending on where `mmap` lands — so part of the failure is nondeterministic.
+
+### Option A — relax `add()` to the encoder's real condition (recommended)
+
+Replace the power-of-two-and-natural-alignment test with `capstone_repr_ok(r->address, r->bytes)`,
+sharing `representable.h` into the module build. Keeps the module's page checks, region and total
+limits, and overlap test.
+
+- Admits **400,000 of 400,000** of mallocng's real mapping shapes, against 28,220 (7.1%) today.
+- Removes the nondeterminism: `heap.c` already requests `max(granule, 4096)`, so the base condition
+  holds by construction rather than by luck.
+- The predicate is the one `repr-cross-check.py` validates against the encoder oracle, and it is
+  *shared*, not copied, so it cannot drift from what the hardware does.
+- **Cost:** it changes what the module enforces, and the same `capstone_vm.c` builds the board
+  module, so it changes what the silicon enforces. It is a loosening — a widened arena would be
+  admitted where it is refused today — which is why it is not a lane's call.
+
+### Option B — leave the module alone, round every arena to a naturally aligned power of two
+
+No module change, so nothing on silicon changes.
+
+- **Costs 46% more mapped memory on average**, measured over 400,000 sizes (80.9 GB becomes
+  118.2 GB in total), worst case 1.97x on a single mapping (266240 becomes 524288).
+- And `mmap` does not provide natural alignment, so the runtime needs over-map-and-trim at up to
+  twice the size again for the reservation, transiently.
+- It does remove the nondeterminism, by satisfying both halves by construction.
+
+### Option C — defer
+
+Option (iii) stays unusable in the exact-bounds-off profile; the allocation failures stand. The
+growth fixes already landed are unaffected either way.
+
+### What I recommend, and why it is not mine to take
+
+**Option A.** B pays 46% of the heap to preserve an invariant the hardware does not require, and
+the module's current test is not a restatement of representability but a much smaller subset of it.
+
+It is not mine to take because it loosens a capability-bounds check on silicon. That is the one
+class of change where being right about the predicate is not sufficient — the question is whether
+the module should be the place that enforces a stricter invariant than the encoder, and that is a
+design call.
+
+**What would make it safe to take, if the answer is A:** the board lane has the prediction
+registered row by row and rebuilds both modules from the revision, so a wrong relaxation shows up
+as a failed row rather than as silence.
