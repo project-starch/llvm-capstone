@@ -69,6 +69,29 @@ in Linux RAM. The rev-node and tag paths do not pass the LSU's PMP. The simulati
 with RWX, is the bare-board shorthand. It must not be copied to the board, because it would expose the M-mode
 firmware to S-mode.
 
+## The capability PMP over Linux's own code: already granted by the classic monitor
+
+The RTL lane's CSRUNV simulation found that S-mode code is confined by the capability PMP in capability mode. So the
+module's path that issues CSRUNV needs a CPMP entry over itself; the directed arm grants CPMP0 over its image. On the
+board that coverage already exists. Read 2026-10-17 from the classic line, opensbi df0e9a8 and capstone-sbi 93440d5:
+- **At boot:** `sbi_capstone_init.S` enters capability mode with `CAPENTER(_cap_text_start, _cap_text_end)` and splits
+  out the monitor's stack. `cap_env_init` (`sbi_capstone_dom.c:13-15`) then writes the three genesis regions into
+  `cpmp(0..2)`:
+  - `[0, _cap_text_start)`, which holds the UART and the CLINT;
+  - `[_cap_text_end, dom_stack)`;
+  - `[dom_stack_end, top)`, which holds Linux's RAM and so the module's code.
+- **After boot:** regions carved later are loaded into a CPMP slot on demand. Any load, store or fetch access fault
+  (causes 5, 7 and 1) enters `swap_cpmp` (`sbi_capstone.c:1975`), which installs the live region covering the
+  faulting address.
+
+So no monitor change is needed for coverage, as with the walker's PMP entry above. Every board boot already runs
+Linux under it.
+
+**One thing to confirm with the RTL lane before vp2:** `swap_cpmp` runs only on those three standard access-fault
+causes. If a CPMP miss in capability mode raises a different cause, a miss on a carved region would not be swapped
+in and would be fatal. The genesis entry covering Linux's RAM is resident from boot. Whether Linux's code stays
+covered by a resident entry once the monitor carves regions out of it is not read here.
+
 ## Status of the pipeline proof
 
 - On dev's runtime 4798dcab2d52 with the October 10 compiler (bd372e25f5fb), the SDK step fails: 101 of 1,361 musl

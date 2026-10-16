@@ -50,6 +50,7 @@ main() {
   # hangs the board in insmod, ISSUES/memory 'out-of-tree package build loses EXTRA_CFLAGS')
   KERNEL_BUILD=$BF/build/linux-6.4.14 CROSS_COMPILE=$BF/host/bin/riscv64-buildroot-linux-gnu- KCFLAGS="-march=rv64g -mabi=lp64d" \
     nice -n 10 bash $S/capstone/runtime/virtual/build-adapter.sh $O/out/adapter-board > $O/adapter-board.log 2>&1 || { log "FAIL-ADAPTER-BOARD"; return 1; }
+  log "MODULE-HEADERS $(cd $O/out/adapter-board/module && sha256sum *.h | cut -c1-16,65- | tr '\n' ' ')"
   log "ADAPTERS-DONE qemu-ko=$(sha256sum $O/out/adapter-qemu/module/capstone_vm.ko | cut -c1-16) board-ko=$(sha256sum $O/out/adapter-board/module/capstone_vm.ko | cut -c1-16) board-vexec=$(sha256sum $O/out/adapter-board/capstone-vexec | cut -c1-16)"
   # the corpus runners' kit (bug-corpora/tools/virtualvm.py FILES): the reference QEMU, the guest images, the QEMU adapter
   local K=$O/out/kit; rm -rf $K; mkdir -p $K/images $K/adapter/module
