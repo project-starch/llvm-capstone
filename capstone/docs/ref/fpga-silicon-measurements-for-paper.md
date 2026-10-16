@@ -6523,3 +6523,22 @@ id[29:16] and index id[15:0]:
 - the fault cells are N = 1;
 - before-reuse only;
 - the survivors ran before the fault.
+
+## The 17-rung ladder over layouts K = 0..3 on the Sublet bitstream: median 1.160×, as phase 10, geometric mean 1.313× (caplifive_sublet_d93a8d66b, 2026-10-16)
+Boot s10 for K = 0, then s16cap-K1..K3 with their bare sweeps (21:40-22:15). These repeat phase 10's layout-randomised
+table (`-DLADDER_PAD=K` in both halves). Folder: `tests/rtl-smoke/ladder-sublet-2026-10-16/` (K = 1..3 pre-registered
+at lane bc200ac88bd3; `results/`).
+- **As pre-registered at every K:**
+  - capability half 17/17 correct, every instret equal to K = 0's;
+  - bare half every rung 15/15, with instret and retval as the capability half's;
+  - `pair-halves.py`'s control gates pass, with 17 admissible rows.
+- **The median over K = 0..3, over the 15 kernels:** 0.991× (`beebs_cover`) to 2.270× (`beebs_insertsort`), median
+  **1.160×**, geometric mean **1.313×**.
+- **Against phase 10:** on 054cea69b it read 0.990×-2.154×, 1.160× and 1.299×, reproduced exactly from its record by
+  the same tool.
+  - 12 kernel medians agree to within 0.6 %.
+  - `coremark_matrix` (1.460 → 1.567) and `beebs_insertsort` (2.154 → 2.270) are the only two rungs whose capability
+    build moved since then (instret 31,560 → 31,803 and 962 → 971). This run cannot split build from silicon there.
+  - `beebs_janne` (1.993 → 2.072, identical instructions) is inside its 13.2 % boot-to-boot band (phase 11).
+- **Layout bands:** `beebs_janne` 7.7 %, `beebs_bs` 5.7 %, `beebs_insertsort` 4.7 %; every other kernel 1.4 % or less.
+- Table: `results/K0-3.summary.txt`.
