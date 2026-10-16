@@ -50,7 +50,7 @@ None of these gives a capability/native ratio on this bitstream.
 | 2 | P1 native baseline in the same boot as cell 5 and cell 6 (fixed) | classic | `tests/rtl-smoke/drivers/board-c6var.sh` | cells 5 and 6, no native | 1 | board | queued |
 | 3 | H1 calibration | classic | `drivers/board-r1e4.sh` + `drivers/lists/h1-v2-calibration.txt` | no | 1 | board | queued |
 | 4 | S1-SQLite use-after-free (lookaside, memsys5) | classic | `drivers/board-s1sql.sh` | no | 1 | board | queued |
-| 5 | mruby B5n (native) beside B5, per-benchmark times | process ABI | `runtime/silicon/build-b5-mruby.sh`, `b0run.sh` b5 rungs | B5 only | 2 | board | queued |
+| 5 | mruby B5n (native) beside B5, per-benchmark times | process ABI | `runtime/silicon/build-b5-mruby.sh`, `b0run.sh` b5 rungs | B5 only | 2 | board | first in the board's order. The FP-era B5n cannot form a ratio with boot P, so both run in one boot |
 | 6 | R1 warm (8 boots) and cold (5 boots) | classic | `drivers/chain-r1.sh` | a1, a3 only | 3 | board | queued |
 | 7 | M1 node reclamation | classic | `drivers/board-m1v2.sh`, `drivers/chain-m1.sh` | no | 3 | board | queued |
 | 8 | M2 dependent chase | classic | `drivers/board-r1e4.sh` + `drivers/lists/f5-chase.txt` (4 boots) | no | 3 | board | queued |
@@ -69,13 +69,13 @@ None of these gives a capability/native ratio on this bitstream.
 
 | Corpus | Cases | What a case needs | Wave | Owner | Status |
 |---|---:|---|---|---|---|
-| postgres/c-repros | 5 | `case.c` + `shared/driver.c` + `shared/upstream_*.c`. The `<N>` protocol, `PG_DEFECT` markers, and a second image per case built with `-DPGCLIENT_NEGATIVE_CONTROL` | 4 | board (new kind) | queued |
-| postgres/mmgr-repros | 5 | `case.c` + the memory-context sources, with and without patch 0003 (CDERIVE/CREVOKE). The `0 N` protocol, like wmem | 4 | board (new kind) | queued |
+| postgres/c-repros | 5 | `case.c` + `shared/driver.c` + `shared/upstream_*.c`. The `<N>` protocol, `PG_DEFECT` markers, and a second image per case built with `-DPGCLIENT_NEGATIVE_CONTROL` | 4 | board (new kind) | next, after wave 2 |
+| postgres/mmgr-repros | 5 | `case.c` + the memory-context sources, with and without patch 0003 (CDERIVE/CREVOKE). The `0 N` protocol, like wmem | 4 | board (new kind) | next, after c-repros |
 | httpd/apr-pool-repros | 1 | `case.c` + `shared/driver.c` (the corpus protocol already) + APR pools + the lease adapter | 4 | board (new kind) | queued. Whether `sublet.h` works in a process-ABI app is open: check it on QEMU first |
 | httpd/bucket-repros | 8 | the same, + apr-util buckets | 4 | board (new kind) | queued, with apr-pool |
-| cpython/pymalloc-repros | 20 | pymalloc + patch 0003 through B0. The replay opens a fixture file (`ports/cpython/pymalloc/src/native/main.c:8-12`), so the rung needs file staging and a writable output path | 4 | board (new kind + staging) | queued |
-| mruby/release-differential | 23 | the B5 interpreter + a `.rb` per case. Also needs: a judge for the cause-24 oracle (there is no fixed/buggy pair); the task and pack gems; a revoking allocator, since B5's `silicon-alloc.c` has bounds only | 4 | board (kind) + compiler (gems, allocator) | queued |
-| sqlite/engine-repros | 33 | the whole 3.22.0 amalgamation per case. The unprotected control arm (8 cases) runs today on the classic line (`tests/rtl-smoke/repro322-silicon-2026-10-01/build-images.sh` + `cells.tsv`). The revoking arm needs a process-ABI SQLite with the CDERIVE memsys5 patch | 1 (control arm), 5 (revoking) | board; compiler for the port | queued |
+| cpython/pymalloc-repros | 20 | pymalloc + patch 0003 through B0. The replay opens a fixture file (`ports/cpython/pymalloc/src/native/main.c:8-12`), so the rung needs file staging and a writable output path | 4 | board (new kind + staging) | after postgres |
+| mruby/release-differential | 23 | the B5 interpreter + a `.rb` per case. Also needs: a judge for the cause-24 oracle (there is no fixed/buggy pair); the task and pack gems; a revoking allocator, since B5's `silicon-alloc.c` has bounds only | 4 | board (kind) + compiler (gems, allocator) | the bounds-only arm (silicon-mruby-bounds) runs now; the revoking arm waits for the compiler lane's allocator |
+| sqlite/engine-repros | 33 | the whole 3.22.0 amalgamation per case. The unprotected control arm (8 cases) runs today on the classic line (`tests/rtl-smoke/repro322-silicon-2026-10-01/build-images.sh` + `cells.tsv`). The revoking arm needs a process-ABI SQLite with the CDERIVE memsys5 patch | 1 (control arm), 5 (revoking) | board; compiler for the port | control arm unblocked: its input must be the virtual arms' amalgamation, sha256 7fc92e19… = stock 3.22.0 + `adapt-sqlite-322.sh` as of 423d13f5b81f, which added the missing sorter-alignment line. A stale cached adapted copy hashes b446615b…: delete it and stop if the hash differs |
 | sqlite/capi-repros | 19 | per-row domains and hosts (`ports/sqlite/sqlite_row*`); the only required arm is host ASan | 5 | compiler | needs port |
 | postgres/sql-repros | 9 | `postgres --single` on an initdb'd data directory, with contrib | 5 | compiler | needs port |
 | perl/release-differential | 11 | the whole Perl interpreter | 5 | compiler | needs port |
@@ -94,13 +94,15 @@ None of these gives a capability/native ratio on this bitstream.
 2. **Process-ABI line, runnable now.** Benchmark 5.
 3. **Long classic campaigns, scheduled around 1-2, overnight where possible.** Benchmarks 6-10.
 4. **Corpora that need only a new kind in `run-silicon-cases.py`:** postgres c/mmgr, httpd ×2, cpython/pymalloc, mruby/release-differential.
-5. **Whole-program silicon ports** (compiler lane), in order of what each unlocks:
-   1. SQLite on the process ABI, with the CDERIVE memsys5 arm;
-   2. the PostgreSQL server;
-   3. Perl;
-   4. the CPython interpreter;
-   5. BEEBS / CoreMark / RV8 as whole programs;
-   6. the primitive-cost rebuild.
+5. **Whole-program silicon ports** (compiler lane), in the compiler lane's order, with its planning estimates from reading (each is replaced by a measured figure after its first qemu-pass):
+   1. SQLite on the process ABI, with the CDERIVE memsys5 arm (1-2 days). `build-sqlite-silicon.sh:86-87` applies any `SQLITE_SUBLET_PATCH` with `patch -F0` to the build's private copy, and `repro322-silicon-2026-10-01/build-images.sh` already builds 3.22.0 through it, so the arm is a parameter on an existing path. Measured: the patch applies 19/19 with `-F0` to pristine 3.22.0 and to the FTS-patched copy, and is refused on 3.53.3 (12 of 19 hunks), so the check can fail. Open: the virtual arms' input amalgamation is sha256 7fc92e19… (`engine-repros/results/*-virtual/*/inputs.json`), not stock 3.22.0 (7991acd0…); the silicon arm builds from the same input or records the difference, and the patch header's hash label is corrected to say which file it is. Alongside: the mruby gems and the revoking allocator (1 day).
+   2. BEEBS / CoreMark / RV8 as whole programs through B0 (1-2 days).
+   3. The primitive/borrow cost rebuild (half a day).
+   4. The PostgreSQL server: --single, initdb at image-build time, contrib (3-5 days).
+   5. The CPython interpreter (2-4 days).
+   6. Perl (3-5 days).
+   7. sqlite/capi-repros, xlang/repro and xlang/lua-cdp: last on value (capi's only required arm is host ASan; xlang declares none), still in scope.
+   8. The E1 matrix: needs item 4 (a B0 PostgreSQL avoids M-8's old glue) plus a B0 nginx build.
 
    Each port hands back staged images, a build manifest and a qemu-pass on the silicon-mimic QEMU. It then joins wave 4's pipeline.
 
@@ -131,3 +133,11 @@ None of these gives a capability/native ratio on this bitstream.
 - 2026-10-16:
   - board lane: waves 1 and 2, wave 3's schedule, wave 4's kinds;
   - compiler lane: wave 5's ports in the order above.
+- 2026-10-16, the board lane accepted the queue with nothing rejected. Its order:
+  1. wave 2 first;
+  2. wave 4 interleaved (postgres c, mmgr, then pymalloc; mruby's bounds-only arm);
+  3. wave 1 as each item's images pass the qemu-pass / check-repr gate, with a note of what was rebuilt;
+  4. wave 3 and speedtest1-100 last in a day, announced before they start.
+- 2026-10-16: the virtual engine-repros bundles cite input 7fc92e19…, which no committed script produced. The compiler lane traced it to `adapt-sqlite-322.sh` missing one sorter-alignment line, and is landing it as its own commit. The board's engine-repros control arm waits for it.
+- 2026-10-16: the fix landed as 423d13f5b81f. Stock + script now reproduces 7fc92e19… exactly, and the new assertion is negative-tested. The engine-repros README records it, and the control arm is unblocked.
+- 2026-10-16, the compiler lane accepted wave 5 and started with SQLite on the process ABI. The order above is its reordering (BEEBS/CoreMark/RV8 and the borrow-cost rebuild moved up as quick conversions). Scope settled: the plan's rows govern, including capi and xlang.

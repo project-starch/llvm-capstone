@@ -39,6 +39,10 @@ Every case declares one of these, and the table partitions the corpus.
 
 Built by `ports/sqlite/repro322/build-virtual.py` (`--memsys5`, `--sublet`) from the adapted 3.22.0
 amalgamation plus `fts5-azarg-patch.py`, run by `shared/run-virtual.py` on a persistent virtual VM,
+The adapted amalgamation the bundles record (`amalgamation_sha256` 7fc92e19…) is stock 3.22.0
+(sha256 7991acd0…) through `ports/sqlite/adapt-sqlite-322.sh` as of 423d13f5b81f. Before that commit
+the script lacked the sorter's 16-byte alignment line and produced b446615b…, so the bundles' input is
+reproducible only from that commit on.
 judged by `tools/verdicts.py`; the current bundles are `results/2026-10-11-virtual-request-bounds/<arm>`
 (memsys5 and the lookaside on CDERIVE/CREVOKE, each memsys5 block bounded to its request), verdicts
 derived into each `case.json`. Before any case each arm runs `controls/` -- a memsys5 block used after free and
