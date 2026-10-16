@@ -77,21 +77,44 @@ The compiler lane states this SDK "builds and produces v6 domains; not yet verif
 that lane. It does not separate the v6 runtime from the bounds profile, since both differ from the passing run
 above; the lane's own on/off control does.
 
-**The cause, located the same morning.** Two checks in `runtime/virtual/module/capstone_vm.c` are keyed on the
-context's `exact_bounds`, which the module reads from CSR 0x5c0 bit 0x100 and which option (iii) turns off:
-- `add()` refuses any arena that is not a naturally aligned power of two:
-  `!c->exact_bounds && (!is_power_of_2(r->bytes) || (r->address & (r->bytes - 1)))` → -EINVAL;
-- `remap_begin()` refuses every heap remap when exact bounds are off.
+**The cause, as far as it is established (corrected 2026-10-17 05:00; the first version of this paragraph,
+dev ee0fa6d0fe55, is retracted below).**
 
-How a NULL arises:
-- below 4 MiB the heap asks the launcher for a granule-rounded size at page alignment (`heap.c`
-  `__capstone_malloc_map`);
-- so every mapping that is not a power of two is refused, and malloc returns NULL without printing anything;
-- every NULL in the run.py contract and in the Tier 3 pilot needs such a mapping (20480, 28672, 36864 B and up).
+What stands, from the compiler lane's audit (lane commit 811840072b8f):
+- Each measured refusal is the module's `add()` at `runtime/virtual/module/capstone_vm.c:466`:
+  `!c->exact_bounds && (!is_power_of_2(r->bytes) || (r->address & (r->bytes - 1)))` → -EINVAL.
+- `exact_bounds` comes from CSR 0x5c0 bit 0x100, which option (iii) turns off.
+- In the lane's instrumented run, all five refusals read errno 22. The mapping sizes were 28672, 200704, 1126400
+  and 6307840, none a power of two.
+- For each, every disjunct of `add()` before line 466 is false, and the launcher's own EINVAL paths do not fire. So
+  the launcher is excluded.
+- The gate bites only on the v6 local-malloc heap. There the launcher grants the exact visible size
+  (`exec.c:266`, `bytes = visible`). Its other paths grant a naturally aligned power of two and pass.
 
-The compiler lane confirmed it two-sided: on the same v6 kit, its `--exact-bounds` arm clears all four failing
-contract markers. The predicate the module enforces is stricter than option (iii)'s representability, and the fix
-belongs in the module. vp2's board runs with exact bounds off, so the fix also applies to the board module.
+What is NOT established:
+- **Which predicate the gate is, empirically.** Every measured size is both non-power-of-two and above 16384, so a
+  size threshold fits the data equally well. Only the source decides between them so far. The pilot's 20480 and
+  36864 are modelled group sizes, never measured.
+- **run.py's heap-growth failure.** No heap growth completed in any arm, exact bounds on or off. The lane's
+  `CAPSTONE_VM_REMAP_OK` reads 0 in all three arms, and that instrument is proven live. So growth fails for a
+  further reason, still unidentified. `remap_begin()`'s refusal of every remap with exact bounds off is in the
+  source, but nothing shows it is the reason.
+
+> **RETRACTED (2026-10-17 05:00), from this paragraph's first version (dev ee0fa6d0fe55):**
+> - **"The compiler lane confirmed it two-sided: its `--exact-bounds` arm clears all four failing contract
+>   markers."** Those four strings are absent from the exact-bounds-on arm, but that arm FAILS too:
+>   - 5 of its 8 failures survive;
+>   - two of the four markers are replaced by different failures, a capability out-of-bounds fault and a
+>     "denial survived" safety failure;
+>   - turning the profile on also changes the encoder, so the arm is not a single-variable control.
+>   It confirms nothing about the gate. I relayed the claim without reading the arm's own log.
+> - **`remap_begin()` as part of the cause of run.py's heap-growth failure.** See "What is NOT established" above.
+> - **"Every NULL ... needs such a mapping (20480, 28672, 36864 B and up)"** mixed measured and modelled sizes.
+>   The measured ones are listed above.
+
+The fix to `add()` belongs in the module, and the board module carries the same file, so it applies to the board
+too. The compiler lane is running the two arms that separate the predicates, before any revision: a request whose
+group needs 32768, and one whose group needs 12288.
 
 ## Defects found on the way, and where they went
 
