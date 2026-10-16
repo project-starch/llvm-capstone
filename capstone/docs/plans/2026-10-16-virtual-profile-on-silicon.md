@@ -80,16 +80,40 @@ differ from the virtual profile's. The known case is rounding: silicon rounds an
 
 ## Bounds (audit item C'): option (iii), representable bounds that the allocator enforces
 
-**Decided 2026-10-16, superseding the same day's choice of (ii).** The lead delegated the choice to the lanes, then
+**HELD 2026-10-16, pending a re-cost:** the cost below was RETRACTED by its author the same day; see the next paragraph. Neither (iii) nor (ii) is being built meanwhile. **Decided 2026-10-16, superseding the same day's choice of (ii).** The lead delegated the choice to the lanes, then
 asked whether exact bounds are needed at all. The answer is that the hardware does not need them; only the landed
 runtime's choices did. The guide states that dependency: "Local mallocng requires this profile to retain upstream
 slot geometry and expose only requested object bounds". QEMU marks its shadow store as a prototype: `cap_mem_map.h:20`
 "we hack this to prevent precision loss for now", and 24b1e95b1dac "does not specify an RTL encoding".
 
-**What (iii) costs.** The compiler lane computed it (`lane/compiler-exact-bounds-iii` 91d5b48e4c23,
+**RETRACTED 2026-10-16 by its author, the compiler lane: "no size-class, slot or group layout, or alignment change"
+is wrong.** The estimate checked only the length. Representability also needs the BASE to be a multiple of the
+granule. modcapstone capstone.c:338 says so ("both its length and its base are granule multiples"), and the RTL
+enforces it in its own way.
+- At d93a8d66b, `compress_bounds` (`ariane_pkg.sv:777-833`) truncates the base to the granule and rounds only the end
+  up. An unaligned base therefore silently gains authority BELOW the object: up to 240 bytes for the largest class,
+  past the in-band header and into the previous slot.
+- QEMU's physical profile refuses the same derive with 29 instead (b6-sublet.c:19).
+- In mallocng's real geometry, `slot_base = group_base + 16 + i*stride` (heap.c), so 12 of the 20 classes with a
+  stride of at least 4096 have an unrepresentable base for their first slot.
+- Rounding the base down and the length up fits inside the slot for only 8 of those 20.
+- Only granule-aligned slot offsets are usable, so mallocng's double-free offset entropy falls to 1 in 2 (granule 32)
+  through 1 in 16 (granule 256) for those classes.
+So (iii) needs the group header and the strides of the large classes to be granule-aligned: a size-class and layout
+change, which is what the estimate said would not be needed.
+
+The hope that this collapses is also settled. The author asked whether the cursorless scheme keeps a freshly derived
+child exact. It does not exist on the bitstream: 4a4261bb4 removed it ("one scheme for every capability",
+`ariane_pkg.sv:778` at d93a8d66b). The author read the main checkout's older capstone-ariane, 062f4453b. The same
+author also counts 430 CAUGHT rows among the corpus's 825 judged virtual-arm rows that could flip under (iii).
+`fault.offset` is a pc offset, not an overrun distance, so the recorded rows cannot settle it; Tier 3's re-run does.
+
+The original estimate follows, kept for the record:
+
+**What (iii) costs, as first estimated.** The compiler lane computed it (`lane/compiler-exact-bounds-iii` 91d5b48e4c23,
 `docs/plans/2026-10-16-exact-bounds-option-iii-cost.md`): 3-5 days in the runtime, and nothing in the RTL.
-- mallocng changes in two expressions: it classifies on `repr_round(n)` and sizes the big-path mapping from it. Its
-  size classes, slot and group layout, and alignment do not change.
+- mallocng changes in two expressions: it classifies on `repr_round(n)` and sizes the big-path mapping from it. ~~Its
+  size classes, slot and group layout, and alignment do not change.~~ (retracted above)
 - 628 of 131,051 small sizes (0.48%) move to a larger class. These are the sizes in the last 16 bytes below a class's
   capacity, and no power of two or page multiple is among them. The worst is n = 13073, 25.1% more. 107 sizes near
   the mmap threshold move to the mmap path. No distribution of application sizes exists, so these figures are over
@@ -249,8 +273,8 @@ waits for the lead's own word; the physical regression is read on every one.
 |---|---|---|
 | re-baseline addendum | RTL lane | DONE 2026-10-16: `virtual-capstone-rtl-feasibility.md` "Addendum, 2026-10-16"; Q-17 and Q-18 filed; reference pinned at d35af47b163c |
 | exact-bounds options, costed (i) vs (ii), format-freeze proposal | RTL lane | DONE 2026-10-16: `2026-10-16-exact-bounds-options.md`. DECIDED the same day: (ii) dense, the format frozen as proposed, the helper lane owning the semantics |
-| C' bounds | RTL lane | DROPPED 2026-10-16: option (iii) needs nothing in the RTL |
-| option (iii) in the runtime: mallocng `repr_round`, the CSMINT descriptor audit, the ABI and launcher gate, runners, documents, re-records | compiler lane | to do, 3-5 days (estimate in `2026-10-16-exact-bounds-option-iii-cost.md`) |
+| C' bounds | RTL lane | DROPPED 2026-10-16 for option (iii), which is now HELD pending a re-cost (the first estimate was retracted). The RTL lane does not restart C' until the decision is re-made |
+| option (iii) in the runtime: mallocng `repr_round`, the CSMINT descriptor audit, the ABI and launcher gate, runners, documents, re-records | compiler lane | HELD: the 3-5-day estimate was retracted by its author. A re-cost with the layout change (granule-aligned group header and large-class strides, the memory cost, the offset-entropy loss) comes first |
 | B translation in C mode | RTL lane | SIMULATION GREEN 2026-10-16: capstone-ariane `virtual-profile` ea88d8e5d (the Q-19 ruling implemented: the consuming ldc decides at writeback from the captured page permission, a non-consuming ldc completes, arm 6 added); seven arms and the flag-off control as pre-registered; lint at baseline, the 40 loop names identical; Q-17's reorder and arm joining, then the flag-off neutrality sweep and the sup lists, then the synthesis request with the pre-registered prediction |
 | A lifetime table | RTL lane | to do |
 | D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | to do |
