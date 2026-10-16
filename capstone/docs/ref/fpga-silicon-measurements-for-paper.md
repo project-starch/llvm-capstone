@@ -6619,3 +6619,27 @@ baseline `9a80c1cd2a576ed2` between two k800 controls. Folder: `tests/rtl-smoke/
 - **The board's idle MemFree** is 940,924 / 941,680 kB after Linux and 938,032 / 934,332 kB at the end of the boot.
   This is the virtual-profile plan's memory figure.
 - **Not established:** N = 1 per cell, at size 1; why the new cell 5 build runs at a higher CPI.
+
+## M2's dependent chase on the Sublet bitstream: S/P rises to 1.66 from N = 256, where r30r31 read 1.0000 (caplifive_sublet_d93a8d66b, 2026-10-17)
+Eight cold boots (m2f16-01 to -08, 03:22-05:08) on the classic line, with the fixed-runtime R1 harness `66764b0e`.
+The September image mis-carves on this bitstream (R-55, the runtime half). Folder: `tests/rtl-smoke/m2-sublet-2026-10-16/`
+(pre-registered at lane 7fc8751dc0e5, amended before the boots; RESULTS.md and `results/`).
+- **Every check holds:** 225 of 225 points with the emulator's checksum, every cold traversal ok, minted D/P 6 and S
+  2N+4, k800 4 twice in every boot, and no refusal.
+
+| N | D | P | S | S/P |
+|---:|---:|---:|---:|---:|
+| 16 | 10.00 | 18.00 | 18.00 | 1.0000 |
+| 64 | 10.00 | 18.00 | 18.00 | 1.0000 |
+| 256 | 10.00 | 18.00 | 29.95 | 1.6639 |
+| 1024 | 41.81 | 61.38 | 99.10 | 1.6144 |
+| 4096 | 49.25 | 88.45 | 123.52 | 1.3964 |
+
+Cycles per access, the median of 15 runs.
+- **D and P equal r30r31's §7y to 0.05 cycles** (41.84 / 49.25 and 61.37 / 88.45 there). S/P was 1.0000-1.0003 there.
+- **So the pre-registered outcome is (a):** an access through a record capability costs S about 12 cycles more at
+  N = 256, and 35-38 more at N ≥ 1024.
+- **The rise starts at 516 live nodes, below the 2,048 the pre-registration assumed for the node cache.** The knee
+  lies between N = 64 and 256, and is not located further.
+- **Not established:** the node cache's capacity here, and whether the surcharge is the node query or the nodes'
+  data-cache footprint.
