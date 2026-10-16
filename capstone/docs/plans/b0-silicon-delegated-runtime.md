@@ -3311,3 +3311,30 @@ bitstreams is not a measurement, so this boot runs both arms, each twice for the
   its spread instead.
 
 No wedge is expected: every image and rung has run on this bitstream or on its predecessor.
+
+## B5 pair RESULT (2026-10-16 16:03-16:33, caplifive_sublet_d93a8d66b, firmware 2edb66370270): every pre-registered reading holds; mruby's domain costs 1.25x native at the same -O1, 1.50x against native -O2
+One boot, eleven rungs, every retval 0 against its oracle (pre-registration 1d9a1b9b5d5d).
+
+**Every prediction held,** computed from the transcript, not by hand:
+1. every stdout hash equals native.sha;
+2. both domain benches repeat boot P within 0.20% per benchmark, and the allocator reads 139/83453/0 both times;
+3. native repeats B5n's FP-bitstream times within 0.74% at -O2 and 1.35% at -O1;
+4. repeats within one boot agree within 0.20% (domain) and 0.50% (native -O2).
+
+**Times** (seconds, Time.now inside the process; the domain and -O2 are means of two runs in this boot):
+
+| benchmark | domain | native -O2 | native -O1 | domain / -O2 | domain / -O1 |
+|---|---|---|---|---|---|
+| mandel_term | 138.34 | 90.59 | 109.37 | 1.53 | 1.26 |
+| fib(24) | 45.49 | 29.75 | 36.04 | 1.53 | 1.26 |
+| so_lists (3 x 1000) | 2.46 | 1.67 | 1.93 | 1.47 | 1.28 |
+| so_mandelbrot (32) | 30.67 | 18.36 | 22.24 | 1.67 | 1.38 |
+| ao_render (8) | 81.89 | 59.42 | 69.60 | 1.38 | 1.18 |
+| total | 298.85 | 199.79 | 239.16 | 1.50 | 1.25 |
+
+**Reading it:**
+- These are B5n's ratios again, now from one boot on the bitstream the paper's Sublet rows use. Both arms' times
+  are the same on the FP and Sublet bitstreams within 1.4%.
+- They remain UPPER BOUNDS on the cost of capabilities, for B5n's reasons: soft-float, clang/musl, full LTO, the
+  size-class allocator and the delegation of every system call, against gcc/glibc native.
+- Launch: 45.13 s for the domain's cold `e`, against 3.89 s / 3.67 s natively, as B5n read it.
