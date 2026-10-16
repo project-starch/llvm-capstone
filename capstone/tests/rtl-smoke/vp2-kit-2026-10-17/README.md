@@ -101,6 +101,44 @@ region being split is rewritten with the piece that remains. The carved piece be
 which `swap_cpmp` loads on its first access fault. So Linux's code is always either under the resident slot or one
 fault away from being swapped in.
 
+## Pre-registered (2026-10-17, before the revision exists): the v6 module's `add()` change
+
+**The change, from the compiler lane** (narrowed at lane 2691b60cbb69). It is not written yet: it changes what the
+silicon enforces, so it waits for the project lead.
+- `add()`: in the exact-bounds-off branch, `capstone_repr_ok(r->address, r->bytes)` replaces the test for a
+  naturally aligned power of two. The page checks, CV_MAX_REGION_BYTES, the total-bytes limit and the overlap test
+  are kept.
+- `representable.h` is shared, and `build-adapter.sh` copies it from the tree being built.
+- `remap_begin()` is left alone.
+
+**Why `add()`:**
+- The arena predicate today is `is_power_of_2`, measured in the lane's malloc-contract predicate arms (exact bounds
+  off): `malloc(9341)` reads ALLOCATED with `last_ok_bytes=32768`, a power of two above 16384, admitted while the gate
+  was armed. That refutes a size threshold by measurement.
+- `malloc(2029)` reads NULL. Its 12288-byte group is the lane's model, not a measurement.
+
+**The prediction, verbatim from the compiler lane, for the `add()`-only change:**
+- the five allocation markers clear (aligned allocation, population array, remap-align setup, remap stale setup,
+  precise allocation);
+- your NULLs at 6144, 34816 and 35840 clear, and cases 00 and 10 read CAUGHT at cause 28;
+- malloc(2029) becomes ALLOCATED where it is NULL today; malloc(9341) stays ALLOCATED;
+- heap growth/zero and real_linux_mremap_growth_and_shrink STILL FAIL — not addressed by this change;
+- bounds still fails, because the request rounding puts +200003 inside the object.
+
+**What the board lane runs on that revision, and reads against the prediction.** Same kit script, QEMU
+`40264f5de09ef153`, the same guest images:
+1. **Tier 3 bundle 5** (`ffmpeg/carved-repros` `virtual-nested-pools`, the recorded cc_args), unchanged from the
+   third pilot:
+   - no NULL at 6144, 34816 or 35840;
+   - cases 00 and 10 CAUGHT at cause 28 at their labelled probes;
+   - 13 of 13 equal to the record.
+2. **Bundles 13 and 14 again as controls:** CAUGHT 9/9 and 3/3, cell by cell as before. The change must not move a
+   cell that was already right.
+3. **run.py with `--timeout 1500`:**
+   - `normal` still exits 1 on `VM_CONTRACT_FAIL:heap growth/zero` (the growth row above);
+   - every other step is reported, not predicted.
+   If growth clears, the model is wrong somewhere, and that is reported as such.
+
 ## Status of the pipeline proof
 
 - On dev's runtime 4798dcab2d52 with the October 10 compiler (bd372e25f5fb), the SDK step fails: 101 of 1,361 musl
