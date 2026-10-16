@@ -64,3 +64,32 @@ R1 warm boot 1, on the same image, host and line, stopped at its 8th invocation 
 - Every invocation past a boot's last `R1 end` line reruns afterwards, in boots m2s16t-01… of at most six, in list
   order.
 - The readings are as pre-registered above, and the boot composition is recorded beside them.
+
+## Amended again (2026-10-16 23:20): the September images mis-carve on this bitstream; everything reruns on the fixed-runtime build
+
+**The old images.** Every R1-harness image this folder used, 1b7a04fe (warm, M2) and 46f99c7b (cold), predates the
+sublet-runtime fix a07a11194fa0. Neither contains SHRINK, the instruction that fix adds to `sublet_split`; fixed builds
+carry it. Under this bitstream's full bounds scheme their carves alias (ISSUES R-55, the runtime half).
+- M2 boots m2s16-b1 and -b2 wedged at their first chase invocation, arms D and S. Both read mcause 6, a store to
+  address 1, at `sd a1,0(a2)` in `run_chase`'s identity loop: the second carve (`lookup`) lands on the first (`region`),
+  and record 1's write turns `lookup[4]` into the integer 1.
+- So R1 warm boot 1's seven invocations and the Sublet acceptance's cold rep 1 (a3) ran mis-carved images. They are
+  not results here. H1's REVOKE finding was retracted for the same reason (dev 783fb0f93f7e).
+
+**The image now: `66764b0e62075e57`.** It is the R1 harness rebuilt from this lane with the fix, with the default
+defines, 0x410000 and -O1 (`../h1f-sublet-2026-10-16`), and 14 SHRINK words.
+- Its emulator records (`/tmp/capstone/fixq-1016`): every distinct R1 warm invocation once (84 point lines, as the
+  campaign's sweep), the five cold reps (48 points) and M2's nine (arm, seed) pairs (45 points, every `chk_ok=1` and
+  `cycle_ok=1`).
+- Seed 1's checksums equal the ones pre-registered above.
+
+**The boots, at most six invocations each, list order unchanged:**
+- M2: m2f16-01..08 (45 invocations);
+- R1 warm: r1wf16-01..15 (90);
+- R1 cold: r1cf16r1..r5, all five reps, because rep 1 ran an unfixed image.
+They run after SLT, P1b and H1F, before the size-100 boots.
+
+**What changes in the readings:**
+- the image differs from 054cea69b's and r30r31's, so every comparison crosses tree, toolchain and silicon;
+- R1's warm slope is reported, not predicted from H1, whose REVOKE reading is retracted;
+- M2's two outcomes, (a) S/P above 1.00 at N >= 1024 and (b) S/P = 1.000, stand as written.
