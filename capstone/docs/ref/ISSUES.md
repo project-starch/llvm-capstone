@@ -1363,7 +1363,7 @@ liveness on either side (RTL :376 queries only for selector 0; QEMU `helper_cslc
 "fault order: agrees" is wrong for this pair. Directed test: derive, CREVOKE the child, CDERIVE from the dead child with
 a size larger than it; expect 25 after the fix, 29 today.
 
-## Q-18 — DROP of a NON-LINEAR capability kills the node for every alias and leaks it on silicon; QEMU clears the register only `OPEN — RTL divergence, filed 2026-10-16 (the audit's F-B); design decision for the lead with the helper lane's QEMU rule as tie-breaker`
+## Q-18 — DROP of a NON-LINEAR capability kills the node for every alias and leaks it on silicon; QEMU clears the register only `RULED 2026-10-17 by the model's semantics owner: under the virtual-context flag DROP is QEMU's register-only tag clear (vp2, item E); the physical profile keeps its broadcast; filed 2026-10-16 (the audit's F-B); design decision for the lead with the helper lane's QEMU rule as tie-breaker`
 
 RTL `DROP` (`capstone_dyn_unit.anvil:24-40`) sends `drop_req` for any tagged type; the handler
 (`capstone_rev_node.anvil:217-233`, `:649-651`) clears `valid` without setting `free` or unlinking: every alias of the
@@ -1373,6 +1373,26 @@ Not reached by `runtime/virtual/heap.c` (no DROP; `sublet_clear` is an STC of ze
 emits DROP implicitly. Options: refuse DROP on a node with children (status 3 -> 29), make DROP walk like CREVOKE, or
 make DROP register-only for NONLIN as QEMU does. Directed test: derive, DROP the parent, load through the child
 (retires today), CREVOKE (refused 25 today).
+
+**Ruling, 2026-10-17, by the model's semantics owner.** Under the virtual-context flag, DROP is what `helper_csdrop`
+does: it nulls the register and touches no table. No node retirement, no broadcast. The physical profile keeps its
+broadcast, which every recorded silicon reading rests on. The RTL conforms in vp2 (item E). The difference is reachable
+in the virtual profile through MOVC-copied NONLIN capabilities, which is why it cannot stay.
+
+## Q-20 — the RTL's REVOKE walk has no visit bound, so a corrupt cyclic lifetime table hangs the core; QEMU bounds every walk by the table's next-unused id and refuses with 29 `RULED 2026-10-17 by the model's semantics owner: the RTL bounds the walk as QEMU does, in vp2's item D; filed 2026-10-17 from the RTL lane's vp2 step 2`
+
+Under the virtual-context flag the table lives in guest RAM and the monitor builds it, so a cycle or a dangling link is
+an input, not an invariant. QEMU (capstone-qemu d35af47b163c) bounds every walk by `table_walk_limit`, which returns the
+table's next-unused id (`cap_rev_table.c:216-220`), and treats as CAP_REV_CORRUPT a walk that visits more records than
+that, returns to its start id, or reaches a record it cannot read (`cap_rev_tree.c:66-82`, `:183-200`).
+`capstone_lifetime_status` maps CORRUPT to ILLEGAL_OP_VAL, cause 29, and the REVOKE helper's default case does the same,
+before any change (`op_helper.c:1100-1108`). EXHAUSTED (a depth at its maximum) stays cause 30. The RTL's walk today
+(`capstone_rev_node.anvil`) has no such bound.
+
+**Ruling.** On silicon under the flag, a walk visits at most root+8's value of records (saturating at 65,536, the unit's
+index width), and on exceeding that, on a cycle back to the start id, or on a record it cannot read, it refuses with 29
+and mutates nothing. Item D of vp2 carries it (`docs/plans/2026-10-16-virtual-profile-on-silicon.md`). The physical
+profile's walk, over its hardware-owned pool, is unchanged.
 
 ## Q-19 — the consuming ldc under the virtual-context flag: the RTL first translated a consuming-capable ldc as a STORE (stricter than QEMU for a non-consuming ldc from a read-only page); RULED and CONFORMANT `CLOSED 2026-10-16 — the model's semantics owner ruled for QEMU's rule (dev 49ad7c2413c3; runtime/virtual/contract.c:223-224 reaches the case); the RTL conforms on virtual-profile ea88d8e5d: the page's store permission is captured with the clear address at the read's translation, the decision is at writeback once the value is known to be consuming, a consuming value on a page without W or D retires with STORE_PAGE_FAULT and the clear is never queued, a non-consuming value completes (vb-trans.S arms 4 and 6)`
 
