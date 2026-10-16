@@ -202,6 +202,13 @@ The driver already hard-stops on this and calls the arm a PHANTOM, refusing to r
 `SQ: G/enter` / `SQ: H/return` markers that follow — they belong to a domain that was never
 loaded. Trust that guard; it is there because those markers otherwise look like a real run.
 
+**A `host|label:args` arm runs that program instead of the host, and it must print a marker the driver
+accepts as its result**, or the driver HARD STOPS at it ("… produced None, not a staged marker") and the
+rest of the boot is lost. The accepted forms are `RESULT <x> retval=<n>`, `BASELINE-PROBE <what> = <digits>`,
+or a probe host's own verdict. Before baking a new kind of arm, run its program and match the output against
+those regexes in `run_sqlite_stages_fpga.py`. A `/proc/meminfo` arm that printed only the file cost boot
+p1s16-c5 this way (2026-10-16).
+
 ```bash
 cd capstone/tests/rtl-smoke
 BAKED_RUNGS="ctl_rung unknown_rung" python3 -m fpga_driver.run_baked_rungs_fpga
