@@ -45,6 +45,13 @@ postgres/mmgr-repros: the same two images per case (-DPG_NEGATIVE_CONTROL), run 
 memory-context managers (the port's `spatial` variant on silicon-pg-stock, `sublet` with patch 0003 on
 silicon-pg-sublet; sources via --extra-src). A fault counts in pg_probe or a case.json fault site; completion is
 `PG_DEFECT case=N mode=0 completed`. Its corpus control 00 (controls/) completes on stock and faults on Sublet.
+cpython/pymalloc-repros: each case is the port's hosted replay (ports/cpython/pymalloc/src/native/main.c) around the
+case's PYC_CASE body, over the port's obmalloc.c and backing.c (--extra-src): the `ported` variant (patches 0001 + 0002)
+on silicon-pym-stock, `protected` (+ patch 0003: every block a CDERIVE child of its arena, CREVOKEd on free) on
+silicon-pym-sublet. A run is `<fixture> <report>`: the fixture is run-virtual.py's own one-event file naming the case,
+staged beside the images (argv carries it as @DIR@, resolved per platform: /mnt/host on QEMU, --board-dir on the board).
+A fault counts only in read_probe; completion is `PYM completed=1`. The corpus control 00 (controls/) completes on
+stock and faults at read_probe on Sublet.
 The carved corpus also runs its own controls as rows: 99 (one byte past a 16-byte carve, inside its block) on every
 arm, and 98 (a re-carved region's old alias) on the Sublet carve. They gate the arm like the four tool controls.
 
@@ -110,6 +117,11 @@ ARMS = {
                          "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
     "silicon-pg-sublet": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-pg-pools",
                           "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    # cpython/pymalloc-repros: which obmalloc.c variant the image links is the arm (--extra-src)
+    "silicon-pym-stock": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-malloc",
+                          "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    "silicon-pym-sublet": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-nested-pools",
+                           "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
     "silicon-wm-stock": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-malloc", "wm_differential": True,
                          "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
 }
@@ -155,6 +167,20 @@ RUNFAM = dict(LIFETIME)
 RUNFAM[PGC] = dict(probe_from=r"PG_DEFECT case=\d+ expect_fault_in=([A-Za-z_][\w.$]*)@", done="case {n} RETURNED")
 RUNFAM[PGM] = dict(probe=r"^pg_(write_)?probe$", done="PG_DEFECT case={n} mode=0 completed")
 RUNFAM[PGM_CTL] = RUNFAM[PGM]
+PYM = ("cpython", "pymalloc-repros")
+PYM_CTL = ("cpython", "pymalloc-repros", "controls")
+PYM_MAIN = REPO / "capstone/ports/cpython/pymalloc/src/native/main.c"
+RUNFAM[PYM] = dict(probe=r"^read_probe$", done="PYM completed=1")
+RUNFAM[PYM_CTL] = RUNFAM[PYM]
+
+
+def pym_fixture(n):
+    """The virtual runner's own fixture for case n (runners/virtual/run-virtual.py), so both platforms read one file."""
+    spec = importlib.util.spec_from_file_location(
+        "pym_virtual", REPO / "capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.fixture(n)
 # Corpora built as two images per case: the case and its negative control, which must complete and gates the arm.
 TWO_IMAGE = {
     PGC: dict(kind="pg-c", neg="-DPGCLIENT_NEGATIVE_CONTROL", argv=lambda n: [str(n)], extra_glob="upstream_*.c",
@@ -171,7 +197,7 @@ def sublet_arm(arm):
 # corpus controls that gate their arm like the four tool controls (pool-control predates this and stays a plain row,
 # as set 2 was pre-registered with it)
 CONTROL_ROWS = ("carve-control", "mc-control", "wmem-control", "pg-c-control", "pg-mmgr-control",
-                "pg-mmgr-corpus-control")
+                "pg-mmgr-corpus-control", "pym-control")
 PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
 CTL_PROBE = re.compile(r"^ctl_(read|write)_probe$")
 
@@ -185,6 +211,8 @@ def kind_of(corpus):
         return TWO_IMAGE[rel]["kind"]
     if rel == PGM_CTL:
         return "pg-mmgr-corpus-control"
+    if rel in (PYM, PYM_CTL):
+        return "pym" if rel == PYM else "pym-control"
     if rel[1] == "pool-repros":
         return "pool-control" if "controls" in rel else "pool"
     if rel[1] == "wmem-repros":
@@ -329,6 +357,28 @@ def cmd_build(a):
                                             runs=[dict(variant="control", argv=ti["argv"](n), expect="COMPLETED")])
                 jobs.append((f"{name}-ctl", [str(d / "case.c"), str(driver), *ups, *a.extra_src],
                              " ".join(flags + [ti["neg"]]), arm["defs"], out, a.data, a.arena))
+            continue
+        if rel in (PYM, PYM_CTL):   # one image per case around the port's replay; the fixture is staged with it
+            v = arm.get("virtual")
+            if v is None:
+                sys.exit(f"CONTROL-FAILED {'/'.join(rel)} has no recorded arm to predict {a.arm} from")
+            files = out / "files"
+            files.mkdir(exist_ok=True)
+            for d in sorted(x for x in corpus.glob("[0-9][0-9]_*") if (x / "case.c").is_file()):
+                name, n = f"{tag}-{d.name[:2]}", int(d.name[:2])
+                fx = files / f"pym-fixture-{n:02d}.bin"
+                fx.write_bytes(pym_fixture(n))
+                if rel == PYM:
+                    verdict = json.loads((d / "case.json").read_text())["arms"][v]["verdict"]
+                    expect = "CAUGHT" if verdict == "CAUGHT" else "COMPLETED"
+                else:
+                    expect = "CAUGHT" if sublet_arm(a.arm) else "COMPLETED"
+                cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind=kind_of(corpus), n=str(n),
+                                   files=[str(fx)],
+                                   runs=[dict(variant="case" if rel == PYM else "control",
+                                              argv=[f"@DIR@/{fx.name}", "/tmp/pym-report.bin"], expect=expect)])
+                jobs.append((name, [str(PYM_MAIN), str(d / "case.c"), *a.extra_src], " ".join(flags), arm["defs"],
+                             out, a.data, a.arena))
             continue
         if rel == PGM_CTL:      # the corpus's own control: completes on stock, faults at the probe on Sublet
             for d in sorted(x for x in corpus.glob("[0-9][0-9]_*") if (x / "case.c").is_file()):
@@ -478,9 +528,11 @@ def cmd_qemu(a):
     for which in ARMS[a.arm]["controls"]:
         run(m["controls"]["image"], [which], f"control-{which}")
     for name, c in m["cases"].items():
+        for f in c.get("files", []):
+            (share / Path(f).name).write_bytes(Path(f).read_bytes())
         if c["image"] and c.get("runs") is not None:
             for r in c["runs"]:
-                run(c["image"], r["argv"], f"{name}-{r['variant']}")
+                run(c["image"], [x.replace("@DIR@", "/mnt/host") for x in r["argv"]], f"{name}-{r['variant']}")
         elif c["image"]:
             for which in ("fixed", "buggy"):
                 argv = argv_for(a.arm, c["kind"], c["n"], which)
@@ -542,16 +594,21 @@ def cmd_stage(a):
         if not c["image"]:
             continue
         (st / f"{name}.dom").write_bytes(Path(c["image"]).read_bytes())
+        for f in c.get("files", []):
+            if not a.board_dir:
+                sys.exit(f"CONTROL-FAILED {name} stages files: pass --board-dir, the directory the stage is baked to")
+            (st / Path(f).name).write_bytes(Path(f).read_bytes())
         if c.get("runs") is not None:
             for r in c["runs"]:
-                lines.append(f"{pre}{name}-{r['variant']} {name}.dom {' '.join(r['argv'])}")
+                argv = [x.replace("@DIR@", a.board_dir) if a.board_dir else x for x in r["argv"]]
+                lines.append(f"{pre}{name}-{r['variant']} {name}.dom {' '.join(argv)}")
             continue
         for which in ("fixed", "buggy"):
             argv = argv_for(a.arm, c["kind"], c["n"], which)
             if argv is not None:
                 lines.append(f"{pre}{name}-{which} {name}.dom {' '.join(argv)}")
     (st / "runs.txt").write_text("\n".join(lines) + "\n")
-    sums = "".join(f"{sha256(f)}  {f.name}\n" for f in sorted(st.glob("*.dom")))
+    sums = "".join(f"{sha256(f)}  {f.name}\n" for f in sorted(p for p in st.iterdir() if p.suffix in (".dom", ".bin")))
     (st / "SHA256SUMS").write_text(sums)
     print(f"staged {len(list(st.glob('*.dom')))} images, {len(lines)} runs, {sum(f.stat().st_size for f in st.glob('*.dom'))} bytes")
     return 0
@@ -574,6 +631,8 @@ def main():
     s = sub.add_parser("stage"); s.add_argument("--arm", choices=ARMS, required=True)
     s.add_argument("--out", type=Path, required=True)
     s.add_argument("--prefix-keys", action="store_true", help="prefix every run key with the arm (several arms per boot)")
+    s.add_argument("--board-dir", default="", help="where the stage is baked (make-bake-multi.py: "
+                   "/test-domains/corpus/<set>-<label>); resolves @DIR@ in a run's argv")
     r = sub.add_parser("board"); r.add_argument("--arm", choices=ARMS, required=True)
     r.add_argument("--out", type=Path, required=True); r.add_argument("--transcript", required=True)
     r.add_argument("--prereg", help="the arm's committed qemu-and-predictions.json: rows are read against it")
