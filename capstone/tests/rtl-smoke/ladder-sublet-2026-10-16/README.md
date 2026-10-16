@@ -43,3 +43,31 @@ output tags renamed:
 
 **Not established:** one boot per K, as phase 10. The capability half's CPI on this bitstream against the FP
 respin's is a bridge only for K = 0: cycles within 0.74 %.
+
+## Results, K = 1..3 (2026-10-16 21:40-22:15, boots s16cap-K1..K3 and their bare sweeps)
+
+**Every pre-registered reading holds at every K** (`results/K{1,2,3}-s16.*`).
+- Capability half: 17 of 17 rungs retval == oracle, and every rung's instret equals K = 0's.
+- Bare half: every rung 15/15 passes at min instret. Every bare instret equals K = 0's, and every retval equals the
+  capability half's.
+- `pair-halves.py` passes its control gates at every K (instruction ratio 1.00002, baseline CPI 1.2000), with 17
+  admissible rows each.
+- The per-K judge was negative-tested: one capability instret moved by 1 reads "1 off".
+
+**The table to cite, the median over K = 0..3, is in `results/K0-3.summary.txt`.**
+- Over the 15 kernels the medians run 0.991× (`beebs_cover`) to 2.270× (`beebs_insertsort`), with median **1.160×**
+  and geometric mean **1.313×**.
+- On 054cea69b, phase 10 read 0.990×-2.154×, 1.160× and 1.299×. Recomputed here from
+  `../ladder-revival-2026-09-22/phase10-layout-randomised.result-lines.txt` with the same `pair-halves.py`, it
+  reproduces those three figures exactly.
+- 12 of the 15 kernel medians agree with phase 10 to within 0.6 %. The three that do not:
+  - `coremark_matrix`, 1.460 → 1.567, and `beebs_insertsort`, 2.154 → 2.270. These are the only two rungs whose
+    capability build changed since phase 10 (instret 31,560 → 31,803 and 962 → 971). Their move belongs to the build
+    as much as to the silicon, and this run cannot split the two.
+  - `beebs_janne`, 1.993 → 2.072, on identical instructions. That is inside the 13.2 % boot-to-boot band phase 11
+    measured for it.
+- **Layout bands:** `beebs_janne` 7.7 %, `beebs_bs` 5.7 %, `beebs_insertsort` 4.7 %; every other kernel 1.4 % or
+  less. Phase 10 named the same three short kernels.
+
+**Not established:** one boot per K, as phase 10. Phase 11 showed that part of the short kernels' band is boot
+variance.

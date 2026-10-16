@@ -1230,7 +1230,7 @@ stays open for the permission check and the cause number. Follow-up 674cdab03c r
 unsigned-overflow acceptance at the upper edge of the sealed-return window and from the general
 bounds check.
 
-## Q-15 — CDERIVE and CREVOKE across the QEMU profiles and the RTL: representability and decode differ `OPEN — for the format cycle; recorded 2026-10-13 from the RTL lane's capstone-sublet work`
+## Q-15 — CDERIVE and CREVOKE across the QEMU profiles and the RTL: representability and decode differ `REPRESENTABILITY RULED 2026-10-16 by the model's semantics owner: under the virtual-context flag an inexact CDERIVE child is refused with 29, and the physical profile keeps rounding outward; recorded 2026-10-13 from the RTL lane's capstone-sublet work`
 
 **Representability.** A CDERIVE child whose bounds the compact format cannot hold is treated three ways.
 capstone-qemu's compact profile refuses it with cause 29: `helper_csderive` compresses the child and
@@ -1242,6 +1242,21 @@ runtime's ABI v5 requires the exact-bounds profile (`capstone/runtime/virtual/RE
 allocators migrated to CDERIVE do not rely on the refusal. On the RTL their large, unaligned children
 would get bounds rounded outward instead of exact ones. This is the exact-bounds question of
 `docs/plans/virtual-capstone-rtl-feasibility.md`, now for CDERIVE as well.
+
+**Ruling, 2026-10-16, by the model's semantics owner** (the helper lane; `docs/plans/2026-10-16-virtual-profile-on-silicon.md`).
+Silicon's virtual profile has no exact bounds: option (iii) was decided the same day. Its rule is therefore the compact
+profile's: **under the virtual-context flag, a CDERIVE child that the compact format cannot hold exactly is refused
+with 29**, as `helper_csderive` does (`op_helper.c:1239-1247` at d35af47b163c: "Never silently widen a new object's
+authority in the compact profile").
+- Rounding outward is not acceptable there. The RTL checks containment against the parent's exact bounds BEFORE
+  compression widens the child (`capstone_dyn_unit.anvil:240-242`), and nothing re-checks the widened result. So an
+  unaligned child can come out wider than its parent.
+- The RTL conforms in its virtual bitstreams, by the same round-trip comparison QEMU makes.
+- The physical profile keeps its measured behaviour: rounding outward, which every recorded silicon reading rests on,
+  predicted by capstone-qemu `silicon/cderive-round` with `CAPSTONE_CDERIVE_ROUND=1`.
+- Consequence for software: every virtual port's Sublet patch derives only representable children. For children of
+  4 KiB and up this means a granule-aligned base and a granule-multiple length, as mallocng's repaired geometry does.
+  The compiler lane carries that work, re-costed in the plan.
 
 **Decode.** Until acbad0f7ec82, capstone-qemu decoded CDERIVE and CREVOKE only with `x-capstone-u-mode`
 (`trans_csderive`, `trans_cskill`, 5fb78e41a3). The physical profile raised illegal instruction 2, because the RTL
@@ -1338,7 +1353,7 @@ needed ce1be0c642 with `CAPSTONE_CDERIVE_ROUND=1`, and Q-15's box records 43,591
 R-54 shape. Under the virtual profile with exact bounds (scapctl bit 8) the encoder is bypassed for the stored bounds,
 so this divergence is a physical-profile one. Fix: land the renormalisation on the QEMU shared branch and bump the pin
 (helper lane); until then every physical-profile differential cites which encoder it ran against.
-## Q-17 — CDERIVE's check order: silicon tests the size window (29) BEFORE the parent's liveness (25), QEMU the reverse `OPEN — RTL divergence, filed 2026-10-16 by the virtual-profile re-baseline; one Anvil reorder, batched into the next bitstream`
+## Q-17 — CDERIVE's check order: silicon tested the size window (29) BEFORE the parent's liveness (25), QEMU the reverse `FIXED on virtual-profile 4b958dc3f (2026-10-16): the liveness query precedes the window test; q17-order.S reads 25 on the fixed tree and 29 on capstone-sublet b7e3287e4 in simulation (the positive control), the window-inside case 25 on both; carried by bitstream 1 of the virtual profile, not yet on silicon`
 
 `capstone_dyn_unit.anvil:246-259` (d93a8d66b): operands 24, type 26, then the size/window test (29) at :251, and only then
 the node liveness query (25) at :257. QEMU `helper_csderive` (`op_helper.c:1221-1235` at d35af47b163c): 24, 26, 25, 29.

@@ -6128,6 +6128,13 @@ the FP respin's (shared tree d04bd83 / df0e9a8 / 93440d5).
 - **Linux:** boots, with k800 4 and s06agg 64.
 - **Boot C+F:** every rung equal to the respin, r54-bounds 64.
 - **R1** (R-43 a1, a3): `alloc=160 minted=191 revoked=160`; 12 wide points ok.
+  - Both images, a1's `079b1f3a` and a3's `46f99c7b`, and a2's `1b7a04fe` below, predate the sublet-runtime fix
+    (2026-10-16 23:20, `tests/rtl-smoke/r1-sublet-2026-10-16`), so their carves alias on this bitstream.
+  - a1 and a3 were completion checks, and no figure here is cited from them.
+  - a2's verdict below is the monitor's region ids and OVERLAP 0, carved outside the domain, so it does not depend on
+    the domain's runtime.
+  - R1's warm and cold figures on this bitstream are pre-registered on the fixed-runtime image `66764b0e` (same
+    folder).
 - **R-43's live sweeps:** 544 / 4352 / 17408.
 - **The 17-rung ladder:** retval and instret identical to the respin's, cycles within 0.74%.
 - **P1 cell 5:** `112006 38bb59fd`, 1,156,968,951 cycles.
@@ -6478,7 +6485,7 @@ The Sublet acceptance (Linux half, dev d5fe0b4092f7) ran both pairs below on the
 - This is one layout draw. Layouts K = 1..3 are pre-registered there (lane bc200ac88bd3), for the median over
   K = 0..3.
 
-## H1 calibration on the Sublet bitstream: the instrument reads as on R-43 v2, and revocation is 14-51 % cheaper at every node count (caplifive_sublet_d93a8d66b, 2026-10-16)
+## H1 calibration on the Sublet bitstream: the instrument reads as on R-43 v2, and REVOKE reads 12-53 % lower, also on a fixed-runtime image (caplifive_sublet_d93a8d66b, 2026-10-16/17)
 Three cold boots (h1s16r1-r3, 19:36-20:17), each running `h1-v2-calibration.txt` on the 2026-09-29 image
 da9c54e578845735. Folder: `tests/rtl-smoke/h1-sublet-2026-10-16/` (pre-registered at lane 21e38145c053; RESULTS.md and
 `results/`).
@@ -6494,3 +6501,121 @@ da9c54e578845735. Folder: `tests/rtl-smoke/h1-sublet-2026-10-16/` (pre-registere
     722-725 / 2,873-2,897 / 11,106-11,293 on v2;
   - about 18.5 cycles per destroyed node at n = 256, against 22.0;
   - the fixed part halves.
+
+> **RETRACTED (2026-10-16 23:10): the attribution of this drop to the bitstream.**
+> - **The image predates the fix.** H1's image `da9c54e578845735` was built on 2026-09-29, before the sublet-runtime fix
+>   a07a11194fa0. It contains no SHRINK, the instruction that fix adds to `sublet_split`; fixed builds of the same
+>   runtime carry four.
+> - **So its carves are wrong here.** Its `sublet_split` gives the lower piece its parent's decoded start, and under
+>   this bitstream's full bounds scheme that rounds below the nominal base (ISSUES R-55, the runtime half).
+> - **A sibling image showed it.** `1b7a04fe237e1580`, same harness and vintage, faulted at M2's first chase on this
+>   bitstream (boot m2s16-b1): mcause 6 storing to address 1, the address the carves' aliasing predicts.
+> - **What is withdrawn:** "revocation is cheaper on this bitstream". The REVOKE figures below are readings of this
+>   image on this bitstream, and they stand as readings; the drop's attribution waits for a fixed-runtime image.
+> - **What stays, as readings of the same image:** latency, timer, node counts and linear types.
+>
+> **RESOLVED (2026-10-17 02:53) by the fixed-runtime test (`tests/rtl-smoke/h1f-sublet-2026-10-16`):** three boots of a
+> rebuild carrying the fix (66764b0e, 14 SHRINK) read the same drop. At n >= 16 it reads 0.84-0.86 of v2, against the old
+> image's 0.82-0.86; the fixed part (n = 1) reads 0.47. So the drop is a property of this bitstream and its classic-line
+> monitor, not of the image's runtime. Whether the bitstream or the monitor (93440d5 against 2dcd3a5) causes it is
+> still open.
+
+## S1 on the Sublet bitstream: SQLite's use-after-free refused at the access, as on R-43 v2 (caplifive_sublet_d93a8d66b, 2026-10-16)
+Three boots (s1sql-b1s16-b3s16, 20:17-21:40) on the classic line. They repeat "S1 on R-43 v2" with images rebuilt on
+dev's port and runtime, which carry the sublet-runtime fix:
+- memsys5, unprotected: `41f9b021371b4b66` at 0x810000;
+- Sublet: `445d93b331cd3ba2` at 0xc10000.
+Folder: `tests/rtl-smoke/s1-sqlite-silicon-2026-10-16/` (pre-registered at lane 930bd30d1060; RESULTS.md and
+`results/`).
+
+**Every pre-registered reading holds, in every boot:**
+- k800 returned 4.
+- The six memsys5 cells and the three returning Sublet cells printed the emulator's markers. memsys5 reads the
+  freed lookaside slot and the freed 4,096 B block, and the byte past a 128 B block.
+- **The Sublet cells:**
+  - p1, the lookaside slot after `sqlite3_finalize`: **cause 25** at the probe's `lbu` (+0x1e46c), record LATCHED,
+    hit-dead;
+  - p2, the 4,096 B block after `sqlite3_free`: **cause 25** at its `lbu` (+0x1df18), record LATCHED, hit-dead;
+  - p6, the byte past a 128 B block: **cause 28** at its `lbu` (+0x1e9b0), record EMPTY.
+- The emulator reads 24 for p1 and p2, because it untags a revoked capability (Q-11), and 5 for p6, as pre-registered.
+
+**The refusal ids**, recorded and not attributed to the probe (ten invocations ran first), read as generation
+id[29:16] and index id[15:0]:
+- boot 1: generation 1 at index 386;
+- boot 2: generation 3 at index 226.
+
+**Limits, as on R-43 v2:**
+- the fault cells are N = 1;
+- before-reuse only;
+- the survivors ran before the fault.
+
+## The 17-rung ladder over layouts K = 0..3 on the Sublet bitstream: median 1.160×, as phase 10, geometric mean 1.313× (caplifive_sublet_d93a8d66b, 2026-10-16)
+Boot s10 for K = 0, then s16cap-K1..K3 with their bare sweeps (21:40-22:15). These repeat phase 10's layout-randomised
+table (`-DLADDER_PAD=K` in both halves). Folder: `tests/rtl-smoke/ladder-sublet-2026-10-16/` (K = 1..3 pre-registered
+at lane bc200ac88bd3; `results/`).
+- **As pre-registered at every K:**
+  - capability half 17/17 correct, every instret equal to K = 0's;
+  - bare half every rung 15/15, with instret and retval as the capability half's;
+  - `pair-halves.py`'s control gates pass, with 17 admissible rows.
+- **The median over K = 0..3, over the 15 kernels:** 0.991× (`beebs_cover`) to 2.270× (`beebs_insertsort`), median
+  **1.160×**, geometric mean **1.313×**.
+- **Against phase 10:** on 054cea69b it read 0.990×-2.154×, 1.160× and 1.299×, reproduced exactly from its record by
+  the same tool.
+  - 12 kernel medians agree to within 0.6 %.
+  - `coremark_matrix` (1.460 → 1.567) and `beebs_insertsort` (2.154 → 2.270) are the only two rungs whose capability
+    build moved since then (instret 31,560 → 31,803 and 962 → 971). This run cannot split build from silicon there.
+  - `beebs_janne` (1.993 → 2.072, identical instructions) is inside its 13.2 % boot-to-boot band (phase 11).
+- **Layout bands:** `beebs_janne` 7.7 %, `beebs_bs` 5.7 %, `beebs_insertsort` 4.7 %; every other kernel 1.4 % or less.
+- Table: `results/K0-3.summary.txt`.
+
+## SQLLogicTest on the Sublet bitstream: all seven files identical to native, 10,809 records (caplifive_sublet_d93a8d66b, 2026-10-16/17)
+One file per boot (23:16-02:12). Each boot runs the relinked k800 first, then the SQLite domain, on the classic line.
+The images were rebuilt with dev147 and validated under QEMU against a native baseline rebuilt from the same tree.
+Folder: `tests/rtl-smoke/slt-sublet-2026-10-16/` (pre-registered at lane 0d68d03ea85c; RESULTS.md and `results/`).
+- **All seven files match native on silicon, k800 4 in every boot:**
+  - negctl and aggfunc reproduce their deliberate failures exactly, 2 + 5 plus one parse error and 1 + 10;
+  - select1 and select2: 1,000 queries each;
+  - select3: 3,320;
+  - select4: 2,648 queries plus 184 skipped for size;
+  - select5: 732 queries and 704 statements.
+- **Against §7c (`caplifive_s12fix_5097eb166`):** the same verdict on every file, with two differences in the inputs.
+  - The negative control gained two arms (23 records), and select4 now compares the 31 empty results §7c's runner
+    skipped. Both come from the 2026-09-30 runner fix.
+  - Three region/heap classes run with reduced stacks (1,507,328 / 458,752 B), because today's code no longer fits the
+    order-10 allocation beside the old ones.
+- select4 ran 4,621 s, against about 78 min on s12fix. That is a correctness run, not a timing.
+
+## H1 on a fixed-runtime image: the REVOKE drop holds, so it is the Sublet bitstream's or its monitor's (caplifive_sublet_d93a8d66b, 2026-10-17)
+Three cold boots (h1fs16r1-r3, 02:12-02:53) of H1's list on `66764b0e62075e57`: the R1 harness rebuilt from the lane
+with the sublet-runtime fix (14 SHRINK words), the defaults and 0x410000. Folder: `tests/rtl-smoke/h1f-sublet-2026-10-16/`
+(pre-registered at lane 3e021fae4070 with both outcomes written down; RESULTS.md and `results/`).
+- **Every instrument reading as R-43 v2 in all three boots:** latency 9/9/40/48/48, the timer 2/2/1, nd = 2n ok=1,
+  the linear types, k800 4 twice.
+- **REVOKE at n = 1/4/16/64/256:** 64-92 / 145-183 / 616-652 / 2,399-2,437 / 9,432-9,523 cycles.
+  - That is outcome (b), the old image's drop: 0.84-0.86 of v2 at n >= 16 and 0.47 at n = 1.
+  - It is not outcome (a), v2's values.
+- **So the retraction of H1's attribution (783fb0f93f7e) is resolved:** the drop is not the unfixed carve.
+- **Bitstream or monitor** (93440d5 against v2's 2dcd3a5) is still open.
+
+## P1 cells 5 and 6 beside the native -O2 baseline on the Sublet bitstream: cell 6 / native 1.509, cell 5 / native 1.418 (caplifive_sublet_d93a8d66b, 2026-10-17)
+Two cold boots (p1s16b-c5, p1s16b-c6, 02:55-03:22) on the classic line. Each runs one cell and the native -O2 warm
+baseline `9a80c1cd2a576ed2` between two k800 controls. Folder: `tests/rtl-smoke/p1-sublet-2026-10-16/`
+(pre-registered at lane 83ce50f019b4, amended at 5131d25ce2eb; RESULTS.md and `results/`).
+- **Every identity reading as pre-registered:** k800 4 twice, `112006 38bb59fd` on every arm, HEAP DROPPED 0,
+  lookasides 25,010 / 25,122, and cell 6's sublet line 5568/37970/32569/37970/5401.
+
+| arm | image | cycles | CPI against QEMU |
+|---|---|---:|---:|
+| cell 5 (memsys5 + lookaside, 2 MiB) | `21f4b2659074511c` | 1,213,784,631 | 3.636 |
+| cell 6 (the Sublet port, fixed runtime) | `4bfe3b0ec8494385` | 1,292,707,481 | 3.757 |
+| native -O2 warm (the two boots) | `9a80c1cd2a576ed2` | 856,244,108 / 856,627,547 | 3.557 / 3.559 |
+
+- **cell 6 / native = 1.5091** (pre-registered ≈ 1.510). The cell reads within 0.01 % of the same image's c6pair
+  boot (2026-10-16).
+- **cell 5 / native = 1.4176**, against the pre-registered ≈ 1.364. Today's cell 5 is a new build: same geometry,
+  different code, from dev's tree and dev147. It runs at CPI 3.636, where the 09-30 image `5f4b44257c933477` ran at
+  3.498. The earlier 1.3513 is that image's ratio.
+- **cell 6 / cell 5 = 1.065** across the boots, 1.0645 normalised by each boot's own native.
+- **The board's idle MemFree** is 940,924 / 941,680 kB after Linux and 938,032 / 934,332 kB at the end of the boot.
+  This is the virtual-profile plan's memory figure.
+- **Not established:** N = 1 per cell, at size 1; why the new cell 5 build runs at a higher CPI.

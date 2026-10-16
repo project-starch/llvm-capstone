@@ -324,6 +324,12 @@ prior attempt on that exact line is filed under its own issue, not yours: on 202
 validated a widened `store_buffer` compare that `docs/history/21-08-2026_…_s10b-is-not-synthesizable.md`
 had already shown to form a LUT loop in synthesis.
 
+**This binds pre-registration too.** Before pre-registering a run on a new bitstream, read every row of
+that bitstream's open ISSUES entries, and check each row against every image and list the run reuses. On
+2026-10-16 two results were lost to rows of R-55's own entry: the classic region table caps a boot at
+seven R1-harness invocations, and pre-fix Sublet images mis-carve. H1's REVOKE finding had to be
+retracted.
+
 **Read past the root-cause box.** A fixed issue's folder records what its fix did *not* cover:
 individual instances, residuals, and "what would settle it" lists. Reading only the headline root
 cause gave the wrong answer twice — "this is not that bug", because the documented *mechanism* did

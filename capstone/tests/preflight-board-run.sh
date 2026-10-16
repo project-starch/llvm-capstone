@@ -91,7 +91,7 @@ if [[ -f "$FW" ]]; then
     # bitstream, capstone-sublet) changes the node RECORD (a parent link in the b word) but not the pool: INIT_STAGE
     # still sets head := 3 and REVNODE_SENTINEL stays 65535, so it is the same DTS. Added before either flash, so a
     # run on the new silicon cannot fall through to the unknown-name block below.
-    *65536*|*_r20*|*supcall*|*r51r52*|*_fpb_*|*_sublet_*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
+    *65536*|*_r20*|*supcall*|*r51r52*|*_fpb_*|*_sublet_*|*_vp1_*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
         && ok "DTS matches $BITSTREAM (0x3c2d2000)" \
         || bad "DTS/bitstream MISMATCH: $BITSTREAM needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
     # An unknown name BLOCKS (the lead, 2026-10-04). It used to warn, and _r20 and supcall both fell through that warn
@@ -170,7 +170,7 @@ if [[ -d "$OVERLAY" ]]; then
 # Also: in that form the dom position may be a VERB for the host binary ("warm", "probe") rather
 # than a path. Those arms stage no .dom of their own, so requiring "warm.dom" is wrong.
 _expand_wanted() {   # prints one needed FILENAME per line
-  local _d _e _rest _bc _ac; local -a _de
+  local _d _e _rest _bc _ac _t; local -a _de
   _isfile() { [[ "$1" == /* || "$1" == *.dom ]]; }
   # emit the FILENAME a rung stages, not the bare rung name: every caller normalises with
   # ${x%.dom}.dom, and the requested-but-absent gate below needs a name it can stat.
@@ -199,6 +199,13 @@ _expand_wanted() {   # prints one needed FILENAME per line
       else
         _isfile "$_bc" && printf '%s\n' "$(basename -- "$_bc")"
         [[ "$_ac" == *" "* ]] && _isfile "${_ac%% *}" && printf '%s\n' "$(basename -- "${_ac%% *}")"
+        # A FIFTH form, 2026-10-16: an input path AFTER a flag, the SLT corpus's
+        #   sqlite stage         /path/img.dom:--slt /path/case.test
+        # Reading only the first word dropped the case file from the wanted set, so the boots that used select3/4/5's
+        # 0.7-1.2 MB case files were refused for "not using" them. Every path among the arguments is a staged
+        # input when it lies under /test-domains/, the overlay's mount point (/tmp or /mnt/host are not overlay files,
+        # and C15 would refuse them as requested-but-absent); an overlay file named nowhere in the run is still unwanted.
+        for _t in $_ac; do [[ "$_t" == /test-domains/* ]] && printf '%s\n' "$(basename -- "$_t")"; done
       fi
     done
   fi
