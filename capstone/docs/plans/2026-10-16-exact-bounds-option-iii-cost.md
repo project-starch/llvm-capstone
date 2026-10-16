@@ -1527,3 +1527,82 @@ launcher `54581b7c0930a21e`, SDK runtime `24ebdd1f8b936e1f`, lane commit cited i
 | control arm | — | **must still show the four Cause-A failures** | otherwise the attribution is void a second time |
 
 If the control arm does NOT reproduce them, this attribution goes the way of the last one.
+
+
+## The pre-registration FAILED: Cause A is not the mechanism either
+
+The run is in, against the pre-registration above, and it refutes it. Inputs as registered:
+domain `01482e9dee66d862`, control `2c1daf0f0833a4fb`, launcher `54581b7c0930a21e`.
+
+**Every one of the four markers predicted to clear still fails**, and the control arm is
+**identical to the fixed arm in all 22 checks** — the same null result as the launcher control
+before it. So the single-slot geometry was not what returned NULL, and Cause A joins the launcher
+mapping defects as a real but LATENT bug. Writing the prediction down is what made this
+unambiguous; without it the four surviving failures would have been easy to read as progress.
+
+**What the probe says, and it is the first direct evidence in this investigation:**
+
+    MALLOC_WHY bind_refused=0 ng_null=1 ...
+
+`bind_refused = 0`. The slot shrink was **never refused**, in any arm. That is the step the whole
+geometry argument turned on, so the argument is dead regardless of whether the arithmetic was
+right — and the arithmetic was right, which is the instructive part. A correct model of the wrong
+step predicts nothing.
+
+**What replaces it: ONE threshold explains all 20 observations.** The request fails if and only if
+the group mapping mallocng would need exceeds **16384 bytes**, i.e. four pages:
+
+| call | needed | rounded() | predicted | observed |
+|---|---|---|---|---|
+| `malloc(3072)` | 16384 | 16384 | ok | ok |
+| `calloc(1, 12288)` | 16384 | 16384 | ok | ok |
+| `malloc(6144)` | 20480 | 32768 | FAIL | FAIL |
+| `posix_memalign(4096, 5001)` -> `malloc(9081)` | 28672 | 32768 | FAIL | FAIL |
+| `calloc(1, 34816)` / `(1, 35840)` | 36864 | 65536 | FAIL | FAIL |
+| `malloc(200003)`, `malloc(200000)` | 200704 | 262144 | FAIL | FAIL |
+| population array, `malloc(70000*16)` | 1122304 | 2097152 | FAIL | FAIL |
+| 6 MiB | 6295552 | 8388608 | FAIL | FAIL |
+
+plus the ten small successes from 64 to 1664 bytes. **20 of 20**, and the discriminating pair is the
+inversion: `malloc(6144)` fails while `calloc(1, 12288)` succeeds, because 6144 lands in a group
+needing 20480 bytes and 12288 lands in one needing exactly 16384.
+
+This also collapses the Cause A / Cause B split. There was never a second mechanism: both
+"Cause B" cases — 6144 and 9081 — are on the same side of this one threshold. Splitting them was an
+artefact of modelling the geometry rather than the limit.
+
+**Where the limit is NOT.** `CV_MAX_REGION_BYTES` and `CAP_VM_MAX_BYTES` are both 256 MiB
+(`wire.h:60`, `vm.h:17`), and `CV_MAX_ARENAS` is 512 against a measured `arenas=9`, so neither is
+it. The only 16384 in the runtime headers is `CAPSTONE_DELEGATE_META_BYTES`
+(`include/capstone/delegate.h:50`), which is suggestive and unproven.
+
+**The honest state of the localisation.** The launcher's acquire appears in the trace as
+`CAPSTONE_VM_SERVICE nr=0xC0DE0001`, and there are exactly three such calls in the failing process,
+all `result=0`, none at the failure. Read literally that says mallocng returned NULL without ever
+requesting a mapping. It is NOT yet conclusive, for two reasons I would rather state than paper
+over: a `CAPSTONE_VM_BOUNDARY kind=2` does appear immediately before the failure and its result is
+not printed, and my own probe conflates two different NULLs — `ensure_ids(256)` failing and
+`__capstone_mallocng_malloc` returning NULL both increment `ng_null`. `ensure_ids` is called with a
+constant and cannot be size-dependent, so it is unlikely, but "unlikely" is not the standard this
+investigation has already failed twice.
+
+**Next, and it is cheap:** split that counter, and record the acquire's return value in
+`__capstone_malloc_map`. One rebuild, one run, and the answer is either "the acquire was refused,
+with this errno" or "mallocng never asked". Everything above is then either confirmed or replaced.
+
+### What this cost, and the rule that would have stopped it
+
+Three attributions in one session, two of them published to other lanes before a control had
+spoken:
+
+1. the launcher's `alignment == 4096` keying — refuted by its own control;
+2. "growth-timing, not size classes" — refuted by the same control;
+3. the single-slot group geometry — refuted by this pre-registered run.
+
+All three were derived from correct readings of real code, and all three named a step that was
+never the failing one. The project rule that covers this is already written — *ask what the
+instrument cannot distinguish, before the claim goes out* — and the specific omission each time was
+the same: no measurement said which step refused. The probe added this round is the first one that
+does, and it answered in a single run. **The lesson is to instrument the choke point before
+modelling the mechanism**, because a model of the wrong step is indistinguishable from a model of
+the right one until something measures.
