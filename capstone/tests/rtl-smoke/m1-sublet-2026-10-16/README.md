@@ -58,3 +58,31 @@ RTL lane's prediction on this bitstream.
 - take is expected unchanged within 0.1, as on v2.
 
 **Not established:** N = 1 per row, as 2026-10-01; the turnover witness, as above.
+
+## Amended before any M1 boot (2026-10-16 23:40): the fixed-runtime images
+
+All three 2026-10-01 images predate the sublet-runtime fix a07a11194fa0: `1b7a04fe`, `249cfda9` and `eb3ed1e3` carry
+no SHRINK. Under this bitstream's full bounds scheme their carves alias. `1b7a04fe` wedged M2 here (ISSUES R-55, the
+runtime half; `../m2-sublet-2026-10-16`), and H1's REVOKE finding was retracted for the same reason (dev
+783fb0f93f7e). So M1 runs on rebuilds from this lane, which carries the fix, made with dev147 at 0x410000 and -O1,
+with v2's defines (the paper bundle's `M1/2026-10-01-v2-series/manifest.json`).
+
+| boot | image | was | defines | carve |
+|---|---|---|---|---|
+| m1s16f-1 | `66764b0e62075e57` (`../h1f-sublet-2026-10-16`) | `1b7a04fe` | default | 336,112 |
+| m1s16f-5 | `74263f41e1386f69` | `249cfda9` | `-DM1_MAXRET=43296` | 963,312 |
+| m1s16f-2/3/4 | `b77b35e5628bb4ae` | `eb3ed1e3` | `-DM1_MAXRET=43296 -DM1_PROBE_RT=1 -DM1_STALE_MINT=0` | 964,080, as `eb3ed1e3` |
+
+- **Each image carries 14 SHRINK words.**
+- **The carves differ from the September bridge images, and the cause is known.** The tree's fixture storage grew
+  by 254,656 B between 09-19 and 09-29: the default build carved 81,456 in `1b7a04fe` and 336,112 in H1's
+  `da9c54e5`. The pressure image differs by exactly that amount (708,656 + 254,656). The probe image, built on 10-01
+  after the growth, reproduces `eb3ed1e3`'s carve exactly, which confirms the defines.
+- **Emulator flow checks, as v2's (`--cap 64 --budget 60000`):** drop, pressure and the probe image each end
+  `R1 m1 end … minted=671 revoked=640`, minted − revoked = 31. The pass records are in `qemu-pass/`.
+- **The stale probes moved by 0xd0 with the rest of `run_m1`:** READ (`lbu s1,0(a1)`) is at **image+0x4938** and
+  WRITE (`sb a0,0(a1)`) at **image+0x499c**. The spacing is unchanged; each instruction occurs once in each image.
+
+**Pre-registered readings as above, with the probe offsets as just stated.** Take, give and mint are reported
+against v2, not predicted from H1, whose REVOKE reading is retracted. The lists are unchanged, at most seven
+invocations per boot, which is within this line's region-table limit: R1's boot read seven and failed at the eighth.
