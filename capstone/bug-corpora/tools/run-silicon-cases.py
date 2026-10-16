@@ -41,6 +41,10 @@ postgres/c-repros: each case runs as `<image> N` against the real upstream funct
 `PG_DEFECT case=N expect_fault_in=<function>` before its access, and prints `case N RETURNED` if nothing faulted. A
 fault counts in that function or in a case.json fault site. Each case is also built with -DPGCLIENT_NEGATIVE_CONTROL,
 which moves one value to the safe side of the boundary; that image must complete and gates the arm.
+postgres/mmgr-repros: the same two images per case (-DPG_NEGATIVE_CONTROL), run as `0 N` against PostgreSQL's own
+memory-context managers (the port's `spatial` variant on silicon-pg-stock, `sublet` with patch 0003 on
+silicon-pg-sublet; sources via --extra-src). A fault counts in pg_probe or a case.json fault site; completion is
+`PG_DEFECT case=N mode=0 completed`. Its corpus control 00 (controls/) completes on stock and faults on Sublet.
 The carved corpus also runs its own controls as rows: 99 (one byte past a 16-byte carve, inside its block) on every
 arm, and 98 (a re-carved region's old alias) on the Sublet carve. They gate the arm like the four tool controls.
 
@@ -101,6 +105,11 @@ ARMS = {
     # wireshark/wmem-repros and its controls: which wmem source the image links is the arm (--extra-src)
     "silicon-wm-sublet": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-nested-pools",
                           "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    # postgres/mmgr-repros: which memory-context variant the image links is the arm (--extra-src)
+    "silicon-pg-stock": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-malloc",
+                         "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
+    "silicon-pg-sublet": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-pg-pools",
+                          "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
     "silicon-wm-stock": {"defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1", "virtual": "virtual-malloc", "wm_differential": True,
                          "controls": {"clean": "RETURNED", "oob": "CAUGHT", "uaf": "CAUGHT", "subobj": "RETURNED"}},
 }
@@ -140,9 +149,19 @@ LIFETIME = {
 
 # Families whose rows are runs with their own completion marker. c-repros names its expected function in its output.
 PGC = ("postgres", "c-repros")
+PGM = ("postgres", "mmgr-repros")
+PGM_CTL = ("postgres", "mmgr-repros", "controls")
 RUNFAM = dict(LIFETIME)
-RUNFAM[PGC] = dict(probe_from=r"PG_DEFECT case=\d+ expect_fault_in=([A-Za-z_][\w.$]*)@", done="case {n} RETURNED",
-                   virtual={"silicon-level0": "spatial", "silicon-lifetimes": "virtual-malloc"})
+RUNFAM[PGC] = dict(probe_from=r"PG_DEFECT case=\d+ expect_fault_in=([A-Za-z_][\w.$]*)@", done="case {n} RETURNED")
+RUNFAM[PGM] = dict(probe=r"^pg_(write_)?probe$", done="PG_DEFECT case={n} mode=0 completed")
+RUNFAM[PGM_CTL] = RUNFAM[PGM]
+# Corpora built as two images per case: the case and its negative control, which must complete and gates the arm.
+TWO_IMAGE = {
+    PGC: dict(kind="pg-c", neg="-DPGCLIENT_NEGATIVE_CONTROL", argv=lambda n: [str(n)], extra_glob="upstream_*.c",
+              virtual={"silicon-level0": "spatial", "silicon-lifetimes": "virtual-malloc"}),
+    PGM: dict(kind="pg-mmgr", neg="-DPG_NEGATIVE_CONTROL", argv=lambda n: ["0", str(n)], extra_glob=None,
+              virtual={"silicon-pg-stock": "virtual-malloc", "silicon-pg-sublet": "virtual-pg-pools"}),
+}
 
 
 def sublet_arm(arm):
@@ -151,7 +170,8 @@ def sublet_arm(arm):
 
 # corpus controls that gate their arm like the four tool controls (pool-control predates this and stays a plain row,
 # as set 2 was pre-registered with it)
-CONTROL_ROWS = ("carve-control", "mc-control", "wmem-control", "pg-c-control")
+CONTROL_ROWS = ("carve-control", "mc-control", "wmem-control", "pg-c-control", "pg-mmgr-control",
+                "pg-mmgr-corpus-control")
 PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
 CTL_PROBE = re.compile(r"^ctl_(read|write)_probe$")
 
@@ -161,8 +181,10 @@ def kind_of(corpus):
     rel = corpus.relative_to(REPO / "capstone/bug-corpora").parts
     if rel in LIFETIME:
         return "lifetime-control"
-    if rel == PGC:
-        return "pg-c"
+    if rel in TWO_IMAGE:
+        return TWO_IMAGE[rel]["kind"]
+    if rel == PGM_CTL:
+        return "pg-mmgr-corpus-control"
     if rel[1] == "pool-repros":
         return "pool-control" if "controls" in rel else "pool"
     if rel[1] == "wmem-repros":
@@ -288,23 +310,34 @@ def cmd_build(a):
         carve = arm.get("carve", {}).get(rel[1], "")
         flags = f"{a.opt} -I{shared} {carve} {arm.get('corpus_defs', {}).get(rel[1], '')} {a.extra_cflags} {appf}".split()
         driver = shared / arm.get("driver", "driver.c")
-        if rel == PGC:
-            ups = sorted(str(f) for f in shared.glob("upstream_*.c"))
-            v = RUNFAM[PGC]["virtual"].get(a.arm)
+        if rel in TWO_IMAGE:
+            ti = TWO_IMAGE[rel]
+            ups = sorted(str(f) for f in shared.glob(ti["extra_glob"])) if ti["extra_glob"] else []
+            v = ti["virtual"].get(a.arm)
             if v is None:
-                sys.exit(f"CONTROL-FAILED c-repros has no recorded arm to predict {a.arm} from")
+                sys.exit(f"CONTROL-FAILED {'/'.join(rel)} has no recorded arm to predict {a.arm} from")
             for d in sorted(x for x in corpus.glob("[0-9][0-9]_*") if (x / "case.c").is_file()):
                 name, n = f"{tag}-{d.name[:2]}", int(d.name[:2])
                 verdict = json.loads((d / "case.json").read_text())["arms"][v]["verdict"]
-                cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind="pg-c", n=str(n),
-                                   runs=[dict(variant="case", argv=[str(n)],
+                cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind=ti["kind"], n=str(n),
+                                   runs=[dict(variant="case", argv=ti["argv"](n),
                                               expect="CAUGHT" if verdict == "CAUGHT" else "COMPLETED")])
                 jobs.append((name, [str(d / "case.c"), str(driver), *ups, *a.extra_src], " ".join(flags), arm["defs"],
                              out, a.data, a.arena))
-                cases[f"{name}-ctl"] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind="pg-c-control",
-                                            n=str(n), runs=[dict(variant="control", argv=[str(n)], expect="COMPLETED")])
+                cases[f"{name}-ctl"] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name,
+                                            kind=f"{ti['kind']}-control", n=str(n),
+                                            runs=[dict(variant="control", argv=ti["argv"](n), expect="COMPLETED")])
                 jobs.append((f"{name}-ctl", [str(d / "case.c"), str(driver), *ups, *a.extra_src],
-                             " ".join(flags + ["-DPGCLIENT_NEGATIVE_CONTROL"]), arm["defs"], out, a.data, a.arena))
+                             " ".join(flags + [ti["neg"]]), arm["defs"], out, a.data, a.arena))
+            continue
+        if rel == PGM_CTL:      # the corpus's own control: completes on stock, faults at the probe on Sublet
+            for d in sorted(x for x in corpus.glob("[0-9][0-9]_*") if (x / "case.c").is_file()):
+                name, n = f"{tag}-{d.name[:2]}", int(d.name[:2])
+                cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=d.name, kind="pg-mmgr-corpus-control",
+                                   n=str(n), runs=[dict(variant="control", argv=["0", str(n)],
+                                                        expect="CAUGHT" if sublet_arm(a.arm) else "COMPLETED")])
+                jobs.append((name, [str(d / "case.c"), str(driver), *a.extra_src], " ".join(flags), arm["defs"],
+                             out, a.data, a.arena))
             continue
         fam = LIFETIME.get(rel)
         if fam:
@@ -381,7 +414,7 @@ def score(a, runs):
                 else:
                     probe_re = re.compile(fam["probe"])
                 outcome, detail = rcd.classify(text, result, syms, probe_re)
-                if outcome == "CAUGHT" and "(the labelled probe)" not in detail and c["kind"] == "pg-c" \
+                if outcome == "CAUGHT" and "(the labelled probe)" not in detail and c["kind"] in ("pg-c", "pg-mmgr") \
                         and rcd.at_declared_site(REPO / c["corpus"] / c["case"], detail):
                     detail += " (a declared fault site)"
                 if outcome != "CAUGHT" and result.get("kind") == "exit" and result.get("value") == 0 \
