@@ -9,3 +9,8 @@ jsonroot	174b	1	0x1c10000	33e71cce67e5ea0c	jsoneachroot NOTRAP done
 backupattach	15	1	0x2010000	8fe5a153c1229ac3	FAULT
 base322	-	2	0x410000	a958958b0d8d5101	__CAPSTONE_SQLITE_MEMORY_PASSED__
 detachtrig	4	2	0x2410000	02ca19e2f6f5affe	FAULT
+base322	-	3	0x410000	a958958b0d8d5101	__CAPSTONE_SQLITE_MEMORY_PASSED__
+blobclose03	c03	3	0x1410000	634b15ac0e5f9c98	blobclose NOTRAP done
+ctluafmem5	ctl	3	0x2810000	30b37a0448073a7a	CONTROL uaf-mem5 mark, returns
+ctlboundsmem5	ctl	3	0x3010000	2cb47577b8fc9a59	CONTROL bounds-mem5 mark, returns
+backupattachrev	c02rev	3	0x2c10000	1fc539c154e66fe2	backupattach NOTRAP done
