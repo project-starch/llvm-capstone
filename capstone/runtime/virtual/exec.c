@@ -24,6 +24,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <capstone/representable.h>
 extern char **environ;
 struct mapping {
     void *address;
@@ -160,6 +161,21 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
     unsigned i;
     for (i = 0; i < CV_MAX_ARENAS && maps[i].address; ++i) {}
     if (i == CV_MAX_ARENAS) { errno = ENOSPC; return -1; }
+    /* Option (iii): refuse to mint an arena whose bounds the encoder cannot represent, rather
+     * than hand the domain a capability silently widened below its base or above its end.
+     *
+     * THIS CANNOT FIRE TODAY, and that is worth stating rather than leaving to be discovered.
+     * Every size reaching a grant is a power of two of at least 4096 -- rounded() doubles from
+     * 4096 until it covers its argument, and CAPSTONE_DELEGATE_META_BYTES and
+     * CAPSTONE_LAUNCH_BYTES are 16384 and 65536 -- and reserve() aligns the base to `bytes`,
+     * which for a power of two implies granule alignment, since the granule is bytes/512 at
+     * most. So the launcher's arenas are representable by construction.
+     *
+     * The check is here because that construction is an invariant of three separate pieces of
+     * code, none of which says so, and a future size that is not a power of two would otherwise
+     * hand the domain a silently widened capability. Every arena the launcher grants passes
+     * through this one function. Negative-tested in tests/exact-bounds-iii/grant-repr-test.c. */
+    if (!capstone_repr_ok((uintptr_t)base, bytes)) { errno = ERANGE; return -1; }
     struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0};
     if (ioctl(device, CV_ADD, &r)) return -1;
     maps[i] = (struct mapping){.address = base, .bytes = bytes, .visible = bytes,

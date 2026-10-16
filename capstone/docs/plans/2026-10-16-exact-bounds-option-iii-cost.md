@@ -758,3 +758,43 @@ claim than the one the port currently makes.
 **Not blocked meanwhile.** The big-path granule trim, the `mremap` path, the per-class storage
 offset, memsys5's static-arena alignment and item 2's checker are all outside the locked regions
 and proceed either way.
+
+## The launcher needs NO alignment change — `rounded()` returns powers of two
+
+Scope reduction, and a correction to my own premise. I wrote a change to `reserve()` on the
+assumption that `image_bytes` and `stack_bytes` are page-rounded and therefore not powers of two,
+which would have made its `& ~(bytes - 1)` a meaningless mask. **That premise was false, and I
+inferred it from the function's name instead of reading it.** `exec.c:123-129`:
+
+    static size_t rounded(size_t n)
+    {
+        size_t size = 4096;
+        if (!n || n > CV_MAX_REGION_BYTES) return 0;
+        while (size < n) size <<= 1;
+        return size;
+    }
+
+It **doubles from 4096**, so every result is a power of two of at least 4096. Verified by running
+it over 200,000 inputs plus the large cases: **0 results that are not a power of two and a granule
+multiple**. The two constant sizes are powers of two as well — `CAPSTONE_DELEGATE_META_BYTES`
+16384, `CAPSTONE_LAUNCH_BYTES` 65536.
+
+A power-of-two length is always a granule multiple (the granule is `bytes/512` at most), and
+`reserve()` aligns the base to `bytes`, which for a power of two implies granule alignment. **So
+every arena the launcher grants is representable by construction**, and the `reserve()` change was
+reverted.
+
+**What was kept is the check at the chokepoint.** `grant()` is the one function every launcher
+arena passes through, and it now refuses an unrepresentable one rather than minting a capability
+silently widened below its base. The comment states plainly that **it cannot fire today** — the
+construction above guarantees it — and why it is there anyway: that construction is an invariant
+of three separate pieces of code, none of which says so, and a future size that bypasses
+`rounded()` would otherwise hand the domain a widened capability.
+
+**A check that cannot fire needs a test that can.**
+`capstone/tests/exact-bounds-iii/grant-repr-test.c` asserts the launcher's real shapes pass — every
+`rounded()` size at a `bytes`-aligned base, plus both constants — and that four guarded shapes are
+refused: a non-power-of-two length at a page-aligned base, a length that is not a granule multiple,
+a base one byte off (`exact-bounds.sh`'s `edge=1` descriptor), and a 16-byte-aligned static arena
+(memsys5's case). Negative-tested: against a predicate that ignores the base, the test fails with
+exactly those three base-dependent cases.
