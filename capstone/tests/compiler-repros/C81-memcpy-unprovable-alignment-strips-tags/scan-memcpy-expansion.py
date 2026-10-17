@@ -33,9 +33,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 LOADS = {"lb": 1, "lbu": 1, "lh": 2, "lhu": 2, "lw": 4, "lwu": 4, "ld": 8}
 STORES = {"sb": 1, "sh": 2, "sw": 4, "sd": 8}
-# Anything that ends a straight-line run. Capability moves end it too: a run that
-# contains ldc/stc is not the scalar path.
-BREAKERS = re.compile(r"^(j|jr|jal|jalr|b[a-z]+|ret|ecall|ebreak|ldc|stc|movc|c[a-z]+|tail|call)\b")
+# What ends a straight-line run: control flow, and capability-WIDTH moves (a run containing
+# ldc/stc is not the scalar path).
+#
+# `c[a-z]+` USED TO BE IN THIS LIST AND WAS A DEFECT. It matched cincoffset/cincoffsetimm, i.e.
+# the pointer arithmetic a copy performs BETWEEN its own chunks, so one copy was split into
+# sub-threshold pieces and dropped. Measured cost on two subobject images: 30 runs hidden in
+# each (91 -> 121, 82 -> 112). The positive control never caught it because repro.c's copies
+# have no intervening capability arithmetic -- a check keyed to one shape silently missing
+# another. `check_no_split_on_pointer_arithmetic()` below is the test that would have.
+BREAKERS = re.compile(r"^(j|jr|jal|jalr|cjal|cjalr|b[a-z]+|ret|ecall|ebreak|ldc|stc|movc|tail|call)\b")
 
 
 def disassemble(path: Path, objdump: str):
@@ -91,6 +98,29 @@ def scan(path: Path, objdump: str, threshold: int):
     return hits
 
 
+def check_no_split_on_pointer_arithmetic() -> int:
+    """A copy's own pointer arithmetic must not end its run. Synthetic, so it always runs.
+
+    This is the regression test for the `c[a-z]+` breaker defect: 32 one-byte stores with a
+    `cincoffsetimm` in the middle are ONE copy, and must be reported as one run of 32 bytes,
+    not two of 16. Deterministic -- no compiler needed.
+    """
+    mid = [(0, "lbu", "a2, 0(a0)"), (0, "sb", "a2, 0(a1)")] * 16
+    mid.insert(16, (0, "cincoffsetimm", "a0, a0, 0x10"))
+    got = runs(mid, 16)
+    ok = len(got) == 1 and got[0][0] == 16
+    print(f"  self-test synthetic  pointer-arithmetic mid-copy "
+          f"{'one run, not split (ok)' if ok else f'SPLIT into {len(got)} -- the breaker defect is back'}")
+    # and the converse: control flow MUST still end a run
+    br = [(0, "lbu", ""), (0, "sb", "")] * 16
+    br.insert(16, (0, "beq", "a0, a1, .L1"))
+    got2 = runs(br, 16)
+    ok2 = len(got2) == 0 or all(r[0] < 16 for r in got2)
+    print(f"  self-test synthetic  control flow mid-copy        "
+          f"{'splits the run (ok)' if ok2 else 'DID NOT split -- breaker too narrow'}")
+    return 0 if (ok and ok2) else 1
+
+
 def self_test(objdump: str, threshold: int, clang: str) -> int:
     src = HERE / "repro.c"
     if not src.is_file():
@@ -103,7 +133,7 @@ def self_test(objdump: str, threshold: int, clang: str) -> int:
              "-Xclang", "-target-feature", "-Xclang", "+d",
              "-Xclang", "-target-abi", "-Xclang", "lp64", "-fno-jump-tables",
              "-mllvm", "-capstone-gp-free", "-mllvm", "-capstone-image-gp"]
-    rc = 0
+    rc = check_no_split_on_pointer_arithmetic()
     with tempfile.TemporaryDirectory() as tmp:
         for arm, extra in (("plain", []), ("nobuiltin", ["-fno-builtin"])):
             obj = Path(tmp) / f"c81-{arm}.o"

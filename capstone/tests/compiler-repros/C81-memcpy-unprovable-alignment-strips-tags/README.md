@@ -204,6 +204,41 @@ So a corpus reading of "all cells restored under `-fno-builtin`" means *those* c
 sub-capability units. Its positive control (`--self-test`, this folder's `repro.c`) fires in both
 directions and at both units.
 
+**THE SCANNER IS NOT AN ENUMERATION, AND ITS COUNTS HERE ARE LOWER BOUNDS.** Counting instead the
+`mem*` call references a libcall twin GAINS, per function, the board lane measured (dev
+`935196067e79`, `capstone/tests/rtl-smoke/c81-silicon-exposure-2026-10-17/`):
+
+| image | expansions the twin diverts | this scanner's plain-only runs |
+|---|---:|---:|
+| SQLite 02 | 48 | 2 |
+| SQLite 05 | 47 | 2 |
+| set 1 controls | 12 | 8 |
+| set 1 heap-00 | 13 | 9 |
+| mruby | 2,957 | 89 |
+
+Most of the remainder are `ldc`/`stc`-width or under 16 bytes, which this tool is right to ignore —
+but the gap is far too large for the diff to be read as a count of anything. **To enumerate, count
+the calls the twin gains** (`memcalls2.py`), then judge each candidate with `granule-check.py`,
+which flags a run whose stores cover 16 contiguous bytes from one base and has its own positive
+control. `rescan-nosplit.py` is the equivalent of the fix described below.
+
+**A defect this tool had, with its measured cost, because the lesson generalises.** `BREAKERS` used
+to include `c[a-z]+`, which matched `cincoffset`/`cincoffsetimm` — the pointer arithmetic a copy does
+*between its own chunks* — so one copy was split into sub-threshold pieces and dropped. On two
+subobject images that hid **30 runs each** (91 -> 121, 82 -> 112). **The positive control could never
+have caught it**: `repro.c`'s copies have no intervening capability arithmetic, so the check was
+keyed to one shape and silently missed another. Fixed, and `--self-test` now carries a synthetic
+two-sided regression test — 32 one-byte stores with a `cincoffsetimm` in the middle must report as
+ONE run, and a `beq` in the middle must still split one.
+
+Re-measuring the nine-case diff with the fix changes the counts and not the conclusion: unit-1 runs
+55 -> 56, unit-4 9 -> 20, unit-8 18 -> 18. Per case the byte-granular count stays at 6 (case 01
+7 -> 8). **So the table below is a lower bound on a real asymmetry, not a census.**
+
+**A second known limit:** `--diff` keys runs by SHAPE, not by function, because these images are
+stripped and the two builds renumber `.Lpcrel_hiNN`. Two distinct copies with the same shape are
+therefore indistinguishable, and can cancel in the set difference.
+
 **Use it as a DIFF between two builds of one source, not as a scan of one image.** A single
 image's hit count is dominated by ordinary struct and array code at unit 8; the informative
 quantity is which runs one build has and the other does not.
