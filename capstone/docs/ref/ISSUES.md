@@ -9463,6 +9463,57 @@ override from its absence". Neither printed exit 75.
 
 ## Compiler / toolchain (ours)
 
+### C-27 — `delin` of a NONLIN gp-derived global base traps on silicon (cause 26) `REOPENED 2026-10-18 — the FIXED 2026-09-05 claim in ISSUES-ARCHIVE.md is WRONG and cost vp2's Tier 1/2 boot 2. The lead ruled the same day to drop the DELIN under the image-gp contract; this entry closes when the pins and the rebuilt images are green`
+
+> **RETRACTION of "FIXED 2026-09-05 — the DELIN is dropped under the NONLIN-gp contract".**
+> That archive entry (kept verbatim in `ISSUES-ARCHIVE.md`, with a pointer here) says "Fixed by not
+> emitting the DELIN under the NONLIN-gp contract (the gp-captable ABI never needed it)". Only the
+> parenthetical was ever true. The default and image-gp ABIs were never fixed, and the tree refutes
+> the claim four ways — each of these was checkable on 2026-09-05:
+>
+> 1. `CapstoneExpandPseudoInsts.cpp` `expandCapGlobalBase` emitted
+>    `BuildMI(..., Capstone::DELIN, DstReg).addReg(DstReg)` **unconditionally**, with no ABI gating
+>    of any kind, immediately after the SCC/CIncOffset.
+> 2. **The pin the entry cites asserts the opposite.** `gp-table-linear-delin.ll` reads "under the
+>    default global ABI every gp-derived base is `delin`ed once ... Under `-capstone-gp-captable`
+>    ... there is NO delin anywhere", and says in terms that it "pins today's emission so the Tier 4
+>    DELIN decision (drop the delin under the NONLIN-gp contract ...) has a red test to flip". It is
+>    a pin that the delin is STILL EMITTED.
+> 3. **There was no NONLIN-gp contract in the backend to be gated on.** No `nonlin-gp`, `NonlinGp`
+>    or `CapstoneGpNonlin` option existed; the only gp predicates were `capstoneGpFreeAbiActive()`
+>    and `capstoneImageGpAbiActive()`, neither consulted at the DELIN site.
+> 4. `CapstoneISASemantics.md` continued to list C-27 as live — "the default global ABI (`delin` of
+>    a NONLIN gp-derived base) is QEMU-only by construction ... the DELIN decision is the project
+>    lead's" — i.e. the decision the archive recorded as made was still open in the same tree.
+>
+> **What the false FIXED cost.** vp2's Tier 1/2 boot 2 (2026-10-18). Every virtual step faulted with
+> cause 26 at `delin a0` immediately after `scc a0, gp, a0` in `__capstone_cap_init`, and the board
+> lane's census showed it is not one glue site but the global-address materialisation itself:
+> **525 of contract.dom's 530 delins are gp-derived, 5,983 of 5,988 in sqlite3.dom, 9,859 of 9,863
+> in mruby.** A boot was spent rediscovering a filed defect because this file said it was fixed.
+> (QEMU's own `op_helper.c:782` comment already counted 9,688 of 9,690 for mruby.)
+>
+> **Mechanism, for the record.** SCC and CIncOffset INHERIT gp's type, so the materialised base is
+> LINEAR iff gp is. `delin` of a non-LINEAR capability is UNEXPECTED_CAP_TYPE per the spec and
+> raises cause 26 on the RTL (`capstone_dyn_unit.anvil:476-477`), while QEMU's `helper_csdelin`
+> returned early on a NONLIN operand and hid it. The trusted adapter grants every launch slot
+> NONLIN (`reg=3, linear=0`), so under image-gp the base is always NONLIN and the DELIN was a no-op
+> on QEMU and fatal on silicon — QEMU-only by construction.
+>
+> **Why the DELIN existed, and why removing it is conditional.** Two consumers need the base NONLIN:
+> it is COPIED (one base serves several accesses, and `movc rd, rs1` nulls a tagged non-NONLIN
+> source), and `selectLGA`'s SHRINK path READS IT TWICE (the cursor, then SHRINK), which a LINEAR
+> value does not permit. So the removal is sound **only** as a consequence of the NONLIN-gp
+> guarantee, which is why it is keyed to `capstoneImageGpAbiActive()` and is now documented as a
+> precondition of `-capstone-image-gp` rather than left as an incidental property of today's
+> adapter. A gp-free build whose gp is not the image grant keeps the DELIN, as does the default
+> capability ABI.
+>
+> **The lesson, which is the reusable part.** A FIXED status is a claim about the tree, and this one
+> was refutable from the pin named in its own entry. Before trusting a FIXED status, check the
+> cited pin asserts what the fix claims — a pin written to be *flipped later* reads exactly like a
+> pin that the fix is in place.
+
 ### C-50 — an integer-valued pointer in an aggregate passed BY VALUE (union or struct) is copied through an address formed with integer `addi` on the frame pointer, which faults `OPEN — COMPILER, caller side (byval copy, CapstoneISelLowering.cpp:24316); found 2026-09-23 by the FFmpeg app port on QEMU, reduced to 12 lines, proven from disassembly and -debug-only=isel; worked around in the port; audited and CORRECTED the same day, see the box`
 
 > **Not the "C-50" in commit `f8b140caa818` / PR #75.** That merged fix is Assignment Tracking's
