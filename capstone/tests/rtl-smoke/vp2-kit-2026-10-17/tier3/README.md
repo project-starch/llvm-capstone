@@ -527,3 +527,40 @@ All four also take `CMAKE_BUILD_TYPE=Debug` and `-isystem <the kit's clang>/lib/
   - If the fixed arm still faults 24 at 0, the hypothesis is wrong for this case, and the cell is read from its
     transcript.
 - **Bundle 13's tally, if the prediction holds:** CAUGHT 9.
+
+**Result (2026-10-17 09:23-09:25): one bundle of four as predicted; the other three FAIL their controls.**
+
+The cases and controls were built with `CAPSTONE_LLVM_BUILD_DIR` set to the kit's own LLVM, the one the SDK was built
+with. The preset's default, `<src>/llvm/cmake-build-debug`, does not exist in this source tree, and the first attempt
+failed at configure on its missing `llvm-ar`. The runner accepted every CMakeCache (`cache_says`).
+
+| # | bundle | read | recorded | cells equal to the record |
+|---|---|---|---|---|
+| 12 | memcached allocator, `virtual-malloc` | CAUGHT 1, MISSED 8 | CAUGHT 1, MISSED 8 | **9 of 9** |
+| 9 | ffmpeg pool, `virtual-malloc` | NO-READING:control-failed 4 | MISSED 4 | 0 of 4 |
+| 10 | ffmpeg pool, `virtual-nested-pools` | NO-READING:control-failed 4 | CAUGHT 4 | 0 of 4 |
+| 13 | memcached allocator, `virtual-nested-pools` | NO-READING:control-failed 9 | CAUGHT 8, control-failed 1 | 1 of 9 (case 05, control-failed as recorded) |
+
+**Two signatures:**
+- **ffmpeg pool, both arms.** Every program, the `pool-return-90` control included, faults with cause 24 at
+  `cap_malloc_validate`.
+  - That is `free()`'s probe load (`runtime/virtual/heap.c:333`, `lbu zero, 0(p)`), so `free` is reached with a
+    pointer that is not a capability.
+  - The generic controls, bounds-malloc (28) and uaf-malloc (25), read as expected.
+  - Not C-72: the kit's compiler defines `__SIZEOF_INTCAP__`, and the port has no intcap guard.
+  - The caller is not identified.
+- **memcached allocator, Sublet arm only.** The control and seven of the cases fault with cause 29 inside
+  `capstone_cap_derive`, at its CDERIVE (word `0xa2e395db`, funct7 0x51), after its own window test has passed.
+  - The stock arm of the same corpus runs clean.
+  - Case 01's buggy arm still faults 25 at `read_probe`, a correct catch.
+  - A 29 from CDERIVE with the window inside the parent is consistent with Q-15's refusal of an inexact child on
+    QEMU's virtual profile. The child's bounds are not logged, so **that is not established**.
+
+**Prediction for bundle 13's case 05: not confirmed.** It reads control-failed again, so the NULL-from-`add()`
+hypothesis is not supported for that case either. Its fixed arm now fails before reaching that point, inside
+`capstone_cap_derive`.
+
+**What is not excluded:** a defect in this rebuild rather than in the revision. Prebuilt mode builds each port from
+the CURRENT corpus scripts at 89ee98be99e5, with the cache options as recorded. The recorded bundles came from older
+script and runner revisions, with another toolchain (`~/pg-virtual-kit`). The plain case.c bundles, built by the
+runner itself, all ran.
