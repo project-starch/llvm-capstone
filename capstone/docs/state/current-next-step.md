@@ -1,3 +1,13 @@
+2026-10-18 (vp2 boot 1): **vp2's first virtual boot wedged at the module's `ldc t0, 0(a5)`: NOT silicon. Two RTL/QEMU
+divergences (Q-23: the RTL refuses an integer-based LDC from trusted S with 24, QEMU loads it; Q-24: the RTL's medeleg
+mask cannot delegate causes 24-30, QEMU's can) and the monitor's EXCX path (fault_return_from_domain taken for a kernel
+trap with no domain active, the stack swap never undone, so the next trap's CINCOFFSETIMM at _cap_trap_entry+4 raises 24
+on S's integer sp).** Answer of record sent to the runtime and board lanes with file:line on all three sources; the
+CSMINT emulation's restore is exact and not involved. The semantics owner's provisional ruling: QEMU's trusted-S scalar
+LDC is the reference, STC stays refused on both. vp2c (Q-23 + Q-24, nothing else) is to be pre-registered on a branch so
+synthesis starts the moment the compiler lane says add() cannot drop the load; the monitor's injection path is the board
+lane's fix for the wedge regardless.
+
 2026-10-18 (A failed): **Attribution build A (D3 off) FAILED TO ROUTE after ~5 h: 242 signals unrouted for congestion, 171
 node overlaps, no bitstream, no routed WNS** (the log's -14.662 is an intermediate figure on an illegal route and is not
 recorded). Its area grade stands (post-phys_opt counts). Finding for every bitstream that follows: routability at ~178k LUT

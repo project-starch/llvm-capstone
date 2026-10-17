@@ -1464,6 +1464,57 @@ Linux cross compiler (`build-adapter.sh:18-22`), its board binary has no capabil
 positive control: the grep finds them there). PU therefore never matters on silicon for the corpus; the divergence
 stays recorded for any future U-mode-outside-a-context design.
 
+## Q-23 — an LDC whose base is an INTEGER from trusted S: the RTL refuses with 24 in every mode, QEMU loads it through S's translation (its "trusted-kernel context spill" branch) `OPEN — RTL/QEMU divergence found on vp2's first virtual boot (2026-10-18, the module's ldc t0, 0(a5) with a5 a kernel pointer); the semantics owner rules, QEMU's trusted-S behaviour the reference unless the RTL states a reason, and it states none`
+
+The RTL (`virtual-profile-2-d` bf3db3175, resident as caplifive_vp2_bf3db3175): the DYN unit's LDC handler
+(`capstone_dyn_unit.anvil:641-654`) raises UNEXPECTED_OPERAND, cause 24, when `rs1.metadata.cap_type == NOT_CAP`, with
+no privilege, srevroot or context qualifier; no scalar-address capability load exists anywhere in the RTL (the LSU's
+cause-24 site, `load_store_unit.sv:1316-1343`, is the separate M-mode check on scalar accesses). QEMU (d35af47b163c):
+`trans_csldc`'s third branch (`insn_trans/trans_capstone.c.inc:214-224`), taken when `ctx->priv == PRV_S &&
+capstone_u_mode` and the context is not in capability-data mode, computes the address as the integer gpr[rs1] + imm
+and calls `helper_capstone_ldc` with rs1 = UINT32_MAX; `capstone_ldc_granule` (`op_helper.c:2173-2225`) checks 16-byte
+alignment, translates through S's satp (`probe_access_full`), reads the granule, queries the tag, and for a tagged
+non-NONLIN value consumes the source after a store probe, skipping the base-permission check because rs1 ==
+UINT32_MAX (:2206). The branch is commented "Experimental trusted-kernel context spill: the kernel slot address is
+scalar, while the saved user register retains its full tag". STC has no scalar-S branch on either side (`trans_csstc`
+:302-340 has only the virtual-data and cap-data arms): a scalar-S STC is cause 2 on QEMU and 24 on the RTL. The module
+(capstone_vm.ko `add()`, `.text+0x27d4`) relies on the QEMU branch; QEMU runs its sequence 41 of 41, silicon traps at
+the first such load.
+
+**RTL change if ruled for QEMU** (costed, not built): the DYN LDC handler accepts a NOT_CAP rs1 when the issuer is
+trusted S (S with srevroot != 0, outside a context: the admission qualifier CSNODE/CSRETIRE already use,
+`decoder.sv:93`, `:1301`) and issues the load at the integer cursor + imm under S translation with no bounds or
+permission check, the tag from the granule and consumption as today; STC the same only if ruled (QEMU would then need
+the branch too). One arm (va-trusted-ldc: the load of a tagged and an untagged granule, the LIN consumption, and the
+refusal from U and from inside a context), the sweep and the sup list; cycle-neutral; a bitstream follows. Until a
+bitstream carries it, the module must not execute an LDC with an integer base on silicon.
+
+## Q-24 — the RTL's medeleg write mask has no bits for the capability causes 24-30, so an S-mode capability fault always lands in M; QEMU lets firmware delegate them `OPEN — RTL/QEMU divergence found on the same boot (2026-10-18); the fix is one line in the RTL, default behaviour unchanged; until then the monitor injects the cause into S in software`
+
+`csr_regfile.sv:1642-1659`: the CSR_MEDELEG write mask lists the standard causes up to STORE_GUEST_PAGE_FAULT and
+nothing above, so medeleg bits 24-30 read 0 whatever the firmware writes, and the delegation test
+(`csr_regfile.sv:2239`, `medeleg_q[ex_i.cause]`) never sends a capability cause to S. QEMU (d35af47b163c
+`csr.c:1140-1168`): `CAPSTONE_DELEGABLE_EXCPS` (UNEXP_OP_TYPE 24, INVALID_CAP 25, UNEXP_CAP_TYPE 26, INSUF_CAP_PERMS
+27, CAP_OOB 28, ILLEGAL_OP_VAL 29, INSUF_RESOURCES 30) is part of `DELEGABLE_EXCPS`, "a protected U task's capability
+faults must reach its trusted kernel in S; firmware chooses by programming medeleg", and `riscv_cpu_do_interrupt`
+honours it (`cpu_helper.c:1712`, `:1851`).
+
+**The wedge this produced, for the record (the monitor's, not the RTL's).** The FPGA monitor's `handle_exception`
+default (`sbi_capstone.c:3520-3554`, capstone-sbi cb91d7d) reports EXCX/MCAU/MEPC/MTVL/MSTA and then calls
+`fault_return_from_domain` (:3049) -> `return_from_domain` (:3034): `*caller_buf = retval;
+__domreturnsaves(caller_dom, ...)` with no check that a domain is running. The cause-24 trap of Q-23 came from S
+outside any domain call (MSTA 0x820: MPP = S), so the domain switch is undefined, and that path never executes
+`return_to_sumode`'s `CCSRRW(sp, CCSR_CSCRATCH, sp)` (`sbi_capstone.S:200`), so CSCRATCH keeps S's INTEGER sp. The
+next trap's entry swaps it into sp (:14) and `_cap_trap_entry+4` = `CINCOFFSETIMM(sp, sp, -256)` (:16) raises 24 in M
+on the untagged sp, with tval 0xffffffc80415bca0 = that kernel stack address: the second trap of the boot, exactly.
+**Software rule until the RTL fix is resident:** on an unhandled cause with MPP = S and no active domain the monitor
+injects the trap into S as `csm_inject` already does for CSMINT refusals (`capstone_csmint.S`: scause = mcause, stval =
+mtval, sepc = mepc, sstatus.SPP = 1, SPIE = SIE, SIE = 0, mepc = stvec) and leaves through `return_to_sumode` so the
+stack swap is undone; `fault_return_from_domain` refuses to run without an active domain. **RTL fix:** the mask gains
+`(1 << 24) | ... | (1 << 30)`; with medeleg bits clear by default nothing changes until firmware sets them. The CSMINT
+emulation's register restore is exact on both exits (`sbi_capstone.S:14-45` save, `:163-200` restore, `capstone_csmint.S:13-16`)
+and is not involved.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
