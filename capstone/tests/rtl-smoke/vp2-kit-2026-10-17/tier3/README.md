@@ -460,3 +460,107 @@ That kit carries the module's `add()` fix, whose results are in `../RESULTS.md`.
 
 **What this shows:** the third pilot's two NO-READING cells were the module's arena rule. On the candidate revision
 the Sublet bundle reproduces its recorded verdicts in full. The rebuild of the other 23 bundles is still to run.
+
+## The plain case.c bundles on the fixed v6 revision: pre-registered (2026-10-17, before the runs)
+
+Next are the five bundles whose recorded build is the plain case.c recipe: no `cc_args`, flags `-O0 -DCORPUS_VIRTUAL`,
+runner `tools/run-virtual-cases.py`. They run on the same kit, SDK, runner and toolchain as the fixed Sublet pilot
+above. Each gets its own guest boot, serially under the QEMU lock, with output outside the corpus's `results/`.
+
+| manifest # | corpus | arm | cases | recorded tally |
+|---|---|---|---|---|
+| 5 | `ffmpeg/carved-repros` | `virtual-malloc` | 13 | MISSED 13 |
+| 7 | `ffmpeg/plain-heap-repros` | `virtual-malloc` | 25 | CAUGHT 25 |
+| 8 | `ffmpeg/plain-temporal-repros` | `virtual-malloc` | 13 | CAUGHT 13 |
+| 23 | `wireshark/plain-heap-repros` | `virtual-malloc` | 12 | CAUGHT 12 |
+| 24 | `wireshark/plain-temporal-repros` | `virtual-malloc` | 10 | CAUGHT 10 |
+
+**Predictions:**
+- **Every one of the 73 cells equals its recorded cell** in verdict, fault cause, faulting probe symbol, attribution
+  and reach. The same script as the Sublet pilot's checks this.
+- **Each bundle's configuration controls read as the runner expects.**
+
+**Why bundle 5's MISSED is the right reading:** without the Sublet carve, a crossing between carved sub-regions of one
+malloc block stays inside the block's bounds. Its record says MISSED 13, the same cases the nested-pools arm catches.
+
+**What a mismatch would say:** a CAUGHT where MISSED was recorded, or the reverse, is a change of verdict on the
+candidate revision. A NO-READING is a harness or heap problem, to be read from the guest transcript before anything
+else.
+
+**Result (2026-10-17 09:20-09:21, one guest boot per bundle):**
+- **Every verdict holds:** MISSED 13, CAUGHT 25, CAUGHT 13, CAUGHT 12 and CAUGHT 10, the recorded tallies.
+- **The cell-by-cell prediction held for four of the five bundles,** 63 cells with 0 mismatches.
+  - The check is `compare-cells.py` (committed here), the Sublet pilot's comparison as a tool.
+  - Its positive control, over the third pilot's verdicts, finds exactly cases 00 and 10.
+- **It missed for the fifth, `wireshark/plain-temporal-repros`.** All 10 cells are CAUGHT at the same probe
+  (`wst_read_probe`), attribution `probe`, reached. But the fault cause is **25** where the record says **24**.
+  - The guest's line for each is QEMU's `Cap mem access on revoked capability`.
+  - This bundle was recorded on 2026-10-10. The other two temporal bundles were recorded on 2026-10-11 and read 25 for
+    the same access shape: `ffmpeg/plain-temporal-repros` 13 x 25, `memcached/plain-temporal-repros` 3 x 25.
+  - So the record that differs is the older one, and the new runs agree with the newer records.
+  - Why the 2026-10-10 runtime read 24 is not established here.
+
+## The prebuilt bundles on the fixed v6 revision: pre-registered (2026-10-17, before the builds)
+
+These four bundles run in the runner's prebuilt mode. Each corpus's `shared/build-cases.sh capstone-application` is
+rebuilt against the kit's v6 SDK with the recorded `build.cache` options, and so is its `controls/virtual` copy. The
+runner refuses a CMakeCache that does not state those options and that SDK (`cache_says`).
+- **The archives are local copies,** so nothing is downloaded: FFmpeg 9.0.1 from `/tmp/capstone/ffmpeg-buffer-pool`
+  through `FFPOOL_ARCHIVE`, and memcached 1.6.45 from `/tmp/capstone/dl`, the port's default.
+- **The rebuilt images and controls cannot match the recorded hashes,** because the SDK is different. The cells are
+  compared as above.
+
+| manifest # | corpus | arm | cache | recorded tally |
+|---|---|---|---|---|
+| 9 | `ffmpeg/pool-repros` | `virtual-malloc` | `FFPOOL_SUBLET=OFF` | MISSED 4 |
+| 10 | `ffmpeg/pool-repros` | `virtual-nested-pools` | `FFPOOL_SUBLET=ON` | CAUGHT 4 |
+| 12 | `memcached/allocator-repros` | `virtual-malloc` | `MCP_STOCK_MALLOC=ON MCP_SUBLET=OFF` | CAUGHT 1, MISSED 8 |
+| 13 | `memcached/allocator-repros` | `virtual-nested-pools` | `MCP_STOCK_MALLOC=OFF MCP_SUBLET=ON` | CAUGHT 8, NO-READING:control-failed 1 |
+
+All four also take `CMAKE_BUILD_TYPE=Debug` and `-isystem <the kit's clang>/lib/clang/22/include`.
+
+**Predictions:**
+- **Every cell equals its recorded cell,** except one.
+- **That one is bundle 13's case 05 (`05_2d61f18_item_data_one_past`), predicted CAUGHT.** Its recorded fixed arm
+  faulted with cause 24 at address 0, a NULL dereference. That is the shape the module's `add()` refusals produced in
+  the Sublet pilot. **The hypothesis behind the prediction:** that NULL was an arena refusal the fix removes.
+  - If the fixed arm still faults 24 at 0, the hypothesis is wrong for this case, and the cell is read from its
+    transcript.
+- **Bundle 13's tally, if the prediction holds:** CAUGHT 9.
+
+**Result (2026-10-17 09:23-09:25): one bundle of four as predicted; the other three FAIL their controls.**
+
+The cases and controls were built with `CAPSTONE_LLVM_BUILD_DIR` set to the kit's own LLVM, the one the SDK was built
+with. The preset's default, `<src>/llvm/cmake-build-debug`, does not exist in this source tree, and the first attempt
+failed at configure on its missing `llvm-ar`. The runner accepted every CMakeCache (`cache_says`).
+
+| # | bundle | read | recorded | cells equal to the record |
+|---|---|---|---|---|
+| 12 | memcached allocator, `virtual-malloc` | CAUGHT 1, MISSED 8 | CAUGHT 1, MISSED 8 | **9 of 9** |
+| 9 | ffmpeg pool, `virtual-malloc` | NO-READING:control-failed 4 | MISSED 4 | 0 of 4 |
+| 10 | ffmpeg pool, `virtual-nested-pools` | NO-READING:control-failed 4 | CAUGHT 4 | 0 of 4 |
+| 13 | memcached allocator, `virtual-nested-pools` | NO-READING:control-failed 9 | CAUGHT 8, control-failed 1 | 1 of 9 (case 05, control-failed as recorded) |
+
+**Two signatures:**
+- **ffmpeg pool, both arms.** Every program, the `pool-return-90` control included, faults with cause 24 at
+  `cap_malloc_validate`.
+  - That is `free()`'s probe load (`runtime/virtual/heap.c:333`, `lbu zero, 0(p)`), so `free` is reached with a
+    pointer that is not a capability.
+  - The generic controls, bounds-malloc (28) and uaf-malloc (25), read as expected.
+  - Not C-72: the kit's compiler defines `__SIZEOF_INTCAP__`, and the port has no intcap guard.
+  - The caller is not identified.
+- **memcached allocator, Sublet arm only.** The control and seven of the cases fault with cause 29 inside
+  `capstone_cap_derive`, at its CDERIVE (word `0xa2e395db`, funct7 0x51), after its own window test has passed.
+  - The stock arm of the same corpus runs clean.
+  - Case 01's buggy arm still faults 25 at `read_probe`, a correct catch.
+  - A 29 from CDERIVE with the window inside the parent is consistent with Q-15's refusal of an inexact child on
+    QEMU's virtual profile. The child's bounds are not logged, so **that is not established**.
+
+**Prediction for bundle 13's case 05: not confirmed.** It reads control-failed again, so the NULL-from-`add()`
+hypothesis is not supported for that case either. Its fixed arm now fails before reaching that point, inside
+`capstone_cap_derive`.
+
+**What is not excluded:** a defect in this rebuild rather than in the revision. Prebuilt mode builds each port from
+the CURRENT corpus scripts at 89ee98be99e5, with the cache options as recorded. The recorded bundles came from older
+script and runner revisions, with another toolchain (`~/pg-virtual-kit`). The plain case.c bundles, built by the
+runner itself, all ran.
