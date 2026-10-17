@@ -68,9 +68,14 @@ case $rung in
       insmod $R/t3/kit/capstone_vm.ko || { echo "T3: insmod failed"; echo "RESULT $rung retval=-2"; exit 1; }
     fi
     [ -z "$R" ] && chmod 666 /dev/capstone-vm
-    [ -L $R/mnt/vm ] && rm $R/mnt/vm
-    [ -e $R/mnt/vm ] && { echo "T3: $R/mnt/vm exists and is not a T3 link"; echo "RESULT $rung retval=-3"; exit 1; }
+    for l in vm host; do
+      [ -L $R/mnt/$l ] && rm $R/mnt/$l
+      [ -e $R/mnt/$l ] && { echo "T3: $R/mnt/$l exists and is not a T3 link"; echo "RESULT $rung retval=-3"; exit 1; }
+    done
+    # /mnt/vm is the bundle (virtualvm steps run there); /mnt/host/applications holds an appvm bundle's images at the
+    # path the VM's run.py gives them, which the launcher's fault record names
     mkdir -p $R/mnt && ln -s $R/t3/$b $R/mnt/vm
+    [ -d $R/t3/$b/host ] && ln -s $R/t3/$b/host $R/mnt/host
     ( i=0; while [ $i -lt 2000 ]; do sleep 30; i=$((i+1)); echo "T3HB $i"; done ) & hb=$!
     echo "@@T3-BUNDLE-BEGIN $b"
     T3_ROOT=$R sh $R/t3/$b/.t3/run.sh
@@ -139,7 +144,7 @@ def bake(a):
         shutil.copy2(kit / f, out / "kit" / f)
     (out / "kit/capstone-vexec").chmod(0o755)
     manifest = {"kit": {f: sha(out / "kit" / f) for f in KIT_FILES}, "step_limit_s": a.step_limit,
-                "bundles": {}}
+                "dry_run_root": a.dry_run_root, "bundles": {}}
     for b in bundles:
         home = bundle_home(a.dir, b)
         steps = json.loads((home / "steps.json").read_text())
@@ -158,7 +163,10 @@ def bake(a):
             if not NAME.fullmatch(st["name"]):
                 sys.exit(f"ERROR: bundle {b} step {st['name']!r} is not shell-safe")
             step = dest / f".t3/steps/{i:03d}.sh"
-            step.write_text(st["command"] + "\n")
+            cmd = st["command"]
+            if a.dry_run_root:   # host dry run only: no /mnt/vm or /mnt/host there; recorded in bake.json
+                cmd = re.sub(r"(?<![\w/.])/mnt/(vm|host)\b", lambda m: f"{a.dry_run_root}/mnt/{m.group(1)}", cmd)
+            step.write_text(cmd + "\n")
             lines += [f"echo '@@STEP-BEGIN {st['name']}'",
                       f"runstep {st['name']} ${{T3_ROOT:-}}/t3/{b}/.t3/steps/{i:03d}.sh {a.step_limit}"]
         (dest / ".t3/run.sh").write_text("\n".join(lines) + "\n")
@@ -211,6 +219,7 @@ def main():
     q = sub.add_parser("bake"); q.add_argument("--dir", required=True); q.add_argument("--bundles", required=True)
     q.add_argument("--kit", required=True); q.add_argument("--out", required=True)
     q.add_argument("--step-limit", type=int, default=1200)
+    q.add_argument("--dry-run-root", default=None, help="host dry runs only: prefix for /mnt/vm and /mnt/host")
     q = sub.add_parser("slice"); q.add_argument("--dir", required=True); q.add_argument("--bundles", required=True)
     q.add_argument("--transcript", required=True)
     a = p.parse_args()
