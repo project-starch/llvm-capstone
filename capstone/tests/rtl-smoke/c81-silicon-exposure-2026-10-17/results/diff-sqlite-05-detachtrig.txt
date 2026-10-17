@@ -1,0 +1,15 @@
+positive control (repro.c, /tmp/capstone/llvm-dev-current-20261017/bin/clang):
+  self-test plain      copy32_unknown           FLAGGED (ok)
+  self-test plain      copy32_unknown_builtin   FLAGGED (ok)
+  self-test plain      copy32_known             clean (ok)
+  self-test nobuiltin  copy32_unknown_builtin   FLAGGED (ok)
+  self-test nobuiltin  copy32_known             clean (ok)
+  self-test nobuiltin  copy32_unknown           clean (ok)
+  self-test: PASS -- the scanner fires on the defect and not on the control
+
+  A 02ca19e2 r322-detachtrig.dom: 99 runs
+  B b781ab8d r322-detachtrig.dom: 97 runs
+  only in A: 2   only in B: 0
+  A-only by unit: {1: 1, 4: 1}
+       49B unit=1 (7 insns) x1
+       20B unit=4 (10 insns) x1
