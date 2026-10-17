@@ -1,0 +1,52 @@
+# vp2's first board session: caplifive_vp2_bf3db3175.bit (sha256 776cdd8c40d98570..., routed WNS -19.019), flashed
+# 2026-10-17 20:40:46 on the lead's explicit word (../README.md), after vp1's first session ended as pre-registered
+# and the preflight passed on the sealed sha256; readback named the bitstream. Session 20:40:46-21:55:18, run
+# unattended by the pre-registered chain (README "The session, pre-registered before it runs", amended 20:24 for an
+# image that never starts; lane 39119a59fb50, c5f5886e715d).
+#
+# Image identity, for every bare run: the runner's `store name sup-<sha12>` in each run's log. Every canary arm, in
+# both passes, ran the d93a8d66b record's image, and every vp2 arm ran the image in ../images/SHA256SUMS (checked by
+# script). The arm comparator is compare-vp2.py: same count and values as 64-bit integers. On this session's own
+# readings it says NOT vp2 for one altered value, a short readout, another arm's vector, and va-flat's vector read
+# from va-flat-off's run.
+#
+# No image failed to start: 0 infra retries in the canary, 0 among the arms.
+
+CANARY1 S16 vs d93a8d66b rc=0 18 arms, 98 reference readings, 0 not identical 20:55:54
+CANARY1 FLOOR vs d93a8d66b rc=0 6 arms, 77 reference readings, 0 not identical 21:00:55
+CANARY1 S1GAPF vs d93a8d66b rc=0 3 arms, 0 with a functional difference 21:03:26
+CANARY2 S16 vs d93a8d66b rc=0 18 arms, 98 reference readings, 0 not identical 21:18:34
+CANARY2 FLOOR vs d93a8d66b rc=0 6 arms, 77 reference readings, 0 not identical 21:23:34
+CANARY2 S1GAPF vs d93a8d66b rc=0 3 arms, 0 with a functional difference 21:26:05
+CANARY12 S16 pass1 vs pass2 rc=0 18 arms, 98 reference readings, 0 not identical
+CANARY12 FLOOR pass1 vs pass2 rc=0 6 arms, 77 reference readings, 0 not identical
+CANARY12 S1GAPF pass1 vs pass2 rc=0 3 arms, 0 with a functional difference
+CANARY PASS 9 of 9 21:26:05
+infra retries (an image that never started, re-run once): 0
+va-runv                f764c436cdb52687  rc=0  VERDICT va-runv: AS PRE-REGISTERED for vp2
+va-runv-quantum        34934ab8b2271c8c  rc=0  VERDICT va-runv-quantum: AS PRE-REGISTERED for vp2
+va-runv2               7b8ab66e23607d31  rc=0  VERDICT va-runv2: AS PRE-REGISTERED for vp2
+va-runv3               d967dcdea54e3a86  rc=0  VERDICT va-runv3: AS PRE-REGISTERED for vp2
+va-runv4               e8ac8002db62b1e8  rc=0  VERDICT va-runv4: AS PRE-REGISTERED for vp2
+va-runv5               a5c00ebb2d79ed1b  rc=0  VERDICT va-runv5: AS PRE-REGISTERED for vp2
+va-runv6               7922462bf7b1a21d  rc=0  VERDICT va-runv6: AS PRE-REGISTERED for vp2
+va-runv7               8edbfa78d1ec7acf  rc=0  VERDICT va-runv7: AS PRE-REGISTERED for vp2
+va-barrier             28202d0d516170e8  rc=0  VERDICT va-barrier: AS PRE-REGISTERED for vp2
+va-q15                 ee0959d19d8f0a82  rc=0  VERDICT va-q15: AS PRE-REGISTERED for vp2
+va-csmint-emu          c2defd4da8304921  rc=0  VERDICT va-csmint-emu: AS PRE-REGISTERED for vp2
+va-csmint-mon          600b48c94fabddc3  rc=0  VERDICT va-csmint-mon: AS PRE-REGISTERED for vp2
+va-straddle            f7ea04e9d24ea60d  rc=0  VERDICT va-straddle: AS PRE-REGISTERED for vp2
+va-flat                08b1ba902363901d  rc=0  VERDICT va-flat: AS PRE-REGISTERED for vp2
+va-flat-off            407e1a8a13293e7f  rc=0  VERDICT va-flat-off: AS PRE-REGISTERED for vp2
+va-alloc               4f346db72ed8337b  rc=0  VERDICT va-alloc: AS PRE-REGISTERED for vp2
+va-alloc-off           cbef3379e9a8b4ad  rc=0  VERDICT va-alloc-off: AS PRE-REGISTERED for vp2
+va-alloc-corrupt       123ce8c012c7e7f9  rc=0  VERDICT va-alloc-corrupt: AS PRE-REGISTERED for vp2
+va-alloc-exhaust       3ed79f75b2f92377  rc=0  VERDICT va-alloc-exhaust: AS PRE-REGISTERED for vp2
+va-ns-collide          47605a54f9682c0b  rc=0  VERDICT va-ns-collide: AS PRE-REGISTERED for vp2
+va-ns-collide-off      90e3d70e14fd406a  rc=0  VERDICT va-ns-collide-off: AS PRE-REGISTERED for vp2
+vb-trans-vp2           0c325b29ba5cc640  rc=0  VERDICT vb-trans-vp2: AS PRE-REGISTERED for vp2
+vb-trans-plain-vp2     38508a4220203bf1  rc=0  VERDICT vb-trans-plain-vp2: AS PRE-REGISTERED for vp2
+q17-order              ee2adf9b373e5028  rc=0  VERDICT q17-order: AS PRE-REGISTERED for vp2
+vb-trans-off           79e670cc77352ee4  rc=0  VERDICT vb-trans-off: AS PRE-REGISTERED for vp2
+arm infra retries: 0
+C7 vs d93a8d66b rc=0 33 reference records, 33 new, 0 differ 21:55:18

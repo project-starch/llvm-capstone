@@ -18,7 +18,9 @@ were held out of vp2 until that variant landed:
 - The plan's line "vp1's vb-trans arms and Q-17's" for vp2 was written without a run (the RTL lane, 2026-10-17).
 - On vp1 (no item A) vb-trans is correct as pre-registered and stays in vp1's batch unchanged.
 
-**Not authorised to run.** A flash of bf3db3175 waits on the lead's own word naming it, after vp1's first session.
+**Run on 2026-10-17, on the lead's own word** ("Flash authorisation" below), after vp1's first session ended as
+pre-registered: the canary passed 9 of 9, all 25 arms read their vectors, set 7 matched d93a8d66b's 33 records
+(`results/board-vp2-bf3db3175.result-lines.txt`).
 
 **Build** (`build.sh`):
 - The tests are copies of capstone-ariane `virtual-profile-2-d` fc679dc68, whose RTL is bf3db3175's (the five commits
@@ -79,6 +81,27 @@ what they do.
 - **If the canary does not pass:** a preflight on vp1's sealed sha256, a reflash to vp1 with readback, and a stop.
 - **Otherwise:** this table's 25 arms in table order, one power cycle each. Each is compared with its board vector,
   count and values as 64-bit integers. Then corpus set 7 against d93a8d66b's record.
+
+
+**Amended before the run (2026-10-17, 20:24): an image that never started is re-run once.**
+
+On vp1's first session a JTAG `load_image` timed out before `continue` (s16st-esc-n8), so that arm produced no reading.
+vp1's PREREG amendment of the same time gives the rule and its precedent. Here every bare run of the session goes
+through `infra-retry.py`: the canary's S-16, floor and s1gap arms, and the 25 arms.
+- A run that exits non-zero with no `] continue` line and no reading is run once more, with the same image. Its first
+  attempt is kept beside the run, as `<run>.infra-fail-1`.
+- A run that started is returned as it is.
+- A second non-start is a missing reading, so the canary's "stop on any difference" fails, and the board goes back to
+  vp1 as pre-registered.
+- The 25 arms' outer timeout is 1200 s, up from 600 s: a load_image hang plus one retry needs about 10 minutes.
+- The arms phase fails (rc 2) unless the pre-registered table gives exactly 25 arms. A dry run had read an empty
+  table as done.
+
+Dry runs, with only the innermost runner stubbed (the real run-capstl.sh and wrapper run):
+`results/dryrun-infra-retry.txt`.
+- One non-start injected in each kind of run: the canary passes 9 of 9, all 25 arms read as pre-registered, and each
+  injected arm shows exactly one retry.
+- A double non-start: the canary fails.
 
 **Still open before a vp2 board run:**
 - (Not needed: resident controls for the physical-pool builds. The `-off` builds run in vp2's own batch beside their

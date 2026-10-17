@@ -1,0 +1,20 @@
+# vp2's session runner with infra-retry.py, dry-run 2026-10-17 20:18-20:28, before the chain can reach it.
+# A copy of run-vp2.sh whose ONLY stub is the innermost runner (SUP_REAL_RUNNER): the real run-capstl.sh and
+# infra-retry.py run. The stub asserts the environment that reaches it (the image file exists, a record address, and
+# FPGA_BITSTREAM is the vp2 name). It then emits one of:
+# - the d93a8d66b record's readings for that arm (for s1gap, d93a8d66b's repeat runs r2 and r3, so the cycle counts
+#   differ as they do on the board);
+# - where a non-start is injected, a JTAG busy timeout with no `continue`.
+## dry4: one non-start in each kind of canary run: S-16 (pass 1, s16st-esc-n8), the floor (pass 2, sublet-mrev-orphan),
+## s1gap (pass 1, s1gap-far)
+CANARY PASS 9 of 9. Each injected arm's log shows exactly one INFRA-RETRY, then the record's readings. Attempt 1 is
+kept as <run>.infra-fail-1.log.
+## dry5: a DOUBLE non-start (pass 2, the floor's stale-access)
+CANARY2 FLOOR rc=1; CANARY12 FLOOR rc=1; CANARY FAIL: 7 of 9 comparisons pass
+## the 25 arms
+dry4's arms phase ran 0 arms and still printed "VP2ARMS DONE ... 0 as pre-registered". Its directory lacked the
+expected-README.md that compare-vp2.py's table() reads. The live directory has it (table() gives 25), but an empty
+table read as done. run-vp2.sh now fails with rc 2 unless the table gives exactly 25 arms, and the chain logs that rc.
+dry6 (no table file):  VP2ARMS FAIL: the pre-registered table gave 0 arms, not 25 (rc 2)
+dry7 (table present; one arm's first attempt a non-start, q17-order):  VP2ARMS DONE 25 as pre-registered; q17-order's
+  log shows one INFRA-RETRY
