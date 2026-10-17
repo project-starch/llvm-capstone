@@ -204,6 +204,24 @@ run to come.
 | `backing` | Capstone domain | FFmpeg pool corpora: revocation only at the pool's BACKING allocation (mode 1), so a buffer the pool never frees is never revoked. `n/a` where there is no block distinct from the object |
 | `host-asan` | host | the upstream function built with ASan at the pin: the oracle is the report (kind, access, region) it must produce. Liveness evidence and the row corpora's only arm, not a protection column |
 
+
+**Virtual arms on the vp2 board (Tier 3, `tools/boardvm.py`).** A `capstone-virtual` configuration can also run on the
+board. `run-virtual-cases.py --board-kit` runs the same gate script in one board boot instead of one QEMU boot. The
+bundle's `inputs.json` names the machine:
+- `platform.qemu` is `board:<bitstream>` and `platform.machine` is `board`;
+- `firmware` and `kernel` are the hashes the board recipe built;
+- `monitor` and `monitor_defines` name the firmware's monitor, including whether the S-23 fetch-retry workaround was
+  in it.
+
+Two comparability facts belong to that machine:
+- **A fault taken before the domain's HELLO is unresolvable.** The launcher prints `entry=... code=lo-hi` only after
+  HELLO (`runtime/linux/delegate-service.c:977-984`), else `entry=unknown`. `verdicts.FAULT_LINE` requires `code=`, so
+  such a fault has no symbol or attribution on QEMU and on the board alike. A NO-READING from it is the launcher's limit,
+  not the board's.
+- **A wedge takes the rest of the boot.** QEMU loses one process to a fault, and the board can lose every later step.
+  Those steps read kind `none`, which `observe()` makes `infra`. The boot plan therefore puts the positive control
+  first and at most one wedge risk last.
+
 `sysalloc-none`, `sysalloc-bounds` and the retired `sysalloc-sublet` are the glossary's
 system-allocator arms (`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the
 same source and differ only in the heap the image links, so a difference between

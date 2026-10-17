@@ -2,6 +2,7 @@
 """Run a case.c corpus of FFmpeg, tshark or memcached on the virtual Capstone profile, all in one boot.
 
     run-virtual-cases.py --corpus <corpus dir> --arm virtual-malloc --virtual-kit <kit> --sdk <virtual SDK>
+                         (or --board-kit <board kit>: the same steps in one vp2 board boot, tools/boardvm.py)
                          --llvm-bin <dir with llvm-nm> [--cc-arg ...] [--out DIR] [--raw DIR] [--only 00,03]
 
 This runner REPORTS; tools/verdicts.py decides, as for every virtual corpus. It is the
@@ -54,6 +55,7 @@ TOOLS = HERE.parent
 REPO = HERE.parents[3]
 sys.path.insert(0, str(TOOLS))
 import appvm  # noqa: E402
+import boardvm  # noqa: E402
 import virtualvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -122,11 +124,22 @@ def observe_control(name, text, result):
     return "complete" if f"CONTROL {name} RETURNED" in text else "none"
 
 
+def backend(a):
+    """(kit, Batch class, the kit's required files, platform(kit, compiler, runner)) for --virtual-kit or --board-kit.
+    The board record's firmware and kernel come from the recipe's own record after the run (boardvm.record_firmware)."""
+    if a.board_kit:
+        return a.board_kit, boardvm.BoardBatch, boardvm.FILES, boardvm.platform
+    return a.virtual_kit, virtualvm.Batch, virtualvm.FILES, virtualvm.platform
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--corpus", type=Path, required=True)
     p.add_argument("--arm", required=True)
-    p.add_argument("--virtual-kit", type=Path, required=True)
+    kits = p.add_mutually_exclusive_group(required=True)
+    kits.add_argument("--virtual-kit", type=Path, help="the QEMU kit (virtualvm)")
+    kits.add_argument("--board-kit", type=Path,
+                     help="a vp2 board kit (boardvm, tools/board/): the same steps in one board boot (Tier 3)")
     p.add_argument("--sdk", type=Path, required=True)
     p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--cc-arg", action="append", default=[])
@@ -154,9 +167,10 @@ def main():
         print(f"CONTROL-FAILED {a.sdk} is a {profile} SDK (heap {heap}); this runner needs the virtual profile",
               file=sys.stderr)
         return 75
-    missing = [f for f in virtualvm.FILES if not (a.virtual_kit / f).is_file()]
+    kit, Batch, kit_files, kit_platform = backend(a)
+    missing = [f for f in kit_files if not (kit / f).is_file()]
     if missing:
-        print(f"CONTROL-FAILED kit {a.virtual_kit} lacks {missing}", file=sys.stderr)
+        print(f"CONTROL-FAILED kit {kit} lacks {missing}", file=sys.stderr)
         return 75
     stamp = time.strftime("%Y%m%d-%H%M%S")
     out = a.out or (corpus / "results" / f"{stamp}-virtual" / a.arm)
@@ -205,13 +219,15 @@ def main():
             plan += [(f"{d.name}-fixed", built[d.name], ["fixed", n]), (f"{d.name}-buggy", built[d.name], ["buggy", n])]
 
     # ---- one boot ----
-    batch = virtualvm.Batch(raw / "stage")
+    batch = Batch(raw / "stage")
     for name, image, argv in plan:
         batch.put(f"images/{image.name}", image)
         batch.step(name, f"./capstone-vexec ./images/{image.name} {' '.join(argv)}")
-    runs, serial, completed = batch.execute(a.virtual_kit, raw / "guest", timeout=300 + 60 * len(plan))
+    runs, serial, completed = batch.execute(kit, raw / "guest", timeout=300 + 60 * len(plan))
     print(f"  virtual boot: {'completed' if completed else 'DID NOT COMPLETE'}; serial {serial}", flush=True)
-    platform = virtualvm.platform(a.virtual_kit, a.llvm_bin / "clang", HERE)
+    platform = kit_platform(kit, a.llvm_bin / "clang", HERE)
+    if a.board_kit:
+        boardvm.record_firmware(platform, raw / "guest")
 
     controls = []
     for name in spec["controls"]:
@@ -466,9 +482,10 @@ def run_hosted(a, corpus):
         if why:
             print(f"CONTROL-FAILED {build} is not the {a.arm} build: {why}", file=sys.stderr)
             return 75
-    missing = [f for f in virtualvm.FILES if not (a.virtual_kit / f).is_file()]
+    kit, Batch, kit_files, kit_platform = backend(a)
+    missing = [f for f in kit_files if not (kit / f).is_file()]
     if missing:
-        print(f"CONTROL-FAILED kit {a.virtual_kit} lacks {missing}", file=sys.stderr)
+        print(f"CONTROL-FAILED kit {kit} lacks {missing}", file=sys.stderr)
         return 75
     mode = ad["mode"][a.arm]
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -520,13 +537,15 @@ def run_hosted(a, corpus):
         plan += [(f"{d.name}-fixed", programs[d.name], run_argv("fixed", n)),
                  (f"{d.name}-buggy", programs[d.name], run_argv("buggy", n))]
 
-    batch = virtualvm.Batch(raw / "stage")
+    batch = Batch(raw / "stage")
     for name, image, argv in plan:
         batch.put(f"images/{image.name}", image)
         batch.step(name, f"./capstone-vexec ./images/{image.name} {' '.join(argv)}")
-    runs, serial, completed = batch.execute(a.virtual_kit, raw / "guest", timeout=300 + 60 * len(plan))
+    runs, serial, completed = batch.execute(kit, raw / "guest", timeout=300 + 60 * len(plan))
     print(f"  virtual boot: {'completed' if completed else 'DID NOT COMPLETE'}; serial {serial}", flush=True)
-    platform = virtualvm.platform(a.virtual_kit, a.llvm_bin / "clang", HERE)
+    platform = kit_platform(kit, a.llvm_bin / "clang", HERE)
+    if a.board_kit:
+        boardvm.record_firmware(platform, raw / "guest")
 
     controls = []
     for c in spec["controls"]:
