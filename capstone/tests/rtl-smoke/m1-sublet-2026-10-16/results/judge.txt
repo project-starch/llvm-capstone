@@ -1,0 +1,21 @@
+== m1s16f-1.extract.txt: 318 snapshots
+  drop: snapshots 159  minted-revoked [31]  take/op 94.347 [94.264, 95.010]  give/op 106.046 [105.961, 106.472]
+  ring: snapshots 159  minted-revoked [31]  take/op 88.000 [87.978, 88.001]  give/op 75.056 [75.033, 75.832]
+== m1s16f-5.extract.txt: 201 snapshots
+  pressure: snapshots 10  minted-revoked [31]  take/op 88.000 [88.000, 88.001]  give/op 75.053 [75.019, 76.613]
+  release: snapshots 191  minted-revoked [31]  take/op 88.000 [88.000, 130.015]  give/op 75.579 [75.339, 97.185]
+== m1s16f-2.extract.txt: 539 snapshots
+  drop: snapshots 159  minted-revoked [31]  take/op 96.002 [95.914, 96.013]  give/op 165.281 [164.977, 165.605]
+  ring: snapshots 159  minted-revoked [31]  take/op 89.000 [88.978, 89.012]  give/op 137.738 [137.687, 138.173]
+  pressure: snapshots 30  minted-revoked [31]  take/op 89.008 [89.000, 90.414]  give/op 139.067 [138.905, 139.084]
+  release: snapshots 191  minted-revoked [31]  take/op 89.000 [89.000, 131.100]  give/op 139.310 [138.332, 166.845]
+== m1s16f-3.extract.txt: 539 snapshots
+  drop: snapshots 159  minted-revoked [31]  take/op 96.002 [95.911, 96.026]  give/op 165.281 [164.976, 165.598]
+  ring: snapshots 159  minted-revoked [31]  take/op 89.000 [88.978, 89.024]  give/op 124.764 [124.619, 127.530]
+  pressure: snapshots 30  minted-revoked [31]  take/op 89.008 [89.000, 90.414]  give/op 139.064 [138.919, 139.081]
+  release: snapshots 191  minted-revoked [31]  take/op 89.000 [89.000, 131.100]  give/op 139.310 [137.609, 166.845]
+== m1s16f-4.extract.txt: 539 snapshots
+  drop: snapshots 159  minted-revoked [31]  take/op 96.002 [95.914, 96.013]  give/op 165.281 [164.977, 165.607]
+  ring: snapshots 159  minted-revoked [31]  take/op 89.000 [88.978, 89.006]  give/op 124.764 [124.698, 127.530]
+  pressure: snapshots 30  minted-revoked [31]  take/op 89.008 [89.000, 90.414]  give/op 139.067 [138.913, 139.084]
+  release: snapshots 191  minted-revoked [31]  take/op 89.000 [89.000, 131.100]  give/op 139.125 [137.498, 166.845]
