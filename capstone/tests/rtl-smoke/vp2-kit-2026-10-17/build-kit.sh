@@ -56,7 +56,7 @@ main() {
   local K=$O/out/kit; rm -rf $K; mkdir -p $K/images $K/adapter/module
   cp $QREF/build/qemu-system-riscv64 $K/ && cp /lib/x86_64-linux-gnu/libslirp.so.0 $K/ \
     && cp $IMGS/{Image,fw_jump.elf,rootfs.ext2} $K/images/ \
-    && cp $O/out/adapter-qemu/capstone-vexec $K/adapter/ && cp $O/out/adapter-qemu/module/capstone_vm.ko $K/adapter/module/ \
+    && cp $O/out/adapter-qemu/capstone-vexec $O/out/adapter-qemu/capstone-job $K/adapter/ && cp $O/out/adapter-qemu/module/capstone_vm.ko $K/adapter/module/ \
     || { log "FAIL-KIT"; return 1; }
   log "KIT-ASSEMBLED $K qemu=$(sha256sum $K/qemu-system-riscv64 | cut -c1-16) rootfs=$(sha256sum $K/images/rootfs.ext2 | cut -c1-16)"
   $O/out/sdk/capstone-cc -O1 -I$S/capstone/runtime/include $S/capstone/runtime/virtual/contract.c -o $O/out/contract.dom > $O/contract.log 2>&1 || { log "FAIL-CONTRACT"; return 1; }

@@ -690,3 +690,82 @@ against it).
 - **Prior art the runtime lane points to:** C-69, FF_FIELD_AT's align-1 capability load lowered to a byte copy. A byte
   copy would show the same way, but it is a compiler-side mechanism, and this result makes it identical under both
   compilers. Which of the SDK's pieces drops the tag is not established.
+
+## wireshark/wmem-repros, both arms, on the fixed revision: pre-registered (2026-10-17, before the runs)
+
+**The runner and its builds.**
+- The runner is the corpus's `shared/run-defects.py`, on a `capstone_vm` VM booted from the v6-fix kit:
+  - its QEMU, Image, fw_jump and rootfs (`-snapshot`);
+  - `--profile virtual`, the launcher `capstone-vexec` and the module `capstone_vm.ko`.
+- **The hosted builds** use the port `ports/wireshark/wmem` with the `capstone-application` preset, against the v6-fix
+  SDK, with `CAPSTONE_LLVM_BUILD_DIR` = the kit's LLVM.
+  - `WM_CORPUS_DIR` = the corpus root for the cases, and `controls/` for the controls.
+  - `WM_SUBLET` is OFF for `virtual-malloc` and ON for `virtual-nested-pools`.
+  - The archive is the local `wireshark-4.6.8.tar.xz`.
+- **This revision's patch 0001 has no `repr_round`.** The virtual-profile plan lists "Wireshark's wmem jumbo blocks
+  (0001)" among the twenty derive sites that need representable placement under (iii).
+
+**Predictions:**
+- **`virtual-malloc` (#25):** MISSED 23, every cell equal to the record. The controls read as the runner requires:
+  chunk use-after-free and overread complete, jumbo use-after-free faults.
+- **`virtual-nested-pools` (#26):** two outcomes, written before the run.
+  - **(a) CAUGHT 23, every cell equal to the record:** no case derives a child that is inexact under (iii).
+  - **(b) Some cells fault 29 at a CDERIVE:** the jumbo-block derive is refused by Q-15, as memcached 0006 was. The
+    same exact-bounds rerun as Run 1 then separates it: with `x-capstone-exact-bounds=true` the cells return to the
+    record.
+
+The VM holds the host-wide QEMU lock while it is up, so the session runs as one bounded block and is brought down
+after.
+
+## Run 4: `+movc-keeps-integer-source`, the one SDK flag arm that links: pre-registered (2026-10-17, before the run)
+
+**Why only one arm.** The compiler lane cut five single-variable SDK arms (`/tmp/capstone/vp2-prep/sdk-arm-{1..5}`,
+`SDK-ARMS.md`). Only arm 1 links:
+- the 10-10 runtime and libc archives are soft-float, and `capstone-cc` refuses them on the virtual profile, which
+  needs F and D;
+- dropping `+f/+d` or the ABI fails `capstone-cc`'s codegen gate.
+So the 10-10 record and the v6 kit differ by profile, not by one flag.
+
+**Arm 1:** the v6-fix SDK with `+movc-keeps-integer-source` dropped from `sdk.json` codegen, one key different
+(diffed), the kit's clang. Subobject case 00 is built as in run 3.
+
+**Outcomes:**
+- **(i) cause 24 at `refstruct_pool_uninit+0x78` again:** the flag is exonerated, and what remains is the archives'
+  contents.
+- **(ii) the fixed arm passes:** the flag is implicated.
+- **The image hash is recorded beside the reading,** so a silently identical rebuild is visible.
+
+**Run 4 result: (i), the flag is exonerated.**
+- Arm 1's image is a different build, `561c29fdc447ebae` against the kit's `bdf538f4859482f3`, so it is not a silent
+  identical rebuild.
+- It faults the same way: cause 24 at `refstruct_pool_uninit+0x78`, the same `ldc a2, 0(a0)` and then `sw a1,
+  0x60(a2)`.
+- **Taken together with run 3, the tag loss is in the v6 profile's own runtime or libc contents, or in the sources
+  against them.** It is not the compiler change, and not `+movc-keeps-integer-source`.
+- **The archives cannot be swapped**, because the 10-10 ones are soft-float. So the next separation is a rebuild of
+  those archives' sources with v6 flags, a scope for the compiler lane to set.
+
+**wmem results (2026-10-17 10:11-10:13).**
+- **The VM.** `capstone_vm up --profile virtual` on the v6-fix kit needs two things the kit lacked:
+  - the job helper, which build-adapter.sh already builds (`out/adapter-qemu/capstone-job`, f49e70ff…);
+    `build-kit.sh` now copies it into `adapter/`;
+  - a guest SSH server, because the kit's rootfs (9903242c…, the record's own) has no dropbear. It is passed as
+    `--ssh-server`, the static dropbear the B0 sessions used (`/tmp/capstone/b0/platform/guest/ssh_server`).
+- **`virtual-malloc` (#25): MISSED 23, every cell equal to the record** (`compare-cells.py`, 0 mismatches), as
+  predicted. The controls behaved: the jumbo use-after-free faulted 25 at the probe.
+- **`virtual-nested-pools` (#26): neither pre-registered outcome as written.** NO-READING:control-failed 23.
+  - The arm's jumbo use-after-free control faults with **cause 29 during setup**: pc +0x18b20, before its ready mark,
+    `last=0xc0de0001`. So the runner reads "expected fault, observed none" at the probe and voids every cell.
+  - That is outcome (b)'s mechanism arriving through the control rather than the cases.
+- **The exact-bounds rerun separates it.** With `capstone_vm up --exact-bounds` (recorded in the VM's config as
+  `"exact_bounds": true`):
+  - the controls pass;
+  - the arm reads **CAUGHT 22 + NO-READING:unattributed 1, 22 of 23 cells equal to the record**.
+  - So wmem patch 0001's jumbo-block derive is refused by Q-15 under (iii), the plan's recorded cost, as for memcached
+    0006.
+- **The one remaining cell is case 22** (`usbhid_output_usages_freed_twice`, a double free).
+  - **Recorded:** CAUGHT, cause 25 in `wmem_block_sublet_free`, the case's declared fault site.
+  - **On v6:** the same cause 25, from the same double free, one call deeper, in the runtime's
+    `capstone_cap_revoke_child`. The declared site no longer names the frame that faults.
+  - Same detection, different attribution. It is a case.json `fault_sites` question for the corpus owner, not a
+    behaviour change.
