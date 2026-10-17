@@ -38,33 +38,36 @@ counts in item A's arms are the obvious place. So each vector is taken from simu
 express its header's claim, is rebuilt (a `BOARD_TEST_CH` guard, as vb-trans has) before it is pre-registered.
 
 **Pending, before any vp2 board run:**
-1. The RTL lane's vectors for the 23 images, and for vp1's vb-trans-off and q17-order on bf3db3175.
+1. The RTL lane's vectors: 16 in (`results/rtl-sim-vectors.txt`). Nine are re-running at the longer limit: va-alloc,
+   va-runv2, va-runv4, va-runv5, va-runv6, va-q15, va-csmint-emu, va-csmint-mon, va-straddle.
 2. The table below filled with them, and pushed on the lane before the run.
 3. Positive controls on the resident bitstream, where an arm's control is defined (the `-off` builds and
    va-ns-collide-off). The physical-pool controls should read the same on d93a8d66b.
 
 | image | sha256 (16) | board_rec | board vector (from the simulation of this image) |
 |---|---|---|---|
-| `va-runv` | f764c436cdb52687 | 0x8000c000 | pending |
-| `va-runv-quantum` | 34934ab8b2271c8c | 0x8000c000 | pending |
+| `va-runv` | f764c436cdb52687 | 0x8000c000 | SR 15: `2 2 0x1234 2 0xb 0 0 0x55 0 0x77 0x77 5 0xb 0 9` |
+| `va-runv-quantum` | 34934ab8b2271c8c | 0x8000c000 | SR 15: `2 1 0x1234 1 0 0 0 0 0 0 0 3 0x8000000000000010 0 9` |
 | `va-runv2` | 7b8ab66e23607d31 | 0x8000d000 | pending |
-| `va-runv3` | d967dcdea54e3a86 | 0x8000c000 | pending |
+| `va-runv3` | d967dcdea54e3a86 | 0x8000c000 | SR 16: `2 3 0 0 0 0 0x3ff8000000000000 0x20 0x3ff8000000000000 1 2 0x4004000000000000 0x40 0x3ff8000000000000 1 0` |
 | `va-runv4` | e8ac8002db62b1e8 | 0x8000d000 | pending |
 | `va-runv5` | a5c00ebb2d79ed1b | 0x8000c000 | pending |
 | `va-runv6` | 5861aa1557e59c21 | 0x80009000 | pending |
-| `va-runv7` | 8edbfa78d1ec7acf | 0x8000c000 | pending |
-| `va-barrier` | 28202d0d516170e8 | 0x80007000 | pending |
+| `va-runv7` | 8edbfa78d1ec7acf | 0x8000c000 | SR 11: `2 2 2 2 0 0 2 2 2 0 0` |
+| `va-barrier` | 28202d0d516170e8 | 0x80007000 | SR 5: `4 0x1000000100000001 0x1000000100000001 5 6` |
 | `va-q15` | ee0959d19d8f0a82 | 0x80010000 | pending |
 | `va-csmint-emu` | 3975c4af5495f488 | 0x8000e000 | pending |
 | `va-csmint-mon` | cb5834d86bcb2f0c | 0x80011000 | pending |
 | `va-straddle` | f7ea04e9d24ea60d | 0x8000a800 | pending |
-| `va-flat` | 08b1ba902363901d | 0x8000a800 | pending |
-| `va-flat-off` | 407e1a8a13293e7f | 0x80009800 | pending |
+| `va-flat` | 08b1ba902363901d | 0x8000a800 | SR 14: `0 0 2 0xe 0x77 0x19 5 1 0 0 0 2 1 0` |
+| `va-flat-off` | 407e1a8a13293e7f | 0x80009800 | SR 13: `0 0 0xe 0x77 0x19 1 1 0 0 0 0 0 0` |
 | `va-alloc` | 4f346db72ed8337b | 0x8000a800 | pending |
-| `va-alloc-off` | cbef3379e9a8b4ad | 0x8000a800 | pending |
-| `va-alloc-corrupt` | 123ce8c012c7e7f9 | 0x8000a800 | pending |
-| `va-alloc-exhaust` | 3ed79f75b2f92377 | 0x8000a800 | pending |
-| `va-ns-collide` | 47605a54f9682c0b | 0x80009800 | pending |
-| `va-ns-collide-off` | 90e3d70e14fd406a | 0x80009800 | pending |
-| `vb-trans-vp2` | 0c325b29ba5cc640 | 0x80013000 | pending |
-| `vb-trans-plain-vp2` | 38508a4220203bf1 | 0x8000b000 | pending |
+| `va-alloc-off` | cbef3379e9a8b4ad | 0x8000a800 | SR 22: `0 0 0 0x40 0x80 0x19 1 0x8000000000000400 6 0x200000005 0 4 0 0 4 0 0 0 0 0 0 0` |
+| `va-alloc-corrupt` | 123ce8c012c7e7f9 | 0x8000a800 | SR 23: `0 0 0x1d 0 0 0 0 5 0x8000000000000400 6 0x100000004 1 1 2 1 4 0 1 0 0 0 0 0` |
+| `va-alloc-exhaust` | 3ed79f75b2f92377 | 0x8000a800 | SR 23: `0 0 0x1e 0 0 0 0 5 0x8000000000000107 7 0 1 0 0 0 0 0 0 2 1 2 1 0` |
+| `va-ns-collide` | 47605a54f9682c0b | 0x80009800 | SR 6: `0x77 0 5 0x19 0 0` |
+| `va-ns-collide-off` | 90e3d70e14fd406a | 0x80009800 | SR 6: `0x77 0 1 0 0x77 0` |
+| `vb-trans-vp2` | 0c325b29ba5cc640 | 0x80013000 | SR 36: `0 5 2 0x28 0x420590db 0x77 0x1234 0 5 2 0x5a5a 0 0 5 0xd 0 0 5 0x99 0 5 0xf 0 0 0 5 0xf 0 5 0 5 0x1c 0 0 5 0` |
+| `vb-trans-plain-vp2` | 38508a4220203bf1 | 0x8000b000 | SR 5: `0 5 0x66 0 0` |
+| `q17-order` (vp1's image) | ee2adf9b373e5028 | 0x80004000 | SR 3: `0x19 0x19 2` |
+| `vb-trans-off` (vp1's image) | 79e670cc77352ee4 | 0x80011800 | SR 13: `0 1 0 0x28 0 0x77 0x1234 0 1 0 0 0x5a5a 0` |
