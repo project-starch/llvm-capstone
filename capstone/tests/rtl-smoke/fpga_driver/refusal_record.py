@@ -52,8 +52,10 @@ def bitstream_note():
     # Every bitstream descended from R-43 v2 (8f6a0af98) carries the record: the R-43 builds, the
     # supervised-CALL build caplifive_supcall_<commit>.bit (capstone-ariane 36a641e0b, resident 2026-10-02) and
     # its descendants caplifive_r51r52_, caplifive_fpb_ and caplifive_sublet_<commit>.bit. The Sublet build
-    # (d93a8d66b) latched the record on 2026-10-16 (boot s10a10: arm probe resolved DEAD, revnode id 55).
-    PREFIXES = ("caplifive_r43_", "caplifive_supcall_", "caplifive_r51r52_", "caplifive_fpb_", "caplifive_sublet_", "caplifive_vp1_")
+    # (d93a8d66b) latched the record on 2026-10-16 (boot s10a10: arm probe resolved DEAD, revnode id 55). The
+    # virtual-profile builds caplifive_vp1_ and caplifive_vp2_ descend from it with the record unchanged.
+    PREFIXES = ("caplifive_r43_", "caplifive_supcall_", "caplifive_r51r52_", "caplifive_fpb_", "caplifive_sublet_", "caplifive_vp1_",
+                "caplifive_vp2_")
     named = bs.startswith(PREFIXES)
     if REFUSAL_RECORD and not named:
         return (f"  [refusal] WARNING: REFUSAL_RECORD=1 but FPGA_BITSTREAM={bs!r} does not follow "

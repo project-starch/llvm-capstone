@@ -90,8 +90,10 @@ if [[ -f "$FW" ]]; then
     # and ariane_pkg.sv only, anvil sources identical, the same 65536-node pool. caplifive_sublet_*.bit (the Sublet
     # bitstream, capstone-sublet) changes the node RECORD (a parent link in the b word) but not the pool: INIT_STAGE
     # still sets head := 3 and REVNODE_SENTINEL stays 65535, so it is the same DTS. Added before either flash, so a
-    # run on the new silicon cannot fall through to the unknown-name block below.
-    *65536*|*_r20*|*supcall*|*r51r52*|*_fpb_*|*_sublet_*|*_vp1_*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
+    # run on the new silicon cannot fall through to the unknown-name block below. caplifive_vp2_*.bit (bf3db3175, the
+    # virtual profile's item A/D/E build) keeps the same DTS and capability word (the RTL lane's grade, 2026-10-17):
+    # item A's lifetime table lives at srevroot in memory and leaves the physical 65536-node pool unmoved.
+    *65536*|*_r20*|*supcall*|*r51r52*|*_fpb_*|*_sublet_*|*_vp1_*|*_vp2_*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
         && ok "DTS matches $BITSTREAM (0x3c2d2000)" \
         || bad "DTS/bitstream MISMATCH: $BITSTREAM needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
     # An unknown name BLOCKS (the lead, 2026-10-04). It used to warn, and _r20 and supcall both fell through that warn

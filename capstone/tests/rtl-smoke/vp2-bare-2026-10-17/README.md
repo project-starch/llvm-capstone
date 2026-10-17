@@ -44,10 +44,23 @@ Three images were rebuilt from tests-only commits before their vectors were take
 - va-csmint-emu and va-csmint-mon, from fc679dc68: `PHYS()` measured from `RAM_BASE` while their RAM capability's base
   is `_start`. On the board, `_start` sits 0x1000 higher, behind the wrapper's page.
 
+**Flash authorisation (2026-10-17, the lead's own word in the board lane's session).** The board lane asked about
+`caplifive_vp2_bf3db3175.bit`: sha256 776cdd8c40d985708a09d4d43ab1c5106414ae1347cc4436a711381d2c197475, routed WNS
+-19.019, inside the plan's band but 3.2 ns worse than any bitstream that has run here. Its recommended option was to
+flash after vp1's first session with a canary first, and to go back to vp1 if the canary differs. The lead answered
+"Go", and then, asked for an explicit word, "Go with reflash, if u need, I confirm". That covers the vp2 flash and the
+reflash back to vp1 on a canary difference.
+- **When:** after vp1's first session completes (`AFTER-FLASH DONE`, not a STOP), and the preflight passes on the
+  sealed sha256.
+- **The canary comes first, before any vp2 arm:** the S-16 set, the Sublet floor and s1gap, each run twice. It stops on
+  any difference from d93a8d66b's records, or between the two runs.
+  - On a difference the board goes back to `caplifive_vp1_9ed9a2594.bit` and the session stops. The next step would be a
+    vp2 respin.
+- **Then:** this table's 25 arms in table order, then corpus set 7, which must be identical to d93a8d66b.
+
 **Still open before a vp2 board run:**
-- The lead's word naming bf3db3175.
-- Positive controls on the resident bitstream for the physical-pool builds (`-off`, va-ns-collide-off), which should
-  read the same there.
+- (Not needed: resident controls for the physical-pool builds. The `-off` builds run in vp2's own batch beside their
+  flag-on arms. On vp1 or d93a8d66b their readings are not predicted: srevroot and the item-D CSRs do not exist there.)
 - The session script, with the canary first if the lead chooses it: the S-16 set, the Sublet floor and s1gap, run twice
   each, stopping on any difference from d93a8d66b or any run-to-run variation.
 
