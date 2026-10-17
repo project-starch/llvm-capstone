@@ -1,3 +1,14 @@
+2026-10-18 (later): **The two attribution builds for vp2's issue_read_operands growth are in synthesis since 07:55 UTC on the
+lead's direct go to the synth lane ("Go with everything"): attr-a 993043c97 (D3's FP port steal held off) and attr-b a8c873ac3
+(Q-15's judge held at 1), graded at seal against the pre-registration on dev (93bee16ee3f7), vp2's seal as the baseline. A null
+duplicate of vp2 was not launched (Vivado is deterministic for identical inputs; a null duplicate needs a named perturbation and
+none was handed off). Standing change from the lead (2026-10-18, in the synth lane's session): the synth lane launches every
+VERIFIED RTL-lane handoff without a per-build go, after checking the commit, parent, scope, Anvil sources and run.tcl and
+recording the pre-registration; it builds nothing that was not handed off. The flash of a bitstream still needs the lead's own
+word to the board lane. vp2's board staging is pre-registered on dev (4be3dfe15509, the board lane): 23 images plus q17-order
+and vb-trans-off, each with its vector simulated on bf3db3175 as built; three tests-only fixes found on the way sit on
+virtual-profile-2-d above bf3db3175 (c55e3ff31, 1bcef8712, fc679dc68; the RTL unchanged).**
+
 2026-10-18: **BOTH VIRTUAL-PROFILE BITSTREAMS ARE SEALED AND GRADED; the flashes wait on the lead's own word to the board lane,
 vp1 first.** vp1 `caplifive_vp1_9ed9a2594.bit` sha256 01072623f8f24b2081556c193113ca906d68316fdc1de15a55ae8267ddf82905,
 routed WNS -15.615 (0.241 inside the resident d93a8d66b's -15.856), LUTLP-1 0; vp2 `caplifive_vp2_bf3db3175.bit` sha256
