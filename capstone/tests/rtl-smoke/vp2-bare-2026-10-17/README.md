@@ -1,4 +1,4 @@
-# vp2's bare arms for `caplifive_vp2_bf3db3175.bit` (staged 2026-10-17; the board vectors are pending)
+# vp2's bare arms for `caplifive_vp2_bf3db3175.bit`: pre-registered board vectors (2026-10-17, before any vp2 run)
 
 The readings the vp2 plan section (`docs/plans/2026-10-16-virtual-profile-on-silicon.md`, "Readings the bitstream must
 answer") lists, as bare JTAG arms:
@@ -21,9 +21,9 @@ were held out of vp2 until that variant landed:
 **Not authorised to run.** A flash of bf3db3175 waits on the lead's own word naming it, after vp1's first session.
 
 **Build** (`build.sh`):
-- The tests are copies of capstone-ariane `virtual-profile-2-d` c55e3ff31, whose RTL is bf3db3175's (the four commits
+- The tests are copies of capstone-ariane `virtual-profile-2-d` fc679dc68, whose RTL is bf3db3175's (the five commits
   above it touch `verif/` only, 0 files elsewhere). They are checked equal at build time when `VP_SRC` is given; they
-  were, from `git archive c55e3ff31`.
+  were, from `git archive fc679dc68`.
 - The wrapper, env and node-aware header are vp1-bare's, unchanged.
 - The recorder's three scratch registers per test are chosen by `pick-regs.py` from the GPRs the test never names.
   va-csmint-mon names all 32; its choice and the reason are in `build.sh`.
@@ -37,15 +37,19 @@ counts in item A's arms are the obvious place. So each vector is taken from simu
 `make veri-testharness elf=...` (the RTL lane, 2026-10-17). An image whose simulation fails, or whose vector does not
 express its header's claim, is rebuilt (a `BOARD_TEST_CH` guard, as vb-trans has) before it is pre-registered.
 
-**Pending, before any vp2 board run:**
-1. The RTL lane's vectors: 20 of 23 in (`results/rtl-sim-vectors.txt`). Three images are to be rebuilt from a
-   tests-only commit in the RTL tree (va-runv6's landed as c55e3ff31, rebuilt, simulation pending):
-   - va-runv6, for an arm fault on the RTL lane's side;
-   - va-csmint-emu and va-csmint-mon, whose PHYS() measured from RAM_BASE while their RAM capability starts at
-     `_start`, 0x1000 higher on the board.
-2. The table below filled with them, and pushed on the lane before the run.
-3. Positive controls on the resident bitstream, where an arm's control is defined (the `-off` builds and
-   va-ns-collide-off). The physical-pool controls should read the same on d93a8d66b.
+**The board vectors are complete:** all 23 images and vp1's two reused ones. They come from simulating each image as
+built on bf3db3175's RTL (`results/rtl-sim-vectors.txt`). In va-csmint-mon's vector, -1 means 0xffffffffffffffff.
+Three images were rebuilt from tests-only commits before their vectors were taken:
+- va-runv6, from c55e3ff31: an arm fault in the test.
+- va-csmint-emu and va-csmint-mon, from fc679dc68: `PHYS()` measured from `RAM_BASE` while their RAM capability's base
+  is `_start`. On the board, `_start` sits 0x1000 higher, behind the wrapper's page.
+
+**Still open before a vp2 board run:**
+- The lead's word naming bf3db3175.
+- Positive controls on the resident bitstream for the physical-pool builds (`-off`, va-ns-collide-off), which should
+  read the same there.
+- The session script, with the canary first if the lead chooses it: the S-16 set, the Sublet floor and s1gap, run twice
+  each, stopping on any difference from d93a8d66b or any run-to-run variation.
 
 | image | sha256 (16) | board_rec | board vector (from the simulation of this image) |
 |---|---|---|---|
@@ -55,12 +59,12 @@ express its header's claim, is rebuilt (a `BOARD_TEST_CH` guard, as vb-trans has
 | `va-runv3` | d967dcdea54e3a86 | 0x8000c000 | SR 16: `2 3 0 0 0 0 0x3ff8000000000000 0x20 0x3ff8000000000000 1 2 0x4004000000000000 0x40 0x3ff8000000000000 1 0` |
 | `va-runv4` | e8ac8002db62b1e8 | 0x8000d000 | SR 16: `2 5 5 0x1e 0 0x33 7 1 2 2 2 0x44 8 2 0 0` |
 | `va-runv5` | a5c00ebb2d79ed1b | 0x8000c000 | SR 33: `2 2 2 2 0 0 2 2 2 0 0 2 2 2 0 0 2 2 2 0 0 2 2 2 0 0 2 2 2 0xc 0xf 9 0` |
-| `va-runv6` | 7922462bf7b1a21d | 0x80009000 | rebuild from the RTL lane's fix (an arm fault cost the 50th reading) |
+| `va-runv6` | 7922462bf7b1a21d | 0x80009000 | SR 50: `2 2 8 4 5 2 4 0x3000000100000001 0x300000000 0x3000000000000000 0x55 0x1000000100000001 6 3 3 0x10000000c0000002 0x500000004 0x66 0 0 0x2000000000000000 0x500000004 0x100000001 0xc0000002 0x19 0x19 1 1 1 1 1 1 1 1 0x3000000000000000 1 0x3000000000000000 0 0x180000001 0x2000000000000000 0x1e 0x3f 0x40 5 0x3000000fc0000001 0x3e00000000 0 0x2000000000000000 0x2000000fc0000001 2` |
 | `va-runv7` | 8edbfa78d1ec7acf | 0x8000c000 | SR 11: `2 2 2 2 0 0 2 2 2 0 0` |
 | `va-barrier` | 28202d0d516170e8 | 0x80007000 | SR 5: `4 0x1000000100000001 0x1000000100000001 5 6` |
 | `va-q15` | ee0959d19d8f0a82 | 0x80010000 | SR 10: `0 0x1018 2 2 2 0x1d 0 0x77 4 0` |
-| `va-csmint-emu` | 3975c4af5495f488 | 0x8000e000 | rebuild from the PHYS fix (tables land 0x1000 high on the board) |
-| `va-csmint-mon` | cb5834d86bcb2f0c | 0x80011000 | rebuild from the PHYS fix (tables land 0x1000 high on the board) |
+| `va-csmint-emu` | c2defd4da8304921 | 0x8000e000 | SR 32: `0 4 5 0x3000000100000001 0x3000000000000000 4 0x8000a004 6 0x8000b018 0x1d 0 0x1d 0 0x1d 0 0xf 0x8000c000 0 6 7 0x3000000180000001 0x3000000000000000 0x1e 0 0 0x8000d200 0x8000d300 0x8000d200 4 0 0 0` |
+| `va-csmint-mon` | 600b48c94fabddc3 | 0x80011000 | SR 46: `4 -1 -1 -1 4 0x8000b004 -1 6 0x8000c018 -1 0x1d 0 -1 0x1d 0 -1 0x1d 0 -1 0xf 0x8000d000 -1 0xd 0x8000f000 -1 2 0xa0b1165b 6 -1 -1 -1 0x1e 0 -1 0x1d 0 0 0x8000e200 0x8000e300 0x8000e200 4 0 0 0 0x3f 0x100000000` |
 | `va-straddle` | f7ea04e9d24ea60d | 0x8000a800 | SR 7: `0 5 0xd 6 2 0 0` |
 | `va-flat` | 08b1ba902363901d | 0x8000a800 | SR 14: `0 0 2 0xe 0x77 0x19 5 1 0 0 0 2 1 0` |
 | `va-flat-off` | 407e1a8a13293e7f | 0x80009800 | SR 13: `0 0 0xe 0x77 0x19 1 1 0 0 0 0 0 0` |

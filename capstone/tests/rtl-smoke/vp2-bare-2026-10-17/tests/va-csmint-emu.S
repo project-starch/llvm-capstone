@@ -81,8 +81,8 @@ CAPENTER(a0, a1)
   CAPCREATE(REG); li a0, TYPE; lla a3, LO; lla a4, HI; li a5, PERM; \
   CAPTYPE(REG, a0); CAPBOUND(REG, a3, a4); CAPPERM(REG, a5)
 
-# a capability in REG at the physical address in AREG, through s3 (the RAM capability, base RAM_BASE)
-#define PHYS(REG, AREG) li t6, RAM_BASE; sub t6, AREG, t6; CINCOFFSET(REG, s3, t6)
+# a capability in REG at the physical address in AREG, through s3 (the RAM capability, base _start)
+#define PHYS(REG, AREG) lla t6, _start; sub t6, AREG, t6; CINCOFFSET(REG, s3, t6)
 #define PREC1(I) li t0, 16*(I); CINCOFFSET(t1, s8, t0); ld t2, 8(t1); CAPPRINT(t2)
 
 # ---------------------------------------------------------------- M's capabilities

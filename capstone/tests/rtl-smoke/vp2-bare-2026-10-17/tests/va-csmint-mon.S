@@ -62,7 +62,7 @@ CAPENTER(a0, a1)
 #define MINT(REG, TYPE, LO, HI, PERM) \
   CAPCREATE(REG); li a0, TYPE; lla a3, LO; lla a4, HI; li a5, PERM; \
   CAPTYPE(REG, a0); CAPBOUND(REG, a3, a4); CAPPERM(REG, a5)
-#define PHYS(REG, AREG) li t6, RAM_BASE; sub t6, AREG, t6; CINCOFFSET(REG, s3, t6)
+#define PHYS(REG, AREG) lla t6, _start; sub t6, AREG, t6; CINCOFFSET(REG, s3, t6)
 
 MINT(s3, CAP_TYPE_NONLIN, _start, ram_end, CAP_PERM_RW)     # M's RAM capability (setup and the final read-back only)
 MINT(s8, CAP_TYPE_NONLIN, tbl, tbl_end, CAP_PERM_RW)        # the table
