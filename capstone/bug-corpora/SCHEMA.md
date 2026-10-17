@@ -88,7 +88,8 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
 `allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `fault_sites`,
-`fault_sites_why`, `duplicate_of`, `control_probe`, `control_probe_why`. Optional means
+`fault_sites_why`, `duplicate_of`, `control_probe`, `control_probe_why`, `arena_bytes`,
+`arena_bytes_why`, `campaign_case`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -129,6 +130,23 @@ A field that is meaningful in exactly one schema belongs in that schema's
 required list, not here. `trigger` is the worked example: it is required for
 `script-trigger`, and keeping it out of the optional set is what lets the
 unknown-field check still catch a stray `trigger` on a `case-json` case.
+
+`arena_bytes` is the size of the nested allocator's arena this case must be built with, in
+bytes. It is **a property of the case, not of the arm**, and every arm must use the same value
+or the arms are not comparable: on an arena-granular arm the arena IS the bound an over-read
+has to leave to be seen. SQLite case 26 is CAUGHT on two arms at 262144 and MISSED on both at
+1048576, from one source. For a temporal case the size cannot change a verdict -- a
+use-after-free inside the arena is invisible at that granularity whatever the size -- so it
+matters there only for whether the trigger has the memory to reach the defect, which is why
+most cases leave it out. Added 2026-10-17, after SQLite's three builders were found to be
+passing three different values with nothing recording any of them. `arena_bytes_why` carries
+the one-sentence reason; a size set without one is a value nobody can later check.
+
+`campaign_case` is the number this case carried before a renumber, kept so that records
+written against the old numbering stay resolvable. A corpus is renumbered when cases are
+withdrawn, because `case` must be dense, and everything written before that point -- commit
+messages, retractions, working notes -- cites the old number. It is set only where the number
+changed, and the corpus README carries the mapping.
 
 `fault_sites` names the functions a fault may land in and still be this defect's, for a case whose
 stale access has no labelled probe -- a double free faults inside the manager, a copy routine faults

@@ -1,0 +1,55 @@
+{
+  "case": 25,
+  "campaign_case": 30,
+  "upstream_fix": "fz06",
+  "title": "heap-buffer-overflow: vdbeRecordCompareInt THREE_BYTE_INT",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "fuzz-corpus diff: the image reproduces on stock 3.22.0 under host ASan as heap-buffer-overflow in vdbeRecordCompareInt at sqlite3.c:77204",
+  "allocator_layer": "memsys5",
+  "arena_bytes": 1048576,
+  "arena_bytes_why": "1 MiB on every arm. Five of the eight spatial cases are forced here by reachability -- at 262144 cases 21, 22 and 23 exhaust memsys5 before the defect (pcache1AllocPage dereferences the NULL that 3.22.0 does not check), 29 returns SQLITE_NOMEM, and 00 takes a different path -- so the same value is declared for all eight to keep the arms comparable. Measured 2026-10-17; this is also the value every recorded virtual reading was taken at, while CheriBSD had been running 262144.",
+  "object": "the serialized record vdbeRecordCompareInt decodes an integer field from. The read is aKey = &((const u8*)pKey1)[*(const u8*)pKey1 & 0x3F], an offset of up to 63 bytes taken from the record's own header byte and never checked against nKey1, followed by a read of up to eight bytes at aKey chosen by serial_type",
+  "lifetime_ender": "not a lifetime defect: a corrupt record header claims a field wider than the record, and the decode reads past it",
+  "shape": "read past the end of the record",
+  "fidelity": "real consumer, real allocator, with a reconstructed trigger -- see case 24 for why the SQL had to be re-derived and why it must be replayed one statement per process. Corrected 2026-10-16: this said case 34, which does not exist; the corpus went from 38 cases to 33 on 2026-10-06 and this cross-reference was left behind, as cases 17 and 19's were",
+  "arms": {
+    "spatial": {
+      "oracle": "completes and prints its own marker ('NOTRAP done', rc=0). Recorded as no-marker until 2026-10-05, when the raw log disproved it: the runner had filed it INFRA because the BOOT returned 1 -- the next case in the queue hung -- and charged that to the head of the remaining list. The case's own return code says why nothing was detected: s0_rc=11, SQLITE_CORRUPT -- the trigger's database image is rejected before the defect",
+      "run": "2026-10-05"
+    },
+    "sublet": {
+      "oracle": "completes and prints its own marker ('NOTRAP done', rc=0). Recorded as no-marker until 2026-10-05, when the raw log disproved it: the runner had filed it INFRA because the BOOT returned 1 -- the next case in the queue hung -- and charged that to the head of the remaining list. The case's own return code says why nothing was detected: s0_rc=11, SQLITE_CORRUPT -- the trigger's database image is rejected before the defect",
+      "run": "2026-10-05",
+      "verdict": "MISSED",
+      "verdict_from": "results/matrix.tsv case 25 sublet: not-detected"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "MISSED",
+      "verdict_from": "results/matrix.tsv case 25 cheribsd-revocation: not-detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f7fce1760 in vdbeRecordCompareInt; by function: vdbeRecordCompareInt is where host ASan reported it",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-nested-pools"
+    },
+    "silicon-sqlite-stock": {
+      "status": "not written",
+      "note": "not in the silicon control arm's batch: tests/rtl-smoke/repro322-silicon-2026-10-16 runs the eight cases of the 2026-10-01 batch, whose README gives why the others were left out"
+    }
+  },
+  "status": "re-measured on all four readings 2026-10-16 on this platform, and the Sublet verdict changes. host ASan was re-run on a restored x86 runtime: heap-buffer-overflow, 20 bytes after a 32-byte region, vdbeRecordCompareInt <- sqlite3BtreeMovetoUnpacked <- sqlite3VdbeExec <- sqlite3Step, identical to the 2026-10-11 bundle. virtual-malloc MISSED: open_rc=0, then s0_rc=11 and NOTRAP done, RETURNED, both controls as declared. virtual-nested-pools CAUGHT: cause=28 pc=0x3facce1760 offset 536 in vdbeRecordCompareInt at fault address 0x3facf69394, inside the arena, both controls as declared -- and it faults BEFORE s0_rc is printed, on the same statement the other arm completes. cheribsd-revocation MISSED, re-measured 2026-10-17: the 2026-10-16 NO-READING was this arm compiling its own copy of the case, which ran PRAGMA integrity_check before the trigger so SQLite rejected it; built from the corpus case.c the arm gives s0_rc=11, identical to virtual-malloc, and probe site 65 reports hits=3 witnesses=3, every read kind=OOB, through a capability with tag=1 bounded to the whole 262144-byte arena -- reached and silent, the same signature case 00 records. The arms block is the 2026-10-11 bundle's and is regenerated by derive-verdicts.py when this review ends. RE-MEASURED 2026-10-17 with one arena on every arm (arena_bytes=1048576) and every arm built from the corpus case.c: virtual-malloc MISSED, virtual-nested-pools CAUGHT cause=28 pc=0x3f894e1760 in vdbeRecordCompareInt, cheribsd-revocation MISSED with RETURNED rc=0 and probe site 65 reporting hits=3 witnesses=3 -- reached and silent, not a no-reading. The earlier spatial readings were taken with the virtual arms at a 1 MiB header default against CheriBSD's 262144, and with this arm compiling its own copy of the case",
+  "note": "Re-measured 2026-10-16. THE SUBLET CELL CHANGES FROM NOT-DETECTED TO DETECTED, and this is the only case in the corpus where that arm was recorded as missing. The physical rows explain their silence as follows, quoted from results/matrix.tsv: 'The case\u2019s own return code says why nothing was detected: s0_rc=11, SQLITE_CORRUPT -- the trigger\u2019s database image is rejected'. That reasoning does not hold, and the two virtual arms show why on one image and one statement. Without Sublet: open_rc=0, then s0_rc=11, NOTRAP done, RETURNED -- the over-read COMPLETES, the decode returns garbage, and SQLite's own corruption check rejects the result afterwards. With Sublet: open_rc=0, then the fault, cause=28 in vdbeRecordCompareInt, before s0_rc is ever printed. So SQLITE_CORRUPT is a CONSEQUENCE of the out-of-bounds read, not a sign that the read never happened, and the defect is reached on exactly the statement whose return code was taken as evidence that it was not. That also settles the base cell: virtual-malloc is a genuine reached-and-silent, since the Sublet arm establishes reachability on the same statement and the same image. The CheriBSD cell was recorded as a NO-READING on that date and is NOT one; the correction is 2026-10-17. The hits=0 came from this arm compiling its own copy of the case under ports/sqlite/cheribsd/cases/, which ran PRAGMA integrity_check BEFORE the trigger -- on a corrupt image that makes SQLite reject the trigger with SQLITE_CORRUPT, so the defect was unreachable. build-corpus-cheri.sh now takes the case program from the corpus, as build-virtual.py does. Re-measured from the corpus source the arm MISSES: s0_rc=11 as on virtual-malloc, and site 65 reports hits=3 witnesses=3, all kind=OOB, through a tag=1 capability bounded to the whole 262144-byte arena. The defect itself is an unchecked offset taken from the data: aKey = pKey1 + (*pKey1 & 0x3F), up to 63 bytes in, never compared against nKey1, then up to eight bytes read at aKey according to serial_type. Site 65 prints pKey1, nKey1, the header byte, serial_type, aKey and whether the widest read already passes the end. One stale cross-reference is corrected: fidelity pointed at case 34, which does not exist",
+  "fault_sites": [
+    "vdbeRecordCompareInt"
+  ],
+  "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in vdbeRecordCompareInt (live_proof); that run is independent of the Capstone arms and predates them."
+}

@@ -23,10 +23,16 @@
  * It fires with either an OPTIMIZE or a plain INSERT as the in-loop write; this case
  * uses OPTIMIZE, which is what upstream uses.
  *
- * Note nRef at offset 0 is exactly the granule memsys5's 8-byte Mem5Link overwrites, so
- * in the domain the refcount read returns a freelist integer rather than faulting -- see
- * case_mem5tagmap.c. That is why this is a silent control here and a reported UAF on the
- * host.
+ * WHY THE UNPROTECTED ARMS ARE SILENT. Not for the reason this comment gave until
+ * 2026-10-16. It said nRef at offset 0 is the granule memsys5's 8-byte Mem5Link
+ * overwrites, so the refcount read returns a freelist integer. Probe site 50 measured
+ * otherwise on all three platforms: across 31 release hits the block is never free when it
+ * is read, and the trace for one structure runs CACHE, releases down to nRef=1, FREE, then
+ * the SAME address CACHEd again with a fresh nRef=3. memsys5 reissues the block to the next
+ * Fts5Structure -- same size class -- before the stale release arrives, so the stale --nRef
+ * silently decrements a LIVE successor's refcount instead of reading bookkeeping. The
+ * Mem5Link would only show if the block were still free at the read. fts5's own
+ * integrity-check then returns rc=0, so the corruption is invisible to the engine too.
  *
  * REACHABILITY PROBE: the MATCH must return 3 rows ('one' appears in documents 1, 3 and
  * 5) and every in-loop write must succeed, which together prove the structure really was

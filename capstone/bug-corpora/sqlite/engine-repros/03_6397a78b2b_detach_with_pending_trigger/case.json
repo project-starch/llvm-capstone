@@ -1,0 +1,53 @@
+{
+  "case": 3,
+  "campaign_case": 5,
+  "upstream_fix": "6397a78b2b",
+  "title": "heap-use-after-free in findElementWithHash",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "inspection in the 3.22.0 tree: detachFunc frees the auxiliary btree and schema in attach.c while a TEMP TRIGGER in aDb[1] keeps pTabSchema pointing at it, and sqlite3DropTriggerPtr -> tableOfTrigger reads pTrigger->pTabSchema->tblHash in trigger.c. Fixed upstream in 3.30.0",
+  "allocator_layer": "memsys5",
+  "object": "the auxiliary database's Schema, and the table hash inside it",
+  "lifetime_ender": "DETACH frees the auxiliary btree and schema while a temp trigger still points at them",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator. Built in the coreT group (-USQLITE_OMIT_TEMPDB): without a temp database the trigger has nowhere to survive",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021300c8"
+    },
+    "sublet": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1020a8f18",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 5 sublet: detected"
+    },
+    "cheribsd-revocation": {
+      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 5 cheribsd-revocation: detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "NO-READING",
+      "verdict_note": "cause=24 pc=0x3facd8ce90 in sqlite3DropTriggerPtr; in sqlite3DropTriggerPtr; ASan site ['findElementWithHash']",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-malloc",
+      "verdict_reason": "unattributed"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f990fdeb0 in findElementWithHash; by function: findElementWithHash is where host ASan reported it",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-nested-pools"
+    },
+    "silicon-sqlite-stock": {
+      "oracle": "silicon, classic line, memsys5 stock over its static arena, lookaside 0,0 (tools/arms.json silicon-sqlite-memsys5): a trap in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x828a7d7c in sqlite3DropTriggerPtr; by function: sqlite3DropTriggerPtr is where host ASan reported it; the trapping instruction is `ldc a3, 0x0(a1)` at sqlite3DropTriggerPtr+0x154, trap tval 0x0",
+      "verdict_from": "results/2026-10-16-silicon/silicon-sqlite-stock"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021300c8; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1020a8f18; cheribsd-revocation run 2026-10-04/05: no verdict: detachtrig before drop",
+  "fault_sites": [
+    "findElementWithHash"
+  ],
+  "fault_sites_why": "The stale access is the first load from the freed auxiliary schema: sqlite3DropTriggerPtr calls tableOfTrigger, which only forms the address &pTrigger->pTabSchema->tblHash, and sqlite3HashFind passes it on; the first load is pH->ht in findElementWithHash. Host ASan agrees -- its access stack is findElementWithHash <- sqlite3HashFind <- tableOfTrigger <- sqlite3DropTriggerPtr, 24 bytes inside a 120-byte region freed by sqlite3DbFreeNN <- sqlite3BtreeClose (results/2026-10-11-host-asan). NARROWED 2026-10-15, from [sqlite3DropTriggerPtr, tableOfTrigger, sqlite3HashFind, findElementWithHash] to this one: the other three are the call chain, and listing them made any fault along it count as a catch, including the NULL dereference this defect causes downstream. Probe site 43 measures the difference -- on stock memsys5, natively and on virtual Capstone and CheriBSD purecap alike, the stale load SUCCEEDS (kind=UAF witnessed, no fault) and returns ht=0 htsize=0 count=0 first=0, so findElementWithHash returns &nullElement, sqlite3HashFind returns NULL, and sqlite3DropTriggerPtr then dereferences that NULL (its assert(pTable) is compiled out by NDEBUG). Those arms fault at address 0x0 in sqlite3DropTriggerPtr, and CheriBSD reports si_code=2, PROT_CHERI_TAG, an untagged dereference -- the consequence of the defect, not a rejection of the invalid access."
+}

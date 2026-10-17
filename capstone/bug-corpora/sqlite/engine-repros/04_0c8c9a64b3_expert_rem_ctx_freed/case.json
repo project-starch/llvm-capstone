@@ -1,0 +1,53 @@
+{
+  "case": 4,
+  "campaign_case": 6,
+  "upstream_fix": "0c8c9a64b3",
+  "title": "heap-use-after-free in idxRemFunc",
+  "consumer": "sqlite3.c (idxRemFunc)",
+  "live_in_pin": true,
+  "live_proof": "inspection with line numbers in the pinned extension source: idxPopulateStat1() frees the context and returns without unregistering at sqlite3expert.c:1671, :1676 and :1719, leaving rem() and sample() registered on the user connection. Fixed upstream in 3.46.1",
+  "allocator_layer": "memsys5",
+  "arena_bytes": 1048576,
+  "arena_bytes_why": "the value corpus322.sh and build-corpus-cheri.sh already passed for this case; recorded here so every arm reads one source.",
+  "object": "the heap IdxRemCtx that rem() was registered with",
+  "lifetime_ender": "idxPopulateStat1() frees the context and returns without unregistering the functions that point at it",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator, but the defect is in ext/expert/sqlite3expert.c rather than in the amalgamation; the case compiles that extension into the domain. The stale read is in idxRemFunc, which is why its probe site is in the extension and not in sqlite3.c",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b86c8",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 6 sublet: detected"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "MISSED",
+      "verdict_from": "results/matrix.tsv case 6 cheribsd-revocation: not-detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "NO-READING",
+      "verdict_note": "reached, then neither completed nor faulted",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-malloc",
+      "verdict_reason": "inconclusive"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3fba41f8bc in idxRemFunc; by function: idxRemFunc is where host ASan reported it",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-nested-pools"
+    },
+    "silicon-sqlite-stock": {
+      "status": "not written",
+      "note": "not in the silicon control arm's batch: tests/rtl-smoke/repro322-silicon-2026-10-16 runs the eight cases of the 2026-10-01 batch, whose README gives why the others were left out"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b86c8; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=12, witnesses=4)",
+  "fault_sites": [
+    "idxRemFunc"
+  ],
+  "fault_sites_why": "Calling rem() runs idxRemFunc over the freed IdxRemCtx (consumer; PROVENANCE.md, sqlite3expert.c:1671/1676/1719). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs. Confirmed 2026-10-15 by probe site 21, the first load from the freed context (assert( iSlot<=p->nSlot ) at sqlite3expert.c:1429, p->nSlot being offset 0 of IdxRemCtx, which is where host ASan reports it). On every unprotected arm the load SUCCEEDS and returns garbage; only virtual-nested-pools rejects it, with cause 25 at that function. What each arm does afterwards is the extension's own assert, and the arms do not agree because they do not compile it the same way: ports/sqlite/cheribsd/build-corpus-cheri.sh puts -DNDEBUG in SQLITE_DEFINES and that reaches the extension translation unit, while repro322/build-virtual.py defines it nowhere (sqlite3.c's internal #define NDEBUG does not cross into a separately compiled extension). So on the virtual arms the assert is live and aborts on the garbage -- SIGABRT, which the judge reads as NO-READING:inconclusive, 'reached, then neither completed nor faulted' -- and on CheriBSD it is compiled out and the case runs to RETURNED rc=0. The garbage differs per platform (nSlot=-1 natively and on virtual Capstone, 14400 on CheriBSD, where iSlot=0<=14400 would have satisfied the assert anyway), so the abort is a property of what happened to be in the freed block, not a detection."
+}

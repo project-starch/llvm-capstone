@@ -55,7 +55,8 @@ for t in $(ls "$WORK/out" | grep -vE '^poscontrol|_static$'); do one "$t"; done
 one spellfixoom_static '' 600   # statically linked: purecap ld-elf.so.1 rejects its traditional TLS
 
 echo
-echo "### control B2: revocation off, per process -- the 4 faults must be unchanged"
+echo "### control B2: revocation off, per process -- the 3 faults must be unchanged"
+# backupattach stays in the list: its replacement trigger must PASS here too, not fault.
 for t in backupattach detachtrig rtreecursor rtreeinode0; do one "$t" _RUNTIME_REVOCATION_DISABLE=1; done
 
 echo
@@ -69,7 +70,12 @@ echo
 echo "### expected"
 cat <<'X'
   poscontrol             FAULT SIGPROT  (revocation on / every-free)   PASS (revocation off)
-  backupattach, detachtrig, rtreecursor, rtreeinode0
+  backupattach           PASS in ALL configurations since 2026-10-15. Its trigger was replaced
+                         (engine-repros/02 PROVENANCE.md): the old one freed nothing and faulted
+                         through a NULL pBt->pPage1 on every arm, which is what the SIGPROT below
+                         was. The replacement frees the destination Btree by DETACH, and this arm
+                         does not report it -- the inner free never reaches the system allocator
+  detachtrig, rtreecursor, rtreeinode0
                          FAULT SIGPROT in ALL configurations -> revocation-independent,
                          i.e. incidental memsys5 in-band-metadata tag clobber, NOT a detection
   every other domain     PASS in ALL configurations

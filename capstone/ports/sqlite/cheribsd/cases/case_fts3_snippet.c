@@ -2,8 +2,16 @@
  * pointers (pHead/pTail) per phrase; a later incremental phrase under an OR restarts
  * the NEAR group (fts3EvalRestart, fts3.c:5540), freeing/reloading already-visited
  * doclists, so the saved pointers dangle while scoring (fts3_snippet.c:507/479).
- * Distinct from becd68ba0d. Trunk-only fix. CONTROL: snippet() over an OR of phrases
- * read incrementally; on unprotected capstone completes -> NOTRAP.
+ * Trunk-only fix. CONTROL: snippet() over an OR of phrases read incrementally; on
+ * unprotected capstone completes -> NOTRAP.
+ *
+ * WITHDRAWAL PROPOSED 2026-10-16: this trigger cannot reach the defect (pNear is the
+ * phrase itself in a flat OR, so a restart frees only the poslist of the phrase being
+ * fetched, whose pointers are stored afterwards), and rewriting it the way case 08's
+ * was rewritten reaches case 10's defect rather than an independent one: the same
+ * instruction, sqlite3.c:164924 in fts3SnippetAdvance, through the same four frames,
+ * with the same free chain. The header line claiming this case is distinct from
+ * becd68ba0d is what the measurement contradicts. See PROVENANCE.md.
  * NOTE: build in fts3 group. */
 #include "repro322_common.h"
 static int run_case(void){

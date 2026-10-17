@@ -34,8 +34,20 @@ sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
-BUILD_ARM = {"virtual-malloc": "memsys5", "virtual-nested-pools": "memsys5-sublet"}
-PREDICTED = {"virtual-malloc": v.MISSED, "virtual-nested-pools": v.CAUGHT}
+BUILD_ARM = {"virtual-malloc": "memsys5", "virtual-nested-pools": "memsys5-sublet",
+             # The non-nested configuration: no SQLITE_CONFIG_HEAP, so SQLite's allocator is
+             # the platform's. Same 28 defects, same sources, one build flag apart.
+             "virtual-sysmalloc": "platform"}
+PREDICTED = {"virtual-malloc": v.MISSED, "virtual-nested-pools": v.CAUGHT,
+             "virtual-sysmalloc": v.CAUGHT}
+# A CONTROL measurement, deliberately not in corpus.json's arm_configurations. Putting it
+# there would make it a required arm, and check-corpus.py then wants an `arms` entry for it
+# in every case.json -- but those blocks are derive-verdicts.py's, generated from the scored
+# arms' bundles, and two cases (07 and 22) have no non-nested form at all because they
+# configure the memsys5 arena themselves to force their OOM path. The non-nested run answers
+# "is the gap about nesting?", and its numbers live in the review documents, not in the
+# per-case arms blocks.
+CONTROL_ARMS = {"virtual-sysmalloc": "virtual-mallocng"}
 
 
 def observe(tag, text, result, symbols, sites):
@@ -82,12 +94,13 @@ def main():
     p.add_argument("--state", type=Path, required=True)
     p.add_argument("--arm", required=True, choices=sorted(BUILD_ARM))
     p.add_argument("--build", type=Path, required=True)
-    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
+    p.add_argument("--llvm-bin", type=Path, required=True)
     p.add_argument("--raw", type=Path, required=True)
     p.add_argument("--only", help="comma-separated case number prefixes")
     a = p.parse_args()
 
-    config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
+    configured = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"]
+    config = configured.get(a.arm) or CONTROL_ARMS[a.arm]
     spec = v.load_arms()[config]
     build = json.loads((a.build / "build.json").read_text())
     if build.get("arm") != BUILD_ARM[a.arm] or appvm.sdk_identity(build["sdk"])[1] != "virtual" \

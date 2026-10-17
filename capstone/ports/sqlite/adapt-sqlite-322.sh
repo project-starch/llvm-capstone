@@ -15,12 +15,6 @@
 # layout is 112 bytes here. Allocate the actual rounded struct size; otherwise
 # phase 210 faults while SQLite initializes the RowSet.
 #
-# The sorter advances its memory cursor by ROUND8(nReq), so a record that holds a capability
-# lands 8-aligned and the ldc/stc on it is an unaligned capability access. Round to 16 instead.
-# This rewrite was MISSING here while the virtual engine-repros arms ran with it applied by hand:
-# their bundles record amalgamation_sha256 7fc92e19a3af61f3..., which stock plus this script could
-# not reproduce (it gave b446615b077da476...) until this line existed. See the commit message.
-#
 # One addition the 3.53.3 pass does not need: sqlite3_filename. SQLite 3.41.0 introduced
 # it as an alias for const char * and changed sqlite3_vfs.xOpen to take it; the shared VFS
 # (tests/runtime-qemu/sqlite-vfs-skeleton/capstone_sqlite_vfs.c) is written against that
@@ -62,7 +56,6 @@ sed \
   -e 's/ROUND8(sizeof(VdbeCursor)) + 2\*sizeof(u32)\*nField + /((ROUND8(sizeof(VdbeCursor)) + 2*sizeof(u32)*nField + 15)\&~15) + /' \
   -e 's/&pMem->z\[ROUND8(sizeof(VdbeCursor))+2\*sizeof(u32)\*nField\]/\&pMem->z[(ROUND8(sizeof(VdbeCursor))+2*sizeof(u32)*nField+15)\&~15]/' \
   -e 's/pMem->zMalloc = sqlite3DbMallocRawNN(db, 64);/pMem->zMalloc = sqlite3DbMallocRawNN(db, ROUND8(sizeof(RowSet)));/' \
-  -e 's/pSorter->iMemory += ROUND8(nReq);/pSorter->iMemory += (nReq+15)\&~15;  \/* Capstone: records hold pointers *\//' \
   -e "$FILENAME_TYPEDEF" \
   "$SRC_DIR/sqlite3.c" > "$TMP_C"
 sed -e "$FILENAME_TYPEDEF" "$SRC_DIR/sqlite3.h" > "$TMP_H"
@@ -73,7 +66,6 @@ grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$TMP_C"
 grep -q '((ROUND8(sizeof(VdbeCursor)) + 2\*sizeof(u32)\*nField + 15)&~15) + ' "$TMP_C"
 grep -q '&pMem->z\[(ROUND8(sizeof(VdbeCursor))+2\*sizeof(u32)\*nField+15)&~15\]' "$TMP_C"
 grep -q 'pMem->zMalloc = sqlite3DbMallocRawNN(db, ROUND8(sizeof(RowSet)));' "$TMP_C"
-grep -q 'pSorter->iMemory += (nReq+15)&~15;' "$TMP_C"
 for t in "$TMP_C" "$TMP_H"; do
   [ "$(grep -c '^typedef const char \*sqlite3_filename;$' "$t")" = 1 ]
 done

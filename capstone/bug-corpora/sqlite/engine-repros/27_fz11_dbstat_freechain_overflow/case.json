@@ -1,0 +1,54 @@
+{
+  "case": 27,
+  "campaign_case": 32,
+  "upstream_fix": "fz11",
+  "title": "heap overflow in statDecodePage free-chain walk; needs DBSTAT_VTAB",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "fuzz-corpus diff: the image reproduces on stock 3.22.0 under host ASan as heap-buffer-overflow in statDecodePage at sqlite3.c:177925",
+  "allocator_layer": "memsys5",
+  "arena_bytes": 1048576,
+  "arena_bytes_why": "1 MiB on every arm. Five of the eight spatial cases are forced here by reachability -- at 262144 cases 21, 22 and 23 exhaust memsys5 before the defect (pcache1AllocPage dereferences the NULL that 3.22.0 does not check), 29 returns SQLITE_NOMEM, and 00 takes a different path -- so the same value is declared for all eight to keep the arms comparable. Measured 2026-10-17; this is also the value every recorded virtual reading was taken at, while CheriBSD had been running 262144.",
+  "object": "the page buffer statDecodePage walks while following the free-block chain: iOff = get2byte(&aData[iOff]) inside while( iOff ), with no bound on iOff and no cycle detection. Measured 2026-10-16 by probe site 64: this case takes the free-block chain with iOff=17234 while its cell walk stays within range at 506, the mirror of case 26",
+  "lifetime_ender": "not a lifetime defect: a corrupt free-block chain sends the walk past the end of the page",
+  "shape": "read past the end of the record",
+  "fidelity": "real consumer, real allocator, with a reconstructed trigger (see case 24, which explains why the SQL for these R2 images had to be re-derived; the old text said case 34, a number from the 38-case corpus that no longer exists). Needs -DSQLITE_ENABLE_DBSTAT_VTAB. Distinct from case 26: the same function, a different walk -- the free-chain traversal rather than the cell-pointer array",
+  "arms": {
+    "spatial": {
+      "oracle": "completes and prints its own marker ('NOTRAP done', rc=0). Recorded as no-marker until 2026-10-05, when the raw log disproved it: the runner had filed it INFRA because the BOOT returned 1 -- the next case in the queue hung -- and charged that to the head of the remaining list. The case's own return code says why nothing was detected: s0_rc=7, SQLITE_NOMEM -- the 256 KB memsys5 arena is exhausted first",
+      "run": "2026-10-05"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 27 sublet: detected"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "MISSED",
+      "verdict_from": "results/matrix.tsv case 27 cheribsd-revocation: not-detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f9a61257c in statDecodePage; by function: statDecodePage is where host ASan reported it",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-nested-pools"
+    },
+    "silicon-sqlite-stock": {
+      "status": "not written",
+      "note": "not in the silicon control arm's batch: tests/rtl-smoke/repro322-silicon-2026-10-16 runs the eight cases of the 2026-10-01 batch, whose README gives why the others were left out"
+    }
+  },
+  "status": "re-measured on all four readings 2026-10-16 on this platform and every verdict holds. host ASan was re-run on a restored x86 runtime: heap-buffer-overflow in statDecodePage at the free-block chain line, via statNext <- statNext, identical to the 2026-10-11 bundle. virtual-malloc MISSED, RETURNED, both controls as declared. virtual-nested-pools CAUGHT, cause=28 pc=0x3fafe1257c in statDecodePage, both controls as declared. cheribsd-revocation MISSED, with the image loaded and the defect reached: probe site 64 reports FREECHAIN iOff=17234, and the run then ends in SQLITE_NOMEM (s1_rc=7) because the 256 KiB arena cannot complete the dbstat scan, which is after the defect site. This arm's 2026-10-06 reading was taken without the image present (see case 21 and the retraction in case 18's PROVENANCE.md), so the MISSED recorded then was a NO-READING; this one is a measured miss. The arms block is the 2026-10-11 bundle's and is regenerated by derive-verdicts.py when this review ends. RE-MEASURED 2026-10-17 with one arena on every arm (arena_bytes=1048576) and every arm built from the corpus case.c: virtual-malloc MISSED, virtual-nested-pools CAUGHT cause=28 pc=0x3f94e1257c in statDecodePage, cheribsd-revocation MISSED with RETURNED rc=0 and probe site 64 reporting hits=14 witnesses=13 -- reached and silent, not a no-reading. The earlier spatial readings were taken with the virtual arms at a 1 MiB header default against CheriBSD's 262144, and with this arm compiling its own copy of the case",
+  "note": "Re-measured 2026-10-16; every verdict holds, and this case is the one that shows what CheriBSD can and cannot see. Probe site 64 hooks all three unchecked reads in statDecodePage. Here the free-block chain runs once with iOff=17234 while the cell walk stays within range at 506 -- the mirror of case 26, which takes the cell walk to 64768 and never enters the chain. Both are over-reads in the same function; the difference is which one the corrupt image steers into. And the consequence for the arms is the distinction the whole spatial group turns on: case 26's walk leaves the WHOLE 256 KiB arena, so CheriBSD's malloc-granularity bounds catch it, while this case's stays inside the arena and that arm is silent. Sublet catches both, because it bounds each sub-allocation. So the two arms are not separated by the defect class here but by the DISTANCE of the over-read, which is a property of the corrupt input. The physical sublet row is one of the 28 halts at kernel pc 0x800239e4 and is marked in results/matrix.tsv; the physical spatial row records a clean completion with the case's own marker, which the virtual-malloc re-run reproduces",
+  "fault_sites": [
+    "statDecodePage"
+  ],
+  "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in statDecodePage (live_proof); that run is independent of the Capstone arms and predates them."
+}

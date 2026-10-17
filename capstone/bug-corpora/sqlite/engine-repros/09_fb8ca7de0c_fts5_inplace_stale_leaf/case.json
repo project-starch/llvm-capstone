@@ -1,0 +1,52 @@
+{
+  "case": 9,
+  "campaign_case": 12,
+  "upstream_fix": "fb8ca7de0c",
+  "title": "row10",
+  "consumer": "sqlite3.c (fts5SegIterNextPage)",
+  "live_in_pin": true,
+  "live_proof": "measured 2026-10-16 as well as inspected. The defect class is the one the case names -- an in-place edit of an Fts5Structure whose nRef is greater than one (nRef is the struct's first field, ext/fts5/fts5_index.c:339) -- but the function this trigger reaches is fts5StructureExtendLevel, not fts5StructureAddLevel at fts5_index.c:925, which reallocs the whole structure and is its sibling. Host ASan: heap-use-after-free, 8 bytes inside a freed 48-byte region, read in fts5SegIterNextPage (sqlite3.c:195736) <- fts5SegIterNext <- fts5MultiIterNext <- sqlite3Fts5IterNextScan <- fts5VocabNextMethod; freed by realloc <- sqlite3MemRealloc <- sqlite3_realloc <- fts5StructureExtendLevel <- fts5FlushOneHash <- fts5IndexFlush <- sqlite3Fts5IndexSync <- fts5SyncMethod <- sqlite3VtabSync <- vdbeCommit; allocated by sqlite3Fts5MallocZero <- fts5StructureDecode <- fts5StructureRead <- sqlite3Fts5IndexQuery <- fts5VocabFilterMethod, which is the structure the vocab cursor read at xFilter time. Fixed upstream in 3.37.0",
+  "allocator_layer": "memsys5",
+  "object": "the aSeg[] array of one level of the shared Fts5Structure, which the scanning cursor's Fts5SegIter.pSeg points into -- 48 bytes here, four Fts5StructureSegment entries of 12 bytes, and the read is pSeg->pgnoLast at offset 8 of one of them",
+  "lifetime_ender": "a mid-scan commit flushes the hash and fts5StructureExtendLevel reallocs that level's aSeg[] array (sqlite3.c:195165, aNew = sqlite3_realloc(pLvl->aSeg, nByte)) while the cursor still points into the old one. When the realloc moves the array the cursor's pointer dangles; when it keeps the block, the same function's memmove/memset shifts the entries up and zeroes the first ones under the cursor, which is not an invalid access but is where the unprotected arms' downstream fault comes from",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator: an fts5vocab scan cursor holding a reference, with inserts driving segment merges mid-scan. Two build constraints that are part of the case, not incidental: -DSQLITE_DQS=0 means SQL string literals must be single-quoted, and the heap stays at the 256 KiB default because raising it inflates the in-image sqlite_heap[] until the domain exceeds the buddy allocator's maximum order and DOM_CREATE fails before a single instruction runs",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10321de94"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 09 sublet: detected"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "MISSED",
+      "verdict_from": "results/matrix.tsv case 09 cheribsd-revocation: not-detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "NO-READING",
+      "verdict_note": "cause=24 pc=0x3fbaa81490 in sqlite3Fts5IterTerm; in sqlite3Fts5IterTerm; ASan site ['fts5SegIterNextPage']",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-malloc",
+      "verdict_reason": "unattributed"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f9c62f350 in fts5SegIterNextPage; by function: fts5SegIterNextPage is where host ASan reported it",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-nested-pools"
+    },
+    "silicon-sqlite-stock": {
+      "status": "not written",
+      "note": "not in the silicon control arm's batch: tests/rtl-smoke/repro322-silicon-2026-10-16 runs the eight cases of the 2026-10-01 batch, whose README gives why the others were left out"
+    }
+  },
+  "status": "re-measured 2026-10-16 on this platform: host ASan reports the use-after-free; virtual-malloc NO-READING:unattributed, cause 24 at address 0x0 in sqlite3Fts5IterTerm, with both controls as declared; virtual-nested-pools CAUGHT, cause=25 in fts5SegIterNextPage attributed by function, both controls as declared; cheribsd-revocation MISSED, RETURNED rc=0, rows=5, with the boot's positive control trapping and probe site 48 witnessing the stale read as kind=OOB. The case reached its mid-scan state in every run (mid-scan inserts ok=24). The arms block below is the 2026-10-11 bundle's and is regenerated by derive-verdicts.py when this review ends",
+  "fault_sites": [
+    "fts5SegIterNextPage"
+  ],
+  "fault_sites_why": "host ASan (results/2026-10-11-host-asan) reports the heap-use-after-free in fts5SegIterNextPage <- fts5SegIterNext <- fts5MultiIterNext. That report predates the Sublet run that faulted there (round c, 2026-10-11), but the site was declared after it; it rests on the ASan report. The earlier Sublet runs stopped first at sqlite3Fts5IterTerm's &z[1] with z NULL (cause 24).",
+  "note": "Re-measured 2026-10-16. The verdicts stand and three records are corrected. (1) The freed object is one level's aSeg[] array, not the Fts5Structure as a whole, and the freeing function is fts5StructureExtendLevel reached from a commit's flush, not fts5StructureAddLevel. (2) The base arm is not a detection. virtual-malloc faults with cause 24 at address 0x0 in sqlite3Fts5IterTerm, whose last statement is return &z[1] with z NULL: on Capstone that is capability arithmetic over a non-capability, so nothing was even loaded, and it is a consequence of the garbage the stale read returned rather than a reading of the defect. The judge already says NO-READING:unattributed; the physical spatial row that reports this as detected is marked in results/matrix.tsv. (3) The probe's kind=OOB is a misclassification, not evidence of an over-read. Site 48 marks the realloc (old and new pointer) and the read: on native memsys5 the array moves in 4 of 30 extend calls and 10 of 40 reads land in an array that a move had already freed, with witnesses=0 because memsys5 reissues the block at once; on CheriBSD the witness fires twice as kind=OOB off=188 n=4 req=180, that is the stale pointer sitting past the REQUESTED size of the smaller object the block was reissued to. Reproduces the 2026-10-06 reading (kind=OOB, hits=40, witnesses=2) and explains it: an address oracle on a reissued block reports OOB for a use-after-free. Host ASan, which does not reissue, calls it heap-use-after-free, so the axis stays temporal. The same CheriBSD witness also prints tag=1 cb=<arena>+262144, the direct measurement of why that arm is silent: the pointer is tagged and bounded to the whole 256 KiB memsys5 arena"
+}

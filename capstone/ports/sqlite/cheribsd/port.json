@@ -6,7 +6,7 @@
     "version": "3.22.0",
     "pin_source": {
       "file": "capstone/ports/sqlite/cheribsd/build-corpus-cheri.sh",
-      "grep": "shared/sqlite-3.22.0-full/ext"
+      "grep": "SQLITE_AMALGAMATION"
     }
   },
   "targets": [
