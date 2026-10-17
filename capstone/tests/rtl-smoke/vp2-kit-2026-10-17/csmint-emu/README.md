@@ -327,3 +327,61 @@ LDC, STC (with the operand order swapped), MOVC and CCSRRW for the monitor's own
 **Readings:** exactly va-csmint-mon's 46 values in the same order, then pass. They are printed by the
 `handle_trap_ecall` stub from S's live a2, a5 and a6. On every ecall the entry overwrites S's a0 and a1 with the SBI
 error/value pair, and S reloads them. Any 0xbad2 or 0xbad3 is a failure.
+
+### va-csmint-entry, run: the shipped `_cap_trap_entry` around the hook, validated (the RTL lane, bf3db3175)
+
+The run was on capstone-ariane virtual-profile-2-d cab4ee891. That commit adds only tests to bf3db3175's RTL. Inputs:
+- the arm at 941196aedc65;
+- the include directory, a `git archive` export of caplifive-sbi cb91d7d with all four pinned sha256 values checked
+  before the build;
+- the ELF, sha256 b47aba619b6b3899092d496523aee06018ff53ca8e20e6104a14eeb5a3c46fa1.
+
+The run passes after 149,861 cycles. The board lane read the readings from the run's own retirement trace
+(`capprint-retired.py`: 46 retired prints, 46 raw, no speculative leftovers):
+
+    4 -1 -1 | -1 4 0x80009004 | -1 6 0x8000a018 | -1 29 0 | -1 29 0 | -1 29 0 | -1 15 0x8000b000 |
+    -1 13 0x8000d000 | -1 2 0xa0b1165b | 6 -1 -1 | -1 30 0 | -1 29 0 |
+    0 0x8000c200 0x8000c300 0x8000c200 4 | 0 0 | 0 | 63 | 0x100000000
+
+**Against the pre-registration:**
+- **39 values are identical** to va-csmint-mon's.
+- **The seven address readings are not, literally.** Each sits exactly 0x1000 below va-csmint-mon's, at the same
+  offset from the same symbol (diffed by script over both runs' retired prints):
+
+  | reading | symbol + offset |
+  |---|---|
+  | row 2's stval | `desc` + 4 |
+  | row 3's | `slotA` + 0x18 |
+  | row 7's | `slotnod` |
+  | row 8's | `descnoa` |
+  | the three final addresses | `dbuf` + 0x200, + 0x300 and + 0x200 |
+
+- **Why they moved:** this build's data symbols lie 0x1000 lower (`desc` 0x80009000 against 0x8000a000 in that arm's
+  build, both from the ELFs the runs used).
+- **The miss is the pre-registration's.** It predicted absolute addresses that depend on the link layout, and should
+  have stated them symbol-relative. Symbol-relative, all 46 match.
+
+**The path, counted from the retirement trace:**
+- **Entries:** `_cap_trap_entry` retires 27 times: 12 CSMINTs and 15 ecalls.
+- **The hook:** `_handle_non_ecall` 12, `csmint_dispatch` 12 and `_handle_branch_1` 12. So every CSMINT took the hook,
+  and none fell through to `handle_exception`, which retires 0 times. `handle_interrupt` also retires 0 times.
+- **Refusals and the window:**
+  - `csm_inject` retires 10 times, for the ten refusal rows. Rows 1 and 10 mint.
+  - `csm_window_trap` retires once, for row 12's CSNODE defence. Its 29 is the run's one logged exception
+    (ILLEGAL_OPERAND_VALUE).
+- **The rest of the entry:** `save_smode_context` 27 and `handle_trap_ecall` 15. `return_to_sumode` retires 26 times:
+  every entry but the last ecall, which ends the run.
+
+**Validated:** the monitor's own `_cap_trap_entry` at cb91d7d with `CAPSTONE_VP2_CSMINT`, run end to end on the RTL.
+That covers:
+- the CSCRATCH swap;
+- the GPR save and restore;
+- `ldc(gp)`;
+- the hook;
+- the rd write-back through `_handle_branch_1`;
+- `return_to_sumode`.
+
+**Still vp2-only:** what the stubs stand in for, as listed in the pre-registration:
+- the C bodies of `save_smode_context`, `handle_trap_ecall`, `handle_exception` and `handle_interrupt`;
+- the monitor's stack capability from `SPLIT` and `dom_init`, in place of the arm's NONLIN one;
+- the monitor's gp.
