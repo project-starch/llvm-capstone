@@ -460,3 +460,29 @@ That kit carries the module's `add()` fix, whose results are in `../RESULTS.md`.
 
 **What this shows:** the third pilot's two NO-READING cells were the module's arena rule. On the candidate revision
 the Sublet bundle reproduces its recorded verdicts in full. The rebuild of the other 23 bundles is still to run.
+
+## The plain case.c bundles on the fixed v6 revision: pre-registered (2026-10-17, before the runs)
+
+Next are the five bundles whose recorded build is the plain case.c recipe: no `cc_args`, flags `-O0 -DCORPUS_VIRTUAL`,
+runner `tools/run-virtual-cases.py`. They run on the same kit, SDK, runner and toolchain as the fixed Sublet pilot
+above. Each gets its own guest boot, serially under the QEMU lock, with output outside the corpus's `results/`.
+
+| manifest # | corpus | arm | cases | recorded tally |
+|---|---|---|---|---|
+| 5 | `ffmpeg/carved-repros` | `virtual-malloc` | 13 | MISSED 13 |
+| 7 | `ffmpeg/plain-heap-repros` | `virtual-malloc` | 25 | CAUGHT 25 |
+| 8 | `ffmpeg/plain-temporal-repros` | `virtual-malloc` | 13 | CAUGHT 13 |
+| 23 | `wireshark/plain-heap-repros` | `virtual-malloc` | 12 | CAUGHT 12 |
+| 24 | `wireshark/plain-temporal-repros` | `virtual-malloc` | 10 | CAUGHT 10 |
+
+**Predictions:**
+- **Every one of the 73 cells equals its recorded cell** in verdict, fault cause, faulting probe symbol, attribution
+  and reach. The same script as the Sublet pilot's checks this.
+- **Each bundle's configuration controls read as the runner expects.**
+
+**Why bundle 5's MISSED is the right reading:** without the Sublet carve, a crossing between carved sub-regions of one
+malloc block stays inside the block's bounds. Its record says MISSED 13, the same cases the nested-pools arm catches.
+
+**What a mismatch would say:** a CAUGHT where MISSED was recorded, or the reverse, is a change of verdict on the
+candidate revision. A NO-READING is a harness or heap problem, to be read from the guest transcript before anything
+else.
