@@ -1133,3 +1133,29 @@ the live PTE value via follow_pte.
   - present and complete: the domain's view is stale, which goes to the RTL lane with the PTE.
 - **If no DIAG line appears** and `vm` still stalls: the stall is not a repeated fault in resolve(). It is then a wait
   elsewhere (the slot queue, a lock), read from what the module prints.
+
+### Boot r7, result (2026-10-18 06:00-06:31): Tier 1 identity again (N = 2); `vm` stalls at the same point; the diagnostic was VOID
+
+Result lines in `board-tier12/results/board-vp2-tier12-r7.result-lines.txt`.
+- **Tier 1:** b0-stats 0, b0-hello 0, vm-contract 0 (identity), one retry before the first grant.
+- **vm-suite:** normal 0 and threads 1, then `vm` stalled after the mmap(8193, PROT_READ) grant, as in r6.
+- **No DIAG line, which reads nothing.** The board's console does not show KERN_INFO: the module's own pr_info "thread
+  create refused" is absent here and in r6, while the kernel's pr_warn lines show. The diagnostic was pr_info.
+
+## Pre-registered (2026-10-18, before boot r8): S-24's -ELOOP module, with the PTE printed at pr_warn
+
+**The change: only the module, 4131e4d8763e86dd.** It is the compiler lane's b04983b244e1 (S-24: a resolve repeated past
+64 times for one address and cause fails with -ELOOP and a pr_warn line) plus `boot3/eloop-pte-diag.patch`. The patch
+prints `capstone_vm: DIAG fault repeat=N cause= addr= pc= pte=` at pr_warn at repeats 2, 16 and 65; the PTE comes from
+follow_pte.
+- The unmodified b04983b244e1, rebuilt by the same recipe, reproduces the compiler lane's cc075f9cc5433275.
+- Firmware 7b3f3e9a50de3e58: the monitor is unchanged (007d81d, its sources hash as r6/r7's).
+- Rungs as r7, run by `boot3/run-tier12-r8.sh 7b3f3e9a50de3e58`.
+
+**Predictions:**
+- Tier 1 identity, normal 0, threads 1.
+- At `vm`: DIAG lines with cause 13, an address in the third page of the 16 KiB arena, and the PTE.
+  - **Expected (the A/D candidate, S-24):** the PTE is valid with A (0x40) clear, the same PTE at each repeat. Then the
+    -ELOOP line, `vm` exits non-zero, and the suite continues.
+  - **If the PTE has A set:** the walker's refusal is something else, which goes to the RTL lane with the PTE.
+- The steps after `vm` are read against QEMU's record. Any other read-only first touch is predicted to end the same way.
