@@ -179,9 +179,9 @@ configuration and the caveat is in the measurements doc); the attribution builds
 
 | item | owner | state |
 |---|---|---|
-| vp1 session | board | armed behind ST100 (chain-vp1.sh, 14:18); vb-trans-plain in the batch (76c8fe446fcd) |
-| vp2 flash + canary + arms + set 7 | board | armed behind vp1 (f05265150556; the lead's word ff4725abd412) |
-| vp2b contingency | RTL | pre-registered before the seals, dev 733ad96033df (lane branch virtual-profile-2-timing) |
+| vp1 session | board | DONE 2026-10-17 (c5e696ac7328): S-16 98/98, floor 77/77, s1gap functional identical to d93a8d66b, the four vp1 arms as pre-registered, set 7 identical; one JTAG non-start re-run, pre-registered before the retry |
+| vp2 flash + canary + arms + set 7 | board | DONE 2026-10-17 (987bf254ee40): flashed 20:40:46 on the lead's word, readback names caplifive_vp2_bf3db3175; canary 9 of 9 (two passes and pass-against-pass); 25 of 25 arms equal to their simulated vectors on bf3db3175's RTL; set 7 33 of 33 identical to d93a8d66b; every run matched to its image hash; the comparator negative-tested on the session's own readings. **vp2 is resident; the physical regression holds (done-means 4).** |
+| vp2b contingency | RTL | pre-registered before the seals, dev 733ad96033df; NOT built: the canary passed. B is graded (44f14d011de5: Q-15's cone is not the ten thousand); A pending, for the record |
 | Tier 1/2 board arm | board | stage, bake recipe, firmware recipe and judge ready in its private tree; HELD on the flat-mode module (kit blockers 1-5); then pre-registered on dev and armed behind vp2's set 7 |
 | flat-mode module (kit blockers 1-5) | compiler | in progress; about a day; regression on QEMU on/off + the collection row before any hash |
 | pinned kit + identity + geometry | compiler | geometry rule in; identity with the flat module's revision |
