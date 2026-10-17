@@ -179,6 +179,22 @@ matched, so it went to the RTL lane before anyone called it silicon. **Not silic
    injected into S as `csm_inject` does and leaves through `return_to_sumode`; `fault_return_from_domain` refuses to
    run without an active domain.
 
+**Boot 2 (2026-10-18 00:38-00:50; vp2-tier12 279d993e273d; module ed24f827b5beb373 at runtime 179686bcf198, firmware
+41fb669c9f77462d with monitor vp2/tier1-monitor 1e9451a; prediction run.py 41/41 on f2f15f8fc70c).** Controls pass. The
+result of record: **the S-trap injection works on silicon**: the module's CSRUNV trapped from S with cause 29, the
+monitor injected it (`INJS 1D`), and the kernel printed a correct oops (epc in vm_ioctl, cause 0x1d, SPP = 1) instead
+of wedging as in boot 1. Every virtual step faulted earlier with cause 26 at contract.dom VA 0x11f60, `delin a0` in
+`__capstone_cap_init` right after `scc a0, gp, a0`: gp is granted NONLIN, the RTL's DELIN raises 26 on any non-LINEAR
+rs1 (`capstone_dyn_unit.anvil:794-801`), QEMU's `helper_csdelin` no-ops it, so the glue's delin has been dead code on
+QEMU since the module delinned the grants itself (C-13 class; S-15 in the silicon-mimic). **Ruled the same way as
+Q-23: the RTL is the reference; QEMU's default DELIN raises 26 on a non-LINEAR rs1; the glue's delin is removed; the
+images are rebuilt on the new pin with the module unchanged; run.py on the UNFIXED glue must fail at the same delin
+on the new QEMU before the fixed glue passes.** Open with the RTL lane: whether CSRUNV from S with an invalid frame or
+action traps with 29 (as boot 2 read) or returns 29 in rd (as the plan's item-D text says); QEMU and the kit's
+expectation follow the RTL. Boot 3 is boot 2's pre-registration with the images' hashes moved and the delin branch
+added. No strict-DELIN property for prediction runs: the strict behaviour is the default, a test-only property exists
+only where a suite's bootstrap needs the old one.
+
 Owners: the RTL lane the QEMU change and the re-run arms; the compiler lane the module (one post-ruling revision,
 with the early-clobber fix, the collection row, the ceiling reading and the flat define); the board lane the monitor
 routine and the injection fix; the helper lane `isa.md` and this record. No board boot before: the tightened QEMU
