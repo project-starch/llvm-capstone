@@ -5,12 +5,58 @@ expanded inline into scalar chunks, and a scalar chunk never carries a capabilit
 built with `-ffreestanding -fno-builtin`, so explicit `memcpy` calls already go to the runtime's copy. What remains is
 `__builtin_memcpy` and the copies the compiler synthesises (struct assignment, by-value aggregates, array init).
 
-The instrument enumerates every inline-expanded copy: rebuild the image with LTO codegen option
-`-capstone-lower-memops-via-libcall`, which turns every mem* expansion into a call, and diff it against the verdict image.
+The instrument is a twin in which every inline-expanded copy is a call: rebuild the image with LTO codegen option
+`-capstone-lower-memops-via-libcall`, which turns every mem* expansion into a call, and compare it with the verdict
+image. **The scanner diff below does not enumerate those copies; see the correction that follows.**
 - The twin is compile-only and NEVER RUN. That flag's "does not work yet" status (`CapstoneISelLowering.cpp`) is about
   running a domain under it, and does not apply.
 - The diff is the compiler lane's `scan-memcpy-expansion.py --diff`: runs present only in the verdict image (C-81 folder,
   `capstone/tests/compiler-repros/C81-memcpy-unprovable-alignment-strips-tags/`, lane/compiler-exact-bounds-iii).
+
+## Correction (2026-10-17, later the same day): the scanner diff sees a fraction of the inline copies
+
+**Withdrawn:** "the instrument enumerates every inline-expanded copy". This section and the SQLite section first rested
+on that claim. claim-auditor, checking the mruby result, counted the mem* calls the twin gains instead of the scanner's
+runs.
+
+**The count.** `memcalls2.py` counts every `auipc`/`addi` reference to `memcpy`, `memset` and `memmove`, per function,
+in both images. The references only the twin has are the expansions the verdict image carries inline:
+
+| image | inline mem* expansions the twin diverts | the scanner's plain-only runs |
+|---|---:|---:|
+| SQLite 02 backupattach | 48 | 2 |
+| SQLite 05 detachtrig | 47 | 2 |
+| set 1 controls | 12 | 8 |
+| set 1 memcached-heap-00 | 13 | 9 |
+| mruby | 2,957 | 89 (shape key) |
+
+**Why the scanner misses them.**
+- It reports only scalar runs of 16 bytes or more.
+- `ldc`/`stc` end a run, which is intended: a capability-width copy keeps its tags. But so does every instruction whose
+  name starts with `c`, so `cincoffset`/`cincoffsetimm` between the chunks of a scalar copy split it below the threshold.
+- Its diff keys runs by shape, not by function.
+
+**The checks that replace it,** run on the same images:
+1. `rescan-nosplit.py`: the scanner's run detector, with only control flow and `ldc`/`stc` ending a run. It lists the
+   plain-only runs that carry a load and store 16 bytes or more.
+2. `granule-check.py`: over those runs, it flags one whose copy-stores cover 16 contiguous bytes from one base. A
+   copy-store stores a register that was loaded earlier in the same run. Sixteen contiguous bytes are the least a scalar
+   copy needs to move a whole capability. Its control: the `copy32` shape is flagged, and a zero fill is not.
+
+| image | plain-only runs | flagged | what the flagged run copies |
+|---|---:|---:|---|
+| SQLite 02, 05 | 2 each | 1 | `cacheEntryClear`'s `yColCache` (`int, i16, u8, int, int, int`) |
+| set 1 controls, heap-00 | 2, 3 | 1 | `dl_round`'s `struct capstone_signal_event` (integers and 128 raw siginfo bytes) |
+| mruby | 65 | 3 | `dl_round` as above; `capstone_spawn_pack`'s `struct capstone_spawn_action a = actions[i]` (six `uint32_t`; `path` is an offset); `mrb_ary_delete+0x358`, the `tt` + padding half (0x10-0x1f) of an unboxed `mrb_value` |
+
+SQLite's second run is in the soft-float builtin `__floatdidf`. It stores one register three times and then loads,
+so it copies nothing. So every expansion the twin diverts is one of:
+- capability-width (`ldc`/`stc`), which keeps tags;
+- shorter than a capability;
+- a fill;
+- a scalar copy of a pointer-free object.
+
+**The SQLite 02/05 verdicts stand on this evidence.** The two-run diff alone did not support them.
 
 **How the twin reaches the code that matters.** The B0 pipeline is full LTO: the case code, the runtime and the musl
 archive (`/tmp/capstone/b0/musl-gpct-lto/libc-capstone.a`) are all bitcode, and lowering happens at the link. So the
@@ -77,7 +123,8 @@ object in the link is compiled with: the amalgamation, `libc.o`, `beebs_string.o
    `libc.o`, `beebs_string.o` and the builtins come out byte-identical, so they hold no expansion for the flag to divert.
 3. The scanner's self-test passes in both diffs, 6 of 6.
 
-**Result:** 2 runs present only in the verdict image, the same two in each.
+**Result:** 2 runs present only in the verdict image, the same two in each. These are the scanner's runs; the twin
+diverts 48 and 47 expansions, which the correction above covers.
 
 | run | where | what it is | can it drop a tag? |
 |---|---|---|---|
