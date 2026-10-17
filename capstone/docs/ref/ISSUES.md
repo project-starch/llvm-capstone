@@ -425,6 +425,48 @@ action 2 only), not to the fixed one, so the kit's predictions see what silicon 
 
 **Not demonstrated.** Source reading only.
 
+## S-23 — silicon only: the S caller's first instruction fetch after a CSRUNV or CSRETIRE returns is refused (instruction access fault, mtval physical) although a loaded RWX CPMP entry covers it when M reads the CSRs; the kernel panics `OPEN — found 2026-10-18 by the board lane on vp2 (caplifive_vp2_bf3db3175), N = 3 panics; WORKED AROUND in the monitor (capstone-sbi vp2/fetch-retry 007d81d, CAPSTONE_VP2_FETCH_RETRY), which every virtual-application claim on vp2 must cite; the root cause and the RTL fix for the next bitstream are the RTL lane's`
+
+Siblings: S-21 and S-22 (the same CSRUNV ENTRY/ESCAPE walks, a different consequence), Q-30.
+
+**Reading** (llvm-capstone lane vp2-tier12, `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/`, result lines per boot):
+- **Boot 3-T1's third run and the CPMX diagnostic run** (module 0cc4760d21fde17a, the compiler lane's 457b78f27e10),
+  and **boot r5** (the same module with CSRUNV moved to a 64-byte line start). Each reads:
+  - Linux "Oops - instruction access fault" at `vm_ioctl+0xb60` (r5: +0xba4), the instruction right after the
+    module's CSRUNV;
+  - badaddr = mtval = the PHYSICAL address of that instruction (epc and mtval share their low 12 bits), with the monitor
+    first printing MTVL, CPMX and INJS;
+  - then a panic.
+- **The CPMX diagnostic** (capstone-sbi vp2/cpmx-diag 0c772b0), read in M after the fault, on two boots: CPMP entry 3
+  holds region 14, decoded [0x80100000, 0xAC000000), permissions 0x7, covering mtval. All loaded entries are RWX.
+- So the fetch was refused under a covering executable entry, and the CSR held it when M looked.
+- **Placement.** The earlier module ed24f827 (CSRUNV at .text 0x37f4) returned without a fault on two boots. Why is
+  unexplained. Line position is ruled out by r5.
+- **Boot r6** (0cc4760d21fde17a, the retry monitor): the monitor retried twice, both at retire+0xdc, the instruction
+  after a CSRETIRE, before the first grant. After that, none of the hundreds of CSRUNV returns faulted.
+
+**The candidate mechanism** (an rtl-oracle reading of bf3db3175, not yet demonstrated):
+- ENTRY's init strobe zeroes the one real CPMP bank (`csr_regfile.sv:2059-2066`, reg_id 69: `cpmp_d = '0;
+  cpmp_tag_d = '0`). This is harmless while the context runs at M, since the checks skip M (`pmp_data_if.sv:241`, `:306`).
+- The ESCAPE's RESTORE walk writes id 0, the pc, first (`capstone_dom_switcher.anvil:508`). The frontend takes it at
+  once (`frontend.sv:88-90`, `:462-465`, overriding the busy hold at `:458-460`), while the CPMP ids 9..24 come later
+  in the same walk.
+- `kill_s1` with `flush_if_o` held for the whole busy window (`frontend.sv:345`, `commit_stage.sv:870`,
+  `controller.sv:215-224`, the guard at `cva6_icache.sv:313-315`) is meant to discard fetches in that window. Whether
+  it has a gap, around busy's drop, an in-flight MISS, or when priv returns to S, is UNRESOLVED.
+- The fetch and data checks share one comparator over one decoded array (`pmp_data_if.sv:134-189`). There is no second
+  CPMP copy and no cached deny.
+
+**Workaround (not a fix).** capstone-sbi vp2/fetch-retry 007d81d, `CAPSTONE_VP2_FETCH_RETRY`, FPGA, off by default.
+- When an S/U instruction-fetch access fault arrives and a loaded CPMP entry with X covers mtval, the monitor reports
+  `FRTY:<mepc>`, executes sfence.vma and fence.i, and returns to the faulting pc.
+- A second refusal at the same pc with fewer than 4096 instructions retired since is injected as before.
+- It grants nothing the CPMP does not. Define-off builds are byte-identical.
+- Boots before r6 did not carry it.
+
+**Fix:** the RTL lane's, pre-registered for the next bitstream beside S-21/S-22's. The likely shape is to restore the
+caller's CPMPs before the pc reaches the frontend, or to hold the fetch until the walk ends.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
