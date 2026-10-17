@@ -706,3 +706,43 @@ is as in B and A: the vp2 bitstream, BL's Image and ten rungs, the judge and the
   first difference.
 - **A2 reading outside the band of P** would mean the spread is wider than BL's bands assumed. The 0.5 % band is
   then too tight for so_lists, and that is reported as such, not used to pass B.
+
+### Boot BLb repeat, result (2026-10-18 01:52-02:19): the bump moved so_lists, as pre-registered, and fib with it; a placement mechanism, supported but not confirmed
+
+Result lines: `bootblb/results-bootblb.txt`.
+- **All four vp2 arms** read all ten retvals identical, the three mruby hashes the same, and no monitor tag.
+- **B2** (bumped firmware) reads so_lists 2445 ms, which is "2445 or less again". **A2** (P's firmware) reads 2469,
+  +0.45 % from P, inside the band. That is the pre-registered reading "the bump moved so_lists".
+
+Bench times in ms. P and BL are on d93a8d66b; A, A2, B and B2 are on vp2.
+
+| benchmark | P | BL | A | A2 | B | B2 | mean B − A | spread A | spread B |
+|---|---|---|---|---|---|---|---|---|---|
+| mandel_term | 138315 | 138351 | 138338 | 138304 | 138320 | 138290 | −0.01 % | 0.02 % | 0.02 % |
+| fib | 45514 | 45524 | 45491 | 45512 | 45658 | 45639 | **+0.32 %** | 0.05 % | 0.04 % |
+| so_lists | 2458 | 2466 | 2458 | 2469 | 2444 | 2445 | **−0.77 %** | 0.45 % | 0.04 % |
+| so_mandelbrot | 30708 | 30683 | 30685 | 30668 | 30685 | 30674 | +0.01 % | 0.06 % | 0.04 % |
+| ao_render | 81907 | 81931 | 81881 | 81870 | 81854 | 81892 | −0.00 % | 0.01 % | 0.05 % |
+
+- **Two effects of the bump:** fib is slower by 0.3 %, inside the band but systematic (four unbumped draws within 33 ms,
+  both bumped draws about 140 ms above them), and so_lists is faster by 0.7 %. The other three benchmarks do not move.
+  Effects of opposite sign on two benchmarks, with nothing moving elsewhere, point to code placement, not to added
+  work.
+
+**The mechanism, supported but not confirmed.** I compared the two monitors' `.cap_text`, extracted with the cross
+objcopy. The control is handle_exception, which changed and reads DIFFER. A 2-byte-shifted compare also reads DIFFER.
+- **The M-mode timer-interrupt path,** which every Linux timer tick takes, is byte-identical code at new addresses.
+  `_cap_trap_entry` is identical at the same address. `_handle_ints` (26 B) and `return_to_sumode` (76 B) are
+  identical, each moved +0x6a behind the new `_inject_s_trap` block. `handle_interrupt` (160 B) is identical, moved
+  +0x230 behind the counter brackets in the domain-call functions above it.
+- **handle_exception,** the path of every trapped Linux time read, is recompiled and 152 bytes larger (632 → 784).
+- **So the bump changes where the monitor's hot paths sit in the I-cache** against each benchmark's own code. Confirming
+  it would need a firmware that reproduces the shift without the code change, such as P's monitor padded by the same
+  amounts. That firmware has not been built.
+- **Instrument note:** the first byte comparison used the host's objcopy, which cannot read RISC-V ELF. It extracted
+  nothing and printed "IDENTICAL" for every function. handle_exception, which changed, exposed it.
+
+**Landing.** The pre-registered rule is "a real effect, which needs a mechanism before the bump lands". The mechanism is
+the candidate above, not a confirmed one, so the pointer is not landed on this record. Whether this is enough to land
+it, with the timing baselines for the physical line re-taken on the bumped firmware (B and B2 rather than P), goes to
+the runtime lane, who asked for the bump. The alternative is the padding arm first.
