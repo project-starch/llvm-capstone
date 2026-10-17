@@ -474,3 +474,98 @@ RTL bf3db3175), with the RTL lane's runner (`run-sup-ladder.sh`, S12_MEM_DELAY=1
 A real CSMINT after three fall-throughs still mints.
 
 **Still vp2-only:** `handle_exception`'s C body, the real time emulation, on the monitor's own stack and gp.
+
+## Boot BL on silicon, pre-registered (2026-10-17, before the boot): the flag-on monitor under Linux, one variable from boot P
+
+**What it settles.** This is the last vp2 firmware gate the runtime lane asked for. Inside boot P's proven
+configuration it runs the monitor that vp2 will carry: capstone-sbi cb91d7d, built with `CAPSTONE_VP2_CSMINT`. So
+every Linux `rdtime` takes va-csmint-ft's fall-through on silicon. It runs on caplifive_sublet_d93a8d66b, resident.
+
+**One variable.** The cleanest comparison against boot P (`b0-silicon-delegated-runtime.md`, Boot P, 2026-10-16):
+- **Unchanged from boot P:** the wrapper (caplifive-opensbi 1269c77), the private Image ae58cf97765442da (all 19
+  manifest files re-checked in its decompressed initramfs), boot P's three supervised-call defines, and its ten
+  rungs in its order.
+- **The monitor:** cb91d7d. Its tree differs from boot P's ebe0a25 only by `capstone_csmint.S` and the hook:
+  ebe0a25's tree is 234ee66's (0b255381), and 234ee66..cb91d7d touches those two files only.
+- **Firmware with the flag:** 26bc4b23c520d9d6. The build uses `build-fpga-fw.sh`, whose wrapper passes the defines
+  to the assembler (`platform/fpga/ariane/objects.mk:18`).
+- **Control, flag off:** the same build from cb91d7d **reproduces boot P's firmware byte for byte,
+  1b44a465d96753b2**. So the flag, with what it compiles in, is the only difference.
+
+**No CSMINT can execute in this boot, which the static scan shows.** The scan (`scan-csmint.py`) finds every word
+with CSMINT's encoding at 2-byte steps. Positive control: 1 hit in va-csmint-ft's ELF and 12 in va-csmint-entry's.
+- **The Image:** 6 hits, all inside the gzip-compressed initramfs span [0x60e158, 0x9ffb9a). That span starts at
+  System.map's `__initramfs_start`, past the kernel's text (to 0x3837b4) and init text (to 0x42c8e0).
+- **The decompressed initramfs:** 124 files, 2 hits, neither an instruction:
+  - libm.so.6's hit lies in `.rodata`;
+  - mruby.dom's, at 0xccfbe, is 2 mod 4, and mruby.dom is RVC-free: its e_flags are 0x0, and its disassembly has
+    394,463 four-byte instructions, no two-byte one and no address that is not 4-aligned. So that offset cannot be an
+    instruction at all. It straddles the `stc` at 0xccfbc and the `sw` at 0xccfc0.
+- **This is a property of BL's image, not of the monitor.** Any other image set under a flag-on monitor would need
+  the same scan.
+
+**What the hook does in this boot, stated before it runs:**
+- **Every illegal-instruction trap from S reaches `csmint_dispatch`, and returns "not ours".** This includes each
+  Linux `rdtime`.
+- **The fast path.** A CSR exception's mtval is the instruction bits on d93a8d66b too: its `commit_stage.sv:865` copies
+  the instruction into tval, and its csr_regfile has no `CSR_TIME` arm. The classic monitor's rd write-back already
+  relies on mtval[11:7]. So each such trap costs about 15 more instructions and no page walk.
+- **Nothing counts these on silicon.** The evidence is the boot and the rungs, compared with boot P.
+
+**A deliberate CSMINT on this bitstream, written down and NOT run:**
+- **How it traps.** d93a8d66b's custom-2 funct7 case ends in `default: ;` (decoder.sv:1343), so CSMINT issues to the
+  FLU and traps illegal with tval 0. That is the behaviour the vp2 decoder's 2026-10-17 comment replaced.
+- **The decode.** The hook then fetches it through the mtval-0 path: a software walk of mepc.
+- **A refusal found before the table check** (alignment, a fault on the descriptor or the slot, a bad descriptor) is
+  injected into S as on vp2.
+- **A valid one** reaches `csrr 0x5C1` (`capstone_csmint.S:189`). d93a8d66b has no srevroot, so that read traps
+  illegal in M, into `_cap_trap_entry`, which is not reentrant: **an expected wedge**. vp1 has no srevroot either (it
+  is item A, vp2's).
+- **So the flag-on monitor belongs on vp2.** On an earlier bitstream it is safe only while nothing issues CSMINT,
+  which is this boot's case.
+- **Why not run it:** a reading on a bitstream vp2 code never runs on says nothing about vp2, and it would end the boot.
+
+**Predictions** (boot P's readings, which this boot must repeat):
+- **Retvals:** b0-stats 0, b0-hello 0, b5-hello 0, b5-mruby-e-stats 0, b5-mruby-stdin-stats 0, b5-mruby-bench 0,
+  r54-bounds 64, cw-pool 0, b6-sublet 0, b0-stats2 0.
+- **mruby's hashes:** 53c234e5e8472b6a, 5476dba1f4bd59f1, 8d1539bc79e2b630.
+- **No EXCT, EXCS, RGNF or ILLX.** ILLX is the monitor's report for an illegal instruction other than a time read.
+- **Bench times:** each benchmark within 0.5% of boot P's 138315, 45514, 2458, 30708 and 81907 ms. The B5 pair
+  repeated boot P within 0.20%, and the hook's cost on a time read cannot move a benchmark measurably.
+- **Exploratory:** the launch ticks, against boot P's (domain 22.93 s cold, regions 9.12 s).
+
+**What a failure would say:**
+- **Linux does not boot, or a rung differs:** the flag-on monitor is at fault, because the flag is the only variable.
+  The first suspect is the fall-through under Linux's own traps, which va-csmint-ft covered only in simulation.
+- **An ILLX:** an illegal instruction that is neither CSMINT nor a time read. The hook should have passed it through
+  unchanged.
+
+### Boot BL, result (2026-10-17 09:37-09:50, caplifive_sublet_d93a8d66b, firmware 26bc4b23c520d9d6): every reading as boot P's
+
+The board script checked the firmware hash and the shared tree's pins before the boot. The watchdog was live (52
+lines). `compare-bootp.py` compares the run with boot P's record. Its positive control, a copy of boot P with one retval
+and one hash altered, reads DIFFER on both.
+- **Retvals:** IDENTICAL on all ten rungs. b0-stats 0, b0-hello 0, b5-hello 0, b5-mruby-e-stats 0,
+  b5-mruby-stdin-stats 0, b5-mruby-bench 0, r54-bounds 64, cw-pool 0, b6-sublet 0, b0-stats2 0.
+- **mruby's hashes:** 53c234e5e8472b6a, 5476dba1f4bd59f1, 8d1539bc79e2b630, the same three.
+- **No EXCT, EXCS, RGNF or ILLX.**
+- **Bench times against boot P,** all within the pre-registered 0.5 %:
+
+  | benchmark | boot BL, ms | change |
+  |---|---|---|
+  | mandel_term | 138,351 | +0.03 % |
+  | fib | 45,524 | +0.02 % |
+  | so_lists | 2,466 | +0.33 % |
+  | so_mandelbrot | 30,683 | -0.08 % |
+  | ao_render | 81,931 | +0.03 % |
+
+- **Launch ticks (exploratory):**
+  - the cold mruby launch's domain stage is 23.24 s against 22.93 s, and its regions stage 9.09 s against 9.12 s;
+  - the other three launches are within 0.03 s per stage.
+
+**What this establishes:** the vp2 monitor build, capstone-sbi cb91d7d with `CAPSTONE_VP2_CSMINT`, boots Linux on
+silicon and runs the process ABI's whole B-series, with every reading as on the flag-off build of the same tree. Every
+Linux `rdtime` crossed the hook's fall-through, va-csmint-ft's path, and Linux's clocksource advanced normally.
+
+**Still vp2-only:** a CSMINT that the hook handles. Here none could be issued (the static scan above), and on this
+bitstream a valid one would wedge (`csrr` srevroot).

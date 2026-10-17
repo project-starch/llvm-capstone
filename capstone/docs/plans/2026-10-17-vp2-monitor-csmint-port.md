@@ -14,8 +14,13 @@
 - The hook's fall-through is validated too (va-csmint-ft, all 26 readings and every path count as pre-registered). That
   is the branch every Linux `rdtime` takes on a flag-on monitor: a non-CSMINT illegal instruction goes on to
   `handle_exception`, and the returned value lands in x[rd].
-- Still open: the hook's landing on capstone-bootstrap, after the board moves onto that line. What only vp2 proves:
-  the C callees, the init-time stack capability and gp, and Linux's own CSMINT traffic.
+- **On silicon (boot BL, 2026-10-17):** the flag-on firmware 26bc4b23c520d9d6 repeats boot P on every reading on
+  caplifive_sublet_d93a8d66b. The flag-off build of the same tree is boot P's firmware byte for byte. Linux's `rdtime`
+  traffic crossed the hook.
+- **Landed:** caplifive-sbi capstone-bootstrap c3293b3, squashed from vp2/csmint-emu, which is kept. The flag is off
+  by default.
+- **What only vp2 proves:** a CSMINT that the hook handles, the C callees, the init-time stack capability and gp. The
+  flag-on build is vp2-only: before vp2 a valid CSMINT reaches a `csrr` of srevroot, which no earlier bitstream has.
 
 **The decision it implements** (the runtime and RTL lanes, 2026-10-17): on vp2 an S-mode CSMINT traps to M (cause 2),
 and the monitor emulates it. The emulation exists, validated end to end in RTL simulation, as the M-mode handler of

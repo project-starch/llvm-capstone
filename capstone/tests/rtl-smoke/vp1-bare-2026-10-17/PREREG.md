@@ -28,6 +28,16 @@ non-consuming ldc from a read-only page completing (1); the trap handler's mcaus
 source with the flag off (csupctl 0, satp bare): arms 0 and 1 only, arm 1's two readings inverted (0 then 0x5a5a).
 `q17-order`: 0x19 (a cderive from a dead child with a window outside it: the liveness query first), 0x19, trap count 2.
 
+**The monitor that boots on vp1 is flag-OFF, by construction (2026-10-17).** The CSMINT hook arrives only in
+caplifive-sbi cb91d7d, behind `CAPSTONE_VP2_CSMINT`. vp1's first session boots no monitor that has it:
+- the bare arms above run with no monitor at all;
+- corpus set 7's firmware 1d2bbbf37f63f435 is wrapper 1269c77 + monitor ebe0a25, whose tree has neither
+  `capstone_csmint.S` nor the hook.
+
+**Boot BL's flag-on firmware (26bc4b23c520d9d6, `vp2-kit-2026-10-17/csmint-emu/README.md`) is vp2-only. It must never
+boot on vp1.** vp1 has no srevroot (that is item A, vp2's). Under that monitor a valid CSMINT reaches `csrr 0x5C1`
+(`capstone_csmint.S:189`), traps illegal in M into the non-reentrant `_cap_trap_entry`, and wedges, as on d93a8d66b.
+
 ## Positive controls on the resident bitstream (the same images on caplifive_sublet_d93a8d66b)
 
 | image | SR | readings (SV, in order), from the simulation of capstone-sublet b7e3287e4 with the same sources |
@@ -42,18 +52,3 @@ the second CALL's escape, 0x99 the word it stored), arm 3's store lands (1), arm
 the liveness query, Q-17's defect) against 0x19 on vp1. A bitstream that reads vp1's vector on arm 1 translates; one
 that reads the control's does not. `vb-trans-off` reads its 13 values on both bitstreams (the flag off is the physical
 profile, and the 95-test sweep is identical between the two trees).
-
-**Read on the board 2026-10-17 (caplifive_sublet_d93a8d66b, one power cycle per image, hashes checked):** `vb-trans-off`
-13 of 13 and `q17-order` 0x1d 0x19 0x2 as above; `vb-trans` SR 36 with 33 values equal to the control vector and three
-that differ from it by the IMAGE'S LINK LAYOUT, not by the silicon. Each of the three subtracts a link address from a
-CSR whose value on the board equals the simulation's: position 16 (0-based) is csuptval - nomap with csuptval 0, and
-`nomap` is 0x80007000 in the control simulation's ELF but 0x80008000 in the board image (`build.sh` rebuilt, sha256
-identical; `llvm-nm`), so the board reads 0xffffffff7fff8000; position 23 is csuptval - ropage with csuptval 0x6f on
-both, and `ropage` is 0x80008000 against 0x80009000, so the board reads 0xffffffff7fff706f; position 27 is csupepc -
-fault4 where csupepc holds the pc of arm 4's RETURN (no escape on the resident bitstream), and the in-domain CAPPRINT of
-arm 4 compiles out under `BOARD_TEST_CH`, so the RETURN is 0x14 past `fault4` on the board (0x80001d98 - 0x80001d84)
-against 0x18 in the simulation. The raw csupepc values are the control trace's `csrr 0xfc2` results (run `vb7ctl`),
-which place the stale pc at the RETURN of each returning arm. So the control vector for the board image is the row
-above with those three positions replaced by 0xffffffff7fff8000, 0xffffffff7fff706f and 0x14, and the resident
-bitstream read it 36 of 36. The vp1 vector has no layout-dependent entry: its arms 2 to 4 fault for real, so the epc
-and tval readings are 0 by construction, and the arm-0 reading 0x28 is the same code in both builds (it matched).
