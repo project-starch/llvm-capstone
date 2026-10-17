@@ -6645,3 +6645,52 @@ Cycles per access, the median of 15 runs.
   a miss is the rev-node probe (R-43's query-on-miss).
 - **Not established:** the knee's exact position, and how the surcharge at N ≥ 1024 splits between the probe and
   the D-cache misses of the node records.
+
+## R1 warm and cold on the Sublet bitstream: node-proportional as on 054cea69b, 21.6 % cheaper per node warm, and the cold constant ends 1.9 % below (caplifive_sublet_d93a8d66b, 2026-10-17)
+Fifteen warm boots (r1wf16-01 to -15, 90 invocations, 420 records) and five cold boots (r1cf16r1 to r5, 60 records).
+- They ran on the classic line (buildroot d04bd83, monitor 93440d5, as each boot logs them) with the fixed-runtime R1
+  harness `66764b0e62075e57`, verified per boot from the boot's own payload. The September images mis-carve
+  on this bitstream (R-55, the runtime half).
+- The folder is `tests/rtl-smoke/r1-sublet-2026-10-16/`. It was pre-registered at lane f0613167b4b8 and amended four
+  times before these boots, the last at f8b4bfde7f6a; RESULTS.md is there.
+- The fits are the 054cea69b campaigns' own `analyze.py`, unchanged.
+
+**Every check holds:**
+- k800 read 4 twice in all 20 boots;
+- every invocation printed its `R1 end` line and `released pool rc=1`;
+- all 480 records read `ok=1 bad=0`;
+- no refusal.
+
+| warm | this bitstream | 054cea69b |
+|---|---|---|
+| REVOKE per affected node, shared | **17.97**, R² 0.99977 | 22.91 |
+| REVOKE per affected node, combined | **15.37**, R² 0.99979 | 15.92 |
+| bookkeeping per node, shared / combined | 28.76 / 28.59 | 28.54 / 28.79 |
+| bytes, heap, object size | no dependence (R² 0.007 / 0.007 / 0.044) | no dependence |
+| delegation depth, node count 47 at every level | no trend (R² 0.35 / 0.23); chain 1 is always the first point, and the first point reads 0.79-1.23x the rest on every axis | shared -0.73 (R² 0.003), combined -5.63 (R² 0.18) |
+| fill against bytes, the positive control | 1.8125 cycles/byte, R² 0.9999999983 | 1.8125 |
+| repeatability, median / max spread | 1.5 % / 25.4 % | 7.8 % / 39.5 % |
+
+**Cold, cycles per destroyed node (median of 5):**
+
+| `nd` | 64 | 512 | 1,024 | 2,048 | 4,096 | 8,192 | 16,384 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| this bitstream | **14.84** | 17.00 | 19.01 | 22.74 | 25.79 | 27.06 | **27.62** |
+| 054cea69b | 19.66 | 22.05 | 23.62 | 25.09 | 27.74 | 28.14 | 28.15 |
+
+**What changed:**
+- **The warm end is about a quarter cheaper; the cold end is nearly unchanged (-1.9 % at 16,384).**
+  - It reads -22 % at nd = 256 and 512.
+  - At nd = 64, -24.5 %, but that is the invocation's first point, which carries extra first-point timing.
+  - H1's REVOKE drop on the same image reads the same way.
+- **Cold over warm is 1.86x**, against 1.43x.
+- **The approach is still a ramp:** the largest interval holds 16.1 % of the rise, at nd = 1,536, below the
+  2,048-node capacity.
+- **It has not saturated by 16,384:** the top two rungs are 2.1 % apart, against 0.034 %.
+
+**Not established:**
+- why the warm end moved: the bitstream (the node record's parent link, R-45's flush), the monitor (93440d5 against
+  2dcd3a5) and the image all differ;
+- where the cold constant saturates;
+- depth apart from the first-point effect, which needs a reversed-order boot;
+- timing closure.
