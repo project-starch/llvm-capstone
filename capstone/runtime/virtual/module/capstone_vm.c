@@ -26,6 +26,10 @@ struct arena {
     struct page **pages;
     unsigned count;
     bool lazy;
+    /* S-21: the ancestor was already CSRETIREd at CV_THREAD_CREATE, to make a child's frame
+     * unreachable by the domain before its first entry. A second retire is not an error, but the
+     * non-destroying path reports one, so it must be skipped rather than tolerated. */
+    bool ancestor_retired;
 };
 struct context;
 struct cv_thread {
@@ -588,14 +592,25 @@ static int retire(struct context *c, struct arena *a, bool destroying)
         int error = pin_remaining(c, a);
         if (error) return error;
     }
-    preempt_disable(); local_irq_save(flags);
-    old = select_root(c);
-    asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                 : "=&r"(status) : "r"(a->ancestor) : "memory");
-    restore_root(old);
-    local_irq_restore(flags); preempt_enable();
-    if (status && !destroying) return -EIO;
-    if (!status) ++c->retired_flat;   /* read only in flat mode; inert for the paged path */
+    /* S-21: skip a retire already done at CV_THREAD_CREATE. Without this, the domain unmapping
+     * its child's frame page takes the NON-destroying path here, cap_rev_retire returns
+     * CAP_REV_DEAD for the invalid node, status is 1, and this function reports -EIO -- which the
+     * launcher surfaces as "service: Input/output error" and a 125 exit. Measured: the child thread
+     * ran and printed VIRTUAL_THREAD_CHILD, and the step then failed on the unmap. An earlier
+     * version of this change reasoned that no flag was needed because retire(destroying=true)
+     * ignores the status; that enumerated only one of the two paths. */
+    if (a->ancestor_retired) {
+        status = 0;
+    } else {
+        preempt_disable(); local_irq_save(flags);
+        old = select_root(c);
+        asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
+                     : "=&r"(status) : "r"(a->ancestor) : "memory");
+        restore_root(old);
+        local_irq_restore(flags); preempt_enable();
+        if (status && !destroying) return -EIO;
+        if (!status) ++c->retired_flat;   /* read only in flat mode; inert for the paged path */
+    }
     /* Clear every tag before returning frames to Linux. Later collection can
      * reuse dead IDs only after sweeping all remaining namespace storage. */
     for (i = 0; i < a->count; ++i) {
@@ -1182,12 +1197,64 @@ retry:
         t->frame[2] = t->frame[3] = t->frame[4] = t->frame[5] = t->frame[6] = 0;
         t->frame[7] = 3;
         t->frame[80] = t->frame[81] = 0;
+        /* S-21: MAKE THE CHILD'S FRAME UNREACHABLE BY THE DOMAIN BEFORE IT IS EVER ENTERED.
+         *
+         * On the RTL every escape restores the S caller's snapshot from frame+1024 unchecked, and a
+         * child frame is a page the DOMAIN allocated and still holds a NONLIN RW copy of
+         * (thread.c's cap_vm_acquire + cap_vm_copyable; this ioctl only find_arena()s and pins it).
+         * So without this the domain could overwrite the kernel's saved pc/sp/satp/stvec in its
+         * child's frame and have the next escape load them. QEMU cannot show it at any slot count,
+         * because the caller stays in save_state -- so this is silicon-only and no record exhibits
+         * it; the reasoning is the RTL source, not a reading.
+         *
+         * Retiring the arena's ancestor kills the domain's copy (25 on access) while the page stays
+         * pinned and kernel-only. That is safe to do at whole-arena granularity BECAUSE a thread
+         * frame is its own arena: thread.c acquires exactly 4096 bytes for it, and
+         * arena_has_thread_frame() matches on t->frame_user == a->address. A frame sharing an arena
+         * with live objects would make this retire kill them too, which is why the granularity is
+         * checked here rather than assumed.
+         *
+         * The later teardown retires the same ancestor again. That is a tolerated no-op, not a
+         * second effect: cap_rev_retire returns CAP_REV_DEAD on an invalid node BEFORE any mutation
+         * (cap_rev_tree.c:249-251), helper_csretire maps that to status 1, retire() ignores a
+         * non-zero status when destroying, and ++c->retired_flat only fires on success. So no flag
+         * is needed to suppress it.
+         *
+         * A failed retire fails the create: a frame the domain can still write is the whole defect.
+         * Note this is unreachable on vp2 today -- with supervisor_slots = 1 the create is already
+         * refused above -- so it is the ABI's property for a multi-slot bitstream, not a fix for
+         * the current board. */
+        {
+            struct arena *fa = find_arena(c, r.frame, PAGE_SIZE);
+            unsigned long st, old_root;
+            if (!fa) { rc = -EINVAL; goto thread_unwind; }
+            preempt_disable(); local_irq_save(flags);
+            old_root = select_root(c);
+            asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
+                         : "=&r"(st) : "r"(fa->ancestor) : "memory");
+            restore_root(old_root);
+            local_irq_restore(flags); preempt_enable();
+            if (st) {
+                pr_warn_ratelimited("capstone_vm: child frame grant not retired (status %lu); "
+                                    "refusing the thread\n", st);
+                rc = -EACCES;
+                goto thread_unwind;
+            }
+            if (!st) ++c->retired_flat;
+            fa->ancestor_retired = true;
+        }
         INIT_LIST_HEAD(&t->link);
         list_add_tail(&t->link, &c->threads);
         r.thread = t->id;
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
         if (rc) {
             list_del(&t->link); clear_thread_frame(t); drop_thread_frame(t); kvfree(t);
+        }
+        if (0) {
+thread_unwind:
+            /* The frame is pinned and the thread is not on c->threads yet, so the teardown is the
+             * same minus the list_del. */
+            clear_thread_frame(t); drop_thread_frame(t); kvfree(t);
         }
     } else if (op == CV_THREAD_EXIT) {
         struct cv_thread_control r;
