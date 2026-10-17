@@ -117,6 +117,8 @@ comparator, with outputs under a fresh directory so the first run's are untouche
 - Dry run (`results/dryrun-repeat.txt`): the runner replayed the first run's own readings, and all 25 read as
   pre-registered and identical to run 1. With one value altered in va-runv, that arm read NOT vp2 and was named as
   differing from run 1. An existing output directory is refused.
+- **Result (21:59:47-22:20:44): as predicted.** All 25 arms read their vectors again, each identical to the first
+  run, with no infra retries (`results/board-vp2-bf3db3175.result-lines.txt`, "Repeat 1").
 
 **Still open before a vp2 board run:**
 - (Not needed: resident controls for the physical-pool builds. The `-off` builds run in vp2's own batch beside their
