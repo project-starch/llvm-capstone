@@ -744,3 +744,28 @@ So the 10-10 record and the v6 kit differ by profile, not by one flag.
   against them.** It is not the compiler change, and not `+movc-keeps-integer-source`.
 - **The archives cannot be swapped**, because the 10-10 ones are soft-float. So the next separation is a rebuild of
   those archives' sources with v6 flags, a scope for the compiler lane to set.
+
+**wmem results (2026-10-17 10:11-10:13).**
+- **The VM.** `capstone_vm up --profile virtual` on the v6-fix kit needs two things the kit lacked:
+  - the job helper, which build-adapter.sh already builds (`out/adapter-qemu/capstone-job`, f49e70ff…);
+    `build-kit.sh` now copies it into `adapter/`;
+  - a guest SSH server, because the kit's rootfs (9903242c…, the record's own) has no dropbear. It is passed as
+    `--ssh-server`, the static dropbear the B0 sessions used (`/tmp/capstone/b0/platform/guest/ssh_server`).
+- **`virtual-malloc` (#25): MISSED 23, every cell equal to the record** (`compare-cells.py`, 0 mismatches), as
+  predicted. The controls behaved: the jumbo use-after-free faulted 25 at the probe.
+- **`virtual-nested-pools` (#26): neither pre-registered outcome as written.** NO-READING:control-failed 23.
+  - The arm's jumbo use-after-free control faults with **cause 29 during setup**: pc +0x18b20, before its ready mark,
+    `last=0xc0de0001`. So the runner reads "expected fault, observed none" at the probe and voids every cell.
+  - That is outcome (b)'s mechanism arriving through the control rather than the cases.
+- **The exact-bounds rerun separates it.** With `capstone_vm up --exact-bounds` (recorded in the VM's config as
+  `"exact_bounds": true`):
+  - the controls pass;
+  - the arm reads **CAUGHT 22 + NO-READING:unattributed 1, 22 of 23 cells equal to the record**.
+  - So wmem patch 0001's jumbo-block derive is refused by Q-15 under (iii), the plan's recorded cost, as for memcached
+    0006.
+- **The one remaining cell is case 22** (`usbhid_output_usages_freed_twice`, a double free).
+  - **Recorded:** CAUGHT, cause 25 in `wmem_block_sublet_free`, the case's declared fault site.
+  - **On v6:** the same cause 25, from the same double free, one call deeper, in the runtime's
+    `capstone_cap_revoke_child`. The declared site no longer names the frame that faults.
+  - Same detection, different attribution. It is a case.json `fault_sites` question for the corpus owner, not a
+    behaviour change.
