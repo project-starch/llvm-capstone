@@ -69,7 +69,24 @@ class Batch:
 
     def script(self):
         lines = ["#!/bin/sh", "cd /mnt/vm || exit 1", "dmesg -n 1",
-                 "insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }",
+                 # vp2's table geometry, so a QEMU prediction is made under the ceiling the
+                 # board enforces. vp2 keeps the RTL's 16-bit node index, so a FLAT table holds
+                 # 65,534 usable ids and the hardware saturates next-unused at 65,536; the
+                 # module's node_max_records defaults to 0 = NO CAP, which is the pre-vp2
+                 # behaviour. Left unset, a bundle that would exhaust the table on silicon
+                 # allocates freely here and its silicon reading (node pressure 30) looks like a
+                 # silicon finding rather than a kit mismatch.
+                 # Tolerant but LOUD: every vp2-prep kit's module takes the parameter, but older
+                 # kits (virt-stack, a2/r6-r9, dev-proof) predate it and insmod FAILS on an unknown
+                 # parameter, which would break any re-run of those. So try with the geometry, and
+                 # if that fails fall back WITH A MARKER rather than silently -- an uncapped run
+                 # that looks capped is the misread this whole change exists to prevent.
+                 # VP2_GEOMETRY= appears in every serial log; a reader can tell which it got.
+                 'if insmod capstone_vm.ko node_max_records=65536 2>/dev/null; then'
+                 ' echo VP2_GEOMETRY=flat65536;'
+                 ' elif insmod capstone_vm.ko; then'
+                 ' echo VP2_GEOMETRY=UNCAPPED-module-predates-node_max_records;'
+                 ' else echo VIRTUAL_STAGED_DONE; exit 1; fi',
                  "chmod 666 /dev/capstone-vm",
                  # The launcher prints its `capstone-exec: domain fault cause= pc= ... code=` line only
                  # with diagnostics on (as run-ports.py runs it); without it a fault is a bare
