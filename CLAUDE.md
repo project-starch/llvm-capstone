@@ -318,7 +318,12 @@ Before spending board time or building an instrument, search the **issue registr
 repro folders including archived ones, the commit history, and the other ports' adapter headers
 and patch commentary** — not only `docs/`. A
 whole session went into re-deriving a fault whose exact shape was already recorded, in the folder
-of a bug believed to be fixed. **Search by the NAME of the construct you are about to change, not only
+of a bug believed to be fixed. **Prior DATA counts as prior art: before commissioning a run to
+measure a quantity, grep for that quantity in the result records and serial logs you ALREADY have —
+including the ones you produced yourself an hour ago.** On 2026-10-18 a two-arm boot was designed
+for a collection row whose numbers were already sitting in the 41/41 logs from that session's own
+re-gate (9 collections on the flat arm, 28 on the paged), and the same missing grep put a rationale
+into a commit message that those logs refute. **Search by the NAME of the construct you are about to change, not only
 by the symptom** — `grep -rn <signal, module or compare> docs/history/ docs/ref/ISSUES.md` — because a
 prior attempt on that exact line is filed under its own issue, not yours: on 2026-10-05 half a session
 validated a widened `store_buffer` compare that `docs/history/21-08-2026_…_s10b-is-not-synthesizable.md`
