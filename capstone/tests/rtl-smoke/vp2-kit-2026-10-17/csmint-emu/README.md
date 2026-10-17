@@ -788,3 +788,32 @@ fib 45639-45658 and so_lists 2444-2445.
 
 The pointer lands after C whatever C reads. Physical-line timing baselines are re-taken on the bumped firmware and
 cite B and B2, or C's reading if it refutes placement. Retval, hash and tag records are unaffected.
+
+### Boot BLb arm C, result (2026-10-18 02:26-02:39): placement CONFIRMED, as pre-registered
+
+Result lines: `bootblb/results-bootblb.txt`.
+- **Correctness:** retvals, hashes and tags as P's: all ten retvals identical, the three mruby hashes the same, no
+  monitor tag.
+- **fib 45665 ms** (45600 or more) and **so_lists 2424 ms** (2450 or less): the bumped side on both, which is the
+  pre-registered "placement confirmed".
+- **What it shows:** boot P's own monitor code, padded to the bumped monitor's placement of the M-mode timer path and
+  of handle_exception's entry, reproduces the timing shift. The bump's effect is code placement, not added work.
+
+| benchmark | P | BL | A | A2 | B | B2 | C | C − mean(A) |
+|---|---|---|---|---|---|---|---|---|
+| mandel_term | 138315 | 138351 | 138338 | 138304 | 138320 | 138290 | 138343 | +0.02 % |
+| fib | 45514 | 45524 | 45491 | 45512 | 45658 | 45639 | 45665 | +0.36 % |
+| so_lists | 2458 | 2466 | 2458 | 2469 | 2444 | 2445 | 2424 | −1.60 % |
+| so_mandelbrot | 30708 | 30683 | 30685 | 30668 | 30685 | 30674 | 30655 | −0.07 % |
+| ao_render | 81907 | 81931 | 81881 | 81870 | 81854 | 81892 | 81828 | −0.06 % |
+
+- **Beyond the criteria:** C's so_lists is about 20 ms below B's. C differs from B in placement elsewhere:
+  - P's data layout;
+  - `_handle_branch_1` at P's address;
+  - code that was not padded.
+  - So so_lists moves with monitor placement at the 1 % level generally, not only with the two paths padded here.
+  - A timing baseline is valid only for the firmware it was measured on.
+
+**The record rule** (the runtime lane's ruling, applied now that the pointer lands):
+- **Timing:** physical-line timing baselines are re-taken on the bumped firmware and cite B and B2 for timing, not P.
+- **Everything else:** retval, hash and tag records are unaffected.
