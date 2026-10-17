@@ -214,6 +214,11 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
         errno = err;
         return -1;
     }
+    /* Every ADMITTED grant, in order, so two modules' grant sequences can be diffed. The
+     * refusal side is already printed; without the success side a diff cannot say WHICH grant
+     * first differs, only that something did. */
+    fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%u base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
+            i, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
     maps[i] = (struct mapping){.address = base, .bytes = bytes, .visible = bytes,
                                .id = r.id, .heap = linear,
                                .kind = linear ? CV_MAP_HEAP : -1};

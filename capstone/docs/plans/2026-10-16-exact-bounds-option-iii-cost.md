@@ -2436,3 +2436,68 @@ sizes diverging between `contract.c` and `malloc-contract.c` is the right place 
 instruction sequence narrows to an 88-byte window and reads two words at `+0x10` and `+0x14` which
 it compares as negatives of one another, so there is a descriptor-layout question underneath it.
 Instrument it; do not reason about it.
+
+
+## The cause-29 fault: located precisely, cause still open, two hypotheses refuted
+
+A grant-logging launcher (every ADMITTED grant printed, not only refusals) paired with each module
+in turn — **same launcher, same domain, same images, the module the only variable**. Arms identified
+by the module hash in `result.json`, not by directory name, after a `sed` accumulation wrote the
+control into `g-oldmod-newmod` and the first diff attempt read a path that did not exist.
+
+### What the grant diff shows, with addresses normalised
+
+The first diff compared raw strings and "found" a difference at event 0 that was only the per-boot
+ASLR base. Normalised to the address-independent fields plus `base % granule`:
+
+| # | new module | old module |
+|---|---|---|
+| 0–7 | **identical** — 524288, 1048576, 16384, 262144, 65536 (the launcher's own arenas) and three linear heap mappings, all power-of-two and naturally aligned | identical |
+| 8 | **OK 49152**, pow2=0, `base%granule=0` | **REFUSED**, errno 22, pow2=0 |
+| 11 | **OK 28672**, pow2=0 | **REFUSED**, errno 22, pow2=0 |
+| 12 | **FAULT cause=29 addr=0x0** | — (already failed out) |
+
+So the loosening admits **exactly** the intended shapes and nothing else, and the launcher's own
+arenas are untouched. 28672 is the `posix_memalign(4096, 5001)` group, i.e. the allocation that
+used to print `MALLOC_FAIL:aligned allocation`.
+
+### The fault's location, established by byte match rather than by symbol
+
+The symbolizer reported `.Lpcrel_hi12 launch.c:0:0` — a **local label** and no line, because the
+runtime archive carries no debug info, so that attribution was not usable. Instead: the 48-byte
+window at the faulting vaddr was extracted from the final image and searched for in every runtime
+and libc object. It appears in **`launch.c.obj` and nowhere else**. `launch.c` defines only
+`append`, `capstone_launch_pack`, `string_at` and `capstone_launch_unpack`, and only the last is
+reachable at runtime.
+
+The instruction is `lw a3, 0x14(a4)` after `shrink a4, a0, a0+0x58`.
+`sizeof(struct capstone_launch_header)` is exactly **0x58 = 88**, and `+0x10`/`+0x14` are its
+`argc` and `envc`. So the fault is reading the launch header through a `buffer` capability that is
+invalid, and `address=0x0` is consistent with that.
+
+This also resolves why nothing prints: the grants at events 5–11 are **startup** heap mappings, and
+`capstone_launch_unpack` runs after them, so `basic()` never begins.
+
+### Two hypotheses refuted, one of them mine
+
+- **"The launch block is refused or granted differently."** No: event 4 (65536, reg=12, perms=4) is
+  **identical** in both arms.
+- **"Registering more arenas invalidates an earlier capability."** No, and this was refuted by data
+  already in hand rather than by a new run: the new module reaches arena **slot 168 in `churn` with
+  0 cause-29 faults**, while the fault happens at max slot **10**. Arena count is not the mechanism,
+  and neither is "admitting a non-power-of-two arena" in itself, since `churn` admits many without
+  faulting.
+
+### What remains true, and what the next instrument is
+
+Still solid: the fault is **not** a bounds failure — zero `Cap mem access OOB`, zero `SHRINK
+illegal`, and cause 28 absent here while firing twice in the board lane's `run.py` both before and
+after. The predicate is not handing out widened capabilities.
+
+Still **open**, and not resolved in the flattering direction: whether the change created this fault
+or made an existing one reachable. Nothing measured so far separates those.
+
+**Next instrument, named rather than reasoned about:** print the launch-block capability's tag and
+bounds in `application.c` immediately before `capstone_launch_unpack` is called, in both arms. That
+is the one reading that says whether the capability is already invalid when it is handed over or is
+invalidated inside the unpack. It needs an SDK rebuild, which is a known-good path here.
