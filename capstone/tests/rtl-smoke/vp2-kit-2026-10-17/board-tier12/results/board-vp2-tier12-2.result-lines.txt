@@ -1,0 +1,40 @@
+# vp2 Tier 1/2 boot 2, 2026-10-18 00:38-00:50: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload 41fb669c9f77462d,
+# capstone_vm.ko ed24f827b5beb373 (runtime 179686bcf198), monitor capstone-sbi 1e9451a. Pre-registered at lane 279d993e273d.
+# Result lines only, from run2/board.txt (the run-scoped transcript) and run2/SEQ; the raw capture is not committed.
+
+DRIVER rc=1 00:50:53; watchdog lines 48
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=922 oracle=0 NOT-AS-ORACLE
+RUNG vm-suite retval=NONE oracle=22 NOT-AS-ORACLE
+VM-CONTRACT BRANCH other: ok-line=False exits=['VM_EXIT:normal:139', 'VM_EXIT:stale:139'] causes=['cause=26', 'cause=26'] monitor=[]
+VM-SUITE board-check rc=2 :: NO DATA: 0 segments for rung vm-suite in /tmp/capstone/tier1/run2/board.txt (need exactly 1)
+
+## vm-contract (first failure; the reading)
+  CAPSTONE_VM_ADD_OK slot=0 base=0x3f87280000 bytes=524288 reg=3 perms=7 linear=0
+  CAPSTONE_VM_ADD_OK slot=1 base=0x3f87100000 bytes=1048576 reg=2 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=2 base=0x3f87380000 bytes=16384 reg=10 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=3 base=0x3f87300000 bytes=262144 reg=11 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=4 base=0x3f87360000 bytes=65536 reg=12 perms=4 linear=0
+  capstone-exec: domain fault cause=26 pc=0x3f87281f60 address=0x3f872a1ff0 entry=unknown last=0x0 preparing=0x0 sha256=bf433e10... image=contract.dom
+  VM_EXIT:normal:139
+  CAPSTONE_VM_ADD_OK slot=0 base=0x3fab400000 bytes=524288 reg=3 perms=7 linear=0
+  CAPSTONE_VM_ADD_OK slot=1 base=0x3fab200000 bytes=1048576 reg=2 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=2 base=0x3fab4e0000 bytes=16384 reg=10 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=3 base=0x3fab380000 bytes=262144 reg=11 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=4 base=0x3fab4c0000 bytes=65536 reg=12 perms=4 linear=0
+  capstone-exec: domain fault cause=26 pc=0x3fab401f60 address=0x3fab421ff0 entry=unknown last=0x0 preparing=0x0 sha256=bf433e10... image=contract.dom
+  VM_EXIT:stale:139
+  RESULT vm-contract retval=922
+  END marker present: True; monitor tags in the segment: none
+
+## vm-suite (after the first failure: reported, not judged)
+  16 VM_EXIT lines before the stop: normal:139 threads:139 vm:139 nested:139 nested-stale:139 heap-threads:139 sparse-churn:139 stale:139 bounds:139 retired:139 vm-ro-write:139 vm-none-read:139 vm-guard:139 vm-padding:139 sparse-stale:139 preempt:139
+  16 domain faults; (cause, pc - slot 0 base, address - slot 0 base), distinct: [('26', '0x1f60', '0x21ff0')]
+  then, in the next step: monitor EXCX:0000E002 MCAU:0000001D MEPC:011137F4 MTVL:00000000 MSTA:00000820 INJS:0000001D
+  Oops - unknown exception [#1]
+  epc : vm_ioctl+0xb04/0x1310 [capstone_vm]
+  status: 0000000200000100 badaddr: 0000000000000000 cause: 000000000000001d
+  Code: 87b3 40e7 3423 00f5 3783 0209 bc23 03b7 3703 0289 (17db) 48b7
+  Kernel panic - not syncing: Fatal exception in interrupt
+  END marker present: False

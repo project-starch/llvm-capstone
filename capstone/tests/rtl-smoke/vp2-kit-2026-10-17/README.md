@@ -521,3 +521,87 @@ is read by `board-tier12/vm-contract-branch.py`, and vm-suite by board-check.py 
   - a wrong firmware, driver or run.py hash;
   - an existing output directory;
   - an llvm dir without llvm-nm. The first version checked for llvm-objdump, and the dry run caught it.
+
+### Boot 2, result (2026-10-18 00:38-00:50): the S-trap injection works on silicon; 18 virtual runs stop at the image-gp `delin` (C-27), and parallel_one's launch traps in CSRUNV
+
+Result lines: `board-tier12/results/board-vp2-tier12-2.result-lines.txt`.
+- **b0-stats, b0-hello:** 0, as predicted.
+- **vm-contract:** retval 922, NOT as predicted, and on no pre-registered branch.
+  - Both `ok` and `stale` exit 139 with `domain fault cause=26`, at pc = slot 0 base + 0x1f60 and address = slot 0
+    base + 0x21ff0.
+  - There is no VIRTUAL_APPLICATION_OK, and no monitor tag.
+  - vexec's five `CAPSTONE_VM_ADD_OK` lines (its `maps[]` index 0-4) print `linear=0`, gp's (map 0, reg=3) included.
+    That is vexec echoing its own request (exec.c:220-221), not a readback of the minted type. The QEMU record's serial
+    prints the same five lines.
+- **vm-suite** ran after the first failure, so it is reported, not judged.
+  - 16 steps ran, normal through preempt. All exit 139 with the same fault: cause 26, pc offset 0x1f60, address
+    offset 0x21ff0.
+  - In the next step (parallel_one) the monitor printed `EXCX MCAU 1D MEPC 011137F4 MTVL 0 MSTA 820`, then `INJS 1D`.
+    The kernel printed `Oops - unknown exception` with `epc vm_ioctl+0xb04/0x1310 [capstone_vm]`, cause 0x1d and
+    status SPP=1, then panicked ("Fatal exception in interrupt").
+  - The oops's Code bytes `(17db) 48b7` are word 0x48b717db, funct7 0x24: the module's `run a5, a4, a1`, with
+    a4 = 0x8159b000 and a1 = 0.
+  - Per the runtime lane, the 29 is the refusal of a second concurrent launch. vp2 has one context slot and QEMU has
+    32, so run.py's parallel steps pass only on QEMU. The module is to serialize contexts instead of being trapped.
+  - Whether the RTL should trap to M or return 29 in rd is with the RTL lane.
+
+**What this boot settles.** The monitor's S-trap injection is validated on silicon. An S-origin capability trap was
+reported (EXCX), handed to the kernel (INJS), and delivered with the right epc, cause and SPP. The kernel then printed
+its own oops, where boot 1's monitor wedged. A virtual application's fault is delivered to the module as a domain
+fault and becomes SIGSEGV (139), 18 times in this boot.
+
+**The fault, located** (claim-auditor: supported, with the wording below; a localization from source and exclusion,
+N = 1 boot, 18 of 18 faults identical).
+- **The mapping is observed, not assumed.** vexec loads the image at `p_vaddr - low` into map 0 (exec.c:413-441), and
+  contract.dom's single LOAD is at VA 0x10000. On QEMU every entry reads map 0 base + 0x974, and domain_main is
+  0x10974. So pc offset 0x1f60 is VA 0x11f60: `delin a0` in `__capstone_cap_init`, right after `scc a0, gp, a0`.
+- **The non-circular fingerprint is tval − pc = 0x20090.** It follows from the instruction bytes alone (`auipc a0,
+  0x20` at pc − 0x14, then `addi 0xa4`), and it holds on all 18 faults. The function's next delin would read 0x24574.
+  For DELIN the decoder takes the operand from the rd field (decoder.sv:1235). tval is the DYN op's operand_a
+  (cva6.sv:1522, ex_stage.sv:1184), and the commit stage latches pc, cause and tval from the same instruction.
+- **a0 is NONLIN.**
+  - The module requests NONLIN for gp and refuses LINEAR (capstone_vm.c:580, :628).
+  - On silicon the type is set by the monitor's CSMINT emulation (capstone_csmint.S:258-264 in fw 41fb669c9f77); on
+    QEMU by helper_csmint.
+  - SCC keeps rs1's type (capstone_flu_unit.anvil:122).
+  - A LINEAR gp is excluded by behaviour. The earlier `scc t2, gp, t0` at 0x10030 would have nulled it, and DELIN of
+    an untagged operand raises 24, not 26.
+- **The RTL's DELIN raises UNEXPECTED_CAP_TYPE (26) for any tagged non-LINEAR capability**, and 24 for an untagged one
+  (capstone_dyn_unit.anvil:797-801 at bf3db3175, with no virtual-context branch).
+- **QEMU's helper_csdelin returns early for NONLIN** (op_helper.c:1569 at f2f15f8fc70c). So the delin is a no-op on
+  QEMU and a fault on the RTL. The QEMU record read 41/41 on the same bytes.
+  - That QEMU took the early return is deduced, not observed: a LINEAR gp would also fault there on QEMU.
+  - The observation is the compiler lane's control: the old images on the strict-DELIN QEMU must reproduce the board
+    line exactly, `cause=26` at base + 0x1f60, address base + 0x21ff0, `entry=unknown`.
+- **Not explained by this localization:** the CSRUNV trap in parallel_one (vm-suite, above), a second signature.
+- This is **C-27** ("`delin` of a NONLIN gp is a spec/RTL trap that QEMU hides"). Earlier instances of the class:
+  history 20-08-2026 S-02/S-05 (lines 146-156) and 27-07-2026 RESULTS-delin-wedges…. Silicon wedged on it then (R-5);
+  vp2 traps cleanly with 26. The mechanism above is cited from source; the docs are cited only as prior instances.
+  - ISSUES-ARCHIVE.md:3328 records C-27 as `FIXED 2026-09-05 — the DELIN is dropped under the NONLIN-gp contract`. That
+    status is false. CapstoneExpandPseudoInsts.cpp:381 still emits the DELIN for every `PseudoCapGlobalBase`, and
+    CapstoneISASemantics.md:52 still lists it under the default ABI ("never under `-capstone-gp-captable`").
+  - The false FIXED is why the boot was spent. Its retraction is the compiler lane's, as its own commit.
+- It is not one site. Counting each `delin` whose rd was set from gp (cincoffset, cincoffsetimm or scc) within the 5
+  preceding instructions gives contract.dom 525 of 530, sqlite3.dom 5,983 of 5,988 and mruby.dom 9,859 of 9,863.
+  Sampled sites are bare `scc rd, gp, x; delin rd`.
+
+**Ruled by the runtime lane** (the semantics owner), as Q-23 was: the RTL is the reference.
+- QEMU's default DELIN raises 26 on a non-LINEAR rs1. The RTL lane implements it on virtual-capstone-v7 and
+  re-measures Tier 0.
+- There is no strict-DELIN property for prediction runs: the default is strict, and a test-only property exists only
+  where a suite's bootstrap needs the old behaviour, as with x-capstone-test-s-ldc.
+- The fix is (b): the backend's image-gp materialization drops the delin. The image gp is NONLIN by ABI, and a
+  LINEAR gp would make every global access write the shared node's linear bit on the RTL. The backend change is
+  reserved to the project lead (CapstoneISASemantics.md:52, "the DELIN decision is the project lead's").
+- The gate on the rebuilt images is `delin-census.py` (this folder): 0 gp-derived delins. The images above are its
+  positive control, at 525 / 5,983 / 9,859.
+- Every QEMU record before the new pin is blind to this class, so the Tier 3 predictions wait for it.
+- Boot 3 is this pre-registration with the images' hashes moved, plus a delin branch: 26 at +0x1f60 is the unfixed
+  glue, kit side (C-27).
+- The board stays idle until all of these are in:
+  - the lead's word on the backend change;
+  - the strict-DELIN, one-slot QEMU pin;
+  - the rebuilt SDK and images, with the census at 0;
+  - a from-scratch run.py record, in which the old images fail at the delin on the new QEMU as the control;
+  - the module's context serialization;
+  - the RTL lane's answer on CSRUNV's 29.
