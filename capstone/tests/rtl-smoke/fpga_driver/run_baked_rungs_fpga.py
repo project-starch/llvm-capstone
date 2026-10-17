@@ -66,8 +66,16 @@ def no_result_kind(text):
     holds only for a rung that started the classic domain share (some SHA<n> marker) and never
     reached SHA6. A Linux-module rung has no SHA markers, and vp2 Tier 1's vm-contract was
     labelled an entry stall while its transcript carried the monitor's EXCX report of a cause-24
-    trap from S-mode, which was the reading."""
-    if re.search(r"EXCX:[0-9A-Fa-f]+", text):
+    trap from S-mode, which was the reading.
+
+    Since the S-trap injection (capstone-sbi vp2/os-trap-inject), an EXCX or ILLX for a trap from S or U is followed
+    by INJS: the monitor handed it to the kernel and went on, so the kernel's response is the reading. NODM and INJL
+    are the monitor's own stops."""
+    if re.search(r"(?:NODM|INJL):[0-9A-Fa-f]{8}", text):
+        return "monitor-stop"
+    if re.search(r"INJS:[0-9A-Fa-f]{8}", text):
+        return "injected-trap"
+    if re.search(r"(?:EXCX|ILLX):[0-9A-Fa-f]+", text):
         return "monitor-trap"
     if re.search(r"\bSHA[0-5]:", text):
         return "entry-stall"
@@ -268,6 +276,15 @@ def main():
                 log(f"  {r}: NO RESULT, and the monitor reported an unhandled trap: "
                     f"{' '.join(re.findall(r'(?:EXCX|MCAU|MEPC|MTVL|MSTA):[0-9A-Fa-f]+', text))}. That report "
                     f"IS the reading: classify it (MSTA's MPP says whose pc MEPC is). Not an entry stall.")
+            elif kind == "injected-trap":
+                log(f"  {r}: NO RESULT; the monitor handed a trap from S or U to the kernel: "
+                    f"{' '.join(re.findall(r'(?:EXCX|ILLX|MCAU|MEPC|MTVL|MSTA|INJS):[0-9A-Fa-f]+', text))}. "
+                    f"The kernel's response (an oops, or a signal to the process) is the reading. Not an entry stall.")
+            elif kind == "monitor-stop":
+                log(f"  {r}: NO RESULT; the MONITOR stopped: "
+                    f"{' '.join(re.findall(r'(?:NODM|INJL|EXCX|ILLX|MCAU|MEPC|MTVL|MSTA):[0-9A-Fa-f]+', text))}. "
+                    f"NODM: a domain fault return with no domain call outstanding; INJL: an injection that would "
+                    f"land on the faulting pc. The core is the monitor's; later rungs are collateral.")
             elif kind == "entry-stall":
                 log(f"  {r}: NO SHA6 -- ENTRY STALL (R-16), the domain never ran. This slot "
                     f"carries NO VERDICT about the code. R-16 is per-image: REDRAW (vary "
