@@ -385,3 +385,92 @@ That covers:
 - the C bodies of `save_smode_context`, `handle_trap_ecall`, `handle_exception` and `handle_interrupt`;
 - the monitor's stack capability from `SPLIT` and `dom_init`, in place of the arm's NONLIN one;
 - the monitor's gp.
+
+## va-csmint-ft.S: the hook's FALL-THROUGH, pre-registered (2026-10-17, before any run)
+
+**The gap.** The hook's other branch has never run, in simulation or on silicon:
+- `csmint_dispatch` returns 0 ("not ours");
+- the entry re-reads mcause and calls `handle_exception`;
+- the entry writes the returned value to x[rd], with rd from mtval[11:7], and advances mepc.
+
+In va-csmint-entry every illegal instruction was a CSMINT, and the `handle_exception` stub retired 0 times. On the
+board this branch carries every Linux `rdtime`, which the FPGA monitor emulates in `handle_exception`. A defect there
+would hang vp2's first boot, directly after a flash.
+
+**The arm.** Same setup, pins and includes as va-csmint-entry: caplifive-sbi cb91d7d with the four sha256s above. The
+stubs differ:
+- `handle_exception` prints its cause argument and mtval, then returns `0x7e50 | mtval[23:20]` in place of the time
+  emulation;
+- `handle_trap_ecall` with a7 = 30 prints S's s6, s7, s9 and a3. Those are sentinels 0x5106, 0x5109 and 0x5a03, plus
+  the target register s7 (x23).
+
+S's four rows:
+- **A:** `csrr s7, time`, 0xc0102bf3. The RTL has no time CSR (no `CSR_TIME` arm in `csr_regfile.sv`), so the read
+  is illegal. The commit stage puts the instruction bits in tval (`commit_stage.sv:970`).
+- **B:** `csrr s7, mhartid`, 0xf1402bf3: an M-only CSR read from S, a privilege violation.
+- **C:** 0xb0001bdb, a near-miss. It has CSMINT's opcode and funct3 with funct7 0x58, one bit from 0x50.
+  - 0x58 is unassigned, so it takes the decoder's `default: illegal_instr` arm.
+  - The custom-2 funct3-1 case assigns 0x00-0x0d, 0x20-0x22, 0x24 and 0x51-0x54 (`decoder.sv:1209-1391`). 0x51 is
+    CDERIVE, which the first draft used before this check.
+  - Masked, it reads 0xb000105b against CSMINT's 0xa000105b, so the decode compare must reject it.
+- **D:** va-csmint-entry's row 1, the real CSMINT, run after the three fall-throughs.
+
+**Predicted readings, 26 values then pass.** Addresses are stated symbol-relative this time:
+
+| row | the `handle_exception` stub | S's registers |
+|---|---|---|
+| A | `2 0xc0102bf3` | `0x5106 0x7e51 0x5109 0x5a03` |
+| B | `2 0xf1402bf3` | `0x5106 0x7e54 0x5109 0x5a03` |
+| C | `2 0xb0001bdb` | `0x5106 0x7e50 0x5109 0x5a03` |
+
+- Row D prints `4 -1 -1`, as va-csmint-entry's row 1: the same table state, since nothing before it writes the table.
+- The finals read slotA back: `0`, `dbuf`, `dbuf + 0x100`, `dbuf`, `6`. That is LINEAR in lcc's numbering, the base,
+  the end, the cursor and RW; va-csmint-entry's RO read 4.
+
+**Predicted path counts, from the retirement trace:**
+- `_cap_trap_entry` 9: four illegal instructions and five ecalls;
+- `csmint_dispatch` 4;
+- `handle_exception` 3;
+- `handle_trap_ecall` 5;
+- `csm_inject` 0;
+- `csm_window_trap` 0.
+
+**What a failure would say:**
+- a wrong s7 with the stub's prints present means the write-back;
+- a changed sentinel means the frame;
+- a stub print missing for A, B or C means the hook claimed a non-CSMINT, which is the decode compare;
+- a hang after the stub returns means the return path.
+
+### va-csmint-ft, run: the fall-through validated, every reading and every path count as pre-registered (the board lane, bf3db3175)
+
+The board lane ran it on a private copy of the RTL lane's run tree (`sup-runs/csm-ft`, virtual-profile-2-d cab4ee891,
+RTL bf3db3175), with the RTL lane's runner (`run-sup-ladder.sh`, S12_MEM_DELAY=12, SUP_TRACE).
+- The includes are the same `git archive` export of cb91d7d, with the four sha256s re-checked.
+- The arm is at d2458229ee1e. The ELF's sha256 is b5aa021e744d113e8761ee73559cf736d6f1e1cfaec6ed2f3f3a6a310e8023d3.
+- The run passes after 89,653 cycles.
+- `capprint-retired.py` reads 26 retired prints and 26 raw.
+- A script compares them with the pre-registration: 0 mismatches, `dbuf` = 0x8000c000 from the ELF.
+
+    2 0xc0102bf3 | 0x5106 0x7e51 0x5109 0x5a03 |
+    2 0xf1402bf3 | 0x5106 0x7e54 0x5109 0x5a03 |
+    2 0xb0001bdb | 0x5106 0x7e50 0x5109 0x5a03 |
+    4 -1 -1 | 0 0x8000c000 0x8000c100 0x8000c000 6
+
+**Path counts, all as predicted:**
+- `_cap_trap_entry` 9;
+- `csmint_dispatch` 4;
+- `handle_exception` 3;
+- `handle_trap_ecall` 5;
+- `csm_inject` 0;
+- `csm_window_trap` 0.
+
+**Validated:** the branch every Linux `rdtime` takes on a flag-on monitor:
+- the hook calls `csmint_dispatch`, which says not ours for a `time` read, an M-only CSR read, and a one-bit near-miss
+  of CSMINT's encoding;
+- the entry passes cause 2 to `handle_exception`;
+- the returned value lands in x[rd], from mtval[11:7];
+- mepc advances, and S resumes with its other registers intact.
+
+A real CSMINT after three fall-throughs still mints.
+
+**Still vp2-only:** `handle_exception`'s C body, the real time emulation, on the monitor's own stack and gp.
