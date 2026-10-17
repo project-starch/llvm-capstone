@@ -1,0 +1,19 @@
+# vp2's chain, dry-run on both canary branches (2026-10-17 19:59; flash and runner stubbed, the real preflights run)
+## canary passes
+CHAIN-VP2 START 19:59:54 waiting for vp1's chain (pid 999999)
+vp1's session ended clean; board free 19:59:54
+vp2 preflight GO 19:59:54
+FLASH vp2 rc=0 19:59:54: 
+CANARY rc=0 19:59:54: CANARY PASS stub
+ARMS done 19:59:54: 
+C7 done 19:59:54: 
+CHAIN_VP2_DONE
+## canary fails: back to vp1, then stop
+CHAIN-VP2 START 19:59:54 waiting for vp1's chain (pid 999999)
+vp1's session ended clean; board free 19:59:54
+vp2 preflight GO 19:59:55
+FLASH vp2 rc=0 19:59:55: 
+CANARY rc=1 19:59:55: CANARY FAIL stub
+CANARY did not pass: back to vp1 (authorised), then STOP 19:59:55
+REVERT to vp1 rc=0 19:59:55: 
+CHAIN_VP2_STOPPED_CANARY

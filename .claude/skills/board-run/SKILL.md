@@ -95,6 +95,11 @@ Each of these has cost real board time when skipped.
    (`(w & 0xfe00707f) == 0x0200105b`, four in a fixed build). Without it, carves alias. On 2026-10-16
    H1, R1, M1 and M2 reran September images that had 0, and H1's REVOKE finding had to be
    retracted (dev 783fb0f93f7e).
+8. **An unattended script is armed only after a stubbed dry run.** Before a session or chain is armed to run on the
+   board without you (after a flash, or behind another run), run a copy with every board call stubbed (runner, upload,
+   flash) on recorded data. It must reach its last rung and exercise each branch of its gates. Keep that output
+   beside the pre-registration. `bash -n` is not this. On 2026-10-17 vp1 flashed, then its session died on its first
+   line (`local W=... F=$W/...` under `set -u`), and nothing had shown it until the board was waiting.
 
 ## 1. Bake it in — never UART
 

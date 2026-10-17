@@ -1,0 +1,53 @@
+# vp2's session runner, dry-run end to end (2026-10-17 19:57, board calls stubbed: the canary on d93a8d66b's records with s1gap repeats 2 and 3, each arm on its pre-registered vector, set 7 on d93a8d66b's record)
+CANARY1 START 19:57:23 caplifive_vp2_bf3db3175.bit
+CANARY1 S16 vs d93a8d66b rc=0 18 arms, 98 reference readings, 0 not identical 19:57:23
+  floor control-call-retpc rc=0 19:57:23
+  floor sublet-derive-kill rc=0 19:57:23
+  floor sublet-split-shares-node rc=0 19:57:23
+  floor sublet-mrev-orphan rc=0 19:57:23
+  floor sup-sublet rc=0 19:57:23
+  floor stale-access rc=0 19:57:23
+CANARY1 FLOOR vs d93a8d66b rc=0 6 arms, 77 reference readings, 0 not identical 19:57:23
+CANARY1 S1GAPF vs d93a8d66b rc=0 3 arms, 0 with a functional difference 19:57:23
+CANARY2 START 19:57:23 caplifive_vp2_bf3db3175.bit
+CANARY2 S16 vs d93a8d66b rc=0 18 arms, 98 reference readings, 0 not identical 19:57:23
+  floor control-call-retpc rc=0 19:57:23
+  floor sublet-derive-kill rc=0 19:57:23
+  floor sublet-split-shares-node rc=0 19:57:23
+  floor sublet-mrev-orphan rc=0 19:57:23
+  floor sup-sublet rc=0 19:57:23
+  floor stale-access rc=0 19:57:23
+CANARY2 FLOOR vs d93a8d66b rc=0 6 arms, 77 reference readings, 0 not identical 19:57:23
+CANARY2 S1GAPF vs d93a8d66b rc=0 3 arms, 0 with a functional difference 19:57:23
+CANARY12 S16 pass1 vs pass2 rc=0 18 arms, 98 reference readings, 0 not identical
+CANARY12 FLOOR pass1 vs pass2 rc=0 6 arms, 77 reference readings, 0 not identical
+CANARY12 S1GAPF pass1 vs pass2 rc=0 3 arms, 0 with a functional difference
+CANARY PASS 9 of 9 19:57:23
+VP2ARMS START 19:57:23 25 arms
+VP2ARM va-runv rc=0 :: VERDICT va-runv: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-runv-quantum rc=0 :: VERDICT va-runv-quantum: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-runv2 rc=0 :: VERDICT va-runv2: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-runv3 rc=0 :: VERDICT va-runv3: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-runv4 rc=0 :: VERDICT va-runv4: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-runv5 rc=0 :: VERDICT va-runv5: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-runv6 rc=0 :: VERDICT va-runv6: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-runv7 rc=0 :: VERDICT va-runv7: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-barrier rc=0 :: VERDICT va-barrier: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-q15 rc=0 :: VERDICT va-q15: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-csmint-emu rc=0 :: VERDICT va-csmint-emu: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-csmint-mon rc=0 :: VERDICT va-csmint-mon: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-straddle rc=0 :: VERDICT va-straddle: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-flat rc=0 :: VERDICT va-flat: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-flat-off rc=0 :: VERDICT va-flat-off: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-alloc rc=0 :: VERDICT va-alloc: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-alloc-off rc=0 :: VERDICT va-alloc-off: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-alloc-corrupt rc=0 :: VERDICT va-alloc-corrupt: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-alloc-exhaust rc=0 :: VERDICT va-alloc-exhaust: AS PRE-REGISTERED for vp2 19:57:23
+VP2ARM va-ns-collide rc=0 :: VERDICT va-ns-collide: AS PRE-REGISTERED for vp2 19:57:24
+VP2ARM va-ns-collide-off rc=0 :: VERDICT va-ns-collide-off: AS PRE-REGISTERED for vp2 19:57:24
+VP2ARM vb-trans-vp2 rc=0 :: VERDICT vb-trans-vp2: AS PRE-REGISTERED for vp2 19:57:24
+VP2ARM vb-trans-plain-vp2 rc=0 :: VERDICT vb-trans-plain-vp2: AS PRE-REGISTERED for vp2 19:57:24
+VP2ARM q17-order rc=0 :: VERDICT q17-order: AS PRE-REGISTERED for vp2 19:57:24
+VP2ARM vb-trans-off rc=0 :: VERDICT vb-trans-off: AS PRE-REGISTERED for vp2 19:57:24
+VP2ARMS DONE 19:57:24 25 as pre-registered
+C7 vs d93a8d66b rc=0 33 reference records, 33 new, 0 differ 19:57:24
