@@ -81,11 +81,17 @@ class Batch:
                  # parameter, which would break any re-run of those. So try with the geometry, and
                  # if that fails fall back WITH A MARKER rather than silently -- an uncapped run
                  # that looks capped is the misread this whole change exists to prevent.
-                 # VP2_GEOMETRY= appears in every serial log; a reader can tell which it got.
+                 # VP2_NODE_CAP= appears in every serial log; a reader can tell which it got.
+                 # NAMED FOR WHAT IT MEASURES. It was VP2_GEOMETRY=flat65536, which was wrong and
+                 # actively misleading: the marker records that the module accepted the 65,536
+                 # RECORD CAP, not that the table FORMAT is flat. The format is chosen by the
+                 # -DCAPSTONE_VM_FLAT_TABLE build define, not by this parameter, so a PAGED kit
+                 # printed "flat65536" too -- observed on bundle 5's paged arm, whose node_capacity
+                 # read 1024 while the marker claimed flat.
                  'if insmod capstone_vm.ko node_max_records=65536 2>/dev/null; then'
-                 ' echo VP2_GEOMETRY=flat65536;'
+                 ' echo VP2_NODE_CAP=65536;'
                  ' elif insmod capstone_vm.ko; then'
-                 ' echo VP2_GEOMETRY=UNCAPPED-module-predates-node_max_records;'
+                 ' echo VP2_NODE_CAP=UNCAPPED-module-predates-node_max_records;'
                  ' else echo VIRTUAL_STAGED_DONE; exit 1; fi',
                  "chmod 666 /dev/capstone-vm",
                  # The launcher prints its `capstone-exec: domain fault cause= pc= ... code=` line only
