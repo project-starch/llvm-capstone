@@ -232,8 +232,23 @@ So the board kind is **the same gate script in a board boot instead of a QEMU bo
 markers, `virtualvm.split()` over the board's serial log, the same `observe()`, and `verdicts.py`'s bundle writer
 producing a verdicts-v1 bundle for a new arm whose `inputs.json` names the bitstream, the firmware hash and the kit
 identity. Proposed as a board backend for `Batch.execute()` (stage dir → the board lane's bake into the initramfs
-with the module and the launcher → boot → `serial.log`), everything else untouched. The board lane confirms or
-amends this before writing it, and pre-registers the rule with anything the launcher cannot produce on the board.
+with the module and the launcher → boot → `serial.log`), everything else untouched.
+
+**CONFIRMED by the board lane (2026-10-18) with seven amendments, before the backend is written** (`BoardBatch(Batch)`
+whose `execute()` stages into the Tier 1 bake and firmware recipe and drives the baked-rung driver; dry-run end to end
+with the driver stubbed before any board time): (1) the backend reads the batch rung's own segment from the driver's
+per-rung `board.txt`, never the raw capture, because the console replays the previous boot's tail on connect (the
+replay trap, made structural); (2) the stage lives at `/test-domains/<batch>/`, `insmod` is guarded on `/proc/modules`
+(an earlier rung may have loaded the module), the final `rmmod` fails harmlessly on the board kernel; (3) a wedge takes
+the core and the later steps read kind `none` → `infra`, so each boot runs the virtual positive control first, the
+expected-to-return cases, and at most one wedge risk last; (4) the gate script carries a heartbeat no `observe()` reads,
+since the driver ends a rung after `BAKED_IDLE_S` of silence; (5) each boot is the clean base plus the batch under the
+declared 26,000,000-byte cap, the plan computed from the actual compressed sizes, a bundle group over several boots
+each repeating the positive control; (6) a pre-HELLO fault reads `entry=unknown` on BOTH machines (the launcher prints
+`code=lo-hi` only after the domain's HELLO, `runtime/linux/delegate-service.c:977-984`, and `verdicts.FAULT_LINE`
+requires `code=`), so such a NO-READING is the launcher's limit, not the board's; (7) `inputs.json` names the
+bitstream, the fw_payload and Image sha256, the module and launcher hashes, and writes the `qemu` key as
+`board:<bitstream>` so the arm cannot be read as an emulator run. Cycle and time readings are not cell fields.
 
 ## The work, by owner
 
