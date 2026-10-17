@@ -488,7 +488,8 @@ unmoved and the physical profile is intact: the Sublet and S-16 subsets identica
 every image built for d93a8d66b runs.
 
 Predictions (refutation keys in brackets), written before the build:
-- Routed WNS within the noise band of vp1's reading (VP1WNS; the band is several ns). The compress_bounds path still
+- Routed WNS within the noise band of vp1's reading once it lands, and of d93a8d66b's -15.856 until then (the band is several
+  ns; vp1 has not been built at this writing). The compress_bounds path still
   sets the slack. Two new cones are candidates to take it over, both registered on both sides and in no loop: (a)
   Q-15's round trip in ex_stage, a second compress_bounds + decompress_bounds instance from a 64-bit add, latched
   with the DYN request and judged one cycle later; (b) the rev-node unit's retire path, a 30-bit compare against
