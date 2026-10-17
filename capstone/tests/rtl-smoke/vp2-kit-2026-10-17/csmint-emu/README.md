@@ -279,3 +279,51 @@ the decode, the flush and the window.
 - the monitor's own `_cap_trap_entry` around the hook (capstone-sbi cb91d7d, behind `CAPSTONE_VP2_CSMINT`). It
   assembles, and with the flag off it is byte-identical to 234ee66; vp2 exercises it;
 - the mtval-0 fetch path on a decoder that leaves mtval 0.
+
+## va-csmint-entry.S: the path through the monitor's OWN trap entry, pre-registered (2026-10-17, before any run)
+
+**Why a third arm.** The runtime lane's next step: "only vp2 exercises it" should not stay true of
+`_cap_trap_entry`. This arm `#include`s capstone-sbi's `sbi_capstone.S` itself, with `CAPSTONE_TARGET_FPGA` and
+`CAPSTONE_VP2_CSMINT` defined, and that file includes `capstone_csmint.S`. mtvec points at its `_cap_trap_entry`, so
+the shipped entry runs:
+- the CSCRATCH swap and the GPR save;
+- `ldc(gp)`;
+- `movc(a0, sp)` and the call to `save_smode_context`;
+- the ecall dispatch and its CEPC + 4;
+- `_handle_non_ecall`'s CSMINT hook;
+- `_handle_branch_1` and `return_to_sumode`.
+The disassembly shows the hook as written: `li t1, 2; bne; movc; cincoffsetimm 16; jal csmint_dispatch; bnez ->
+_handle_branch_1`.
+
+**Pinned: caplifive-sbi `vp2/csmint-emu` cb91d7d.** Check each file's sha256 before building:
+
+| file | sha256 |
+|---|---|
+| `sbi_capstone.S` | 1cdc41d16551a168617fa1702d37bf8c52c847c744ca4160efac04246123ba5a |
+| `sbi_capstone.h` | 2c6f6bcab4ce180ee642382228ad52fb171bdb3840370bfad3f794cdba5dded1 |
+| `capstone_target.h` | 66b051f5f23fb024eef7086286a065cb3e6f24f340705b90f854129a86c31259 |
+| `capstone_csmint.S` | 77c5f13019379cdfff2f290647331fdd279b7e69115a51386c77fecd4bf7650f |
+
+Build with `-I<capstone-sbi at cb91d7d>`. The include comes last in the arm's text, because `sbi_capstone.h` redefines
+LDC, STC (with the operand order swapped), MOVC and CCSRRW for the monitor's own code.
+
+**What the arm supplies in place of monitor state, line by line. This is what only the vp2 boot proves.**
+- The four C functions the entry calls are asm stubs:
+  - `save_smode_context` returns;
+  - `handle_trap_ecall` is the arm's row reporter plus the three table edits;
+  - `handle_exception` prints 0xbad2 and the cause, then spins, so no CSMINT may fall through to it;
+  - `handle_interrupt` prints 0xbad3, then spins.
+  The monitor's real C versions run only on vp2. That includes `handle_exception`'s `time` emulation after the hook's
+  fall-through, and whatever `save_smode_context` records.
+- **The stack.** CSCRATCH holds a NONLIN capability over a 4 KiB stack, cursor at the top, with a capability in the
+  `ldc(gp)` slot at frame - 16.
+  - The monitor's stack capability comes from `SPLIT` at init (`sbi_capstone_init.S`) and `dom_init`. Its type there
+    is not reproduced here.
+  - The entry's own `movc(a0, sp)` followed by further use of sp, which the hook repeats, already runs on silicon at
+    every boot of the current monitor.
+- **The monitor's gp** is that slot's capability here. The monitor's real gp, and the C code that uses it, run only
+  on vp2.
+
+**Readings:** exactly va-csmint-mon's 46 values in the same order, then pass. They are printed by the
+`handle_trap_ecall` stub from S's live a2, a5 and a6. On every ecall the entry overwrites S's a0 and a1 with the SBI
+error/value pair, and S reloads them. Any 0xbad2 or 0xbad3 is a failure.
