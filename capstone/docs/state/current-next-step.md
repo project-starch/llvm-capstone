@@ -1,5 +1,5 @@
-2026-10-17: **THE VIRTUAL PROFILE'S TWO BITSTREAMS ARE HANDED OFF AND WAIT ON THE LEAD'S OWN GO TO THE SYNTH LANE; neither
-has started.** vp1 = capstone-ariane `virtual-profile` 9ed9a2594 (item B translation, Q-17, R-56, Q-19), handed off 2026-10-17
+2026-10-17: **THE VIRTUAL PROFILE'S TWO BITSTREAMS ARE IN SYNTHESIS, in parallel, since 03:23 UTC on 2026-10-18 on the lead's
+direct go in the synth lane's session ("go both"); the seals are expected 2.5-3.5 h later, vp2 possibly longer.** vp1 = capstone-ariane `virtual-profile` 9ed9a2594 (item B translation, Q-17, R-56, Q-19), handed off 2026-10-17
 with its gates and pre-registration (`caplifive_vp1_9ed9a2594.bit`). vp2 = `virtual-profile-2-d` at bf3db3175 (the tip
 b339f9b0b adds tests and tools only): item A's flat per-context lifetime table, item D's CSRUNV with the frame as the one
 saved context's storage, kinds 1-5 and FP state per context, CSRETIRE in hardware and CSNODE for the monitor's CSMINT
@@ -9,8 +9,9 @@ Gates on bf3db3175: lint at baseline by name, the 95-test sweep 92 / 0 / 3, the 
 quantum-timed tests moved by the flush's cycles (attributed by a matched pair); every virtual-profile arm as pre-registered;
 the board lane's monitor-path arms (the shipped `_cap_trap_entry` around `capstone_csmint.S`) read all 46 values. The
 pre-registration is on dev (e2f230533063, the plan doc's "Synthesis of virtual-profile-2-d bf3db3175"); the synth lane
-has recorded it. **What the lead must do: give the synth lane the go for vp1 in the synth lane's own session, then vp2's;**
-the flash of each waits on the board lane's controls and the lead's own word to the board lane. The RTL lane's next work
+has recorded it and grades vp1 against its amended pre-registration and vp2 against the dev section, with vp1's reading
+as vp2's band once vp1 seals. **The flash of each waits on the board lane's controls and the lead's own word to the board
+lane.** The RTL lane's next work
 is reading both synthesis reports against their pre-registrations; the deferred follow-ups (the paged table, 32 contexts)
 start only if acceptance needs them. The Q-entries for the recorded divergences (the table barrier, the emulation window's
 rules, CSRETIRE's answers without a read, the 256-id reserve per context allocation, the item-E refusal of a domain's
