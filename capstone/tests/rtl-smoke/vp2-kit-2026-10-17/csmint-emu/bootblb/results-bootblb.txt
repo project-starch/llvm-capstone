@@ -1,0 +1,180 @@
+# Boot BLb, 2026-10-18, on the resident caplifive_vp2_bf3db3175 (no flash). Pre-registered at lane vp2-tier12 07a286231cdc.
+# Arm B: fw 2a0850a406d1229c (wrapper 1269c77's tree + capstone-sbi dafe4f2, flag off, BL's Image ae58cf97765442da).
+# Arm A: fw 1b44a465d96753b2 (boot P's own firmware), run because B differed. Judged by bootblb/judge-blb.py.
+# Arm C: fw 4dca1649894c6f15 (boot P's monitor padded to arm B's code placement; bootblb/build-fpga-fw-pad.sh).
+# Result lines only; the raw captures are not committed.
+
+## arm B
+  BOOTBLB_B_START 01:24:28 fw 2a0850a406d1229c
+  DRIVER rc=0 01:37:30; watchdog lines 52
+  JUDGE B vs P rc=1 :: VERDICT DIFFER
+  BOOTBLB_B_DONE 01:37:30
+  -- judge-vs-P
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138320 ms vs 138315: +0.00 % within 0.5 %
+    TIME bm_fib 45658 ms vs 45514: +0.32 % within 0.5 %
+    TIME bm_so_lists 2444 ms vs 2458: -0.57 % OUTSIDE 0.5 %
+    TIME bm_so_mandelbrot 30685 ms vs 30708: -0.07 % within 0.5 %
+    TIME bm_ao_render 81854 ms vs 81907: -0.06 % within 0.5 %
+    monitor tags: none
+    VERDICT DIFFER
+  launch ticks (exploratory; s at 12.5 MHz): total 1.64 domain 0.36 regions 0.43; total 1.31 domain 0.19 regions 0.33; total 35.11 domain 22.95 regions 9.13; total 14.28 domain 2.17 regions 9.15
+
+## arm A
+  BOOTBLB_A_START 01:37:56 fw 1b44a465d96753b2
+  DRIVER rc=0 01:50:59; watchdog lines 52
+  JUDGE A vs P rc=0 :: VERDICT PASS
+  JUDGE B vs A rc=1 :: VERDICT DIFFER
+  BOOTBLB_A_DONE 01:50:59
+  -- judge-vs-P
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138338 ms vs 138315: +0.02 % within 0.5 %
+    TIME bm_fib 45491 ms vs 45514: -0.05 % within 0.5 %
+    TIME bm_so_lists 2458 ms vs 2458: +0.00 % within 0.5 %
+    TIME bm_so_mandelbrot 30685 ms vs 30708: -0.07 % within 0.5 %
+    TIME bm_ao_render 81881 ms vs 81907: -0.03 % within 0.5 %
+    monitor tags: none
+    VERDICT PASS
+  -- judge-B-vs-A
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138320 ms vs 138338: -0.01 % within 0.5 %
+    TIME bm_fib 45658 ms vs 45491: +0.37 % within 0.5 %
+    TIME bm_so_lists 2444 ms vs 2458: -0.57 % OUTSIDE 0.5 %
+    TIME bm_so_mandelbrot 30685 ms vs 30685: +0.00 % within 0.5 %
+    TIME bm_ao_render 81854 ms vs 81881: -0.03 % within 0.5 %
+    monitor tags: none
+    VERDICT DIFFER
+  launch ticks (exploratory; s at 12.5 MHz): total 1.63 domain 0.35 regions 0.43; total 1.32 domain 0.19 regions 0.33; total 34.80 domain 22.64 regions 9.12; total 14.30 domain 2.18 regions 9.17
+
+## arm B2
+  BOOTBLB_B2_START 01:52:51 fw 2a0850a406d1229c
+  DRIVER rc=0 02:05:56; watchdog lines 52
+  JUDGE B2 vs P rc=1 :: VERDICT DIFFER
+  BOOTBLB_B2_DONE 02:05:56
+  -- judge-vs-P
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138290 ms vs 138315: -0.02 % within 0.5 %
+    TIME bm_fib 45639 ms vs 45514: +0.27 % within 0.5 %
+    TIME bm_so_lists 2445 ms vs 2458: -0.53 % OUTSIDE 0.5 %
+    TIME bm_so_mandelbrot 30674 ms vs 30708: -0.11 % within 0.5 %
+    TIME bm_ao_render 81892 ms vs 81907: -0.02 % within 0.5 %
+    monitor tags: none
+    VERDICT DIFFER
+  launch ticks (exploratory; s at 12.5 MHz): total 1.64 domain 0.36 regions 0.43; total 1.32 domain 0.18 regions 0.33; total 35.09 domain 22.94 regions 9.12; total 14.30 domain 2.17 regions 9.16
+
+## arm A2
+  BOOTBLB_A2_START 02:05:56 fw 1b44a465d96753b2
+  DRIVER rc=0 02:19:00; watchdog lines 52
+  JUDGE A2 vs P rc=0 :: VERDICT PASS
+  JUDGE B2 vs A2 rc=1 :: VERDICT DIFFER
+  BOOTBLB_A2_DONE 02:19:00
+  -- judge-vs-P
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138304 ms vs 138315: -0.01 % within 0.5 %
+    TIME bm_fib 45512 ms vs 45514: -0.00 % within 0.5 %
+    TIME bm_so_lists 2469 ms vs 2458: +0.45 % within 0.5 %
+    TIME bm_so_mandelbrot 30668 ms vs 30708: -0.13 % within 0.5 %
+    TIME bm_ao_render 81870 ms vs 81907: -0.05 % within 0.5 %
+    monitor tags: none
+    VERDICT PASS
+  -- judge-B-vs-A
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138290 ms vs 138304: -0.01 % within 0.5 %
+    TIME bm_fib 45639 ms vs 45512: +0.28 % within 0.5 %
+    TIME bm_so_lists 2445 ms vs 2469: -0.97 % OUTSIDE 0.5 %
+    TIME bm_so_mandelbrot 30674 ms vs 30668: +0.02 % within 0.5 %
+    TIME bm_ao_render 81892 ms vs 81870: +0.03 % within 0.5 %
+    monitor tags: none
+    VERDICT DIFFER
+  launch ticks (exploratory; s at 12.5 MHz): total 1.63 domain 0.35 regions 0.44; total 1.31 domain 0.19 regions 0.33; total 35.13 domain 22.98 regions 9.12; total 14.28 domain 2.17 regions 9.16
+
+## arm C
+  BOOTBLB_C_START 02:25:58 fw 4dca1649894c6f15
+  DRIVER rc=0 02:39:01; watchdog lines 52
+  JUDGE C vs P rc=1 :: VERDICT DIFFER
+  JUDGE C vs B rc=1 :: VERDICT DIFFER
+  JUDGE C vs B2 rc=1 :: VERDICT DIFFER
+  JUDGE C vs A rc=1 :: VERDICT DIFFER
+  JUDGE C vs A2 rc=1 :: VERDICT DIFFER
+  BOOTBLB_C_DONE 02:39:01
+  -- judge-vs-P
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138343 ms vs 138315: +0.02 % within 0.5 %
+    TIME bm_fib 45665 ms vs 45514: +0.33 % within 0.5 %
+    TIME bm_so_lists 2424 ms vs 2458: -1.38 % OUTSIDE 0.5 %
+    TIME bm_so_mandelbrot 30655 ms vs 30708: -0.17 % within 0.5 %
+    TIME bm_ao_render 81828 ms vs 81907: -0.10 % within 0.5 %
+    monitor tags: none
+    VERDICT DIFFER
+  -- judge-vs-B
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138343 ms vs 138320: +0.02 % within 0.5 %
+    TIME bm_fib 45665 ms vs 45658: +0.02 % within 0.5 %
+    TIME bm_so_lists 2424 ms vs 2444: -0.82 % OUTSIDE 0.5 %
+    TIME bm_so_mandelbrot 30655 ms vs 30685: -0.10 % within 0.5 %
+    TIME bm_ao_render 81828 ms vs 81854: -0.03 % within 0.5 %
+    monitor tags: none
+    VERDICT DIFFER
+  -- judge-vs-B2
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138343 ms vs 138290: +0.04 % within 0.5 %
+    TIME bm_fib 45665 ms vs 45639: +0.06 % within 0.5 %
+    TIME bm_so_lists 2424 ms vs 2445: -0.86 % OUTSIDE 0.5 %
+    TIME bm_so_mandelbrot 30655 ms vs 30674: -0.06 % within 0.5 %
+    TIME bm_ao_render 81828 ms vs 81892: -0.08 % within 0.5 %
+    monitor tags: none
+    VERDICT DIFFER
+  -- judge-vs-A
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138343 ms vs 138338: +0.00 % within 0.5 %
+    TIME bm_fib 45665 ms vs 45491: +0.38 % within 0.5 %
+    TIME bm_so_lists 2424 ms vs 2458: -1.38 % OUTSIDE 0.5 %
+    TIME bm_so_mandelbrot 30655 ms vs 30685: -0.10 % within 0.5 %
+    TIME bm_ao_render 81828 ms vs 81881: -0.06 % within 0.5 %
+    monitor tags: none
+    VERDICT DIFFER
+  -- judge-vs-A2
+    retvals IDENTICAL (10 rungs): {'b0-stats': '0', 'b0-hello': '0', 'b5-hello': '0', 'b5-mruby-e-stats': '0', 'b5-mruby-stdin-stats': '0', 'b5-mruby-bench': '0', 'r54-bounds': '64', 'cw-pool': '0', 'b6-sublet': '0', 'b0-stats2': '0'}
+    mruby b5-mruby-e-stats same 53c234e5e8472b6a (ref 53c234e5e8472b6a)
+    mruby b5-mruby-stdin-stats same 5476dba1f4bd59f1 (ref 5476dba1f4bd59f1)
+    mruby b5-mruby-bench same 8d1539bc79e2b630 (ref 8d1539bc79e2b630)
+    TIME bm_mandel_term 138343 ms vs 138304: +0.03 % within 0.5 %
+    TIME bm_fib 45665 ms vs 45512: +0.34 % within 0.5 %
+    TIME bm_so_lists 2424 ms vs 2469: -1.82 % OUTSIDE 0.5 %
+    TIME bm_so_mandelbrot 30655 ms vs 30668: -0.04 % within 0.5 %
+    TIME bm_ao_render 81828 ms vs 81870: -0.05 % within 0.5 %
+    monitor tags: none
+    VERDICT DIFFER
+  launch ticks (exploratory; s at 12.5 MHz): total 1.63 domain 0.36 regions 0.43; total 1.32 domain 0.19 regions 0.33; total 34.81 domain 22.65 regions 9.14; total 14.28 domain 2.17 regions 9.17
+
+boot P's launch ticks: total 1.64 domain 0.36 regions 0.43; total 1.32 domain 0.19 regions 0.33; total 35.09 domain 22.93 regions 9.12; total 14.29 domain 2.18 regions 9.16
