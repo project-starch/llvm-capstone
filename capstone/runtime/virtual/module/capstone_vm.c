@@ -679,7 +679,32 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         for (j = 0; j < i; ++j) if (pages[i] == pages[j]) goto unpin;
     }
     slot = t->frame + 8 + r->reg * 2;
-    if (slot[0] || slot[1]) goto unpin;
+    /* Q-30: THE FRAME'S REGISTER SLOTS ARE THE CONTEXT'S LIVE STATE, NOT SPARE SPACE.
+     *
+     * This used to refuse a non-empty slot with -EFAULT, which only ever passed on QEMU. On an
+     * escape the RTL writes x1..x31 WITH THEIR TAGS into the frame's own slots and restores the
+     * register file over them (capstone_dom_switcher.anvil:155-161, :513-526 at bf3db3175), so
+     * after a kind-3 service escape +224 holds the context's own a0 -- the size argument of the
+     * MAP it is asking for. QEMU keeps the callee in save_state and leaves the slots at ENTRY's
+     * zero (capstone_supervisor.c:419, :951-958), so the emptiness check was vacuous there.
+     *
+     * vp2's boot 3-T1 is the reading: CAPSTONE_VM_ADD_REFUSED errno=14 on the first reply-slot
+     * LINEAR grant, then cause 24 downstream in mmap's errno store through tp=0. The RTL's frame
+     * is the reference, so the reply OVERWRITES the slot and the RTL zeroes +224 again at the reply
+     * resume (:297, :338-340).
+     *
+     * FALSIFIABLE, and the board lane's line: with the old module no
+     * `ADD_OK ... reg=10 ... linear=1` can follow a kind-3 pause on silicon, because a MAP service
+     * always carries a0 = size != 0. One such line in a transcript refutes this reasoning.
+     *
+     * The emptiness check is KEPT for a pre-start grant, where the slots really are ENTRY's zero
+     * and a non-empty one would mean the launcher wrote somewhere it should not. The guard above
+     * has already restricted a started context to event 3, reg 10 and !reply_cap, so the cleared
+     * branch is only ever the reply. The stores are plain, which untags the granule. */
+    if (t->started) {
+        slot[0] = 0;
+        slot[1] = 0;
+    } else if (slot[0] || slot[1]) goto unpin;
     desc[0] = r->address;
     desc[1] = r->address + r->bytes;
     /* C pointers are copyable, so a non-linear grant is minted NONLIN directly. A linear
@@ -772,7 +797,12 @@ static int remap_end(struct context *c, const struct cv_remap *r)
     mmap_read_unlock(c->mm);
     if (!valid) return -EACCES;
     slot = t->frame + 28;
-    if (slot[0] || slot[1]) return -EFAULT;
+    /* Q-30, the same shape as add(). Unreachable in the FLAT build -- remap_begin returns -EINVAL
+     * when exact_bounds is false -- so this is for the paged build and is written to match rather
+     * than to be exercised here. remap_end only runs on a started context at its heap-grow reply,
+     * so there is no pre-start case to preserve. */
+    slot[0] = 0;
+    slot[1] = 0;
     count = r->bytes / PAGE_SIZE;
     for (unsigned i=0; i<min(count, a->count); ++i) c->remap_pages[i] = a->pages[i];
     /* v7, behaviour-preserving: this slot is the heap's, which is LINEAR, and the old
