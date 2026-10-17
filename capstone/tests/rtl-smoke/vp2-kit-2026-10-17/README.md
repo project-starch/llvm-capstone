@@ -508,7 +508,8 @@ and supervised_invoke, the test in fault_return_from_domain, and the carve in do
 are its evidence.
 
 **The scripts, checked before the boot** (`board-tier12/results/dryrun-tier12-boot2.txt`). The boot runs
-`board-tier12/run-tier1-2.sh 41fb669c9f77462d` on the stage in `board-tier12/stage.SHA256SUMS`. vm-contract's branch
+`board-tier12/run-tier1-2.sh 41fb669c9f77462d` on the stage in `board-tier12/stage.SHA256SUMS`, which from here on is
+boot 2's. Boot 1's manifest, the one its pre-registration above names, is kept as `board-tier12/stage-boot1.SHA256SUMS`. vm-contract's branch
 is read by `board-tier12/vm-contract-branch.py`, and vm-suite by board-check.py as on boot 1.
 - On the record's own serial it reads 41 of 41. With the board's expectation applied, it flags only cleanup, which is
   true on QEMU, as it must be. One altered status (vm-none-read) flips exactly that test.
