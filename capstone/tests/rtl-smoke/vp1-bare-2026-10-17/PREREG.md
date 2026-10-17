@@ -94,3 +94,21 @@ supersedes it for 9ed9a2594.
   - 0: mcause.
   - The header's simulation vector is `0 0 1 0x66 0 0`; the in-domain CAPPRINT compiles out on the board.
 - **The corpus set 7 gate now counts four arms as pre-registered.** There is no d93a8d66b reading of this arm.
+
+**Amended before the run (2026-10-17): s1gap's place in the stop rule.** s1gap's cycle counts vary run to run on
+d93a8d66b itself. It has three runs, 2026-10-16:
+- s1gap-close's k = 3 gap read 0x1d, 0x22, 0x1d;
+- s1gap-far's k = 1 revoke read 0x45, 0x42, 0x43, its k = 2 gap 0xfbc, 0xfbc, 0xfbd, and its k = 4 revoke 0x47, 0x4d,
+  0x47.
+
+So an exact match against the d93a8d66b record would stop the session on noise; the session's own script already said
+"a cycle-count difference is reported, not a defect". The stop rule therefore applies to s1gap's functional readings:
+the four revoke causes, base validity, traps, GAP and the count, and every reading of its control arm. These must be
+identical. The eight cycle counts (positions 0, 1, 3, 4, 6, 7, 9, 10, the test's own layout in
+s1-revoke-gap-2026-10-14/PREREG.md) are reported. The comparator is `cmp-s1gap.py`, tested both ways:
+- d93a8d66b's two repeats pass against its record;
+- a changed GAP reading fails;
+- a missing arm fails;
+- an empty reference is an error.
+
+The S-16 set (98 readings identical across bitstreams) and the Sublet floor keep the exact rule.
