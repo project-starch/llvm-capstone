@@ -82,6 +82,61 @@ next-unused stays inside it, and the module's table size is the one input the ki
 header checks is bit-identical between the two (the three Q-entries carried into vp2: the table barrier, the
 emulation window's rules, CSRETIRE's answers without a read).
 
+## Kit blockers found from the sources before any board time (2026-10-17, evening)
+
+Each of these would have ended vp2's first virtual boot at its first allocation or its first CSR access, and none is
+visible on the QEMU prediction kit, which implements what the module assumes. All are the compiler lane's, in the
+module, behind one parameter (`node_table_flat`, default off so the paged kit is unchanged and the record tells
+them apart), regressed on QEMU with the parameter on and off (run.py 41/41, bundle 5 13/13; the off arm is the null
+control of the paged path) before any hash reaches the board lane.
+
+1. **The module publishes a PAGED table.** `c->table[0] = CAP_REV_TABLE_FLAGS`, and capstone-qemu d35af47b163c
+   `target/riscv/cap_rev_table_abi.h:13-15` defines `FLAGS = RECYCLE | PAGED`; the table grows by pages
+   (`node_add_page`). vp2 implements only the flat format and refuses a PAGED header with status 3, which reads 29 at
+   the context's first allocation. **Flat mode:** one physically contiguous 1 MiB allocation at context creation
+   (order 8, `__GFP_RETRY_MAYFAIL`; the root is a physical address, QEMU's flat preflight wants the whole
+   `capacity*16` mapped), capacity published as 65,536 from `open()`, no growth path, ids 0 and 1 the header.
+2. **Two paged-only header words sit inside record id 2 in the flat layout.** The module writes MAGIC at root+32
+   (`table[4]`) and reads the RETIRED count at root+40 (`table[5]`, written by QEMU only under `t->paged`,
+   `cap_rev_table.c:177-181`) in its collection heuristic (`capstone_vm.c:392, :401, :864`). In flat mode the first is
+   dropped and the second is kept by the module itself: incremented on each `CSRETIRE` that returned 0, reset at the
+   collection that reclaims the retired records. The RTL publishes no retired count in flat mode (the unit writes only
+   the four header words, `ex_stage.sv:1559-1565`). The collection trigger gets its own two-sided regression row (a
+   workload that collects under the paged module collects under the flat one, counts comparable).
+3. **CSR 0xcc0 (urevavail) does not exist on vp2**: a read is an illegal instruction (`csr_regfile.sv:1079`). QEMU
+   implements it as `capacity − next + free_count` read live (`capstone_table.c:199-205`). The module computes the
+   same from the header words, saturated at 65,536, and never reads the CSR on silicon. Q-21.
+4. **CSR 0x5c0 (scapctl) does not exist on vp2** either (any access traps). On QEMU it is "protected U" (bit 0 PU:
+   U mode outside a context uses the guest table; the read ORs 0x100 when exact bounds are on). The RTL's namespace is a
+   context, S with srevroot ≠ 0, or M with csupctl bit 3; U outside a context never reaches the table. The module
+   must not execute the 0x5c0 access in flat mode, and answers the exact-bounds query with 0. Q-22. Open: whether
+   anything run.py or the corpus runs in U outside a CSRUNV context with capabilities (believed not: the launcher's
+   own code is plain Linux, every domain instruction runs inside the context); the compiler lane answers from the
+   module's lines.
+5. **The module's CSR set on silicon is exactly** srevroot 0x5c1 (S and M RW, 4 KiB aligned, the write flushes the
+   pipeline), satp, and CSRUNV/CSRETIRE/CSNODE as instructions. csupctl/csupquantum are M-only; csupstatus/cause/
+   epc/tval and csnodefree are M-only read-only; an S-mode CSRUNV caller reads the event from rd and the frame (+16
+   kind, +24 cause, +32 pc, +40 addr, reply +224). Control: an objdump of the flat-mode module showing no reachable
+   csrr/csrw of 0x5c0 or 0xcc0, with the paged build as the positive control that the grep finds them.
+
+**The flat layout, confirmed word for word by the RTL lane against QEMU's `table_get`/`table_put`** (not the stale
+comment at `cap_rev_table.h:8-16`): record i at root + 16·i (QEMU `cap_rev_table.c:9-11`; RTL `ex_stage.sv:1555-1556`
+indexes by id[15:0]); word 0 = prev[31:0] | next[63:32]; word 1 = depth[29:0] | parent[59:30] | VALID bit 60 |
+LINEAR bit 61 | FREE bit 62 (the RTL writes parent as 16 bits and depth as 17, exact inside a 65,536-record table); a
+FREE record has word 1 == exactly FREE<<60 and word 0 = the link; header slot 0 = {capacity | RECYCLE<<63, next-unused},
+slot 1 = {free_head | free_count<<32, allocations}. **No RTL arm has ever read a table QEMU's code wrote**: the
+cross-check is the flat-mode module's own table on QEMU, dumped whole (1 MiB) after a run.py run with the
+allocation/retirement sequence, fed by the RTL lane as `.data` into an arm whose readings are QEMU's.
+
+**Tier 3's payload budget (decided by the helper lane under the lead's delegation, 2026-10-17):** a Tier 3 bake may
+total 26,000,000 bytes when every file beyond the clean base is named in the bake manifest with its sha256; the 20 MB
+rule stays for every other boot. The preflight's C10 purpose (no undeclared stale domain) is kept as that manifest
+check. Negative tests recorded with the change: an undeclared file BLOCKS; a declared bake at 26,000,001 bytes
+BLOCKS. Measured by the board lane: a clean firmware is about 17.5 MB, case bundles gzip to 0.7-2.3 MB each, so the
+old rule gave one bundle per boot (about 17 boots); the budget gives 4-5. The gate changes only after vp1's armed
+chain has passed its second preflight. Bundles over the payload are split by case across boots or recorded as not
+stageable at their measured size, never squeezed.
+
 ## Tier 3's comparison rule, settled from the sources (2026-10-17)
 
 The question was whether the board can give the cell comparison QEMU gives (verdict, cause, faulting symbol,
@@ -126,9 +181,11 @@ configuration and the caveat is in the measurements doc); the attribution builds
 |---|---|---|
 | vp1 session | board | armed behind ST100 (chain-vp1.sh, 14:18); vb-trans-plain in the batch (76c8fe446fcd) |
 | vp2 flash + canary + arms + set 7 | board | armed behind vp1 (f05265150556; the lead's word ff4725abd412) |
-| vp2b contingency | RTL | asked 2026-10-17 evening, before the A/B seals |
-| Tier 1/2 board arm | board | asked 2026-10-17 evening; to be pre-registered before vp2's first session |
-| pinned kit + identity + geometry | compiler | asked 2026-10-17 evening |
+| vp2b contingency | RTL | pre-registered before the seals, dev 733ad96033df (lane branch virtual-profile-2-timing) |
+| Tier 1/2 board arm | board | stage, bake recipe, firmware recipe and judge ready in its private tree; HELD on the flat-mode module (kit blockers 1-5); then pre-registered on dev and armed behind vp2's set 7 |
+| flat-mode module (kit blockers 1-5) | compiler | in progress; about a day; regression on QEMU on/off + the collection row before any hash |
+| pinned kit + identity + geometry | compiler | geometry rule in; identity with the flat module's revision |
+| Tier 3 payload budget (26 MB declared) | board | accepted; lands on dev after vp1's second preflight, with both negative tests |
 | 26 bundles rebuilt and re-predicted on the pin | compiler | to do; 20/26 read on the unpinned kit |
 | invocation manifest | compiler | asked 2026-10-17 evening |
 | Tier 3 board backend + boot plan | board | asked 2026-10-17 evening; the comparison rule above to confirm first |
