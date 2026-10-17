@@ -564,9 +564,34 @@ static int ensure_nodes(struct context *c, unsigned long required)
     return node_available(c) >= required ? 0 : -ENOMEM;
 }
 
+/* Q-?? / sparse wedge: an OPTIONAL hardware fence immediately before the domain entry.
+ *
+ * Measured in the built object, not assumed: run() inlines to FOUR CSRUNV sites and not one
+ * of them has a `fence` within the 500 instructions preceding it; the whole module contains
+ * two fence instructions in 4323, neither on this path. The "memory" clobber below is a
+ * COMPILER barrier and emits no instruction, and the local_irq_save ahead of each entry is a
+ * `csrrc sstatus,2`, which does not order memory on RISC-V. On the ENTRY path the last frame
+ * store sits TWO instructions ahead of the entry:
+ *     sd a5,8(a0)     frame[1] = virt_to_phys(table)
+ *     sd s11,56(a5)   frame[7] = 3
+ *     ld a4,40(s2)
+ *     CSRUNV
+ * So if the switcher's RESUME walk can observe the frame before the kernel's stores drain,
+ * nothing here prevents it.
+ *
+ * A module parameter rather than a build flag, deliberately: it makes the hypothesis
+ * two-sided inside ONE boot, which is what the batching rule asks for, instead of spending
+ * two board sessions on two hashes. Default off, so the production path keeps its current
+ * behaviour and the only cost when off is a predictable load-and-branch in front of an entry
+ * that already costs thousands of cycles. */
+static bool fence_before_entry;
+module_param(fence_before_entry, bool, 0444);
+
 static unsigned long run(unsigned long frame, unsigned long action)
 {
     unsigned long result;
+    if (fence_before_entry)
+        asm volatile("fence rw,rw" ::: "memory");
     asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2"
                  : "=&r"(result) : "r"(frame), "r"(action) : "memory");
     return result;
@@ -1023,7 +1048,7 @@ static void pin_ahead(struct context *c, struct arena *a,
  * The prev(...) fields cost nothing -- they are already on the thread for the -ELOOP
  * bound -- and they carry the discriminator: prev addr == this addr with prev cause 13,
  * and cause 15 here, is the read-then-write COW signature that is the hypothesis. */
-#define CV_DIAG_TAG "resolve-sites-2"
+#define CV_DIAG_TAG "resolve-sites-3"
 #define CV_RESOLVE_FAIL(site, fmt, ...)                                            \
     pr_warn("capstone_vm: resolve refused at %s: addr 0x%lx cause %lu need 0x%lx "  \
             "pc 0x%lx prev(addr 0x%lx cause %lu rep %u) " fmt "\n",                 \
