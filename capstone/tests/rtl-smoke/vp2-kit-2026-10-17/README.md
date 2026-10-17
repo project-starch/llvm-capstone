@@ -418,3 +418,106 @@ vm-contract (Tier 1), then vm-suite (Tier 2, run.py's steps; the longest, last).
   a duplicated segment.
 - The boot script was dry-run with only the driver stubbed. A clean transcript, the layout branch, and no transcript
   each produce the predicted lines.
+
+## Pre-registered again (2026-10-18, before boot 2): Tier 1/2 on vp2 with CSMINT v7, the v7 module and the monitor's S-trap injection
+
+Boot 1 (results/board-vp2-tier12-1.result-lines.txt) wedged in vm-contract. The module's `ldc` on an integer base was
+refused by the RTL with cause 24 (Q-23). The monitor then wedged, because it had no path to hand an S-origin trap to
+the kernel (Q-24). Both are addressed, and nothing else changes: same bitstream, rungs, judge and stage layout.
+
+**What changed since boot 1:**
+- **The module:** the v7 board adapter at runtime 179686bcf198, the compiler lane's kit. It is built by build-kit.sh
+  KIT_FLAT=1 inside the kit, and a second build in another directory gives the same hash.
+  - Since 2f15ed14b4f6 only two files changed: capstone_vm.c gained the node_flat_records parameter (default and
+    maximum 65,536), and a tests README.
+  - `capstone_vm.ko` ed24f827b5beb373. My reading of it: vermagic 6.4.14, no 16-bit instructions, no ldc or stc, and
+    no csrr of 0x5c0 or 0xcc0. The controls fire: boot 1's 0d62a1bcdeecc13f reads 2 ldc and 2 stc, and the paged QEMU
+    module 69a7016b reads one of each csrr.
+  - Its custom instructions are all register-form: run (0x24) x4, CSMINT (0x50) x2, csretire (0x53) x2.
+  - `capstone-vexec` b27afefc09c6cae6 and `capstone-job` c501da210412e23e are boot 1's bytes.
+  - The kit loads the parameter unset. The geometry comes from the stats line (a readback of the live table header),
+    not from the invocation: node_bytes 1048576, node_capacity 65536.
+- **The prediction:** run.py's record at 179686bcf198 on QEMU virtual-capstone-v7 f2f15f8fc70c, the tightened QEMU:
+  trusted S makes no capability memory access.
+  - The record is the kit's `out/result-flat-179686bc.json` (serial `tmp/virtual-app.a9a4el5a/serial.log`; the compiler
+    lane's pre-registration 189b170683ca): the flat arm reads PASS 41 / 41 with 22 VM_EXIT lines. The paged arm is the
+    null control.
+  - It is re-run rather than carried over from 2f15ed14b4f6: the parameter sits outside the flat #ifdef, so both
+    arms' modules changed.
+  - It runs the board's bytes: contract.dom bf433e107032fa8a and mruby 5fee8d8f604229ea (both boot 1's), and
+    sqlite3.dom a4b2c0f05809f433. sqlite3.dom does not reproduce across builds, so it is staged by its sha256.
+  - From boot 1's stage two files change: capstone_vm.ko and sqlite3.dom.
+- **The monitor:** capstone-sbi vp2/tier1-monitor 1e9451a, which merges two lines:
+  - the S-trap injection with its review fixes (vp2/os-trap-inject f8bfde5: NODM on the FPGA host only, the INJL
+    loop guard) and ccf9afc, which makes the domain-call counter and swap_cpmp's return value FPGA-only. The QEMU monitor
+    is then byte-identical to capstone-bootstrap c3293b3, and the FPGA output is byte-identical to f8bfde5's;
+  - the v7 routine, gated to CSMINT from S (vp2/csmint-v7 67ed67f).
+  - Its base is capstone-bootstrap c3293b3, whose tree equals boot 1's monitor cb91d7d (`git diff cb91d7d c3293b3`
+    is empty). From boot 1 the monitor changes in three files, +239/−20: sbi_capstone.c, sbi_capstone.S and
+    capstone_csmint.S. The wrapper (1269c77) and the defines are boot 1's.
+  - Pinned: sbi_capstone.c c8172e5abc09687e…, sbi_capstone.S 7b23b6a67540fd45…, capstone_csmint.S 4600d04680158edf…,
+    sbi_capstone.h 2c6f6bcab4ce180e…. Each was checked in the firmware build's extracted source.
+  - The injection is validated on the RTL in two runs. The first (osinject/results/rtl-bf3db3175.result-lines.txt)
+    read 14 of 14 as pre-registered, with the control failing as predicted. Revision 2 adds the U-CSMINT row on
+    fba7812's files: 23 of 23 as predicted, the control as predicted
+    (osinject/results/rtl-bf3db3175-rev2.result-lines.txt, lane f077f70d1e57).
+  - The v7 routine is validated by va-csmint-mon (81/81 on v7) and by va-csmint-entry v7 on fba7812:
+    mon's 81 values at the entry arm's layout (csmint-emu/results/rtl-bf3db3175-v7-entry.result-lines.txt, lane
+    f077f70d1e57).
+- **The firmware:** BL's recipe + CAPSTONE_VP2_CSMINT on that monitor (FW_MON=/tmp/capstone/csbi-t1mon).
+  - The pre-bake check build is fw_payload ae517ef354830e70, gate 25712/32768. It is the same hash from fba7812 and
+    from 1e9451a, so the RTL arms run on fba7812's files hold for 1e9451a.
+  - The baked payload, with the v7 module in its initramfs, is fw_payload 41fb669c9f77462d (19,565,064 B; Image
+    2e7c65b3df7d76d7), gate PASS (25712 of 32768 B). csmint_dispatch and _inject_s_trap are in its ELF.
+  - The bake checked by hash that the private initramfs carries all 14 staged files, and that the restored
+    shared image carries none. The shared buildroot is d04bd83b13cd, its HEAD since 2026-10-16 04:22 by the
+    reflog, so boot 1's too.
+  - The standalone preflight reads exactly as it did for boot 1. The DTS-against-bitstream, single-FDT and
+    20 MB checks pass; its overlay checks do not apply to a private image.
+- **The drivers:** they classify the injection tags (lane 0b8813639710). An EXCX or ILLX followed by INJS is a trap
+  handed to the kernel, not a monitor spin, and NODM and INJL are monitor stops.
+
+**Predictions** (rungs as boot 1: b0-stats, b0-hello, vm-contract, vm-suite):
+- b0-stats, b0-hello: 0, as on boot 1 (results/board-vp2-tier12-1.result-lines.txt).
+- vm-contract, the identity branch: `ok` prints VIRTUAL_APPLICATION_OK and exits 0; `stale` is denied with cause 25,
+  exit 139. This is the reading that the run is virtual. Two other branches are written down:
+  - 29 at contract.dom's first allocation, before VIRTUAL_APPLICATION_OK: header or layout, kit side. It goes to the
+    RTL lane with the table dump.
+  - 24 from S: a remaining integer-based access, which the module's 0-ldc/stc gate says cannot exist. Its address
+    names the instruction.
+  - With the injection, a 24 or any other unhandled trap from S no longer wedges. The monitor prints INJS after its
+    EXCX report, and the kernel takes the trap: an oops, or a signal to the process. If the kernel survives,
+    vm-contract.sh returns a 92x retval (921-925, its header) and the boot reaches vm-suite, whose reading after such
+    a failure is reported, not judged. If the oops hangs the kernel, the oops text is the reading. Either way the
+    driver classifies the rung as injected-trap, not as a monitor spin.
+  - NODM or INJL: the monitor's own stop. NODM means a domain fault return with no domain call outstanding; INJL
+    means S's stvec is the faulting pc. The core is lost and later rungs are collateral.
+- vm-suite: 22 steps with the record's statuses, except cleanup (no module unload on the board kernel).
+  board-check.py with run.py's analysis block (run.py d03ea74cc714f17a, unchanged since boot 1) must read
+  40 of 41 true, with cleanup the only false one.
+- A reading that differs from the record is reported with both values, and goes to the RTL lane before anything
+  is called silicon.
+
+**The injection's M-path half** (a classic domain's fault still returns its code) is not a board rung. On this
+silicon a classic domain fault wedges today (s1-sqlite-silicon-2026-10-16: sbp1 and sbp2 at cause 25, sbp6 at 28),
+so no board run can show the return. The patch's only M-path change is the NODM stop when no domain call is
+outstanding. The compiled monitor brackets 8 of 8 domain calls. In capstone-c's FPGA output at 1e9451a (BL's
+defines + CAPSTONE_VP2_CSMINT), the counter at gp+208 has 34 references: an increment and a decrement around each call
+in call_domain, call_domain_with_cap, schedule_domain, share_child_region, share_region (two), shared_region_annotated
+and supervised_invoke, the test in fault_return_from_domain, and the carve in dom_init. That and the RTL lane's review
+are its evidence.
+
+**The scripts, checked before the boot** (`board-tier12/results/dryrun-tier12-boot2.txt`). The boot runs
+`board-tier12/run-tier1-2.sh 41fb669c9f77462d` on the stage in `board-tier12/stage.SHA256SUMS`. vm-contract's branch
+is read by `board-tier12/vm-contract-branch.py`, and vm-suite by board-check.py as on boot 1.
+- On the record's own serial it reads 41 of 41. With the board's expectation applied, it flags only cleanup, which is
+  true on QEMU, as it must be. One altered status (vm-none-read) flips exactly that test.
+- Wrapped in the driver's framing, with cleanup failing as the board kernel makes it fail, the serial reads 40 of 41,
+  with cleanup the only false test.
+- run-tier1-2.sh ran with every pin real (firmware, stage, run.py, llvm-nm, driver) and only the driver stubbed. A clean
+  transcript, an injected trap and a NODM stop each produce their predicted lines.
+- The gates refuse before the driver starts:
+  - an unfilled placeholder;
+  - a wrong firmware, driver or run.py hash;
+  - an existing output directory;
+  - an llvm dir without llvm-nm. The first version checked for llvm-objdump, and the dry run caught it.

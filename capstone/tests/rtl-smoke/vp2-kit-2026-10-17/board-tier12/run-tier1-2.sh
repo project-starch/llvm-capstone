@@ -5,9 +5,9 @@
 # monitor-stop branches, and the pins below are boot 2's.
 # Usage: run-tier1-2.sh <firmware sha256/16 as pre-registered>. T1_* variables are for the stubbed dry run only.
 # Filled in when the compiler lane's module arrives (STOP while any is still a placeholder):
-RUNPY=/tmp/capstone/tier1/run-RUNPY_REV.py      # run.py at the module's revision
-RUNPY_SHA=RUNPY_SHA16                           # its sha256/16
-LLVM_BIN=LLVM_BIN_DIR                           # the llvm-nm run.py (in board-check.py) reads the .dom with
+RUNPY=/tmp/capstone/tier1/run-179686bcf198.py  # run.py at the module's revision (git show 179686bcf198:capstone/runtime/virtual/run.py)
+RUNPY_SHA=d03ea74cc714f17a                      # its sha256/16 (byte-identical to boot 1's c14933904de4 copy)
+LLVM_BIN=/tmp/capstone/llvm-dev-current-20261017/bin  # the kit's compiler (85b1dadd); its llvm-nm is what run.py (in board-check.py) reads the .dom with
 DRV_DIR=/tmp/capstone/wt-gate/capstone/tests/rtl-smoke
 DRV_SHA=4ae259caae50b35d                        # sha256/16 of the lane's run_baked_rungs_fpga.py (lane 0b8813639710)
 main() {

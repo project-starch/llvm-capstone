@@ -22,3 +22,12 @@ run.py hash wrong                                STOP: run.py is not the module 
 output directory exists                          STOP: ... exists; a run writes a fresh directory
 llvm dir without llvm-nm                         STOP: no llvm-nm (the first version checked for llvm-objdump, which
                                                  run.py does not use and the v6 dir lacks; caught by this dry run)
+## with the real pins (2026-10-18 00:37): the 179686bc record, firmware 41fb669c9f77462d, the re-staged stage
+judge, the record's QEMU serial (tmp/virtual-app.a9a4el5a/serial.log)     rc=0  41 of 41 true
+judge, the same serial with EXPECT_FALSE=cleanup                         rc=1  41 of 41 true; off: cleanup (true on QEMU)
+judge, the serial with vm-none-read altered                              rc=1  40 of 41 true; off: vm-none-read
+judge, the serial in board framing, cleanup failing, EXPECT_FALSE=cleanup rc=0  40 of 41 true
+run-tier1-2.sh, every pin real, driver stubbed:
+clean transcript      every RUNG AS-ORACLE; BRANCH identity; VM-SUITE board-check rc=0 (40 of 41)
+injected transcript   vm-contract 922 NOT-AS-ORACLE; BRANCH injected; vm-suite AS-ORACLE
+NODM transcript       vm-contract and vm-suite NONE; BRANCH monitor-stop [no END marker]; VM-SUITE NO DATA (rc 2)
