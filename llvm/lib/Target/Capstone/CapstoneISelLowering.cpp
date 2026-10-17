@@ -131,6 +131,20 @@ static cl::opt<bool> CapstoneMemOpsViaLibcall(
              "library implementations, which carry the untagged-ldc/stc high-half fix"),
     cl::init(false));
 
+// C-81 prototype: decline ONLY the copies that would otherwise be expanded into
+// tag-stripping scalar chunks -- 16 bytes or more with alignment not provably 16 -- instead of
+// declining every mem* op the way -memops-via-libcall does. The wholesale flag above breaks a
+// real domain (mruby, cause 24 inside memcpy before any case code), but that is evidence about
+// routing EVERYTHING through libcalls; this narrows it to the sites the defect actually needs.
+// Pre-registered predictions and the void gate:
+// capstone/tests/compiler-repros/C81-memcpy-unprovable-alignment-strips-tags/
+//     PREREGISTRATION-narrow-libcall.md
+static cl::opt<bool> CapstoneNarrowLibcallC81(
+    DEBUG_TYPE "-narrow-libcall-c81", cl::Hidden,
+    cl::desc("C-81 prototype: emit a libcall for a memcpy of >=16 bytes whose operands are not "
+             "provably 16-aligned, instead of scalar chunks that strip tags"),
+    cl::init(false));
+
 // Defined in CapstoneSelectionDAGInfo.cpp, where the emission lives.
 extern cl::opt<bool> CapstoneMemcpyHighHalfFixup;
 
@@ -25863,6 +25877,20 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
       EffAlign = std::min<uint64_t>(EffAlign, Op.getDstAlign().value());
     if (EffAlign == 0)
       EffAlign = 1;
+    // C-81 prototype. Everything below this point copies a whole granule or more through scalar
+    // units, and a scalar store cannot carry a tag, so a capability in the range arrives
+    // untagged. Decline instead, which makes the caller emit a libcall into musl's memcpy, whose
+    // run-time alignment check copies a 16-aligned granule as a capability.
+    //
+    // `Limit != ~0U` IS LOAD-BEARING, not defensive. For a forced-inline copy
+    // (llvm.memcpy.inline) Limit is ~0U (SelectionDAG.cpp, `Limit = AlwaysInline ? ~0U : ...`),
+    // and returning false for one is a documented SILENT MISCOMPILE here: getMemcpy retries with
+    // AlwaysInline, that returns null too, and the null SDValue destroys the DAG root -- the copy,
+    // the following stores, the stack teardown AND the return all vanish, exit code 0, no
+    // diagnostic. So a forced-inline copy keeps its tag-stripping expansion under this prototype;
+    // that case is C-78's recorded residual and needs a different fix.
+    if (CapstoneNarrowLibcallC81 && Limit != ~0U && Op.size() >= 16 && EffAlign < 16)
+      return false;
     uint64_t Unit = 8; // never i128 on this path; cap the scalar unit at XLen
     while (Unit > 1 && (EffAlign % Unit) != 0)
       Unit /= 2;
