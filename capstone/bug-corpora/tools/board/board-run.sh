@@ -15,8 +15,13 @@ main() {
   set -u
   local STAGE=${1:?stage dir} W=${2:?work dir} TO=${3:?timeout s}
   local KIT; KIT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  # Exported, not just set: bake-manifest.sh is a child process and reads BAKE_REPLACE_KO (and BOARD_BUILDROOT etc.).
+  # The first smoke boot sourced it unexported, so the replacement of /capstone.ko silently did not happen and the
+  # board control read 901 ("a module without the process ABI is already loaded").
+  set -a
   # shellcheck disable=SC1091
-  source "$KIT/board.env" || { echo "STOP: no board.env in $KIT"; return 2; }
+  source "$KIT/board.env" || { set +a; echo "STOP: no board.env in $KIT"; return 2; }
+  set +a
   local v
   for v in BOARD_BITSTREAM BOARD_BASE_MANIFEST BOARD_FW_RECIPE BOARD_FW_WRAP BOARD_FW_MON BOARD_MONITOR_COMMIT \
            BOARD_FW_DEFINES BOARD_FW_CAP BOARD_DRIVER_DIR BOARD_DRIVER_SHA; do

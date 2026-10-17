@@ -49,12 +49,18 @@ main() {
   flock -w 7200 "$LOCK" bash -c 'cd "$1" && nice -n 10 ionice -c3 make TARGET=fpga build LINUX_PAYLOAD=1 A=linux-rebuild CAPSTONE_CC_PATH="$2"' \
     _ "$FB" "$CC" > "$OUT/bake-run.log" 2>&1 || { echo "STOP: bake failed"; tail -5 "$OUT/bake-run.log"; return 1; }
   check_cpio "$FB" "$OUT" present
+  if [ -n "${BAKE_REPLACE_KO:-}" ]; then  # the replaced /capstone.ko, by hash, as the vp2 Tier 1 bake checked it
+    check_ko "$FB" "$OUT" "$(sha256sum "$BAKE_REPLACE_KO" | cut -d' ' -f1)" replaced
+  fi
   cp "$FB/build-fpga/images/Image" "$FB/build-fpga/images/caplifive.dtb" "$OUT/"
   echo "$(date +%T) saved Image $(sha256sum "$OUT/Image" | cut -c1-16) dtb $(sha256sum "$OUT/caplifive.dtb" | cut -c1-16)"
   restore_files "$FB" "$OUT"; trap - EXIT
   flock -w 7200 "$LOCK" bash -c 'cd "$1" && nice -n 10 ionice -c3 make TARGET=fpga build LINUX_PAYLOAD=1 A=linux-rebuild CAPSTONE_CC_PATH="$2"' \
     _ "$FB" "$CC" > "$OUT/bake-restore.log" 2>&1 || { echo "STOP: RESTORE BAKE FAILED -- the shared image still carries the staged files"; return 1; }
   check_cpio "$FB" "$OUT" absent
+  if [ -f "$OUT/capstone.ko.stock" ]; then
+    check_ko "$FB" "$OUT" "$(sha256sum "$OUT/capstone.ko.stock" | cut -d' ' -f1)" stock
+  fi
   echo "$(date +%T) shared image restored; BAKE_DONE"
 }
 restore_files() {  # <buildroot> <out>: remove exactly the manifest's files; put the stock /capstone.ko back
@@ -75,5 +81,13 @@ check_cpio() {  # <buildroot> <out> present|absent: hash each manifest file insi
   rm -rf "${X:?}"
   [ $n -gt 0 ] && [ $bad -eq 0 ] || { echo "STOP: CPIO CHECK FAILED ($want): $bad of $n"; return 1; }
   echo "  cpio: all $n manifest files $want"
+}
+check_ko() {  # <buildroot> <out> <want sha256> <label>: the initramfs's /capstone.ko must hash to <want>
+  local FB=$1 OUT=$2 want=$3 X=$2/cpio-ko got
+  rm -rf "${X:?}"; mkdir -p "$X"
+  (cd "$X" && cpio -idm --quiet --no-absolute-filenames capstone.ko < "$FB/build-fpga/images/rootfs.cpio") 2>/dev/null || true
+  got=$(sha256sum "$X/capstone.ko" 2>/dev/null | cut -d' ' -f1); rm -rf "${X:?}"
+  [ "$got" = "$want" ] || { echo "STOP: cpio /capstone.ko is ${got:-absent}, not the $4 module $want"; return 1; }
+  echo "  cpio /capstone.ko: the $4 module"
 }
 main "$@"; exit $?

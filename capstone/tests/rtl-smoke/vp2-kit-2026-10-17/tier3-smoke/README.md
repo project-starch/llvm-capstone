@@ -27,3 +27,20 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
   - a step read from outside the batch segment;
   - a firmware or kernel hash absent from the recipe's record.
 - **What would show a silicon divergence:** a different cause or exit, named with its fault line.
+
+## Result, first smoke boot (2026-10-18 07:23-07:42): VOID, a backend defect found and fixed
+
+- **The recipe ran:** a bake of 10 files (checked present, then absent, by hash), firmware 86b21d9f7ebd674e
+  (17.5 MB, under the 26 MB cap), and the driver.
+- **The board control failed:** b0-stats read **901**, "B0: a module without the process ABI is already loaded and
+  cannot be unloaded". The image still carried the stock /capstone.ko.
+  - **Cause, in the recipe:** board-run.sh sourced board.env without exporting it, so BAKE_REPLACE_KO never reached
+    bake-manifest.sh, a child process. The replacement silently did not happen.
+  - bake-manifest.sh did not check the replaced module by hash, which would have caught it at bake time. The vp2
+    Tier 1 bake did check it.
+- **The batch then hung in its first step** (control-bounds-malloc: 13 minutes of heartbeats, where QEMU faults it
+  with cause 28 in seconds). This is with the classic module loaded beside capstone_vm, a configuration no Tier 1 boot
+  had. The run was ended by SIGINT.
+- **The fix:** board-run.sh sources board.env under `set -a`. bake-manifest.sh checks the initramfs's /capstone.ko by
+  hash, against the replacement after the bake and against the stock module after the restore.
+- **The rerun is pending,** on the next free board slot. Until it passes, the backend is not validated on silicon.
