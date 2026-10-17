@@ -96,10 +96,13 @@ Each of these has cost real board time when skipped.
    H1, R1, M1 and M2 reran September images that had 0, and H1's REVOKE finding had to be
    retracted (dev 783fb0f93f7e).
 8. **An unattended script is armed only after a stubbed dry run.** Before a session or chain is armed to run on the
-   board without you (after a flash, or behind another run), run a copy with every board call stubbed (runner, upload,
-   flash) on recorded data. It must reach its last rung and exercise each branch of its gates. Keep that output
-   beside the pre-registration. `bash -n` is not this. On 2026-10-17 vp1 flashed, then its session died on its first
-   line (`local W=... F=$W/...` under `set -u`), and nothing had shown it until the board was waiting.
+   board without you (after a flash, or behind another run), run a copy with ONLY the board calls stubbed (runner,
+   upload, flash) on recorded data. Waits, locks and gates run for real, from the parent the armed run will have. It
+   must reach its last rung and exercise each branch of its gates, and each injected failure must be asserted to have
+   changed its input. Keep that output beside the pre-registration. `bash -n` is not this. On 2026-10-17 vp1 flashed,
+   then its session died on its first line (`local W=... F=$W/...` under `set -u`), and nothing had shown it until the
+   board was waiting. The same night, a chain's dry run passed with its board-free wait stubbed. That wait matched the
+   chain's own parent and had no bound, so it would never have returned.
 
 ## 1. Bake it in — never UART
 
