@@ -8,7 +8,9 @@ answer") lists, as bare JTAG arms:
 
 q17-order (bare M-mode) runs as `vp1-bare-2026-10-17`'s image, byte for byte.
 
-**vb-trans, vb-trans-off and vb-trans-plain are HELD OUT of vp2** until the RTL lane's `VB_TABLE` variant lands.
+**vb-trans and vb-trans-plain run on vp2 as their `VB_TABLE` builds** (`vb-trans-vp2`, `vb-trans-plain-vp2`;
+capstone-ariane 1bcef8712). The flag-off build of the edited file reproduces vp1's two vb-trans hashes exactly. They
+were held out of vp2 until that variant landed:
 - On bf3db3175 every vb-trans arm reads csupstatus 5 / csupcause 25 where vp1 reads its pre-registered values.
 - Since item A, a domain under `csupctl.virt` runs in the lifetime-table namespace at srevroot, so its capabilities'
   node 2 must be a valid record in a table. vb-trans sets no srevroot. The va-* arms each build such a table, which is
@@ -19,14 +21,14 @@ q17-order (bare M-mode) runs as `vp1-bare-2026-10-17`'s image, byte for byte.
 **Not authorised to run.** A flash of bf3db3175 waits on the lead's own word naming it, after vp1's first session.
 
 **Build** (`build.sh`):
-- The tests are copies of capstone-ariane `virtual-profile-2` b339f9b0b, whose RTL is bf3db3175's (the two commits
-  above it touch `verif/` only). They are checked equal at build time when `VP_SRC` is given; they were, from
-  `git archive b339f9b0b`.
+- The tests are copies of capstone-ariane `virtual-profile-2-d` 1bcef8712, whose RTL is bf3db3175's (the three commits
+  above it touch `verif/` only, 0 files elsewhere). They are checked equal at build time when `VP_SRC` is given; they
+  were, from `git archive 1bcef8712`.
 - The wrapper, env and node-aware header are vp1-bare's, unchanged.
 - The recorder's three scratch registers per test are chosen by `pick-regs.py` from the GPRs the test never names.
   va-csmint-mon names all 32; its choice and the reason are in `build.sh`.
 - Toolchain check: this recipe with vp1's id characters reproduces vp1-bare's three hashes exactly.
-- Results: `results/build.result-lines.txt`; `images/SHA256SUMS` (21 images).
+- Results: `results/build.result-lines.txt`; `images/SHA256SUMS` (23 images).
 
 **The board vectors are not the headers' simulation vectors.** The recorder's CAPPRINT creates its own capability with
 CAPCREATE, and a CAPPRINT inside a domain cannot run as it does in simulation. Both can change a reading, and the node
@@ -36,7 +38,7 @@ counts in item A's arms are the obvious place. So each vector is taken from simu
 express its header's claim, is rebuilt (a `BOARD_TEST_CH` guard, as vb-trans has) before it is pre-registered.
 
 **Pending, before any vp2 board run:**
-1. The RTL lane's vectors for the 21 images.
+1. The RTL lane's vectors for the 23 images, and for vp1's vb-trans-off and q17-order on bf3db3175.
 2. The table below filled with them, and pushed on the lane before the run.
 3. Positive controls on the resident bitstream, where an arm's control is defined (the `-off` builds and
    va-ns-collide-off). The physical-pool controls should read the same on d93a8d66b.
@@ -64,3 +66,5 @@ express its header's claim, is rebuilt (a `BOARD_TEST_CH` guard, as vb-trans has
 | `va-alloc-exhaust` | 3ed79f75b2f92377 | 0x8000a800 | pending |
 | `va-ns-collide` | 47605a54f9682c0b | 0x80009800 | pending |
 | `va-ns-collide-off` | 90e3d70e14fd406a | 0x80009800 | pending |
+| `vb-trans-vp2` | 0c325b29ba5cc640 | 0x80013000 | pending |
+| `vb-trans-plain-vp2` | 38508a4220203bf1 | 0x8000b000 | pending |

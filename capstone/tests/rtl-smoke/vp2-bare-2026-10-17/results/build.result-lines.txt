@@ -19,3 +19,5 @@ va-alloc-corrupt        47016 bytes  sha256 123ce8c012c7e7f9  board_rec 8000a800
 va-alloc-exhaust        47016 bytes  sha256 3ed79f75b2f92377  board_rec 8000a800
 va-ns-collide           42920 bytes  sha256 47605a54f9682c0b  board_rec 80009800
 va-ns-collide-off       42920 bytes  sha256 90e3d70e14fd406a  board_rec 80009800
+vb-trans-vp2            81832 bytes  sha256 0c325b29ba5cc640  board_rec 80013000
+vb-trans-plain-vp2      49064 bytes  sha256 38508a4220203bf1  board_rec 8000b000
