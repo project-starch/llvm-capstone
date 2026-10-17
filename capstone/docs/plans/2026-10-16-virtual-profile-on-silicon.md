@@ -827,11 +827,15 @@ N = 2, 4, 8.
   measured on the attribution builds (csr_regfile moved 272 on B, the scoreboard 2,276), so the LUT reading can neither
   confirm nor refute at any N and must not be graded as if it could; TOP within its band. WNS: within the one-sample
   band of the base with the worst endpoint unchanged (cpmp_q -> issue_read_operands cap_metadata); refutation key: a
-  worst path ending in csr_regfile's slot match or at commit's dom_switch_req valid. The refusal path has a registered
-  cycle of slack (runv_refuse_q); the ACCEPT path (the switcher request valid in the commit cycle, :603) does not, so the
-  synth lane reads the slack of today's single compare from vp2's checkpoint BEFORE N is chosen; if it is tight the
-  match is registered one cycle and every CSRUNV costs one cycle (the fallback, with every retired-count reading of the
-  D arms moving by one per CSRUNV). Routability at ~178k LUT is the risk A showed, independent of N.
+  worst path ending in csr_regfile's slot match or at commit's dom_switch_req valid. **The WNS premise, read by the
+  synth lane on vp2's routed checkpoint (2026-10-18):** today's compare survives as `commit_stage_i/runv_same_frame0`
+  (the three predicates absorbed into it); its combinational ACCEPT path (:603) from `runv_frame_q` into the switcher,
+  endpoint `dom_switcher/cur_base_q_reg[14]/D`, has slack +20.712 ns over 41 levels (the next four cur_base_q bits
+  +20.789..+20.884), and it is the worst path from runv_frame_q to any endpoint; the registered refusal path into
+  `runv_refuse_q_reg/D` has +36.130 ns over 9 levels. N comparators and one mux level (about two LUT levels, 1-2 ns) fit
+  in the +20.712 with room, so the one-cycle registered fallback (every CSRUNV one cycle later, every D arm's
+  retired-count reading moving) is NOT needed at N <= 8 on today's numbers; it stays written down as the fallback if the
+  routed build says otherwise. Routability at ~178k LUT is the risk A showed, independent of N.
 - **Arms.** va-runv8 on N = 2: context A enters and escapes with a quantum (kind 1) holding dirty FP registers and a
   non-default fcsr; B enters a second frame, runs to a terminal escape and is discarded; A is RESUMED with action 0 and
   continues at the interrupted pc with its integer, FP and fcsr state exact (the readings re-ENTRY cannot produce, Q-26);
