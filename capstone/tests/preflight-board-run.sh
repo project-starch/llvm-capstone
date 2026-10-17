@@ -341,7 +341,24 @@ fi
 # One boot already spent 245 s of the 300 with no warning.
 if [[ -n "$FW" && -f "$FW" ]]; then
   _b=$(stat -c%s "$FW"); _upl=$(( _b / 131293 ))
-  if (( _b > 20000000 )); then
+  if [[ -n "${PREFLIGHT_DECLARED_DIR:-}" ]]; then
+    # A DECLARED bake (the vp2 bug-corpus boots, decided 2026-10-17): a deliberate payload beyond the clean base, so C10's
+    # purpose -- no undeclared stale domain rides along -- is checked by CONTENT instead of by size. Every regular file
+    # in the firmware's own initramfs must match the clean base or the bake's manifest by path and sha256, every
+    # declared file must be present, and the total is capped at 26,000,000 bytes (the upload rule below still applies).
+    # Negative-tested before first use: an undeclared file BLOCKS, and a declared bake at 26,000,001 bytes BLOCKS.
+    if (( _b > 26000000 )); then
+      bad "firmware ${_b} bytes exceeds the DECLARED-bake cap of 26,000,000"
+    else
+      _dp=$(python3 "$(dirname "${BASH_SOURCE[0]}")/fw-declared-payload.py" "$FW" "$PREFLIGHT_DECLARED_DIR" 2>&1); _drc=$?
+      if (( _drc == 0 )); then
+        ok "firmware ${_b} bytes, a DECLARED bake within 26,000,000: $(tail -1 <<< "$_dp")"
+      else
+        while IFS= read -r _l; do say "BLOCK" "$_l"; done <<< "$_dp"
+        bad "DECLARED bake: the firmware's initramfs is not exactly the clean base plus $PREFLIGHT_DECLARED_DIR/manifest.txt (rc ${_drc})"
+      fi
+    fi
+  elif (( _b > 20000000 )); then
     bad "firmware $(( _b / 1048576 )) MB exceeds the 20 MB working budget -- the overlay is dirty. A clean one is ~17.5 MB; only a retained multi-megabyte domain gets it past 20."
   else
     ok "firmware $(( _b / 1048576 )) MB within the 20 MB working budget (~${_upl}s upload)"
