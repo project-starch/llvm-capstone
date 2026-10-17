@@ -2888,3 +2888,59 @@ function; and an assembly matcher requiring the label line to equal `copy_pair:`
 The single cheap check that would have caught the whole thing at the start: **print the compiler
 revision next to each body**. The rule is already in my notes, I did not apply it, and a swapped
 pair of labels is exactly what it exists to prevent.
+
+## The mechanism, established, with the variable I had wrong twice
+
+The four earlier assemblies were **one compiler at two optimisation levels**, not two
+compilers. Confirmed by body hash against a sweep with the compiler held fixed at
+`85b1daddf230`:
+
+| arm | funcs | insns | lbu | sb | body sha | is |
+|---|---|---|---|---|---|---|
+| `-O0` plain | 10 | 89 | 32 | 32 | `6bfee5a7dc34` | `probe.s` |
+| `-O0` `-fno-builtin` | 10 | 30 | 0 | 0 | `8402810a9c4f` | `probe-nb.s` |
+| `-O1`/`-O2`/`-Os` plain | 6 | 21 | 0 | 0 | `0f832598dde9` | `probe-old.s` |
+| `-O1`/`-O2`/`-Os` `-fno-builtin` | 6 | 23 | 0 | 0 | `9871b6a90cc3` | `probe-old-nb.s` |
+
+So the `-old` files were `-O1`+, the un-suffixed ones `-O0`, and the 10-vs-6 function count
+was the tell I walked past: a compiler revision does not delete four functions, an
+inliner does.
+
+### But the optimisation level is not the variable either
+
+A 32-byte `memcpy` with external linkage and `void *` parameters, so that no pass can
+infer alignment, against a control whose type makes 16-alignment provable:
+
+| `-O` | alignment not inferable | provably 16-aligned |
+|---|---|---|
+| `-O0` | 32x (`lbu` + `sb`) -- **tags lost** | `ldc`/`stc` -- kept |
+| `-O1` | 32x (`lbu` + `sb`) -- **tags lost** | `ldc`/`stc` -- kept |
+| `-O2` | 32x (`lbu` + `sb`) -- **tags lost** | `ldc`/`stc` -- kept |
+
+**The variable is whether the compiler can prove 16-alignment, at every level.** The
+probe's reading is `-O`-sensitive only because IPSCCP converts its *unknown* case into a
+*known* one -- single call site, file-scope statics -- which is the same finding as the
+section above, now with its cause named.
+
+**The defect, stated properly:** a constant-size `memcpy` whose alignment the compiler
+cannot prove is expanded byte-wise, which is correct for plain data and destroys every
+tag in the range. A correct lowering must either call `memcpy` or emit a runtime-aligned
+capability copy. This is not a regression -- both revisions do it, identically -- and it
+sits in the same family as C-69 (under-aligned capability load lowered to a byte copy) and
+C-78 (16-aligned copy of a non-multiple-of-16 size strips tags). Whether it is one of those
+or its own entry is the registry owner's call, not mine.
+
+**Why `-fno-builtin` is the right systemic fix and not a workaround for a probe:** it routes
+the copy to musl's `memcpy`, which resolves alignment at run time and preserves tags, at
+every optimisation level and for every copy whose alignment is not provable.
+
+### Which builds are exposed
+
+* `ports/common/application/build.py` builds applications at **`-O1`** (`:139`, `:147`,
+  `:152`, `:159`, `:165`). `-O1` does **not** protect anything: the FFmpeg pool copy's
+  alignment is genuinely not inferable, so it byte-expanded there, which is what runs 3,
+  5 and 6 showed.
+* `ports/sqlite/repro322/build-virtual.py` defaults to **`-O0`** (`:147`).
+
+So the earlier reading that `-O2` "keeps the tag" was true only of the probe, and
+generalising it to the ports would have been wrong in exactly the direction that matters.
