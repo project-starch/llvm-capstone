@@ -74,6 +74,14 @@ if [ -n "$SYSALLOC" ]; then
 else
   ZM="-DSQLITE_ZERO_MALLOC=1"
 fi
+
+# WHAT WAS ACTUALLY COMPILED, one line per case: tag<TAB>source path. The corpus-side
+# runner refuses a binary whose source was not the corpus case.c, and nothing in the
+# binary itself can answer that -- only the nine image cases even mention repro_memfs.
+# One file PER GROUP, because this script is invoked group by group: a single
+# sources.tsv truncated at each invocation would keep only the last group.
+SRCMAP=$OUT/sources-$GROUP$SUF.tsv
+: > "$SRCMAP"
 SQLITE_DEFINES=(
   -DNDEBUG
   -DSQLITE_OS_UNIX=1                 # was SQLITE_OS_OTHER=1 on Capstone
@@ -336,6 +344,7 @@ build_group() {
         -DSQLITE_HEAP_SIZE=$arena ${extra:-} "${xinc[@]:-}" \
         "$csrc" "${xsrc[@]:-}" "$so" -lm -o "$OUT/$tag$SUF" 2>"$OBJ/$tag.err"; then
       printf "  %-16s OK\n" "$tag"
+      printf '%s\t%s\n' "$tag$SUF" "$csrc" >> "$SRCMAP"
     else
       printf "  %-16s FAIL (see obj/%s.err)\n" "$tag" "$tag"
       head -4 "$OBJ/$tag.err" | sed "s/^/      /"
