@@ -600,7 +600,8 @@ Pinned:
   Its prediction is mon's 81 readings at its own layout, the same rule the v6 run used. The prediction is in the
   file's header; the file was not committed before the run. On bf3db3175 it read 81 values, SUCCESS after 215,008
   cycles (`results/rtl-bf3db3175-v7-entry.result-lines.txt`). 64 values equal mon's. The other 17 are address-valued,
-  and each sits exactly 0x1000 below mon's, at this arm's layout. The run's own copy of the source is not kept, so the
-  file was checked against the executed trace: the row offsets 64..640 and the report sequence 1-16, 21, 17, 22, 18, 99.
+  and each sits exactly 0x1000 below mon's, at this arm's layout. The file here is the bytes the run compiled: the RTL
+  lane's run script copied it in just before the ladder, and its sha256 and an unchanged mtime match. The executed
+  trace agrees too: the row offsets 64..640 and the report sequence 1-16, 21, 17, 22, 18, 99.
 - **va-osinject revision 2** (`../osinject/`) adds the U-origin CSMINT row on the same files: 23 of 23 as predicted.
 

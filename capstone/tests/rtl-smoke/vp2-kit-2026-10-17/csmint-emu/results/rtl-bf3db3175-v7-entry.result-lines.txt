@@ -1,9 +1,10 @@
 # va-csmint-entry, descriptor v7, on capstone-ariane bf3db3175's RTL (the RTL lane, 2026-10-18), with the monitor's trap
 # entry and routine from capstone-sbi vp2/tier1-monitor fba7812: sbi_capstone.S 7b23b6a67540fd45...,
 # capstone_csmint.S 4600d04680158edf..., sbi_capstone.h 2c6f6bcab4ce180e... (checked by the RTL lane before the run).
-# Source: ../va-csmint-entry.S, sha256 602a0bf1e99d869f... The run's own copy is not kept, so the source was checked
-# against the executed trace: row descriptor offsets 64..640 at a 64-byte stride, and reports 1-16, 21, 17, 22, 18, 99
-# in that order.
+# Source: ../va-csmint-entry.S, sha256 602a0bf1e99d869f..., the bytes the run compiled. The RTL lane's run script copies
+# its scratch file into the worktree immediately before the ladder; that file's sha256 is this one, and its mtime
+# (23:45:30) precedes the run and has not changed since. Also consistent with the executed trace: row descriptor offsets
+# 64..640 at a 64-byte stride, and reports 1-16, 21, 17, 22, 18, 99 in that order.
 # Read by the board lane from the run's retirement trace (vp7-wt/.sup/entry7/), replaying the register writes to each
 # CAPPRINT's operand. va-csmint-mon (capstone-ariane virtual-profile-2-c 7b8c0d979, the same pin) read the same way from
 # vp8-wt/.sup/mon8/.
