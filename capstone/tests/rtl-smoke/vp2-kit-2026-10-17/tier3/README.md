@@ -769,3 +769,106 @@ So the 10-10 record and the v6 kit differ by profile, not by one flag.
     `capstone_cap_revoke_child`. The declared site no longer names the frame that faults.
   - Same detection, different attribution. It is a case.json `fault_sites` question for the corpus owner, not a
     behaviour change.
+
+## Run 5: `-fno-builtin` (SDK arm 6): pre-registered (2026-10-17, before the arm exists)
+
+**The defect behind it.** The compiler lane's hosted-contract probe (`runtime/virtual/hosted-contract.c`) finds the v6
+SDK losing a capability tag on a constant-size `memcpy` of unknown alignment (`memcpy_constant_size_unknown_alignment`
+FALSE).
+- Rebuilding only the probe with `-fno-builtin` flips it to TRUE.
+- The images differ (683a6b6f against d6de4abc), so it is two-sided.
+- The 10-10 SDK lacks the flag as well.
+
+**Arm 6:** the v6-fix SDK with `-fno-builtin` added to `sdk.json` codegen, everything else equal, the kit's clang.
+Subobject case 00 as in runs 3 and 4.
+
+**Outcomes:**
+- **(i) the fixed arm prints VERDICT FIXED, and the buggy arm reads as recorded (MISSED):** the pool fault is that
+  copy shape.
+- **(ii) cause 24 at `refstruct_pool_uninit+0x78` again:** a separate shape, and the `memcpy` finding is a second,
+  independent defect.
+- **Either way open:** why the 10-10 record, whose SDK had the same exposure, passed. Either its codegen did not
+  inline that copy, or the copy shape is new in v6's sources. The image hash goes beside the reading.
+
+## postgres/c-repros `virtual-malloc` (#16) on the fixed revision: pre-registered (2026-10-17, before the run)
+
+- **Build:** `shared/build-domain.sh <v6-fix SDK> <out>`, one domain program per case.
+- **Run:** `shared/run-arm.py --virtual-kit <v6-fix kit>`, the kit's direct boot, so no VM is needed.
+- **Prediction:** CAUGHT 5, every cell equal to the record (`compare-cells.py`).
+- **Recorded:** CAUGHT 5, on the 2026-10-10 SDK at `/tmp/capstone/pgv-none/image/sdk`, runtime e5693f5c….
+
+**Result: CAUGHT 5, every cell equal to the record** (0 mismatches). All five fault with cause 28 at the case's declared
+function. The build made 10 case images and the controls with heap virtual-mallocng, and the uaf-malloc control
+faulted as expected.
+
+## postgres/mmgr-repros, both arms (#17, #18), on the fixed revision: pre-registered (2026-10-17, before the runs)
+
+- **Hosted builds:** `ports/postgres/memory-contexts`, `capstone-application` preset, against the v6-fix SDK, with
+  `PG_SUBLET` OFF or ON.
+  - `PG_CORPUS_DIR` = the corpus root for the cases, and `controls/` for the controls.
+  - The archive is the local `postgresql-17.0.tar.bz2`.
+- **Run:** `run-defects.py --virtual-kit`.
+
+**Predictions:**
+- **`virtual-malloc` (#17):** MISSED 5, every cell equal to the record.
+- **`virtual-pg-pools` (#18):** two outcomes.
+  - **(a) CAUGHT 5, every cell equal to the record.**
+  - **(b) 29s at a CDERIVE in the cases or controls.** Patch 0003's large chunks are on the plan's list of (iii) derive
+    sites. The exact-bounds wrapper kit (Run 1) then separates it.
+
+**Run 5 result: (i).** On arm 6, case 00's fixed arm prints `VERDICT FIXED the fix's bound of 599 keeps every write
+inside its own member`. Its buggy arm prints `VERDICT DEFECT-REPRODUCED` and completes: MISSED, as recorded.
+- The image is a different build, `ffd2170b30b57e5c` against the kit's `bdf538f4859482f3`.
+- The two generic controls fault as expected (28, 25).
+- **So `-fno-builtin` clears case 00's tag loss.**
+- **The mechanism is not established.** The compiler lane withdrew its explanation: in its reduction both compilers
+  tail-call `memcpy` with or without the flag. Why the 10-10 record passed without the flag is also open.
+
+## Run 6: the three FFmpeg pool bundles on arm 6: pre-registered (2026-10-17, before the runs)
+
+`ffmpeg/subobject-repros` (all 9) and `ffmpeg/pool-repros` (both arms, prebuilt rebuilt with arm 6's SDK; the runner's
+`cache_says` checks the SDK path), on the v6-fix kit.
+- **Prediction:** every cell equal to the record: MISSED 9, MISSED 4, CAUGHT 4.
+- **A cell that still faults 24 in pool code is a second shape** that the flag does not cover.
+
+**mmgr result (#17, #18): both arms as recorded.** `virtual-malloc` reads MISSED 5 and `virtual-pg-pools` CAUGHT 5,
+every cell equal to the record, which is outcome (a). Patch 0003's derives on these five cases are representable under
+(iii). The hosted builds made 17 case programs and 8 controls per arm.
+
+**Run 6 result: every cell equal to the record on arm 6.** Subobject 9/9 (MISSED 9), pool stock 4/4 (MISSED 4), pool
+Sublet 4/4 (CAUGHT 4). So **`-fno-builtin` resolves the FFmpeg pool tag loss in all three bundles.** The mechanism and
+the 10-10 question stay open, as above. Adding the flag to the shipped SDK is the compiler lane's landing, with its
+hosted-contract check as the gate.
+
+## Status on the fixed v6 revision (2026-10-17 10:30), computed by `status.py` from the verdict files
+
+```
+ffmpeg/carved-repros | virtual-nested-pools | kit 89ee98be | recorded 13 new 13 mismatches 0 missing 0
+ffmpeg/carved-repros | virtual-malloc | kit 89ee98be | recorded 13 new 13 mismatches 0 missing 0
+ffmpeg/plain-heap-repros | virtual-malloc | kit 89ee98be | recorded 25 new 25 mismatches 0 missing 0
+ffmpeg/plain-temporal-repros | virtual-malloc | kit 89ee98be | recorded 13 new 13 mismatches 0 missing 0
+wireshark/plain-heap-repros | virtual-malloc | kit 89ee98be | recorded 12 new 12 mismatches 0 missing 0
+wireshark/plain-temporal-repros | virtual-malloc | kit 89ee98be | recorded 10 new 10 mismatches 10 missing 0
+memcached/allocator-repros | virtual-malloc | kit 89ee98be | recorded 9 new 9 mismatches 0 missing 0
+memcached/plain-heap-repros | virtual-malloc | kit 89ee98be | recorded 9 new 9 mismatches 0 missing 0
+memcached/plain-temporal-repros | virtual-malloc | kit 89ee98be | recorded 3 new 3 mismatches 0 missing 0
+postgres/c-repros | virtual-malloc | kit 89ee98be | recorded 5 new 5 mismatches 0 missing 0
+postgres/mmgr-repros | virtual-malloc | kit 89ee98be | recorded 5 new 5 mismatches 0 missing 0
+postgres/mmgr-repros | virtual-pg-pools | kit 89ee98be | recorded 5 new 5 mismatches 0 missing 0
+wireshark/wmem-repros | virtual-malloc | kit 89ee98be (capstone_vm) | recorded 23 new 23 mismatches 0 missing 0
+ffmpeg/subobject-repros | virtual-malloc | SDK arm 6 (-fno-builtin) | recorded 9 new 9 mismatches 0 missing 0
+ffmpeg/pool-repros | virtual-malloc | SDK arm 6 (-fno-builtin) | recorded 4 new 4 mismatches 0 missing 0
+ffmpeg/pool-repros | virtual-nested-pools | SDK arm 6 (-fno-builtin) | recorded 4 new 4 mismatches 0 missing 0
+memcached/allocator-repros | virtual-nested-pools | kit + QEMU exact bounds | recorded 9 new 9 mismatches 0 missing 0
+wireshark/wmem-repros | virtual-nested-pools | kit + QEMU exact bounds (capstone_vm) | recorded 23 new 23 mismatches 1 missing 0
+bundles run: 18 of 26; not run: [('cpython/allocator-boundary-repros', 'virtual-malloc'), ('cpython/allocator-boundary-repros', 'virtual-nested-pools'), ('cpython/pymalloc-repros', 'virtual-malloc'), ('cpython/pymalloc-repros', 'virtual-nested-pools'), ('postgres/sql-repros', 'virtual-malloc'), ('postgres/sql-repros', 'virtual-pg-pools'), ('sqlite/engine-repros', 'virtual-malloc'), ('sqlite/engine-repros', 'virtual-nested-pools')]
+```
+
+**Reading the table:**
+- **12 bundles hold cell for cell on the kit as-is.** One more, wireshark plain-temporal, holds every verdict; its
+  cause is 25 where its older record has 24.
+- **3 bundles (the FFmpeg pool code) need `-fno-builtin` in the SDK.**
+- **2 Sublet arms need option (iii)'s recorded port repairs,** shown by QEMU's exact-bounds control: memcached 0006
+  and wmem 0001. wmem's case 22 differs in attribution only.
+- **8 bundles have not run yet:** CPython (4) and PostgreSQL sql-repros (2) need interpreter or server rebuilds, and
+  SQLite engine-repros (2) needs build-virtual.py over 33 cases.
