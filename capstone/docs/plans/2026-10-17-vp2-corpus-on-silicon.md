@@ -51,9 +51,36 @@ Tier 1 (contract.dom)  →  Tier 2 (run.py on the board)  →  Tier 3 (the 26 vi
   denied with 25 (exit 139), or a Q-15 refusal (29 at `capstone_cap_derive`). A boot without one says nothing about
   the profile it ran under.
 - **Table geometry must match between the prediction kit and the board kit:** a flat RECYCLE table of at most
-  65,536 records (vp2 refuses PAGED at CSRUNV and saturates next-unused at 65,536), the 256-identity reserve inside a
-  context. A heavy-allocating image reading node pressure (kind 5, cause 30) on silicon where QEMU did not is a
-  kit-mismatch candidate first and a silicon finding only after the module's request is shown equal on both.
+  65,536 records, the 256-identity reserve inside a context. A heavy-allocating image reading node pressure (kind 5,
+  cause 30) on silicon where QEMU did not is a kit-mismatch candidate first and a silicon finding only after the
+  module's request is shown equal on both. The RTL lane's statement of the rule, verbatim, follows. (An earlier line
+  here said vp2 refuses PAGED at CSRUNV; it does not: the refusal comes at the context's first allocation, as 29.)
+
+**What the module's lifetime table must look like for the board kit and the QEMU prediction kit to agree (the RTL
+lane, from capstone-ariane `virtual-profile-2-d` bf3db3175, 2026-10-18).** The rev-node unit reads the table's
+header at EVERY allocation (`capstone_rev_node.anvil:225-238`, QEMU's `table_load` made per allocation) and refuses
+the header, status 3, when any of these fails: RECYCLE set (slot 0 word 0 bit 63), PAGED clear (bit 62), next-unused
+at least 2 and at most capacity, and a free list whose head and count are both zero or both non-zero. Inside a
+context the DYN unit turns status 3 into 29 at the allocating instruction (`capstone_dyn_unit.anvil:284-287`: Q-20's
+"a corrupt table reads 29"); CSRUNV itself reads no header, so a PAGED or non-RECYCLE table is NOT refused at entry:
+the context enters and its first CDERIVE, CSMINT-emulated mint or MREV reads 29. The glue presents capacity and
+next-unused saturated at 65,536 (`ex_stage.sv:1397-1398`: any set bit in [61:16] reads as 65,536) and indexes
+records by the id's LOW 16 BITS (`ex_stage.sv:1545-1548`), while QEMU accepts a capacity up to 2^30 and ids up to
+UINT32_MAX (`cap_rev_table.c:51`, `:105`, `cap_rev_tree.h:11`). So the kit rule is: a flat RECYCLE table, capacity at
+most 65,536 records (1 MiB), PAGED never set, ids 0 and 1 the header, and the module must never let next-unused pass
+65,536. Node pressure (kind 5) fires inside a context when capacity − next + free_count ≤ 256 (`:239-246`, QEMU's
+`capstone_require_node` with `CAP_REV_TABLE_RESERVE` 256); CSNODE's first allocation needs two identities. **Where a
+heavy-allocating image (cpython, perl) can read differently on silicon than under QEMU, and is pre-registered as a
+KIT MISMATCH, not a silicon finding:** (1) a table the module sizes above 65,536 records: QEMU allocates past id
+65,535 and sees pressure only 256 below its own capacity, silicon saturates capacity at 65,536, so kind 5 fires when
+65,536 − next + free_count ≤ 256 and, if the software collects and continues, ids at or above 65,536 alias records
+by their low 16 bits (corruption that QEMU cannot show); (2) CSRETIRE of an id at or above 65,536 or below 2 answers
+rd 1 without a table read on silicon (`capstone_rev_node.anvil:620`), where QEMU's bound is UINT32_MAX; (3)
+next-unused written by software above 65,536 reads as exactly 65,536 on silicon, so a "next > capacity" refusal QEMU
+would raise does not fire there. None of the three can occur with a table at or below 65,536 records whose
+next-unused stays inside it, and the module's table size is the one input the kit controls. Everything else in the
+header checks is bit-identical between the two (the three Q-entries carried into vp2: the table barrier, the
+emulation window's rules, CSRETIRE's answers without a read).
 
 ## Tier 3's comparison rule, settled from the sources (2026-10-17)
 
