@@ -2665,3 +2665,48 @@ record, against 8 mismatches without it. That is vp2's Q-15 binding inside a vir
 **The open question for that arm is the one this lane's own fault answered: what SIZE the carve
 passes to the derive.** If it derives over a raw request, rounding at the carve is the fix, and
 `heap.c`'s `malloc`/`realloc`/`aligned_alloc` are the worked example.
+
+
+## The FFmpeg pool tag loss: narrowing "the SDK" to five arms, and two of my own hypotheses refuted
+
+Not this lane's defect, but option (iii)'s mallocng is one of the candidates, so the narrowing is
+recorded here. The board lane established the compiler is exonerated for the case: the same program
+built with the kit's clang (85b1daddf230) and the 10-10 record's clang (bd372e25f5fb) against a
+fixed v6 SDK gives **byte-identical images**, and both fault cause 24 at
+`refstruct_pool_uninit+0x78`. So the variable is what the SDK brings.
+
+### Two hypotheses of mine, both refuted before being sent
+
+**`memcpy`'s mis-phased byte fallback is NOT a defect.** `string_bounds_safe.c`'s `memcpy` uses the
+tag-preserving granule loop only when source and destination share a 16-byte phase, and otherwise
+copies every byte — which does drop tags. But the file's own header already states the rule: *"A
+tagged value that is not 16-aligned in both source and target cannot be preserved by any copy, which
+is also CHERI's rule, and the bytes of it are still copied correctly, only untagged."* It is the
+documented semantics, not a bug. Checking prior art before writing it up is what stopped that.
+
+**The missing `-fno-builtin` is NOT the differentiator.** C-78's entry records that this exact SDK
+flag difference once produced an untagged capability — *"reads the copied capability untagged in the
+SDK without -fno-builtin, and passes in the SDK with it"* — and the v6 SDK does not pass it. But
+**neither does the 10-10 SDK**: `virt-stack/out/sdk/sdk.json`'s codegen is
+`-mllvm -capstone-gp-free -mllvm -capstone-image-gp` and nothing else. So the flag is constant
+across the two records and cannot explain a difference between them. A good hypothesis with a
+recorded precedent, killed by looking at the other side.
+
+### What "the SDK" actually is: five single-variable arms
+
+Comparing the two `sdk.json` codegen lines entry by entry, the v6 SDK **adds** exactly three things
+and removes nothing:
+
+| added | what it is |
+|---|---|
+| `-Xclang -target-feature -Xclang +f` and `+d` | hard float |
+| `-Xclang -target-abi -Xclang lp64` | the ABI, stated explicitly |
+| `-Xclang -target-feature -Xclang +movc-keeps-integer-source` | `movc` semantics |
+
+So the remaining variable is five arms, each testable against the same compiler and sources:
+the three flag groups above, `libapplication-runtime.a`, and `libc-capstone-virtual.a` (musl plus
+patches 0001–0009, i.e. option (iii)'s mallocng).
+
+**`+movc-keeps-integer-source` is the one I would try first** for a tag-loss symptom, because it is
+the only added flag that changes how a value moves between registers, and the symptom is a value
+that keeps its address and loses its tag. That is a reason to order the arms, not a prediction.
