@@ -9463,7 +9463,46 @@ override from its absence". Neither printed exit 75.
 
 ## Compiler / toolchain (ours)
 
-### C-82 — musl routes function pointers through `uintptr_t` in the init/exit machinery, so the capability is destroyed by construction and the call target is untagged `OPEN — PORT (musl), latent in every image shipped so far; found 2026-10-18 by the board lane's decode-whitelist gate on the vp2 Tier 1/2 images, class widened from one site to three by this lane the same day. Fix deferred behind the module's context serialization by the runtime lane's ruling`
+### C-82 — musl routes function pointers through `uintptr_t` in the init/exit machinery, so the capability is destroyed by construction and the call target is untagged `OPEN as DEAD CODE — PORT (musl). The runtime already overrides every affected entry point, so NO image is exposed; found 2026-10-18 by the board lane's decode-whitelist gate, and the exposure claim RETRACTED the same day by this lane's own positive control`
+
+> **RETRACTION, 2026-10-18, of this entry's own first version and of the report that prompted it.**
+> Both said the defect was latent-by-DATA — "any image with a non-empty `.fini_array` (a C++ static
+> destructor, `__attribute__((destructor))`) would fault at exit on both machines". **That is
+> false, and the control that was built to demonstrate it refuted it instead.**
+>
+> `c82-destructor.dom` `a250d387ddfd352d`: one `__attribute__((destructor))`, so
+> `__fini_array_start = 0x29270` and `__fini_array_end = 0x29280` — 16 bytes apart, ONE entry, the
+> `bgeu` cannot skip the loop, and the image carries the defective sequence at `0x20de0`. On the
+> strict pin it printed `C82_MAIN_OK`, printed **`C82_DTOR_RAN`**, and exited **0**. No fault.
+>
+> **Why: the defective functions are never called.** musl's `libc_exit_fini` is present at
+> `0x20d5c` with **zero** call sites — its single occurrence in the disassembly is its own
+> definition header, which is the "linked is not called" distinction. The runtime supplies a
+> **strong** `__libc_exit_fini` at `0x10770` that overrides musl's weak alias
+> (`weak_alias(libc_exit_fini, __libc_exit_fini)` in `exit/exit.c:25`), and `exit()` calls the
+> override. That override is capability-correct — `cincoffsetimm`/`movc`/`scc`/`stc` — exactly like
+> the startup walker `hc_run_init_array` at `0x10be0`.
+>
+> So the three "sites" resolve as:
+>
+> | site | status |
+> |---|---|
+> | `exit/exit.c:19-21` (`.fini_array`) | **present but uncalled**; runtime's `__libc_exit_fini` overrides it |
+> | `env/__libc_start_main.c:62-64` (`.init_array`) | **not linked at all**; `__libc_start_main`/`libc_start_init` absent, runtime's `hc_run_init_array` does the walk |
+> | `exit/atexit.c:73,78` | thunk present; nothing registers, and the exit machinery is the runtime's |
+>
+> **What is left, and why the entry stays open.** The defective instructions are really in the
+> image, so the board lane's decode gate reports them as candidates — correctly, as a decode
+> pattern. The exposure would become real only if the runtime's override were removed or something
+> called musl's `libc_exit_fini` directly. So this is a dead-code and gate-noise item, not a
+> correctness risk, and it should be fixed by patching musl's loops into pointer form anyway, so
+> the gate reads 0 without an exception list.
+>
+> **The lesson, which is the reusable part.** The control was built to make a latent site FIRE and
+> instead showed it cannot. Had it been skipped, C-82 would have stood as a live defect against
+> every future C++ image, and a `musl-patches/` fix would have been written for a path nothing
+> executes. *A latency claim needs the control that makes the site reachable — and "the data is
+> empty" is a weaker explanation than "nothing calls it", so check the call graph before the data.*
 
 > **The reported instance.** `libc_exit_fini` walks `.fini_array` and emits, in contract.dom
 > `125705371837ea92` at `0x24cd0` (and sqlite3.dom `0x14d2c4`, mruby `0x1a7958`):
