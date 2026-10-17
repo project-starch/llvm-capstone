@@ -2765,3 +2765,42 @@ validates. It is one entry. But it changes every port's images, and the board la
 flight against the current SDK, so it is proposed rather than dropped in mid-experiment — and it
 should go in as a *validated* arm, with this probe as its gate, since the probe is exactly the test
 that would have caught the omission.
+
+
+## The `-fno-builtin` OBSERVATION stands; my MECHANISM for it does not
+
+The two-sided result is unchanged and reproducible: with the v6 SDK as shipped,
+`hosted-contract.c`'s `memcpy_constant_size_unknown_alignment` reads FALSE; adding `-fno-builtin`
+and changing nothing else makes it TRUE and leaves no virtual failures, with different images.
+
+**The explanation I attached to it is withdrawn.** I wrote that "without `-fno-builtin` the compiler
+inlines the copy, cannot prove alignment, takes the scalar path, and the tag is gone". A minimal
+reduction of exactly that shape — a `noinline` function doing `memcpy(d, s, sizeof(struct pair))`
+through `void *`, `sizeof` 32 — shows the opposite in **all four** arms (kit clang 85b1daddf230 and
+the 10-10 clang bd372e25f5fb, each with and without the flag): `copy_pair` **tail-calls `memcpy`**.
+
+    auipc a2, %pcrel_hi(memcpy) ; addi a3, ... ; li a2, 32 ; mv t1, a3 ; ... ; jr t1
+
+So for that shape the compiler already makes the conservative, tag-preserving choice, and the flag
+changes nothing about it. Whatever `-fno-builtin` is doing in the probe, it is **not** preventing an
+inline expansion of that call.
+
+**And the reading that first said otherwise was a detector artifact of mine.** My script counted
+`ldc`/`stc`/`ld`/`sd` in the function body and looked for `call.*memcpy|tail.*memcpy`. It found no
+call — because a tail call through `auipc` + `jr t1` matches neither pattern — and it counted the
+**prologue spills of `s0` and `ra`** as the copy, so it reported "inlined as CAPABILITY (tag kept)"
+for a function that does not copy anything itself. Dumping the whole body is what caught it, and is
+what should have been done before reading counts.
+
+**So two things are now open rather than one:**
+
+1. The board lane's question — if the 10-10 SDK lacked the flag too, why did its run pass? My
+   reduction was meant to answer it by showing the old compiler lowered the copy differently. It
+   shows the two compilers lowering it **identically**, so the question stands untouched.
+2. **Why the flag changes the probe's result at all**, given that the shape it names is a call in
+   both builds. The next step is to diff the probe's own generated code with and without the flag
+   around that check, rather than to reason from a reduction that does not reproduce. The two probe
+   images are kept for exactly that: `683a6b6f350a7764` and `d6de4abcd44a568d`.
+
+The arm is still worth running: the observation is what it is, and if case 00 clears on arm 6 that
+is a fact about case 00 whether or not the mechanism is yet understood.
