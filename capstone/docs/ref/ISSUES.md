@@ -1476,8 +1476,11 @@ and calls `helper_capstone_ldc` with rs1 = UINT32_MAX; `capstone_ldc_granule` (`
 alignment, translates through S's satp (`probe_access_full`), reads the granule, queries the tag, and for a tagged
 non-NONLIN value consumes the source after a store probe, skipping the base-permission check because rs1 ==
 UINT32_MAX (:2206). The branch is commented "Experimental trusted-kernel context spill: the kernel slot address is
-scalar, while the saved user register retains its full tag". STC has no scalar-S branch on either side (`trans_csstc`
-:302-340 has only the virtual-data and cap-data arms): a scalar-S STC is cause 2 on QEMU and 24 on the RTL. The module
+scalar, while the saved user register retains its full tag". **Correction (2026-10-18, the RTL lane, a retraction of
+this entry's first wording):** `trans_csstc` HAS the same scalar-S branch (`trans_capstone.c.inc:342-359`: an integer
+base from S under `capstone_u_mode`, the compressed capability stored and the source consumed); the first wording said
+"no scalar-S branch on either side" from a grep that stopped at :340. So a scalar-S STC was admitted on QEMU and is 24
+on the RTL, the same divergence as the LDC; the ruling below covers both. The module
 (capstone_vm.ko `add()`, `.text+0x27d4`) relies on the QEMU branch; QEMU runs its sequence 41 of 41, silicon traps at
 the first such load.
 

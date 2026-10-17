@@ -1,3 +1,17 @@
+2026-10-18 (v7 pinned): **QEMU v7 is capstone-qemu `virtual-capstone-v7` f2f15f8fc70c402c9798d2191439785ebd0c33e3, one commit
+on d35af47b163c: helper_csmint reads six words with the routine's refusal order of record and writes both slots with one
+node; the scalar-S LDC and STC refuse with 24 (tval = the base register) unless the test-only property
+x-capstone-test-s-ldc is set, which four suites' runners set (m1, movc, trusted-linux-u-access, and virtual-capstone-runtime's
+run.sh and index8.sh for two scaffolding sites found by the control run); eleven descriptor writers at six words; four new
+table cases.** Tier 0 on it: m1 73/73, movc 67/67, sublet-lifetimes 119/119, trusted-linux-u-access 71/71, runtime 69/69,
+index8 PASS, fp 60/60, exact-bounds 4/4. Two corrections surfaced on the way, both in the record: QEMU HAS a scalar-S STC
+branch (Q-23's first wording said neither side had one; retracted in the entry), and the dependence count by raw encoding
+missed a suite that uses the LDC macro (a memory). The board lane's OS-trap-injection monitor (capstone-sbi
+vp2/os-trap-inject db23ffd) was reviewed against the RTL and its arm va-osinject read all 14 values as predicted on
+bf3db3175 (scause 24, stval = the base, SPP 1 then 0, sepc at each ldc, the clobbered registers restored; the control runs
+to the cycle limit). vp2c's Q-24 change is committed on capstone-ariane `virtual-profile-2-c` 3244170b0, lint at baseline by
+name. Next: va-csmint-mon/emu/entry re-pre-registered for v7 on the 729a340 routine; the 1 MiB table cross-check arm.
+
 2026-10-18 (Q-23 ruled): **Q-23 is CLOSED with the RTL as it is: trusted S performs no capability memory access, QEMU is
 tightened to the RTL, the module takes the CSMINT descriptor v7 route (type, cursor, a second slot for one NONLIN mint),
 whose emulation sequence the RTL supports today (CSNODE takes any tagged rs1; SCC is register-only; slot 0 at frame+64
