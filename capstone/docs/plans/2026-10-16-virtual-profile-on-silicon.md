@@ -803,6 +803,46 @@ unmasked restore at `:2023` is untouched (M-owned, see Q-24).
 - **If the next bitstream also carries other changes** (vp2b's deferred fix, the Q-15 mask form), each is its own
   section and this one is cited by hash; the arms and gates above still apply.
 
+## N saved virtual contexts, costed 2026-10-18 (the remedy for Q-26's one slot), NOT scheduled
+
+vp2 keeps ONE saved context, so a paused context blocks the next entry (commit_stage.sv:271-276, mcause 29) and
+re-ENTRY is not a resume (ISSUES.md Q-26): a join or a shared-memory wait is "not available on a one-slot bitstream" and
+the module returns -EBUSY where a second live context is required. The semantics owner asked for this costing so the
+lead can buy the remedy once the compiler lane says how many Tier 3 bundles need a second live context; the points are
+N = 2, 4, 8.
+
+- **What changes.** The switcher: nothing (every context's architectural state already lives in its frame; ENTRY,
+  ESCAPE and RESUME act on the frame named by the request, capstone_dom_switcher.anvil:157-161, :295-345). The CSR file:
+  the one slot `{used, paused, terminal, kind[2:0], frame[63:0], options[1:0], caller_priv[1:0]}` (74 flops,
+  csr_regfile.sv:387-391) becomes an array of N plus an active-slot index (log2 N bits), set at entry and resume
+  (:2116-2119), written by the escape (:2127-2130) and by the bad-frame id 74 (:2046-2056), cleared by the discard of the
+  matched slot (:2123); the frame match is N 64-bit comparators of dom_switch_req.base_addr against the N frames, done in
+  the CSR file, which returns match / paused / kind / free to commit. Commit: the three predicates (same frame, resume ok,
+  service ok; :271-276) read the matched slot, and the refusal for a NEW frame becomes "no free slot"; the escape's rd
+  target, the quantum counter and the csup* record stay single (one context runs at a time). QEMU's twin is the existing
+  property `x-capstone-supervisor-slots` at the same N.
+- **Predictions, keyed as the attribution builds were, with the design total AND the flop count as controls.** Flops:
+  exactly 74·N + log2 N (N = 2: +149, 4: +298, 8: +595), the one sharp key, since a flop count is not moved by the flow.
+  LUT: about 85·N (64 per comparator plus the muxes; 2: ~170, 4: ~340, 8: ~680), BELOW the per-module netlist band
+  measured on the attribution builds (csr_regfile moved 272 on B, the scoreboard 2,276), so the LUT reading can neither
+  confirm nor refute at any N and must not be graded as if it could; TOP within its band. WNS: within the one-sample
+  band of the base with the worst endpoint unchanged (cpmp_q -> issue_read_operands cap_metadata); refutation key: a
+  worst path ending in csr_regfile's slot match or at commit's dom_switch_req valid. The refusal path has a registered
+  cycle of slack (runv_refuse_q); the ACCEPT path (the switcher request valid in the commit cycle, :603) does not, so the
+  synth lane reads the slack of today's single compare from vp2's checkpoint BEFORE N is chosen; if it is tight the
+  match is registered one cycle and every CSRUNV costs one cycle (the fallback, with every retired-count reading of the
+  D arms moving by one per CSRUNV). Routability at ~178k LUT is the risk A showed, independent of N.
+- **Arms.** va-runv8 on N = 2: context A enters and escapes with a quantum (kind 1) holding dirty FP registers and a
+  non-default fcsr; B enters a second frame, runs to a terminal escape and is discarded; A is RESUMED with action 0 and
+  continues at the interrupted pc with its integer, FP and fcsr state exact (the readings re-ENTRY cannot produce, Q-26);
+  a third frame while two are paused reads the 29 trap ("no free slot"); a discard of the non-active slot by frame; a
+  resume of the OLDEST slot. Every existing arm unchanged (N >= 1 keeps today's semantics): the D list, item A's nine, the
+  five vb-trans arms, the board kit's 25 images re-simulated identical. Gates: lint by name with the 40 loop names, the
+  95-test sweep 92/0/3, the sup list 152/152 against the base.
+- **Effort and recommendation.** RTL about a day (CSR file, commit, cva6 wiring), the arm a day, the gates half a day,
+  then the usual synthesis cycle on the lead's buy. N = 4 unless the largest Tier 3 bundle has more live threads; 8 costs
+  nothing measurable and buys nothing the module's queue needs.
+
 ## Constraints
 
 - **No reflash without the lead's own word.** On 2026-10-16 (evening) the lead set the priority: the full virtual
