@@ -76,3 +76,21 @@ with `caplifive_vp1_9ed9a2594.bit` once:
 The first session is this file's: the bare arms, the physical regression and corpus set 7, with the flag-off monitor.
 It stops and reports on any reading that differs from d93a8d66b. The earlier approval named 4b958dc3f; this one
 supersedes it for 9ed9a2594.
+
+**Added before the run (2026-10-17, while vp1's chain waited on ST100): `vb-trans-plain`, run LAST among vp1's arms.**
+- **What it tests:** R-56's clear-refusal gate (`ldc_store_ok`). It does a consuming `ldc` from a page writable from
+  the start. vp1's one router-left combinational loop breaks through that gate (the synth and RTL lanes' risk list).
+  vb-trans arms 4 and 6 exercise the same gate both ways.
+- **The image:** `images/vb-trans-plain.bin`, sha256 997bc656df3be645…, board_rec 0x80009800. It is built by `build.sh`
+  from capstone-ariane 1bcef8712's `vb-trans-plain.S` without `VB_TABLE`.
+- **That file does not change vp1's other images:** its flag-off build of the edited `vb-trans.S` reproduces vb-trans
+  and vb-trans-off's hashes above exactly.
+- **The board vector is from the RTL lane's simulation of THIS image on 9ed9a2594** (37,040 retired): SR 5, values
+  `0 1 0x66 0 0`.
+  - 0: armed.
+  - 1: csupstatus; the domain returned after the admitted consuming `ldc`.
+  - 0x66: stored through the loaded LINEAR capability.
+  - 0: the parked word, cleared.
+  - 0: mcause.
+  - The header's simulation vector is `0 0 1 0x66 0 0`; the in-domain CAPPRINT compiles out on the board.
+- **The corpus set 7 gate now counts four arms as pre-registered.** There is no d93a8d66b reading of this arm.
