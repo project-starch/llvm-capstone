@@ -6764,5 +6764,7 @@ compiler synthesises.
   so C-81 cannot be tested there. Those two stay "differ, unexplained".
 
 Evidence on dev: 7122c158e6c1 and 935196067e79 (SQLite, and the correction), 419fbf06bbc4 and 021568237f34 (set 1,
-mruby), 16f9756828d6 (SQLite 12/24). The virtual-profile half (the Tier 3 sweep, enumerated the same way) is the
-compiler lane's.
+mruby), 16f9756828d6 (SQLite 12/24).
+
+**Scope:** the silicon images only. The virtual-profile corpus images were built without `-fno-builtin`, so explicit
+`memcpy` calls there are exposed too, and nothing here covers them.
