@@ -106,10 +106,14 @@ path.
 
 - The board moves onto the exact-regions monitor line (capstone-bootstrap). The shared checkout still runs the
   classic pins d04bd83 / df0e9a8 / 93440d5.
-- The 496 MiB memory map:
-  - CMA moves inside [0x8000_0000, 0x9F00_0000);
-  - the monitor's bound on Linux's region (0xC0000000, R-55) moves to the new top;
-  - the boot-carve replay (`r55-regions/replay.py`) is re-run on the new map before the flash.
+- **No memory-map change.** Option (iii) keeps today's map: 963 MiB of data, with the tag region at 0xBC2D_2D2D. vp2's
+  RTL still has `CAP_TAG_MEM_BASE = 56'hBC2D_2D2D` (`core/include/ariane_pkg.sv:614` at virtual-profile-2-d cab4ee891).
+  So CMA, the monitor's bound on Linux's region (0xC0000000, R-55) and the boot carves stay as they are.
+
+> **WITHDRAWN (2026-10-17), from this list's first version (0aed17df2e81):** "The 496 MiB memory map". That item asked
+> for CMA inside [0x8000_0000, 0x9F00_0000), the monitor's Linux bound moved to the new top, and the carve replay re-run
+> before the flash. It was copied from the dense-bounds design, which the virtual-profile plan marks as superseded by
+> option (iii). That plan's own list of what (iii) saves names the 496 MiB map.
 - The page-table walker's PMP needs no change: OpenSBI's Domain0 already permits S/U over all memory.
 - The supervisor's CPMP coverage needs no change: genesis CPMP entries plus `swap_cpmp`, settled with the RTL lane.
 
