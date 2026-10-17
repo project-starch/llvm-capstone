@@ -282,11 +282,15 @@ tags and registers unchanged; a retry moves once.
 whose base register is an integer reads 24 (tval = the base register) in every mode, as on the RTL.
 QEMU's earlier experimental "trusted-kernel context spill" branches (an S-mode scalar-address `LDC`,
 and the matching `STC`, which QEMU also had) survive only
-under the CPU property `x-capstone-test-s-ldc=true`, default off, which exists for three directed
-suites (`virtual-capstone-m1`, `movc-untagged-source`, `trusted-linux-u-access`) whose bootstrap
-loads minted capabilities into registers before `sret` into U; it is a test scaffold with no silicon
-equivalent, no production kit sets it, and their passes say nothing about trusted S. The follow-up
-that retires the property is rewriting that bootstrap onto the `CSRUNV` route. The adapter obtains
+under the CPU property `x-capstone-test-s-ldc=true`, default off, which exists for four directed
+suites (`virtual-capstone-m1`, `movc-untagged-source`, `trusted-linux-u-access`, and
+`virtual-capstone-runtime`'s `run.sh` and `index8.sh`) whose bootstrap or scaffolding loads minted
+capabilities into registers from S; it is a test scaffold with no silicon equivalent, no production
+kit sets it, and their passes say nothing about trusted S. The follow-up that retires the property
+is rewriting that bootstrap onto the `CSRUNV` route. The reference QEMU for the virtual profile is
+capstone-qemu `virtual-capstone-v7` f2f15f8fc70c (one commit on d35af47b163c); Tier 0 on it: m1 73/73,
+movc 67/67, sublet-lifetimes 119/119, trusted-linux-u-access 71/71, runtime run.sh 69/69, index8 PASS,
+fp 60/60, exact-bounds 4/4. The adapter obtains
 every capability it needs through `CSMINT` (descriptor v7) and never holds one in a register.
 The Q-12 protected-path changes did not change legacy physical C transfers.
 
