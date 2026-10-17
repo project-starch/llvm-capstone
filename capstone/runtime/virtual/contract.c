@@ -137,24 +137,45 @@ static void vm_large_contract(void)
     e[0] = 8; e[last - 1] = 9;
     puts("VIRTUAL_VM_LARGE_OK region aggregate realloc release");
 }
-/* More registered mappings than the first profile's 512: every allocation
- * above mallocng's mmap threshold is a mapping of its own. One byte of each is
- * touched, and they are freed again. */
+/* More registered mappings than the 8192 the module's table once held: every
+ * allocation above mallocng's mmap threshold is a mapping of its own. Every
+ * second one is freed and replaced, eight grow through the remap path, and the
+ * data is checked in an order unrelated to addresses. They stay live at exit,
+ * so the launcher's stats record shows the registered count. */
+static char mapping_byte(unsigned i, unsigned at) { return (char)((i & 1 ? i : ~i) >> at); }
 static void vm_mappings_contract(void)
 {
-    enum { count = 1200 };
+    enum { count = 9000, stride = 7919 }; /* coprime: every index once */
     static char *held[count];
-    const size_t bytes = 140000;
+    const size_t bytes = 140000, grown = 600000;
     for (unsigned i = 0; i < count; ++i) {
         held[i] = malloc(bytes);
-        require(held[i] != NULL, "mapping above 512");
-        held[i][bytes - 1] = (char)i;
+        require(held[i] != NULL, "mapping above 8192");
+        held[i][0] = (char)i; held[i][bytes - 1] = (char)(i >> 8);
     }
-    for (unsigned i = 0; i < count; ++i)
-        require(held[i][bytes - 1] == (char)i, "mapping data");
-    for (unsigned i = 0; i < count; ++i)
+    for (unsigned k = 0, i = 0; k < count; ++k, i = (i + stride) % count)
+        require(held[i][0] == (char)i && held[i][bytes - 1] == (char)(i >> 8), "mapping data");
+    for (unsigned i = 0; i < count; i += 2)
         free(held[i]);
-    puts("VIRTUAL_VM_MAPPINGS_OK 1200");
+    for (unsigned i = 0; i < count; i += 2) {
+        held[i] = malloc(bytes);
+        require(held[i] != NULL, "mapping refill");
+        held[i][0] = mapping_byte(i, 0); held[i][bytes - 1] = mapping_byte(i, 8);
+    }
+    unsigned moved = 0;
+    for (unsigned i = 1; i < count; i += count / 8) {
+        char *before = held[i], *p = realloc(held[i], grown);
+        require(p != NULL, "mapping remap");
+        moved += p != before;
+        held[i] = p; p[grown - 1] = 5;
+    }
+    for (unsigned k = 0, i = 0; k < count; ++k, i = (i + stride) % count)
+        require(held[i][0] == mapping_byte(i, 0) && held[i][bytes - 1] == mapping_byte(i, 8),
+                "mapping data after refill and remap");
+    for (unsigned i = 1; i < count; i += count / 8)
+        require(held[i][grown - 1] == 5, "remapped tail");
+    printf("VIRTUAL_VM_MAPPINGS_MOVED %u\n", moved);
+    puts("VIRTUAL_VM_MAPPINGS_OK 9000");
 }
 int main(int argc, char **argv)
 {

@@ -11,6 +11,8 @@
 #include <linux/list.h>
 #include <linux/wait.h>
 #include <linux/ktime.h>
+#include <linux/rbtree.h>
+#include <linux/xarray.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
@@ -18,7 +20,11 @@
 #include "cap_rev_table_abi.h"
 _Static_assert(CV_NODE_RESERVE == CAP_REV_TABLE_RESERVE, "processor reserve ABI");
 
+/* One registered mapping. Arenas are allocated one by one and never move, so
+ * the remap window may hold a pointer across its unlocked mremap. */
 struct arena {
+    struct rb_node node;
+    u64 id;
     unsigned long address, bytes, ancestor;
     struct page **pages;
     unsigned count;
@@ -44,9 +50,14 @@ struct context {
     struct cv_thread *main_thread;
     struct list_head threads;
     u64 next_thread;
-    struct arena arenas[CV_MAX_ARENAS];
+    /* Registered arenas by address and by mapping ID, both under vm_lock.
+     * Arenas never overlap, so the address tree answers containment with
+     * one predecessor lookup. registered_bytes is the sum of their sizes. */
+    struct rb_root arenas;
+    struct xarray ids;
+    unsigned long registered_bytes;
     struct cv_stats stats;
-    u64 next_id, ids[CV_MAX_ARENAS];
+    u64 next_id;
     bool exact_bounds;
     wait_queue_head_t remap_wait;
     struct arena *remapping;
@@ -155,14 +166,55 @@ static unsigned thread_count(struct context *c)
     return count;
 }
 
+/* The arena with the highest start below end, or NULL. */
+static struct arena *arena_below(struct context *c, unsigned long end)
+{
+    struct rb_node *n = c->arenas.rb_node;
+    struct arena *best = NULL;
+    while (n) {
+        struct arena *a = rb_entry(n, struct arena, node);
+        if (a->address < end) { best = a; n = n->rb_right; }
+        else n = n->rb_left;
+    }
+    return best;
+}
+/* The arena containing address, or NULL. */
+static struct arena *arena_at(struct context *c, unsigned long address)
+{
+    struct arena *a = address == ULONG_MAX ? NULL : arena_below(c, address + 1);
+    return a && address - a->address < a->bytes ? a : NULL;
+}
+/* Does [address, address + bytes) overlap an arena other than skip? */
+static bool arena_overlaps(struct context *c, unsigned long address,
+                           unsigned long bytes, struct arena *skip)
+{
+    struct arena *a = arena_below(c, address + bytes);
+    if (a && a == skip) {
+        struct rb_node *n = rb_prev(&a->node);
+        a = n ? rb_entry(n, struct arena, node) : NULL;
+    }
+    return a && a->address + a->bytes > address;
+}
+static void arena_insert(struct context *c, struct arena *a)
+{
+    struct rb_node **link = &c->arenas.rb_node, *parent = NULL;
+    while (*link) {
+        parent = *link;
+        link = a->address < rb_entry(parent, struct arena, node)->address ?
+               &parent->rb_left : &parent->rb_right;
+    }
+    rb_link_node(&a->node, parent, link);
+    rb_insert_color(&a->node, &c->arenas);
+}
+#define for_each_arena(a, c) \
+    for (struct rb_node *n_ = rb_first(&(c)->arenas); \
+         n_ && ((a) = rb_entry(n_, struct arena, node)); n_ = rb_next(n_))
+
 static struct arena *find_arena(struct context *c, unsigned long address,
                                 unsigned long bytes)
 {
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
-        if (c->arenas[i].pages && c->arenas[i].address == address &&
-            c->arenas[i].bytes == bytes)
-            return &c->arenas[i];
-    return NULL;
+    struct arena *a = arena_at(c, address);
+    return a && a->address == address && a->bytes == bytes ? a : NULL;
 }
 
 static bool arena_has_thread_frame(struct context *c, struct arena *a)
@@ -326,16 +378,16 @@ static int collect(struct context *c, struct cv_thread *owner)
     /* Include resident pages populated by Linux/the trusted launcher without
      * a C fault. Missing pages are not materialized; any inspection failure
      * prevents identity reuse. Saved contexts share this mm's namespace. */
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
-        int error = pin_remaining(c, &c->arenas[i]);
+    struct arena *a;
+    for_each_arena(a, c) {
+        int error = pin_remaining(c, a);
         if (error) return error;
     }
     list_for_each_entry(t, &c->threads, link)
         if (collect_page(&list, t->frame_pa)) goto out;
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
-        for (unsigned j = 0; j < c->arenas[i].count; ++j)
-            if (c->arenas[i].pages[j] &&
-                collect_page(&list, page_to_phys(c->arenas[i].pages[j]))) goto out;
+    for_each_arena(a, c)
+        for (unsigned j = 0; j < a->count; ++j)
+            if (a->pages[j] && collect_page(&list, page_to_phys(a->pages[j]))) goto out;
     owner->frame[80] = list.count | CAP_REV_COLLECT_CHAIN;
     owner->frame[81] = virt_to_phys(list.head);
     preempt_disable(); local_irq_save(flags);
@@ -357,7 +409,8 @@ static int ensure_nodes(struct context *c, unsigned long required)
 {
     struct cv_thread *owner = NULL, *t;
     unsigned long available = node_available(c);
-    unsigned long sweep_pages = thread_count(c), collect_min;
+    unsigned long sweep_pages = thread_count(c) + c->registered_bytes / PAGE_SIZE;
+    unsigned long collect_min;
     bool collected = false;
     int error;
     if (required > CAP_REV_TABLE_NAMESPACE_SIZE) return -ENOMEM;
@@ -368,8 +421,6 @@ static int ensure_nodes(struct context *c, unsigned long required)
      * Amortize that scan over at least as many retired identities and one
      * growth batch; a tiny table beside a large sparse VMA must not cause a
      * full scan every few hundred allocations. Existing free IDs win above. */
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
-        sweep_pages += c->arenas[i].bytes / PAGE_SIZE;
     collect_min = max(sweep_pages, node_batch_pages * 256);
     collect_min = max(collect_min, node_capacity(c) / 4);
     if (owner && c->table[5] >= max(required - available, collect_min)) {
@@ -436,15 +487,18 @@ static int retire(struct context *c, struct arena *a, bool destroying)
         --c->stats.pinned_pages;
     }
     --c->stats.arenas;
+    rb_erase(&a->node, &c->arenas);
+    xa_erase(&c->ids, a->id);
+    c->registered_bytes -= a->bytes;
     kvfree(a->pages);
-    memset(a, 0, sizeof(*a));
+    kfree(a);
     return 0;
 }
 static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
 {
-    unsigned i, j, index = 0;
-    struct arena *a = NULL;
-    unsigned long flags, old, desc[3], ancestor, *slot, mapped = 0;
+    unsigned i, j;
+    struct arena *a;
+    unsigned long flags, old, desc[3], ancestor, *slot;
     struct page **pages;
     long n;
     if (!r->bytes || r->bytes > CV_MAX_REGION_BYTES ||
@@ -461,15 +515,8 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
          r->reg != 10 && r->reg != 11 && r->reg != 12 && r->reg != 13) ||
         (r->reg == 3 && (!(r->permissions & 1) || r->linear)))
         return -EINVAL;
-    for (i = 0; i < CV_MAX_ARENAS; ++i) {
-        struct arena *b = &c->arenas[i];
-        if (!b->pages) { if (!a) { a = b; index = i; } continue; }
-        mapped += b->bytes;
-        if (r->address < b->address + b->bytes && b->address < r->address + r->bytes)
-            return -EINVAL;
-    }
-    if (!a) return -ENOSPC;
-    if (mapped + r->bytes > CV_MAX_BYTES) return -ENOMEM;
+    if (arena_overlaps(c, r->address, r->bytes, NULL)) return -EINVAL;
+    if (c->registered_bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
     if (ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE)) return -ENOMEM;
     mmap_read_lock(c->mm);
     for (unsigned long at = r->address; at < r->address + r->bytes;) {
@@ -488,8 +535,13 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         at = min((unsigned long)(r->address + r->bytes), v->vm_end);
     }
     mmap_read_unlock(c->mm);
+    /* Everything that can fail is prepared before the grant is minted. */
+    a = kzalloc(sizeof(*a), GFP_KERNEL);
+    if (!a) return -ENOMEM;
+    a->id = c->next_id + 1;
+    if (xa_insert(&c->ids, a->id, a, GFP_KERNEL)) { kfree(a); return -ENOMEM; }
     pages = kvcalloc(r->bytes / PAGE_SIZE, sizeof(*pages), GFP_KERNEL);
-    if (!pages) return -ENOMEM;
+    if (!pages) { xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
     n = 0;
     /* Growing RW arenas start with absent PTEs. Linux resolves each first
      * touch through GUP, then the adapter pins that backing until retirement. */
@@ -524,9 +576,11 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     }
     restore_root(old);
     local_irq_restore(flags); preempt_enable();
-    *a = (struct arena){r->address, r->bytes, ancestor, pages,
-                       r->bytes / PAGE_SIZE, r->linear};
-    r->id = c->ids[index] = ++c->next_id;
+    a->address = r->address; a->bytes = r->bytes; a->ancestor = ancestor;
+    a->pages = pages; a->count = r->bytes / PAGE_SIZE; a->lazy = r->linear;
+    arena_insert(c, a);
+    c->registered_bytes += a->bytes;
+    r->id = c->next_id = a->id;
     ++c->stats.arenas; c->stats.pinned_pages += n;
     c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
     if (t->started) t->reply_cap = true;
@@ -534,6 +588,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
 unpin:
     for (i = 0; i < max(n, 0L); ++i) unpin_user_page(pages[i]);
     kvfree(pages);
+    xa_erase(&c->ids, a->id); kfree(a);
     return -EFAULT;
 }
 /* Linux performs mremap; the adapter only updates lifetime and physical-tag
@@ -543,19 +598,15 @@ unpin:
 static int remap_begin(struct context *c, const struct cv_remap *r)
 {
     struct cv_thread *t = find_thread(c, r->thread);
-    struct arena *a = NULL;
-    unsigned long mapped = 0;
+    struct arena *a;
     int error;
     if (!c->exact_bounds || c->remapping || !t || t->terminal ||
         !t->started || t->event != 3 || t->reply_cap ||
         !r->bytes || r->bytes > CV_MAX_REGION_BYTES || (r->bytes & ~PAGE_MASK))
         return -EINVAL;
-    for (unsigned i=0; i<CV_MAX_ARENAS; ++i) {
-        mapped += c->arenas[i].bytes;
-        if (c->ids[i] == r->id && c->arenas[i].pages) a = &c->arenas[i];
-    }
+    a = xa_load(&c->ids, r->id);
     if (!a || !a->lazy || arena_has_thread_frame(c, a)) return -EINVAL;
-    if (mapped - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
+    if (c->registered_bytes - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
     error = pin_remaining(c, a);
     if (error) return error;
     error = ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE);
@@ -583,11 +634,7 @@ static int remap_end(struct context *c, const struct cv_remap *r)
         !access_ok((void __user *)r->address, r->bytes)) return -EINVAL;
     /* The launcher is trusted, but reject overlap with another registered
      * arena and malformed VM state before retiring the old ancestor. */
-    for (unsigned i=0; i<CV_MAX_ARENAS; ++i) {
-        struct arena *b = &c->arenas[i];
-        if (b != a && b->pages && r->address < b->address+b->bytes &&
-            b->address < r->address+r->bytes) return -EINVAL;
-    }
+    if (arena_overlaps(c, r->address, r->bytes, a)) return -EINVAL;
     mmap_read_lock(c->mm);
     v = find_vma(c->mm, r->address);
     valid = v && v->vm_start <= r->address && v->vm_end >= r->address+r->bytes &&
@@ -621,7 +668,11 @@ static int remap_end(struct context *c, const struct cv_remap *r)
         --c->stats.pinned_pages;
     }
     kvfree(a->pages); a->pages = c->remap_pages; c->remap_pages = NULL;
+    /* Rekeying the tree allocates nothing: the commit cannot fail here. */
+    rb_erase(&a->node, &c->arenas);
+    c->registered_bytes += r->bytes - a->bytes;
     a->address = r->address; a->bytes = r->bytes; a->count = count;
+    arena_insert(c, a);
     c->remapping = NULL; wake_up_all(&c->remap_wait); t->reply_cap = true;
     return 0;
 }
@@ -780,14 +831,13 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
     struct page *page;
     struct vm_area_struct *v;
     unsigned long required = cause == 15 ? VM_WRITE : cause == 12 ? VM_EXEC : VM_READ;
+    struct arena *a;
     if (!t->started || t->event != 4 || (cause != 12 && cause != 13 && cause != 15))
         return -EINVAL;
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
-        struct arena *a = &c->arenas[i];
+    a = arena_at(c, address);
+    if (a && a->lazy) {
         unsigned index;
         long n;
-        if (!a->pages || !a->lazy || address < a->address ||
-            address - a->address >= a->bytes) continue;
         index = (address - a->address) / PAGE_SIZE;
         mmap_read_lock(c->mm);
         v = find_vma(c->mm, address);
@@ -1029,9 +1079,10 @@ retry:
         rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
     } else if (op == CV_RETIRE) {
         u64 id;
+        struct arena *a;
         if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
-        for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
-            if (c->ids[i] == id && c->arenas[i].pages) { rc = retire(c, &c->arenas[i], false); break; }
+        a = xa_load(&c->ids, id);
+        if (a) rc = retire(c, a, false);
     } else if (op == CV_STATS) {
         node_stats(c);
         rc = copy_to_user((void __user *)arg, &c->stats, sizeof(c->stats)) ? -EFAULT : 0;
@@ -1057,6 +1108,8 @@ static int vm_open(struct inode *inode, struct file *f)
     if (!c) return -ENOMEM;
     INIT_LIST_HEAD(&c->threads);
     init_waitqueue_head(&c->remap_wait);
+    c->arenas = RB_ROOT;
+    xa_init(&c->ids);
     c->next_thread = 0;
     t = kvzalloc(sizeof(*t), GFP_KERNEL);
     if (!t) { kvfree(c); return -ENOMEM; }
@@ -1134,12 +1187,12 @@ static int vm_release(struct inode *inode, struct file *f)
     }
     /* Teardown still clears tags in user frames (including thread start
      * frames) before the final pins are dropped. */
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
-        if (c->arenas[i].pages || c->arenas[i].address)
-            /* The task may be in exit_mm() here.  A teardown must never
-             * call pin_user_pages_fast() to materialize lazy holes; only
-             * already pinned pages can safely be revoked and released. */
-            retire(c, &c->arenas[i], true);
+    while (!RB_EMPTY_ROOT(&c->arenas))
+        /* The task may be in exit_mm() here.  A teardown must never
+         * call pin_user_pages_fast() to materialize lazy holes; only
+         * already pinned pages can safely be revoked and released. */
+        retire(c, rb_entry(rb_first(&c->arenas), struct arena, node), true);
+    xa_destroy(&c->ids);
     list_for_each_entry_safe(t, tmp, &c->threads, link) {
         list_del(&t->link);
         if (t->user_frame) { clear_thread_frame(t); drop_thread_frame(t); }
