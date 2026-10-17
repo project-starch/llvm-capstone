@@ -354,3 +354,67 @@ The question: does sqlite_write's exit 7 (NOMEM) come from a growth refused befo
   that compiler on 2026-10-10, so today's runtime needs a newer compiler.
 - The proof reruns with the compiler lane's dev-current build when it lands. Its numbers go into this folder's RESULTS
   then.
+
+## Pre-registered (2026-10-17, before the boot): Tier 1/2 on vp2 with the flat-table module
+
+One boot of a private image on `caplifive_vp2_bf3db3175.bit`, resident since its first session (987bf254ee40,
+83be6830551d); no flash. The files are in `board-tier12/`: the arm's scripts, the judge, the boot script and the
+stage's `SHA256SUMS`.
+
+**The kit (c14933904de4, the compiler lane's flat kit).** Its run.py record on QEMU is the prediction: flat arm PASS
+41/41, 22 `VM_EXIT` lines; the paged arm also read 41/41, as a null control. The board runs the bytes that record ran:
+- `contract.dom` `bf433e107032fa8a`, `sqlite3.dom` `a6ee743522518c02`, mruby `5fee8d8f604229ea`, taken from run.py's
+  own stage.
+
+**The board adapter** is built by build-kit.sh's adapter block with `KIT_FLAT=1` (e8b55b5dfdfc), from c14933904de4's
+runtime. All 32 sources in the record's `source_sha256` are identical in that tree.
+- `capstone_vm.ko` `0d62a1bcdeecc13f`. It has vermagic 6.4.14, no 16-bit instructions (the same counter finds 1,612
+  in the QEMU module), and no `csrr` of scapctl or urevavail. The compiler lane's own board build is byte-identical.
+- `capstone-vexec` `b27afefc09c6cae6` and `capstone-job` `c501da210412e23e`, static RISC-V executables.
+- QEMU module hashes are not comparable across builds: that kernel embeds the module's build path
+  (DEBUG_BUGVERBOSE). The kit's `bb6d1aec…` and a build-kit.sh build at another path have identical code and differ
+  only in the path string and the build-id. The board module carries no path, so its hash is a code identity.
+
+**The firmware.**
+- `fw_payload.bin` `2882836388198297`, 19,565,064 B; Image `ce8a2ba31fbe5ce3`.
+- BL's recipe (wrapper 1269c77, monitor cb91d7d) plus `CAPSTONE_VP2_CSMINT`; `csmint_dispatch` is in the ELF.
+- The bake checked by hash that the private initramfs carries every staged file, and that the restored shared image
+  carries none.
+- It also packs about 2.5 MB of the shared tree's standing files (speedtest1*, k800, sqlite_host*). None of them
+  runs.
+- Of the standalone preflight's checks, the DTS-against-bitstream, single-FDT and 20 MB budget checks pass. Its
+  overlay checks look for each rung as a `.dom` in the shared overlay. They do not apply here: the vm rungs are
+  scripts in a private image, and the bake's hash check stands in for them.
+
+**The rungs, in order:** b0-stats and b0-hello (BL's controls; both read 0 on vp2 in tonight's set 7), then
+vm-contract (Tier 1), then vm-suite (Tier 2, run.py's steps; the longest, last).
+
+**Predictions.**
+- **b0-stats, b0-hello:** retval 0.
+- **vm-contract:** retval 0. contract.dom's `ok` prints `VIRTUAL_APPLICATION_OK` and exits 0. Its `stale` access is
+  denied with cause 25, exit 139, which is the reading that the run is virtual.
+  - The layout branch, written before the boot at the runtime lane's request: a 29 at contract.dom's FIRST allocation,
+    before any `VIRTUAL_APPLICATION_OK`, means "header or layout, kit side". It goes to the RTL lane with the table
+    dump and is not a silicon finding. This boot is the first time silicon reads a table the module wrote, and the RTL
+    lane's cross-check of a module-written table has not run yet.
+- **vm-suite:** 22 `VM_EXIT` lines, each with the flat record's status:
+  - 0: normal, threads, vm, nested, heap-threads, sparse-churn, parallel_one, parallel_two, sqlite_write, sqlite_read,
+    mruby;
+  - 139: nested-stale, stale, bounds, retired, vm-ro-write, vm-none-read, vm-guard, vm-padding, sparse-stale;
+  - 143: preempt;
+  - except `cleanup`: the board kernel cannot unload a module, so `rmmod` fails and cleanup is pre-registered false.
+  - `board-check.py`, which runs run.py's own analysis block from c14933904de4, must read 40 of 41 tests true, with
+    cleanup the only false one.
+- **A reading that differs from the record** is reported with both values, and goes to the RTL lane before anything is
+  called silicon.
+
+**The judge, checked before the boot** (`board-tier12/results/dryrun-tier12.txt`).
+- On the flat QEMU serial it reads 41/41.
+- One altered status flips exactly that test.
+- `cleanup` is flagged when the board expectation is applied to the QEMU serial.
+- A board-format dry run found a bug, now fixed. The driver's echoed command line carries both rung markers literally,
+  and the unanchored judge matched that echo and read "NO DATA" on a clean transcript. The markers are now anchored at
+  line start, with a numeric rc on the END marker. The anchored judge reads the same transcript correctly, and refuses
+  a duplicated segment.
+- The boot script was dry-run with only the driver stubbed. A clean transcript, the layout branch, and no transcript
+  each produce the predicted lines.
