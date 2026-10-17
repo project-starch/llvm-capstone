@@ -903,3 +903,33 @@ bundles run: 18 of 26; not run: [('cpython/allocator-boundary-repros', 'virtual-
 - `build-virtual.py` adds `-I capstone/runtime/include` only for `--sublet` (line 207).
 - So the stock arm finds neither the include nor its path, and the Sublet arm finds the path but not the include.
 - The repair belongs to the port's owner, the compiler lane, which has been told. Neither prediction is read.
+
+**Rerun with the build fix (2026-10-17 10:46-11:02).**
+- **The tree.** The kit's source tree carries only b0d93849ceba's two-file fix (`build-virtual.py`,
+  `repro322_common.h`), applied as a diff onto 89ee98be99e5. The SDK and the kit are unchanged.
+- **The controls.** The configuration's controls are built with `--observe controls/control_{uaf,bounds}_mem5.c`. My
+  first rerun omitted them, and the runner read every cell control-failed: an error in my recipe.
+- **Cases 06 and 22 read build-failed:** they need `--ext-src`, a SQLite 3.22.0 full source tree, and none is on this
+  host. The only full tree here is 3.53.3, which is the wrong version.
+
+| arm | without exact bounds ((iii), production) | with `--exact-bounds` | cells equal to the record (exact) |
+|---|---|---|---|
+| `virtual-malloc` | CAUGHT 3, MISSED 27, unattributed 1, build-failed 2 | the same | 29 of 33 |
+| `virtual-nested-pools` | CAUGHT 1, unattributed 30 (cause 29 in `capstone_cap_derive`), build-failed 2 | CAUGHT 25, MISSED 6, build-failed 2 | 31 of 33 |
+
+- **`virtual-nested-pools`: outcome (b), confirmed by the exact-bounds control.**
+  - Without exact bounds, 30 cells die with 29 at the memsys5 Sublet derive.
+  - With exact bounds, every built cell equals the record.
+  - That is the plan's recorded (iii) cost for SQLite's memsys5 blocks.
+- **`virtual-malloc`: two real differences, cases 12 and 24, and neither depends on (iii)** (they read the same with
+  exact bounds).
+  - Both had recorded cause-24 faults (an operand that is not a capability): 12 in `sqlite3Fts5IterTerm`
+    (unattributed), and 24 in `sqlite3OpenTable` (CAUGHT under its fault site).
+  - On v6 both complete with no fault, so they read MISSED.
+  - For 24 this matches the corpus's silicon stock arm, which also completes. The campaign plan records "24 completes
+    where virtual-malloc faults", with the emulator agreeing.
+  - So the record's cause-24 fault there was a property of the 10-11 virtual build, not of the defect. What dropped
+    the tag in that build is not established.
+- **The pre-registered (iii) rounding exception was not needed:** no CAUGHT 28 became MISSED.
+
+**Status after SQLite (computed by `status.py`): 20 of 26 bundles run; not run: cpython (4) and postgres/sql-repros (2), blocked on the per-port SDK build (soft-float builtins in a hard-float link), which the compiler lane has taken.**

@@ -23,6 +23,8 @@ runs = [  # (corpus, arm, verdicts file, platform)
  ('ffmpeg/pool-repros', 'virtual-nested-pools', F+'/run6/pool-ON/virtual-nested-pools/verdicts.jsonl', 'SDK arm 6 (-fno-builtin)'),
  ('memcached/allocator-repros', 'virtual-nested-pools', F+'/disc1-b13-exact/virtual-nested-pools/verdicts.jsonl', 'kit + QEMU exact bounds'),
  ('wireshark/wmem-repros', 'virtual-nested-pools', F+'/wmem/out-virtual-nested-pools-exact/verdicts.jsonl', 'kit + QEMU exact bounds (capstone_vm)'),
+ ('sqlite/engine-repros', 'virtual-malloc', F+'/sqlite/out-virtual-malloc/verdicts.jsonl', 'kit + b0d93849ceba build fix (capstone_vm)'),
+ ('sqlite/engine-repros', 'virtual-nested-pools', F+'/sqlite/out-virtual-nested-pools-exact/verdicts.jsonl', 'kit + b0d93849ceba + QEMU exact bounds (capstone_vm)'),
 ]
 man = json.load(open(M)); allb = {(b['corpus'], b['arm']) for b in man['bundles']}
 seen = set(); rows = []
