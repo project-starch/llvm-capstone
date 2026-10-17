@@ -933,3 +933,59 @@ The repeat with ONE file changed: the board module, ed24f827 → **0cc4760d21fde
   or the RTL lane by what faulted.
 - `monitor-stop`: NODM or INJL.
 - Anything else goes to the RTL lane.
+
+### Boot 3-T1's third run, result (2026-10-18 04:42-04:54): the kernel takes an instruction access fault in the new module's own text, at the rung's first ioctl
+
+Pre-registered at d7a7b6206cf5, N = 1. Result lines in `board-tier12/results/board-vp2-tier12-3t1r3.result-lines.txt`.
+- b0-stats 0 and b0-hello 0.
+- **vm-contract never returned: branch `injected`.** The reading, before any grant:
+  - MTVL:81D2E940, CPMX, INJS:2;
+  - then Linux's own "Oops - instruction access fault" at `vm_ioctl+0xb60 [capstone_vm]`, badaddr 0x81d2e940;
+  - then a kernel panic.
+- **The Q-30 reading was not reached.** The rung stopped before the launcher's first grant.
+
+Located, not attributed:
+- epc ffffffff01113940 and badaddr 0x81d2e940 share their low 12 bits. The fault is the instruction FETCH of the
+  module's own text page, physical 0x81d2e000.
+- The kernel wrote that page at insmod, and its oops dump read the faulting instruction back from it. Data loads and
+  stores reach the page; only the fetch faults.
+- swap_cpmp found no live region covering mtval that was not already loaded in a CPMP entry. Its lookup skips loaded
+  regions, so the reading cannot distinguish:
+  - a hole in the region table;
+  - a loaded entry that covers the page but refused the fetch.
+- On the FPGA, print_regions and print_cpmps print nothing.
+- This boot's carve tags are identical to the repeat's. The repeat's smaller module (ed24f827) ran the same path with
+  its text on other pages.
+- Modelled from R-55's exact-pieces rule (not read): the remainder below the CMA carves is one exact piece
+  [0x80100000, 0xAC000000), which also covers the kernel's own text, so a covering region is predicted to exist.
+
+## Pre-registered (2026-10-18, before the CPMX diagnostic run): the third run again, with the region table reported at a CPMX
+
+**The one change:** the monitor, 1e9451a → capstone-sbi vp2/cpmx-diag 0c772b0.
+- `CAPSTONE_CPMX_DIAG` makes swap_cpmp's CPMX path (FPGA) call `report_cpmx_diag(mtval)`. It reports:
+  - every live region: id, CPMP slot, decoded base and end, permissions (lcc selector 5);
+  - every loaded CPMP entry: id|region, bounds, permissions;
+  - CPHT for a loaded entry that covers mtval.
+- It is read-only (each capability is read and written back, as print_regions does).
+- Without the define, `qemu-kit-fw/monitor-variant-gate.sh 1e9451a vp2/cpmx-diag` reads 0 differing lines on all three
+  configurations.
+
+**The pins:**
+- Firmware e56ec94f185ad5ee: the third run's Image 21e730020b2f6a1d, wrapper 1269c77, the board's four defines plus
+  CAPSTONE_CPMX_DIAG.
+- The dom_stack gate passes (25712 B of 32768 B). `report_cpmx_diag` is in the ELF and swap_cpmp calls it.
+- The stage is the third run's. Rungs b0-stats, b0-hello, vm-contract.
+- Run by `boot3/run-tier1-3r4.sh e56ec94f185ad5ee`, judged by the third run's judge plus `boot3/cpmx-diag-read.py`.
+  Both were dry-run (`boot3/dryrun-boot3r4.txt`).
+
+**Predictions:**
+- b0-stats 0, b0-hello 0.
+- **If the fault recurs** (the same module, the same boot sequence, so likely the same placement), the dump names one
+  branch:
+  - `covered-loaded` with X in the permissions: a loaded entry covers mtval and the fetch was refused anyway, so the
+    RTL's fetch-side check (the RTL lane). The model above predicts this, or the next.
+  - `covered-loaded` without X: the monitor gave Linux a non-executable piece (the monitor's carve).
+  - `covered-unloaded`: swap_cpmp's lookup missed a live covering region (the monitor).
+  - `uncovered`: a hole in the region table (the monitor's carves; R-55's replay is then pointed at this boot).
+- **If it does not recur:** vm-contract reads by the third run's branches, and the run is recorded as placement-dependent
+  with the dump armed.
