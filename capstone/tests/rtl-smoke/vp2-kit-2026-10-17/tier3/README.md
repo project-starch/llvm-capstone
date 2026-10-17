@@ -789,3 +789,10 @@ Subobject case 00 as in runs 3 and 4.
   independent defect.
 - **Either way open:** why the 10-10 record, whose SDK had the same exposure, passed. Either its codegen did not
   inline that copy, or the copy shape is new in v6's sources. The image hash goes beside the reading.
+
+## postgres/c-repros `virtual-malloc` (#16) on the fixed revision: pre-registered (2026-10-17, before the run)
+
+- **Build:** `shared/build-domain.sh <v6-fix SDK> <out>`, one domain program per case.
+- **Run:** `shared/run-arm.py --virtual-kit <v6-fix kit>`, the kit's direct boot, so no VM is needed.
+- **Prediction:** CAUGHT 5, every cell equal to the record (`compare-cells.py`).
+- **Recorded:** CAUGHT 5, on the 2026-10-10 SDK at `/tmp/capstone/pgv-none/image/sdk`, runtime e5693f5c….
