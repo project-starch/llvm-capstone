@@ -2501,3 +2501,63 @@ or made an existing one reachable. Nothing measured so far separates those.
 bounds in `application.c` immediately before `capstone_launch_unpack` is called, in both arms. That
 is the one reading that says whether the capability is already invalid when it is handed over or is
 invalidated inside the unpack. It needs an SDK rebuild, which is a known-good path here.
+
+
+## RETRACTED: the fault is not in `launch.c`. My addresses were wrong by 0x10000
+
+### The error
+
+I translated the fault pc as `ELF vaddr = pc - code_base`, which was never verified against an
+anchor — the `entry=` field in the fault line is the launcher's trampoline and lies outside the
+image's `PT_LOAD`. The board lane's own convention, stated in their report, is
+**`VA = (pc - code_base) + 0x10000`**, and it cross-checks: they place `cap_malloc_validate` at
+VA `0x20d78`, and in this image its symbol is at `0x20dc8`.
+
+So everything I concluded from vaddr `0x1133c` is withdrawn, including the byte-match "confirmation"
+that the fault was in `launch.c.obj`. **That match was real but at the wrong address.** A byte match
+confirms where bytes came from; it cannot confirm that the fault happened there, and I presented it
+as if it did.
+
+### What the fault actually is, at the corrected VA `0x2133c`
+
+    21324: lcc  t0, a2, 0x3        # base
+    21328: lcc  t1, a2, 0x4        # end
+    2132c: sub  t1, t1, t0
+    21330: bltu t1, a3             # the function's own window test -- PASSES
+    21338: scc  t2, a2, t0
+    2133c: <unknown, funct7 0x51>  <-- faults
+
+That is instruction-for-instruction `capstone_cap_derive` from
+`runtime/include/capstone/capability.h:42-48`, inlined into **`aligned_alloc`** at +0x19c
+(`aligned_alloc` is at `0x211a0`, `posix_memalign` at `0x213b4`).
+
+**So this is the board lane's signature (2), not a separate fault.** Their description —
+"cause 29 inside `capstone_cap_derive` (+0x9c), at its CDERIVE (funct7 0x51), after the function's
+own window test passed" — matches mine exactly. There is **one** signature here, not two, and it is
+reached through `posix_memalign(4096, 5001)`, whose 28672-byte arena the `add()` relaxation newly
+admits.
+
+### The cause numbers, from the source rather than from inference
+
+`cpu_bits.h:693-699`: `0x18` `UNEXP_OP_TYPE`, `0x19` `INVALID_CAP`, `0x1a` `UNEXP_CAP_TYPE`,
+`0x1b` `INSUF_CAP_PERMS`, `0x1c` `CAP_OOB`, `0x1d` `ILLEGAL_OP_VAL`, `0x1e` `INSUF_RESOURCES`.
+
+So **24 = `UNEXP_OP_TYPE`**, which confirms the board lane's reading of their signature (1) from the
+cause name alone: a non-capability where a capability was required, i.e. `free()` reached with an
+integer pointer. And **29 = `ILLEGAL_OP_VAL`**; **28 = `CAP_OOB`** is the bounds class, which is why
+its absence was the right thing to check.
+
+### An inconsistency I have NOT resolved, stated rather than smoothed over
+
+`RISCV_EXCP_ILLEGAL_OP_VAL` is raised at exactly three places in this QEMU pin — `op_helper.c:1087`
+(SHRINK, with a debug print), `:1264` (`csinit`, no print) and `:1561` (STC through an uninitialised
+capability with a non-zero imm, with a print). **None of them is a CDERIVE.** Further, funct7 `0x51`
+on opcode `0x5b` has **no entry** in this pin's `insn32.decode` (0 matches), there is no `cderive`
+in the decode table or in `op_helper.c`, and the disassembler prints `<unknown>`.
+
+Those facts do not yet fit together: an undefined instruction would normally raise cause 2, and the
+arm does contain exactly one cause-2 fault. So either the pc is still off by one instruction, or
+funct7 0x51 reaches a raise site I have not found. **That is the next thing to settle, and it is
+also the most likely explanation of the board lane's signature (2) in a corpus that my change did
+not touch** — which would make the mechanism independent of the relaxation, with the relaxation only
+making the path reachable.
