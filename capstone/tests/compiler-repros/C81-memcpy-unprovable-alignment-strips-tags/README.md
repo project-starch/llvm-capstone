@@ -163,6 +163,18 @@ flags (`-capstone-gp-free -capstone-image-gp`) the emitted libcall is
 libcalls also already occur on the default path for copies past the chunk budget, so they are not
 structurally fatal.
 
+## The libcall flag has TWO uses; one is valid and one is withdrawn
+
+Keep these apart, because the flag appears in this folder for both reasons:
+
+* **As an enumeration INSTRUMENT: valid.** Compile with
+  `-mllvm -capstone-lower-memops-via-libcall`, never run the result, and diff it against the plain
+  build. Every copy that becomes a call was inline-expanded before, including `__builtin_memcpy` and
+  compiler-synthesised copies that `-fno-builtin` cannot reach. The positive control is
+  `copy32_unknown_builtin` becoming a call. The flag's withdrawn status concerns *running a domain
+  under it*, which this use never does.
+* **As a WORKAROUND: withdrawn**, pending the W-05 matched pair. See above.
+
 ## `-fno-builtin` is an INCOMPLETE workaround — do not record it as the resolution
 
 The third row of the table is the point: `__builtin_memcpy` byte-expands **with** the flag. The flag
@@ -256,15 +268,22 @@ codegen, and nothing in the record captures that. So `inputs.json` cannot answer
 build", and a re-run diffed against the record would read as unchanged. Recording the SDK's codegen
 list, or a hash over it, in both `inputs.json` and `manifest.json` would close both gaps.
 
-**Consequence for the nine-case diff, stated rather than buried:** because the clean side is an
-arm-6 *SDK* build, it differs from the plain side in the runtime archive as well as in the case
-code. So the 6-7 byte-granular runs per case cannot be attributed to the FFmpeg sources
-specifically — they may lie in the runtime. That does not weaken "the mechanism is this defect",
-since a tag stripped by a runtime `memcpy` is the same defect, and it is consistent with the fault
-being read at `refstruct_pool_uninit+0x78` while the stripping copy is upstream and unidentified.
-A pair that isolates the case code is the baseline SDK plus `--cc-arg -fno-builtin`, which leaves
-the runtime untouched; that is a different question from reproducing run6's verdicts, and the two
-must not be conflated.
+**RETRACTED: arm 6 IS a one-variable pair, so the nine-case diff needs no such caveat.** An
+earlier version of this paragraph said the arm-6 SDK moves the runtime archive too, so the
+byte-granular runs might lie in the runtime rather than the case code. That was wrong, and wrong
+because I compared against the WRONG baseline — `sdk-abi-v6-20261017`, which did not build the
+Tier 3 kit. Against the kit's actual baseline, `vp2-prep/v6-fix/out/sdk`, verified file by file:
+
+| SDK | `libapplication-runtime.a` | `libcapstone-application-builtins.a` | `spawn-shell.o` | `capstone-cc` |
+|---|---|---|---|---|
+| `v6-fix/out/sdk` (baseline) | `855f843c750a9838` | `4dff5d9426bdcffe` | `4c7cc33f439e1c11` | `7f3077ae894a9edb` |
+| `sdk-arm-6` | `855f843c750a9838` | `4dff5d9426bdcffe` | `4c7cc33f439e1c11` | `7f3077ae894a9edb` |
+| `sdk-abi-v6-20261017` (NOT the kit's) | `2955b33c0253845f` | `4dff5d9426bdcffe` | absent | `7f3077ae894a9edb` |
+
+`diff -rq` between the baseline and arm 6 reports only `ARM.txt` and `sdk.json`, and `sdk.json`'s
+only codegen difference is `-fno-builtin`. **Every prebuilt object is byte-identical**, so the
+nine-run difference cannot be in the prebuilt runtime; it is in what `capstone-cc` compiled under
+the differing codegen, i.e. the application side. The diff attributes correctly as it stands.
 
 **There is no retrospective artifact test for this, and that is a recording gap.**
 `ports/common/application/build.py`'s `manifest.json` (:172-188) records `compiler_sha256`,
