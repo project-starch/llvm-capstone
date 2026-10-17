@@ -6694,3 +6694,33 @@ Fifteen warm boots (r1wf16-01 to -15, 90 invocations, 420 records) and five cold
 - where the cold constant saturates;
 - depth apart from the first-point effect, which needs a reversed-order boot;
 - timing closure.
+
+## M1 on the Sublet bitstream: all four conditions as on R-43 v2, on the fixed-runtime images (caplifive_sublet_d93a8d66b, 2026-10-17)
+Five boots on the classic line (buildroot d04bd83, monitor 93440d5) with `REFUSAL_RECORD=1`, on rebuilds that carry the
+sublet-runtime fix. The 2026-10-01 images mis-carve here (R-55, the runtime half). Folder:
+`tests/rtl-smoke/m1-sublet-2026-10-16/`, pre-registered at lane 0f3a221c015a, corrected at a69e5fe5bfdc and amended before any boot at 4f130895e813; RESULTS.md
+is there.
+
+| condition | reading |
+|---|---|
+| permitted reuse | drop and ring reach 10C (`alloc=655320`) against the 65,532-index pool, in every boot that runs them, with no exhaustion |
+| accounting | `minted − revoked = 31` on every snapshot (318 in m1s16f-1, 201 in m1s16f-5, 539 in each probe boot) |
+| stale operations | after all four Design arms, ONE stale access per boot is refused at the probe's own instruction with cause 25: READ age 0 at image+0x4938, WRITE age 0 at image+0x499c, READ age 2 (below). The same instructions through live aliases succeed earlier in each boot, and the refusal record reads LATCHED |
+| pressure | `stop=buffer alloc=43297`; release enters phase 2 at 43,290 and ends at 51,948 |
+
+**Cost against v2**, reported, not predicted, per operation: the median over an arm's snapshots.
+
+| arm | take, this run | take, v2 | give, this run | give, v2 |
+|---|---|---|---|---|
+| drop | 94.347 | 72.029 | 106.046 | 107.057 |
+| pressure | 88.000 | 72.010 | 75.053 | 75.066 |
+
+- **Take rose 16 to 22 cycles; give is unchanged to about 1 cycle.**
+- **The image changed:** the fixed runtime's `sublet_split` SHRINK and cursor-based take. The bitstream changed too.
+- These boots do not separate the two.
+
+**Observed, not predicted:** the age-2 row's latched refusal sits at generation 1,352, with index = head − 1 (257 / 258)
+and serving = head − 16 (242). Those are R-43 v2's m1v2s-4 relations and generation, with a different B.
+
+**Not established:** the take rise's attribution; the turnover witness (deferred: this bitstream's node ids are not
+modelled); N = 1 per row.
