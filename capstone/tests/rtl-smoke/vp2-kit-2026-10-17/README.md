@@ -1047,3 +1047,43 @@ The dry run is in `boot3/dryrun-r5.txt`.
 - **What narrows it:** a fetch fault at the next line (CSRUNV+0x40) or later inside vm_ioctl. That would mean the window
   covers more than the restart fetch.
 - Any other stop is read by its branch, with the dump if a CPMX appears.
+
+### Boot r5, result (2026-10-18 05:11-05:22): the line-boundary hypothesis is RETRACTED; the fault is at CSRUNV+4 wherever CSRUNV sits
+
+Pre-registered at ef4747aab249. Result lines in `board-tier12/results/board-vp2-tier12-r5.result-lines.txt`.
+- **The fault, unchanged.** b0-stats 0, b0-hello 0, then the same instruction access fault and panic. epc is
+  vm_ioctl+0xba4 = .text 0x39c4 = CSRUNV + 4, where CSRUNV now starts a 64-byte line: the faulting instruction shares
+  CSRUNV's line and even its 8-byte block. The dump again reads CPMP 3 = [0x80100000, 0xAC000000) RWX covering mtval.
+- **RETRACTED: the explanation the previous section offered** ("only a return fetch that needs a new line faults"). It
+  was a lane-side working hypothesis, sent to the RTL lane as one, and never on a shared branch.
+  - What would have caught it before the boot: the differential it rested on had two modules that differ in many
+    respects (their Q-26/Q-30 code, their sizes, their physical placement), and the line was only the first
+    difference noticed. One matched pair is not a localisation when the pair differs by more than one thing.
+- **What stands, N = 3 boots of two builds of the compiler lane's revision.** The S caller's FIRST fetch after a CSRUNV
+  escape returns (always CSRUNV + 4) is refused, while a loaded RWX CPMP entry covers it when M looks.
+- **Unexplained:** ed24f827's returns (CSRUNV at .text 0x37f4) did not fault, on two boots and many steps.
+
+## Pre-registered (2026-10-18, before boot r6): the compiler lane's module with a monitor that retries the refused fetch
+
+**The change** (from the third run: monitor only). Module 0cc4760d21fde17a again (the stage is the third run's files,
+by hash). The monitor is capstone-sbi vp2/fetch-retry 007d81d: the CPMX diagnostic plus `CAPSTONE_VP2_FETCH_RETRY`.
+- An S/U instruction-fetch access fault whose mtval a LOADED CPMP entry with X covers is not injected. The monitor
+  reports `FRTY:<mepc>`, executes sfence.vma and fence.i, and returns to the faulting pc.
+- A second refusal at the same pc with fewer than 4096 instructions retired since is injected, as before.
+- Define-off byte-identical in every configuration (monitor-variant-gate).
+
+**The pins.** Firmware bbc3cd7e9e1d6b56 (Image 5a3b6462bc2cc6e4, wrapper 1269c77, the board's defines plus
+CAPSTONE_CPMX_DIAG and CAPSTONE_VP2_FETCH_RETRY). The dom_stack gate passes, and swap_cpmp calls
+fetch_retry_covered. Run by `boot3/run-tier12-r6.sh bbc3cd7e9e1d6b56`, dry-run in `boot3/dryrun-r6.txt`. Rungs
+b0-stats, b0-hello, vm-contract, then vm-suite last.
+
+**Predictions:**
+- **If the refusal is transient** (the CPMP state the fetch was checked against at the escape is not what M reads
+  later), the retry succeeds:
+  - FRTY lines at the CSRUNV+4 pc, one per faulting return, and no Oops;
+  - vm-contract identity (exit 0, then 139/25), its sixth grant `ADD_OK slot=5 ... bytes=8192 reg=10 perms=7 linear=1`;
+  - vm-suite 22 exits and board-check 33 of 41 (the eight pre-registered false);
+  - the first virtual applications on silicon.
+- **If it is persistent** (a verdict that sfence.vma and fence.i do not clear), there is one FRTY at that pc, then the
+  guard injects. The CPMX dump and Oops follow as in r4/r5, and the mechanism is the RTL lane's.
+- **The FRTY count is a reading in either case:** how many returns fault.
