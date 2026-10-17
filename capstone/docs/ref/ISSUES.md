@@ -385,6 +385,16 @@ ECALL reads 25 after the fix and reaches the ECALL on the pre-fix module. Truste
 pre-registered by the RTL lane): the caller snapshot kept out of the frame, in a kernel-only save area or the CSR file
 for the one slot, since (a) relies on the adapter never granting a frame page.
 
+**Exposure today** (verified at llvm-capstone 457b78f27e10). A child frame runs only in a second context slot.
+- **vp2 has one slot.** The RTL refuses a second CSRUNV with 29 while the creator's context holds the slot (Q-26).
+- **From the Q-26 queue (39cf6763d3a6) onward**, the module refuses CV_THREAD_CREATE with -EBUSY whenever a frame is
+  live, and its caller always is (capstone_vm.c:1123-1126; `supervisor_slots` is 1 and fixed after load). So on vp2
+  no child frame is ever created.
+- **With the earlier modules** (ed24f827, which boots 1-3 ran), the child frame is admitted at create. Whether a
+  creator can leave the slot while its child survives was not examined.
+- **QEMU keeps the caller internal at any slot count**, so this issue does not apply to QEMU.
+- **The live case** is a multi-slot bitstream, or a module admitting child frames on one slot.
+
 **Impact.** Benign programs run unaffected (Tier 1/2 proceed). Any claim that the virtual profile isolates the kernel
 from a domain ON SILICON must not outrun this issue until (a) is on the board and the demonstration arm reads 25.
 
@@ -407,6 +417,11 @@ Siblings: S-21 (the S caller's snapshot at frame+1024, restored on every escape;
 (next bitstream): a consuming resume (the switcher clears the 31 slots and tags after loading them) and the hidden
 words out of the frame. QEMU is being brought to the RTL's behaviour as it is (slots written on escape, +224 zeroed on
 action 2 only), not to the fixed one, so the kit's predictions see what silicon does.
+
+**Exposure today.** As S-21's: no child frame is created on vp2 from the Q-26 queue (39cf6763d3a6) onward.
+- The hidden-word read does not apply to QEMU, which keeps those words internal.
+- The stale-copy residual will apply to a multi-slot QEMU configuration once QEMU writes the escape slots into the frame
+  (the RTL lane's next pin).
 
 **Not demonstrated.** Source reading only.
 
