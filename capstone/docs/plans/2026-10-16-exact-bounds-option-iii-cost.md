@@ -2612,3 +2612,56 @@ The board lane's other two signatures are separate and remain theirs: the FFmpeg
 their subobject bundle defines it away) and the memcached allocator-repros CDERIVE refusal. The
 latter may share this mechanism — an unrepresentable size reaching a derive — but through their own
 port's allocator rather than through `heap.c`, and that is unverified.
+
+
+## Two corrections from reading the WRONG TREE, and they strengthen the decision
+
+The board lane caught both. I grepped the `capstone-qemu` **checkout**, which is at
+`deb7d757565d`, while the QEMU actually run is the pin `d35af47b163c`. This project's own rule
+covers it exactly — *a lagging checkout cannot prove absence; verify a citation in its own tree with
+`git show <ref>:<path>`* — and I did not follow it.
+
+### RETRACTED: "funct7 0x51 is not a defined instruction"
+
+It is. In the pin, `insn32.decode:984` reads
+`csderive 1010001 ..... ..... 001 ..... 1011011`. The checkout I grepped has **0** occurrences of
+`csderive`; the pin has it. So the "inconsistency I have not resolved" in the previous section
+dissolves: the faulting word is `csderive`, there is a `helper_csderive`, and nothing was undefined.
+
+### RETRACTED and REFINED: "QEMU has no refusal path, it silently widens"
+
+`helper_csderive` in the pin does this, with the comment *"Never silently widen a new object's
+authority in the compact profile"*:
+
+    cap_compress(&child, &lo, &hi);
+    cap_uncompress(lo, hi, &back);
+    if (!riscv_cpu_cfg(env)->capstone_exact_bounds &&
+        (back.bounds.base != child.bounds.base || back.bounds.end != child.bounds.end))
+        riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_OP_VAL, ra);
+
+So **QEMU refuses a non-representable CHILD at derive time**, as a compress/uncompress round trip,
+exactly when exact bounds are off. What widens silently is `cap_compress` used as an encoder; what
+refuses is the derive instruction. My audit sentence conflated the two.
+
+**This strengthens Option A rather than weakening it.** The argument I gave was "follow QEMU for
+what is representable, not for what it does when a range is not, because it widens". The better
+argument is simpler: **`csderive` already refuses exactly what is not representable, so a module
+arena test of `capstone_repr_ok` makes the module agree with the instruction** instead of enforcing
+a stricter, unrelated rule. The decision is unchanged; its justification is now the stronger one.
+
+It also means my abandoned round-trip oracle was the right *shape* — QEMU itself round-trips — and
+only my transcription of it was wrong. Worth recording so the next reader does not conclude the
+approach was misguided.
+
+### And it closes the mechanism, consistently
+
+My cause-29 fault was `csderive` refusing a child of size 5001, whose granule is 8 and which is
+therefore not representable — the round trip above returns different bounds and the instruction
+raises. The board lane's memcached Sublet signature is the same refusal, confirmed by them with a
+single-variable run: the identical binaries, SDK and module with only
+`x-capstone-exact-bounds=true` added read CAUGHT 8 + 1 control-failed, every cell equal to the
+record, against 8 mismatches without it. That is vp2's Q-15 binding inside a virtual context.
+
+**The open question for that arm is the one this lane's own fault answered: what SIZE the carve
+passes to the derive.** If it derives over a raw request, rounding at the carve is the fix, and
+`heap.c`'s `malloc`/`realloc`/`aligned_alloc` are the worked example.
