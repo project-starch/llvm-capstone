@@ -51,6 +51,11 @@ struct context {
     struct cv_stats stats;
     u64 next_id, ids[CV_MAX_ARENAS];
     bool exact_bounds;
+    /* The flat format has no retired word: QEMU reads root+40 only under t->paged, and in a flat
+     * table that offset is record id 2. CSRETIRE answers 0 on success and 1 on rejection and never
+     * faults, so counting the zeros here is the same quantity the paged word held, not an estimate.
+     * Reset by the collection that reclaims the retired records. */
+    unsigned long retired_flat;
     wait_queue_head_t remap_wait;
     struct arena *remapping;
     struct page **remap_pages;
@@ -77,15 +82,49 @@ static unsigned long node_max_records;
 module_param(node_max_records, ulong, 0444);
 MODULE_PARM_DESC(node_max_records,
     "vp2: cap the flat lifetime table at this many records (65536 for a 16-bit node index); 0 = no cap");
+/* vp2 implements only the FLAT table format. CAP_REV_TABLE_FLAGS is RECYCLE|PAGED, so the
+ * default header publishes a PAGED table, which the rev-node unit refuses (status 3, read as 29 at
+ * the context's first allocation). In flat mode the table is ONE physically contiguous
+ * CV_FLAT_RECORDS*16 allocation, records indexed straight off the root as QEMU lays them out
+ * (cap_rev_table.c: pa = root + id*16), capacity fixed at CV_FLAT_RECORDS and never grown -- the
+ * hardware saturates capacity and next-unused at 65,536 regardless, and a fixed capacity makes the
+ * pressure rule (capacity - next + free_count <= RESERVE) read identically on both kits from the
+ * first allocation. Default off, so the paged kit is unchanged and the two are told apart by the
+ * recorded parameter rather than by inspection. */
+static bool node_table_flat;
+module_param(node_table_flat, bool, 0444);
+MODULE_PARM_DESC(node_table_flat,
+    "vp2: publish a flat (non-PAGED) lifetime table of a fixed 65536 records; 0 = the paged format");
+#define CV_FLAT_RECORDS 65536UL
+#define CV_FLAT_BYTES (CV_FLAT_RECORDS * CAP_REV_TABLE_RECORD)
+
 /* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
 static unsigned long pin_ahead_pages = 1;
 module_param(pin_ahead_pages, ulong, 0444);
 
+/* The retired count, from wherever this format keeps it. */
+static unsigned long node_retired(const struct context *c)
+{ return node_table_flat ? c->retired_flat : c->table[5]; }
+
 static unsigned long node_capacity(const struct context *c)
 { return c->table[0] & ~CAP_REV_TABLE_FLAGS; }
 static unsigned long node_available(const struct context *c)
 { return node_capacity(c) - c->table[1] + (c->table[2] >> 32); }
+
+/* The flat table is one physically contiguous allocation: select_root() publishes
+ * virt_to_phys(c->table) into CSR 0x5c1, and QEMU's flat preflight requires the whole
+ * capacity*16 extent to be range_ok from that physical root, so vmalloc will not do.
+ * __GFP_RETRY_MAYFAIL tries hard without inviting the OOM killer; failing here is a clean
+ * ENOMEM at context creation, which is strictly better than the paged path's failure
+ * part-way through a running domain. */
+static unsigned long *node_new_flat_table(struct context *c)
+{
+    unsigned long *p = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO | __GFP_RETRY_MAYFAIL,
+                                                get_order(CV_FLAT_BYTES));
+    if (p) c->stats.node_bytes += CV_FLAT_BYTES;
+    return p;
+}
 
 static unsigned long *node_new_page(struct context *c)
 {
@@ -119,6 +158,9 @@ static int node_grow(struct context *c, unsigned long required)
     unsigned long limit = node_max_pages ?: CAP_REV_TABLE_MAX_PAGES;
     unsigned long pages = node_capacity(c) / 256, before = pages;
     unsigned long need, end;
+    /* Flat capacity is fixed at creation; node_add_page writes the paged directory, which in a
+     * flat table is record space. Exhaustion is the ordinary ENOMEM/resource path. */
+    if (node_table_flat) return node_available(c) >= required ? 0 : -ENOMEM;
     if (node_available(c) >= required) return 0;
     need = DIV_ROUND_UP(required - node_available(c), 256UL);
     end = min(limit, pages + max(node_batch_pages, need));
@@ -131,6 +173,11 @@ static int node_grow(struct context *c, unsigned long required)
 static void node_free_table(struct context *c)
 {
     if (!c->table) return;
+    if (node_table_flat) {
+        free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
+        c->table = NULL;
+        return;
+    }
     for (unsigned i = 0; i < CAP_REV_TABLE_ROOT_ENTRIES; ++i) {
         unsigned long pa = c->table[CAP_REV_TABLE_DIRECTORY / 8 + i];
         unsigned long *middle;
@@ -378,6 +425,7 @@ static int ensure_nodes(struct context *c, unsigned long required)
     if (required > CAP_REV_TABLE_NAMESPACE_SIZE) return -ENOMEM;
     /* vp2's 16-bit node index: refuse growth past the flat table's ceiling. */
     if (node_max_records && required > node_max_records) return -ENOMEM;
+    if (node_table_flat && required > CV_FLAT_RECORDS) return -ENOMEM;
     if (available >= required) return 0;
     list_for_each_entry(t, &c->threads, link)
         if (t->started && !t->terminal) { owner = t; break; }
@@ -389,16 +437,17 @@ static int ensure_nodes(struct context *c, unsigned long required)
         sweep_pages += c->arenas[i].bytes / PAGE_SIZE;
     collect_min = max(sweep_pages, node_batch_pages * 256);
     collect_min = max(collect_min, node_capacity(c) / 4);
-    if (owner && c->table[5] >= max(required - available, collect_min)) {
+    if (owner && node_retired(c) >= max(required - available, collect_min)) {
         error = collect(c, owner);
         if (error) return error;
+        c->retired_flat = 0;
         collected = true;
         if (node_available(c) >= required) return 0;
     }
     error = node_grow(c, required);
     if (!error) return 0;
     /* At a quota or memory limit, even a small successful sweep can help. */
-    if (!collected && owner && c->table[5]) {
+    if (!collected && owner && node_retired(c)) {
         error = collect(c, owner);
         if (error) return error;
     }
@@ -440,6 +489,7 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     restore_root(old);
     local_irq_restore(flags); preempt_enable();
     if (status && !destroying) return -EIO;
+    if (!status) ++c->retired_flat;   /* read only in flat mode; inert for the paged path */
     /* Clear every tag before returning frames to Linux. Later collection can
      * reuse dead IDs only after sweeping all remaining namespace storage. */
     for (i = 0; i < a->count; ++i) {
@@ -861,8 +911,8 @@ static void node_stats(struct context *c)
 {
     c->stats.nodes = c->table[3];
     c->stats.nodes_high_water = c->table[1] - 2;
-    c->stats.nodes_retired = c->table[5];
-    c->stats.nodes_live = c->stats.nodes_high_water - c->table[5] - (c->table[2] >> 32);
+    c->stats.nodes_retired = node_retired(c);
+    c->stats.nodes_live = c->stats.nodes_high_water - node_retired(c) - (c->table[2] >> 32);
     c->stats.node_capacity = node_capacity(c);
     high_water = max(high_water, c->stats.nodes_high_water);
 }
@@ -1094,28 +1144,49 @@ static int vm_open(struct inode *inode, struct file *f)
     t = kvzalloc(sizeof(*t), GFP_KERNEL);
     if (!t) { kvfree(c); return -ENOMEM; }
     c->frame = (void *)get_zeroed_page(GFP_KERNEL);
-    c->table = node_new_page(c);
+    c->table = node_table_flat ? node_new_flat_table(c) : node_new_page(c);
     if (!c->frame || !c->table) {
         if (c->frame) free_page((unsigned long)c->frame);
         node_free_table(c);
         kvfree(t); kvfree(c); return -ENOMEM;
     }
-    c->table[0] = CAP_REV_TABLE_FLAGS;
-    c->table[1] = 2;
-    c->table[4] = CAP_REV_TABLE_MAGIC;
-    for (unsigned long i = 0; i < node_initial_pages; ++i) {
-        if (node_add_page(c, i * 256)) {
-            node_free_table(c); free_page((unsigned long)c->frame);
-            kvfree(t); kvfree(c); return -ENOMEM;
+    if (node_table_flat) {
+        /* RECYCLE set, PAGED clear, capacity fixed and published immediately. Deliberately NO
+         * MAGIC at table[4] and no retired word at table[5]: in this format root+32 and root+40
+         * are record id 2, the first allocatable id, and QEMU reads neither outside the paged
+         * branch. Writing them would publish a table whose first record is the magic's ASCII. */
+        c->table[0] = CAP_REV_TABLE_RECYCLE | CV_FLAT_RECORDS;
+        c->table[1] = 2;
+    } else {
+        c->table[0] = CAP_REV_TABLE_FLAGS;
+        c->table[1] = 2;
+        c->table[4] = CAP_REV_TABLE_MAGIC;
+        for (unsigned long i = 0; i < node_initial_pages; ++i) {
+            if (node_add_page(c, i * 256)) {
+                node_free_table(c); free_page((unsigned long)c->frame);
+                kvfree(t); kvfree(c); return -ENOMEM;
+            }
         }
     }
     /* An older processor rejects the versioned format through urevavail.
-     * Detect that before CSMINT could fault in the kernel context. */
-    preempt_disable(); local_irq_save(flags);
-    previous_root = select_root(c);
-    asm volatile("csrr %0, 0xcc0" : "=r"(available));
-    restore_root(previous_root);
-    local_irq_restore(flags); preempt_enable();
+     * Detect that before CSMINT could fault in the kernel context.
+     *
+     * NOT IN FLAT MODE. urevavail (0xcc0) does not exist on vp2 -- csr_regfile.sv falls through
+     * to its default and a csrr is an ILLEGAL INSTRUCTION, so this probe would trap in S the
+     * first time a context is created. QEMU implements 0xcc0 as capacity - next + free_count
+     * read live, which is exactly node_available(), so in flat mode the header answers it
+     * without touching the CSR. Saturated at CV_FLAT_RECORDS as the hardware saturates. The
+     * probe's purpose -- detecting a processor too old for the versioned format -- does not
+     * apply to vp2, which is the newer part. Recorded in inputs.json as a computed count. */
+    if (node_table_flat) {
+        available = min(node_available(c), CV_FLAT_RECORDS);
+    } else {
+        preempt_disable(); local_irq_save(flags);
+        previous_root = select_root(c);
+        asm volatile("csrr %0, 0xcc0" : "=r"(available));
+        restore_root(previous_root);
+        local_irq_restore(flags); preempt_enable();
+    }
     if (available != node_capacity(c) - 2) {
         node_free_table(c); free_page((unsigned long)c->frame);
         kvfree(t); kvfree(c); return -EOPNOTSUPP;

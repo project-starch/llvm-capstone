@@ -14,7 +14,7 @@ cp "$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h"
 # built, like the ABI header above, so a kit cannot pair a module and an SDK across revisions.
 cp "$here/../include/capstone/representable.h" "$out/module/"
 make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" \
-    M="$(cd "$out/module" && pwd)" -j16 modules
+    M="$(cd "$out/module" && pwd)" -j"${CAPSTONE_BUILD_JOBS:-12}" modules
 "${CROSS_COMPILE}gcc" -O2 -static -pthread -Wall -Wextra -Werror \
     -I"$here/../include" "$here/exec.c" \
     "$here/../linux/"{application-image,image-hash,delegate-service,spawner,signals,park}.c \
