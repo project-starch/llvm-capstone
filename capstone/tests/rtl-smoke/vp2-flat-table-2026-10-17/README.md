@@ -75,6 +75,26 @@ with `${CROSS_COMPILE}gcc`, the plain Linux cross compiler, not the Capstone cla
 own code cannot contain a capability instruction, and every domain instruction runs inside the
 context.
 
+## Two things not to "fix", and one image not to rebuild
+
+**The ten uncapped runners are correct as they are.** `run.py`, `run-malloc.py`, `run-nodes.py`,
+`run-fp.py`, `run-hosted.py`, `run-ports.py`, `run-pthreads.py`, `run-safety.py`,
+`run-pin-ahead.py` and `run-step-hooks.py` all load the module with a bare `insmod`, so
+`node_max_records` is 0. That is not a defect for this kit: the flat module caps itself at
+`node_flat_records` by construction, so `node_max_records` binds only a PAGED table, and a paged
+kit is never a prediction for silicon. Only `bug-corpora/tools/virtualvm.py` needs the cap, because
+only the corpus runner predicts. Do not patch the other ten.
+
+**`sqlite3.dom` is not reproducible across builds of the same revision; cite the file, never
+rebuild to match.** Measured across two kit builds whose lane revisions differed only in the
+module, a test and documentation: same size, 32,805 differing bytes in 1,755 clusters spread from
+`0x12db` to `0x1c4c29` — not a path string or a build-id. `contract.dom` and the mruby binary WERE
+byte-identical across the same pair. The consequence is procedural rather than alarming: a
+prediction cites the image file by sha256 from the kit that produced it, `inputs.json`'s
+`image_sha256` is the identity, and the board lane bakes from that kit directory, so prediction and
+run are on the same bytes. The same applies to Tier 3's sqlite bundles and the 33 per-case
+engine-repros amalgamations. Chasing the cause is a post-campaign follow-up, not a blocker.
+
 ## Not yet done
 
 `run.py` 41/41 and bundle 5 13/13 on the flat QEMU kit, the paged build as the null control of what
