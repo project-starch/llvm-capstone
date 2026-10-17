@@ -119,6 +119,22 @@ path.
 > for CMA inside [0x8000_0000, 0x9F00_0000), the monitor's Linux bound moved to the new top, and the carve replay re-run
 > before the flash. It was copied from the dense-bounds design, which the virtual-profile plan marks as superseded by
 > option (iii). That plan's own list of what (iii) saves names the 496 MiB map.
+- **The carve replay is closed: no monitor carve is subject to Q-15** (asked by the runtime lane, 2026-10-17). Q-15
+  makes vp2 refuse an inexact child with 29 where the physical profile rounds.
+  - **Which instruction:** Q-15 is CDERIVE's alone. The dyn unit reads its representability bit at exactly one site,
+    the CDERIVE arm (`capstone_dyn_unit.anvil:277`). SPLIT and SHRINK never consult it.
+  - **When:** its flag is the TABLE namespace, not the translation flag. The dyn unit's `vctx` port is wired to
+    `vctx_table_i` (`ex_stage.sv:1213`). That namespace (`csr_regfile.sv:2865-2867`) covers:
+    - a context;
+    - S outside one with srevroot set;
+    - M under `csupctl.table`, which only the three-instruction CSNODE window in `capstone_csmint.S` sets.
+  - **The monitor issues no CDERIVE:**
+    - none in capstone-sbi's sources at cb91d7d;
+    - none that capstone-c can emit. Its instruction table (`code_printer.rs`) has no funct7 0x51 on any of its 15
+      refs, while the same search finds the table's 0xc, 0xa and 0x8 entries.
+    - In the built classic monitor asm (`sbi_capstone_dom.c.S`, `capstone_int_handler.c.S`), the custom-2 funct3-1
+      funct7s are 0x0-0xc, 0x20 and 0x21 only.
+  - **S outside a context:** the CDERIVEs are the module's arenas, which the `add()` predicate already covers.
 - The page-table walker's PMP needs no change: OpenSBI's Domain0 already permits S/U over all memory.
 - The supervisor's CPMP coverage needs no change: genesis CPMP entries plus `swap_cpmp`, settled with the RTL lane.
 
