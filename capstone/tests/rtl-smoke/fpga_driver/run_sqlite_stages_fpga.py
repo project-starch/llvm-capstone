@@ -242,6 +242,26 @@ def _selftest_switch_path():
 _selftest_switch_path()
 
 
+MONITOR_SPIN_TAGS = re.compile(r"(SPL[AB]|ILLX|EXCX|RCPX|WCPX|SHAX|RGNO|DPIC|DPIX|DRET|RCSH|RCPR|NODM|INJL):([0-9A-Fa-f]{8})")
+
+
+def monitor_spin_tag(text):
+    """The first monitor tag that means the MONITOR stopped (a match object), or None.
+
+    Since the 2026-10-17 monitor (capstone-sbi vp2/os-trap-inject), an EXCX or ILLX for a trap from S or U is
+    followed by INJS: the trap was handed to the kernel and the system went on, so the monitor did NOT stop there.
+    NODM (fault_return_from_domain with no domain call outstanding) and INJL (an injection that would land on the
+    faulting pc) are monitor stops, and they win over the EXCX or ILLX report printed before them."""
+    stop = re.search(r"(NODM|INJL):([0-9A-Fa-f]{8})", text)
+    if stop:
+        return stop
+    for m in MONITOR_SPIN_TAGS.finditer(text):
+        if m.group(1) in ("EXCX", "ILLX") and re.search(r"INJS:[0-9A-Fa-f]{8}", text[m.end():]):
+            continue
+        return m
+    return None
+
+
 def stall_shape(text):
     """The shape of a NON-RETURNING arm's transcript: (last share tag, last host marker).
 
@@ -1819,7 +1839,7 @@ def main():
             # deterministic monitor region-pool exhaustion (RGNO:0000E00C, RGNN:00000020 = 32
             # regions). They are still excluded from wedge counts -- but as a known monitor limit,
             # not as an unexplained per-image stall.
-            montag  = re.search(r"(SPL[AB]|ILLX|EXCX|RCPX|WCPX|SHAX|RGNO|DPIC|DPIX|DRET|RCSH|RCPR):([0-9A-Fa-f]{8})", text)
+            montag  = monitor_spin_tag(text)
             stall_shape_of[label] = stall_shape(text)
             results.append((label, wedged, obs, returned, created, entered,
                             montag.group(0) if montag else None))
