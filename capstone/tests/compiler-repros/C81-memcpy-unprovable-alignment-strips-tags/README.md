@@ -154,9 +154,32 @@ lane built the mruby twin with `-capstone-lower-memops-via-libcall` at LTO on th
 (image `f87f9cbf`) and it does not run: `smoke.rb` and all 20 rows fault identically, before any
 case code, with cause 24 at `pc=0xe030c96c`, `address=0xe2246e90`, inside `memcpy+0xc8` — a domain
 heap address, i.e. an untagged pointer reaching `memcpy`. That is a current, independent
-reproduction on a different program from the 2026-08-11 SQLite record, so the "may be stale"
-caveat below is answered: it is not stale. **Emit-the-libcall is not available, and a run-time
-alignment test is the fix.**
+reproduction on a different program from the 2026-08-11 SQLite record, and it is a RUN, not a
+compile-time reading — a cause, a faulting pc and a heap address require execution, and it ran
+under QEMU in the silicon-mimic stage. So the "may be stale" caveat below is answered: **enabling
+the flag wholesale breaks a real program today, and the flag is not usable as a workaround.**
+
+**CORRECTED: that does NOT by itself disqualify direction 2 as a FIX, and an earlier version of
+this paragraph said it did.** The flag declines *every* `memcpy`/`memmove`/`memset`, so mruby is
+evidence against **routing everything through libcalls**. The fix is far narrower — a libcall only
+for copies of 16 bytes or more whose operands are not provably 16-aligned — which touches a small
+fraction of those sites. Two things make the inference from one to the other weak:
+
+* my own probe (below) found the libcall's **argument setup is correct** in every shape tested, so
+  the mechanism of mruby's fault is *unexplained*; attributing it to "compiler-generated libcalls
+  are broken on this ABI" is the `gp` hypothesis again, which is labelled unestablished and does
+  not even apply under the v6 flags;
+* a narrow fix would not convert the small or provably-aligned copies that run during early domain
+  startup, which is where both recorded failures occur ("immediately after domain entry", "before
+  any case code").
+
+**So the direction is still open, and the deciding experiment is still needed.** What is settled:
+the wholesale flag is out as a workaround. What is not: whether a targeted libcall is viable. The
+cheapest way to settle it is a prototype that declines only the narrow case and then runs the same
+mruby and SQLite arms; the W-05 matched pair is the complementary reading on
+BEEBS/RV8/CoreMark/SLT, where the flag has previously passed RV8 -O2 7/7. A run-time alignment test
+remains the safer default because it introduces no call at all, which is what the in-tree note
+itself suggests as the remaining option.
 
 Note the two failures are NOT the same signature, and a matching shape is not a matching
 mechanism: the SQLite record is `helper_cscincoffset: Assertion rs1_v->tag failed`, a `cincoffset`
