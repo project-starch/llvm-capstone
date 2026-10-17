@@ -681,6 +681,18 @@ WNS second; 1.5 ns of WNS alone decides nothing, the one-sample null band is 3.7
   COSTED FIRST, no build without it: a design note deriving the predicted LUT reduction from the synth lane's per-instance
   utilization of vp2 (the same report that showed the own-cell growth), and the predicted WNS; if the costing cannot
   predict a recovery above the band, vp2b is not built and the flash decision rests on the canary alone.
+  **Amendment 2026-10-18, after B's seal and BEFORE A's: the mechanism this branch names is refuted at the source.**
+  Between vp1 (9ed9a2594, the merge base) and vp2 (bf3db3175) exactly two commits touch issue_read_operands.sv: D3
+  8e8b69693 (35 lines added, 6 removed: the FP port steal, `fp_dom_sel` and its read/write steering) and D4 41fa120bf (one
+  line: CSNODE and CSRETIRE added to the serialisation list). D1 and D2 did not touch the module; the switcher's register
+  access through it (the 108 ids) predates vp1 unchanged, so "D1/D2's path" cannot be a vp1-to-vp2 growth. If A reads near
+  27,845 too, the ten thousand is NOT a source change inside the module: it is the flow's cross-boundary retiming or
+  absorption of logic that belongs to a neighbour (ex_stage, the scoreboard, the switcher), and B's seal shows the
+  per-module own-cell counts move by thousands on a one-line change elsewhere (scoreboard 14,451 -> 16,727). Then the next
+  instrument is not an RTL redesign but a netlist attribution: the synth lane lists issue_read_operands' own cells by the
+  driving nets' hierarchical origin on vp2 and vp1 (the loop-block query already does this per block), and the RTL change
+  is named from that listing, costed, and only then built. The two-level id decode is withdrawn as the "neither" action;
+  no vp2b build is handed off on a "neither" reading until the attribution names the cone.
 - **Mixed (both partial, the sum near 10,000): both changes, one build.**
 
 **Arms that re-run on the vp2b tree, every pre-registered value unchanged** (the exception named above: va-runv3's
