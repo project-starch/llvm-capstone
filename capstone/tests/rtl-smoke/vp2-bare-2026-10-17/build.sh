@@ -2,8 +2,8 @@
 # vp2's bare arms as M-mode board images (load at 0x80000000), for caplifive_vp2_bf3db3175.bit: item D's CSRUNV family,
 # item A's flat lifetime table, and vp1's arms, each with the controls its header names. Wrapper, env and node-aware
 # header as vp1-bare-2026-10-17 (inc/ copied from it). Sources are copies of capstone-ariane verif/tests/custom/capstone at
-# virtual-profile-2-d 1bcef8712 (= bf3db3175's RTL; the three commits above it touch verif/ only; 1bcef8712 adds
-# VB_TABLE to vb-trans.S and vb-trans-plain.S), checked equal to the tree
+# virtual-profile-2-d c55e3ff31 (= bf3db3175's RTL; the four commits above it touch verif/ only; 1bcef8712 adds
+# VB_TABLE to vb-trans.S and vb-trans-plain.S, c55e3ff31 fixes va-runv6), checked equal to the tree
 # named by VP_SRC at build time when it is given.
 # The recorder's three scratch GPRs per test are registers the test never names (pick-regs.py, recorded below), except
 # va-csmint-mon, whose own code names all 32: its CAPPRINTs all sit in the M trap handler between the frame save of

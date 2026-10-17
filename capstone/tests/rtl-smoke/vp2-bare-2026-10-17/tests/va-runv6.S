@@ -216,6 +216,8 @@ PREC1(62)                      # 0x3000000FC0000001
 PREC0(63)                      # 0x3E00000000
 
 # ---------------------------------------------------------------- S: CSRETIRE under srevroot, then without it
+csrci CSUPCTL, 8               # leave M's table namespace before S runs: S clears srevroot later, and an M-mode memory access
+                               # under the table bit would then address table base 0 (the board recorder's loads did, 2026-10-18)
 li t0, 0x1800
 csrc mstatus, t0
 li t0, 0x0800
@@ -253,7 +255,6 @@ trap_handler:
   PREC1(62)                    # 0x2000000FC0000001
   j 9f
 7:
-  csrci CSUPCTL, 8             # leave M's table namespace: S cleared srevroot, so the table base is 0 here
   CAP_PASS(s11)
 9:
   csrr t0, mepc

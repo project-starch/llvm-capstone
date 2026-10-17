@@ -4,7 +4,7 @@ va-runv2                57256 bytes  sha256 7b8ab66e23607d31  board_rec 8000d000
 va-runv3                53160 bytes  sha256 d967dcdea54e3a86  board_rec 8000c000
 va-runv4                57256 bytes  sha256 e8ac8002db62b1e8  board_rec 8000d000
 va-runv5                53160 bytes  sha256 a5c00ebb2d79ed1b  board_rec 8000c000
-va-runv6                40872 bytes  sha256 5861aa1557e59c21  board_rec 80009000
+va-runv6                40872 bytes  sha256 7922462bf7b1a21d  board_rec 80009000
 va-runv7                53160 bytes  sha256 8edbfa78d1ec7acf  board_rec 8000c000
 va-barrier              32680 bytes  sha256 28202d0d516170e8  board_rec 80007000
 va-q15                  69544 bytes  sha256 ee0959d19d8f0a82  board_rec 80010000

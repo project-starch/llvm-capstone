@@ -21,9 +21,9 @@ were held out of vp2 until that variant landed:
 **Not authorised to run.** A flash of bf3db3175 waits on the lead's own word naming it, after vp1's first session.
 
 **Build** (`build.sh`):
-- The tests are copies of capstone-ariane `virtual-profile-2-d` 1bcef8712, whose RTL is bf3db3175's (the three commits
+- The tests are copies of capstone-ariane `virtual-profile-2-d` c55e3ff31, whose RTL is bf3db3175's (the four commits
   above it touch `verif/` only, 0 files elsewhere). They are checked equal at build time when `VP_SRC` is given; they
-  were, from `git archive 1bcef8712`.
+  were, from `git archive c55e3ff31`.
 - The wrapper, env and node-aware header are vp1-bare's, unchanged.
 - The recorder's three scratch registers per test are chosen by `pick-regs.py` from the GPRs the test never names.
   va-csmint-mon names all 32; its choice and the reason are in `build.sh`.
@@ -38,8 +38,11 @@ counts in item A's arms are the obvious place. So each vector is taken from simu
 express its header's claim, is rebuilt (a `BOARD_TEST_CH` guard, as vb-trans has) before it is pre-registered.
 
 **Pending, before any vp2 board run:**
-1. The RTL lane's vectors: 16 in (`results/rtl-sim-vectors.txt`). Nine are re-running at the longer limit: va-alloc,
-   va-runv2, va-runv4, va-runv5, va-runv6, va-q15, va-csmint-emu, va-csmint-mon, va-straddle.
+1. The RTL lane's vectors: 20 of 23 in (`results/rtl-sim-vectors.txt`). Three images are to be rebuilt from a
+   tests-only commit in the RTL tree (va-runv6's landed as c55e3ff31, rebuilt, simulation pending):
+   - va-runv6, for an arm fault on the RTL lane's side;
+   - va-csmint-emu and va-csmint-mon, whose PHYS() measured from RAM_BASE while their RAM capability starts at
+     `_start`, 0x1000 higher on the board.
 2. The table below filled with them, and pushed on the lane before the run.
 3. Positive controls on the resident bitstream, where an arm's control is defined (the `-off` builds and
    va-ns-collide-off). The physical-pool controls should read the same on d93a8d66b.
@@ -48,20 +51,20 @@ express its header's claim, is rebuilt (a `BOARD_TEST_CH` guard, as vb-trans has
 |---|---|---|---|
 | `va-runv` | f764c436cdb52687 | 0x8000c000 | SR 15: `2 2 0x1234 2 0xb 0 0 0x55 0 0x77 0x77 5 0xb 0 9` |
 | `va-runv-quantum` | 34934ab8b2271c8c | 0x8000c000 | SR 15: `2 1 0x1234 1 0 0 0 0 0 0 0 3 0x8000000000000010 0 9` |
-| `va-runv2` | 7b8ab66e23607d31 | 0x8000d000 | pending |
+| `va-runv2` | 7b8ab66e23607d31 | 0x8000d000 | SR 53: `2 4 4 0xd 0 0 0 0 5 0x1d 3 3 0xb 0 7 7 0 0 0x42 0x1d 2 2 2 0 0x99 0x1d 0x1d 0 0 2 0x80003ec0 2 0x1d 0 0 2 0x80003ec0 2 0x1d 0 0 2 0x80003ec0 2 0x1d 0 0 2 0x1234 2 0x1d 0x1234 0` |
 | `va-runv3` | d967dcdea54e3a86 | 0x8000c000 | SR 16: `2 3 0 0 0 0 0x3ff8000000000000 0x20 0x3ff8000000000000 1 2 0x4004000000000000 0x40 0x3ff8000000000000 1 0` |
-| `va-runv4` | e8ac8002db62b1e8 | 0x8000d000 | pending |
-| `va-runv5` | a5c00ebb2d79ed1b | 0x8000c000 | pending |
-| `va-runv6` | 5861aa1557e59c21 | 0x80009000 | pending |
+| `va-runv4` | e8ac8002db62b1e8 | 0x8000d000 | SR 16: `2 5 5 0x1e 0 0x33 7 1 2 2 2 0x44 8 2 0 0` |
+| `va-runv5` | a5c00ebb2d79ed1b | 0x8000c000 | SR 33: `2 2 2 2 0 0 2 2 2 0 0 2 2 2 0 0 2 2 2 0 0 2 2 2 0 0 2 2 2 0xc 0xf 9 0` |
+| `va-runv6` | 7922462bf7b1a21d | 0x80009000 | rebuild from the RTL lane's fix (an arm fault cost the 50th reading) |
 | `va-runv7` | 8edbfa78d1ec7acf | 0x8000c000 | SR 11: `2 2 2 2 0 0 2 2 2 0 0` |
 | `va-barrier` | 28202d0d516170e8 | 0x80007000 | SR 5: `4 0x1000000100000001 0x1000000100000001 5 6` |
-| `va-q15` | ee0959d19d8f0a82 | 0x80010000 | pending |
-| `va-csmint-emu` | 3975c4af5495f488 | 0x8000e000 | pending |
-| `va-csmint-mon` | cb5834d86bcb2f0c | 0x80011000 | pending |
-| `va-straddle` | f7ea04e9d24ea60d | 0x8000a800 | pending |
+| `va-q15` | ee0959d19d8f0a82 | 0x80010000 | SR 10: `0 0x1018 2 2 2 0x1d 0 0x77 4 0` |
+| `va-csmint-emu` | 3975c4af5495f488 | 0x8000e000 | rebuild from the PHYS fix (tables land 0x1000 high on the board) |
+| `va-csmint-mon` | cb5834d86bcb2f0c | 0x80011000 | rebuild from the PHYS fix (tables land 0x1000 high on the board) |
+| `va-straddle` | f7ea04e9d24ea60d | 0x8000a800 | SR 7: `0 5 0xd 6 2 0 0` |
 | `va-flat` | 08b1ba902363901d | 0x8000a800 | SR 14: `0 0 2 0xe 0x77 0x19 5 1 0 0 0 2 1 0` |
 | `va-flat-off` | 407e1a8a13293e7f | 0x80009800 | SR 13: `0 0 0xe 0x77 0x19 1 1 0 0 0 0 0 0` |
-| `va-alloc` | 4f346db72ed8337b | 0x8000a800 | pending |
+| `va-alloc` | 4f346db72ed8337b | 0x8000a800 | SR 23: `0 0 2 0 0x40 0x80 0x19 5 0x8000000000000400 7 0 3 1 2 1 1 2 1 0 0 2 1 0` |
 | `va-alloc-off` | cbef3379e9a8b4ad | 0x8000a800 | SR 22: `0 0 0 0x40 0x80 0x19 1 0x8000000000000400 6 0x200000005 0 4 0 0 4 0 0 0 0 0 0 0` |
 | `va-alloc-corrupt` | 123ce8c012c7e7f9 | 0x8000a800 | SR 23: `0 0 0x1d 0 0 0 0 5 0x8000000000000400 6 0x100000004 1 1 2 1 4 0 1 0 0 0 0 0` |
 | `va-alloc-exhaust` | 3ed79f75b2f92377 | 0x8000a800 | SR 23: `0 0 0x1e 0 0 0 0 5 0x8000000000000107 7 0 1 0 0 0 0 0 0 2 1 2 1 0` |
