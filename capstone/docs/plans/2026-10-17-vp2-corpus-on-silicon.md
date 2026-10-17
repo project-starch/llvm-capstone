@@ -191,10 +191,22 @@ Q-23: the RTL is the reference; QEMU's default DELIN raises 26 on a non-LINEAR r
 pin with the module unchanged; run.py on the UNFIXED images must fail at the same delin on the new QEMU before the
 fixed ones pass.** The board lane's census then showed the delin is not one glue site but the backend's
 `-capstone-image-gp` global-address materialization, `scc rd, gp, x; delin rd` with no type test: 525 of contract.dom's
-530 delins, 5,983 of sqlite3.dom's 5,988, 9,859 of mruby's 9,863. Fix (b): the backend drops the delin (the image gp is
-NONLIN by ABI; a LINEAR gp would make every global access write the shared node's linear bit on the RTL); the census
-script is the gate on the rebuilt images (0, against 525/5,983/9,859); the 5 non-gp delins per image are named one by
-one; the backend revision joins the compiler identity in `inputs.json`. Open with the RTL lane: whether CSRUNV from S with an invalid frame or
+530 delins, 5,983 of sqlite3.dom's 5,988, 9,859 of mruby's 9,863. **This is C-27**, filed 2026-09 and recorded FIXED in
+ISSUES-ARCHIVE ("the DELIN is dropped under the NONLIN-gp contract") while the backend still emits it unconditionally
+(`CapstoneExpandPseudoInsts.cpp:381`; the cited pin asserts the delin is still emitted; no NONLIN-gp option exists;
+`CapstoneISASemantics.md:52` still lists it): the false FIXED is why boot 2 was spent, and the prior-art search that
+would have caught it (the registry's archive) was not made before the boot. The retraction lands as its own commit.
+Fix (b), recommended: the backend drops the delin under the ASSERTED NONLIN-gp ABI (two consumers depend on the base
+being NONLIN: the copy hazard and the SHRINK double read, so the contract is asserted, not assumed; a LINEAR gp would
+also make every global access write the shared node's linear bit on the RTL). **The decision is reserved to the
+project lead** (`CapstoneISASemantics.md:52`, "the Tier 4 DELIN decision"); the compiler lane stopped on it and the lead
+is asked. Then: the census script is the gate on the rebuilt images (0, against 525/5,983/9,859); the 5 non-gp delins
+per image are named one by one; the backend revision joins the compiler identity in `inputs.json`.
+**Context slots:** QEMU holds 32 (`SUPERVISOR_SLOTS`), the RTL one; run.py's parallel steps pass on QEMU for that
+reason and boot 2's 29 at parallel_one was the pre-registered refusal of a second launch. QEMU gains a slot-count
+property defaulting to 1 (the DELIN commit); the module serializes contexts on a one-slot machine and never issues a
+CSRUNV the hardware would refuse (a 29 trap in S is a kernel panic); the parallel/preempt/heap-threads expectations on
+vp2 are derived from the serialization mechanism and pre-registered on the 1-slot QEMU before the run. Open with the RTL lane: whether CSRUNV from S with an invalid frame or
 action traps with 29 (as boot 2 read) or returns 29 in rd (as the plan's item-D text says); QEMU and the kit's
 expectation follow the RTL. Boot 3 is boot 2's pre-registration with the images' hashes moved and the delin branch
 added. No strict-DELIN property for prediction runs: the strict behaviour is the default, a test-only property exists

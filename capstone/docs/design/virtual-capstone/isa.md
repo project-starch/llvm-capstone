@@ -297,10 +297,14 @@ The Q-12 protected-path changes did not change legacy physical C transfers.
 **`DELIN` of a non-LINEAR capability faults with 26 (ruled 2026-10-18).** The RTL raises 26 for any
 non-LINEAR rs1 (`capstone_dyn_unit.anvil:794-801`); QEMU's earlier no-op for a NONLIN operand is
 replaced by the same fault in the default profile, so a prediction run sees what silicon sees. The
-image gp is NONLIN by ABI (every launch grant is), so the `-capstone-image-gp` materialization of a
-global address is `scc`/`cincoffset` off gp with no `delin`; the earlier sequence carried a `delin`
-that was dead on QEMU and faulted on vp2 (boot 2 of the virtual profile, 2026-10-18: 525 of
-contract.dom's 530 delins).
+image gp is NONLIN by ABI (every launch grant is). The `-capstone-image-gp` materialization of a
+global address today is `scc`/`cincoffset` off gp followed by a `delin` that is dead on QEMU and
+faults on vp2 (boot 2 of the virtual profile, 2026-10-18: 525 of contract.dom's 530 delins): this is
+C-27, which ISSUES-ARCHIVE recorded FIXED while the backend still emits it unconditionally. Dropping
+the `delin` is sound only under the asserted NONLIN-gp ABI (two consumers rely on the base being
+NONLIN: the copy hazard and the SHRINK double read), and that decision is reserved to the project
+lead (`CapstoneISASemantics.md:52`); the semantics owner's recommendation is to drop it with the
+contract asserted in the backend and the pin flipped.
 
 | Cause | Capability fault |
 |---|---|
