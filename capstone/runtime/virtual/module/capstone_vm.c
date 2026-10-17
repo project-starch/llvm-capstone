@@ -585,7 +585,14 @@ static int ensure_nodes(struct context *c, unsigned long required)
  * behaviour and the only cost when off is a predictable load-and-branch in front of an entry
  * that already costs thousands of cycles. */
 static bool fence_before_entry;
-module_param(fence_before_entry, bool, 0444);
+/* 0644, not 0444: writable through
+ * /sys/module/capstone_vm/parameters/fence_before_entry, because run() reads it on every
+ * entry, so a write takes effect at the next one. That is what makes the arm two-sided in a
+ * SINGLE boot -- run the suite with it on, then clear it and repeat the wedge-expected case
+ * as the last step -- instead of spending a second boot on the second arm, which the board
+ * kernel would otherwise require since it cannot unload this module. A lone bool read by a
+ * plain load needs no locking against the sysfs write; the write lands between cases. */
+module_param(fence_before_entry, bool, 0644);
 
 static unsigned long run(unsigned long frame, unsigned long action)
 {
