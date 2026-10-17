@@ -188,7 +188,21 @@ See the [runtime mechanism and reproduction commands](../../runtime/virtual/READ
 
 ## 2026-10-04, evening — the S-16 fix bitstream on silicon: S-16 fixed, the R-43 list unchanged, and the real workload preempts 1,277 times at +0.69 %
 
-- **The resident bitstream is `caplifive_sublet_d93a8d66b.bit` since 2026-10-15 23:54** (sha256
+- **The resident bitstream is `caplifive_vp2_bf3db3175.bit` since 2026-10-17** (sha256
+  776cdd8c40d985708a09d4d43ab1c5106414ae1347cc4436a711381d2c197475; routed WNS -19.019, 3.404 behind vp1 and inside the
+  one-sample null band of 3.74 ns, LUTLP-1 0). capstone-ariane `virtual-profile-2-d` bf3db3175: the FULL virtual
+  Capstone profile on vp1's base (item B translation in C mode, Q-17, R-56, Q-19) plus item A's flat per-context
+  lifetime table, item D's CSRUNV with the frame as the one saved context's storage (kinds 1-5, FP state per context,
+  CSRETIRE in hardware, CSNODE for the monitor's CSMINT emulation), items E and H, Q-15's exactness refusal, Q-18, and
+  the decoder and CSR-write fixes. Flashed by the board lane on the lead's own word after vp1's first session (dev
+  987bf254ee40, `tests/rtl-smoke/vp2-bare-2026-10-17/README.md` "Flash authorisation"): the canary 9 of 9 against
+  d93a8d66b, all 25 pre-registered arms equal to their vectors simulated on bf3db3175, corpus set 7 33 of 33. The
+  attribution of its issue_read_operands growth (the DYN unit's unregistered result chain, real logic from item D) and
+  the un-built vp2b timing contingency are in `docs/plans/2026-10-16-virtual-profile-on-silicon.md`. Known RTL/QEMU
+  divergences carried: Q-16, Q-20's software rules, Q-21 (0xcc0 absent), Q-22 (0x5c0 absent). Registered fallbacks:
+  `caplifive_vp1_9ed9a2594.bit` (sha256 01072623f8f24b2081556c193113ca906d68316fdc1de15a55ae8267ddf82905, its first
+  session clean, dev c5e696ac7328) and `caplifive_sublet_d93a8d66b.bit`.
+- **Earlier resident: `caplifive_sublet_d93a8d66b.bit`, 2026-10-15 23:54 to 2026-10-17** (sha256
   89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430; routed WNS -15.856, outside the band, and it runs:
   the S-16 bare set identical to the FP respin's). It carries the Sublet extension on top of fp-fixes 4a4261bb4: the
   capability word {revnode_id 30 | perm 4 | cap_type 3 | bounds 27} (MANAGE = perm bit 3), CDERIVE / CREVOKE with the
