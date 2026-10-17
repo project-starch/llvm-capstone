@@ -486,3 +486,31 @@ malloc block stays inside the block's bounds. Its record says MISSED 13, the sam
 **What a mismatch would say:** a CAUGHT where MISSED was recorded, or the reverse, is a change of verdict on the
 candidate revision. A NO-READING is a harness or heap problem, to be read from the guest transcript before anything
 else.
+
+## The prebuilt bundles on the fixed v6 revision: pre-registered (2026-10-17, before the builds)
+
+These four bundles run in the runner's prebuilt mode. Each corpus's `shared/build-cases.sh capstone-application` is
+rebuilt against the kit's v6 SDK with the recorded `build.cache` options, and so is its `controls/virtual` copy. The
+runner refuses a CMakeCache that does not state those options and that SDK (`cache_says`).
+- **The archives are local copies,** so nothing is downloaded: FFmpeg 9.0.1 from `/tmp/capstone/ffmpeg-buffer-pool`
+  through `FFPOOL_ARCHIVE`, and memcached 1.6.45 from `/tmp/capstone/dl`, the port's default.
+- **The rebuilt images and controls cannot match the recorded hashes,** because the SDK is different. The cells are
+  compared as above.
+
+| manifest # | corpus | arm | cache | recorded tally |
+|---|---|---|---|---|
+| 9 | `ffmpeg/pool-repros` | `virtual-malloc` | `FFPOOL_SUBLET=OFF` | MISSED 4 |
+| 10 | `ffmpeg/pool-repros` | `virtual-nested-pools` | `FFPOOL_SUBLET=ON` | CAUGHT 4 |
+| 12 | `memcached/allocator-repros` | `virtual-malloc` | `MCP_STOCK_MALLOC=ON MCP_SUBLET=OFF` | CAUGHT 1, MISSED 8 |
+| 13 | `memcached/allocator-repros` | `virtual-nested-pools` | `MCP_STOCK_MALLOC=OFF MCP_SUBLET=ON` | CAUGHT 8, NO-READING:control-failed 1 |
+
+All four also take `CMAKE_BUILD_TYPE=Debug` and `-isystem <the kit's clang>/lib/clang/22/include`.
+
+**Predictions:**
+- **Every cell equals its recorded cell,** except one.
+- **That one is bundle 13's case 05 (`05_2d61f18_item_data_one_past`), predicted CAUGHT.** Its recorded fixed arm
+  faulted with cause 24 at address 0, a NULL dereference. That is the shape the module's `add()` refusals produced in
+  the Sublet pilot. **The hypothesis behind the prediction:** that NULL was an arena refusal the fix removes.
+  - If the fixed arm still faults 24 at 0, the hypothesis is wrong for this case, and the cell is read from its
+    transcript.
+- **Bundle 13's tally, if the prediction holds:** CAUGHT 9.
