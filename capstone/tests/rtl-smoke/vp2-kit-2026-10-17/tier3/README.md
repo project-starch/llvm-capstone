@@ -893,3 +893,13 @@ bundles run: 18 of 26; not run: [('cpython/allocator-boundary-repros', 'virtual-
   - **(a) every cell equal to the record** (CAUGHT 27, MISSED 6), up to the same rounding exception;
   - **(b) Q-15 29s at the memsys5-block CDERIVE,** which is on the plan's list of (iii) derive sites. The exact-bounds
     rerun then separates it.
+
+**Result: not runnable at 89ee98be99e5. NO-READING:build-failed 33 on both arms.** Every case fails to compile at
+`ports/sqlite/repro322/repro322_common.h:71`.
+- **The cause is the tree's own (iii) change, 99aa4350bcfb** ("memsys5's static arena granule-aligned, with a
+  compile-time granule macro").
+- The virtual memsys5 branch (lines 66-74) uses `CAPSTONE_REPR_ASSERT_POW2` and `CAPSTONE_REPR_GRANULE_POW2`.
+- They come from `<capstone/representable.h>`, which the header includes only in its freestanding branch (line 153).
+- `build-virtual.py` adds `-I capstone/runtime/include` only for `--sublet` (line 207).
+- So the stock arm finds neither the include nor its path, and the Sublet arm finds the path but not the include.
+- The repair belongs to the port's owner, the compiler lane, which has been told. Neither prediction is read.
