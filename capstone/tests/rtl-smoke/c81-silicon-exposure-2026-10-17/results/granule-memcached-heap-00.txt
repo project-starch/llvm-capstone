@@ -1,0 +1,3 @@
+control: copy32 shape flagged, zero fill clean
+FLAG dl_round+0x34c  162B unit=2 (41 insns) -- 16 contiguous copied bytes at s2+0x80
+results/rescan-memcached-heap-00.txt: 3 plain-only runs, 1 flagged

@@ -1,0 +1,3 @@
+control: copy32 shape flagged, zero fill clean
+FLAG cacheEntryClear+0xf4  20B unit=1 (12 insns) -- 16 contiguous copied bytes at a1+0x0
+results/rescan-sqlite-05.txt: 2 plain-only runs, 1 flagged

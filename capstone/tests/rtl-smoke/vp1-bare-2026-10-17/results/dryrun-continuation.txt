@@ -1,0 +1,14 @@
+# continue-vp1.sh, dry-run 2026-10-17 20:20-20:22 before it was armed: the real script, its paths redirected by its
+# CONT_* variables, with the runner, corpus set 7, the chain call and the board-free wait stubbed (the wait was tested
+# separately, two-sided). Input: the session's REAL S-16 directory and comparison (17/18 identical, s16st-esc-n8 never
+# started) and a session record in after-flash.sh's format. Each injected change was asserted to have changed its input
+# (two first-attempt injections had silently changed nothing, and were redone).
+# branch                                  -> result
+(a) the retry reads the record             -> S16 rc=0 18 arms, 98 readings, 0 not identical; C7 rc=0 (33 records, 0 differ); AFTER-FLASH DONE; chain called (VP1_CHAIN_PID=999999)
+(b) the retry does not start either        -> S16 rc=1; GATE missing S16; STOP before corpus set 7; HOLD; no set 7, no chain
+(c) set 7 differs (one value changed)      -> C7 rc=1 (1 differ); STOP after corpus set 7; HOLD; no chain
+(d) an S-16 arm that RAN differs (s16sd24) -> HOLD before any board call: "S-16 arm s16sd24 differs and it ran"
+(e) vp2's chain did not hold               -> HOLD before any board call: "vp2's chain did not hold as expected"
+(f) a second gate line failed (FLOOR rc=1) -> HOLD before any board call
+(g) rerun-then-vp2.sh never finishes       -> waits (bounded at 3 h by the script; the test's timeout ended it), no board call
+(h) the failed log has a start marker      -> HOLD before any board call: "differs and it ran"

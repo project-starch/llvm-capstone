@@ -28,6 +28,16 @@ non-consuming ldc from a read-only page completing (1); the trap handler's mcaus
 source with the flag off (csupctl 0, satp bare): arms 0 and 1 only, arm 1's two readings inverted (0 then 0x5a5a).
 `q17-order`: 0x19 (a cderive from a dead child with a window outside it: the liveness query first), 0x19, trap count 2.
 
+**The monitor that boots on vp1 is flag-OFF, by construction (2026-10-17).** The CSMINT hook arrives only in
+caplifive-sbi cb91d7d, behind `CAPSTONE_VP2_CSMINT`. vp1's first session boots no monitor that has it:
+- the bare arms above run with no monitor at all;
+- corpus set 7's firmware 1d2bbbf37f63f435 is wrapper 1269c77 + monitor ebe0a25, whose tree has neither
+  `capstone_csmint.S` nor the hook.
+
+**Boot BL's flag-on firmware (26bc4b23c520d9d6, `vp2-kit-2026-10-17/csmint-emu/README.md`) is vp2-only. It must never
+boot on vp1.** vp1 has no srevroot (that is item A, vp2's). Under that monitor a valid CSMINT reaches `csrr 0x5C1`
+(`capstone_csmint.S:189`), traps illegal in M into the non-reentrant `_cap_trap_entry`, and wedges, as on d93a8d66b.
+
 ## Positive controls on the resident bitstream (the same images on caplifive_sublet_d93a8d66b)
 
 | image | SR | readings (SV, in order), from the simulation of capstone-sublet b7e3287e4 with the same sources |
@@ -57,3 +67,80 @@ which place the stale pc at the RETURN of each returning arm. So the control vec
 above with those three positions replaced by 0xffffffff7fff8000, 0xffffffff7fff706f and 0x14, and the resident
 bitstream read it 36 of 36. The vp1 vector has no layout-dependent entry: its arms 2 to 4 fault for real, so the epc
 and tval readings are 0 by construction, and the arm-0 reading 0x28 is the same code in both builds (it matched).
+
+**Flash authorisation (2026-10-17, the lead's own word in the board lane's session, naming this bitstream):** reflash
+with `caplifive_vp1_9ed9a2594.bit` once:
+- it seals;
+- its preflight passes on the sealed sha256;
+- ST100's overnight pair on d93a8d66b has finished.
+The first session is this file's: the bare arms, the physical regression and corpus set 7, with the flag-off monitor.
+It stops and reports on any reading that differs from d93a8d66b. The earlier approval named 4b958dc3f; this one
+supersedes it for 9ed9a2594.
+
+**Added before the run (2026-10-17, while vp1's chain waited on ST100): `vb-trans-plain`, run LAST among vp1's arms.**
+- **What it tests:** R-56's clear-refusal gate (`ldc_store_ok`). It does a consuming `ldc` from a page writable from
+  the start. vp1's one router-left combinational loop breaks through that gate (the synth and RTL lanes' risk list).
+  vb-trans arms 4 and 6 exercise the same gate both ways.
+- **The image:** `images/vb-trans-plain.bin`, sha256 997bc656df3be645…, board_rec 0x80009800. It is built by `build.sh`
+  from capstone-ariane 1bcef8712's `vb-trans-plain.S` without `VB_TABLE`.
+- **That file does not change vp1's other images:** its flag-off build of the edited `vb-trans.S` reproduces vb-trans
+  and vb-trans-off's hashes above exactly.
+- **The board vector is from the RTL lane's simulation of THIS image on 9ed9a2594** (37,040 retired): SR 5, values
+  `0 1 0x66 0 0`.
+  - 0: armed.
+  - 1: csupstatus; the domain returned after the admitted consuming `ldc`.
+  - 0x66: stored through the loaded LINEAR capability.
+  - 0: the parked word, cleared.
+  - 0: mcause.
+  - The header's simulation vector is `0 0 1 0x66 0 0`; the in-domain CAPPRINT compiles out on the board.
+- **The corpus set 7 gate now counts four arms as pre-registered.** There is no d93a8d66b reading of this arm.
+
+**Amended before the run (2026-10-17): s1gap's place in the stop rule.** s1gap's cycle counts vary run to run on
+d93a8d66b itself. It has three runs, 2026-10-16:
+- s1gap-close's k = 3 gap read 0x1d, 0x22, 0x1d;
+- s1gap-far's k = 1 revoke read 0x45, 0x42, 0x43, its k = 2 gap 0xfbc, 0xfbc, 0xfbd, and its k = 4 revoke 0x47, 0x4d,
+  0x47.
+
+So an exact match against the d93a8d66b record would stop the session on noise; the session's own script already said
+"a cycle-count difference is reported, not a defect". The stop rule therefore applies to s1gap's functional readings:
+the four revoke causes, base validity, traps, GAP and the count, and every reading of its control arm. These must be
+identical. The eight cycle counts (positions 0, 1, 3, 4, 6, 7, 9, 10, the test's own layout in
+s1-revoke-gap-2026-10-14/PREREG.md) are reported. The comparator is `cmp-s1gap.py`, tested both ways:
+- d93a8d66b's two repeats pass against its record;
+- a changed GAP reading fails;
+- a missing arm fails;
+- an empty reference is an error.
+
+The S-16 set (98 readings identical across bitstreams) and the Sublet floor keep the exact rule.
+
+**Amended at 20:24, before the retry (2026-10-17): an image that never started is re-run once.**
+
+At 20:03 the session's S-16 arm s16st-esc-n8 never ran its image. The JTAG `load_image` timed out ("[riscv.cpu] Timed
+out after 120s waiting for busy to go low") before `continue`, so the arm produced no reading, and S-16 read 17 of 18
+arms identical to d93a8d66b. The stop rule is about readings that differ, and this arm has none. Two sources say how to
+treat it:
+- the same event on 36a641e0b (2026-10-03) was re-run once with the same image
+  (`sup-bare-2026-10-03-ladder/results/board-36a641e0b.result-lines.txt:7-9`);
+- the board-run skill classifies JTAG errors as infra, to retry.
+
+The rule:
+- An arm whose run log has no `] continue` line and no reading is re-run ONCE, with the same image and record address.
+- An arm that started is never re-run: its reading stands.
+- A second non-start is a missing reading, and stops the session.
+- More than two non-starts in one set point at the board, not an arm: hold for the lead.
+
+`continue-vp1.sh` applies it, and acts only if that non-start is the session's only failure (every other gate line
+passed). It then:
+- writes a new SEQ section carrying the session's other gate lines verbatim beside the new S-16 comparison;
+- applies after-flash.sh's gate to that section, unchanged;
+- runs corpus set 7.
+
+It is stricter than the armed chain in one respect: vp2's chain starts only if set 7 is also identical to d93a8d66b
+(the lead: "if vp1 as expected, go with vp2"). Dry run, with the runner, set 7 and the chain stubbed:
+`results/dryrun-continuation.txt`. Each of its eight branches produced the predicted action.
+
+Found on the way, and fixed before it could fire: vp2's chain waited for a free board with a `ps` pattern that matched
+its own parent (rerun-then-vp2.sh, under vp1-session/), and that wait had no bound. A clean vp1 end would have left the
+board idle. The chain now calls `../vp2-bare-2026-10-17/board-free-wait.sh`, which ignores the caller's ancestors and is
+bounded at 6 h. It was tested two-sided, including against the live session. The earlier chain dry run
+(`../vp2-bare-2026-10-17/results/dryrun-chain.txt`) had stubbed exactly that wait.

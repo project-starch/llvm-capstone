@@ -117,7 +117,7 @@ def main():
     where.add_argument("--virtual-kit", type=Path, help="the virtual platform kit (tools/virtualvm.py); "
                        "every control and case then runs in ONE boot")
     p.add_argument("--bindir", type=Path, required=True)
-    p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--out", type=Path)
     p.add_argument("--only", help="comma-separated case numbers")
     p.add_argument("--raw", type=Path, help="where console logs and the virtual stage go; never inside "

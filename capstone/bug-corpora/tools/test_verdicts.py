@@ -130,5 +130,36 @@ class Bundle(unittest.TestCase):
             v.write_bundle(d, "c", "spatial", [], {"platform": {"compiler": "x"}})
 
 
+class LlvmBin(unittest.TestCase):
+    """--llvm-bin is refused at argument parsing unless the judge's two tools are there and executable."""
+
+    def dir_with(self, d, tools, mode=0o755):
+        for t in tools:
+            (Path(d) / t).write_text("#!/bin/sh\n")
+            (Path(d) / t).chmod(mode)
+        return d
+
+    def test_both_present(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(v.llvm_bin_dir(self.dir_with(d, ("llvm-nm", "llvm-readelf"))), Path(d))
+
+    def test_readelf_missing(self):   # the copied bin+lib set of 2026-10-17: llvm-nm and llvm-readobj, no llvm-readelf
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaisesRegex(Exception, "llvm-readelf"):
+                v.llvm_bin_dir(self.dir_with(d, ("llvm-nm", "llvm-readobj")))
+
+    def test_not_executable(self):
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaisesRegex(Exception, "llvm-nm or llvm-readelf"):
+                v.llvm_bin_dir(self.dir_with(d, ("llvm-nm", "llvm-readelf"), mode=0o644))
+
+    def test_dangling_link(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.dir_with(d, ("llvm-readelf",))
+            (Path(d) / "llvm-nm").symlink_to(Path(d) / "nowhere")
+            with self.assertRaisesRegex(Exception, "llvm-nm"):
+                v.llvm_bin_dir(d)
+
+
 if __name__ == "__main__":
     unittest.main()

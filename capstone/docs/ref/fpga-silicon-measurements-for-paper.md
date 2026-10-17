@@ -6619,3 +6619,236 @@ baseline `9a80c1cd2a576ed2` between two k800 controls. Folder: `tests/rtl-smoke/
 - **The board's idle MemFree** is 940,924 / 941,680 kB after Linux and 938,032 / 934,332 kB at the end of the boot.
   This is the virtual-profile plan's memory figure.
 - **Not established:** N = 1 per cell, at size 1; why the new cell 5 build runs at a higher CPI.
+
+## M2's dependent chase on the Sublet bitstream: S/P rises to 1.66 from N = 256, where r30r31 read 1.0000 (caplifive_sublet_d93a8d66b, 2026-10-17)
+Eight cold boots (m2f16-01 to -08, 03:22-05:08) on the classic line, with the fixed-runtime R1 harness `66764b0e`.
+The September image mis-carves on this bitstream (R-55, the runtime half). Folder: `tests/rtl-smoke/m2-sublet-2026-10-16/`
+(pre-registered at lane 7fc8751dc0e5, amended before the boots; RESULTS.md and `results/`).
+- **Every check holds:** 225 of 225 points with the emulator's checksum, every cold traversal ok, minted D/P 6 and S
+  2N+4, k800 4 twice in every boot, and no refusal.
+
+| N | D | P | S | S/P |
+|---:|---:|---:|---:|---:|
+| 16 | 10.00 | 18.00 | 18.00 | 1.0000 |
+| 64 | 10.00 | 18.00 | 18.00 | 1.0000 |
+| 256 | 10.00 | 18.00 | 29.95 | 1.6639 |
+| 1024 | 41.81 | 61.38 | 99.10 | 1.6144 |
+| 4096 | 49.25 | 88.45 | 123.52 | 1.3964 |
+
+Cycles per access, the median of 15 runs.
+- **D and P equal r30r31's §7y to 0.05 cycles** (41.84 / 49.25 and 61.37 / 88.45 there). S/P was 1.0000-1.0003 there.
+- **So the pre-registered outcome is (a):** an access through a record capability costs S about 12 cycles more at
+  N = 256, and 35-38 more at N ≥ 1024.
+- **The rise starts between 132 and 516 live nodes.** That is the LSU's revocation validity cache: 64 sets × 4
+  ways = 256 ids, indexed by the id's low 6 bits (capstone-ariane d93a8d66b `core/load_store_unit.sv:258-260`).
+  The pre-registration had assumed §7t's 2,048. A hit costs nothing, so S equals P up to N = 64. Per the RTL lane,
+  a miss is the rev-node probe (R-43's query-on-miss).
+- **Not established:** the knee's exact position, and how the surcharge at N ≥ 1024 splits between the probe and
+  the D-cache misses of the node records.
+
+## R1 warm and cold on the Sublet bitstream: node-proportional as on 054cea69b, 21.6 % cheaper per node warm, and the cold constant ends 1.9 % below (caplifive_sublet_d93a8d66b, 2026-10-17)
+Fifteen warm boots (r1wf16-01 to -15, 90 invocations, 420 records) and five cold boots (r1cf16r1 to r5, 60 records).
+- They ran on the classic line (buildroot d04bd83, monitor 93440d5, as each boot logs them) with the fixed-runtime R1
+  harness `66764b0e62075e57`, verified per boot from the boot's own payload. The September images mis-carve
+  on this bitstream (R-55, the runtime half).
+- The folder is `tests/rtl-smoke/r1-sublet-2026-10-16/`. It was pre-registered at lane f0613167b4b8 and amended four
+  times before these boots, the last at f8b4bfde7f6a; RESULTS.md is there.
+- The fits are the 054cea69b campaigns' own `analyze.py`, unchanged.
+
+**Every check holds:**
+- k800 read 4 twice in all 20 boots;
+- every invocation printed its `R1 end` line and `released pool rc=1`;
+- all 480 records read `ok=1 bad=0`;
+- no refusal.
+
+| warm | this bitstream | 054cea69b |
+|---|---|---|
+| REVOKE per affected node, shared | **17.97**, R² 0.99977 | 22.91 |
+| REVOKE per affected node, combined | **15.37**, R² 0.99979 | 15.92 |
+| bookkeeping per node, shared / combined | 28.76 / 28.59 | 28.54 / 28.79 |
+| bytes, heap, object size | no dependence (R² 0.007 / 0.007 / 0.044) | no dependence |
+| delegation depth, node count 47 at every level | no trend (R² 0.35 / 0.23); chain 1 is always the first point, and the first point reads 0.79-1.23x the rest on every axis | shared -0.73 (R² 0.003), combined -5.63 (R² 0.18) |
+| fill against bytes, the positive control | 1.8125 cycles/byte, R² 0.9999999983 | 1.8125 |
+| repeatability, median / max spread | 1.5 % / 25.4 % | 7.8 % / 39.5 % |
+
+**Cold, cycles per destroyed node (median of 5):**
+
+| `nd` | 64 | 512 | 1,024 | 2,048 | 4,096 | 8,192 | 16,384 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| this bitstream | **14.84** | 17.00 | 19.01 | 22.74 | 25.79 | 27.06 | **27.62** |
+| 054cea69b | 19.66 | 22.05 | 23.62 | 25.09 | 27.74 | 28.14 | 28.15 |
+
+**What changed:**
+- **The warm end is about a quarter cheaper; the cold end is nearly unchanged (-1.9 % at 16,384).**
+  - It reads -22 % at nd = 256 and 512.
+  - At nd = 64, -24.5 %, but that is the invocation's first point, which carries extra first-point timing.
+  - H1's REVOKE drop on the same image reads the same way.
+- **Cold over warm is 1.86x**, against 1.43x.
+- **The approach is still a ramp:** the largest interval holds 16.1 % of the rise, at nd = 1,536, below the
+  2,048-node capacity.
+- **It has not saturated by 16,384:** the top two rungs are 2.1 % apart, against 0.034 %.
+
+**Not established:**
+- why the warm end moved: the bitstream (the node record's parent link, R-45's flush), the monitor (93440d5 against
+  2dcd3a5) and the image all differ;
+- where the cold constant saturates;
+- depth apart from the first-point effect, which needs a reversed-order boot;
+- timing closure.
+
+## M1 on the Sublet bitstream: all four conditions as on R-43 v2, on the fixed-runtime images (caplifive_sublet_d93a8d66b, 2026-10-17)
+Five boots on the classic line (buildroot d04bd83, monitor 93440d5) with `REFUSAL_RECORD=1`, on rebuilds that carry the
+sublet-runtime fix. The 2026-10-01 images mis-carve here (R-55, the runtime half). Folder:
+`tests/rtl-smoke/m1-sublet-2026-10-16/`, pre-registered at lane 0f3a221c015a, corrected at a69e5fe5bfdc and amended before any boot at 4f130895e813; RESULTS.md
+is there.
+
+| condition | reading |
+|---|---|
+| permitted reuse | drop and ring reach 10C (`alloc=655320`) against the 65,532-index pool, in every boot that runs them, with no exhaustion |
+| accounting | `minted − revoked = 31` on every snapshot (318 in m1s16f-1, 201 in m1s16f-5, 539 in each probe boot) |
+| stale operations | after all four Design arms, ONE stale access per boot is refused at the probe's own instruction with cause 25: READ age 0 at image+0x4938, WRITE age 0 at image+0x499c, READ age 2 (below). The same instructions through live aliases succeed earlier in each boot, and the refusal record reads LATCHED |
+| pressure | `stop=buffer alloc=43297`; release enters phase 2 at 43,290 and ends at 51,948 |
+
+**Cost against v2**, reported, not predicted, per operation: the median over an arm's snapshots.
+
+| arm | take, this run | take, v2 | give, this run | give, v2 |
+|---|---|---|---|---|
+| drop | 94.347 | 72.029 | 106.046 | 107.057 |
+| pressure | 88.000 | 72.010 | 75.053 | 75.066 |
+
+- **Take rose 16 to 22 cycles; give is unchanged to about 1 cycle.**
+- **The image changed:** the fixed runtime's `sublet_split` SHRINK and cursor-based take. The bitstream changed too.
+- These boots do not separate the two.
+
+**Observed, not predicted:** the age-2 row's latched refusal sits at generation 1,352, with index = head − 1 (257 / 258)
+and serving = head − 16 (242). Those are R-43 v2's m1v2s-4 relations and generation, with a different B.
+
+**Not established:** the take rise's attribution; the turnover witness (deferred: this bitstream's node ids are not
+modelled); N = 1 per row.
+
+## C-81 and the silicon corpus verdicts: no in-scope reading depends on a tag-dropping inline copy (the silicon half, 2026-10-17)
+
+**The defect (ISSUES C-81).** A constant-size copy whose alignment the compiler cannot prove is expanded inline into
+scalar chunks, and a scalar chunk never carries a capability's tag. So a copied capability arrives with its address
+and tag 0, and its next use reads cause 24. The silicon corpus images were built with `-ffreestanding -fno-builtin`, so
+explicit `memcpy` calls go to the runtime's copy. What C-81 can still reach is `__builtin_memcpy` and the copies the
+compiler synthesises.
+
+**The instrument** (`capstone/tests/rtl-smoke/c81-silicon-exposure-2026-10-17/`):
+- Each verdict image is rebuilt twice, plain and as a compile-only twin with `-capstone-lower-memops-via-libcall`,
+  which turns every inline mem* expansion into a call. The plain rebuild must reproduce the board image's sha256.
+- The expansions are enumerated by the mem* references the twin gains, per function (`memcalls2.py`).
+- Each scalar run the twin removes is judged by `granule-check.py`: are 16 contiguous bytes copied through registers
+  loaded in the same run, the least a scalar copy needs to move a capability? It has a two-sided control.
+- A shape scanner's plain-only runs are NOT an enumeration. It saw 2 of SQLite's 48 expansions; withdrawn as a method
+  claim on dev 935196067e79.
+
+| image | inline expansions the twin diverts | runs flagged | what they copy | verdicts touched |
+|---|---:|---:|---|---|
+| SQLite stock 02 / 05 (in scope, CAUGHT 24) | 48 / 47 | 1 each | `cacheEntryClear`'s `yColCache`, no pointer | none: both stand |
+| set 1, memcached plain-heap (controls, heap-00) | 12 / 13 | 1 | `dl_round`'s signal record, no pointer | none: the rows are cause 28 |
+| mruby (rows outside the totals) | 2,957 | 3 | the signal record, a six-`uint32_t` spawn action, an `mrb_value`'s type-tag half | none (below) |
+
+- **SQLite 02/05:** over every scalar run in the image, not only the diverted ones, a strict object-copy check flags
+  only `yColCache` and an 8-byte spill chain.
+- **mruby:** for each of its nine cause-24 rows the faulting value is identified, and none is a tag-stripped
+  capability:
+  - 01, 07, 18-21 fault on a NULL base;
+  - 02 is the VM's instruction fetch;
+  - 17's value has bit 61 set;
+  - 22's 0x7d8000 is the inline-packed symbol `:f0`.
+  Eight of the nine are byte-identical on QEMU, which lays the domain out 0x34200000 higher.
+  - Not excluded: a stripped tag elsewhere steering a different value to the fault. The twin cannot be run to test it:
+    it faults in `memcpy` before any case code.
+- **Sets 2-9 are not twinned:** none of their in-scope rows reads cause 24, the only reading C-81 can produce.
+- **The 10-11 virtual record's SQLite 12/24** (cause 24, completing on v6): the record images and their SDK are gone,
+  so C-81 cannot be tested there. Those two stay "differ, unexplained".
+
+Evidence on dev: 7122c158e6c1 and 935196067e79 (SQLite, and the correction), 419fbf06bbc4 and 021568237f34 (set 1,
+mruby), 16f9756828d6 (SQLite 12/24).
+
+**Scope:** the silicon images only. The virtual-profile corpus images were built without `-fno-builtin`, so explicit
+`memcpy` calls there are exposed too, and nothing here covers them.
+
+## speedtest1 `main --size 100`, domain against native, on the Sublet bitstream: ratio 1.1835, as pre-registered (caplifive_sublet_d93a8d66b, 2026-10-17)
+
+The board campaign's item 10, a repeat of §7p (sw73, ratio 1.1819, another bitstream). The set was rebuilt with §7p's
+recipe: FULL=on, FLOAT=on, -O0, a 128 MiB region arena on the domain and a 128 MiB static heap natively, dev147
+612b3ec514c0. Images: domain 2e839991ffd34e79, host 2af56927aaf907e9 (both byte-identical to §7p's), native
+50bd00d74f63fd4c. Pre-registered before the boots on lane 816de2675b21; the folder is
+`capstone/tests/rtl-smoke/st100-sublet-2026-10-16/`.
+
+| boot | arm | hash | `SPEEDTEST1-CYCLES` | wall (`TOTAL`) |
+|---|---|---|---:|---:|
+| pre-boot, size 1 | native `warm` | `111130 1e792c9d` | 2,199,168,382 | 87.8 s |
+| pre-boot, size 1 | domain | `111130 1e792c9d` | 2,674,009,545 | 106.8 s |
+| pair, size 100 | native `warm` | `23674002 573a4409` | 336,762,395,125 | 13,469.7 s |
+| pair, size 100 | domain | `23674002 573a4409` | 398,552,257,537 | 15,941.1 s |
+
+- **Size-100 ratio 1.1835**, inside the pre-registered ~1.18 (band 1.14-1.24).
+  - The absolutes are within 0.15 % of the predictions from sw73's cycles per instruction: 337.2 G and 398.6 G.
+  - Both arms hash to the native oracle.
+  - The domain reads `HEAP 134217728 DROPPED 0 RC 0`, with no NOMEM, share-trap or refusal; k800 reads 4 before and
+    after.
+- **Size-1 ratio 1.2159**, against the predicted ~1.22.
+- **Recorded, not predicted:** the native's `BASELINE-WARM INSTRS` is 95,124,732,502 against QEMU's 90,025,116,459. The
+  board counts every instruction the hart retired in the interval, kernel work included.
+- **Not established:** N = 1 per arm.
+
+## vp1 on silicon: the physical regression identical to the Sublet bitstream, and vp1's arms as pre-registered (caplifive_vp1_9ed9a2594, 2026-10-17)
+
+vp1's first board session, the gate before vp2. `caplifive_vp1_9ed9a2594.bit` (sha256 `01072623f8f24b20…`, routed WNS
+-15.615) was flashed on the lead's word with readback. The session was pre-registered in
+`capstone/tests/rtl-smoke/vp1-bare-2026-10-17/PREREG.md`, and its rule was to stop on any reading that differs from
+the Sublet bitstream d93a8d66b. Result lines: `results/board-vp1-9ed9a2594.result-lines.txt` there. Every row is
+matched to d93a8d66b's record by image hash.
+
+| set | arms | against d93a8d66b |
+|---|---:|---|
+| S-16 | 18 | 98 of 98 readings identical |
+| Sublet floor | 6 | 77 of 77 readings identical |
+| s1gap | 3 | functional readings identical; one timed reading differs, inside d93a8d66b's own run-to-run spread |
+| corpus set 7 (PostgreSQL c-repros, process-ABI line, same firmware payload) | 5 rungs | 33 of 33 records identical |
+
+- **vp1's own arms read as pre-registered:**
+  - vb-trans, q17-order and vb-trans-plain match vp1's simulated vector and not d93a8d66b's, so the bitstream carries
+    vp1's change;
+  - vb-trans-off, the flag-off build, matches both.
+- **One infrastructure event:** an S-16 arm's JTAG `load_image` timed out before the image started, so it produced no
+  reading. It was re-run once with the same image, under a rule pushed before the retry, and read the record's
+  vector.
+- **Not established:** N = 1 per arm. This is a regression check of the physical profile, not a cost measurement.
+
+## vp2 on silicon: all 25 pre-registered arms read their simulated vectors, and the physical regression is identical to the Sublet bitstream, twice (caplifive_vp2_bf3db3175, 2026-10-17)
+
+vp2's first board session. `caplifive_vp2_bf3db3175.bit` (sha256 `776cdd8c40d98570…`, routed WNS -19.019) was flashed
+on the lead's explicit word after vp1's first session ended as pre-registered. The preflight ran on the sealed hash,
+and the readback named the bitstream. The session ran unattended from the pre-registered chain, and every step gated
+the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with result lines in
+`results/board-vp2-bf3db3175.result-lines.txt`. Every run is matched to its image by hash.
+
+| step | result |
+|---|---|
+| canary, pass 1 and pass 2 against d93a8d66b | S-16 98/98 and floor 77/77 readings identical in each pass; s1gap's functional readings identical |
+| canary, pass 1 against pass 2 | identical by the same rules: 9 of 9 comparisons pass |
+| the 25 pre-registered arms | 25 of 25 equal to their board vectors, count and values |
+| the 25 arms again, same resident bitstream | 25 of 25 equal to their vectors, and each identical to the first run |
+| corpus set 7 (same firmware payload as d93a8d66b's run) | 33 of 33 records identical |
+
+- **The arms:**
+  - item D's: the virtual-context runs va-runv..va-runv7, va-barrier, va-q15, and va-csmint in its emulated and
+    monitor forms;
+  - item A's: va-flat with its control, va-alloc with its three controls, va-ns-collide with its control, and
+    va-straddle;
+  - vb-trans and vb-trans-plain as their VB_TABLE builds;
+  - vp1's q17-order and vb-trans-off, byte for byte.
+- **Where the vectors come from:** each one is from simulating that exact image on bf3db3175's RTL, not from the test
+  headers, because the board recorder changes some readings.
+- **The comparator was checked on this session's own readings.** It says "NOT vp2" for one altered value, a short
+  readout, another arm's vector, and va-flat's vector read from va-flat-off's run. So a flag-on arm and its flag-off
+  control differ on silicon, as pre-registered.
+- **No image failed to start**, in the canary or among the arms.
+- **Not established:**
+  - N = 2 per arm. The 25 arms ran a second time (pre-registered before it ran) and read identically, as the
+    canary's two passes did. Two runs cannot rule out a rarer nondeterminism.
+  - This is the bare profile. vp2 under Linux in the virtual profile (Tier 1/2 and the corpus bundles of Tier 3)
+    waits on the flat-table module and the pinned kit.

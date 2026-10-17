@@ -23,4 +23,7 @@ build vb-trans     vb-trans.S  86 -DBOARD_R_CAP=x8 -DBOARD_R_T1=x4 -DBOARD_R_T2=
 build vb-trans-off vb-trans.S  87 -DBOARD_R_CAP=x8 -DBOARD_R_T1=x4 -DBOARD_R_T2=x2 -DVB_FLAG_OFF
 # q17-order leaves x8/x16/x17 free
 build q17-order    q17-order.S 88 -DBOARD_R_CAP=x16 -DBOARD_R_T1=x17 -DBOARD_R_T2=x8
+# vb-trans-plain (added 2026-10-17, before the run): capstone-ariane 1bcef8712's vb-trans-plain.S, flag-off build (no
+# VB_TABLE); it names none of x8/x4/x2.
+build vb-trans-plain vb-trans-plain.S 89 -DBOARD_R_CAP=x8 -DBOARD_R_T1=x4 -DBOARD_R_T2=x2
 (cd "$B/images" && sha256sum *.bin > SHA256SUMS)

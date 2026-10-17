@@ -1,0 +1,53 @@
+repo      /tmp/capstone/wt-land-b0
+rev       44d82a9eb3f3 (44d82a9eb3f3666491528f674b1f1c0eebf92913)
+looked in capstone/bug-corpora/**/corpus.json at the rev: 24 files
+            capstone/bug-corpora/cpython/allocator-boundary-repros/corpus.json
+            capstone/bug-corpora/cpython/pymalloc-repros/corpus.json
+            capstone/bug-corpora/ffmpeg/carved-repros/corpus.json
+            capstone/bug-corpora/ffmpeg/plain-heap-repros/corpus.json
+            capstone/bug-corpora/ffmpeg/plain-temporal-repros/corpus.json
+            capstone/bug-corpora/ffmpeg/plane-repros/corpus.json
+            capstone/bug-corpora/ffmpeg/pool-repros/corpus.json
+            capstone/bug-corpora/ffmpeg/subobject-repros/corpus.json
+            capstone/bug-corpora/httpd/apr-pool-repros/corpus.json
+            capstone/bug-corpora/httpd/bucket-repros/corpus.json
+            capstone/bug-corpora/memcached/allocator-repros/corpus.json
+            capstone/bug-corpora/memcached/plain-heap-repros/corpus.json
+            capstone/bug-corpora/memcached/plain-temporal-repros/corpus.json
+            capstone/bug-corpora/mruby/gc-slot-repros/corpus.json
+            capstone/bug-corpora/mruby/release-differential/corpus.json
+            capstone/bug-corpora/perl/release-differential/corpus.json
+            capstone/bug-corpora/postgres/c-repros/corpus.json
+            capstone/bug-corpora/postgres/mmgr-repros/corpus.json
+            capstone/bug-corpora/postgres/sql-repros/corpus.json
+            capstone/bug-corpora/sqlite/capi-repros/corpus.json
+            capstone/bug-corpora/sqlite/engine-repros/corpus.json
+            capstone/bug-corpora/wireshark/plain-heap-repros/corpus.json
+            capstone/bug-corpora/wireshark/plain-temporal-repros/corpus.json
+            capstone/bug-corpora/wireshark/wmem-repros/corpus.json
+arms      capstone/bug-corpora/tools/arms.json
+          37 configurations, 18 with target capstone-virtual
+
+RULE: corpus.json verdict_bundles -> arm_configurations -> arms.json target == 'capstone-virtual', inputs.json contract == 'verdicts-v1'
+corpora with no verdict_bundles (none selected from them): httpd/apr-pool-repros, httpd/bucket-repros, mruby/gc-slot-repros, mruby/release-differential, perl/release-differential, sqlite/capi-repros
+bundles   26
+cells     382
+images    304 distinct observation.image_sha256
+          images by number of bundles using them: {1: 304}
+
+side line, the sentence read literally (every inputs.json at the rev with contract verdicts-v1):
+          100 bundles; by target {'capstone-virtual': 57, 'capstone-silicon': 31, 'capstone-domain': 2, 'None': 10}
+          57 with target capstone-virtual: 26 current (selected), 31 superseded or outside a corpus
+          configurations absent from arms.json (no target): ['app-level0-pg-nested-sublet', 'app-sublet', 'replay-arena', 'replay-sublet', 'virtual-wmem-chunks', 'virtual-wmem-libc']
+
+case.json cross-check: 382/382 cells carry the bundle's verdict, reason and verdict_from
+
+survivors /mnt/hdd/<user>/capstone/virtual-corpus-images-2026-10-16
+          SHA256SUMS lines 91; 91/91 files hash to their SHA256SUMS line
+          matched to recorded images: 91; listed but matching no cell: 0; name mismatches: 0
+
+wrote /tmp/capstone/vp2-prep/tier3/manifest.json and /tmp/capstone/vp2-prep/tier3/manifest.tsv (382 cell rows, 304 image rows)
+
+expect bundles,cells,images = [26, 382, 304]; got [26, 382, 304]: OK
+expect survivors = 91; matched 91, unmatched 0: OK
+rc=0

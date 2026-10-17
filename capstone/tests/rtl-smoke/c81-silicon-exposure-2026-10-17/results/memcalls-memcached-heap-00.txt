@@ -1,0 +1,13 @@
+plain totals {'memcpy': 3, 'memset': 2}  twin totals {'memcpy': 10, 'memset': 8}
+twin-only references: 13 in 10 functions
+  __capstone_sigaction memcpy x1 (twin offsets ['0x46c'])
+  __capstone_sigaltstack memcpy x2 (twin offsets ['0x54', '0x150'])
+  abort memset x1 (twin offsets ['0x58'])
+  dl_ioctl memset x1 (twin offsets ['0x154'])
+  dl_prctl memset x1 (twin offsets ['0x50'])
+  dl_round memcpy x1 (twin offsets ['0x344'])
+  main memset x1 (twin offsets ['0xec'])
+  printf_core memcpy x1 (twin offsets ['0x5c8'])
+  run_event memcpy x2 (twin offsets ['0xf4', '0x148'])
+  run_event memset x1 (twin offsets ['0x514'])
+  vfprintf memset x1 (twin offsets ['0x40'])

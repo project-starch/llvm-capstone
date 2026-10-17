@@ -1,0 +1,92 @@
+# board-m2f16-07, fw 0f9ceaf6d82cdc6d, image 66764b0e62075e57
+04:44:08 === boot m2f16-07 = M2 chase, fixed runtime, on d93a8d66b, lines 37-42 of f5-chase.txt: control, 6 harness invocations (list lines 1-12 of /tmp/capstone/tails-1016/lists/m2f16-07.txt), control ===
+04:44:08 === pre-registered: retval=4 twice; 6 x speedtest1-ran=0x4EB1xxxx; M2: every point chk_ok=1 with the QEMU checksum, cycle_ok=1; minted P/D 6, S 2N+4; S/P at N>=1024 is the reading; 6 x released pool rc=1; every R1 point line ok=1 bad=0 (5 lines per nodes/bytes/heap invocation, 4 per depth/object); nd = 2n on shared nodes points; fb = B on shared/combined, 0 on individual; no refused lines
+04:56:14 runner ended after 726 s with rc=0
+  R1 point lines: 0 (expect 4-5 per invocation); ok=1: 0; bad!=0: 0; R1 end lines: 6 (expect one per invocation); refused: 0
+  RESULT k800 retval=[0-9-]+  : 2x ['RESULT k800 retval=4']
+  speedtest1-ran=\d+          : 6x ['speedtest1-ran=1320222720']
+  released pool rc=\d+        : 6x ['released pool rc=1']
+  released tables rc=\d+      : 6x ['released tables rc=1']
+  HARD STOP|ENTRY-STALL|ABORT : 0x []
+  domain halted[^\n]{0,60}    : 0x []
+  declared lines per invocation: [13, 13, 13, 13, 13, 13]
+  boot banners after this run's load_image (must be 1): 1
+-- R1 lines (r1-lines.txt)
+R1 entry shares=4 region=65536 opcode=1397769216 offset=70 phase=0
+R1 start arm=D series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=D N=16 seed=1 cyc=398 per=24 cycle_ok=1
+R1 chase arm=D N=16 seed=1 rep=1 loads=100000 cyc=1000281 per100=1000 instret=600019 touched=0 minted=6 chk=750000 chk_ok=1
+R1 chase-cold arm=D N=64 seed=1 cyc=489 per=7 cycle_ok=1
+R1 chase arm=D N=64 seed=1 rep=1 loads=100000 cyc=1000045 per100=1000 instret=600019 touched=0 minted=6 chk=3150039 chk_ok=1
+R1 chase-cold arm=D N=256 seed=1 cyc=3565 per=13 cycle_ok=1
+R1 chase arm=D N=256 seed=1 rep=1 loads=100000 cyc=1000288 per100=1000 instret=600019 touched=0 minted=6 chk=12750873 chk_ok=1
+R1 chase-cold arm=D N=1024 seed=1 cyc=40313 per=39 cycle_ok=1
+R1 chase arm=D N=1024 seed=1 rep=1 loads=100000 cyc=4191250 per100=4191 instret=600019 touched=0 minted=6 chk=51154965 chk_ok=1
+R1 chase-cold arm=D N=4096 seed=1 cyc=192333 per=46 cycle_ok=1
+R1 chase arm=D N=4096 seed=1 rep=1 loads=100000 cyc=4925199 per100=4925 instret=600019 touched=0 minted=6 chk=204826544 chk_ok=1
+R1 end minted=0 split=15 mrev=15 revoke=0 init=0 out=1145 lines=13
+R1 entry shares=4 region=65536 opcode=1397769216 offset=70 phase=0
+R1 start arm=S series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=S N=16 seed=1 cyc=554 per=34 cycle_ok=1
+R1 chase arm=S N=16 seed=1 rep=1 loads=100000 cyc=1800238 per100=1800 instret=700015 touched=16 minted=36 chk=750000 chk_ok=1
+R1 chase-cold arm=S N=64 seed=1 cyc=1053 per=16 cycle_ok=1
+R1 chase arm=S N=64 seed=1 rep=1 loads=100000 cyc=1800078 per100=1800 instret=700015 touched=64 minted=132 chk=3150039 chk_ok=1
+R1 chase-cold arm=S N=256 seed=1 cyc=9002 per=35 cycle_ok=1
+R1 chase arm=S N=256 seed=1 rep=1 loads=100000 cyc=2995511 per100=2995 instret=700015 touched=256 minted=516 chk=12750873 chk_ok=1
+R1 chase-cold arm=S N=1024 seed=1 cyc=90808 per=88 cycle_ok=1
+R1 chase arm=S N=1024 seed=1 rep=1 loads=100000 cyc=9715037 per100=9715 instret=700015 touched=1024 minted=2052 chk=51154965 chk_ok=1
+R1 chase-cold arm=S N=4096 seed=1 cyc=490172 per=119 cycle_ok=1
+R1 chase arm=S N=4096 seed=1 rep=1 loads=100000 cyc=12505507 per100=12505 instret=700015 touched=4096 minted=8196 chk=204826544 chk_ok=1
+R1 end minted=0 split=5466 mrev=5466 revoke=0 init=0 out=1175 lines=13
+R1 entry shares=4 region=65536 opcode=1397769216 offset=70 phase=0
+R1 start arm=D series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=D N=16 seed=3 cyc=398 per=24 cycle_ok=1
+R1 chase arm=D N=16 seed=3 rep=1 loads=100000 cyc=1000280 per100=1000 instret=600019 touched=0 minted=6 chk=750000 chk_ok=1
+R1 chase-cold arm=D N=64 seed=3 cyc=489 per=7 cycle_ok=1
+R1 chase arm=D N=64 seed=3 rep=1 loads=100000 cyc=1000045 per100=1000 instret=600019 touched=0 minted=6 chk=3150001 chk_ok=1
+R1 chase-cold arm=D N=256 seed=3 cyc=3384 per=13 cycle_ok=1
+R1 chase arm=D N=256 seed=3 rep=1 loads=100000 cyc=1000171 per100=1000 instret=600019 touched=0 minted=6 chk=12750602 chk_ok=1
+R1 chase-cold arm=D N=1024 seed=3 cyc=39480 per=38 cycle_ok=1
+R1 chase arm=D N=1024 seed=3 rep=1 loads=100000 cyc=4180001 per100=4180 instret=600019 touched=0 minted=6 chk=51145342 chk_ok=1
+R1 chase-cold arm=D N=4096 seed=3 cyc=192012 per=46 cycle_ok=1
+R1 chase arm=D N=4096 seed=3 rep=1 loads=100000 cyc=4925199 per100=4925 instret=600019 touched=0 minted=6 chk=204723554 chk_ok=1
+R1 end minted=0 split=15 mrev=15 revoke=0 init=0 out=1145 lines=13
+R1 entry shares=4 region=65536 opcode=1397769216 offset=70 phase=0
+R1 start arm=P series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=P N=16 seed=1 cyc=536 per=33 cycle_ok=1
+R1 chase arm=P N=16 seed=1 rep=1 loads=100000 cyc=1800238 per100=1800 instret=700015 touched=1 minted=6 chk=750000 chk_ok=1
+R1 chase-cold arm=P N=64 seed=1 cyc=1033 per=16 cycle_ok=1
+R1 chase arm=P N=64 seed=1 rep=1 loads=100000 cyc=1800090 per100=1800 instret=700015 touched=1 minted=6 chk=3150039 chk_ok=1
+R1 chase-cold arm=P N=256 seed=1 cyc=6663 per=26 cycle_ok=1
+R1 chase arm=P N=256 seed=1 rep=1 loads=100000 cyc=1800200 per100=1800 instret=700015 touched=1 minted=6 chk=12750873 chk_ok=1
+R1 chase-cold arm=P N=1024 seed=1 cyc=57789 per=56 cycle_ok=1
+R1 chase arm=P N=1024 seed=1 rep=1 loads=100000 cyc=6136349 per100=6136 instret=700015 touched=1 minted=6 chk=51154965 chk_ok=1
+R1 chase-cold arm=P N=4096 seed=1 cyc=335631 per=81 cycle_ok=1
+R1 chase arm=P N=4096 seed=1 rep=1 loads=100000 cyc=8844195 per100=8844 instret=700015 touched=1 minted=6 chk=204826544 chk_ok=1
+R1 end minted=0 split=15 mrev=15 revoke=0 init=0 out=1147 lines=13
+R1 entry shares=4 region=65536 opcode=1397769216 offset=70 phase=0
+R1 start arm=D series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=D N=16 seed=2 cyc=398 per=24 cycle_ok=1
+R1 chase arm=D N=16 seed=2 rep=1 loads=100000 cyc=1000280 per100=1000 instret=600019 touched=0 minted=6 chk=750000 chk_ok=1
+R1 chase-cold arm=D N=64 seed=2 cyc=489 per=7 cycle_ok=1
+R1 chase arm=D N=64 seed=2 rep=1 loads=100000 cyc=1000045 per100=1000 instret=600019 touched=0 minted=6 chk=3149908 chk_ok=1
+R1 chase-cold arm=D N=256 seed=2 cyc=3750 per=14 cycle_ok=1
+R1 chase arm=D N=256 seed=2 rep=1 loads=100000 cyc=1000045 per100=1000 instret=600019 touched=0 minted=6 chk=12750699 chk_ok=1
+R1 chase-cold arm=D N=1024 seed=2 cyc=39540 per=38 cycle_ok=1
+R1 chase arm=D N=1024 seed=2 rep=1 loads=100000 cyc=4181246 per100=4181 instret=600019 touched=0 minted=6 chk=51147149 chk_ok=1
+R1 chase-cold arm=D N=4096 seed=2 cyc=192187 per=46 cycle_ok=1
+R1 chase arm=D N=4096 seed=2 rep=1 loads=100000 cyc=4925609 per100=4925 instret=600019 touched=0 minted=6 chk=204726945 chk_ok=1
+R1 end minted=0 split=15 mrev=15 revoke=0 init=0 out=1145 lines=13
+R1 entry shares=4 region=65536 opcode=1397769216 offset=70 phase=0
+R1 start arm=S series=chase pattern=shared reps=1 touch=1 budget=50000 arena=4194304 root_type=0
+R1 chase-cold arm=S N=16 seed=2 cyc=554 per=34 cycle_ok=1
+R1 chase arm=S N=16 seed=2 rep=1 loads=100000 cyc=1800238 per100=1800 instret=700015 touched=16 minted=36 chk=750000 chk_ok=1
+R1 chase-cold arm=S N=64 seed=2 cyc=1253 per=19 cycle_ok=1
+R1 chase arm=S N=64 seed=2 rep=1 loads=100000 cyc=1800083 per100=1800 instret=700015 touched=64 minted=132 chk=3149908 chk_ok=1
+R1 chase-cold arm=S N=256 seed=2 cyc=10911 per=42 cycle_ok=1
+R1 chase arm=S N=256 seed=2 rep=1 loads=100000 cyc=2988465 per100=2988 instret=700015 touched=256 minted=516 chk=12750699 chk_ok=1
+R1 chase-cold arm=S N=1024 seed=2 cyc=94663 per=92 cycle_ok=1
+R1 chase arm=S N=1024 seed=2 rep=1 loads=100000 cyc=9910143 per100=9910 instret=700015 touched=1024 minted=2052 chk=51147149 chk_ok=1
+R1 chase-cold arm=S N=4096 seed=2 cyc=482503 per=117 cycle_ok=1
+R1 chase arm=S N=4096 seed=2 rep=1 loads=100000 cyc=12347399 per100=12347 instret=700015 touched=4096 minted=8196 chk=204726945 chk_ok=1
+R1 end minted=0 split=5466 mrev=5466 revoke=0 init=0 out=1176 lines=13

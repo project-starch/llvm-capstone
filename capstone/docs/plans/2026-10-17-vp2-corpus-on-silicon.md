@@ -1,0 +1,243 @@
+# vp2 on the board, and the whole bug corpus on it in the virtual profile (2026-10-17)
+
+The lead's instruction (2026-10-17, evening): do everything needed for a working vp2, then run every test of the
+bug corpus on it in fully virtual Capstone mode. This plan is the decision tree and the work split; it is kept
+current by the helper lane. The vp2 design and its acceptance definition live in
+[`2026-10-16-virtual-profile-on-silicon.md`](2026-10-16-virtual-profile-on-silicon.md) ("What done means", items
+3.2-3.4); the Tier 1/2 kit in `tests/rtl-smoke/vp2-kit-2026-10-17/README.md`; the Tier 3 manifest in its `tier3/`.
+
+**Where things stand at this writing.** `caplifive_vp2_bf3db3175.bit` is sealed (sha256 `776cdd8c…7475`, routed WNS
+-19.019, graded at 9c3a27dc54c6 and amended at 6a2062ff338d). vp1 `caplifive_vp1_9ed9a2594.bit` is sealed (-15.615)
+and its flash chain is armed behind ST100; vp2's chain is armed behind vp1's with the lead's word (ff4725abd412,
+b1516214e63e). The monitor with the CSMINT hook is on capstone-bootstrap c3293b3 and booted Linux on d93a8d66b (boot
+BL, 26fd95e2861c). The v6 kit passes `run.py` 41/41 on QEMU (fa22c4592250). Tier 3 on QEMU: 20 of 26 bundles run.
+Two attribution builds of vp2 (A: no D3 port steal; B: no Q-15 cone) are in synthesis (93bee16ee3f7).
+
+## The decision tree for the bitstream
+
+```
+vp1 session (tonight)        ── differs from d93a8d66b ──► STOP, hold vp2; RTL lane reproduces in sim first
+      │ clean
+vp2 flash + canary           ── canary fails ──► revert to vp1 (one reflash); build vp2b (below)
+      │ passes                                          │
+25 arms + corpus set 7       ── an arm differs ──► sim reproduction (RTL lane) before any call of "silicon"
+      │ as pre-registered
+Tier 1 (contract.dom)  →  Tier 2 (run.py on the board)  →  Tier 3 (the 26 virtual bundles)
+```
+
+- **The canary** (f05265150556): S-16 and the Sublet floor exactly, s1gap by its functional readings (the eight cycle
+  counts reported, not compared: d93a8d66b's own runs differ in them), two passes plus pass-against-pass. A timing
+  failure on this design shows as a wrong or nondeterministic functional reading on a known program; that is what
+  the canary measures, and why cycle counts are not its signal.
+- **vp2b**, built only if the canary fails: the RTL change is selected by the attribution seals, pre-registered by
+  the RTL lane before they land (B names Q-15's cone → the mask test in the DYN unit, a documented equivalence to
+  the encoder, no reading changes; A names D3 → a narrow registered FP port for the switcher; neither → the two-level
+  id decode, costed first). The synth lane builds verified handoffs without a per-build go (the lead, 2026-10-17).
+  Every vp2 arm and Tier re-runs on vp2b; nothing below is specific to bf3db3175 except its hash.
+
+## The rule that binds every reading: one pinned kit, predicted and run on the same bytes
+
+- **One kit revision for Tiers 1-3** (LLVM build, runtime, the virtual SDK with `-fno-builtin` as decided on
+  2026-10-17 — a PARTIAL workaround for C-81, explicit `memcpy` only — module, launcher). The compiler lane pins it
+  and the board lane builds the board module (6.4.14, 0 RVC) from it.
+- **Its identity is recorded in every bundle's `inputs.json`:** the compiler binary's sha256 beside `--version`, the
+  runtime archive hash and the full SDK flags. (The manifest recorded none of the flags before 2026-10-17; the
+  archive hash cannot see `-fno-builtin`, measured by the compiler lane.)
+- **Prediction on image X, silicon on image X.** Every one of the 26 bundles is rebuilt on the pinned SDK and re-run
+  on QEMU's virtual profile with exact bounds off; that reading, cell by cell, is the board's prediction. The Tier 3
+  readings taken before the pin (20/26 on v6-fix without the flag; the three pool bundles on arm-6) are not
+  predictions for the board's images.
+- **A positive control that the run is virtual, in the first rung of every boot:** `contract.dom`'s stale access
+  denied with 25 (exit 139), or a Q-15 refusal (29 at `capstone_cap_derive`). A boot without one says nothing about
+  the profile it ran under.
+- **Table geometry must match between the prediction kit and the board kit:** a flat RECYCLE table of at most
+  65,536 records, the 256-identity reserve inside a context. A heavy-allocating image reading node pressure (kind 5,
+  cause 30) on silicon where QEMU did not is a kit-mismatch candidate first and a silicon finding only after the
+  module's request is shown equal on both. The RTL lane's statement of the rule, verbatim, follows. (An earlier line
+  here said vp2 refuses PAGED at CSRUNV; it does not: the refusal comes at the context's first allocation, as 29.)
+
+**What the module's lifetime table must look like for the board kit and the QEMU prediction kit to agree (the RTL
+lane, from capstone-ariane `virtual-profile-2-d` bf3db3175, 2026-10-18).** The rev-node unit reads the table's
+header at EVERY allocation (`capstone_rev_node.anvil:225-238`, QEMU's `table_load` made per allocation) and refuses
+the header, status 3, when any of these fails: RECYCLE set (slot 0 word 0 bit 63), PAGED clear (bit 62), next-unused
+at least 2 and at most capacity, and a free list whose head and count are both zero or both non-zero. Inside a
+context the DYN unit turns status 3 into 29 at the allocating instruction (`capstone_dyn_unit.anvil:284-287`: Q-20's
+"a corrupt table reads 29"); CSRUNV itself reads no header, so a PAGED or non-RECYCLE table is NOT refused at entry:
+the context enters and its first CDERIVE, CSMINT-emulated mint or MREV reads 29. The glue presents capacity and
+next-unused saturated at 65,536 (`ex_stage.sv:1397-1398`: any set bit in [61:16] reads as 65,536) and indexes
+records by the id's LOW 16 BITS (`ex_stage.sv:1545-1548`), while QEMU accepts a capacity up to 2^30 and ids up to
+UINT32_MAX (`cap_rev_table.c:51`, `:105`, `cap_rev_tree.h:11`). So the kit rule is: a flat RECYCLE table, capacity at
+most 65,536 records (1 MiB), PAGED never set, ids 0 and 1 the header, and the module must never let next-unused pass
+65,536. Node pressure (kind 5) fires inside a context when capacity − next + free_count ≤ 256 (`:239-246`, QEMU's
+`capstone_require_node` with `CAP_REV_TABLE_RESERVE` 256); CSNODE's first allocation needs two identities. **Where a
+heavy-allocating image (cpython, perl) can read differently on silicon than under QEMU, and is pre-registered as a
+KIT MISMATCH, not a silicon finding:** (1) a table the module sizes above 65,536 records: QEMU allocates past id
+65,535 and sees pressure only 256 below its own capacity, silicon saturates capacity at 65,536, so kind 5 fires when
+65,536 − next + free_count ≤ 256 and, if the software collects and continues, ids at or above 65,536 alias records
+by their low 16 bits (corruption that QEMU cannot show); (2) CSRETIRE of an id at or above 65,536 or below 2 answers
+rd 1 without a table read on silicon (`capstone_rev_node.anvil:620`), where QEMU's bound is UINT32_MAX; (3)
+next-unused written by software above 65,536 reads as exactly 65,536 on silicon, so a "next > capacity" refusal QEMU
+would raise does not fire there. None of the three can occur with a table at or below 65,536 records whose
+next-unused stays inside it, and the module's table size is the one input the kit controls. Everything else in the
+header checks is bit-identical between the two (the three Q-entries carried into vp2: the table barrier, the
+emulation window's rules, CSRETIRE's answers without a read).
+
+## Kit blockers found from the sources before any board time (2026-10-17, evening)
+
+Each of these would have ended vp2's first virtual boot at its first allocation or its first CSR access, and none is
+visible on the QEMU prediction kit, which implements what the module assumes. All are the compiler lane's, in the
+module, behind one parameter (`node_table_flat`, default off so the paged kit is unchanged and the record tells
+them apart), regressed on QEMU with the parameter on and off (run.py 41/41, bundle 5 13/13; the off arm is the null
+control of the paged path) before any hash reaches the board lane.
+
+1. **The module publishes a PAGED table.** `c->table[0] = CAP_REV_TABLE_FLAGS`, and capstone-qemu d35af47b163c
+   `target/riscv/cap_rev_table_abi.h:13-15` defines `FLAGS = RECYCLE | PAGED`; the table grows by pages
+   (`node_add_page`). vp2 implements only the flat format and refuses a PAGED header with status 3, which reads 29 at
+   the context's first allocation. **Flat mode:** one physically contiguous 1 MiB allocation at context creation
+   (order 8, `__GFP_RETRY_MAYFAIL`; the root is a physical address, QEMU's flat preflight wants the whole
+   `capacity*16` mapped), capacity published as 65,536 from `open()`, no growth path, ids 0 and 1 the header.
+2. **Two paged-only header words sit inside record id 2 in the flat layout.** The module writes MAGIC at root+32
+   (`table[4]`) and reads the RETIRED count at root+40 (`table[5]`, written by QEMU only under `t->paged`,
+   `cap_rev_table.c:177-181`) in its collection heuristic (`capstone_vm.c:392, :401, :864`). In flat mode the first is
+   dropped and the second is kept by the module itself: incremented on each `CSRETIRE` that returned 0, reset at the
+   collection that reclaims the retired records. The RTL publishes no retired count in flat mode (the unit writes only
+   the four header words, `ex_stage.sv:1559-1565`). The collection trigger gets its own two-sided regression row (a
+   workload that collects under the paged module collects under the flat one, counts comparable).
+3. **CSR 0xcc0 (urevavail) does not exist on vp2**: a read is an illegal instruction (`csr_regfile.sv:1079`). QEMU
+   implements it as `capacity − next + free_count` read live (`capstone_table.c:199-205`). The module computes the
+   same from the header words, saturated at 65,536, and never reads the CSR on silicon. Q-21.
+4. **CSR 0x5c0 (scapctl) does not exist on vp2** either (any access traps). On QEMU it is "protected U" (bit 0 PU:
+   U mode outside a context uses the guest table; the read ORs 0x100 when exact bounds are on). The RTL's namespace is a
+   context, S with srevroot ≠ 0, or M with csupctl bit 3; U outside a context never reaches the table. The module
+   must not execute the 0x5c0 access in flat mode, and answers the exact-bounds query with 0. Q-22. Open: whether
+   anything run.py or the corpus runs in U outside a CSRUNV context with capabilities (believed not: the launcher's
+   own code is plain Linux, every domain instruction runs inside the context); the compiler lane answers from the
+   module's lines.
+5. **The module's CSR set on silicon is exactly** srevroot 0x5c1 (S and M RW, 4 KiB aligned, the write flushes the
+   pipeline), satp, and CSRUNV/CSRETIRE/CSNODE as instructions. csupctl/csupquantum are M-only; csupstatus/cause/
+   epc/tval and csnodefree are M-only read-only; an S-mode CSRUNV caller reads the event from rd and the frame (+16
+   kind, +24 cause, +32 pc, +40 addr, reply +224). Control: an objdump of the flat-mode module showing no reachable
+   csrr/csrw of 0x5c0 or 0xcc0, with the paged build as the positive control that the grep finds them.
+
+**The flat layout, confirmed word for word by the RTL lane against QEMU's `table_get`/`table_put`** (not the stale
+comment at `cap_rev_table.h:8-16`): record i at root + 16·i (QEMU `cap_rev_table.c:9-11`; RTL `ex_stage.sv:1555-1556`
+indexes by id[15:0]); word 0 = prev[31:0] | next[63:32]; word 1 = depth[29:0] | parent[59:30] | VALID bit 60 |
+LINEAR bit 61 | FREE bit 62 (the RTL writes parent as 16 bits and depth as 17, exact inside a 65,536-record table); a
+FREE record has word 1 == exactly FREE<<60 and word 0 = the link; header slot 0 = {capacity | RECYCLE<<63, next-unused},
+slot 1 = {free_head | free_count<<32, allocations}. **No RTL arm has ever read a table QEMU's code wrote**: the
+cross-check is the flat-mode module's own table on QEMU, dumped whole (1 MiB) after a run.py run with the
+allocation/retirement sequence, fed by the RTL lane as `.data` into an arm whose readings are QEMU's.
+
+**Tier 3's payload budget (decided by the helper lane under the lead's delegation, 2026-10-17):** a Tier 3 bake may
+total 26,000,000 bytes when every file beyond the clean base is named in the bake manifest with its sha256; the 20 MB
+rule stays for every other boot. The preflight's C10 purpose (no undeclared stale domain) is kept as that manifest
+check. Negative tests recorded with the change: an undeclared file BLOCKS; a declared bake at 26,000,001 bytes
+BLOCKS. Measured by the board lane: a clean firmware is about 17.5 MB, case bundles gzip to 0.7-2.3 MB each, so the
+old rule gave one bundle per boot (about 17 boots); the budget gives 4-5. The gate changes only after vp1's armed
+chain has passed its second preflight. Bundles over the payload are split by case across boots or recorded as not
+stageable at their measured size, never squeezed.
+
+## The first virtual boot, and the ruling it forced (2026-10-17 night, Q-23 and Q-24)
+
+vp2's first virtual boot (board lane, lane vp2-tier12 c1fa1a863d09) wedged at `contract.dom` before any output:
+EXCX cause 24 from S at `capstone_vm.ko` add()'s `ldc t0, 0(a5)`, a5 the slot (an integer kernel pointer), right
+after the emulated CSMINT; then a second 24 at the monitor's own `_cap_trap_entry+4`. Neither pre-registered branch
+matched, so it went to the RTL lane before anyone called it silicon. **Not silicon**, three findings of record:
+
+1. **Q-23.** The RTL's DYN unit refuses `LDC`/`STC` with a NOT_CAP rs1 in every mode
+   (`capstone_dyn_unit.anvil:641-654`, `:716-719`); QEMU alone had an "experimental trusted-kernel context spill"
+   branch (`trans_capstone.c.inc:214-224`, S-mode scalar-address `LDC`, no bounds or permission check), exercised on
+   purpose by `tests/trusted-linux-u-access`, and no such branch for `STC`. The module's four integer-based accesses
+   (all in add(): block A `ldc/delin/scc/stc` to retype LIN → NONLIN and set the cursor; block B `ldc/stc` copying the
+   image capability into register slot 0) run on EVERY domain launch (five of the eight grants are `linear = 0`),
+   so nothing of Tiers 1-3 could run on the resident module. Block B needs a scalar `STC`, which QEMU does not have
+   either, so "QEMU as reference" decided nothing.
+   **Ruling (the semantics owner, under the lead's delegation, 2026-10-18): the RTL stays; trusted S performs no
+   capability memory access; QEMU is tightened to the RTL (the scalar-S `LDC` branch kept only under the
+   test-only property `x-capstone-test-s-ldc`, default off, for three directed suites' bootstrap; no production kit
+   sets it, and the kit's QEMU invocation is grepped for it as a gate); the CSMINT descriptor becomes v7** (`isa.md`: base, end, perms | bit 8 NONLIN, cursor with `base <= cursor <=
+   end`, a second slot address or 0, reserved 0; one node in both slots; LINEAR with a second slot is 29). Feasible
+   on the RTL because CSNODE accepts any tagged rs1 (`capstone_dyn_unit.anvil:585-592`), SCC is a pure register op
+   (`capstone_flu_unit.anvil:104-126`) and the switcher loads the context's PC capability from frame +64
+   (`capstone_dom_switcher.anvil:157, :319`), so slot 0 is the hardware's and the second slot fills it. No bitstream.
+   The alternative, scalar `LDC` and `STC` from trusted S on the RTL plus the `STC` branch in QEMU (vp2c), was
+   weighed and rejected: a day plus a flash cycle to codify a branch QEMU itself marked experimental.
+   Consequences: the module loses all four accesses (gate: 0 `ldc`/`stc` encodings in the `.ko`, the pre-ruling
+   module as the positive control with 4); the monitor routine mints NONLIN directly (CAPCREATE/CAPTYPE/CAPBOUND/
+   CAPPERM → CSNODE in the window → SCC outside it → STC, STC); the emulation arms are re-pre-registered for v7; the
+   Tier 0 suites that build descriptors move to six words and are re-measured; run.py's 41/41 on the old QEMU is
+   NOT inherited (it passed through the removed branch), the regression reruns on the tightened QEMU.
+2. **The emulation's restore is exact** (`sbi_capstone.S:14-45`, `return_to_sumode` `:163-199`); a5 was the slot;
+   the 24 is finding 1.
+3. **Q-24, the wedge.** `handle_exception`'s default (`sbi_capstone.c:3520-3554`) calls `fault_return_from_domain`
+   with no domain active (MPP = S), never runs `return_to_sumode`'s CSCRATCH swap, so the next trap entry runs
+   CINCOFFSETIMM on an integer sp: the second 24, tval = the kernel stack. medeleg cannot delegate causes 24-30 on
+   this RTL (`csr_regfile.sv:1642-1659`, the write mask stops below 24; the switcher's unmasked write at `:2023` is an
+   M-owned path, an inconsistency to record, not a loophole), where QEMU makes them delegable. RTL fix: the mask gains
+   24-30, cycle-neutral, pre-registered for the next bitstream. Monitor fix now (board lane, reviewed by the RTL
+   lane): an unhandled cause with MPP = S (sufficient for OS-versus-domain: a classic domain traps with MPP = M) is
+   injected into S as `csm_inject` does and leaves through `return_to_sumode`; `fault_return_from_domain` refuses to
+   run without an active domain.
+
+Owners: the RTL lane the QEMU change and the re-run arms; the compiler lane the module (one post-ruling revision,
+with the early-clobber fix, the collection row, the ceiling reading and the flat define); the board lane the monitor
+routine and the injection fix; the helper lane `isa.md` and this record. No board boot before: the tightened QEMU
+pinned, the new module through its gates and the from-scratch regression, the emulation arms re-run, the 1 MiB
+table cross-check.
+
+## Tier 3's comparison rule, settled from the sources (2026-10-17)
+
+The question was whether the board can give the cell comparison QEMU gives (verdict, cause, faulting symbol,
+attribution, reached) or only verdict-plus-exit-status. It can give the full one:
+
+- the launcher itself prints the `domain fault cause= pc= address=` line when `CAPSTONE_EXEC_DIAGNOSTICS=1`
+  (`runtime/virtual/exec.c`, `fault()`: `capstone_delegate_fault_record` to fd 2), and `tools/virtualvm.py`'s gate
+  script exports that variable; nothing comes from a QEMU-side trace;
+- `run-virtual-cases.py` resolves the pc against the image's own symbols with `llvm-nm` on the host, after the run.
+
+So the board kind is **the same gate script in a board boot instead of a QEMU boot**: the same `BEGIN`/`END` step
+markers, `virtualvm.split()` over the board's serial log, the same `observe()`, and `verdicts.py`'s bundle writer
+producing a verdicts-v1 bundle for a new arm whose `inputs.json` names the bitstream, the firmware hash and the kit
+identity. Proposed as a board backend for `Batch.execute()` (stage dir → the board lane's bake into the initramfs
+with the module and the launcher → boot → `serial.log`), everything else untouched. The board lane confirms or
+amends this before writing it, and pre-registers the rule with anything the launcher cannot produce on the board.
+
+## The work, by owner
+
+| track | owner | what | when |
+|---|---|---|---|
+| bitstream | board | vp1 session; vp2 flash, canary, 25 arms, set 7 (armed) | tonight, after ST100 |
+| bitstream | RTL | vp2b pre-registered against A/B before the seals; sim standby for every differing reading | now |
+| bitstream | synth | A and B sealed with stems; vp2b if asked, without a per-build go | ~1 h |
+| Tier 1/2 | board | the board arm from the kit README (`VM_EXIT:<name>:<status>`, `BASELINE-PROBE vm_steps`), `contract.dom` first; prediction = the QEMU record c2e0bfa7901e1c76 step by step | pre-registered before vp2's first session |
+| Tier 3 kit | compiler | pin the revision; identity into `inputs.json`; table geometry shown equal on both kits; rebuild 26 bundles on the pinned SDK; QEMU re-run with exact bounds off (serialized on the QEMU lock with its C-81 runs); the invocation manifest (argv, stdin, fixtures, env, cc_args per bundle, machine-readable, from the records) | today and tomorrow |
+| Tier 3 runner | board | the board backend above; the boot plan computed from the compressed initramfs size of the actual images against the 20 MB working / 32 MB cap, one wedge risk last per boot, the virtual positive control first; boots and hours per bundle group | after the pin |
+| Tier 3 fold | helper | `arms.json` configurations, `SCHEMA.md` rows, `check-corpus` oracles, `derive-verdicts`, `build-index`; the independent re-verification (images in the booted firmware by sha256, readings regenerated from the serial log) | as bundles land |
+| ports | compiler | the three Sublet (iii) placement repairs (memcached 0006, wmem 0001, memsys5); the per-port SDK soft-float fix (cpython, postgres/sql) | continuing |
+
+**Order of the bundles on the board.** The 17 that read as their records on QEMU first; then the three Sublet (iii)
+arms BEFORE their placement repairs, with "29 at `capstone_cap_derive`" as the prediction (on silicon it is the first
+reading of Q-15's refusal path), and again after; the six blocked on the per-port SDK fix last, recorded "pending"
+until the fix lands rather than holding the campaign.
+
+**Not a gate for any of this:** C-81's backend fix (its own track; the partial workaround is the pinned
+configuration and the caveat is in the measurements doc); the attribution builds' outcome when the canary passes.
+
+## Status
+
+| item | owner | state |
+|---|---|---|
+| vp1 session | board | DONE 2026-10-17 (c5e696ac7328): S-16 98/98, floor 77/77, s1gap functional identical to d93a8d66b, the four vp1 arms as pre-registered, set 7 identical; one JTAG non-start re-run, pre-registered before the retry |
+| vp2 flash + canary + arms + set 7 | board | DONE 2026-10-17 (987bf254ee40): flashed 20:40:46 on the lead's word, readback names caplifive_vp2_bf3db3175; canary 9 of 9 (two passes and pass-against-pass); 25 of 25 arms equal to their simulated vectors on bf3db3175's RTL; set 7 33 of 33 identical to d93a8d66b; every run matched to its image hash; the comparator negative-tested on the session's own readings. **vp2 is resident; the physical regression holds (done-means 4).** |
+| vp2b contingency | RTL | pre-registered before the seals, dev 733ad96033df; NOT built: the canary passed. B is graded (44f14d011de5: Q-15's cone is not the ten thousand); A pending, for the record |
+| Tier 1/2 board arm | board | stage, bake recipe, firmware recipe and judge ready in its private tree; HELD on the flat-mode module (kit blockers 1-5); then pre-registered on dev and armed behind vp2's set 7 |
+| flat-mode module (kit blockers 1-5) | compiler | built and gated (board ko 0d62a1bcdeecc13f flat; run.py 41/41 and bundle 5 13/13 on both adapters, c14933904de4) — superseded by the v7 module below |
+| Q-23/Q-24: the first virtual boot's wedge | all | ruled 2026-10-18 (a2739d9313ca, 2ed59b4d0e6c, 8865adec18f9): no bitstream. QEMU v7 pinned: capstone-qemu `virtual-capstone-v7` f2f15f8fc70c (Tier 0 re-measured: m1 73/73, movc 67/67, sublet-lifetimes 119/119, tlua 71/71, runtime 69/69 + index8, fp 60/60, exact-bounds 4/4); monitor routine capstone-sbi vp2/csmint-v7 729a340 (sha256 a61bd763…) and the S-trap injection vp2/os-trap-inject db23ffd under RTL review; v7 module built (board ko 9ff967445799c02b, 0 ldc/stc against 4) awaiting its from-scratch regression on f2f15f8fc70c; emulation arms re-pre-registered on 729a340 by the RTL lane |
+| pinned kit + identity + geometry | compiler | geometry rule in; identity with the flat module's revision |
+| Tier 3 payload budget (26 MB declared) | board | accepted; lands on dev after vp1's second preflight, with both negative tests |
+| 26 bundles rebuilt and re-predicted on the pin | compiler | to do; 20/26 read on the unpinned kit |
+| invocation manifest | compiler | asked 2026-10-17 evening |
+| Tier 3 board backend + boot plan | board | asked 2026-10-17 evening; the comparison rule above to confirm first |
+| Tier 3 fold tooling | helper | to do |
+| Sublet (iii) placement repairs ×3 | compiler | to do |
+| per-port SDK fix (cpython ×4, postgres/sql ×2) | compiler | root-caused, to do |
