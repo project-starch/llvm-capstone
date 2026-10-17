@@ -1,0 +1,4 @@
+# Boot r11 runner dry run (firmware 4c2685def8817a87), driver stubbed: a synthetic transcript carrying the module banner,
+# two FENCE flips and a remap refusal line: all three extracted whole; wrong firmware: STOP. (The first extraction of the
+# refusal line used grep [^\r], which excludes a backslash and the letter r, and cut the line at "remap"; caught by this
+# dry run and replaced by a whole-line match.)

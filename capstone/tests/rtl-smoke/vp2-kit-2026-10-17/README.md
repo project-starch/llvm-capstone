@@ -1239,3 +1239,38 @@ Pre-registered at bb4981135515. Result lines in `board-tier12/results/board-vp2-
   the sparse wedge: M, not stalled, an instruction valid at commit, the LSU idle, no monitor tag.
 - **Silicon count so far:** 16 of vm-suite's 22 steps read. 15 match QEMU, and `vm` diverges (the module's store-fault
   path). sqlite_write wedges, and sqlite_read, mruby and the two sparse steps (a wedge of their own) are not yet read.
+
+## Pre-registered (2026-10-18, before boot r11): which resolve() refusal ends `vm`, and does a fence before every CSRUNV remove the sparse wedge
+
+**The changes:**
+- **The module:** f02ca82ea9b2dd61 (the compiler lane's d66030133aa6):
+  - every terminal return of resolve() prints `capstone_vm: resolve refused at <site>: ...` at pr_warn, at most one
+    line per step;
+  - a banner at insmod (`capstone_vm: loaded, diag resolve-sites-3, supervisor_slots=1`);
+  - the S-24 -ELOOP bound;
+  - `fence_before_entry` (default 0, 0644: a `fence rw,rw` before each of the four CSRUNV sites when set).
+- **The suite:** `board-tier12/vm-suite-inner-r11.sh`.
+  - sqlite is deferred to r12: r10's wedge is a second unknown, and it would cost the control.
+  - The sparse pair runs with the fence set through sysfs, then sparse-stale runs with it cleared, last.
+  - Each flip echoes the value read back.
+- **The pins.** Firmware 4c2685def8817a87; monitor 007d81d unchanged. Run by `boot3/run-tier12-r11.sh
+  4c2685def8817a87`, dry-run in `boot3/dryrun-r11.txt`.
+
+**Predictions:**
+- **Tier 1:** identity.
+- **The banner must appear.** If it does not, every absent site line in this boot is void.
+- **`vm`:** the compiler lane's per-site table (`vp2-flat-table-2026-10-17/PREREGISTRATION-resolve-refusal-sites.md` on
+  lane/compiler-exact-bounds-iii, pushed before the run).
+  - **`remap`** with cause 15, pfn_old != pfn_new, and prev(the same address, cause 13): the COW-on-write mechanism.
+  - Another site names its own mechanism.
+  - No site line with the banner present means the store does not fail in resolve() at all, and the !same deduction
+    is refuted.
+  - vm-ro-write and vm-none-read are predicted to print `vma` lines, as on QEMU (the compiler lane's control).
+- **The other returning steps:** as r9/r10, plus mruby 0 with MRUBY_SUM=5050 and MRUBY_FILE=virtual (the first silicon
+  reading).
+- **The fence, read as four outcomes** (the semantics owner's table):
+  - **fence=1 returns, fence=0 wedges:** the fence orders the race, which is a kit-side fix.
+  - **Both wedge:** not the fence.
+  - **Both return:** the race is timing-sensitive and the print or the order moved it. That is its own finding, not
+    a fence pass.
+  - **fence=1 wedges and fence=0 returns:** a different variable.
