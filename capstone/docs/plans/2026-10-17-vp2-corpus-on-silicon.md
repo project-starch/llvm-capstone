@@ -187,9 +187,14 @@ of wedging as in boot 1. Every virtual step faulted earlier with cause 26 at con
 `__capstone_cap_init` right after `scc a0, gp, a0`: gp is granted NONLIN, the RTL's DELIN raises 26 on any non-LINEAR
 rs1 (`capstone_dyn_unit.anvil:794-801`), QEMU's `helper_csdelin` no-ops it, so the glue's delin has been dead code on
 QEMU since the module delinned the grants itself (C-13 class; S-15 in the silicon-mimic). **Ruled the same way as
-Q-23: the RTL is the reference; QEMU's default DELIN raises 26 on a non-LINEAR rs1; the glue's delin is removed; the
-images are rebuilt on the new pin with the module unchanged; run.py on the UNFIXED glue must fail at the same delin
-on the new QEMU before the fixed glue passes.** Open with the RTL lane: whether CSRUNV from S with an invalid frame or
+Q-23: the RTL is the reference; QEMU's default DELIN raises 26 on a non-LINEAR rs1; the images are rebuilt on the new
+pin with the module unchanged; run.py on the UNFIXED images must fail at the same delin on the new QEMU before the
+fixed ones pass.** The board lane's census then showed the delin is not one glue site but the backend's
+`-capstone-image-gp` global-address materialization, `scc rd, gp, x; delin rd` with no type test: 525 of contract.dom's
+530 delins, 5,983 of sqlite3.dom's 5,988, 9,859 of mruby's 9,863. Fix (b): the backend drops the delin (the image gp is
+NONLIN by ABI; a LINEAR gp would make every global access write the shared node's linear bit on the RTL); the census
+script is the gate on the rebuilt images (0, against 525/5,983/9,859); the 5 non-gp delins per image are named one by
+one; the backend revision joins the compiler identity in `inputs.json`. Open with the RTL lane: whether CSRUNV from S with an invalid frame or
 action traps with 29 (as boot 2 read) or returns 29 in rd (as the plan's item-D text says); QEMU and the kit's
 expectation follow the RTL. Boot 3 is boot 2's pre-registration with the images' hashes moved and the delin branch
 added. No strict-DELIN property for prediction runs: the strict behaviour is the default, a test-only property exists

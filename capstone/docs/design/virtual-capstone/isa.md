@@ -294,6 +294,14 @@ fp 60/60, exact-bounds 4/4. The adapter obtains
 every capability it needs through `CSMINT` (descriptor v7) and never holds one in a register.
 The Q-12 protected-path changes did not change legacy physical C transfers.
 
+**`DELIN` of a non-LINEAR capability faults with 26 (ruled 2026-10-18).** The RTL raises 26 for any
+non-LINEAR rs1 (`capstone_dyn_unit.anvil:794-801`); QEMU's earlier no-op for a NONLIN operand is
+replaced by the same fault in the default profile, so a prediction run sees what silicon sees. The
+image gp is NONLIN by ABI (every launch grant is), so the `-capstone-image-gp` materialization of a
+global address is `scc`/`cincoffset` off gp with no `delin`; the earlier sequence carried a `delin`
+that was dead on QEMU and faulted on vp2 (boot 2 of the virtual profile, 2026-10-18: 525 of
+contract.dom's 530 delins).
+
 | Cause | Capability fault |
 |---|---|
 | 24 | Unexpected operand type, including a missing tag |
