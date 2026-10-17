@@ -2710,3 +2710,58 @@ patches 0001–0009, i.e. option (iii)'s mallocng).
 **`+movc-keeps-integer-source` is the one I would try first** for a tag-loss symptom, because it is
 the only added flag that changes how a value moves between registers, and the symptom is a value
 that keeps its address and loses its tag. That is a reason to order the arms, not a prediction.
+
+
+## The v6 SDK loses a capability tag, and `-fno-builtin` is the cause — reduced, two-sided
+
+Reached by reaching for an existing instrument instead of a rebuild. The board lane's runs 2, 3 and
+4 had excluded the module change, the compiler change and `+movc-keeps-integer-source`, leaving "the
+runtime/libc contents or the pool sources", and the archive-swap arms cannot link. So rather than
+rebuild archive sources, the **hosted-application probe** —
+`runtime/virtual/hosted-contract.c`, the instrument that found C-78 — was run against the v6 SDK.
+It tests tag survival across fourteen copy shapes with controls that MUST lose the tag.
+
+**One check fails, and only one:**
+
+    virtual:memcpy_constant_size_unknown_alignment   FALSE
+
+Everything else passes, including `memcpy_24_capability_head`, `memcpy_padded_struct`,
+`struct_assignment_64_pointers`, `realloc_moving` and `memmove_overlapping` — and both tag-loss
+controls behave (`control_byte_copy_drops_tag` and `misaligned_copy_has_no_tag` are true), so the
+instrument can report the opposite.
+
+**The shape.** `copy_pair` is `noinline` and does `memcpy(d, s, sizeof(struct pair))` through `void
+*`, with the probe's own comment: *"The compiler sees only void pointers: no alignment to rely
+on."* Both operands are 16-aligned statics in fact, so musl's run-time-checking `memcpy` would
+preserve the tag — but without `-fno-builtin` the compiler is free to inline the copy, cannot prove
+alignment, takes the scalar path, and the tag is gone. Its known-alignment neighbour,
+`memcpy(&pair_dst, &pair_src, sizeof pair_dst)` on the same types, passes.
+
+**Two-sided and single-variable:** rebuilding only the probe with `-fno-builtin` added, nothing else
+changed, flips that check to TRUE and leaves **no virtual failures at all**. The two images differ
+(`683a6b6f350a7764` vs `d6de4abcd44a568d`), so this is not a silent rebuild of the same code.
+
+### This corrects my own earlier refutation, which was right about the wrong question
+
+Earlier in this document the `-fno-builtin` hypothesis was recorded as refuted, on the grounds that
+the 10-10 SDK does not pass it either. **That refutation answered "does the flag DIFFER between the
+two records?" — it does not — and I then over-generalised it into "the flag is irrelevant".** The
+flag demonstrably causes a tag loss in the v6 SDK. Both statements can hold: the flag is a real
+defect in both SDKs and therefore cannot by itself explain a difference between them.
+
+### What is NOT established
+
+That this explains the FFmpeg pool fault. The 10-10 record **passed** that case and, if its SDK also
+lacks the flag, it should have had the same exposure — so either the pool's copy is a different
+shape, or something else in v6 makes it reachable. **The decisive test is one rebuild and belongs
+with the case:** add `-fno-builtin` to the SDK's codegen and re-run subobject case 00. If it clears,
+the chain is closed; if not, the pool fault is a separate shape and this is a second, independent
+defect found on the way.
+
+### The fix, and why it is not applied unilaterally
+
+`-fno-builtin` belongs in the virtual SDK's codegen, next to the flags `capstone-cc` already
+validates. It is one entry. But it changes every port's images, and the board lane has runs in
+flight against the current SDK, so it is proposed rather than dropped in mid-experiment — and it
+should go in as a *validated* arm, with this probe as its gate, since the probe is exactly the test
+that would have caught the omission.
