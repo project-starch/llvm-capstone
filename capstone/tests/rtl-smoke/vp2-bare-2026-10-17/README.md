@@ -80,6 +80,25 @@ what they do.
 - **Otherwise:** this table's 25 arms in table order, one power cycle each. Each is compared with its board vector,
   count and values as 64-bit integers. Then corpus set 7 against d93a8d66b's record.
 
+
+**Amended before the run (2026-10-17, 20:25): an image that never started is re-run once.**
+
+On vp1's first session a JTAG `load_image` timed out before `continue` (s16st-esc-n8), so that arm produced no reading.
+vp1's PREREG amendment of the same time gives the rule and its precedent. Here every bare run of the session goes
+through `infra-retry.py`: the canary's S-16, floor and s1gap arms, and the 25 arms.
+- A run that exits non-zero with no `] continue` line and no reading is run once more, with the same image. Its first
+  attempt is kept beside the run, as `<run>.infra-fail-1`.
+- A run that started is returned as it is.
+- A second non-start is a missing reading, so the canary's "stop on any difference" fails, and the board goes back to
+  vp1 as pre-registered.
+- The 25 arms' outer timeout is 1200 s, up from 600 s: a load_image hang plus one retry needs about 10 minutes.
+
+Dry runs, with only the innermost runner stubbed (the real run-capstl.sh and wrapper run):
+`results/dryrun-infra-retry.txt`.
+- One non-start injected in each kind of run: the canary passes 9 of 9, all 25 arms read as pre-registered, and each
+  injected arm shows exactly one retry.
+- A double non-start: the canary fails.
+
 **Still open before a vp2 board run:**
 - (Not needed: resident controls for the physical-pool builds. The `-off` builds run in vp2's own batch beside their
   flag-on arms. On vp1 or d93a8d66b their readings are not predicted: srevroot and the item-D CSRs do not exist there.)
