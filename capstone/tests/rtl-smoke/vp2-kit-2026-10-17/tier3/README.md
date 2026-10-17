@@ -933,3 +933,13 @@ bundles run: 18 of 26; not run: [('cpython/allocator-boundary-repros', 'virtual-
 - **The pre-registered (iii) rounding exception was not needed:** no CAUGHT 28 became MISSED.
 
 **Status after SQLite (computed by `status.py`): 20 of 26 bundles run; not run: cpython (4) and postgres/sql-repros (2), blocked on the per-port SDK build (soft-float builtins in a hard-float link), which the compiler lane has taken.**
+
+**Scope of the `-fno-builtin` result (2026-10-17, from the compiler lane's measured control; now ISSUES C-81).**
+- **The flag diverts only EXPLICIT `memcpy` calls to musl's run-time copy.** `__builtin_memcpy`, and every copy the
+  compiler synthesises (struct assignment, by-value aggregates, array initialisation), still expand bytewise with the
+  flag on when their alignment is not provable, and drop the tags.
+- **So run 6's 17/17 shows that the FFmpeg pool's tag-losing copies were explicit `memcpy` calls. It does not show
+  that the images are tag-safe.** Where this README says the flag "resolves" or "clears" the pool tag loss, read: the
+  three bundles read as recorded with it.
+- **The defect is long-standing, not a regression.** The two compiler revisions emit byte-identical bodies. The
+  compiler lane localises it to `findOptimalMemOpLowering`'s scalar path, and claim-auditor is checking that.
