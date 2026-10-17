@@ -1,0 +1,5 @@
+FLAG cacheEntryClear+0xf4 20B unit=1 -- 16-byte object copy a0+0x4 -> a1+0x4 
+      lw a1, 0x0(a1); lbu a2, 0x3d(a2); lw a2, 0x10(a0); sw a2, 0x10(a1); lw a2, 0xc(a0); sw a2, 0xc(a1); lw a2, 0x8(a0); sw a2, 0x8(a1); lw a2, 0x4(a0); sw a2, 0x4(a1); lw a0, 0x0(a0); sw a0, 0x0(a1)
+FLAG wherePathSolver+0xbc 16B unit=8 -- 16-byte object copy s0+-0x198 -> s0+-0x190 
+      ld a0, -0x198(s0); sd a0, -0x190(s0); ld a0, -0x190(s0); sd a0, -0x188(s0)
+/tmp/capstone/c81/sqlite/plain/backupattach/r322-backupattach.dom: 171 load-carrying runs, 2 flagged (granule-strict.py)

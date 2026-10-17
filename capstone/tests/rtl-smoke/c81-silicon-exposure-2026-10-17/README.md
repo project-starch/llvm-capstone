@@ -92,8 +92,26 @@ cases.
 - each set-1 image carries 8-9 scalar inline copies of 16 bytes or more that the libcall lowering would turn into calls;
 - none is byte-granular.
 **A scalar copy of any width drops a capability's tag.** So each of these is a CANDIDATE, and the finding would be one
-over a region that holds a capability. That is not yet established for any of them. They are not attributed to
-functions here.
+over a region that holds a capability.
+
+**Attribution** (`attribute.py`, which maps each twin-only run to its enclosing non-`.L` symbol and prints its
+instructions). All nine cases carry the same nine runs; only `main`'s offset moves (+0xec or +0xf0). The controls image
+carries the same set without `main`'s, with `printf+0x7c` in place of `vfprintf+0x44`.
+
+| run | what it stores | can it drop a tag? |
+|---|---|---|
+| `abort+0x50`, 48 B | `sd zero` x6: a zero-filled stack local | no, it loads nothing |
+| `dl_ioctl+0x14c`, 64 B | `sd zero` x8: a stack local at `s0-0x180` | no |
+| `dl_prctl+0x4c`, 72 B | `sd zero` x8 over two locals, then an integer spill | no |
+| `dl_prctl+0x244`, 16 B | an integer spill, then `li a0, 0` and `sd a0` | no |
+| `dl_prctl+0x2e4`, 16 B | the constants 0x20 and 0x10 | no |
+| `vfprintf+0x44`, 40 B | `sd zero` x5: 40 bytes, the size of musl's `nl_type[NL_ARGMAX+1]` | no |
+| `main+0xec`, 64 B | `sd zero` x8: a stack local at `s0-0xe0` | no |
+| `run_event+0x500`, 16 B | `sw s1` and `sw zero` x3, the integer fields of a struct whose capability field is stored by its own `stc` | no |
+| `dl_round+0x35c`, 162 B | the ONE copy: `ld`/`sd` over 160 bytes, then `sh`. It is `events[slot].ev = block->events[i]` in `__capstone_signals_take` (signals.c), inlined by LTO, followed by the 2-byte `state`/`on_alt` store. | no: `struct capstone_signal_event` (`runtime/include/capstone/delegate.h:62`) is `seq`, `signo`, `flags`, `mask`, `generation` and `info[128]`, the raw siginfo bytes the launcher wrote. It holds no pointer. |
+
+**So none of set 1's candidates is a C-81 instance.** Eight load nothing, and the one copy moves a pointer-free wire
+record.
 **The verdicts they bear on:** set 1's rows are spatial overreads (cause 28), not cause-24 temporal rows, so these
 candidates touch no CAUGHT-by-24 reading in this set.
 
@@ -140,5 +158,74 @@ The 98 runs present in both images survive the libcall lowering, so they are not
 field-typed stores, of the kind the scanner header calls a candidate and not a finding. A pointer field is moved by
 `ldc`/`stc` there.
 
+**Over every scalar run in the image, not only the diverted ones** (`allruns.py` with `granule-strict.py`, which also
+requires the 16 copied bytes to come from one source base in the same layout): 171 and 168 runs, 2 flagged in each.
+- One is `cacheEntryClear`, above.
+- The other is an 8-byte spill chain in `wherePathSolver+0xbc`: `ld a0, -0x198(s0); sd a0, -0x190(s0); ld a0,
+  -0x190(s0); sd a0, -0x188(s0)`.
+
+So no scalar copy of a 16-byte object exists anywhere in these images except the pointer-free `yColCache`.
+
 **What this does not cover:** a scalar copy of a capability written as such in the source (type punning through an
 integer type). That is a source property, not C-81.
+
+## mruby: B5's `mruby.dom`, the image of the silicon mruby-bounds rows (`twin-mruby.sh`)
+
+The rows are outside the silicon totals, so this section completes the record; no verdict depends on it. The image is
+full LTO through `build-b0-hello.sh`, so the twin takes set 1's `B0_PLUGIN_EXTRA` hook.
+
+**Controls:**
+1. **The plain rebuild equals the record, a7ac283d7050a5d8.** It is built from the tree that built the board image
+   (7049b13d969e, B5's landing) plus the inert hook, with dev147 and the 10-04 musl archive (`silicon-cflags.txt`).
+   - The mruby source is the board build's pinned tree, copied.
+   - `build-b5-mruby.sh`'s patch-set stamp hashes `sha256sum` output, which carries the patches' absolute path. So the
+     copy is re-stamped for the new tree's path, after the patch contents are compared.
+2. The twin differs: f87f9cbf0fa8e5a6.
+3. The scanner's self-test passes, 6 of 6.
+
+**Expansions:**
+- The twin diverts 2,957 inline mem* operations in 893 functions. Most are `mrb_value` copies at `ldc`/`stc` width.
+- `rescan-nosplit.py` leaves 65 load-carrying plain-only scalar runs, and `granule-check.py` flags 3. All three copy
+  pointer-free objects (see the correction).
+- 34 of the 65 have one shape: four `sw` at offsets 0x10-0x1c. That is the `tt` + padding half of an unboxed `mrb_value`.
+  The build sets `MRB_NO_BOXING` (`boxing_no.h`: a 16-byte union, then the type tag at 0x10, a 32-byte stride), and the
+  capability half is stored by its own `stc` just before.
+
+**The cause-24 rows.** A C-81 copy strips the tag and keeps the address bits, so a later use would fault with the
+address of something in the domain.
+
+Two premises carry the argument, both read from primary sources:
+- **"address" is the operand's integer view.**
+  - The fault line prints the trap value, which the monitor logs as `SUPT`.
+  - In the RTL at d93a8d66b, a cause-24 load reports the full effective address (`core/load_store_unit.sv:1327-1329`
+    and `:1384`).
+  - A capability-ALU fault reports `operand_a`, the rs1 cursor without the immediate (`core/ex_stage.sv:489-498`).
+- **This domain's addresses are all far from the fault values.**
+  - Base: `DBAS:AC100000`. Code: 0xac100000-0xac290000. The lowest shared region is `BASE:AC040000`.
+  - Heap faults land at 0xae0a61e0-0xae0ce080.
+  - QEMU lays the domain out exactly 0x34200000 higher. Every pc, and every cause-28 heap address, differs by that
+    much between the two platforms.
+
+| row | fault | address, silicon / QEMU | what the value is |
+|---|---|---|---|
+| 01, 07 | `mrb_vformat+0x5e8` `lbu a1, 0x10(a0)` | 0x10 / 0x10 | a base of 0, a NULL. Several paths reach the load, two with `a0` zeroed by the code itself (`mrb_class`'s `default: return NULL`) |
+| 02 | `mrb_vm_exec+0x718` `lbu a3, 0(a0)`, after `ldc a0, 0x40(a1)` | 0x1604 / 0x1604 | the VM's instruction fetch through `ci->pc`. It reads the same on both platforms, so it is not a pointer |
+| 17 | `mrb_func_basic_p+0x60` `ldc` | 0x30274e0b65a71c20 / the same | bit 61 set, beyond any physical address, and the same on both platforms |
+| 18-21 | `mt_put+0x4c` `lw` | 0 / 0 | a NULL method table, as the four case names say. `mt_put`'s own inline copies are `ldc`/`stc` |
+| 22 | `mrb_proc_parameters+0xcc` `cincoffsetimm a1, a4, 0x50`, after `ldc a4, 0x20(a1)` | 0x7d8000 / 0 | mruby's inline-packed symbol `:f0`: 'f' gives 7<<20 and '0' gives 54<<14 (`src/symbol.c:132-150`). `src/class.c:3323` stores the alias's method id in the proc's body, where an irep pointer belongs, with a scalar store and no copy. QEMU leaves the trap value 0 for this instruction |
+
+**What is established:** no faulting operand of the nine cause-24 rows is a tag-stripped capability.
+- Eight of the nine addresses are byte-identical on both platforms, although the platforms place the domain 0x34200000
+  apart.
+- Row 22's value is identified.
+- The three fault functions that have diverted expansions (`mrb_vformat`, `mrb_vm_exec`, `mrb_proc_parameters`) do not
+  change that, because the argument is about the value, not about where it was written.
+
+**What is not established:** that C-81 has no indirect effect, where a tag stripped elsewhere changes control flow so
+that a different, non-pointer value reaches the fault. No such path has been found or proposed.
+- The experiment that would settle it is to run the twin (f87f9cbf) under QEMU's silicon-mimic profile on the nine rows.
+  `smoke.rb` must pass first, because the flag's status for running is "does not work yet".
+- QEMU already reproduces 8 of the 9 silicon addresses exactly.
+
+**Sets 2-9 are not twinned.** None of their in-scope rows reads cause 24, the only reading C-81 can produce. Their
+twins would list candidates and touch no verdict.
