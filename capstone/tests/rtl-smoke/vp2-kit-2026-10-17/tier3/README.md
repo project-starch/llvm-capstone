@@ -564,3 +564,10 @@ hypothesis is not supported for that case either. Its fixed arm now fails before
 the CURRENT corpus scripts at 89ee98be99e5, with the cache options as recorded. The recorded bundles came from older
 script and runner revisions, with another toolchain (`~/pg-virtual-kit`). The plain case.c bundles, built by the
 runner itself, all ran.
+
+**The two memcached pilots rerun on the fixed revision (2026-10-17).** `memcached/plain-heap-repros` and
+`plain-temporal-repros` had run only on 85b1daddf230's kit, the first two pilots above. On 89ee98be99e5 they read
+CAUGHT 9 and CAUGHT 3, every cell equal to the record (`compare-cells.py`, 0 mismatches).
+- So **nine** of the thirteen `run-virtual-cases.py` bundles hold on the fixed revision, the Sublet carve included.
+- **Correction to dev 2df55c358ccb's message.** It already said nine. At that commit two of the nine had run only on
+  the older kit, so the true count was seven. The count of nine holds from this rerun on.
