@@ -9463,6 +9463,72 @@ override from its absence". Neither printed exit 75.
 
 ## Compiler / toolchain (ours)
 
+### C-82 — musl routes function pointers through `uintptr_t` in the init/exit machinery, so the capability is destroyed by construction and the call target is untagged `OPEN — PORT (musl), latent in every image shipped so far; found 2026-10-18 by the board lane's decode-whitelist gate on the vp2 Tier 1/2 images, class widened from one site to three by this lane the same day. Fix deferred behind the module's context serialization by the runtime lane's ruling`
+
+> **The reported instance.** `libc_exit_fini` walks `.fini_array` and emits, in contract.dom
+> `125705371837ea92` at `0x24cd0` (and sqlite3.dom `0x14d2c4`, mruby `0x1a7958`):
+>
+> ```
+> mv   s1, a2          ; a2 is a shrink result -- a capability
+> addi s1, s1, -0x10   ; pointer decrement done as an INTEGER add
+> mv   a0, s1
+> ldc  a0, 0x0(a0)     ; LDC on an untagged base -> cause 24
+> jalr a0
+> ```
+>
+> An integer ALU result is untagged on the RTL (`commit_stage.sv:453/878`, bf3db3175) and on QEMU
+> (`translate.c` `gen_set_gpr:439-440`, 3b8040d5ff6e), so this is cause 24 on **both** machines.
+>
+> **IT IS NOT A BACKEND DEFECT, and that matters for where the fix goes.** The source asks for
+> integer arithmetic explicitly, so the backend emitted exactly what it was told
+> (`musl-1.2.5/src/exit/exit.c:19`):
+>
+> ```c
+> uintptr_t a = (uintptr_t)&__fini_array_end;
+> for (; a>(uintptr_t)&__fini_array_start; a-=sizeof(void(*)()))
+>         (*(void (**)())(a-sizeof(void(*)())))();
+> ```
+>
+> The `(uintptr_t)` cast destroys the capability at the cast, the arithmetic runs on an integer, and
+> the `inttoptr` back produces an untagged value that is then an LDC base. CINCOFFSETIMM and MOVC
+> are the right machine forms, but no lowering can reach them from this source: the fix is to keep
+> the loop in POINTER form (`void (**p)() = &__fini_array_end; while (p > ...) (*--p)();`) as a
+> `musl-patches/` patch, which is how this port already expresses one decision per patch.
+>
+> **THE CLASS IS THREE SITES, not one.** The gate found the `.fini_array` walk; the same construct
+> appears twice more, and both were found by grepping musl's init/exit path for `uintptr_t` rather
+> than by waiting for a gate to reach them:
+>
+> | site | what it walks / does | why latent today |
+> |---|---|---|
+> | `exit/exit.c:19-21` | `.fini_array` | array empty |
+> | `env/__libc_start_main.c:62-64` | `.init_array`, **the startup counterpart** | array empty |
+> | `exit/atexit.c:73,78` | `((void(*)(void))(uintptr_t)p)()` and `(void*)(uintptr_t)func` | nothing registers a handler |
+>
+> **Two distinct latency reasons, which is why "unreachable" needs care.** Sites 1 and 2 are latent
+> because `__init_array_start == __init_array_end == __fini_array_start == __fini_array_end` — all
+> four symbols sit at `0x35a80` in contract.dom, i.e. the images carry no static constructors or
+> destructors at all, and the `bgeu` at `libc_exit_fini+0x44` skips the loop. Site 3 is latent for
+> an unrelated reason: `__funcs_on_exit` is defined (`t`, `0x11db0`) and `exit()` calls it, but the
+> disassembly carries **0** references to `atexit`/`__cxa_atexit`, so the list it walks is empty.
+>
+> **So the exposure is wider than the reported instance.** Any ONE of these makes it reachable: a
+> C++ static destructor, a `__attribute__((destructor))`, a static *constructor* (site 2, which
+> faults at STARTUP rather than at exit), or a single `atexit()` call anywhere in an image. A C++
+> port trips two of the three.
+>
+> **Two-sided check for the fix**, per the runtime lane: an image with a destructor faults 24 at
+> exit on QEMU before the fix and exits 0 after; and the board lane's
+> `vp2-kit-2026-10-17/vp2-silicon-gate.py` reports these as "LDC base written by integer ALU
+> arithmetic" candidates today and must read 0 on a fixed build. The gate is the instrument; the
+> destructor image is the positive control, because a gate that has only ever seen clean images is
+> unproven.
+>
+> **Not a prediction-blindness class.** QEMU faults identically the day it is reachable, so this
+> would not have reached silicon undetected — unlike C-27 and Q-21, where QEMU's permissiveness was
+> the whole problem. That is why the fix sits behind the serialization queue rather than in front
+> of it.
+
 ### C-27 — `delin` of a NONLIN gp-derived global base traps on silicon (cause 26) `REOPENED 2026-10-18 — the FIXED 2026-09-05 claim in ISSUES-ARCHIVE.md is WRONG and cost vp2's Tier 1/2 boot 2. The lead ruled the same day to drop the DELIN under the image-gp contract; this entry closes when the pins and the rebuilt images are green`
 
 > **RETRACTION of "FIXED 2026-09-05 — the DELIN is dropped under the NONLIN-gp contract".**
