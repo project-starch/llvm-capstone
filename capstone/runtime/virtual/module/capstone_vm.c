@@ -90,11 +90,20 @@ MODULE_PARM_DESC(node_max_records,
  * hardware saturates capacity and next-unused at 65,536 regardless, and a fixed capacity makes the
  * pressure rule (capacity - next + free_count <= RESERVE) read identically on both kits from the
  * first allocation. Default off, so the paged kit is unchanged and the two are told apart by the
- * recorded parameter rather than by inspection. */
-static bool node_table_flat;
-module_param(node_table_flat, bool, 0444);
-MODULE_PARM_DESC(node_table_flat,
-    "vp2: publish a flat (non-PAGED) lifetime table of a fixed 65536 records; 0 = the paged format");
+ * recorded define rather than by inspection.
+ *
+ * A COMPILE-TIME define, not a module parameter, and the reason is specific: vp2 has neither
+ * scapctl (0x5c0) nor urevavail (0xcc0), and a csrr of either is an ILLEGAL INSTRUCTION in every
+ * mode. With a runtime parameter both encodings sit in the one binary and "the branch is not
+ * taken" is the only guarantee available -- which cannot be checked by inspecting the module and
+ * depends on the optimiser not keeping an `asm volatile` under `if (0)`. With a define the flat
+ * build does not CONTAIN them, which an objdump can verify and the paged build positively
+ * controls. For a trap that kills a context at creation, absence beats an untaken branch. */
+#ifdef CAPSTONE_VM_FLAT_TABLE
+#define node_table_flat 1
+#else
+#define node_table_flat 0
+#endif
 #define CV_FLAT_RECORDS 65536UL
 #define CV_FLAT_BYTES (CV_FLAT_RECORDS * CAP_REV_TABLE_RECORD)
 
@@ -1129,7 +1138,7 @@ static int vm_open(struct inode *inode, struct file *f)
     struct context *c;
     struct context *existing;
     struct cv_thread *t;
-    unsigned long flags, previous_root, available;
+    unsigned long available;
     if (num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
         return -EOPNOTSUPP;
     if (node_initial_pages < 2 || node_initial_pages > CAP_REV_TABLE_MAX_PAGES ||
@@ -1178,22 +1187,35 @@ static int vm_open(struct inode *inode, struct file *f)
      * without touching the CSR. Saturated at CV_FLAT_RECORDS as the hardware saturates. The
      * probe's purpose -- detecting a processor too old for the versioned format -- does not
      * apply to vp2, which is the newer part. Recorded in inputs.json as a computed count. */
-    if (node_table_flat) {
-        available = min(node_available(c), CV_FLAT_RECORDS);
-    } else {
+#if node_table_flat
+    available = min(node_available(c), CV_FLAT_RECORDS);
+#else
+    /* Braced so the declarations stay at the head of a block: the kernel builds with
+     * -Wdeclaration-after-statement, and scoping them here keeps the flat build free of
+     * -Wunused-variable, which is how the need for this was caught. */
+    {
+        unsigned long flags, previous_root;
         preempt_disable(); local_irq_save(flags);
         previous_root = select_root(c);
         asm volatile("csrr %0, 0xcc0" : "=r"(available));
         restore_root(previous_root);
         local_irq_restore(flags); preempt_enable();
     }
+#endif
     if (available != node_capacity(c) - 2) {
         node_free_table(c); free_page((unsigned long)c->frame);
         kvfree(t); kvfree(c); return -EOPNOTSUPP;
     }
+#if node_table_flat
+    /* scapctl (0x5c0) does not exist on vp2 either -- any access, any mode, is illegal. The only
+     * thing this read produced was the exact-bounds property, which under option (iii) is false.
+     * The module never WROTE 0x5c0 (one access in the file, a read), so nothing else is lost. */
+    c->exact_bounds = false;
+#else
     { unsigned long profile;
       asm volatile("csrr %0, 0x5c0" : "=r"(profile));
       c->exact_bounds = !!(profile & 0x100); }
+#endif
     c->frame[1] = virt_to_phys(c->table);
     t->context = c; t->id = 0; t->frame = c->frame;
     t->frame_pa = virt_to_phys(c->frame); t->user_frame = false;
