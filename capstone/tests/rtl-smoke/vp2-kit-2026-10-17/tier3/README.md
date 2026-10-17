@@ -769,3 +769,23 @@ So the 10-10 record and the v6 kit differ by profile, not by one flag.
     `capstone_cap_revoke_child`. The declared site no longer names the frame that faults.
   - Same detection, different attribution. It is a case.json `fault_sites` question for the corpus owner, not a
     behaviour change.
+
+## Run 5: `-fno-builtin` (SDK arm 6): pre-registered (2026-10-17, before the arm exists)
+
+**The defect behind it.** The compiler lane's hosted-contract probe (`runtime/virtual/hosted-contract.c`) finds the v6
+SDK losing a capability tag on a constant-size `memcpy` of unknown alignment (`memcpy_constant_size_unknown_alignment`
+FALSE).
+- Rebuilding only the probe with `-fno-builtin` flips it to TRUE.
+- The images differ (683a6b6f against d6de4abc), so it is two-sided.
+- The 10-10 SDK lacks the flag as well.
+
+**Arm 6:** the v6-fix SDK with `-fno-builtin` added to `sdk.json` codegen, everything else equal, the kit's clang.
+Subobject case 00 as in runs 3 and 4.
+
+**Outcomes:**
+- **(i) the fixed arm prints VERDICT FIXED, and the buggy arm reads as recorded (MISSED):** the pool fault is that
+  copy shape.
+- **(ii) cause 24 at `refstruct_pool_uninit+0x78` again:** a separate shape, and the `memcpy` finding is a second,
+  independent defect.
+- **Either way open:** why the 10-10 record, whose SDK had the same exposure, passed. Either its codegen did not
+  inline that copy, or the copy shape is new in v6's sources. The image hash goes beside the reading.
