@@ -1,0 +1,25 @@
+# vp2 Tier 1/2, boot 1: 2026-10-17 22:35-22:45 on caplifive_vp2_bf3db3175.bit (resident; no flash), firmware
+# fw_payload 2882836388198297 (BL's recipe + CAPSTONE_VP2_CSMINT; private image with the flat module
+# 0d62a1bcdeecc13f and the kit c14933904de4's contract.dom, sqlite3.dom, mruby). Pre-registered at lane c1fa1a863d09.
+# Read no further than the first failure (board-run skill): vm-contract wedged; vm-suite is collateral, not a result.
+
+b0-stats      retval 0    AS ORACLE (0)
+b0-hello      retval 0    AS ORACLE (0)
+vm-contract   NO RESULT   wedged: no return within 3600 s. vm-contract.sh printed nothing (no VM_EXIT line).
+              Immediately after the rung marker the monitor reported an unhandled trap (its EXCX site):
+                EXCX:0000E002 MCAU:00000018 MEPC:011127D4 MTVL:01D3F070 MSTA:00000820
+              i.e. cause 24, from S-mode (MSTA MPP = 01): the trap came from Linux, not from a domain.
+              Hardware trap log (aperture sw=255 and the trap-log registers), the last trap:
+                {seen,mcause} 0x98 (cause 24), mepc 0x80020064 = _cap_trap_entry+4 (the monitor's own trap
+                entry, M-mode), tval 0xffffffc80415bca0; commit pc (stale slot 0) 0x800200a4 = _cap_trap_entry+0x44.
+vm-suite      COLLATERAL  never ran (after a wedge -- not a result)
+
+# Neither pre-registered vm-contract branch: not the identity reading (25 after VIRTUAL_APPLICATION_OK), and not the
+# layout branch (29 before it). Routed to the RTL side, as pre-registered, before anything is called silicon.
+# Attribution, UNVERIFIED at this writing: modules load page-aligned, and the only capability instruction in the
+# module's .text at an offset ending 0x7d4 is .text+0x27d4, `ldc t0, 0(a5)` (0x0007b2db) in add(), right after the
+# monitor-emulated CSMINT (`.insn r 0x5b,1,0x50`, encoded 0xa13799db: rd s3, rs1 a5, rs2 s3); a5 = `slot`, an integer
+# kernel address. The same sequence passes under QEMU (run.py 41/41).
+# The driver labelled the rung "ENTRY STALL (R-16)": its classifier assumed a classic-domain rung (SHA markers). Fixed
+# on this lane: a rung with an EXCX report is classified from that report, and one with no SHA marker is not called
+# an entry stall.
