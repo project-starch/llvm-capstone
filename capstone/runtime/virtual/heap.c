@@ -356,14 +356,28 @@ void *realloc(void *p, size_t n)
     if (!p) return malloc(n);
     lock_heap();
     struct capstone_malloc_slot *r = checked(p);
-    void *q = ensure_ids(256) ? NULL : publish(__capstone_mallocng_realloc(backend_pointer(r), n), n);
+    /* Round the REQUEST as malloc does, not just the published size: publish() derives the child
+     * over the nominal size, so that size must be representable, and asking mallocng for the
+     * rounded size is what makes the block actually that big. Publishing a rounded size over an
+     * unrounded block would hand out a capability past the allocation. */
+    size_t want = capstone_repr_round(n ? n : 1);
+    if (want < n) { unlock_heap(); errno = ENOMEM; return NULL; }
+    void *q = ensure_ids(256) ? NULL
+            : publish(__capstone_mallocng_realloc(backend_pointer(r), want), want);
     unlock_heap(); return q;
 }
 void *__libc_realloc(void *p, size_t n) { return realloc(p, n); }
 void *aligned_alloc(size_t a, size_t n)
 {
     lock_heap();
-    void *p = ensure_ids(256) ? NULL : publish(__capstone_mallocng_aligned_alloc(a, n), n);
+    /* Same as malloc and realloc. This one is why posix_memalign(4096, 5001) faulted: 5001 has
+     * granule 8 and 5001 % 8 == 1, so the child derived over the raw size is unrepresentable and
+     * the CDERIVE in capstone_cap_derive raises ILLEGAL_OP_VAL. The arena itself was fine; the
+     * rounding added to malloc had simply never been applied to its two siblings. */
+    size_t want = capstone_repr_round(n ? n : 1);
+    if (want < n) { unlock_heap(); errno = ENOMEM; return NULL; }
+    void *p = ensure_ids(256) ? NULL
+            : publish(__capstone_mallocng_aligned_alloc(a, want), want);
     unlock_heap(); return p;
 }
 int posix_memalign(void **out, size_t a, size_t n)

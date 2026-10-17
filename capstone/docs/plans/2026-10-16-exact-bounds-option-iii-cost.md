@@ -2561,3 +2561,54 @@ funct7 0x51 reaches a raise site I have not found. **That is the next thing to s
 also the most likely explanation of the board lane's signature (2) in a corpus that my change did
 not touch** — which would make the mechanism independent of the relaxation, with the relaxation only
 making the path reachable.
+
+
+## RESOLVED: the cause-29 fault was my own rounding, applied to `malloc` and not its siblings
+
+The board lane flagged this as an "unrelated observation" and said it was not the cause of their
+FFmpeg signature. They were right about theirs and it is the complete cause of **mine**.
+
+`malloc` publishes `capstone_repr_round(n)`. `realloc` (`heap.c:359`) and `aligned_alloc` (`:366`)
+published the **raw `n`**. And `posix_memalign(4096, 5001)` reaches `aligned_alloc(4096, 5001)`,
+where `granule(5001) = 8` and `5001 % 8 = 1` — so the child derived over the raw size is **not
+representable**, and the CDERIVE inside `capstone_cap_derive` raises `ILLEGAL_OP_VAL`, cause 29.
+
+**So the open question is answered, and not in the flattering direction.** The relaxation did not
+create the fault and the predicate was never implicated: the relaxation made reachable a defect in
+**the rounding change this lane had already landed**, which had only ever been applied to `malloc`.
+Before, the 28672 arena was refused, so `aligned_alloc` returned NULL and never reached `publish`.
+
+### The fix, and why it rounds the REQUEST and not just the published size
+
+Publishing a rounded size over an unrounded block would hand out a capability past the allocation —
+the opposite defect. So `realloc` and `aligned_alloc` now ask mallocng for `want` and publish
+`want`, exactly as `malloc` does, and all three `publish()` call sites pass a representable size.
+
+### Pre-registered, and every row held
+
+| row | before | after |
+|---|---|---|
+| cause-29 faults | 2 | **0** |
+| `basic` exit | 139 | **0** |
+| `MALLOC_TAG_COPY_OK` (needs 2) | 1 | **2** |
+| `CAPSTONE_VM_ADD_REFUSED` | 0 | **0** |
+| align-probe | — | **600 ok, 0 failed** |
+| suite aggregate | 18 true / 5 false | **21 true / 2 false** |
+
+21/2 is the aggregate predicted before the `add()` run and missed; the two remaining failures are
+`bounds` and `real_linux_mremap_growth_and_shrink`, both already recorded as checks that encode
+pre-option-(iii) behaviour rather than defects.
+
+### What this says about the method
+
+Three of this investigation's attributions failed because a control under-determined. This one was
+settled by someone else reading my code and noticing an inconsistency I had introduced and not
+looked for — which no amount of instrumenting the fault would have found, because the fault was a
+faithful consequence of a wrong input. **Worth keeping: when a derive is refused, check what size
+was asked for before instrumenting where it was refused.**
+
+The board lane's other two signatures are separate and remain theirs: the FFmpeg pool tag loss
+(cause 24, a capability stored to memory returning untagged, independent of `aligned_alloc` since
+their subobject bundle defines it away) and the memcached allocator-repros CDERIVE refusal. The
+latter may share this mechanism — an unrepresentable size reaching a derive — but through their own
+port's allocator rather than through `heap.c`, and that is unverified.
