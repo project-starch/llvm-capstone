@@ -226,6 +226,13 @@ that a different, non-pointer value reaches the fault. No such path has been fou
 - The experiment that would settle it is to run the twin (f87f9cbf) under QEMU's silicon-mimic profile on the nine rows.
   `smoke.rb` must pass first, because the flag's status for running is "does not work yet".
 - QEMU already reproduces 8 of the 9 silicon addresses exactly.
+- **Tried 2026-10-17, and void (`twin-mruby-qemu.sh`).** The twin's arm was built by set 10's recipe (21 of 21
+  cases, controls ok) and run on set 10's own QEMU stage (qemu-round ea7af742, firmware d5c57ee765c9).
+  - The smoke control fails, and so does every row, identically and before any case code: cause 24 at
+    `memcpy+0xc8`, address 0xe2246e90, a domain heap address. So an untagged pointer reaches `memcpy`.
+  - That is the flag's "does not work yet" for running, and the gate means the run says nothing about the rows.
+  - No runnable twin exists to settle the indirect path. A `-fno-builtin` twin would cover explicit calls only, and the
+    silicon images already route those to the runtime.
 
 **Sets 2-9 are not twinned.** None of their in-scope rows reads cause 24, the only reading C-81 can produce. Their
 twins would list candidates and touch no verdict.
