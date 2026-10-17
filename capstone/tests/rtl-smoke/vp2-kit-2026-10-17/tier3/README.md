@@ -443,3 +443,20 @@ That kit carries the module's `add()` fix, whose results are in `../RESULTS.md`.
   open thread on this revision (`../RESULTS.md`, run.py's `basic`), not the case.
 - **A NULL allocation again in case 00 or 10** means `add()` still refuses those arenas. The guest's refusal lines
   name the base and length.
+
+**Result (2026-10-17, one boot): every prediction held. 13 of 13 CAUGHT, every cell equal to the record.**
+- **Compared by script:** verdict, fault cause, faulting probe symbol, attribution and reach, against the bundle's
+  recorded cells (`manifest.json`). 0 mismatches.
+- **The positive control:** the same comparison over the third pilot's verdicts finds exactly 2 mismatches, cases 00
+  and 10.
+- **Cases 00 and 10's fixed arms now allocate and pass:**
+  - case 00: `block mallocng bytes=35840`, `VERDICT FIXED`, exit 0;
+  - case 10: `block mallocng bytes=6144`, `VERDICT FIXED`, exit 0.
+  Their buggy arms fault with cause 28 at `ffc_write_probe_u8`, as recorded.
+- **The four controls read as expected:** bounds-malloc fault (28), uaf-malloc fault (25), live-carve complete,
+  uaf-carve fault (25).
+- **No launch fault and no refusal line** in the guest's transcript.
+- The output is in `/tmp/capstone/vp2-prep/tier3-pilot/ffmpeg-carved-fix`, not in the corpus's `results/`.
+
+**What this shows:** the third pilot's two NO-READING cells were the module's arena rule. On the candidate revision
+the Sublet bundle reproduces its recorded verdicts in full. The rebuild of the other 23 bundles is still to run.
