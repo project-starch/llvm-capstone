@@ -644,6 +644,16 @@ overlaps at 285 min after a host load of ~60 from another user's jobs). Basis: r
 flow has no post-route phys_opt; control: vp1's and vp2's post-phys_opt checkpoints read exactly their routed counts
 (21,084 and 32,878), so A's post-phys_opt checkpoint reads what its routed one will. WNS, endpoints and LUTLP-1 come at
 the seal, if it comes (first estimate -18.142, vp2's).
+**A FAILED TO ROUTE (2026-10-18, after ~5 h in route_design): "Design is not legally routed", 171 node overlaps (Route
+35-2), 242 signals failed to route due to routing congestion (Route 35-162); no bitstream, NO routed WNS.** The last
+WNS in the log (-14.662, WHS -0.400) is an intermediate figure on an illegally routed design before the hold fix and is
+not A's WNS. Grade line: "A: routing failed (congestion; 242 signals, 171 overlaps); no routed WNS". The run exited 2 after 6 h 39 m 41 s
+(synthesis peak 21.76 GB); the guard kept a 45-file diagnostic artifact (synth-993043c97-exit2.tar.gz, 1,589,889 B) and
+the timing enumeration was skipped for want of a routed checkpoint. The area reading
+below stands (post-phys_opt; routing does not change cell counts). **Routability on this design is marginal:** A's TOP
+178,757 LUT against vp2's 178,406, which routed in 22 min; the same size routes on one netlist and not on another, and
+the congestion is local, not occupancy-driven. Every future bitstream of this size carries that risk, and a hierarchy
+re-homing like A's (the DYN result cones moved into `dyn_unit/_spawn_0`) is enough to tip it.
 - **By the pre-registered key alone, A names D3:** issue_read_operands own LUT cells vp1 21,084 | vp2 32,878 | A 21,977;
   the module's `mem_q` stem 11,370 | 22,741 | 11,465.
 - **By the control the key lacked, it does not: the logic did not leave the design.** Total LUTs vp1 168,740 | vp2
@@ -794,5 +804,5 @@ chosen variant; the grade is written at seal against them.
 | E policy list | RTL lane | GREEN 2026-10-17 with D (aca8c4929): the virtual context's refusals and #25, va-runv5 |
 | board acceptance (done-means 3, 4) | board lane | vp1 flashed and its first session clean against d93a8d66b with its four arms as pre-registered (dev c5e696ac7328); vp2 `caplifive_vp2_bf3db3175.bit` RESIDENT 2026-10-17 on the lead's own word: canary 9 of 9, all 25 arms equal to their simulated vectors, corpus set 7 33 of 33 (dev 987bf254ee40) |
 | synthesis vp1 / vp2 | synth lane | SEALED 2026-10-18 and graded above: vp1 WNS -15.615, vp2 -19.019, LUTLP-1 0 on both; the WNS predictions hold on the endpoint rule, the area rows were refuted and the growth attributed (below) |
-| attribution A / B | RTL + synth lanes | B sealed: Q-15's cone is not the growth; A's area read before its seal: D3 moves the cones' hierarchy home, it is not the logic; the growth is the DYN unit's unregistered result chain (90 -> 105 sources), real logic from item D; the per-module own-cell key is refuted as an instrument. A's WNS at its seal, if it seals (past the host's 3 h 30 m rule) |
+| attribution A / B | RTL + synth lanes | B sealed: Q-15's cone is not the growth; A's area read before its seal: D3 moves the cones' hierarchy home, it is not the logic; the growth is the DYN unit's unregistered result chain (90 -> 105 sources), real logic from item D; the per-module own-cell key is refuted as an instrument. A FAILED TO ROUTE after ~5 h (congestion: 242 signals, 171 overlaps; no bitstream, no routed WNS); routability at ~178k LUT is marginal and netlist-dependent |
 | vp2b timing contingency | RTL lane | NOT BUILT: vp2's canary passed. The section stands as the record; the fix it names (collapse the DYN unit's sends onto one result register, cycle-neutral) is DEFERRED, not scheduled, for whatever bitstream follows |

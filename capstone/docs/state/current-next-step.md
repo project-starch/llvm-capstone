@@ -1,3 +1,9 @@
+2026-10-18 (A failed): **Attribution build A (D3 off) FAILED TO ROUTE after ~5 h: 242 signals unrouted for congestion, 171
+node overlaps, no bitstream, no routed WNS** (the log's -14.662 is an intermediate figure on an illegal route and is not
+recorded). Its area grade stands (post-phys_opt counts). Finding for every bitstream that follows: routability at ~178k LUT
+is marginal and netlist-dependent; vp2 at 178,406 routed in 22 min, A at 178,757 did not, with the only difference the
+hierarchy home of the DYN result cones. vp2 is resident; nothing waited on A.
+
 2026-10-18 (A's area, pre-seal): **A (D3 off) reads issue_read_operands own cells 21,977, vp1's level, and the pre-registered
 key would name D3; the design total refutes it: TOP 178,757 (vp2 178,406), with the same mem_q write-back cones homed under
 dyn_unit/_spawn_0 (14,366 cells against vp2's 870).** D3 moves the logic's hierarchy home; it is not the logic. The key is
