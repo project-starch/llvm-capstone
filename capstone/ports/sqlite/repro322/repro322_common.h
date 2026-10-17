@@ -64,6 +64,10 @@ static int run_case(void);
 #define SQLITE_HEAP_SIZE (1024U * 1024U)
 #endif
 #ifdef REPRO322_VIRTUAL_MEMSYS5
+/* The granule macros below are the freestanding branch's too, which includes this header at its
+ * own top; this branch needs it as well, and build-virtual.py passes the runtime include for both
+ * arms. Without it the first use expands to an undeclared call and the case does not compile. */
+#include <capstone/representable.h>
 /* Option (iii): memsys5 derives mem5.pHeap and mem5.zPool over the WHOLE arena, so the arena's
  * own base must be a multiple of its bounds granule -- 2048 for 1 MiB, 512 for 256 KiB -- or the
  * compressed encoder truncates it downward and the pool gains authority below itself. aligned(16)
