@@ -3327,6 +3327,12 @@ treatment.
 
 ### C-27 — `delin` of a NONLIN gp is a spec/RTL trap that QEMU hides `FIXED 2026-09-05 — the DELIN is dropped under the NONLIN-gp contract`
 
+> ⚠ **THIS FIXED STATUS IS RETRACTED (2026-10-18).** The default and image-gp ABIs were never
+> fixed; only the gp-captable parenthetical was true. The entry below is kept verbatim as the
+> record of what was claimed. See **C-27 in `ISSUES.md`** for the four ways the tree refutes it
+> and for what it cost (vp2's Tier 1/2 boot 2). Do not cite this entry as evidence that the
+> DELIN is absent.
+
 Under the default global ABI every gp-derived base was `delin`ed once; on the RTL (and per the spec) DELIN of a non-linear capability traps, QEMU let it pass (finding 28 of the Tier 4 semantics matrix). Fixed by not emitting the DELIN under the NONLIN-gp contract (the gp-captable ABI never needed it). Pin: `gp-table-linear-delin.ll`.
 
 ### C-28 — tail calls were emitted as calls (`cjalr ra` instead of restore-ra + `cjalr zero`) `FIXED cycle 2 (2026-09-05)`
