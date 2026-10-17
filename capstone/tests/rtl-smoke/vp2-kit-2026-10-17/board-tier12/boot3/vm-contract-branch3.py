@@ -6,6 +6,7 @@ layout        29 before VIRTUAL_APPLICATION_OK: header or layout, kit side (to t
 injected      the monitor handed a trap from S or U to the kernel (EXCX/ILLX then INJS); its cause and pc are the reading
 monitor-stop  NODM or INJL: the monitor's own stop
 delin         cause 26 at map 0 base + 0x1f60: the unfixed image-gp delin in __capstone_cap_init (C-27), kit side (boot 3)
+qemu-csr      cause 2 whose tval is a Zicsr instruction on CSR 0xcc0 or 0x5c0: a QEMU-only CSR read not removed (Q-21/Q-22), kit side
 other         anything else, printed with its exits and causes
 NO DATA       the segment is missing or ambiguous (exit 2)
 
@@ -44,6 +45,15 @@ def delin_fault(s):
     return None
 
 
+def qemu_csr_fault(s):
+    """A domain fault with cause 2 whose tval decodes as csrr*/csrw* on 0xcc0 (urevavail) or 0x5c0 (scapctl)."""
+    for m in re.finditer(r"domain fault cause=2 pc=0x[0-9a-f]+ address=0x([0-9a-f]+)", s):
+        w = int(m.group(1), 16)
+        if w & 0x7F == 0x73 and (w >> 12) & 7 in (1, 2, 3, 5, 6, 7) and (w >> 20) in (0xcc0, 0x5c0):
+            return f"tval {w:#010x}, CSR {w >> 20:#x}"
+    return None
+
+
 def classify(s):
     ok = "VIRTUAL_APPLICATION_OK" in s
     pre = s.split("VIRTUAL_APPLICATION_OK")[0] if ok else s
@@ -52,6 +62,9 @@ def classify(s):
         return "monitor-stop", mon
     if ok and re.search(r"VM_EXIT:stale:139", s) and "domain fault cause=25" in s and not re.search(rf"INJS:{TAG}", s):
         return "identity", "VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)"
+    q = qemu_csr_fault(s)
+    if q and not ok:
+        return "qemu-csr", f"cause 2 on a QEMU-only CSR instruction ({q}): the read was not removed (Q-21/Q-22), kit side"
     d = delin_fault(s)
     if d and not ok:
         return "delin", "cause 26 at map 0 base + 0x1f60: the unfixed image-gp delin (C-27), kit side"
@@ -78,6 +91,8 @@ def selftest():
              ("$ echo '### RUNG 3/4 vm-contract ###'; x; echo \"### RUNG 3 vm-contract END rc=$rc ###\"\n", "NO DATA"),
              (seg(inj)[:seg(inj).index("### RUNG 3 vm-contract END")].replace("INJS:00000018\n", ""), "other"),   # wedged
              (seg(ident) + seg(ident), "NO DATA"),
+             (seg("capstone-exec: domain fault cause=2 pc=0x3f92210ccc address=0xcc002573\nVM_EXIT:normal:139\nRESULT vm-contract retval=922"), "qemu-csr"),
+             (seg("capstone-exec: domain fault cause=2 pc=0x3f92210ccc address=0xc0102573\nVM_EXIT:normal:139\nRESULT vm-contract retval=922"), "other"),
              (seg("CAPSTONE_VM_ADD_OK slot=0 base=0x3f87280000 bytes=524288 reg=3 perms=7 linear=0\ncapstone-exec: domain fault cause=26 pc=0x3f87281f60 address=0x3f872a1ff0\nVM_EXIT:normal:139\nRESULT vm-contract retval=922"), "delin"),
              (seg("CAPSTONE_VM_ADD_OK slot=0 base=0x3f87280000 bytes=524288 reg=3 perms=7 linear=0\ncapstone-exec: domain fault cause=26 pc=0x3f87281f64 address=0x3f872a1ff0\nVM_EXIT:normal:139\nRESULT vm-contract retval=922"), "other")]
     bad = 0

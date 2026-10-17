@@ -26,6 +26,11 @@ main() {
   [ "$(sha256sum ${SRC[vm/sqlite3.dom]} | cut -c1-16)" = "$SQ" ] || { echo "STOP: the kit's sqlite3.dom is not $SQ"; return 1; }
   [ "$(sha256sum ${SRC[vm/contract.dom]} | cut -c1-16)" = "$CT" ] || { echo "STOP: the kit's contract.dom is not $CT"; return 1; }
   [ "$(sha256sum ${SRC[vm/mruby.dom]} | cut -c1-16)" = "$MR" ] || { echo "STOP: the kit's mruby is not $MR"; return 1; }
+  # The kit gates (the runtime lane's ruling, 2026-10-18), before anything moves: 0 gp-derived delins (C-27) in each
+  # image, and 0 accesses to QEMU-only CSRs (0xcc0, 0x5c0; Q-21/Q-22) in each image and in the module.
+  local G=/tmp/capstone/wt-gate/capstone/tests/rtl-smoke/vp2-kit-2026-10-17
+  python3 $G/delin-census.py ${SRC[vm/contract.dom]} ${SRC[vm/sqlite3.dom]} ${SRC[vm/mruby.dom]} || { echo "STOP: delin-census is not 0 (or no data)"; return 1; }
+  python3 $G/qemu-only-csr-census.py ${SRC[vm/contract.dom]} ${SRC[vm/sqlite3.dom]} ${SRC[vm/mruby.dom]} ${SRC[vm/capstone_vm.ko]} || { echo "STOP: qemu-only-csr-census is not 0 (or no data)"; return 1; }
   [ -e "$A" ] && { echo "STOP: $A exists"; return 1; }
   mkdir -p $A/vm
   for k in "${!SRC[@]}"; do mv $T/stage/$k $A/$k; done

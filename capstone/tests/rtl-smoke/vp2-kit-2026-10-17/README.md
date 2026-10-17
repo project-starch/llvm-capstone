@@ -659,3 +659,43 @@ and one context slot by default. Serial: `<v8-kit>/t1-contract/guest/serial.log`
 **The judge:** `boot3/vm-contract-branch3.py`, boot 2's branches plus `delin`. It reads boot 2's real transcript as
 `delin`, and a fault 4 bytes off as `other`. The script was dry-run with every pin real and the driver stubbed
 (`boot3/dryrun-boot3t1.txt`).
+
+### Boot 3-T1, result (2026-10-18 03:17-03:23): the C-27 fix holds on silicon; vm-contract then faults at `malloc`'s read of a QEMU-only CSR (Q-21)
+
+Result lines: `board-tier12/results/board-vp2-tier12-3t1.result-lines.txt`.
+- **b0-stats, b0-hello:** 0.
+- **vm-contract:** retval 922, on none of the pre-registered branches.
+  - Both `ok` and `stale` exit 139 with `domain fault cause=2` at map 0 base + 0x10ccc, address 0xcc002573.
+  - There is no VIRTUAL_APPLICATION_OK, no cause 24 or 26, and no monitor tag.
+- **The C-27 fix holds on silicon.** Every virtual run passed `__capstone_cap_init` for the first time, where boot 2
+  stopped at its delin.
+
+**Located.**
+- **The instruction:** VA 0x20ccc in contract.dom f2017064 is `csrr a0, 0xcc0` in `malloc`, and 0xcc002573 is that
+  instruction's own encoding.
+- **The cause:** CSR 0xcc0 (urevavail) does not exist on the RTL (ISSUES Q-21, `csr_regfile.sv:1079`), so a read is an
+  illegal instruction. QEMU implements it, so every QEMU record passed.
+- **The gap:** Q-21's rule ("never read 0xcc0") reached the module but not the application runtime. All three images
+  read it twice, in `malloc` and `realloc`. The images boot 2 ran had the same two reads; the delin faulted first.
+
+**Ruled by the runtime lane:**
+- The compiler lane removes the reads from the runtime, whose availability signal is the hardware's pressure event, and
+  rebuilds the images.
+- The RTL lane makes 0xcc0 and 0x5c0 illegal by default in QEMU and re-pins.
+- The Tier 1 and Tier 2 app-step records are re-made on that pin before anything is called a pass.
+- Boot 3-T1 repeats on the rebuilt images with this pre-registration, the hashes moved and a `qemu-csr` branch added:
+  cause 2 whose tval is a Zicsr instruction on 0xcc0 or 0x5c0 means the read was not removed, kit side.
+
+**The gate, from here on.** Every staged image goes through `delin-census.py` and `qemu-only-csr-census.py` before it
+is staged. `boot3/stage-boot3.sh` refuses otherwise, and it refuses today's images.
+- The CSR census's positive controls: today's three images read 2 each, and the paged QEMU module 69a7016b reads 2
+  in `vm_open`.
+- Its negative controls: the board module ed24f827 and the QEMU flat module c4440add read 0.
+- A non-ELF input reads NO DATA.
+- The runtime lane has asked for one instrument covering every QEMU-only behaviour: a decode whitelist against the
+  RTL's decoder. These two censuses are its first rules.
+
+**What would have caught it before the boot.** A memory written earlier the same day named the habit: before a boot
+predicted by a QEMU record, list the QEMU-only paths the images take. Q-21 was on dev, and the census is a two-minute
+count, but it was not run for this boot. A habit in memory did not fire under time pressure; a gate in the staging
+script does.
