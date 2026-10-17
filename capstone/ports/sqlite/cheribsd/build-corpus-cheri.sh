@@ -276,12 +276,22 @@ build_group() {
   # amalgamation printed "sqlite3.o cached" and relinked the site-46 object, and the
   # case ran with LB_ARMED and not one probe line. Same class as the flags bug above,
   # and it cost a CheriBSD boot to find.
+  # -g IS NOT OPTIONAL HERE. A fault on this arm is reported as a raw pc, and without
+  # debug info it cannot be placed: SQLite's amalgamation makes every function `static`,
+  # so none of them reaches the symbol table and llvm-symbolizer answers "??". On
+  # 2026-10-17 that cost two real detections -- cases 29 and 31 faulted AT their declared
+  # sites and were filed faulted-unattributed because the site could not be named.
+  # The binaries are PIE, so a reported pc is load_base + file address; the base has been
+  # 0x100000 on this guest, confirmed against a case whose site was already known.
+  # NOTE: the cache key below does not include -g. It does not have to while -g is
+  # unconditional, but anything that makes it conditional must add it to the key, or a
+  # stale object without symbols is relinked and the build looks correct.
   local key src_hash; src_hash=$(sha256sum "$SRC/$AMALG" | cut -c1-16)
   key=$(printf %s "${SQLITE_DEFINES[*]} ${SQLITE_RESTORE[*]:-} ${SYSALLOC_FLAGS[*]:-} ${PROBE_FLAGS[*]:-} $AMALG $src_hash $cf" | sha256sum | cut -c1-10)
   local so="$OBJ/sqlite3-$g$SUF-$key.o"
   if [ ! -f "$so" ]; then
     # shellcheck disable=SC2086
-    "$CLANG" "${PURECAP[@]}" -O0 -I"$SRC" \
+    "$CLANG" "${PURECAP[@]}" -O0 -g -I"$SRC" \
       "${SQLITE_DEFINES[@]}" "${SQLITE_RESTORE[@]}" "${SYSALLOC_FLAGS[@]:-}" ${PROBE_FLAGS[@]+"${PROBE_FLAGS[@]}"} $cf \
       -c "$SRC/$AMALG" -o "$so"
     echo "  sqlite3.o built"
@@ -339,7 +349,7 @@ build_group() {
       arena=$(python3 -I -B -c "import json,sys; print(json.load(open(sys.argv[1])).get('arena_bytes') or 262144)" "$CORPUS/$cdir/case.json") || exit 1
     fi
     # shellcheck disable=SC2086
-    if "$CLANG" "${PURECAP[@]}" -O0 -I"$C" -I"$SRC" \
+    if "$CLANG" "${PURECAP[@]}" -O0 -g -I"$C" -I"$SRC" \
         "${SQLITE_DEFINES[@]}" "${SQLITE_RESTORE[@]}" "${SYSALLOC_FLAGS[@]:-}" ${PROBE_FLAGS[@]+"${PROBE_FLAGS[@]}"} $cf \
         -DSQLITE_HEAP_SIZE=$arena ${extra:-} "${xinc[@]:-}" \
         "$csrc" "${xsrc[@]:-}" "$so" -lm -o "$OUT/$tag$SUF" 2>"$OBJ/$tag.err"; then

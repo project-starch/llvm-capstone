@@ -126,6 +126,28 @@ def judge(obs, arm_spec):
             return NO_READING, "unattributed", (
                 f"cause={obs.fault.cause} pc={obs.fault.pc:#x} in {obs.fault.symbol or '?'}"
                 f"; {obs.attribution_evidence or 'no probe, declared function or control'}")
+        # OPTIONAL, per configuration: which fault causes this arm's MECHANISM can report.
+        # Without it a fault anywhere in a declared function counts, and that cannot tell a
+        # rejected access from a crash two frames later inside the same function, on a value
+        # the program read out of the dead object. On SQLite's memsys5 arms every one of the
+        # base arm's apparent catches was cause 24, an untagged dereference -- the
+        # architecture's baseline tag check firing on the CONSEQUENCE of an access it had
+        # already allowed -- while every Sublet catch was cause 25 (lifetime) or 28 (bounds),
+        # the mechanism itself. Declaring catch_causes makes that difference decide, instead
+        # of leaving it to whoever reads the table. A configuration that does not declare it
+        # behaves exactly as before.
+        allowed = arm_spec.get("catch_causes")
+        if allowed is not None and obs.fault.cause not in allowed:
+            required = set(arm_spec.get("controls_for_missed", []))
+            if not required <= {c.name for c in obs.controls}:
+                return NO_READING, "control-failed", (
+                    "the arm's controls did not run: missing "
+                    + ", ".join(sorted(required - {c.name for c in obs.controls})))
+            return MISSED, None, (
+                f"reached, and faulted with cause={obs.fault.cause} in "
+                f"{obs.fault.symbol or '?'} -- not one of this arm's mechanism causes "
+                f"{allowed}, so the defective access was allowed and this is a later "
+                f"consequence of it, not a catch")
         return CAUGHT, None, (f"cause={obs.fault.cause} pc={obs.fault.pc:#x} in "
                               f"{obs.fault.symbol or '?'}; by {obs.attribution}: "
                               f"{obs.attribution_evidence}")

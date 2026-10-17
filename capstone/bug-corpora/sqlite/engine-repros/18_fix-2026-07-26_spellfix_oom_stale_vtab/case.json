@@ -1,0 +1,47 @@
+{
+  "case": 18,
+  "campaign_case": 22,
+  "upstream_fix": "fix-2026-07-26",
+  "title": "row24",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "inspection in the pinned extension source, re-read line by line 2026-10-16 and correct: editDist3Install() registers editdist3() three times sharing one heap EditDist3Config, only the arity-1 registration carries the editDist3ConfigDelete destructor, and the else branch belongs to the THIRD if -- so a failure of the second or third registration frees pConfig while an earlier registration is still live. There is no refcount. The upstream reference this case carries cannot be checked here and appears nowhere outside this corpus's own files: the identifier is given two ways, as fix-2026-07-26 in upstream_fix and the directory name and as d9305a65c876 here and in the case header, and this environment is offline, so neither the commit nor the date is verified. That is stated rather than asserted (as case 13's unfixed label is), and unlike case 09 (withdrawn, campaign numbering) it does not carry the claim: the defect is established by the pinned source above and by the three oracles agreeing on the access",
+  "allocator_layer": "memsys5",
+  "object": "the shared heap EditDist3Config, referenced by up to three registered functions",
+  "lifetime_ender": "a failing registration takes the else branch and frees pConfig while an earlier successful registration still points at it",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator, but the defect is in ext/misc/spellfix.c rather than in the amalgamation; the case compiles that extension in. The failure that frees pConfig is reached by exhausting the allocator, so the case depends on the arena being small enough for the registration to fail",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b65c0"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 18 sublet: detected"
+    },
+    "cheribsd-revocation": {
+      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 18 cheribsd-revocation: detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached, and faulted with cause=24 in editDist3FindLang -- not one of this arm's mechanism causes [25, 28], so the defective access was allowed and this is a later consequence of it, not a catch",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3fbb81ff64 in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-nested-pools"
+    }
+  },
+  "status": "re-measured on all four readings 2026-10-16 on this platform, and two verdicts change. host ASan is the 2026-10-11 bundle's reading, in the variant whose SQLITE_CONFIG_HEAP call is replaced so the allocator wrapper sits on the system allocator: heap-use-after-free, 0 bytes inside a 16-byte region, editDist3FindLang <- editDist3SqlFunc, freed by sqlite3_free <- editDist3Install <- spellfix1Register, allocated by sqlite3_malloc64. Offset 0 of 16 is pConfig->nLang under the host's 8-byte-pointer layout. Not re-run: this host has no x86 ASan runtime. virtual-malloc faults cause=24 pc=0x3fa341ffb0 offset 240 in editDist3FindLang, fault address 0x0; virtual-nested-pools faults cause=25 pc=0x3fa541ff64 offset 164 in editDist3FindLang, fault address 0x3fa577b890 inside the arena; cheribsd-revocation faults SIGPROT(34) si_code=2 PROT_CHERI_TAG/untagged-deref pc=0x69f5e = editDist3FindLang+0x40, with the boot's positive control trapping and revocation knobs 1/0. All controls as declared on both virtual arms. Every run reaches the bug state and says so: wrapper active=1, unarmed init rc=0 allocs=16 callable=1, then BUG STATE at failAt=14 rc=NOMEM callable=1. Only the Sublet reading is a detection; see note. The earlier status line said cheribsd-revocation completes with a clean exit, which was stale -- it faults, and the arms block is right about the signal and wrong about what it means. The arms block is the 2026-10-11 bundle's and is regenerated by derive-verdicts.py when this review ends",
+  "note": "Re-measured 2026-10-16. The defect is real, the three oracles agree on which access it is, and the base and CheriBSD cells are NOT detections. editDist3FindLang reads the freed config in three steps, and the disassembly separates them: (1) pConfig->nLang at offset 0, (2) pConfig->a at offset 16, (3) the dereference a[i].iLang. On the Sublet image the fault is at offset 164, which is the lw of step 1 -- the first read of the dead object -- with cause 25 and a fault address inside the arena; that is the same access host ASan reports, 0 bytes into a 16-byte region. On the base image the fault is at offset 240, after slli by 5 (sizeof(EditDist3Lang) = 32) and a cincoffset, which is step 3; and on CheriBSD at editDist3FindLang+0x40, which the disassembly shows is the same step 3 lw, two instructions after the lc of offset 16 that loaded the pointer. So both non-Sublet arms let steps 1 and 2 succeed and fault on a pointer they read OUT OF the dead object. Probe site 57 prints the values, identically on both platforms: at the free, nLang=0 a=0x0 rc=7 (SQLITE_NOMEM, so registration 3 failed while registration 2 was live); at the stale read, nLang_read=1953786219 and a_read=0x74746973272c276e, whose bytes are SQL text (n','sitt) -- the block has been reissued. So the dead object's zeroed fields are not what is read: nLang comes back as a large positive number, which is what makes the loop run at all, and a comes back as eight bytes of someone else's string, which is what is dereferenced. The CheriBSD witness settles the question for that arm: kind=OOB off=0 n=8 req=7 blk=0x1d91c0 tag=1 cb=<arena>+262144, so the defective read goes through a capability whose tag is intact and whose bounds are the whole 256 KiB arena. req=7 is the size the block was reissued at, a short SQL string, and the 8-byte field read exceeding it is why the probe says OOB rather than UAF -- a misclassification by the address judgement, as in cases 09 and 17, not an over-read. Third row in this corpus whose base and CheriBSD cells are a fault on a value read out of the dead object; the taxonomy is in case 16's PROVENANCE.md and in the standalone record. The physical sublet row is marked in results/matrix.tsv as one of the 28 kernel-pc halts, so the Sublet cell rests on the virtual arm's cause 25. Also fixed on the way: ports/sqlite/cheribsd/build-corpus-cheri.sh had no PROBE branch for spellfixoom, unlike expertrem, so that arm could never place a site at this case's defect, which is what the old status line meant by 'no defect-site probe in that run'",
+  "fault_sites": [
+    "editDist3FindLang"
+  ],
+  "fault_sites_why": "host ASan on the corrected trigger, built with its SQLITE_CONFIG_HEAP call replaced so the allocator wrapper sits on the system allocator (results/2026-10-11-host-asan, variant), reports the heap-use-after-free in editDist3FindLang <- editDist3SqlFunc. Declared 2026-10-11, before the first Sublet run of that trigger. INSUFFICIENT AS AN ATTRIBUTION on its own, measured 2026-10-16: editDist3FindLang contains three accesses to the config -- nLang at offset 0, a at offset 16, and the dereference a[i].iLang -- and all three arms fault inside this one function on different ones of them. Attribution by function therefore cannot separate the defective read from the consequence of letting it succeed, and here the pc offsets do: 164 on Sublet is step 1, 240 on base and +0x40 on CheriBSD are step 3. ASan's own report pins which access the case is about: 0 bytes inside a 16-byte region is offset 0, step 1, the same access Sublet faults on."
+}

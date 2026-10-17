@@ -88,6 +88,10 @@
       "controls_for_missed": [
         "uaf-mem5",
         "bounds-mem5"
+      ],
+      "catch_causes": [
+        25,
+        28
       ]
     },
     "virtual-sqlite-memsys5-pools": {
@@ -101,6 +105,10 @@
       "controls_for_missed": [
         "uaf-mem5",
         "bounds-mem5"
+      ],
+      "catch_causes": [
+        25,
+        28
       ]
     },
     "virtual-pymalloc": {

@@ -30,10 +30,20 @@ session or the run is void and no verdict is written. A silent case proves nothi
 that cannot be shown to report.
 
 VERDICTS. exit 162 = SIGPROT(34), a capability violation, and `si_code` says which kind:
-si_code=1 PROT_CHERI_BOUNDS is a valid capability used out of bounds -- the mechanism
-reporting the violation itself; si_code=2 PROT_CHERI_TAG is dereferencing an untagged value,
-which on this corpus has always meant the defective access already succeeded and this is its
-consequence. The two are recorded separately and are not the same evidence.
+si_code=1 PROT_CHERI_BOUNDS is a valid capability used out of bounds; si_code=2
+PROT_CHERI_TAG is dereferencing an untagged value. BOTH can be the mechanism reporting and
+neither settles anything on its own -- what settles it is WHERE the fault is.
+
+  si_code=2 at the defect's own line is the mechanism. Revocation works by clearing the tag,
+  so a use-after-free on a revoked object is a tag fault at the access; and an over-read far
+  enough past the end becomes unrepresentable, so the hardware clears the tag at the pointer
+  arithmetic rather than faulting on the bounds. Cases 29 and 31 are the second kind.
+
+  si_code=2 in a DIFFERENT function, on a value the program read out of a dead object, is the
+  consequence of an access that already succeeded. Every nested false positive is this.
+
+So the runner records the si_code and the pc, and attribution is a separate step: the binaries
+are PIE, so subtract the load base (0x100000 on this guest) before symbolizing.
 """
 import argparse
 import json

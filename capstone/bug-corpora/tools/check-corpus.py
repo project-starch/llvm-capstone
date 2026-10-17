@@ -71,7 +71,7 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
                  "citation_constraint", "fault_sites", "fault_sites_why", "duplicate_of",
-                 "arena_bytes", "arena_bytes_why"}
+                 "arena_bytes", "arena_bytes_why", "campaign_case"}
 # `duplicate_of` names a sibling case directory that records the SAME upstream defect -- e.g. a
 # release-branch backport of the fix another case already carries (`git patch-id` equal). The case
 # stays in the corpus, so its numbering and every record that cites it stay valid, and

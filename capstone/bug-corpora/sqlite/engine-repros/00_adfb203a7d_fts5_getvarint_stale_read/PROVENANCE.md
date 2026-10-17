@@ -98,7 +98,7 @@ all three builders read it, and `build-corpus-cheri.sh` now takes the case progr
 | cheribsd-revocation | **MISSED** | `RETURNED rc=0`; `poscontrol` exit 162 with `revocation=1` in the same session |
 
 Reachability on CheriBSD is not inferred from the return code, which is what made the first reading
-of case 30 void: probe site 33 was built into this arm's binary -- verified by `strings` to carry the
+of case 25 void: probe site 33 was built into this arm's binary -- verified by `strings` to carry the
 site's own payload, not just the runtime's `LB_ARMED` line -- and reports `hits=4 witnesses=0` (site 33 tests the object itself and makes no address judgement, so witnesses=0 is expected).
 The defect site is entered and the access happens; the mechanism is silent because its bound is the
 whole arena and the over-read stays inside it.

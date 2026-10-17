@@ -1,0 +1,46 @@
+{
+  "case": 1,
+  "campaign_case": 2,
+  "upstream_fix": "b9e0f62c3a",
+  "title": "heap-use-after-free in sqlite3BtreeRollback",
+  "consumer": "sqlite3.c (sqlite3_backup_finish -> sqlite3BtreeRollback)",
+  "live_in_pin": true,
+  "live_proof": "inspection with line numbers in the 3.22.0 tree, confirmed by a host ASan run 2026-10-15: sqlite3_backup caches raw Btree* at backup.c:23 and :29, resolved by findBtree at :82, and detachFunc closes that Btree at attach.c:292 (sqlite3BtreeClose) while the backup still holds the pointer. detachFunc's own guard does not cover it: sqlite3BtreeIsInBackup reads Btree.nBackup, and backup.c:205 increments it on the SOURCE only. Host ASan reports heap-use-after-free in sqlite3BtreeRollback <- sqlite3_backup_finish, freed by sqlite3BtreeClose <- detachFunc, allocated by sqlite3BtreeOpen <- attachFunc. Fixed upstream in 3.53.3 by storing db indices and re-deriving the Btree at each use",
+  "allocator_layer": "memsys5",
+  "object": "the Btree of the destination database the backup caches, allocated by attachFunc",
+  "lifetime_ender": "DETACH of the destination database on the destination connection closes that Btree (detachFunc -> sqlite3BtreeClose)",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator: the public backup API driven against a connection that DETACHes the destination database mid-backup. The backup is stepped to SQLITE_DONE first because detachFunc also refuses a database in a read transaction, and that commit (backup.c:567) ends the destination's; p->bDestLocked stays 1, so no later step reopens one",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10280b794"
+    },
+    "sublet": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10200b994",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 2 sublet: detected"
+    },
+    "cheribsd-revocation": {
+      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 2 cheribsd-revocation: detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f938291f0 in sqlite3BtreeRollback; by function: sqlite3BtreeRollback is where host ASan reported it",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-nested-pools"
+    }
+  },
+  "status": "trigger replaced 2026-10-15 after review: the previous one ATTACHed on the destination connection and never detached, so nothing was freed and all three arms were reporting a NULL dereference of pBt->pPage1 in sqlite3BtreeUpdateMeta (host ASan: SEGV on address 0x50). All arms are re-measured on the new trigger; the figures recorded before that date are not comparable with these.",
+  "fault_sites": [
+    "sqlite3BtreeRollback"
+  ],
+  "fault_sites_why": "Host ASan, running this case source on stock 3.22.0, reports the invalid access in sqlite3BtreeRollback, reached from sqlite3_backup_finish (live_proof); probe site 37 witnesses the same read as kind=UAF under memsys5, and the control with the DETACH removed is silent at both."
+}

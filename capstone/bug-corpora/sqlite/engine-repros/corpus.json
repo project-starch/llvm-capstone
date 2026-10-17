@@ -6,7 +6,7 @@
     "version": "3.22.0 amalgamation",
     "port": "capstone/ports/sqlite"
   },
-  "cases": 33,
+  "cases": 28,
   "case_schema": "case-json",
   "required_arms": [
     "spatial",
@@ -18,7 +18,7 @@
   "status": "measured",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
-    "true": 33
+    "true": 28
   },
   "runners": [
     "capstone/ports/sqlite/repro322/corpus322.sh",
@@ -43,7 +43,7 @@
     "virtual-nested-pools": "virtual-sqlite-memsys5-pools"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-11-virtual-request-bounds/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
+    "virtual-malloc": "results/2026-10-17-renumbered/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-17-renumbered/virtual-nested-pools"
   }
 }

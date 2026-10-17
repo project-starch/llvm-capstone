@@ -1,0 +1,47 @@
+{
+  "case": 5,
+  "campaign_case": 7,
+  "upstream_fix": "129371553c",
+  "title": "heap-use-after-free in fts3DestroyMethod",
+  "consumer": "sqlite3.c (fts3DestroyMethod)",
+  "live_in_pin": true,
+  "live_proof": "inspection in the 3.22.0 tree: fts3DestroyMethod() issues five fts3DbExec() calls in sequence, each evaluating p->zName at the call site, while an OOM inside one of them reaches fts3DisconnectMethod through sqlite3VdbeHalt -> sqlite3RollbackAll -> sqlite3ResetAllSchemasOfConnection -> sqlite3VtabUnlockList and sqlite3_free()s the Fts3Table. Fixed upstream in 3.27.0 by collapsing the five calls into one",
+  "allocator_layer": "memsys5",
+  "object": "the Fts3Table, freed by its own destructor running underneath it",
+  "lifetime_ender": "a nested OOM triggers a schema reset that calls fts3DisconnectMethod while fts3DestroyMethod is still on the stack",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator, with OOM injected by a counting wrapper installed over memsys5 -- SQLITE_UNTESTABLE removes sqlite3_test_control, so the injection point is the allocator rather than SQLite's own test hook. The case reports its allocation count and the rc transition point so its sequence can be matched against the host oracle's",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4",
+      "verdict": "CAUGHT",
+      "verdict_from": "results/matrix.tsv case 7 sublet: detected"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "verdict": "MISSED",
+      "verdict_from": "results/matrix.tsv case 7 cheribsd-revocation: not-detected"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-malloc"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3fafe2b454 in fts3DestroyMethod; by function: fts3DestroyMethod is where host ASan reported it",
+      "verdict_from": "results/2026-10-17-renumbered/virtual-nested-pools"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=257, witnesses=18)",
+  "fault_sites": [
+    "fts3DestroyMethod"
+  ],
+  "fault_sites_why": "The stale access is fts3DestroyMethod evaluating p->zName for the next fts3DbExec after a schema reset freed the Fts3Table (PROVENANCE.md: host ASan READ of size 8 in fts3DestroyMethod). Declared 2026-10-11 before the first run of this case on virtual-nested-pools, the first arm that builds it with a revoking memsys5; the source is PROVENANCE.md, which predates that run. Confirmed 2026-10-15, and this case is where an address-based oracle stops working. Probe site 44, at the sqlite3_free in fts3DisconnectMethod, records the Fts3Table the sweep frees; on virtual-nested-pools the last one before the fault is p=0x3fa6bcf000 and the fault address is 0x3fa6bcf050, 80 bytes into that same 592-byte object, so the stale access is this defect's. Probe site 9, which judges the same pointer BY ADDRESS against memsys5's free state, reports no witness on either virtual arm: memsys5 reissues the block to the next allocation before the stale read, so an address check sees a live object. That is the same blindness host ASan has here -- results/2026-10-11-host-asan scores this case only because run-host-asan.py replaces the memsys5 configuration so each object is its own allocation -- and the same blindness CheriBSD's revocation has -- measured on that arm too: it completes, and site 9 reports no witness in 257 reaches. Sublet rejects it because the reissued block carries a fresh colour while the stale pointer keeps the revoked one.",
+  "note": "The arms do not reach the same occurrence of this defect, and the trigger says so itself. It sweeps an OOM injection point over every allocation the DROP makes, so what it finds depends on the allocation sequence, and that differs per allocator: drop_allocs is 296 under the host ASan variant (system allocator; the recorded host oracle says 292), 68 on virtual-malloc, 70 on virtual-nested-pools and 288 on cheribsd-revocation. The virtual arms are the outliers and the reason is not the allocator: they are the only configuration that leaves SQLite's LOOKASIDE ON. run-host-asan.py and cheribsd/build-corpus-cheri.sh both set SQLITE_DEFAULT_LOOKASIDE=0,0, so every small allocation reaches the memsys5 wrapper this trigger counts; build-virtual.py sets it nowhere, so most small allocations come from lookaside slots and are never counted. The Sublet port's memsys5 reports requested sizes rather than block sizes, which is the documented reason its sequence differs from stock memsys5's (the same change the application study attributes SQLite's reuse-distance difference to). On virtual-malloc the full sweep of 76 injection points runs to completion and site 9 reaches the defect site 70 times; on virtual-nested-pools the sweep faults at about iteration 24. cheribsd-revocation sweeps 296 points, completes, and its site 9 reports no witness in 257 reaches. So virtual-malloc's MISSED is not a silent miss of the same event Sublet caught -- measured 2026-10-15 and 2026-10-16."
+}

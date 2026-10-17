@@ -88,7 +88,7 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
 `allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `fault_sites`,
-`fault_sites_why`, `duplicate_of`, `arena_bytes`, `arena_bytes_why`. Optional means
+`fault_sites_why`, `duplicate_of`, `arena_bytes`, `arena_bytes_why`, `campaign_case`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -148,6 +148,13 @@ per-case overrides that were not the same overrides, and the virtual builder pas
 all and fell through to a 1 MiB header default -- four times the other arms -- so the spatial
 row compared the arenas rather than the mechanisms. Absence means the builder's default. `arena_bytes_why` carries the one-sentence reason, and
 a case that sets the size without saying why is a value nobody can later check.
+
+`campaign_case` is the number this case carried before a renumber, kept so that records
+written against the old numbering stay resolvable. A corpus is renumbered when cases are
+withdrawn -- `case` must be dense -- and everything written before that point, commit
+messages, retractions, working notes, cites the old number. Dropping it would make those
+records ambiguous rather than merely old. It is set only on cases whose number actually
+changed, and the corpus README carries the full mapping.
 
 `fault_sites` names the functions a fault may land in and still be this defect's, for a case whose
 stale access has no labelled probe -- a double free faults inside the manager, a copy routine faults
