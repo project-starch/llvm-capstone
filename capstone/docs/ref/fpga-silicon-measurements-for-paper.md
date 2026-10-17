@@ -6831,6 +6831,7 @@ the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with re
 | canary, pass 1 and pass 2 against d93a8d66b | S-16 98/98 and floor 77/77 readings identical in each pass; s1gap's functional readings identical |
 | canary, pass 1 against pass 2 | identical by the same rules: 9 of 9 comparisons pass |
 | the 25 pre-registered arms | 25 of 25 equal to their board vectors, count and values |
+| the 25 arms again, same resident bitstream | 25 of 25 equal to their vectors, and each identical to the first run |
 | corpus set 7 (same firmware payload as d93a8d66b's run) | 33 of 33 records identical |
 
 - **The arms:**
@@ -6847,6 +6848,7 @@ the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with re
   control differ on silicon, as pre-registered.
 - **No image failed to start**, in the canary or among the arms.
 - **Not established:**
-  - N = 1 per arm. The canary's two passes are the only repeat, and they are identical.
+  - N = 2 per arm. The 25 arms ran a second time (pre-registered before it ran) and read identically, as the
+    canary's two passes did. Two runs cannot rule out a rarer nondeterminism.
   - This is the bare profile. vp2 under Linux in the virtual profile (Tier 1/2 and the corpus bundles of Tier 3)
     waits on the flat-table module and the pinned kit.

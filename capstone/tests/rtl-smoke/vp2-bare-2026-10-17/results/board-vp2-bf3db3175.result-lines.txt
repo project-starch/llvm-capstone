@@ -50,3 +50,32 @@ q17-order              ee2adf9b373e5028  rc=0  VERDICT q17-order: AS PRE-REGISTE
 vb-trans-off           79e670cc77352ee4  rc=0  VERDICT vb-trans-off: AS PRE-REGISTERED for vp2
 arm infra retries: 0
 C7 vs d93a8d66b rc=0 33 reference records, 33 new, 0 differ 21:55:18
+
+# Repeat 1 of the 25 arms, 21:59:47-22:20:44, same resident bitstream (no flash), same images and comparator,
+# pre-registered at lane b4a1d494facf before the run. Image identity checked for every arm; 0 infra retries.
+REP1ARM va-runv rc=0 :: VERDICT va-runv: AS PRE-REGISTERED for vp2
+REP1ARM va-runv-quantum rc=0 :: VERDICT va-runv-quantum: AS PRE-REGISTERED for vp2
+REP1ARM va-runv2 rc=0 :: VERDICT va-runv2: AS PRE-REGISTERED for vp2
+REP1ARM va-runv3 rc=0 :: VERDICT va-runv3: AS PRE-REGISTERED for vp2
+REP1ARM va-runv4 rc=0 :: VERDICT va-runv4: AS PRE-REGISTERED for vp2
+REP1ARM va-runv5 rc=0 :: VERDICT va-runv5: AS PRE-REGISTERED for vp2
+REP1ARM va-runv6 rc=0 :: VERDICT va-runv6: AS PRE-REGISTERED for vp2
+REP1ARM va-runv7 rc=0 :: VERDICT va-runv7: AS PRE-REGISTERED for vp2
+REP1ARM va-barrier rc=0 :: VERDICT va-barrier: AS PRE-REGISTERED for vp2
+REP1ARM va-q15 rc=0 :: VERDICT va-q15: AS PRE-REGISTERED for vp2
+REP1ARM va-csmint-emu rc=0 :: VERDICT va-csmint-emu: AS PRE-REGISTERED for vp2
+REP1ARM va-csmint-mon rc=0 :: VERDICT va-csmint-mon: AS PRE-REGISTERED for vp2
+REP1ARM va-straddle rc=0 :: VERDICT va-straddle: AS PRE-REGISTERED for vp2
+REP1ARM va-flat rc=0 :: VERDICT va-flat: AS PRE-REGISTERED for vp2
+REP1ARM va-flat-off rc=0 :: VERDICT va-flat-off: AS PRE-REGISTERED for vp2
+REP1ARM va-alloc rc=0 :: VERDICT va-alloc: AS PRE-REGISTERED for vp2
+REP1ARM va-alloc-off rc=0 :: VERDICT va-alloc-off: AS PRE-REGISTERED for vp2
+REP1ARM va-alloc-corrupt rc=0 :: VERDICT va-alloc-corrupt: AS PRE-REGISTERED for vp2
+REP1ARM va-alloc-exhaust rc=0 :: VERDICT va-alloc-exhaust: AS PRE-REGISTERED for vp2
+REP1ARM va-ns-collide rc=0 :: VERDICT va-ns-collide: AS PRE-REGISTERED for vp2
+REP1ARM va-ns-collide-off rc=0 :: VERDICT va-ns-collide-off: AS PRE-REGISTERED for vp2
+REP1ARM vb-trans-vp2 rc=0 :: VERDICT vb-trans-vp2: AS PRE-REGISTERED for vp2
+REP1ARM vb-trans-plain-vp2 rc=0 :: VERDICT vb-trans-plain-vp2: AS PRE-REGISTERED for vp2
+REP1ARM q17-order rc=0 :: VERDICT q17-order: AS PRE-REGISTERED for vp2
+REP1ARM vb-trans-off rc=0 :: VERDICT vb-trans-off: AS PRE-REGISTERED for vp2
+REP1 vs RUN1: 25 of 25 arms identical
