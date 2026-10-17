@@ -49,7 +49,10 @@ Three images were rebuilt from tests-only commits before their vectors were take
 -19.019, inside the plan's band but 3.2 ns worse than any bitstream that has run here. Its recommended option was to
 flash after vp1's first session with a canary first, and to go back to vp1 if the canary differs. The lead answered
 "Go", and then, asked for an explicit word, "Go with reflash, if u need, I confirm". That covers the vp2 flash and the
-reflash back to vp1 on a canary difference.
+reflash back to vp1 on a canary difference. Then the lead gave the explicit form, naming the bitstream and the hash (in
+Russian; translated): "Flash vp2 caplifive_vp2_bf3db3175 after vp1's first session, after the preflight on the sealed
+sha256 776cdd8c40d985708a09d4d43ab1c5106414ae1347cc4436a711381d2c197475. First in the session, the control: S-16, the
+Sublet floor and s1gap, twice each, stop on any difference."
 - **When:** after vp1's first session completes (`AFTER-FLASH DONE`, not a STOP), and the preflight passes on the
   sealed sha256.
 - **The canary comes first, before any vp2 arm:** the S-16 set, the Sublet floor and s1gap, each run twice. It stops on
