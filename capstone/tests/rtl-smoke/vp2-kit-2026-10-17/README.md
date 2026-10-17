@@ -989,3 +989,61 @@ Located, not attributed:
   - `uncovered`: a hole in the region table (the monitor's carves; R-55's replay is then pointed at this boot).
 - **If it does not recur:** vm-contract reads by the third run's branches, and the run is recorded as placement-dependent
   with the dump armed.
+
+### The CPMX diagnostic run, result (2026-10-18 04:58-05:09): a LOADED, executable CPMP entry covers the fetch the silicon refused
+
+Pre-registered at 4ed92db89028. N = 2 for the fault. Result lines in
+`board-tier12/results/board-vp2-tier12-3t1r4.result-lines.txt`.
+- **The fault.** b0-stats 0 and b0-hello 0, then the same fault at the same instruction as the third run:
+  - Oops at `vm_ioctl+0xb60`, the instruction right AFTER the module's CSRUNV (`.4byte 0x48b717db` at +0xb5c);
+  - mtval 0x81d2c940 (the module two pages lower, same page offset).
+- **The dump (branch `covered-loaded`, with X).** CPMP entry 3 holds region 14, decoded [0x80100000, 0xAC000000),
+  permissions 0x7, and covers mtval. All 11 loaded entries carry 0x7, and region 14 is the exact piece R-55's model
+  predicted. So the silicon refused an S-mode fetch that, by the time M looked, a loaded executable entry covered.
+  Pre-registered owner: the RTL's fetch side.
+- **Why it depends on placement.** The S caller's FIRST fetch after a CSRUNV escape returned is what faults.
+  - ed24f827: CSRUNV at .text 0x37f4, so the next instruction shares its 64-byte line. Every return worked on boot
+    3-T1 and the repeat.
+  - 0cc4760d: CSRUNV at 0x393c, the last word of its line, so the next instruction (0x3940) starts a new line. It
+    faulted on both boots.
+- **The working hypothesis, sent to the RTL lane with a directed test.** The frontend restarts at the restored pc during
+  the ESCAPE's RESTORE walk (id 0, the pc, first; the CPMP ids later). A fetch that needs a fresh line is then checked
+  against the CPMP state of that moment, and the fault rides the instruction to commit. The test is a CSRUNV at a line
+  end against one mid-line.
+
+## Pre-registered (2026-10-18, before boot r5): Tier 1 and Tier 2 in one boot, the module with CSRUNV line-aligned
+
+**The change.** The module is 82250f627aba01f1: the compiler lane's 457b78f27e10 plus `.balign 64` before CSRUNV in
+run() (`boot3/csrunv-align.patch`). This is a board-lane experiment, not the module's revision.
+- An unmodified rebuild by the same recipe reproduced 0cc4760d21fde17a, the identity control.
+- The variant's CSRUNV sits at .text 0x39c0 (64-aligned), with .text aligned to 64.
+- Both kit gates pass (0 QEMU-only CSRs; 0 refused, 2 conditional).
+- The CPMX diagnostic monitor stays armed: fw_payload 8129241bb6debad2, Image 551f48a9834bbbcd, monitor 0c772b0 with
+  the board's defines plus CAPSTONE_CPMX_DIAG.
+
+**Rungs:** b0-stats, b0-hello, vm-contract, then **vm-suite last** (the image already carries run.py's suite).
+
+**Scripts.** `boot3/run-tier12-r5.sh 8129241bb6debad2`. It runs the judges:
+- vm-contract-branch3r3.py;
+- board-check3.py over the vm-suite rung, with run.py 85461f0e25ab66bf (the module revision's, identical to the kit's)
+  and these eight tests pre-registered false: threads, vm, heap-threads, threads_output, vm_contract, heap_threads,
+  shared_heap_pages_released, cleanup;
+- cpmx-diag-read.py.
+
+The dry run is in `boot3/dryrun-r5.txt`.
+
+**Predictions:**
+- b0-stats 0 and b0-hello 0.
+- **Under the hypothesis:** the return fetch now shares CSRUNV's line, so vm-contract reads the identity branch (exit
+  0, then 139/25). Its sixth grant reads `ADD_OK slot=5 ... bytes=8192 reg=10 perms=7 linear=1` (the Q-30 reading)
+  and its grant sequence is QEMU's 24.
+- **vm-suite: 22 exits and board-check 33 of 41.** Those are QEMU's 34 minus `cleanup`, the compiler lane's boot 4
+  pre-registration (39cf6763d3a6):
+  - threads, vm and heap-threads exit 1 (refused at create);
+  - parallel_one and parallel_two 0;
+  - preempt 143, every deliberate fault 139, sqlite and mruby 0;
+  - no cause 29, no oops.
+- **What refutes the hypothesis:** the same fault at CSRUNV+4.
+- **What narrows it:** a fetch fault at the next line (CSRUNV+0x40) or later inside vm_ioctl. That would mean the window
+  covers more than the restart fetch.
+- Any other stop is read by its branch, with the dump if a CPMX appears.

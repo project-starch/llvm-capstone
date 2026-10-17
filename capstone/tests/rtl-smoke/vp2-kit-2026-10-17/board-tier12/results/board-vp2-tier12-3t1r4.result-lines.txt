@@ -1,0 +1,67 @@
+# vp2 Tier 1, the CPMX DIAGNOSTIC run, 2026-10-18 04:58-05:08: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload
+# e56ec94f185ad5ee (the third run's Image 21e730020b2f6a1d; monitor capstone-sbi vp2/cpmx-diag 0c772b0 with
+# CAPSTONE_CPMX_DIAG), module 0cc4760d21fde17a, the third run's stage. Pre-registered at lane vp2-tier12 4ed92db89028.
+# Result lines only, scoped to this run's load_image; the raw capture is not committed.
+
+RUNG b0-stats retval=0
+RUNG b0-hello retval=0
+vm-contract: the same fault as the third run, at the same instruction (N = 2):
+  MTVL:81D2C940   CPMX:00000002   INJS:00000002
+  [  138.300089] Oops - instruction access fault [#1]
+  [  138.303909] epc : vm_ioctl+0xb60/0x2220 [capstone_vm]     (ffffffff01113940; the instruction after CSRUNV)
+  [  138.318267] status: 0000000200000100 badaddr: 0000000081d2c940 cause: 0000000000000001
+  then Kernel panic. The module's text sits two pages lower than in the third run (0x81d2c000 vs 0x81d2e000).
+
+## the dump (report_cpmx_diag, read in M in swap_cpmp after the fault), via boot3/cpmx-diag-read.py
+  region   0 slot  0 [0x0000000000, 0x0002000000) perm 0x7
+  region   1 slot  1 [0x0080040000, 0x0080080200) perm 0x7
+  region   2 slot  2 [0x0080090b80, 0x00800a0000) perm 0x7
+  region   3 slot  - [0x0010000100, 0x0010040000) perm 0x7
+  region   4 slot  4 [0x0010000000, 0x0010000100) perm 0x7
+  region   5 slot  - [0x000200c000, 0x0002040000) perm 0x7
+  region   6 slot  - [0x000200bff8, 0x000200c000) perm 0x7
+  region   7 slot  - [0x0002004008, 0x0002004020) perm 0x7
+  region   8 slot  - [0x0002004000, 0x0002004008) perm 0x7
+  region   9 slot  - [0x0080030000, 0x0080040000) perm 0x7
+  region  10 slot  - [0x00c0000000, 0x10000000000) perm 0x7
+  region  11 slot  - [0x0002000000, 0x0002004000) perm 0x7
+  region  12 slot  - [0x0080080200, 0x0080080380) perm 0x7
+  region  13 slot  6 [0x00800a0000, 0x0080100000) perm 0x7
+  region  14 slot  3 [0x0080100000, 0x00ac000000) perm 0x7
+  region  15 slot  - [0x0010040000, 0x0010200000) perm 0x7
+  region  16 slot  - [0x0010200000, 0x0080000000) perm 0x7
+  region  17 slot  - [0x0080000000, 0x0080014000) perm 0x7
+  region  18 slot  5 [0x0002040000, 0x0010000000) perm 0x7
+  region  19 slot  - [0x0002004020, 0x000200bfe0) perm 0x7
+  region  20 slot  - [0x000200bfe0, 0x000200bff8) perm 0x7
+  region  21 slot  7 [0x00ac100000, 0x00c0000000) perm 0x7
+  region  22 slot  8 [0x00ac000000, 0x00ac040000) perm 0x7
+  region  23 slot  - [0x00ac080000, 0x00ac100000) perm 0x7
+  region  24 slot 10 [0x00ac048000, 0x00ac050000) perm 0x7
+  region  25 slot  - [0x00ac040000, 0x00ac048000) perm 0x7
+  region  26 slot 12 [0x00ac070000, 0x00ac080000) perm 0x7
+  region  27 slot  - [0x00ac050000, 0x00ac060000) perm 0x7
+  region  28 slot  - [0x00ac060000, 0x00ac070000) perm 0x7
+  cpmp  0 region   0 [0x0000000000, 0x0002000000) perm 0x7
+  cpmp  1 region   1 [0x0080040000, 0x0080080200) perm 0x7
+  cpmp  2 region   2 [0x0080090b80, 0x00800a0000) perm 0x7
+  cpmp  3 region  14 [0x0080100000, 0x00ac000000) perm 0x7
+  cpmp  4 region   4 [0x0010000000, 0x0010000100) perm 0x7
+  cpmp  5 region  18 [0x0002040000, 0x0010000000) perm 0x7
+  cpmp  6 region  13 [0x00800a0000, 0x0080100000) perm 0x7
+  cpmp  7 region  21 [0x00ac100000, 0x00c0000000) perm 0x7
+  cpmp  8 region  22 [0x00ac000000, 0x00ac040000) perm 0x7
+  cpmp 10 region  24 [0x00ac048000, 0x00ac050000) perm 0x7
+  cpmp 12 region  26 [0x00ac070000, 0x00ac080000) perm 0x7
+CPMX-DIAG mtval 0x81d2c940: BRANCH covered-loaded: CPMP entry 3 (region 14, [0x80100000, 0xac000000), perm 0x7)
+
+## what it shows
+  A LOADED CPMP entry (3: region 14, decoded [0x80100000, 0xAC000000), permissions 0x7) covers mtval, and all 11
+  loaded entries carry permissions 0x7. The S-mode fetch was refused while, by the time M read it, the CPMP held a
+  covering entry with execute permission: the pre-registered branch covered-loaded WITH X, the RTL's fetch side.
+  Region 14 is the R-55 exact piece the model predicted.
+## the differential that explains the placement dependence (from the two modules' disassembly)
+  ed24f827: CSRUNV at .text 0x37f4, the instruction after it (0x37f8) in the same 64-byte line: every CSRUNV return
+            worked (boot 3-T1 and the repeat, many steps).
+  0cc4760d: CSRUNV at .text 0x393c, the LAST word of its line; the instruction after it (0x3940) starts a new line:
+            faulted on both boots, at that instruction.
