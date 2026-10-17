@@ -52,6 +52,15 @@ encoding illegal at decode with mtval = the instruction, which the routine's own
   refused base >= end with 29 through csm_inject, which forces SPP = 1. So row 3 reads 29 and SPP 1 without the gate,
   and 2 and SPP 0 with it.
 
+### Revision 2, result (the RTL lane, 2026-10-17, on fba7812's files): 23 of 23 as predicted
+
+`results/rtl-bf3db3175-rev2.result-lines.txt`, read from the run's retirement trace.
+- Rows 1 and 2 read as in the first run, at this build's addresses.
+- Row 3 reads scause 2, stval 0xa0b5165b, SPP 0 and sepc `csmint_u`, the sentinels back, and slotB's words 0 and 0.
+  So the routine declines a CSMINT from U, and the entry injects it into S as an illegal instruction, minting nothing.
+- The control ends at the cycle limit with no reading: its handle_exception stub returns -1 1,392 times, and the ldc
+  at ldc_s traps 1,393 times.
+
 ## What the arm runs
 
 The shipped trap entry (`#include "sbi_capstone.S"`, CAPSTONE_TARGET_FPGA and CAPSTONE_VP2_CSMINT), with mtvec at

@@ -21,7 +21,9 @@
 #     (sbi_capstone_init.S) and dom_init; the entry's own movc(a0, sp) followed by further use of sp, which the csmint
 #     hook repeats, already runs on silicon at every boot of the current monitor.
 #
-# Rows and pre-registered readings: exactly va-csmint-mon's (46 values, then pass), printed by the handle_trap_ecall
+# DESCRIPTOR v7 (2026-10-18): six words at a 64-byte stride, the rows and readings exactly va-csmint-mon's v7 header
+# (18 rows x 3 values, then the 27 of the final readback: 81 values, then pass), on capstone-sbi vp2/tier1-monitor fba7812
+# (the v7 routine with the MPP gate + the OS-trap injection entry; sha256s in README.md), printed by the handle_trap_ecall
 # stub from S's a2, a5, a6. The entry clobbers S's a0/a1 with the SBI error/value pair on every ecall; S reloads them.
 
 #include "riscv_test.h"
@@ -85,14 +87,23 @@ lla t0, tbl
 csrw SREVROOT, t0
 
 # ---------------------------------------------------------------- descriptors {base, end, perms}
-#define DESC(LBL, OFF, B, E, P) lla t0, LBL; addi t0, t0, OFF; PHYS(t1, t0); \
-  lla t2, dbuf; li t3, B; add t3, t3, t2; sd t3, 0(t1); li t3, E; add t3, t3, t2; sd t3, 8(t1); li t3, P; sd t3, 16(t1)
-DESC(desc, 0,   0,   256,  CAP_PERM_RW)     # D1
-DESC(desc, 32,  256, 0,    CAP_PERM_RW)     # D2: base >= end
-DESC(desc, 64,  8,   8200, CAP_PERM_RW)     # D3: unrepresentable
-DESC(desc, 96,  512, 768,  CAP_PERM_RO)     # D4
-DESC(desc, 128, 0,   256,  16)              # D5: perms > 15
-DESC(descnoa, 0, 0,  256,  CAP_PERM_RW)     # in a page whose PTE lacks A
+#define DESC(LBL, OFF, B, E, P, C, S2, R) lla t0, LBL; addi t0, t0, OFF; PHYS(t1, t0); \
+  lla t2, dbuf; li t3, B; add t3, t3, t2; sd t3, 0(t1); li t3, E; add t3, t3, t2; sd t3, 8(t1); li t3, P; sd t3, 16(t1); \
+  li t3, C; add t3, t3, t2; sd t3, 24(t1); li t3, S2; sd t3, 32(t1); li t3, R; sd t3, 40(t1)
+#define DESC2(LBL, OFF, B, E, P, C, S2LBL, S2OFF, R) DESC(LBL, OFF, B, E, P, C, 0, R); \
+  lla t3, S2LBL; addi t3, t3, S2OFF; sd t3, 32(t1)
+DESC(desc, 0,   0,   256,  CAP_PERM_RW, 0, 0, 0)          # D1
+DESC(desc, 64,  256, 0,    CAP_PERM_RW, 256, 0, 0)        # D2: base >= end
+DESC(desc, 128, 8,   8200, CAP_PERM_RW, 8, 0, 0)          # D3: unrepresentable
+DESC(desc, 192, 512, 768,  CAP_PERM_RO, 512, 0, 0)        # D4
+DESC(desc, 256, 0,   256,  16, 0, 0, 0)                   # D5: a perms bit outside the rights and NONLIN
+DESC(desc, 320, 1024, 1280, CAP_PERM_RW + 0x100, 1040, 0, 0)   # D6: NONLIN, cursor 16 inside
+DESC2(desc, 384, 1536, 1792, CAP_PERM_RW + 0x100, 1536, slotE, 0, 0)   # D7: NONLIN into two slots
+DESC2(desc, 448, 0,   256,  CAP_PERM_RW, 0, slotE, 0, 0)  # D8: LINEAR with a second slot
+DESC(desc, 512, 0,   256,  CAP_PERM_RW, 257, 0, 0)        # D9: cursor = end + 1
+DESC2(desc, 576, 1536, 1792, CAP_PERM_RW + 0x100, 1536, slotE, 8, 0)   # D10: second slot misaligned
+DESC(desc, 640, 0,   256,  CAP_PERM_RW, 0, 0, 1)          # D11: reserved word set
+DESC(descnoa, 0, 0,  256,  CAP_PERM_RW, 0, 0, 0)          # in a page whose PTE lacks A
 
 # ---------------------------------------------------------------- Sv39 tables: identity, 4 KiB supervisor pages
 lla t0, pt_l0
@@ -170,11 +181,11 @@ addi a0, a0, 8
 lla a1, desc
 CSMINT(a2, a0, a1)
 REPORT(3)
-ROW(slotB, desc, 32)           # 4
+ROW(slotB, desc, 64)           # 4
 REPORT(4)
-ROW(slotB, desc, 64)           # 5
+ROW(slotB, desc, 128)          # 5
 REPORT(5)
-ROW(slotB, desc, 128)          # 6
+ROW(slotB, desc, 256)          # 6
 REPORT(6)
 ROW(slotnod, desc, 0)          # 7
 REPORT(7)
@@ -184,16 +195,28 @@ PRE                            # 9: rs1 = sp
 lla a1, desc
 CSMINT(a2, sp, a1)
 REPORT(9)
-ROW(slotA, desc, 96)           # 10
+ROW(slotA, desc, 192)          # 10
 REPORT(10)
+ROW(slotC, desc, 320)          # 11: NONLIN, cursor != base
+REPORT(11)
+ROW(slotD, desc, 384)          # 12: one NONLIN mint, two slots
+REPORT(12)
+ROW(slotB, desc, 448)          # 13: LINEAR with a second slot
+REPORT(13)
+ROW(slotB, desc, 512)          # 14: cursor out of range
+REPORT(14)
+ROW(slotB, desc, 576)          # 15: second slot misaligned
+REPORT(15)
+ROW(slotB, desc, 640)          # 16: reserved word
+REPORT(16)
 li a7, 21                      # next-unused 63
 ecall
-ROW(slotB, desc, 0)            # 11
-REPORT(11)
+ROW(slotB, desc, 0)            # 17
+REPORT(17)
 li a7, 22                      # free head 0, free count 1
 ecall
-ROW(slotB, desc, 0)            # 12
-REPORT(12)
+ROW(slotB, desc, 0)            # 18
+REPORT(18)
 li a7, 99
 ecall
 1: j 1b
@@ -272,6 +295,26 @@ e_final:
   PHYS(t1, t0)
   ld t2, 0(t1)
   CAPPRINT(t2)                                 # 0
+#define READBACK(SLOT) lla t0, SLOT; PHYS(t1, t0); LDC(t3, t1, 0); \
+  LCC(t2, t3, x1); CAPPRINT(t2); LCC(t2, t3, x3); CAPPRINT(t2); LCC(t2, t3, x4); CAPPRINT(t2); \
+  LCC(t2, t3, x2); CAPPRINT(t2); LCC(t2, t3, x5); CAPPRINT(t2)
+  READBACK(slotC)                              # 1 (NONLIN), dbuf+1024, dbuf+1280, dbuf+1040, 6
+  READBACK(slotD)                              # 1, dbuf+1536, dbuf+1792, dbuf+1536, 6
+  READBACK(slotE)                              # the same five
+  lla t0, slotD
+  PHYS(t1, t0)
+  lla t0, slotE
+  PHYS(t4, t0)
+  ld t2, 0(t1)
+  ld t3, 0(t4)
+  xor t2, t2, t3
+  seqz t2, t2
+  CAPPRINT(t2)                                 # 1: the same word
+  ld t2, 8(t1)
+  ld t3, 8(t4)
+  xor t2, t2, t3
+  seqz t2, t2
+  CAPPRINT(t2)                                 # 1: the same metadata
   ld t2, 8(s8)
   CAPPRINT(t2)                                 # 63
   ld t2, 16(s8)
@@ -307,7 +350,13 @@ desc:
 slotA:
   .zero 16
 slotB:
-  .zero 4080
+  .zero 1024
+slotC:
+  .zero 1024
+slotD:
+  .zero 1024
+slotE:
+  .zero 1008
 slotnod:
   .zero 4096
 dbuf:
