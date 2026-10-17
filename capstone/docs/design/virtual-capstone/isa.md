@@ -218,6 +218,15 @@ QEMU's internally saved continuations.
 | 576..639 | 64 total | Scalar cursor/value views of a0..a7 |
 | 640, 648 | 8 each | Collection page count, physical page-list address |
 
+**The register slots after an escape (ruled 2026-10-18, Q-30; the RTL is the reference).** On every escape the
+context's x1..x31 are written WITH their tags into the frame's own register slots (+64 + 16·i) and the caller is
+restored over the register file, so a linear capability has one live owner, the frame; the reply resume (action 2)
+loads +224 (x10's slot) and zeroes it. The trusted adapter therefore treats the register slots as the context's live
+state and OVERWRITES +224 with the reply; a check that the slot is empty is QEMU-shaped and wrong on silicon (vp2's
+boot 3-T1 repeat stopped on it). QEMU's escape, which kept the callee in its own save state and left the slots
+zero, is brought to the RTL's behaviour in the pin that follows 3b8040d5ff6e; the +576..+639 views and the event
+words are unchanged.
+
 The base frame is 576 bytes; nonzero options require 640 bytes; collection
 requires 656 bytes. Unknown options are rejected. First entry consumes and
 clears all 32 initial PCC/GPR slots. Later resumes use the saved continuation;
