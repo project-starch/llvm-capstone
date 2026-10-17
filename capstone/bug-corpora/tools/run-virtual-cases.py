@@ -128,7 +128,7 @@ def main():
     p.add_argument("--arm", required=True)
     p.add_argument("--virtual-kit", type=Path, required=True)
     p.add_argument("--sdk", type=Path, required=True)
-    p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--cc-arg", action="append", default=[])
     p.add_argument("--out", type=Path)
     p.add_argument("--raw", type=Path)

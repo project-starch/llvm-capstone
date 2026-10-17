@@ -102,7 +102,7 @@ def main():
                    help="the port configured with the capstone-application preset, -DWM_CORPUS_DIR=<corpus>")
     p.add_argument("--controls-hosted-build", type=Path, required=True,
                    help="the same, -DWM_CORPUS_DIR=<corpus>/controls")
-    p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--raw", type=Path, required=True, help="console logs; outside the bundle")
     a = p.parse_args()
     import appvm
