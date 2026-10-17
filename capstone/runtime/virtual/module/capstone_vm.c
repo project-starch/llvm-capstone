@@ -39,6 +39,11 @@ struct cv_thread {
     bool user_frame;
     bool started, reply_cap, terminal;
     unsigned long event;
+    /* S-24: the same kind-4 fault resolved repeatedly without changing anything. The RTL's walker
+     * faults on a clear A bit and never sets it, so a PTE this module leaves untouched can re-fault
+     * for ever while resolve() keeps reporting success. Bounded and reported rather than spun. */
+    unsigned long last_fault_addr, last_fault_cause;
+    unsigned fault_repeat;
 };
 struct context {
     struct list_head link;
@@ -104,6 +109,11 @@ MODULE_PARM_DESC(node_max_records,
 #else
 #define node_table_flat 0
 #endif
+/* S-24: how many times the SAME (address, cause) may be "resolved" without changing anything
+ * before the run is failed instead of retried. Generous, because a resolve followed by a quantum
+ * stop is legitimately repeated by the launcher's idempotent CV_RESOLVE; a hardware fault the
+ * module cannot clear repeats without bound, which is the case this catches. */
+#define CV_FAULT_REPEAT_MAX 64U
 #define CV_FLAT_RECORDS_MAX 65536UL
 #ifdef CAPSTONE_VM_FLAT_TABLE
 /* The flat table's record count. The ruling's 65,536 is the MAXIMUM, not merely a default:
@@ -1025,8 +1035,43 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
              * of this pinned profile. Drop only the additional pin. */
             int same = a->pages[index] == page;
             unpin_user_page(page);
-            return same ? 0 : -EACCES;
+            if (!same) return -EACCES;
+            /* S-24. THIS PATH CHANGES NOTHING, so reporting success is only correct if the
+             * hardware will make progress on the retry. On vp2 it need not: the RTL's walker
+             * faults on a clear accessed bit and never sets it (cva6_ptw.sv), while QEMU with
+             * svadu=true sets A and D in hardware, so the same fault can be re-raised for ever
+             * with an identical PTE. The module touches no PTE anywhere -- there is not one
+             * pte_mkyoung, ptep_* or follow_pte in this file -- so nothing here changes the
+             * condition the walker is unhappy about.
+             *
+             * vp2's Tier 2 stalled exactly so: 25 minutes of heartbeats after
+             * vm_contract()'s mmap(8193, PROT_READ) first touch, with no record able to show why,
+             * because every CV_STEP was "resolving" a fault successfully.
+             *
+             * A resolve that changes nothing must not be able to report success indefinitely. The
+             * repeat is counted per (address, cause) and the run is failed with a named error and
+             * one rate-limited line, which turns a silent 25-minute hang into a reading. The bound
+             * is deliberately generous: a legitimate repeat happens when a fault is resolved here
+             * and the quantum stops the entry before the retry, and the launcher's idempotent
+             * CV_RESOLVE then repeats it. */
+            if (address == t->last_fault_addr && cause == t->last_fault_cause) {
+                if (++t->fault_repeat > CV_FAULT_REPEAT_MAX) {
+                    pr_warn_ratelimited("capstone_vm: fault at 0x%lx cause %lu resolved %u times "
+                                        "with no change; the page is pinned and the PTE is "
+                                        "untouched by this module\n",
+                                        address, cause, t->fault_repeat);
+                    return -ELOOP;
+                }
+            } else {
+                t->last_fault_addr = address;
+                t->last_fault_cause = cause;
+                t->fault_repeat = 1;
+            }
+            return 0;
         }
+        t->last_fault_addr = address;
+        t->last_fault_cause = cause;
+        t->fault_repeat = 0;
         a->pages[index] = page;
         ++c->stats.pinned_pages;
         c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
