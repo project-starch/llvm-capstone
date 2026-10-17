@@ -58,11 +58,24 @@ reflash back to vp1 on a canary difference.
     vp2 respin.
 - **Then:** this table's 25 arms in table order, then corpus set 7, which must be identical to d93a8d66b.
 
+**The session, pre-registered before it runs (2026-10-17).** These are the board lane's private scripts; this is
+what they do.
+- **Start:** only after vp1's first session ends clean (its `AFTER-FLASH DONE`, no STOP, vp1 read back as resident).
+- **Preflight:** on the sealed sha256 and WNS (-19.019, inside the band floor -19.596), with the DTS pairing.
+- **Flash:** the readback must name caplifive_vp2_bf3db3175.bit.
+- **The canary, nine comparisons, all of which must pass:**
+  - The S-16 set and the Sublet floor, in each of two passes, exactly equal to d93a8d66b's records.
+  - s1gap in each pass, by vp1's amended rule (88d670de65bc): functional readings exactly, the eight cycle counts
+    reported.
+  - Pass 1 against pass 2 by the same rules. So a run-to-run variation in any functional reading fails it; the cycle
+    counts vary run to run on d93a8d66b itself.
+- **If the canary does not pass:** a preflight on vp1's sealed sha256, a reflash to vp1 with readback, and a stop.
+- **Otherwise:** this table's 25 arms in table order, one power cycle each. Each is compared with its board vector,
+  count and values as 64-bit integers. Then corpus set 7 against d93a8d66b's record.
+
 **Still open before a vp2 board run:**
 - (Not needed: resident controls for the physical-pool builds. The `-off` builds run in vp2's own batch beside their
   flag-on arms. On vp1 or d93a8d66b their readings are not predicted: srevroot and the item-D CSRs do not exist there.)
-- The session script, with the canary first if the lead chooses it: the S-16 set, the Sublet floor and s1gap, run twice
-  each, stopping on any difference from d93a8d66b or any run-to-run variation.
 
 | image | sha256 (16) | board_rec | board vector (from the simulation of this image) |
 |---|---|---|---|
