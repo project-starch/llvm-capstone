@@ -1008,11 +1008,35 @@ static void pin_ahead(struct context *c, struct arena *a,
     }
 }
 
+/* r8's terminal store reads as a bare 139 in the suite: the signal cannot say WHICH of
+ * resolve()'s five refusals fired, and the board lane's "!same" attribution is a
+ * STRUCTURAL deduction from this source, not a reading. So every terminal return names
+ * itself. Each of these paths ends the step, so at most one line is emitted per step --
+ * unlike a print per fault, which would be ~426 UART lines per step (measured) and could
+ * perturb or wedge the very boot it exists to observe.
+ *
+ * pr_warn, not pr_info: the board console drops KERN_INFO, which is what voided r7's
+ * diagnostic -- an invisible print and a print that never fired read identically.
+ * page_to_pfn, not %p: %p is hashed, so two values are comparable for equality within a
+ * single boot and for nothing else.
+ *
+ * The prev(...) fields cost nothing -- they are already on the thread for the -ELOOP
+ * bound -- and they carry the discriminator: prev addr == this addr with prev cause 13,
+ * and cause 15 here, is the read-then-write COW signature that is the hypothesis. */
+#define CV_DIAG_TAG "resolve-sites-1"
+#define CV_RESOLVE_FAIL(site, fmt, ...)                                            \
+    pr_warn("capstone_vm: resolve refused at %s: addr 0x%lx cause %lu need 0x%lx "  \
+            "prev(addr 0x%lx cause %lu rep %u) " fmt "\n",                          \
+            site, address, cause, required,                                         \
+            t->last_fault_addr, t->last_fault_cause, t->fault_repeat,               \
+            ##__VA_ARGS__)
+
 static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
     struct page *page;
     struct vm_area_struct *v;
+    unsigned long vmflags = 0;   /* snapshot under the mmap lock; v is unsafe to read after unlock */
     unsigned long required = cause == 15 ? VM_WRITE : cause == 12 ? VM_EXEC : VM_READ;
     if (!t->started || t->event != 4 || (cause != 12 && cause != 13 && cause != 15))
         return -EINVAL;
@@ -1027,8 +1051,13 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         v = find_vma(c->mm, address);
         if (!v || v->vm_start > address || !(v->vm_flags & required) ||
             v->vm_file || (v->vm_flags & VM_SHARED)) {
-            mmap_read_unlock(c->mm); return -EACCES;
+            unsigned long f = v ? v->vm_flags : 0UL;
+            int file = v ? !!v->vm_file : -1;
+            mmap_read_unlock(c->mm);
+            CV_RESOLVE_FAIL("vma", "found %d flags 0x%lx file %d", !!v, f, file);
+            return -EACCES;
         }
+        vmflags = v->vm_flags;
         /* Check actual PTE policy first. FORCE then materializes private
          * anonymous backing even for a read-only zero-page first touch. The
          * application still sees its original VMA/PTE protection. */
@@ -1036,9 +1065,16 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         n = pin_user_pages_remote(c->mm, address & PAGE_MASK, 1,
                                   FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
                                   &page, NULL, NULL);
-        if (n != 1) { mmap_read_unlock(c->mm); return -EFAULT; }
+        if (n != 1) {
+            mmap_read_unlock(c->mm);
+            CV_RESOLVE_FAIL("pin", "pin_user_pages_remote=%ld vm_flags 0x%lx", n, vmflags);
+            return -EFAULT;
+        }
         TEST_HOOK(1);
         if (!PageAnon(page) || page_mapcount(page) != 1) {
+            CV_RESOLVE_FAIL("anon", "pfn 0x%lx anon %d mapcount %d refs %d vm_flags 0x%lx",
+                            page_to_pfn(page), !!PageAnon(page), page_mapcount(page),
+                            page_ref_count(page), vmflags);
             mmap_read_unlock(c->mm); unpin_user_page(page); return -EACCES;
         }
         if (!a->pages[index])
@@ -1049,6 +1085,11 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
              * resolve to the same backing: tag-preserving moves are not part
              * of this pinned profile. Drop only the additional pin. */
             int same = a->pages[index] == page;
+            if (!same)
+                CV_RESOLVE_FAIL("remap",
+                                "pfn_old 0x%lx pfn_new 0x%lx mapcount %d refs %d vm_flags 0x%lx",
+                                page_to_pfn(a->pages[index]), page_to_pfn(page),
+                                page_mapcount(page), page_ref_count(page), vmflags);
             unpin_user_page(page);
             if (!same) return -EACCES;
             /* S-24. THIS PATH CHANGES NOTHING, so reporting success is only correct if the
@@ -1092,6 +1133,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
         return 0;
     }
+    CV_RESOLVE_FAIL("arena", "no lazy arena covers this address");
     return -EFAULT;
 }
 
@@ -1567,7 +1609,19 @@ static int __init init(void)
         return -EINVAL;
     }
 #endif
-    return misc_register(&device);
+    {
+        /* MUST-FIRE control for every CV_RESOLVE_FAIL above. Fires exactly once per insmod
+         * at the same level, so the log separates the two readings r7 could not: a boot
+         * WITHOUT this line proves the level is being dropped and any absent diagnostic is
+         * void; a boot WITH it proves an absent diagnostic really did not fire. Bump
+         * CV_DIAG_TAG whenever the lines above change shape. */
+        int rc = misc_register(&device);
+        if (rc)
+            return rc;
+        pr_warn("capstone_vm: loaded, diag %s, supervisor_slots=%lu\n",
+                CV_DIAG_TAG, supervisor_slots);
+        return 0;
+    }
 }
 #ifdef CV_TEST_HOOKS
 static void __exit done(void) { test_report("unload"); misc_deregister(&device); }
