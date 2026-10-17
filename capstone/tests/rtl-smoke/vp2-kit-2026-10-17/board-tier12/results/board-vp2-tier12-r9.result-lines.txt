@@ -1,0 +1,61 @@
+# vp2 boot r9 (Tier 1+2), 2026-10-18 06:51-07:04: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload b47f82487c6030f6
+# (monitor capstone-sbi vp2/fetch-retry 007d81d), module ce3a542d00acce86 (the compiler lane's 69db2f133b93), the suite
+# with sparse-churn moved last (vm-suite-inner-r9.sh). Pre-registered at lane vp2-tier12 2727936779cd. Result lines
+# only, from run3r9/board.txt and SEQ.
+
+DRIVER rc=1 07:03:34; watchdog lines 47
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=NONE oracle=22 NOT-AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+VM-SUITE board-check rc=1 :: 13 of 41 true; 20 off the pre-registration ['sparse-churn', 'sparse-stale', 'preempt', 'parallel_one', 'parallel_two', 'sqlite_write', 'sqlite_read', 'mruby', 'normal_output', 'fault_causes', 'nested_denial_site
+FRTY retries 2 at       2 FRTY:01111434 
+DIAG fault repeats: 
+ELOOP lines: 
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_R9_DONE 07:03:34
+
+## vm-suite exits, in order (sparse-churn was to run last; sparse-stale, in run.py's place before it, wedged)
+  VM_EXIT:normal:0
+  VM_EXIT:threads:1
+  VM_EXIT:vm:139
+  VM_EXIT:nested:0
+  VM_EXIT:nested-stale:139
+  VM_EXIT:heap-threads:1
+  VM_EXIT:stale:139
+  VM_EXIT:bounds:139
+  VM_EXIT:retired:139
+  VM_EXIT:vm-ro-write:139
+  VM_EXIT:vm-none-read:139
+  VM_EXIT:vm-guard:139
+  VM_EXIT:vm-padding:139
+  Every exit read matches the pre-registration: vm 139 (r8's store fault) and the twelve others QEMU's.
+  sparse-stale: the core WEDGED. The transcript stops mid-line in the launcher's grant line for slot 12 (4096 bytes),
+  exactly where r8's sparse-churn stopped.
+## the wedge apertures (sparse-stale)
+  sw=255 TRAP LOG {seen,mcause[6:0]} 0x88 10001000
+  sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x25 00100101
+  sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0xc4 11000100
+  sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x00 00000000
+  sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x0
+  sw=228 {1,dom_switch_idx[6:0]} 0xb8 10111000
+  sw=229 {load_state[3:0],0000} 0x00 00000000
+  sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+  sw=193 {00000,store_buf_commit_cnt} 0x01 00000001
+  sw=194 {000000,store_state} 0x03 00000011
+  sw=195 {0000,load_state} 0x00 00000000
+  sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0x26 00100110
+  sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x82 10000010
+  sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0x00 00000000
+  sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+  commit pc (scoreboard slot 0; stale after a flush) 0x0000003f83090e98
+  trap-log mepc 0x0000000000035a88
+  trap-log tval 0x0000000000000073
+  rev_node_debug_ex 0x0000001a00000000
+  rev_node_head_ex 0x006d
+  rev_node_serving_idx_ex 0x00000000
+  Identical to r8's sparse-churn wedge in every aperture but the trap log (here mcause 8, U ecall, mepc a U address,
+  tval 0x73): M, stall, a pending store (store_state 3, lsu op 0x26 STORE), the switcher at index 56 with a register
+  write in flight. The domain's commit pc is contract.dom VA 0x20e98 (map base + 0x10e98) on BOTH boots: `free+4`,
+  `sd ra, 0x80(sp)`, free()'s first store. Both sparse modes begin `*slot = malloc(64); free(*slot);`.

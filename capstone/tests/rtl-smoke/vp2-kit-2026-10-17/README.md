@@ -1200,3 +1200,29 @@ transcript when vm-suite has no END marker. Run by `boot3/run-tier12-r9.sh b47f8
   - preempt 143, parallel_one 0, parallel_two 0, sqlite_write 0, sqlite_read 0, mruby 0;
   - then sparse-churn: a **wedge** as in r8, or 0 if r8's wedge was not deterministic.
 - Every step from stale to mruby is a first silicon reading. A differing exit is named with its fault line.
+
+### Boot r9, result (2026-10-18 06:51-07:04): Tier 1 identity (fourth boot, the production module); vm-suite reads 13 steps as pre-registered, then sparse-stale wedges the core exactly where sparse-churn did in r8
+
+Pre-registered at 2727936779cd. Result lines in `board-tier12/results/board-vp2-tier12-r9.result-lines.txt`.
+- **Tier 1:** identity on the compiler lane's ce3a542d00acce86.
+- **vm-suite, all as pre-registered:**
+  - normal 0, threads 1, vm 139 (r8's store fault), nested 0, nested-stale 139, heap-threads 1;
+  - stale, bounds, retired, vm-ro-write, vm-none-read, vm-guard and vm-padding each 139.
+- **sparse-stale wedged.** It ran in run.py's place, before the relocated sparse-churn. The transcript stops mid-way
+  through the launcher's slot-12 grant line, as r8's sparse-churn did. The apertures are r8's in every field but the
+  trap log.
+- **One reproducer, the RTL lane's.** On both boots the domain's commit pc is contract.dom VA 0x20e98, `free+4`, free()'s
+  first store. Both sparse modes begin `*slot = malloc(64); free(*slot);`.
+
+## Pre-registered (2026-10-18, before boot r10): both sparse steps last, so preempt, the parallel pair, sqlite and mruby are read
+
+**The change:** only the suite script, `board-tier12/vm-suite-inner-r10.sh`: sparse-stale, then sparse-churn, after
+every other step. The module (ce3a542d00acce86) and the monitor (007d81d) are r9's. Firmware 9b3eb92a963acb7c. Run by
+`boot3/run-tier12-r10.sh 9b3eb92a963acb7c`.
+
+**Predictions:**
+- Tier 1 identity; then r9's thirteen exits.
+- **Then the first silicon readings, from QEMU's record (svadu=false reads the same, the compiler lane's
+  fe8c4283f8ad):** preempt 143, parallel_one 0, parallel_two 0 (serialized by the queue), sqlite_write 0 with
+  SQLITE_SUM=5050, sqlite_read 0 with SQLITE_PERSIST=100, mruby 0 with MRUBY_SUM=5050 and MRUBY_FILE=virtual.
+- **Then sparse-stale:** a wedge at r8/r9's point, with sparse-churn behind it as collateral.
