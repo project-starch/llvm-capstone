@@ -699,3 +699,31 @@ is staged. `boot3/stage-boot3.sh` refuses otherwise, and it refuses today's imag
 predicted by a QEMU record, list the QEMU-only paths the images take. Q-21 was on dev, and the census is a two-minute
 count, but it was not run for this boot. A habit in memory did not fire under time pressure; a gate in the staging
 script does.
+
+## The vp2 silicon gate (2026-10-18): every staged file against the RTL lane's census table
+
+`vp2-silicon-gate.py` reads `capstone/docs/plans/2026-10-18-vp2-silicon-census.tsv` at run time. A change to the
+table therefore changes the gate.
+- **What it checks:**
+  - every custom-2 and custom-3 instruction, SFENCE.VMA, MRET and SRET, by its row;
+  - every CSR access, by its row, or by the table's CSR-privilege rule when the CSR has no row;
+  - images as `in_context`, modules as `trusted_S`.
+- **Two operand rules:**
+  - a DELIN of a gp-derived operand;
+  - an LDC/STC whose base an integer instruction wrote.
+- **Trusted S, stricter:** an LDC/STC in a module is refused unless a capability instruction wrote its base in the
+  same function, which is v7's contract (Q-23).
+- `delin-census.py` and `qemu-only-csr-census.py` stay as its first two rules.
+- **Controls, all firing:**
+  - boot 2's images: 525/5,983/9,859 gp-derived delins and 2 reads of 0xcc0 each;
+  - boot 3-T1's images: 2 reads each;
+  - boot 1's module 0d62a1bc: 4 integer-base LDC/STC, the first at 0x27d4, boot 1's fault;
+  - the paged module 69a7016b: 0xcc0 and 0x5c0;
+  - the board module ed24f827: 0.
+- **Two false positives were found and fixed before it was trusted:**
+  - the operand scan crossed function boundaries (setjmp read `li a0, 0` from the function before it);
+  - `unimp` (0xc0001073, a deliberate trap on both machines) was read as a CSR write. It is counted apart.
+- **The rebuilt images** (contract 125705371837ea92, sqlite a5942a1add489597, mruby a902e740fc5d3b0f) read 0 refused
+  and 1 candidate each: `libc_exit_fini`'s LDC through a base made by `addi`/`mv` from a capability. The table has no
+  row for an integer ALU instruction on a tagged operand. The RTL lane is asked for one. Until it answers, the
+  candidate holds boot 3-T1's repeat, because a non-empty report does not boot.
