@@ -1,0 +1,11 @@
+# Boot r6's runner (run-tier12-r6.sh) with every pin real (firmware bbc3cd7e9e1d6b56, the stage with module
+# 0cc4760d21fde17a, run.py 85461f0e25ab66bf, the lane driver) and only the driver stubbed. 2026-10-18 05:2x.
+synthetic clean transcript, with 3 FRTY lines (two of them mid-line)
+                              every rung AS-ORACLE; BRANCH identity; board-check rc 0 "33 of 41 true; 0 off";
+                              "FRTY retries 3"; CPMX-DIAG NO DATA
+the diagnostic run's transcript  BRANCH injected; board-check NO DATA; "FRTY retries 0"; CPMX-DIAG covered-loaded
+no transcript                 NO DATA (rc 2)
+wrong firmware hash           STOP (rc 1)
+(The build script's summary check was tested both ways before the build: it matches an r6 summary and rejects r5's. A
+first version of that test was vacuous -- run against a script that had not been written, it grepped with an empty
+pattern, which matches anything -- and was redone.)

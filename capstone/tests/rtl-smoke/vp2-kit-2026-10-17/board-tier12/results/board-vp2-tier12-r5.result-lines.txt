@@ -1,0 +1,39 @@
+# vp2 boot r5 (Tier 1+2 batched), 2026-10-18 05:11-05:22: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload
+# 8129241bb6debad2 (Image 551f48a9834bbbcd; monitor capstone-sbi vp2/cpmx-diag 0c772b0 with CAPSTONE_CPMX_DIAG), module
+# 82250f627aba01f1 (457b78f27e10 + `.balign 64` before CSRUNV: CSRUNV at .text 0x39c0). Pre-registered at lane
+# vp2-tier12 ef4747aab249. Result lines only, scoped to this run's load_image.
+
+DRIVER rc=1 05:21:52; watchdog lines 42
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=NONE oracle=0 NOT-AS-ORACLE
+RUNG vm-suite retval=NONE oracle=22 NOT-AS-ORACLE
+VM-CONTRACT BRANCH injected: MTVL:81D279C4 INJS:00000002 [no END marker: the rung did not return]
+VM-SUITE board-check rc=2 :: NO DATA: 0 segments for rung vm-suite in /tmp/capstone/tier1/run3r5/board.txt (need exactly 1)
+CPMX-DIAG rc=0 :: CPMX-DIAG mtval 0x81d279c4: BRANCH covered-loaded: CPMP entry 3 (region 14, [0x80100000, 0xac000000), perm 0x7)
+TIER12_R5_DONE 05:21:52
+
+## vm-contract: the same fault, now with CSRUNV line-aligned
+  MTVL:81D279C4
+  CPMX:00000002
+  INJS:00000002
+  [  138.198575] Oops - instruction access fault [#1]
+  [  138.202431] epc : vm_ioctl+0xba4/0x21e0 [capstone_vm]
+  [  138.209911] epc : ffffffff011139c4 ra : ffffffff01113a44 sp : ffffffc80415bd20
+  [  138.217004] status: 0000000200000100 badaddr: 0000000081d279c4 cause: 0000000000000001
+  [  138.225416] Code: 0013 0000 0013 0000 0013 0000 0013 0000 17db 48b7 (3423) 04f9 
+  epc vm_ioctl+0xba4 = .text 0x39c4 = CSRUNV (0x39c0, a 64-byte line start) + 4: the same line and the same 8-byte
+  block as the CSRUNV. The Code: dump shows the alignment nops executed before it.
+## the dump
+    cpmp  0 region   0 [0x0000000000, 0x0002000000) perm 0x7
+    cpmp  1 region   1 [0x0080040000, 0x0080080200) perm 0x7
+    cpmp  2 region   2 [0x0080090b80, 0x00800a0000) perm 0x7
+    cpmp  3 region  14 [0x0080100000, 0x00ac000000) perm 0x7
+    cpmp  4 region   4 [0x0010000000, 0x0010000100) perm 0x7
+    cpmp  5 region  18 [0x0002040000, 0x0010000000) perm 0x7
+    cpmp  6 region  13 [0x00800a0000, 0x0080100000) perm 0x7
+    cpmp  7 region  21 [0x00ac100000, 0x00c0000000) perm 0x7
+    cpmp  8 region  22 [0x00ac000000, 0x00ac040000) perm 0x7
+    cpmp 10 region  24 [0x00ac048000, 0x00ac050000) perm 0x7
+    cpmp 12 region  26 [0x00ac070000, 0x00ac080000) perm 0x7
+  CPMX-DIAG mtval 0x81d279c4: BRANCH covered-loaded: CPMP entry 3 (region 14, [0x80100000, 0xac000000), perm 0x7)

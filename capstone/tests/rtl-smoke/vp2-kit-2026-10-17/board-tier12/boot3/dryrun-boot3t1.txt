@@ -1,0 +1,7 @@
+# Boot 3-T1's script (run-tier1-3t1.sh) with every pin real (firmware 2df129f4643a64fe, the re-staged stage, the lane
+# driver) and only the driver stubbed. The stub asserts the three-rung BAKED_RUNGS. 2026-10-18 03:12.
+boot 2's real transcript      vm-contract 922 NOT-AS-ORACLE; BRANCH delin (cause 26 at map 0 base + 0x1f60)
+clean identity transcript     vm-contract 0 AS-ORACLE; BRANCH identity
+injected transcript           vm-contract 922; BRANCH injected (EXCX ... INJS)
+no transcript                 NO DATA (rc 2)
+wrong firmware hash           STOP: the firmware is not the pre-registered one

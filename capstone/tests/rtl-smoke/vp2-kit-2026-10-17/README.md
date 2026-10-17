@@ -606,3 +606,574 @@ N = 1 boot, 18 of 18 faults identical).
   - a from-scratch run.py record, in which the old images fail at the delin on the new QEMU as the control;
   - the module's context serialization;
   - the RTL lane's answer on CSRUNV's 29.
+
+## Pre-registered (2026-10-18, before boot 3-T1): Tier 1 on the C-27-fixed images
+
+**The runtime lane's ruling.** Boot 3 is held for Tier 2: vp2 has one saved-context slot (Q-26), and the module does
+not serialize yet. Tier 1 runs now, because vm-contract runs `ok` and then `stale`, each a single context. This boot
+is boot 2 with the three images rebuilt by the C-27 fix and with no vm-suite.
+
+**The images,** from the compiler lane's v8 kit: compiler built at 01b62884c0c7, which contains C-27's fix 299465232cc3 (the
+DELIN dropped under the image-gp ABI).
+- contract.dom f2017064bea77dd2, sqlite3.dom 233640f7193b034c, mruby bba891bc16576d98.
+- `delin-census.py` reads 0 gp-derived delins on all three. The totals fell by exactly the old counts: 530 → 5,
+  5,988 → 5, 9,863 → 4. The instruction counts fell by the same amounts (33,870 → 33,345, and so on), so the
+  instructions were removed, not moved out of the window.
+- The residual 5/5/4 are the allocator glue's `ldc rd; delin rd`. Their operand's type is only known at run time,
+  and the strict-DELIN pin would name any that is not LINEAR.
+
+**Unchanged from boot 2,** checked by hash:
+- module ed24f827b5beb373, capstone-vexec b27afefc09c6cae6, capstone-job c501da210412e23e;
+- the monitor 1e9451a and the firmware recipe;
+- the bitstream.
+
+The stage changes in exactly the three images (`board-tier12/stage.SHA256SUMS`; boot 2's is
+`stage-boot2.SHA256SUMS`). The firmware is fw_payload 2df129f4643a64fe (Image d38b07ac077e598a), gate PASS. The bake
+checked the initramfs by hash, and csmint_dispatch and _inject_s_trap are in the ELF.
+
+**The prediction:** the compiler lane's Tier 1 record on QEMU virtual-capstone-v7 852c5bc76774, which has strict DELIN
+and one context slot by default. Serial: `<v8-kit>/t1-contract/guest/serial.log`; status: `<v8-kit>/status-t1`.
+- It reads `T1_EXIT:ok:0` with VIRTUAL_APPLICATION_OK, then `T1_EXIT:stale:139` with one `domain fault cause=25`.
+- There is no cause 24 or 26 and no delin. The geometry is the flat 1 MiB, 65,536 records.
+- It ran the board's contract.dom bytes. Its module c4440adde0d02347 and launcher a405840dce789345 are the QEMU-kernel
+  builds of the same sources as the board's ed24f827 and b27afefc, not a different revision.
+
+**Rungs:** b0-stats, b0-hello, vm-contract (`board-tier12/boot3/run-tier1-3t1.sh 2df129f4643a64fe`).
+
+**Predictions:**
+- b0-stats 0 and b0-hello 0.
+- **vm-contract 0, the identity branch:** `ok` prints VIRTUAL_APPLICATION_OK and exits 0; `stale` is denied with cause
+  25 and exits 139. This is Tier 1's headline: a virtual application runs on silicon, and its stale access is
+  denied.
+- **The other branches, written down by the runtime lane:**
+  - 26 anywhere: C-27 not fixed in the staged bytes. That is kit side, and the census was wrong. A 26 at map 0 base
+    + 0x1f60 reads as the `delin` branch.
+  - 24 from S: a remaining integer-based access, which the 0-ldc/stc gate says cannot exist.
+  - 29 before VIRTUAL_APPLICATION_OK: header or layout, kit side.
+  - Anything else goes to the RTL lane.
+
+**Two gaps, named:**
+- The prediction for `stale` comes from this new-pin record alone. No earlier board reading exists for it.
+- The ADD_OK geometry on the board comes from boot 2's module, unchanged.
+
+**The judge:** `boot3/vm-contract-branch3.py`, boot 2's branches plus `delin`. It reads boot 2's real transcript as
+`delin`, and a fault 4 bytes off as `other`. The script was dry-run with every pin real and the driver stubbed
+(`boot3/dryrun-boot3t1.txt`).
+
+### Boot 3-T1, result (2026-10-18 03:17-03:23): the C-27 fix holds on silicon; vm-contract then faults at `malloc`'s read of a QEMU-only CSR (Q-21)
+
+Result lines: `board-tier12/results/board-vp2-tier12-3t1.result-lines.txt`.
+- **b0-stats, b0-hello:** 0.
+- **vm-contract:** retval 922, on none of the pre-registered branches.
+  - Both `ok` and `stale` exit 139 with `domain fault cause=2` at map 0 base + 0x10ccc, address 0xcc002573.
+  - There is no VIRTUAL_APPLICATION_OK, no cause 24 or 26, and no monitor tag.
+- **The C-27 fix holds on silicon.** Every virtual run passed `__capstone_cap_init` for the first time, where boot 2
+  stopped at its delin.
+
+**Located.**
+- **The instruction:** VA 0x20ccc in contract.dom f2017064 is `csrr a0, 0xcc0` in `malloc`, and 0xcc002573 is that
+  instruction's own encoding.
+- **The cause:** CSR 0xcc0 (urevavail) does not exist on the RTL (ISSUES Q-21, `csr_regfile.sv:1079`), so a read is an
+  illegal instruction. QEMU implements it, so every QEMU record passed.
+- **The gap:** Q-21's rule ("never read 0xcc0") reached the module but not the application runtime. All three images
+  read it twice, in `malloc` and `realloc`. The images boot 2 ran had the same two reads; the delin faulted first.
+
+**Ruled by the runtime lane:**
+- The compiler lane removes the reads from the runtime, whose availability signal is the hardware's pressure event, and
+  rebuilds the images.
+- The RTL lane makes 0xcc0 and 0x5c0 illegal by default in QEMU and re-pins.
+- The Tier 1 and Tier 2 app-step records are re-made on that pin before anything is called a pass.
+- Boot 3-T1 repeats on the rebuilt images with this pre-registration, the hashes moved and a `qemu-csr` branch added:
+  cause 2 whose tval is a Zicsr instruction on 0xcc0 or 0x5c0 means the read was not removed, kit side.
+
+**The gate, from here on.** Every staged image goes through `delin-census.py` and `qemu-only-csr-census.py` before it
+is staged. `boot3/stage-boot3.sh` refuses otherwise, and it refuses today's images.
+- The CSR census's positive controls: today's three images read 2 each, and the paged QEMU module 69a7016b reads 2
+  in `vm_open`.
+- Its negative controls: the board module ed24f827 and the QEMU flat module c4440add read 0.
+- A non-ELF input reads NO DATA.
+- The runtime lane has asked for one instrument covering every QEMU-only behaviour: a decode whitelist against the
+  RTL's decoder. These two censuses are its first rules.
+
+**What would have caught it before the boot.** A memory written earlier the same day named the habit: before a boot
+predicted by a QEMU record, list the QEMU-only paths the images take. Q-21 was on dev, and the census is a two-minute
+count, but it was not run for this boot. A habit in memory did not fire under time pressure; a gate in the staging
+script does.
+
+## The vp2 silicon gate (2026-10-18): every staged file against the RTL lane's census table
+
+`vp2-silicon-gate.py` reads `capstone/docs/plans/2026-10-18-vp2-silicon-census.tsv` at run time. A change to the
+table therefore changes the gate.
+- **What it checks:**
+  - every custom-2 and custom-3 instruction, SFENCE.VMA, MRET and SRET, by its row;
+  - every CSR access, by its row, or by the table's CSR-privilege rule when the CSR has no row;
+  - images as `in_context`, modules as `trusted_S`.
+- **Two operand rules:**
+  - a DELIN of a gp-derived operand;
+  - an LDC/STC whose base an integer instruction wrote.
+- **Trusted S, stricter:** an LDC/STC in a module is refused unless a capability instruction wrote its base in the
+  same function, which is v7's contract (Q-23).
+- `delin-census.py` and `qemu-only-csr-census.py` stay as its first two rules.
+- **Controls, all firing:**
+  - boot 2's images: 525/5,983/9,859 gp-derived delins and 2 reads of 0xcc0 each;
+  - boot 3-T1's images: 2 reads each;
+  - boot 1's module 0d62a1bc: 4 integer-base LDC/STC, the first at 0x27d4, boot 1's fault;
+  - the paged module 69a7016b: 0xcc0 and 0x5c0;
+  - the board module ed24f827: 0.
+- **Two false positives were found and fixed before it was trusted:**
+  - the operand scan crossed function boundaries (setjmp read `li a0, 0` from the function before it);
+  - `unimp` (0xc0001073, a deliberate trap on both machines) was read as a CSR write. It is counted apart.
+- **The rebuilt images** (contract 125705371837ea92, sqlite a5942a1add489597, mruby a902e740fc5d3b0f) read 0 refused
+  and 1 candidate each: `libc_exit_fini`'s LDC through a base made by `addi`/`mv` from a capability. The table has no
+  row for an integer ALU instruction on a tagged operand. The RTL lane is asked for one. Until it answers, the
+  candidate holds boot 3-T1's repeat, because a non-empty report does not boot.
+
+## Pre-registered (2026-10-18, before boot 3-T1's repeat): Tier 1 on the Q-21-fixed images
+
+Boot 3-T1 with its images rebuilt once more. The runtime's malloc and realloc no longer read CSR 0xcc0 (the compiler
+lane's fix f6dfd19d9396). Everything else is boot 3-T1's: module ed24f827, launcher, monitor 1e9451a, recipe,
+bitstream, rungs and judge.
+
+**The images** (`<hdd>/v9-kit`, where `<hdd>` is the run host's scratch volume): contract.dom 125705371837ea92, sqlite3.dom a5942a1add489597, mruby
+a902e740fc5d3b0f. Each is exactly 8 instructions shorter than boot 3-T1's: two guarded reads at two sites.
+
+**The gates, run on these exact hashes by `boot3/stage-boot3r.sh` before staging:**
+- `delin-census.py` reads 0/0/0.
+- `qemu-only-csr-census.py` reads 0/0/0 on the images and 0 on the module.
+- `vp2-silicon-gate.py`, against the RTL lane's census TSV, reads 0 refused on all four files.
+  - Each image has one candidate, `libc_exit_fini`'s LDC through an `addi`/`mv`-derived base. On both machines
+    that is cause 24 (the RTL lane: commit_stage.sv:453/878; QEMU translate.c gen_set_gpr).
+  - Each candidate is attributed in `boot3/silicon-gate-attributions.tsv` (the runtime lane's ruling): unreachable,
+    because `.fini_array` has size 0 and `bgeu` at libc_exit_fini+0x44 skips the loop.
+  - The gate verifies that evidence against each image's section header. A row keyed to another hash, or whose
+    evidence fails (the control: /bin/ls's 8-byte .fini_array), is rejected.
+  - The latent defect behind it, pointer arithmetic on a capability lowered to `addi`, goes to the compiler lane.
+
+**The stage** changes in exactly the three images (`stage.SHA256SUMS`; boot 3-T1's is `stage-boot3t1.SHA256SUMS`).
+The firmware is fw_payload ed7c599a132508f5 (Image 92fbb0e2ca4aa45b), gate PASS, with csmint_dispatch and
+_inject_s_trap in the ELF.
+
+**The prediction:** the compiler lane's re-made record on QEMU virtual-capstone-v7 3b8040d5ff6e, binary
+809d1fc107e64515, on which 0xcc0 and 0x5c0 are illegal by default. The fixed arm's serial is
+`<hdd>/csr-pair/fixed/guest/serial.log`, record cbfa22b4c957.
+- `ok` exits 0 with VIRTUAL_APPLICATION_OK.
+- `stale` exits 139 with one `domain fault cause=25` on contract.dom 125705371837ea92.
+- No cause 2 and no "requires capability".
+- Its control arm, on boot 3-T1's images, reproduced boot 3-T1's board line exactly: five faults at cause 2 with
+  address 0xcc002573.
+
+**Rungs:** b0-stats, b0-hello, vm-contract (`boot3/run-tier1-3r.sh ed7c599a132508f5`).
+
+**Predictions:**
+- b0-stats 0 and b0-hello 0.
+- **vm-contract 0, the identity branch.** VIRTUAL_APPLICATION_OK, exit 0, then the stale access denied with cause
+  25, exit 139. This would be the first virtual application on silicon.
+- **The branches** (`boot3/vm-contract-branch3.py`):
+  - `qemu-csr`: cause 2 whose tval is a 0xcc0 or 0x5c0 instruction. The read was not removed, kit side.
+  - `delin`: 26 at map 0 base + 0x1f60, the C-27 glue, kit side.
+  - 24 from S: a remaining integer-based access.
+  - 29 before OK: layout.
+  - Anything else goes to the RTL lane.
+
+The script was dry-run with every pin real and the driver stubbed. It reads boot 3-T1's real transcript as
+`qemu-csr`, a clean one as `identity`, and stops on a wrong firmware.
+
+**Correction (2026-10-18, after the pre-registration above, before its boot's result):** the `libc_exit_fini` sites are
+musl's source doing integer arithmetic through `(uintptr_t)`, not a codegen defect. More to the point, musl's
+`libc_exit_fini` is never called in these images: the runtime's strong `__libc_exit_fini` overrides musl's weak alias,
+and it is capability-correct. The compiler lane's control proved it (C-82, 6ec2d7b380c2). c82-destructor.dom
+a250d387ddfd352d carries the pattern and a one-entry .fini_array, and it exits 0 after running its destructor. The
+board lane's earlier claim to the runtime lane, that any image with a destructor faults at exit, is retracted.
+- The gate is unchanged in what it reports: the instructions are present.
+- Under the RTL lane's TSV row "integer ALU op on a tagged register" (dev 35b14e455880, b29410a7fe1a), the gate now
+  REFUSES them rather than listing them as candidates.
+- The attribution rows carry them, with the evidence checked. Their reason understates the case: the function has no
+  caller at all.
+- A gate refusal is a static pattern, not a predicted fault.
+- Plain JALR through an untagged register is admitted (the TSV's new row): a plain jump, which faults only outside
+  the PCC, and that is dynamic.
+
+### Boot 3-T1's repeat, result (2026-10-18 03:49-03:55): C-27 and Q-21 fixed on silicon; the run reached the first reply and stopped at the adapter's QEMU-shaped empty-slot check (Q-30)
+
+N = 1 boot, both contract runs identical. fw_payload ed7c599a132508f5, module ed24f827, contract.dom 125705371837ea92;
+result lines in `board-tier12/results/board-vp2-tier12-3t1r.result-lines.txt`.
+
+- b0-stats 0 and b0-hello 0, as predicted.
+- **vm-contract 922, branch `other`** (not predicted): `ok` and `stale` both exit 139 with cause 24.
+- **No cause 2 anywhere, so Q-21 is fixed on silicon.** malloc ran past its former 0xcc0 read. The first heap grant
+  went through and the domain resumed, so C-27 holds too.
+
+What the run reads, in order:
+1. Five grants succeed (`CAPSTONE_VM_ADD_OK` slots 0-4). All are made before the first CSRUNV.
+2. The sixth is the first grant made while the domain is paused at a service ECALL (kind 3): reg 10, LINEAR, 8192
+   bytes (on QEMU this grant reads perms 7). It is refused: `CAPSTONE_VM_ADD_REFUSED ... errno=14` (EFAULT).
+   - QEMU 3b8040d5ff6e reads `ADD_OK slot=5` at the same point (record cbfa22b4c957).
+3. The domain's mmap returns failure. Its errno store faults with cause 24 at VA 0x1207c, `sw s1, 0(a0)`.
+   - a0 comes from `__errno_location` (`movc a0, tp; cincoffsetimm a0, a0, -0x124`).
+   - The address 0 - 0x124 says tp's cursor was 0. So the 24 is downstream of the refusal, not a cause in its own right.
+
+**Located.** In the module (ed24f827's source, `<v9-kit>/out/adapter-board/module/capstone_vm.c`) a LINEAR add pins no
+pages, so its -EFAULT returns are:
+- the copies to and from user space;
+- add() :622-623, `slot = t->frame + 8 + r->reg * 2; if (slot[0] || slot[1]) goto unpin;`.
+
+The post-success copy marks the thread terminal. The next CV_STEP would then fail with ESRCH and the launcher would
+die() on it. Instead the board printed `domain fault`, which needs a successful step, so that branch is excluded.
+remap_end() :715-716 carries the same check. It is unreachable in this flat build: `exact_bounds` is false, so
+remap_begin refuses first.
+
+The slot is the frame's x10 at +224, and on silicon it is not empty at a service pause:
+- **RTL (bf3db3175):** the frame IS the paused context's storage (vp2 item D, decision 1). Every escape saves x1..x31,
+  with tags, into the frame's own slots (capstone_dom_switcher.anvil:155-161). The reply resume loads them and zeroes
+  +224.
+- **QEMU:** zeroes the slots at entry and keeps the context in its own state (capstone_supervisor.c:950-969).
+- **The board read +224 itself, indirectly.**
+  - The service's size argument, `args[0]`, is the module's `frame[72]` (+576).
+  - On silicon +576 is written only by the switcher's copy from +224 (dom_switcher.anvil:492).
+  - The launcher reached the grant, so that size was non-zero (exec.c:267-270).
+  - So +224's low word was non-zero at this escape.
+- The QEMU record ran the flat adapter c4440adde0d02347, built from the same source with the same define for the
+  QEMU kernel.
+- The claim-auditor confirmed this localization from source, with the corrections now in this text.
+
+So an adapter that requires +224 to be empty passes only on QEMU. The item D plan asked for this divergence to be
+recorded as a Q-entry (:71-73), and it was not. It is Q-30, filed by the RTL lane.
+
+**Ruled by the semantics owner the same morning:**
+- the RTL's frame is the reference;
+- the adapter overwrites +224 instead of requiring it empty (the compiler lane's module revision);
+- QEMU gains the frame write on escape (the RTL lane, the next pin).
+
+The next run's pre-registration follows when the revised module's hash exists.
+
+## The kit's QEMU firmware with the S-trap injection (capstone-sbi vp2/qemu-kit-inject c170e49, 2026-10-18)
+
+**Why.** Since capstone-sbi 83966bc the FPGA monitor injects a trap from S or U that it does not service into S
+(medeleg cannot route causes 24-30 on this RTL, Q-24). The kit's QEMU firmware did not inject, so the kit's QEMU
+reference answered those traps differently from the board. c170e49 gives the QEMU monitor the same injection, behind
+`CAPSTONE_S_TRAP_INJECT`. Without the define, the QEMU build is byte-identical to 4674ab6, and so are FPGA builds with
+or without it.
+
+**It returns through CEPC, not mepc.** Under cap_mem, QEMU's trap from S or U writes only CEPC
+(cpu_helper.c:1986-1991), and mret returns through CEPC (op_helper.c:352-356). On the RTL, CEPC's cursor and mepc are
+one register (Q-28). So the QEMU block and the FPGA block are paired by behaviour, not by bytes.
+- The first port, f5f1bbe, read and wrote mepc. The claim-auditor refuted it, and it is the control below.
+
+**Recipe:** `qemu-kit-fw/build-kit-qemu-fw.sh <capstone-sbi commit> inject <fresh dir>`.
+- OpenSBI cf344cf3, PLATFORM=generic.
+- The monitor C generated by capstone-c and checked by buildroot 8fd1ea12's check-monitor-asm.py.
+- The define reaches capstone-c and all three of the platform's flag lines (cpp, c, as).
+- fw_jump.elf: c170e49 inject = 2bc1dbbad1cc50d7; f5f1bbe inject = 34bb30a7dcdfb9d1.
+
+**The behavioural pair** (`qemu-kit-fw/run-pair.sh`): run.py on QEMU 3b8040d5ff6e (binary 809d1fc107e64515, one
+context slot) with the v9 images (contract.dom 125705371837ea92) and the flat adapter c4440adde0d02347. Predictions were
+written into the script before it ran.
+
+| arm | prediction at `threads` (the second CSRUNV, refused 29) | reading |
+|---|---|---|
+| c170e49 | INJS 0x1d, then Linux takes the trap at stvec and reports it itself; no INJL, no spin | `INJS` `0x1d`, then `[4.790252] Oops - unkno...`. run.py stops the guest at the first "Oops" (run.py:186-190), so the line is cut by the harness, not by a crash |
+| f5f1bbe | INJS, then INJL with the stale mepc, and a spin to the timeout | `INJS` `0x1d` `INJL` `0x1d` `0xffffffff80003344`, then silence until the 180 s timeout (03:51:16 to 03:54:19) |
+
+Both arms read `normal` as VIRTUAL_APPLICATION_OK first, and both run.py records are FAIL from `threads` on, because
+QEMU now refuses the second context as silicon does (Q-26). The pair shows the injection reaching Linux. It says nothing
+about the virtual tests after `threads`.
+
+## Pre-registered (2026-10-18, before boot 3-T1's third run): Tier 1 with the Q-26 + Q-30 module
+
+The repeat with ONE file changed: the board module, ed24f827 → **0cc4760d21fde17a**, built from llvm-capstone
+457b78f27e10 by the kit's ADAPTER-board step (the compiler lane). Two changes from ed24f827:
+- **Q-26:** contexts serialized on one slot. CV_THREAD_CREATE refuses with -EBUSY while a frame is live. Tier 1 creates
+  no threads.
+- **Q-30:** add() and remap_end() overwrite the reply slot instead of requiring it empty. The emptiness check stays for
+  pre-start grants.
+
+**The pins:**
+- **Module.** In the image by hash (the bake's cpio check). It carries a string absent from ed24f827 ("thread create
+  refused"), and its vermagic is the board kernel's.
+- **Kit gates, on the module.** `qemu-only-csr-census.py` 0, and `vp2-silicon-gate.py` 0 refused (2 conditional, as
+  ed24f827). The images, launcher and scripts are the repeat's, by `stage.SHA256SUMS`, which differs from
+  `stage-boot3r.SHA256SUMS` in that one line.
+- **Firmware.** fw_payload 31abc60d3d27d4be (Image 21e730020b2f6a1d). The monitor is unchanged: 1e9451a, wrapper
+  1269c77, the repeat's defines, and the extracted monitor sources hash as the repeat's.
+- **Preflight.** It reads as for boots 1-3: the DTS-against-bitstream, single-FDT and size-budget checks pass. Its
+  overlay and control checks do not apply to a private baked image.
+- **Scripts.** `boot3/run-tier1-3r3.sh 31abc60d3d27d4be`, with the judge `boot3/vm-contract-branch3r3.py`. The judge is
+  the repeat's plus `reply-slot`. Both were dry-run with every pin real and the driver stubbed
+  (`boot3/dryrun-boot3r3.txt`).
+
+**The QEMU reference:** QEMU 809d1fc107e64515, one slot, the same source's flat module, contract.dom
+125705371837ea92 (the compiler lane's q30-run, run.py 34/41).
+- `ok`: 24 `CAPSTONE_VM_ADD_OK` lines, then VIRTUAL_APPLICATION_OK, exit 0. As (bytes reg perms linear):
+  - pre-start: 524288 3 7 0, 1048576 2 6 0, 16384 10 6 0, 262144 11 6 0, 65536 12 4 0;
+  - then 8192 10 7 1, 16384 10 6 1, 16384 10 7 1, 49152 10 6 1;
+  - then 135168 10 6 1 three times, 32768 10 7 1;
+  - then 135168 10 6 1 seven times, 65536 10 7 1;
+  - then 135168 10 6 1 twice, 8192 10 7 1.
+- `stale`: 12 ADD_OK lines (the same five pre-start; then 8192, 16384, 16384, 49152, 32768, 4096, 4096, all reg 10,
+  linear), then one `domain fault cause=25`, exit 139.
+
+**Rungs:** b0-stats, b0-hello, vm-contract.
+
+**Predictions:**
+- b0-stats 0 and b0-hello 0.
+- **vm-contract 0, the identity branch:** VIRTUAL_APPLICATION_OK with exit 0, then the stale access denied with cause
+  25 and exit 139. The first virtual application on silicon.
+- **The Q-30 reading, in either branch:** the sixth grant, the first made at a service pause, reads
+  `CAPSTONE_VM_ADD_OK slot=5 ... bytes=8192 reg=10 perms=7 linear=1`. With the old module that line cannot appear on
+  silicon.
+- **Recorded beside the verdict:** the grant sequence against QEMU's above. A differing sequence with an identity verdict
+  is still recorded, as a divergence to read. This is the first silicon run of the heap's growth, retirement and mmap
+  paths, and of a page-fault resume, so a stop there is a first reading, not a regression.
+
+**The branches** (`boot3/vm-contract-branch3r3.py`):
+- `reply-slot`: errno 14 at a grant again. The Q-30 change is not in the staged module, kit side.
+- `qemu-csr` or `delin`: kit-side regressions. The images are unchanged, so either would be an instrument fault.
+- `layout`: 29 before OK, kit side.
+- `injected`: a trap from S or U handed to the kernel. Its cause and pc are the reading, for the module (compiler lane)
+  or the RTL lane by what faulted.
+- `monitor-stop`: NODM or INJL.
+- Anything else goes to the RTL lane.
+
+### Boot 3-T1's third run, result (2026-10-18 04:42-04:54): the kernel takes an instruction access fault in the new module's own text, at the rung's first ioctl
+
+Pre-registered at d7a7b6206cf5, N = 1. Result lines in `board-tier12/results/board-vp2-tier12-3t1r3.result-lines.txt`.
+- b0-stats 0 and b0-hello 0.
+- **vm-contract never returned: branch `injected`.** The reading, before any grant:
+  - MTVL:81D2E940, CPMX, INJS:2;
+  - then Linux's own "Oops - instruction access fault" at `vm_ioctl+0xb60 [capstone_vm]`, badaddr 0x81d2e940;
+  - then a kernel panic.
+- **The Q-30 reading was not reached.** The rung stopped before the launcher's first grant.
+
+Located, not attributed:
+- epc ffffffff01113940 and badaddr 0x81d2e940 share their low 12 bits. The fault is the instruction FETCH of the
+  module's own text page, physical 0x81d2e000.
+- The kernel wrote that page at insmod, and its oops dump read the faulting instruction back from it. Data loads and
+  stores reach the page; only the fetch faults.
+- swap_cpmp found no live region covering mtval that was not already loaded in a CPMP entry. Its lookup skips loaded
+  regions, so the reading cannot distinguish:
+  - a hole in the region table;
+  - a loaded entry that covers the page but refused the fetch.
+- On the FPGA, print_regions and print_cpmps print nothing.
+- This boot's carve tags are identical to the repeat's. The repeat's smaller module (ed24f827) ran the same path with
+  its text on other pages.
+- Modelled from R-55's exact-pieces rule (not read): the remainder below the CMA carves is one exact piece
+  [0x80100000, 0xAC000000), which also covers the kernel's own text, so a covering region is predicted to exist.
+
+## Pre-registered (2026-10-18, before the CPMX diagnostic run): the third run again, with the region table reported at a CPMX
+
+**The one change:** the monitor, 1e9451a → capstone-sbi vp2/cpmx-diag 0c772b0.
+- `CAPSTONE_CPMX_DIAG` makes swap_cpmp's CPMX path (FPGA) call `report_cpmx_diag(mtval)`. It reports:
+  - every live region: id, CPMP slot, decoded base and end, permissions (lcc selector 5);
+  - every loaded CPMP entry: id|region, bounds, permissions;
+  - CPHT for a loaded entry that covers mtval.
+- It is read-only (each capability is read and written back, as print_regions does).
+- Without the define, `qemu-kit-fw/monitor-variant-gate.sh 1e9451a vp2/cpmx-diag` reads 0 differing lines on all three
+  configurations.
+
+**The pins:**
+- Firmware e56ec94f185ad5ee: the third run's Image 21e730020b2f6a1d, wrapper 1269c77, the board's four defines plus
+  CAPSTONE_CPMX_DIAG.
+- The dom_stack gate passes (25712 B of 32768 B). `report_cpmx_diag` is in the ELF and swap_cpmp calls it.
+- The stage is the third run's. Rungs b0-stats, b0-hello, vm-contract.
+- Run by `boot3/run-tier1-3r4.sh e56ec94f185ad5ee`, judged by the third run's judge plus `boot3/cpmx-diag-read.py`.
+  Both were dry-run (`boot3/dryrun-boot3r4.txt`).
+
+**Predictions:**
+- b0-stats 0, b0-hello 0.
+- **If the fault recurs** (the same module, the same boot sequence, so likely the same placement), the dump names one
+  branch:
+  - `covered-loaded` with X in the permissions: a loaded entry covers mtval and the fetch was refused anyway, so the
+    RTL's fetch-side check (the RTL lane). The model above predicts this, or the next.
+  - `covered-loaded` without X: the monitor gave Linux a non-executable piece (the monitor's carve).
+  - `covered-unloaded`: swap_cpmp's lookup missed a live covering region (the monitor).
+  - `uncovered`: a hole in the region table (the monitor's carves; R-55's replay is then pointed at this boot).
+- **If it does not recur:** vm-contract reads by the third run's branches, and the run is recorded as placement-dependent
+  with the dump armed.
+
+### The CPMX diagnostic run, result (2026-10-18 04:58-05:09): a LOADED, executable CPMP entry covers the fetch the silicon refused
+
+Pre-registered at 4ed92db89028. N = 2 for the fault. Result lines in
+`board-tier12/results/board-vp2-tier12-3t1r4.result-lines.txt`.
+- **The fault.** b0-stats 0 and b0-hello 0, then the same fault at the same instruction as the third run:
+  - Oops at `vm_ioctl+0xb60`, the instruction right AFTER the module's CSRUNV (`.4byte 0x48b717db` at +0xb5c);
+  - mtval 0x81d2c940 (the module two pages lower, same page offset).
+- **The dump (branch `covered-loaded`, with X).** CPMP entry 3 holds region 14, decoded [0x80100000, 0xAC000000),
+  permissions 0x7, and covers mtval. All 11 loaded entries carry 0x7, and region 14 is the exact piece R-55's model
+  predicted. So the silicon refused an S-mode fetch that, by the time M looked, a loaded executable entry covered.
+  Pre-registered owner: the RTL's fetch side.
+- **Why it depends on placement.** The S caller's FIRST fetch after a CSRUNV escape returned is what faults.
+  - ed24f827: CSRUNV at .text 0x37f4, so the next instruction shares its 64-byte line. Every return worked on boot
+    3-T1 and the repeat.
+  - 0cc4760d: CSRUNV at 0x393c, the last word of its line, so the next instruction (0x3940) starts a new line. It
+    faulted on both boots.
+- **The working hypothesis, sent to the RTL lane with a directed test.** The frontend restarts at the restored pc during
+  the ESCAPE's RESTORE walk (id 0, the pc, first; the CPMP ids later). A fetch that needs a fresh line is then checked
+  against the CPMP state of that moment, and the fault rides the instruction to commit. The test is a CSRUNV at a line
+  end against one mid-line.
+
+## Pre-registered (2026-10-18, before boot r5): Tier 1 and Tier 2 in one boot, the module with CSRUNV line-aligned
+
+**The change.** The module is 82250f627aba01f1: the compiler lane's 457b78f27e10 plus `.balign 64` before CSRUNV in
+run() (`boot3/csrunv-align.patch`). This is a board-lane experiment, not the module's revision.
+- An unmodified rebuild by the same recipe reproduced 0cc4760d21fde17a, the identity control.
+- The variant's CSRUNV sits at .text 0x39c0 (64-aligned), with .text aligned to 64.
+- Both kit gates pass (0 QEMU-only CSRs; 0 refused, 2 conditional).
+- The CPMX diagnostic monitor stays armed: fw_payload 8129241bb6debad2, Image 551f48a9834bbbcd, monitor 0c772b0 with
+  the board's defines plus CAPSTONE_CPMX_DIAG.
+
+**Rungs:** b0-stats, b0-hello, vm-contract, then **vm-suite last** (the image already carries run.py's suite).
+
+**Scripts.** `boot3/run-tier12-r5.sh 8129241bb6debad2`. It runs the judges:
+- vm-contract-branch3r3.py;
+- board-check3.py over the vm-suite rung, with run.py 85461f0e25ab66bf (the module revision's, identical to the kit's)
+  and these eight tests pre-registered false: threads, vm, heap-threads, threads_output, vm_contract, heap_threads,
+  shared_heap_pages_released, cleanup;
+- cpmx-diag-read.py.
+
+The dry run is in `boot3/dryrun-r5.txt`.
+
+**Predictions:**
+- b0-stats 0 and b0-hello 0.
+- **Under the hypothesis:** the return fetch now shares CSRUNV's line, so vm-contract reads the identity branch (exit
+  0, then 139/25). Its sixth grant reads `ADD_OK slot=5 ... bytes=8192 reg=10 perms=7 linear=1` (the Q-30 reading)
+  and its grant sequence is QEMU's 24.
+- **vm-suite: 22 exits and board-check 33 of 41.** Those are QEMU's 34 minus `cleanup`, the compiler lane's boot 4
+  pre-registration (39cf6763d3a6):
+  - threads, vm and heap-threads exit 1 (refused at create);
+  - parallel_one and parallel_two 0;
+  - preempt 143, every deliberate fault 139, sqlite and mruby 0;
+  - no cause 29, no oops.
+- **What refutes the hypothesis:** the same fault at CSRUNV+4.
+- **What narrows it:** a fetch fault at the next line (CSRUNV+0x40) or later inside vm_ioctl. That would mean the window
+  covers more than the restart fetch.
+- Any other stop is read by its branch, with the dump if a CPMX appears.
+
+### Boot r5, result (2026-10-18 05:11-05:22): the line-boundary hypothesis is RETRACTED; the fault is at CSRUNV+4 wherever CSRUNV sits
+
+Pre-registered at ef4747aab249. Result lines in `board-tier12/results/board-vp2-tier12-r5.result-lines.txt`.
+- **The fault, unchanged.** b0-stats 0, b0-hello 0, then the same instruction access fault and panic. epc is
+  vm_ioctl+0xba4 = .text 0x39c4 = CSRUNV + 4, where CSRUNV now starts a 64-byte line: the faulting instruction shares
+  CSRUNV's line and even its 8-byte block. The dump again reads CPMP 3 = [0x80100000, 0xAC000000) RWX covering mtval.
+- **RETRACTED: the explanation the previous section offered** ("only a return fetch that needs a new line faults"). It
+  was a lane-side working hypothesis, sent to the RTL lane as one, and never on a shared branch.
+  - What would have caught it before the boot: the differential it rested on had two modules that differ in many
+    respects (their Q-26/Q-30 code, their sizes, their physical placement), and the line was only the first
+    difference noticed. One matched pair is not a localisation when the pair differs by more than one thing.
+- **What stands, N = 3 boots of two builds of the compiler lane's revision.** The S caller's FIRST fetch after a CSRUNV
+  escape returns (always CSRUNV + 4) is refused, while a loaded RWX CPMP entry covers it when M looks.
+- **Unexplained:** ed24f827's returns (CSRUNV at .text 0x37f4) did not fault, on two boots and many steps.
+
+## Pre-registered (2026-10-18, before boot r6): the compiler lane's module with a monitor that retries the refused fetch
+
+**The change** (from the third run: monitor only). Module 0cc4760d21fde17a again (the stage is the third run's files,
+by hash). The monitor is capstone-sbi vp2/fetch-retry 007d81d: the CPMX diagnostic plus `CAPSTONE_VP2_FETCH_RETRY`.
+- An S/U instruction-fetch access fault whose mtval a LOADED CPMP entry with X covers is not injected. The monitor
+  reports `FRTY:<mepc>`, executes sfence.vma and fence.i, and returns to the faulting pc.
+- A second refusal at the same pc with fewer than 4096 instructions retired since is injected, as before.
+- Define-off byte-identical in every configuration (monitor-variant-gate).
+
+**The pins.** Firmware bbc3cd7e9e1d6b56 (Image 5a3b6462bc2cc6e4, wrapper 1269c77, the board's defines plus
+CAPSTONE_CPMX_DIAG and CAPSTONE_VP2_FETCH_RETRY). The dom_stack gate passes, and swap_cpmp calls
+fetch_retry_covered. Run by `boot3/run-tier12-r6.sh bbc3cd7e9e1d6b56`, dry-run in `boot3/dryrun-r6.txt`. Rungs
+b0-stats, b0-hello, vm-contract, then vm-suite last.
+
+**Predictions:**
+- **If the refusal is transient** (the CPMP state the fetch was checked against at the escape is not what M reads
+  later), the retry succeeds:
+  - FRTY lines at the CSRUNV+4 pc, one per faulting return, and no Oops;
+  - vm-contract identity (exit 0, then 139/25), its sixth grant `ADD_OK slot=5 ... bytes=8192 reg=10 perms=7 linear=1`;
+  - vm-suite 22 exits and board-check 33 of 41 (the eight pre-registered false);
+  - the first virtual applications on silicon.
+- **If it is persistent** (a verdict that sfence.vma and fence.i do not clear), there is one FRTY at that pc, then the
+  guard injects. The CPMX dump and Oops follow as in r4/r5, and the mechanism is the RTL lane's.
+- **The FRTY count is a reading in either case:** how many returns fault.
+
+### Boot r6, result (2026-10-18 05:23-05:55): TIER 1 PASSES ON SILICON, with the fetch retry; Tier 2 stops in `vm`
+
+Pre-registered at 452c1611a52e. Result lines in `board-tier12/results/board-vp2-tier12-r6.result-lines.txt`. The run
+was ended by SIGINT after ~25 minutes without progress. The driver released the board but wrote no board.txt, so the
+lines come from driver.log, scoped to this run's load_image.
+
+**Tier 1: the identity branch, the first virtual application on silicon.** b0-stats 0, b0-hello 0, vm-contract 0.
+- contract.dom `ok` exits 0 with `VIRTUAL_APPLICATION_OK argv env files heap_growth heap_retirement mmap`. Its 24 grants
+  equal QEMU's 24, checked by script, and the sixth is the pre-registered Q-30 line, `ADD_OK slot=5 ... bytes=8192
+  reg=10 perms=7 linear=1`.
+- `stale` is denied with cause 25, exit 139.
+
+**The retry.** It fired twice in the whole boot (FRTY 2), both at retire+0xdc, the instruction after a CSRETIRE, before
+any grant. After that, none of the hundreds of CSRUNV returns faulted.
+- So the refusal is not per escape, and the retry turns it from a kernel panic into a continue.
+- Its mechanism stays with the RTL lane. An rtl-oracle reading of bf3db3175: ENTRY's init strobe zeroes the CPMP bank,
+  the ESCAPE restores the pc first and the CPMPs later, and a kill_s1 guard is meant to cover the window.
+
+**Tier 2 (vm-suite).**
+- normal 0 and threads 1, as pre-registered.
+- `vm`'s first launch read as QEMU's. Its second launch made QEMU's grants up to vm_contract()'s `mmap(8193,
+  PROT_READ)` (16 KiB), then nothing but heartbeats.
+- Between that grant and QEMU's next, vm_contract() runs only `require(p[8192] == 0, "read-only first touch")`.
+
+## Pre-registered (2026-10-18, before boot r7): r6 with a module that reports a repeated page fault
+
+**The change:** only the module, 8fdfa127cf13a7c2 = 0cc4760d21fde17a plus a diagnostic (`boot3/resolve-diag.patch`, a
+board-lane experiment). resolve(), the module's in-step page-fault resolution, prints `capstone_vm: DIAG fault
+repeat=N cause= addr= pc= pte=` when it sees the same pc and address again (at repeats 2, 16, 256 and 65536). The pte is
+the live PTE value via follow_pte.
+- Both kit gates pass.
+- Firmware 684684692449f302, whose monitor sources hash as r6's (007d81d, the retry and CPMX diagnostic armed).
+- Rungs as r6. Run by `boot3/run-tier12-r7.sh 684684692449f302`, dry-run in `boot3/dryrun-r7.txt`.
+- If `vm` stops again, the board lane ends the run by SIGINT once DIAG lines have appeared, or after 10 minutes without
+  progress.
+
+**Predictions:**
+- Tier 1 as r6 (identity), and normal 0 and threads 1.
+- **If `vm` is a fault loop** at the read-only first touch: DIAG lines for one address in the third page of the
+  16 KiB arena, cause 13, pc in vm_contract. The PTE names the reason:
+  - present with A clear: CVA6 faults on A = 0, which QEMU sets in hardware;
+  - not present: the resolution did not reach the page table the domain walks;
+  - present and complete: the domain's view is stale, which goes to the RTL lane with the PTE.
+- **If no DIAG line appears** and `vm` still stalls: the stall is not a repeated fault in resolve(). It is then a wait
+  elsewhere (the slot queue, a lock), read from what the module prints.
+
+### Boot r7, result (2026-10-18 06:00-06:31): Tier 1 identity again (N = 2); `vm` stalls at the same point; the diagnostic was VOID
+
+Result lines in `board-tier12/results/board-vp2-tier12-r7.result-lines.txt`.
+- **Tier 1:** b0-stats 0, b0-hello 0, vm-contract 0 (identity), one retry before the first grant.
+- **vm-suite:** normal 0 and threads 1, then `vm` stalled after the mmap(8193, PROT_READ) grant, as in r6.
+- **No DIAG line, which reads nothing.** The board's console does not show KERN_INFO: the module's own pr_info "thread
+  create refused" is absent here and in r6, while the kernel's pr_warn lines show. The diagnostic was pr_info.
+
+## Pre-registered (2026-10-18, before boot r8): S-24's -ELOOP module, with the PTE printed at pr_warn
+
+**The change: only the module, 4131e4d8763e86dd.** It is the compiler lane's b04983b244e1 (S-24: a resolve repeated past
+64 times for one address and cause fails with -ELOOP and a pr_warn line) plus `boot3/eloop-pte-diag.patch`. The patch
+prints `capstone_vm: DIAG fault repeat=N cause= addr= pc= pte=` at pr_warn at repeats 2, 16 and 65; the PTE comes from
+follow_pte.
+- The unmodified b04983b244e1, rebuilt by the same recipe, reproduces the compiler lane's cc075f9cc5433275.
+- Firmware 7b3f3e9a50de3e58: the monitor is unchanged (007d81d, its sources hash as r6/r7's).
+- Rungs as r7, run by `boot3/run-tier12-r8.sh 7b3f3e9a50de3e58`.
+
+**Predictions:**
+- Tier 1 identity, normal 0, threads 1.
+- At `vm`: DIAG lines with cause 13, an address in the third page of the 16 KiB arena, and the PTE.
+  - **Expected (the A/D candidate, S-24):** the PTE is valid with A (0x40) clear, the same PTE at each repeat. Then the
+    -ELOOP line, `vm` exits non-zero, and the suite continues.
+  - **If the PTE has A set:** the walker's refusal is something else, which goes to the RTL lane with the PTE.
+- The steps after `vm` are read against QEMU's record. Any other read-only first touch is predicted to end the same way.
+
+### Boot r8, result (2026-10-18 06:34-06:46): Tier 1 identity (third boot); vm-suite runs seven steps, `vm` ends on a terminal store fault, and sparse-churn wedges the core
+
+Pre-registered at bc776696ec59. Result lines in `board-tier12/results/board-vp2-tier12-r8.result-lines.txt`.
+- **Tier 1:** b0-stats 0, b0-hello 0, vm-contract 0 (identity), two retries as before.
+- **vm-suite**, in order: normal 0, threads 1, vm 139, nested 0, nested-stale 139/25, heap-threads 1, then a wedge in
+  sparse-churn.
+- **`vm`: the A/D candidate is refuted.**
+  - The store after `mprotect(p, 12288, RW)` faulted (cause 15) at the arena's base + 8192, and it was TERMINAL on its
+    first occurrence.
+  - No DIAG and no -ELOOP line anywhere in the boot, so no fault repeated on the already-pinned path. The prediction
+    "the PTE shows A clear" does not hold.
+  - resolve() returned -EACCES from `if (!same)`. The compiler lane takes it, with a first-fault print of both page
+    pointers next.
+  - QEMU passes this store.
+- **sparse-churn wedged.** The transcript stops mid-line. The apertures show M, a stall, a pending store, and the domain
+  switcher at index 56 with a register write in flight. The trap log names a pc six instructions after the module's
+  CSRUNV. Sent to the RTL lane.

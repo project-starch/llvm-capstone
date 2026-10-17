@@ -1,0 +1,38 @@
+# vp2 Tier 1 boot 3-T1's third run, 2026-10-18 04:42-04:54: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload
+# 31abc60d3d27d4be, module 0cc4760d21fde17a (Q-26 + Q-30), the repeat's images. Pre-registered at lane vp2-tier12
+# d7a7b6206cf5. Result lines only, from run3r3/board.txt and run3r3/SEQ (scoped to this run's load_image); the raw
+# capture is not committed.
+
+DRIVER rc=1 04:53:35; watchdog lines 42
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=NONE oracle=0 NOT-AS-ORACLE
+VM-CONTRACT BRANCH injected: MTVL:81D2E940 INJS:00000002 [no END marker: the rung did not return]
+
+## vm-contract (the reading): the kernel, not the domain, at the rung's first ioctl
+  ### RUNG 3/3 vm-contract ###
+  MTVL:81D2E940
+  CPMX:00000002
+  INJS:00000002
+  [  137.584899] Oops - instruction access fault [#1]
+  [  137.585713] Modules linked in: capstone_vm(O) capstone(O)
+  [  137.587379] CPU: 0 PID: 88 Comm: capstone-vexec Tainted: G           O       6.4.14 #1595
+  [  137.588762] epc : vm_ioctl+0xb60/0x2220 [capstone_vm]
+  [  137.593525]  ra : vm_ioctl+0xbe0/0x2220 [capstone_vm]
+  [  137.603200] status: 0000000200000100 badaddr: 0000000081d2e940 cause: 0000000000000001
+  [  137.611575] Code: 3423 00f5 3783 0209 bc23 03b7 3703 0289 17db 48b7 (3423) 04f9
+  [  137.919701] Kernel panic - not syncing: Fatal exception in interrupt
+  No CAPSTONE_VM_ADD line and no domain fault line precede the oops: the launcher had not made its first grant.
+
+## located (from the transcript and the monitor source; NOT yet attributed)
+  - epc ffffffff01113940 and badaddr 0x81d2e940 share their low 12 bits (0x940), so mtval is the PHYSICAL address
+    of an instruction fetch from the module's own text page (physical 0x81d2e000).
+  - The kernel had written that page at insmod (data stores), and its oops dump read the faulting instruction's
+    bytes back from it (a data load). Only the FETCH faulted.
+  - The earlier part of vm_ioctl, on the previous virtual page, had executed.
+  - The monitor's swap_cpmp (1e9451a, FPGA) found no live region that was NOT already in a CPMP entry and covered
+    mtval. It printed MTVL/CPMX and injected the trap into S (INJS 2 = CAPSTONE_NO_CPMP_REGION). Linux took it as
+    its own instruction access fault and panicked.
+  - On the FPGA, print_regions/print_cpmps print nothing, so the region table at the fault is not in the transcript.
+  - The carve tags of this boot (DBAS/RGID/BASE/ALEN/RCLM/APRM/AREV) are IDENTICAL to the repeat's.
+  - The repeat ran the same path with ed24f827, a smaller module whose text landed on other physical pages.

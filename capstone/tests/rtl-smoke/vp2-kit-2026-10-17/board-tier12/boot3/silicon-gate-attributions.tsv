@@ -1,0 +1,4 @@
+# image sha256/16	address	evidence (checked against the image by the gate)	reason
+125705371837ea92	0x24ce0	fini_array_size=0	unreachable: the do-while over .fini_array is skipped by bgeu at libc_exit_fini+0x44 when start >= end
+a5942a1add489597	0x14d2c4	fini_array_size=0	unreachable: the do-while over .fini_array is skipped by bgeu at libc_exit_fini+0x44 when start >= end
+a902e740fc5d3b0f	0x1a7958	fini_array_size=0	unreachable: the do-while over .fini_array is skipped by bgeu at libc_exit_fini+0x44 when start >= end
