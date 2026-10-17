@@ -161,3 +161,121 @@ illegal at decode, with mtval carrying the bits, and the pipeline now flushes on
 - port the routine into the board monitor (capstone-sbi), where its caller injects the status into S instead of
   printing it;
 - handle a page fault on the MPRV descriptor read, which this arm does not create.
+
+## va-csmint-mon.S: the monitor's path, pre-registered (2026-10-17, before any run)
+
+**Why a second arm.** The runtime lane's conditions for the port (`docs/plans/2026-10-17-vp2-monitor-csmint-port.md`)
+require an arm that exercises the real path:
+1. S issues CSMINT, which traps with cause 2.
+2. An M trap entry builds the MONITOR's frame: S's x[n] at frame + 8n, and S's sp parked in CSCRATCH, as capstone-sbi's
+   `_cap_trap_entry` does.
+3. It calls `csmint_dispatch`.
+4. Either rd is written into the frame and the frame restored, or the refusal is injected into S. S's own stvec
+   handler records scause and stval and steps over the instruction.
+5. S reads rd itself, and M reads the slot back physically.
+
+The arm also has to link the SAME routine the monitor ships, so `va-csmint-mon.S` `#include`s `capstone_csmint.S`
+from the capstone-sbi tree. It does not carry a copy.
+
+**The pinned source:**
+- caplifive-sbi (capstone-sbi), branch `vp2/csmint-emu`, commit **868dd5f**;
+- `capstone_csmint.S` sha256 **77c5f13019379cdfff2f290647331fdd279b7e69115a51386c77fecd4bf7650f**;
+- build with `-I<capstone-sbi at 868dd5f>`, and check the file's sha256 before building. A different hash is a
+  different routine.
+
+**What it adds, beyond the routine:**
+- a descriptor in a page without A (13): the monitor walks the descriptor in software, and never uses MPRV;
+- an sp operand (2, tval the instruction): the monitor keeps S's sp in CSCRATCH;
+- CSNODE's defence. A free head of 0 with a free count of 1 passes the routine's pre-check (64 - 63 + 1 = 2), and
+  CSNODE refuses the header as corrupt (29) inside the window. The window's trap vector catches it, the cause is
+  injected into S, and nothing is written.
+
+**The window's vector.** On the RTL the trap vector is mtvec in both modes (the RTL lane, bf3db3175). The routine
+copies the vector capability with `CCSRRW(s8, ctvec, x0)`, points mtvec at `csm_window_trap` for the window, and
+restores cursor, metadata and tag with one CCSRRW.
+
+**Readings (CAPPRINT, in order: S's a2, a5, a6 per row).** Addresses are this folder's build with `link.ld`. The RTL
+lane's build reads them from `llvm-nm`.
+
+| row | what | a2 (rd), a5 (scause), a6 (stval) |
+|---|---|---|
+| 1 | D1 into slotA | 4, -1, -1 |
+| 2 | descriptor misaligned | -1, 4, desc+4 [0x80008004] |
+| 3 | slot misaligned | -1, 6, slotB+8 [0x80009018] |
+| 4 | base >= end | -1, 29, 0 |
+| 5 | unrepresentable | -1, 29, 0 |
+| 6 | perms > 15 | -1, 29, 0 |
+| 7 | slot PTE without D | -1, 15, slotnod [0x8000a000] |
+| 8 | descriptor page without A | -1, 13, descnoa [0x8000c000] |
+| 9 | rs1 = sp | -1, 2, 0xa0b1165b |
+| 10 | D4 into slotA | 6, -1, -1 |
+| 11 | next-unused 63 (the pre-check) | -1, 30, 0 |
+| 12 | corrupt free head (the defence) | -1, 29, 0 |
+| final | slotA: type, base, end, cursor, perms | 0, dbuf+512 [0x8000b200], dbuf+768 [0x8000b300], dbuf+512, 4 |
+| final | slotB; slotnod; next-unused; the free word | 0, 0; 0; 63; 0x100000000 |
+
+That is 47 values, then pass. Any 0xbad1 or 0xbad2 is a failure of the arm.
+
+**Not covered by either arm** (the plan records it):
+- the monitor's own `_cap_trap_entry` around the hook;
+- the mtval-0 fetch on the fixed decoder.
+vp2 exercises the first. The fetch was exercised by va-csmint-emu on the pre-fix decoder; the monitor's version of it
+is a software-walked fetch, which this arm does not reach.
+
+### va-csmint-mon, first run (the RTL lane, bf3db3175, capstone_csmint.S at 868dd5f with its sha256 checked)
+
+**The build's addresses:** desc 0x8000a000, slotA 0x8000b000, slotB 0x8000b010, slotnod 0x8000c000, dbuf 0x8000d000,
+descnoa 0x8000e000, frame 0x8000f000.
+
+**Rows 1-10 read exactly as pre-registered, 30 values:**
+
+    4 -1 -1 | -1 4 desc+4 | -1 6 slotB+8 | -1 29 0 | -1 29 0 | -1 29 0 | -1 15 slotnod | -1 13 descnoa |
+    -1 2 0xa0b1165b | 6 -1 -1
+
+These all work on the RTL:
+- the frame-building entry;
+- `call` and `ret` into the included routine in capability mode;
+- `CCSRRW(s8, ctvec, x0)` on a pair only `csrw mtvec` had set;
+- the window on the stub;
+- the injection into S's own stvec handler;
+- the MPRV-free software walk of the descriptor's page (13);
+- the sp-operand decode (2, with the bits).
+
+That is two mints through the whole monitor path.
+
+**Row 11 never produced a reading, and the failure is the arm's, not the RTL's or the routine's.** The arm kept its own
+table capability (s8) and RAM capability (s3) in registers across exits, but the return path restores S's registers.
+So m_next63's store went through S's s8, a scalar, and raised 24. The arm's unexpected-trap path then cascaded until
+the cycle limit, and rows 12 and the finals were not reached.
+
+**Fixed:** M re-mints both capabilities at the top of its ecall handling. The readings are unchanged. The re-run is
+requested.
+
+### va-csmint-mon, second run: the monitor's whole CSMINT path validated (the RTL lane, bf3db3175, arm a1f7b5163e7d)
+
+The routine is capstone-sbi 868dd5f, with its sha256 checked. The run passes after 144,709 cycles. The board lane read
+the CAPPRINT operands from the run's own retirement trace (`vp8-wt/.sup/mon2/va-csmint-mon.*.log`):
+
+    4 -1 -1 | -1 4 0x8000a004 | -1 6 0x8000b018 | -1 29 0 | -1 29 0 | -1 29 0 | -1 15 0x8000c000 |
+    -1 13 0x8000e000 | -1 2 0xa0b1165b | 6 -1 -1 | -1 30 0 | -1 29 0 |
+    0 0x8000d200 0x8000d300 0x8000d200 4 | 0 0 | 0 | 0x3f | 0x100000000
+
+**Every value is as pre-registered.** There are 46 of them, not 47: 12 rows of 3 plus 10 finals is 46. The "47" in
+the pre-registration and in the arm's header was a miscount of the table, which itself lists 46.
+
+What this validates on the RTL, beyond the routine arm:
+- the monitor-shaped frame entry, `call` into the included routine, the rd write-back and the frame restore;
+- the injection of every refusal into S's own stvec handler: 4, 6, 29, 15, 13, 2 and 30;
+- the routine's free-identity pre-check (row 11's 30, before the window);
+- **the defence (row 12).** A corrupt free head passes the pre-check, CSNODE refuses it with 29 inside the window,
+  the window's trap vector lands it on the stub, and it reaches S as a 29. The table is unwritten: next-unused is
+  still 63 and the free word still 0x100000000.
+- two mints through the whole path, with the second LINEAR child in slotA and its cursor at the base.
+
+The RTL lane carries the arm, and a pinned copy of the routine (its sha in the testlist comment), as a regression for
+the decode, the flush and the window.
+
+**Not validated here:**
+- the monitor's own `_cap_trap_entry` around the hook (capstone-sbi cb91d7d, behind `CAPSTONE_VP2_CSMINT`). It
+  assembles, and with the flag off it is byte-identical to 234ee66; vp2 exercises it;
+- the mtval-0 fetch path on a decoder that leaves mtval 0.
