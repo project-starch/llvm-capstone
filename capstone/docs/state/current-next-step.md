@@ -16,6 +16,23 @@ start only if acceptance needs them. The Q-entries for the recorded divergences 
 rules, CSRETIRE's answers without a read, the 256-id reserve per context allocation, the item-E refusal of a domain's
 RETURN) are the runtime lane's.
 
+2026-10-17 (board lane): **the board campaign's classic-line items are done except ST100, and vp2's monitor and Tier 3
+inputs are prepared.**
+- **Board, on caplifive_sublet_d93a8d66b:**
+  - R1 warm and cold, landed b58e60fe19c7: 17.97 cycles/node warm shared, and the cold constant 27.62 at nd = 16,384.
+  - M1's five rows, landed df8dbd0f030e: all four conditions as on R-43 v2.
+  - Boot BL, landed 26fd95e2861c: the flag-on CSMINT monitor repeats boot P on every reading.
+  - ST100's pre-boot and its 8.5 h pair run now.
+- **The CSMINT emulation is landed on caplifive-sbi capstone-bootstrap c3293b3, flag off by default.** It is validated
+  in RTL simulation (va-csmint-emu, -mon, -entry, -ft) and on silicon (BL). The flag-on build is vp2-only.
+- **vp2 Tier 3 on the compiler lane's fixed v6 revision:** 20 of 26 bundles run (`tests/rtl-smoke/vp2-kit-2026-10-17/tier3/`,
+  `status.py`). The open items:
+  - `-fno-builtin` in the SDK, for the FFmpeg pool tag loss;
+  - option (iii)'s recorded placement repairs in memcached 0006, wmem 0001 and SQLite memsys5;
+  - the per-port SDK build for cpython and postgres sql.
+  All three are with the compiler lane.
+- **The lead's own word is still needed** for the vp1 flash on 9ed9a2594. The earlier answer named 4b958dc3f.
+
 2026-10-14: **TWO BITSTREAMS IN SYNTHESIS, both pre-registered on dev before the handoff.** The synth lane needed
 the lead's word in ITS session (a go relayed from another lane does not count); it came, and the FP build started
 03:36 UTC, the elaboration-only pass of the Sublet tip ran clean in parallel, and the Sublet build followed (second
