@@ -112,3 +112,35 @@ s1-revoke-gap-2026-10-14/PREREG.md) are reported. The comparator is `cmp-s1gap.p
 - an empty reference is an error.
 
 The S-16 set (98 readings identical across bitstreams) and the Sublet floor keep the exact rule.
+
+**Amended at 20:24, before the retry (2026-10-17): an image that never started is re-run once.**
+
+At 20:03 the session's S-16 arm s16st-esc-n8 never ran its image. The JTAG `load_image` timed out ("[riscv.cpu] Timed
+out after 120s waiting for busy to go low") before `continue`, so the arm produced no reading, and S-16 read 17 of 18
+arms identical to d93a8d66b. The stop rule is about readings that differ, and this arm has none. Two sources say how to
+treat it:
+- the same event on 36a641e0b (2026-10-03) was re-run once with the same image
+  (`sup-bare-2026-10-03-ladder/results/board-36a641e0b.result-lines.txt:7-9`);
+- the board-run skill classifies JTAG errors as infra, to retry.
+
+The rule:
+- An arm whose run log has no `] continue` line and no reading is re-run ONCE, with the same image and record address.
+- An arm that started is never re-run: its reading stands.
+- A second non-start is a missing reading, and stops the session.
+- More than two non-starts in one set point at the board, not an arm: hold for the lead.
+
+`continue-vp1.sh` applies it, and acts only if that non-start is the session's only failure (every other gate line
+passed). It then:
+- writes a new SEQ section carrying the session's other gate lines verbatim beside the new S-16 comparison;
+- applies after-flash.sh's gate to that section, unchanged;
+- runs corpus set 7.
+
+It is stricter than the armed chain in one respect: vp2's chain starts only if set 7 is also identical to d93a8d66b
+(the lead: "if vp1 as expected, go with vp2"). Dry run, with the runner, set 7 and the chain stubbed:
+`results/dryrun-continuation.txt`. Each of its eight branches produced the predicted action.
+
+Found on the way, and fixed before it could fire: vp2's chain waited for a free board with a `ps` pattern that matched
+its own parent (rerun-then-vp2.sh, under vp1-session/), and that wait had no bound. A clean vp1 end would have left the
+board idle. The chain now calls `../vp2-bare-2026-10-17/board-free-wait.sh`, which ignores the caller's ancestors and is
+bounded at 6 h. It was tested two-sided, including against the live session. The earlier chain dry run
+(`../vp2-bare-2026-10-17/results/dryrun-chain.txt`) had stubbed exactly that wait.

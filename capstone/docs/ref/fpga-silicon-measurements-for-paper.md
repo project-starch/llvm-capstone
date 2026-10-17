@@ -6793,3 +6793,27 @@ recipe: FULL=on, FLOAT=on, -O0, a 128 MiB region arena on the domain and a 128 M
 - **Recorded, not predicted:** the native's `BASELINE-WARM INSTRS` is 95,124,732,502 against QEMU's 90,025,116,459. The
   board counts every instruction the hart retired in the interval, kernel work included.
 - **Not established:** N = 1 per arm.
+
+## vp1 on silicon: the physical regression identical to the Sublet bitstream, and vp1's arms as pre-registered (caplifive_vp1_9ed9a2594, 2026-10-17)
+
+vp1's first board session, the gate before vp2. `caplifive_vp1_9ed9a2594.bit` (sha256 `01072623f8f24b20…`, routed WNS
+-15.615) was flashed on the lead's word with readback. The session was pre-registered in
+`capstone/tests/rtl-smoke/vp1-bare-2026-10-17/PREREG.md`, and its rule was to stop on any reading that differs from
+the Sublet bitstream d93a8d66b. Result lines: `results/board-vp1-9ed9a2594.result-lines.txt` there. Every row is
+matched to d93a8d66b's record by image hash.
+
+| set | arms | against d93a8d66b |
+|---|---:|---|
+| S-16 | 18 | 98 of 98 readings identical |
+| Sublet floor | 6 | 77 of 77 readings identical |
+| s1gap | 3 | functional readings identical; one timed reading differs, inside d93a8d66b's own run-to-run spread |
+| corpus set 7 (PostgreSQL c-repros, process-ABI line, same firmware payload) | 5 rungs | 33 of 33 records identical |
+
+- **vp1's own arms read as pre-registered:**
+  - vb-trans, q17-order and vb-trans-plain match vp1's simulated vector and not d93a8d66b's, so the bitstream carries
+    vp1's change;
+  - vb-trans-off, the flag-off build, matches both.
+- **One infrastructure event:** an S-16 arm's JTAG `load_image` timed out before the image started, so it produced no
+  reading. It was re-run once with the same image, under a rule pushed before the retry, and read the record's
+  vector.
+- **Not established:** N = 1 per arm. This is a regression check of the physical profile, not a cost measurement.
