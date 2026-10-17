@@ -6,6 +6,10 @@
 ; effecting delin stays behind in each -- the first copy nulls the shared
 ; register and every later delin faults on an untagged operand.
 ;
+; NOTE: under -capstone-image-gp there is no delin to pair at all (C-27, the ABI
+; asserts a NONLIN gp); that emission is pinned in gp-table-linear-delin.ll.
+; This test covers the ABIs that DO delin, where the fusion is what keeps a
+; LINEAR value from ever having two uses.
 ; selectLGA emits the cincoffset+delin pair as ONE pseudo (PseudoCapGlobalBase),
 ; so no LINEAR value ever has multiple uses. Each materialised base is delin'd
 ; exactly once, at its definition; later copies are of the NONLIN result.
