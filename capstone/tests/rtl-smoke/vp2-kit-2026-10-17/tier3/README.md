@@ -815,3 +815,18 @@ faulted as expected.
   - **(a) CAUGHT 5, every cell equal to the record.**
   - **(b) 29s at a CDERIVE in the cases or controls.** Patch 0003's large chunks are on the plan's list of (iii) derive
     sites. The exact-bounds wrapper kit (Run 1) then separates it.
+
+**Run 5 result: (i).** On arm 6, case 00's fixed arm prints `VERDICT FIXED the fix's bound of 599 keeps every write
+inside its own member`. Its buggy arm prints `VERDICT DEFECT-REPRODUCED` and completes: MISSED, as recorded.
+- The image is a different build, `ffd2170b30b57e5c` against the kit's `bdf538f4859482f3`.
+- The two generic controls fault as expected (28, 25).
+- **So `-fno-builtin` clears case 00's tag loss.**
+- **The mechanism is not established.** The compiler lane withdrew its explanation: in its reduction both compilers
+  tail-call `memcpy` with or without the flag. Why the 10-10 record passed without the flag is also open.
+
+## Run 6: the three FFmpeg pool bundles on arm 6: pre-registered (2026-10-17, before the runs)
+
+`ffmpeg/subobject-repros` (all 9) and `ffmpeg/pool-repros` (both arms, prebuilt rebuilt with arm 6's SDK; the runner's
+`cache_says` checks the SDK path), on the v6-fix kit.
+- **Prediction:** every cell equal to the record: MISSED 9, MISSED 4, CAUGHT 4.
+- **A cell that still faults 24 in pool code is a second shape** that the flag does not cover.
