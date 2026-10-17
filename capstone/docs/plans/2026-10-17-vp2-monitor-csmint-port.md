@@ -11,6 +11,9 @@
   `#include`s the shipped `sbi_capstone.S` and reads all 46 values. The pre-registration stated seven address readings
   absolutely, and they sit 0x1000 lower with the link layout, at the same symbol offsets. Only the entry's C callees
   and its init-time stack and gp are stubbed.
+- The hook's fall-through is validated too (va-csmint-ft, all 26 readings and every path count as pre-registered). That
+  is the branch every Linux `rdtime` takes on a flag-on monitor: a non-CSMINT illegal instruction goes on to
+  `handle_exception`, and the returned value lands in x[rd].
 - Still open: the hook's landing on capstone-bootstrap, after the board moves onto that line. What only vp2 proves:
   the C callees, the init-time stack capability and gp, and Linux's own CSMINT traffic.
 
@@ -85,6 +88,8 @@ days of work, and it is not queued.
 - va-csmint-emu's routine run is the positive control for the mint.
 - va-csmint-entry runs the monitor's own `_cap_trap_entry` around the hook, the shipped `sbi_capstone.S` at cb91d7d,
   with stub C callees. It covers the GPR save and restore, the hook and `return_to_sumode`.
+- va-csmint-ft runs the hook's fall-through through the same entry: three non-CSMINT illegal instructions reach the
+  `handle_exception` stub, and its return value is written back.
 - The real C callees, the init-time stack capability and gp are exercised only on vp2, by Tier 1's contract.dom.
 
 **Conditions from the runtime lane:**

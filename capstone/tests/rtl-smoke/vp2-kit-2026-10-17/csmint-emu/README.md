@@ -440,3 +440,37 @@ S's four rows:
 - a changed sentinel means the frame;
 - a stub print missing for A, B or C means the hook claimed a non-CSMINT, which is the decode compare;
 - a hang after the stub returns means the return path.
+
+### va-csmint-ft, run: the fall-through validated, every reading and every path count as pre-registered (the board lane, bf3db3175)
+
+The board lane ran it on a private copy of the RTL lane's run tree (`sup-runs/csm-ft`, virtual-profile-2-d cab4ee891,
+RTL bf3db3175), with the RTL lane's runner (`run-sup-ladder.sh`, S12_MEM_DELAY=12, SUP_TRACE).
+- The includes are the same `git archive` export of cb91d7d, with the four sha256s re-checked.
+- The arm is at d2458229ee1e. The ELF's sha256 is b5aa021e744d113e8761ee73559cf736d6f1e1cfaec6ed2f3f3a6a310e8023d3.
+- The run passes after 89,653 cycles.
+- `capprint-retired.py` reads 26 retired prints and 26 raw.
+- A script compares them with the pre-registration: 0 mismatches, `dbuf` = 0x8000c000 from the ELF.
+
+    2 0xc0102bf3 | 0x5106 0x7e51 0x5109 0x5a03 |
+    2 0xf1402bf3 | 0x5106 0x7e54 0x5109 0x5a03 |
+    2 0xb0001bdb | 0x5106 0x7e50 0x5109 0x5a03 |
+    4 -1 -1 | 0 0x8000c000 0x8000c100 0x8000c000 6
+
+**Path counts, all as predicted:**
+- `_cap_trap_entry` 9;
+- `csmint_dispatch` 4;
+- `handle_exception` 3;
+- `handle_trap_ecall` 5;
+- `csm_inject` 0;
+- `csm_window_trap` 0.
+
+**Validated:** the branch every Linux `rdtime` takes on a flag-on monitor:
+- the hook calls `csmint_dispatch`, which says not ours for a `time` read, an M-only CSR read, and a one-bit near-miss
+  of CSMINT's encoding;
+- the entry passes cause 2 to `handle_exception`;
+- the returned value lands in x[rd], from mtval[11:7];
+- mepc advances, and S resumes with its other registers intact.
+
+A real CSMINT after three fall-throughs still mints.
+
+**Still vp2-only:** `handle_exception`'s C body, the real time emulation, on the monitor's own stack and gp.
