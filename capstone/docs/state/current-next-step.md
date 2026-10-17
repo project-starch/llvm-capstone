@@ -1,3 +1,18 @@
+2026-10-18 (boot 2's rulings): **vp2's boot 2 (board lane vp2-tier12 279d993e273d) proved the S-trap injection on silicon and
+exposed two more reference-model gaps, both ruled "the RTL is the reference" and fixed in QEMU: capstone-qemu
+virtual-capstone-v7 852c5bc7677440b95736b5fc22bc158cce3f6479 raises 26 for a DELIN of any non-LINEAR capability (24 for an
+untagged one; Q-25: the glue's delin of a NONLIN gp faulted every virtual step on silicon where QEMU's no-op passed them)
+and holds ONE saved context by default (x-capstone-supervisor-slots, Q-26: QEMU's 32 slots let run.py's parallel steps pass
+where silicon's one slot refuses the second CSRUNV with a cause-29 trap).** Tier 0 at the defaults: m1 74/74 (with the
+DELIN positive control), movc 67/67, sublet-lifetimes 119/119, trusted-linux-u-access 71/71, runtime 69/69, index8 PASS,
+exact-bounds 4/4, fp.sh 60/60 (its three two-application isolation cases set 32 slots for themselves; nothing else does).
+Also answered from the RTL: a refused CSRUNV TRAPS with mcause 29 on both sides (the plan's "refused actions read 29" is
+reworded; the only non-trap 29 is the bad-frame terminal event), discard-and-re-enter is not a resume (the switcher's ENTRY
+zeroes FP state and the CSRs and cannot advance the pc after a service escape; sent to the compiler lane for the module's
+serialization), and action 3 diverges (RTL illegal 2, QEMU 29-or-collect: Q-27, low priority). The board lane's record of
+the three v7 arms is at vp2-tier12 f077f70d1e57 (its trace replay matched every value; the entry source hash matched).
+Open for the RTL lane: the 1 MiB table cross-check arm when the module's dump arrives.
+
 2026-10-18 (v7 arms green): **All three CSMINT emulation arms are green at descriptor v7 on the resident RTL bf3db3175 with
 the gated monitor capstone-sbi vp2/tier1-monitor fba7812 (the v7 routine + the MPP gate the board lane's auditor required +
 the OS-trap injection entry).** va-csmint-mon 81 of 81 as pre-registered on the 729a340 routine, then 0 of 81 differing on

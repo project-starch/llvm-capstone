@@ -1522,6 +1522,49 @@ stack swap is undone; `fault_return_from_domain` refuses to run without an activ
 emulation's register restore is exact on both exits (`sbi_capstone.S:14-45` save, `:163-200` restore, `capstone_csmint.S:13-16`)
 and is not involved.
 
+## Q-25 — DELIN of a NON-LINEAR capability: the RTL refuses with 26, QEMU treated it as a no-op `RULED 2026-10-18 by the semantics owner after vp2's boot 2 (the RTL is the reference: a delin of a non-linear capability is a programming error); QEMU fixed on virtual-capstone-v7 852c5bc7677440b95736b5fc22bc158cce3f6479; the runtime glue's delin of a NONLIN gp is the compiler lane's to remove`
+
+vp2's boot 2 (board lane, vp2-tier12 279d993e273d): every virtual step faulted with cause 26 at contract.dom's `delin a0`
+in `__capstone_cap_init`, right after `scc a0, gp, a0`, because gp is granted NONLIN (`linear = 0`). The RTL's DYN unit
+(`capstone_dyn_unit.anvil:794-801`) raises UNEXPECTED_OPERAND (24) for an untagged rs1 and UNEXPECTED_CAP_TYPE (26) for
+any rs1 that is not LINEAR, NONLIN included; QEMU's `helper_csdelin` (d35af47b163c `op_helper.c:1540-1575`) returned
+early for a NONLIN rd ("treat delin as idempotent rather than faulting") and raised 26 for an UNTAGGED rd where the RTL
+raises 24. The S-15 class (the silicon-mimic note) reached the reference model: QEMU's run.py accepted a glue silicon
+refuses. **Ruling:** the RTL stays; QEMU's default raises 26 on every non-LINEAR rd and 24 on an untagged one. No suite
+depended on the no-op (Tier 0 identical: m1 73/73 then 74/74 with the control, movc 67/67, sublet-lifetimes 119/119,
+trusted-linux-u-access 71/71, runtime 69/69, index8 PASS, fp 60/60, exact-bounds 4/4); the positive control is
+table.S case 21 (`delin_of_nonlin_is_26`: a second DELIN of the same capability reads 26 and the type stays NONLIN).
+The run.py control on the UNFIXED glue must fail at the same delin (cause 26) before the fixed glue passes (the
+compiler lane).
+
+## Q-26 — saved virtual contexts: the RTL holds ONE, QEMU held THIRTY-TWO, so every parallel step passed on QEMU and refuses with 29 on silicon `KIT MISMATCH, pre-registered 2026-10-18 from vp2's boot 2 (parallel_one read the pre-registered 29 trap at its second CSRUNV); QEMU gains x-capstone-supervisor-slots defaulting to 1 on virtual-capstone-v7 852c5bc7677440b95736b5fc22bc158cce3f6479; the module serializes contexts (compiler lane)`
+
+RTL: one saved context in the CSR file (`csr_regfile.sv:152` `sup_runv_used_o // the one slot holds a saved context`,
+`:2868`; the design decision in `docs/plans/2026-10-17-vp2-item-d-csrunv-rtl.md:64`), and commit refuses action 0
+whenever the slot is used and the request is not a resume of the same frame (`commit_stage.sv:274-278`, the trap at
+`:1021-1027`, mcause 29). QEMU (d35af47b163c): `#define SUPERVISOR_SLOTS 32` (`capstone_supervisor.c:27`, a compile-time
+constant), `helper_csrunv` refusing only when no empty slot remains (`:878`), so a second, third, ... frame entered
+while others are paused each took a slot. The 29 at boot 2 came at parallel_one, after sixteen earlier steps had each
+launched and been discarded cleanly, so it is the one-slot refusal and not a silicon reading. **Both closures taken:**
+the QEMU property `x-capstone-supervisor-slots` (default 1, up to 32 by explicit setting, named in the suites that
+need it and never set by a prediction kit; the compiler lane's kit gate parses it beside the test-only LDC property), so
+the reference refuses as silicon does; and the module serializes contexts on vp2 (at most one outstanding). What
+serialization may NOT do: discard (action 1) and re-enter a frame as a substitute for a resume. A fresh ENTRY
+(`capstone_dom_switcher.anvil:157-158`, `:548-552`) loads the PCC and x1..x31 as the escape left them but takes
+satp/srevroot/options from the module's words +0/+8/+56, runs the init strobe (`:190-194`: CSRs zero, mstatus from the
+caller with FS Initial, fcsr 0) and zeroes fpr0..31 (`:207-208`), while RESUME (`:295-345`) restores the FP state from
++656..+912, mstatus from +920 and the hidden words from +928..+944, and adds 4 to the pc only on a service reply; after a
+kind-3 escape the saved pc is the ecall itself and the kernel cannot advance a PCC slot (a scalar store untags it). So
+discard-and-re-enter equals a resume only for an integer-only context paused by a quantum escape.
+
+## Q-27 — CSRUNV action 3: the RTL refuses it at execute as an illegal instruction (2), QEMU refuses it with 29 unless a paused context exists, where it collects `OPEN — low priority, filed 2026-10-18 from the same read; the plan says action 3 is illegal (collection is software)`
+
+RTL: the DYN unit's CSRUNV handler raises ILLEGAL_INSTRUCTION for `rs2.cursor > 2` (capstone_dyn_unit.anvil, func
+CSRUNV), so action 3 never reaches commit. QEMU d35af47b163c `capstone_supervisor.c:881-887`: action 3 with a paused
+call frees identities and writes rd; without one it raises 29. The plan's row for item D says action 3 is illegal and
+collection is software; QEMU's arm is the odd one. No kit issues action 3 today; a one-line QEMU change (action > 2
+illegal) when the next QEMU commit is cut, or a ruling if the collector is wanted in the reference.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
