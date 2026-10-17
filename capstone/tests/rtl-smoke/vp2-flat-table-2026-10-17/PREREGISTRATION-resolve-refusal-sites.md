@@ -79,12 +79,16 @@ readable instead of ambiguous.
   therefore argument-checked by the compiler, not by inspection.
 - **RVC = 0** on both arms. A compressed instruction in the `.ko` hangs the FPGA at `insmod`.
 - All five distinct format strings present in the board object, each with its site-specific tail,
-  plus the banner; `CV_DIAG_TAG = resolve-sites-1`.
+  plus the banner; `CV_DIAG_TAG = resolve-sites-2`.
 
 Module hashes:
 
-- board (linux-6.4.14, flat): `e2088cbd29765997ba308c748153ff9fb9f1269380232018fbacc15ef8bf2d07`
-- QEMU (linux-custom, flat): `f661101a1a70a0cbc1d717b16cb9740cc84e46e5e5d68c2c52f1b90bc3122018`
+- board (linux-6.4.14, flat): `52adaac58db98b9f6bdf15d4e832b1c7b9e70b58f1d51debbad1491c5197b66f`
+- QEMU (linux-custom, flat): `e8e65536cd342609...` (rebuilt with `pc`; see the durable `SHA256SUMS`)
+
+Durable board artifact: `diag-r11/` on the shared scratch volume, with its own `SHA256SUMS`.
+Each line also carries **`pc`** (`t->frame[4]`, the slot `CV_STEP` reports as `r.pc`), so the
+faulting instruction is named rather than inferred.
 
 ## QEMU control run — predicted, before running
 

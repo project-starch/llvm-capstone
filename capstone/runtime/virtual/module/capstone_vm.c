@@ -1023,11 +1023,11 @@ static void pin_ahead(struct context *c, struct arena *a,
  * The prev(...) fields cost nothing -- they are already on the thread for the -ELOOP
  * bound -- and they carry the discriminator: prev addr == this addr with prev cause 13,
  * and cause 15 here, is the read-then-write COW signature that is the hypothesis. */
-#define CV_DIAG_TAG "resolve-sites-1"
+#define CV_DIAG_TAG "resolve-sites-2"
 #define CV_RESOLVE_FAIL(site, fmt, ...)                                            \
     pr_warn("capstone_vm: resolve refused at %s: addr 0x%lx cause %lu need 0x%lx "  \
-            "prev(addr 0x%lx cause %lu rep %u) " fmt "\n",                          \
-            site, address, cause, required,                                         \
+            "pc 0x%lx prev(addr 0x%lx cause %lu rep %u) " fmt "\n",                 \
+            site, address, cause, required, t->frame[4],                            \
             t->last_fault_addr, t->last_fault_cause, t->fault_repeat,               \
             ##__VA_ARGS__)
 
