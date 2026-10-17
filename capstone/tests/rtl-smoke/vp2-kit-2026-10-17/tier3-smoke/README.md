@@ -44,3 +44,23 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
 - **The fix:** board-run.sh sources board.env under `set -a`. bake-manifest.sh checks the initramfs's /capstone.ko by
   hash, against the replacement after the bake and against the stock module after the restore.
 - **The rerun is pending,** on the next free board slot. Until it passes, the backend is not validated on silicon.
+
+## Pre-registered (2026-10-18, before the second smoke boot): the same smoke on the fixed recipe
+
+- **The kit:** `<t3-smoke>/bkit2`, a fresh copy.
+  - It differs from the first boot's kit only in the two fixed scripts and in BOARD_BASE_MANIFEST naming its own
+    copy, which has the same five lines.
+  - board.env, the module, the launcher, the monitor and the defines are unchanged.
+- **The new must-fire check:** the recipe's stub mode now prints what a CHILD process sees of board.env.
+  - The dry run reads `BAKE_REPLACE_KO=/tmp/capstone/r55-table/fpga-pkg-127/module/capstone.ko`.
+  - The same kit with `set -a` removed reads `BAKE_REPLACE_KO=UNSET`. The first boot's stub printed only commands, so
+    it could not show this.
+- **The run:** `smoke.py --board-kit <t3-smoke>/bkit2 --image <t3-smoke>/bin/controls.dom --raw <t3-smoke>/board-run2`.
+- **Predicted:**
+  - The bake prints `cpio /capstone.ko: the replaced module` (f2a2645cc570dcc6, the module the Tier 1 bakes put
+    there), and after the restore, `the stock module`.
+  - b0-stats 0.
+  - The batch rung reads QEMU's three readings: fault cause 28, fault cause 25, exit 75, with `completed=True`.
+- **If control-bounds-malloc hangs again** with the process-ABI module in place, the hang is not the recipe's. It is a
+  silicon reading of `capstone-exec`'s fault path in a corpus image, and it is recorded with the batch rung's last
+  lines.

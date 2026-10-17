@@ -38,6 +38,9 @@ main() {
   done >> "$MAN"
   echo "manifest $(wc -l < "$MAN") files, stage $(du -sb "$STAGE" | cut -f1) bytes" >> "$L"
   if [ "${BOARD_STUB:-}" = 1 ]; then
+    # What a CHILD process sees (the bake is one): the first smoke boot's defect was invisible to a stub that only
+    # printed the commands.
+    echo "STUB child env: $(bash -c 'echo "BAKE_REPLACE_KO=${BAKE_REPLACE_KO:-UNSET} BOARD_BUILDROOT=${BOARD_BUILDROOT:-UNSET}"')"
     echo "STUB bake: bash $KIT/bake-manifest.sh $MAN $IMG"
     echo "STUB firmware: FW_WRAP=$BOARD_FW_WRAP FW_MON=$BOARD_FW_MON FW_IMAGE_DIR=$IMG bash $BOARD_FW_RECIPE $FW \"$BOARD_FW_DEFINES\""
     echo "STUB driver: BAKED_CTL=/test-domains/vbatch/ctl.sh BAKED_RUNGS=\"b0-stats vbatch\" BAKED_TIMEOUT=$TO BAKED_OUT=$W/board.txt in $BOARD_DRIVER_DIR"
