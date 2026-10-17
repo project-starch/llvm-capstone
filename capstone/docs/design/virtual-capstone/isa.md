@@ -219,9 +219,12 @@ QEMU's internally saved continuations.
 | 640, 648 | 8 each | Collection page count, physical page-list address |
 
 **The register slots after an escape (ruled 2026-10-18, Q-30; the RTL is the reference).** On every escape the
-context's x1..x31 are written WITH their tags into the frame's own register slots (+64 + 16·i) and the caller is
-restored over the register file, so a linear capability has one live owner, the frame; the reply resume (action 2)
-loads +224 (x10's slot) and zeroes it. The trusted adapter therefore treats the register slots as the context's live
+context's x1..x31 are written WITH their tags into the frame's own register slots (+64 + 16·i, the PCC at +64) and
+the caller is restored over the register file; the resume loads the slots back (the pc from +64, +4 after a reply),
+and zeroes only +224 (x10's slot) after a reply (action 2); a non-reply resume zeroes nothing, and the restore read
+does not consume, so after every resume the frame keeps tagged copies of x1..x31, LINEAR ones included, beside the
+live registers until a later ENTRY zeroes them (a linearity residual on silicon, recorded with the S-entry below;
+the RTL item for the next bitstream is a consuming resume). The trusted adapter therefore treats the register slots as the context's live
 state and OVERWRITES +224 with the reply; a check that the slot is empty is QEMU-shaped and wrong on silicon (vp2's
 boot 3-T1 repeat stopped on it). QEMU's escape, which kept the callee in its own save state and left the slots
 zero, is brought to the RTL's behaviour in the pin that follows 3b8040d5ff6e; the +576..+639 views and the event
