@@ -9463,6 +9463,49 @@ override from its absence". Neither printed exit 75.
 
 ## Compiler / toolchain (ours)
 
+### C-81 — a constant-size `memcpy` whose operands carry unprovable alignment is expanded as bytes, stripping capability tags `OPEN — COMPILER; found 2026-10-17 from the FFmpeg subobject fault's artifacts, mechanism read out of the lowering. Reproducer, pre-registration and a decline prototype all on lane/compiler-exact-bounds-iii; the prototype's arms are UNRUN. Filed late: the number was in use by three folders and two docs for a day with no entry here, which is the C-27 shape and is why this entry exists`
+
+> **The evidence is a folder, and this entry is a pointer to it, not a copy of it.**
+> `tests/compiler-repros/C81-memcpy-unprovable-alignment-strips-tags/` carries the two-sided
+> reproducer (`repro.c`, `run.sh`), the expansion scanner (`scan-memcpy-expansion.py`) and
+> `PREREGISTRATION-narrow-libcall.md`. The silicon-exposure work is in
+> `tests/rtl-smoke/c81-silicon-exposure-2026-10-17/`.
+>
+> **Mechanism.** A constant-size `llvm.memcpy` whose operands carry `align 1` reaches the final
+> scalar branch of `CapstoneTargetLowering::findOptimalMemOpLowering`, guarded by
+> `!(Op.isAligned(Align(16)) && (Op.size() % 16) == 0)`. That branch caps the unit at 8 bytes and
+> sizes the chunks to `EffAlign`, so a 16-byte capability granule is copied as scalars and the tag
+> does not survive.
+>
+> **The variable is alignment INFERABILITY, not the optimisation level.** IPSCCP turns a static
+> single-call-site copy's unknown alignment into a known one, which is why the same source can be
+> correct at one `-O` and wrong at another, and why a naive two-arm comparison across `-O` levels
+> says nothing. This lane published a "regression between two compilers" from exactly that mistake
+> and retracted it: the two assemblies were one compiler at two optimisation levels.
+>
+> **Siblings, because three defects share the symptom "a copy lost a tag".** C-78 is the provably
+> 16-aligned, non-multiple-of-16 case, fixed and gated on `Op.isAligned(Align(16))`, so its fix
+> cannot reach this one. C-69 is a capability-TYPED access carrying `align 1`, a different lowering
+> stage (unaligned-access legalization of a `c128` access). **The asymmetry is the substantive
+> point:** C-69 is fixable *because the type says capability*, whereas here the IR is type-erased
+> and carries no capability type to key on.
+>
+> **Workarounds, with their limits measured rather than assumed.** `-fno-builtin` is PARTIAL: it
+> misses `__builtin_memcpy` and compiler-synthesised copies. `-mllvm
+> -capstone-lower-memops-via-libcall` is complete at compile time but carries
+> `STATUS: DOES NOT WORK YET` in its own comment block (`CapstoneISelLowering.cpp:110`), with a
+> measured SQLite fault — `helper_cscincoffset: Assertion rs1_v->tag failed` immediately after
+> domain entry. This lane claimed that flag "strictly dominates `-fno-builtin`" and retracted it:
+> the `cl::opt` and the use site had been read, the thirty lines of status above them had not.
+> **Flag status lives above the `cl::opt`, not in its `cl::desc`.**
+>
+> **State of the fix.** A narrow decline prototype is on the lane at `1f339723201e`
+> (`CapstoneNarrowLibcallC81`), declining inside the scalar branch after `EffAlign` when
+> `Limit != ~0U && Op.size() >= 16 && EffAlign < 16`. The `Limit != ~0U` guard is load-bearing: it
+> avoids the documented silent miscompile for `llvm.memcpy.inline`, verified at
+> `SelectionDAG.cpp:8687`, `:8884` and `:9003`. Its three pre-run gates pass. **Its
+> pre-registered arms have not been run**, so nothing here claims the prototype is a fix.
+
 ### C-82 — musl routes function pointers through `uintptr_t` in the init/exit machinery, so the capability is destroyed by construction and the call target is untagged `OPEN as DEAD CODE — PORT (musl). The runtime already overrides every affected entry point, so NO image is exposed; found 2026-10-18 by the board lane's decode-whitelist gate, and the exposure claim RETRACTED the same day by this lane's own positive control`
 
 > **RETRACTION, 2026-10-18, of this entry's own first version and of the report that prompted it.**
