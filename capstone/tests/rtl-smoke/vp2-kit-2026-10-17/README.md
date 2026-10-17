@@ -606,3 +606,56 @@ N = 1 boot, 18 of 18 faults identical).
   - a from-scratch run.py record, in which the old images fail at the delin on the new QEMU as the control;
   - the module's context serialization;
   - the RTL lane's answer on CSRUNV's 29.
+
+## Pre-registered (2026-10-18, before boot 3-T1): Tier 1 on the C-27-fixed images
+
+**The runtime lane's ruling.** Boot 3 is held for Tier 2: vp2 has one saved-context slot (Q-26), and the module does
+not serialize yet. Tier 1 runs now, because vm-contract runs `ok` and then `stale`, each a single context. This boot
+is boot 2 with the three images rebuilt by the C-27 fix and with no vm-suite.
+
+**The images,** from the compiler lane's v8 kit: compiler built at 01b62884c0c7, which contains C-27's fix 299465232cc3 (the
+DELIN dropped under the image-gp ABI).
+- contract.dom f2017064bea77dd2, sqlite3.dom 233640f7193b034c, mruby bba891bc16576d98.
+- `delin-census.py` reads 0 gp-derived delins on all three. The totals fell by exactly the old counts: 530 → 5,
+  5,988 → 5, 9,863 → 4. The instruction counts fell by the same amounts (33,870 → 33,345, and so on), so the
+  instructions were removed, not moved out of the window.
+- The residual 5/5/4 are the allocator glue's `ldc rd; delin rd`. Their operand's type is only known at run time,
+  and the strict-DELIN pin would name any that is not LINEAR.
+
+**Unchanged from boot 2,** checked by hash:
+- module ed24f827b5beb373, capstone-vexec b27afefc09c6cae6, capstone-job c501da210412e23e;
+- the monitor 1e9451a and the firmware recipe;
+- the bitstream.
+
+The stage changes in exactly the three images (`board-tier12/stage.SHA256SUMS`; boot 2's is
+`stage-boot2.SHA256SUMS`). The firmware is fw_payload 2df129f4643a64fe (Image d38b07ac077e598a), gate PASS. The bake
+checked the initramfs by hash, and csmint_dispatch and _inject_s_trap are in the ELF.
+
+**The prediction:** the compiler lane's Tier 1 record on QEMU virtual-capstone-v7 852c5bc76774, which has strict DELIN
+and one context slot by default. Serial: `<v8-kit>/t1-contract/guest/serial.log`; status: `<v8-kit>/status-t1`.
+- It reads `T1_EXIT:ok:0` with VIRTUAL_APPLICATION_OK, then `T1_EXIT:stale:139` with one `domain fault cause=25`.
+- There is no cause 24 or 26 and no delin. The geometry is the flat 1 MiB, 65,536 records.
+- It ran the board's contract.dom bytes. Its module c4440adde0d02347 and launcher a405840dce789345 are the QEMU-kernel
+  builds of the same sources as the board's ed24f827 and b27afefc, not a different revision.
+
+**Rungs:** b0-stats, b0-hello, vm-contract (`board-tier12/boot3/run-tier1-3t1.sh 2df129f4643a64fe`).
+
+**Predictions:**
+- b0-stats 0 and b0-hello 0.
+- **vm-contract 0, the identity branch:** `ok` prints VIRTUAL_APPLICATION_OK and exits 0; `stale` is denied with cause
+  25 and exits 139. This is Tier 1's headline: a virtual application runs on silicon, and its stale access is
+  denied.
+- **The other branches, written down by the runtime lane:**
+  - 26 anywhere: C-27 not fixed in the staged bytes. That is kit side, and the census was wrong. A 26 at map 0 base
+    + 0x1f60 reads as the `delin` branch.
+  - 24 from S: a remaining integer-based access, which the 0-ldc/stc gate says cannot exist.
+  - 29 before VIRTUAL_APPLICATION_OK: header or layout, kit side.
+  - Anything else goes to the RTL lane.
+
+**Two gaps, named:**
+- The prediction for `stale` comes from this new-pin record alone. No earlier board reading exists for it.
+- The ADD_OK geometry on the board comes from boot 2's module, unchanged.
+
+**The judge:** `boot3/vm-contract-branch3.py`, boot 2's branches plus `delin`. It reads boot 2's real transcript as
+`delin`, and a fault 4 bytes off as `other`. The script was dry-run with every pin real and the driver stubbed
+(`boot3/dryrun-boot3t1.txt`).
