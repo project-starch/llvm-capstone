@@ -932,7 +932,34 @@ bundles run: 18 of 26; not run: [('cpython/allocator-boundary-repros', 'virtual-
     the tag in that build is not established.
 - **The pre-registered (iii) rounding exception was not needed:** no CAUGHT 28 became MISSED.
 
-**Status after SQLite (computed by `status.py`): 20 of 26 bundles run; not run: cpython (4) and postgres/sql-repros (2), blocked on the per-port SDK build (soft-float builtins in a hard-float link), which the compiler lane has taken.**
+**Cases 06 and 22, with the 3.22.0 ext source (2026-10-17 13:27-13:34, `tier3-sqlite-ext.sh`).**
+- **The source.** The kit's own cached `sqlite-src-3220000.zip`, at the SHA3-256 that `ports/sqlite/app/prepare-sources.sh`
+  pins (f8695d69...; VERSION 3.22.0), unpacked and passed as `--ext-src`. Kit, tree, controls and runner are the
+  10:46 rerun's.
+- **The 31 cells already read are the check:**
+  - all 33 images of each arm's earlier build are byte-identical in this one, and the two new images are 06 and 22;
+  - all 93 earlier readings (31 cells by three runs) repeat exactly.
+- **Predictions, written before any reading** (`sqlite-ext-PREDICTION.txt`):
+  - virtual-malloc 06 inconclusive and 22 CAUGHT 24 in `editDist3FindLang`, as the record;
+  - nested-pools without exact bounds, cause 29 in `capstone_cap_derive` for both;
+  - with exact bounds, the record: 06 CAUGHT 25 in `idxRemFunc`, 22 CAUGHT 25 in `editDist3FindLang`.
+
+| arm | 06 expert | 22 spellfix | all 33 against the record |
+|---|---|---|---|
+| `virtual-malloc` | inconclusive (= record) | CAUGHT 24 `editDist3FindLang` (= record) | 31 of 33; the two differences are 12 and 24, as above |
+| `virtual-nested-pools`, (iii) | 29 in `capstone_cap_derive` (as predicted) | **CAUGHT 25 `editDist3FindLang` (= record; predicted 29)** | 2 of 33 (18 and 22); the other 31 are cause 29 at the derive |
+| `virtual-nested-pools`, `--exact-bounds` | CAUGHT 25 `idxRemFunc` (= record) | CAUGHT 25 `editDist3FindLang` (= record) | **33 of 33** |
+
+- **One prediction missed:** case 22 under (iii). Its run reaches the stale-vtab fault without first attempting an
+  inexact derive: an attempted one would have stopped it with 29 at the derive, as it stops the other 31.
+  - The prediction applied the other 30 cells' outcome without checking 22's allocation order.
+  - The reading equals the record, so the miss changes no conclusion.
+- **SQLite is now fully read on v6:**
+  - virtual-malloc 31 of 33, with 12 and 24 independent of (iii);
+  - nested-pools 33 of 33 under exact bounds, and under (iii) the plan's recorded Q-15 cost on every cell that
+    derives an inexact child before it faults.
+
+**Status after SQLite (computed by `status.py`, its SQLite rows now the 33-cell runs): 20 of 26 bundles run; not run: cpython (4) and postgres/sql-repros (2), blocked on the per-port SDK build (soft-float builtins in a hard-float link), which the compiler lane has taken.**
 
 **Scope of the `-fno-builtin` result (2026-10-17, from the compiler lane's measured control; now ISSUES C-81).**
 - **The flag diverts only EXPLICIT `memcpy` calls to musl's run-time copy.** `__builtin_memcpy`, and every copy the
