@@ -51,8 +51,8 @@ The current `CSRETIRE` helper ignores rs2.
 | CSR | Address | Meaning |
 |---|---|---|
 | `srevroot` | `0x5c1` | S/M read/write physical lifetime-table base, rounded down to 4 KiB |
-| `urevavail` | `0xcc0` | Read-only available IDs; zero for an invalid/missing table |
-| `scapctl` | `0x5c0` | S/M; bit 0 controls the separate protected-U experiment; read-only bit 8 advertises exact shadow bounds |
+| `urevavail` | `0xcc0` | Read-only available IDs; zero for an invalid/missing table. **QEMU only (Q-21):** absent on vp2 (illegal instruction); the adapter computes `capacity − next + free_count` from the table header instead |
+| `scapctl` | `0x5c0` | S/M; bit 0 controls the separate protected-U experiment; read-only bit 8 advertises exact shadow bounds. **QEMU only (Q-22):** absent on vp2; the silicon adapter never touches it and reads exact bounds as 0 |
 
 `scapctl` is not how the launcher enters virtual C. `CSRUNV` binds both roots
 when admitting a context, then restores them from saved state on resume.
@@ -94,7 +94,7 @@ Context restoration also loads those shadow bounds. This opt-in QEMU profile
 supports mallocng object geometry without allocator-specific instructions;
 it requires more metadata than a tag bit and is not an RTL encoding.
 All checks precede table and slot mutation. Success creates a private senior
-ancestor and a linear child. The scalar ancestor lets the adapter later
+ancestor and a child of the descriptor's type (LINEAR by default, NONLIN with bit 8). The scalar ancestor lets the adapter later
 retire every application derivation under that arena without keeping a REV
 capability in ordinary kernel C state.
 
