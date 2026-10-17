@@ -288,9 +288,12 @@ suites (`virtual-capstone-m1`, `movc-untagged-source`, `trusted-linux-u-access`,
 capabilities into registers from S; it is a test scaffold with no silicon equivalent, no production
 kit sets it, and their passes say nothing about trusted S. The follow-up that retires the property
 is rewriting that bootstrap onto the `CSRUNV` route. The reference QEMU for the virtual profile is
-capstone-qemu `virtual-capstone-v7` f2f15f8fc70c (one commit on d35af47b163c); Tier 0 on it: m1 73/73,
-movc 67/67, sublet-lifetimes 119/119, trusted-linux-u-access 71/71, runtime run.sh 69/69, index8 PASS,
-fp 60/60, exact-bounds 4/4. The adapter obtains
+capstone-qemu `virtual-capstone-v7` 852c5bc76774 (two commits on d35af47b163c: descriptor v7 and the
+scalar-S gate at f2f15f8fc70c; strict DELIN and `x-capstone-supervisor-slots`, default 1 as on
+silicon, clamped 1..32, at 852c5bc76774); Tier 0 on it at the defaults: m1 74/74 (with the DELIN
+positive control), movc 67/67, sublet-lifetimes 119/119, trusted-linux-u-access 71/71, runtime
+run.sh 69/69, index8 PASS, fp 60/60 (three isolation cases set 32 slots explicitly), exact-bounds
+4/4. No prediction kit sets either property. The adapter obtains
 every capability it needs through `CSMINT` (descriptor v7) and never holds one in a register.
 The Q-12 protected-path changes did not change legacy physical C transfers.
 
