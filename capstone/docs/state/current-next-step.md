@@ -1,3 +1,12 @@
+2026-10-18 (v7 arms green): **All three CSMINT emulation arms are green at descriptor v7 on the resident RTL bf3db3175 with
+the gated monitor capstone-sbi vp2/tier1-monitor fba7812 (the v7 routine + the MPP gate the board lane's auditor required +
+the OS-trap injection entry).** va-csmint-mon 81 of 81 as pre-registered on the 729a340 routine, then 0 of 81 differing on
+fba7812 (capstone-ariane virtual-profile-2-c 2639bd078, 7b8c0d979); va-csmint-entry at v7 through the shipped _cap_trap_entry
+81 of 81, identical to mon except the 17 address-valued readings (layout); va-osinject revision 2 23 of 23, with the
+U-origin CSMINT declined by the gate and injected as an illegal instruction (SPP 0, nothing minted). No RTL change. The
+entry arm's v7 source goes back to the board lane's kit. Open for the RTL lane: the 1 MiB table cross-check arm when the
+module's dump arrives.
+
 2026-10-18 (v7 pinned): **QEMU v7 is capstone-qemu `virtual-capstone-v7` f2f15f8fc70c402c9798d2191439785ebd0c33e3, one commit
 on d35af47b163c: helper_csmint reads six words with the routine's refusal order of record and writes both slots with one
 node; the scalar-S LDC and STC refuse with 24 (tval = the base register) unless the test-only property
