@@ -245,6 +245,54 @@ static void node_free_table(struct context *c)
     c->table = NULL;
 }
 static LIST_HEAD(contexts);
+/* Q-26: THE SUPERVISOR SLOT. vp2 has ONE saved-context slot; the processor refuses a CSRUNV action
+ * 0 whenever the slot is used and the request is not a resume of the SAME frame, and that refusal
+ * is a cause-29 trap in S -- which took the kernel with it on vp2's boot 2. So the module must
+ * never issue an entry the hardware would refuse, which means knowing the limit rather than
+ * discovering it.
+ *
+ * A frame OCCUPIES the slot from its first entry until it terminates, not merely while an ioctl
+ * runs: vm_lock already serialises ioctls, but a started frame that escaped on its quantum still
+ * holds the slot between calls. `started && !terminal` is exactly that state, and it is the same
+ * predicate ensure_nodes() already uses at :479 to find a collection owner.
+ *
+ * Read-only after load, default 1 (the silicon value, and QEMU's default since 3b8040d5ff6e). No
+ * kit sets it; a value above 1 is for a machine that really has more slots. */
+static unsigned long supervisor_slots = 1;
+module_param(supervisor_slots, ulong, 0444);
+MODULE_PARM_DESC(supervisor_slots,
+    "saved-context slots the processor has (default 1, as vp2); the module never issues an entry "
+    "beyond this many live frames");
+static DECLARE_WAIT_QUEUE_HEAD(slot_wait);
+/* The wait condition, evaluated WITHOUT vm_lock: it takes the lock itself, because the sleeper
+ * released it. A false wake just re-checks. */
+static bool slot_free_now(void);
+
+/* Live frames across EVERY context, and one of them if asked. vm_lock is held by every caller. */
+static unsigned slot_live(struct cv_thread **holder)
+{
+    struct context *c;
+    struct cv_thread *t;
+    unsigned n = 0;
+    list_for_each_entry(c, &contexts, link)
+        list_for_each_entry(t, &c->threads, link)
+            if (t->started && !t->terminal) {
+                if (holder && !n) *holder = t;
+                ++n;
+            }
+    return n;
+}
+
+/* Evaluated by wait_event_interruptible WITHOUT vm_lock held -- the sleeper released it -- so this
+ * takes the lock itself. A spurious wake simply re-checks. */
+static bool slot_free_now(void)
+{
+    bool free;
+    if (mutex_lock_interruptible(&vm_lock)) return true;   /* let the sleeper return -EINTR */
+    free = slot_live(NULL) < supervisor_slots;
+    mutex_unlock(&vm_lock);
+    return free;
+}
 static u64 allocated_total, high_water, collections_total, reclaimed_total;
 
 static unsigned long run(unsigned long frame, unsigned long action);
@@ -1035,6 +1083,18 @@ retry:
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         if (!r.frame || !find_arena(c, r.frame, PAGE_SIZE)) { rc = -EINVAL; goto out; }
         if (thread_count(c) >= 32) { rc = -ENOSPC; goto out; }
+        /* Refuse at CREATE, not at the join. The caller is itself a live frame -- it escaped to
+         * make this ioctl -- so on a one-slot machine the child could never be entered. Admitting
+         * it anyway is the illegible failure: contract.dom's `threads` busy-waits 100,000,000
+         * iterations on a value the child will never set and then fails an assertion that says
+         * nothing about slots, and `heap-threads` blocks in join for ever. -EBUSY here fails at the
+         * domain's own require(tid > 0, "thread create"), which a pre-registration can state and a
+         * judge can check. */
+        if (slot_live(NULL) + 1 > supervisor_slots) {
+            pr_info_ratelimited("capstone_vm: thread create refused, %lu supervisor slot%s in use\n",
+                                supervisor_slots, supervisor_slots == 1 ? "" : "s");
+            rc = -EBUSY; goto out;
+        }
         t = kvzalloc(sizeof(*t), GFP_KERNEL);
         if (!t) { rc = -ENOMEM; goto out; }
         t->context = c; t->id = ++c->next_thread;
@@ -1079,6 +1139,23 @@ retry:
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
         if (r.reply > 1 || (r.reply != (t->started && t->event == 3))) goto out;
         if (!t->started && (!t->frame[8] || !t->frame[12])) goto out;
+        /* A frame that has not started needs a free slot to enter. Waiting is safe ACROSS
+         * contexts -- two vexec processes never join each other, so run.py's parallel pair simply
+         * serialises and still prints both results -- and is NOT safe within one context, where a
+         * live sibling is the thing that would have to finish first. The create refusal above means
+         * the same-context case cannot normally arise; it is rejected here too rather than
+         * deadlocking if it ever does. vm_lock must be dropped while waiting, so the wait is
+         * outside it and the ioctl restarts. */
+        if (!t->started) {
+            struct cv_thread *holder = NULL;
+            if (slot_live(&holder) >= supervisor_slots) {
+                if (holder && holder->context == c) { rc = -EBUSY; goto out; }
+                mutex_unlock(&vm_lock);
+                if (wait_event_interruptible(slot_wait, slot_free_now()))
+                    return -EINTR;
+                return -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
+            }
+        }
         if (r.reply && !t->reply_cap) {
             t->frame[28] = r.result; t->frame[29] = 0;
         }
@@ -1171,6 +1248,10 @@ retry:
     } else rc = -ENOTTY;
 out:
     TEST_IOCTL_DONE();
+    /* Q-26: one wake covers every way a frame can stop occupying the slot --
+     * terminal exit, a discard, an error path -- instead of enumerating them and
+     * missing one. A spurious wake costs a re-check. */
+    wake_up_all(&slot_wait);
     mutex_unlock(&vm_lock);
     return rc;
 }
@@ -1315,6 +1396,7 @@ static int vm_release(struct inode *inode, struct file *f)
     }
     node_free_table(c);
     mmdrop(c->mm); kvfree(c);
+    wake_up_all(&slot_wait);   /* the released context's frames are gone */
     mutex_unlock(&vm_lock);
     return 0;
 }
