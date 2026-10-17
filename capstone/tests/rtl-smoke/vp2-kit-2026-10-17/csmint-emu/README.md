@@ -498,7 +498,11 @@ with CSMINT's encoding at 2-byte steps. Positive control: 1 hit in va-csmint-ft'
   System.map's `__initramfs_start`, past the kernel's text (to 0x3837b4) and init text (to 0x42c8e0).
 - **The decompressed initramfs:** 124 files, 2 hits, neither an instruction:
   - libm.so.6's hit lies in `.rodata`;
-  - mruby.dom's, at 0xccfbe, straddles two instructions: `stc` at 0xccfbc and `sw` at 0xccfc0.
+  - mruby.dom's, at 0xccfbe, is 2 mod 4, and mruby.dom is RVC-free: its e_flags are 0x0, and its disassembly has
+    394,463 four-byte instructions, no two-byte one and no address that is not 4-aligned. So that offset cannot be an
+    instruction at all. It straddles the `stc` at 0xccfbc and the `sw` at 0xccfc0.
+- **This is a property of BL's image, not of the monitor.** Any other image set under a flag-on monitor would need
+  the same scan.
 
 **What the hook does in this boot, stated before it runs:**
 - **Every illegal-instruction trap from S reaches `csmint_dispatch`, and returns "not ours".** This includes each

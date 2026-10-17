@@ -28,6 +28,16 @@ non-consuming ldc from a read-only page completing (1); the trap handler's mcaus
 source with the flag off (csupctl 0, satp bare): arms 0 and 1 only, arm 1's two readings inverted (0 then 0x5a5a).
 `q17-order`: 0x19 (a cderive from a dead child with a window outside it: the liveness query first), 0x19, trap count 2.
 
+**The monitor that boots on vp1 is flag-OFF, by construction (2026-10-17).** The CSMINT hook arrives only in
+caplifive-sbi cb91d7d, behind `CAPSTONE_VP2_CSMINT`. vp1's first session boots no monitor that has it:
+- the bare arms above run with no monitor at all;
+- corpus set 7's firmware 1d2bbbf37f63f435 is wrapper 1269c77 + monitor ebe0a25, whose tree has neither
+  `capstone_csmint.S` nor the hook.
+
+**Boot BL's flag-on firmware (26bc4b23c520d9d6, `vp2-kit-2026-10-17/csmint-emu/README.md`) is vp2-only. It must never
+boot on vp1.** vp1 has no srevroot (that is item A, vp2's). Under that monitor a valid CSMINT reaches `csrr 0x5C1`
+(`capstone_csmint.S:189`), traps illegal in M into the non-reentrant `_cap_trap_entry`, and wedges, as on d93a8d66b.
+
 ## Positive controls on the resident bitstream (the same images on caplifive_sublet_d93a8d66b)
 
 | image | SR | readings (SV, in order), from the simulation of capstone-sublet b7e3287e4 with the same sources |
