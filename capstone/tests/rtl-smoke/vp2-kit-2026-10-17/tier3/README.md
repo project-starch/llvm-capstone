@@ -499,6 +499,9 @@ else.
     the same access shape: `ffmpeg/plain-temporal-repros` 13 x 25, `memcached/plain-temporal-repros` 3 x 25.
   - So the record that differs is the older one, and the new runs agree with the newer records.
   - Why the 2026-10-10 runtime read 24 is not established here.
+  - **Not a verdict change.** The schema (`bug-corpora/SCHEMA.md:254`) makes CAUGHT need reached, a fault and an
+    attribution, not a particular cause. Both readings are CAUGHT at the labelled probe, so a fold over verdicts sees
+    no flip. The cause number is recorded beside the verdict, not in it.
 
 ## The prebuilt bundles on the fixed v6 revision: pre-registered (2026-10-17, before the builds)
 
@@ -640,8 +643,13 @@ against it).
   `-cpu rv64,...,x-capstone-u-mode=true,x-capstone-exact-bounds=true`.
 - **So under option (iii) the memcached port's Sublet carve derives children that the compact format cannot hold,
   and QEMU's Q-15 refuses them with 29.** The 2026-10-11 record ran with exact bounds held in the metadata.
-- On vp2's silicon, Q-15 binds inside a virtual context, which is where this arm runs, so this is a vp2 Tier 3
-  blocker for that arm until the carve rounds its children.
+- **This is option (iii)'s recorded cost, confirmed, not a new finding.** The virtual-profile plan
+  (`2026-10-16-virtual-profile-on-silicon.md`, "The cost omits the nested allocators") lists memcached 0006's slab
+  chunks among the twenty derive sites that must place children representably under (iii). It says "the Tier 3 nested
+  arms depend on them". This run shows that on 89ee98be99e5 the memcached carve is not yet repaired. The fix stays
+  with the compiler lane, as port owner.
+- **Corrected the same day:** the first version of this line called it "a vp2 Tier 3 blocker". The runtime lane routed
+  it to the plan's heading, which already covers it.
 - **Not established:** which derive and which size. The compiler lane's cause-29 fault had the same instruction and
   cause through the v6 heap's unrounded `aligned_alloc`. It is fixed at its d4c8d191bcd0, and does not touch this
   corpus.
@@ -651,3 +659,34 @@ against it).
 - Seven programs fault with cause 24 at `cap_malloc_validate`, as on the fixed kit.
 - Case 03's two programs fault 24 at `memset+0x2c` instead, VA 0x11a08.
 - The tag loss does not depend on `add()`.
+
+## Run 3: compiler or runtime, for the FFmpeg pool tag loss: pre-registered (2026-10-17, before the run)
+
+`ffmpeg/subobject-repros` case 00, built twice; asked by the compiler lane. The SDK is the v6-fix SDK both times
+(runtime, libc, builtins, linker and codegen flags), and only `sdk.json`'s `cc` differs:
+
+| arm | clang | identity (`--version`) | binary sha256/16 |
+|---|---|---|---|
+| kit (as run above) | `/tmp/capstone/vp2-prep/v6-fix/llvm-build/bin/clang` | llvm-capstone 85b1daddf230 | ba603a574ce08ea4 |
+| old | `/tmp/capstone/virt-stack/llvm-build/bin/clang`, the 2026-10-10 record's | llvm-capstone bd372e25f5fb | 7977ad4b53d445e8 |
+
+**Outcomes:**
+- **(i) The old clang's build also faults 24:** the compiler is exonerated, and the loss is in the runtime or the
+  sources.
+- **(ii) It does not fault, and case 00 reads as recorded:** a compiler regression in bd372e25f5fb..85b1daddf230.
+- **(iii) `capstone-cc`'s qualification probes refuse the old clang** (C-46, intcap, C-80): no reading.
+
+**Run 3 result: (i), the compiler is exonerated for this case.**
+- **The old arm ran the old clang.** A verbose compile through the copied SDK's `capstone-cc` invokes
+  `/tmp/capstone/virt-stack/llvm-build/bin/clang-22` (bd372e25f5fb). The kit's runs `llvm-dev-current-20261017`
+  (85b1daddf230).
+- **The record's own compiler.** The 2026-10-10 record's `platform.compiler` is
+  7977ad4b53d445e89114468b57371c4c9ecbb412b0b575db474fe169b85dcf16, exactly the old clang's binary.
+- **The image is byte-identical** to the kit-clang build (`bdf538f4859482f3`), and its fixed arm faults the same way:
+  cause 24 at code+0x16eec, `refstruct_pool_uninit+0x78`.
+- **So for this program the two compilers emit identical code.** Built with the record's compiler, the v6 SDK still
+  loses the tag. The loss is in what the SDK brings (runtime, libc), or in the sources against it, not in the
+  compiler change.
+- **Prior art the runtime lane points to:** C-69, FF_FIELD_AT's align-1 capability load lowered to a byte copy. A byte
+  copy would show the same way, but it is a compiler-side mechanism, and this result makes it identical under both
+  compilers. Which of the SDK's pieces drops the tag is not established.
