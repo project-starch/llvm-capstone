@@ -930,6 +930,14 @@ bundles run: 18 of 26; not run: [('cpython/allocator-boundary-repros', 'virtual-
     where virtual-malloc faults", with the emulator agreeing.
   - So the record's cause-24 fault there was a property of the 10-11 virtual build, not of the defect. What dropped
     the tag in that build is not established.
+  - **C-81 is a candidate explanation (a stripped tag reads 24), and it cannot be tested: the record's images are
+    gone** (checked 2026-10-17).
+    - No file under /tmp, /home or /mnt/hdd has either record sha256 (12 dc55fe7c6c2460d0, 24 6fbbd27ef45c7ac8).
+      The search's control, the v6 case-12 image, is found 3 times.
+    - The build SDK the record names (`build.sdk`) no longer exists.
+    - The record's `platform.compiler` hash is the runner's symboliser (SCHEMA.md), and no clang on disk matches
+      it anyway. The search's control, dev147's clang-22, is found 4 times.
+    - So the rows stay "differ, unexplained".
 - **The pre-registered (iii) rounding exception was not needed:** no CAUGHT 28 became MISSED.
 
 **Cases 06 and 22, with the 3.22.0 ext source (2026-10-17 13:27-13:34, `tier3-sqlite-ext.sh`).**

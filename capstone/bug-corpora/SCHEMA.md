@@ -261,7 +261,10 @@ its results under one contract, implemented in `tools/verdicts.py` and tested in
   onto it, so two corpora whose `spatial` differ cannot be summed as one.
 * **The bundle is the only original.** `results/<stamp>/<arm>/` holds `verdicts.jsonl` (each
   Observation with its verdict) and `inputs.json` (configuration, and the compiler, QEMU, firmware,
-  kernel and runner hashes, each said or said to be `unrecorded`). `verdict_bundles` names the
+  kernel and runner hashes, each said or said to be `unrecorded`). **`platform.compiler` is the sha256 of
+  `<--llvm-bin>/clang`, the toolchain the runner symbolises faults with** (`tools/virtualvm.py`, `tools/appvm.py`).
+  It is the build compiler only when the build used that same directory, so a rebuild takes its compiler from the
+  build's own record (`build.sdk`, a build log), never from this field. `verdict_bundles` names the
   current bundle per arm; `tools/derive-verdicts.py` writes each `case.json` arm's `verdict`,
   `verdict_reason`, `verdict_note`, `verdict_from` and `results/verdicts.tsv` from them, and
   `check-corpus.py` fails when either differs from what it would write -- re-judging every stored
