@@ -13,6 +13,7 @@ which and what the 2026-09-05 sweep (`docs/plans/bug-sweep-2026-09.md`) found fo
 | `C22-i128-or-sext-folds-to-constant` | C-22 | `c ? (__int128)-1 : k` dropped the condition | GONE with the c128 carrier; `run.sh` PRESENT on the pre-c128 build, ABSENT on 08-19 and now |
 | `C23-i128-high-half-silently-dropped` | C-23 | an `__int128` computed on its low half only | NOT REPRODUCIBLE on any recorded compiler (the parent of its filing commit is clean, positive control fires); current compiler clean |
 | `H01-beebs-matmult-float-host-headers` | H-01 | BEEBS matmult-float picked up host glibc headers | FIXED; `src/repro.sh` clean |
+| `C81-memcpy-unprovable-alignment-strips-tags` | C-81 (provisional) | a constant-size `memcpy` whose 16-alignment is not provable byte-expands and strips tags; `-fno-builtin` covers only explicit `memcpy` calls | n/a — filed 2026-10-17, after the sweep |
 
 A folder stays after its defect is fixed: the `run.sh` is the instrument that shows the fix, and
 a sweep re-runs it on the compiler the bug was filed against before calling anything GONE.

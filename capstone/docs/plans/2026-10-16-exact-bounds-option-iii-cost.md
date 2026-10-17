@@ -2930,9 +2930,16 @@ sits in the same family as C-69 (under-aligned capability load lowered to a byte
 C-78 (16-aligned copy of a non-multiple-of-16 size strips tags). Whether it is one of those
 or its own entry is the registry owner's call, not mine.
 
-**Why `-fno-builtin` is the right systemic fix and not a workaround for a probe:** it routes
-the copy to musl's `memcpy`, which resolves alignment at run time and preserves tags, at
-every optimisation level and for every copy whose alignment is not provable.
+**Why `-fno-builtin` helps:** it routes an explicit `memcpy` call to musl's, which resolves
+alignment at run time and preserves tags, at every optimisation level.
+
+**CORRECTED 2026-10-17, after an audit:** the sentence that stood here called it "the right
+systemic fix and not a workaround ... for every copy whose alignment is not provable". **"Every" is
+wrong and the framing was wrong.** It covers explicit `memcpy` calls only. Measured, same compiler
+and flags, identical at `-O0`/`-O1`/`-O2`: `__builtin_memcpy` still byte-expands with the flag, and
+so do an under-aligned aggregate assignment and an under-aligned by-value argument copy, neither of
+which mentions `memcpy` in the source at all. It is a partial workaround, not a fix; the fix is in
+the backend. See `tests/compiler-repros/C81-memcpy-unprovable-alignment-strips-tags/`.
 
 ### Which builds are exposed
 
