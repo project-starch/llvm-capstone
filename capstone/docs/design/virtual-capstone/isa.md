@@ -227,6 +227,16 @@ boot 3-T1 repeat stopped on it). QEMU's escape, which kept the callee in its own
 zero, is brought to the RTL's behaviour in the pin that follows 3b8040d5ff6e; the +576..+639 views and the event
 words are unchanged.
 
+**The caller's snapshot at +1024..+2304 must never sit in a page the application can reach (found
+2026-10-18 by the board lane's auditor, filed as an S-entry).** On the RTL every escape restores the S caller
+(pc, x1..x31, the S and M CSRs, FP) from frame+1024 with no check, so a domain holding a capability to a
+child thread's frame page could write the kernel's saved pc/sp/satp/stvec and have the next escape load them.
+QEMU keeps the caller in its own slot and cannot show it. Rule: the trusted adapter makes a child thread's
+frame unreachable by the domain before its first entry (it retires the frame arena's ancestor after pinning the
+page and keeps the page kernel-only; the main thread's frame is a kernel page already); and the RTL item for the
+next bitstream keeps the caller snapshot out of any domain-reachable page. Item D's decision 1 placed the
+snapshot in the frame on QEMU's assumption that the frame is not mapped into the application.
+
 The base frame is 576 bytes; nonzero options require 640 bytes; collection
 requires 656 bytes. Unknown options are rejected. First entry consumes and
 clears all 32 initial PCC/GPR slots. Later resumes use the saved continuation;
