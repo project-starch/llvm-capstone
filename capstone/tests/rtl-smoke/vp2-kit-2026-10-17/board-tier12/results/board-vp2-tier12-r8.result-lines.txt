@@ -1,0 +1,62 @@
+# vp2 boot r8 (Tier 1+2), 2026-10-18 06:34-06:46: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload 7b3f3e9a50de3e58
+# (monitor capstone-sbi vp2/fetch-retry 007d81d), module 4131e4d8763e86dd (the compiler lane's b04983b244e1 + a pr_warn PTE
+# print at repeats 2/16/65; eloop-pte-diag.patch). Pre-registered at lane vp2-tier12 bc776696ec59. Result lines only,
+# from run3r8/board.txt (the driver's per-rung transcript) and SEQ; the raw capture is not committed.
+
+DRIVER rc=1 06:45:49; watchdog lines 45
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=NONE oracle=22 NOT-AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+VM-SUITE board-check rc=2 :: NO DATA: 0 segments for rung vm-suite in /tmp/capstone/tier1/run3r8/board.txt (need exactly 1)
+FRTY retries 2 at       2 FRTY:01110E44 
+DIAG fault repeats: 
+ELOOP lines: 
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_R8_DONE 06:45:49
+
+## Tier 1: identity (the third boot)
+## vm-suite, in order
+  VM_EXIT:normal:0
+  VM_EXIT:threads:1
+  VM_EXIT:vm:139
+  VM_EXIT:nested:0
+  VM_EXIT:nested-stale:139
+  VM_EXIT:heap-threads:1
+  vm 139: the store `p[8192] = 23` after `mprotect(p, 12288, RW)` (address = the 16 KiB arena's base + 8192) took a
+  TERMINAL page fault on its first occurrence, with no DIAG and no -ELOOP line anywhere in the boot:
+    capstone-exec: domain fault cause=15 pc=0x3fa89124ac address=0x3fa8992000 entry=0x3fa890094c code=0x3fa8900000-0x3fa8980000 last=0xc0de0001 preparing=0xc0de0001 sha256=12
+  So no (address, cause) repeated on the already-pinned path, and the A/D loop hypothesis is not what happened here.
+  resolve() returned an error on the first store fault: its already-pinned branch returns -EACCES when the newly
+  pinned page differs from the arena's (`if (!same) return -EACCES;`), the branch the compiler lane identifies. QEMU's
+  `vm` passes this store and fails later, at "execute through mapping PCC" (vm:1).
+  nested 0 (VIRTUAL_NESTED_OK), nested-stale 139/25, heap-threads 1: as QEMU's record.
+  sparse-churn: the core WEDGED mid-step (the transcript stops mid-line in its grant lines: `...slot=12 base=0x3f8f7c6000
+  byt`); QEMU's sparse-churn makes 200000 allocations and 9 collections and exits 0.
+## the wedge apertures (sparse-churn)
+  sw=255 TRAP LOG {seen,mcause[6:0]} 0x89 10001001
+  sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x25 00100101
+  sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0xc4 11000100
+  sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x00 00000000
+  sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x0
+  sw=228 {1,dom_switch_idx[6:0]} 0xb8 10111000
+  sw=229 {load_state[3:0],0000} 0x00 00000000
+  sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+  sw=193 {00000,store_buf_commit_cnt} 0x01 00000001
+  sw=194 {000000,store_state} 0x03 00000011
+  sw=195 {0000,load_state} 0x00 00000000
+  sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0x26 00100110
+  sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x82 10000010
+  sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0x00 00000000
+  sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+  commit pc (scoreboard slot 0; stale after a flush) 0x0000003f8f710e98
+  trap-log mepc 0xffffffff01113b28
+  trap-log tval 0x00000000068c3783
+  rev_node_debug_ex 0x0000001c00000000
+  rev_node_head_ex 0x006d
+  rev_node_serving_idx_ex 0x00000000
+  trap-log mepc = capstone_vm .text 0x3b28 (vm_ioctl+0xb74, `ld a5,104(s8)`), six instructions after the module's
+  CSRUNV at 0x3b10; trap-log tval 0x068c3783 is that instruction's own encoding while the logged mcause is 9 (ecall from
+  S): the latches may come from different traps. The core: privM, stall, a store pending (store_state 3), the domain
+  switcher at index 56 (the last GPR id of a walk) with a register write in flight.

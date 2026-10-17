@@ -1159,3 +1159,21 @@ follow_pte.
     -ELOOP line, `vm` exits non-zero, and the suite continues.
   - **If the PTE has A set:** the walker's refusal is something else, which goes to the RTL lane with the PTE.
 - The steps after `vm` are read against QEMU's record. Any other read-only first touch is predicted to end the same way.
+
+### Boot r8, result (2026-10-18 06:34-06:46): Tier 1 identity (third boot); vm-suite runs seven steps, `vm` ends on a terminal store fault, and sparse-churn wedges the core
+
+Pre-registered at bc776696ec59. Result lines in `board-tier12/results/board-vp2-tier12-r8.result-lines.txt`.
+- **Tier 1:** b0-stats 0, b0-hello 0, vm-contract 0 (identity), two retries as before.
+- **vm-suite**, in order: normal 0, threads 1, vm 139, nested 0, nested-stale 139/25, heap-threads 1, then a wedge in
+  sparse-churn.
+- **`vm`: the A/D candidate is refuted.**
+  - The store after `mprotect(p, 12288, RW)` faulted (cause 15) at the arena's base + 8192, and it was TERMINAL on its
+    first occurrence.
+  - No DIAG and no -ELOOP line anywhere in the boot, so no fault repeated on the already-pinned path. The prediction
+    "the PTE shows A clear" does not hold.
+  - resolve() returned -EACCES from `if (!same)`. The compiler lane takes it, with a first-fault print of both page
+    pointers next.
+  - QEMU passes this store.
+- **sparse-churn wedged.** The transcript stops mid-line. The apertures show M, a stall, a pending store, and the domain
+  switcher at index 56 with a register write in flight. The trap log names a pc six instructions after the module's
+  CSRUNV. Sent to the RTL lane.
