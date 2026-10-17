@@ -1,5 +1,13 @@
-2026-10-17: **THE VIRTUAL PROFILE'S TWO BITSTREAMS ARE IN SYNTHESIS, in parallel, since 03:23 UTC on 2026-10-18 on the lead's
-direct go in the synth lane's session ("go both"); the seals are expected 2.5-3.5 h later, vp2 possibly longer.** vp1 = capstone-ariane `virtual-profile` 9ed9a2594 (item B translation, Q-17, R-56, Q-19), handed off 2026-10-17
+2026-10-18: **BOTH VIRTUAL-PROFILE BITSTREAMS ARE SEALED AND GRADED; the flashes wait on the lead's own word to the board lane,
+vp1 first.** vp1 `caplifive_vp1_9ed9a2594.bit` sha256 01072623f8f24b2081556c193113ca906d68316fdc1de15a55ae8267ddf82905,
+routed WNS -15.615 (0.241 inside the resident d93a8d66b's -15.856), LUTLP-1 0; vp2 `caplifive_vp2_bf3db3175.bit` sha256
+776cdd8c40d985708a09d4d43ab1c5106414ae1347cc4436a711381d2c197475, routed WNS -19.019 (3.404 behind vp1), LUTLP-1 0. Grades
+against the pre-registrations are in the plan doc (dev 6a2062ff338d): both WNS predictions hold on the endpoint rule (the
+worst paths are the resident's capability-metadata forwarding family), both loop-membership predictions are refuted without
+consequence (the router-left loop breaks through R-56's clear-refusal gate on both; vp2 adds a re-cut of the D-cache handshake
+ring), vp1's module-level area rows and vp2's area ranking are refuted: issue_read_operands' own cells grew 10,340 LUT from vp1
+to vp2, the module holding the critical cone, content not shown. The lead can buy the attribution (vp2 minus D3, vp2 minus Q-15;
+one cycle each). The builds ran in parallel from 03:23 UTC on the lead's direct go ("go both"). vp1 = capstone-ariane `virtual-profile` 9ed9a2594 (item B translation, Q-17, R-56, Q-19), handed off 2026-10-17
 with its gates and pre-registration (`caplifive_vp1_9ed9a2594.bit`). vp2 = `virtual-profile-2-d` at bf3db3175 (the tip
 b339f9b0b adds tests and tools only): item A's flat per-context lifetime table, item D's CSRUNV with the frame as the one
 saved context's storage, kinds 1-5 and FP state per context, CSRETIRE in hardware and CSNODE for the monitor's CSMINT

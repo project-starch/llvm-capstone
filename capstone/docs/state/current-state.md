@@ -40,7 +40,9 @@ vp1 (`virtual-profile` 9ed9a2594: translation in C mode) and vp2 (`virtual-profi
 lifetime table, CSRUNV with one saved context and FP state, CSRETIRE/CSNODE, the policy list, the collection strobe, the
 reserve, Q-15's representability refusal, Q-18) are gated in simulation (lint at baseline by name, the 95-test sweep, the
 152-test supervised list, every virtual-profile arm as pre-registered), pre-registered on dev before their handoffs, and
-handed to the synth lane, which launched both in parallel at 03:23 UTC on 2026-10-18 on the lead's direct go. The
+handed to the synth lane, which built both in parallel on 2026-10-18 on the lead's direct go: vp1 sealed at routed WNS -15.615
+(sha256 01072623...2905), vp2 at -19.019 (sha256 776cdd8c...7475), LUTLP-1 0 on both, graded in the plan doc; the flashes wait on
+the lead's own word to the board lane. The
 monitor's CSMINT emulation (the board lane's routine, included at a pinned hash) reads every pre-registered value on the
 vp2 RTL through the shipped trap entry. Silicon still runs `caplifive_sublet_d93a8d66b.bit`. Details and the next step:
 [`current-next-step.md`](current-next-step.md) and the plan's rows for items A, B, D and E.
