@@ -28,6 +28,9 @@ SIL=(-mllvm -capstone-gp-captable -mllvm -capstone-shrink-stack=false
      -mllvm -capstone-shrink-globals=false -mllvm -capstone-merge-string-constants=true)
 PLUG=(--plugin-opt=-capstone-gp-captable --plugin-opt=-capstone-shrink-stack=false
       --plugin-opt=-capstone-shrink-globals=false --plugin-opt=-capstone-merge-string-constants=true)
+# B0_PLUGIN_EXTRA: extra LTO codegen options, e.g. --plugin-opt=-capstone-lower-memops-via-libcall for C-81's
+# compile-only exposure twin (never run). Empty by default, so a normal build is byte-identical.
+read -r -a _plug_extra <<< "${B0_PLUGIN_EXTRA:-}"; PLUG+=("${_plug_extra[@]}")
 RES=$("$CC" -print-resource-dir)
 BASE=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -Xclang -target-feature -Xclang +a
       -ffreestanding -fno-builtin -nostdinc
