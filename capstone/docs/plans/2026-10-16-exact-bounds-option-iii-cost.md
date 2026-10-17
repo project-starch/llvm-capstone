@@ -2804,3 +2804,87 @@ what should have been done before reading counts.
 
 The arm is still worth running: the observation is what it is, and if case 00 clears on arm 6 that
 is a fact about case 00 whether or not the mechanism is yet understood.
+## RETRACTED: there is no measured compiler regression, and my compiler labels were swapped
+
+**Everything I wrote in this document's previous section about a lowering regression between
+`bd372e25f5fb` and `85b1daddf230` is withdrawn.** It rested on two disassemblies I attributed to
+two compilers. Re-measured with the revision printed in the same command as the numbers, the body I
+labelled "the 10-10 compiler, tag kept" is **the kit compiler's own output**:
+
+    85b1daddf230, SDK v6 codegen flags, -O2, NO -fno-builtin -- copy_pair, 21 instructions:
+      auipc a0, %pcrel_hi(.L_MergedGlobals) ; li a1, 1616 ; scc a0, gp, a0 ; delin a0
+      mv a2, a0 ; add a1, a2, a1 ; shrink a0, a2, a1
+      ldc a1, 32(a0) ; ldc a2, 16(a0) ; stc a1, 96(a0) ; stc a2, 80(a0)
+
+Capability loads and stores: **the tag is kept here.** And the four arms settle it completely --
+the two compilers emit **byte-identical** bodies:
+
+| arm | insns | copy | body sha |
+|---|---|---|---|
+| `bd372e25f5fb` plain | 21 | `ldc`x2 + `stc`x2 inline | `0f832598dde9` |
+| `85b1daddf230` plain | 21 | `ldc`x2 + `stc`x2 inline | `0f832598dde9` |
+| `bd372e25f5fb` `-fno-builtin` | 23 | tail-call `memcpy` (`jr t1`) | `9871b6a90cc3` |
+| `85b1daddf230` `-fno-builtin` | 23 | tail-call `memcpy` (`jr t1`) | `9871b6a90cc3` |
+
+**There is no compiler difference in this function at all**, so there is no regression to claim and
+nothing was "lost" between the revisions. The `32x (lbu + sb)` body is reproduced by **neither**
+compiler and I no longer know where it came from. The 16-byte size delta between the two plain
+objects lies elsewhere in the file, not here.
+
+**And both flag settings keep the tag at `-O2`** -- plain inlines the capability copy, `-fno-builtin`
+tail-calls musl. So at this optimisation level the check cannot read FALSE either way, which is the
+real content of the next paragraph.
+
+One more thing the compiler axis was never going to show: `sdk-arm-6/sdk.json` names
+`cc = /tmp/capstone/vp2-prep/v6-fix/llvm-build/bin/clang`, which is a **symlink** resolving to
+`/tmp/capstone/llvm-dev-current-20261017/bin/clang-22`, i.e. `85b1daddf230`. The gate and my arms
+used one compiler throughout. A configured path is not a compiler.
+
+### What survives, because it never depended on the disassembly
+
+* **Arm 6's gate.** `memcpy_constant_size_unknown_alignment` reads FALSE without `-fno-builtin` and
+  TRUE with it, with two distinct probe image hashes (`683a6b6f350a7764` vs `d6de4abcd44a568d`).
+  That is an image-level two-sided reading.
+* **The board lane's run 6.** Arm 6 restores every cell in all three FFmpeg pool bundles --
+  subobject 9/9, pool stock 4/4, pool Sublet 4/4 CAUGHT.
+
+The flag's *effect* is measured. Its *mechanism* is not, and I should have kept those apart.
+
+### The finding that is actually worth keeping, about the instrument
+
+**My `-O2` reproduction does not reproduce the gate**, and that is the informative part. At `-O2`
+*neither* flag setting loses the tag in `copy_pair`, so the image whose check reads FALSE cannot
+have been built the way I just built it. The `-O2` was my choice, not the build's. The build flags are the missing fact; `run-hosted.py` does
+not compile the probe at all, it consumes a prebuilt `hosted.dom`.
+
+And the reason the two can differ at all is a property of the check itself:
+
+    /* The compiler sees only void pointers: no alignment to rely on. */
+    __attribute__((noinline)) static void copy_pair(void *d, const void *s)
+    { memcpy(d, s, sizeof(struct pair)); }
+    ...
+    copy_pair(&pair_opaque, &pair_src);          /* the only call site */
+
+`copy_pair` is `static` with **one** call site and both operands are file-scope statics. `noinline`
+stops inlining; it does **not** stop interprocedural constant propagation. At `-O2` the compiler
+substitutes `&pair_opaque` and `&pair_src` into the body -- which is why the body references
+`.L_MergedGlobals` and never reads `a0`/`a1` -- and then it *knows* both operands are 16-aligned
+statics. **So the check named `memcpy_constant_size_unknown_alignment` does not necessarily test
+unknown alignment.** Whether it does is an optimisation-level property, and the comment asserting
+otherwise is defeated by a pass the comment does not mention. That is a real defect in the probe,
+independent of the flag question, and it is the kind that makes a check read differently for reasons
+that have nothing to do with the thing under test.
+
+### Process
+
+Four instrument failures ran before any number here was trustworthy, each silent:
+`llvm-objdump` absent at the path I used with **stderr folded into the body file**, so "No such
+file" rendered as `0` in all four arms -- the "no data as a zero" shape, in the same week I
+sharpened this repo's rule about it; `--disassemble-symbols` stopping after the prologue; an address
+slice bounded by the next `t` symbol, which is a `.Lpcrel_hi` label 20 bytes in, not the next
+function; and an assembly matcher requiring the label line to equal `copy_pair:` when LLVM emits
+`copy_pair:  // @copy_pair`. The reading only became real once two independent views agreed.
+
+The single cheap check that would have caught the whole thing at the start: **print the compiler
+revision next to each body**. The rule is already in my notes, I did not apply it, and a swapped
+pair of labels is exactly what it exists to prevent.
