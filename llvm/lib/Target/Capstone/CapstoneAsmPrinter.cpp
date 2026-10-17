@@ -1481,8 +1481,10 @@ void CapstoneAsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
 
   // Check if this is a 128-bit sized type that needs special handling.
   // Skip declarations (extern without definition): getKindForGlobal asserts
-  // on them because it is only valid for definitions.
-  if (!GV->isDeclarationForLinker() &&
+  // on them because it is only valid for definitions. Skip common symbols
+  // (-fcommon tentative definitions): they have no section, and the generic
+  // path emits them as .comm with their size and alignment.
+  if (!GV->isDeclarationForLinker() && !GV->hasCommonLinkage() &&
       GV->getValueType()->isSized() &&
       getDataLayout().getTypeAllocSize(GV->getValueType()) == 16) {
 
