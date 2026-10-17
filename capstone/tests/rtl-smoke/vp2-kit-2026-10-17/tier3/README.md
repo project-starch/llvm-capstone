@@ -632,3 +632,22 @@ launcher `32f79ca8`). This is the compiler lane's single-variable test for the m
 
 The binaries carry the v6-fix SDK's runtime, so `--sdk` stays the v6-fix SDK (the runner checks the CMakeCache
 against it).
+
+**Run 1 result: Q-15's (b).**
+- With `x-capstone-exact-bounds=true` the memcached Sublet arm reads CAUGHT 8 and NO-READING:control-failed 1, every
+  cell equal to the record (`compare-cells.py`, 0 mismatches). With the property off it read 8 mismatches.
+- The wrapper's log shows the property on the run's one boot:
+  `-cpu rv64,...,x-capstone-u-mode=true,x-capstone-exact-bounds=true`.
+- **So under option (iii) the memcached port's Sublet carve derives children that the compact format cannot hold,
+  and QEMU's Q-15 refuses them with 29.** The 2026-10-11 record ran with exact bounds held in the metadata.
+- On vp2's silicon, Q-15 binds inside a virtual context, which is where this arm runs, so this is a vp2 Tier 3
+  blocker for that arm until the carve rounds its children.
+- **Not established:** which derive and which size. The compiler lane's cause-29 fault had the same instruction and
+  cause through the v6 heap's unrounded `aligned_alloc`. It is fixed at its d4c8d191bcd0, and does not touch this
+  corpus.
+
+**Run 2 result: (i), the module change is exonerated for the pool's cause 24.**
+- On the pre-fix module kit the same binaries read NO-READING:control-failed 4.
+- Seven programs fault with cause 24 at `cap_malloc_validate`, as on the fixed kit.
+- Case 03's two programs fault 24 at `memset+0x2c` instead, VA 0x11a08.
+- The tag loss does not depend on `add()`.
