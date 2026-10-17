@@ -6,6 +6,8 @@
   "live_in_pin": true,
   "live_proof": "backport filter: upstream fix adfb203a7d (\"Fix a buffer overread in fts5 ... ORDER BY rowid DESC ... corrupt database records\") removes code still present in 3.22.0, and its own regression database (decoded from the fix's hex dump) reproduces on stock 3.22.0 under host ASan as heap-buffer-overflow in sqlite3Fts5GetVarint (results/2026-10-11-host-asan). Recorded as heap-use-after-free until 2026-10-15: the over-read lands in a freed neighbour of the page, and an earlier heap layout put it inside that block, which ASan names a use-after-free (PROVENANCE.md)",
   "allocator_layer": "memsys5",
+  "arena_bytes": 1048576,
+  "arena_bytes_why": "1 MiB on every arm. Five of the eight spatial cases are forced here by reachability -- at 262144 cases 26, 27 and 28 exhaust memsys5 before the defect (pcache1AllocPage dereferences the NULL that 3.22.0 does not check), 29 returns SQLITE_NOMEM, and 00 takes a different path -- so the same value is declared for all eight to keep the arms comparable. Measured 2026-10-17; this is also the value every recorded virtual reading was taken at, while CheriBSD had been running 262144.",
   "object": "the fts5 leaf-page buffer fts5SegIterReverse keeps as pLast, live at the access",
   "lifetime_ender": "not a lifetime defect: a corrupt leaf's header carries a first-rowid offset past the end of the page (iOff=148 on a 24-byte page), and fts5SegIterReverse hands it to the varint decoder unchecked",
   "shape": "read past the end of the record",
@@ -37,7 +39,7 @@
       "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
     }
   },
-  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=14, witnesses=2)",
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=14, witnesses=2). RE-MEASURED 2026-10-17 with one arena on every arm (arena_bytes=1048576) and every arm built from the corpus case.c: virtual-malloc MISSED, virtual-nested-pools CAUGHT cause=28 pc=0x3fa022224c in sqlite3Fts5GetVarint, cheribsd-revocation MISSED with RETURNED rc=0 and probe site 33 reporting hits=4 witnesses=0 -- reached and silent, not a no-reading. The earlier spatial readings were taken with the virtual arms at a 1 MiB header default against CheriBSD's 262144, and with this arm compiling its own copy of the case",
   "fault_sites": [
     "sqlite3Fts5GetVarint"
   ],

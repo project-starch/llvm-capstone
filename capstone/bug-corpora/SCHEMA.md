@@ -88,7 +88,7 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
 `allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `fault_sites`,
-`fault_sites_why`, `duplicate_of`. Optional means
+`fault_sites_why`, `duplicate_of`, `arena_bytes`, `arena_bytes_why`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -129,6 +129,25 @@ A field that is meaningful in exactly one schema belongs in that schema's
 required list, not here. `trigger` is the worked example: it is required for
 `script-trigger`, and keeping it out of the optional set is what lets the
 unknown-field check still catch a stray `trigger` on a `case-json` case.
+
+`arena_bytes` is the size of the nested allocator's arena this case must be built with, in
+bytes. It is **a property of the case, not of the arm**, and every arm must use the same value
+or the arms are not comparable. It matters in two ways. For a SPATIAL case it is load-bearing:
+the arena is the bound that an arena-granular mechanism enforces, so an over-read is visible to
+that mechanism exactly when it leaves the arena, and changing the size changes the verdict --
+SQLite case 31 is MISSED at 1 MiB and CAUGHT at 256 KiB, on the same arm and the same source.
+For a TEMPORAL case the size does not affect detectability at all, since a use-after-free inside
+the arena is invisible at arena granularity whatever the size; the field is then only about
+whether the trigger has enough memory to run, which is why most cases leave it out. SQLite case
+29 needs it for that reason: at 256 KiB its first statement returns SQLITE_NOMEM and the defect
+is never reached.
+
+It was added on 2026-10-17 after the three SQLite builders were found to disagree. Each carried
+its own hand-written list: the physical driver and the CheriBSD builder passed 262144 with
+per-case overrides that were not the same overrides, and the virtual builder passed nothing at
+all and fell through to a 1 MiB header default -- four times the other arms -- so the spatial
+row compared the arenas rather than the mechanisms. Absence means the builder's default. `arena_bytes_why` carries the one-sentence reason, and
+a case that sets the size without saying why is a value nobody can later check.
 
 `fault_sites` names the functions a fault may land in and still be this defect's, for a case whose
 stale access has no labelled probe -- a double free faults inside the manager, a copy routine faults

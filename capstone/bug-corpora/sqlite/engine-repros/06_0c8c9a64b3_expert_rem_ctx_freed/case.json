@@ -6,6 +6,8 @@
   "live_in_pin": true,
   "live_proof": "inspection with line numbers in the pinned extension source: idxPopulateStat1() frees the context and returns without unregistering at sqlite3expert.c:1671, :1676 and :1719, leaving rem() and sample() registered on the user connection. Fixed upstream in 3.46.1",
   "allocator_layer": "memsys5",
+  "arena_bytes": 1048576,
+  "arena_bytes_why": "the value corpus322.sh and build-corpus-cheri.sh already passed for this case; recorded here so every arm reads one source.",
   "object": "the heap IdxRemCtx that rem() was registered with",
   "lifetime_ender": "idxPopulateStat1() frees the context and returns without unregistering the functions that point at it",
   "shape": "free / stale read",

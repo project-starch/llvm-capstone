@@ -18,6 +18,9 @@ set -euo pipefail
 # behaviour is unchanged unless it is set. The toolchain and the pinned SQLite
 # amalgamation are machine-specific and are overridable for the same reason.
 C=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+# THE CORPUS IS THE SOURCE OF TRUTH FOR CASE PROGRAMS. See the source selection
+# in the per-case loop below.
+CORPUS=$(cd "$C/../../../bug-corpora/sqlite/engine-repros" && pwd)
 WORK=${SQLITE_CHERI_WORK:-$HOME/arms/sqlite/cheribsd}
 mkdir -p "$WORK"
 SDK=${CHERI_SDK:-/home/zephyr/cheriBSD/cheri/output/sdk}
@@ -301,11 +304,37 @@ build_group() {
                    else xsrc=("$EXT/expert/sqlite3expert.c"); fi
                    xinc=(-DSQLITE_CORE -I"$EXT/expert") ;;
     esac
+    # WHERE THE CASE PROGRAM COMES FROM. The corpus case.c is what the other two
+    # arms compile: build-virtual.py takes $CORPUS/<dir>/case.c and adds
+    # repro322_memfs.c when the body serves its image through the in-memory VFS.
+    # This arm used to compile a hand-maintained copy under cases/ instead, and
+    # three of those had drifted into a different program -- 03, 21 and 30. Case
+    # 30's copy ran `PRAGMA integrity_check` BEFORE its own trigger, so SQLite
+    # rejected the trigger with SQLITE_CORRUPT, vdbeRecordCompareInt was never
+    # entered, and the arm scored a clean completion that looked like a miss.
+    # The ONLY difference this arm is entitled to is the ISA and the OS, so the
+    # case program is taken from the corpus wherever a corpus directory exists.
+    # cases/ remains for tags that have none.
+    local csrc="$C/cases/$src" cdir
+    cdir=$(awk -F'\t' -v t="$tag" '$1==t{print $2}' "$C/../repro322/tags.tsv")
+    if [ -n "${cdir:-}" ] && [ -f "$CORPUS/$cdir/case.c" ]; then
+      csrc="$CORPUS/$cdir/case.c"
+      # memfs is portable: it includes only sqlite3.h and carves its own static
+      # arena, so the same file serves the freestanding domain and this one.
+      grep -q repro_memfs "$csrc" && xsrc+=("$C/../repro322/repro322_memfs.c")
+    fi
+    # THE ARENA IS THE CASE'S, NOT THIS ARM'S (bug-corpora SCHEMA.md `arena_bytes`). On an
+    # arena-granular arm the arena IS the bound, so two arms built at different sizes are not
+    # comparable -- which is how SQLite case 31 came to read MISSED here and CAUGHT there.
+    local arena=262144
+    if [ -n "${cdir:-}" ] && [ -f "$CORPUS/$cdir/case.json" ]; then
+      arena=$(python3 -I -B -c "import json,sys; print(json.load(open(sys.argv[1])).get('arena_bytes') or 262144)" "$CORPUS/$cdir/case.json") || exit 1
+    fi
     # shellcheck disable=SC2086
     if "$CLANG" "${PURECAP[@]}" -O0 -I"$C" -I"$SRC" \
         "${SQLITE_DEFINES[@]}" "${SQLITE_RESTORE[@]}" "${SYSALLOC_FLAGS[@]:-}" ${PROBE_FLAGS[@]+"${PROBE_FLAGS[@]}"} $cf \
-        -DSQLITE_HEAP_SIZE=262144 ${extra:-} "${xinc[@]:-}" \
-        "$C/cases/$src" "${xsrc[@]:-}" "$so" -lm -o "$OUT/$tag$SUF" 2>"$OBJ/$tag.err"; then
+        -DSQLITE_HEAP_SIZE=$arena ${extra:-} "${xinc[@]:-}" \
+        "$csrc" "${xsrc[@]:-}" "$so" -lm -o "$OUT/$tag$SUF" 2>"$OBJ/$tag.err"; then
       printf "  %-16s OK\n" "$tag"
     else
       printf "  %-16s FAIL (see obj/%s.err)\n" "$tag" "$tag"

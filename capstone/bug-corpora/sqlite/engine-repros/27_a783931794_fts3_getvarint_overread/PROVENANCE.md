@@ -87,3 +87,28 @@ Why both non-Sublet arms are silent is case 23's reason: what is read is **bytes
 arena, through a capability with `tag=1` and whole-arena bounds, and no pointer is forged, so
 there is nothing for the baseline tag check to fire on. Sublet rejects it because the
 sub-allocation's **bounds** are what it checks.
+
+## Re-measured 2026-10-17: one arena on every arm, every arm from the corpus source
+
+Two things were wrong with the earlier spatial readings and both are fixed here. The arms did not
+share an arena -- the virtual images were built at the 1 MiB header default, CheriBSD at 262144 --
+and on an arena-granular arm the arena IS the bound, so the two were comparing arenas rather than
+mechanisms. And this arm compiled its own copy of the case from `ports/sqlite/cheribsd/cases/`
+rather than the corpus `case.c`. Both are closed: the case declares `arena_bytes` (1048576 here),
+all three builders read it, and `build-corpus-cheri.sh` now takes the case program from the corpus.
+
+| arm | verdict | evidence |
+| --- | --- | --- |
+| virtual-malloc | **MISSED** | both controls as declared; reached and silent, by the Sublet catch below on the same build pair |
+| virtual-nested-pools | **CAUGHT** | both controls as declared; `cause=28 pc=0x3fa821d5b4` in `sqlite3Fts3GetVarint`, a declared fault site |
+| cheribsd-revocation | **MISSED** | `RETURNED rc=0`; `poscontrol` exit 162 with `revocation=1` in the same session |
+
+Reachability on CheriBSD is not inferred from the return code, which is what made the first reading
+of case 30 void: probe site 62 was built into this arm's binary -- verified by `strings` to carry the
+site's own payload, not just the runtime's `LB_ARMED` line -- and reports `hits=14 witnesses=1`, every witnessed read `kind=OOB`.
+The defect site is entered and the access happens; the mechanism is silent because its bound is the
+whole arena and the over-read stays inside it.
+
+Both binaries were verified before the run: built after the change, carrying the embedded image
+(`repro_memfs`) rather than `/root/corpus/*.db`, at the declared 1048576-byte arena, and matching
+by sha256 in the guest.

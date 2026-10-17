@@ -49,6 +49,7 @@ declare -A SITE=(
   [fts5vocabeof]=13 [fts5structwrite]=14 [fts5inplace]=15 [634ac14488_0]=16
   [33cf194218_0]=17 [bfe33f80dd_0]=18 [8f5b14a5c2_0]=19 [415540ddaa_0]=20
   [adfb203a7d_0]=20 [expertrem]=21 [rtreecursor]=54 [rtreeinode0]=55
+  [fz06_r2]=65
 )
 # memsys5 arm, then the system-allocator arm for the images that have one.
 # Overridable so a gap can be filled without editing the list: MEM5="a b" SYS="" ./run-probe-cheri.sh

@@ -71,3 +71,35 @@ The free-block chain never runs on this image, which is what distinguishes this 
 As in case 29: the physical `spatial` row reports `cause 5` and the virtual-malloc build
 completes. Base Capstone holds the arena as one capability, so the fault depends on where the
 over-read lands relative to the arena end, which differs between builds.
+
+## Re-measured 2026-10-17: one arena on every arm, every arm from the corpus source
+
+Two things were wrong with the earlier spatial readings and both are fixed here. The arms did not
+share an arena -- the virtual images were built at the 1 MiB header default, CheriBSD at 262144 --
+and on an arena-granular arm the arena IS the bound, so the two were comparing arenas rather than
+mechanisms. And this arm compiled its own copy of the case from `ports/sqlite/cheribsd/cases/`
+rather than the corpus `case.c`. Both are closed: the case declares `arena_bytes` (1048576 here),
+all three builders read it, and `build-corpus-cheri.sh` now takes the case program from the corpus.
+
+| arm | verdict | evidence |
+| --- | --- | --- |
+| virtual-malloc | **MISSED** | both controls as declared; reached and silent, by the Sublet catch below on the same build pair |
+| virtual-nested-pools | **CAUGHT** | both controls as declared; `cause=28 pc=0x3f95a12aa4` in `statDecodePage`, a declared fault site |
+| cheribsd-revocation | **MISSED** | `RETURNED rc=0`; `poscontrol` exit 162 with `revocation=1` in the same session |
+
+Reachability on CheriBSD is not inferred from the return code, which is what made the first reading
+of case 30 void: probe site 64 was built into this arm's binary -- verified by `strings` to carry the
+site's own payload, not just the runtime's `LB_ARMED` line -- and reports `hits=9 witnesses=7`, every witnessed read `kind=OOB`.
+The defect site is entered and the access happens; the mechanism is silent because its bound is the
+whole arena and the over-read stays inside it.
+
+**This case is where the arena is visible.** At 262144 it is CAUGHT on BOTH other arms -- `cause=28`
+in `statDecodePage` on `virtual-malloc`, `SIGPROT si_code=1 PROT_CHERI_BOUNDS` on CheriBSD -- and at
+1048576 it is MISSED on both, from the same source. The over-read leaves a 256 KiB arena and lands
+inside a 1 MiB one; nothing about the mechanisms differs. The declared size is 1048576 because five
+of the eight spatial cases cannot run below it, and the arms must share one value. Both readings are
+real and the smaller one is recorded here rather than left out.
+
+Both binaries were verified before the run: built after the change, carrying the embedded image
+(`repro_memfs`) rather than `/root/corpus/*.db`, at the declared 1048576-byte arena, and matching
+by sha256 in the guest.
