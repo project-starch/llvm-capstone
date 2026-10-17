@@ -1592,6 +1592,26 @@ FPGA and QEMU entries byte-paired, proved by va-osinject on bf3db3175 (predictio
 step with INJS 0x1d on QEMU. Whether QEMU should also write mepc on a trap under cap_mem, to match the RTL's one-cursor
 model, is a question for the next QEMU commit, not a blocker.
 
+## Q-29 — fetch against the PC capability: QEMU and the RTL apply the same four refusals with the same codes, and differ only in their ORDER when two hold at once and in SCOPE (QEMU checks virtual-C blocks only, the RTL every M-with-capmode fetch) `OPEN — low priority, filed 2026-10-18 by the RTL lane after a RETRACTION: the first form of this entry's claim, "QEMU has no fetch check", was wrong and the fix ruled on it was withdrawn the same day; neither residual touches a corpus context`
+
+RTL (bf3db3175): commit checks the fetched pc against the PCC whenever priv is M with capmode and the PCC is tagged
+(`commit_stage.sv:370-393`), a CSRUNV context included: wrong type 26, no X 27, outside the bounds 28, dead 25, tested in
+that order (:379-391), so a dead PCC that is also out of bounds reads 28. A plain JALR/JAL/branch sets no PC metadata
+(`branch_unit.sv:76-100`, `frontend.sv:476-478`): the PCC keeps its bounds and only the cursor moves, and the check is
+on the target. QEMU (`virtual-capstone-v7` 3b8040d5ff6e): `capstone_supervisor.c:982-1062` (`pcc_identity_cause`,
+`pcc_bounds_hold`, `pcc_fetch_cause`, `capstone_pcc_fetch_ok`, `helper_capstone_check_pcc`,
+`helper_capstone_check_pcc_block`) applies the same four refusals with the same codes; the translator ends a block
+before an instruction the PCC would not let it fetch and the block-entry helper re-checks under the PCC of the moment
+(`translate.c:1425-1433`), one-instruction exact. `tests/virtual-capstone-runtime` proves it on 3b8040d5: pcc_bounds (5),
+fetch_full_width (18), cap_execute (3), revoked_pcc (6), revoked_cached_pcc (19), all passing at the default.
+**Residual (b), order:** QEMU tests liveness FIRST (25 before 26/27/28), the RTL LAST; visible only when two conditions
+hold at once, which no kit creates. **Residual (c), scope:** QEMU checks blocks with `ctx->capstone_virtual_c` set, so
+the legacy-C monitor's own PCC is unchecked on QEMU and checked on silicon; a monitor jump outside its PCC faults on the
+board only. The semantics owner's ruling (2026-10-18): the RTL is the reference for both; recorded, not implemented,
+until a kit or the monitor exercises either. The retraction: the "no fetch check" claim came from grepping `pc_cap` in
+two files and dismissing the hits in a third unread, and from not opening the suite that tests exactly this behaviour;
+the census row (`docs/plans/2026-10-18-vp2-silicon-census.tsv`, plain JALR) carries the same correction.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
