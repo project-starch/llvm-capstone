@@ -690,3 +690,29 @@ against it).
 - **Prior art the runtime lane points to:** C-69, FF_FIELD_AT's align-1 capability load lowered to a byte copy. A byte
   copy would show the same way, but it is a compiler-side mechanism, and this result makes it identical under both
   compilers. Which of the SDK's pieces drops the tag is not established.
+
+## wireshark/wmem-repros, both arms, on the fixed revision: pre-registered (2026-10-17, before the runs)
+
+**The runner and its builds.**
+- The runner is the corpus's `shared/run-defects.py`, on a `capstone_vm` VM booted from the v6-fix kit:
+  - its QEMU, Image, fw_jump and rootfs (`-snapshot`);
+  - `--profile virtual`, the launcher `capstone-vexec` and the module `capstone_vm.ko`.
+- **The hosted builds** use the port `ports/wireshark/wmem` with the `capstone-application` preset, against the v6-fix
+  SDK, with `CAPSTONE_LLVM_BUILD_DIR` = the kit's LLVM.
+  - `WM_CORPUS_DIR` = the corpus root for the cases, and `controls/` for the controls.
+  - `WM_SUBLET` is OFF for `virtual-malloc` and ON for `virtual-nested-pools`.
+  - The archive is the local `wireshark-4.6.8.tar.xz`.
+- **This revision's patch 0001 has no `repr_round`.** The virtual-profile plan lists "Wireshark's wmem jumbo blocks
+  (0001)" among the twenty derive sites that need representable placement under (iii).
+
+**Predictions:**
+- **`virtual-malloc` (#25):** MISSED 23, every cell equal to the record. The controls read as the runner requires:
+  chunk use-after-free and overread complete, jumbo use-after-free faults.
+- **`virtual-nested-pools` (#26):** two outcomes, written before the run.
+  - **(a) CAUGHT 23, every cell equal to the record:** no case derives a child that is inexact under (iii).
+  - **(b) Some cells fault 29 at a CDERIVE:** the jumbo-block derive is refused by Q-15, as memcached 0006 was. The
+    same exact-bounds rerun as Run 1 then separates it: with `x-capstone-exact-bounds=true` the cells return to the
+    record.
+
+The VM holds the host-wide QEMU lock while it is up, so the session runs as one bounded block and is brought down
+after.
