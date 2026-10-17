@@ -6817,3 +6817,36 @@ matched to d93a8d66b's record by image hash.
   reading. It was re-run once with the same image, under a rule pushed before the retry, and read the record's
   vector.
 - **Not established:** N = 1 per arm. This is a regression check of the physical profile, not a cost measurement.
+
+## vp2 on silicon: all 25 pre-registered arms read their simulated vectors, and the physical regression is identical to the Sublet bitstream, twice (caplifive_vp2_bf3db3175, 2026-10-17)
+
+vp2's first board session. `caplifive_vp2_bf3db3175.bit` (sha256 `776cdd8c40d98570…`, routed WNS -19.019) was flashed
+on the lead's explicit word after vp1's first session ended as pre-registered. The preflight ran on the sealed hash,
+and the readback named the bitstream. The session ran unattended from the pre-registered chain, and every step gated
+the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with result lines in
+`results/board-vp2-bf3db3175.result-lines.txt`. Every run is matched to its image by hash.
+
+| step | result |
+|---|---|
+| canary, pass 1 and pass 2 against d93a8d66b | S-16 98/98 and floor 77/77 readings identical in each pass; s1gap's functional readings identical |
+| canary, pass 1 against pass 2 | identical by the same rules: 9 of 9 comparisons pass |
+| the 25 pre-registered arms | 25 of 25 equal to their board vectors, count and values |
+| corpus set 7 (same firmware payload as d93a8d66b's run) | 33 of 33 records identical |
+
+- **The arms:**
+  - item D's: the virtual-context runs va-runv..va-runv7, va-barrier, va-q15, and va-csmint in its emulated and
+    monitor forms;
+  - item A's: va-flat with its control, va-alloc with its three controls, va-ns-collide with its control, and
+    va-straddle;
+  - vb-trans and vb-trans-plain as their VB_TABLE builds;
+  - vp1's q17-order and vb-trans-off, byte for byte.
+- **Where the vectors come from:** each one is from simulating that exact image on bf3db3175's RTL, not from the test
+  headers, because the board recorder changes some readings.
+- **The comparator was checked on this session's own readings.** It says "NOT vp2" for one altered value, a short
+  readout, another arm's vector, and va-flat's vector read from va-flat-off's run. So a flag-on arm and its flag-off
+  control differ on silicon, as pre-registered.
+- **No image failed to start**, in the canary or among the arms.
+- **Not established:**
+  - N = 1 per arm. The canary's two passes are the only repeat, and they are identical.
+  - This is the bare profile. vp2 under Linux in the virtual profile (Tier 1/2 and the corpus bundles of Tier 3)
+    waits on the flat-table module and the pinned kit.

@@ -18,7 +18,9 @@ were held out of vp2 until that variant landed:
 - The plan's line "vp1's vb-trans arms and Q-17's" for vp2 was written without a run (the RTL lane, 2026-10-17).
 - On vp1 (no item A) vb-trans is correct as pre-registered and stays in vp1's batch unchanged.
 
-**Not authorised to run.** A flash of bf3db3175 waits on the lead's own word naming it, after vp1's first session.
+**Run on 2026-10-17, on the lead's own word** ("Flash authorisation" below), after vp1's first session ended as
+pre-registered: the canary passed 9 of 9, all 25 arms read their vectors, set 7 matched d93a8d66b's 33 records
+(`results/board-vp2-bf3db3175.result-lines.txt`).
 
 **Build** (`build.sh`):
 - The tests are copies of capstone-ariane `virtual-profile-2-d` fc679dc68, whose RTL is bf3db3175's (the five commits
