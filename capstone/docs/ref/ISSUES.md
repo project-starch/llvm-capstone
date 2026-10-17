@@ -1574,6 +1574,24 @@ call frees identities and writes rd; without one it raises 29. The plan's row fo
 collection is software; QEMU's arm is the odd one. No kit issues action 3 today; a one-line QEMU change (action > 2
 illegal) when the next QEMU commit is cut, or a ruling if the collector is wanted in the reference.
 
+## Q-28 — the trap return register under capability mode: the RTL keeps ONE cursor (CEPC's cursor is mepc) and returns through mepc; QEMU under cap_mem keeps CEPC and mepc as two registers, writes only CEPC on a trap and returns through CEPC `OPEN — low priority, filed 2026-10-18 by the RTL lane; the shared monitor entry avoids it by using CCSRRW CEPC on both targets, and the next monitor author will meet it`
+
+RTL (`virtual-profile-2-d` bf3db3175): a hardware trap writes mepc (`csr_regfile.sv:2324`) and untags cepc (:2329); the
+capability CSR CEPC reads `mepc_q` as its cursor with `{cepc_tag_q, cepc_q}` as its metadata, and a CCSRRW write sets
+`mepc_d` beside `cepc_d` (:2616-2621); mret returns through mepc (:3092). So `csrr/csrw mepc` and `CCSRRW CEPC` name the
+same return address, and the FPGA monitor's mepc-based `_inject_s_trap` (capstone-sbi db23ffd) was right on silicon
+(va-osinject, 14 and 23 of 23 readings). QEMU (d35af47b163c): under cap_mem a trap writes `env->cepc` (a capability for a
+PRV_C trap, a scalar otherwise) and NOT mepc (`cpu_helper.c:1986-1991`), and mret returns through CEPC whenever
+`capstone_u_active` is clear or the previous privilege was C (`op_helper.c:352-356`); the kit's QEMU firmware sets
+cap_mem through CAPENTER and never writes scapctl, so mepc is stale there and a monitor that reads or writes mepc for
+an S-origin trap re-faults (the board lane's first QEMU-kit injection build, refuted by the auditor before handover).
+**Rule for monitor code:** read the faulting pc and write the return target through `CCSRRW CEPC` (the ecall path's
+shape, `sbi_capstone.S:88-90`), never through mepc; it is the same register on the RTL and the only one QEMU honours.
+The semantics owner's ruling (2026-10-18): one CEPC-based `_inject_s_trap` in the shared source, no target `#ifdef`, the
+FPGA and QEMU entries byte-paired, proved by va-osinject on bf3db3175 (predictions unchanged) and the kit's `threads`
+step with INJS 0x1d on QEMU. Whether QEMU should also write mepc on a trap under cap_mem, to match the RTL's one-cursor
+model, is a question for the next QEMU commit, not a blocker.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
