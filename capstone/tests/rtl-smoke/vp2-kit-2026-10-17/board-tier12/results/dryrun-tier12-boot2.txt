@@ -1,0 +1,33 @@
+# Boot 2's script (run-tier1-2.sh) and vm-contract judge (vm-contract-branch.py), checked 2026-10-18 before the module
+# arrived. The placeholders were filled with boot 1's values (run.py c14933904de4, sha256/16 d03ea74cc714f17a, the v6
+# llvm bin). The firmware was the pre-bake check build ae517ef354830e70. The driver was stubbed (the stub asserts
+# BAKED_CTL, BAKED_RUNGS and FPGA_BITSTREAM, then replays a transcript). The transcripts are boot 1's dry-run
+# board-format ones, plus two built from the clean one: an EXCX/INJS injection with retval 922 in vm-contract, and
+# a NODM stop with no END marker.
+## the judge alone
+vm-contract-branch.py --selftest                 PASS, 9 cases (identity, layout, injected x2, monitor-stop, other, wedged,
+                                                 NO DATA x2)
+boot 1's real transcript (run/board.txt)         other: EXCX MCAU 0x18 MEPC 011127D4 MTVL 01D3F070 MSTA 0x820 [no END marker]
+## run-tier1-2.sh with only the driver stubbed
+clean transcript      every RUNG AS-ORACLE; BRANCH identity; VM-SUITE board-check rc=0 (40 of 41, cleanup the pre-registered false)
+layout transcript     vm-contract 922 NOT-AS-ORACLE; BRANCH layout; vm-suite AS-ORACLE
+injected transcript   vm-contract 922 NOT-AS-ORACLE; BRANCH injected (EXCX MCAU 0x18 ... INJS 0x18); vm-suite AS-ORACLE
+NODM transcript       vm-contract and vm-suite NONE; BRANCH monitor-stop [no END marker]; VM-SUITE NO DATA (rc 2)
+no transcript         NO DATA: no board transcript (rc 2)
+## the gates, each refusing before the driver starts
+placeholders unfilled                            STOP: placeholder ... not filled
+firmware hash wrong                              STOP: the firmware is not the pre-registered one
+driver hash wrong                                STOP: the driver is not the pre-registered one
+run.py hash wrong                                STOP: run.py is not the module revision's
+output directory exists                          STOP: ... exists; a run writes a fresh directory
+llvm dir without llvm-nm                         STOP: no llvm-nm (the first version checked for llvm-objdump, which
+                                                 run.py does not use and the v6 dir lacks; caught by this dry run)
+## with the real pins (2026-10-18 00:37): the 179686bc record, firmware 41fb669c9f77462d, the re-staged stage
+judge, the record's QEMU serial (tmp/virtual-app.a9a4el5a/serial.log)     rc=0  41 of 41 true
+judge, the same serial with EXPECT_FALSE=cleanup                         rc=1  41 of 41 true; off: cleanup (true on QEMU)
+judge, the serial with vm-none-read altered                              rc=1  40 of 41 true; off: vm-none-read
+judge, the serial in board framing, cleanup failing, EXPECT_FALSE=cleanup rc=0  40 of 41 true
+run-tier1-2.sh, every pin real, driver stubbed:
+clean transcript      every RUNG AS-ORACLE; BRANCH identity; VM-SUITE board-check rc=0 (40 of 41)
+injected transcript   vm-contract 922 NOT-AS-ORACLE; BRANCH injected; vm-suite AS-ORACLE
+NODM transcript       vm-contract and vm-suite NONE; BRANCH monitor-stop [no END marker]; VM-SUITE NO DATA (rc 2)

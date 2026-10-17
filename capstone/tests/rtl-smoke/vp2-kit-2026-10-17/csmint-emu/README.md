@@ -569,3 +569,39 @@ Linux `rdtime` crossed the hook's fall-through, va-csmint-ft's path, and Linux's
 
 **Still vp2-only:** a CSMINT that the hook handles. Here none could be issued (the static scan above), and on this
 bitstream a valid one would wedge (`csrr` srevroot).
+
+## Descriptor v7 on the combined monitor, capstone-sbi vp2/tier1-monitor fba7812 (2026-10-18)
+
+The runtime lane's semantics ruling (Q-23) replaced the three-word descriptor with six words:
+- w0 base, w1 end, w2 perms (bits 0-3) with bit 8 = NONLIN, w3 the cursor (base <= cursor <= end);
+- w4 a second slot (0 = none; LINEAR with a second slot is refused with 29);
+- w5 reserved, which must be 0.
+
+The order of refusals is: the access-shaped refusals (6, 15, 13) before the semantic one (29), and w4 is checked like
+the first slot. The routine is capstone-sbi vp2/csmint-v7 (729a340, then 67ed67f). 67ed67f emulates only a CSMINT
+from S: the claim-auditor found the routine emulating one from U, and QEMU refuses CSMINT at PRV_U at decode.
+fba7812 merges it with the S-trap injection (vp2/os-trap-inject f8bfde5).
+
+Pinned:
+- sbi_capstone.S 7b23b6a67540fd45cee4fa2bd66f5cdd7098b9c5208e1b0ce244367a5d520365
+- capstone_csmint.S 4600d04680158edf90396cc303cbb5aff4e2a286c9a0f302058ecd41232d6fbf
+- sbi_capstone.h 2c6f6bcab4ce180ee642382228ad52fb171bdb3840370bfad3f794cdba5dded1
+- sbi_capstone.c 2ff807a6db2bce15127fe349f4fb0ef508c1ebfdcea62cb25b2612bd2184d7aa (not linked by these arms)
+
+- **va-csmint-mon v7** is the RTL lane's, in capstone-ariane virtual-profile-2-c. 2639bd078 re-pre-registered it with
+  81 readings: 18 rows of three, then a readback of 27. It read all 81 on 729a340's routine. 7b8c0d979 moves its pin to
+  fba7812, where 0 of 81 values differ (SUCCESS after 211,099 cycles).
+- **va-csmint-entry v7** is this folder's `va-csmint-entry.S`, sha256 602a0bf1e99d869f…, written by the RTL lane. It
+  applies mon's v7 rewrite to the v6 file (7b1155f93d15):
+  - six-word descriptors at a 64-byte stride;
+  - rows 11-16;
+  - the readback of slotC, slotD and slotE, with slotB's page carved into four slots.
+
+  Its prediction is mon's 81 readings at its own layout, the same rule the v6 run used. The prediction is in the
+  file's header; the file was not committed before the run. On bf3db3175 it read 81 values, SUCCESS after 215,008
+  cycles (`results/rtl-bf3db3175-v7-entry.result-lines.txt`). 64 values equal mon's. The other 17 are address-valued,
+  and each sits exactly 0x1000 below mon's, at this arm's layout. The file here is the bytes the run compiled: the RTL
+  lane's run script copied it in just before the ladder, and its sha256 and an unchanged mtime match. The executed
+  trace agrees too: the row offsets 64..640 and the report sequence 1-16, 21, 17, 22, 18, 99.
+- **va-osinject revision 2** (`../osinject/`) adds the U-origin CSMINT row on the same files: 23 of 23 as predicted.
+
