@@ -137,6 +137,87 @@ old rule gave one bundle per boot (about 17 boots); the budget gives 4-5. The ga
 chain has passed its second preflight. Bundles over the payload are split by case across boots or recorded as not
 stageable at their measured size, never squeezed.
 
+## The first virtual boot, and the ruling it forced (2026-10-17 night, Q-23 and Q-24)
+
+vp2's first virtual boot (board lane, lane vp2-tier12 c1fa1a863d09) wedged at `contract.dom` before any output:
+EXCX cause 24 from S at `capstone_vm.ko` add()'s `ldc t0, 0(a5)`, a5 the slot (an integer kernel pointer), right
+after the emulated CSMINT; then a second 24 at the monitor's own `_cap_trap_entry+4`. Neither pre-registered branch
+matched, so it went to the RTL lane before anyone called it silicon. **Not silicon**, three findings of record:
+
+1. **Q-23.** The RTL's DYN unit refuses `LDC`/`STC` with a NOT_CAP rs1 in every mode
+   (`capstone_dyn_unit.anvil:641-654`, `:716-719`); QEMU alone had an "experimental trusted-kernel context spill"
+   branch (`trans_capstone.c.inc:214-224`, S-mode scalar-address `LDC`, no bounds or permission check), exercised on
+   purpose by `tests/trusted-linux-u-access`, and no such branch for `STC`. The module's four integer-based accesses
+   (all in add(): block A `ldc/delin/scc/stc` to retype LIN → NONLIN and set the cursor; block B `ldc/stc` copying the
+   image capability into register slot 0) run on EVERY domain launch (five of the eight grants are `linear = 0`),
+   so nothing of Tiers 1-3 could run on the resident module. Block B needs a scalar `STC`, which QEMU does not have
+   either, so "QEMU as reference" decided nothing.
+   **Ruling (the semantics owner, under the lead's delegation, 2026-10-18): the RTL stays; trusted S performs no
+   capability memory access; QEMU is tightened to the RTL (the scalar-S `LDC` branch kept only under the
+   test-only property `x-capstone-test-s-ldc`, default off, for three directed suites' bootstrap; no production kit
+   sets it, and the kit's QEMU invocation is grepped for it as a gate); the CSMINT descriptor becomes v7** (`isa.md`: base, end, perms | bit 8 NONLIN, cursor with `base <= cursor <=
+   end`, a second slot address or 0, reserved 0; one node in both slots; LINEAR with a second slot is 29). Feasible
+   on the RTL because CSNODE accepts any tagged rs1 (`capstone_dyn_unit.anvil:585-592`), SCC is a pure register op
+   (`capstone_flu_unit.anvil:104-126`) and the switcher loads the context's PC capability from frame +64
+   (`capstone_dom_switcher.anvil:157, :319`), so slot 0 is the hardware's and the second slot fills it. No bitstream.
+   The alternative, scalar `LDC` and `STC` from trusted S on the RTL plus the `STC` branch in QEMU (vp2c), was
+   weighed and rejected: a day plus a flash cycle to codify a branch QEMU itself marked experimental.
+   Consequences: the module loses all four accesses (gate: 0 `ldc`/`stc` encodings in the `.ko`, the pre-ruling
+   module as the positive control with 4); the monitor routine mints NONLIN directly (CAPCREATE/CAPTYPE/CAPBOUND/
+   CAPPERM → CSNODE in the window → SCC outside it → STC, STC); the emulation arms are re-pre-registered for v7; the
+   Tier 0 suites that build descriptors move to six words and are re-measured; run.py's 41/41 on the old QEMU is
+   NOT inherited (it passed through the removed branch), the regression reruns on the tightened QEMU.
+2. **The emulation's restore is exact** (`sbi_capstone.S:14-45`, `return_to_sumode` `:163-199`); a5 was the slot;
+   the 24 is finding 1.
+3. **Q-24, the wedge.** `handle_exception`'s default (`sbi_capstone.c:3520-3554`) calls `fault_return_from_domain`
+   with no domain active (MPP = S), never runs `return_to_sumode`'s CSCRATCH swap, so the next trap entry runs
+   CINCOFFSETIMM on an integer sp: the second 24, tval = the kernel stack. medeleg cannot delegate causes 24-30 on
+   this RTL (`csr_regfile.sv:1642-1659`, the write mask stops below 24; the switcher's unmasked write at `:2023` is an
+   M-owned path, an inconsistency to record, not a loophole), where QEMU makes them delegable. RTL fix: the mask gains
+   24-30, cycle-neutral, pre-registered for the next bitstream. Monitor fix now (board lane, reviewed by the RTL
+   lane): an unhandled cause with MPP = S (sufficient for OS-versus-domain: a classic domain traps with MPP = M) is
+   injected into S as `csm_inject` does and leaves through `return_to_sumode`; `fault_return_from_domain` refuses to
+   run without an active domain.
+
+**Boot 2 (2026-10-18 00:38-00:50; vp2-tier12 279d993e273d; module ed24f827b5beb373 at runtime 179686bcf198, firmware
+41fb669c9f77462d with monitor vp2/tier1-monitor 1e9451a; prediction run.py 41/41 on f2f15f8fc70c).** Controls pass. The
+result of record: **the S-trap injection works on silicon**: the module's CSRUNV trapped from S with cause 29, the
+monitor injected it (`INJS 1D`), and the kernel printed a correct oops (epc in vm_ioctl, cause 0x1d, SPP = 1) instead
+of wedging as in boot 1. Every virtual step faulted earlier with cause 26 at contract.dom VA 0x11f60, `delin a0` in
+`__capstone_cap_init` right after `scc a0, gp, a0`: gp is granted NONLIN, the RTL's DELIN raises 26 on any non-LINEAR
+rs1 (`capstone_dyn_unit.anvil:794-801`), QEMU's `helper_csdelin` no-ops it, so the glue's delin has been dead code on
+QEMU since the module delinned the grants itself (C-13 class; S-15 in the silicon-mimic). **Ruled the same way as
+Q-23: the RTL is the reference; QEMU's default DELIN raises 26 on a non-LINEAR rs1; the images are rebuilt on the new
+pin with the module unchanged; run.py on the UNFIXED images must fail at the same delin on the new QEMU before the
+fixed ones pass.** The board lane's census then showed the delin is not one glue site but the backend's
+`-capstone-image-gp` global-address materialization, `scc rd, gp, x; delin rd` with no type test: 525 of contract.dom's
+530 delins, 5,983 of sqlite3.dom's 5,988, 9,859 of mruby's 9,863. **This is C-27**, filed 2026-09 and recorded FIXED in
+ISSUES-ARCHIVE ("the DELIN is dropped under the NONLIN-gp contract") while the backend still emits it unconditionally
+(`CapstoneExpandPseudoInsts.cpp:381`; the cited pin asserts the delin is still emitted; no NONLIN-gp option exists;
+`CapstoneISASemantics.md:52` still lists it): the false FIXED is why boot 2 was spent, and the prior-art search that
+would have caught it (the registry's archive) was not made before the boot. The retraction lands as its own commit.
+Fix (b), recommended: the backend drops the delin under the ASSERTED NONLIN-gp ABI (two consumers depend on the base
+being NONLIN: the copy hazard and the SHRINK double read, so the contract is asserted, not assumed; a LINEAR gp would
+also make every global access write the shared node's linear bit on the RTL). **The decision is reserved to the
+project lead** (`CapstoneISASemantics.md:52`, "the Tier 4 DELIN decision"); the compiler lane stopped on it and the lead
+is asked. Then: the census script is the gate on the rebuilt images (0, against 525/5,983/9,859); the 5 non-gp delins
+per image are named one by one; the backend revision joins the compiler identity in `inputs.json`.
+**Context slots:** QEMU holds 32 (`SUPERVISOR_SLOTS`), the RTL one; run.py's parallel steps pass on QEMU for that
+reason and boot 2's 29 at parallel_one was the pre-registered refusal of a second launch. QEMU gains a slot-count
+property defaulting to 1 (the DELIN commit); the module serializes contexts on a one-slot machine and never issues a
+CSRUNV the hardware would refuse (a 29 trap in S is a kernel panic); the parallel/preempt/heap-threads expectations on
+vp2 are derived from the serialization mechanism and pre-registered on the 1-slot QEMU before the run. Open with the RTL lane: whether CSRUNV from S with an invalid frame or
+action traps with 29 (as boot 2 read) or returns 29 in rd (as the plan's item-D text says); QEMU and the kit's
+expectation follow the RTL. Boot 3 is boot 2's pre-registration with the images' hashes moved and the delin branch
+added. No strict-DELIN property for prediction runs: the strict behaviour is the default, a test-only property exists
+only where a suite's bootstrap needs the old one.
+
+Owners: the RTL lane the QEMU change and the re-run arms; the compiler lane the module (one post-ruling revision,
+with the early-clobber fix, the collection row, the ceiling reading and the flat define); the board lane the monitor
+routine and the injection fix; the helper lane `isa.md` and this record. No board boot before: the tightened QEMU
+pinned, the new module through its gates and the from-scratch regression, the emulation arms re-run, the 1 MiB
+table cross-check.
+
 ## Tier 3's comparison rule, settled from the sources (2026-10-17)
 
 The question was whether the board can give the cell comparison QEMU gives (verdict, cause, faulting symbol,
@@ -183,7 +264,19 @@ configuration and the caveat is in the measurements doc); the attribution builds
 | vp2 flash + canary + arms + set 7 | board | DONE 2026-10-17 (987bf254ee40): flashed 20:40:46 on the lead's word, readback names caplifive_vp2_bf3db3175; canary 9 of 9 (two passes and pass-against-pass); 25 of 25 arms equal to their simulated vectors on bf3db3175's RTL; set 7 33 of 33 identical to d93a8d66b; every run matched to its image hash; the comparator negative-tested on the session's own readings. **vp2 is resident; the physical regression holds (done-means 4).** |
 | vp2b contingency | RTL | pre-registered before the seals, dev 733ad96033df; NOT built: the canary passed. B is graded (44f14d011de5: Q-15's cone is not the ten thousand); A pending, for the record |
 | Tier 1/2 board arm | board | stage, bake recipe, firmware recipe and judge ready in its private tree; HELD on the flat-mode module (kit blockers 1-5); then pre-registered on dev and armed behind vp2's set 7 |
-| flat-mode module (kit blockers 1-5) | compiler | in progress; about a day; regression on QEMU on/off + the collection row before any hash |
+| flat-mode module (kit blockers 1-5) | compiler | built and gated (board ko 0d62a1bcdeecc13f flat; run.py 41/41 and bundle 5 13/13 on both adapters, c14933904de4) — superseded by the v7 module below |
+| Q-23/Q-24: the first virtual boot's wedge | all | ruled 2026-10-18 (a2739d9313ca, 2ed59b4d0e6c, 8865adec18f9): no bitstream. Boot 1's attribution landed (9536a7531531). Monitor: capstone-sbi capstone-bootstrap 83966bc (the S-trap injection) + dafe4f2 (the v7 routine, gated to S) = vp2/tier1-monitor 1e9451a's tree; caplifive-opensbi capstone-bootstrap bumped to it at bc55760 after BLb (five arms, placement confirmed as the mechanism of a −0.77 % so_lists / +0.32 % fib shift; fa049994c1eb; physical-line timing baselines are re-taken on the bumped firmware and cite B/B2). v7 module: board ko 9ff967445799c02b at the delin-era revision, run.py 41/41 and bundle 5 13/13 on both adapters at f2f15f8fc70c; the collection row measured (both arms collect at the default, reclaim within 0.33 %); emulation arms on the final monitor 81/81, 81/81, 23/23 |
+| boot 2 (Tier 1/2 on the v7 module) | board | DONE 2026-10-18 (8350197f7649; attribution audited at vp2-tier12 2a01393a18e4): the injection works on silicon; every virtual step faults at the glue's delin of the NONLIN gp = C-27 (falsely FIXED in the archive; retraction by the compiler lane); the 29 at parallel_one = the one-slot refusal (Q-26) |
+| QEMU reference pin | RTL | capstone-qemu `virtual-capstone-v7` 852c5bc76774 (22d2bebc5b75): v7 descriptor, scalar-S transfers refused by default, strict DELIN, `x-capstone-supervisor-slots` default 1; Tier 0 re-measured at the defaults. Every prediction from here cites it |
+| C-27 fix (the backend drops the delin under the asserted NONLIN-gp ABI) | compiler, the lead's word | recommended; reserved to the lead by `CapstoneISASemantics.md:52`; the compiler lane holds the change ready; the control (run.py on the current images on 852c5bc76774 failing at the delin and at the second CSRUNV) runs meanwhile |
+| context serialization in the module (one slot on vp2) | compiler | to do, its own commit; the parallel/preempt/heap-threads expectations pre-registered from the mechanism on the 1-slot QEMU |
+| C-27 validated on the rebuilt images | compiler | DONE 2026-10-18 (lane 6fa0e2483a71): 0 gp-derived delins with the totals falling by exactly the old counts (530→5, 5,988→5, 9,863→4); run.py 41/41 zero false on the old pin as the control; images contract f2017064bea77dd2, sqlite 233640f7193b034c, mruby bba891bc16576d98; compiler 01b62884c0c7 with a feature probe beside the version |
+| the QEMU kit's firmware lacks the S-trap injection | board | FOUND 2026-10-18 by the matrix on 852c5bc76774: new images pass `normal` and die at `threads` (step 2) with the kit's M firmware (c3293b3's tree, injection FPGA-only) faulting 24 at its own pc after the one-slot refusal 29; silicon injected the same refusal cleanly in boot 2. Fix: a QEMU-kit firmware with the injection under a vp2-kit define, pinned, RTL-reviewed; the matrix re-run on it |
+| thread steps on one slot | compiler, RTL | RULED from the switcher's lines (RTL lane, 2026-10-18): a paused context occupies the one slot and blocks a second one's entry (`commit_stage.sv:271-276`, mcause 29); re-ENTRY after a discard is not a resume (CSRs and FP zeroed, no pc advance; `capstone_dom_switcher.anvil:190-227`). So `threads`, heap-threads, preempt and any step where a live context waits on another are **"not available on a one-slot bitstream"**, Q-26's consequence: the module's queue admits sequential contexts only and returns -EBUSY where a second live context is required, never a trap. The RTL remedy (N saved contexts in the CSR file, the refusal becoming "no free slot") is costed by the RTL lane at N = 2/4/8 (dev fe641742ce4c; +74·N + log2 N flops as the sharp key, ~+85·N LUT below the netlist band, the compare path's slack +20.712 ns combinational / +36.130 registered from vp2's checkpoint) and stays DEFERRED: the compiler lane's count is **zero of the 26 bundles** needing a second live context (236 domain sources of the 16 case.c corpora scanned, 0 thread or process creations, contract.c as the firing control; the two script-trigger corpora's images define neither thread-create symbol, contract.dom as the control; two void passes on the way recorded). Caveat, Tier 2 not Tier 3: the kit apps sqlite3.dom (THREADSAFE=1) and mruby LINK the thread-create frame symbol; linked is not called, and those three steps have no one-slot reading yet (the matrix died at `threads` first), so they run alone on 852c5bc76774 before the queue is designed; if one needs a slot, the 39/41 pre-registration changes |
+| boot 3-T1, first run (2026-10-18 03:17-03:23, 2d8559e63ed0) | board | READ: C-27's fix holds on silicon (the run passes `__capstone_cap_init` for the first time); then both `ok` and `stale` exit 139 with cause 2 at contract.dom VA 0x20ccc, `csrr a0, 0xcc0` in the virtual runtime's malloc (tval = the encoding): **Q-21 reaching the application runtime** (malloc and realloc read urevavail twice per image; the module has 0; QEMU implements the CSR, so every record passes). Ruled as DELIN was: the application runtime never reads 0xcc0 or 0x5c0 (availability inside a context is the kind-5 pressure event, not a polled CSR; the compiler lane removes the reads and rebuilds); QEMU's default makes both CSRs illegal (test-only property only where a Tier 0 suite needs it; the RTL lane re-pins); the Tier 1 and Tier 2 app-step records are re-made on that pin (the one-slot app-step record is withdrawn as QEMU-only); the board lane adds a CSR census beside delin-census.py (today's images the positive control, 2/2/2). **General instrument asked for:** a decode-whitelist census of every staged image against the RTL's decoder (the RTL lane supplies the table from decoder.sv/riscv_pkg.sv with file:line), replacing one-off censuses: the three classes that cost boots today are its positive controls, and a staged image with a non-empty report does not boot |
+| boot 3-T1, repeat (Tier 1 alone: contract.dom on the rebuilt images, ed24f827) | board | after the runtime fix, the census at 0/0/0 and the new-pin record; the previous entry's GO text follows: the new-pin record exists (852c5bc76774, new images: ok → 0 with VIRTUAL_APPLICATION_OK, stale → 139 cause 25, zero 24/26, geometry 1 MiB/65,536); b0-stats, b0-hello, vm-contract; single-context; the identity reading is Tier 1's headline; 26 = C-27 not in the staged bytes; 24 from S = an integer-based access the gate says cannot exist |
+| run.py's steps on one slot, classified from contract.c | compiler | a vexec process is one context (keyed on mm) and each thread has its own frame, so threads and contexts are one slot problem. Serialize completely (no second live frame): every single-process step, `preempt` (one thread, SIGTERM), and `parallel_one`/`parallel_two` (two independent processes that never synchronize: the second just waits longer). Not available on one slot: `threads` (busy-waits 100 M iterations on the child) and `heap-threads` (joins). The queue refuses at `thread_create` with -EBUSY (never admits a frame it cannot schedule), so both fail immediately and legibly at their `require(tid > 0)`, with one stderr line naming the slot limit. Pre-registered expectation for boot 4: 39 of 41, those two a clean create failure |
+| boot 4 (Tier 2: vm-suite) | board | after the QEMU-kit firmware with the injection (CAPSTONE_S_TRAP_INJECT, vp2-kit only, no-define builds byte-identical to dafe4f2, RTL-reviewed, audited), the matrix re-run on it, the serialized module with the step expectations pre-registered (the thread steps "not available"), and the C-27 word for the landing |
 | pinned kit + identity + geometry | compiler | geometry rule in; identity with the flat module's revision |
 | Tier 3 payload budget (26 MB declared) | board | accepted; lands on dev after vp1's second preflight, with both negative tests |
 | 26 bundles rebuilt and re-predicted on the pin | compiler | to do; 20/26 read on the unpinned kit |

@@ -35,7 +35,7 @@ The following R-type encodings all use opcode `0x5b`, funct3 `1`.
 | Instruction | funct7 | Inputs | Result |
 |---|---|---|---|
 | `CSRUNV rd, rs1, rs2` | `0x24` | Physical frame address, action | Event kind or action result |
-| `CSMINT rd, rs1, rs2` | `0x50` | Destination slot VA, descriptor VA | Scalar private ancestor ID; tagged linear child in slot |
+| `CSMINT rd, rs1, rs2` | `0x50` | Destination slot VA, descriptor VA (v7: base, end, perms+type, cursor, second slot, 0) | Scalar private ancestor ID; the tagged child (LINEAR or NONLIN, at the cursor) in the slot, and in the second slot when given |
 | `CDERIVE rd, rs1, rs2` | `0x51` | Non-linear parent with cursor at child start, scalar size | Fresh non-linear child with inherited data rights and MANAGE |
 | `CREVOKE rs1, rs2` (rd=0) | `0x52` | Management-capable non-linear parent, non-linear child reference | Invalidate that direct child and its subtree |
 | `CSRETIRE rd, rs1, rs2` | `0x53` | Ancestor ID; conventionally zero in rs2 | Zero on success, one on rejected retirement |
@@ -51,8 +51,8 @@ The current `CSRETIRE` helper ignores rs2.
 | CSR | Address | Meaning |
 |---|---|---|
 | `srevroot` | `0x5c1` | S/M read/write physical lifetime-table base, rounded down to 4 KiB |
-| `urevavail` | `0xcc0` | Read-only available IDs; zero for an invalid/missing table |
-| `scapctl` | `0x5c0` | S/M; bit 0 controls the separate protected-U experiment; read-only bit 8 advertises exact shadow bounds |
+| `urevavail` | `0xcc0` | **Illegal instruction by default (Q-21, as on vp2; QEMU from 3b8040d5ff6e).** Under the test-only property `x-capstone-test-csrs` only: read-only available IDs. The adapter computes `capacity − next + free_count` from the table header; the application runtime never reads it (availability inside a context is the kind-5 pressure event) |
+| `scapctl` | `0x5c0` | **Illegal instruction by default (Q-22, as on vp2; QEMU from 3b8040d5ff6e).** Under `x-capstone-test-csrs` only: bit 0 selects the protected-U experiment, read-only bit 8 advertises exact shadow bounds. The adapter never touches it and reads exact bounds as 0 |
 
 `scapctl` is not how the launcher enters virtual C. `CSRUNV` binds both roots
 when admitting a context, then restores them from saved state on resume.
@@ -63,10 +63,28 @@ revision. Linux syscall and VM service numbers belong to software ABIs.
 
 ### Minting and retiring an arena
 
-`CSMINT` reads an 8-byte-aligned descriptor of three little-endian u64 values:
-`base`, exclusive `end`, and permissions (`X=1`, `W=2`, `R=4`, `MANAGE=8`). The destination
-must be a writable, 16-byte-aligned ordinary-RAM slot. Descriptor words and
-the destination are translated with the trusted caller's permissions.
+`CSMINT` reads an 8-byte-aligned descriptor of six little-endian u64 values (**descriptor v7, ruled
+2026-10-18 by the semantics owner; Q-23**): `base`, exclusive `end`, permissions (`X=1`, `W=2`, `R=4`,
+`MANAGE=8`; bit 8 set selects a NONLIN child, clear a LINEAR one), `cursor` (`base <= cursor <= end`,
+else 29), a second slot address (0 = none; a non-zero second slot with a LINEAR type is 29, since a
+linear capability cannot be in two places), and a reserved word that must be 0 (else 29). The
+destination slot, and the second slot when given, must be writable, 16-byte-aligned ordinary-RAM
+slots; both receive the SAME capability, one node. Descriptor words and the slots are translated with
+the trusted caller's permissions. The three-word descriptor (LINEAR, cursor = base, one slot) is v6
+and is no longer accepted.
+
+Why six words: trusted S performs no capability memory access on the RTL (`LDC`/`STC` with an
+integer base read 24 in every mode), so the kernel cannot retype, re-cursor or copy a minted
+capability itself; the mint produces exactly what the adapter needs, and the adapter's register slot 0
+(the context's PC capability, which the switcher loads from frame +64) is filled by the second slot.
+
+Refusal order of record for v7 (QEMU's helper and the monitor's emulation agree): operand
+misalignment 4 (descriptor) and 6 (either slot); an unreadable descriptor word 13 (tval the word's
+VA, in order); an unwritable slot 15 (tval the slot), the first slot's checks before the second's;
+then, with tval 0, 29 for `base >= end`, permission bits outside `0x10F`, a non-zero reserved word,
+a cursor outside `[base, end]`, and a second slot with a LINEAR type; then the representability
+refusal 29; then fewer than two free IDs, 30. The slot's shape is checked before the descriptor's
+meaning, so a misaligned second slot with a LINEAR type reads 6.
 
 It requires `base < end`, permissions at most 15, two available IDs, and an
 exact compress/decompress round trip of the initial bounds and cursor in the
@@ -76,7 +94,7 @@ Context restoration also loads those shadow bounds. This opt-in QEMU profile
 supports mallocng object geometry without allocator-specific instructions;
 it requires more metadata than a tag bit and is not an RTL encoding.
 All checks precede table and slot mutation. Success creates a private senior
-ancestor and a linear child. The scalar ancestor lets the adapter later
+ancestor and a child of the descriptor's type (LINEAR by default, NONLIN with bit 8). The scalar ancestor lets the adapter later
 retire every application derivation under that arena without keeping a REV
 capability in ordinary kernel C state.
 
@@ -260,8 +278,39 @@ Read and consume must use the same translated physical granule, including
 when a PTE was changed without a translation fence. A fault leaves bytes,
 tags and registers unchanged; a retry moves once.
 
-These rules also cover trusted S-mode tagged transfers used by the module.
+**Trusted S performs no capability memory access (ruled 2026-10-18, Q-23).** An `LDC` or `STC`
+whose base register is an integer reads 24 (tval = the base register) in every mode, as on the RTL.
+QEMU's earlier experimental "trusted-kernel context spill" branches (an S-mode scalar-address `LDC`,
+and the matching `STC`, which QEMU also had) survive only
+under the CPU property `x-capstone-test-s-ldc=true`, default off, which exists for four directed
+suites (`virtual-capstone-m1`, `movc-untagged-source`, `trusted-linux-u-access`, and
+`virtual-capstone-runtime`'s `run.sh` and `index8.sh`) whose bootstrap or scaffolding loads minted
+capabilities into registers from S; it is a test scaffold with no silicon equivalent, no production
+kit sets it, and their passes say nothing about trusted S. The follow-up that retires the property
+is rewriting that bootstrap onto the `CSRUNV` route. The reference QEMU for the virtual profile is
+capstone-qemu `virtual-capstone-v7` 3b8040d5ff6e (three commits on d35af47b163c: descriptor v7 and the
+scalar-S gate at f2f15f8fc70c; strict DELIN and `x-capstone-supervisor-slots`, default 1 as on
+silicon, clamped 1..32, at 852c5bc76774; `scapctl` and `urevavail` illegal by default under
+`x-capstone-test-csrs` at 3b8040d5ff6e). Tier 0 on it at the defaults: sublet-lifetimes 119/119,
+runtime run.sh 69/69, index8 PASS, fp 60/60 (three isolation cases set 32 slots explicitly),
+exact-bounds 4/4; virtual-capstone-m1 74/74, movc 67/67 and trusted-linux-u-access 71/71 with
+`x-capstone-test-s-ldc` and `x-capstone-test-csrs` set by their runners (their bootstrap selects
+protected U through `scapctl`). No prediction kit sets any of the three properties; the kit gate
+parses their values. The adapter obtains
+every capability it needs through `CSMINT` (descriptor v7) and never holds one in a register.
 The Q-12 protected-path changes did not change legacy physical C transfers.
+
+**`DELIN` of a non-LINEAR capability faults with 26 (ruled 2026-10-18).** The RTL raises 26 for any
+non-LINEAR rs1 (`capstone_dyn_unit.anvil:794-801`); QEMU's earlier no-op for a NONLIN operand is
+replaced by the same fault in the default profile, so a prediction run sees what silicon sees. The
+image gp is NONLIN by ABI (every launch grant is). The `-capstone-image-gp` materialization of a
+global address today is `scc`/`cincoffset` off gp followed by a `delin` that is dead on QEMU and
+faults on vp2 (boot 2 of the virtual profile, 2026-10-18: 525 of contract.dom's 530 delins): this is
+C-27, which ISSUES-ARCHIVE recorded FIXED while the backend still emits it unconditionally. Dropping
+the `delin` is sound only under the asserted NONLIN-gp ABI (two consumers rely on the base being
+NONLIN: the copy hazard and the SHRINK double read), and that decision is reserved to the project
+lead (`CapstoneISASemantics.md:52`); the semantics owner's recommendation is to drop it with the
+contract asserted in the backend and the pin flipped.
 
 | Cause | Capability fault |
 |---|---|
