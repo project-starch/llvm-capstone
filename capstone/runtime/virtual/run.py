@@ -21,6 +21,14 @@ def digest(path):
         for b in iter(lambda: f.read(1048576), b''): h.update(b)
     return h.hexdigest()
 
+PARALLEL_BLOCK = (
+    './capstone-vexec contract.dom ok argument > /tmp/one.out 2>&1 & one=$!\n'
+    './capstone-vexec contract.dom ok argument > /tmp/two.out 2>&1 & two=$!\n'
+    'wait "$one"; echo VM_EXIT:parallel_one:$?\n'
+    'wait "$two"; echo VM_EXIT:parallel_two:$?\n'
+    'cat /tmp/one.out /tmp/two.out\n'
+)
+
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 insmod capstone_vm.ko || exit 1
@@ -96,6 +104,15 @@ def main():
     p.add_argument('--record', type=Path, required=True)
     p.add_argument('--timeout', type=int, default=300)
     p.add_argument('--omit-application', action='store_true')
+    # Q-26 / one supervisor slot: with x-capstone-supervisor-slots defaulting to 1, the second
+    # CSRUNV of the parallel pair traps 29, which on the board took the kernel with it and ended
+    # the boot before every later step. Moving the pair to the END therefore changes WHICH steps a
+    # one-slot machine still reports, so a QEMU record is comparable with such a board run only if
+    # it uses the same order. An OPTION and not a reorder: every existing caller's guest script
+    # stays byte-identical, because this runner's argv is pinned by other suites' tests.
+    p.add_argument('--parallel-last', action='store_true',
+                   help='Run the parallel pair immediately before rmmod, not mid-suite '
+                        '(one-slot machines: the pair can end the guest)')
     a = p.parse_args()
     work = Path(tempfile.mkdtemp(prefix='virtual-app.', dir=os.environ['CAPSTONE_TMP_ROOT']))
     stage = work/'stage'; stage.mkdir()
@@ -119,6 +136,20 @@ def main():
     script = SCRIPT
     if a.skip_recycling:
         script = script.replace(' sparse-churn', '').replace(' sparse-stale', '')
+    if a.parallel_last:
+        # Move, do not duplicate, and assert BOTH halves: a non-matching replace would silently
+        # leave the original order while the record claimed the new one.
+        block = (PARALLEL_BLOCK)
+        assert script.count(block) == 1, 'parallel block not found verbatim'
+        script = script.replace(block, '', 1)
+        assert script.count(block) == 0, 'parallel block not removed'
+        anchor = 'rmmod capstone_vm\n'
+        assert script.count(anchor) == 1, 'rmmod anchor is not unique'
+        # Immediately BEFORE rmmod -- after mruby and the perl block, while the module is still
+        # loaded. After rmmod (before VIRTUAL_RUNTIME_DONE) the pair would launch with NO module on
+        # a machine where rmmod succeeds, and would test nothing about the slot at all.
+        script = script.replace(anchor, block + anchor, 1)
+        assert script.count(block) == 1, 'parallel block not reinserted'
     (stage/'gate.sh').write_text(script)
     disk = work/'stage.ext4'
     with disk.open('wb') as f: f.truncate(64 << 20)
