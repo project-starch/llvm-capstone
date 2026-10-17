@@ -240,6 +240,32 @@ the build host, **1 carries it and 18 do not** — including every Tier 3 virtua
 `v6-pilot`, `v6-561`, `v6-b61`, `v6-instr`, `dev-proof`). So every image built before that arm was
 built without it.
 
+**The corpus runner's record has the same gap, and this one is worse because two different
+builds carry IDENTICAL provenance.** For the nine-case diff above, the plain bundle's
+`virtual-malloc/inputs.json` and the arm-6 twin's are byte-for-byte identical in everything that
+describes the build:
+
+* `cc_args` — identical, and **neither contains `-fno-builtin`**;
+* `build.flags` — `["-O0", "-DCORPUS_VIRTUAL"]` on both;
+* `build.sdk_identity` — `["virtual-mallocng", "virtual"]` on both, i.e. heap and profile only,
+  which does not name the SDK;
+* `platform.compiler`, `.launcher`, `.module`, `.qemu`, `.rootfs` — all identical.
+
+Yet the images differ (`bdf538f4` vs `ffd2170b`). The flag came from the arm-6 **SDK's** `sdk.json`
+codegen, and nothing in the record captures that. So `inputs.json` cannot answer "was this the arm-6
+build", and a re-run diffed against the record would read as unchanged. Recording the SDK's codegen
+list, or a hash over it, in both `inputs.json` and `manifest.json` would close both gaps.
+
+**Consequence for the nine-case diff, stated rather than buried:** because the clean side is an
+arm-6 *SDK* build, it differs from the plain side in the runtime archive as well as in the case
+code. So the 6-7 byte-granular runs per case cannot be attributed to the FFmpeg sources
+specifically — they may lie in the runtime. That does not weaken "the mechanism is this defect",
+since a tag stripped by a runtime `memcpy` is the same defect, and it is consistent with the fault
+being read at `refstruct_pool_uninit+0x78` while the stripping copy is upstream and unidentified.
+A pair that isolates the case code is the baseline SDK plus `--cc-arg -fno-builtin`, which leaves
+the runtime untouched; that is a different question from reproducing run6's verdicts, and the two
+must not be conflated.
+
 **There is no retrospective artifact test for this, and that is a recording gap.**
 `ports/common/application/build.py`'s `manifest.json` (:172-188) records `compiler_sha256`,
 `runtime_archive_sha256` and the revisions, but **not the codegen flags**. And the archive hash
