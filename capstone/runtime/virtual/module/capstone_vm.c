@@ -113,6 +113,21 @@ static unsigned long pin_ahead_pages = 1;
 module_param(pin_ahead_pages, ulong, 0444);
 
 /* The retired count, from wherever this format keeps it. */
+/* The CSMINT descriptor, v7 (Q-23's ruling). Six words, 8-aligned:
+ *   w0 base
+ *   w1 end
+ *   w2 perms in bits 0-3, bit 8 set = NONLIN, clear = LINEAR
+ *   w3 cursor, base <= cursor <= end or the mint refuses with 29
+ *   w4 a SECOND slot address, 0 for none; same checks as the first, and non-zero
+ *      together with LINEAR refuses with 29
+ *   w5 reserved, must be 0
+ * One rev node however many slots are written, which is why this replaces the old
+ * load/delin/scc/store round trip rather than a second mint: two mints would make two
+ * nodes and revoking one would leave the other live. Trusted S performs no capability
+ * memory access, so the module holds no ldc/stc at all. */
+#define CV_DESC_WORDS 6
+#define CV_DESC_NONLIN 0x100UL
+
 static unsigned long node_retired(const struct context *c)
 { return node_table_flat ? c->retired_flat : c->table[5]; }
 
@@ -467,7 +482,7 @@ static unsigned long run(unsigned long frame, unsigned long action)
 {
     unsigned long result;
     asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2"
-                 : "=r"(result) : "r"(frame), "r"(action) : "memory");
+                 : "=&r"(result) : "r"(frame), "r"(action) : "memory");
     return result;
 }
 static unsigned long select_root(struct context *c)
@@ -494,7 +509,7 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     preempt_disable(); local_irq_save(flags);
     old = select_root(c);
     asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                 : "=r"(status) : "r"(a->ancestor) : "memory");
+                 : "=&r"(status) : "r"(a->ancestor) : "memory");
     restore_root(old);
     local_irq_restore(flags); preempt_enable();
     if (status && !destroying) return -EIO;
@@ -520,7 +535,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
 {
     unsigned i, j, index = 0;
     struct arena *a = NULL;
-    unsigned long flags, old, desc[3], ancestor, *slot, mapped = 0;
+    unsigned long flags, old, desc[CV_DESC_WORDS], ancestor, *slot, mapped = 0;
     struct page **pages;
     long n;
     if (!r->bytes || r->bytes > CV_MAX_REGION_BYTES ||
@@ -593,25 +608,24 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     }
     slot = t->frame + 8 + r->reg * 2;
     if (slot[0] || slot[1]) goto unpin;
-    desc[0] = r->address; desc[1] = r->address + r->bytes; desc[2] = r->permissions;
+    desc[0] = r->address;
+    desc[1] = r->address + r->bytes;
+    /* C pointers are copyable, so a non-linear grant is minted NONLIN directly. A linear
+     * mapping grant stays move-only until the allocator derives a non-linear object. */
+    desc[2] = r->permissions | (r->linear ? 0 : CV_DESC_NONLIN);
+    /* The cursor the caller asked for. For a LINEAR grant this equals the base in every
+     * caller (exec.c:292 and :844 both pass the region's own address), so naming it here
+     * is what the old path produced by letting the mint default to base. */
+    desc[3] = r->cursor;
+    /* The image also has to appear in register slot 0: run() refuses to start a thread
+     * unless frame[8] and frame[12] are both filled, and slot 0 is never granted. One
+     * mint, two slots, one node. t->frame is unsigned long *, so + 8 is byte frame+64. */
+    desc[4] = r->reg == 3 ? (unsigned long)(t->frame + 8) : 0;
+    desc[5] = 0;
     preempt_disable(); local_irq_save(flags);
     old = select_root(c);
     asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
-                 : "=r"(ancestor) : "r"(slot), "r"(desc) : "memory");
-    /* C pointers are copyable. Linear mapping grants remain in move-only
-     * slots until the allocator derives a non-linear object from them. */
-    if (!r->linear) {
-        asm volatile(".insn i 0x5b, 3, t0, %0, 0\n"
-                     ".insn r 0x5b, 1, 3, t0, zero, zero\n"
-                     ".insn r 0x5b, 1, 5, t0, t0, %1\n"
-                     ".insn s 0x5b, 4, t0, 0(%0)\nli t0, 0"
-                     : : "r"(slot), "r"(r->cursor) : "t0", "memory");
-    }
-    if (r->reg == 3) {
-        asm volatile(".insn i 0x5b, 3, t0, %0, 0\n"
-                     ".insn s 0x5b, 4, t0, 0(%1)\nli t0, 0"
-                     : : "r"(slot), "r"(t->frame + 8) : "t0", "memory");
-    }
+                 : "=&r"(ancestor) : "r"(slot), "r"(desc) : "memory");
     restore_root(old);
     local_irq_restore(flags); preempt_enable();
     *a = (struct arena){r->address, r->bytes, ancestor, pages,
@@ -659,7 +673,7 @@ static int remap_end(struct context *c, const struct cv_remap *r)
 {
     struct arena *a = c->remapping;
     struct cv_thread *t = find_thread(c, r->thread);
-    unsigned long flags, root, result, desc[3], *slot;
+    unsigned long flags, root, result, desc[CV_DESC_WORDS], *slot;
     unsigned count;
     struct vm_area_struct *v;
     bool valid;
@@ -689,13 +703,16 @@ static int remap_end(struct context *c, const struct cv_remap *r)
     if (slot[0] || slot[1]) return -EFAULT;
     count = r->bytes / PAGE_SIZE;
     for (unsigned i=0; i<min(count, a->count); ++i) c->remap_pages[i] = a->pages[i];
+    /* v7, behaviour-preserving: this slot is the heap's, which is LINEAR, and the old
+     * path let the mint default the cursor to the base. No second slot. */
     desc[0] = r->address; desc[1] = r->address+r->bytes; desc[2] = 6;
+    desc[3] = r->address; desc[4] = 0; desc[5] = 0;
     preempt_disable(); local_irq_save(flags); root = select_root(c);
     asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                 : "=r"(result) : "r"(a->ancestor) : "memory");
+                 : "=&r"(result) : "r"(a->ancestor) : "memory");
     if (!result) {
         asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
-                     : "=r"(result) : "r"(slot), "r"(desc) : "memory");
+                     : "=&r"(result) : "r"(slot), "r"(desc) : "memory");
         a->ancestor = result;
     } else {
         restore_root(root); local_irq_restore(flags); preempt_enable();

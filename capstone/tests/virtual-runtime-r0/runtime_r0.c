@@ -16,7 +16,10 @@ static DEFINE_MUTEX(r0_lock);
 static void mint(unsigned long *frame, unsigned reg, unsigned long base,
                  unsigned long end, unsigned long perms)
 {
-    unsigned long desc[3] = {base, end, perms};
+    /* CSMINT descriptor v7 (Q-23): six words -- base, end, perms|NONLIN, cursor,
+     * second slot address, reserved. This suite mints LINEAR with the cursor at the
+     * base and no second slot, which is what the three-word form produced. */
+    unsigned long desc[6] = {base, end, perms, base, 0, 0};
     void *slot = (char *)frame + 64 + reg * 16;
     asm volatile(".insn r 0x5b, 1, 0x50, zero, %0, %1"
                  : : "r"(slot), "r"(desc) : "memory");

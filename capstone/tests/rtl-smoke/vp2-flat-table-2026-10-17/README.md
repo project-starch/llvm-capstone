@@ -34,6 +34,21 @@ build has no `select_root`/`restore_root` pair around the removed `urevavail` re
     "$OD" -d capstone_vm.ko | grep -cE 'csr[a-z]*[^#]*0x5c1'
     "$OD" -d capstone_vm.ko | grep -cE '^\s+[0-9a-f]+:\s+[0-9a-f]{4}\s+[a-z]'   # RVC
 
+## The zero-capability-memory-access gate (Q-23)
+
+Trusted S performs no capability memory access, so the module must contain no `ldc` or `stc` at
+all. Counted by ENCODING, not mnemonic: opcode `0x5b` with funct3 3 (`csldc`) or 4 (`csstc`).
+objdump prints these as `.4byte`, so a mnemonic grep reads 0 whether they are there or not — that
+false negative cost me a check earlier.
+
+| module | ldc/stc | `0x5c0` | `0xcc0` | RVC | warnings |
+|---|---:|---:|---:|---:|---:|
+| v7, post-ruling (`9ff967445799c02b`) | **0** | 0 | 0 | 0 | 0 |
+| pre-ruling, POSITIVE CONTROL | **4** | 0 | 0 | 0 | 0 |
+
+The pre-ruling row is what makes the zero a reading: all four of its LDC/STC were in `add()`, two
+through the frame slot and two through the frame itself, and the gate finds them.
+
 ## The module's CSR surface, enumerated from source
 
 | CSR | access | sites | on vp2 |
