@@ -606,3 +606,29 @@ No prediction between them: this run decides.
   shared allocator files, the v6 runtime, or the compiler.
 - **Not established:** where the tag is lost. The record ran the same sources on the 2026-10-10 SDK with
   `/tmp/capstone/virt-stack`'s toolchain; this run uses the v6 kit's SDK and `llvm-dev-current-20261017`.
+
+## Two discriminator runs for the failing bundles: pre-registered (2026-10-17, before the runs)
+
+**Fact first: the kit's QEMU decodes CDERIVE.** The compiler lane asked whether this QEMU pin decodes funct7 0x51.
+d35af47b16 has `csderive 1010001 ..... ..... 001 ..... 1011011` (`target/riscv/insn32.decode:984`), implemented by
+`helper_csderive` (`op_helper.c:1212`). That helper raises 29 (`ILLEGAL_OP_VAL`) in exactly two places:
+- **(a)** size 0, or a window outside the parent, tested from the cursor;
+- **(b)** Q-15, when the child does not survive `cap_compress`/`cap_uncompress` and `capstone_exact_bounds` is off.
+
+`capstone_cap_derive`'s own pre-test bounds the offset, not offset + size, so it does not exclude (a).
+
+**Run 1: memcached allocator, Sublet arm (#13), on a kit whose QEMU runs with `x-capstone-exact-bounds=true`.** The
+binaries, controls, SDK and module are the same. Only the QEMU `-cpu` string differs, through a wrapper.
+- If the 29s are Q-15's (b), they vanish. The arm then reads as recorded, CAUGHT 8, with case 05 read from its
+  transcript.
+- If they are (a), they stay.
+
+**Run 2: ffmpeg pool, stock arm (#9), the same binaries, on the PRE-fix module kit** (`v6-pilot`, module `97334f0f`,
+launcher `32f79ca8`). This is the compiler lane's single-variable test for the module change.
+- **(i)** Still cause 24 at `cap_malloc_validate`: the module change is exonerated.
+- **(ii)** The 24s stop: the module change is implicated.
+- **(iii)** A NULL from a refused arena instead: the old module's `add()` rule decides first, and the test does not
+  separate.
+
+The binaries carry the v6-fix SDK's runtime, so `--sdk` stays the v6-fix SDK (the runner checks the CMakeCache
+against it).
