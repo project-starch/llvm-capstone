@@ -638,6 +638,29 @@ the router leaves varies by netlist).
   change A's seal names, never as the fix for the ten thousand. If A also reads near 27,845 the pre-registered "neither"
   branch applies: the two-level id decode, costed before any build.
 
+**A's area reading, 2026-10-18, BEFORE its seal** (the synth lane; A 993043c97, D3's FP port steal held off, crossed the
+host's 3 h 30 m rule without a bitstream and is treated as failing until it seals; route_design still converging, 567
+overlaps at 285 min after a host load of ~60 from another user's jobs). Basis: routing does not change cell counts and the
+flow has no post-route phys_opt; control: vp1's and vp2's post-phys_opt checkpoints read exactly their routed counts
+(21,084 and 32,878), so A's post-phys_opt checkpoint reads what its routed one will. WNS, endpoints and LUTLP-1 come at
+the seal, if it comes (first estimate -18.142, vp2's).
+- **By the pre-registered key alone, A names D3:** issue_read_operands own LUT cells vp1 21,084 | vp2 32,878 | A 21,977;
+  the module's `mem_q` stem 11,370 | 22,741 | 11,465.
+- **By the control the key lacked, it does not: the logic did not leave the design.** Total LUTs vp1 168,740 | vp2
+  178,406 | A 178,757 (A keeps vp2's +9.7k, +351 above it). issue_stage 39,374 | 50,182 | 37,562; scoreboard 14,187 |
+  14,451 | 11,968; ex_stage 41,659 | 37,668 | 48,051; dyn_unit 5,344 | 3,381 | 13,923 (+10,542 against vp2), the growth
+  in its Anvil child `dyn_unit/_spawn_0`: 14,366 LUT cells on A against 870 on vp2; the `mem_q` stem summed under
+  dyn_unit 3,019 -> 14,914 (+11,895). The SAME scoreboard write-back input cones are homed inside the DYN unit on A,
+  where the `_ep_res_0` chain lives, and under issue_read_operands on vp2 and B.
+- **Grade: the "D3" hypothesis is REFUTED on the total and the key is REFUTED as an instrument.** The pre-registration
+  measured where the flow homes a cone, not whether the cone exists: issue_read_operands' own cells are not a stable
+  attribution metric on this design; TOP plus the stem summed over all hierarchies is. Both attribution builds agree with
+  the source diagnosis below: the ten thousand is the DYN result chain's write-back cones (90 -> 105 sources), and which
+  module's hierarchy they land in is netlist-dependent (D3's port steal changes it, Q-15's cone does not). This is the
+  "a check that fires correctly and still under-determines" shape: the key fired exactly as written and could not tell
+  "D3 is the logic" from "D3 moves the logic". The control that catches it is the one every per-module area key needs
+  from now on: the design total beside the module's count, and the stem summed over every hierarchy.
+
 ## vp2b, the timing fix for vp2: pre-registered 2026-10-18 BEFORE the A/B seals, built only if vp2's canary fails
 
 The lead's standing instruction (relayed by the runtime lane, 2026-10-18): everything needed for a working vp2 and the

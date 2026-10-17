@@ -1,3 +1,11 @@
+2026-10-18 (A's area, pre-seal): **A (D3 off) reads issue_read_operands own cells 21,977, vp1's level, and the pre-registered
+key would name D3; the design total refutes it: TOP 178,757 (vp2 178,406), with the same mem_q write-back cones homed under
+dyn_unit/_spawn_0 (14,366 cells against vp2's 870).** D3 moves the logic's hierarchy home; it is not the logic. The key is
+refuted as an instrument (a per-module own-cell count measures the flow's hierarchy choice): every per-module area key now
+carries the design total and the stem summed over all hierarchies as its control. Both builds agree with the source
+diagnosis (the DYN result chain). A is past the host's 3 h 30 m rule without a bitstream, still routing (567 overlaps at
+285 min); its WNS and seal, if they come, are recorded against the pre-registration.
+
 2026-10-18 (attribution concluded): **vp2's issue_read_operands growth is named: the DYN unit's unregistered result mux.**
 The synth lane's netlist queries (stems by cell name, D-pin and replication checks, flop counts) show 96% of the growth is
 the input cones of the scoreboard's cap_result flops, deepened per bit with no replication and no relocation; the source is
