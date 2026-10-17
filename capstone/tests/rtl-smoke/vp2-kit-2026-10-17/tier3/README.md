@@ -872,3 +872,24 @@ bundles run: 18 of 26; not run: [('cpython/allocator-boundary-repros', 'virtual-
   and wmem 0001. wmem's case 22 differs in attribution only.
 - **8 bundles have not run yet:** CPython (4) and PostgreSQL sql-repros (2) need interpreter or server rebuilds, and
   SQLite engine-repros (2) needs build-virtual.py over 33 cases.
+
+## sqlite/engine-repros, both arms (#21, #22), on the fixed revision: pre-registered (2026-10-17, before the runs)
+
+- **Build:** `ports/sqlite/repro322/build-virtual.py --sdk <v6-fix SDK> --amalgamation <the kit's sqlite-source>`
+  (sqlite3.c 7fc92e19…, the record's input), with `--memsys5` for `virtual-malloc` and `--memsys5 --sublet` for
+  `virtual-nested-pools`.
+- **Run:** `shared/run-virtual.py` on a `capstone_vm` VM from the v6-fix kit, without `--exact-bounds`, which is
+  option (iii)'s production configuration.
+- **The record's VM ran `--exact-bounds`** (the runner's docstring, 2026-10-11). So this run differs from the record
+  in the bounds model as well as the revision.
+
+**Predictions:**
+- **`virtual-malloc` (#21): every cell equal to the record** (CAUGHT 5, MISSED 25, NO-READING 3), except where (iii)
+  rounds.
+  - A CAUGHT that becomes MISSED is allowed only for a spatial overrun of an allocation of 4 KiB or more whose
+    accessed byte lies inside its granule's rounding slack. That is (iii)'s documented cost.
+  - Each such flip is checked against the allocation's size from its transcript. Any other flip is a finding.
+- **`virtual-nested-pools` (#22):** two outcomes.
+  - **(a) every cell equal to the record** (CAUGHT 27, MISSED 6), up to the same rounding exception;
+  - **(b) Q-15 29s at the memsys5-block CDERIVE,** which is on the plan's list of (iii) derive sites. The exact-bounds
+    rerun then separates it.
