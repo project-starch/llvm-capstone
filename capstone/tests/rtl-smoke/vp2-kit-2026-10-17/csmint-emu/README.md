@@ -746,3 +746,45 @@ objcopy. The control is handle_exception, which changed and reads DIFFER. A 2-by
 the candidate above, not a confirmed one, so the pointer is not landed on this record. Whether this is enough to land
 it, with the timing baselines for the physical line re-taken on the bumped firmware (B and B2 rather than P), goes to
 the runtime lane, who asked for the bump. The alternative is the padding arm first.
+
+## Boot BLb arm C, pre-registered (2026-10-18, before the boot): boot P's monitor padded to the bumped monitor's code placement
+
+The runtime lane's ruling: run this arm, then land the pointer whatever it reads, citing A, A2, B, B2 and C. It turns
+the candidate mechanism into a confirmed or refuted one.
+
+**The firmware:** fw_payload 4dca1649894c6f15, gate PASS (25680 B, P's).
+- **Built from boot P's own sources:** monitor ebe0a25, wrapper 1269c77, P's three defines and BL's Image.
+- **The build** is `bootblb/build-fpga-fw-pad.sh`, the shared build-fpga-fw.sh plus one step, `FW_PAD=bootblb`.
+  - **Control:** without that step the copy reproduces boot P's firmware byte for byte, 1b44a465d96753b2.
+- **The step inserts `.skip` padding only where control never falls through.** Each insertion point is required to
+  occur exactly once.
+  - 0x6a bytes after `j return_to_sumode`, before `_handle_ints`, in the assembly;
+  - 0x1c6 bytes after a `ret`, before `handle_interrupt`, in the generated C;
+  - 0x11c bytes after a `ret`, before `handle_exception`, in the generated C.
+- **Checked in the built monitor object** (`.cap_text` with the cross objcopy). These sit at arm B's addresses with
+  boot P's exact bytes:
+  - `_handle_ints` 0x1bc;
+  - `return_to_sumode` 0x1d6;
+  - `handle_interrupt` 0x94da;
+  - `handle_exception`'s entry 0x99d8. Its bytes are P's 632, which differ from B's 784 (the control).
+  - `_cap_trap_entry` is at 0x68 in all three.
+
+**What it does not reproduce, so a refutation is not over-read:**
+- **B's 6-byte shift of `_handle_branch_1`.** That is executed code on the exception-return path, which stays at
+  P's 0x144.
+- **B's global data layout.** The counter global moved every later gp slot; this firmware keeps P's.
+- **B's recompiled handle_exception body, and the counter brackets in the domain-call functions.**
+
+**Readings, written down before the boot.** Unbumped draws: fib 45491-45524 and so_lists 2458-2469. Bumped draws:
+fib 45639-45658 and so_lists 2444-2445.
+- **Placement confirmed:** so_lists 2450 ms or less and fib 45600 ms or more, the bumped side on both. The effect is
+  the code placement of the timer path and handle_exception's entry.
+- **Placement refuted:** so_lists 2455 ms or more and fib 45540 ms or less, the unbumped side on both. The effect is
+  then in what C does not reproduce. Per the runtime lane's ruling it is recorded as "handle_exception's
+  recompilation, not attributed further", with the data layout and `_handle_branch_1` named as untested alternatives.
+- **Anything between, or one benchmark on each side:** a partial reading, reported with both numbers and not forced
+  into either.
+- **Retvals, hashes and tags must be P's.** A difference there is a finding of its own and is read first.
+
+The pointer lands after C whatever C reads. Physical-line timing baselines are re-taken on the bumped firmware and
+cite B and B2, or C's reading if it refutes placement. Retval, hash and tag records are unaffected.

@@ -2,7 +2,7 @@
 # Boot BLb (pre-registered on lane vp2-tier12 before the boot): boot BL's image and rungs on the resident vp2, with the
 # firmware of caplifive-opensbi capstone-bootstrap's capstone-sbi pointer bumped 234ee66 -> dafe4f2 (arm B), and, only
 # if B differs from boot P, boot P's own firmware on vp2 (arm A), the arm that differs from B by the firmware alone.
-# Usage: board-bootblb.sh B|A|B2|A2 <firmware sha256/16 as pre-registered>. B2/A2: the pre-registered repeat; A2 compares
+# Usage: board-bootblb.sh B|A|B2|A2|C <firmware sha256/16 as pre-registered>. C: P's monitor padded to B's placement. B2/A2: the pre-registered repeat; A2 compares
 # against B2 as A against B. T_* variables are for the stubbed dry run only.
 main() {
   set -u
@@ -10,7 +10,8 @@ main() {
   case $ARM in
     B|B2) FW=${T_FW:-/tmp/capstone/bootblb/fw/fw_payload.bin};;
     A|A2) FW=${T_FW:-/tmp/capstone/bootp/fw/fw_payload.bin};;
-    *) echo "STOP: arm is B, A, B2 or A2"; return 1;;
+    C) FW=${T_FW:-/tmp/capstone/bootblb/fw-pad/fw_payload.bin};;
+    *) echo "STOP: arm is B, A, B2, A2 or C"; return 1;;
   esac
   local D=${T_OUT:-/tmp/capstone/bootblb/run-$ARM} DRV=/tmp/capstone/wt-gate/capstone/tests/rtl-smoke
   local P=/tmp/capstone/bootp/run/board-bootp.txt J=/tmp/capstone/bootblb/judge-blb.py
@@ -42,6 +43,14 @@ main() {
     [ -s $BREF ] || { echo "NO DATA: arm A needs arm B's transcript at $BREF" >> $L; return 2; }
     python3 $J $D/board-bootblb.txt $BREF > $D/judge-B-vs-A.txt 2>&1
     echo "JUDGE B${ARM#A} vs $ARM rc=$? :: $(tail -1 $D/judge-B-vs-A.txt)" >> $L
+  fi
+  if [ $ARM = C ]; then
+    local r
+    for r in B B2 A A2; do
+      python3 $J /tmp/capstone/bootblb/run-$r/board-bootblb.txt $D/board-bootblb.txt > $D/judge-vs-$r.txt 2>&1
+      echo "JUDGE C vs $r rc=$? :: $(tail -1 $D/judge-vs-$r.txt)" >> $L
+    done
+    grep -o 'TIME bm_[a-z_]* [0-9]* ms' $D/board-bootblb.txt | sed 's/^/  /' >> $L
   fi
   echo "BOOTBLB_${ARM}_DONE $(date +%T)" >> $L
 }
