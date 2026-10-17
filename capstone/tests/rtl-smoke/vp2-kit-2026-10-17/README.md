@@ -1177,3 +1177,26 @@ Pre-registered at bc776696ec59. Result lines in `board-tier12/results/board-vp2-
 - **sparse-churn wedged.** The transcript stops mid-line. The apertures show M, a stall, a pending store, and the domain
   switcher at index 56 with a register write in flight. The trap log names a pc six instructions after the module's
   CSRUNV. Sent to the RTL lane.
+
+## Pre-registered (2026-10-18, before boot r9): every vm-suite step except sparse-churn, which goes last
+
+**The changes** from r8, two stage files:
+- **The module:** the compiler lane's production ce3a542d00acce86 (69db2f133b93: S-24's -ELOOP bound, the
+  thread-create refusal at pr_warn, S-21's child-frame retire).
+- **The suite:** `board-tier12/vm-suite-inner-r9.sh`, run.py's guest script with sparse-churn moved to the end, before
+  rmmod, because it wedged the core in r8. Everything else is in run.py's order.
+
+**The pins.** Firmware b47f82487c6030f6 (the monitor unchanged, 007d81d). board-check reads to the end of the
+transcript when vm-suite has no END marker. Run by `boot3/run-tier12-r9.sh b47f82487c6030f6`, dry-run in
+`boot3/dryrun-r9.txt`.
+
+**Predictions:**
+- **Tier 1:** identity.
+- **vm-suite, against QEMU's record (q30-run),** step by step:
+  - normal 0, threads 1, vm **139** (r8's terminal store fault, the module's !same path, which this module keeps;
+    QEMU 1), nested 0, nested-stale 139, heap-threads 1;
+  - stale, bounds, retired, vm-ro-write, vm-none-read, vm-guard, vm-padding and sparse-stale each 139, with their
+    pre-registered faults;
+  - preempt 143, parallel_one 0, parallel_two 0, sqlite_write 0, sqlite_read 0, mruby 0;
+  - then sparse-churn: a **wedge** as in r8, or 0 if r8's wedge was not deterministic.
+- Every step from stale to mruby is a first silicon reading. A differing exit is named with its fault line.
