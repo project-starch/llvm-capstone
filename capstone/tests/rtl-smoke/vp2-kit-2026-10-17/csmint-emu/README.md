@@ -671,3 +671,38 @@ no vp2 record of the B-series rungs:
   - an existing output directory.
 - **A stubbed dry run** read each branch as written: B passing, B differing, no transcript, a wrong firmware, and
   arm A with B the same, B different, or B absent.
+
+### Boot BLb, result (2026-10-18 01:24-01:51): DIFFER, as pre-registered. One reading, so_lists, is 0.57 % faster on the bumped firmware
+
+Result lines: `bootblb/results-bootblb.txt`.
+- **Arm B** (bumped firmware 2a0850a406d1229c) against boot P: DIFFER.
+  - All ten retvals and all three mruby hashes are identical, and there is no monitor tag of any kind.
+  - Four of the five bench times are inside the band: mandel_term +0.00 %, fib +0.32 %, so_mandelbrot −0.07 % and
+    ao_render −0.06 %.
+  - **so_lists reads 2444 ms against 2458, −0.57 %, outside the 0.5 % band.**
+- **Arm A** (boot P's own firmware 1b44a465d96753b2, on vp2) against boot P: PASS.
+  - Everything is inside the band, so_lists exactly 2458. The bitstream, vp2 against d93a8d66b, moves none of
+    these readings.
+- **B against A:** DIFFER, on so_lists alone (−0.57 %); fib reads +0.37 %. The launch ticks match P's within 0.3 s
+  per stage.
+
+**The pre-registered reading is "B differs and A does not: the bump",** so the control has not passed and the pointer
+bump does not land on it. That rule cannot separate a real effect from the draw-to-draw spread of the shortest
+benchmark: 14 ms on 2.4 s, in the faster direction, where BL's own so_lists read +0.33 % against P.
+
+## Boot BLb repeat, pre-registered (2026-10-18, after B and A, before B2 and A2): one more draw per arm, alternating
+
+**Design.** Arm B2 is the bumped firmware 2a0850a406d1229c, then arm A2 is boot P's 1b44a465d96753b2. Everything else
+is as in B and A: the vp2 bitstream, BL's Image and ten rungs, the judge and the bands. Run order B, A, B2, A2.
+
+**Readings, written down before the draws:**
+- **The 0.57 % was the spread, not the bump:** B2's so_lists is within 0.5 % of A's 2458, i.e. 2446-2470 ms, and B2
+  against A2 reads PASS. The control then passes on B2, and the pointer lands, citing all four arms.
+- **The bump moved so_lists:** B2 reads 2445 ms or less again, and A2 stays within the band of 2458.
+  - That is a real effect of dafe4f2 on the firmware, however small, faster rather than slower. It is reported, and
+    it needs a mechanism before the bump lands. The candidate is a monitor code or data layout change on the
+    rdtime trap path, which every Linux time read takes.
+- **Anything else** (a retval, a hash, a tag, another time outside the band) is read like arm B: no further than its
+  first difference.
+- **A2 reading outside the band of P** would mean the spread is wider than BL's bands assumed. The 0.5 % band is
+  then too tight for so_lists, and that is reported as such, not used to pass B.

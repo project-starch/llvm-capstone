@@ -2,14 +2,15 @@
 # Boot BLb (pre-registered on lane vp2-tier12 before the boot): boot BL's image and rungs on the resident vp2, with the
 # firmware of caplifive-opensbi capstone-bootstrap's capstone-sbi pointer bumped 234ee66 -> dafe4f2 (arm B), and, only
 # if B differs from boot P, boot P's own firmware on vp2 (arm A), the arm that differs from B by the firmware alone.
-# Usage: board-bootblb.sh B|A <firmware sha256/16 as pre-registered>. T_* variables are for the stubbed dry run only.
+# Usage: board-bootblb.sh B|A|B2|A2 <firmware sha256/16 as pre-registered>. B2/A2: the pre-registered repeat; A2 compares
+# against B2 as A against B. T_* variables are for the stubbed dry run only.
 main() {
   set -u
-  local ARM=${1:?B or A} WANT=${2:?firmware hash} FW
+  local ARM=${1:?B, A, B2 or A2} WANT=${2:?firmware hash} FW
   case $ARM in
-    B) FW=${T_FW:-/tmp/capstone/bootblb/fw/fw_payload.bin};;
-    A) FW=${T_FW:-/tmp/capstone/bootp/fw/fw_payload.bin};;
-    *) echo "STOP: arm is B or A"; return 1;;
+    B|B2) FW=${T_FW:-/tmp/capstone/bootblb/fw/fw_payload.bin};;
+    A|A2) FW=${T_FW:-/tmp/capstone/bootp/fw/fw_payload.bin};;
+    *) echo "STOP: arm is B, A, B2 or A2"; return 1;;
   esac
   local D=${T_OUT:-/tmp/capstone/bootblb/run-$ARM} DRV=/tmp/capstone/wt-gate/capstone/tests/rtl-smoke
   local P=/tmp/capstone/bootp/run/board-bootp.txt J=/tmp/capstone/bootblb/judge-blb.py
@@ -36,11 +37,11 @@ main() {
   [ -s $D/board-bootblb.txt ] || { echo "NO DATA: no board transcript" >> $L; return 2; }
   python3 $J $P $D/board-bootblb.txt > $D/judge-vs-P.txt 2>&1
   echo "JUDGE $ARM vs P rc=$? :: $(tail -1 $D/judge-vs-P.txt)" >> $L
-  local BREF=${T_BREF:-/tmp/capstone/bootblb/run-B/board-bootblb.txt}
-  if [ $ARM = A ]; then
+  local BREF=${T_BREF:-/tmp/capstone/bootblb/run-B${ARM#A}/board-bootblb.txt}
+  if [ ${ARM:0:1} = A ]; then
     [ -s $BREF ] || { echo "NO DATA: arm A needs arm B's transcript at $BREF" >> $L; return 2; }
     python3 $J $D/board-bootblb.txt $BREF > $D/judge-B-vs-A.txt 2>&1
-    echo "JUDGE B vs A rc=$? :: $(tail -1 $D/judge-B-vs-A.txt)" >> $L
+    echo "JUDGE B${ARM#A} vs $ARM rc=$? :: $(tail -1 $D/judge-B-vs-A.txt)" >> $L
   fi
   echo "BOOTBLB_${ARM}_DONE $(date +%T)" >> $L
 }
