@@ -734,3 +734,13 @@ So the 10-10 record and the v6 kit differ by profile, not by one flag.
   contents.
 - **(ii) the fixed arm passes:** the flag is implicated.
 - **The image hash is recorded beside the reading,** so a silently identical rebuild is visible.
+
+**Run 4 result: (i), the flag is exonerated.**
+- Arm 1's image is a different build, `561c29fdc447ebae` against the kit's `bdf538f4859482f3`, so it is not a silent
+  identical rebuild.
+- It faults the same way: cause 24 at `refstruct_pool_uninit+0x78`, the same `ldc a2, 0(a0)` and then `sw a1,
+  0x60(a2)`.
+- **Taken together with run 3, the tag loss is in the v6 profile's own runtime or libc contents, or in the sources
+  against them.** It is not the compiler change, and not `+movc-keeps-integer-source`.
+- **The archives cannot be swapped**, because the 10-10 ones are soft-float. So the next separation is a rebuild of
+  those archives' sources with v6 flags, a scope for the compiler lane to set.
