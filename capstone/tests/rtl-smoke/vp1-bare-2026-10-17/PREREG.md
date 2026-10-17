@@ -113,7 +113,7 @@ s1-revoke-gap-2026-10-14/PREREG.md) are reported. The comparator is `cmp-s1gap.p
 
 The S-16 set (98 readings identical across bitstreams) and the Sublet floor keep the exact rule.
 
-**Amended at 20:25, before the retry (2026-10-17): an image that never started is re-run once.**
+**Amended at 20:24, before the retry (2026-10-17): an image that never started is re-run once.**
 
 At 20:03 the session's S-16 arm s16st-esc-n8 never ran its image. The JTAG `load_image` timed out ("[riscv.cpu] Timed
 out after 120s waiting for busy to go low") before `continue`, so the arm produced no reading, and S-16 read 17 of 18

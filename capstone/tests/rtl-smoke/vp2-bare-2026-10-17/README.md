@@ -81,7 +81,7 @@ what they do.
   count and values as 64-bit integers. Then corpus set 7 against d93a8d66b's record.
 
 
-**Amended before the run (2026-10-17, 20:25): an image that never started is re-run once.**
+**Amended before the run (2026-10-17, 20:24): an image that never started is re-run once.**
 
 On vp1's first session a JTAG `load_image` timed out before `continue` (s16st-esc-n8), so that arm produced no reading.
 vp1's PREREG amendment of the same time gives the rule and its precedent. Here every bare run of the session goes
@@ -92,6 +92,8 @@ through `infra-retry.py`: the canary's S-16, floor and s1gap arms, and the 25 ar
 - A second non-start is a missing reading, so the canary's "stop on any difference" fails, and the board goes back to
   vp1 as pre-registered.
 - The 25 arms' outer timeout is 1200 s, up from 600 s: a load_image hang plus one retry needs about 10 minutes.
+- The arms phase fails (rc 2) unless the pre-registered table gives exactly 25 arms. A dry run had read an empty
+  table as done.
 
 Dry runs, with only the innermost runner stubbed (the real run-capstl.sh and wrapper run):
 `results/dryrun-infra-retry.txt`.
