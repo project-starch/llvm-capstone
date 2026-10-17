@@ -161,3 +161,63 @@ illegal at decode, with mtval carrying the bits, and the pipeline now flushes on
 - port the routine into the board monitor (capstone-sbi), where its caller injects the status into S instead of
   printing it;
 - handle a page fault on the MPRV descriptor read, which this arm does not create.
+
+## va-csmint-mon.S: the monitor's path, pre-registered (2026-10-17, before any run)
+
+**Why a second arm.** The runtime lane's conditions for the port (`docs/plans/2026-10-17-vp2-monitor-csmint-port.md`)
+require an arm that exercises the real path:
+1. S issues CSMINT, which traps with cause 2.
+2. An M trap entry builds the MONITOR's frame: S's x[n] at frame + 8n, and S's sp parked in CSCRATCH, as capstone-sbi's
+   `_cap_trap_entry` does.
+3. It calls `csmint_dispatch`.
+4. Either rd is written into the frame and the frame restored, or the refusal is injected into S. S's own stvec
+   handler records scause and stval and steps over the instruction.
+5. S reads rd itself, and M reads the slot back physically.
+
+The arm also has to link the SAME routine the monitor ships, so `va-csmint-mon.S` `#include`s `capstone_csmint.S`
+from the capstone-sbi tree. It does not carry a copy.
+
+**The pinned source:**
+- caplifive-sbi (capstone-sbi), branch `vp2/csmint-emu`, commit **868dd5f**;
+- `capstone_csmint.S` sha256 **77c5f13019379cdfff2f290647331fdd279b7e69115a51386c77fecd4bf7650f**;
+- build with `-I<capstone-sbi at 868dd5f>`, and check the file's sha256 before building. A different hash is a
+  different routine.
+
+**What it adds, beyond the routine:**
+- a descriptor in a page without A (13): the monitor walks the descriptor in software, and never uses MPRV;
+- an sp operand (2, tval the instruction): the monitor keeps S's sp in CSCRATCH;
+- CSNODE's defence. A free head of 0 with a free count of 1 passes the routine's pre-check (64 - 63 + 1 = 2), and
+  CSNODE refuses the header as corrupt (29) inside the window. The window's trap vector catches it, the cause is
+  injected into S, and nothing is written.
+
+**The window's vector.** On the RTL the trap vector is mtvec in both modes (the RTL lane, bf3db3175). The routine
+copies the vector capability with `CCSRRW(s8, ctvec, x0)`, points mtvec at `csm_window_trap` for the window, and
+restores cursor, metadata and tag with one CCSRRW.
+
+**Readings (CAPPRINT, in order: S's a2, a5, a6 per row).** Addresses are this folder's build with `link.ld`. The RTL
+lane's build reads them from `llvm-nm`.
+
+| row | what | a2 (rd), a5 (scause), a6 (stval) |
+|---|---|---|
+| 1 | D1 into slotA | 4, -1, -1 |
+| 2 | descriptor misaligned | -1, 4, desc+4 [0x80008004] |
+| 3 | slot misaligned | -1, 6, slotB+8 [0x80009018] |
+| 4 | base >= end | -1, 29, 0 |
+| 5 | unrepresentable | -1, 29, 0 |
+| 6 | perms > 15 | -1, 29, 0 |
+| 7 | slot PTE without D | -1, 15, slotnod [0x8000a000] |
+| 8 | descriptor page without A | -1, 13, descnoa [0x8000c000] |
+| 9 | rs1 = sp | -1, 2, 0xa0b1165b |
+| 10 | D4 into slotA | 6, -1, -1 |
+| 11 | next-unused 63 (the pre-check) | -1, 30, 0 |
+| 12 | corrupt free head (the defence) | -1, 29, 0 |
+| final | slotA: type, base, end, cursor, perms | 0, dbuf+512 [0x8000b200], dbuf+768 [0x8000b300], dbuf+512, 4 |
+| final | slotB; slotnod; next-unused; the free word | 0, 0; 0; 63; 0x100000000 |
+
+That is 47 values, then pass. Any 0xbad1 or 0xbad2 is a failure of the arm.
+
+**Not covered by either arm** (the plan records it):
+- the monitor's own `_cap_trap_entry` around the hook;
+- the mtval-0 fetch on the fixed decoder.
+vp2 exercises the first. The fetch was exercised by va-csmint-emu on the pre-fix decoder; the monitor's version of it
+is a software-walked fetch, which this arm does not reach.
