@@ -1,3 +1,13 @@
+2026-10-18 (B sealed): **Attribution build B (Q-15's cone pruned) is sealed and graded: Q-15 is NOT issue_read_operands' ten
+thousand.** B's own cells there read 28,457 against vp2's 27,845 and vp1's 17,505; the cone was ex_stage's (2,410 -> 337,
+2,073 LUT); routed WNS -17.537 recovers 1.482 of the 3.404 ns gap, inside the one-sample band, so not attributable; LUTLP-1 0.
+The grade is in the plan doc under the attribution section. "D3" and "neither" stay open on A's seal (993043c97, still
+routing in a second-pass excursion). The vp2b Q-15 variant is therefore not the fix; its mask-form judge stays validated on the
+lane branch (947ebb48c, 11,092,561 children, 0 mismatches) as an ex_stage reduction that can ride the build A's reading names.
+Two RTL/QEMU divergences filed from the module's CSR questions: Q-21 (0xcc0 urevavail absent on the RTL, illegal; the module
+computes availability from the header) and Q-22 (0x5c0 scapctl absent; the RTL is PU = 0 permanently; the module must not
+write it on silicon).
+
 2026-10-18 (later still): **vp2b, the timing fix for vp2, is pre-registered before the A/B seals** (the plan doc's "vp2b, the
 timing fix for vp2"): the lead's standing instruction (via the runtime lane) is everything needed for a working vp2 and the
 corpus on it without further asks, so if vp2's canary fails the change the seals name starts at once (B names Q-15: the mask

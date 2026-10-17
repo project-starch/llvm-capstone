@@ -615,6 +615,29 @@ Each reading changes the next RTL step, so the builds go; a null duplicate of vp
 and is not requested. The grade is written against this section at each seal: own-cell LUT of issue_read_operands, TOP
 LUT, routed WNS and the worst endpoint, loop count and LUTLP-1 (both expected unchanged from vp2's: 8 blocks, 0).
 
+**B sealed 2026-10-18 (the synth lane; flow 2 h 24 m 51 s, synthesis peak 22.31 GB), graded against the keys above.** Build
+a8c873ac3 (Q-15's judge held at 1), bitstream 11,443,722 B, sha256 906941f54787efdfca25c53153e7cee5c20054a84a223f24801059828e33411b,
+synthesis-only, not for the board. Routed WNS -17.537 (TNS -837,683.375, WHS +0.047, 101,314 failing endpoints of 258,951,
+worst path 129 levels), the worst endpoints the same family as vp1 and vp2 (csr_regfile cpmp_q[7] iE -> issue_read_operands
+fu_data_q cap_metadata_b[20] / rd_metadata[19..20] / cap_metadata_a[20]). LUTLP-1 0; the router leaves one loop, its
+TIMING-23 arc cap_clear_addr_q[55]_i_2 (d93a8d66b's arc, not vp1's and vp2's ldc_store_ok_q_i_2: which member of the ring
+the router leaves varies by netlist).
+- **The deciding key: issue_read_operands' own cells 28,457, against vp2's 27,845 (+612) and vp1's 17,505. Q-15's cone is
+  NOT the ten thousand.** The second hypothesis is refuted on its own key; "D3" and "neither" stay open on A's reading.
+- **Where Q-15's cone was: ex_stage's own cells 2,410 -> 337 (vp1 43), 2,073 LUT** for the latched child bounds and the
+  compress + decompress round trip, in the module that holds them, not retimed across the boundary. TOP 178,406 -> 177,515
+  (-891): the cone's 2,073 is offset by netlist-to-netlist movement elsewhere (scoreboard 14,451 -> 16,727, dom_switcher
+  9,467 -> 9,762, dyn 3,381 -> 3,052, rev_node 2,842 -> 2,737, csr_regfile 28,405 -> 28,133), none of it predicted and
+  none of it in a module the one-line change touches.
+- **WNS: B recovers 1.482 of vp2's 3.404 ns gap to vp1, and that is INSIDE the one-sample null band (3.74 ns)**, so the
+  1.5 ns is not attributable to Q-15 on this evidence; the worst-path family is unchanged, consistent with the round trip's
+  cone sitting off the critical path. TNS -837,683 is better than vp1's -885,099.
+- **Consequence for vp2b:** the Q-15 variant is not named by this seal. The mask-form judge stays validated and available
+  (capstone-ariane `virtual-profile-2-d` 947ebb48c: equal to the round trip on 11,092,561 children, 0 mismatches, both
+  controls firing) as a 2,073-LUT reduction of ex_stage with no reading change; it joins a vp2b build only alongside the
+  change A's seal names, never as the fix for the ten thousand. If A also reads near 27,845 the pre-registered "neither"
+  branch applies: the two-level id decode, costed before any build.
+
 ## vp2b, the timing fix for vp2: pre-registered 2026-10-18 BEFORE the A/B seals, built only if vp2's canary fails
 
 The lead's standing instruction (relayed by the runtime lane, 2026-10-18): everything needed for a working vp2 and the
