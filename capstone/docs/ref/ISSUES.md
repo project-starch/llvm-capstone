@@ -339,6 +339,77 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 **Impact.** A program that branches on these errnos (ENODEV for an unsupported file mapping, ENOMEM for an oversize mapping) takes another path. No port has been checked for such a dependency.
 
 
+## S-21 — silicon only: every CSRUNV escape restores the S caller's registers and CSRs (M-mode ones included) from frame+1024, and a child thread's frame is a page the domain can write `OPEN — security, silicon only, found 2026-10-18 by the board lane reading vp2 Tier 1 boot 3-T1's repeat (confirmed from source by the claim-auditor and two-sided by the RTL lane; NOT YET DEMONSTRATED, the RTL lane's sim arm is pre-registered); RULED the same day by the semantics owner: the module makes a child frame unreachable before its first entry (the compiler lane), and the RTL keeps the caller snapshot out of the frame on the next bitstream (the RTL lane); a consequence of vp2 item D's decision 1`
+
+Siblings: S-22 (the paused context's OWN state, read back from the same domain-reachable frame), Q-30 (the frame slots'
+visibility after an escape, which is how this was found). The main thread is not affected: its frame is a kernel page.
+
+**The chain** (capstone-ariane bf3db3175, the vp2 bitstream; module capstone_vm.c as built into ko ed24f827):
+1. **ENTRY saves the S caller at frame+1024.** The request carries save_base = base_addr + 1024 (commit_stage.sv:617);
+   the CSR file latches base_addr as runv_frame (:626; csr_regfile.sv:2117).
+2. **Every escape restores it from there.** The escape request has restore_base = sup_runv_frame_i + 1024
+   (commit_stage.sv:853-856); the walk restores ids 0..66 from it (capstone_dom_switcher.anvil:508), the FP state from
+   frame+2048 (:527-533). Every escape kind runs it, the quantum included, so no ECALL is needed.
+3. **Nothing on the restore path checks what it loads.** restore_io (:121-147) reads the word and sets the register
+   with has_metadata = metadata_en; the pc comes from id 0 (frontend.sv:462-466); x1..x31 are written unfiltered
+   (issue_read_operands.sv:1649-1651); CSR ids 1..25 and 57..66 are written with no privilege gate
+   (csr_regfile.sv:2008-2070), which includes S state (mstatus, satp, stvec, sepc, sscratch) and M state (mtvec,
+   mscratch, medeleg, mideleg, mie, mip, mepc/cepc, ctvec, cpmp0..15). Only the privilege level is a flop
+   (runv_caller_priv_q, csr_regfile.sv:2120/2127). "Not found" is the strength of this point: greps of the restore
+   path for a privilege or tag test, by the auditor and by the RTL lane, found none.
+4. **A child thread's frame is domain-writable.** The domain builds it in a 4 KiB page it holds a NONLIN RW copy of
+   (runtime/virtual/thread.c:36-61, cap_vm_copyable) and names it in the thread-create service. CV_THREAD_CREATE
+   (capstone_vm.c:1021-1045) checks find_arena(frame, PAGE_SIZE) and pins the page; it does not retire, revoke or
+   remap the grant, and retire() refuses -EBUSY while the arena is a thread frame (:516), so the grant stays live.
+5. So a domain can write the saved S pc, sp, tp, satp and stvec, and M-mode trap state, into its child's frame+1024..,
+   and the child's next escape loads them into the S caller: a kernel compromise directly; the path through mtvec or
+   medeleg to M is the auditor's inference, not traced end to end. Reading the page also leaks the kernel's live GPRs
+   and the tagged M CSRs that ENTRY saved there.
+
+**QEMU cannot show it.** QEMU keeps the caller in the context slot (save_state(&call->caller), capstone_supervisor.c
+:971, restored at :439), and its own comment requires the frame be "not mapped into the application" (:685-686).
+Item D's decision 1 (docs/plans/2026-10-17-vp2-item-d-csrunv-rtl.md, "the frame is the context storage", the caller's
+snapshot at frame+1024) was taken by the semantics owner on 2026-10-17 on that assumption, and the module's child
+frames break it.
+
+**Demonstration (pending).** The RTL lane's arm on bf3db3175: a va-runv2 variant whose context stores a marker into
+the caller's sp slot of its frame before its ECALL, the S supervisor printing sp after CSRUNV returns (prediction: sp
+reads the marker), plus an arm on an M CSR. The slot's offset is taken from the switcher's own save walk in the trace
+(the auditor's layout reads +1408, the RTL lane's +1120).
+
+**Fixes, as ruled.** (a) The module (the compiler lane, the queue's revision): CSRETIRE the frame arena's ancestor once
+the pinned page is in hand, so the domain's copy is dead (25 on access), keep the page kernel-only, and refuse
+CV_THREAD_CREATE if the retire fails; a two-sided run.py check, a domain that writes its child's frame+1024.. before the
+ECALL reads 25 after the fix and reaches the ECALL on the pre-fix module. Trusted S cannot copy tagged capabilities
+(Q-23), so copying the start frame into a kernel page is not available. (b) The RTL (next bitstream, costed and
+pre-registered by the RTL lane): the caller snapshot kept out of the frame, in a kernel-only save area or the CSR file
+for the one slot, since (a) relies on the adapter never granting a frame page.
+
+**Impact.** Benign programs run unaffected (Tier 1/2 proceed). Any claim that the virtual profile isolates the kernel
+from a domain ON SILICON must not outrun this issue until (a) is on the board and the demonstration arm reads 25.
+
+## S-22 — silicon only: the paused context's own state stays in its frame, so a domain that can write a child thread's frame can change that thread's satp, srevroot and mstatus on resume and reload stale tagged register copies `OPEN — security, silicon only, filed 2026-10-18 beside S-21 from the RTL lane's two-sided read; the same module fix as S-21 covers it today; the RTL fixes (a consuming resume, the hidden words out of the frame) are the RTL lane's for the next bitstream`
+
+Siblings: S-21 (the S caller's snapshot at frame+1024, restored on every escape; same frame, same module fix), Q-30.
+
+**The two mechanisms** (bf3db3175):
+1. **Resume re-reads privileged context state from the frame.** RESUME loads the context's mstatus from +920 and its
+   satp, srevroot and options from the hidden words at +928..+944 (capstone_dom_switcher.anvil:310-316, rsteps 2-5);
+   QEMU keeps them internal. The runtime suite's case 28 (immutable_resume_roots) rewrites +0/+8/+56, not +928..,
+   so it does not cover this. A domain with RW to its child's frame could therefore give the child a page table
+   root, a revocation root or an mstatus of its choosing at the child's next resume.
+2. **Resume does not consume the slots.** The restore read is a plain read (restore_io; load_unit.sv:197-234), and only
+   +224 is zeroed, after a reply (anvil :297, :338-340); a non-reply resume zeroes nothing. So after every resume the
+   frame keeps tagged copies of x1..x31, LINEAR ones included, beside the live registers, until a later ENTRY zeroes
+   them: a domain holding RW to the frame can LDC a stale LINEAR copy after a resume, a linearity residual.
+
+**Fixes.** (a) The module fix of S-21 makes the frame unreachable to the domain, which closes both. (b) The RTL lane
+(next bitstream): a consuming resume (the switcher clears the 31 slots and tags after loading them) and the hidden
+words out of the frame. QEMU is being brought to the RTL's behaviour as it is (slots written on escape, +224 zeroed on
+action 2 only), not to the fixed one, so the kit's predictions see what silicon does.
+
+**Not demonstrated.** Source reading only.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
