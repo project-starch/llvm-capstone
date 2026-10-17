@@ -218,6 +218,28 @@ QEMU's internally saved continuations.
 | 576..639 | 64 total | Scalar cursor/value views of a0..a7 |
 | 640, 648 | 8 each | Collection page count, physical page-list address |
 
+**The register slots after an escape (ruled 2026-10-18, Q-30; the RTL is the reference).** On every escape the
+context's x1..x31 are written WITH their tags into the frame's own register slots (+64 + 16·i, the PCC at +64) and
+the caller is restored over the register file; the resume loads the slots back (the pc from +64, +4 after a reply),
+and zeroes only +224 (x10's slot) after a reply (action 2); a non-reply resume zeroes nothing, and the restore read
+does not consume, so after every resume the frame keeps tagged copies of x1..x31, LINEAR ones included, beside the
+live registers until a later ENTRY zeroes them (a linearity residual on silicon, recorded with the S-entry below;
+the RTL item for the next bitstream is a consuming resume). The trusted adapter therefore treats the register slots as the context's live
+state and OVERWRITES +224 with the reply; a check that the slot is empty is QEMU-shaped and wrong on silicon (vp2's
+boot 3-T1 repeat stopped on it). QEMU's escape, which kept the callee in its own save state and left the slots
+zero, is brought to the RTL's behaviour in the pin that follows 3b8040d5ff6e; the +576..+639 views and the event
+words are unchanged.
+
+**The caller's snapshot at +1024..+2304 must never sit in a page the application can reach (found
+2026-10-18 by the board lane's auditor, filed as an S-entry).** On the RTL every escape restores the S caller
+(pc, x1..x31, the S and M CSRs, FP) from frame+1024 with no check, so a domain holding a capability to a
+child thread's frame page could write the kernel's saved pc/sp/satp/stvec and have the next escape load them.
+QEMU keeps the caller in its own slot and cannot show it. Rule: the trusted adapter makes a child thread's
+frame unreachable by the domain before its first entry (it retires the frame arena's ancestor after pinning the
+page and keeps the page kernel-only; the main thread's frame is a kernel page already); and the RTL item for the
+next bitstream keeps the caller snapshot out of any domain-reachable page. Item D's decision 1 placed the
+snapshot in the frame on QEMU's assumption that the frame is not mapped into the application.
+
 The base frame is 576 bytes; nonzero options require 640 bytes; collection
 requires 656 bytes. Unknown options are rejected. First entry consumes and
 clears all 32 initial PCC/GPR slots. Later resumes use the saved continuation;
