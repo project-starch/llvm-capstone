@@ -487,6 +487,19 @@ malloc block stays inside the block's bounds. Its record says MISSED 13, the sam
 candidate revision. A NO-READING is a harness or heap problem, to be read from the guest transcript before anything
 else.
 
+**Result (2026-10-17 09:20-09:21, one guest boot per bundle):**
+- **Every verdict holds:** MISSED 13, CAUGHT 25, CAUGHT 13, CAUGHT 12 and CAUGHT 10, the recorded tallies.
+- **The cell-by-cell prediction held for four of the five bundles,** 63 cells with 0 mismatches.
+  - The check is `compare-cells.py` (committed here), the Sublet pilot's comparison as a tool.
+  - Its positive control, over the third pilot's verdicts, finds exactly cases 00 and 10.
+- **It missed for the fifth, `wireshark/plain-temporal-repros`.** All 10 cells are CAUGHT at the same probe
+  (`wst_read_probe`), attribution `probe`, reached. But the fault cause is **25** where the record says **24**.
+  - The guest's line for each is QEMU's `Cap mem access on revoked capability`.
+  - This bundle was recorded on 2026-10-10. The other two temporal bundles were recorded on 2026-10-11 and read 25 for
+    the same access shape: `ffmpeg/plain-temporal-repros` 13 x 25, `memcached/plain-temporal-repros` 3 x 25.
+  - So the record that differs is the older one, and the new runs agree with the newer records.
+  - Why the 2026-10-10 runtime read 24 is not established here.
+
 ## The prebuilt bundles on the fixed v6 revision: pre-registered (2026-10-17, before the builds)
 
 These four bundles run in the runner's prebuilt mode. Each corpus's `shared/build-cases.sh capstone-application` is
