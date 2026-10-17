@@ -52,3 +52,18 @@ the second CALL's escape, 0x99 the word it stored), arm 3's store lands (1), arm
 the liveness query, Q-17's defect) against 0x19 on vp1. A bitstream that reads vp1's vector on arm 1 translates; one
 that reads the control's does not. `vb-trans-off` reads its 13 values on both bitstreams (the flag off is the physical
 profile, and the 95-test sweep is identical between the two trees).
+
+**Read on the board 2026-10-17 (caplifive_sublet_d93a8d66b, one power cycle per image, hashes checked):** `vb-trans-off`
+13 of 13 and `q17-order` 0x1d 0x19 0x2 as above; `vb-trans` SR 36 with 33 values equal to the control vector and three
+that differ from it by the IMAGE'S LINK LAYOUT, not by the silicon. Each of the three subtracts a link address from a
+CSR whose value on the board equals the simulation's: position 16 (0-based) is csuptval - nomap with csuptval 0, and
+`nomap` is 0x80007000 in the control simulation's ELF but 0x80008000 in the board image (`build.sh` rebuilt, sha256
+identical; `llvm-nm`), so the board reads 0xffffffff7fff8000; position 23 is csuptval - ropage with csuptval 0x6f on
+both, and `ropage` is 0x80008000 against 0x80009000, so the board reads 0xffffffff7fff706f; position 27 is csupepc -
+fault4 where csupepc holds the pc of arm 4's RETURN (no escape on the resident bitstream), and the in-domain CAPPRINT of
+arm 4 compiles out under `BOARD_TEST_CH`, so the RETURN is 0x14 past `fault4` on the board (0x80001d98 - 0x80001d84)
+against 0x18 in the simulation. The raw csupepc values are the control trace's `csrr 0xfc2` results (run `vb7ctl`),
+which place the stale pc at the RETURN of each returning arm. So the control vector for the board image is the row
+above with those three positions replaced by 0xffffffff7fff8000, 0xffffffff7fff706f and 0x14, and the resident
+bitstream read it 36 of 36. The vp1 vector has no layout-dependent entry: its arms 2 to 4 fault for real, so the epc
+and tval readings are 0 by construction, and the arm-0 reading 0x28 is the same code in both builds (it matched).
