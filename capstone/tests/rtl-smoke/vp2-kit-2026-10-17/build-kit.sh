@@ -7,6 +7,10 @@
 # Inputs, all required: KIT_REPO (the main clone, with its buildroot submodules: a worktree has none), KIT_LLVM (an LLVM
 # build with -capstone-image-gp), KIT_QEMU_REF (a d35af47b163c checkout with build/qemu-system-riscv64), KIT_IMAGES (the
 # guest's Image, fw_jump.elf and rootfs.ext2), KIT_MUSL_TARBALL (musl-1.2.5.tar.gz). KIT_OUT is the output root.
+# KIT_FLAT=1 builds BOTH adapters with -DCAPSTONE_VM_FLAT_TABLE=1, vp2's flat lifetime table (capstone_vm.c `#ifdef
+# CAPSTONE_VM_FLAT_TABLE`: the module then has no scapctl or urevavail access, CSRs vp2 lacks). Unset, both builds get
+# exactly the environment they got before the hook. The define is recorded in the status and in the kit beside the
+# module (adapter/module/BUILD-FLAGS).
 main() {
   set -u
   local REV=${1:?runtime rev} LABEL=${2:?label}
@@ -44,11 +48,14 @@ main() {
   [ -d "$musl" ] || { log "FAIL-MUSL (musl.log)"; return 1; }
   nice -n 10 bash $S/capstone/runtime/virtual/build-sdk.sh $O/out "$musl" > $O/sdk.log 2>&1 || { log "FAIL-SDK (sdk.log)"; return 1; }
   log "SDK-DONE"
+  local FLAT=""
+  case "${KIT_FLAT:-}" in 1) FLAT=-DCAPSTONE_VM_FLAT_TABLE=1 ;; "") ;; *) log "FAIL KIT_FLAT must be 1 or unset"; return 1 ;; esac
+  log "KIT-FLAT ${KIT_FLAT:-0} module define: ${FLAT:-none}"
   KERNEL_BUILD=$BQ/build/build/linux-custom CROSS_COMPILE=$BQ/build/host/bin/riscv64-buildroot-linux-gnu- \
-    nice -n 10 bash $S/capstone/runtime/virtual/build-adapter.sh $O/out/adapter-qemu > $O/adapter-qemu.log 2>&1 || { log "FAIL-ADAPTER-QEMU"; return 1; }
+    nice -n 10 env ${FLAT:+KCFLAGS=$FLAT} bash $S/capstone/runtime/virtual/build-adapter.sh $O/out/adapter-qemu > $O/adapter-qemu.log 2>&1 || { log "FAIL-ADAPTER-QEMU"; return 1; }
   # the board's module: the FPGA kernel tree, and buildroot's external.mk flags (rv64g, no RVC: a compressed module
   # hangs the board in insmod, ISSUES/memory 'out-of-tree package build loses EXTRA_CFLAGS')
-  KERNEL_BUILD=$BF/build/linux-6.4.14 CROSS_COMPILE=$BF/host/bin/riscv64-buildroot-linux-gnu- KCFLAGS="-march=rv64g -mabi=lp64d" \
+  KERNEL_BUILD=$BF/build/linux-6.4.14 CROSS_COMPILE=$BF/host/bin/riscv64-buildroot-linux-gnu- KCFLAGS="-march=rv64g -mabi=lp64d${FLAT:+ $FLAT}" \
     nice -n 10 bash $S/capstone/runtime/virtual/build-adapter.sh $O/out/adapter-board > $O/adapter-board.log 2>&1 || { log "FAIL-ADAPTER-BOARD"; return 1; }
   log "MODULE-HEADERS $(cd $O/out/adapter-board/module && sha256sum *.h | cut -c1-16,65- | tr '\n' ' ')"
   log "ADAPTERS-DONE qemu-ko=$(sha256sum $O/out/adapter-qemu/module/capstone_vm.ko | cut -c1-16) board-ko=$(sha256sum $O/out/adapter-board/module/capstone_vm.ko | cut -c1-16) board-vexec=$(sha256sum $O/out/adapter-board/capstone-vexec | cut -c1-16)"
@@ -58,6 +65,7 @@ main() {
     && cp $IMGS/{Image,fw_jump.elf,rootfs.ext2} $K/images/ \
     && cp $O/out/adapter-qemu/capstone-vexec $O/out/adapter-qemu/capstone-job $K/adapter/ && cp $O/out/adapter-qemu/module/capstone_vm.ko $K/adapter/module/ \
     || { log "FAIL-KIT"; return 1; }
+  echo "${FLAT:-none}" > $K/adapter/module/BUILD-FLAGS
   log "KIT-ASSEMBLED $K qemu=$(sha256sum $K/qemu-system-riscv64 | cut -c1-16) rootfs=$(sha256sum $K/images/rootfs.ext2 | cut -c1-16)"
   $O/out/sdk/capstone-cc -O1 -I$S/capstone/runtime/include $S/capstone/runtime/virtual/contract.c -o $O/out/contract.dom > $O/contract.log 2>&1 || { log "FAIL-CONTRACT"; return 1; }
   log "CONTRACT-DONE $(sha256sum $O/out/contract.dom | cut -c1-16)"
