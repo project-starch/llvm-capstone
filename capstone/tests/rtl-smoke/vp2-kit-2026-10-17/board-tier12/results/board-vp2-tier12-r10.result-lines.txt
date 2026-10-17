@@ -1,0 +1,65 @@
+# vp2 boot r10 (Tier 1+2), 2026-10-18 07:06-07:19: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload 9b3eb92a963acb7c
+# (monitor 007d81d), module ce3a542d00acce86, the suite with sparse-stale and sparse-churn last (vm-suite-inner-r10.sh).
+# Pre-registered at lane vp2-tier12 bb4981135515. Result lines only, from run3r10/board.txt and SEQ.
+
+DRIVER rc=1 07:18:32; watchdog lines 49
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=NONE oracle=22 NOT-AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+VM-SUITE board-check rc=1 :: 18 of 41 true; 15 off the pre-registration ['sparse-churn', 'sparse-stale', 'sqlite_write', 'sqlite_read', 'mruby', 'fault_causes', 'nested_denial_site', 'vm_denial_sites', 'vm_denial_operations', 'linux_pages_r
+FRTY retries 4 at       4 FRTY:01111434 
+DIAG fault repeats: 
+ELOOP lines: 
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_R10_DONE 07:18:32
+
+## vm-suite exits, in order
+  VM_EXIT:normal:0
+  VM_EXIT:threads:1
+  VM_EXIT:vm:139
+  VM_EXIT:nested:0
+  VM_EXIT:nested-stale:139
+  VM_EXIT:heap-threads:1
+  VM_EXIT:stale:139
+  VM_EXIT:bounds:139
+  VM_EXIT:retired:139
+  VM_EXIT:vm-ro-write:139
+  VM_EXIT:vm-none-read:139
+  VM_EXIT:vm-guard:139
+  VM_EXIT:vm-padding:139
+  VM_EXIT:preempt:143
+  VM_EXIT:parallel_one:0
+  VM_EXIT:parallel_two:0
+  As pre-registered through parallel_two: r9's thirteen, then preempt 143, parallel_one 0 and parallel_two 0 (both
+  serialized processes print VIRTUAL_APPLICATION_OK, each with QEMU's 24 grants) -- the first silicon readings of
+  those three.
+  sqlite_write: the core WEDGED. The step's own output goes to /tmp/sqlite.out (run.py's script), so nothing of it
+  reaches the transcript; it ends after the parallel pair's cat. sqlite_read, mruby and the two sparse steps: not run.
+## the wedge apertures (sqlite_write)
+  sw=255 TRAP LOG {seen,mcause[6:0]} 0x88 10001000
+  sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1d 00011101
+  sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x80 10000000
+  sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x00 00000000
+  sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x0
+  sw=228 {1,dom_switch_idx[6:0]} 0xb8 10111000
+  sw=229 {load_state[3:0],0000} 0x00 00000000
+  sw=192 {0000000,commit_instr[0].valid} 0x01 00000001
+  sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+  sw=194 {000000,store_state} 0x00 00000000
+  sw=195 {0000,load_state} 0x00 00000000
+  sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0x00 00000000
+  sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x40 01000000
+  sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0x00 00000000
+  sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+  commit pc (scoreboard slot 0; stale after a flush) 0x0000003f90e62638
+  trap-log mepc 0x0000000000035a88
+  trap-log tval 0x0000000000000073
+  rev_node_debug_ex 0x0000000040000033
+  rev_node_head_ex 0x006d
+  rev_node_serving_idx_ex 0x0000004a
+  Different from the sparse wedge (r8/r9): privM with lsu_rdy, dyn_rdy and flu_rdy, NOT stalled (225 = tbe only),
+  an instruction valid at commit, the LSU idle, store_state 0; the switcher index again 56 with reg_req.is_set (common
+  to all three wedges, so possibly residue). No monitor tag in the transcript. An M-mode core that runs without
+  progress and without printing.

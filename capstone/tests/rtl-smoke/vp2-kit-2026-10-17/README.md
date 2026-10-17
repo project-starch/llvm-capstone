@@ -1226,3 +1226,16 @@ every other step. The module (ce3a542d00acce86) and the monitor (007d81d) are r9
   fe8c4283f8ad):** preempt 143, parallel_one 0, parallel_two 0 (serialized by the queue), sqlite_write 0 with
   SQLITE_SUM=5050, sqlite_read 0 with SQLITE_PERSIST=100, mruby 0 with MRUBY_SUM=5050 and MRUBY_FILE=virtual.
 - **Then sparse-stale:** a wedge at r8/r9's point, with sparse-churn behind it as collateral.
+
+### Boot r10, result (2026-10-18 07:06-07:19): preempt, the parallel pair and every earlier step read as QEMU's; sqlite_write wedges the core in M
+
+Pre-registered at bb4981135515. Result lines in `board-tier12/results/board-vp2-tier12-r10.result-lines.txt`.
+- **Tier 1:** identity, the fifth boot.
+- **vm-suite, through parallel_two, as pre-registered:**
+  - r9's thirteen exits;
+  - then the first silicon readings of **preempt 143, parallel_one 0 and parallel_two 0**. Both serialized processes
+    print VIRTUAL_APPLICATION_OK with QEMU's 24 grants.
+- **sqlite_write wedged.** Its output goes to a file, so the transcript shows nothing of it. The apertures differ from
+  the sparse wedge: M, not stalled, an instruction valid at commit, the LSU idle, no monitor tag.
+- **Silicon count so far:** 16 of vm-suite's 22 steps read. 15 match QEMU, and `vm` diverges (the module's store-fault
+  path). sqlite_write wedges, and sqlite_read, mruby and the two sparse steps (a wedge of their own) are not yet read.
