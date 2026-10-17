@@ -261,7 +261,11 @@ silence** (~130 KiB/s), so a lower threshold aborts healthy runs *mid-upload*. T
 default did exactly that and produced a session's worth of false "will not boot" / "cyclic boot" /
 "firmware is broken" diagnoses. Scope any log scan to **this run's own `load_image`** — the
 console replays ~548 KB of the previous boot on connect, so grepping the whole log matches
-stale markers.
+stale markers. **Read results from the driver's per-rung transcript (`BAKED_OUT`, already cut per
+rung), never from the raw `driver.log`,** and scope even a live watch to the lines after this run's
+`monitor load_image`. On 2026-10-18 a monitor over the raw `driver.log` reported the previous boot's
+grant refusals and fault lines as the boot in progress. Only their repeated base addresses gave them
+away.
 
 ### Switch values are not just a mux selector — the low three bits steal the console
 
