@@ -693,6 +693,33 @@ WNS second; 1.5 ns of WNS alone decides nothing, the one-sample null band is 3.7
   driving nets' hierarchical origin on vp2 and vp1 (the loop-block query already does this per block), and the RTL change
   is named from that listing, costed, and only then built. The two-level id decode is withdrawn as the "neither" action;
   no vp2b build is handed off on a "neither" reading until the attribution names the cone.
+  **The attribution ran and named the cone (2026-10-18, the synth lane's read-only queries on the routed checkpoints of
+  vp1, vp2 and B; LUT cells by PARENT, dual-packed counted separately: IRO own 21,084 / 32,878 / 33,885).** 96% of
+  issue_read_operands' growth is cells named after the scoreboard entries' cap_result fields: `mem_q` stems 11,370 ->
+  22,741, by field [sbe][cap_result][dom_switch_req] 18 -> 3,165, rs1_metadata 1,662 -> 4,754, result_metadata 2,866 ->
+  5,711, rs1_cursor 1,036 -> 1,946, [sbe][result] 4,437 -> 5,119, [sbe][ex][tval] 265 -> 761. The control fires: in
+  ex_stage, B minus vp2 is the Q-15 stem alone (dyn_child_repr_q 2,343 -> 0). What the cells are: 100% end in `_i_<n>`,
+  the INPUT cones of the scoreboard's entry flops; 0 carry a replication suffix (the matcher finds 2,844 / 2,801 replicas
+  elsewhere in the design); the scoreboard's own cells for those fields are tiny on both trees (51 -> 3, 35 -> 10, 4 -> 1),
+  so it is not relocation; the flop counts are unchanged (dom_switch_req 2,616 / 2,628, rs1_metadata 530 / 520,
+  result_metadata 520 / 520). The cones per flop bit deepened: dom_switch_req 0.007 -> 1.20 LUT per bit (a wire became a
+  select), rs1_metadata 3.1 -> 9.1, result_metadata 5.5 -> 11.0. **The source, with both trees quoted:** the DYN unit's
+  result endpoint `_ep_res_0` (910 bits) is generated as ONE combinational priority chain over every Anvil `send ep.res`
+  site: vp1's generated core/capstone_dyn_unit.anvil.sv:11153 has 90 ternaries, vp2's :12820 has 105 (the .anvil's send
+  sites 31 -> 37 for CSRUNV, CSNODE and CSRETIRE; all in the one handler thread), and `create_result_pack_runv`
+  (capstone_unit.anvilh:454-458) is a fourth distinct value for the switch-request fields, frame / action / cnull, where
+  vp1 had zero / CALL / RETURN. The chain feeds cva6.sv's `cap_wbdata_id_ex[1]` and the scoreboard's cap_result flops with
+  no register between (cva6.sv's assembly and scoreboard.sv are identical on both trees), so its per-bit logic is counted
+  at those flops' D cones, which the flow homes under issue_read_operands. The FLU's chain grew too, 55 -> 58. **Reading:
+  real logic from item D's result sends, not relocation, not tool replication, not a defect; the module-level "own
+  cells" of a unit whose output is unregistered are the flow's to place.** No vp2b build follows from it. Two fix shapes,
+  costed before any is named: (a) register the DYN result pack at the unit boundary: the chain's logic gets its own flops
+  and the critical cone shortens, but every DYN op retires one cycle later, so every retired-count reading in the sweep
+  and the sup list moves and the baselines are re-recorded (the sweep compares retired counts); (b) collapse the 37 sends
+  onto one result register written on each path and sent once at the handler's end: cycle-neutral, no reading changes,
+  but a restructuring of the dyn unit's control flow in Anvil with the generated assignment checked for every path
+  (Anvil drops a set silently in two known shapes). (b) is the one to take if a build is ever needed for this; neither is
+  needed for a working vp2, whose WNS difference to vp1 (3.404 ns) is inside the one-sample null band.
 - **Mixed (both partial, the sum near 10,000): both changes, one build.**
 
 **Arms that re-run on the vp2b tree, every pre-registered value unchanged** (the exception named above: va-runv3's

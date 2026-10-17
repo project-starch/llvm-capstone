@@ -1,3 +1,13 @@
+2026-10-18 (attribution concluded): **vp2's issue_read_operands growth is named: the DYN unit's unregistered result mux.**
+The synth lane's netlist queries (stems by cell name, D-pin and replication checks, flop counts) show 96% of the growth is
+the input cones of the scoreboard's cap_result flops, deepened per bit with no replication and no relocation; the source is
+the generated result endpoint of the DYN unit, one combinational priority chain over every send site, 90 ternaries on vp1 and
+105 on vp2 (item D's six new sends), feeding the scoreboard with no register between. Real logic, not a defect. Two fix
+shapes costed in the plan (register the result pack, or collapse the sends onto one register, the cycle-neutral one); no vp2b
+build is named; the pre-registered "neither" redesign stays withdrawn. A's seal still decides D3's share. One retraction on
+the way: a "second write-back source in cva6.sv" claim sent to the synth lane was withdrawn within minutes (the assembly is
+identical on both trees); the memory rule is that a difference claim needs both trees quoted.
+
 2026-10-18 (B sealed): **Attribution build B (Q-15's cone pruned) is sealed and graded: Q-15 is NOT issue_read_operands' ten
 thousand.** B's own cells there read 28,457 against vp2's 27,845 and vp1's 17,505; the cone was ex_stage's (2,410 -> 337,
 2,073 LUT); routed WNS -17.537 recovers 1.482 of the 3.404 ns gap, inside the one-sample band, so not attributable; LUTLP-1 0.
