@@ -47,11 +47,29 @@ void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t 
     unsigned b = bucket(r->key);
     r->next = index_heads[b]; index_heads[b] = r;
 }
+/* Q-21: THE APPLICATION RUNTIME NEVER READS A CSR FOR AVAILABILITY.
+ *
+ * This used to begin `csrr n, 0xcc0` (urevavail) and return early when n >= need +
+ * CV_NODE_RESERVE, purely to SKIP the service call below. The read is a QEMU-only construct:
+ * urevavail does not exist on the RTL (csr_regfile.sv falls through to illegal), so every image
+ * carrying it passes under QEMU and takes an illegal-instruction fault on silicon at its FIRST
+ * malloc. vp2's boot 3-T1 read exactly that -- cause 2 at contract.dom VA 0x20ccc, which is this
+ * instruction inside malloc, with tval the instruction's own encoding. Q-21's rule had been applied
+ * to the kernel module and not here, and the application runtime cannot see the table header at
+ * all, so it had no second source to fall back on.
+ *
+ * Dropping the pre-check is BEHAVIOUR-PRESERVING, not a trade: the module's ensure_nodes() opens
+ * with `if (available >= required) return 0;` over the table header, which is the authoritative
+ * copy of the same quantity the CSR mirrored. So the decision is unchanged and merely made one
+ * level in. The cost is a service call on the path that previously returned without one; it is
+ * per-MAPPING (three call sites, all ensure_ids(256), on mallocng's group-mapping paths) and not
+ * per-allocation, and it is measured rather than assumed in the record beside this change.
+ *
+ * Availability is not a thing the application polls. The signals are the hardware's kind-5 pressure
+ * escape and the module's collection; a hint, if one is ever wanted, is a service call like the one
+ * below and never a CSR. */
 static int ensure_ids(size_t need)
 {
-    unsigned long n;
-    __asm__ volatile("csrr %0, 0xcc0" : "=r"(n));
-    if (n >= need + CV_NODE_RESERVE) return 0;
     long rc = __capstone_vm_nodes(need);
     if (rc < 0) { errno = -rc; return -1; }
     return 0;
