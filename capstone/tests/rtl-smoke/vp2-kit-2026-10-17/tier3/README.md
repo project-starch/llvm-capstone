@@ -796,3 +796,22 @@ Subobject case 00 as in runs 3 and 4.
 - **Run:** `shared/run-arm.py --virtual-kit <v6-fix kit>`, the kit's direct boot, so no VM is needed.
 - **Prediction:** CAUGHT 5, every cell equal to the record (`compare-cells.py`).
 - **Recorded:** CAUGHT 5, on the 2026-10-10 SDK at `/tmp/capstone/pgv-none/image/sdk`, runtime e5693f5c….
+
+**Result: CAUGHT 5, every cell equal to the record** (0 mismatches). All five fault with cause 28 at the case's declared
+function. The build made 10 case images and the controls with heap virtual-mallocng, and the uaf-malloc control
+faulted as expected.
+
+## postgres/mmgr-repros, both arms (#17, #18), on the fixed revision: pre-registered (2026-10-17, before the runs)
+
+- **Hosted builds:** `ports/postgres/memory-contexts`, `capstone-application` preset, against the v6-fix SDK, with
+  `PG_SUBLET` OFF or ON.
+  - `PG_CORPUS_DIR` = the corpus root for the cases, and `controls/` for the controls.
+  - The archive is the local `postgresql-17.0.tar.bz2`.
+- **Run:** `run-defects.py --virtual-kit`.
+
+**Predictions:**
+- **`virtual-malloc` (#17):** MISSED 5, every cell equal to the record.
+- **`virtual-pg-pools` (#18):** two outcomes.
+  - **(a) CAUGHT 5, every cell equal to the record.**
+  - **(b) 29s at a CDERIVE in the cases or controls.** Patch 0003's large chunks are on the plan's list of (iii) derive
+    sites. The exact-bounds wrapper kit (Run 1) then separates it.
