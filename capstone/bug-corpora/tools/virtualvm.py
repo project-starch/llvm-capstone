@@ -12,7 +12,20 @@ observe() reads a virtual step exactly as it reads a physical run. Nothing here 
 The platform is a kit directory holding exactly what the qualification recorded:
 qemu-system-riscv64 (+ libslirp.so.0), images/{Image,fw_jump.elf,rootfs.ext2},
 adapter/capstone-vexec, adapter/module/capstone_vm.ko.
+
+THE BOARD BACKEND (Tier 3 on silicon, docs/plans/2026-10-17-vp2-corpus-on-silicon.md) is off unless
+CAPSTONE_VIRTUAL_BOARD is set; unset, nothing below changes the QEMU path. A board boot runs several
+bundles, so a runner is run twice around it, unchanged:
+  stage:<dir>  execute() saves the batch instead of booting and exits 0: <dir>/<bundle>/stage/ (the
+               staged files; the launcher and module come from the board kit, once per boot),
+               steps.json (each step's name, command and limit) and stage.SHA256SUMS.
+  judge:<dir>  execute() returns split() of <dir>/<bundle>/serial.log, the boot's slice for this
+               bundle, after refusing unless this run staged exactly the bytes and steps that ran.
+CAPSTONE_VIRTUAL_BOARD_BUNDLE names the bundle. In judge mode platform() is the boot's record,
+<dir>/board-platform.json. A step the board's per-step limit killed reads kind 'none' with
+`[runner] TIMEOUT`, as a QEMU step that never ended does; the board prints `@@T3-TIMEOUT <step>`.
 """
+import json
 import os
 import re
 import shutil
@@ -27,10 +40,40 @@ STAGED = REPO / "capstone/runtime/virtual/run-staged.py"
 FILES = ("qemu-system-riscv64", "images/Image", "images/fw_jump.elf", "images/rootfs.ext2",
          "adapter/capstone-vexec", "adapter/module/capstone_vm.ko")
 BEGIN, END = "@@STEP-BEGIN ", "@@STEP-END "
+BOARD_KIT_FILES = ("capstone-vexec", "capstone_vm.ko")   # the board kit's, never a bundle's
+BOARD_TIMEOUT, BOARD_HEARTBEAT = "@@T3-TIMEOUT ", re.compile(r"^T3HB \d+\n", re.M)
+
+
+def board():
+    """(mode, dir, bundle) when the board backend is selected, else None."""
+    spec = os.environ.get("CAPSTONE_VIRTUAL_BOARD")
+    if not spec:
+        return None
+    mode, _, where = spec.partition(":")
+    bundle = os.environ.get("CAPSTONE_VIRTUAL_BOARD_BUNDLE", "")
+    if mode not in ("stage", "judge") or not where or not re.fullmatch(r"[A-Za-z0-9_.+-]+", bundle):
+        sys.exit("CAPSTONE_VIRTUAL_BOARD must be stage:<dir> or judge:<dir>, with "
+                 "CAPSTONE_VIRTUAL_BOARD_BUNDLE a shell-safe name")
+    return mode, Path(where), bundle
+
+
+def stage_sums(stage):
+    """{relative path: sha256} for every staged file except the board kit's own."""
+    stage = Path(stage)
+    return {str(f.relative_to(stage)): sha256(f) for f in sorted(stage.rglob("*"))
+            if f.is_file() and str(f.relative_to(stage)) not in BOARD_KIT_FILES + ("gate.sh",)}
 
 
 def platform(kit, compiler, runner):
     """Every platform file's sha256, plus the compiler, the runner and the judge."""
+    b = board()
+    if b and b[0] == "judge":
+        record = json.loads((b[1] / "board-platform.json").read_text())
+        record["compiler"] = sha256(compiler) if compiler and Path(compiler).is_file() else "unrecorded"
+        record["runner"] = sha256(runner)
+        record["judge"] = sha256(Path(__file__).with_name("verdicts.py"))
+        record["profile"] = "virtual"
+        return record
     kit = Path(kit)
     record = {"qemu": sha256(kit / FILES[0]), "kernel": sha256(kit / FILES[1]),
               "firmware": sha256(kit / FILES[2]), "rootfs": sha256(kit / FILES[3]),
@@ -83,6 +126,8 @@ class Batch:
 
     def execute(self, kit, work, timeout):
         """Boot once, run every step. Returns ({name: (text, result)}, serial path, completed)."""
+        if board():
+            return self.board_execute(*board())
         kit = Path(kit)
         shutil.copy2(kit / "adapter/capstone-vexec", self.stage / "capstone-vexec")
         (self.stage / "capstone-vexec").chmod(0o755)
@@ -100,6 +145,38 @@ class Batch:
         serial = Path(work) / "serial.log"
         text = serial.read_text(errors="replace").replace("\r\n", "\n") if serial.exists() else ""
         return split(text), serial, run.returncode == 0
+
+
+    def board_execute(self, mode, where, bundle):
+        steps = [{"name": n, "command": c} for n, c in self.steps]
+        sums = stage_sums(self.stage)
+        home = where / bundle
+        if mode == "stage":
+            if home.exists():
+                sys.exit(f"{home} exists; a bundle is staged once")
+            shutil.copytree(self.stage, home / "stage", symlinks=False,
+                            ignore=lambda d, names: [n for n in names if Path(d) == self.stage
+                                                     and n in BOARD_KIT_FILES + ("gate.sh",)])
+            (home / "steps.json").write_text(json.dumps(steps, indent=1) + "\n")
+            (home / "stage.SHA256SUMS").write_text("".join(f"{h}  {p}\n" for p, h in sums.items()))
+            print(f"BOARD-STAGED {bundle}: {len(steps)} steps, {len(sums)} files -> {home}", flush=True)
+            sys.exit(0)
+        # judge: refuse unless this run staged what the boot ran
+        if json.loads((home / "steps.json").read_text()) != steps:
+            sys.exit(f"BOARD JUDGE REFUSED {bundle}: this run's steps are not the staged steps.json")
+        ran = dict(l.split("  ", 1)[::-1] for l in (home / "stage.SHA256SUMS").read_text().splitlines())
+        if ran != sums:
+            diff = sorted(set(ran.items()) ^ set(sums.items()))[:5]
+            sys.exit(f"BOARD JUDGE REFUSED {bundle}: the staged bytes differ from the boot's ({diff})")
+        serial = home / "serial.log"
+        text = BOARD_HEARTBEAT.sub("", serial.read_text(errors="replace").replace("\r\n", "\n"))
+        runs = split(text)
+        for name, (out, result) in list(runs.items()):
+            marker = f"{BOARD_TIMEOUT}{name}\n"
+            if marker in out:
+                kept = {k: v for k, v in result.items() if k == "fault"}   # as split() keeps it
+                runs[name] = (out.replace(marker, "") + "\n[runner] TIMEOUT\n", {"kind": "none", **kept})
+        return runs, serial, f"@@T3-BUNDLE-END {bundle}" in text
 
 
 def split(serial):
