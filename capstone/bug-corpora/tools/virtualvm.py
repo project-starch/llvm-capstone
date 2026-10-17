@@ -92,9 +92,19 @@ class Batch:
                  # with diagnostics on (as run-ports.py runs it); without it a fault is a bare
                  # SIGSEGV, which no observe() may read as the mechanism reporting.
                  "export CAPSTONE_EXEC_DIAGNOSTICS=1"]
+        # The node-table readout, per step, against vp2's 65,536-record ceiling. No module change
+        # is needed: capstone-vexec --stats already prints nodes_high_water, nodes_live,
+        # nodes_retired, node_capacity, collections and nodes_reclaimed as JSON through the
+        # CV_GLOBAL ioctl (runtime/virtual/exec.c), which is what the ports' memory-behaviour runs
+        # read. The corpus runner simply never called it, which is why every Tier 3 serial log was
+        # blank for nodes_high_water. A baseline before the first step makes each step's delta
+        # readable, and `|| true` keeps a missing or failing launcher from ending the batch -- the
+        # absence then shows as no VP2_NODES line rather than a dead run.
+        lines += ['echo "VP2_NODES:baseline:$(./capstone-vexec --stats 2>/dev/null || true)"']
         for name, command in self.steps:
             lines += [f"echo '{BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
-                      "cat /tmp/step.out", f"echo \"{END}{name} $rc\""]
+                      "cat /tmp/step.out", f"echo \"{END}{name} $rc\"",
+                      f'echo "VP2_NODES:{name}:$(./capstone-vexec --stats 2>/dev/null || true)"']
         lines += ["rmmod capstone_vm", "echo VIRTUAL_STAGED_DONE", ""]
         return "\n".join(lines)
 
