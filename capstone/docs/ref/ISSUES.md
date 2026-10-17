@@ -1464,7 +1464,7 @@ Linux cross compiler (`build-adapter.sh:18-22`), its board binary has no capabil
 positive control: the grep finds them there). PU therefore never matters on silicon for the corpus; the divergence
 stays recorded for any future U-mode-outside-a-context design.
 
-## Q-23 — an LDC whose base is an INTEGER from trusted S: the RTL refuses with 24 in every mode, QEMU loads it through S's translation (its "trusted-kernel context spill" branch) `OPEN — RTL/QEMU divergence found on vp2's first virtual boot (2026-10-18, the module's ldc t0, 0(a5) with a5 a kernel pointer); the semantics owner rules, QEMU's trusted-S behaviour the reference unless the RTL states a reason, and it states none`
+## Q-23 — an LDC whose base is an INTEGER from trusted S: the RTL refuses with 24 in every mode, QEMU loads it through S's translation (its "trusted-kernel context spill" branch) `CLOSED 2026-10-18 by the semantics owner's ruling (under the lead's delegation, reported with veto): the RTL stays as it is, trusted S performs NO capability memory access, and QEMU is tightened to the RTL (its experimental scalar-S LDC branch is removed, so an integer-based LDC or STC from S reads 24 on both; tests/trusted-linux-u-access, which exercised that branch on purpose, is rewritten or retired with the reason). The module gets what it needed through the CSMINT descriptor instead (v7: type and cursor, and a second slot for the same NONLIN mint), whose emulation sequence the RTL supports as it is: CAPCREATE/CAPTYPE(NONLIN)/CAPBOUND/CAPPERM -> CSNODE inside the window (any tagged rs1, capstone_dyn_unit.anvil:585-592) -> SCC outside it (register-only, capstone_flu_unit.anvil:104-126) -> STC to both slots (a NONLIN source is not moved). Filed the same day from vp2's first virtual boot (the module's ldc t0, 0(a5) with a5 a kernel pointer); no bitstream follows`
 
 The RTL (`virtual-profile-2-d` bf3db3175, resident as caplifive_vp2_bf3db3175): the DYN unit's LDC handler
 (`capstone_dyn_unit.anvil:641-654`) raises UNEXPECTED_OPERAND, cause 24, when `rs1.metadata.cap_type == NOT_CAP`, with
@@ -1492,7 +1492,11 @@ bitstream carries it, the module must not execute an LDC with an integer base on
 ## Q-24 — the RTL's medeleg write mask has no bits for the capability causes 24-30, so an S-mode capability fault always lands in M; QEMU lets firmware delegate them `OPEN — RTL/QEMU divergence found on the same boot (2026-10-18); the fix is one line in the RTL, default behaviour unchanged; until then the monitor injects the cause into S in software`
 
 `csr_regfile.sv:1642-1659`: the CSR_MEDELEG write mask lists the standard causes up to STORE_GUEST_PAGE_FAULT and
-nothing above, so medeleg bits 24-30 read 0 whatever the firmware writes, and the delegation test
+nothing above, so a CSR write can never set medeleg bits 24-30 (the ONE unmasked path, found by the board lane, is the
+switcher's register restore `7'd5: medeleg_d = dom_switch_reg_req_i.data` at `:2023`: a CALL's seal-window exchange of
+ids 0..7, a supervised RESTORE from the monitor's save area, and CSRUNV's escape restoring the caller's own snapshot; M
+owns every input to it, S cannot reach it, so it is an inconsistency the mask fix removes, not a loophole), and the
+delegation test
 (`csr_regfile.sv:2239`, `medeleg_q[ex_i.cause]`) never sends a capability cause to S. QEMU (d35af47b163c
 `csr.c:1140-1168`): `CAPSTONE_DELEGABLE_EXCPS` (UNEXP_OP_TYPE 24, INVALID_CAP 25, UNEXP_CAP_TYPE 26, INSUF_CAP_PERMS
 27, CAP_OOB 28, ILLEGAL_OP_VAL 29, INSUF_RESOURCES 30) is part of `DELEGABLE_EXCPS`, "a protected U task's capability

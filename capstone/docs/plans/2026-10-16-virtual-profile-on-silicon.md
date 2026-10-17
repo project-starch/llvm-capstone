@@ -772,6 +772,37 @@ images plus q17-order and vb-trans-off) re-simulated on the vp2b tree with vecto
 board's staged images need no rebuild. The handoff carries the hash, the lint numbers and this section's predictions for the
 chosen variant; the grade is written at seal against them.
 
+## vp2c, pre-registered 2026-10-18: Q-24 alone (the medeleg mask gains causes 24-30), for whatever bitstream follows; NOT built now
+
+vp2's first virtual boot (board lane, c1fa1a863d09) exposed Q-23 and Q-24 (ISSUES.md). The semantics owner ruled Q-23
+closed with the RTL as it is (trusted S performs no capability memory access; QEMU is tightened; the module takes the
+CSMINT descriptor v7 route), so vp2 PROCEEDS WITHOUT A BITSTREAM and the LDC-side RTL edits that were drafted for the
+other outcome are discarded (a scratch patch, never committed). What stays pre-registered, for the next bitstream of
+the virtual profile, is Q-24 and nothing else, on capstone-ariane lane branch `virtual-profile-2-c` from fc679dc68 (RTL
+bf3db3175): `csr_regfile.sv` CSR_MEDELEG's write mask gains `UNEXPECTED_OPERAND_TYPE` 24 through
+`INSUFFICIENT_SYSTEM_RESOURCES` 30 under `CVA6Cfg.CAPSTONE_EXT`, as QEMU's `CAPSTONE_DELEGABLE_EXCPS`. One file, one
+expression; medeleg resets to 0 and nothing writes those bits today, so every existing reading is unchanged; the switcher's
+unmasked restore at `:2023` is untouched (M-owned, see Q-24).
+- **Arms:** va-medeleg: in M, `csrw medeleg` with bit 24 set reads back with bit 24 set (today it reads 0: the positive
+  control on the mask); from S with bit 24 set, a scalar STC through an integer base (24 on both profiles, Q-23's rule)
+  lands at stvec with scause 24, stval the integer, sepc the STC (the S handler prints them and steps over); with the
+  bit clear the same STC lands in M (mcause 24, the trap handler prints it); bit 25 the same way with a load through a
+  revoked capability (25); a trap from U under the bit lands at stvec with SPP = 0. Every other arm unchanged: the D list
+  (va-runv..va-runv7, va-barrier, va-q15, va-csmint-emu, va-csmint-mon, the board lane's va-csmint-entry), item A's nine,
+  the five vb-trans arms.
+- **Gates:** lint by name against bf3db3175's 52/3/0/0/40/0/2/25/1395/2/100 with the 40 UNOPTFLAT names identical
+  (the mask is a constant; nothing in a loop cone); the 95-test sweep 92 identical / 0 differ / 3 sourceless against
+  bf3db3175's run; the sup list 152 of 152 identical.
+- **Synthesis prediction, with its key:** the change is seven constant bits in a CSR write mask: own cells of
+  csr_regfile within the netlist band of vp2's (28,405 LUT cells; B read 28,133 on a change elsewhere), TOP within the
+  band of vp2's 178,406, routed WNS within the one-sample band (3.74 ns) of vp2's -19.019 with vp2's worst endpoint
+  (cpmp_q -> issue_read_operands fu_data_q cap_metadata), loops and LUTLP-1 as vp2's. Refutation key: a worst path
+  ending at medeleg_q or a csr_regfile endpoint, or csr_regfile's own cells moving by more than the band. Routability
+  caveat: at ~178k LUT a build of this size may fail to route on hierarchy alone (A did); a failure is recorded as such,
+  never as a WNS. The grade is written at seal against this section.
+- **If the next bitstream also carries other changes** (vp2b's deferred fix, the Q-15 mask form), each is its own
+  section and this one is cited by hash; the arms and gates above still apply.
+
 ## Constraints
 
 - **No reflash without the lead's own word.** On 2026-10-16 (evening) the lead set the priority: the full virtual

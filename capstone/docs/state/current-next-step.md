@@ -1,3 +1,13 @@
+2026-10-18 (Q-23 ruled): **Q-23 is CLOSED with the RTL as it is: trusted S performs no capability memory access, QEMU is
+tightened to the RTL, the module takes the CSMINT descriptor v7 route (type, cursor, a second slot for one NONLIN mint),
+whose emulation sequence the RTL supports today (CSNODE takes any tagged rs1; SCC is register-only; slot 0 at frame+64
+is the hardware's PC capability slot). vp2 PROCEEDS WITHOUT A BITSTREAM.** The drafted LDC edits are discarded. vp2c is
+pre-registered with Q-24 alone (the medeleg mask, lane branch virtual-profile-2-c, lint running) for whatever bitstream
+follows; the plan's section carries its arms, gates and prediction. RTL lane's next work: QEMU virtual-capstone for v7
+(helper_csmint six words, both slots, one node; the scalar-S LDC branch removed; trusted-linux-u-access rewritten or
+retired; the Tier 0 descriptor suites moved to six words and re-measured), one commit with a pinned hash; then the
+emulation arms re-pre-registered for v7 and re-run on the board lane's updated routine; the 1 MiB table cross-check arm.
+
 2026-10-18 (vp2 boot 1): **vp2's first virtual boot wedged at the module's `ldc t0, 0(a5)`: NOT silicon. Two RTL/QEMU
 divergences (Q-23: the RTL refuses an integer-based LDC from trusted S with 24, QEMU loads it; Q-24: the RTL's medeleg
 mask cannot delegate causes 24-30, QEMU's can) and the monitor's EXCX path (fault_return_from_domain taken for a kernel
