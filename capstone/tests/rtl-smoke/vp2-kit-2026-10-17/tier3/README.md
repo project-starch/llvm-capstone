@@ -571,3 +571,23 @@ CAUGHT 9 and CAUGHT 3, every cell equal to the record (`compare-cells.py`, 0 mis
 - So **nine** of the thirteen `run-virtual-cases.py` bundles hold on the fixed revision, the Sublet carve included.
 - **Correction to dev 2df55c358ccb's message.** It already said nine. At that commit two of the nine had run only on
   the older kit, so the true count was seven. The count of nine holds from this rerun on.
+
+## `ffmpeg/subobject-repros` `virtual-malloc` on the fixed revision: pre-registered (2026-10-17, before the run)
+
+The recorded build compiles FFmpeg's pool sources directly into each case: `buffer.c`, `refstruct.c`, and the port's
+`pool-allocator.c`, `metadata-allocator.c`, `observe-pool-events.c` and `payload-pointers.c`. It also carries
+`-Daligned_alloc(a,n)=malloc(n)`. The same pool code faulted in `free()` with cause 24 in every program of the two
+pool bundles above, so this bundle discriminates.
+- **The recorded `cc_args`, with paths mapped:** `<scratch>/wt-merge` becomes the kit's source tree, and the
+  `-isystem` becomes the kit's clang include. The `ffmpeg-ported` sources are the recorded
+  `/tmp/capstone/ffmpeg-buffer-pool` copy.
+- **Recorded tally:** MISSED 9.
+
+**Both outcomes, written before the run:**
+- **(a) MISSED 9, every cell equal to the record.** The pool code itself does not hand `free()` a non-capability on v6.
+  The pool bundles' failure then lies in what differs: their CMake library build (`-DFF2_SYSTEM_MEMORY`, the
+  `ffmpeg-traced` sources) and the `aligned_alloc` path, which this build maps to `malloc`.
+- **(b) control-failed with cause 24 at `cap_malloc_validate`, as in the pool bundles.** The failure lies in code
+  common to both builds, not in `aligned_alloc`.
+
+No prediction between them: this run decides.
