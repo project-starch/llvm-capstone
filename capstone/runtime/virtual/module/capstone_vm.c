@@ -1181,7 +1181,13 @@ retry:
          * domain's own require(tid > 0, "thread create"), which a pre-registration can state and a
          * judge can check. */
         if (slot_live(NULL) + 1 > supervisor_slots) {
-            pr_info_ratelimited("capstone_vm: thread create refused, %lu supervisor slot%s in use\n",
+            /* pr_warn, NOT pr_info: the board console does not show KERN_INFO, so an INFO
+             * refusal is invisible in a transcript and reads as "the refusal never happened".
+             * Measured by the board lane on boots r6 and r7 -- this exact line never appeared
+             * although `threads` demonstrably hit it (the step exits 1 at its own
+             * require(tid > 0)), while the kernel's own pr_warn lines do appear. A diagnostic that
+             * cannot be seen on the machine it is for is not a diagnostic. */
+            pr_warn_ratelimited("capstone_vm: thread create refused, %lu supervisor slot%s in use\n",
                                 supervisor_slots, supervisor_slots == 1 ? "" : "s");
             rc = -EBUSY; goto out;
         }
