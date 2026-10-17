@@ -39,8 +39,12 @@ done
 # records by position.
 (unset CAPSTONE_VM_STATS; ./capstone-vexec contract.dom vm-large 2>&1)
 echo VM_EXIT:vm-large:$?
-(unset CAPSTONE_VM_STATS; ./capstone-vexec contract.dom vm-mappings 2>&1)
+# Its record is renamed: it gives the registered count at exit. A failed
+# remap falls back to a copy, so the trace counts the remaps that succeeded.
+CAPSTONE_VM_TRACE=1 ./capstone-vexec contract.dom vm-mappings > /tmp/mappings.out 2>&1
 echo VM_EXIT:vm-mappings:$?
+echo VM_MAPPINGS_REMAPS:$(grep -c '^CAPSTONE_VM_REMAP_OK ' /tmp/mappings.out)
+grep -v -E '^CAPSTONE_VM_(BOUNDARY|SERVICE|REMAP_OK) ' /tmp/mappings.out | sed 's/^CAPSTONE_VM_STATS /VM_MAPPINGS_STATS /'
 ./capstone-vexec contract.dom spin > /tmp/spin.out 2>&1 & spin=$!
 # QEMU startup includes Linux image loading and the first delegated rounds;
 # allow the child to publish its readiness before testing signal termination.
@@ -207,7 +211,12 @@ def main():
         for name, (pc, entry) in zip(names, fault_sites[4:]))
     tests['vm_contract'] = lines.count('VIRTUAL_VM_OK protections guards requested_length unused_pages execute rollback') == 1
     tests['vm_large_contract'] = lines.count('VIRTUAL_VM_LARGE_OK region aggregate realloc release') == 1
-    tests['vm_mappings_contract'] = lines.count('VIRTUAL_VM_MAPPINGS_OK 1200') == 1
+    mapping_stats = [dict((k, int(v)) for k, v in re.findall(r'(\w+)=(\d+)', s))
+                     for s in lines if s.startswith('VM_MAPPINGS_STATS ')]
+    moved = [int(s.split()[1]) for s in lines if s.startswith('VIRTUAL_VM_MAPPINGS_MOVED ')]
+    tests['vm_mappings_contract'] = (lines.count('VIRTUAL_VM_MAPPINGS_OK 9000') == 1 and
+                                     len(mapping_stats) == 1 and mapping_stats[0]['arenas'] > 9000 and
+                                     lines.count('VM_MAPPINGS_REMAPS:8') == 1 and len(moved) == 1 and moved[0] >= 1)
     tests['heap_threads'] = lines.count('VIRTUAL_HEAP_THREADS_OK shared_ownership metadata_growth arena_growth') == 1
     tests['vm_denial_operations'] = all(lines.count('VIRTUAL_VM_ACCESS:' + op) == 1
                                       for op in ('write_ro', 'read_none', 'guard', 'padding') + (() if a.skip_recycling else ('collected',)))
