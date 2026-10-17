@@ -153,8 +153,9 @@ matched, so it went to the RTL lane before anyone called it silicon. **Not silic
    so nothing of Tiers 1-3 could run on the resident module. Block B needs a scalar `STC`, which QEMU does not have
    either, so "QEMU as reference" decided nothing.
    **Ruling (the semantics owner, under the lead's delegation, 2026-10-18): the RTL stays; trusted S performs no
-   capability memory access; QEMU is tightened to the RTL (the scalar-S `LDC` branch removed, the suite retired);
-   the CSMINT descriptor becomes v7** (`isa.md`: base, end, perms | bit 8 NONLIN, cursor with `base <= cursor <=
+   capability memory access; QEMU is tightened to the RTL (the scalar-S `LDC` branch kept only under the
+   test-only property `x-capstone-test-s-ldc`, default off, for three directed suites' bootstrap; no production kit
+   sets it, and the kit's QEMU invocation is grepped for it as a gate); the CSMINT descriptor becomes v7** (`isa.md`: base, end, perms | bit 8 NONLIN, cursor with `base <= cursor <=
    end`, a second slot address or 0, reserved 0; one node in both slots; LINEAR with a second slot is 29). Feasible
    on the RTL because CSNODE accepts any tagged rs1 (`capstone_dyn_unit.anvil:585-592`), SCC is a pure register op
    (`capstone_flu_unit.anvil:104-126`) and the switcher loads the context's PC capability from frame +64

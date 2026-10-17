@@ -271,10 +271,14 @@ when a PTE was changed without a translation fence. A fault leaves bytes,
 tags and registers unchanged; a retry moves once.
 
 **Trusted S performs no capability memory access (ruled 2026-10-18, Q-23).** An `LDC` or `STC`
-whose base register is an integer reads 24 in every mode, as on the RTL; QEMU's earlier
-experimental "trusted-kernel context spill" branch (an S-mode scalar-address `LDC`) is removed, and
-the `trusted-linux-u-access` suite that exercised it is retired with it. The adapter obtains every
-capability it needs through `CSMINT` (descriptor v7) and never holds one in a register.
+whose base register is an integer reads 24 in every mode, as on the RTL. QEMU's earlier
+experimental "trusted-kernel context spill" branch (an S-mode scalar-address `LDC`) survives only
+under the CPU property `x-capstone-test-s-ldc=true`, default off, which exists for three directed
+suites (`virtual-capstone-m1`, `movc-untagged-source`, `trusted-linux-u-access`) whose bootstrap
+loads minted capabilities into registers before `sret` into U; it is a test scaffold with no silicon
+equivalent, no production kit sets it, and their passes say nothing about trusted S. The follow-up
+that retires the property is rewriting that bootstrap onto the `CSRUNV` route. The adapter obtains
+every capability it needs through `CSMINT` (descriptor v7) and never holds one in a register.
 The Q-12 protected-path changes did not change legacy physical C transfers.
 
 | Cause | Capability fault |
