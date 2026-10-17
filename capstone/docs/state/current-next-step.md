@@ -1,3 +1,13 @@
+2026-10-18 (later still): **vp2b, the timing fix for vp2, is pre-registered before the A/B seals** (the plan doc's "vp2b, the
+timing fix for vp2"): the lead's standing instruction (via the runtime lane) is everything needed for a working vp2 and the
+corpus on it without further asks, so if vp2's canary fails the change the seals name starts at once (B names Q-15: the mask
+test replaces the registered round trip, validated against bounds-model.py first; A names D3: a narrow registered FP port for
+the switcher; neither: the two-level id decode, costed first) and the synth lane builds it overnight; the arms, gates and
+predictions per variant are in that section. Pre-seal: attr-b routed at WNS -17.583 (1.489 of the 3.400 ns gap, inside the
+band); attr-a still routing; the own-cell area at seal decides. The Tier 3 table rule for the corpus kits (flat RECYCLE,
+capacity at most 65,536, next-unused never past it; three silicon-only readings pre-registered as kit mismatches) was sent to
+the runtime lane for 2026-10-17-vp2-corpus-on-silicon.md.
+
 2026-10-18 (later): **The two attribution builds for vp2's issue_read_operands growth are in synthesis since 07:55 UTC on the
 lead's direct go to the synth lane ("Go with everything"): attr-a 993043c97 (D3's FP port steal held off) and attr-b a8c873ac3
 (Q-15's judge held at 1), graded at seal against the pre-registration on dev (93bee16ee3f7), vp2's seal as the baseline. A null

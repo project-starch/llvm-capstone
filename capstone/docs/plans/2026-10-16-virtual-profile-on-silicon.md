@@ -615,6 +615,63 @@ Each reading changes the next RTL step, so the builds go; a null duplicate of vp
 and is not requested. The grade is written against this section at each seal: own-cell LUT of issue_read_operands, TOP
 LUT, routed WNS and the worst endpoint, loop count and LUTLP-1 (both expected unchanged from vp2's: 8 blocks, 0).
 
+## vp2b, the timing fix for vp2: pre-registered 2026-10-18 BEFORE the A/B seals, built only if vp2's canary fails
+
+The lead's standing instruction (relayed by the runtime lane, 2026-10-18): everything needed for a working vp2 and the
+whole corpus on it in fully virtual mode, without further asks. So the contingency is written down now, conditional on the
+attribution readings, and runs without a decision point: if vp2's first board session (the canary) fails, the RTL change
+named below starts at once on capstone-ariane lane branch `virtual-profile-2-timing` (from fc679dc68, RTL bf3db3175), and the
+synth lane builds it overnight on the verified handoff (its standing change, dev 896759b07aef) as `caplifive_vp2b_<hash>.bit`.
+If the canary passes, vp2b is not built; this section then names the timing fix for the record and for whatever bitstream
+follows. A reflash still waits on the lead's own word to the board lane.
+
+**Which change, decided by the seals against the section above's keys** (issue_read_operands' own-cell LUT first, routed
+WNS second; 1.5 ns of WNS alone decides nothing, the one-sample null band is 3.74 ns):
+
+- **B names Q-15 (B's own cells near vp1's 17,505, A's near 27,845): the mask test replaces the round trip.** ex_stage.sv
+  902-915's `dyn_child_back = decompress_bounds(compress_bounds(dyn_child_q, 5'd0, 1'b0), dyn_child_q.start)` and its two
+  64-bit compares go; `dyn_child_repr_q` is computed from the encoder's own exactness condition on the latched child
+  (start, len = base - start): E from the encoder's leading-zero window (ariane_pkg.sv compress_bounds), exact iff
+  `(E == 0 && !len[12]) || ((start | len) & ((1 << (E + 3)) - 1)) == 0`. With both ends on the granule the residues sr and lr
+  are zero, so the residue-form step cannot fire, and q = len >> (E + 3) < 1024 by E's choice; with start = cursor for a
+  fresh child the cursor-relative reconstruction adds no term. The same children are admitted and refused, so NO reading
+  changes: va-q15 and every D arm identical. Validation before any build: bounds-model.py (verif/tests/custom/capstone/)
+  gets the mask form as a third function and asserts equality with the round trip at hardware width over its existing
+  corpus (400,000 random regions, three cursors each, and every region below 2^16); one disagreement and the mask form is
+  NOT taken: the fallback is the round trip pipelined (compress's bounds_t registered, decompress and compare the next
+  cycle; no stall, the DYN unit reaches its test after the liveness round trip). Positive control: a child one byte off its
+  granule reads exact = 0 in the model and refuses 29 in va-q15 (as it does today). Predictions: issue_read_operands own
+  cells within ~1,000 of B's seal reading, TOP within ~1,000 of B's, routed WNS within the band of B's with B's worst
+  endpoint, lint by name at 52/3/0/0/40/0/2/25/1395/2/100 with the 40 UNOPTFLAT names identical (UNUSEDSIGNAL may drop by
+  dyn_child_back's one), loops as B's. A reading worse than B's by more than the band means the test added logic the pruned
+  cone did not have, and names the pipelined form for the next build.
+- **A names D3 (the mirror): the switcher's FP access through a dedicated narrow port.** The context's FP save and restore
+  (D3: 32 registers plus fcsr at frame +656 / +912, zeroed at entry) move one register per cycle through one read port and
+  one write port of the FP register file with the id registered a cycle ahead, instead of steering the operand ports'
+  muxes (`fp_dom_sel`, issue_read_operands.sv). Semantics unchanged; the FP state arm va-runv3 keeps every value and may
+  move in retired-cycle count only (recorded, not registered). Validation: the D list below, and, because the change is in
+  the issue stage, the FP coverage set rv64ud-p-* and s18-fp-* identical to bf3db3175's run (the 95-test sweep has no FP
+  coverage). Predictions: own cells within ~1,000 of A's seal reading, TOP within ~1,000 of A's, WNS within the band of A's
+  with A's endpoint, lint by name identical, loops as A's.
+- **Neither (both near 27,845): the registered two-level id decode for the switcher's register access.** The frame walk's
+  108 register ids on the read and write ports (D1/D2) are decoded in two registered levels instead of one flat level.
+  COSTED FIRST, no build without it: a design note deriving the predicted LUT reduction from the synth lane's per-instance
+  utilization of vp2 (the same report that showed the own-cell growth), and the predicted WNS; if the costing cannot
+  predict a recovery above the band, vp2b is not built and the flash decision rests on the canary alone.
+- **Mixed (both partial, the sum near 10,000): both changes, one build.**
+
+**Arms that re-run on the vp2b tree, every pre-registered value unchanged** (the exception named above: va-runv3's
+cycle count under the D3 change): item D's va-runv, va-runv-quantum, va-runv2, va-runv3, va-runv4, va-runv5, va-runv6,
+va-runv7, va-barrier, va-q15, va-csmint-emu, va-csmint-mon, and the board lane's va-csmint-entry; item A's va-flat,
+va-flat-off, va-alloc, va-alloc-off, va-alloc-corrupt, va-alloc-exhaust, va-ns-collide, va-ns-collide-off, va-straddle;
+vb-trans, vb-trans-plain, vb-trans-vp2, vb-trans-plain-vp2, vb-trans-off. **Gates**: lint by name against bf3db3175's
+52/3/0/0/40/0/2/25/1395/2/100 with the 40 UNOPTFLAT names identical (a changed name goes to the auditor before the handoff);
+the 95-test sweep 92 identical / 0 differ / 3 sourceless against bf3db3175's run; the sup list 152 of 152 identical to
+bf3db3175's (its two quantum-timed moves against the D4 tree are now the baseline); the vp2 board kit (dev 4be3dfe15509, 23
+images plus q17-order and vb-trans-off) re-simulated on the vp2b tree with vectors identical to the bf3db3175 run, so the
+board's staged images need no rebuild. The handoff carries the hash, the lint numbers and this section's predictions for the
+chosen variant; the grade is written at seal against them.
+
 ## Constraints
 
 - **No reflash without the lead's own word.** On 2026-10-16 (evening) the lead set the priority: the full virtual
