@@ -51,15 +51,28 @@ so the floor scales with capacity. The flat table is created at its full 65,536 
 its floor is 16,384 from the first allocation. The paged table grows into 21,504, so its floor
 averages far lower and ends at 5,376.
 
-| | flat | paged |
-|---|---:|---:|
-| binding floor `capacity / 4` | 16,384 | 5,376 |
-| ratio of floors | | **3.05x** |
-| ratio of measured collection counts (28 / 9) | | **3.11x** |
+**CORRECTED — the first version of this section overstated the agreement, and the correction is
+the honest reading.** It computed a single ratio 16,384 / 5,376 = 3.05x against a measured 3.11x
+and called it a 2% confirmation. That was a post-hoc fit with two defects: it used the paged arm's
+**final** capacity, when that arm grew through five growths over the run, and it dropped the
+`node_batch_pages * 256` term entirely. Computed properly across the run:
 
-Predicted 3.05x, measured 3.11x — within 2%, from the floor alone. That is the reading: **the flat
-mode does not collect less, it collects less often and more per sweep, and the factor is its fixed
-capacity.**
+| capacity during the run | `max(sweep≈490, batch·256=4096, capacity/4)` |
+|---|---:|
+| flat, 65,536 throughout (0 growths) | 16,384 |
+| paged at 1,024 / 2,048 / 5,120 / 10,240 | **4,096 — the batch term binds, not `capacity/4`** |
+| paged at 21,504 (final) | 5,376 |
+
+So the paged floor ran between 4,096 and 5,376, and the floor model predicts a collection-count
+ratio anywhere in **3.05x – 4.00x**. The measured 3.11x lies inside that band. The band is wide,
+and the model also ignores the unfloored second collect site at :498, so some of the paged arm's 28
+sweeps may be last-resort collections the model does not describe at all.
+
+The defensible reading is therefore: **the flat mode does not collect less effectively, it collects
+less often and more per sweep, and that is consistent with a collection floor that scales with
+capacity — the flat table being created at its full capacity and never growing.** Settling it to a
+single factor needs per-collection stats (when each fired, at what capacity), which this run does
+not record.
 
 ## Correction 1 — the stated rationale for `node_flat_records` is refuted by this row
 
@@ -89,9 +102,13 @@ Both return `-ENOMEM` *before* either collection site, so capping the paged arm 
 exhaustion and never a collection — and "the paged arm does not collect" would have read as a
 finding about collection when it was an artefact of the knob. The comparable cap is
 `node_max_pages`: paged capacity grows 256 records per leaf page, so 4,096 records is
-`node_max_pages=16`, and `node_bytes` is then `(leaves + 3) * 4096` — the three directory levels
-cost three pages, confirmed against three measured points (4 leaves -> 7 pages, 20 -> 23, 84 -> 87)
-and against `run-nodes.py`'s own `node_bytes == 7 * 4096` at capacity 1024.
+`node_max_pages=16`, and `node_bytes` is then `(leaves + 3) * 4096` — root page, one L1, one L2, and
+the leaves — confirmed against three measured points (4 leaves -> 7 pages, 20 -> 23, 84 -> 87) and
+against `run-nodes.py`'s own `node_bytes == 7 * 4096` at capacity 1024. **The `+3` is bounded, not
+general:** `node_add_page` indexes each directory level with 9 bits (`(id >> 17) & 511`,
+`(id >> 8) & 511`), so one L2 page spans 512 leaves = 131,072 records, and a 513th leaf costs a
+further page. All three measured points are under 512 leaves, so they cannot distinguish `+3` from a
+formula that grows. At the 16-leaf scale this row would have used, `+3` is exact.
 
 ## Correction 3 — a mechanism step in the ceiling row's pre-registration is wrong
 
