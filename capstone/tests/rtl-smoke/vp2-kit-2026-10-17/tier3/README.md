@@ -415,3 +415,31 @@ The recipes, read from the recorded runner blob:
 - **Tool note:** the compiler lane's toolchain copy has `llvm-readobj` but no `llvm-readelf`, which the judge
   calls. The pilot used a bin directory of symlinks to that toolchain, with `llvm-readelf` pointing at
   `llvm-readobj`. So the recorded compiler hash is still that clang's (`ba603a57...`).
+
+## The Sublet pilot again, on the fixed v6 revision: pre-registered (2026-10-17, before the run)
+
+Bundle 5, `ffmpeg/carved-repros` `virtual-nested-pools`, rerun on the kit built from the compiler lane's 89ee98be99e5.
+That kit carries the module's `add()` fix, whose results are in `../RESULTS.md`.
+- **Unchanged from the third pilot:** the runner (sha256 `5ff1997e...`), the corpus files (`diff -r` empty), the
+  recorded `cc_args`, the reference QEMU and the guest images.
+- **Changed:** the runtime revision moved from 85b1daddf230 to 89ee98be99e5. The adapter module is `d24d036e...` (was
+  `97334f0f...`), the launcher `8234e6a1...` (was `32f79ca8...`), and the SDK is rebuilt. So this is a reading of the
+  bundle on the candidate revision, not a one-variable test of `add()`.
+
+**Predictions:**
+- **13 of 13 CAUGHT, the recorded tally.** Each case reads cause 28 at its labelled probe, attribution `probe`.
+- **Cases 00 and 10, the two NO-READING cells, now read CAUGHT,** with their fixed arms printing VERDICT FIXED.
+  - **Case 10:** its malloc(6144) group is a power of two, and the old rule refused it only when mmap placed it
+    unaligned (1 of 4 boots admitted). The new rule accepts any representable arena, and a page-aligned power of two
+    is always representable.
+  - **Case 00:** calloc(1, 34816) and calloc(1, 35840). The old rule refused their group at any address, because it
+    is not a power of two. The compiler lane's modelled group, 36864 B, has granule 2^(15-9) = 64 under option
+    (iii), so a page-aligned base and that length are representable.
+- **The other 11 cases equal the third pilot's cells.** The four controls read as before: bounds-malloc fault,
+  uaf-malloc fault, live-carve complete, uaf-carve fault.
+
+**Open threads a failure would land on:**
+- **A launch fault before any case output, cause 29 at address 0 in `capstone_launch_unpack`,** is the compiler lane's
+  open thread on this revision (`../RESULTS.md`, run.py's `basic`), not the case.
+- **A NULL allocation again in case 00 or 10** means `add()` still refuses those arenas. The guest's refusal lines
+  name the base and length.
