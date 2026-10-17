@@ -7,8 +7,12 @@
 - The trap-entry hook is cb91d7d, behind `CAPSTONE_VP2_CSMINT`, FPGA build.
 - va-csmint-mon reads all 46 values as pre-registered on capstone-ariane bf3db3175, the CSNODE defence included
   (`tests/rtl-smoke/vp2-kit-2026-10-17/csmint-emu`).
-- Still open: the monitor's own trap entry around the hook (vp2), and the hook's landing on capstone-bootstrap, after
-  the board moves onto that line.
+- The monitor's own `_cap_trap_entry` around the hook (cb91d7d) is validated in RTL simulation too. va-csmint-entry
+  `#include`s the shipped `sbi_capstone.S` and reads all 46 values. The pre-registration stated seven address readings
+  absolutely, and they sit 0x1000 lower with the link layout, at the same symbol offsets. Only the entry's C callees
+  and its init-time stack and gp are stubbed.
+- Still open: the hook's landing on capstone-bootstrap, after the board moves onto that line. What only vp2 proves:
+  the C callees, the init-time stack capability and gp, and Linux's own CSMINT traffic.
 
 **The decision it implements** (the runtime and RTL lanes, 2026-10-17): on vp2 an S-mode CSMINT traps to M (cause 2),
 and the monitor emulates it. The emulation exists, validated end to end in RTL simulation, as the M-mode handler of
@@ -79,8 +83,9 @@ days of work, and it is not queued.
 - The guest's own S trap handler records the injected scause, stval and sepc. S reads rd. M reads the slot back
   physically.
 - va-csmint-emu's routine run is the positive control for the mint.
-- The monitor's own `_cap_trap_entry` around the hook (the GPR save and restore, `return_to_sumode`) is exercised only
-  on vp2, by Tier 1's contract.dom.
+- va-csmint-entry runs the monitor's own `_cap_trap_entry` around the hook, the shipped `sbi_capstone.S` at cb91d7d,
+  with stub C callees. It covers the GPR save and restore, the hook and `return_to_sumode`.
+- The real C callees, the init-time stack capability and gp are exercised only on vp2, by Tier 1's contract.dom.
 
 **Conditions from the runtime lane:**
 - The tval layout is pinned to the vp2 decoder's file:line at virtual-profile-2-d bf3db3175. If the RTL lane changes
