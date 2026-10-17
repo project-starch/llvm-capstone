@@ -877,3 +877,59 @@ written into the script before it ran.
 Both arms read `normal` as VIRTUAL_APPLICATION_OK first, and both run.py records are FAIL from `threads` on, because
 QEMU now refuses the second context as silicon does (Q-26). The pair shows the injection reaching Linux. It says nothing
 about the virtual tests after `threads`.
+
+## Pre-registered (2026-10-18, before boot 3-T1's third run): Tier 1 with the Q-26 + Q-30 module
+
+The repeat with ONE file changed: the board module, ed24f827 → **0cc4760d21fde17a**, built from llvm-capstone
+457b78f27e10 by the kit's ADAPTER-board step (the compiler lane). Two changes from ed24f827:
+- **Q-26:** contexts serialized on one slot. CV_THREAD_CREATE refuses with -EBUSY while a frame is live. Tier 1 creates
+  no threads.
+- **Q-30:** add() and remap_end() overwrite the reply slot instead of requiring it empty. The emptiness check stays for
+  pre-start grants.
+
+**The pins:**
+- **Module.** In the image by hash (the bake's cpio check). It carries a string absent from ed24f827 ("thread create
+  refused"), and its vermagic is the board kernel's.
+- **Kit gates, on the module.** `qemu-only-csr-census.py` 0, and `vp2-silicon-gate.py` 0 refused (2 conditional, as
+  ed24f827). The images, launcher and scripts are the repeat's, by `stage.SHA256SUMS`, which differs from
+  `stage-boot3r.SHA256SUMS` in that one line.
+- **Firmware.** fw_payload 31abc60d3d27d4be (Image 21e730020b2f6a1d). The monitor is unchanged: 1e9451a, wrapper
+  1269c77, the repeat's defines, and the extracted monitor sources hash as the repeat's.
+- **Preflight.** It reads as for boots 1-3: the DTS-against-bitstream, single-FDT and size-budget checks pass. Its
+  overlay and control checks do not apply to a private baked image.
+- **Scripts.** `boot3/run-tier1-3r3.sh 31abc60d3d27d4be`, with the judge `boot3/vm-contract-branch3r3.py`. The judge is
+  the repeat's plus `reply-slot`. Both were dry-run with every pin real and the driver stubbed
+  (`boot3/dryrun-boot3r3.txt`).
+
+**The QEMU reference:** QEMU 809d1fc107e64515, one slot, the same source's flat module, contract.dom
+125705371837ea92 (the compiler lane's q30-run, run.py 34/41).
+- `ok`: 24 `CAPSTONE_VM_ADD_OK` lines, then VIRTUAL_APPLICATION_OK, exit 0. As (bytes reg perms linear):
+  - pre-start: 524288 3 7 0, 1048576 2 6 0, 16384 10 6 0, 262144 11 6 0, 65536 12 4 0;
+  - then 8192 10 7 1, 16384 10 6 1, 16384 10 7 1, 49152 10 6 1;
+  - then 135168 10 6 1 three times, 32768 10 7 1;
+  - then 135168 10 6 1 seven times, 65536 10 7 1;
+  - then 135168 10 6 1 twice, 8192 10 7 1.
+- `stale`: 12 ADD_OK lines (the same five pre-start; then 8192, 16384, 16384, 49152, 32768, 4096, 4096, all reg 10,
+  linear), then one `domain fault cause=25`, exit 139.
+
+**Rungs:** b0-stats, b0-hello, vm-contract.
+
+**Predictions:**
+- b0-stats 0 and b0-hello 0.
+- **vm-contract 0, the identity branch:** VIRTUAL_APPLICATION_OK with exit 0, then the stale access denied with cause
+  25 and exit 139. The first virtual application on silicon.
+- **The Q-30 reading, in either branch:** the sixth grant, the first made at a service pause, reads
+  `CAPSTONE_VM_ADD_OK slot=5 ... bytes=8192 reg=10 perms=7 linear=1`. With the old module that line cannot appear on
+  silicon.
+- **Recorded beside the verdict:** the grant sequence against QEMU's above. A differing sequence with an identity verdict
+  is still recorded, as a divergence to read. This is the first silicon run of the heap's growth, retirement and mmap
+  paths, and of a page-fault resume, so a stop there is a first reading, not a regression.
+
+**The branches** (`boot3/vm-contract-branch3r3.py`):
+- `reply-slot`: errno 14 at a grant again. The Q-30 change is not in the staged module, kit side.
+- `qemu-csr` or `delin`: kit-side regressions. The images are unchanged, so either would be an instrument fault.
+- `layout`: 29 before OK, kit side.
+- `injected`: a trap from S or U handed to the kernel. Its cause and pc are the reading, for the module (compiler lane)
+  or the RTL lane by what faulted.
+- `monitor-stop`: NODM or INJL.
+- Anything else goes to the RTL lane.
