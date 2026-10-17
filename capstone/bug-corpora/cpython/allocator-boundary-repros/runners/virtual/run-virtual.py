@@ -180,7 +180,7 @@ def main():
     p.add_argument("--state", type=Path, required=True)
     p.add_argument("--arm", required=True, choices=sorted(NESTED))
     p.add_argument("--build", type=Path, required=True)
-    p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--raw", type=Path, required=True)
     p.add_argument("--only", help="comma-separated case numbers")
     p.add_argument("--timeout", type=int, default=300)

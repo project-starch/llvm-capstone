@@ -20,9 +20,11 @@ THE THREE VERDICTS, and what each one needs:
 The judge is a pure function of the Observation and the arm's declaration (tools/arms.json), so
 a reading can be re-judged from its bundle without re-running anything.
 """
+import argparse
 from dataclasses import asdict, dataclass, field
 import hashlib
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -155,6 +157,17 @@ def sha256(path):
 
 # The host's line for an application-domain fault, as capstone-exec prints it.
 FAULT_LINE = re.compile(r"domain fault cause=(\d+) pc=(0x[0-9a-f]+) address=(0x[0-9a-f]+).*?code=(0x[0-9a-f]+)-")
+
+
+def llvm_bin_dir(path):
+    """argparse type for a runner's --llvm-bin. Symbols runs llvm-nm and llvm-readelf from it AFTER the boot, so a
+    directory without both (a copied bin+lib set, 2026-10-17) would spend a clean boot on a judge that crashes;
+    it is refused here, at argument parsing, before anything is built or booted."""
+    p = Path(path)
+    missing = [t for t in ("llvm-nm", "llvm-readelf") if not ((p / t).is_file() and os.access(p / t, os.X_OK))]
+    if missing:
+        raise argparse.ArgumentTypeError(f"{p} has no executable {' or '.join(missing)}; the judge needs both")
+    return p
 
 
 class Symbols:

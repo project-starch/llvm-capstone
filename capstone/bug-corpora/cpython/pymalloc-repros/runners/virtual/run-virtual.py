@@ -76,7 +76,7 @@ def main():
     p.add_argument("--arm", required=True, choices=sorted(SUBLET))
     p.add_argument("--build", type=Path, required=True)
     p.add_argument("--controls-build", type=Path, required=True)
-    p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--raw", type=Path, required=True)
     a = p.parse_args()
 

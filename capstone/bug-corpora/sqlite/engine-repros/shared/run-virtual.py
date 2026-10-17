@@ -82,7 +82,7 @@ def main():
     p.add_argument("--state", type=Path, required=True)
     p.add_argument("--arm", required=True, choices=sorted(BUILD_ARM))
     p.add_argument("--build", type=Path, required=True)
-    p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--raw", type=Path, required=True)
     p.add_argument("--only", help="comma-separated case number prefixes")
     a = p.parse_args()

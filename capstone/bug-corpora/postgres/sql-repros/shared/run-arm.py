@@ -381,7 +381,7 @@ def main():
     parser.add_argument("--pg-share", type=Path,
                         help="the share/postgresql the image reads (timezone sets etc.); "
                              "default <fixture>/../install/share/postgresql")
-    parser.add_argument("--llvm-bin", type=Path, required=True)
+    parser.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     parser.add_argument("--preinstalled", default="",
                         help="comma-separated extensions the fixture already carries; every row "
                              "that used one says so")
