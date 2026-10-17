@@ -103,6 +103,21 @@ Dry runs, with only the innermost runner stubbed (the real run-capstl.sh and wra
   injected arm shows exactly one retry.
 - A double non-start: the canary fails.
 
+
+**Repeat 1 of the 25 arms, pre-registered before it runs (2026-10-17, after the first session).**
+
+The first session read each arm once. vp2's new logic carries the design's worst routed slack (WNS -19.019), and a
+timing failure there would show as a nondeterministic reading on a known program. The canary repeated only the
+physical arms. So the 25 arms run once more, on the same resident bitstream (no flash), the same images and the same
+comparator, with outputs under a fresh directory so the first run's are untouched.
+- **Prediction:** all 25 equal to their board vectors again, and each arm's readings identical to the first run's.
+- **A difference is reported as vp2 nondeterminism**, with both vectors. It goes to the RTL lane for simulation before
+  anything is called silicon.
+- Same infra rule as the first session: an image that never started is re-run once.
+- Dry run (`results/dryrun-repeat.txt`): the runner replayed the first run's own readings, and all 25 read as
+  pre-registered and identical to run 1. With one value altered in va-runv, that arm read NOT vp2 and was named as
+  differing from run 1. An existing output directory is refused.
+
 **Still open before a vp2 board run:**
 - (Not needed: resident controls for the physical-pool builds. The `-off` builds run in vp2's own batch beside their
   flag-on arms. On vp1 or d93a8d66b their readings are not predicted: srevroot and the item-D CSRs do not exist there.)
