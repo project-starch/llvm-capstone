@@ -830,3 +830,45 @@ inside its own member`. Its buggy arm prints `VERDICT DEFECT-REPRODUCED` and com
 `cache_says` checks the SDK path), on the v6-fix kit.
 - **Prediction:** every cell equal to the record: MISSED 9, MISSED 4, CAUGHT 4.
 - **A cell that still faults 24 in pool code is a second shape** that the flag does not cover.
+
+**mmgr result (#17, #18): both arms as recorded.** `virtual-malloc` reads MISSED 5 and `virtual-pg-pools` CAUGHT 5,
+every cell equal to the record, which is outcome (a). Patch 0003's derives on these five cases are representable under
+(iii). The hosted builds made 17 case programs and 8 controls per arm.
+
+**Run 6 result: every cell equal to the record on arm 6.** Subobject 9/9 (MISSED 9), pool stock 4/4 (MISSED 4), pool
+Sublet 4/4 (CAUGHT 4). So **`-fno-builtin` resolves the FFmpeg pool tag loss in all three bundles.** The mechanism and
+the 10-10 question stay open, as above. Adding the flag to the shipped SDK is the compiler lane's landing, with its
+hosted-contract check as the gate.
+
+## Status on the fixed v6 revision (2026-10-17 10:30), computed by `status.py` from the verdict files
+
+```
+ffmpeg/carved-repros | virtual-nested-pools | kit 89ee98be | recorded 13 new 13 mismatches 0 missing 0
+ffmpeg/carved-repros | virtual-malloc | kit 89ee98be | recorded 13 new 13 mismatches 0 missing 0
+ffmpeg/plain-heap-repros | virtual-malloc | kit 89ee98be | recorded 25 new 25 mismatches 0 missing 0
+ffmpeg/plain-temporal-repros | virtual-malloc | kit 89ee98be | recorded 13 new 13 mismatches 0 missing 0
+wireshark/plain-heap-repros | virtual-malloc | kit 89ee98be | recorded 12 new 12 mismatches 0 missing 0
+wireshark/plain-temporal-repros | virtual-malloc | kit 89ee98be | recorded 10 new 10 mismatches 10 missing 0
+memcached/allocator-repros | virtual-malloc | kit 89ee98be | recorded 9 new 9 mismatches 0 missing 0
+memcached/plain-heap-repros | virtual-malloc | kit 89ee98be | recorded 9 new 9 mismatches 0 missing 0
+memcached/plain-temporal-repros | virtual-malloc | kit 89ee98be | recorded 3 new 3 mismatches 0 missing 0
+postgres/c-repros | virtual-malloc | kit 89ee98be | recorded 5 new 5 mismatches 0 missing 0
+postgres/mmgr-repros | virtual-malloc | kit 89ee98be | recorded 5 new 5 mismatches 0 missing 0
+postgres/mmgr-repros | virtual-pg-pools | kit 89ee98be | recorded 5 new 5 mismatches 0 missing 0
+wireshark/wmem-repros | virtual-malloc | kit 89ee98be (capstone_vm) | recorded 23 new 23 mismatches 0 missing 0
+ffmpeg/subobject-repros | virtual-malloc | SDK arm 6 (-fno-builtin) | recorded 9 new 9 mismatches 0 missing 0
+ffmpeg/pool-repros | virtual-malloc | SDK arm 6 (-fno-builtin) | recorded 4 new 4 mismatches 0 missing 0
+ffmpeg/pool-repros | virtual-nested-pools | SDK arm 6 (-fno-builtin) | recorded 4 new 4 mismatches 0 missing 0
+memcached/allocator-repros | virtual-nested-pools | kit + QEMU exact bounds | recorded 9 new 9 mismatches 0 missing 0
+wireshark/wmem-repros | virtual-nested-pools | kit + QEMU exact bounds (capstone_vm) | recorded 23 new 23 mismatches 1 missing 0
+bundles run: 18 of 26; not run: [('cpython/allocator-boundary-repros', 'virtual-malloc'), ('cpython/allocator-boundary-repros', 'virtual-nested-pools'), ('cpython/pymalloc-repros', 'virtual-malloc'), ('cpython/pymalloc-repros', 'virtual-nested-pools'), ('postgres/sql-repros', 'virtual-malloc'), ('postgres/sql-repros', 'virtual-pg-pools'), ('sqlite/engine-repros', 'virtual-malloc'), ('sqlite/engine-repros', 'virtual-nested-pools')]
+```
+
+**Reading the table:**
+- **12 bundles hold cell for cell on the kit as-is.** One more, wireshark plain-temporal, holds every verdict; its
+  cause is 25 where its older record has 24.
+- **3 bundles (the FFmpeg pool code) need `-fno-builtin` in the SDK.**
+- **2 Sublet arms need option (iii)'s recorded port repairs,** shown by QEMU's exact-bounds control: memcached 0006
+  and wmem 0001. wmem's case 22 differs in attribution only.
+- **8 bundles have not run yet:** CPython (4) and PostgreSQL sql-repros (2) need interpreter or server rebuilds, and
+  SQLite engine-repros (2) needs build-virtual.py over 33 cases.
