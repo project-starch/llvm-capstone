@@ -406,11 +406,14 @@ Conditions for the flash that moves the map:
    vp1's translation reads wrong on silicon, vp2 inherits the same fix, and its synthesis request is not held for it.
    **Q-15 under the flag (ruled 2026-10-16, f224649773ee; in this bitstream):** a CDERIVE child the compact format
    cannot hold exactly is refused with 29 before any mutation, QEMU's compact rule; the physical profile keeps
-   rounding outward. Mechanism: not a round trip through compress_cap (a decode in series after one of the three
-   instances that set the WNS) but the equivalent mask test in the dyn unit before derive_req: exact iff len < 4096
-   (the iE = 0 branch, `E == 0 && !len[12]`), or both start and end are multiples of 2^(E0 + 3) with E0 from the
-   length's priority encode and no renormalisation term (aligned ends have zero residues, so the R-54 step never fires
-   on an exact region). The runtime lane checked the rule against bounds-model.py at d93a8d66b on 200,000 random
+   rounding outward. Mechanism (final for vp2, the RTL lane 2026-10-17, superseding the mask test proposed here on 2026-10-16): a
+   registered round trip through the package encoder, ex_stage.sv:895-914 at cab4ee891. The child's bounds [rs1.cursor,
+   rs1.cursor + rs2.cursor) are latched with the DYN request, decompress_bounds(compress_bounds(child)) is compared
+   against both ends one cycle later, and the dyn unit samples the settled bit (capstone_dyn_unit.anvil:277) only after
+   its liveness query, so nothing sits on the request path. One implementation is bit-identical to QEMU's cap_compress
+   by construction; the mask test, validated against the same encoder on 200,000 regions with 0 mispredictions, is
+   kept in the runtime as capstone_repr_ok. The extra compress+decompress instance is named in vp2's synthesis
+   pre-registration (area, and as a candidate WNS cone keyed on a worst path ending at dyn_child_repr_q). The runtime lane checked the rule against bounds-model.py at d93a8d66b on 200,000 random
    regions with 0 mispredictions (an 8 KiB exemption would mispredict 749). Directed arm, three cases: a 5,000-byte
    child at an odd base (29 under the flag, rounded on the physical profile), the same child 8-aligned (exact on both),
    len 4095 at an odd base (exact on both).
@@ -471,6 +474,52 @@ b7e3287e4's run of the same 152 entries `SUMMARY 152 tests: 152 identical, 0 dif
 side is green; the flash waits for synthesis inside the prediction, the board lane's controls on the resident bitstream,
 and the lead's own word to the board lane.
 
+## Synthesis of `virtual-profile-2-d` bf3db3175, bitstream 2 of the virtual profile (A flat + D + E + H + Q-15 + Q-18, on vp1's B + Q-17 + R-56 + Q-19), pre-registered 2026-10-17 BEFORE the handoff
+
+Name `caplifive_vp2_bf3db3175.bit`. The tree: vp1's 9ed9a2594 plus item A step 1 fbc67c26b and step 2 724e8d393 (the flat
+per-context lifetime table at srevroot, the held rev-node namespace, the trackers' namespace flush), item D (D1
+441f2aa9e, D2 87a5e633b, D3 8e8b69693, D5/D6/E/H aca8c4929, D4 41fa120bf, Q-15 c4d80699b, the decoder's illegal-at-decode defaults and the flushing csupctl/srevroot writes bf3db3175: CSRUNV with the frame as the
+one context's storage, kinds 1-5, FP state per context, CSRETIRE and CSNODE, the policy list, the collection strobe,
+the reserve, the representability refusal). Gates on the committed tree before the handoff: lint 52/3/0/0/40/0/2/25/1395/2/100 with the 40
+UNOPTFLAT names identical; the flag-off 95-test sweep 92 identical / 0 differ / 3 sourceless against step 2's run; the full sup list
+150 of 152 identical, 2 differ by timing only (sup-stcsb-ev-q2k retired 19874 -> 19898; sup-s16-esc-n32 retired 566 -> 539 with its resume count 0x17 -> 0x14, a count the arm registers as '>= 1'): both values reproduced exactly by the D4 tree plus the csupctl-write flush alone, so the flush's cycles per csupctl write move where a 200- or 2000-cycle quantum lands; every registered reading unchanged against step 2's; every item-D arm as pre-registered in its header (va-runv..va-runv7, va-barrier,
+va-alloc and its controls at capacity 1024, va-q15, the board lane's va-csmint-emu, va-csmint-mon and va-csmint-entry). The flow untouched; DTS 65536 unchanged (the physical pool is
+unmoved and the physical profile is intact: the Sublet and S-16 subsets identical); the capability word unchanged, so
+every image built for d93a8d66b runs.
+
+Predictions (refutation keys in brackets), written before the build:
+- Routed WNS within the noise band of vp1's reading (VP1WNS; the band is several ns). The compress_bounds path still
+  sets the slack. Two new cones are candidates to take it over, both registered on both sides and in no loop: (a)
+  Q-15's round trip in ex_stage, a second compress_bounds + decompress_bounds instance from a 64-bit add, latched
+  with the DYN request and judged one cycle later; (b) the rev-node unit's retire path, a 30-bit compare against
+  next-unused plus the widened kill_mode selector at REVOKE_NODE's two exits. [WNS worse by more than the band with
+  the worst path's endpoint at dyn_child_repr_q names (a): the next build splits the judge into two cycles (compress
+  registered, decompress + compare the cycle after); an endpoint inside capstone_rev_node names (b); an endpoint in
+  issue_read_operands at the FP register file's port 0 names D3's port steal; one in commit_stage at the kind mux
+  names the escape's 64-bit cause compare (D1/D5).]
+- Loop membership by stem unchanged; LUTLP-1 0; the 40 UNOPTFLAT names identical in every lint on the way (step 2,
+  D3, D6, D4, Q-15). The two new rev_node_ch endpoints enter R-27's owed/drain vector (11 bits), which is outside
+  every loop cone; the DYN unit's new vctx/derive_repr endpoints are sampled registers. [a new stem through
+  capstone_rev_node's IDLE_STAGE priority chain (eleven requesters now) or through the dom switcher's write selector:
+  the arbiter-in-a-loop-cone case lint cannot see, isolate by reverting D4's two endpoints on the branch]
+- Area: the dom switcher grows most (the frame walk over 4 KiB: 31 + 67 + 33 register ids, the FP ids 75..107, the
+  views, the precheck and refusal paths: hundreds of LUT and the frame address registers); capstone_rev_node +6
+  30-bit registers, +1 stage, +2 endpoints (a 62-bit reply); ex_stage +2 channels in the drain vector, the Q-15 cone
+  (one compress + one decompress instance, ~the size of one write-back encoder) and two 64-bit bound registers;
+  csr_regfile the slot's state (used/paused/terminal/kind/frame/options/priv, the strobe, the table bit) and the
+  vctx_table decode; decoder two admissions; issue_read_operands the FP port steal; commit_stage the kind mux and
+  the escape record. Everything else flat. [a module moving by thousands of LUT: a synthesis duplication the model
+  does not see, read the hierarchy report; the switcher's write selector is the first suspect (31+ write sites)]
+- Route time: longer than vp1's by the switcher's growth; recorded for the spread, no number.
+Readings the bitstream must answer (bare JTAG arms, pre-registered values from the simulation): the item-D arms
+(va-runv..va-runv7, va-barrier, va-q15, va-csmint-emu, va-csmint-mon) and item A's (va-flat, va-alloc and its three controls, va-ns-collide and its
+control, va-straddle) with their headers' values; vp1's vb-trans arms and Q-17's; the S-16 set, the Sublet arms and
+one corpus set identical to d93a8d66b (the physical regression). What the resident fallback stays: whichever of
+caplifive_sublet_d93a8d66b and caplifive_vp1_9ed9a2594 is registered on the console at flash time.
+Known divergences carried into the build (the Q-entries): the table barrier (a load younger than a non-ending table
+writer may read the previous word; a serialising event orders it); the emulation window's two rules; CSRETIRE's
+answers without a read; the reserve of 256 per context allocation; capacity and next saturated at 65,536.
+
 ## Constraints
 
 - **No reflash without the lead's own word.** On 2026-10-16 (evening) the lead set the priority: the full virtual
@@ -499,6 +548,6 @@ and the lead's own word to the board lane.
 | option (iii) in the runtime: mallocng `repr_round`, the CSMINT descriptor audit, the ABI and launcher gate, runners, documents, re-records | compiler lane | to do, 4-6 days: the re-costed geometry (7 table entries, granule group header, granule offset steps) plus classification on `repr_round(n)` against `stride - IB`, so no rounded end reaches the next slot's header |
 | B translation in C mode | RTL lane | ALL GATES GREEN 2026-10-17 on capstone-ariane `virtual-profile` 9ed9a2594 (vp1's RTL): seven arms, the flag-off control and the Q-17 arm as pre-registered; lint 52/3/0/0/40/0/2/25/896/2/100 with the 40 loop names identical; the flag-off sweep 92/95 identical (3 sourceless), the full sup list 152/152 identical; synthesis handed off as `caplifive_vp1_9ed9a2594.bit`; the flash waits for synthesis inside the prediction and the lead's own word to the board lane |
 | A lifetime table | RTL lane | STEP 2 GREEN 2026-10-17 on capstone-ariane `virtual-profile-2` 724e8d393 (step 1 fbc67c26b): the unit allocates from the table's header as QEMU's table_alloc (free list, then the bump; the open-time header checks at every allocation, status 3 -> 25, exhausted -> 30), retires without a push (a kill nulls the retired record's links as cap_rev_retire), ids without a generation, the scaffold and the index shield gone; the rev channel's namespace (flag, table base) is HELD while a handler runs, and the three revocation trackers forget on every namespace change (the audit's arm read a stale ALLOW across the physical/virtual boundary before that, 25 after). Nine arms as pre-registered (va-flat, va-alloc with the flag-off controls, corrupt 25, exhaust 30, ns-collide, straddle); lint by name at baseline (40 loops, UNUSEDSIGNAL 896 -> 926 all generated-unit wires); sweep 92 identical / 0 differ / 3 sourceless (SWEEP-RAN 95); sup list 152 of 152 identical. Recorded divergences, not closed: DROP retires the shared node where QEMU's is register-only (Q-18, item E); no visit bound on the REVOKE walk (a corrupt cyclic table hangs where QEMU refuses: item D's fail-closed work, with PAGED and non-RECYCLE tables refused at CSRUNV); the derive handler does not check the parent's next points back; QEMU's open validates one list entry beyond the popped one; capacity and next saturate at 65,536; the bump writes root+16 back unchanged beside root+24; depth 17 bits and parent 16 where QEMU's are 30. Next: D (CSRUNV front end, one context, CSMINT/CSRETIRE, FP state) |
-| D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | DESIGN PROPOSED 2026-10-17: `2026-10-17-vp2-item-d-csrunv-rtl.md` (CSRUNV as the virtual profile's supervised entry on the existing switcher, the frame as the context storage, kinds 1-5, action 3 illegal-and-emulated, kind 5 from the allocator's reserve test, the bounded read-only walk, CSMINT/CSRETIRE as DYN ops, FP ids on the switcher). Three decisions for the semantics owner and the lead are named in it: the frame as context storage (2 KiB), action 3 emulated, and the table namespace for S-mode code outside a context. RTL work starts on the switcher's physical bypass and the frame walk, which depend on none of them |
-| E policy list | RTL lane | to do, folded into D |
+| D `CSRUNV`, `CSMINT`/`CSRETIRE` | RTL lane | GREEN 2026-10-17 on capstone-ariane `virtual-profile-2-d` bf3db3175 (D1 441f2aa9e, D2 87a5e633b, D3 8e8b69693, D5/D6/E/H aca8c4929, D4 41fa120bf, Q-15 c4d80699b, the decoder and CSR-write fixes bf3db3175; from step 2's 724e8d393). CSRUNV (0x24) from scalar S or scalar M enters a context on the existing switcher with the frame as its storage (4 KiB: the caller's integer snapshot at +1024 and its FP state at +2048..+2304, the context's x_i at +64+16i, fpr at +656, fcsr +912, the views +576..+639 when options are set); kinds 1 (quantum), 2 (terminal), 3 (service ECALL, action 2 consumes +224 and advances), 4 (page fault, action 0 retries), 5 (node pressure: the allocator's 256-id reserve inside a context, action 0 re-executes after a software collection); action 1 forgets, action 3 is illegal (collection is software); a bad frame is a terminal event {2, 29}; refused actions read 29. One saved context. FP state per context (zeroed at entry, saved and restored by the switcher). Item E: SEAL, RETURN, CCSRRW, SFENCE.VMA and CSR 0x803 are illegal in a context, and #25's untagged CINCOFFSET/CINCOFFSETIMM/SCC give integers there. Item H: csupctl bit 2 is the collection strobe (the trackers forget); Q-18: DROP is register-only under the table. Decision 3: the table namespace is a context, S outside one with srevroot set, or M with csupctl bit 3; a corrupt table reads 29 there (Q-20). D4 (the semantics owner's split): CSMINT traps in S and the monitor emulates it; CSRETIRE (0x53) is hardware (next-unused bounds the id and a read-only pass over the run refuses a cycle or an over-long run before any write, then the run loses VALID and the operand is unlinked; rd 0/1, never a fault); CSNODE (0x54, RTL-only) mints QEMU's child-and-ancestor pair for the emulation (rd = the ancestor id, rs1 re-noded; 30 below two identities); both admitted to trusted S and M under the table bit, outside a context, never U. Q-15: an inexact CDERIVE child is refused with 29 under the table namespace by the encoder's own round trip (va-q15; the physical profile keeps rounding). Found by the board lane's CSMINT-emulation arm (va-csmint-emu, 32 readings as pre-registered on this tree): an unknown custom encoding is now illegal at decode (mtval = the bits) and a csupctl/srevroot write flushes the pipeline; the board lane's monitor-path arm va-csmint-mon (46 readings, the monitor's own routine pinned at caplifive-sbi 868dd5f) and its entry arm va-csmint-entry (the shipped _cap_trap_entry, cb91d7d) both read as pre-registered on the same RTL (cab4ee891 carries va-csmint-mon as a regression). Arms as pre-registered: va-runv, va-runv-quantum, va-runv2 (53 readings), va-runv3, va-runv4, va-runv5, va-runv6 (50), va-runv7, va-barrier, va-q15, va-csmint-emu, va-alloc-exhaust. Gates on the D3 tree 8e8b69693 (D1-D3 alone): the 95-test sweep 92 identical / 0 differ / 3 sourceless against step 2, the sup list 152 of 152 identical; on the D4 tree 41fa120bf the sweep again 92 / 0 / 3. Gates on the final tree bf3db3175: lint by name 52/3/0/0/40/0/2/25/1395/2/100 with the 40 UNOPTFLAT names identical; sweep 92 identical / 0 differ / 3 sourceless; sup list 150 of 152 identical, 2 differ by timing only (sup-stcsb-ev-q2k retired 19874 -> 19898; sup-s16-esc-n32 retired 566 -> 539 with its resume count 0x17 -> 0x14, a count the arm registers as '>= 1'): both values reproduced exactly by the D4 tree plus the csupctl-write flush alone, so the flush's cycles per csupctl write move where a 200- or 2000-cycle quantum lands; every registered reading unchanged. Recorded divergences, not closed: ids 0/1 and >= 65536 answer CSRETIRE 1 without a read (QEMU: > UINT32_MAX); the reserve test counts next-unused saturated at 65536; in M under the table bit the LSU's probes read the table, so the monitor's emulation window must hold no capability data access (the trackers assume their capability valid across the namespace change). Next: the vp2 synthesis pre-registration and the handoff to the synth lane |
+| E policy list | RTL lane | GREEN 2026-10-17 with D (aca8c4929): the virtual context's refusals and #25, va-runv5 |
 | board acceptance (done-means 3, 4) | board lane | after the first virtual bitstream |
