@@ -605,3 +605,69 @@ Pinned:
   trace agrees too: the row offsets 64..640 and the report sequence 1-16, 21, 17, 22, 18, 99.
 - **va-osinject revision 2** (`../osinject/`) adds the U-origin CSMINT row on the same files: 23 of 23 as predicted.
 
+
+## Boot BLb, pre-registered (2026-10-18, before the boot): capstone-bootstrap's capstone-sbi pointer bumped to dafe4f2, BL's control on the resident vp2
+
+**What it settles.** caplifive-opensbi's capstone-bootstrap points at capstone-sbi 234ee66. Bumping it to dafe4f2
+brings in three commits:
+- c3293b3: the CSMINT hook, behind CAPSTONE_VP2_CSMINT;
+- 83966bc: the S-trap injection, which is FPGA-only and compiled into every FPGA build;
+- dafe4f2: the v7 routine, behind the flag.
+
+With the flag off, the change against boot P's monitor (ebe0a25, whose tree is 234ee66's) is the injection and its
+domain-call counter. The runtime lane asked for BL's control before any physical-line record cites the bumped
+firmware: one boot on that firmware, flag off, with BL's image set, repeating boot P's readings within BL's bands.
+
+**The firmware (arm B):** fw_payload 2a0850a406d1229c, gate 25712 of 32768 B.
+- **Wrapper:** 1269c77, boot P's and BL's wrapper. capstone-bootstrap's head 3ab5655 differs from it only by the
+  capstone-sbi pointer, so this is the bumped wrapper's tree.
+- **Monitor:** capstone-sbi dafe4f2. Its four files were checked in the build's extracted source: sbi_capstone.c
+  c8172e5abc09687e…, sbi_capstone.S 7b23b6a67540fd45…, capstone_csmint.S 4600d04680158edf…, sbi_capstone.h
+  2c6f6bcab4ce180e….
+- **Defines and Image:** boot P's three supervised-call defines, without CAPSTONE_VP2_CSMINT, and BL's Image
+  ae58cf97765442da.
+- **Symbols:** `_inject_s_trap` is in the ELF and `csmint_dispatch` is not.
+
+**A second variable, and how the design handles it.** P and BL ran on caplifive_sublet_d93a8d66b. The resident
+bitstream is vp2 (caplifive_vp2_bf3db3175), and putting d93a8d66b back is a reflash, which is the lead's call. I found
+no vp2 record of the B-series rungs:
+- vp2's sessions ran the bare arms and the corpus;
+- Tier 1/2 kept only b0-stats and b0-hello, dropping the rest for image size.
+- **Arm B runs first:** BL's ten rungs in BL's order, P's oracles, on the bumped firmware.
+  - If B reads boot P within BL's bands, the control passes. Neither the firmware nor the bitstream moved any reading.
+- **Arm A runs next only if B differs:** boot P's own firmware, 1b44a465d96753b2, on vp2. It is the arm that differs
+  from B by the firmware alone.
+  - B is then judged against A within the same bands, and A against P says what the bitstream changes.
+  - A firmware difference shows as B ≠ A; a bitstream one as A ≠ P with B = A.
+- **The d93a8d66b reading of the bumped firmware** waits for the next residency of that bitstream.
+
+**Predictions for B** (boot P's readings, BL's bands):
+- **Retvals:** b0-stats 0, b0-hello 0, b5-hello 0, b5-mruby-e-stats 0, b5-mruby-stdin-stats 0, b5-mruby-bench 0,
+  r54-bounds 64, cw-pool 0, b6-sublet 0, b0-stats2 0.
+- **mruby's hashes:** 53c234e5e8472b6a, 5476dba1f4bd59f1, 8d1539bc79e2b630.
+- **Bench times within 0.5 %** of boot P's: 138315, 45514, 2458, 30708 and 81907 ms.
+- **No EXCT, EXCS, RGNF or ILLX, and no INJS, NODM or INJL.** An INJS would be a trap from S that boot P's monitor
+  could not have survived. P did not wedge, so none is expected, and one would be a reading in its own right.
+- **Exploratory:** the launch ticks, against P's.
+
+**What a difference would say** (read no further than the first failure; arm A then runs):
+- **Linux does not boot, or a B-series rung differs on both arms:** vp2 differs from d93a8d66b for this image set,
+  not the firmware.
+- **B differs and A does not:** the bump. The first suspect is the counter or the injection on a path P's monitor
+  handled differently.
+
+**The scripts** (`bootblb/`), checked before the boot:
+- **judge-blb.py** applies BL's bands mechanically. Against boot P's run-scoped transcript, BL's own run reads PASS.
+  These each read DIFFER: BL's altered-copy control (a retval and a hash), so_lists moved 1.71 %, and an INJS line.
+  An empty transcript reads NO DATA.
+  - The comparison must use the run-scoped `board-bootp.txt`, never the raw capture. A first try took
+    `board-bootp-raw.txt` by `ls | head -1`, and BL then read DIFFER against its own committed IDENTICAL. The scripts
+    pin the path, and P's transcript by sha256/16 5fb970fff3b3ea24.
+- **board-bootblb.sh B|A <fw hash>** STOPs on any of these:
+  - a wrong firmware hash;
+  - a driver other than the lane's 4ae259caae50b35d;
+  - a changed P transcript;
+  - a shared tree not at df0e9a8 / 93440d5;
+  - an existing output directory.
+- **A stubbed dry run** read each branch as written: B passing, B differing, no transcript, a wrong firmware, and
+  arm A with B the same, B different, or B absent.
