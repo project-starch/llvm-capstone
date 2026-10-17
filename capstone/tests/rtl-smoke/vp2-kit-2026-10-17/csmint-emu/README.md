@@ -539,3 +539,33 @@ with CSMINT's encoding at 2-byte steps. Positive control: 1 hit in va-csmint-ft'
   The first suspect is the fall-through under Linux's own traps, which va-csmint-ft covered only in simulation.
 - **An ILLX:** an illegal instruction that is neither CSMINT nor a time read. The hook should have passed it through
   unchanged.
+
+### Boot BL, result (2026-10-17 09:37-09:50, caplifive_sublet_d93a8d66b, firmware 26bc4b23c520d9d6): every reading as boot P's
+
+The board script checked the firmware hash and the shared tree's pins before the boot. The watchdog was live (52
+lines). `compare-bootp.py` compares the run with boot P's record. Its positive control, a copy of boot P with one retval
+and one hash altered, reads DIFFER on both.
+- **Retvals:** IDENTICAL on all ten rungs. b0-stats 0, b0-hello 0, b5-hello 0, b5-mruby-e-stats 0,
+  b5-mruby-stdin-stats 0, b5-mruby-bench 0, r54-bounds 64, cw-pool 0, b6-sublet 0, b0-stats2 0.
+- **mruby's hashes:** 53c234e5e8472b6a, 5476dba1f4bd59f1, 8d1539bc79e2b630, the same three.
+- **No EXCT, EXCS, RGNF or ILLX.**
+- **Bench times against boot P,** all within the pre-registered 0.5 %:
+
+  | benchmark | boot BL, ms | change |
+  |---|---|---|
+  | mandel_term | 138,351 | +0.03 % |
+  | fib | 45,524 | +0.02 % |
+  | so_lists | 2,466 | +0.33 % |
+  | so_mandelbrot | 30,683 | -0.08 % |
+  | ao_render | 81,931 | +0.03 % |
+
+- **Launch ticks (exploratory):**
+  - the cold mruby launch's domain stage is 23.24 s against 22.93 s, and its regions stage 9.09 s against 9.12 s;
+  - the other three launches are within 0.03 s per stage.
+
+**What this establishes:** the vp2 monitor build, capstone-sbi cb91d7d with `CAPSTONE_VP2_CSMINT`, boots Linux on
+silicon and runs the process ABI's whole B-series, with every reading as on the flag-off build of the same tree. Every
+Linux `rdtime` crossed the hook's fall-through, va-csmint-ft's path, and Linux's clocksource advanced normally.
+
+**Still vp2-only:** a CSMINT that the hook handles. Here none could be issued (the static scan above), and on this
+bitstream a valid one would wedge (`csrr` srevroot).
