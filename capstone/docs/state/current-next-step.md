@@ -1,3 +1,16 @@
+2026-10-18 (boot 3's ruling, the census): **Boot 3-T1 on vp2: C-27's fix holds, then every virtual application faults at its
+first malloc, `csrr a0, 0xcc0` (Q-21's urevavail, which the application runtime polled and only QEMU answered). Ruled as
+before: QEMU's default stops implementing 0xcc0 and 0x5c0 (capstone-qemu virtual-capstone-v7 3b8040d5ff6e909ab30c0ecc32fc76
+58ea07eb0d, the test-only property x-capstone-test-csrs for the three bootstrap suites that select protected U through scapctl:
+m1 74/74, movc 67/67, trusted-linux-u-access 71/71 with it, 6/74, 52/67 and 16/71 without; the five other suites unchanged);
+the runtime loses the reads (compiler lane); the RTL is unchanged.** The silicon census the runtime lane asked for is at
+`docs/plans/2026-10-18-vp2-silicon-census.tsv`: 53 rows read from decoder.sv, csr_regfile.sv, riscv_pkg.sv and the Anvil
+units, every custom-2 and custom-3 arm by privilege and context with its static refusal and operand rule, every Capstone
+CSR with its accessible privilege, and the trap-delivery, table-namespace and one-slot rules, each with its file:lines; the
+three classes that cost boots (an integer-based LDC/STC, a DELIN of a NONLIN, a read of 0xcc0 or 0x5c0) are its first
+positive controls. Also on dev: the N-context costing (not scheduled; zero Tier 3 bundles need a second live context) with
+its WNS premise from vp2's checkpoint (+20.712 ns on the compare's accept path).
+
 2026-10-18 (boot 2's rulings): **vp2's boot 2 (board lane vp2-tier12 279d993e273d) proved the S-trap injection on silicon and
 exposed two more reference-model gaps, both ruled "the RTL is the reference" and fixed in QEMU: capstone-qemu
 virtual-capstone-v7 852c5bc7677440b95736b5fc22bc158cce3f6479 raises 26 for a DELIN of any non-LINEAR capability (24 for an

@@ -1423,7 +1423,7 @@ store permission.
 - The directed test needs the missing arm: a non-consuming ldc from a read-only page through an RW capability completes
   on both sides. The `sparse-stale` contract mode is the Tier 2 check on the board.
 
-## Q-21 — CSR 0xcc0 (`urevavail`, the lifetime table's available-identity count) exists in QEMU and not on the RTL, where a read is an illegal instruction `OPEN — RTL/QEMU divergence, filed 2026-10-18 by the RTL lane answering the module's flat-table question; software rule in place (the module computes availability from the header), no RTL change requested`
+## Q-21 — CSR 0xcc0 (`urevavail`, the lifetime table's available-identity count) exists in QEMU and not on the RTL, where a read is an illegal instruction `RULED 2026-10-18 (boot 3): the RTL is the reference, QEMU's default no longer implements 0xcc0 (capstone-qemu virtual-capstone-v7 3b8040d5ff6e: an illegal instruction, kept only under the test-only property x-capstone-test-csrs for three bootstrap suites); the module computes availability from the header and the APPLICATION RUNTIME's malloc and realloc, which polled 0xcc0, lose the read (availability inside a context is the kind-5 event); filed the same day from the module's flat-table question, no RTL change`
 
 QEMU (capstone-qemu d35af47b163c) implements CSR 0xcc0 under `capstone_vm` (`csr.c:4876`, `read_urevavail` :4164-4169):
 it returns `capstone_urevavail` (`capstone_table.c:199-205`) = `cap_rev_table_avail` = capacity − next-unused +
@@ -1438,6 +1438,15 @@ from the header words it owns, capacity − next-unused + free_count, saturating
 RTL's header view does (`ex_stage.sv:1397-1398`). **RTL candidate, not requested:** a read-only 0xcc0 returning the unit's
 latched header view (vp_cap − vp_next + vp_free_cnt) could ride a vp2b build; it would read the value as of the last
 allocation, not live, so the software rule stays the definition either way.
+
+**The consequence reached further than the module (vp2's boot 3-T1, board lane).** Past the C-27 fix every virtual
+application faulted at its first malloc with cause 2 at `csrr a0, 0xcc0`: the APPLICATION runtime's malloc and realloc
+polled urevavail, and only QEMU answered. Ruling as for Q-23 and Q-25: QEMU's default stops implementing 0xcc0 and 0x5c0
+(virtual-capstone-v7 3b8040d5ff6e; `csr.c` predicate `capstone_vm_test_csrs`), the three Tier 0 suites whose bootstrap
+selects protected U through scapctl set `x-capstone-test-csrs` for themselves (virtual-capstone-m1, movc-untagged-source,
+trusted-linux-u-access; the five others need nothing), the runtime removes the reads (the compiler lane), and the board
+lane's CSR census gate reads the decoder's table (`docs/plans/2026-10-18-vp2-silicon-census.tsv`) rather than a memory
+of it. The RTL does not change.
 
 ## Q-22 — CSR 0x5c0 (`scapctl`, QEMU's "protected U" switch) exists in QEMU and not on the RTL, which behaves as PU = 0: U mode outside a context is never in the table namespace `OPEN — RTL/QEMU divergence, filed 2026-10-18 by the RTL lane answering the module's CSR list; CLOSED FOR THE CORPUS KITS the same day: the module reads 0x5c0 once and never writes it, the silicon adapter is built without the read, and no kit path runs in U outside a context`
 
