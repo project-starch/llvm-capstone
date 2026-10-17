@@ -716,3 +716,21 @@ against it).
 
 The VM holds the host-wide QEMU lock while it is up, so the session runs as one bounded block and is brought down
 after.
+
+## Run 4: `+movc-keeps-integer-source`, the one SDK flag arm that links: pre-registered (2026-10-17, before the run)
+
+**Why only one arm.** The compiler lane cut five single-variable SDK arms (`/tmp/capstone/vp2-prep/sdk-arm-{1..5}`,
+`SDK-ARMS.md`). Only arm 1 links:
+- the 10-10 runtime and libc archives are soft-float, and `capstone-cc` refuses them on the virtual profile, which
+  needs F and D;
+- dropping `+f/+d` or the ABI fails `capstone-cc`'s codegen gate.
+So the 10-10 record and the v6 kit differ by profile, not by one flag.
+
+**Arm 1:** the v6-fix SDK with `+movc-keeps-integer-source` dropped from `sdk.json` codegen, one key different
+(diffed), the kit's clang. Subobject case 00 is built as in run 3.
+
+**Outcomes:**
+- **(i) cause 24 at `refstruct_pool_uninit+0x78` again:** the flag is exonerated, and what remains is the archives'
+  contents.
+- **(ii) the fixed arm passes:** the flag is implicated.
+- **The image hash is recorded beside the reading,** so a silently identical rebuild is visible.
