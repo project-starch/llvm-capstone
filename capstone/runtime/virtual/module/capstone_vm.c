@@ -105,19 +105,30 @@ MODULE_PARM_DESC(node_max_records,
 #define node_table_flat 0
 #endif
 #define CV_FLAT_RECORDS_MAX 65536UL
+#ifdef CAPSTONE_VM_FLAT_TABLE
 /* The flat table's record count. The ruling's 65,536 is the MAXIMUM, not merely a default:
- * silicon saturates capacity and next-unused there, so a larger value is refused at insmod
- * rather than silently clamped. Lower values exist for testing -- a collection row needs both
- * arms to collect, and at the default that means driving them to ~65,278 identities, which
- * would exercise the ceiling in a row meant to be independent of it. Read-only after load, so
- * the allocation order computed from it is stable for the module's lifetime.
- * The board kit and the prediction kit load with this UNSET; the recorded value comes from
- * /sys/module/capstone_vm/parameters/node_flat_records, never from the invocation. */
+ * silicon saturates capacity and next-unused there, so a larger value is refused -- at INSMOD,
+ * in init() below, not at first open: the parameter is read-only after load, so there is nothing
+ * a later check could catch that load time cannot, and a module that loads and then fails every
+ * open reports the error as whatever the opener makes of -EINVAL. Lower values exist for testing
+ * -- a collection row needs both arms to collect, and at the default that means driving them to
+ * ~65,278 identities, which would exercise the ceiling in a row meant to be independent of it.
+ * Read-only after load, so the allocation order computed from it is stable for the module's
+ * lifetime. The board kit and the prediction kit load with this UNSET; the recorded value comes
+ * from the module's own published capacity (table[0] below, via node_capacity() into
+ * stats.node_capacity), never from the invocation. */
 static unsigned long node_flat_records = CV_FLAT_RECORDS_MAX;
 module_param(node_flat_records, ulong, 0444);
 MODULE_PARM_DESC(node_flat_records,
-    "vp2 flat table records (default and maximum 65536; a larger value is refused)");
+    "vp2 flat table records (default and maximum 65536; a larger value is refused at insmod)");
 #define CV_FLAT_RECORDS node_flat_records
+#else
+/* No such parameter in the paged build: it never allocates a flat table, so the knob would be a
+ * knob that does nothing, and `insmod node_flat_records=N` should fail as an unknown parameter
+ * rather than be accepted and ignored. The constant is kept because the flat-only branches at
+ * :465, :1203 and :1227 still have to compile here. */
+#define CV_FLAT_RECORDS CV_FLAT_RECORDS_MAX
+#endif
 #define CV_FLAT_BYTES (CV_FLAT_RECORDS * CAP_REV_TABLE_RECORD)
 
 /* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
@@ -1171,12 +1182,6 @@ static int vm_open(struct inode *inode, struct file *f)
     unsigned long available;
     if (num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
         return -EOPNOTSUPP;
-    if (node_flat_records < 2 || node_flat_records > CV_FLAT_RECORDS_MAX ||
-        (node_flat_records * CAP_REV_TABLE_RECORD) % PAGE_SIZE) {
-        pr_err("capstone_vm: node_flat_records=%lu must be 2..%lu and a whole number of pages\n",
-               node_flat_records, CV_FLAT_RECORDS_MAX);
-        return -EINVAL;
-    }
     if (node_initial_pages < 2 || node_initial_pages > CAP_REV_TABLE_MAX_PAGES ||
         !node_batch_pages || node_batch_pages > CAP_REV_TABLE_MAX_PAGES ||
         node_max_pages > CAP_REV_TABLE_MAX_PAGES ||
@@ -1319,7 +1324,21 @@ static const struct file_operations ops = {
 static struct miscdevice device = {
     .minor = MISC_DYNAMIC_MINOR, .name = "capstone-vm", .fops = &ops, .mode = 0600,
 };
-static int __init init(void) { return misc_register(&device); }
+static int __init init(void)
+{
+#ifdef CAPSTONE_VM_FLAT_TABLE
+    /* Refuse the LOAD, so a bad value cannot reach a run. 2 because ids 0 and 1 are the header;
+     * the maximum because silicon saturates capacity there; whole pages because the table is one
+     * __get_free_pages() allocation whose order is computed from this. */
+    if (node_flat_records < 2 || node_flat_records > CV_FLAT_RECORDS_MAX ||
+        (node_flat_records * CAP_REV_TABLE_RECORD) % PAGE_SIZE) {
+        pr_err("capstone_vm: node_flat_records=%lu must be 2..%lu and a whole number of pages\n",
+               node_flat_records, CV_FLAT_RECORDS_MAX);
+        return -EINVAL;
+    }
+#endif
+    return misc_register(&device);
+}
 #ifdef CV_TEST_HOOKS
 static void __exit done(void) { test_report("unload"); misc_deregister(&device); }
 #else
