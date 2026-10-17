@@ -582,6 +582,39 @@ provenance HEAD bf3db3175; tarball synth-bf3db3175-exit0.tar.gz sha256 934e1f9ad
 The flash waits on the board lane's controls and the lead's own word to the board lane; nothing is staged.
 **Amended at vp1's seal (2026-10-18).** The comparison reads against vp1's SEALED -15.615 (the -15.672 above was the router's estimate): vp2 is 3.404 ns worse than vp1 and 3.163 worse than d93a8d66b's -15.856. The area split (vp2 against vp1, LUT/FF): TOP +9,666/+1,217; **issue_read_operands +10,542/-8, its OWN cells 17,505 -> 27,845 (+10,340), the FP register file 1,850 -> 1,733 (no LUTRAM: not D3's read port duplicating a RAM) and the integer file 2,186 -> 2,322**; scoreboard +264/+13; ex_stage -3,991/+706 in total with own cells +2,367/+296; dyn_unit -1,963/+11; rev_node -4,598/+407; lsu +836/+12; cva6_mmu -259/-1; load_unit -88/0; csr_regfile +429/+138; commit_stage +71/-1; dom_switcher +2,874/+354; id_stage +376/-11; frontend -107/-1. **So the area prediction's ranking is REFUTED: the largest mover is issue_read_operands' own logic, not the dom switcher, and what the 10,340 LUT are is not shown.** That weighs against the WNS caveat as first written ("placement pressure from neighbours"): the module holding the critical capability-metadata cone itself grew by ten thousand cells between vp1 and vp2. The register deltas (rev_node +407, ex_stage own +296, dom_switcher +354, csr_regfile +138) match the predictions' sizes; the LUT moves do not, and the flow's cross-boundary retiming means an own-cell count is not the size of a module's RTL change (vp1's rows show the same re-partitioning with no RTL change in those modules). The attribution the lead can buy, one bitstream cycle each: vp2 minus D3's FP port steal, and vp2 minus Q-15's cone, against this seal; a null duplicate of vp2 sizes the band but cannot name the 10k. Neither bitstream is flashable on the synth machine's rules (negative WNS); flashing is the lead's word to the board lane.
 
+## Attribution builds for vp2's issue_read_operands growth, pre-registered 2026-10-18 BEFORE any build (synthesis only, not for the board)
+
+vp2 (bf3db3175) seals with issue_read_operands' OWN cells at 27,845 LUT against vp1's 17,505 (+10,340), the module where
+the worst paths end (the capability-metadata forwarding family), and routed WNS -19.019 against vp1's -15.615; the FP
+register file is not a LUTRAM duplicate (1,850 -> 1,733). Two builds name the ten thousand, each one line off bf3db3175,
+lint-gated by name, built in parallel on the synth host on the lead's go; neither is flashable (a context's FP save would
+hang on A, an inexact child would be admitted on B), and nothing is staged for the board.
+
+- **A = `virtual-profile-2-attr-a` 993043c97: D3's FP port steal held off** (`fp_dom_sel = 1'b0`, issue_read_operands.sv),
+  so the switcher's FP read/write muxes through issue_read_operands prune. Lint 52/3/0/0/40/0/2/25/1395/2/100 at bf3db3175's baseline, the 40 loop names identical.
+- **B = `virtual-profile-2-attr-b` a8c873ac3: Q-15's judge held at 1** (`dyn_child_repr_q <= 1'b1`, ex_stage.sv), so the
+  compress+decompress cone and the latched child bounds prune. Lint 52/3/0/0/40/0/2/25/1396/2/100, the 40 loop names identical (UNUSEDSIGNAL +1 = dyn_child_back, now unread).
+
+Predictions (what each build READS, written before either runs; the keys in brackets):
+- **If D3's port steal is the ten thousand:** A reads issue_read_operands' own cells near vp1's 17,505 (within ~1,000)
+  and TOP down by ~10,000 LUT; routed WNS back within vp1's -15.615 ± the one-sample band, the worst path still the
+  metadata-forwarding family. B reads own cells near 27,845 and WNS near -19.0. [Then the RTL change is D3's access path:
+  the switcher reads and writes FP state through a dedicated narrow port with a registered id decode, not the operand
+  read/write ports' muxes; a re-synthesis of vp2 with that change is the next bitstream.]
+- **If Q-15's cone, retimed into issue_read_operands, is the ten thousand:** the mirror image: B recovers (own cells near
+  17,505, WNS within vp1's band), A does not. [Then the judge moves: the mask test in the DYN unit (capstone_repr_ok's
+  rule, already validated against the encoder on 200,000 regions) in place of the encoder round trip, or the round trip
+  pipelined over three cycles with the compressed child registered; a re-synthesis follows.]
+- **If neither:** both A and B read own cells near 27,845 and WNS near -19.0 (within the band of each other). [Then the
+  growth is D1/D2's switcher register-access path through issue_read_operands (the frame walk's 108 register ids on the
+  read and write ports) or the flow's cross-boundary retiming of the switcher's growth into the module; the RTL change
+  would be a registered two-level id decode for the switcher's register access, a redesign to be costed before any build,
+  and the flash decision for vp2 rests on the board's canary alone.]
+- **Mixed outcomes** (both recover part; the sum near 10,000) name both and the two changes above are both taken.
+Each reading changes the next RTL step, so the builds go; a null duplicate of vp2 would size the band but name nothing,
+and is not requested. The grade is written against this section at each seal: own-cell LUT of issue_read_operands, TOP
+LUT, routed WNS and the worst endpoint, loop count and LUTLP-1 (both expected unchanged from vp2's: 8 blocks, 0).
+
 ## Constraints
 
 - **No reflash without the lead's own word.** On 2026-10-16 (evening) the lead set the priority: the full virtual
