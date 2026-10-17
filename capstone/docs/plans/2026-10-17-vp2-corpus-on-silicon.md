@@ -137,6 +137,53 @@ old rule gave one bundle per boot (about 17 boots); the budget gives 4-5. The ga
 chain has passed its second preflight. Bundles over the payload are split by case across boots or recorded as not
 stageable at their measured size, never squeezed.
 
+## The first virtual boot, and the ruling it forced (2026-10-17 night, Q-23 and Q-24)
+
+vp2's first virtual boot (board lane, lane vp2-tier12 c1fa1a863d09) wedged at `contract.dom` before any output:
+EXCX cause 24 from S at `capstone_vm.ko` add()'s `ldc t0, 0(a5)`, a5 the slot (an integer kernel pointer), right
+after the emulated CSMINT; then a second 24 at the monitor's own `_cap_trap_entry+4`. Neither pre-registered branch
+matched, so it went to the RTL lane before anyone called it silicon. **Not silicon**, three findings of record:
+
+1. **Q-23.** The RTL's DYN unit refuses `LDC`/`STC` with a NOT_CAP rs1 in every mode
+   (`capstone_dyn_unit.anvil:641-654`, `:716-719`); QEMU alone had an "experimental trusted-kernel context spill"
+   branch (`trans_capstone.c.inc:214-224`, S-mode scalar-address `LDC`, no bounds or permission check), exercised on
+   purpose by `tests/trusted-linux-u-access`, and no such branch for `STC`. The module's four integer-based accesses
+   (all in add(): block A `ldc/delin/scc/stc` to retype LIN → NONLIN and set the cursor; block B `ldc/stc` copying the
+   image capability into register slot 0) run on EVERY domain launch (five of the eight grants are `linear = 0`),
+   so nothing of Tiers 1-3 could run on the resident module. Block B needs a scalar `STC`, which QEMU does not have
+   either, so "QEMU as reference" decided nothing.
+   **Ruling (the semantics owner, under the lead's delegation, 2026-10-18): the RTL stays; trusted S performs no
+   capability memory access; QEMU is tightened to the RTL (the scalar-S `LDC` branch removed, the suite retired);
+   the CSMINT descriptor becomes v7** (`isa.md`: base, end, perms | bit 8 NONLIN, cursor with `base <= cursor <=
+   end`, a second slot address or 0, reserved 0; one node in both slots; LINEAR with a second slot is 29). Feasible
+   on the RTL because CSNODE accepts any tagged rs1 (`capstone_dyn_unit.anvil:585-592`), SCC is a pure register op
+   (`capstone_flu_unit.anvil:104-126`) and the switcher loads the context's PC capability from frame +64
+   (`capstone_dom_switcher.anvil:157, :319`), so slot 0 is the hardware's and the second slot fills it. No bitstream.
+   The alternative, scalar `LDC` and `STC` from trusted S on the RTL plus the `STC` branch in QEMU (vp2c), was
+   weighed and rejected: a day plus a flash cycle to codify a branch QEMU itself marked experimental.
+   Consequences: the module loses all four accesses (gate: 0 `ldc`/`stc` encodings in the `.ko`, the pre-ruling
+   module as the positive control with 4); the monitor routine mints NONLIN directly (CAPCREATE/CAPTYPE/CAPBOUND/
+   CAPPERM → CSNODE in the window → SCC outside it → STC, STC); the emulation arms are re-pre-registered for v7; the
+   Tier 0 suites that build descriptors move to six words and are re-measured; run.py's 41/41 on the old QEMU is
+   NOT inherited (it passed through the removed branch), the regression reruns on the tightened QEMU.
+2. **The emulation's restore is exact** (`sbi_capstone.S:14-45`, `return_to_sumode` `:163-199`); a5 was the slot;
+   the 24 is finding 1.
+3. **Q-24, the wedge.** `handle_exception`'s default (`sbi_capstone.c:3520-3554`) calls `fault_return_from_domain`
+   with no domain active (MPP = S), never runs `return_to_sumode`'s CSCRATCH swap, so the next trap entry runs
+   CINCOFFSETIMM on an integer sp: the second 24, tval = the kernel stack. medeleg cannot delegate causes 24-30 on
+   this RTL (`csr_regfile.sv:1642-1659`, the write mask stops below 24; the switcher's unmasked write at `:2023` is an
+   M-owned path, an inconsistency to record, not a loophole), where QEMU makes them delegable. RTL fix: the mask gains
+   24-30, cycle-neutral, pre-registered for the next bitstream. Monitor fix now (board lane, reviewed by the RTL
+   lane): an unhandled cause with MPP = S (sufficient for OS-versus-domain: a classic domain traps with MPP = M) is
+   injected into S as `csm_inject` does and leaves through `return_to_sumode`; `fault_return_from_domain` refuses to
+   run without an active domain.
+
+Owners: the RTL lane the QEMU change and the re-run arms; the compiler lane the module (one post-ruling revision,
+with the early-clobber fix, the collection row, the ceiling reading and the flat define); the board lane the monitor
+routine and the injection fix; the helper lane `isa.md` and this record. No board boot before: the tightened QEMU
+pinned, the new module through its gates and the from-scratch regression, the emulation arms re-run, the 1 MiB
+table cross-check.
+
 ## Tier 3's comparison rule, settled from the sources (2026-10-17)
 
 The question was whether the board can give the cell comparison QEMU gives (verdict, cause, faulting symbol,

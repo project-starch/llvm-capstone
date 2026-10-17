@@ -35,7 +35,7 @@ The following R-type encodings all use opcode `0x5b`, funct3 `1`.
 | Instruction | funct7 | Inputs | Result |
 |---|---|---|---|
 | `CSRUNV rd, rs1, rs2` | `0x24` | Physical frame address, action | Event kind or action result |
-| `CSMINT rd, rs1, rs2` | `0x50` | Destination slot VA, descriptor VA | Scalar private ancestor ID; tagged linear child in slot |
+| `CSMINT rd, rs1, rs2` | `0x50` | Destination slot VA, descriptor VA (v7: base, end, perms+type, cursor, second slot, 0) | Scalar private ancestor ID; the tagged child (LINEAR or NONLIN, at the cursor) in the slot, and in the second slot when given |
 | `CDERIVE rd, rs1, rs2` | `0x51` | Non-linear parent with cursor at child start, scalar size | Fresh non-linear child with inherited data rights and MANAGE |
 | `CREVOKE rs1, rs2` (rd=0) | `0x52` | Management-capable non-linear parent, non-linear child reference | Invalidate that direct child and its subtree |
 | `CSRETIRE rd, rs1, rs2` | `0x53` | Ancestor ID; conventionally zero in rs2 | Zero on success, one on rejected retirement |
@@ -63,10 +63,20 @@ revision. Linux syscall and VM service numbers belong to software ABIs.
 
 ### Minting and retiring an arena
 
-`CSMINT` reads an 8-byte-aligned descriptor of three little-endian u64 values:
-`base`, exclusive `end`, and permissions (`X=1`, `W=2`, `R=4`, `MANAGE=8`). The destination
-must be a writable, 16-byte-aligned ordinary-RAM slot. Descriptor words and
-the destination are translated with the trusted caller's permissions.
+`CSMINT` reads an 8-byte-aligned descriptor of six little-endian u64 values (**descriptor v7, ruled
+2026-10-18 by the semantics owner; Q-23**): `base`, exclusive `end`, permissions (`X=1`, `W=2`, `R=4`,
+`MANAGE=8`; bit 8 set selects a NONLIN child, clear a LINEAR one), `cursor` (`base <= cursor <= end`,
+else 29), a second slot address (0 = none; a non-zero second slot with a LINEAR type is 29, since a
+linear capability cannot be in two places), and a reserved word that must be 0 (else 29). The
+destination slot, and the second slot when given, must be writable, 16-byte-aligned ordinary-RAM
+slots; both receive the SAME capability, one node. Descriptor words and the slots are translated with
+the trusted caller's permissions. The three-word descriptor (LINEAR, cursor = base, one slot) is v6
+and is no longer accepted.
+
+Why six words: trusted S performs no capability memory access on the RTL (`LDC`/`STC` with an
+integer base read 24 in every mode), so the kernel cannot retype, re-cursor or copy a minted
+capability itself; the mint produces exactly what the adapter needs, and the adapter's register slot 0
+(the context's PC capability, which the switcher loads from frame +64) is filled by the second slot.
 
 It requires `base < end`, permissions at most 15, two available IDs, and an
 exact compress/decompress round trip of the initial bounds and cursor in the
@@ -260,7 +270,11 @@ Read and consume must use the same translated physical granule, including
 when a PTE was changed without a translation fence. A fault leaves bytes,
 tags and registers unchanged; a retry moves once.
 
-These rules also cover trusted S-mode tagged transfers used by the module.
+**Trusted S performs no capability memory access (ruled 2026-10-18, Q-23).** An `LDC` or `STC`
+whose base register is an integer reads 24 in every mode, as on the RTL; QEMU's earlier
+experimental "trusted-kernel context spill" branch (an S-mode scalar-address `LDC`) is removed, and
+the `trusted-linux-u-access` suite that exercised it is retired with it. The adapter obtains every
+capability it needs through `CSMINT` (descriptor v7) and never holds one in a register.
 The Q-12 protected-path changes did not change legacy physical C transfers.
 
 | Cause | Capability fault |
