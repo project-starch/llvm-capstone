@@ -49,8 +49,11 @@ build va-alloc-corrupt   va-alloc.S      114  "$R16_8_4" -DVA_CORRUPT
 build va-alloc-exhaust   va-alloc.S      115  "$R16_8_4" -DVA_EXHAUST
 build va-ns-collide      va-ns-collide.S 116  "$R16_8_4"
 build va-ns-collide-off  va-ns-collide.S 117  "$R16_8_4" -DVA_FLAG_OFF
-# vp1's arms (vb-trans, vb-trans-off, q17-order) run as vp1-bare-2026-10-17's images, byte for byte, so the three
-# bitstreams' readings compare on one set of bytes. Their sources and this wrapper are identical to vp1-bare's, and this
+# q17-order (bare M-mode, no supervised domain) runs as vp1-bare-2026-10-17's image, byte for byte, so the three
+# bitstreams' readings compare on one set of bytes. vb-trans and vb-trans-off are HELD OUT of vp2 until the RTL lane's
+# VB_TABLE variant lands: since item A a domain under csupctl.virt runs in the lifetime-TABLE namespace at srevroot,
+# vb-trans sets no srevroot, and on bf3db3175 every arm reads csupstatus 5 / csupcause 25 (the RTL lane, 2026-10-17).
+# On vp1 (no item A) vb-trans is correct as pre-registered and stays in vp1's batch unchanged. Their sources and this wrapper are identical to vp1-bare's, and this
 # recipe with vp1's id characters (86, 87, 88) reproduces its three hashes exactly (a3fa54d0, 79e670cc, ee2adf9b),
 # which also checks the toolchain behind every image above.
 (cd "$B/images" && sha256sum *.bin > SHA256SUMS)

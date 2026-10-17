@@ -6,7 +6,15 @@ answer") lists, as bare JTAG arms:
 - item A's arms: va-flat, va-alloc with its three controls, va-ns-collide with its control, va-straddle;
 - each with the controls its header names.
 
-vp1's arms (vb-trans, vb-trans-off, q17-order) run as `vp1-bare-2026-10-17`'s images, byte for byte.
+q17-order (bare M-mode) runs as `vp1-bare-2026-10-17`'s image, byte for byte.
+
+**vb-trans, vb-trans-off and vb-trans-plain are HELD OUT of vp2** until the RTL lane's `VB_TABLE` variant lands.
+- On bf3db3175 every vb-trans arm reads csupstatus 5 / csupcause 25 where vp1 reads its pre-registered values.
+- Since item A, a domain under `csupctl.virt` runs in the lifetime-table namespace at srevroot, so its capabilities'
+  node 2 must be a valid record in a table. vb-trans sets no srevroot. The va-* arms each build such a table, which is
+  why they read right.
+- The plan's line "vp1's vb-trans arms and Q-17's" for vp2 was written without a run (the RTL lane, 2026-10-17).
+- On vp1 (no item A) vb-trans is correct as pre-registered and stays in vp1's batch unchanged.
 
 **Not authorised to run.** A flash of bf3db3175 waits on the lead's own word naming it, after vp1's first session.
 
