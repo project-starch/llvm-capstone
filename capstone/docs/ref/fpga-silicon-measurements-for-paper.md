@@ -6724,3 +6724,45 @@ and serving = head − 16 (242). Those are R-43 v2's m1v2s-4 relations and gener
 
 **Not established:** the take rise's attribution; the turnover witness (deferred: this bitstream's node ids are not
 modelled); N = 1 per row.
+
+## C-81 and the silicon corpus verdicts: no in-scope reading depends on a tag-dropping inline copy (the silicon half, 2026-10-17)
+
+**The defect (ISSUES C-81).** A constant-size copy whose alignment the compiler cannot prove is expanded inline into
+scalar chunks, and a scalar chunk never carries a capability's tag. So a copied capability arrives with its address
+and tag 0, and its next use reads cause 24. The silicon corpus images were built with `-ffreestanding -fno-builtin`, so
+explicit `memcpy` calls go to the runtime's copy. What C-81 can still reach is `__builtin_memcpy` and the copies the
+compiler synthesises.
+
+**The instrument** (`capstone/tests/rtl-smoke/c81-silicon-exposure-2026-10-17/`):
+- Each verdict image is rebuilt twice, plain and as a compile-only twin with `-capstone-lower-memops-via-libcall`,
+  which turns every inline mem* expansion into a call. The plain rebuild must reproduce the board image's sha256.
+- The expansions are enumerated by the mem* references the twin gains, per function (`memcalls2.py`).
+- Each scalar run the twin removes is judged by `granule-check.py`: are 16 contiguous bytes copied through registers
+  loaded in the same run, the least a scalar copy needs to move a capability? It has a two-sided control.
+- A shape scanner's plain-only runs are NOT an enumeration. It saw 2 of SQLite's 48 expansions; withdrawn as a method
+  claim on dev 935196067e79.
+
+| image | inline expansions the twin diverts | runs flagged | what they copy | verdicts touched |
+|---|---:|---:|---|---|
+| SQLite stock 02 / 05 (in scope, CAUGHT 24) | 48 / 47 | 1 each | `cacheEntryClear`'s `yColCache`, no pointer | none: both stand |
+| set 1, memcached plain-heap (controls, heap-00) | 12 / 13 | 1 | `dl_round`'s signal record, no pointer | none: the rows are cause 28 |
+| mruby (rows outside the totals) | 2,957 | 3 | the signal record, a six-`uint32_t` spawn action, an `mrb_value`'s type-tag half | none (below) |
+
+- **SQLite 02/05:** over every scalar run in the image, not only the diverted ones, a strict object-copy check flags
+  only `yColCache` and an 8-byte spill chain.
+- **mruby:** for each of its nine cause-24 rows the faulting value is identified, and none is a tag-stripped
+  capability:
+  - 01, 07, 18-21 fault on a NULL base;
+  - 02 is the VM's instruction fetch;
+  - 17's value has bit 61 set;
+  - 22's 0x7d8000 is the inline-packed symbol `:f0`.
+  Eight of the nine are byte-identical on QEMU, which lays the domain out 0x34200000 higher.
+  - Not excluded: a stripped tag elsewhere steering a different value to the fault. The twin cannot be run to test it:
+    it faults in `memcpy` before any case code.
+- **Sets 2-9 are not twinned:** none of their in-scope rows reads cause 24, the only reading C-81 can produce.
+- **The 10-11 virtual record's SQLite 12/24** (cause 24, completing on v6): the record images and their SDK are gone,
+  so C-81 cannot be tested there. Those two stay "differ, unexplained".
+
+Evidence on dev: 7122c158e6c1 and 935196067e79 (SQLite, and the correction), 419fbf06bbc4 and 021568237f34 (set 1,
+mruby), 16f9756828d6 (SQLite 12/24). The virtual-profile half (the Tier 3 sweep, enumerated the same way) is the
+compiler lane's.
