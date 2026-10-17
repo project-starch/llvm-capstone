@@ -1,3 +1,21 @@
+2026-10-17: **THE VIRTUAL PROFILE'S TWO BITSTREAMS ARE HANDED OFF AND WAIT ON THE LEAD'S OWN GO TO THE SYNTH LANE; neither
+has started.** vp1 = capstone-ariane `virtual-profile` 9ed9a2594 (item B translation, Q-17, R-56, Q-19), handed off 2026-10-17
+with its gates and pre-registration (`caplifive_vp1_9ed9a2594.bit`). vp2 = `virtual-profile-2-d` at bf3db3175 (the tip
+b339f9b0b adds tests and tools only): item A's flat per-context lifetime table, item D's CSRUNV with the frame as the one
+saved context's storage, kinds 1-5 and FP state per context, CSRETIRE in hardware and CSNODE for the monitor's CSMINT
+emulation, items E and H, Q-15 (the registered round trip), Q-18, and two fixes found by the board lane's emulation arm (an
+unknown custom encoding is illegal at decode, so mtval carries the bits; a csupctl or srevroot write flushes the pipeline).
+Gates on bf3db3175: lint at baseline by name, the 95-test sweep 92 / 0 / 3, the sup list 150 of 152 identical with two
+quantum-timed tests moved by the flush's cycles (attributed by a matched pair); every virtual-profile arm as pre-registered;
+the board lane's monitor-path arms (the shipped `_cap_trap_entry` around `capstone_csmint.S`) read all 46 values. The
+pre-registration is on dev (e2f230533063, the plan doc's "Synthesis of virtual-profile-2-d bf3db3175"); the synth lane
+has recorded it. **What the lead must do: give the synth lane the go for vp1 in the synth lane's own session, then vp2's;**
+the flash of each waits on the board lane's controls and the lead's own word to the board lane. The RTL lane's next work
+is reading both synthesis reports against their pre-registrations; the deferred follow-ups (the paged table, 32 contexts)
+start only if acceptance needs them. The Q-entries for the recorded divergences (the table barrier, the emulation window's
+rules, CSRETIRE's answers without a read, the 256-id reserve per context allocation, the item-E refusal of a domain's
+RETURN) are the runtime lane's.
+
 2026-10-14: **TWO BITSTREAMS IN SYNTHESIS, both pre-registered on dev before the handoff.** The synth lane needed
 the lead's word in ITS session (a go relayed from another lane does not count); it came, and the FP build started
 03:36 UTC, the elaboration-only pass of the Sublet tip ran clean in parallel, and the Sublet build followed (second

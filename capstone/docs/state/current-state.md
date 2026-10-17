@@ -34,6 +34,17 @@ outranks this file.
 What to do next is [`current-next-step.md`](current-next-step.md), not this
 file. This one records what was established and when.
 
+## 2026-10-17 — The virtual profile's RTL is complete for the two-bitstream plan; both builds wait on the lead's go
+
+vp1 (`virtual-profile` 9ed9a2594: translation in C mode) and vp2 (`virtual-profile-2-d` bf3db3175: the flat per-context
+lifetime table, CSRUNV with one saved context and FP state, CSRETIRE/CSNODE, the policy list, the collection strobe, the
+reserve, Q-15's representability refusal, Q-18) are gated in simulation (lint at baseline by name, the 95-test sweep, the
+152-test supervised list, every virtual-profile arm as pre-registered), pre-registered on dev before their handoffs, and
+handed to the synth lane; neither build has started, both wait on the lead's own go in the synth lane's session. The
+monitor's CSMINT emulation (the board lane's routine, included at a pinned hash) reads every pre-registered value on the
+vp2 RTL through the shipped trap entry. Silicon still runs `caplifive_sublet_d93a8d66b.bit`. Details and the next step:
+[`current-next-step.md`](current-next-step.md) and the plan's rows for items A, B, D and E.
+
 ## 2026-10-12 — Virtual allocator cleanup qualified on the migration branch
 
 `ports/nested-allocators-rebased` uses managed lifetimes in outer musl mallocng
