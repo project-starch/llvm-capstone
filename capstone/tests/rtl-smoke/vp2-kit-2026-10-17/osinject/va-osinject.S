@@ -24,6 +24,10 @@
 # Rows (CAPPRINT, then pass), printed by the handle_trap_ecall stub from S's registers:
 #   row 1, S origin: scause (a5), stval (a6), sstatus.SPP (a3), sepc (a4), t2, s5, s6
 #   row 2, U origin: the same seven
+#   row 3, a CSMINT from U (added 2026-10-17 with capstone_csmint.S's MPP gate): the same seven, then slotB's two words.
+#          The routine declines it (not from S), the entry's handle_exception stub injects the illegal instruction into
+#          S: scause 2, stval the instruction bits, SPP 0, nothing minted. The ungated routine would have emulated it
+#          and refused the all-zero descriptor with 29, injected with SPP forced to 1.
 # Row 1's own ecall is the SECOND trap after an injection: it prints only if the entry swaps CSCRATCH back.
 
 #include "riscv_test.h"
@@ -33,6 +37,7 @@
 #define PTE_S_RWX   0xCF   /* V R W X A D, supervisor */
 #define PTE_U_RWX   0xDF   /* V R W X U A D */
 #define PTE_PTR     0x01
+#define CSMINT(rd, rs1, rs2)  .insn r 0x5B, 0x1, 0x50, rd, rs1, rs2
 #define RAM_BASE 0x80000000
 
 .option norvc
@@ -140,6 +145,7 @@ REPORT(1)                                      # the second trap after the injec
 
 # row 2: the same from U
 PRE
+lla s9, s_after_u                              # where s_trap returns to S after a U-origin trap
 lla t0, u_code
 csrw sepc, t0
 li t0, 0x100
@@ -147,6 +153,20 @@ csrc sstatus, t0                               # SPP = 0: sret to U
 sret
 s_after_u:
 REPORT(2)
+
+# row 3: a CSMINT from U must not be emulated (only S may CSMINT): illegal instruction, injected into S
+PRE
+lla s9, s_after_u2
+lla t0, u_csmint
+csrw sepc, t0
+li t0, 0x100
+csrc sstatus, t0                               # SPP = 0: sret to U
+sret
+s_after_u2:
+lla t0, slotB
+ld a0, 0(t0)                                   # the slot's two words: 0, 0 (nothing minted)
+ld a1, 8(t0)
+REPORT(3)
 REPORT(99)
 
 # S's own trap handler: record the injected trap; from S step over the ldc, from U come back to S at s_after_u
@@ -159,8 +179,7 @@ csrr a4, sepc
 srli a3, a3, 8
 andi a3, a3, 1                                 # SPP
 bnez a3, 1f
-la t0, s_after_u
-csrw sepc, t0
+csrw sepc, s9                                  # the row's own return point
 li t0, 0x100
 csrs sstatus, t0                               # back to S
 sret
@@ -177,6 +196,12 @@ lla a0, slotA
 ldc_u:
 LDC(t0, a0, 0)
 1: j 1b                                        # not reached: s_trap returns to S
+u_csmint:
+lla a0, slotB
+lla a1, descB
+csmint_u:
+CSMINT(a2, a0, a1)
+1: j 1b                                        # not reached
 
 # ================================================================ M: the stubs for the monitor's C functions
 .align 12
@@ -213,6 +238,11 @@ handle_trap_ecall:                             # S's a0..a7 are live here (the e
   CAPPRINT(t2)                                 # 0x7777: a register _inject_s_trap clobbers, restored by the exit
   CAPPRINT(s5)                                 # 0x5555
   CAPPRINT(s6)                                 # 0x6666
+  li t1, 3
+  bne a7, t1, 3f
+  CAPPRINT(a0)                                 # row 3: slotB word 0
+  CAPPRINT(a1)                                 # row 3: slotB word 1
+3:
   li a0, 0
   ret
 e_final:
@@ -241,6 +271,10 @@ pt_l0:
   .zero 4096
 slotA:
   .zero 4096
+slotB:
+  .zero 64
+descB:
+  .zero 4032
 mstack:
   .zero 4096
 mstack_top:

@@ -26,6 +26,32 @@ monitor's own state separates a domain's M trap from the monitor's own.
 
 Build as `va-csmint-entry` (`-I<capstone-sbi at db23ffd>`, the csmint-emu folder's `link.ld`), on bf3db3175's RTL.
 
+## Revision 2 (2026-10-17, after the first run, before its re-run): row 3 and the combined monitor
+
+The claim-auditor found that capstone_csmint.S emulated a CSMINT from U (pre-existing since c3293b3): a U process
+could have had the monitor mint into kernel pages. The routine now emulates only a CSMINT from S (vp2/csmint-v7
+67ed67f, the runtime lane's rule: QEMU refuses CSMINT at PRV_U at decode).
+- **Row 3** is added: from U, `CSMINT(a2, a0 = slotB, a1 = descB)` at label `csmint_u`. The routine declines it, the
+  entry's handle_exception stub injects the illegal instruction into S, and S then reads slotB's two words.
+- **The arm now includes the combined monitor**, capstone-sbi vp2/tier1-monitor fba7812: the injection with its
+  review fixes (vp2/os-trap-inject f8bfde5) plus the gated v7 routine. The include is sbi_capstone.S; the C files are
+  not in this arm. Pinned:
+  - `sbi_capstone.S` 7b23b6a67540fd45cee4fa2bd66f5cdd7098b9c5208e1b0ce244367a5d520365 (unchanged since db23ffd)
+  - `capstone_csmint.S` 4600d04680158edf90396cc303cbb5aff4e2a286c9a0f302058ecd41232d6fbf
+  - `sbi_capstone.h` 2c6f6bcab4ce180ee642382228ad52fb171bdb3840370bfad3f794cdba5dded1
+- **Rows 1 and 2 are unchanged** in source and prediction, apart from row 2's return point moving into s9. The first
+  run (results/rtl-bf3db3175.result-lines.txt) was on db23ffd's files.
+
+| row | scause | stval | SPP | sepc | t2 | s5 | s6 | slotB w0 | slotB w1 |
+|---|---|---|---|---|---|---|---|---|---|
+| 3 (U CSMINT) | 0x2 | 0xa0b5165b (the instruction) | 0 | `csmint_u` | 0x7777 | 0x5555 | 0x6666 | 0 | 0 |
+
+0xa0b5165b is `.insn r 0x5B, 0x1, 0x50, a2, a0, a1`, computed from the encoding. bf3db3175 makes an unknown custom
+encoding illegal at decode with mtval = the instruction, which the routine's own mtval decode relies on.
+- **What the ungated routine would read instead:** it would have emulated the CSMINT, read descB (all zero), and
+  refused base >= end with 29 through csm_inject, which forces SPP = 1. So row 3 reads 29 and SPP 1 without the gate,
+  and 2 and SPP 0 with it.
+
 ## What the arm runs
 
 The shipped trap entry (`#include "sbi_capstone.S"`, CAPSTONE_TARGET_FPGA and CAPSTONE_VP2_CSMINT), with mtvec at
