@@ -221,3 +221,32 @@ That is 47 values, then pass. Any 0xbad1 or 0xbad2 is a failure of the arm.
 - the mtval-0 fetch on the fixed decoder.
 vp2 exercises the first. The fetch was exercised by va-csmint-emu on the pre-fix decoder; the monitor's version of it
 is a software-walked fetch, which this arm does not reach.
+
+### va-csmint-mon, first run (the RTL lane, bf3db3175, capstone_csmint.S at 868dd5f with its sha256 checked)
+
+**The build's addresses:** desc 0x8000a000, slotA 0x8000b000, slotB 0x8000b010, slotnod 0x8000c000, dbuf 0x8000d000,
+descnoa 0x8000e000, frame 0x8000f000.
+
+**Rows 1-10 read exactly as pre-registered, 30 values:**
+
+    4 -1 -1 | -1 4 desc+4 | -1 6 slotB+8 | -1 29 0 | -1 29 0 | -1 29 0 | -1 15 slotnod | -1 13 descnoa |
+    -1 2 0xa0b1165b | 6 -1 -1
+
+These all work on the RTL:
+- the frame-building entry;
+- `call` and `ret` into the included routine in capability mode;
+- `CCSRRW(s8, ctvec, x0)` on a pair only `csrw mtvec` had set;
+- the window on the stub;
+- the injection into S's own stvec handler;
+- the MPRV-free software walk of the descriptor's page (13);
+- the sp-operand decode (2, with the bits).
+
+That is two mints through the whole monitor path.
+
+**Row 11 never produced a reading, and the failure is the arm's, not the RTL's or the routine's.** The arm kept its own
+table capability (s8) and RAM capability (s3) in registers across exits, but the return path restores S's registers.
+So m_next63's store went through S's s8, a scalar, and raised 24. The arm's unexpected-trap path then cascaded until
+the cycle limit, and rows 12 and the finals were not reached.
+
+**Fixed:** M re-mints both capabilities at the top of its ecall handling. The readings are unchanged. The re-run is
+requested.

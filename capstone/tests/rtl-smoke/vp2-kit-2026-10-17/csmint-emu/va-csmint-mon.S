@@ -263,6 +263,10 @@ csrr t0, mcause
 CAPPRINT(t0)
 j m_skip
 m_ecall:
+# M's own capabilities do not survive an exit: the return path restores S's registers, s3 and s8 included (the
+# first run, 2026-10-17, faulted 24 on m_next63's store through S's s8). Re-mint both before any use.
+MINT(s3, CAP_TYPE_NONLIN, _start, ram_end, CAP_PERM_RW)
+MINT(s8, CAP_TYPE_NONLIN, tbl, tbl_end, CAP_PERM_RW)
 ld t0, 136(sp)                                 # S's a7
 li t1, 21
 beq t0, t1, m_next63
