@@ -218,11 +218,32 @@ def gate(lines, insn_rows, csr_rows, column):
     return n, refused, cand, cond, traps
 
 
+def check_evidence(f, ev):
+    """Verify an attribution's evidence against the image itself. Known forms: fini_array_size=0."""
+    if ev == "fini_array_size=0":
+        ro = os.path.join(os.path.dirname(LLVM), "llvm-readelf")
+        out = subprocess.run([ro, "-S", "-W", f], capture_output=True, text=True).stdout
+        m = re.search(r"\]\s+\.fini_array\s+\S+\s+([0-9a-f]+)\s+([0-9a-f]+)\s+([0-9a-f]+)", out)
+        if not m: return False, "no .fini_array section found"
+        size = int(m.group(3), 16)
+        return size == 0, f".fini_array size {size:#x} at {m.group(1)}"
+    return False, "unknown evidence form"
+
+
 def main(argv):
     ap = argparse.ArgumentParser(); ap.add_argument("--table", default=str(DEFAULT_TABLE)); ap.add_argument("--column")
+    ap.add_argument("--attributions", help="TSV: image sha256/16, address (hex), evidence, reason. A matching candidate "
+                                           "is reported as attributed, and does not fail the gate, only if its evidence "
+                                           "checks out against the image; a refusal is never attributed")
     ap.add_argument("files", nargs="*"); a = ap.parse_args(argv)
     if not os.path.exists(a.table): print(f"NO DATA: no table at {a.table}"); return 2
     insn_rows, csr_rows = load_table(a.table)
+    attr = {}
+    if a.attributions:
+        for l in open(a.attributions):
+            if l.startswith("#") or not l.strip(): continue
+            sha, ad, ev, why = l.rstrip("\n").split("\t", 3)
+            attr[(sha, int(ad, 16))] = (ev, why)
     if not a.files: print(__doc__); return 2
     worst = 0
     for f in a.files:
@@ -234,15 +255,25 @@ def main(argv):
         n, refused, cand, cond, traps = gate(r.stdout.splitlines(), insn_rows, csr_rows, col)
         sha = subprocess.run(["sha256sum", f], capture_output=True, text=True).stdout[:16]
         if n == 0: print(f"NO DATA {f} ({sha}): 0 instructions disassembled"); worst = 2; continue
+        attributed, keep = [], []
+        for ad, fn, w, why in cand:
+            row = attr.get((sha, ad))
+            ok, note = (False, "") if row is None else check_evidence(f, row[0])
+            if ok: attributed.append((ad, fn, w, why, f"{row[1]} [evidence {row[0]}: {note}]"))
+            else:
+                keep.append((ad, fn, w, why + (f" (attribution REJECTED: evidence {row[0]}: {note})" if row else "")))
+        cand = keep
         groups = {}
         for addr, fn, w, why in refused: groups.setdefault(why, []).append((addr, fn))
         status = "FAIL" if refused else ("CAND" if cand else "ok  ")
-        print(f"{status} {f} ({sha}) as {col}: {len(refused)} refused, {len(cand)} candidates, {cond} conditional, {traps} unimp, {n} instructions")
+        print(f"{status} {f} ({sha}) as {col}: {len(refused)} refused, {len(cand)} candidates, {len(attributed)} attributed, {cond} conditional, {traps} unimp, {n} instructions")
         for why, sites in sorted(groups.items(), key=lambda x: -len(x[1])):
             fns = sorted({fn or '?' for _, fn in sites})
             print(f"       {len(sites):6} x {why}  [{', '.join(fns[:4])}{', ...' if len(fns) > 4 else ''}] first {sites[0][0]:#x}")
         for addr, fn, w, why in cand[:5]:
             print(f"       candidate {addr:#x} {fn}: {why}")
+        for addr, fn, w, why, because in attributed:
+            print(f"       attributed {addr:#x} {fn}: {why} -- {because}")
         if refused or cand: worst = max(worst, 1)
     return worst
 

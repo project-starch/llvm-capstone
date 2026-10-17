@@ -727,3 +727,53 @@ table therefore changes the gate.
   and 1 candidate each: `libc_exit_fini`'s LDC through a base made by `addi`/`mv` from a capability. The table has no
   row for an integer ALU instruction on a tagged operand. The RTL lane is asked for one. Until it answers, the
   candidate holds boot 3-T1's repeat, because a non-empty report does not boot.
+
+## Pre-registered (2026-10-18, before boot 3-T1's repeat): Tier 1 on the Q-21-fixed images
+
+Boot 3-T1 with its images rebuilt once more. The runtime's malloc and realloc no longer read CSR 0xcc0 (the compiler
+lane's fix f6dfd19d9396). Everything else is boot 3-T1's: module ed24f827, launcher, monitor 1e9451a, recipe,
+bitstream, rungs and judge.
+
+**The images** (`<hdd>/v9-kit`, where `<hdd>` is the run host's scratch volume): contract.dom 125705371837ea92, sqlite3.dom a5942a1add489597, mruby
+a902e740fc5d3b0f. Each is exactly 8 instructions shorter than boot 3-T1's: two guarded reads at two sites.
+
+**The gates, run on these exact hashes by `boot3/stage-boot3r.sh` before staging:**
+- `delin-census.py` reads 0/0/0.
+- `qemu-only-csr-census.py` reads 0/0/0 on the images and 0 on the module.
+- `vp2-silicon-gate.py`, against the RTL lane's census TSV, reads 0 refused on all four files.
+  - Each image has one candidate, `libc_exit_fini`'s LDC through an `addi`/`mv`-derived base. On both machines
+    that is cause 24 (the RTL lane: commit_stage.sv:453/878; QEMU translate.c gen_set_gpr).
+  - Each candidate is attributed in `boot3/silicon-gate-attributions.tsv` (the runtime lane's ruling): unreachable,
+    because `.fini_array` has size 0 and `bgeu` at libc_exit_fini+0x44 skips the loop.
+  - The gate verifies that evidence against each image's section header. A row keyed to another hash, or whose
+    evidence fails (the control: /bin/ls's 8-byte .fini_array), is rejected.
+  - The latent defect behind it, pointer arithmetic on a capability lowered to `addi`, goes to the compiler lane.
+
+**The stage** changes in exactly the three images (`stage.SHA256SUMS`; boot 3-T1's is `stage-boot3t1.SHA256SUMS`).
+The firmware is fw_payload ed7c599a132508f5 (Image 92fbb0e2ca4aa45b), gate PASS, with csmint_dispatch and
+_inject_s_trap in the ELF.
+
+**The prediction:** the compiler lane's re-made record on QEMU virtual-capstone-v7 3b8040d5ff6e, binary
+809d1fc107e64515, on which 0xcc0 and 0x5c0 are illegal by default. The fixed arm's serial is
+`<hdd>/csr-pair/fixed/guest/serial.log`, record cbfa22b4c957.
+- `ok` exits 0 with VIRTUAL_APPLICATION_OK.
+- `stale` exits 139 with one `domain fault cause=25` on contract.dom 125705371837ea92.
+- No cause 2 and no "requires capability".
+- Its control arm, on boot 3-T1's images, reproduced boot 3-T1's board line exactly: five faults at cause 2 with
+  address 0xcc002573.
+
+**Rungs:** b0-stats, b0-hello, vm-contract (`boot3/run-tier1-3r.sh ed7c599a132508f5`).
+
+**Predictions:**
+- b0-stats 0 and b0-hello 0.
+- **vm-contract 0, the identity branch.** VIRTUAL_APPLICATION_OK, exit 0, then the stale access denied with cause
+  25, exit 139. This would be the first virtual application on silicon.
+- **The branches** (`boot3/vm-contract-branch3.py`):
+  - `qemu-csr`: cause 2 whose tval is a 0xcc0 or 0x5c0 instruction. The read was not removed, kit side.
+  - `delin`: 26 at map 0 base + 0x1f60, the C-27 glue, kit side.
+  - 24 from S: a remaining integer-based access.
+  - 29 before OK: layout.
+  - Anything else goes to the RTL lane.
+
+The script was dry-run with every pin real and the driver stubbed. It reads boot 3-T1's real transcript as
+`qemu-csr`, a clean one as `identity`, and stops on a wrong firmware.
