@@ -78,6 +78,14 @@ integer base read 24 in every mode), so the kernel cannot retype, re-cursor or c
 capability itself; the mint produces exactly what the adapter needs, and the adapter's register slot 0
 (the context's PC capability, which the switcher loads from frame +64) is filled by the second slot.
 
+Refusal order of record for v7 (QEMU's helper and the monitor's emulation agree): operand
+misalignment 4 (descriptor) and 6 (either slot); an unreadable descriptor word 13 (tval the word's
+VA, in order); an unwritable slot 15 (tval the slot), the first slot's checks before the second's;
+then, with tval 0, 29 for `base >= end`, permission bits outside `0x10F`, a non-zero reserved word,
+a cursor outside `[base, end]`, and a second slot with a LINEAR type; then the representability
+refusal 29; then fewer than two free IDs, 30. The slot's shape is checked before the descriptor's
+meaning, so a misaligned second slot with a LINEAR type reads 6.
+
 It requires `base < end`, permissions at most 15, two available IDs, and an
 exact compress/decompress round trip of the initial bounds and cursor in the
 default profile. With `x-capstone-exact-bounds=true`, the existing physical
@@ -271,8 +279,9 @@ when a PTE was changed without a translation fence. A fault leaves bytes,
 tags and registers unchanged; a retry moves once.
 
 **Trusted S performs no capability memory access (ruled 2026-10-18, Q-23).** An `LDC` or `STC`
-whose base register is an integer reads 24 in every mode, as on the RTL. QEMU's earlier
-experimental "trusted-kernel context spill" branch (an S-mode scalar-address `LDC`) survives only
+whose base register is an integer reads 24 (tval = the base register) in every mode, as on the RTL.
+QEMU's earlier experimental "trusted-kernel context spill" branches (an S-mode scalar-address `LDC`,
+and the matching `STC`, which QEMU also had) survive only
 under the CPU property `x-capstone-test-s-ldc=true`, default off, which exists for three directed
 suites (`virtual-capstone-m1`, `movc-untagged-source`, `trusted-linux-u-access`) whose bootstrap
 loads minted capabilities into registers before `sret` into U; it is a test scaffold with no silicon
