@@ -1,6 +1,14 @@
 # vp2: porting the CSMINT emulation into the board monitor (plan, 2026-10-17)
 
-**Owner:** the board lane. **Status:** in progress (2026-10-17). It is not needed for the current bitstream.
+**Owner:** the board lane. It is not needed for the current bitstream.
+
+**Status (2026-10-17):** written and validated in RTL simulation.
+- The routine is caplifive-sbi `vp2/csmint-emu` 868dd5f (`capstone_csmint.S`).
+- The trap-entry hook is cb91d7d, behind `CAPSTONE_VP2_CSMINT`, FPGA build.
+- va-csmint-mon reads all 46 values as pre-registered on capstone-ariane bf3db3175, the CSNODE defence included
+  (`tests/rtl-smoke/vp2-kit-2026-10-17/csmint-emu`).
+- Still open: the monitor's own trap entry around the hook (vp2), and the hook's landing on capstone-bootstrap, after
+  the board moves onto that line.
 
 **The decision it implements** (the runtime and RTL lanes, 2026-10-17): on vp2 an S-mode CSMINT traps to M (cause 2),
 and the monitor emulates it. The emulation exists, validated end to end in RTL simulation, as the M-mode handler of

@@ -250,3 +250,32 @@ the cycle limit, and rows 12 and the finals were not reached.
 
 **Fixed:** M re-mints both capabilities at the top of its ecall handling. The readings are unchanged. The re-run is
 requested.
+
+### va-csmint-mon, second run: the monitor's whole CSMINT path validated (the RTL lane, bf3db3175, arm a1f7b5163e7d)
+
+The routine is capstone-sbi 868dd5f, with its sha256 checked. The run passes after 144,709 cycles. The board lane read
+the CAPPRINT operands from the run's own retirement trace (`vp8-wt/.sup/mon2/va-csmint-mon.*.log`):
+
+    4 -1 -1 | -1 4 0x8000a004 | -1 6 0x8000b018 | -1 29 0 | -1 29 0 | -1 29 0 | -1 15 0x8000c000 |
+    -1 13 0x8000e000 | -1 2 0xa0b1165b | 6 -1 -1 | -1 30 0 | -1 29 0 |
+    0 0x8000d200 0x8000d300 0x8000d200 4 | 0 0 | 0 | 0x3f | 0x100000000
+
+**Every value is as pre-registered.** There are 46 of them, not 47: 12 rows of 3 plus 10 finals is 46. The "47" in
+the pre-registration and in the arm's header was a miscount of the table, which itself lists 46.
+
+What this validates on the RTL, beyond the routine arm:
+- the monitor-shaped frame entry, `call` into the included routine, the rd write-back and the frame restore;
+- the injection of every refusal into S's own stvec handler: 4, 6, 29, 15, 13, 2 and 30;
+- the routine's free-identity pre-check (row 11's 30, before the window);
+- **the defence (row 12).** A corrupt free head passes the pre-check, CSNODE refuses it with 29 inside the window,
+  the window's trap vector lands it on the stub, and it reaches S as a 29. The table is unwritten: next-unused is
+  still 63 and the free word still 0x100000000.
+- two mints through the whole path, with the second LINEAR child in slotA and its cursor at the base.
+
+The RTL lane carries the arm, and a pinned copy of the routine (its sha in the testlist comment), as a regression for
+the decode, the flush and the window.
+
+**Not validated here:**
+- the monitor's own `_cap_trap_entry` around the hook (capstone-sbi cb91d7d, behind `CAPSTONE_VP2_CSMINT`). It
+  assembles, and with the flag off it is byte-identical to 234ee66; vp2 exercises it;
+- the mtval-0 fetch path on a decoder that leaves mtval 0.
