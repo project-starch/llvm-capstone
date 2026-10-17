@@ -67,3 +67,12 @@ which place the stale pc at the RETURN of each returning arm. So the control vec
 above with those three positions replaced by 0xffffffff7fff8000, 0xffffffff7fff706f and 0x14, and the resident
 bitstream read it 36 of 36. The vp1 vector has no layout-dependent entry: its arms 2 to 4 fault for real, so the epc
 and tval readings are 0 by construction, and the arm-0 reading 0x28 is the same code in both builds (it matched).
+
+**Flash authorisation (2026-10-17, the lead's own word in the board lane's session, naming this bitstream):** reflash
+with `caplifive_vp1_9ed9a2594.bit` once:
+- it seals;
+- its preflight passes on the sealed sha256;
+- ST100's overnight pair on d93a8d66b has finished.
+The first session is this file's: the bare arms, the physical regression and corpus set 7, with the flag-off monitor.
+It stops and reports on any reading that differs from d93a8d66b. The earlier approval named 4b958dc3f; this one
+supersedes it for 9ed9a2594.
