@@ -1,0 +1,5 @@
+control: copy32 shape flagged, zero fill clean
+FLAG capstone_spawn_pack+0x538  24B unit=4 (12 insns) -- 16 contiguous copied bytes at a3+0x0
+FLAG dl_round+0x348  162B unit=2 (41 insns) -- 16 contiguous copied bytes at s2+0x80
+FLAG mrb_ary_delete+0x358  16B unit=4 (9 insns) -- 16 contiguous copied bytes at a3+0x10
+results/rescan-mruby.txt: 65 plain-only runs, 3 flagged
