@@ -149,7 +149,34 @@ Two things keep direction 2 alive as a question rather than closing it:
   **no longer exists** (S-06 was fixed in silicon 2026-08-15 and the workaround reverted). It also
   predates the C-79/C-80-era fixes.
 
-**The deciding experiment** is therefore the W-05 matched pair in
+**DECIDED 2026-10-17: direction 1 is the deliverable, because the flag's failure is LIVE.** A peer
+lane built the mruby twin with `-capstone-lower-memops-via-libcall` at LTO on the current tree
+(image `f87f9cbf`) and it does not run: `smoke.rb` and all 20 rows fault identically, before any
+case code, with cause 24 at `pc=0xe030c96c`, `address=0xe2246e90`, inside `memcpy+0xc8` — a domain
+heap address, i.e. an untagged pointer reaching `memcpy`. That is a current, independent
+reproduction on a different program from the 2026-08-11 SQLite record, so the "may be stale"
+caveat below is answered: it is not stale. **Emit-the-libcall is not available, and a run-time
+alignment test is the fix.**
+
+Note the two failures are NOT the same signature, and a matching shape is not a matching
+mechanism: the SQLite record is `helper_cscincoffset: Assertion rs1_v->tag failed`, a `cincoffset`
+on an untagged REGISTER at domain entry; the mruby one is a fault inside `memcpy` on an untagged
+heap ADDRESS. Whether they share a cause is unestablished.
+
+**A hypothesis of mine, tested and NOT supported, recorded so nobody re-runs it.** I suspected the
+flag's failure was C-77 ("the argument copy's `memcpy` gets its operands through integer moves"),
+which would mean every `mem*` call now traverses a known-open defect. Compiled five operand
+provenances under the flag and inspected the last writer of `a0`/`a1` before each call: parameters
+arrive incoming; a heap-loaded pair arrives via `movc`/`ldc`; a by-value struct arrives via `movc`.
+**Every real call site passes capabilities correctly**, so the untagged pointer does not come from
+the libcall's own argument setup in these shapes. The mruby fault's mechanism remains unexplained.
+
+A related precision this probe forced, which corrects a looser claim I had made: a by-value
+aggregate copy is a C-81 instance only when the aggregate is UNDER-ALIGNED. `struct { void *a, *b; }`
+by value carries `llvm.memcpy ... align 16` and takes the capability path; the exposed case is a
+packed or otherwise under-aligned aggregate, whose `byval` is `align 1`.
+
+**The W-05 matched pair** in
 `docs/plans/compiler-validation-plan.md`, run on today's tree with the v6 flags, asserting the two
 `.dom` sha256s differ. If it reads clean, direction 2 is available; if the fault is live, direction
 1 is the deliverable.
@@ -314,6 +341,19 @@ Tier 3 kit. Against the kit's actual baseline, `vp2-prep/v6-fix/out/sdk`, verifi
 | `v6-fix/out/sdk` (baseline) | `855f843c750a9838` | `4dff5d9426bdcffe` | `4c7cc33f439e1c11` | `7f3077ae894a9edb` |
 | `sdk-arm-6` | `855f843c750a9838` | `4dff5d9426bdcffe` | `4c7cc33f439e1c11` | `7f3077ae894a9edb` |
 | `sdk-abi-v6-20261017` (NOT the kit's) | `2955b33c0253845f` | `4dff5d9426bdcffe` | absent | `7f3077ae894a9edb` |
+
+Re-runnable, because this reverses what I had earlier told the other lanes and a reader will
+arrive with the same doubt:
+
+    B=/tmp/capstone/vp2-prep/v6-fix/out/sdk; A=/tmp/capstone/vp2-prep/sdk-arm-6
+    for f in libapplication-runtime.a libcapstone-application-builtins.a spawn-shell.o capstone-cc; do
+        sha256sum "$B/$f" "$A/$f"; done
+    diff -rq "$B" "$A"
+    python3 -c 'import json,sys; a,b=[json.load(open(p))["codegen"] for p in sys.argv[1:]]; \
+        print([x for x in a if x not in b], [x for x in b if x not in a])' "$B/sdk.json" "$A/sdk.json"
+
+gives the four identical pairs above, `Only in .../sdk-arm-6: ARM.txt` plus the `sdk.json`
+difference, and `[] ['-fno-builtin']`.
 
 `diff -rq` between the baseline and arm 6 reports only `ARM.txt` and `sdk.json`, and `sdk.json`'s
 only codegen difference is `-fno-builtin`. **Every prebuilt object is byte-identical**, so the
