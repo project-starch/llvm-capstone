@@ -1439,7 +1439,7 @@ RTL's header view does (`ex_stage.sv:1397-1398`). **RTL candidate, not requested
 latched header view (vp_cap − vp_next + vp_free_cnt) could ride a vp2b build; it would read the value as of the last
 allocation, not live, so the software rule stays the definition either way.
 
-## Q-22 — CSR 0x5c0 (`scapctl`, QEMU's "protected U" switch) exists in QEMU and not on the RTL, which behaves as PU = 0: U mode outside a context is never in the table namespace `OPEN — RTL/QEMU divergence, filed 2026-10-18 by the RTL lane answering the module's CSR list; the module must not write it on silicon; the runtime lane is asked what it writes there`
+## Q-22 — CSR 0x5c0 (`scapctl`, QEMU's "protected U" switch) exists in QEMU and not on the RTL, which behaves as PU = 0: U mode outside a context is never in the table namespace `OPEN — RTL/QEMU divergence, filed 2026-10-18 by the RTL lane answering the module's CSR list; CLOSED FOR THE CORPUS KITS the same day: the module reads 0x5c0 once and never writes it, the silicon adapter is built without the read, and no kit path runs in U outside a context`
 
 QEMU (d35af47b163c) defines CSR 0x5c0 (`cpu_bits.h:539`, `SCAPCTL_PU` bit 0 at :542; `read_scapctl` / `write_scapctl`
 `csr.c:4134-4147`, the read ORing bit 0x100 when the CPU property `capstone_exact_bounds` is set) and mirrors bit 0 into
@@ -1454,6 +1454,15 @@ reaches the table: PU = 0 permanently.
 regardless of PU, so the divergence does not touch the corpus on silicon IF the module writes 0x5c0 only on QEMU; on vp2
 the write traps and must not be executed. Whether anything in the kits runs in U outside a context with PU set is the
 runtime lane's answer; if it does, that path has no silicon equivalent on vp2 and needs a ruling, not a workaround.
+
+**Answered 2026-10-18 (the runtime lane, from the compiler lane's measurement).** The module never writes 0x5c0; it
+reads it once at context creation (`capstone_vm.c:1195`, keeping bit 0x100 as the context's exact-bounds flag), zero
+write sites by grep. No kit path runs in U outside a context with capabilities: capstone-vexec is built with the plain
+Linux cross compiler (`build-adapter.sh:18-22`), its board binary has no capability mnemonics and no access to 0x5c0 or
+0xcc0, and every domain instruction runs inside the CSRUNV context. The silicon kit's adapter is built with
+`-DCAPSTONE_VM_FLAT_TABLE=1`, which removes both the 0x5c0 and the 0xcc0 read from the binary (the paged build is the
+positive control: the grep finds them there). PU therefore never matters on silicon for the corpus; the divergence
+stays recorded for any future U-mode-outside-a-context design.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
