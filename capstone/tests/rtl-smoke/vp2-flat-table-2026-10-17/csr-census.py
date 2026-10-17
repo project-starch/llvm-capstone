@@ -9,9 +9,12 @@ Counted by ENCODING, not by mnemonic: objdump prints some custom words as .4byte
 grep reads 0 (this project has been bitten by exactly that). A SYSTEM/csr instruction is opcode
 0x73 with funct3 in {1,2,3,5,6,7}; the CSR number is bits [31:20].
 """
-import re, subprocess, sys, hashlib, pathlib, collections
+import collections, hashlib, os, pathlib, re, subprocess, sys
 
-OBJDUMP = "/mnt/hdd/alexey/capstone/llvm-lane-c27/bin/llvm-objdump"
+# From the environment, never a literal path. An absolute build path here carried the
+# operator's account name into a committed file, which the name rule forbids outright; it
+# was committed at the predecessor of this commit and is removed here.
+OBJDUMP = os.environ.get("LLVM_OBJDUMP", "llvm-objdump")
 WATCH = {0xcc0: "urevavail(0xcc0)", 0x5c0: "scapctl(0x5c0)"}
 INSN = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} ){4})\s*(.*)$")
 
