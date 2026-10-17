@@ -872,3 +872,64 @@ bundles run: 18 of 26; not run: [('cpython/allocator-boundary-repros', 'virtual-
   and wmem 0001. wmem's case 22 differs in attribution only.
 - **8 bundles have not run yet:** CPython (4) and PostgreSQL sql-repros (2) need interpreter or server rebuilds, and
   SQLite engine-repros (2) needs build-virtual.py over 33 cases.
+
+## sqlite/engine-repros, both arms (#21, #22), on the fixed revision: pre-registered (2026-10-17, before the runs)
+
+- **Build:** `ports/sqlite/repro322/build-virtual.py --sdk <v6-fix SDK> --amalgamation <the kit's sqlite-source>`
+  (sqlite3.c 7fc92e19…, the record's input), with `--memsys5` for `virtual-malloc` and `--memsys5 --sublet` for
+  `virtual-nested-pools`.
+- **Run:** `shared/run-virtual.py` on a `capstone_vm` VM from the v6-fix kit, without `--exact-bounds`, which is
+  option (iii)'s production configuration.
+- **The record's VM ran `--exact-bounds`** (the runner's docstring, 2026-10-11). So this run differs from the record
+  in the bounds model as well as the revision.
+
+**Predictions:**
+- **`virtual-malloc` (#21): every cell equal to the record** (CAUGHT 5, MISSED 25, NO-READING 3), except where (iii)
+  rounds.
+  - A CAUGHT that becomes MISSED is allowed only for a spatial overrun of an allocation of 4 KiB or more whose
+    accessed byte lies inside its granule's rounding slack. That is (iii)'s documented cost.
+  - Each such flip is checked against the allocation's size from its transcript. Any other flip is a finding.
+- **`virtual-nested-pools` (#22):** two outcomes.
+  - **(a) every cell equal to the record** (CAUGHT 27, MISSED 6), up to the same rounding exception;
+  - **(b) Q-15 29s at the memsys5-block CDERIVE,** which is on the plan's list of (iii) derive sites. The exact-bounds
+    rerun then separates it.
+
+**Result: not runnable at 89ee98be99e5. NO-READING:build-failed 33 on both arms.** Every case fails to compile at
+`ports/sqlite/repro322/repro322_common.h:71`.
+- **The cause is the tree's own (iii) change, 99aa4350bcfb** ("memsys5's static arena granule-aligned, with a
+  compile-time granule macro").
+- The virtual memsys5 branch (lines 66-74) uses `CAPSTONE_REPR_ASSERT_POW2` and `CAPSTONE_REPR_GRANULE_POW2`.
+- They come from `<capstone/representable.h>`, which the header includes only in its freestanding branch (line 153).
+- `build-virtual.py` adds `-I capstone/runtime/include` only for `--sublet` (line 207).
+- So the stock arm finds neither the include nor its path, and the Sublet arm finds the path but not the include.
+- The repair belongs to the port's owner, the compiler lane, which has been told. Neither prediction is read.
+
+**Rerun with the build fix (2026-10-17 10:46-11:02).**
+- **The tree.** The kit's source tree carries only b0d93849ceba's two-file fix (`build-virtual.py`,
+  `repro322_common.h`), applied as a diff onto 89ee98be99e5. The SDK and the kit are unchanged.
+- **The controls.** The configuration's controls are built with `--observe controls/control_{uaf,bounds}_mem5.c`. My
+  first rerun omitted them, and the runner read every cell control-failed: an error in my recipe.
+- **Cases 06 and 22 read build-failed:** they need `--ext-src`, a SQLite 3.22.0 full source tree, and none is on this
+  host. The only full tree here is 3.53.3, which is the wrong version.
+
+| arm | without exact bounds ((iii), production) | with `--exact-bounds` | cells equal to the record (exact) |
+|---|---|---|---|
+| `virtual-malloc` | CAUGHT 3, MISSED 27, unattributed 1, build-failed 2 | the same | 29 of 33 |
+| `virtual-nested-pools` | CAUGHT 1, unattributed 30 (cause 29 in `capstone_cap_derive`), build-failed 2 | CAUGHT 25, MISSED 6, build-failed 2 | 31 of 33 |
+
+- **`virtual-nested-pools`: outcome (b), confirmed by the exact-bounds control.**
+  - Without exact bounds, 30 cells die with 29 at the memsys5 Sublet derive.
+  - With exact bounds, every built cell equals the record.
+  - That is the plan's recorded (iii) cost for SQLite's memsys5 blocks.
+- **`virtual-malloc`: two real differences, cases 12 and 24, and neither depends on (iii)** (they read the same with
+  exact bounds).
+  - Both had recorded cause-24 faults (an operand that is not a capability): 12 in `sqlite3Fts5IterTerm`
+    (unattributed), and 24 in `sqlite3OpenTable` (CAUGHT under its fault site).
+  - On v6 both complete with no fault, so they read MISSED.
+  - For 24 this matches the corpus's silicon stock arm, which also completes. The campaign plan records "24 completes
+    where virtual-malloc faults", with the emulator agreeing.
+  - So the record's cause-24 fault there was a property of the 10-11 virtual build, not of the defect. What dropped
+    the tag in that build is not established.
+- **The pre-registered (iii) rounding exception was not needed:** no CAUGHT 28 became MISSED.
+
+**Status after SQLite (computed by `status.py`): 20 of 26 bundles run; not run: cpython (4) and postgres/sql-repros (2), blocked on the per-port SDK build (soft-float builtins in a hard-float link), which the compiler lane has taken.**
