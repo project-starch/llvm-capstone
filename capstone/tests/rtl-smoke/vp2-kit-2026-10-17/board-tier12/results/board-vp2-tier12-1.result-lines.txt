@@ -1,0 +1,40 @@
+# vp2 Tier 1/2, boot 1: 2026-10-17 22:35-22:45 on caplifive_vp2_bf3db3175.bit (resident; no flash), firmware
+# fw_payload 2882836388198297 (BL's recipe + CAPSTONE_VP2_CSMINT; private image with the flat module
+# 0d62a1bcdeecc13f and the kit c14933904de4's contract.dom, sqlite3.dom, mruby). Pre-registered at lane c1fa1a863d09.
+# Read no further than the first failure (board-run skill): vm-contract wedged; vm-suite is collateral, not a result.
+
+b0-stats      retval 0    AS ORACLE (0)
+b0-hello      retval 0    AS ORACLE (0)
+vm-contract   NO RESULT   wedged: no return within 3600 s. vm-contract.sh printed nothing (no VM_EXIT line).
+              Immediately after the rung marker the monitor reported an unhandled trap (its EXCX site):
+                EXCX:0000E002 MCAU:00000018 MEPC:011127D4 MTVL:01D3F070 MSTA:00000820
+              i.e. cause 24, from S-mode (MSTA MPP = 01): the trap came from Linux, not from a domain.
+              Hardware trap log (aperture sw=255 and the trap-log registers), the last trap:
+                {seen,mcause} 0x98 (cause 24), mepc 0x80020064 = _cap_trap_entry+4 (the monitor's own trap
+                entry, M-mode), tval 0xffffffc80415bca0; commit pc (stale slot 0) 0x800200a4 = _cap_trap_entry+0x44.
+vm-suite      COLLATERAL  never ran (after a wedge -- not a result)
+
+# Neither pre-registered vm-contract branch: not the identity reading (25 after VIRTUAL_APPLICATION_OK), and not the
+# layout branch (29 before it). Routed to the RTL side, as pre-registered, before anything is called silicon.
+# Attribution, VERIFIED (2026-10-17, after the boot) from three primary sources, each read directly:
+# - the module: capstone_vm.ko 0d62a1bcdeecc13f .text+0x27d4 (add() +0x384) is 0x0007b2db = `ldc t0, 0(a5)`, the only
+#   capability instruction in .text at an offset ending 0x7d4 (modules load page-aligned); it follows the CSMINT
+#   (0xa13799db) in add()'s "C pointers are copyable" block, and a5 = `slot`, an integer kernel address. The same code is
+#   in the paged module 91b6adeb9caf2839, which vp2 refuses earlier (29); the flat change made add() reachable.
+# - the RTL (capstone-ariane bf3db3175, core/anvil_build/capstone_dyn_unit.anvil, func LDC): rs1 of type NOT_CAP raises
+#   UNEXPECTED_OPERAND (cause 24) with no privilege or mode condition.
+# - QEMU (capstone-qemu d35af47b163c, target/riscv/insn_trans/trans_capstone.c.inc, trans_csldc): an S-mode LDC outside
+#   cap-data mode takes a branch commented "Experimental trusted-kernel context spill: the kernel slot address is
+#   scalar", which forms the address from rs1 as an integer and never type-checks it. The module depends on that
+#   accommodation; the RTL has none (Q-23, the runtime lane's ruling).
+# The CSMINT emulation restores the frame exactly and a5 was the slot (the RTL lane, sbi_capstone.S save/restore); the
+# rd/rs2 aliasing in that CSMINT (`=r` output without early clobber) is real but not this fault.
+# The wedge is the monitor's, not the module's. handle_exception's default (EXCX) calls fault_return_from_domain for a
+# trap from S with no domain active; return_to_sumode never runs, so CSCRATCH keeps S's integer sp, and the next trap's
+# _cap_trap_entry+4 = CINCOFFSETIMM(sp, sp, -256) (read here: sbi_capstone.S, the entry's second instruction) raises 24
+# on it: the trap log's mepc 0x80020064 and tval 0xffffffc80415bca0 (the kernel stack). medeleg cannot route 24..30 to
+# S: csr_regfile.sv's CSR_MEDELEG write mask (read here, bf3db3175) has no bits 24-30 (Q-24). The software fix is on
+# capstone-sbi: inject an OS-origin trap into S instead.
+# The driver labelled the rung "ENTRY STALL (R-16)": its classifier assumed a classic-domain rung (SHA markers). Fixed
+# on this lane: a rung with an EXCX report is classified from that report, and one with no SHA marker is not called
+# an entry stall.
