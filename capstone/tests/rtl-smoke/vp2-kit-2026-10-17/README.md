@@ -1087,3 +1087,49 @@ b0-stats, b0-hello, vm-contract, then vm-suite last.
 - **If it is persistent** (a verdict that sfence.vma and fence.i do not clear), there is one FRTY at that pc, then the
   guard injects. The CPMX dump and Oops follow as in r4/r5, and the mechanism is the RTL lane's.
 - **The FRTY count is a reading in either case:** how many returns fault.
+
+### Boot r6, result (2026-10-18 05:23-05:55): TIER 1 PASSES ON SILICON, with the fetch retry; Tier 2 stops in `vm`
+
+Pre-registered at 452c1611a52e. Result lines in `board-tier12/results/board-vp2-tier12-r6.result-lines.txt`. The run
+was ended by SIGINT after ~25 minutes without progress. The driver released the board but wrote no board.txt, so the
+lines come from driver.log, scoped to this run's load_image.
+
+**Tier 1: the identity branch, the first virtual application on silicon.** b0-stats 0, b0-hello 0, vm-contract 0.
+- contract.dom `ok` exits 0 with `VIRTUAL_APPLICATION_OK argv env files heap_growth heap_retirement mmap`. Its 24 grants
+  equal QEMU's 24, checked by script, and the sixth is the pre-registered Q-30 line, `ADD_OK slot=5 ... bytes=8192
+  reg=10 perms=7 linear=1`.
+- `stale` is denied with cause 25, exit 139.
+
+**The retry.** It fired twice in the whole boot (FRTY 2), both at retire+0xdc, the instruction after a CSRETIRE, before
+any grant. After that, none of the hundreds of CSRUNV returns faulted.
+- So the refusal is not per escape, and the retry turns it from a kernel panic into a continue.
+- Its mechanism stays with the RTL lane. An rtl-oracle reading of bf3db3175: ENTRY's init strobe zeroes the CPMP bank,
+  the ESCAPE restores the pc first and the CPMPs later, and a kill_s1 guard is meant to cover the window.
+
+**Tier 2 (vm-suite).**
+- normal 0 and threads 1, as pre-registered.
+- `vm`'s first launch read as QEMU's. Its second launch made QEMU's grants up to vm_contract()'s `mmap(8193,
+  PROT_READ)` (16 KiB), then nothing but heartbeats.
+- Between that grant and QEMU's next, vm_contract() runs only `require(p[8192] == 0, "read-only first touch")`.
+
+## Pre-registered (2026-10-18, before boot r7): r6 with a module that reports a repeated page fault
+
+**The change:** only the module, 8fdfa127cf13a7c2 = 0cc4760d21fde17a plus a diagnostic (`boot3/resolve-diag.patch`, a
+board-lane experiment). resolve(), the module's in-step page-fault resolution, prints `capstone_vm: DIAG fault
+repeat=N cause= addr= pc= pte=` when it sees the same pc and address again (at repeats 2, 16, 256 and 65536). The pte is
+the live PTE value via follow_pte.
+- Both kit gates pass.
+- Firmware 684684692449f302, whose monitor sources hash as r6's (007d81d, the retry and CPMX diagnostic armed).
+- Rungs as r6. Run by `boot3/run-tier12-r7.sh 684684692449f302`, dry-run in `boot3/dryrun-r7.txt`.
+- If `vm` stops again, the board lane ends the run by SIGINT once DIAG lines have appeared, or after 10 minutes without
+  progress.
+
+**Predictions:**
+- Tier 1 as r6 (identity), and normal 0 and threads 1.
+- **If `vm` is a fault loop** at the read-only first touch: DIAG lines for one address in the third page of the
+  16 KiB arena, cause 13, pc in vm_contract. The PTE names the reason:
+  - present with A clear: CVA6 faults on A = 0, which QEMU sets in hardware;
+  - not present: the resolution did not reach the page table the domain walks;
+  - present and complete: the domain's view is stale, which goes to the RTL lane with the PTE.
+- **If no DIAG line appears** and `vm` still stalls: the stall is not a repeated fault in resolve(). It is then a wait
+  elsewhere (the slot queue, a lock), read from what the module prints.
