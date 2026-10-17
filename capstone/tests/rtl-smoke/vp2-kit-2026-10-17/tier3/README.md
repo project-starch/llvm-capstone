@@ -591,3 +591,18 @@ pool bundles above, so this bundle discriminates.
   common to both builds, not in `aligned_alloc`.
 
 No prediction between them: this run decides.
+
+**Result: outcome (b), in class. NO-READING:control-failed 9, against a recorded MISSED 9; 0 of 9 cells equal.**
+- The generic controls read as expected: bounds-malloc 28, uaf-malloc 25.
+- **Every case program faults with cause 24 in the pool code, in both arms.**
+- **Case 00** faults at `refstruct_pool_uninit+0x78`:
+  - `ldc a2, 0(a0)` loads a capability from memory;
+  - the next store through it, `sw a1, 0x60(a2)`, faults 24.
+  So a pointer that the pool code stored in memory comes back without its tag.
+- The site differs from the pool bundles' (`free()`'s probe), but the class is the same: a value used as a capability
+  is not one.
+- **What this settles:** the `aligned_alloc` path is not needed for the failure, because this build maps
+  `aligned_alloc` to `malloc`. The failure is in code common to both builds: the FFmpeg pool sources, the port's
+  shared allocator files, the v6 runtime, or the compiler.
+- **Not established:** where the tag is lost. The record ran the same sources on the 2026-10-10 SDK with
+  `/tmp/capstone/virt-stack`'s toolchain; this run uses the v6 kit's SDK and `llvm-dev-current-20261017`.
