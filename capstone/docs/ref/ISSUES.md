@@ -1423,6 +1423,38 @@ store permission.
 - The directed test needs the missing arm: a non-consuming ldc from a read-only page through an RW capability completes
   on both sides. The `sparse-stale` contract mode is the Tier 2 check on the board.
 
+## Q-21 — CSR 0xcc0 (`urevavail`, the lifetime table's available-identity count) exists in QEMU and not on the RTL, where a read is an illegal instruction `OPEN — RTL/QEMU divergence, filed 2026-10-18 by the RTL lane answering the module's flat-table question; software rule in place (the module computes availability from the header), no RTL change requested`
+
+QEMU (capstone-qemu d35af47b163c) implements CSR 0xcc0 under `capstone_vm` (`csr.c:4876`, `read_urevavail` :4164-4169):
+it returns `capstone_urevavail` (`capstone_table.c:199-205`) = `cap_rev_table_avail` = capacity − next-unused +
+free_count, read live from the table's header in guest RAM. The RTL (`virtual-profile-2-d` bf3db3175) has no CSR 0xcc0:
+`csr_regfile.sv` and `riscv_pkg.sv` (the Capstone CSR list at :667-674) carry no such address, so a `csrr` of it takes
+`default: read_access_exception` (`csr_regfile.sv:1079`) and traps as an illegal instruction. The nearest RTL register is
+CSNODEFREE 0xFC4 (`csr_regfile.sv:1078`): 0xFFFF − head + free_len of the unit's PHYSICAL pool, unrelated to a context's
+table. No arm reads 0xcc0; the divergence surfaced when the module's flat-table mode asked where to read availability.
+
+**Software rule (the runtime lane's module, both kits):** never read 0xcc0; the trusted adapter computes availability
+from the header words it owns, capacity − next-unused + free_count, saturating capacity and next-unused at 65,536 as the
+RTL's header view does (`ex_stage.sv:1397-1398`). **RTL candidate, not requested:** a read-only 0xcc0 returning the unit's
+latched header view (vp_cap − vp_next + vp_free_cnt) could ride a vp2b build; it would read the value as of the last
+allocation, not live, so the software rule stays the definition either way.
+
+## Q-22 — CSR 0x5c0 (`scapctl`, QEMU's "protected U" switch) exists in QEMU and not on the RTL, which behaves as PU = 0: U mode outside a context is never in the table namespace `OPEN — RTL/QEMU divergence, filed 2026-10-18 by the RTL lane answering the module's CSR list; the module must not write it on silicon; the runtime lane is asked what it writes there`
+
+QEMU (d35af47b163c) defines CSR 0x5c0 (`cpu_bits.h:539`, `SCAPCTL_PU` bit 0 at :542; `read_scapctl` / `write_scapctl`
+`csr.c:4134-4147`, the read ORing bit 0x100 when the CPU property `capstone_exact_bounds` is set) and mirrors bit 0 into
+`capstone_u_active` (`cpu.h:400-409`: "scapctl bit 0 selects protected U"). With PU set, U mode OUTSIDE a context uses the
+guest table (`capstone_table.c:98-110`: `if (env->priv == PRV_U) return env->capstone_u_active`) and the Capstone
+H-interrupt C-mode delivery is suppressed (`cpu_helper.c:459`, `:1819`). The RTL (`virtual-profile-2-d` bf3db3175) has no
+0x5c0: a read or write from any mode traps (`csr_regfile.sv:1079`, `:2006`). Its table namespace is a context, S with
+srevroot != 0, or M with csupctl bit 3 (`decoder.sv:93`, `:1301`; the plan's decision 3), so U outside a context never
+reaches the table: PU = 0 permanently.
+
+**Consequence.** Tier 3 under capstone-vexec runs its bundles inside CSRUNV contexts, where the RTL is in the namespace
+regardless of PU, so the divergence does not touch the corpus on silicon IF the module writes 0x5c0 only on QEMU; on vp2
+the write traps and must not be executed. Whether anything in the kits runs in U outside a context with PU set is the
+runtime lane's answer; if it does, that path has no silicon equivalent on vp2 and needs a ruling, not a workaround.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
