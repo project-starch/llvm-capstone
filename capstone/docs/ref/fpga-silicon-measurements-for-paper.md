@@ -6768,3 +6768,28 @@ mruby), 16f9756828d6 (SQLite 12/24).
 
 **Scope:** the silicon images only. The virtual-profile corpus images were built without `-fno-builtin`, so explicit
 `memcpy` calls there are exposed too, and nothing here covers them.
+
+## speedtest1 `main --size 100`, domain against native, on the Sublet bitstream: ratio 1.1835, as pre-registered (caplifive_sublet_d93a8d66b, 2026-10-17)
+
+The board campaign's item 10, a repeat of §7p (sw73, ratio 1.1819, another bitstream). The set was rebuilt with §7p's
+recipe: FULL=on, FLOAT=on, -O0, a 128 MiB region arena on the domain and a 128 MiB static heap natively, dev147
+612b3ec514c0. Images: domain 2e839991ffd34e79, host 2af56927aaf907e9 (both byte-identical to §7p's), native
+50bd00d74f63fd4c. Pre-registered before the boots on lane 816de2675b21; the folder is
+`capstone/tests/rtl-smoke/st100-sublet-2026-10-16/`.
+
+| boot | arm | hash | `SPEEDTEST1-CYCLES` | wall (`TOTAL`) |
+|---|---|---|---:|---:|
+| pre-boot, size 1 | native `warm` | `111130 1e792c9d` | 2,199,168,382 | 87.8 s |
+| pre-boot, size 1 | domain | `111130 1e792c9d` | 2,674,009,545 | 106.8 s |
+| pair, size 100 | native `warm` | `23674002 573a4409` | 336,762,395,125 | 13,469.7 s |
+| pair, size 100 | domain | `23674002 573a4409` | 398,552,257,537 | 15,941.1 s |
+
+- **Size-100 ratio 1.1835**, inside the pre-registered ~1.18 (band 1.14-1.24).
+  - The absolutes are within 0.15 % of the predictions from sw73's cycles per instruction: 337.2 G and 398.6 G.
+  - Both arms hash to the native oracle.
+  - The domain reads `HEAP 134217728 DROPPED 0 RC 0`, with no NOMEM, share-trap or refusal; k800 reads 4 before and
+    after.
+- **Size-1 ratio 1.2159**, against the predicted ~1.22.
+- **Recorded, not predicted:** the native's `BASELINE-WARM INSTRS` is 95,124,732,502 against QEMU's 90,025,116,459. The
+  board counts every instruction the hart retired in the interval, kernel work included.
+- **Not established:** N = 1 per arm.

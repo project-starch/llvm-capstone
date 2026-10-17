@@ -1,0 +1,6 @@
+compiler: clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 612b3ec514c03255eaa2181c9894c5c6a576ac0d)
+qemu: capstone-qemu/build/qemu-system-riscv64 (the main clone, deb7d75756) sha256 6e5e136a070b0ee9
+dom size 1 rc=0 dom=2e839991ffd34e79 host=2af56927aaf907e9 :: Verification Hash: 111130 1e792c9d :: SPEEDTEST1-CYCLES 697087510 HIGHWATER n/a HEAP 134217728 DROPPED 0 :: arena_bytes=134217728 :: 102 s with the build
+native build rc=0 50bd00d74f63fd4c
+native size 1 rc=0 :: Verification Hash: 111130 1e792c9d :: BASELINE-WARM CYCLES 548764424 INSTRS 548764450 :: HEAP 134217728 DROPPED 0 :: 17 s
+native size 100 rc=0 :: Verification Hash: 23674002 573a4409 :: BASELINE-WARM CYCLES 90025116433 INSTRS 90025116459 :: HEAP 134217728 DROPPED 0 :: 448 s

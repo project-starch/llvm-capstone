@@ -1,0 +1,12 @@
+  RESULT k800 retval=[0-9-]+    : 2x ['RESULT k800 retval=4', 'RESULT k800 retval=4']
+  Verification Hash: \d+ [0-9a-f: 2x ['Verification Hash: 23674002 573a4409', 'Verification Hash: 23674002 573a4409']
+  SPEEDTEST1-CYCLES \d+[^\r\n]{0: 2x ['SPEEDTEST1-CYCLES 336762395125 HIGHWATER n/a HEAP 134217728 DROPPED 0 RC 0', 'SPEEDTEST1-CYCLES 398552257537 HIGHWATER n/a HEAP 134217728 DROPPED 0 RC 0']
+  BASELINE-WARM CYCLES \d+ INSTR: 1x ['BASELINE-WARM CYCLES 336762429198 INSTRS 95124732502']
+  arena_bytes=\d+               : 1x ['arena_bytes=134217728']
+  HEAP \d+ DROPPED \d+          : 2x ['HEAP 134217728 DROPPED 0', 'HEAP 134217728 DROPPED 0']
+  RC -?\d+                      : 2x ['RC 0', 'RC 0']
+  share-trap[^\r\n]{0,60}       : 0x []
+  NOMEM[^\r\n]{0,40}            : 0x []
+  refus[^\r\n]{0,80}            : 0x []
+  mcause[^\r\n]{0,60}           : 0x []
+  boot banners after this run's load_image (must be 1): 1
