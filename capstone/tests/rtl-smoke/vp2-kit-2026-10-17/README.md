@@ -777,3 +777,103 @@ _inject_s_trap in the ELF.
 
 The script was dry-run with every pin real and the driver stubbed. It reads boot 3-T1's real transcript as
 `qemu-csr`, a clean one as `identity`, and stops on a wrong firmware.
+
+**Correction (2026-10-18, after the pre-registration above, before its boot's result):** the `libc_exit_fini` sites are
+musl's source doing integer arithmetic through `(uintptr_t)`, not a codegen defect. More to the point, musl's
+`libc_exit_fini` is never called in these images: the runtime's strong `__libc_exit_fini` overrides musl's weak alias,
+and it is capability-correct. The compiler lane's control proved it (C-82, 6ec2d7b380c2). c82-destructor.dom
+a250d387ddfd352d carries the pattern and a one-entry .fini_array, and it exits 0 after running its destructor. The
+board lane's earlier claim to the runtime lane, that any image with a destructor faults at exit, is retracted.
+- The gate is unchanged in what it reports: the instructions are present.
+- Under the RTL lane's TSV row "integer ALU op on a tagged register" (dev 35b14e455880, b29410a7fe1a), the gate now
+  REFUSES them rather than listing them as candidates.
+- The attribution rows carry them, with the evidence checked. Their reason understates the case: the function has no
+  caller at all.
+- A gate refusal is a static pattern, not a predicted fault.
+- Plain JALR through an untagged register is admitted (the TSV's new row): a plain jump, which faults only outside
+  the PCC, and that is dynamic.
+
+### Boot 3-T1's repeat, result (2026-10-18 03:49-03:55): C-27 and Q-21 fixed on silicon; the run reached the first reply and stopped at the adapter's QEMU-shaped empty-slot check (Q-30)
+
+N = 1 boot, both contract runs identical. fw_payload ed7c599a132508f5, module ed24f827, contract.dom 125705371837ea92;
+result lines in `board-tier12/results/board-vp2-tier12-3t1r.result-lines.txt`.
+
+- b0-stats 0 and b0-hello 0, as predicted.
+- **vm-contract 922, branch `other`** (not predicted): `ok` and `stale` both exit 139 with cause 24.
+- **No cause 2 anywhere, so Q-21 is fixed on silicon.** malloc ran past its former 0xcc0 read. The first heap grant
+  went through and the domain resumed, so C-27 holds too.
+
+What the run reads, in order:
+1. Five grants succeed (`CAPSTONE_VM_ADD_OK` slots 0-4). All are made before the first CSRUNV.
+2. The sixth is the first grant made while the domain is paused at a service ECALL (kind 3): reg 10, LINEAR, 8192
+   bytes (on QEMU this grant reads perms 7). It is refused: `CAPSTONE_VM_ADD_REFUSED ... errno=14` (EFAULT).
+   - QEMU 3b8040d5ff6e reads `ADD_OK slot=5` at the same point (record cbfa22b4c957).
+3. The domain's mmap returns failure. Its errno store faults with cause 24 at VA 0x1207c, `sw s1, 0(a0)`.
+   - a0 comes from `__errno_location` (`movc a0, tp; cincoffsetimm a0, a0, -0x124`).
+   - The address 0 - 0x124 says tp's cursor was 0. So the 24 is downstream of the refusal, not a cause in its own right.
+
+**Located.** In the module (ed24f827's source, `<v9-kit>/out/adapter-board/module/capstone_vm.c`) a LINEAR add pins no
+pages, so its -EFAULT returns are:
+- the copies to and from user space;
+- add() :622-623, `slot = t->frame + 8 + r->reg * 2; if (slot[0] || slot[1]) goto unpin;`.
+
+The post-success copy marks the thread terminal. The next CV_STEP would then fail with ESRCH and the launcher would
+die() on it. Instead the board printed `domain fault`, which needs a successful step, so that branch is excluded.
+remap_end() :715-716 carries the same check. It is unreachable in this flat build: `exact_bounds` is false, so
+remap_begin refuses first.
+
+The slot is the frame's x10 at +224, and on silicon it is not empty at a service pause:
+- **RTL (bf3db3175):** the frame IS the paused context's storage (vp2 item D, decision 1). Every escape saves x1..x31,
+  with tags, into the frame's own slots (capstone_dom_switcher.anvil:155-161). The reply resume loads them and zeroes
+  +224.
+- **QEMU:** zeroes the slots at entry and keeps the context in its own state (capstone_supervisor.c:950-969).
+- **The board read +224 itself, indirectly.**
+  - The service's size argument, `args[0]`, is the module's `frame[72]` (+576).
+  - On silicon +576 is written only by the switcher's copy from +224 (dom_switcher.anvil:492).
+  - The launcher reached the grant, so that size was non-zero (exec.c:267-270).
+  - So +224's low word was non-zero at this escape.
+- The QEMU record ran the flat adapter c4440adde0d02347, built from the same source with the same define for the
+  QEMU kernel.
+- The claim-auditor confirmed this localization from source, with the corrections now in this text.
+
+So an adapter that requires +224 to be empty passes only on QEMU. The item D plan asked for this divergence to be
+recorded as a Q-entry (:71-73), and it was not. It is Q-30, filed by the RTL lane.
+
+**Ruled by the semantics owner the same morning:**
+- the RTL's frame is the reference;
+- the adapter overwrites +224 instead of requiring it empty (the compiler lane's module revision);
+- QEMU gains the frame write on escape (the RTL lane, the next pin).
+
+The next run's pre-registration follows when the revised module's hash exists.
+
+## The kit's QEMU firmware with the S-trap injection (capstone-sbi vp2/qemu-kit-inject c170e49, 2026-10-18)
+
+**Why.** Since capstone-sbi 83966bc the FPGA monitor injects a trap from S or U that it does not service into S
+(medeleg cannot route causes 24-30 on this RTL, Q-24). The kit's QEMU firmware did not inject, so the kit's QEMU
+reference answered those traps differently from the board. c170e49 gives the QEMU monitor the same injection, behind
+`CAPSTONE_S_TRAP_INJECT`. Without the define, the QEMU build is byte-identical to 4674ab6, and so are FPGA builds with
+or without it.
+
+**It returns through CEPC, not mepc.** Under cap_mem, QEMU's trap from S or U writes only CEPC
+(cpu_helper.c:1986-1991), and mret returns through CEPC (op_helper.c:352-356). On the RTL, CEPC's cursor and mepc are
+one register (Q-28). So the QEMU block and the FPGA block are paired by behaviour, not by bytes.
+- The first port, f5f1bbe, read and wrote mepc. The claim-auditor refuted it, and it is the control below.
+
+**Recipe:** `qemu-kit-fw/build-kit-qemu-fw.sh <capstone-sbi commit> inject <fresh dir>`.
+- OpenSBI cf344cf3, PLATFORM=generic.
+- The monitor C generated by capstone-c and checked by buildroot 8fd1ea12's check-monitor-asm.py.
+- The define reaches capstone-c and all three of the platform's flag lines (cpp, c, as).
+- fw_jump.elf: c170e49 inject = 2bc1dbbad1cc50d7; f5f1bbe inject = 34bb30a7dcdfb9d1.
+
+**The behavioural pair** (`qemu-kit-fw/run-pair.sh`): run.py on QEMU 3b8040d5ff6e (binary 809d1fc107e64515, one
+context slot) with the v9 images (contract.dom 125705371837ea92) and the flat adapter c4440adde0d02347. Predictions were
+written into the script before it ran.
+
+| arm | prediction at `threads` (the second CSRUNV, refused 29) | reading |
+|---|---|---|
+| c170e49 | INJS 0x1d, then Linux takes the trap at stvec and reports it itself; no INJL, no spin | `INJS` `0x1d`, then `[4.790252] Oops - unkno...`. run.py stops the guest at the first "Oops" (run.py:186-190), so the line is cut by the harness, not by a crash |
+| f5f1bbe | INJS, then INJL with the stale mepc, and a spin to the timeout | `INJS` `0x1d` `INJL` `0x1d` `0xffffffff80003344`, then silence until the 180 s timeout (03:51:16 to 03:54:19) |
+
+Both arms read `normal` as VIRTUAL_APPLICATION_OK first, and both run.py records are FAIL from `threads` on, because
+QEMU now refuses the second context as silicon does (Q-26). The pair shows the injection reaching Linux. It says nothing
+about the virtual tests after `threads`.

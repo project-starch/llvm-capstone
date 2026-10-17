@@ -43,6 +43,7 @@ def load_table(path):
     for c in COLUMNS + ("class", "name", "encoding"):
         if c not in hdr: raise SystemExit(f"NO DATA: table {path} has no column {c!r}")
     insn, csr = [], []
+    rules = {r["name"] for r in body if r["class"] == "rule"}
     for r in body:
         if r["class"] == "insn":
             e = r["encoding"]
@@ -63,7 +64,7 @@ def load_table(path):
                 lo = int(m.group(1), 16); hi = int(m.group(2), 16) if m.group(2) else lo
                 csr.append({"lo": lo, "hi": hi, "row": r})
     if not insn or not csr: raise SystemExit(f"NO DATA: table {path} has no insn or csr rows")
-    return insn, csr
+    return insn, csr, rules
 
 
 def match_insn(insn_rows, w):
@@ -130,6 +131,9 @@ def writer_before(seq, i, reg, window):
     return None
 
 
+ALU_RULE = "integer ALU op on a tagged register"   # the TSV's rule row (the RTL lane, 35b14e455880, b29410a7fe1a)
+
+
 def integer_kind(w):
     """'integer' when the writer certainly produces an integer (lui, auipc, a plain load, li = addi from x0, a link);
     'alu' when it is integer ALU arithmetic on a register that may hold a capability (addi/add/mv from rs1 != x0),
@@ -137,6 +141,8 @@ def integer_kind(w):
     op = w & 0x7F
     if op in (0x37, 0x17, 0x03, 0x6F, 0x67): return "integer"
     if op in (0x13, 0x1B) and (w >> 15) & 31 == 0: return "integer"
+    if op == 0x73 and (w >> 12) & 7 in (1, 2, 3, 5, 6, 7): return "integer"          # a CSR read into rd
+    if op == 0x53 and (w >> 25) in (0x70, 0x71): return "integer"                    # FMV.X.W / FMV.X.D, an FP move
     if op in (0x13, 0x33, 0x1B, 0x3B): return "alu"
     return None
 
@@ -147,7 +153,7 @@ def is_gp_derive(w):
     return (f3 == 1 and f7 in (0x0C, 0x05)) or f3 == 2     # CINCOFFSET, SCC, CINCOFFSETIMM
 
 
-def gate(lines, insn_rows, csr_rows, column):
+def gate(lines, insn_rows, csr_rows, column, rules=frozenset()):
     seq = list(words(lines))
     refused, cand, cond, n, traps = [], [], 0, len(seq), 0
     priv = PRIV[column]
@@ -179,15 +185,17 @@ def gate(lines, insn_rows, csr_rows, column):
                 if src is None or (src & 0x7F) not in (0x5B, 0x7B):
                     refused.append((addr, fn, w, f"{'LDC' if f3 == 3 else 'STC'} in trusted S with base x{r} not from a capability instruction (Q-23)"))
                 continue
-            if op == 0x5B and f3 in (3, 4):                                       # LDC / STC base
+            if op == 0x5B and f3 in (3, 4, 5):                                    # LDC / STC / CJALR base
                 r = (w >> 15) & 31
+                nm = {3: "LDC", 4: "STC", 5: "CJALR"}[f3]
                 wr = writer_before(seq, i, r, 8)
                 k = integer_kind(wr) if wr is not None else None
-                if k == "integer":
-                    refused.append((addr, fn, w, f"{'LDC' if f3 == 3 else 'STC'} with an integer base x{r} (Q-23)"))
+                if k == "integer" or (k == "alu" and ALU_RULE in rules):
+                    refused.append((addr, fn, w, f"{nm} with an untagged base x{r}, defined by word {wr:#010x} "
+                                                 f"({'integer ALU op on a tagged register' if k == 'alu' else 'an integer writer'}; Q-23)"))
                 elif k == "alu":
-                    cand.append((addr, fn, w, f"{'LDC' if f3 == 3 else 'STC'} base x{r} written by integer ALU arithmetic "
-                                              f"(word {wr:#010x}); its type on the RTL is not in the table"))
+                    cand.append((addr, fn, w, f"{nm} base x{r} written by integer ALU arithmetic "
+                                              f"(word {wr:#010x}); the table has no '{ALU_RULE}' row"))
         elif op == 0x73 and f3 == 0:
             if w == 0x30200073 or w == 0x10200073:
                 e = next(x for x in insn_rows if x.get("std") == "xret")
@@ -237,7 +245,7 @@ def main(argv):
                                            "checks out against the image; a refusal is never attributed")
     ap.add_argument("files", nargs="*"); a = ap.parse_args(argv)
     if not os.path.exists(a.table): print(f"NO DATA: no table at {a.table}"); return 2
-    insn_rows, csr_rows = load_table(a.table)
+    insn_rows, csr_rows, rules = load_table(a.table)
     attr = {}
     if a.attributions:
         for l in open(a.attributions):
@@ -252,10 +260,19 @@ def main(argv):
         if not os.access(od, os.X_OK): print(f"NO DATA: no objdump at {od}"); return 2
         args = [od, "-d", f] if od == CROSS else [od, "-d", "--triple=capstone64-unknown-elf", f]
         r = subprocess.run(args, capture_output=True, text=True)
-        n, refused, cand, cond, traps = gate(r.stdout.splitlines(), insn_rows, csr_rows, col)
+        n, refused, cand, cond, traps = gate(r.stdout.splitlines(), insn_rows, csr_rows, col, rules)
         sha = subprocess.run(["sha256sum", f], capture_output=True, text=True).stdout[:16]
         if n == 0: print(f"NO DATA {f} ({sha}): 0 instructions disassembled"); worst = 2; continue
-        attributed, keep = [], []
+        attributed, keep, keep_ref = [], [], []
+        for ad, fn, w, why in refused:
+            row = attr.get((sha, ad))
+            if row is not None and "untagged base" in why:
+                ok, note = check_evidence(f, row[0])
+                if ok:
+                    attributed.append((ad, fn, w, why, f"{row[1]} [evidence {row[0]}: {note}]")); continue
+                why += f" (attribution REJECTED: evidence {row[0]}: {note})"
+            keep_ref.append((ad, fn, w, why))
+        refused = keep_ref
         for ad, fn, w, why in cand:
             row = attr.get((sha, ad))
             ok, note = (False, "") if row is None else check_evidence(f, row[0])
