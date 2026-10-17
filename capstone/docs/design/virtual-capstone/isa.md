@@ -51,8 +51,8 @@ The current `CSRETIRE` helper ignores rs2.
 | CSR | Address | Meaning |
 |---|---|---|
 | `srevroot` | `0x5c1` | S/M read/write physical lifetime-table base, rounded down to 4 KiB |
-| `urevavail` | `0xcc0` | Read-only available IDs; zero for an invalid/missing table. **QEMU only (Q-21):** absent on vp2 (illegal instruction); the adapter computes `capacity − next + free_count` from the table header instead |
-| `scapctl` | `0x5c0` | S/M; bit 0 controls the separate protected-U experiment; read-only bit 8 advertises exact shadow bounds. **QEMU only (Q-22):** absent on vp2; the silicon adapter never touches it and reads exact bounds as 0 |
+| `urevavail` | `0xcc0` | **Illegal instruction by default (Q-21, as on vp2; QEMU from 3b8040d5ff6e).** Under the test-only property `x-capstone-test-csrs` only: read-only available IDs. The adapter computes `capacity − next + free_count` from the table header; the application runtime never reads it (availability inside a context is the kind-5 pressure event) |
+| `scapctl` | `0x5c0` | **Illegal instruction by default (Q-22, as on vp2; QEMU from 3b8040d5ff6e).** Under `x-capstone-test-csrs` only: bit 0 selects the protected-U experiment, read-only bit 8 advertises exact shadow bounds. The adapter never touches it and reads exact bounds as 0 |
 
 `scapctl` is not how the launcher enters virtual C. `CSRUNV` binds both roots
 when admitting a context, then restores them from saved state on resume.
@@ -288,12 +288,15 @@ suites (`virtual-capstone-m1`, `movc-untagged-source`, `trusted-linux-u-access`,
 capabilities into registers from S; it is a test scaffold with no silicon equivalent, no production
 kit sets it, and their passes say nothing about trusted S. The follow-up that retires the property
 is rewriting that bootstrap onto the `CSRUNV` route. The reference QEMU for the virtual profile is
-capstone-qemu `virtual-capstone-v7` 852c5bc76774 (two commits on d35af47b163c: descriptor v7 and the
+capstone-qemu `virtual-capstone-v7` 3b8040d5ff6e (three commits on d35af47b163c: descriptor v7 and the
 scalar-S gate at f2f15f8fc70c; strict DELIN and `x-capstone-supervisor-slots`, default 1 as on
-silicon, clamped 1..32, at 852c5bc76774); Tier 0 on it at the defaults: m1 74/74 (with the DELIN
-positive control), movc 67/67, sublet-lifetimes 119/119, trusted-linux-u-access 71/71, runtime
-run.sh 69/69, index8 PASS, fp 60/60 (three isolation cases set 32 slots explicitly), exact-bounds
-4/4. No prediction kit sets either property. The adapter obtains
+silicon, clamped 1..32, at 852c5bc76774; `scapctl` and `urevavail` illegal by default under
+`x-capstone-test-csrs` at 3b8040d5ff6e). Tier 0 on it at the defaults: sublet-lifetimes 119/119,
+runtime run.sh 69/69, index8 PASS, fp 60/60 (three isolation cases set 32 slots explicitly),
+exact-bounds 4/4; virtual-capstone-m1 74/74, movc 67/67 and trusted-linux-u-access 71/71 with
+`x-capstone-test-s-ldc` and `x-capstone-test-csrs` set by their runners (their bootstrap selects
+protected U through `scapctl`). No prediction kit sets any of the three properties; the kit gate
+parses their values. The adapter obtains
 every capability it needs through `CSMINT` (descriptor v7) and never holds one in a register.
 The Q-12 protected-path changes did not change legacy physical C transfers.
 
