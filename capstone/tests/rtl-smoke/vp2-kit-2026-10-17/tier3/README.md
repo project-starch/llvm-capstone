@@ -571,3 +571,83 @@ CAUGHT 9 and CAUGHT 3, every cell equal to the record (`compare-cells.py`, 0 mis
 - So **nine** of the thirteen `run-virtual-cases.py` bundles hold on the fixed revision, the Sublet carve included.
 - **Correction to dev 2df55c358ccb's message.** It already said nine. At that commit two of the nine had run only on
   the older kit, so the true count was seven. The count of nine holds from this rerun on.
+
+## `ffmpeg/subobject-repros` `virtual-malloc` on the fixed revision: pre-registered (2026-10-17, before the run)
+
+The recorded build compiles FFmpeg's pool sources directly into each case: `buffer.c`, `refstruct.c`, and the port's
+`pool-allocator.c`, `metadata-allocator.c`, `observe-pool-events.c` and `payload-pointers.c`. It also carries
+`-Daligned_alloc(a,n)=malloc(n)`. The same pool code faulted in `free()` with cause 24 in every program of the two
+pool bundles above, so this bundle discriminates.
+- **The recorded `cc_args`, with paths mapped:** `<scratch>/wt-merge` becomes the kit's source tree, and the
+  `-isystem` becomes the kit's clang include. The `ffmpeg-ported` sources are the recorded
+  `/tmp/capstone/ffmpeg-buffer-pool` copy.
+- **Recorded tally:** MISSED 9.
+
+**Both outcomes, written before the run:**
+- **(a) MISSED 9, every cell equal to the record.** The pool code itself does not hand `free()` a non-capability on v6.
+  The pool bundles' failure then lies in what differs: their CMake library build (`-DFF2_SYSTEM_MEMORY`, the
+  `ffmpeg-traced` sources) and the `aligned_alloc` path, which this build maps to `malloc`.
+- **(b) control-failed with cause 24 at `cap_malloc_validate`, as in the pool bundles.** The failure lies in code
+  common to both builds, not in `aligned_alloc`.
+
+No prediction between them: this run decides.
+
+**Result: outcome (b), in class. NO-READING:control-failed 9, against a recorded MISSED 9; 0 of 9 cells equal.**
+- The generic controls read as expected: bounds-malloc 28, uaf-malloc 25.
+- **Every case program faults with cause 24 in the pool code, in both arms.**
+- **Case 00** faults at `refstruct_pool_uninit+0x78`:
+  - `ldc a2, 0(a0)` loads a capability from memory;
+  - the next store through it, `sw a1, 0x60(a2)`, faults 24.
+  So a pointer that the pool code stored in memory comes back without its tag.
+- The site differs from the pool bundles' (`free()`'s probe), but the class is the same: a value used as a capability
+  is not one.
+- **What this settles:** the `aligned_alloc` path is not needed for the failure, because this build maps
+  `aligned_alloc` to `malloc`. The failure is in code common to both builds: the FFmpeg pool sources, the port's
+  shared allocator files, the v6 runtime, or the compiler.
+- **Not established:** where the tag is lost. The record ran the same sources on the 2026-10-10 SDK with
+  `/tmp/capstone/virt-stack`'s toolchain; this run uses the v6 kit's SDK and `llvm-dev-current-20261017`.
+
+## Two discriminator runs for the failing bundles: pre-registered (2026-10-17, before the runs)
+
+**Fact first: the kit's QEMU decodes CDERIVE.** The compiler lane asked whether this QEMU pin decodes funct7 0x51.
+d35af47b16 has `csderive 1010001 ..... ..... 001 ..... 1011011` (`target/riscv/insn32.decode:984`), implemented by
+`helper_csderive` (`op_helper.c:1212`). That helper raises 29 (`ILLEGAL_OP_VAL`) in exactly two places:
+- **(a)** size 0, or a window outside the parent, tested from the cursor;
+- **(b)** Q-15, when the child does not survive `cap_compress`/`cap_uncompress` and `capstone_exact_bounds` is off.
+
+`capstone_cap_derive`'s own pre-test bounds the offset, not offset + size, so it does not exclude (a).
+
+**Run 1: memcached allocator, Sublet arm (#13), on a kit whose QEMU runs with `x-capstone-exact-bounds=true`.** The
+binaries, controls, SDK and module are the same. Only the QEMU `-cpu` string differs, through a wrapper.
+- If the 29s are Q-15's (b), they vanish. The arm then reads as recorded, CAUGHT 8, with case 05 read from its
+  transcript.
+- If they are (a), they stay.
+
+**Run 2: ffmpeg pool, stock arm (#9), the same binaries, on the PRE-fix module kit** (`v6-pilot`, module `97334f0f`,
+launcher `32f79ca8`). This is the compiler lane's single-variable test for the module change.
+- **(i)** Still cause 24 at `cap_malloc_validate`: the module change is exonerated.
+- **(ii)** The 24s stop: the module change is implicated.
+- **(iii)** A NULL from a refused arena instead: the old module's `add()` rule decides first, and the test does not
+  separate.
+
+The binaries carry the v6-fix SDK's runtime, so `--sdk` stays the v6-fix SDK (the runner checks the CMakeCache
+against it).
+
+**Run 1 result: Q-15's (b).**
+- With `x-capstone-exact-bounds=true` the memcached Sublet arm reads CAUGHT 8 and NO-READING:control-failed 1, every
+  cell equal to the record (`compare-cells.py`, 0 mismatches). With the property off it read 8 mismatches.
+- The wrapper's log shows the property on the run's one boot:
+  `-cpu rv64,...,x-capstone-u-mode=true,x-capstone-exact-bounds=true`.
+- **So under option (iii) the memcached port's Sublet carve derives children that the compact format cannot hold,
+  and QEMU's Q-15 refuses them with 29.** The 2026-10-11 record ran with exact bounds held in the metadata.
+- On vp2's silicon, Q-15 binds inside a virtual context, which is where this arm runs, so this is a vp2 Tier 3
+  blocker for that arm until the carve rounds its children.
+- **Not established:** which derive and which size. The compiler lane's cause-29 fault had the same instruction and
+  cause through the v6 heap's unrounded `aligned_alloc`. It is fixed at its d4c8d191bcd0, and does not touch this
+  corpus.
+
+**Run 2 result: (i), the module change is exonerated for the pool's cause 24.**
+- On the pre-fix module kit the same binaries read NO-READING:control-failed 4.
+- Seven programs fault with cause 24 at `cap_malloc_validate`, as on the fixed kit.
+- Case 03's two programs fault 24 at `memset+0x2c` instead, VA 0x11a08.
+- The tag loss does not depend on `add()`.
