@@ -52,7 +52,11 @@ flash after vp1's first session with a canary first, and to go back to vp1 if th
 reflash back to vp1 on a canary difference. Then the lead gave the explicit form, naming the bitstream and the hash (in
 Russian; translated): "Flash vp2 caplifive_vp2_bf3db3175 after vp1's first session, after the preflight on the sealed
 sha256 776cdd8c40d985708a09d4d43ab1c5106414ae1347cc4436a711381d2c197475. First in the session, the control: S-16, the
-Sublet floor and s1gap, twice each, stop on any difference."
+Sublet floor and s1gap, twice each, stop on any difference." Asked two follow-ups, the lead chose:
+- the functional rule for s1gap: its causes, validity, traps, GAP and count must match exactly; the eight cycle counts
+  vary run to run on d93a8d66b itself, and are reported;
+- "if vp1 as expected, go with vp2": vp2 goes ahead only if vp1's first session ends as pre-registered. Otherwise vp1
+  stays resident and the chain holds.
 - **When:** after vp1's first session completes (`AFTER-FLASH DONE`, not a STOP), and the preflight passes on the
   sealed sha256.
 - **The canary comes first, before any vp2 arm:** the S-16 set, the Sublet floor and s1gap, each run twice. It stops on
