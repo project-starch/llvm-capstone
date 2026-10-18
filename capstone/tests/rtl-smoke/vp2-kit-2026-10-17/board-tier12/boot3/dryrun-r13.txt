@@ -1,0 +1,4 @@
+# Boot r13 runner dry run (2026-10-18), driver stubbed, on a synthetic transcript in the module's real line formats:
+# the console banner, the Y/N read-backs, both KMSG windows with their must-fire counts, the bound line and the PTE
+# fields at the bound, the vm exits. The first PTE extraction stopped at the bound line's first ";" and would have
+# missed the fields; caught here. The runner pins the current driver fd38816a90c64c22 (BAKED_FINAL_APERTURES off).

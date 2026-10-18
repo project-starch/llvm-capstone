@@ -1389,3 +1389,57 @@ Every pre-registered reading held.
 - **A runner defect, caught by the live monitor:** the "FENCE flips" extraction matched digits, but the bool
   parameter reads back `Y`, so the extraction was empty. The result lines take the flip from the transcript. Later
   runners match `[0-9YN]`.
+
+## Pre-registered (2026-10-18, before boot r13): S-24 two-sided, the `vm` loop with resolve_dirty off and on (a diagnostic, not a Tier 2 record)
+
+- **The module:** a56fc415ad7133aa (the compiler lane's resolve-sites-10).
+  - It passed its QEMU control 34/41, byte-identical to the baseline, with resolve_dirty=1 and resolve_pte=1.
+  - 4683 instructions, 0 compressed.
+  - Two new 0644 parameters, both bool, reading back Y/N:
+    - `resolve_dirty`: for a cause-15 fault, fault the page in through the kernel's write path before the pin;
+    - `resolve_pte`: print the faulting PTE in the bound line.
+  - `fault_repeat_max` stays at its default, 64, so the bound is comparable with r12's.
+- **The suite:** `board-tier12/vm-suite-inner-r13.sh`.
+  1. normal and threads.
+  2. `resolve_pte`=Y, then `vm` with resolve_dirty=N, then a dmesg read.
+  3. `resolve_dirty`=Y.
+  4. threads again: the post-flip window's own must-fire.
+  5. `vm` again, then a dmesg read.
+  6. The other returning steps, with resolve_dirty=Y.
+  - No sparse steps (S-25) and no kit applications.
+- **Unchanged:** firmware 3df8df7da5c9ea30, monitor 007d81d; the extracted sources equal r12's. Run by
+  `boot3/run-tier12-r13.sh 3df8df7da5c9ea30`, dry-run in `boot3/dryrun-r13.txt`.
+
+**Predictions:**
+- **Tier 1:** identity.
+- **The console banner,** once, with tag resolve-sites-10.
+- **`vm` with resolve_dirty=N:** exit 139, as r8-r12.
+  - The VM0 window holds threads' must-fire and the bound line at the launcher's fault address, cause 15, now with
+    the PTE.
+  - The runtime lane's account predicts `present=1 write=1 young=1 dirty=0`. A `dirty=1` refutes the account,
+    including the fix's premise.
+- **`vm` with resolve_dirty=Y:** exit 1, QEMU's status, with the cause left as a reading.
+  - The VM1 window holds threads2's must-fire and no bound line. The PTE print belongs to the bound, so its absence
+    is expected.
+  - A resolve() site line there would name a different failure.
+- **The other returning steps:** as r12. The fix covers cause 15 only, so the cause-13 steps (vm-none-read,
+  vm-guard) keep their `vma` refusals.
+
+### Boot r13, result (2026-10-18 09:34-09:42): S-24 is read on silicon and fixed. The PTE has D clear, and faulting the page in for write before the pin makes `vm` read QEMU's status
+
+Pre-registered at ad7ef6004ffc. Result lines are in `board-tier12/results/board-vp2-tier12-r13.result-lines.txt`.
+Every pre-registered reading held, compared by script.
+- **Tier 1:** identity, the eighth boot.
+- **The console banner,** once: resolve-sites-10.
+- **`vm` with resolve_dirty=N:** exit 139. The bound line sits at the launcher's fault address and now carries the
+  PTE: `val=0x20331857 present=1 write=1 young=1 dirty=0`.
+  - The low byte 0x57 decodes to V, R, W, U and A set, with D clear: the runtime lane's account, read on silicon.
+  - The RTL raises a store page fault while D is clear and never sets it.
+  - GUP's `follow_page_pte` marks the struct page dirty, not the PTE (board tree `mm/gup.c:624-627`).
+- **`vm` with resolve_dirty=Y:** exit 1, with `VM_CONTRACT_FAIL:execute through mapping PCC`, QEMU's own status and
+  failure point. No new bound line after the flip; threads2's refusal is the window's must-fire.
+- **The other returning steps:** equal to r12's in exits and in every fault line's cause and code offset. The three
+  `vma` refusals hold the predicted relation. The fix covers cause 15, and a store to a mapping without VM_WRITE still
+  refuses at `vma`.
+- **The runner's per-window KMSG counts are cumulative.** dmesg is not cleared, so later windows repeat earlier
+  lines. The result lines take each window's new lines by timestamp.
