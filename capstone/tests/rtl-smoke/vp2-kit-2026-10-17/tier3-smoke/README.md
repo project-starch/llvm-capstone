@@ -1620,3 +1620,21 @@ is board-side.
 - pc in the bootrom (0x10000-0x10fff): the core never left it after `continue`;
 - a non-zero mcause or pc at the trap vector: an early fault;
 - pc moving inside 0x80000000..: the firmware runs, and the console output is what is lost.
+
+**The diagnostic's readings (2026-10-19 02:41-03:00; a first attempt at 02:40 timed out in `gdb_start`, so a 3-try
+retry was added, as the production drivers' cold_boot has):**
+- **Before `continue`:**
+  - pc after `monitor reset halt` = 0x10530, the bootrom.
+  - load_image: "downloaded 19565064 bytes in 147.00s".
+  - **verify_image: "verified 19565064 bytes in 151.25s"**, slowly, because no work area is configured, but complete.
+  - The words at 0x80000000 equal the file's (0x00050433 0x000584b3 0x00060933 0x53c000ef ...). **The image is in DDR,
+    intact.**
+- **After `continue`:** 0 UART bytes in 12 s.
+- **`monitor halt` then timed out** (no gdb prompt in 30 s). The debug module could not halt the core, so pc and the
+  trap CSRs could not be read.
+- **What this establishes:** the image reaches DDR intact, and the core, released from the bootrom at 0x80000000,
+  goes silent at once into a state the debugger cannot halt. That is the same on a known-good image that booted at
+  19:14, and it survives the power cycle every session starts with.
+- **What it does not establish:** why. It is board-side and needs the board owner: a full power removal, or a check
+  that the FPGA configuration and its clocks are what they were. A reflash of bf3db3175 would be the lead's call.
+- **No further board time is spent.** The queue stays stopped.

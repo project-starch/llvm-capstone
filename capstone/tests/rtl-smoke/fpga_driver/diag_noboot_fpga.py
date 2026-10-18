@@ -68,9 +68,17 @@ def main():
             raise SystemExit("HARD STOP: resident bitstream differs")
         say(f"image {IMG} sha256/12 {IMG_NAME[3:15]} size {IMG.stat().st_size}")
         console.upload_boot_image(IMG_NAME, str(IMG))
-        console.power(False); time.sleep(POWER_CYCLE_OFF)
-        console.power(True); time.sleep(POWER_ON_SETTLE)
-        console.gdb_start()
+        for attempt in range(1, 4):  # as the baked runner's cold_boot: gdb_start can time out after a power cycle
+            console.power(False); time.sleep(POWER_CYCLE_OFF)
+            console.power(True); time.sleep(POWER_ON_SETTLE)
+            try:
+                console.gdb_start()
+                say(f"gdb started on attempt {attempt}")
+                break
+            except Exception as exc:
+                say(f"gdb_start failed on attempt {attempt} ({type(exc).__name__})")
+                if attempt == 3:
+                    raise
         try:
             console.gdb_cmd("monitor reset halt", C.GDB_PROMPT, timeout=60.0)
             time.sleep(4.0)
