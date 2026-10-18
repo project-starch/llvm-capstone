@@ -624,6 +624,36 @@ static unsigned long run(unsigned long frame, unsigned long action)
                  : "=&r"(result) : "r"(frame), "r"(action) : "memory");
     return result;
 }
+/* The same CSRUNV with rd = x0. On vp2 a RESUME writes the literal 2 into the RESUMED CONTEXT's
+ * x(rd) (commit_stage.sv:610-624, set_ra = rd / ra_data = 2, applied by finish() to every request
+ * that is not a good entry) and re-latches rd, through which the next escape writes its kind
+ * (:627, :839). With rd = x0 nothing is written into the context and the kind goes nowhere, so a
+ * caller of this reads the event from the frame (run_event). To move another site here, change
+ * its run(...) to run_x0(...); the collect site (action 3) cannot, its freed count IS rd. */
+static void run_x0(unsigned long frame, unsigned long action)
+{
+    asm volatile(".insn r 0x5b, 1, 0x24, x0, %0, %1"
+                 : : "r"(frame), "r"(action) : "memory");
+}
+/* The event record every escape writes at frame+16: kind, cause, pc, address
+ * (capstone-qemu target/riscv/capstone_supervisor.c event_write, call->event = frame + 16 :963).
+ * The kinds written are 0 (return) to 5, so ~0 is never one: it is planted before the CSRUNV
+ * and, read back unchanged, means the CSRUNV wrote no record -- REFUSED (a bad frame, or any
+ * switcher refusal). A refusal is not an escape, so without the sentinel +16 would still hold
+ * the previous event's kind (4) and the loop would resume for ever. */
+#define CV_EVENT_UNWRITTEN (~0UL)
+/* The cause reported to the launcher for a refused CSRUNV: outside every RISC-V cause, so a judge
+ * reading the fault line can tell it from any real one. */
+#define CV_CAUSE_REFUSED 0xcafe0001UL
+static unsigned long run_event(struct cv_thread *t, unsigned long action)
+{
+    WRITE_ONCE(t->frame[2], CV_EVENT_UNWRITTEN);
+    /* The sentinel must reach memory before the switcher can write the record over it; a kernel
+     * store still draining after the escape's write would turn a real event into a refusal. */
+    asm volatile("fence rw,rw" ::: "memory");
+    run_x0(t->frame_pa, action);
+    return READ_ONCE(t->frame[2]);
+}
 static unsigned long select_root(struct context *c)
 {
     unsigned long old;
@@ -1102,7 +1132,7 @@ static unsigned escape_prints;
  * work. 0644, so one boot can try both without a rebuild. */
 static bool diag_emerg;
 module_param(diag_emerg, bool, 0644);
-static unsigned eloop_prints, refuse_prints, childframe_prints;
+static unsigned eloop_prints, refuse_prints, childframe_prints, refused_prints;
 
 /* r12's reading: for `vm`, NONE of resolve()'s five refusal sites fired and the S-24 bound did --
  * the same address and cause 65 times with no change. So the !same deduction is refuted and the
@@ -1597,10 +1627,25 @@ thread_unwind:
                 t->frame[1] = virt_to_phys(c->table);
                 t->frame[7] = 3;
             }
-            t->event = run(t->frame_pa, action);
+            t->event = run_event(t, action);
             t->started = true; t->reply_cap = false;
             local_irq_restore(flags); preempt_enable();
             ++c->stats.steps;
+            if (t->event == CV_EVENT_UNWRITTEN) {
+                /* REFUSED: the CSRUNV wrote no event record. End the context, never loop. The
+                 * report below reads frame[2..5], so set them to a terminal kind and a cause no
+                 * real fault carries. Must-fire, budgeted, at KERN_EMERG: the board console shows
+                 * nothing lower. */
+                if (refused_prints < CV_DIAG_BUDGET) {
+                    ++refused_prints;
+                    pr_emerg("capstone_vm: CSRUNV action %lu wrote no event record (refused), "
+                             "thread %llu entries %lu: context ended\n",
+                             action, (unsigned long long)t->id, entries);
+                }
+                t->frame[2] = 2; t->frame[3] = CV_CAUSE_REFUSED;
+                t->frame[4] = t->frame[5] = 0;
+                t->event = 2;
+            }
             if (diag_escapes && escape_prints < CV_ESCAPE_BUDGET) {
                 ++escape_prints;
                 CV_EMIT("capstone_vm: escape %u action %lu event %lu frame kind 0x%lx cause 0x%lx "
