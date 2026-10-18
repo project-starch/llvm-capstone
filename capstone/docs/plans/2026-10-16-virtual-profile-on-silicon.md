@@ -897,3 +897,47 @@ lint numbers and its directed arm; the sweep and the supervised list run once on
 
 Go/no-go for the build, per CLAUDE.md: every item above has its arm reading on the combined tree, the sweep identical, the
 lint gate at baseline by name, and the predicted LUT/FF/WNS written here before the handoff.
+
+## Tree A's sufficiency list, written before the handoff (the RTL lane, 2026-10-18)
+
+Tree A is `capstone-ariane virtual-profile-2-c` at **8522d72fe**, carrying four fixes, each verified an ancestor of that
+HEAD: R-57 `2114e11bd`, Q-24 `3244170b0`, S-27 `445e3a48b`, S-28 `8522d72fe`. The whole diff against the resident RTL
+(bf3db3175) touches four files in `core/`: `commit_stage.sv` +17/-2, `csr_regfile.sv` +13/-1, `cva6.sv` +2/-1 (a comment)
+and `ex_stage.sv` +33/-2. Lint gate on that HEAD: PASS with every counter at the committed baseline, 52 / 3 / 0 / 40 /
+1395.
+
+**Every question this bitstream must answer, with the reading each way.** The rule this section exists for is that a
+cycle spent confirming what the evidence already implies is a different trade from one spent discovering something, so
+each row names what a WRONG fix looks like as well as a right one.
+
+| fix | the question | reading if the fix is right | reading if it is wrong |
+|---|---|---|---|
+| S-27 | does a resume leave the resumed context's registers alone? | the corpus images reach their QEMU verdicts on the OLD module recipe, i.e. with a non-zero destination at the resume site and no software workaround; the board's E3 arm reads its constant 8 surviving the resume, an 8-byte window, and no cause 28 at `&used` | the register reads 2 again and the family returns: cause 6 at address 0x12 in the allocators, cause 28 at `&used` in E3, cause 24 at address 0x2 in SQLite |
+| R-57 | does a capability store whose translation faults deliver its fault instead of losing it? | the sparse steps and any first-touch capability store complete; the resting read of the store buffer's commit count is 0 with matching valid bits | the wedge returns with its recorded signature, a count of 1 or 4 with fewer valid bits than the count and no store request |
+| Q-24 | can firmware delegate the capability causes 24..30 to S? | the monitor's `medeleg` write reads back with those bits and an S-origin capability fault reaches S without the monitor's software injection; va-osinject's readings unchanged | the write reads back without them, i.e. the mask still drops the bits, and the injection path stays load-bearing |
+| S-28 | **none.** Its condition is real in source and its directed arm could not make the pairing happen, on either tree, with zero port-1 commits beside the instruction. It ships as a defensive term with its trigger unexercised, recorded as R-50's was, and **this bitstream carries no reading for it**; claiming one would be the vacuous-gate mistake. | | |
+
+**Per-change area and WNS prediction**, against the resident vp2 at 178,406 LUT and WNS −19.019, given per change so a
+congestion failure or a growth is attributable rather than batched (the synth lane's request; an earlier +1-line change
+at 178,757 LUT failed `route_design` on congestion after 6h40m with 242 unrouted signals):
+
+| change | flops | LUTs | timing exposure |
+|---|---|---|---|
+| R-57, `ex_stage.sv` | ~134: one `exception_t`, a valid bit and a `trans_id` | ~150: a 4-way mux over the exception's width plus two trans_id compares | the only one with any. It adds at most one LUT level to the capability writeback's exception path, which already muxes for the load side. **The discriminator for a timing move is a failing endpoint inside `ex_stage`'s capability writeback cone**; an endpoint anywhere in `commit_stage` belongs to S-27 or S-28 instead |
+| Q-24, `csr_regfile.sv` | 0, `medeleg` already exists in full | a handful on an existing mask | none |
+| S-27, `commit_stage.sv` | 0 | ~5, one ternary on a 5-bit field | none |
+| S-28, `commit_stage.sv` | 0 | ~1, one AND term on an existing condition | none |
+
+So the prediction is **+0.09 % area, about 178,560 LUT**, WNS inside the standing noise band around −19.019 (a null RTL
+change has moved WNS by 3.7 ns on this design, so a few ns either way is not a signal), and **no congestion failure
+predicted**, since the design stays essentially at the resident size and well below the 178,757 that failed to route. If
+it fails to route anyway, that is a reading about this design's marginality at its current size, not about these four
+changes, and attribution goes by which instance's cone holds the unrouted nets.
+
+**What this bitstream does NOT answer, so nothing waits on it:** S-23, the caller's first fetch after a return, whose
+mechanism is open after two refuted candidates and whose monitor fetch-retry workaround must stay enabled; S-26, the
+cold-boot warm-up, for which there is no mechanism; the generation item, where the virtual allocator hands out a bare
+index so a reused record would revive stale capabilities, which keeps the module's `-ENOMEM` stopgap as the behaviour of
+record and makes the collecting arms honest "no reading on bf3db3175" rows; S-21/S-22, whose fix is a design choice about
+where the caller's snapshot lives; and the switcher's `satp` write without a flush, whose cost has to be measured rather
+than guessed. Those are tree B.
