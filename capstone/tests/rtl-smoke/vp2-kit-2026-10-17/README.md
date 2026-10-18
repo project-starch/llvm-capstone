@@ -1556,3 +1556,18 @@ Pre-registered at 5143ae4e0601. Result lines are in `board-tier12/results/board-
   is withdrawn by this boot.
 - **The module is still the variable:** only it and the suite differ from r13, and the first failing context uses
   no suite. Boot 4c is the control.
+
+### Tier 2 boot 4c, result (2026-10-18 11:38-11:46): THE TIER 2 RECORD. Every run.py step outside S-25 reads QEMU's result on silicon
+
+Pre-registered at 8ac6cc3143d8. Result lines are in `board-tier12/results/board-vp2-tier12-b4c.result-lines.txt`.
+Every pre-registered reading held, compared by script.
+- **Tier 1:** identity.
+- **The 17 exits equal the reference-pin QEMU prediction** (capstone-qemu b290f5656600, svadu=false):
+  - `vm` reads 1 under resolve_dirty=Y for it alone, read back N, then Y, then N. This is S-24's fix.
+  - cleanup reads 1 because the board kernel cannot unload the module.
+- **The 16 steps shared with r13** equal it in exit and in every fault line.
+- **S-25's five steps were not run.** They wait on the RTL fix (R-57) or the module's arena pin.
+- **No wedge.**
+- **The module control:** with 4b's suite, image, launcher and monitor, only the module changed (a00109e9 there,
+  a56fc415 here). 4b failed every context and 4c reads the record, so boot 4's regression lies in the Q-26 wait
+  rewrite or the escape-print code. It is bisected next.
