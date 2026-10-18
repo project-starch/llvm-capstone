@@ -213,10 +213,24 @@ void *memmove(void *dst, const void *src, size_t n)
 
 void *memset(void *dst, int c, size_t n)
 {
-	/* Bytes. A memset cannot create a tag, and writing bytes over a slot
-	   clears any tag there, which is what overwriting a capability with
-	   integer data must do. */
+	/* A memset cannot create a tag, and overwriting a capability with
+	   integer data must clear it. Every scalar store clears the tag of each
+	   16-byte granule it touches, whatever its width (capstone-qemu's store
+	   hook, cap_mem_map_physical_remove_range), so aligned 8-byte words
+	   clear exactly what bytes would, with an eighth of the stores: the
+	   byte loop this replaces was a quarter of 519.lbm_r's program
+	   instructions. Only whole words inside [dst, dst + n) are
+	   written as words; the unaligned edges are bytes. The pointer stays
+	   derived from dst, so every store is checked against its bounds. */
+	typedef unsigned long __attribute__((__may_alias__, __aligned__(8))) word_t;
 	unsigned char *d = dst;
+	unsigned long w = (unsigned char)c * 0x0101010101010101ul;
+	while (n && ((__UINTPTR_TYPE__)d & 7)) { *d++ = (unsigned char)c; n--; }
+	for (; n >= 32; d += 32, n -= 32) {
+		word_t *p = (word_t *)d;
+		p[0] = w; p[1] = w; p[2] = w; p[3] = w;
+	}
+	for (; n >= 8; d += 8, n -= 8) *(word_t *)d = w;
 	while (n--) *d++ = (unsigned char)c;
 	return dst;
 }
