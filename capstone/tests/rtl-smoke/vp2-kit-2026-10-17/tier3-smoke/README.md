@@ -1073,3 +1073,12 @@ UNGATED (PREFLIGHT=0). Dry run: `dryrun-fence-arm.txt`.
   against the total. The record was rewritten with the fixed scorer.
 - **The partial bundle is not filed in the corpus.**
 - **The sequence stopped after fso**, so pb12-fix6 and pb10-fix6 did not run. Both are in the fix6b re-run.
+
+### pym1-fix6, result (2026-10-18 20:45-20:58): CAUGHT 20, 20 of 20 cells as predicted (0 of 20 on 3005ed52)
+
+`records/pym1-fix6.board.txt`. The images are pym1's list, gate-checked, on kit bkit7-fix6 (module d71f207a3af5546b).
+- **The cells:** every case reads CAUGHT, and control uaf-block faults as predicted. That makes 21 fault lines, the
+  detections themselves. Nothing faults at 0x12.
+- **On 3005ed52** the same images read 0 of 20, every step control-failed by S-27's 0x12 fault.
+- **Timing:** the boot took 13 minutes, because a caught program ends at its detection.
+- **The bundle:** `cpython/pymalloc-repros/results/2026-10-18-vp2-rdx0/vp2-nested-pools`. UNGATED (PREFLIGHT=0).
