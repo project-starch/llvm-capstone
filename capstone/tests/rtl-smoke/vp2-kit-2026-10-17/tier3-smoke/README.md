@@ -1480,3 +1480,9 @@ the new module, ahead of the d71f207a chain.
   chain (wpt, wph, fcs, fph, then pgc/pgm0/pgm1) resumes after it. If tree A's flash becomes authorised and sealed
   while sql0 runs, sql0 finishes first.
 - **Dry run:** the guard, pass and VOID branches, on a stubbed runner. UNGATED (PREFLIGHT=0).
+
+**fca-fix6b, result (2026-10-19 00:46-00:56):** ffmpeg/carved vp2-malloc on kit bkit7-fix6t (module d71f207a3af5546b),
+MISSED 13, 13 of 13 as predicted, its 3005ed52 reading again. Bundle
+`ffmpeg/carved-repros/results/2026-10-18-vp2-rdx0/vp2-malloc`. The chain was then held for sql0-rev2: the holder
+killed the chain's group and wpt's `timeout` group within 6 s of fca's END, before wpt built anything. UNGATED
+(PREFLIGHT=0).
