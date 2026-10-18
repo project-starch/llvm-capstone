@@ -81,6 +81,8 @@ def main():
     a = p.parse_args()
 
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
+    import boardvm
+    rec = boardvm.record_arm(a.arm, appvm.on_board(a.state))  # vp2-<arm> for a board session
     spec = v.load_arms()[config]
     for build in (a.build, a.controls_build):
         cache = (build / "work/00/CMakeCache.txt").read_text()
@@ -115,20 +117,20 @@ def main():
         number = int(d.name[:2])
         image = a.build / "bin" / f"defect-{number:02d}"
         if not image.is_file():
-            o = v.Observation(case=d.name, arm=a.arm, infra="build-failed", notes=f"no {image.name}")
+            o = v.Observation(case=d.name, arm=rec, infra="build-failed", notes=f"no {image.name}")
         else:
             text, result = run(image, number, d.name)
             o = observe(text, result, v.Symbols(a.llvm_bin, image))
             o.image_sha256 = v.sha256(image)
-        o.case, o.arm, o.controls = d.name, a.arm, list(controls)
+        o.case, o.arm, o.controls = d.name, rec, list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
         print(f"{'ok  ' if verdict[0] == PREDICTED[a.arm] else 'DIFF'} {d.name[:50]:<50} "
               f"{verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:80]}", flush=True)
-    record = v.write_bundle(a.output, "cpython/pymalloc-repros", a.arm, rows, {
+    record = v.write_bundle(a.output, "cpython/pymalloc-repros", rec, rows, {
         "configuration": config, "predicted": PREDICTED[a.arm],
         "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
-    print(f"--- {a.arm} ({config}): {record['tally']}")
+    print(f"--- {rec} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 
