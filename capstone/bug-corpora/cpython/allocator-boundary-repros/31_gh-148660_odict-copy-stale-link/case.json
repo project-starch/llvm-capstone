@@ -33,5 +33,6 @@
   "fault_sites": [
     "odict_copy"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 8) at odict_copy Objects/odictobject.c:1239. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 8) at odict_copy Objects/odictobject.c:1239. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "① WITHDRAWN by the 2026-10-18 review. TEMPORAL defect, so a detection is the lifetime check: cause=25 INVALID_CAP on Capstone, si_code=2 PROT_CHERI_TAG on CheriBSD (revocation clears the tag -- the guest's sicode selftest prints exactly that for its `revoked` control). ② faults cause=25 on `ldc s5, 0x20(s5)` and ③ si_code=2, and both stand. ① faults cause=24 on `lbu a2, 0x0(a2)`, which is neither: nothing revoked anything on that arm, so the stale read succeeded and the fault is on using what it returned."
 }
