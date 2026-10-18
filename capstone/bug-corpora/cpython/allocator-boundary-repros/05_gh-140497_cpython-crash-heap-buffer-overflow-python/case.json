@@ -32,5 +32,6 @@
   "fault_sites": [
     "_PyEval_EvalFrameDefault"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 2) at _PyEval_EvalFrameDefault Python/ceval.c:780. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 2) at _PyEval_EvalFrameDefault Python/ceval.c:780. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "① and ③ WITHDRAWN by the 2026-10-18 review. Spatial defect. ② faults cause=28 on `lhu a0, 0x0(s5)`, the defective load. ① faults cause=24 on `ldc a2, 0x0(a0)` -- a capability load whose BASE register is not a capability, i.e. a dereference of a value the overread had already been allowed to fetch -- and ③ with si_code=2 PROT_CHERI_TAG. Neither is the bounds check."
 }
