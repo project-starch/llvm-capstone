@@ -510,12 +510,35 @@ static void collect_free(struct collect_list *list)
     }
 }
 
+#if node_table_flat
+/* Q-27: vp2's RTL refuses CSRUNV action 3 at execute as an illegal instruction (rs2 > 2), so on
+ * silicon a collection is an S-mode trap; QEMU implements it. Nor can the module collect in
+ * software on bf3db3175 (ruled 2026-10-18 from the RTL lane's record, not read here): under the
+ * virtual-context flag a node id carries no generation, so
+ * re-listing a retired index would make every stale copy naming it live again at the next CSMINT,
+ * and trusted S has no capability memory access to sweep those copies' tags (Q-23). QEMU's
+ * collect is safe only because it clears them first (virtual_collect's page sweep). The flat
+ * build therefore never collects: exhaustion takes the ordinary -ENOMEM path node_grow() already
+ * names, and both kits agree by construction. The line is pr_emerg because the runners keep only
+ * KERN_EMERG on the console, and its budget is a count, never a ratelimit; `skips` keeps counting
+ * past the budget. */
+#define CV_COLLECT_SKIP_BUDGET 4U
+static unsigned long collect_skips;
+#endif
+
 static int collect(struct context *c, struct cv_thread *owner)
 {
     unsigned long flags, result;
     struct collect_list list = {0};
     int error = -ENOMEM;
     struct cv_thread *t;
+#if node_table_flat
+    if (++collect_skips <= CV_COLLECT_SKIP_BUDGET)
+        pr_emerg("capstone_vm: collect skipped: collection is not available on bf3db3175 "
+                 "(Q-27, S-entry); retired %lu available %lu, skips %lu\n",
+                 node_retired(c), node_available(c), collect_skips);
+    return -ENOMEM;
+#endif
     /* Include resident pages populated by Linux/the trusted launcher without
      * a C fault. Missing pages are not materialized; any inspection failure
      * prevents identity reuse. Saved contexts share this mm's namespace. */
