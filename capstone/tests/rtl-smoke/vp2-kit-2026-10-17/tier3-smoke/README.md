@@ -589,12 +589,22 @@ Both generic controls pass in the same boot (28 and 25).
 MISSED 8. The board has 19 faults of `cause=6 address=0x12` (the chunk-free-90 control and every case) and QEMU none.
 Both generic controls pass. That is three ports: pymalloc, ffmpeg's pool/metadata allocator and memcached's
 allocator.
-- **The RTL lane's reading, from bf3db3175's source: R-57 cannot produce this.**
-  - An invalid ghost never writes, forwards or shadows.
-  - A lost STC leaves the granule's previous contents, zero on fresh .bss.
-  - R-57 always wedges, and these programs run on.
-  So the cursor of 2 needs its own explanation. A non-zero wrong value is the stale-refill class's shape (the
-  granule's PREVIOUS contents), and the RTL lane cautions to check the value before naming any mechanism.
+- **The RTL lane's reading, from bf3db3175's source: R-57 is excluded.** R-57's ghost stops the commit queue from
+  ever draining, so the very next store of any kind would stall forever. These programs run on and fault at the
+  next instruction.
+  - CORRECTED (2026-10-18, the RTL lane's retraction): this section first gave two more legs, that "a lost STC
+    leaves zero on fresh .bss" and that a ghost never writes. The first is VOID: it assumed the reloaded granule was
+    the .bss global, but the reload is of a STACK spill slot (below). The exclusion rests on the one mechanical leg
+    above.
+- **The directed simulation (the RTL lane):** drop only the spill `stc` from the ports' exact sequence, with the
+  stack slot seeded with 2. The reload then reads a non-capability, and `sd n, 0x10(b)` faults cause 6 at address
+  0x12, value for value the ports' reading.
+  - So the defect is a capability spill store that did not land. The reload returns the slot's previous contents,
+    and a 2 in live stack data needs no explanation.
+  - With the store present, the sequence is correct in simulation, with and without the intervening load.
+  - The RTL lane's next hypothesis, from source: a committed store dropped by a flush (`store_unit.sv:283` gates the
+    push on `!flush_i`, and `:351` returns the unit to IDLE on a flush). In a virtual context flushes are frequent,
+    and nothing wedges.
 - **The compiler lane's probe** reads the granule back raw (both halves with plain `ld`, plus the tag) before and after
   the init, with and without a plain pre-touch. Pre-registered go/no-go: "the pre-touch changes the reading".
 
