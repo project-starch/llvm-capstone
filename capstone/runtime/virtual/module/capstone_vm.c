@@ -1064,7 +1064,7 @@ static void pin_ahead(struct context *c, struct arena *a,
  * The prev(...) fields cost nothing -- they are already on the thread for the -ELOOP
  * bound -- and they carry the discriminator: prev addr == this addr with prev cause 13,
  * and cause 15 here, is the read-then-write COW signature that is the hypothesis. */
-#define CV_DIAG_TAG "resolve-sites-10"
+#define CV_DIAG_TAG "resolve-sites-11"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
@@ -1134,6 +1134,24 @@ module_param(fault_repeat_max, ulong, 0644);
  * Default off so the production path is unchanged and the arm is two-sided in one boot. */
 static bool resolve_dirty;
 module_param(resolve_dirty, bool, 0644);
+
+/* S-26: the first virtual context after a cold boot spins in R after the image's five grants
+ * unless a classic domain ran first. The RTL side reads the switcher as not depending on a prior
+ * CALL, so the question is what the module sees at each escape. This prints the frame's event
+ * words RAW -- kind, cause, pc, tval, a0 at +16, +24, +32, +40, +48 -- because a raw word cannot
+ * mis-decode and the spin sits inside the first few escapes, where a decode bug would be
+ * indistinguishable from the thing being measured.
+ *
+ * BUDGETED at 16, not rate-limited, and the budget is small on purpose: a normal boot runs ~460
+ * steps, so a line per escape with a generous budget is a great deal of UART on a console that is
+ * also the harness's input. 16 covers the image's five grants and what follows, which is the
+ * window the spin sits in. Rate limiting was rejected for the reason that bit the thread-refusal
+ * line: a time-based limiter drops the FIRST occurrence as readily as any, and here the first
+ * escapes are the only ones that matter. */
+static bool diag_escapes;
+module_param(diag_escapes, bool, 0644);
+static unsigned escape_prints;
+#define CV_ESCAPE_BUDGET 16U
 
 #define CV_EMIT(fmt, ...) do {                      \
     if (diag_emerg) pr_emerg(fmt, ##__VA_ARGS__);   \
@@ -1575,6 +1593,16 @@ thread_unwind:
             t->started = true; t->reply_cap = false;
             local_irq_restore(flags); preempt_enable();
             ++c->stats.steps;
+            /* After the entry returns and OUTSIDE the atomic region, so a print cannot extend the
+             * window with interrupts off. event is run()'s own return, the five words are the
+             * frame's. */
+            if (diag_escapes && escape_prints < CV_ESCAPE_BUDGET) {
+                ++escape_prints;
+                CV_EMIT("capstone_vm: escape %u action %lu event %lu frame kind 0x%lx cause 0x%lx "
+                        "pc 0x%lx tval 0x%lx a0 0x%lx\n",
+                        escape_prints, action, t->event,
+                        t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
+            }
             if (t->event != 4)
                 break;
             /* Resolve a page fault here, as CV_RESOLVE would, and resume
