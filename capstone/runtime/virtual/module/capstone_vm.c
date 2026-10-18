@@ -1066,7 +1066,7 @@ static void pin_ahead(struct context *c, struct arena *a,
  * The prev(...) fields cost nothing -- they are already on the thread for the -ELOOP
  * bound -- and they carry the discriminator: prev addr == this addr with prev cause 13,
  * and cause 15 here, is the read-then-write COW signature that is the hypothesis. */
-#define CV_DIAG_TAG "resolve-sites-12"
+#define CV_DIAG_TAG "resolve-sites-13"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
@@ -1134,11 +1134,26 @@ module_param(fault_repeat_max, ulong, 0644);
  * (cpu_helper.c:1124-1131 returns TRANSLATE_FAIL when A/D need updating and hade is false).
  *
  * Default off so the production path is unchanged and the arm is two-sided in one boot. */
-/* DEFAULT ON since r13: the mechanism is no longer a hypothesis. The bound's PTE print read
- * val=0x20331857 on silicon -- V, R, W, U and A set, D CLEAR -- and with this on, `vm` moved from
- * 139 to QEMU's own status and QEMU's own failure point. Off it remains available, so the arm is
- * still two-sided in one boot. */
-static bool resolve_dirty = true;
+/* DEFAULT OFF AGAIN. Turning it on by default regressed every virtual context on silicon in
+ * boot 4, Tier 1 included: cause 24 at code offset 0x1d94 with address 0x2, before HELLO,
+ * image-independent, with the banner printed and resolve_dirty reading back Y. a56fc415, identical
+ * but for this default, read identity on the same rung.
+ *
+ * Why the earlier silicon evidence did not catch it: r13 set resolve_dirty through sysfs for the
+ * `vm` step ALONE, after Tier 1 and threads had already run with it off. Boot 4 was the first time
+ * any path other than `vm` executed this call on silicon. So "it worked on silicon" was true and
+ * about one step, and I generalised it to a default -- which is the same shape as a pass on a
+ * subset read as a pass.
+ *
+ * The hypothesis for the mechanism, NOT established: fixup_user_fault calls handle_mm_fault, which
+ * may install a DIFFERENT page (a COW break or a zero-page promotion) while the module still holds
+ * the old one pinned in a->pages[index]. The domain would then run through a mapping whose backing
+ * the module never authorised, which is a capability fault rather than a page fault and is
+ * consistent with cause 24 before HELLO. Testing that needs a page-identity re-check after the
+ * fixup -- the same comparison the `remap` site already makes -- and that is the next change, with
+ * its own control. Until then this stays off and `vm` is read by flipping it for that step only,
+ * exactly as r13 did. */
+static bool resolve_dirty;
 module_param(resolve_dirty, bool, 0644);
 
 /* S-26: the first virtual context after a cold boot spins in R after the image's five grants
