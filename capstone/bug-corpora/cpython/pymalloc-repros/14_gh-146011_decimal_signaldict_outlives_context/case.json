@@ -42,6 +42,12 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=25 pc=0xac101eac in read_probe; by probe: the pc lies in read_probe, the labelled probe",
       "verdict_from": "results/2026-10-16-silicon/silicon-pym-sublet"
+    },
+    "vp2-malloc": {
+      "verdict": "MISSED",
+      "verdict_note": "reached (PYM completed=1, after the case's read_probe) and completed with no fault",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
+      "oracle": "virtual profile, pymalloc stock in an arena from virtual mallocng (tools/arms.json virtual-pymalloc): a fault at the labelled read probe, or the case completes and this arm did not see it"
     }
   },
   "status": "measured on virtual Capstone (virtual-malloc, virtual-nested-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle"
