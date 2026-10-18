@@ -32,6 +32,8 @@ TIER12_R8_DONE 06:45:49
   console shows only KERN_EMERG: the baked driver sets printk=1 before rung 1. Their absence reads nothing, and
   "terminal on its first occurrence" has no other support. The A/D candidate is unresolved. See the kit README's r8
   section.]
+  [RETRACTED 2026-10-18 with the bracket above: the next sentence. "On the first store fault" rests on the same
+  absent lines; the !same branch is a deduction from the source, not a reading.]
   resolve() returned an error on the first store fault: its already-pinned branch returns -EACCES when the newly
   pinned page differs from the arena's (`if (!same) return -EACCES;`), the branch the compiler lane identifies. QEMU's
   `vm` passes this store and fails later, at "execute through mapping PCC" (vm:1).

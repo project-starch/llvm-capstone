@@ -4703,7 +4703,10 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > `1` in the same boot (the host counts the module's dmesg line across its own create_region;
 > commit 0f150add), so the line reaches the capture and fires exactly when the arithmetic says it
 > must. Every earlier "zero rounding lines" reading (sw63/66/68/71) is now informative rather than
-> uninformative. The arena gate (`arena-mismatch-gate.py`) now refuses a non-representable `--expect`
+> uninformative. **[RETRACTED 2026-10-18: "the line reaches the capture" and the sentence after it.** sw72
+> counted the line in dmesg, the ring buffer. But the line is `pr_info` (modcapstone `capstone.c:306` at d04bd83, `:352` at 8fd1ea1249a9), and the board drivers set `/proc/sys/kernel/printk` to 1 before the first rung (`fpga_driver/run_ladder_perf_fpga.py:201`, since 2026-07-25), so it can never reach the UART capture; the sw74 note below says as much. The capture's zeros
+> (sw63/66/71/73) carry no information. The geometry conclusions stand on the power-of-two sizes, as the
+> measurements doc says. Found by the vp2 board lane's audit after boot r11.**]** The arena gate (`arena-mismatch-gate.py`) now refuses a non-representable `--expect`
 > up front, mirroring `capstone_repr_granule`; 1,419,584 is its negative control.
 >
 > **2026-09-14, boots sw74 / sw74b — the reclaim of the rounded arena completes (twice), and what that
