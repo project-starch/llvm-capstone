@@ -301,6 +301,12 @@ Rules that follow:
 * **Post-run odd reads are safe by construction**: `debug_led_o` goes to the LEDs, a different pin
   from the console TX, so an odd aperture cannot corrupt the reading itself — it can only steal
   console output happening at the same time.
+* **A read of a RUNNING core is an OR, not a snapshot.** The LED pulse stretcher holds every bit high
+  for about 2^20 cycles (`ariane_xilinx.sv:956-966`), so each dynamic aperture (192-195, 219-227) reads
+  as the OR over that window. Idle Linux is running. Only a still core gives a snapshot: wedged, or
+  parked in `wfi` with interrupts masked. At rest, only 228 (the switcher's last index), the latched
+  trap log and the R-43 record read true. The first resting read on vp2 gave a commit count of 7 for a
+  4-deep queue (2026-10-18).
 
 ## 3. THE ORDERING RULE — this is what makes a verdict valid
 

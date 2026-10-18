@@ -498,10 +498,10 @@ cannot show during rungs (RETRACTED, dev 9e645777a5fb). The `!same` attribution 
 **Fix:** the module faults the page in through the kernel's write-fault path (which sets D) before pinning. Compiler
 lane, in the module queue's next revision.
 
-## S-25 — silicon only (vp2 bf3db3175): a capability store whose translation faults inside a virtual context retires with no exception and leaves a ghost entry in the store buffer's commit queue, which never drains; one ghost wedges every later DYN operation, four wedge every store `OPEN — mechanism REPORTED confirmed in simulation by the RTL lane (va-runv8 against its plain-sd control on bf3db3175, pre-registered at capstone-ariane 179b06610; the result itself not yet committed when this entry was filed), consistent with every board wedge reading; the RTL fix (carry the store exception to the STC's writeback, as R-56 did for loads) is the next bitstream's; until then no capability store may be the first access to a page (docs/design/virtual-capstone/isa.md)`
+## S-25 — silicon only (vp2 bf3db3175): a capability store whose translation faults inside a virtual context retires with no exception and leaves a ghost entry in the store buffer's commit queue, which never drains; one ghost wedges every later DYN operation, four wedge every store `OPEN — mechanism REPORTED confirmed in simulation by the RTL lane (va-runv8 against its plain-sd control on bf3db3175, pre-registered at capstone-ariane 179b06610; the result itself not yet committed when this entry was filed), consistent with every board wedge reading; the RTL defect is R-57 (filed by the RTL lane, dev 891186fc9d93, where the trace chain and the readings sit); its fix (carry the store exception to the STC's writeback, as R-56 did for loads; capstone-ariane virtual-profile-2-c 2114e11bd) is the next bitstream's; until then no capability store may be the first access to a page (docs/design/virtual-capstone/isa.md)`
 
-Siblings: S-24 (the `vm` loop, a different mechanism), R-56 (the load-side twin), R-49 (the same ghost-count shape,
-another cause).
+Siblings: R-57 (this defect's RTL entry), S-24 (the `vm` loop, a different mechanism), R-56 (the load-side twin), R-49
+(the same ghost-count shape, another cause).
 
 **Board readings** (lane vp2-tier12, the wedge apertures read by the driver after each wedge; every comparison
 below made by script):
