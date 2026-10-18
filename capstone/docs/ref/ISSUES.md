@@ -2915,6 +2915,17 @@ under the virtual profile; the module pins a whole arena at its first kind-4 fau
 > mirrors, but it rests on an unverified assumption that two cannot be in flight; the comment at `:1352` asserts only
 > that a load and a store cannot complete on the capability writeback port in the same cycle, which is a different
 > claim. No arm exercises two faulting capability stores in flight.
+>
+> **CLOSED the same day, structurally, so no arm was built.** The capability unit cannot have two operations in flight.
+> Its top-level loop is sequential: `loop ep.flush { send ep.rtr(1'd1) >> let msg = recv ep.req >> match msg.operation
+> { ... fu_op::STC => call STC(msg) ... } >> cycle 1 }` (`capstone_dyn_unit.anvil`, the `proc capstone_dyn_unit` body).
+> It announces readiness, receives ONE request, runs that handler to completion, and only then loops to announce
+> readiness again; the STC handler's final act is `send ep.res(result_pack)`, which is the very event
+> (`capstone_dyn_res_valid_o` with the matching trans_id) that consumes the saved exception. So a second capability
+> store cannot be ACCEPTED by the unit until the first one's result has been emitted, and the hold is cleared at that
+> emission, which makes the overwrite at `ex_stage.sv:1346` unreachable rather than merely unobserved. A plain store
+> cannot reach the hold either, since its exception takes the normal path and raises `forward_normal_store_valid`,
+> which the hold's condition excludes. The same reasoning closes the load side's identical shape.
 
 ### R-56 — a page fault raised at a capability LOAD's translation was dropped on the way to writeback, because an LDC's result is routed through the DYN unit whose result packet carries only the capability cause `LATENT ON EVERY BITSTREAM, UNREACHABLE THERE (capability loads were never translated); FIXED on virtual-profile 16345658f (ex_stage.sv carries the LSU's exception beside the DYN result for that trans_id; cva6.sv lets it replace the capability port's exception record)`
 
