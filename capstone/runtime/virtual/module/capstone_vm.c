@@ -145,6 +145,27 @@ MODULE_PARM_DESC(node_flat_records,
 #endif
 #define CV_FLAT_BYTES (CV_FLAT_RECORDS * CAP_REV_TABLE_RECORD)
 
+/* S-25's narrow pin: on a fault, take the REST of the arena rather than pin_ahead_pages.
+ *
+ * Deliberately a one-line widening of pin_ahead's existing limit rather than a new helper. That
+ * loop is already batched, already deadline-aware via cv_step_stop, already validates anon and
+ * mapcount per page and NULLs what it could not take, and already stops at the VMA edge and at the
+ * first already-pinned page -- so it is idempotent across repeated faults and needs no "done" flag
+ * on struct arena. Avoiding that field also avoids touching the POSITIONAL struct literal in add(),
+ * where a new member silently shifts `lazy`.
+ *
+ * Why this shape is enough: an arena's first access is enframe's plain byte read of the slot
+ * prefix, near the arena's start, so pinning FORWARD from the faulting page covers the pages a
+ * later memcpy stc could reach. It does not pin backward, so it is "the rest of the arena from
+ * here", not literally the whole arena -- stated because the difference matters if a first access
+ * ever lands late in an arena.
+ *
+ * Default OFF. The last module change that altered behaviour by default regressed every virtual
+ * context on silicon while QEMU passed it 34/41, so this ships inert: one boot proves the code is
+ * harmless when off, and the arm that sets it tests the pin. */
+static bool arena_pin;
+module_param(arena_pin, bool, 0644);
+
 /* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
 static unsigned long pin_ahead_pages = 1;
@@ -999,7 +1020,7 @@ static void pin_ahead(struct context *c, struct arena *a,
 {
     unsigned long start = a->address + (unsigned long)first * PAGE_SIZE;
     unsigned long count = 0, done;
-    while (count + 1 < pin_ahead_pages && first + count < a->count &&
+    while ((arena_pin || count + 1 < pin_ahead_pages) && first + count < a->count &&
            start + count * PAGE_SIZE < v->vm_end && !a->pages[first + count])
         ++count;
     for (done = 0; done < count;) {
@@ -1069,7 +1090,7 @@ module_param(diag_escapes, bool, 0644);
 static unsigned escape_prints;
 #define CV_ESCAPE_BUDGET 16U
 
-#define CV_DIAG_TAG "bisect-esconly"
+#define CV_DIAG_TAG "arena-pin-1"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
