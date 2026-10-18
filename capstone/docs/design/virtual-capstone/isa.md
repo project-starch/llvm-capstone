@@ -300,6 +300,14 @@ Read and consume must use the same translated physical granule, including
 when a PTE was changed without a translation fence. A fault leaves bytes,
 tags and registers unchanged; a retry moves once.
 
+**A and D are software's on vp2 (S-24, found 2026-10-18).** The RTL's walker never sets the accessed or dirty
+bit: a load or fetch on a leaf with A clear, and a store on a leaf with W or D clear, raise a page fault and
+install no TLB entry (`cva6_ptw.sv:453/468/477-481`, `cva6_mmu.sv:142/602`). Linux's GUP on a present page marks
+the struct page, not the PTE, so the trusted adapter resolves a kind-4 STORE fault on a present page through the
+kernel's write-fault path (`fixup_user_fault` with FAULT_FLAG_WRITE, which sets D and fences the address) before
+pinning; a read fault's populate sets A. The prediction kit runs QEMU with svadu=false so hardware A/D never hides
+this class.
+
 **On vp2 (bf3db3175) a capability store must not be the first access to a page (S-25, found 2026-10-18).** The
 RTL's store syncer hands the DYN unit a response with no exception field, so an `STC` whose translation faults
 retires with no exception and no kind-4 escape while commit still counts it: a ghost entry in the store buffer's
