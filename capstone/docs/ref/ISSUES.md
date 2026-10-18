@@ -1944,7 +1944,7 @@ two files and dismissing the hits in a third unread, and from not opening the su
 the census row (`docs/plans/2026-10-18-vp2-silicon-census.tsv`, plain JALR) carries the same correction.
 
 
-## Q-31 — a plain load through an UNTAGGED base in a vp2 virtual context: the RTL reports the address trap when the address is also bad (4 misaligned, 13 non-canonical), QEMU the capability trap (24); an ORDERING divergence with no verdict consequence `OPEN — observed 2026-10-18 on vp2 bf3db3175 (sq0d-fix6, module d71f207a; case 22 also on 3005ed52), N=3 cells, UNGATED boots; mechanism read in the RTL at bf3db3175 by the RTL lane and checked here line by line; which order is the reference is the semantics owner's ruling (as Q-29)`
+## Q-31 — a plain load through an UNTAGGED base in a vp2 virtual context: the RTL reports the address trap when the address is also bad (4 misaligned, 13 non-canonical), QEMU the capability trap (24); an ORDERING divergence with no verdict consequence `OPEN — observed 2026-10-18 on vp2 bf3db3175 (sq0d-fix6, module d71f207a; case 22 also on 3005ed52), N=3 cells, UNGATED boots; mechanism read in the RTL at bf3db3175 by the RTL lane and checked here line by line; RULED 2026-10-18 by the semantics owner: the RTL's order is the reference (a misaligned access wins the merge, a non-canonical address page-faults in the MMU, the tag check comes after both); a QEMU pin aligning its order is later and low-priority (after the +928 source pin and the action-3 refusal); until then a prediction that compares CAUSES models the order, and a silicon 4 or 13 where the record says 24 on the same pc is Q-31, not a new finding`
 
 **The cells** (sqlite/engine-repros vp2-malloc, `tier3-smoke/records/sq0d-fix6.board.txt`; QEMU: `t3-pred-sq0`, qkit7):
 

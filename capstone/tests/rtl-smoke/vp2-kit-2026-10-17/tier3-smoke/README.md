@@ -1185,3 +1185,20 @@ symbol+offset, the same attribution and the same tval on both sides:
     is superseded.)
 
 UNGATED (PREFLIGHT=0). The count of the 3005ed52 cells that carried S-27 is corrected in the RETRACTION just above.
+
+### wm0-fix6, result (2026-10-18 21:48-21:59): the same wedge as on 3005ed52, so it is not downstream of S-27, and R-57's attribution stands at N=2
+
+`records/wm0-fix6.board.txt`. Kit bkit7-fix6, module d71f207a3af5546b, wm0's 26 images gate-checked.
+- **The boot ran 2 of 26 steps,** exactly as on 3005ed52. Control uaf-chunk completed, then the core wedged in control
+  uaf-jumbo.
+- **The wedge apertures equal wm0's on 3005ed52 in 14 of 15 switch fields:**
+  - the trap log 0x88 and its mepc 0x35a88 and tval 0x73;
+  - WAIT_STORE_READY, a store-buffer commit count of 4, an unacknowledged capability write, and the switcher at
+    index 28;
+  - the commit pc at the same code offset (…96f54).
+- **Only sw=221's commit-queue valid bits differ:** 1011 here, 1101 on 3005ed52, and 0111 in wm1. The invalid entry
+  sits in another slot each time.
+- **As pre-registered,** the same apertures again keep the RTL lane's R-57 attribution, now at N=2. Removing S-27 did
+  not remove this wedge.
+- **The bundle is not filed:** 21 of its cells never ran, and the 3005ed52 wm0 bundle was not filed either.
+- wm1-fix6 follows. UNGATED (PREFLIGHT=0).
